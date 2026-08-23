@@ -8,7 +8,18 @@
  * rendering. The store ({@link useOpenDocuments}) maps refs to open tabs, resolves titles
  * lazily, and persists the set across reloads.
  */
+import {
+  AgentSessionId,
+  CycleId,
+  InitiativeId,
+  OrganizationId,
+  ProgramId,
+  ProjectId,
+  TaskId,
+} from '@docket/types';
 import type { OpenTab, TabDocType } from '@docket/ui/components';
+
+import { buildAuthenticatedHref } from '@/lib/authenticated-route';
 
 export type { OpenTab, TabDocType };
 
@@ -45,5 +56,37 @@ export const TAB_ROUTE_SEGMENT: Record<TabDocType, string> = {
 
 /** Build the detail-route href for a document ref. */
 export function hrefForTab(ref: TabRef): string {
-  return `/orgs/${ref.orgId}/${TAB_ROUTE_SEGMENT[ref.type]}/${ref.id}`;
+  const orgId = OrganizationId.parse(ref.orgId);
+  switch (ref.type) {
+    case 'task':
+      return buildAuthenticatedHref('/orgs/[orgId]/tasks/[taskId]', {
+        orgId,
+        taskId: TaskId.parse(ref.id),
+      });
+    case 'project':
+      return buildAuthenticatedHref('/orgs/[orgId]/projects/[projectId]', {
+        orgId,
+        projectId: ProjectId.parse(ref.id),
+      });
+    case 'program':
+      return buildAuthenticatedHref('/orgs/[orgId]/programs/[programId]', {
+        orgId,
+        programId: ProgramId.parse(ref.id),
+      });
+    case 'initiative':
+      return buildAuthenticatedHref('/orgs/[orgId]/initiatives/[initiativeId]', {
+        orgId,
+        initiativeId: InitiativeId.parse(ref.id),
+      });
+    case 'cycle':
+      return buildAuthenticatedHref('/orgs/[orgId]/cycles/[cycleId]', {
+        orgId,
+        cycleId: CycleId.parse(ref.id),
+      });
+    case 'session':
+      return buildAuthenticatedHref('/orgs/[orgId]/sessions/[sessionId]', {
+        orgId,
+        sessionId: AgentSessionId.parse(ref.id),
+      });
+  }
 }

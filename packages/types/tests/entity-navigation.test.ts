@@ -1,14 +1,19 @@
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import {
+  CommentCreate,
+  CommentListQuery,
   EntityNavigationSnapshot,
   entityNavigationSnapshotFromWorkViewRow,
   ProjectViewRow,
   SubjectRef,
+  UpdateCreate,
+  UpdateListQuery,
   type EntityNavigationSnapshot as EntityNavigationSnapshotValue,
   type InitiativeId,
   type OrganizationId,
   type ProjectId,
+  type ProgramId,
   type TaskId,
 } from '../src';
 
@@ -141,5 +146,33 @@ describe('SubjectRef', () => {
 
     if (subject.subjectType !== 'initiative') throw new Error('Expected an Initiative subject.');
     expectTypeOf(subject.subjectId).toEqualTypeOf<InitiativeId>();
+  });
+
+  it('defines comment and update inputs from correlated branded subjects', () => {
+    const comments = CommentListQuery.parse({ subjectType: 'task', subjectId: ENTITY_ID });
+    if (comments.subjectType !== 'task') throw new Error('Expected a Task comment subject.');
+    expectTypeOf(comments.subjectId).toEqualTypeOf<TaskId>();
+
+    const comment = CommentCreate.parse({
+      subjectType: 'project',
+      subjectId: ENTITY_ID,
+      body: 'Ship it.',
+    });
+    if (comment.subjectType !== 'project') throw new Error('Expected a Project comment subject.');
+    expectTypeOf(comment.subjectId).toEqualTypeOf<ProjectId>();
+
+    const updates = UpdateListQuery.parse({ subjectType: 'program', subjectId: ENTITY_ID });
+    if (updates.subjectType !== 'program') throw new Error('Expected a Program update subject.');
+    expectTypeOf(updates.subjectId).toEqualTypeOf<ProgramId>();
+
+    const update = UpdateCreate.parse({
+      subjectType: 'initiative',
+      subjectId: ENTITY_ID,
+      body: 'On schedule.',
+    });
+    if (update.subjectType !== 'initiative') {
+      throw new Error('Expected an Initiative update subject.');
+    }
+    expectTypeOf(update.subjectId).toEqualTypeOf<InitiativeId>();
   });
 });

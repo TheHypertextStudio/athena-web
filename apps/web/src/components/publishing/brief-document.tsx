@@ -128,7 +128,7 @@ export function BriefDocument({ brief }: BriefDocumentProps): JSX.Element {
         </Text>
         {brief.canonicalUrl ? (
           <Text as="p" token="body-small" className="brief-muted">
-            <a className="brief-link" href={brief.canonicalUrl}>
+            <a className="brief-link" href={brief.canonicalUrl} data-native-navigation="">
               {brief.canonicalUrl}
             </a>
           </Text>

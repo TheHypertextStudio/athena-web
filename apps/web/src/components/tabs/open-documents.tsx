@@ -63,6 +63,19 @@ function storageKey(userId: string): string {
   return `docket:open-tabs:${userId}`;
 }
 
+interface PersistedTab extends TabRef {
+  readonly title: string | null;
+}
+
+const TAB_TYPES = new Set<PersistedTab['type']>([
+  'task',
+  'project',
+  'initiative',
+  'program',
+  'cycle',
+  'session',
+]);
+
 /** Read the persisted tab set for a user, tolerating absent/corrupt storage. */
 function readPersisted(userId: string): readonly OpenTab[] {
   const parsed = readStoredJson(storageKey(userId), 'session');
@@ -71,29 +84,35 @@ function readPersisted(userId: string): readonly OpenTab[] {
   // and document ids must be real ULIDs, so any junk tab persisted before the route guard
   // landed — e.g. a stale "Session undefined" with `id: 'undefined'` — is dropped on hydration
   // rather than resurrected.
-  return parsed.filter(isOpenTab);
+  return parsed.filter(isPersistedTab).map((tab) => newTab(tab, tab.title));
 }
 
-/** Whether one parsed entry is a usable {@link OpenTab} rather than drift from an older schema. */
-function isOpenTab(value: unknown): value is OpenTab {
+/** Whether one parsed entry is a usable descriptor rather than drift from an older schema. */
+function isPersistedTab(value: unknown): value is PersistedTab {
   if (typeof value !== 'object' || value === null) return false;
-  const tab: Partial<Record<keyof OpenTab, unknown>> = value;
+  const tab = value as Readonly<Record<string, unknown>>;
   return (
-    typeof tab.key === 'string' &&
-    typeof tab.id === 'string' &&
-    typeof tab.orgId === 'string' &&
-    typeof tab.href === 'string' &&
+    typeof tab['type'] === 'string' &&
+    TAB_TYPES.has(tab['type'] as PersistedTab['type']) &&
+    typeof tab['id'] === 'string' &&
+    typeof tab['orgId'] === 'string' &&
     // `null` is a legitimate stored value: a tab whose document could not be read is persisted
     // unnamed rather than named after its id, and re-resolves on the next visit.
-    (typeof tab.title === 'string' || tab.title === null) &&
-    ULID_REGEX.test(tab.id) &&
-    ULID_REGEX.test(tab.orgId)
+    (typeof tab['title'] === 'string' || tab['title'] === null) &&
+    ULID_REGEX.test(tab['id']) &&
+    ULID_REGEX.test(tab['orgId'])
   );
 }
 
 /** Persist the tab set for a user, ignoring storage failures (quota/private mode). */
 function persist(userId: string, tabs: readonly OpenTab[]): void {
-  writeStoredJson(storageKey(userId), tabs, 'session');
+  const descriptors: readonly PersistedTab[] = tabs.map(({ type, orgId, id, title }) => ({
+    type,
+    orgId,
+    id,
+    title,
+  }));
+  writeStoredJson(storageKey(userId), descriptors, 'session');
 }
 
 /** Props for {@link OpenDocumentsProvider}. */
@@ -288,7 +307,7 @@ export function OpenDocumentsProvider({
       // updater) so we don't trigger the router's state change while rendering this provider.
       if (key === activeKey) {
         const neighbor = next[index] ?? next[index - 1] ?? null;
-        if (neighbor) router.push(neighbor.href);
+        if (neighbor) router.push(hrefForTab(neighbor));
         else if (closed) router.push(`/orgs/${closed.orgId}/my-work`);
         else router.push('/today');
       }
@@ -307,7 +326,7 @@ export function OpenDocumentsProvider({
             : tabs.length - 1
           : (activeIndex + direction + tabs.length) % tabs.length;
       const target = tabs[targetIndex];
-      if (target) router.push(target.href);
+      if (target) router.push(hrefForTab(target));
     },
     [tabs, activeKey, router],
   );

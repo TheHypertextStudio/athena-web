@@ -10,6 +10,8 @@ import type { Token, Tokens } from 'marked';
 import type { ReactNode } from 'react';
 import { Fragment } from 'react';
 
+import Link from '@/components/docket-link';
+
 import { MarkdownTable, MarkdownTaskItem, type MarkdownTableCell } from './markdown-block-parts';
 import { StaticCode } from './static-code-block';
 
@@ -79,9 +81,9 @@ export function renderInline(tokens: readonly Token[], prefix: string): ReactNod
         return href === undefined ? (
           <Fragment key={key}>{content}</Fragment>
         ) : (
-          <a key={key} href={href} title={link.title ?? undefined}>
+          <Link key={key} href={href} title={link.title ?? undefined}>
             {content}
-          </a>
+          </Link>
         );
       }
       case 'underline':

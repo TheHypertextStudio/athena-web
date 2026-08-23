@@ -24,7 +24,7 @@ import { StatusIcon, type WorkflowStateType } from '../atoms/StatusIcon';
 import type { ListViewRowProps } from './list-view-types';
 
 /** Props for {@link ListRow}. */
-export interface ListRowProps extends React.HTMLAttributes<HTMLElement> {
+export interface ListRowProps extends React.ComponentPropsWithoutRef<'div'> {
   /** The row's cells, each typically a {@link ListCell} (`role="gridcell"`). */
   children: React.ReactNode;
   /** Whether the row is the active (keyboard-focused) row. */
@@ -33,9 +33,7 @@ export interface ListRowProps extends React.HTMLAttributes<HTMLElement> {
   selected?: boolean | undefined;
   /** Activate the row (Enter / click). */
   onActivate?: (() => void) | undefined;
-  /** Render the semantic row as a real link while plain activation stays client-owned. */
-  href?: string | undefined;
-  /** Makes the row a drag source without losing its real-link semantics. */
+  /** Makes the whole row a drag source without changing its row semantics. */
   drag?: DragSource | undefined;
   /** Tab index for roving-tabindex keyboard navigation; defaults to `-1`. */
   tabIndex?: number | undefined;
@@ -86,13 +84,12 @@ export function ListCell({ children, className }: ListCellProps): React.JSX.Elem
  * `ContextMenuTrigger asChild` child (right-click row actions) without an extra wrapper element —
  * keeping the virtualized list's row measurement intact.
  */
-export const ListRow = React.forwardRef<HTMLElement, ListRowProps>(function ListRow(
+export const ListRow = React.forwardRef<HTMLDivElement, ListRowProps>(function ListRow(
   {
     children,
     active = false,
     selected = false,
     onActivate,
-    href,
     tabIndex = -1,
     drag,
     className,
@@ -112,43 +109,9 @@ export const ListRow = React.forwardRef<HTMLElement, ListRowProps>(function List
     dragProps?.className,
     className,
   );
-  if (href !== undefined) {
-    return (
-      <a
-        ref={ref as React.ForwardedRef<HTMLAnchorElement>}
-        role="row"
-        href={href}
-        aria-selected={selected}
-        data-active={active ? '' : undefined}
-        tabIndex={tabIndex}
-        {...rest}
-        {...dragProps}
-        onClick={(event) => {
-          onClick?.(event);
-          if (
-            event.defaultPrevented ||
-            event.button !== 0 ||
-            event.metaKey ||
-            event.ctrlKey ||
-            event.shiftKey ||
-            event.altKey
-          )
-            return;
-          event.preventDefault();
-          onActivate?.();
-        }}
-        onKeyDown={(event) => {
-          onKeyDown?.(event);
-        }}
-        className={rowClassName}
-      >
-        {children}
-      </a>
-    );
-  }
   return (
     <div
-      ref={ref as React.ForwardedRef<HTMLDivElement>}
+      ref={ref}
       role="row"
       aria-selected={selected}
       data-active={active ? '' : undefined}

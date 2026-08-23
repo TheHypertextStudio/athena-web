@@ -170,21 +170,6 @@ describe('ListRow', () => {
       fireEvent.keyDown(screen.getByRole('row'), { key: 'Enter' });
     }).not.toThrow();
   });
-
-  it('renders a real href and leaves modified clicks to the browser', () => {
-    const onActivate = vi.fn();
-    render(
-      <ListRow href="/orgs/o1/tasks/t1" onActivate={onActivate}>
-        r
-      </ListRow>,
-    );
-    const row = screen.getByRole('row');
-    expect(row).toHaveAttribute('href', '/orgs/o1/tasks/t1');
-
-    expect(fireEvent.click(row)).toBe(false);
-    fireEvent.click(row, { metaKey: true });
-    expect(onActivate).toHaveBeenCalledTimes(1);
-  });
 });
 
 describe('TaskRow', () => {

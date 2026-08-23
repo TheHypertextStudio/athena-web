@@ -8,6 +8,7 @@ import {
 } from '@docket/types';
 import { ActorAvatar, IdentityGlyph, ListCell, ListRow, ListView } from '@docket/ui/components';
 import { Calendar, Layers } from '@docket/ui/icons';
+import { STRETCHED_LINK } from '@docket/ui/lib/stretched-link';
 import { cn } from '@docket/ui/lib/utils';
 import { Button, Checkbox } from '@docket/ui/primitives';
 import type { ViewTarget } from '@docket/work/view-contract';
@@ -22,6 +23,7 @@ import {
 
 import { useRelationDropTarget } from '@/components/dnd/use-relation-drop-target';
 import { useDragState } from '@/components/dnd/drag-context';
+import DocketLink from '@/components/docket-link';
 import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
 import { useWorkStatusResolver } from '@/components/entity-display/use-work-status';
 import { WorkStatusIcon } from '@/components/entity-display/work-status';
@@ -31,6 +33,7 @@ import { ObjectSurface } from '@/components/objects/object-surface';
 import { PriorityGlyph } from '@/components/task-detail/PriorityGlyph';
 import type { ObjectRef } from '@/lib/actions';
 import { buildEntityHref } from '@/lib/authenticated-route';
+import { seedNavigationSnapshot } from '@/lib/navigation-snapshot-runtime';
 
 import { deriveInitiativeTreePositions, type InitiativeTreePosition } from './initiative-rails';
 import type { WorkViewDefinitionFor } from './view-state';
@@ -252,7 +255,6 @@ function WorkListObjectRow({
   rowId,
   contextRow,
   ariaLevel,
-  href,
   className,
   children,
 }: {
@@ -264,7 +266,6 @@ function WorkListObjectRow({
   readonly rowId: string;
   readonly contextRow: boolean;
   readonly ariaLevel: number | undefined;
-  readonly href: string;
   readonly className: string;
   readonly children: ReactNode;
 }): JSX.Element {
@@ -276,7 +277,6 @@ function WorkListObjectRow({
         ref={drop.dropProps.ref}
         active={active}
         selected={selected}
-        href={href}
         data-row-id={rowId}
         data-context-row={contextRow ? 'true' : undefined}
         aria-level={ariaLevel}
@@ -354,7 +354,7 @@ function SelectionIdentity({
   onToggle: () => void;
 }): JSX.Element {
   return (
-    <span className="relative flex size-8 shrink-0 items-center justify-center">
+    <span className="relative z-10 flex size-8 shrink-0 items-center justify-center">
       <span
         className={`absolute inset-0 flex items-center justify-center transition-opacity ${
           selected || selectionActive
@@ -615,6 +615,7 @@ export function WorkList<TTarget extends ViewTarget>({
           const object = wouldCreateCycle
             ? { ...baseObject, meta: { ...baseObject.meta, wouldCreateCycle: true } }
             : baseObject;
+          const navigationSnapshot = entityNavigationSnapshotFromWorkViewRow(row);
           return (
             <WorkListObjectRow
               object={object}
@@ -625,7 +626,6 @@ export function WorkList<TTarget extends ViewTarget>({
               contextRow={row.isContext}
               ariaLevel={position?.depth}
               onActivate={context.onActivate}
-              href={buildEntityHref(entityNavigationSnapshotFromWorkViewRow(row))}
               className={`group/roster relative min-h-14 gap-2 rounded-lg border-b-0 px-3 py-0 ${row.isContext ? 'text-on-surface-variant' : ''}`}
             >
               {position ? (
@@ -647,7 +647,16 @@ export function WorkList<TTarget extends ViewTarget>({
                       toggle(row.id);
                     }}
                   />
-                  <span className="min-w-0">
+                  <DocketLink
+                    href={buildEntityHref(navigationSnapshot)}
+                    className={cn(
+                      'focus-visible:ring-primary min-w-0 rounded-sm outline-none focus-visible:ring-2',
+                      STRETCHED_LINK,
+                    )}
+                    onClick={() => {
+                      seedNavigationSnapshot(navigationSnapshot);
+                    }}
+                  >
                     <span className="text-on-surface text-body-medium block truncate">
                       {workViewRowTitle(row)}
                     </span>
@@ -656,7 +665,7 @@ export function WorkList<TTarget extends ViewTarget>({
                         {summary}
                       </span>
                     ) : null}
-                  </span>
+                  </DocketLink>
                 </span>
               </ListCell>
               {properties.map((field) => (

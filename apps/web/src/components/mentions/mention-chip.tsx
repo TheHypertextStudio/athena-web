@@ -21,6 +21,8 @@ import { cn } from '@docket/ui/lib/utils';
 import type { MentionRef } from '@docket/types';
 import type { ReactNode } from 'react';
 
+import Link from '@/components/docket-link';
+
 /** Props for {@link MentionChip}. */
 export interface MentionChipProps {
   /** What the chip points at. */
@@ -61,7 +63,7 @@ export default function MentionChip({
   onClick,
 }: MentionChipProps): React.JSX.Element {
   return (
-    <a
+    <Link
       href={href}
       // Inside an editor the chip must not be a tab stop, or Tab would walk out of the document
       // instead of indenting. The hovercard stays keyboard-reachable there by arrowing onto the
@@ -73,7 +75,7 @@ export default function MentionChip({
       // fights the hovercard and cannot be styled.
       aria-label={label}
       {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-      onClick={onClick}
+      {...(onClick ? { onClick } : {})}
       className={cn(
         // 22ch was clipping most titles down to a fragment; 40ch shows a title in full in the
         // common case and still caps how much of a line of prose one mention can take over.
@@ -102,6 +104,6 @@ export default function MentionChip({
         </span>
       ) : null}
       <span className="truncate">{label}</span>
-    </a>
+    </Link>
   );
 }

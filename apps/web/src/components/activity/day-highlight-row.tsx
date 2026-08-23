@@ -23,6 +23,7 @@ import type { JSX } from 'react';
 import { entityGlyph } from '@/components/activity/entity-glyph';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { ProviderBadge } from '@/components/stream/provider-badge';
+import Link from '@/components/docket-link';
 
 import { entryTimeLabel, narrationView } from './highlight-view';
 
@@ -73,9 +74,9 @@ export function DayHighlightRow({
       leading={<Glyph className="text-on-surface-variant size-5" aria-hidden="true" />}
       title={
         href ? (
-          <a href={href} className="hover:text-primary block truncate">
+          <Link href={href} className="hover:text-primary block truncate">
             {subject}
-          </a>
+          </Link>
         ) : (
           subject
         )

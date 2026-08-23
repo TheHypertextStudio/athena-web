@@ -128,6 +128,12 @@ describe('WorkList', () => {
       screen.getByRole('checkbox', { name: 'Select Task 0' }).parentElement?.parentElement,
     ).toHaveClass('opacity-0');
     expect(screen.getAllByRole('row').length).toBeLessThan(60);
+    const taskLink = screen.getByRole('link', { name: 'Task 0' });
+    expect(taskLink).toHaveAttribute(
+      'href',
+      '/orgs/01ARZ3NDEKTSV4RRFFQ69G5FA0/tasks/01ARZ3NDEKTSV4RRFFQ6900000',
+    );
+    expect(taskLink).not.toContainElement(screen.getByRole('checkbox', { name: 'Select Task 0' }));
     fireEvent.keyDown(grid, { key: 'ArrowDown' });
     fireEvent.keyDown(grid, { key: 'x' });
     expect(onSelectionChange).toHaveBeenCalledWith(new Set([task(0).id]));
@@ -167,6 +173,7 @@ describe('WorkList', () => {
       contributingProjects: [],
       manualRank: 'a0',
       isContext: true,
+      updatedAt: '2026-08-23T00:00:00.000Z',
     });
     const child = InitiativeViewRow.parse({
       ...parent,
@@ -311,6 +318,7 @@ describe('WorkList', () => {
       contributingProjects: [],
       manualRank: 'a0',
       isContext: false,
+      updatedAt: '2026-08-23T00:00:00.000Z',
     });
     const child = InitiativeViewRow.parse({
       ...parent,

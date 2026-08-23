@@ -4,6 +4,7 @@
 import { z } from 'zod';
 
 import { Health } from './capability';
+import { InitiativeSubjectRef, ProjectSubjectRef, ProgramSubjectRef } from './subject-ref';
 import { ActorId, OrganizationId, UpdateId } from './primitives';
 
 /** The subjects an Update can post status about (Project/Program/Initiative). */
@@ -12,29 +13,33 @@ export const UpdateSubjectType = z.enum(['project', 'program', 'initiative']);
 export type UpdateSubjectType = z.infer<typeof UpdateSubjectType>;
 
 /** Query params for listing Updates on one subject. */
-export const UpdateListQuery = z
-  .object({
-    subjectType: UpdateSubjectType.describe(
-      "Kind of subject to read updates for: 'project' | 'program' | 'initiative'.",
-    ),
-    subjectId: z.string().min(1).describe('Id of the subject whose updates to list. Required.'),
-  })
-  .meta({ id: 'UpdateListQuery', description: 'List updates for a subject.' });
+const UpdateSubjectRef = z.discriminatedUnion('subjectType', [
+  ProjectSubjectRef,
+  ProgramSubjectRef,
+  InitiativeSubjectRef,
+]);
+
+export const UpdateListQuery = UpdateSubjectRef.meta({
+  id: 'UpdateListQuery',
+  description: 'List updates for a subject.',
+});
 /** Validated update-list query value. */
 export type UpdateListQuery = z.infer<typeof UpdateListQuery>;
 
 /** Body for posting an Update; the latest health also sets the subject's current health. */
+const updateCreateFields = {
+  health: Health.optional().describe(
+    "Optional health signal: 'on_track' | 'at_risk' | 'off_track'. When set, it also overwrites the subject's current health (latest health-bearing update wins). Omit to post a narrative-only update that leaves subject health untouched.",
+  ),
+  body: z.string().min(1).describe('The update narrative (markdown). Required, non-empty.'),
+};
+
 export const UpdateCreate = z
-  .object({
-    subjectType: UpdateSubjectType.describe(
-      "Kind of subject to post about: 'project' | 'program' | 'initiative'.",
-    ),
-    subjectId: z.string().min(1).describe('Id of the subject to post the update on. Required.'),
-    health: Health.optional().describe(
-      "Optional health signal: 'on_track' | 'at_risk' | 'off_track'. When set, it also overwrites the subject's current health (latest health-bearing update wins). Omit to post a narrative-only update that leaves subject health untouched.",
-    ),
-    body: z.string().min(1).describe('The update narrative (markdown). Required, non-empty.'),
-  })
+  .discriminatedUnion('subjectType', [
+    ProjectSubjectRef.extend(updateCreateFields),
+    ProgramSubjectRef.extend(updateCreateFields),
+    InitiativeSubjectRef.extend(updateCreateFields),
+  ])
   .meta({ id: 'UpdateCreate', description: 'Post a status update on a subject.' });
 /** Validated update-create body. */
 export type UpdateCreate = z.infer<typeof UpdateCreate>;

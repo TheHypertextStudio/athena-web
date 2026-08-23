@@ -6,6 +6,8 @@ import { focusRing } from '@docket/ui/primitives';
 import { cn } from '@docket/ui';
 import type { JSX } from 'react';
 
+import Link from '@/components/docket-link';
+
 import { AthenaPlan } from './athena-plan';
 import { ProviderBadge } from './provider-badge';
 import {
@@ -75,7 +77,7 @@ export function EventDrawer({ row, onClose }: EventDrawerProps): JSX.Element | n
             <div className="border-outline-variant mt-5 border-t pt-4">
               <p className="text-on-surface-variant text-label-small">Subject</p>
               {href ? (
-                <a
+                <Link
                   href={href}
                   className={cn(
                     'text-primary text-body-medium mt-1 inline-flex min-h-10 items-center gap-1 rounded-sm outline-none',
@@ -84,7 +86,7 @@ export function EventDrawer({ row, onClose }: EventDrawerProps): JSX.Element | n
                 >
                   {row.entityTitle}
                   <OpenInNew className="size-4" aria-hidden="true" />
-                </a>
+                </Link>
               ) : (
                 <p className="text-on-surface text-body-medium mt-1">{row.entityTitle}</p>
               )}

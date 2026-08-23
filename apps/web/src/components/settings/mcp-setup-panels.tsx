@@ -94,7 +94,9 @@ function DeepLinkSetup({
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
         <Button asChild>
-          <a href={client.deepLink(url)}>Open in {client.name}</a>
+          <a href={client.deepLink(url)} data-native-navigation="">
+            Open in {client.name}
+          </a>
         </Button>
         <p className="text-on-surface-variant text-body-small">
           Opens {client.name} and pre-fills the MCP server config — no manual editing required.

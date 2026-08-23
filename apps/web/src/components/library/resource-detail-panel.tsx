@@ -109,6 +109,7 @@ export default function ResourceDetailPanel({
         ) : (
           <a
             href={primaryAction.href}
+            data-native-navigation=""
             {...(primaryAction.kind === 'external'
               ? { target: '_blank', rel: 'noreferrer' }
               : { download: fileName ?? true })}

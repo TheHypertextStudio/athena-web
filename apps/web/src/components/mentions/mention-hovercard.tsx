@@ -32,6 +32,7 @@ import {
   SEARCH_KIND_LABEL,
   searchKindFor,
 } from '@/components/command-palette/use-hub-search';
+import Link from '@/components/docket-link';
 
 import { ExcerptMarkdown } from './excerpt-markdown';
 import { MENTION_PROVIDER_LABEL, RESOURCE_TYPE_ICON, RESOURCE_TYPE_LABEL } from './mention-glyphs';
@@ -186,13 +187,13 @@ export default function MentionHoverCard({
                 {modified === undefined ? '' : `Updated ${modified}`}
               </span>
               <Button asChild size="sm" variant="ghost">
-                <a
+                <Link
                   href={href}
                   {...(isExternal ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                 >
                   Open
                   {isExternal ? <OpenInNew className="ml-1 size-3.5!" aria-hidden /> : null}
-                </a>
+                </Link>
               </Button>
             </div>
           </>

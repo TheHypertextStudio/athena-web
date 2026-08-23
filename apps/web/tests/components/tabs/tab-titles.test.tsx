@@ -87,6 +87,8 @@ describe('an unnamed tab', () => {
     // A failed resolve used to be persisted as a title like any other, so an id-shaped label
     // outlived the request that produced it and survived every reload for the session.
     expect((stored as OpenTab[])[0]?.title).toBeNull();
+    expect((stored as OpenTab[])[0]).not.toHaveProperty('href');
+    expect((stored as OpenTab[])[0]).not.toHaveProperty('key');
   });
 });
 

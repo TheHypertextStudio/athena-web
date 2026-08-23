@@ -3,6 +3,14 @@
  */
 import { z } from 'zod';
 
+import {
+  CycleSubjectRef,
+  InitiativeSubjectRef,
+  ProjectSubjectRef,
+  ProgramSubjectRef,
+  SubjectRef,
+  TaskSubjectRef,
+} from './subject-ref';
 import { ActorId, CommentId, OrganizationId } from './primitives';
 
 /** The polymorphic subject kinds a Comment can attach to. */
@@ -11,32 +19,29 @@ export const CommentSubjectType = z.enum(['task', 'project', 'program', 'initiat
 export type CommentSubjectType = z.infer<typeof CommentSubjectType>;
 
 /** Query params for listing Comments on one polymorphic subject. */
-export const CommentListQuery = z
-  .object({
-    subjectType: CommentSubjectType.describe(
-      "Kind of subject to read comments for: 'task' | 'project' | 'program' | 'initiative' | 'cycle'.",
-    ),
-    subjectId: z
-      .string()
-      .min(1)
-      .describe('Id of the subject whose comment thread to list. Required.'),
-  })
-  .meta({ id: 'CommentListQuery', description: 'List comments for a subject.' });
+export const CommentListQuery = SubjectRef.meta({
+  id: 'CommentListQuery',
+  description: 'List comments for a subject.',
+});
 /** Validated comment-list query value. */
 export type CommentListQuery = z.infer<typeof CommentListQuery>;
 
 /** Body for creating a Comment (authorId comes from the actor context, never the body). */
+const commentCreateFields = {
+  body: z.string().min(1).describe('Comment text (markdown). Required, non-empty.'),
+  parentCommentId: CommentId.optional().describe(
+    'Set to reply to an existing comment. The parent must be a ROOT comment on the SAME subject and org — replies are single-level (no replies to replies). Omit for a root comment.',
+  ),
+};
+
 export const CommentCreate = z
-  .object({
-    subjectType: CommentSubjectType.describe(
-      "Kind of subject to comment on: 'task' | 'project' | 'program' | 'initiative' | 'cycle'.",
-    ),
-    subjectId: z.string().min(1).describe('Id of the subject the comment attaches to. Required.'),
-    body: z.string().min(1).describe('Comment text (markdown). Required, non-empty.'),
-    parentCommentId: CommentId.optional().describe(
-      'Set to reply to an existing comment. The parent must be a ROOT comment on the SAME subject and org — replies are single-level (no replies to replies). Omit for a root comment.',
-    ),
-  })
+  .discriminatedUnion('subjectType', [
+    TaskSubjectRef.extend(commentCreateFields),
+    ProjectSubjectRef.extend(commentCreateFields),
+    ProgramSubjectRef.extend(commentCreateFields),
+    InitiativeSubjectRef.extend(commentCreateFields),
+    CycleSubjectRef.extend(commentCreateFields),
+  ])
   .meta({ id: 'CommentCreate', description: 'Create a comment on a subject.' });
 /** Validated comment-create body. */
 export type CommentCreate = z.infer<typeof CommentCreate>;

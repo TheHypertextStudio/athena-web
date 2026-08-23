@@ -76,6 +76,59 @@ const listeners = new Set<() => void>();
  */
 let current: Href = '';
 
+interface ShellScrollPosition {
+  readonly left: number;
+  readonly top: number;
+}
+
+const HISTORY_ENTRY_KEY = '__docketNavigationEntry';
+const shellScrollPositions = new Map<string, ShellScrollPosition>();
+let activeHistoryEntry: string | null = null;
+let historyEntrySequence = 0;
+
+function historyState(value: unknown): Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Readonly<Record<string, unknown>>)
+    : {};
+}
+
+function nextHistoryEntry(): string {
+  historyEntrySequence += 1;
+  return `docket-${String(historyEntrySequence)}`;
+}
+
+function ensureHistoryEntry(): string {
+  const state = historyState(window.history.state);
+  const stored = state[HISTORY_ENTRY_KEY];
+  if (typeof stored === 'string') {
+    activeHistoryEntry = stored;
+    return stored;
+  }
+  const entry = nextHistoryEntry();
+  window.history.replaceState({ ...state, [HISTORY_ENTRY_KEY]: entry }, '', window.location.href);
+  activeHistoryEntry = entry;
+  return entry;
+}
+
+function shellScrollPosition(): ShellScrollPosition {
+  const main = document.getElementById('main-content');
+  return main instanceof HTMLElement
+    ? { left: main.scrollLeft, top: main.scrollTop }
+    : { left: window.scrollX, top: window.scrollY };
+}
+
+function restoreShellScroll(position: ShellScrollPosition): void {
+  window.requestAnimationFrame(() => {
+    const main = document.getElementById('main-content');
+    if (main instanceof HTMLElement) {
+      main.scrollLeft = position.left;
+      main.scrollTop = position.top;
+      return;
+    }
+    window.scrollTo(position);
+  });
+}
+
 /** Read the browser's current href, in the store's `pathname + search` form. */
 function readWindowHref(): Href {
   return `${window.location.pathname}${window.location.search}`;
@@ -110,10 +163,18 @@ export function navigateWithoutRouter(href: string): void {
 }
 
 function navigateHistory(href: string, replace: boolean, scroll: boolean): void {
-  if (replace) window.history.replaceState(null, '', href);
-  else window.history.pushState(null, '', href);
+  const previousEntry = ensureHistoryEntry();
+  const previousPosition = shellScrollPosition();
+  shellScrollPositions.set(previousEntry, previousPosition);
+  const nextEntry = nextHistoryEntry();
+  const nextPosition = scroll ? { left: 0, top: 0 } : previousPosition;
+  const state = { [HISTORY_ENTRY_KEY]: nextEntry };
+  if (replace) window.history.replaceState(state, '', href);
+  else window.history.pushState(state, '', href);
+  activeHistoryEntry = nextEntry;
+  shellScrollPositions.set(nextEntry, nextPosition);
   syncLocation();
-  if (scroll) window.scrollTo({ left: 0, top: 0 });
+  restoreShellScroll(nextPosition);
 }
 
 /** Options for one validated browser-history navigation. */
@@ -236,9 +297,19 @@ export function AppLocationProvider({
 
   // Back and forward move the URL without going through either the router or our own navigation.
   useEffect(() => {
-    window.addEventListener('popstate', syncLocation);
+    ensureHistoryEntry();
+    const handlePopState = (event: PopStateEvent): void => {
+      if (activeHistoryEntry !== null) {
+        shellScrollPositions.set(activeHistoryEntry, shellScrollPosition());
+      }
+      const stored = historyState(event.state)[HISTORY_ENTRY_KEY];
+      activeHistoryEntry = typeof stored === 'string' ? stored : ensureHistoryEntry();
+      syncLocation();
+      restoreShellScroll(shellScrollPositions.get(activeHistoryEntry) ?? { left: 0, top: 0 });
+    };
+    window.addEventListener('popstate', handlePopState);
     return () => {
-      window.removeEventListener('popstate', syncLocation);
+      window.removeEventListener('popstate', handlePopState);
     };
   }, []);
 

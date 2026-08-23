@@ -19,6 +19,7 @@ import { Button, Chip, ControlGroup, Text, Toolbar } from '@docket/ui/primitives
 import { BarChart, Filter, Schedule } from '@docket/ui/icons';
 import { type JSX, useMemo, useState } from 'react';
 
+import Link from '@/components/docket-link';
 import { api } from '@/lib/api';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 import { userErrorMessage } from '@/lib/problem';
@@ -248,7 +249,7 @@ function EmptyState(): JSX.Element {
         — and every segment you record will show up here, grouped however you like.
       </Text>
       <Button variant="secondary" asChild>
-        <a href="/today">Go find something to work on</a>
+        <Link href="/today">Go find something to work on</Link>
       </Button>
     </div>
   );

@@ -18,6 +18,7 @@ import {
   searchKindFor,
 } from '@/components/command-palette/use-hub-search';
 import { RESOURCE_TYPE_ICON, RESOURCE_TYPE_LABEL } from '@/components/mentions/mention-glyphs';
+import Link from '@/components/docket-link';
 
 /** Props for {@link MentionedResources}. */
 export interface MentionedResourcesProps {
@@ -76,7 +77,7 @@ export default function MentionedResources({
 
             return (
               <li key={mention.key}>
-                <a
+                <Link
                   href={mention.href}
                   {...(isExternal ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                   className="hover:bg-surface-container focus-visible:bg-surface-container flex min-h-14 items-center gap-3 rounded-lg px-3 py-2 transition-colors duration-(--dur-fast) outline-none focus-visible:ring-2 focus-visible:ring-(--color-primary)"
@@ -93,7 +94,7 @@ export default function MentionedResources({
                   <span className="text-on-surface-variant hidden shrink-0 text-xs sm:inline">
                     {provenance(mention)}
                   </span>
-                </a>
+                </Link>
               </li>
             );
           })}

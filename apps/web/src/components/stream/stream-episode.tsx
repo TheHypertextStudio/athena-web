@@ -6,6 +6,7 @@ import { focusRing } from '@docket/ui/primitives';
 import { useState, type JSX } from 'react';
 
 import { entityGlyph, entityTypeLabel } from '@/components/activity/entity-glyph';
+import Link from '@/components/docket-link';
 import { OrgChip } from '@/components/org-chip';
 
 import { ProviderBadge } from './provider-badge';
@@ -67,7 +68,7 @@ export function StreamEpisodeView({
       <div className="min-w-0">
         <header className="mb-1.5 min-w-0">
           {href ? (
-            <a
+            <Link
               href={href}
               className={cn(
                 'text-on-surface hover:text-primary text-title-small block w-fit max-w-full rounded-sm outline-none',
@@ -75,7 +76,7 @@ export function StreamEpisodeView({
               )}
             >
               <span className="block truncate">{title}</span>
-            </a>
+            </Link>
           ) : (
             <h3 className="text-on-surface text-title-small truncate">{title}</h3>
           )}

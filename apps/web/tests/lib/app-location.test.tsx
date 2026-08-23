@@ -1,5 +1,5 @@
-import { act, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, render, screen, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrganizationId, TaskId } from '@docket/types';
 
 const { nextPush, nextReplace } = vi.hoisted(() => ({
@@ -31,8 +31,19 @@ function TaskRouteProbe(): React.JSX.Element {
 beforeEach(() => {
   window.history.replaceState(null, '', '/today');
   window.scrollTo = vi.fn();
+  window.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
+    callback(0);
+    return 1;
+  });
+  const main = document.createElement('main');
+  main.id = 'main-content';
+  document.body.append(main);
   nextPush.mockReset();
   nextReplace.mockReset();
+});
+
+afterEach(() => {
+  document.getElementById('main-content')?.remove();
 });
 
 describe('authenticated app location', () => {
@@ -86,18 +97,58 @@ describe('authenticated app location', () => {
   });
 
   it('honors scroll false while default navigation resets the destination', () => {
+    const main = document.getElementById('main-content');
+    if (!(main instanceof HTMLElement)) throw new Error('Expected the shell scroll owner.');
+    main.scrollTop = 240;
     navigateAuthenticated(
       '/orgs/[orgId]/tasks/[taskId]',
       { orgId: ORG_ID, taskId: TASK_ID },
       { scroll: false },
     );
-    expect(window.scrollTo).not.toHaveBeenCalled();
+    expect(main.scrollTop).toBe(240);
 
     window.history.replaceState(null, '', '/today');
+    main.scrollTop = 180;
     navigateAuthenticated('/orgs/[orgId]/tasks/[taskId]', {
       orgId: ORG_ID,
       taskId: TASK_ID,
     });
-    expect(window.scrollTo).toHaveBeenCalledWith({ left: 0, top: 0 });
+    expect(main.scrollTop).toBe(0);
+    expect(window.scrollTo).not.toHaveBeenCalled();
+  });
+
+  it('restores the shell scroll owner across native back and forward navigation', async () => {
+    render(
+      <AppLocationProvider serverPath="/today">
+        <LocationProbe />
+      </AppLocationProvider>,
+    );
+    const main = document.getElementById('main-content');
+    if (!(main instanceof HTMLElement)) throw new Error('Expected the shell scroll owner.');
+    main.scrollTop = 120;
+
+    act(() => {
+      navigateAuthenticated('/orgs/[orgId]/tasks/[taskId]', {
+        orgId: ORG_ID,
+        taskId: TASK_ID,
+      });
+    });
+    main.scrollTop = 64;
+
+    act(() => {
+      window.history.back();
+    });
+    await waitFor(() => {
+      expect(window.location.pathname).toBe('/today');
+      expect(main.scrollTop).toBe(120);
+    });
+
+    act(() => {
+      window.history.forward();
+    });
+    await waitFor(() => {
+      expect(window.location.pathname).toBe(`/orgs/${ORG_ID}/tasks/${TASK_ID}`);
+      expect(main.scrollTop).toBe(64);
+    });
   });
 });

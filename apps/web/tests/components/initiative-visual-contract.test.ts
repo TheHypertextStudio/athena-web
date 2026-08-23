@@ -133,7 +133,7 @@ describe('Initiative visual contract', () => {
   it('keeps Initiative controls in the shared non-wrapping toolbar', () => {
     const workPage = source(workPagePath);
     expect(workPage).toContain('<WorkViewToolbar');
-    expect(workPage).toContain('min-w-0 flex-1');
+    expect(workPage).toContain('!dependencyMode ?');
     expect(workPage).not.toContain('data-testid="initiative-attention-controls"');
     expect(workPage).not.toContain('gap-3 border-y px-1 py-4');
   });
@@ -151,7 +151,7 @@ describe('Initiative visual contract', () => {
     expect(source(pageLayoutPath)).toContain("'max-w-7xl'");
     expect(overview).toContain('<WorkViewPage');
     expect(workPage).toContain('<ListPageLayout');
-    expect(workPage).toContain('bg-surface-container-lowest');
+    expect(workPage).toContain('fill');
     expect(overview).not.toContain('max-w-7xl flex-col gap-6');
   });
 

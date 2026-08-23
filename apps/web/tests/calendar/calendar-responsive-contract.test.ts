@@ -60,7 +60,7 @@ describe('Calendar responsive layout contract', () => {
   it('uses a seven-day desktop target instead of three oversized date lanes', () => {
     const surface = source('apps/web/src/app/(app)/calendar/calendar-scheduling-surface.tsx');
 
-    expect(surface).toContain('minimumLaneWidth={160}');
+    expect(surface).toContain('minimumLaneWidth={144}');
     expect(surface).toContain('maximumVisibleLaneCount={7}');
   });
 

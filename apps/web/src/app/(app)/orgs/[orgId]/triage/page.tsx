@@ -4,7 +4,7 @@ import { ListView } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Inbox } from '@docket/ui/icons';
 import { Skeleton } from '@docket/ui/primitives';
-import { useRouter } from 'next/navigation';
+import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useAppParams } from '@/lib/app-location';
 import { type JSX, useCallback, useMemo, useRef, useState } from 'react';
 

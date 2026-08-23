@@ -25,7 +25,7 @@ import { ULID_REGEX } from '@docket/types';
 import type { OpenTab } from '@docket/ui/components';
 import { readStoredJson, writeStoredJson } from '@docket/ui/lib/browser-storage';
 import { useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
+import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useAppPathname } from '@/lib/app-location';
 import {
   createContext,

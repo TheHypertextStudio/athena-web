@@ -16,5 +16,6 @@ describe('detail route ownership', () => {
 
     expect(source).not.toContain('useAppParams');
     expect(source).toContain('useTypedRoute');
+    expect(source).not.toContain("from 'next/navigation'");
   });
 });

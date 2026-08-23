@@ -14,6 +14,7 @@ import {
   MilestoneId,
   ProgramId,
   ProjectId,
+  TaskSubjectRef,
   type TaskArchived,
   type TaskDetail,
   type TaskOut,
@@ -118,6 +119,7 @@ export function useTaskMutations(
 ): TaskMutations {
   const queryClient = useQueryClient();
   const statuses = useStatusRegistry();
+  const subject = TaskSubjectRef.parse({ subjectType: 'task', subjectId: taskId });
 
   // The subtask checkbox writes a status *key*, and the keys it used to write were the literals
   // `done` and `todo` — which name nothing in a workspace that renamed its stages. Ticking the box
@@ -330,7 +332,7 @@ export function useTaskMutations(
         () =>
           api.v1.orgs[':orgId'].comments.$post({
             param: { orgId },
-            json: { subjectType: 'task', subjectId: taskId, body },
+            json: { ...subject, body },
           }),
         'Could not post the comment.',
       ),

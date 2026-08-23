@@ -24,7 +24,6 @@ import {
   type TabsItem,
 } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
 import { useAppSearchParams, useTypedRoute } from '@/lib/app-location';
 import { type JSX, useEffect, useMemo, useState } from 'react';
 
@@ -64,12 +63,13 @@ import { userErrorMessage } from '@/lib/problem';
 import { useSession } from '@/lib/auth-client';
 import { useFiscalYearStartMonth } from '@/lib/use-fiscal-year-start-month';
 import { useNavigationSnapshot } from '@/lib/use-navigation-snapshot';
+import { useAppRouter } from '@/lib/interactions/navigation';
 
 type TabId = 'overview' | 'tasks' | 'updates' | 'resources';
 
 /** Operational Project detail composed from the shared entity-detail shell. */
 export default function ProjectDetailPage(): JSX.Element {
-  const router = useRouter();
+  const router = useAppRouter();
   const searchParams = useAppSearchParams();
   const queryClient = useQueryClient();
   const { params } = useTypedRoute('/orgs/[orgId]/projects/[projectId]');

@@ -20,7 +20,7 @@ import {
   Sparkles,
   Target,
 } from '@docket/ui/icons';
-import { useRouter } from 'next/navigation';
+import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useMemo } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';

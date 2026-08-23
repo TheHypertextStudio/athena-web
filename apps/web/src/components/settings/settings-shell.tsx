@@ -27,7 +27,7 @@ import {
   SettingsDialogContent,
 } from '@docket/ui/primitives';
 import { type Workspace, WorkspaceSwitcher } from '@docket/ui/components';
-import { useRouter } from 'next/navigation';
+import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { type JSX, type ReactNode, useEffect, useMemo, useRef } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';

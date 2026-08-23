@@ -2,7 +2,7 @@
 
 /** `agenda/agenda-canvas` — list and shared-fluid-canvas arrangements of one agenda. */
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@docket/ui/primitives';

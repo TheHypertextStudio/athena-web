@@ -24,7 +24,6 @@ import {
 } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useAppSearchParams, useTypedRoute } from '@/lib/app-location';
 import { type JSX, useMemo, useState } from 'react';
 
@@ -68,6 +67,7 @@ import { useSession } from '@/lib/auth-client';
 import { formatPlanningTimeframe, toPlanningTimeframe } from '@/lib/planning-timeframe';
 import { useFiscalYearStartMonth } from '@/lib/use-fiscal-year-start-month';
 import { useNavigationSnapshot } from '@/lib/use-navigation-snapshot';
+import { useAppRouter } from '@/lib/interactions/navigation';
 
 type TabId = 'overview' | 'subinitiatives' | 'work' | 'updates' | 'resources';
 
@@ -77,7 +77,7 @@ export default function InitiativeDetailPage(): JSX.Element {
   const { orgId, initiativeId } = params;
   const navigationSnapshot = useNavigationSnapshot('initiative', initiativeId);
   const entityMentions = useEntityMentions(orgId, 'initiative', initiativeId);
-  const router = useRouter();
+  const router = useAppRouter();
   const queryClient = useQueryClient();
   const pickerOverlay = usePickerOverlay();
   const searchParams = useAppSearchParams();

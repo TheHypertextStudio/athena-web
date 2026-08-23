@@ -25,7 +25,7 @@
  * {@link clampPixelsPerHour}, so no path can persist an illegal height.
  */
 import type { CalendarPreferences, HubPreferences } from '@docket/types';
-import { useRouter } from 'next/navigation';
+import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 
 import { shiftISODate } from '@/components/agenda/agenda-context';

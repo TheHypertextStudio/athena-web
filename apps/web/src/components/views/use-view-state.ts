@@ -19,7 +19,7 @@
  * This hook is intentionally thin (the codec it wraps is pure and separately unit-tested); it
  * exists only to bind that codec to Next's navigation primitives.
  */
-import { useRouter } from 'next/navigation';
+import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useAppPathname, useAppSearchParams } from '@/lib/app-location';
 import { useImmediateUrlState } from '@/lib/interactions/immediate-url-state';
 import { useCallback, useEffect, useMemo, useRef } from 'react';

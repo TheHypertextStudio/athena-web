@@ -5,7 +5,7 @@ import { ArrowRight, Flag, Layers, Tag, User, Users, Workflow } from '@docket/ui
 import { ProgramUpdate, ProjectUpdate } from '@docket/types';
 import type { RelationEndpoint } from '@docket/work/relation-contract';
 import { useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
+import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useMemo } from 'react';
 
 import { copyObjectAction } from '@/components/actions/copy-object-action';

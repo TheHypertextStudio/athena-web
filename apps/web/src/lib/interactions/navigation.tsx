@@ -29,6 +29,8 @@ export interface ResponsiveRouter {
   readonly push: (href: string, options?: ResponsiveNavigationOptions) => boolean;
   /** Publish a replacement navigation and return whether an imperative host accepted the transport. */
   readonly replace: (href: string, options?: ResponsiveNavigationOptions) => boolean;
+  /** Traverse browser history through the same location store used by local routes. */
+  readonly back: () => void;
 }
 
 /** Props for {@link ResponsiveNavigationProvider}. */
@@ -204,6 +206,9 @@ export function ResponsiveNavigationProvider({
       replace: (href, options) => {
         return request(href, true, options);
       },
+      back: () => {
+        window.history.back();
+      },
     }),
     [request, requestedHref],
   );
@@ -262,6 +267,9 @@ export function useAppRouter(): ResponsiveRouter {
         if (options?.scroll === undefined) router.push(href);
         else router.push(href, { scroll: options.scroll });
         return true;
+      },
+      back: () => {
+        router.back();
       },
       replace: (href, options) => {
         if (options?.scroll === undefined) router.replace(href);

@@ -13,7 +13,7 @@
  * `PALETTE_MODES` entry, one new call + switch arm in `CommandPalette` — not a framework.
  */
 import { Tag, type LucideIcon } from '@docket/ui/icons';
-import { useRouter } from 'next/navigation';
+import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useMemo } from 'react';
 
 import { labelsDef } from '@/components/labels/queries';

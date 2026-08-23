@@ -13,7 +13,7 @@
  * and grouping, on the shared `filter`/`group` params — and this one owns presentation, on the
  * canvas's own keys. Neither codec touches the other's params, so the two compose on one URL.
  */
-import { useRouter } from 'next/navigation';
+import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useAppPathname, useAppSearchParams } from '@/lib/app-location';
 import { useCallback, useMemo } from 'react';
 

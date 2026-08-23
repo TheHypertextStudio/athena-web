@@ -11,7 +11,7 @@ import { type Column, EntityTable, type EntityTableGroup, EmptyState } from '@do
 import { Info, Library, Link as LinkIcon, RefreshCw, type LucideIcon } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import {
   type JSX,
   useCallback,

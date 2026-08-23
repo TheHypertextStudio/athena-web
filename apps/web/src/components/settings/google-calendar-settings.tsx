@@ -22,7 +22,7 @@ import { Calendar, RefreshCw } from '@docket/ui/icons';
 import { firstWriteError, WriteError } from './write-error';
 import { Checkbox, Badge, Button } from '@docket/ui/primitives';
 import NextLink from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import type { JSX } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 

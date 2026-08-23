@@ -22,7 +22,7 @@ import { EmptyState } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { ListChecks } from '@docket/ui/icons';
 import { Skeleton } from '@docket/ui/primitives';
-import { useRouter } from 'next/navigation';
+import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { type JSX, useEffect, useMemo, useRef } from 'react';
 
 import { applyView } from '@/components/views/apply-view';

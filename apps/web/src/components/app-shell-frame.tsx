@@ -18,7 +18,7 @@ import { VocabularyProvider } from '@docket/ui/hooks';
 import { Calendar, Search, Timer } from '@docket/ui/icons';
 import { Skeleton, Stack } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
+import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useAppPathname } from '@/lib/app-location';
 import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 

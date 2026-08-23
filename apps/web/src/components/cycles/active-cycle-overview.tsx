@@ -24,7 +24,7 @@ import type { CycleOut, CycleStats, TaskOut } from '@docket/types';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Skeleton } from '@docket/ui/primitives';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { type JSX, useMemo } from 'react';
 
 import type { ActorDirectory } from '@/components/agents/actor-directory';

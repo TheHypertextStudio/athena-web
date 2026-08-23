@@ -15,7 +15,7 @@
  * fourth one. This reads `sharedOnly` off the registry, so a section declares the fact once and
  * both the nav and the route obey the same declaration.
  */
-import { useRouter } from 'next/navigation';
+import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useEffect } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';

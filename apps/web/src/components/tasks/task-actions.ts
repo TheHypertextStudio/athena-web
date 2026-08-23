@@ -46,7 +46,7 @@ import {
   WorkViewOrderRequest,
 } from '@docket/types';
 import { useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
+import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useCallback, useMemo } from 'react';
 
 import { copyObjectAction } from '@/components/actions/copy-object-action';

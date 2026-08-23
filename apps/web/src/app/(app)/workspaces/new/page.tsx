@@ -3,7 +3,7 @@
 import { useContextState } from '@docket/ui/components';
 import { Button } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
+import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { type JSX, type SyntheticEvent, useCallback, useState } from 'react';
 
 import { WorkspaceNameField } from '@/components/workspace-creation/workspace-name-field';

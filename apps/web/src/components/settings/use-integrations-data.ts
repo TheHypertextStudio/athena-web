@@ -26,7 +26,7 @@ import type {
 } from '@docket/types';
 import { googleScopesForConnector } from '@docket/types';
 import { useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
+import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useAppSearchParams } from '@/lib/app-location';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 

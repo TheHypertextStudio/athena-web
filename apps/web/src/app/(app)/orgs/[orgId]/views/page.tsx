@@ -33,7 +33,7 @@
  */
 import { LayoutGrid, Plus } from '@docket/ui/icons';
 import { Button, Separator, Skeleton } from '@docket/ui/primitives';
-import { useRouter } from 'next/navigation';
+import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useAppParams } from '@/lib/app-location';
 import { type JSX } from 'react';
 

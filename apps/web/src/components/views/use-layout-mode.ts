@@ -13,7 +13,7 @@
  * It rides the same URL as the rest of the view state, so a hub someone left in list layout is
  * still in list layout after a reload and arrives that way when the link is shared.
  */
-import { useRouter } from 'next/navigation';
+import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useCallback, useMemo } from 'react';
 
 import { useAppPathname, useAppSearchParams } from '@/lib/app-location';

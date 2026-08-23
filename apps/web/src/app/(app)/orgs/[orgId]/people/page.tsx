@@ -13,7 +13,7 @@ import { useAppParams } from '@/lib/app-location';
  *
  * Data is fetched at runtime, so the production build needs no running server.
  */
-import { useRouter } from 'next/navigation';
+import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useEffect, type JSX } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';

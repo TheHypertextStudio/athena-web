@@ -19,7 +19,7 @@ import { useAppParams } from '@/lib/app-location';
  * org default first. A calm one-line placeholder shows during that brief window.
  */
 import { useEffect, type JSX } from 'react';
-import { useRouter } from 'next/navigation';
+import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 
 import { useActiveOrg } from '@/components/active-org';
 import { defaultSettingsSection, sectionHref } from '@/components/settings/settings-registry';

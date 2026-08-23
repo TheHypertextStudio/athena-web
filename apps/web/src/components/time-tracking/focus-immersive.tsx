@@ -4,7 +4,7 @@
 import { ChevronLeft, OpenInNew } from '@docket/ui/icons';
 import { Button, Skeleton, Text } from '@docket/ui/primitives';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { type JSX, useId, useState } from 'react';
 
 import FocusIdle, { type FocusShortcut } from './focus-idle';

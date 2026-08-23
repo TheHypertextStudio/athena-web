@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger,
   Skeleton,
 } from '@docket/ui/primitives';
-import { useRouter } from 'next/navigation';
+import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { type JSX, useEffect, useMemo, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';

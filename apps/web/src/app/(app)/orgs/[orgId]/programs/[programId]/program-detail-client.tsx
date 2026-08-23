@@ -15,7 +15,6 @@ import {
   menuDestructiveItem,
   type TabsItem,
 } from '@docket/ui/primitives';
-import { useRouter } from 'next/navigation';
 import { useTypedRoute } from '@/lib/app-location';
 import { type JSX, useMemo, useState } from 'react';
 
@@ -45,12 +44,13 @@ import { useProgramMutations } from '@/lib/use-program-mutations';
 import { userErrorMessage } from '@/lib/problem';
 import { useSession } from '@/lib/auth-client';
 import { useNavigationSnapshot } from '@/lib/use-navigation-snapshot';
+import { useAppRouter } from '@/lib/interactions/navigation';
 
 type TabId = 'overview' | 'projects' | 'work' | 'updates';
 
 /** ProgramDetailPage renders the authenticated program page. */
 export default function ProgramDetailPage(): JSX.Element {
-  const router = useRouter();
+  const router = useAppRouter();
   const { params } = useTypedRoute('/orgs/[orgId]/programs/[programId]');
   const { orgId, programId } = params;
   const navigationSnapshot = useNavigationSnapshot('program', programId);

@@ -10,19 +10,20 @@
  * All queries run through {@link useApiQuery} so they auto-refetch on window focus
  * and after any mutation without manual refresh.
  */
-import type {
-  AgentOut,
-  AgentSessionOut,
-  CommentOut,
-  CycleOut,
-  MemberOut,
-  MilestoneOut,
-  ProgramOut,
-  ProjectOut,
-  RoleOut,
-  SessionActivityOut,
-  TaskDetail,
-  WorkflowState,
+import {
+  type AgentOut,
+  type AgentSessionOut,
+  type CommentOut,
+  type CycleOut,
+  type MemberOut,
+  type MilestoneOut,
+  type ProgramOut,
+  type ProjectOut,
+  type RoleOut,
+  type SessionActivityOut,
+  type TaskDetail,
+  TaskSubjectRef,
+  type WorkflowState,
 } from '@docket/types';
 import type { QueryKey } from '@tanstack/react-query';
 import { useMemo } from 'react';
@@ -78,6 +79,7 @@ export interface TaskDetailData {
  * @returns All data slices + query-state flags.
  */
 export function useTaskDetail(orgId: string, taskId: string): TaskDetailData {
+  const subject = TaskSubjectRef.parse({ subjectType: 'task', subjectId: taskId });
   const detailKey = useMemo<QueryKey>(() => queryKeys.task(orgId, taskId), [orgId, taskId]);
   const commentsKey = useMemo<QueryKey>(() => [...detailKey, 'comments'], [detailKey]);
 
@@ -159,7 +161,7 @@ export function useTaskDetail(orgId: string, taskId: string): TaskDetailData {
       () =>
         api.v1.orgs[':orgId'].comments.$get({
           param: { orgId },
-          query: { subjectType: 'task', subjectId: taskId },
+          query: subject,
         }),
       'Could not load comments.',
     ),

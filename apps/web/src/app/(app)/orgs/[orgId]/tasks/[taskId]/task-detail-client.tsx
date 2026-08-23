@@ -4,7 +4,6 @@ import type { Priority } from '@docket/work/task-contract';
 import { ActorAvatar, ActorPicker, type ActorKind, type PickerOption } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Skeleton, SkeletonChip, SkeletonText } from '@docket/ui/primitives';
-import { useRouter } from 'next/navigation';
 import { useTypedRoute } from '@/lib/app-location';
 import { type JSX, useCallback, useMemo, useState } from 'react';
 
@@ -48,6 +47,7 @@ import { useCategoryOf } from '@/components/entity-display/use-work-status';
 import { TaskRepeatingWorkBacklink } from '@/components/recurrence/repeating-work-backlink';
 import { useSession } from '@/lib/auth-client';
 import { useNavigationSnapshot } from '@/lib/use-navigation-snapshot';
+import { useAppRouter } from '@/lib/interactions/navigation';
 
 interface TaskFeedActor {
   name: string;
@@ -57,7 +57,7 @@ interface TaskFeedActor {
 
 /** TaskDetailPage renders the authenticated task page. */
 export default function TaskDetailPage(): JSX.Element {
-  const router = useRouter();
+  const router = useAppRouter();
   const { params } = useTypedRoute('/orgs/[orgId]/tasks/[taskId]');
   const { orgId, taskId } = params;
   const navigationSnapshot = useNavigationSnapshot('task', taskId);

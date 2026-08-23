@@ -14,7 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@docket/ui/primitives';
-import { useRouter } from 'next/navigation';
+import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import type { JSX } from 'react';
 
 import { signOutAndPurge } from '@/lib/sign-out';

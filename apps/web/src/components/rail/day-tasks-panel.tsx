@@ -18,7 +18,7 @@ import type { HubTaskItem } from '@docket/types';
 import { StatusIcon } from '@docket/ui/components';
 import { Skeleton } from '@docket/ui/primitives';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import type { JSX } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';

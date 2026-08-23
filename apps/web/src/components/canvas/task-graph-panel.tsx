@@ -24,7 +24,7 @@ import { Undo, Workflow, X } from '@docket/ui/icons';
 import { Button, Skeleton, Surface } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import { type Edge, type Node, Panel } from '@xyflow/react';
-import { useRouter } from 'next/navigation';
+import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useCallback, useMemo, useState } from 'react';
 
 import { useStatusRegistry } from '@/components/statuses/status-registry';

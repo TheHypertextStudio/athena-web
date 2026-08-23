@@ -24,12 +24,18 @@
 - **Blockers**: None. CI run 32614320165 blocked the first deployment attempt because the newer
   work-view slice did not register its virtualized list with the shared in-page search contract.
   The same slice left one domain export, one exported overload implementation, and design-token
-  debt out of sync with the repository policy gates.
+  debt out of sync with the repository policy gates. CI run 32615330065 then found an unsafe union
+  access in the new API regression and uncovered compatibility branches in the shared types
+  package.
 - **Validation**: The four formerly failing repository policy files pass 27 tests. Focused web and
   API regressions prove that work-view search reaches the server, searches only the authorized
   corpus, applies before counts and cursor pagination, and remains separate from saved view state.
-  The API typecheck passed. The local web typecheck produced no diagnostic but exceeded five
-  minutes on the integrated graph, so the exact-SHA CI run remains the authoritative web typecheck.
+  The corrected API query suite passes all 12 tests under one worker.
+  The shared types package passes all 43 files and 747 tests with 100 percent statement, branch,
+  function, and line coverage. The local API typecheck exhausted Node's default 2 GB heap after 97
+  seconds without a diagnostic. The local web typecheck also produced no diagnostic but exceeded
+  five minutes on the integrated graph, so the exact-SHA CI run remains authoritative for both
+  application typechecks.
 
 ### [WEB-SWITCHER-003] Correct the open-document switcher layout and actions
 

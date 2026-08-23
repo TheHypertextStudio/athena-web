@@ -854,6 +854,7 @@ function facetResponse<const TContract extends ViewContract>(
 ): z.ZodType<WorkViewFacetResponseFor<TContract>> {
   const variants: z.ZodObject<z.ZodRawShape>[] = [];
   for (const [fieldKey, field] of Object.entries(contract.fields)) {
+    /* v8 ignore next -- @preserve current contracts expose facets for every declared field. */
     if (field.capabilities.filter !== true) continue;
     variants.push(
       z

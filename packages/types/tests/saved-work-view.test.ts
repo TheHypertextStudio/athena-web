@@ -96,6 +96,71 @@ describe('saved work views', () => {
     });
   });
 
+  it('covers every legacy predicate family and rejects values with no legacy equivalent', () => {
+    const filters = [
+      { field: 'priority', op: 'neq', value: 'low' },
+      { field: 'labels', op: 'eq', value: ID },
+      { field: 'labels', op: 'neq', value: ID },
+      { field: 'labels', op: 'in', value: [ID] },
+      { field: 'labels', op: 'nin', value: [ID] },
+      { field: 'priority', op: 'nin', value: ['low'] },
+      { field: 'estimate', op: 'gt', value: 1 },
+      { field: 'dueDate', op: 'gt', value: '2026-09-01' },
+      { field: 'estimate', op: 'lt', value: 8 },
+      { field: 'dueDate', op: 'lt', value: '2026-10-01' },
+      { field: 'priority', op: 'in', value: ['low', 'high'] },
+      { field: 'title', op: 'contains', value: 'launch' },
+    ] as const;
+
+    for (const filter of filters) {
+      const definition = migrateLegacyTaskViewDefinition({
+        filters: [filter],
+        grouping: null,
+        sort: [],
+      });
+      expect(projectTaskViewDefinitionToLegacy(definition).filters).toHaveLength(1);
+    }
+
+    const empty = migrateLegacyTaskViewDefinition({ filters: [], grouping: null, sort: [] });
+    expect(projectTaskViewDefinitionToLegacy(empty)).toEqual({
+      filters: [],
+      grouping: null,
+      sort: [],
+    });
+    const onePredicate = {
+      ...migrateLegacyTaskViewDefinition({
+        filters: [{ field: 'priority', op: 'eq', value: 'high' }],
+        grouping: { by: 'state' },
+        sort: [],
+      }),
+      filter: {
+        kind: 'predicate',
+        field: 'priority',
+        operator: 'is',
+        operand: 'high',
+      },
+    } as const;
+    expect(projectTaskViewDefinitionToLegacy(onePredicate).grouping).toEqual({ by: 'state' });
+    expect(() =>
+      migrateLegacyTaskViewDefinition({
+        filters: [{ field: 'unsupported', op: 'eq', value: 'x' }],
+        grouping: null,
+        sort: [],
+      }),
+    ).toThrow('is not supported');
+    expect(() =>
+      projectTaskViewDefinitionToLegacy({
+        ...empty,
+        filter: {
+          kind: 'predicate',
+          field: 'assignee',
+          operator: 'is',
+          operand: { kind: 'current-actor' },
+        },
+      }),
+    ).toThrow('has no equivalent legacy value');
+  });
+
   it('validates typed definitions, contextual attachment, position, and compatibility output', () => {
     const definition = migrateLegacyTaskViewDefinition({ filters: [], grouping: null, sort: [] });
     const create = SavedWorkViewCreate.parse({

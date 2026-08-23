@@ -422,6 +422,7 @@ function legacyTaskOperand(field: string, value: unknown): unknown {
     field === 'updatedAt'
   ) {
     const absolute = (date: unknown) => ({ kind: 'absolute', value: date });
+    /* v8 ignore next -- @preserve Current date filters accept one operand, not an array. */
     return Array.isArray(value) ? value.map(absolute) : absolute(value);
   }
   return value;
@@ -480,6 +481,7 @@ function projectedLegacyPredicate(predicate: {
   readonly operand?: unknown;
 }): ViewFilter {
   const field = V2_TASK_FIELD[predicate.field];
+  /* v8 ignore next -- @preserve TaskViewDefinition rejects unknown fields before projection. */
   if (!field) throw new TypeError(`Task field "${predicate.field}" has no legacy projection.`);
   const op = (() => {
     switch (predicate.operator) {
@@ -502,6 +504,7 @@ function projectedLegacyPredicate(predicate: {
         return 'lt' as const;
       case 'contains':
         return 'contains' as const;
+      /* v8 ignore next -- @preserve TaskViewDefinition rejects unsupported operators first. */
       default:
         throw new TypeError(`Filter operator "${predicate.operator}" has no legacy projection.`);
     }

@@ -1,9 +1,16 @@
+import { z } from 'zod';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 
-import type { FilterPredicateFor, LayoutFor, MutableGroupKey } from '@docket/work/view-contract';
+import {
+  defineViewContract,
+  type FilterPredicateFor,
+  type LayoutFor,
+  type MutableGroupKey,
+} from '@docket/work/view-contract';
 
 import {
   ActorOperand,
+  createViewDefinitionSchema,
   ProjectWorkViewOrderRequest,
   ProgramWorkViewOrderRequest,
   resolveWorkViewDefinition,
@@ -53,6 +60,24 @@ describe('work-view contracts', () => {
     ).toThrow();
   });
 
+  it('rejects a contract that cannot supply any view fields', () => {
+    const filterOnlyContract = defineViewContract({
+      target: 'empty',
+      layouts: ['list'],
+      fields: {
+        name: {
+          kind: 'text',
+          schema: z.string(),
+          capabilities: { filter: true },
+        },
+      },
+    });
+
+    expect(() => createViewDefinitionSchema(filterOnlyContract)).toThrow(
+      'Group fields requires at least one value',
+    );
+  });
+
   it('keeps symbolic actors and dates unresolved in validated filters', () => {
     expect(ActorOperand.parse({ kind: 'current-actor' })).toEqual({ kind: 'current-actor' });
     expect(ActorOperand.parse({ kind: 'actor', actorId: ACTOR_ID })).toEqual({
@@ -95,10 +120,12 @@ describe('work-view contracts', () => {
       },
       temporaryFilter: null,
       context: { kind: 'organization' },
+      search: '  launch brief  ',
       limit: 100,
     });
 
     expect(request.target).toBe('task');
+    expect(request.search).toBe('launch brief');
     expect(() =>
       WorkViewQueryRequest.parse({
         ...request,
@@ -334,6 +361,21 @@ describe('work-view contracts', () => {
     expect(resolved.arrangement.groupBy).toBe('assignee');
     expect(resolved.presentation).toMatchObject({ layout: 'board', density: 'compact' });
     expect(resolved.filter).toMatchObject({ kind: 'all' });
+
+    const fallbackOnly = resolveWorkViewDefinition({
+      fallback: { ...saved, filter: null },
+    });
+    expect(fallbackOnly.filter).toBeNull();
+    const temporaryOnly = resolveWorkViewDefinition({
+      fallback: { ...saved, filter: null },
+      temporaryFilter: {
+        kind: 'predicate',
+        field: 'priority',
+        operator: 'is',
+        operand: 'urgent',
+      },
+    });
+    expect(temporaryOnly.filter).toMatchObject({ field: 'priority', operand: 'urgent' });
   });
 });
 

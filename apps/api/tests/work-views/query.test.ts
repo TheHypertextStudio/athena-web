@@ -84,10 +84,9 @@ describe('queryWorkView', () => {
       actorId: humanActorId,
       request: { ...request, cursor: first.nextCursor },
     });
-    expect([...first.rows, ...second.rows].map((row) => row.title).sort()).toEqual([
-      'Needle launch brief',
-      'Needle rollout notes',
-    ]);
+    expect(
+      [...first.rows, ...second.rows].map((row) => (row.target === 'task' ? row.title : '')).sort(),
+    ).toEqual(['Needle launch brief', 'Needle rollout notes']);
   });
 
   it('authorizes before filtering, distinct counts, label fan-out groups, and pagination', async () => {

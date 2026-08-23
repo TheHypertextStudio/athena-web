@@ -1,6 +1,6 @@
 'use client';
 
-import { LayoutGrid, ListView, TuneRounded } from '@docket/ui/icons';
+import { LayoutGrid, ListView, Search, TuneRounded } from '@docket/ui/icons';
 import { cn } from '@docket/ui';
 import {
   Button,
@@ -29,7 +29,7 @@ import {
 } from './view-state';
 
 /** The arrangement or presentation section shown by one compact toolbar trigger. */
-export type DisplayControlKind = 'group' | 'layout' | 'properties';
+export type DisplayControlKind = 'group' | 'display' | 'layout' | 'properties';
 
 /** Props for grouping, layout, and displayed-property controls. */
 export interface DisplayControlsProps<TTarget extends ViewTarget> {
@@ -37,6 +37,8 @@ export interface DisplayControlsProps<TTarget extends ViewTarget> {
   readonly target: TTarget;
   readonly definition: WorkViewDefinitionFor<TTarget>;
   readonly onChange: (definition: WorkViewDefinitionFor<TTarget>) => void;
+  /** Open the temporary roster finder from the display menu. */
+  readonly onFind?: (() => void) | undefined;
   readonly trigger: ReactNode;
   readonly open?: boolean;
   readonly onOpenChange?: (open: boolean) => void;
@@ -50,6 +52,7 @@ export type DisplayControlsContentProps<TTarget extends ViewTarget> = Omit<
 
 function titleFor(kind: DisplayControlKind): string {
   if (kind === 'group') return 'Group';
+  if (kind === 'display') return 'Display';
   if (kind === 'layout') return 'Layout';
   return 'Properties';
 }
@@ -75,6 +78,7 @@ export function DisplayControlsContent<TTarget extends ViewTarget>({
   target,
   definition,
   onChange,
+  onFind,
 }: DisplayControlsContentProps<TTarget>): ReactElement {
   const groupable = workViewGroupFieldCatalog(target);
   const displayable = workViewDisplayFieldCatalog(target);
@@ -147,7 +151,7 @@ export function DisplayControlsContent<TTarget extends ViewTarget>({
         </Stack>
       ) : null}
 
-      {kind === 'layout' ? (
+      {kind === 'layout' || kind === 'display' ? (
         <ControlGroup controlSize="sm" orientation="vertical" role="radiogroup">
           {layouts.map((layout) => (
             <Button
@@ -171,7 +175,13 @@ export function DisplayControlsContent<TTarget extends ViewTarget>({
         </ControlGroup>
       ) : null}
 
-      {kind === 'properties' ? (
+      {kind === 'display' && onFind ? (
+        <Button variant="ghost" className="mt-2 justify-start" onClick={onFind}>
+          <Search aria-hidden /> Find
+        </Button>
+      ) : null}
+
+      {kind === 'properties' || kind === 'display' ? (
         <Stack gap={1} role="group" aria-label="Displayed properties">
           {displayable.map((field) => {
             const checked = definition.presentation.properties.some(
@@ -214,6 +224,7 @@ export function DisplayControls<TTarget extends ViewTarget>({
   target,
   definition,
   onChange,
+  onFind,
   trigger,
   open,
   onOpenChange,
@@ -227,6 +238,7 @@ export function DisplayControls<TTarget extends ViewTarget>({
           target={target}
           definition={definition}
           onChange={onChange}
+          onFind={onFind}
         />
       </PopoverContent>
     </Popover>

@@ -38,16 +38,13 @@ import {
   workViewFieldCatalog,
 } from './view-state';
 
-type ToolbarControl = 'sort' | 'group' | 'layout' | 'properties' | 'default' | 'reset';
-type ToolbarPriority = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+type ToolbarControl = 'sort' | 'group' | 'display';
+type ToolbarPriority = 0 | 1 | 2 | 3;
 
 const CONTROL_PRIORITY = {
   sort: 1,
   group: 2,
-  layout: 3,
-  properties: 4,
-  default: 5,
-  reset: 6,
+  display: 3,
 } as const satisfies Record<ToolbarControl, ToolbarPriority>;
 
 const PRIORITY_MIN_WIDTH: Readonly<Record<ToolbarPriority, number>> = {
@@ -55,24 +52,18 @@ const PRIORITY_MIN_WIDTH: Readonly<Record<ToolbarPriority, number>> = {
   1: 720,
   2: 840,
   3: 960,
-  4: 1080,
-  5: 1200,
-  6: 1320,
 };
 
 const CONTROL_LABEL = {
   sort: 'Sort',
   group: 'Group',
-  layout: 'Layout',
-  properties: 'Properties',
-  default: 'Set as default',
-  reset: 'Reset to default',
+  display: 'Display',
 } as const satisfies Record<ToolbarControl, string>;
 
 /** Return the highest lower-priority toolbar tier that fits the measured container. */
 export function visibleToolbarPriority(width: number): ToolbarPriority {
   let result: ToolbarPriority = 0;
-  for (const priority of [1, 2, 3, 4, 5, 6] as const) {
+  for (const priority of [1, 2, 3] as const) {
     if (width < PRIORITY_MIN_WIDTH[priority]) break;
     result = priority;
   }
@@ -155,6 +146,8 @@ export interface WorkViewToolbarProps<TTarget extends ViewTarget> {
   readonly onSaveView: () => void;
   readonly onSetDefault: () => void;
   readonly onReset: () => void;
+  /** Open the target's temporary finder from Display. */
+  readonly onFind?: () => void;
   readonly canSetDefault?: boolean;
   readonly facetResponse?: WorkViewFacetResponseForTarget<TTarget> | undefined;
   readonly facetMetadataResponse?: WorkViewFacetResponseForTarget<TTarget> | undefined;
@@ -174,6 +167,7 @@ export function WorkViewToolbar<TTarget extends ViewTarget>({
   onSaveView,
   onSetDefault,
   onReset,
+  onFind,
   canSetDefault = true,
   facetResponse,
   facetMetadataResponse,
@@ -188,17 +182,7 @@ export function WorkViewToolbar<TTarget extends ViewTarget>({
   const [overflowPanel, setOverflowPanel] = useState<ToolbarControl | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const [editingFilterIndex, setEditingFilterIndex] = useState<number | null>(null);
-  const controls = useMemo<readonly ToolbarControl[]>(
-    () => [
-      'sort',
-      'group',
-      'layout',
-      'properties',
-      ...(canSetDefault ? ['default' as const] : []),
-      'reset',
-    ],
-    [canSetDefault],
-  );
+  const controls = useMemo<readonly ToolbarControl[]>(() => ['sort', 'group', 'display'], []);
   const visibleControls = controls.filter(
     (control) => CONTROL_PRIORITY[control] <= visiblePriority,
   );
@@ -238,20 +222,6 @@ export function WorkViewToolbar<TTarget extends ViewTarget>({
         />
       );
     }
-    if (control === 'default') {
-      return (
-        <Button key={control} variant="ghost" aria-label="Set as default" onClick={onSetDefault}>
-          Set as default
-        </Button>
-      );
-    }
-    if (control === 'reset') {
-      return (
-        <Button key={control} variant="ghost" aria-label="Reset to default" onClick={onReset}>
-          Reset to default
-        </Button>
-      );
-    }
     return (
       <DisplayControls
         key={control}
@@ -259,6 +229,7 @@ export function WorkViewToolbar<TTarget extends ViewTarget>({
         target={target}
         definition={definition}
         onChange={commit}
+        onFind={onFind}
         trigger={<DisplayControlsTrigger kind={control} />}
       />
     );
@@ -318,24 +289,33 @@ export function WorkViewToolbar<TTarget extends ViewTarget>({
           />
           {visibleControls.map(renderControl)}
           <span className="flex-1" aria-hidden />
-          <Button variant="secondary" aria-label="Save view" onClick={onSaveView}>
-            Save view
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" aria-label="Views">
+                Views
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" aria-label="Views">
+              <DropdownMenuItem onSelect={onSaveView}>Save view</DropdownMenuItem>
+              {canSetDefault ? (
+                <DropdownMenuItem onSelect={onSetDefault}>Set as default</DropdownMenuItem>
+              ) : null}
+              <DropdownMenuItem onSelect={onReset}>Reset to default</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           {hiddenControls.length > 0 ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" iconOnly aria-label="More view controls">
+                <Button variant="ghost" iconOnly aria-label="More controls">
                   <Ellipsis aria-hidden />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" aria-label="More view controls">
+              <DropdownMenuContent align="end" aria-label="More controls">
                 {hiddenControls.map((control) => (
                   <DropdownMenuItem
                     key={control}
                     onSelect={() => {
-                      if (control === 'default') onSetDefault();
-                      else if (control === 'reset') onReset();
-                      else setOverflowPanel(control);
+                      setOverflowPanel(control);
                     }}
                   >
                     {CONTROL_LABEL[control]}
@@ -411,17 +391,15 @@ export function WorkViewToolbar<TTarget extends ViewTarget>({
               }}
             />
           ) : null}
-          {overflowPanel === 'group' ||
-          overflowPanel === 'layout' ||
-          overflowPanel === 'properties' ? (
+          {overflowPanel === 'group' || overflowPanel === 'display' ? (
             <DisplayControlsContent
               kind={overflowPanel}
               target={target}
               definition={definition}
               onChange={(nextDefinition) => {
                 commit(nextDefinition);
-                if (overflowPanel === 'layout') setOverflowPanel(null);
               }}
+              onFind={onFind}
             />
           ) : null}
         </DialogContent>

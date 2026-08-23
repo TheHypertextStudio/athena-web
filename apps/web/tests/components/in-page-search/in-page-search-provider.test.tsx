@@ -15,6 +15,7 @@ interface TargetProps {
   readonly enabled?: boolean;
   readonly brokenFocus?: boolean;
   readonly inputOutsideRoot?: boolean;
+  readonly temporary?: boolean;
 }
 
 function Target({
@@ -23,10 +24,24 @@ function Target({
   enabled = true,
   brokenFocus = false,
   inputOutsideRoot = false,
+  temporary = false,
 }: TargetProps): JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { restoreFocus } = useInPageSearchTarget({ id, rootRef, inputRef, enabled });
+  const [open, setOpen] = useState(!temporary);
+  const { restoreFocus } = useInPageSearchTarget({
+    id,
+    rootRef,
+    inputRef,
+    enabled,
+    ...(temporary
+      ? {
+          onOpen: () => {
+            setOpen(true);
+          },
+        }
+      : {}),
+  });
 
   const input = (
     <input
@@ -47,7 +62,7 @@ function Target({
       {inputOutsideRoot ? input : null}
       <div ref={rootRef}>
         <button type="button">{id} action</button>
-        {inputOutsideRoot ? null : input}
+        {inputOutsideRoot || !open ? null : input}
         <button type="button" onClick={restoreFocus}>
           Restore {id} focus
         </button>
@@ -102,6 +117,22 @@ describe('InPageSearchProvider', () => {
     );
 
     expect(fireEvent.keyDown(document, { key: 'f', ctrlKey: true })).toBe(true);
+  });
+
+  it('opens and focuses a temporary field instead of requiring an idle search bar', async () => {
+    render(
+      <InPageSearchProvider>
+        <Target id="library" temporary />
+      </InPageSearchProvider>,
+    );
+
+    expect(screen.queryByRole('textbox', { name: 'library search' })).toBeNull();
+    fireEvent.keyDown(document, { key: 'f', ctrlKey: true });
+
+    const input = await screen.findByRole<HTMLInputElement>('textbox', {
+      name: 'library search',
+    });
+    expect(input).toHaveFocus();
   });
 
   it('prefers the deepest target that contains the current focus', () => {

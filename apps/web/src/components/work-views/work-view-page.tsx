@@ -153,6 +153,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
   const [dependencyMode, setDependencyMode] = useState(false);
   const [selectedViewId, setSelectedViewId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [findOpen, setFindOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const copy = PAGE_COPY[target];
@@ -190,6 +191,9 @@ export function WorkViewPage<TTarget extends ViewTarget>({
     rootRef,
     inputRef: searchInputRef,
     enabled: layout === 'list' && !controller.loading && !controller.error,
+    onOpen: () => {
+      setFindOpen(true);
+    },
   });
   const openRow = (row: WorkViewRowFor<TTarget>): void => {
     router.push(`/orgs/${organizationId}/${target}s/${row.id}`);
@@ -436,17 +440,22 @@ export function WorkViewPage<TTarget extends ViewTarget>({
                 })}
               </div>
             ) : null}
-            <InPageSearchField
-              inputRef={searchInputRef}
-              value={search}
-              onValueChange={setSearch}
-              onEscapeEmpty={restoreFocus}
-              label={`Search ${copy.title}`}
-              placeholder={`Search every ${copy.singular}`}
-              resultCount={controller.response?.totalCount ?? 0}
-              pending={controller.loading}
-              className="w-full @2xl:max-w-md"
-            />
+            {findOpen ? (
+              <InPageSearchField
+                inputRef={searchInputRef}
+                value={search}
+                onValueChange={setSearch}
+                onEscapeEmpty={() => {
+                  setFindOpen(false);
+                  restoreFocus();
+                }}
+                label={`Search ${copy.title}`}
+                placeholder={`Search ${copy.title.toLowerCase()}`}
+                resultCount={controller.response?.totalCount ?? 0}
+                pending={controller.loading}
+                className="w-full @2xl:max-w-md"
+              />
+            ) : null}
             <div className="flex min-w-0 items-center gap-2">
               <div className="min-w-0 flex-1">
                 <WorkViewToolbar
@@ -459,6 +468,9 @@ export function WorkViewPage<TTarget extends ViewTarget>({
                   }}
                   onSetDefault={controller.setAsDefault}
                   onReset={controller.resetPersonalOverride}
+                  onFind={() => {
+                    setFindOpen(true);
+                  }}
                   facetResponse={controller.facetResponse}
                   facetMetadataResponse={controller.facetMetadataResponse}
                   facetLoading={controller.facetLoading}
@@ -484,7 +496,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
           </div>
         }
       >
-        <div className="border-outline-variant bg-surface-container-lowest flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {projectTimeline.error || orderMutation.error || initiativeHierarchy.error ? (
             <p role="alert" className="text-error text-body-medium px-3 py-2">
               {projectTimeline.error

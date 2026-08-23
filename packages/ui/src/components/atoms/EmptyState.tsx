@@ -75,8 +75,8 @@ export interface EmptyStateProps {
   readonly icon?: React.ComponentType<{ className?: string }>;
   /** The empty-state headline. */
   readonly title: string;
-  /** The one-line supporting copy below the title. */
-  readonly body: string;
+  /** Optional one-line supporting copy below the title. */
+  readonly body?: string | undefined;
   /**
    * Tints the glyph disc to give an empty state per-feature character while keeping the layout
    * identical. Defaults to `neutral`.
@@ -115,7 +115,7 @@ const TONE_DISC_CLASS: Record<EmptyStateTone, string> = {
 };
 
 /**
- * A calm, centered empty state: a toned glyph disc, a title, supporting copy, and an optional
+ * A calm, centered empty state: a toned glyph disc, title, optional supporting copy, and an optional
  * primary action.
  *
  * @remarks
@@ -152,7 +152,9 @@ export function EmptyState({
         <Icon />
       </span>
       <p className="text-on-surface text-body-medium font-medium">{title}</p>
-      <p className="text-on-surface-variant text-body-medium max-w-xs leading-relaxed">{body}</p>
+      {body ? (
+        <p className="text-on-surface-variant text-body-medium max-w-xs leading-relaxed">{body}</p>
+      ) : null}
       {cta ? (
         <Button size="sm" onClick={cta.onClick} disabled={cta.disabled ?? false}>
           {cta.label}

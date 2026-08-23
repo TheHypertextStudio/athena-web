@@ -23,9 +23,8 @@ export function WorkViewLoadFailure({
         frame="none"
         icon={RefreshCw}
         title={`${title} could not load`}
-        body="Your filters and display settings are safe. Try loading this list again."
         cta={{
-          label: retrying ? 'Trying again' : 'Try again',
+          label: retrying ? 'Retrying' : 'Retry',
           onClick: onRetry,
           disabled: retrying,
         }}

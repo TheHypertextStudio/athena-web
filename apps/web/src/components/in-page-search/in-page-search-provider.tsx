@@ -20,6 +20,8 @@ export interface InPageSearchTargetOptions {
   readonly rootRef: RefObject<HTMLElement | null>;
   /** The field that receives focus when this target claims the command. */
   readonly inputRef: RefObject<HTMLInputElement | null>;
+  /** Reveal a temporary search field before the provider attempts to focus it. */
+  readonly onOpen?: () => void;
   /** Whether this target may currently claim the command. */
   readonly enabled?: boolean;
 }
@@ -41,6 +43,7 @@ interface TargetRegistration {
   readonly id: string;
   readonly getRoot: () => HTMLElement | null;
   readonly getInput: () => HTMLInputElement | null;
+  readonly open: (() => void) | undefined;
   readonly isEnabled: () => boolean;
   registeredAt: number;
   lastFocusedAt: number;
@@ -144,17 +147,27 @@ export function InPageSearchProvider({ children }: InPageSearchProviderProps): J
         );
 
       for (const target of [...active, ...remaining]) {
-        const input = target.getInput();
-        if (!input?.isConnected) continue;
         const priorFocus =
-          document.activeElement instanceof HTMLElement && document.activeElement !== input
-            ? document.activeElement
-            : null;
-        input.focus();
-        if (document.activeElement !== input) continue;
-        if (priorFocus?.isConnected) target.restoreElement = priorFocus;
-        input.select();
+          document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        const focus = (): boolean => {
+          const input = target.getInput();
+          if (!input?.isConnected) return false;
+          input.focus();
+          if (document.activeElement !== input) return false;
+          if (priorFocus?.isConnected) target.restoreElement = priorFocus;
+          input.select();
+          return true;
+        };
+        if (focus()) {
+          event.preventDefault();
+          return;
+        }
+        if (!target.open) continue;
+        target.open();
         event.preventDefault();
+        window.setTimeout(() => {
+          focus();
+        }, 0);
         return;
       }
     };
@@ -192,6 +205,7 @@ export function useInPageSearchTarget(
       id: options.id,
       getRoot: () => optionsRef.current.rootRef.current,
       getInput: () => optionsRef.current.inputRef.current,
+      open: optionsRef.current.onOpen,
       isEnabled: () => optionsRef.current.enabled ?? true,
       registeredAt: 0,
       lastFocusedAt: 0,

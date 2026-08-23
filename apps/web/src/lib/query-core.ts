@@ -76,13 +76,8 @@ export const STALE = {
   static: 300_000,
 } as const;
 
-/** How long an unused query stays cached before GC — long enough that back-nav stays instant. */
-// Must be >= the persisted cache's maxAge (24h): `persistQueryClient` refuses to restore an entry
-// whose gcTime has already elapsed, so the previous 5 minutes meant essentially nothing survived a
-// cold start and offline rendering silently did nothing. The cost is that unused queries stay
-// resident for a day within one long-lived tab — bounded by what was actually visited, and the
-// persister's own maxAge still evicts on restore.
-const DEFAULT_GC_TIME_MS = 24 * 60 * 60_000;
+/** How long an unused request stays in memory before TanStack Query collects it. */
+const DEFAULT_GC_TIME_MS = 5 * 60_000;
 
 /**
  * Build a {@link QueryClient} with the app-wide defaults.

@@ -289,7 +289,7 @@ export function useCommandActions({
         keywords: ['log out', 'logout', 'leave'],
         run: () => {
           close();
-          // Centralized: see `lib/sign-out.ts` — clearing the persisted query cache on the way
+          // Centralized: see `lib/sign-out.ts` — clearing persisted entity snapshots on the way
           // out is what stops the next person on a shared device seeing this one's data.
           void signOutAndPurge(queryClient);
         },

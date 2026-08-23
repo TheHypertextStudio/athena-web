@@ -6,6 +6,7 @@ import type { ComponentProps, JSX, MouseEvent } from 'react';
 
 import { useServerReachable } from '@/components/reachability';
 import { navigateWithoutRouter } from '@/lib/app-location';
+import { parseAuthenticatedRoute, prefetchAuthenticatedRoute } from '@/lib/authenticated-route';
 import { useOptionalResponsiveRouter } from '@/lib/interactions/navigation';
 import { useOfflineAvailability } from '@/lib/offline-availability';
 import { useOnlineStatus } from '@/lib/use-online-status';
@@ -43,12 +44,19 @@ export type DocketLinkProps = ComponentProps<typeof Link>;
  * @param props - `next/link`'s props.
  * @returns The link.
  */
-export default function DocketLink({ onClick, ...props }: DocketLinkProps): JSX.Element {
+export default function DocketLink({
+  onClick,
+  onFocus,
+  onMouseEnter,
+  prefetch,
+  ...props
+}: DocketLinkProps): JSX.Element {
   const serverReachable = useServerReachable();
   const online = useOnlineStatus();
   const routerReachable = serverReachable && online;
   const responsiveRouter = useOptionalResponsiveRouter();
   const href = typeof props.href === 'string' ? props.href : null;
+  const localRoute = href?.startsWith('/') === true && routePathIsAuthenticated(href);
   const availability = useOfflineAvailability(href, !routerReachable);
   const navigationPending = responsiveRouter?.requestedHref === href;
 
@@ -76,6 +84,10 @@ export default function DocketLink({ onClick, ...props }: DocketLinkProps): JSX.
     navigateWithoutRouter(href);
   };
 
+  const handleIntent = (): void => {
+    if (href !== null && localRoute) void prefetchAuthenticatedRoute(href);
+  };
+
   if (availability === 'unavailable') {
     // Only DOM-safe props are carried over. `next/link` accepts `prefetch`, `replace`, `scroll` and
     // friends, and spreading those onto a `span` would put unknown attributes in the document and
@@ -99,12 +111,27 @@ export default function DocketLink({ onClick, ...props }: DocketLinkProps): JSX.
   return (
     <Link
       {...props}
+      {...(localRoute ? { prefetch: false } : prefetch === undefined ? {} : { prefetch })}
       aria-current={navigationPending ? undefined : props['aria-current']}
       aria-busy={navigationPending || undefined}
       data-navigation-pending={navigationPending || undefined}
       onClick={handleClick}
+      onFocus={(event) => {
+        onFocus?.(event);
+        if (!event.defaultPrevented) handleIntent();
+      }}
+      onMouseEnter={(event) => {
+        onMouseEnter?.(event);
+        if (!event.defaultPrevented) handleIntent();
+      }}
     />
   );
+}
+
+function routePathIsAuthenticated(href: string): boolean {
+  const queryAt = href.indexOf('?');
+  const pathname = queryAt === -1 ? href : href.slice(0, queryAt);
+  return parseAuthenticatedRoute(pathname).kind === 'matched';
 }
 
 /**

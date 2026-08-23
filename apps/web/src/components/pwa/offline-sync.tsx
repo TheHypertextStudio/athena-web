@@ -61,8 +61,8 @@ export function useOutboxSummary(): OutboxSummary {
  * Headless: binds the queue to the signed-in account and keeps it draining.
  *
  * @remarks
- * Mounted beside `QueryPersistence`, and for the same reason — both need the resolved user id, and
- * that is the one thing the shell knows before any surface renders. The identity is also posted to
+ * Mounted beside entity snapshot persistence because both need the resolved user id, and that is
+ * the one thing the shell knows before any surface renders. The identity is also posted to
  * the service worker here, because the worker keys its offline document cache on it and cannot ask.
  *
  * On a successful sync the whole query cache is invalidated once. That looks blunt, and is

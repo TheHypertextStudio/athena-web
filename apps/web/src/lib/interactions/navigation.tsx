@@ -46,7 +46,7 @@ export interface ResponsiveNavigationProviderProps {
     href: string,
     replace: boolean,
     options?: ResponsiveNavigationOptions,
-  ) => void;
+  ) => boolean | undefined;
   /** The subtree whose links and imperative owners share navigation intent. */
   readonly children: ReactNode;
 }
@@ -146,7 +146,10 @@ export function ResponsiveNavigationProvider({
       }
 
       try {
-        (navigate ?? navigateWithRouter)(href, replace, options);
+        const handled = navigate?.(href, replace, options);
+        if (navigate === undefined || handled === false) {
+          navigateWithRouter(href, replace, options);
+        }
         return true;
       } catch {
         if (intentRef.current.id === id) {

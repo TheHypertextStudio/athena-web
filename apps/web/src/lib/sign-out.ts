@@ -5,7 +5,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import { purgeAllOutboxes } from '@/components/pwa/outbox-store';
 import { purgeOfflineDocuments } from '@/components/pwa/purge-offline-documents';
 import { signOut } from '@/lib/auth-client';
-import { purgeAllPersistedQueryCaches } from '@/lib/query-persist';
+import { purgeAllNavigationSnapshots } from '@/lib/navigation-snapshot-runtime';
 import { clearSessionSnapshot } from '@/lib/session-snapshot';
 
 /**
@@ -21,8 +21,8 @@ import { clearSessionSnapshot } from '@/lib/session-snapshot';
  * shell render a workspace for someone who is not signed in), then every persisted bucket — not
  * just this user's, since the point is that no previous occupant's data survives.
  *
- * There are now four such places, not one, and they are cleared together on purpose: the query
- * buckets, the offline write queue, and the service worker's cached route documents. The last two
+ * There are now four such places, not one, and they are cleared together on purpose: the entity
+ * snapshots, the offline write queue, and the service worker's cached route documents. The last two
  * arrived with offline support, and each would otherwise let a previous occupant's data — an unsent
  * change, a rendered workspace shell — outlive their session on a shared device. Unsent changes
  * *are* discarded by this; the sync indicator is visible the whole time any exist, so signing out
@@ -33,7 +33,7 @@ import { clearSessionSnapshot } from '@/lib/session-snapshot';
 export async function purgeLocalSessionState(queryClient: QueryClient): Promise<void> {
   queryClient.clear();
   clearSessionSnapshot();
-  await Promise.all([purgeAllPersistedQueryCaches(), purgeAllOutboxes(), purgeOfflineDocuments()]);
+  await Promise.all([purgeAllNavigationSnapshots(), purgeAllOutboxes(), purgeOfflineDocuments()]);
 }
 
 /**
@@ -41,8 +41,8 @@ export async function purgeLocalSessionState(queryClient: QueryClient): Promise<
  *
  * @remarks
  * Centralized because signing out has to tear down three separate stores, and doing that correctly
- * in two places was never going to stay correct. Once the query cache is persisted to IndexedDB, a
- * sign-out that only ends the session leaves the previous person's orgs, projects and tasks readable
+ * in two places was never going to stay correct. Once entity snapshots persist to IndexedDB, a
+ * sign-out that only ends the session leaves the previous person's recently opened work readable
  * by whoever opens the browser next.
  *
  * **Only ever call this for a deliberate user action** — the account menu and the command palette's

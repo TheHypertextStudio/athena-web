@@ -12,6 +12,13 @@ import {
   type ReactNode,
 } from 'react';
 
+import {
+  buildAuthenticatedHref,
+  parseAuthenticatedRoute,
+  type AuthenticatedRoute,
+  type AuthenticatedRouteParams,
+} from './authenticated-route';
+import type { AuthenticatedRoutePattern } from './offline-routes.generated';
 import { ROUTE_PATTERNS } from './offline-routes.generated';
 import { ResponsiveNavigationProvider } from './interactions/navigation';
 import { matchRoutes } from './route-match';
@@ -96,8 +103,34 @@ export function syncLocation(): void {
  * @param href - The destination, as a same-origin path with optional query.
  */
 export function navigateWithoutRouter(href: string): void {
-  window.history.pushState(null, '', href);
+  navigateHistory(href, false);
+}
+
+function navigateHistory(href: string, replace: boolean): void {
+  if (replace) window.history.replaceState(null, '', href);
+  else window.history.pushState(null, '', href);
   syncLocation();
+}
+
+/** Options for one validated browser-history navigation. */
+export interface AuthenticatedNavigationOptions {
+  /** Replace the current history entry instead of pushing a new one. */
+  readonly replace?: boolean;
+}
+
+/**
+ * Validate and commit one generated authenticated route without asking Next for an RSC transition.
+ *
+ * @param pattern - A generated authenticated route pattern.
+ * @param params - Parameters correlated with that exact pattern.
+ * @param options - Browser history behavior.
+ */
+export function navigateAuthenticated<TPattern extends AuthenticatedRoutePattern>(
+  pattern: TPattern,
+  params: AuthenticatedRouteParams<TPattern>,
+  options: AuthenticatedNavigationOptions = {},
+): void {
+  navigateHistory(buildAuthenticatedHref(pattern, params), options.replace === true);
 }
 
 /** Subscribe to location changes. */
@@ -173,8 +206,16 @@ export function AppLocationProvider({
   const serverHref =
     serverPath ??
     (routerSearch.size > 0 ? `${routerPathname}?${routerSearch.toString()}` : routerPathname);
-  const canonicalHref =
-    routerSearch.size > 0 ? `${routerPathname}?${routerSearch.toString()}` : routerPathname;
+  const getServerSnapshot = useCallback(() => serverHref, [serverHref]);
+  const locationHref = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+
+  const navigate = useCallback((href: string, replace: boolean): boolean => {
+    const queryAt = href.indexOf('?');
+    const pathname = queryAt === -1 ? href : href.slice(0, queryAt);
+    if (parseAuthenticatedRoute(pathname).kind !== 'matched') return false;
+    navigateHistory(href, replace);
+    return true;
+  }, []);
 
   useEffect(() => {
     syncLocation();
@@ -190,7 +231,7 @@ export function AppLocationProvider({
 
   return (
     <ServerHrefContext.Provider value={serverHref}>
-      <ResponsiveNavigationProvider canonicalHref={canonicalHref}>
+      <ResponsiveNavigationProvider canonicalHref={locationHref} navigate={navigate}>
         {children}
       </ResponsiveNavigationProvider>
     </ServerHrefContext.Provider>
@@ -251,6 +292,24 @@ export function useAppLocation(): AppLocation {
 // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
 export function useAppParams<T extends Record<string, string | readonly string[]>>(): T {
   return useAppLocation().params as T;
+}
+
+/**
+ * Read one exact generated route and its runtime-validated, branded parameters.
+ *
+ * @param pattern - The route pattern the mounted component implements.
+ * @returns The matched route with parameters correlated to that pattern.
+ * @throws {Error} When the current URL is invalid or names a different route.
+ */
+export function useTypedRoute<TPattern extends AuthenticatedRoutePattern>(
+  pattern: TPattern,
+): Extract<AuthenticatedRoute, { readonly pattern: TPattern }> {
+  const { pathname } = useAppLocation();
+  const result = parseAuthenticatedRoute(pathname);
+  if (result.kind !== 'matched' || result.route.pattern !== pattern) {
+    throw new Error(`Expected authenticated route ${pattern}.`);
+  }
+  return result.route as Extract<AuthenticatedRoute, { readonly pattern: TPattern }>;
 }
 
 /**

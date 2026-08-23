@@ -25,7 +25,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useAppParams, useAppSearchParams } from '@/lib/app-location';
+import { useAppSearchParams, useTypedRoute } from '@/lib/app-location';
 import { type JSX, useMemo, useState } from 'react';
 
 import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
@@ -67,12 +67,15 @@ import { userErrorMessage } from '@/lib/problem';
 import { useSession } from '@/lib/auth-client';
 import { formatPlanningTimeframe, toPlanningTimeframe } from '@/lib/planning-timeframe';
 import { useFiscalYearStartMonth } from '@/lib/use-fiscal-year-start-month';
+import { useNavigationSnapshot } from '@/lib/use-navigation-snapshot';
 
 type TabId = 'overview' | 'subinitiatives' | 'work' | 'updates' | 'resources';
 
 /** Printable, document-first Initiative detail composed from the shared entity-detail shell. */
 export default function InitiativeDetailPage(): JSX.Element {
-  const { orgId, initiativeId } = useAppParams<{ orgId: string; initiativeId: string }>();
+  const { params } = useTypedRoute('/orgs/[orgId]/initiatives/[initiativeId]');
+  const { orgId, initiativeId } = params;
+  const navigationSnapshot = useNavigationSnapshot('initiative', initiativeId);
   const entityMentions = useEntityMentions(orgId, 'initiative', initiativeId);
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -278,7 +281,7 @@ export default function InitiativeDetailPage(): JSX.Element {
         // composer that created it, or warmed by the list the reader came from. Showing the real
         // name the moment it exists is the difference between a page that is loading and a page
         // that gives no sign of what it is.
-        title={recordQ.data?.name}
+        title={recordQ.data?.name ?? navigationSnapshot?.name}
         subtitle={recordQ.data?.summary ?? undefined}
       />
     );

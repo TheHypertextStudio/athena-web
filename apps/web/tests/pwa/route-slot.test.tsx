@@ -74,7 +74,7 @@ describe('RouteSlot', () => {
     expect(screen.getByText('the real page')).toBeInTheDocument();
   });
 
-  it('keeps Next’s resolved children during an online soft navigation with a stale document path', () => {
+  it('mounts the requested client route during an online local navigation', () => {
     at('/orgs/o1/tasks/t1');
     render(
       <AppLocationProvider serverPath="/today">
@@ -86,8 +86,8 @@ describe('RouteSlot', () => {
       </AppLocationProvider>,
     );
 
-    expect(screen.getByText('the real page')).toBeInTheDocument();
-    expect(screen.queryByText('outlet')).not.toBeInTheDocument();
+    expect(screen.getByText('outlet')).toBeInTheDocument();
+    expect(screen.queryByText('the real page')).not.toBeInTheDocument();
   });
 
   it('renders the requested route when the document was replayed while offline', () => {

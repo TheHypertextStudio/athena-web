@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  entityNavigationSnapshotFromWorkViewRow,
   InitiativeViewDefinition,
   type InitiativeViewRow,
   pageOf,
@@ -28,7 +29,6 @@ import {
   Skeleton,
 } from '@docket/ui/primitives';
 import type { ViewTarget } from '@docket/work/view-contract';
-import { useRouter } from 'next/navigation';
 import { type JSX, useRef, useState } from 'react';
 
 import { useCreateObject } from '@/components/create-object/create-object-provider';
@@ -37,6 +37,7 @@ import { InPageSearchField } from '@/components/in-page-search/in-page-search-fi
 import { useInPageSearchTarget } from '@/components/in-page-search/in-page-search-provider';
 import { ListPageLayout } from '@/components/views/page-layout';
 import { api } from '@/lib/api';
+import { openEntity } from '@/lib/local-first-navigation';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, type RpcResponse, useApiQuery } from '@/lib/query';
 
@@ -141,7 +142,6 @@ export function WorkViewPage<TTarget extends ViewTarget>({
   organizationId,
   target,
 }: WorkViewPageProps<TTarget>): JSX.Element {
-  const router = useRouter();
   const { openCreate } = useCreateObject();
   const { teams } = useActiveOrg();
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(() => new Set());
@@ -196,7 +196,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
     },
   });
   const openRow = (row: WorkViewRowFor<TTarget>): void => {
-    router.push(`/orgs/${organizationId}/${target}s/${row.id}`);
+    openEntity(entityNavigationSnapshotFromWorkViewRow(row));
   };
   const create = (path: readonly string[] = []): void => {
     const applyColumn = (itemId: string): void => {
@@ -353,7 +353,8 @@ export function WorkViewPage<TTarget extends ViewTarget>({
         onApplyCascade={projectTimeline.applyCascade}
         applyingCascade={projectTimeline.applyingCascade}
         onActivate={(id) => {
-          router.push(`/orgs/${organizationId}/projects/${id}`);
+          const row = rows.find((candidate) => candidate.id === id);
+          if (row !== undefined) openRow(row);
         }}
         onPrefetch={() => undefined}
       />
@@ -365,7 +366,8 @@ export function WorkViewPage<TTarget extends ViewTarget>({
         rows={rows as unknown as readonly InitiativeViewRow[]}
         density={controller.definition.presentation.density}
         onActivate={(id) => {
-          router.push(`/orgs/${organizationId}/initiatives/${id}`);
+          const row = rows.find((candidate) => candidate.id === id);
+          if (row !== undefined) openRow(row);
         }}
         onPrefetch={() => undefined}
       />

@@ -5,7 +5,7 @@ import { ActorAvatar, ActorPicker, type ActorKind, type PickerOption } from '@do
 import { useVocabulary } from '@docket/ui/hooks';
 import { Skeleton, SkeletonChip, SkeletonText } from '@docket/ui/primitives';
 import { useRouter } from 'next/navigation';
-import { useAppParams } from '@/lib/app-location';
+import { useTypedRoute } from '@/lib/app-location';
 import { type JSX, useCallback, useMemo, useState } from 'react';
 
 import { useDocumentTitle } from '@/components/tabs/use-document-title';
@@ -47,6 +47,7 @@ import { useRenameTask } from '@/lib/use-rename-task';
 import { useCategoryOf } from '@/components/entity-display/use-work-status';
 import { TaskRepeatingWorkBacklink } from '@/components/recurrence/repeating-work-backlink';
 import { useSession } from '@/lib/auth-client';
+import { useNavigationSnapshot } from '@/lib/use-navigation-snapshot';
 
 interface TaskFeedActor {
   name: string;
@@ -57,8 +58,9 @@ interface TaskFeedActor {
 /** TaskDetailPage renders the authenticated task page. */
 export default function TaskDetailPage(): JSX.Element {
   const router = useRouter();
-  const params = useAppParams<{ orgId: string; taskId: string }>();
+  const { params } = useTypedRoute('/orgs/[orgId]/tasks/[taskId]');
   const { orgId, taskId } = params;
+  const navigationSnapshot = useNavigationSnapshot('task', taskId);
 
   const projectLabel = useVocabulary('project');
   const programLabel = useVocabulary('program');
@@ -221,7 +223,13 @@ export default function TaskDetailPage(): JSX.Element {
       // column jumped left the moment the 18rem property rail appeared beside it.
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
         <header className="flex flex-col gap-4">
-          <SkeletonText scale="title" className="w-2/3 max-w-lg" />
+          {navigationSnapshot ? (
+            <h1 className="text-on-surface text-title-large leading-tight">
+              {navigationSnapshot.title}
+            </h1>
+          ) : (
+            <SkeletonText scale="title" className="w-2/3 max-w-lg" />
+          )}
           <div className="flex flex-wrap gap-2">
             <SkeletonChip className="w-32" />
             <SkeletonChip className="w-32" />

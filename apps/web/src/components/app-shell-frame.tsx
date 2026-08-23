@@ -37,7 +37,7 @@ import { CommandPaletteProvider, useCommandPalette } from '@/components/command-
 import { OfflineBanner, OfflineContent } from '@/components/offline-state';
 import { NavigationProgress } from '@/components/navigation-progress';
 import { OfflineSyncIndicator, OfflineSyncRuntime, useOutboxSummary } from '@/components/pwa';
-import { QueryPersistence } from '@/components/query-persistence';
+import { NavigationSnapshotPersistence } from '@/components/navigation-snapshot-persistence';
 import { ReachabilityProvider } from '@/components/reachability';
 import { RecoveryNudgeBanner } from '@/components/recovery-nudge-banner';
 import { SettingsShell } from '@/components/settings/settings-shell';
@@ -52,7 +52,7 @@ import {
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { userErrorMessage } from '@/lib/problem';
-import { purgeAllPersistedQueryCaches } from '@/lib/query-persist';
+import { purgeAllNavigationSnapshots } from '@/lib/navigation-snapshot-runtime';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery, useLiveApiQuery } from '@/lib/query';
 import {
   clearSessionSnapshot,
@@ -205,7 +205,7 @@ export function AppShellFrame({ children, initialSession }: AppShellFrameProps):
     if (status !== 'authenticated' || !session || !snapshot) return;
     if (snapshot.userId !== session.user.id) {
       queryClient.clear();
-      void purgeAllPersistedQueryCaches();
+      void purgeAllNavigationSnapshots();
     }
   }, [status, session, snapshot, queryClient]);
 
@@ -328,9 +328,8 @@ export function AppShellFrame({ children, initialSession }: AppShellFrameProps):
             {/* The palette's navigate actions are static route pushes, so it is armed as soon as we
               know whose workspace to search — not once every workspace has loaded. */}
             <CommandPaletteProvider enabled={!identityUnknown}>
-              <QueryPersistence userId={userId} />
-              {/* Beside the query cache and for the same reason: both bind local durable state to the
-                resolved account, and this is the first place that id is known. */}
+              <NavigationSnapshotPersistence userId={userId} />
+              {/* This is the first place that durable local state can bind to a resolved account. */}
               <OfflineSyncRuntime userId={userId} />
               <OpenDocumentsProvider userId={userId}>
                 <AppShellInner

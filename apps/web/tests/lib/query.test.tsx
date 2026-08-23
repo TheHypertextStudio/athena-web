@@ -123,6 +123,13 @@ describe('useApiQuery', () => {
 });
 
 describe('createQueryClient session-expiry wiring', () => {
+  it('garbage-collects inactive request data after five minutes', () => {
+    const client = createQueryClient();
+
+    expect(client.getDefaultOptions().queries?.gcTime).toBe(5 * 60 * 1000);
+    client.clear();
+  });
+
   it('invokes the injected onError with a SessionExpiredError when a query 401s', async () => {
     const onError = vi.fn();
     const client = createQueryClient({ onError });

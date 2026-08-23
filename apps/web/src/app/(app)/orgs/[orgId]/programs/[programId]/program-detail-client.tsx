@@ -16,7 +16,7 @@ import {
   type TabsItem,
 } from '@docket/ui/primitives';
 import { useRouter } from 'next/navigation';
-import { useAppParams } from '@/lib/app-location';
+import { useTypedRoute } from '@/lib/app-location';
 import { type JSX, useMemo, useState } from 'react';
 
 import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
@@ -44,14 +44,16 @@ import { fetchProgramDetail } from '@/lib/fetch-program-detail';
 import { useProgramMutations } from '@/lib/use-program-mutations';
 import { userErrorMessage } from '@/lib/problem';
 import { useSession } from '@/lib/auth-client';
+import { useNavigationSnapshot } from '@/lib/use-navigation-snapshot';
 
 type TabId = 'overview' | 'projects' | 'work' | 'updates';
 
 /** ProgramDetailPage renders the authenticated program page. */
 export default function ProgramDetailPage(): JSX.Element {
   const router = useRouter();
-  const params = useAppParams<{ orgId: string; programId: string }>();
+  const { params } = useTypedRoute('/orgs/[orgId]/programs/[programId]');
   const { orgId, programId } = params;
+  const navigationSnapshot = useNavigationSnapshot('program', programId);
 
   const programLabel = useVocabulary('program');
   const projectNounCased = useVocabulary('project');
@@ -162,7 +164,13 @@ export default function ProgramDetailPage(): JSX.Element {
     //
     // Reached only on a cold open; arriving from a list or from the composer that just
     // created it, the record is cached and the real masthead renders straight away.
-    return <EntityDetailSkeleton tabCount={3} label={`Loading ${programLabel.toLowerCase()}`} />;
+    return (
+      <EntityDetailSkeleton
+        tabCount={3}
+        label={`Loading ${programLabel.toLowerCase()}`}
+        title={navigationSnapshot?.name}
+      />
+    );
   }
 
   if (detailQ.isError) {

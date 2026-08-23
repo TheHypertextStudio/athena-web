@@ -3,9 +3,7 @@
 import type { JSX, ReactNode } from 'react';
 
 import OfflineRouteOutlet from '@/components/pwa/offline-route-outlet';
-import { useServerReachable } from '@/components/reachability';
 import { useAppLocation } from '@/lib/app-location';
-import { useOnlineStatus } from '@/lib/use-online-status';
 
 /**
  * Renders the page this document was built for, or — when the worker replayed this document under
@@ -37,9 +35,9 @@ import { useOnlineStatus } from '@/lib/use-online-status';
  * click that swaps the route re-renders this — without it, the previous page would stay on screen
  * under the new URL, which is the exact lie the whole component exists to prevent.
  *
- * With a reachable server, even a path mismatch keeps Next's resolved `children`. Offline, or once
- * the shell knows the server is unreachable, that mismatch selects the outlet without a failed
- * router request first.
+ * A path mismatch always selects the client outlet. Authenticated same-tab navigation deliberately
+ * commits browser history without asking Next for a route payload, so an online mismatch is the
+ * normal local-first path rather than evidence of an offline replay.
  */
 
 /** Props for {@link RouteSlot}. */
@@ -64,12 +62,9 @@ export interface RouteSlotProps {
  */
 export default function RouteSlot({ serverPath, children }: RouteSlotProps): JSX.Element {
   const { pathname } = useAppLocation();
-  const serverReachable = useServerReachable();
-  const online = useOnlineStatus();
-  const replayedOffline =
-    serverPath !== null && pathOf(serverPath) !== pathname && (!online || !serverReachable);
+  const routedLocally = serverPath !== null && pathOf(serverPath) !== pathname;
 
-  return replayedOffline ? <OfflineRouteOutlet /> : <>{children}</>;
+  return routedLocally ? <OfflineRouteOutlet /> : <>{children}</>;
 }
 
 /** The path part of a value that may carry a query string. */

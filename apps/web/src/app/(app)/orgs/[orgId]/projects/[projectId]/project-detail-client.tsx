@@ -25,7 +25,7 @@ import {
 } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { useAppParams, useAppSearchParams } from '@/lib/app-location';
+import { useAppSearchParams, useTypedRoute } from '@/lib/app-location';
 import { type JSX, useEffect, useMemo, useState } from 'react';
 
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
@@ -63,6 +63,7 @@ import { useRenameTask } from '@/lib/use-rename-task';
 import { userErrorMessage } from '@/lib/problem';
 import { useSession } from '@/lib/auth-client';
 import { useFiscalYearStartMonth } from '@/lib/use-fiscal-year-start-month';
+import { useNavigationSnapshot } from '@/lib/use-navigation-snapshot';
 
 type TabId = 'overview' | 'tasks' | 'updates' | 'resources';
 
@@ -71,7 +72,9 @@ export default function ProjectDetailPage(): JSX.Element {
   const router = useRouter();
   const searchParams = useAppSearchParams();
   const queryClient = useQueryClient();
-  const { orgId, projectId } = useAppParams<{ orgId: string; projectId: string }>();
+  const { params } = useTypedRoute('/orgs/[orgId]/projects/[projectId]');
+  const { orgId, projectId } = params;
+  const navigationSnapshot = useNavigationSnapshot('project', projectId);
   const { defaultTeamId } = useActiveOrg();
   const { openCreate } = useCreateObject();
   const highlightMilestoneId = searchParams.get('milestoneId');
@@ -270,7 +273,12 @@ export default function ProjectDetailPage(): JSX.Element {
     // Reached only on a cold open. Arriving from a list, or straight from the composer
     // that just created the project, the record is already cached and the page renders its real
     // masthead immediately with only the body still loading.
-    return <EntityDetailSkeleton label={`Loading ${projectNoun.toLowerCase()}`} />;
+    return (
+      <EntityDetailSkeleton
+        label={`Loading ${projectNoun.toLowerCase()}`}
+        title={navigationSnapshot?.name}
+      />
+    );
   }
   if (detailQ.isError || !project) {
     return (

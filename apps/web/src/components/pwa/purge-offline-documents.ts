@@ -5,7 +5,7 @@
  *
  * @remarks
  * The page-side half of the sign-out teardown. `purgeLocalSessionState` already clears the
- * in-memory query cache, the offline identity snapshot, and every persisted IndexedDB bucket; once
+ * in-memory query cache, the offline identity snapshot, and every persisted entity bucket; once
  * the worker began storing route documents (see `service-worker/documents.ts`) it became a fourth
  * place a previous occupant's data can live, and sign-out has to mean one thing.
  *

@@ -8,7 +8,7 @@ import { type OutboxEntry, expireAged } from './outbox-model';
  * Durable storage for the offline write queue.
  *
  * @remarks
- * IndexedDB, per user, alongside the persisted query cache and under the same
+ * IndexedDB, per user, alongside persisted entity snapshots and under the same
  * `docket:<thing>:<userId>` convention — deliberately the same store and the same key discipline,
  * so "everywhere local data lives" stays a list of one technology rather than two.
  *

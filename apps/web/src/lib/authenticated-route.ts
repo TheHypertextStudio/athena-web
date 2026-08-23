@@ -23,7 +23,11 @@ import {
   type TeamId as TeamIdValue,
 } from '@docket/types';
 
-import { ROUTE_PATTERNS, type AuthenticatedRoutePattern } from './offline-routes.generated';
+import {
+  OFFLINE_ROUTES,
+  ROUTE_PATTERNS,
+  type AuthenticatedRoutePattern,
+} from './offline-routes.generated';
 import { matchRoutes } from './route-match';
 
 type RouteParamValue<TName extends string> = TName extends 'orgId'
@@ -112,6 +116,7 @@ const paramSchemas: Readonly<Record<string, RuntimeParamSchema>> = {
   seriesId: RecurrenceSeriesId,
   sessionId: AgentSessionId,
 };
+const modulePrefetches = new Map<AuthenticatedRoutePattern, Promise<unknown>>();
 
 function paramSchema(name: string): RuntimeParamSchema {
   return paramSchemas[name] ?? fallbackParam;
@@ -232,4 +237,32 @@ export function buildEntityHref(snapshot: EntityNavigationSnapshot): string {
         initiativeId: snapshot.id,
       });
   }
+}
+
+/**
+ * Load only the client module for one authenticated href after explicit pointer or keyboard intent.
+ *
+ * @param href - Same-origin href with an optional query string.
+ * @returns Whether the href names a generated authenticated client route.
+ */
+export async function prefetchAuthenticatedRoute(href: string): Promise<boolean> {
+  const queryAt = href.indexOf('?');
+  const pathname = queryAt === -1 ? href : href.slice(0, queryAt);
+  const match = parseAuthenticatedRoute(pathname);
+  if (match.kind !== 'matched') return false;
+  const pattern = match.route.pattern;
+  const entry = OFFLINE_ROUTES.find((candidate) => candidate.pattern === pattern);
+  if (entry === undefined) return false;
+  const existing = modulePrefetches.get(pattern);
+  if (existing !== undefined) {
+    await existing;
+    return true;
+  }
+  const load = entry.load().catch((error: unknown) => {
+    modulePrefetches.delete(pattern);
+    throw error;
+  });
+  modulePrefetches.set(pattern, load);
+  await load;
+  return true;
 }

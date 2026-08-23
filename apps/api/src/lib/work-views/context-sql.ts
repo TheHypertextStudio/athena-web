@@ -203,7 +203,7 @@ function baseColumns(target: ViewTarget): SQL {
         e.owner_id, e.visibility, e.created_by, e.updated_at`;
     case 'initiative':
       return sql`e.organization_id, e.id, e.name, e.summary, e.status, e.status_id, e.priority, e.health,
-        e.owner_id, e.lead_team_id, e.target_date, e.update_cadence`;
+        e.owner_id, e.lead_team_id, e.target_date, e.update_cadence, e.updated_at`;
   }
 }
 

@@ -51,14 +51,20 @@ function id<Brand extends string>() {
 export const OrganizationId = id<'OrganizationId'>().describe(
   'ULID id of an Organization — a tenant workspace; the top-level boundary every other entity belongs to.',
 );
+/** A branded Organization id value. */
+export type OrganizationId = z.infer<typeof OrganizationId>;
 /** Branded `Actor` id. */
 export const ActorId = id<'ActorId'>().describe(
   "ULID id of an Actor — a member identity within one org (a human user's membership, or an agent/service principal).",
 );
+/** A branded Actor id value. */
+export type ActorId = z.infer<typeof ActorId>;
 /** Branded `Team` id. */
 export const TeamId = id<'TeamId'>().describe(
   'ULID id of a Team — a named group of actors within an org used for ownership and routing.',
 );
+/** A branded Team id value. */
+export type TeamId = z.infer<typeof TeamId>;
 /** Branded `Role` id. */
 export const RoleId = id<'RoleId'>().describe(
   'ULID id of a Role — a named bundle of capabilities assignable to an actor.',
@@ -75,14 +81,20 @@ export const InvitationId = id<'InvitationId'>().describe(
 export const InitiativeId = id<'InitiativeId'>().describe(
   'ULID id of an Initiative — the highest planning altitude, grouping Programs/Projects toward a strategic outcome.',
 );
+/** A branded Initiative id value. */
+export type InitiativeId = z.infer<typeof InitiativeId>;
 /** Branded `Program` id. */
 export const ProgramId = id<'ProgramId'>().describe(
   'ULID id of a Program — a mid-altitude grouping of related Projects.',
 );
+/** A branded Program id value. */
+export type ProgramId = z.infer<typeof ProgramId>;
 /** Branded `Project` id. */
 export const ProjectId = id<'ProjectId'>().describe(
   'ULID id of a Project — a bounded body of work containing Tasks, with status and health.',
 );
+/** A branded Project id value. */
+export type ProjectId = z.infer<typeof ProjectId>;
 /** Branded `Milestone` id. */
 export const MilestoneId = id<'MilestoneId'>().describe(
   'ULID id of a Milestone — a dated checkpoint within a Project.',
@@ -91,10 +103,14 @@ export const MilestoneId = id<'MilestoneId'>().describe(
 export const CycleId = id<'CycleId'>().describe(
   'ULID id of a Cycle — a time-boxed iteration (sprint) Tasks can be scheduled into.',
 );
+/** A branded Cycle id value. */
+export type CycleId = z.infer<typeof CycleId>;
 /** Branded `Task` id. */
 export const TaskId = id<'TaskId'>().describe(
   'ULID id of a Task — the atomic unit of work, with status, priority, assignee, and dependencies.',
 );
+/** A branded Task id value. */
+export type TaskId = z.infer<typeof TaskId>;
 /** Branded `WorkStatus` id. */
 export const WorkStatusId = id<'WorkStatusId'>().describe(
   'ULID id of a work status — one entry in a workspace’s status set for Tasks, Projects, Programs, or Initiatives.',
@@ -155,6 +171,8 @@ export const ProcessStepId = id<'ProcessStepId'>().describe(
 export const RecurrenceSeriesId = id<'RecurrenceSeriesId'>().describe(
   'ULID id of a RecurrenceSeries — a schedule that expects process occurrences.',
 );
+/** A branded Recurrence Series id value. */
+export type RecurrenceSeriesId = z.infer<typeof RecurrenceSeriesId>;
 /** Branded `RecurrenceSeriesRevision` id. */
 export const RecurrenceSeriesRevisionId = id<'RecurrenceSeriesRevisionId'>().describe(
   'ULID id of a RecurrenceSeriesRevision — one immutable trigger version within a recurrence series.',
@@ -175,6 +193,8 @@ export const AgentId = id<'AgentId'>().describe(
 export const AgentSessionId = id<'AgentSessionId'>().describe(
   'ULID id of an AgentSession — one run of an Agent, with a status lifecycle (incl. `awaiting_approval`, `failed`).',
 );
+/** A branded Agent Session id value. */
+export type AgentSessionId = z.infer<typeof AgentSessionId>;
 /** Branded `SessionActivity` id. */
 export const SessionActivityId = id<'SessionActivityId'>().describe(
   'ULID id of a SessionActivity — a single step/event recorded within an AgentSession timeline.',

@@ -1352,6 +1352,7 @@ export const InitiativeViewRow = z
     targetDate: nullableDate,
     updateCadence: InitiativeUpdateCadence,
     latestUpdate: nullableTimestamp,
+    updatedAt: TimestampString,
     activeProjectCount: count,
     parent: InitiativeId.nullable(),
     parentLinkId: Id.nullable().default(null),

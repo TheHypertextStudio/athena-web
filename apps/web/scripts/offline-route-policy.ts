@@ -270,12 +270,17 @@ export interface OfflineRoute {
 }
 
 /** Every authenticated route that has a client component to render. */
-export const OFFLINE_ROUTES: readonly OfflineRoute[] = [
+export const OFFLINE_ROUTES = [
 ${entries}
-];
+] as const satisfies readonly OfflineRoute[];
+
+/** Every generated authenticated route pattern as a closed string-literal union. */
+export type AuthenticatedRoutePattern = (typeof OFFLINE_ROUTES)[number]['pattern'];
 
 /** Just the patterns, for matching a pathname without touching any route's component. */
-export const ROUTE_PATTERNS: readonly string[] = OFFLINE_ROUTES.map((route) => route.pattern);
+export const ROUTE_PATTERNS: readonly AuthenticatedRoutePattern[] = OFFLINE_ROUTES.map(
+  (route) => route.pattern,
+);
 `;
   const options = (await resolveConfig(GENERATED_PATH)) ?? {};
   return format(source, { ...options, filepath: GENERATED_PATH });

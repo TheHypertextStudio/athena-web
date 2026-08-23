@@ -21,7 +21,7 @@ export interface OfflineRoute {
 }
 
 /** Every authenticated route that has a client component to render. */
-export const OFFLINE_ROUTES: readonly OfflineRoute[] = [
+export const OFFLINE_ROUTES = [
   {
     pattern: '/athena/mail/[id]',
     load: async () => (await import('@/app/(app)/athena/mail/[id]/page')).default,
@@ -301,7 +301,12 @@ export const OFFLINE_ROUTES: readonly OfflineRoute[] = [
     pattern: '/workspaces/new',
     load: async () => (await import('@/app/(app)/workspaces/new/page')).default,
   },
-];
+] as const satisfies readonly OfflineRoute[];
+
+/** Every generated authenticated route pattern as a closed string-literal union. */
+export type AuthenticatedRoutePattern = (typeof OFFLINE_ROUTES)[number]['pattern'];
 
 /** Just the patterns, for matching a pathname without touching any route's component. */
-export const ROUTE_PATTERNS: readonly string[] = OFFLINE_ROUTES.map((route) => route.pattern);
+export const ROUTE_PATTERNS: readonly AuthenticatedRoutePattern[] = OFFLINE_ROUTES.map(
+  (route) => route.pattern,
+);

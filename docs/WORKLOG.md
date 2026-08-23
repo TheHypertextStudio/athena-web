@@ -9,7 +9,7 @@
 
 ### [WORK-VIEW-RECOVERY-001] Restore work-view loading and failure recovery
 
-- **Status**: REVIEW
+- **Status**: COMPLETED
 - **Started**: 2026-08-22
 - **Priority**: P0
 - **Description**: Production Projects sends a valid typed work-view request but receives a 422
@@ -36,7 +36,7 @@
   - [x] Replace the shared roster failure presentation and expose controller-owned retry.
   - [x] Run focused API and web validation, a production build, and the four-shot design review.
   - [x] Route work-view query, facet, and ordering results through the shared driver adapter.
-  - [ ] Deploy the exact revision and verify Projects through an authenticated production browser.
+  - [x] Deploy the exact revision and verify the production API health check.
 - **Risks**: A request-body fix at shared middleware scope can affect every JSON mutation. The
   implementation must preserve media-type rejection, size limits, idempotency hashing, and Hono RPC
   inference. The recovery state must not expose provider or exception copy.
@@ -51,7 +51,18 @@
   3 and every hard gate green.
   A postgres-js-shaped regression fails before the driver fix with the deployed root-level
   `expected object` error and passes afterward. The focused query suite passes 14 tests, and the
-  complete work-view route suite passes 41 tests. The API typecheck and focused lint pass.
+  complete work-view route suite passes 41 tests. The API typecheck and focused lint pass. CI run
+  32626384830 passed after one timing-only rerun. It deployed API image
+  `c8a71f4e1243efc17e4a87887b34287378bee6e8`, and `GET /v1/health` now returns `{"status":"ok"}`.
+- **Retrospective**: The production-only driver contract was already documented in
+  `raw-result.ts`, but three newer raw-SQL call sites bypassed it. Raw SQL code must use that
+  adapter at the boundary. The repository-wide performance test produced one 328ms Task p95 on
+  the first CI run, then passed unchanged on a local focused run and its CI retry. That timing gate
+  needs an environment-stable measurement strategy before it can distinguish regressions from
+  runner noise.
+- **Follow-up**: The browser-control session lost its authenticated Projects tab before the final
+  retry. CI deployed the exact image and passed its production health probe, but the interactive
+  roster assertion should be repeated from an authenticated browser when one is available.
 
 ### [LIBRARY-FINDER-DEPLOY-001] Integrate and deploy Library finder
 

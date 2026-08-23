@@ -60,6 +60,7 @@ describe('entity detail collapse contract', () => {
     expect(css).toMatch(
       /\.detail-primary\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) auto/,
     );
+    expect(css).toMatch(/\.detail-primary\s*\{[^}]*align-items:\s*center/);
   });
 
   it('keeps expanded text readable and restores spacing that collapses with the masthead', () => {
@@ -81,6 +82,12 @@ describe('entity detail collapse contract', () => {
     expect(css).toMatch(
       /@keyframes detail-title-collapse\s*\{[\s\S]*from\s*\{[\s\S]*white-space:\s*normal/,
     );
+  });
+
+  it('keeps the tab strip flush with no wrapper padding', () => {
+    expect(css).not.toMatch(/\.detail-header\s*\{[^}]*padding-block-end/);
+    expect(css).not.toMatch(/\.detail-tabs\s*\{[^}]*padding-block/);
+    expect(css).not.toContain('detail-header-collapse');
   });
 
   it('uses a discrete compact state for reduced motion', () => {

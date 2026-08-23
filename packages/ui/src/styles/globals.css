@@ -928,11 +928,6 @@
   animation-name: detail-masthead-collapse;
 }
 
-.detail-header {
-  padding-block-end: 0.5rem;
-  animation-name: detail-header-collapse;
-}
-
 /*
  * `padding-block-start` used to live on `.detail-header` itself. That worked only while the cover
  * was the header's own direct absolutely-positioned child — an out-of-flow element ignores its
@@ -965,7 +960,7 @@
 .detail-primary {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
+  align-items: center;
   column-gap: 0.75rem;
   min-width: 0;
 }
@@ -1036,7 +1031,6 @@
 }
 
 .detail-backdrop-space,
-.detail-header,
 .masthead-content,
 .detail-masthead,
 .detail-glyph,
@@ -1093,12 +1087,6 @@
 @keyframes detail-masthead-collapse {
   to {
     row-gap: 0;
-  }
-}
-
-@keyframes detail-header-collapse {
-  to {
-    padding-block-end: 0.25rem;
   }
 }
 

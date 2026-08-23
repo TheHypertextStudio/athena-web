@@ -161,7 +161,7 @@ describe('Initiative visual contract', () => {
     const workList = source(workListPath);
     expect(workList).toContain('<ListView');
     expect(workList).toContain('className="min-h-0 flex-1"');
-    expect(workList).toContain('text-on-surface-variant hidden shrink-0');
+    expect(workList).toContain('text-on-surface-variant text-body-small hidden shrink-0');
     expect(workList).toContain('truncate');
     expect(workList).not.toContain('border-b md:table-row');
   });

@@ -38,7 +38,9 @@ describe('Roster grid contract', () => {
 
   it('routes the four planning rosters through the shared density-aware list', () => {
     const workList = source(join(root, 'apps/web/src/components/work-views/work-list.tsx'));
-    expect(workList).toContain('import { ListCell, ListRow, ListView }');
+    expect(workList).toContain('<ListView');
+    expect(workList).toContain('<ListRow');
+    expect(workList).toContain('<ListCell');
 
     for (const path of typedRosterPaths) {
       const roster = source(path);

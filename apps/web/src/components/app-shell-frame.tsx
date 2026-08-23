@@ -15,7 +15,7 @@ import {
   type WorkspaceNavKey,
 } from '@docket/ui/components';
 import { VocabularyProvider } from '@docket/ui/hooks';
-import { Calendar, ListChecks, Search, Timer } from '@docket/ui/icons';
+import { Calendar, Search, Timer } from '@docket/ui/icons';
 import { Skeleton, Stack } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
@@ -31,7 +31,6 @@ import { GlobalProjectComposer } from '@/components/projects/create-project';
 import { GlobalTaskComposer } from '@/components/tasks/create-task';
 import { GlobalTeamComposer } from '@/components/teams/create-team';
 import Agenda from '@/components/agenda/agenda';
-import DayTasksPanel from '@/components/rail/day-tasks-panel';
 import { AthenaPanelProvider } from '@/components/athena/athena-panel-provider';
 import { useAuthenticationInterlock } from '@/components/authentication-interlock';
 import { CommandPaletteProvider, useCommandPalette } from '@/components/command-palette';
@@ -294,9 +293,9 @@ export function AppShellFrame({ children, initialSession }: AppShellFrameProps):
     pathname.startsWith('/settings/') ||
     pathname.endsWith('/settings') ||
     pathname.includes('/settings/');
-  // The calendar surface (`/calendar` or `/orgs/<id>/calendar`) does not register the Agenda panel
-  // at all — the calendar's own timeline IS the schedule, so offering the Agenda beside it would put
-  // a second live scheduling canvas on screen. Its rail is the Tasks day-plan panel alone.
+  // The calendar surface (`/calendar` or `/orgs/<id>/calendar`) owns the whole scheduling width.
+  // A right rail makes a week collapse into a few narrow day lanes, which turns the surface into a
+  // cramped agenda before the person has chosen that presentation.
   // `(^|/)calendar$` excludes settings' `google-calendar` (preceded by `-`, not `/`).
   const calendarSurface = /(^|\/)calendar$/.test(pathname);
 
@@ -447,41 +446,23 @@ function SidebarRecoveryNudge({
 }
 
 /**
- * The curated, Docket-native rail panels for a surface. Internal-only by design — the Tasks
- * day-plan and the Agenda — never an integration add-on gallery.
+ * The curated, Docket-native rail panels for a non-calendar surface. Internal-only by design — the
+ * Tasks day-plan and the Agenda — never an integration add-on gallery.
  *
  * @remarks
- * On the calendar the Agenda is **not registered at all**, not merely demoted from the default.
- * `<Agenda />` mounts `AgendaCanvas` → `TimelineArrangement` → a `SchedulingCanvas`, the very
- * primitive the calendar page mounts, and `ShellActivityBar` gives every registered panel a
- * one-click button — so registering it here put two full time grids on screen side by side, each
- * with its own date navigator, the rail one frequently taller than the primary. The calendar
- * surface therefore offers the Tasks day-plan alone, which is also the drag source for dropping a
- * task into a timebox. Everywhere else the Agenda is the sole panel.
- *
- * Focus, by contrast, is registered on **every** surface including the calendar. The reason Agenda
- * is excluded there does not apply to it: Focus mounts no scheduling canvas and no date navigator,
- * so it cannot become the second time grid on a screen that already has one. It is also the panel
- * that most needs to be reachable from wherever the person happens to be, since the work it
- * measures is being done on those other surfaces rather than in the rail.
- *
- * The default panel is unchanged on both surfaces, so nobody's rail moves under them; Focus is an
- * addition to the switcher, not a new landing place.
+ * The calendar does not use this rail. Its own timeline is the primary planning surface, and a
+ * docked companion steals enough width to hide a normal seven-day week. Calendar creation keeps an
+ * explicit Event/Timebox choice, while task management stays one navigation action away.
  *
  * Every panel here is a per-person read, so they are swapped for a placeholder on
  * `identityUnknown` alone. The workspace list is irrelevant to all of them — gating them on it
  * would have held an empty rail open for an org fetch no panel consumes.
  *
  * @param identityUnknown - Whether the viewer is still unidentified; swaps panels for a placeholder.
- * @param calendarSurface - Whether the active route is the full calendar view.
  * @param timerStatus - The live tracker, which lends the Focus icon its status dot.
  * @returns The rail panel set and the panel shown until the viewer picks another.
  */
-function railAsideFor(
-  identityUnknown: boolean,
-  calendarSurface: boolean,
-  timerStatus: TimerStatus,
-): AppShellAside {
+function railAsideFor(identityUnknown: boolean, timerStatus: TimerStatus): AppShellAside {
   const status = identityUnknown ? null : focusRailStatus(timerStatus);
   const focus: RailPanel = {
     id: 'focus',
@@ -490,15 +471,6 @@ function railAsideFor(
     node: identityUnknown ? <AppShellAgendaSkeleton /> : <FocusPanel />,
     ...(status ? { status } : {}),
   };
-  if (calendarSurface) {
-    const tasks: RailPanel = {
-      id: 'tasks',
-      label: 'Tasks',
-      icon: <ListChecks aria-hidden="true" />,
-      node: identityUnknown ? <AppShellAgendaSkeleton /> : <DayTasksPanel />,
-    };
-    return { panels: [tasks, focus], defaultPanelId: 'tasks' };
-  }
   const agenda: RailPanel = {
     id: 'agenda',
     label: 'Agenda',
@@ -788,9 +760,9 @@ function AppShellInner({
               ) : undefined
             }
             aside={
-              settingsSurface
+              settingsSurface || calendarSurface
                 ? undefined
-                : railAsideFor(identityUnknown, calendarSurface, timerStatus)
+                : railAsideFor(identityUnknown, timerStatus)
             }
           >
             {/* The page renders unconditionally while the session and workspace list resolve. Each

@@ -160,6 +160,15 @@ afterEach(() => {
 });
 
 describe('AppShellFrame session loading', () => {
+  it('keeps the full-width calendar free of a competing right rail', () => {
+    pathnameState.value = '/calendar';
+
+    renderFrame(SERVER_SESSION);
+
+    expect(screen.queryByRole('complementary', { name: 'Tasks' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('complementary', { name: 'Focus' })).not.toBeInTheDocument();
+  });
+
   it('paints the page and every statically-known nav label the moment the server names the viewer', () => {
     renderFrame(SERVER_SESSION);
 

@@ -166,7 +166,7 @@ export function CalendarSchedulingSurface({
           pixelsPerHour={pixelsPerHour}
           now={now}
           viewportHeight="100%"
-          minimumLaneWidth={160}
+          minimumLaneWidth={144}
           maximumVisibleLaneCount={7}
           {...(axis === 'dates' ? workLocationComposition?.canvasProps : {})}
           initialLaneIndex={axis === 'dates' ? dateAxis.initialLaneIndex : 0}

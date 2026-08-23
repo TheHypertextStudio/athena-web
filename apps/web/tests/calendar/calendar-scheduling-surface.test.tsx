@@ -418,7 +418,7 @@ describe('CalendarSchedulingSurface persistence', () => {
   it('targets a seven-day desktop week with compact readable lanes', () => {
     renderSurface();
 
-    expect(canvasProps().minimumLaneWidth).toBe(160);
+    expect(canvasProps().minimumLaneWidth).toBe(144);
     expect(canvasProps().maximumVisibleLaneCount).toBe(7);
   });
 

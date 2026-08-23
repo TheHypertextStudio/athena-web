@@ -10,6 +10,7 @@ import { and, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { ApiError } from '../../error';
+import { rawResultRows } from '../raw-result';
 import { compileAuthorizationSql } from './authorization-sql';
 import { compileRosterCtes } from './context-sql';
 import { WORK_VIEW_SQL_CONTRACTS } from './contracts';
@@ -95,10 +96,7 @@ async function executeOne<TSchema extends z.ZodType>(
   schema: TSchema,
 ): Promise<z.output<TSchema>> {
   const result: unknown = await database.execute(statement);
-  const rows = z
-    .object({ rows: z.array(schema) })
-    .loose()
-    .parse(result).rows;
+  const rows = z.array(schema).parse(rawResultRows<unknown>(result));
   const row = rows[0];
   if (!row) throw new TypeError('A work-view facet query returned no row.');
   return row;

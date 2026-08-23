@@ -11,6 +11,7 @@ import {
 } from '@docket/types';
 
 import { ApiError } from '../../src/error';
+import { rawResultRows } from '../../src/lib/raw-result';
 import { decodeWorkViewCursor, encodeWorkViewCursor } from '../../src/lib/work-views/cursor';
 import { queryWorkView } from '../../src/lib/work-views/query';
 import { getDb, seedBaseOrg } from '../support/routes-harness';
@@ -120,6 +121,32 @@ describe('queryWorkView', () => {
     expect(result.totalCount).toBe(1);
     expect(result.rows).toEqual([
       expect.objectContaining({ target: 'project', name: 'Needle launch project' }),
+    ]);
+  });
+
+  it('accepts postgres-js raw row arrays', async () => {
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(schema.db, schema);
+    await schema.db.insert(schema.project).values({
+      organizationId: orgId,
+      teamId,
+      name: 'Postgres-backed project',
+      status: 'planned',
+      statusId: statusId('project', 'planned'),
+      visibility: 'public',
+    });
+    const postgresJsDatabase = {
+      execute: async (statement: SQL) => rawResultRows(await schema.db.execute(statement)),
+    } as unknown as typeof schema.db;
+
+    const result = await queryWorkView({
+      database: postgresJsDatabase,
+      organizationId: orgId,
+      actorId: humanActorId,
+      request: projectRequest(),
+    });
+
+    expect(result.rows).toEqual([
+      expect.objectContaining({ target: 'project', name: 'Postgres-backed project' }),
     ]);
   });
 

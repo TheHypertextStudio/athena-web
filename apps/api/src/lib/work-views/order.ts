@@ -12,6 +12,7 @@ import { z } from 'zod';
 
 import { ApiError, CapabilityError, NotFoundError } from '../../error';
 import { labelsForSubject, replaceLabels, resolveLabelSet } from '../labels';
+import { rawResultRows } from '../raw-result';
 import { diffTaskFields, recordTaskChanges, resolveTaskChangeLabels } from '../task-audit';
 import { finishTaskStateTransition, writeTaskStateTransition } from '../task-state';
 import {
@@ -52,10 +53,7 @@ async function executeRows<TSchema extends z.ZodType>(
   schema: TSchema,
 ): Promise<z.output<TSchema>[]> {
   const result: unknown = await database.execute(statement);
-  return z
-    .object({ rows: z.array(schema) })
-    .loose()
-    .parse(result).rows;
+  return z.array(schema).parse(rawResultRows<unknown>(result));
 }
 
 function contextId(context: WorkViewOrderRequest['context'], organizationId: string): string {

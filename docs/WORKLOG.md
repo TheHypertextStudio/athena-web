@@ -1,7 +1,7 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-08-22
+> **Last Updated**: 2026-08-23
 
 ---
 
@@ -19,9 +19,11 @@
 - **Evidence**: The authenticated production browser sends a 367-byte JSON request with
   `content-type: application/json`. The request fails through both the Vercel rewrite and the API
   origin. The same payload passes the isolated work-view route suite with all 41 tests and the
-  composed API stack with every production middleware enabled. This rules out the Project
-  definition, the Hono client, the service worker, the web proxy, and the checked-in API stack. The
-  remaining data-load discrepancy is specific to the deployed API artifact or runtime.
+  composed API stack with every production middleware enabled. The deployed API then reports a
+  root-level Zod `expected object` failure. PGlite returns raw SQL results as `{ rows }`, while the
+  production postgres-js driver returns the row array directly. The work-view query, facet, and
+  ordering paths bypass the repository's existing cross-driver adapter and parse only the PGlite
+  shape.
 - **Approach**: Keep a production-stack regression around the exact captured Project payload so
   another checked-in middleware cannot reproduce the 422 unnoticed. Replace the bare paragraph in the
   shared `WorkViewPage` with one bounded, application-owned recovery state. The controller will
@@ -33,13 +35,12 @@
   - [x] Add a failing shared work-view recovery-state test with a retry assertion.
   - [x] Replace the shared roster failure presentation and expose controller-owned retry.
   - [x] Run focused API and web validation, a production build, and the four-shot design review.
+  - [x] Route work-view query, facet, and ordering results through the shared driver adapter.
   - [ ] Deploy the exact revision and verify Projects through an authenticated production browser.
 - **Risks**: A request-body fix at shared middleware scope can affect every JSON mutation. The
   implementation must preserve media-type rejection, size limits, idempotency hashing, and Hono RPC
   inference. The recovery state must not expose provider or exception copy.
-- **Blockers**: Cloud Logging cannot be read from this machine because the active Google credential
-  requires interactive reauthentication. Browser evidence and local production-stack reproduction
-  remain available.
+- **Blockers**: None.
 - **Validation**: The controller and recovery-state suites pass 16 tests. The complete API
   mechanics suite passes 38 tests, including the captured Project query through session, body-size,
   media-type, cache, authorization, idempotency, precondition, organization, and capability
@@ -48,6 +49,9 @@
   1440×900 and 390×844 in light and dark. It proves keyboard focus, a second request from Retry,
   and zero horizontal overflow. The design review records a SHIP verdict with every dimension at
   3 and every hard gate green.
+  A postgres-js-shaped regression fails before the driver fix with the deployed root-level
+  `expected object` error and passes afterward. The focused query suite passes 14 tests, and the
+  complete work-view route suite passes 41 tests. The API typecheck and focused lint pass.
 
 ### [LIBRARY-FINDER-DEPLOY-001] Integrate and deploy Library finder
 

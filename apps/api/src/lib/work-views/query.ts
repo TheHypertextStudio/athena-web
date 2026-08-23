@@ -5,6 +5,7 @@ import { and, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { ApiError } from '../../error';
+import { rawResultRows } from '../raw-result';
 import { compileRosterCtes, type WorkViewSqlContext } from './context-sql';
 import { decodeWorkViewCursor, encodeWorkViewCursor, fingerprintWorkViewQuery } from './cursor';
 import { WORK_VIEW_SQL_CONTRACTS } from './contracts';
@@ -82,10 +83,7 @@ async function executeRows<TSchema extends z.ZodType>(
   rowSchema: TSchema,
 ): Promise<z.output<TSchema>[]> {
   const result: unknown = await database.execute(query);
-  return z
-    .object({ rows: z.array(rowSchema) })
-    .loose()
-    .parse(result).rows;
+  return z.array(rowSchema).parse(rawResultRows<unknown>(result));
 }
 
 function filterSql(

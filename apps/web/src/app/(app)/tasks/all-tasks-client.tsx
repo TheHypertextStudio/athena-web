@@ -127,7 +127,7 @@ export default function AllTasksClient(): JSX.Element {
   };
 
   return (
-    <Stack gap={4} className="mx-auto h-full w-full max-w-4xl p-4 @2xl:p-6">
+    <Stack gap={4} className="h-full w-full px-3 py-4 @2xl:gap-5 @2xl:p-6 @4xl:p-8">
       <Row as="header" justify="between">
         <h1 className="text-on-surface text-title-large">Tasks</h1>
         {sorted.length > 0 ? <SortToggle sort={sort} onSort={setSort} /> : null}
@@ -158,30 +158,15 @@ export default function AllTasksClient(): JSX.Element {
           ))}
         </Stack>
       ) : loadError && sorted.length === 0 ? (
-        <Stack
-          align="center"
-          gap={2}
-          role="alert"
-          className="border-error/40 bg-error/5 justify-center rounded-2xl border p-12 text-center"
-        >
+        <Stack align="center" gap={2} role="alert" className="justify-center p-12 text-center">
           <p className="text-error text-body-medium font-medium">{loadError}</p>
-          <p className="text-on-surface-variant text-body-small max-w-sm">
-            Your tasks are still there — we could not reach them just now.
-          </p>
           <Button variant="outline" size="sm" onClick={refetchAll}>
             Try again
           </Button>
         </Stack>
       ) : sorted.length === 0 ? (
-        <Stack
-          align="center"
-          gap={2}
-          className="border-outline-variant bg-surface-container-low/60 justify-center rounded-2xl border p-12 text-center"
-        >
+        <Stack align="center" gap={2} className="justify-center p-12 text-center">
           <p className="text-on-surface text-body-medium font-medium">No tasks assigned to you</p>
-          <p className="text-on-surface-variant text-body-small max-w-sm">
-            Tasks assigned to you across every workspace land here.
-          </p>
         </Stack>
       ) : (
         <Stack as="ul" gap={1} className="min-h-0 flex-1 overflow-auto">

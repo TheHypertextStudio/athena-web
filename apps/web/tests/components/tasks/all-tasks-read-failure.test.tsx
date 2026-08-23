@@ -147,7 +147,7 @@ describe('the cross-workspace task read', () => {
     // The regression: this sentence must not appear when nobody was successfully asked.
     expect(screen.queryByText('No tasks assigned to you')).toBeNull();
     const alert = screen.getByRole('alert');
-    expect(alert).toHaveTextContent('Your tasks are still there');
+    expect(alert).toHaveTextContent('Could not load your tasks.');
     // Application-owned copy only — the provider's own text never reaches the screen.
     expect(alert.textContent).not.toContain('fetch failed');
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();

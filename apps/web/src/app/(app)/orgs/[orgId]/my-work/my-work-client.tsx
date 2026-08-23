@@ -114,14 +114,13 @@ export default function MyWorkClient(): JSX.Element {
     tab === 'mine'
       ? {
           title: 'Nothing assigned to you yet',
-          body: 'Create your first task — or capture thoughts from Today and they land here.',
         }
-      : { title: 'All clear', body: 'Nothing delegated, nothing awaiting your approval.' };
+      : { title: 'All clear' };
 
   return (
     <div
       ref={rootRef}
-      className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8"
+      className="flex h-full w-full flex-col gap-4 px-3 py-4 @2xl:gap-5 @2xl:p-6 @4xl:p-8"
     >
       <header className="flex flex-col gap-3 @2xl:flex-row @2xl:items-start @2xl:justify-between">
         <div className="flex flex-col gap-1">
@@ -175,9 +174,7 @@ export default function MyWorkClient(): JSX.Element {
         role="tabpanel"
         aria-labelledby={`tab-${tab}`}
         className={
-          visible.length === 0 && !loading && !loadError
-            ? undefined
-            : 'border-outline-variant flex-1 overflow-hidden rounded-xl border'
+          visible.length === 0 && !loading && !loadError ? undefined : 'flex-1 overflow-hidden'
         }
       >
         {/* placeholder: the rows for the selected tab — which items are assigned to, created by or
@@ -194,7 +191,7 @@ export default function MyWorkClient(): JSX.Element {
             {loadError}
           </p>
         ) : visible.length === 0 ? (
-          <div className="border-outline-variant bg-surface-container-low/60 flex flex-col items-center gap-3 rounded-xl border p-10 text-center">
+          <div className="flex flex-col items-center gap-3 p-10 text-center">
             <span
               aria-hidden="true"
               className="bg-surface-container text-on-surface-variant flex size-10 items-center justify-center rounded-full"
@@ -202,9 +199,6 @@ export default function MyWorkClient(): JSX.Element {
               <ListChecks className="size-5" />
             </span>
             <p className="text-on-surface text-body-medium font-medium">{empty.title}</p>
-            <p className="text-on-surface-variant text-body-medium max-w-xs leading-relaxed">
-              {empty.body}
-            </p>
             {tab === 'mine' ? (
               <Button type="button" variant="outline" size="sm" onClick={openTaskComposer}>
                 <Plus aria-hidden="true" className="size-4" />

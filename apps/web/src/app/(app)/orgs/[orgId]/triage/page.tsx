@@ -77,7 +77,7 @@ export default function TriagePage(): JSX.Element {
   return (
     <div
       ref={rootRef}
-      className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8"
+      className="flex h-full w-full flex-col gap-4 px-3 py-4 @2xl:gap-5 @2xl:p-6 @4xl:p-8"
     >
       <header className="flex flex-col gap-1">
         <h1 className="text-on-surface text-title-large">Triage</h1>
@@ -118,10 +118,7 @@ export default function TriagePage(): JSX.Element {
         </p>
       ) : null}
 
-      <section
-        aria-label="Triage queue"
-        className="border-outline-variant flex-1 overflow-hidden rounded-xl border"
-      >
+      <section aria-label="Triage queue" className="flex-1 overflow-hidden">
         {/* placeholder: the triage queue's rows — what has arrived unsorted, and each item's
             title, source and age. The queue's own heading and empty-state copy are static. */}
         {loading ? (
@@ -138,11 +135,8 @@ export default function TriagePage(): JSX.Element {
         ) : queue.length === 0 ? (
           <div className="text-on-surface-variant flex flex-col items-center gap-3 p-12 text-center">
             <Inbox className="h-8 w-8 opacity-50" aria-hidden="true" />
-            <div className="flex flex-col gap-1">
+            <div>
               <p className="text-on-surface text-body-medium font-medium">Triage is clear</p>
-              <p className="text-body-medium">
-                Nothing unsorted right now. New incoming work shows up here for you to sort.
-              </p>
             </div>
           </div>
         ) : (

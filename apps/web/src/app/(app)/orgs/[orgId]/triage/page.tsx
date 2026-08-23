@@ -9,6 +9,7 @@ import { useAppParams } from '@/lib/app-location';
 import { type JSX, useCallback, useMemo, useRef, useState } from 'react';
 
 import { InPageSearchField } from '@/components/in-page-search/in-page-search-field';
+import { InPageFindButton } from '@/components/in-page-search/in-page-find-button';
 import { useInPageSearchTarget } from '@/components/in-page-search/in-page-search-provider';
 import { useResidentInPageSearch } from '@/components/in-page-search/use-resident-in-page-search';
 import SuggestionsLane from '@/components/triage/suggestions-lane';
@@ -64,7 +65,7 @@ export default function TriagePage(): JSX.Element {
     [groupBy, providerName, toRow],
   );
   const search = useResidentInPageSearch({ source, searchableText });
-  const { restoreFocus } = useInPageSearchTarget({
+  const { openSearch, restoreFocus } = useInPageSearchTarget({
     id: 'triage',
     rootRef,
     inputRef: searchInputRef,
@@ -79,13 +80,16 @@ export default function TriagePage(): JSX.Element {
       ref={rootRef}
       className="flex h-full w-full flex-col gap-4 px-3 py-4 @2xl:gap-5 @2xl:p-6 @4xl:p-8"
     >
-      <header className="flex flex-col gap-1">
-        <h1 className="text-on-surface text-title-large">Triage</h1>
-        <p className="text-on-surface-variant text-xs">
-          Unsorted incoming work — {taskNounPlural.toLowerCase()} that have no home yet. Sort each
-          one onward into a {projectNoun.toLowerCase()} or {programNoun.toLowerCase()}, or dismiss
-          it.
-        </p>
+      <header className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-col gap-1">
+          <h1 className="text-on-surface text-title-large">Triage</h1>
+          <p className="text-on-surface-variant text-xs">
+            Unsorted incoming work — {taskNounPlural.toLowerCase()} that have no home yet. Sort each
+            one onward into a {projectNoun.toLowerCase()} or {programNoun.toLowerCase()}, or dismiss
+            it.
+          </p>
+        </div>
+        <InPageFindButton onClick={openSearch} />
       </header>
 
       <SuggestionsLane orgId={orgId} canAct />

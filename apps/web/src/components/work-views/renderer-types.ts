@@ -46,9 +46,25 @@ export function workViewRowValue(row: WorkViewRowFor<ViewTarget>, field: string)
   return (row as unknown as Readonly<Record<string, unknown>>)[field];
 }
 
+/** Resolve display-only relation projections while preserving raw values for other fields. */
+export function workViewRowDisplayValue(row: WorkViewRowFor<ViewTarget>, field: string): unknown {
+  if (row.target === 'task' && field === 'assignee') return row.assigneeActor;
+  if (row.target === 'project' && field === 'lead') return row.leadActor;
+  if (row.target === 'program' && field === 'owner') return row.ownerActor;
+  if (row.target === 'initiative' && field === 'owner') return row.ownerActor;
+  return workViewRowValue(row, field);
+}
+
 /** Format a projected scalar or relation value for a compact row or card. */
 export function formatWorkViewValue(value: unknown, kind?: string): string {
   if (value === null || value === undefined || value === '') return '—';
+  if (
+    typeof value === 'object' &&
+    'displayName' in value &&
+    typeof value.displayName === 'string'
+  ) {
+    return value.displayName;
+  }
   if (kind === 'relation-one') return '—';
   if (kind === 'relation-many')
     return Array.isArray(value) && value.length > 0 ? String(value.length) : '—';
@@ -57,9 +73,6 @@ export function formatWorkViewValue(value: unknown, kind?: string): string {
   if (typeof value === 'number')
     return Number.isInteger(value) ? String(value) : `${String(Math.round(value * 100))}%`;
   if (typeof value === 'string') return value.replaceAll('_', ' ');
-  if (typeof value === 'object' && 'actorId' in value) {
-    return 'Assigned';
-  }
   return '—';
 }
 

@@ -24,6 +24,7 @@ import {
 
 import { SEARCH_KIND_ICON } from '@/components/command-palette/use-hub-search';
 import { InPageSearchField } from '@/components/in-page-search/in-page-search-field';
+import { InPageFindButton } from '@/components/in-page-search/in-page-find-button';
 import { useInPageSearchTarget } from '@/components/in-page-search/in-page-search-provider';
 import ResourceDetailPanel from '@/components/library/resource-detail-panel';
 import { RESOURCE_TYPE_ICON } from '@/components/mentions/mention-glyphs';
@@ -107,7 +108,7 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
   const scrollPositions = useRef({ browse: 0, search: 0 });
   const restoredMode = useRef<'browse' | 'search' | null>(null);
   const pendingUrlQuery = useRef<string | null>(null);
-  const { restoreFocus } = useInPageSearchTarget({
+  const { openSearch, restoreFocus } = useInPageSearchTarget({
     id: 'library',
     rootRef: gridRef,
     inputRef: searchInputRef,
@@ -382,6 +383,7 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
             onFiltersChange={setFilters}
             onGroupByChange={setGroupBy}
             onSortChange={setSort}
+            saveSlot={<InPageFindButton onClick={openSearch} />}
           />
         </div>
       }

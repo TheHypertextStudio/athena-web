@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { type ReactElement, useState } from 'react';
+import { type ReactElement, useRef, useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -14,6 +14,11 @@ import {
 import { FilterBuilder } from '../../src/components/work-views/filter-builder';
 import { SortBuilder } from '../../src/components/work-views/sort-builder';
 import { WorkViewToolbar } from '../../src/components/work-views/work-view-toolbar';
+import { InPageSearchField } from '../../src/components/in-page-search/in-page-search-field';
+import {
+  InPageSearchProvider,
+  useInPageSearchTarget,
+} from '../../src/components/in-page-search/in-page-search-provider';
 
 const taskDefinition = TaskViewDefinition.parse({
   version: 2,
@@ -53,6 +58,49 @@ const taskAssigneeFacets = TaskWorkViewFacetResponse.parse({
   ],
   distinctCount: 4,
 });
+
+function SearchableToolbar(): ReactElement {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [findOpen, setFindOpen] = useState(false);
+  const { openSearch, restoreFocus } = useInPageSearchTarget({
+    id: 'review-toolbar',
+    rootRef,
+    inputRef,
+    onOpen: () => {
+      setFindOpen(true);
+    },
+  });
+  return (
+    <div ref={rootRef}>
+      <WorkViewToolbar
+        target="task"
+        definition={taskDefinition}
+        onDefinitionChange={vi.fn()}
+        onSaveView={vi.fn()}
+        onSetDefault={vi.fn()}
+        onReset={vi.fn()}
+        onFind={(restoreElement) => {
+          openSearch(restoreElement);
+        }}
+      />
+      {findOpen ? (
+        <InPageSearchField
+          inputRef={inputRef}
+          value=""
+          onValueChange={vi.fn()}
+          onEscapeEmpty={() => {
+            setFindOpen(false);
+            restoreFocus();
+          }}
+          label="Search tasks"
+          placeholder="Search tasks"
+          resultCount={1}
+        />
+      ) : null}
+    </div>
+  );
+}
 
 function PaginatedFacetBuilder(): ReactElement {
   const firstOptions = Array.from({ length: 50 }, (_, index) => ({
@@ -256,6 +304,24 @@ describe('WorkViewToolbar', () => {
         }),
       }),
     );
+  });
+
+  it('returns focus to Display after Find closes', async () => {
+    const user = userEvent.setup();
+    render(
+      <InPageSearchProvider>
+        <SearchableToolbar />
+      </InPageSearchProvider>,
+    );
+    const display = screen.getByRole('button', { name: 'Display' });
+
+    await user.click(display);
+    await user.click(screen.getByRole('button', { name: 'Find in this view' }));
+    const field = screen.getByRole('searchbox', { name: 'Search tasks' });
+    expect(field).toHaveFocus();
+    await user.keyboard('{Escape}');
+
+    expect(display).toHaveFocus();
   });
 
   it('adds an assignee filter without discarding the active priority filter', async () => {

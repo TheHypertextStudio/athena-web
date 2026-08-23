@@ -7,6 +7,45 @@
 
 ## Active Tasks
 
+### [WORK-VIEW-REVIEW-001] Close production review regressions
+
+- **Status**: REVIEW
+- **Started**: 2026-08-23
+- **Priority**: P0
+- **Description**: An independent review of the shipped collection-foundation range found five
+  behavioral gaps. Ungrouped Board views render no column, Cards stop at the first 100 rows,
+  grouped Initiative rows do not guarantee ancestor-first order, My Work, Triage, and Library hide
+  search from touch users, and relation properties lose their projected actor names in Board and
+  Cards.
+- **Approach**: Add one failing interaction regression for each behavior. Extend each renderer with
+  the smallest shared contract that already exists in List or the typed row projection. Keep Board
+  usable without inventing a grouping preference, preserve root pagination in Cards, order
+  Initiative memberships inside each server group, expose Find through each page toolbar, and
+  resolve relation display values from target-specific actor projections.
+- **Subtasks**:
+  - [x] Render one synthetic Board column for an ungrouped roster.
+  - [x] Continue Cards through the root roster cursor.
+  - [x] Keep grouped Initiative ancestors before descendants.
+  - [x] Expose touch-accessible Find actions on My Work, Triage, and Library.
+  - [x] Render projected actor names in Board and Cards.
+  - [x] Run focused validation and complete the correction review.
+- **Blockers**: None.
+- **Validation**: Every reported behavior first failed in a focused regression. The corrected suite
+  passes 92 tests across Board, Cards, List, toolbar, controller, in-page search, My Work, Triage,
+  and Library. The web typecheck, focused lint, formatting, and diff checks pass. The independent
+  reviewer then checked the correction diff twice. The first pass caught a 100-card root-board cap
+  and a transient focus return target. Their regressions now pass, and the final pass reports no
+  remaining Critical or Important issue. The production web build compiles all 75 routes and emits
+  the production service worker when supplied the documented local build environment.
+- **Follow-up**: Invalid advanced-filter drafts still disable Apply without concise assistive
+  validation text. The reviewer classified this as Minor. It remains outside this production
+  correction because the filter parser and apply behavior are otherwise unchanged.
+- **Retrospective**: Renderer independence requires every presentation to inherit the same data
+  continuation contract. Search actions also need one shared open-and-focus operation. A state-only
+  setter cannot preserve keyboard focus when an overlay source unmounts.
+
+---
+
 ### [ENTITY-METADATA-FIT-001] Fit detail properties to available space
 
 - **Status**: COMPLETED

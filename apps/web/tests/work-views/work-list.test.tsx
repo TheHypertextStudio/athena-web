@@ -209,6 +209,74 @@ describe('WorkList', () => {
     expect(screen.getByText('Matching child')).toBeVisible();
   });
 
+  it('orders grouped Initiative ancestors before child-first server rows', () => {
+    const definition = InitiativeViewDefinition.parse({
+      version: 2,
+      target: 'initiative',
+      filter: null,
+      arrangement: { groupBy: 'status', subGroupBy: null, orderBy: [] },
+      presentation: {
+        layout: 'list',
+        properties: ['health'],
+        density: 'compact',
+        showEmptyGroups: false,
+      },
+    });
+    const parent = InitiativeViewRow.parse({
+      target: 'initiative',
+      organizationId: '01ARZ3NDEKTSV4RRFFQ69G5FA0',
+      organization: '01ARZ3NDEKTSV4RRFFQ69G5FA0',
+      id: '01ARZ3NDEKTSV4RRFFQ69G5FC0',
+      name: 'Parent first',
+      status: 'planned',
+      priority: 'high',
+      health: null,
+      owner: null,
+      leadTeam: null,
+      labels: [],
+      targetDate: null,
+      updateCadence: 'monthly',
+      latestUpdate: null,
+      activeProjectCount: 1,
+      parent: null,
+      parentLinkId: null,
+      contributingProjects: [],
+      manualRank: 'a0',
+      isContext: true,
+    });
+    const child = InitiativeViewRow.parse({
+      ...parent,
+      id: '01ARZ3NDEKTSV4RRFFQ69G5FC1',
+      name: 'Child second',
+      parent: parent.id,
+      manualRank: 'a1',
+      isContext: false,
+    });
+
+    render(
+      <WorkList
+        target="initiative"
+        definition={definition}
+        rows={[]}
+        groups={[{ path: ['planned'], key: 'planned', label: 'Planned', count: 1 }]}
+        groupPages={[
+          { path: ['planned'], rows: [child, parent], nextCursor: null, loading: false },
+        ]}
+        selectedIds={new Set()}
+        onSelectionChange={vi.fn()}
+        onActivate={vi.fn()}
+      />,
+    );
+
+    const labels = screen
+      .getAllByRole('row')
+      .map((row) => row.textContent)
+      .filter((label): label is string => Boolean(label));
+    expect(labels.findIndex((label) => label.includes('Parent first'))).toBeLessThan(
+      labels.findIndex((label) => label.includes('Child second')),
+    );
+  });
+
   it('turns an Initiative row drop into a hierarchy move', () => {
     const definition = InitiativeViewDefinition.parse({
       version: 2,

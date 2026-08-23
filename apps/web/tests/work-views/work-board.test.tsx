@@ -54,6 +54,49 @@ function task(id: string, title: string) {
 }
 
 describe('WorkBoard', () => {
+  it('renders root rows in one column when the view has no grouping', () => {
+    const rootRows = Array.from({ length: 101 }, (_, index) =>
+      task(
+        `01ARZ3NDEKTSV4RRFFQ6${String(index).padStart(6, '0')}`,
+        index === 0
+          ? 'First root task'
+          : index === 100
+            ? 'Last root task'
+            : `Root task ${String(index)}`,
+      ),
+    );
+    const onLoadMoreRows = vi.fn();
+    const ungroupedDefinition = TaskViewDefinition.parse({
+      ...definition,
+      arrangement: { groupBy: null, subGroupBy: null, orderBy: [] },
+    });
+    const props = {
+      target: 'task' as const,
+      definition: ungroupedDefinition,
+      rows: rootRows,
+      groups: [],
+      groupPages: [],
+      hiddenColumns: new Set<string>(),
+      selectedIds: new Set<string>(),
+      onSelectionChange: vi.fn(),
+      onCreate: vi.fn(),
+      onActivate: vi.fn(),
+      onDrop: vi.fn(),
+      onLoadMore: vi.fn(),
+      hasMoreRows: true,
+      loadingMoreRows: false,
+      onLoadMoreRows,
+    };
+
+    render(<WorkBoard {...props} />);
+
+    expect(screen.getByRole('region', { name: 'All tasks column' })).toBeVisible();
+    expect(screen.getByRole('article', { name: 'First root task' })).toBeVisible();
+    expect(screen.getByRole('article', { name: 'Last root task' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Load more tasks' }));
+    expect(onLoadMoreRows).toHaveBeenCalledOnce();
+  });
+
   it('omits hidden columns and keeps create inside the destination column', () => {
     const onCreate = vi.fn();
     const onHideColumn = vi.fn();
@@ -153,5 +196,41 @@ describe('WorkBoard', () => {
       beforeId: null,
       afterId: null,
     });
+  });
+
+  it('renders the projected assignee name instead of the relation id', () => {
+    const row = TaskViewRow.parse({
+      ...task('01ARZ3NDEKTSV4RRFFQ69G5FC8', 'Owned task'),
+      assignee: '01ARZ3NDEKTSV4RRFFQ69G5FE0',
+      assigneeActor: {
+        id: '01ARZ3NDEKTSV4RRFFQ69G5FE0',
+        kind: 'human',
+        displayName: 'Willie Chalmers III',
+        avatar: null,
+      },
+    });
+    const assigneeDefinition = TaskViewDefinition.parse({
+      ...definition,
+      arrangement: { groupBy: 'status', subGroupBy: null, orderBy: [] },
+      presentation: { ...definition.presentation, properties: ['assignee'] },
+    });
+
+    render(
+      <WorkBoard
+        target="task"
+        definition={assigneeDefinition}
+        groups={[{ path: ['todo'], key: 'todo', label: 'Todo', count: 1 }]}
+        groupPages={[{ path: ['todo'], rows: [row], nextCursor: null, loading: false }]}
+        hiddenColumns={new Set()}
+        selectedIds={new Set()}
+        onSelectionChange={vi.fn()}
+        onCreate={vi.fn()}
+        onActivate={vi.fn()}
+        onDrop={vi.fn()}
+        onLoadMore={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Willie Chalmers III')).toBeVisible();
   });
 });

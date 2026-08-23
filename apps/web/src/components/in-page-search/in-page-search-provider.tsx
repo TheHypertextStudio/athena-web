@@ -29,6 +29,8 @@ export interface InPageSearchTargetOptions {
 
 /** Commands exposed to a registered in-page search target. */
 export interface InPageSearchTargetHandle {
+  /** Reveal and focus this target through a visible page action. */
+  readonly openSearch: (restoreElement?: HTMLElement | null) => void;
   /** Return focus to the element that preceded the last successful search command. */
   readonly restoreFocus: () => void;
 }
@@ -223,5 +225,24 @@ export function useInPageSearchTarget(
   const restoreFocus = useCallback((): void => {
     registry.restoreFocus(target);
   }, [registry, target]);
-  return useMemo(() => ({ restoreFocus }), [restoreFocus]);
+  const openSearch = useCallback(
+    (restoreElement?: HTMLElement | null): void => {
+      const priorFocus =
+        document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      let input = target.getInput();
+      if (!input?.isConnected && target.open) {
+        flushSync(() => {
+          target.open?.();
+        });
+        input = target.getInput();
+      }
+      if (!input?.isConnected) return;
+      input.focus();
+      input.select();
+      const durableRestore = restoreElement?.isConnected ? restoreElement : priorFocus;
+      if (durableRestore?.isConnected) target.restoreElement = durableRestore;
+    },
+    [target],
+  );
+  return useMemo(() => ({ openSearch, restoreFocus }), [openSearch, restoreFocus]);
 }

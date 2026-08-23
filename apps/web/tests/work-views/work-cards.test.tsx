@@ -74,4 +74,54 @@ describe('WorkCards', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select Ship the roster' }));
     expect(onSelectionChange).toHaveBeenCalledWith(new Set([task.id]));
   });
+
+  it('continues the root roster after the first page', () => {
+    const onLoadMoreRows = vi.fn();
+    const props = {
+      target: 'task' as const,
+      definition,
+      rows: [task],
+      selectedIds: new Set<string>(),
+      onSelectionChange: vi.fn(),
+      onActivate: vi.fn(),
+      hasMoreRows: true,
+      loadingMoreRows: false,
+      onLoadMoreRows,
+    };
+
+    render(<WorkCards {...props} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Load more tasks' }));
+    expect(onLoadMoreRows).toHaveBeenCalledOnce();
+  });
+
+  it('renders the projected assignee name instead of the relation id', () => {
+    const assignedTask = TaskViewRow.parse({
+      ...task,
+      assignee: '01ARZ3NDEKTSV4RRFFQ69G5FE0',
+      assigneeActor: {
+        id: '01ARZ3NDEKTSV4RRFFQ69G5FE0',
+        kind: 'human',
+        displayName: 'Willie Chalmers III',
+        avatar: null,
+      },
+    });
+    const assigneeDefinition = TaskViewDefinition.parse({
+      ...definition,
+      presentation: { ...definition.presentation, properties: ['assignee'] },
+    });
+
+    render(
+      <WorkCards
+        target="task"
+        definition={assigneeDefinition}
+        rows={[assignedTask]}
+        selectedIds={new Set()}
+        onSelectionChange={vi.fn()}
+        onActivate={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText('Willie Chalmers III')).toBeVisible();
+  });
 });

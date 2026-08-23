@@ -177,7 +177,7 @@ describe('virtualized task page in-page search', () => {
     expect(browseGrid.querySelectorAll('[role="row"]').length).toBeLessThan(121);
     expect(screen.queryByText('Offscreen needle')).not.toBeInTheDocument();
 
-    fireEvent.keyDown(document, { key: 'f', ctrlKey: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Find' }));
     const field = screen.getByRole('searchbox', { name: 'Search the triage queue' });
     expect(field).toHaveFocus();
     fireEvent.change(field, { target: { value: 'needle github owner team' } });
@@ -198,7 +198,7 @@ describe('virtualized task page in-page search', () => {
     expect(browseGrid.querySelectorAll('[role="row"]').length).toBeLessThan(121);
     expect(screen.queryByText('Offscreen needle')).not.toBeInTheDocument();
 
-    fireEvent.keyDown(document, { key: 'f', metaKey: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Find' }));
     const field = screen.getByRole('searchbox', { name: 'Search My Work' });
     fireEvent.change(field, {
       target: { value: 'needle project agent assignee ready needs' },

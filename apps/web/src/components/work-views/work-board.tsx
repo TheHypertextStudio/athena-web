@@ -20,8 +20,8 @@ import {
   type WorkViewGroupSummary,
   type WorkViewRowFor,
   workViewGroupPathKey,
+  workViewRowDisplayValue,
   workViewRowTitle,
-  workViewRowValue,
 } from './renderer-types';
 
 const BOARD_DRAG_TYPE = 'application/x-docket-work-view-row';
@@ -40,6 +40,7 @@ export interface WorkBoardDrop<TTarget extends ViewTarget> {
 export interface WorkBoardProps<TTarget extends ViewTarget> {
   readonly target: TTarget;
   readonly definition: WorkViewDefinitionFor<TTarget>;
+  readonly rows?: readonly WorkViewRowFor<TTarget>[];
   readonly groups: readonly WorkViewGroupSummary[];
   readonly groupPages: readonly WorkViewGroupPage<TTarget>[];
   readonly hiddenColumns: ReadonlySet<string>;
@@ -49,6 +50,9 @@ export interface WorkBoardProps<TTarget extends ViewTarget> {
   readonly onActivate: (row: WorkViewRowFor<TTarget>) => void;
   readonly onDrop: (drop: WorkBoardDrop<TTarget>) => void;
   readonly onLoadMore: (path: readonly string[]) => void;
+  readonly hasMoreRows?: boolean;
+  readonly loadingMoreRows?: boolean;
+  readonly onLoadMoreRows?: (() => void) | undefined;
   readonly onHideColumn?: ((key: string) => void) | undefined;
   readonly onShowAllColumns?: (() => void) | undefined;
 }
@@ -83,6 +87,7 @@ function readDrag(event: DragEvent): DragPayload | null {
 export function WorkBoard<TTarget extends ViewTarget>({
   target,
   definition,
+  rows: rootRows = [],
   groups,
   groupPages,
   hiddenColumns,
@@ -92,12 +97,23 @@ export function WorkBoard<TTarget extends ViewTarget>({
   onActivate,
   onDrop,
   onLoadMore,
+  hasMoreRows = false,
+  loadingMoreRows = false,
+  onLoadMoreRows,
   onHideColumn,
   onShowAllColumns,
 }: WorkBoardProps<TTarget>): JSX.Element {
-  const columns = groups.filter(
-    (group) => group.path.length === 1 && !hiddenColumns.has(group.key),
-  );
+  const ungrouped = (definition.arrangement.groupBy as string | null) === null;
+  const columns = ungrouped
+    ? [
+        {
+          path: [] as readonly string[],
+          key: '__all__',
+          label: `All ${target}s`,
+          count: rootRows.length,
+        },
+      ]
+    : groups.filter((group) => group.path.length === 1 && !hiddenColumns.has(group.key));
   const laneGroups = groups.filter((group) => group.path.length === 2);
   const laneKeys = [
     ...new Set(
@@ -108,9 +124,11 @@ export function WorkBoard<TTarget extends ViewTarget>({
   const rows = useMemo(
     () =>
       new Map<string, WorkViewRowFor<TTarget>>(
-        groupPages.flatMap((page) => page.rows.map((row) => [row.id, row] as const)),
+        [...rootRows, ...groupPages.flatMap((page) => page.rows)].map(
+          (row) => [row.id, row] as const,
+        ),
       ),
-    [groupPages],
+    [groupPages, rootRows],
   );
   const groupField = definition.arrangement.groupBy as string | null;
   const mutable =
@@ -173,7 +191,7 @@ export function WorkBoard<TTarget extends ViewTarget>({
                   <Plus aria-hidden />
                 </Button>
               ) : null}
-              {onHideColumn ? (
+              {!ungrouped && onHideColumn ? (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
@@ -201,10 +219,12 @@ export function WorkBoard<TTarget extends ViewTarget>({
             <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-2">
               {lanes.map((laneKey) => {
                 const path = laneKey === null ? column.path : [column.key, laneKey];
-                const page = groupPages.find(
-                  (candidate) =>
-                    workViewGroupPathKey(candidate.path) === workViewGroupPathKey(path),
-                );
+                const page = ungrouped
+                  ? { path, rows: rootRows, nextCursor: null, loading: loadingMoreRows }
+                  : groupPages.find(
+                      (candidate) =>
+                        workViewGroupPathKey(candidate.path) === workViewGroupPathKey(path),
+                    );
                 const lane =
                   laneKey === null
                     ? null
@@ -212,7 +232,9 @@ export function WorkBoard<TTarget extends ViewTarget>({
                         (candidate) =>
                           workViewGroupPathKey(candidate.path) === workViewGroupPathKey(path),
                       );
-                const mountedRows = (page?.rows ?? []).slice(-MAX_MOUNTED_CARDS_PER_CELL);
+                const mountedRows = ungrouped
+                  ? (page?.rows ?? [])
+                  : (page?.rows ?? []).slice(-MAX_MOUNTED_CARDS_PER_CELL);
                 return (
                   <section
                     key={workViewGroupPathKey(path)}
@@ -294,7 +316,7 @@ export function WorkBoard<TTarget extends ViewTarget>({
                                   <dt className="sr-only">{field.label}</dt>
                                   <dd className="max-w-36 truncate">
                                     {formatWorkViewValue(
-                                      workViewRowValue(row, field.key),
+                                      workViewRowDisplayValue(row, field.key),
                                       field.kind,
                                     )}
                                   </dd>
@@ -305,7 +327,18 @@ export function WorkBoard<TTarget extends ViewTarget>({
                         </article>
                       ))}
                     </div>
-                    {page?.nextCursor ? (
+                    {ungrouped && hasMoreRows && onLoadMoreRows ? (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        controlSize="sm"
+                        className="mt-2 w-full"
+                        disabled={loadingMoreRows}
+                        onClick={onLoadMoreRows}
+                      >
+                        {loadingMoreRows ? 'Loading more' : `Load more ${target}s`}
+                      </Button>
+                    ) : page?.nextCursor ? (
                       <Button
                         type="button"
                         variant="ghost"

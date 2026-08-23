@@ -49,7 +49,12 @@ vi.mock('@/components/views/use-view-state', () => ({
   },
 }));
 vi.mock('@/components/views/filter-toolbar', () => ({
-  FilterToolbar: () => <div data-testid="filter-toolbar">Filter and Display</div>,
+  FilterToolbar: ({ saveSlot }: { saveSlot?: ReactNode }) => (
+    <div data-testid="filter-toolbar">
+      Filter and Display
+      {saveSlot}
+    </div>
+  ),
 }));
 vi.mock('@/lib/use-debounced-value', () => ({ useDebouncedValue: <T,>(value: T) => value }));
 vi.mock('@/lib/query', () => ({
@@ -205,6 +210,15 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('LibraryClient cursor and presentation behavior', () => {
+  it('opens contextual search from a touch-accessible Find action', () => {
+    harness.queryResult = queryResult([page([resource('one')])]);
+    render(<LibraryFixture />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Find' }));
+
+    expect(screen.getByRole('searchbox', { name: 'Search the Library' })).toHaveFocus();
+  });
+
   it('keeps the row-key contract stable across parent renders', () => {
     harness.queryResult = queryResult([page([resource('one')])]);
     const rendered = render(<LibraryFixture />);

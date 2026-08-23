@@ -188,7 +188,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
   const rows = (controller.response?.rows ?? []) as unknown as readonly WorkViewRowFor<TTarget>[];
   const requestedLayout = controller.definition.presentation.layout;
   const layout = supportsWorkViewRenderer(target, requestedLayout) ? requestedLayout : 'list';
-  const { restoreFocus } = useInPageSearchTarget({
+  const { openSearch, restoreFocus } = useInPageSearchTarget({
     id: `work-view:${target}`,
     rootRef,
     inputRef: searchInputRef,
@@ -299,6 +299,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
       <WorkBoard
         target={target}
         definition={controller.definition}
+        rows={rows}
         groups={controller.response?.groups ?? []}
         groupPages={controller.groupPages}
         hiddenColumns={controller.hiddenBoardColumns}
@@ -322,6 +323,9 @@ export function WorkViewPage<TTarget extends ViewTarget>({
           });
         }}
         onLoadMore={controller.loadMoreGroup}
+        hasMoreRows={controller.response?.nextCursor !== null}
+        loadingMoreRows={controller.loadingMoreRows}
+        onLoadMoreRows={controller.loadMoreRows}
         onHideColumn={controller.toggleHiddenBoardColumn}
         onShowAllColumns={controller.showAllBoardColumns}
       />
@@ -335,6 +339,9 @@ export function WorkViewPage<TTarget extends ViewTarget>({
         selectedIds={selectedIds}
         onSelectionChange={setSelectedIds}
         onActivate={openRow}
+        hasMoreRows={controller.response?.nextCursor !== null}
+        loadingMoreRows={controller.loadingMoreRows}
+        onLoadMoreRows={controller.loadMoreRows}
       />
     );
   } else if (target === 'project' && layout === 'timeline') {
@@ -512,8 +519,8 @@ export function WorkViewPage<TTarget extends ViewTarget>({
                 }}
                 onSetDefault={controller.setAsDefault}
                 onReset={controller.resetPersonalOverride}
-                onFind={() => {
-                  setFindOpen(true);
+                onFind={(restoreElement) => {
+                  openSearch(restoreElement);
                 }}
                 facetResponse={controller.facetResponse}
                 facetMetadataResponse={controller.facetMetadataResponse}

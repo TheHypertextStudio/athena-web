@@ -9,6 +9,7 @@ import { useAppParams } from '@/lib/app-location';
 import { type JSX, useCallback, useMemo, useRef, useState } from 'react';
 
 import { InPageSearchField } from '@/components/in-page-search/in-page-search-field';
+import { InPageFindButton } from '@/components/in-page-search/in-page-find-button';
 import { useInPageSearchTarget } from '@/components/in-page-search/in-page-search-provider';
 import { useResidentInPageSearch } from '@/components/in-page-search/use-resident-in-page-search';
 import { useSession } from '@/lib/auth-client';
@@ -88,7 +89,7 @@ export default function MyWorkClient(): JSX.Element {
     [actorName, groupBy, statusRegistry, subGroupBy, tab, toRow],
   );
   const search = useResidentInPageSearch({ source, searchableText });
-  const { restoreFocus } = useInPageSearchTarget({
+  const { openSearch, restoreFocus } = useInPageSearchTarget({
     id: `my-work:${tab}`,
     rootRef,
     inputRef: searchInputRef,
@@ -129,10 +130,13 @@ export default function MyWorkClient(): JSX.Element {
             Your work and your agents&apos; work, grouped by {projectNoun.toLowerCase()}.
           </p>
         </div>
-        <Button type="button" className="gap-1.5 self-start" onClick={openTaskComposer}>
-          <Plus aria-hidden="true" className="size-4" />
-          New task
-        </Button>
+        <div className="flex items-center gap-2 self-start">
+          <InPageFindButton onClick={openSearch} />
+          <Button type="button" className="gap-1.5" onClick={openTaskComposer}>
+            <Plus aria-hidden="true" className="size-4" />
+            New task
+          </Button>
+        </div>
       </header>
 
       <SplitTabs

@@ -13,7 +13,7 @@ import {
   Stack,
 } from '@docket/ui/primitives';
 import type { ViewTarget } from '@docket/work/view-contract';
-import { type ReactElement, type ReactNode, useState } from 'react';
+import { type ReactElement, type ReactNode, useRef, useState } from 'react';
 
 import { DisplayControls, DisplayControlsTrigger } from './display-controls';
 import { FilterBuilder } from './filter-builder';
@@ -108,7 +108,7 @@ export interface WorkViewToolbarProps<TTarget extends ViewTarget> {
   /** View chips that lead the same control row as filter and display. */
   readonly leading?: ReactNode;
   /** Open the target's temporary finder from Display. */
-  readonly onFind?: () => void;
+  readonly onFind?: (restoreElement?: HTMLElement | null) => void;
   readonly canSetDefault?: boolean;
   readonly facetResponse?: WorkViewFacetResponseForTarget<TTarget> | undefined;
   readonly facetMetadataResponse?: WorkViewFacetResponseForTarget<TTarget> | undefined;
@@ -139,6 +139,7 @@ export function WorkViewToolbar<TTarget extends ViewTarget>({
   onFacetLoadMore,
   onFacetRequest,
 }: WorkViewToolbarProps<TTarget>): ReactElement {
+  const displayTriggerRef = useRef<HTMLButtonElement>(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const [editingFilterIndex, setEditingFilterIndex] = useState<number | null>(null);
 
@@ -210,8 +211,21 @@ export function WorkViewToolbar<TTarget extends ViewTarget>({
             target={target}
             definition={definition}
             onChange={commit}
-            onFind={onFind}
-            trigger={<DisplayControlsTrigger kind="display" iconOnly className="rounded-full" />}
+            onFind={
+              onFind
+                ? () => {
+                    onFind(displayTriggerRef.current);
+                  }
+                : undefined
+            }
+            trigger={
+              <DisplayControlsTrigger
+                ref={displayTriggerRef}
+                kind="display"
+                iconOnly
+                className="rounded-full"
+              />
+            }
           />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

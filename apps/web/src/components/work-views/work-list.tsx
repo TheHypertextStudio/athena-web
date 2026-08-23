@@ -436,7 +436,9 @@ export function WorkList<TTarget extends ViewTarget>({
   const grouped = groupField !== null;
   const memberships = useMemo<readonly ListMembership<TTarget>[]>(() => {
     const source = grouped
-      ? groupPages.flatMap((page) => page.rows.map((row) => ({ row, path: page.path })))
+      ? groupPages.flatMap((page) =>
+          orderInitiativeMemberships(page.rows.map((row) => ({ row, path: page.path }))),
+        )
       : rows.map((row) => ({ row, path: [] }));
     return grouped ? source : orderInitiativeMemberships(source);
   }, [groupPages, grouped, rows]);

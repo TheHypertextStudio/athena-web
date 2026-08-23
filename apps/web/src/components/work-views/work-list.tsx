@@ -357,7 +357,7 @@ function PropertyValue({
     if (value === null) return <span>—</span>;
     const health = value as Health;
     return (
-      <span className={`${HEALTH_TEXT_CLASS[health]} flex items-center gap-2 font-medium`}>
+      <span className={`${HEALTH_TEXT_CLASS[health]} text-label-medium flex items-center gap-2`}>
         <span className={`${HEALTH_FILL_CLASS[health]} size-1.5 rounded-full`} />
         {HEALTH_LABEL[health]}
       </span>
@@ -480,7 +480,7 @@ export function WorkList<TTarget extends ViewTarget>({
     >
       <div
         role="row"
-        className="text-on-surface-variant flex h-8 shrink-0 items-center gap-2 px-3 text-xs"
+        className="text-on-surface-variant text-label-small flex h-8 shrink-0 items-center gap-2 px-3"
       >
         <span role="columnheader" className="min-w-72 flex-1 pl-10">
           {TARGET_LABEL[target]}
@@ -596,11 +596,11 @@ export function WorkList<TTarget extends ViewTarget>({
                     }}
                   />
                   <span className="min-w-0">
-                    <span className="text-on-surface block truncate text-sm font-medium">
+                    <span className="text-on-surface text-body-medium block truncate">
                       {workViewRowTitle(row)}
                     </span>
                     {summary ? (
-                      <span className="text-on-surface-variant block max-w-[52ch] truncate text-xs">
+                      <span className="text-on-surface-variant text-body-small block max-w-[52ch] truncate">
                         {summary}
                       </span>
                     ) : null}
@@ -610,7 +610,7 @@ export function WorkList<TTarget extends ViewTarget>({
               {properties.map((field) => (
                 <ListCell
                   key={field.key}
-                  className={`text-on-surface-variant hidden shrink-0 px-2 text-xs @2xl:flex ${FIELD_WIDTH[field.key] ?? 'w-32'}`}
+                  className={`text-on-surface-variant text-body-small hidden shrink-0 px-2 @2xl:flex ${FIELD_WIDTH[field.key] ?? 'w-32'}`}
                 >
                   <span className="sr-only">{field.label}: </span>
                   <PropertyValue

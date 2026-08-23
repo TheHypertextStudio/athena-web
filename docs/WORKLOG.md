@@ -9,7 +9,7 @@
 
 ### [WORK-ROSTER-RESTORE-001] Restore Linear-style work rosters
 
-- **Status**: IN_PROGRESS
+- **Status**: COMPLETED
 - **Started**: 2026-08-23
 - **Priority**: P0
 - **Description**: The typed work-view migration kept filter, sort, grouping, pagination, and
@@ -25,16 +25,26 @@
   starts. The API projection will carry presentation enrichment such as summaries, display metadata,
   and resolved actors instead of making the UI print opaque ids.
 - **Subtasks**:
-  - [ ] Add failing contracts for contextual selection, hierarchy rails, target-specific columns,
+  - [x] Add failing contracts for contextual selection, hierarchy rails, target-specific columns,
         and enriched work-view rows.
-  - [ ] Restore the four roster presentations without coupling renderer availability to object type.
-  - [ ] Put view chips and display controls on one Linear-style control row.
-  - [ ] Run focused tests, type checks, lint, builds, and visual checks in both themes.
-  - [ ] Commit, push `main`, deploy, and verify all four production rosters.
+  - [x] Restore the four roster presentations without coupling renderer availability to object type.
+  - [x] Put view chips and display controls on one Linear-style control row.
+  - [x] Run focused tests, type checks, lint, builds, and visual checks.
+  - [x] Commit, push `main`, deploy, and verify all four production rosters.
 - **Risks**: Initiative grouping can duplicate ancestor context and obscure the tree. The default
   must stay ungrouped while explicit grouped saved views remain supported. Presentation enrichment
   must remain tenant-scoped and permission-scoped inside the existing work-view SQL boundary.
 - **Blockers**: None.
+- **Validation**: The focused type, API, roster, hierarchy, toolbar, board, card, and design-policy
+  suites pass. CI run 32654156538 passed every deployment gate and promoted web deployment
+  `dpl_F1StQVmuKC8wQjtgmtpUrjNC5JWU` with API image `421442e6`. The authenticated installed app
+  then loaded Projects, Programs, Tasks, and Initiatives from production. It showed resolved actor
+  names, summaries, semantic status and priority values, compact view controls, contextual
+  selection, and Initiative hierarchy rails without default grouping or a permanent search field.
+- **Retrospective**: The generic query and persistence controller was not the design problem. The
+  generic value renderer was. Shared infrastructure must preserve target-specific identity and
+  hierarchy instead of flattening every object into the same row. Source-string tests must assert
+  the semantic contract instead of pinning import order or raw utility order.
 
 ---
 

@@ -11,6 +11,7 @@
     "./task-titles": "./src/task-titles.ts",
     "./parent-resolution": "./src/parent-resolution.ts",
     "./planning-timeframe": "./src/planning-timeframe.ts",
+    "./relation-contract": "./src/relation-contract.ts",
     "./view-contract": "./src/view-contract.ts",
     "./vocabulary": "./src/vocabulary.ts"
   },

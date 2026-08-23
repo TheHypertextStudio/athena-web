@@ -41,7 +41,7 @@ describe('saved-views: a patch that omits name (covers the name-absent branch)',
         await w.request(`/${id}`, {
           method: 'PATCH',
           headers: J,
-          body: JSON.stringify({ scope: 'team' }),
+          body: JSON.stringify({ scope: 'organization' }),
         })
       ).status,
     ).toBe(200);

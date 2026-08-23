@@ -8,7 +8,7 @@ import type {
   Health,
   UpdateOut,
 } from '@docket/types';
-import { defaultEntityDisplay } from '@docket/types';
+import { defaultEntityDisplay, InitiativeSubjectRef } from '@docket/types';
 import type { PickerOption } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { ChevronLeft, CornerDownLeft, Ellipsis, Trash2 } from '@docket/ui/icons';
@@ -23,7 +23,7 @@ import {
   menuDestructiveItem,
 } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import { useAppSearchParams, useTypedRoute } from '@/lib/app-location';
 import { type JSX, useMemo, useState } from 'react';
 
@@ -75,8 +75,12 @@ type TabId = 'overview' | 'subinitiatives' | 'work' | 'updates' | 'resources';
 export default function InitiativeDetailPage(): JSX.Element {
   const { params } = useTypedRoute('/orgs/[orgId]/initiatives/[initiativeId]');
   const { orgId, initiativeId } = params;
+  const subject = InitiativeSubjectRef.parse({
+    subjectType: 'initiative',
+    subjectId: initiativeId,
+  });
   const navigationSnapshot = useNavigationSnapshot('initiative', initiativeId);
-  const entityMentions = useEntityMentions(orgId, 'initiative', initiativeId);
+  const entityMentions = useEntityMentions(orgId, subject);
   const router = useAppRouter();
   const queryClient = useQueryClient();
   const pickerOverlay = usePickerOverlay();
@@ -116,7 +120,7 @@ export default function InitiativeDetailPage(): JSX.Element {
       () =>
         api.v1.orgs[':orgId'].updates.$get({
           param: { orgId },
-          query: { subjectType: 'initiative', subjectId: initiativeId },
+          query: subject,
         }),
       'Could not load updates.',
     ),
@@ -129,7 +133,7 @@ export default function InitiativeDetailPage(): JSX.Element {
       displayKey,
       () =>
         api.v1.orgs[':orgId'].display[':subjectType'][':subjectId'].$get({
-          param: { orgId, subjectType: 'initiative', subjectId: initiativeId },
+          param: { orgId, ...subject },
         }),
       'Could not load display settings.',
     ),
@@ -169,8 +173,7 @@ export default function InitiativeDetailPage(): JSX.Element {
           api.v1.orgs[':orgId'].updates.$post({
             param: { orgId },
             json: {
-              subjectType: 'initiative',
-              subjectId: initiativeId,
+              ...subject,
               body: input.body,
               ...(input.health ? { health: input.health } : {}),
             },
@@ -192,7 +195,7 @@ export default function InitiativeDetailPage(): JSX.Element {
       unwrap(
         () =>
           api.v1.orgs[':orgId'].display[':subjectType'][':subjectId'].$put({
-            param: { orgId, subjectType: 'initiative', subjectId: initiativeId },
+            param: { orgId, ...subject },
             json,
           }),
         `Could not customize this ${initiativeNoun.toLowerCase()}.`,
@@ -201,8 +204,7 @@ export default function InitiativeDetailPage(): JSX.Element {
       await queryClient.cancelQueries({ queryKey: displayKey });
       const previous = queryClient.getQueryData<EntityDisplayOut>(displayKey);
       queryClient.setQueryData<EntityDisplayOut>(displayKey, {
-        subjectType: 'initiative',
-        subjectId: initiativeId,
+        ...subject,
         iconKey,
         colorKey,
         customColor,

@@ -23,7 +23,7 @@ import type { Priority } from '@docket/work/task-contract';
 import { StatusGlyph } from '@docket/ui/components';
 import { Button, Row, Skeleton, Stack } from '@docket/ui/primitives';
 import { useQueries } from '@tanstack/react-query';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { type JSX, useMemo, useState } from 'react';
 

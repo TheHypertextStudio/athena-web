@@ -10,6 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@docket/ui/primitives';
+import { entityNavigationSnapshotFromWorkViewRow } from '@docket/types';
 import type { ViewTarget } from '@docket/work/view-contract';
 import { useDragDropMonitor, useDragOperation, useDroppable } from '@dnd-kit/react';
 import { type JSX, type ReactNode, useMemo } from 'react';
@@ -17,6 +18,9 @@ import { type JSX, type ReactNode, useMemo } from 'react';
 import { isObjectDragData } from '@/components/dnd/object-drag-data';
 import { useRelationDropTarget } from '@/components/dnd/use-relation-drop-target';
 import { ObjectSurface } from '@/components/objects/object-surface';
+
+import DocketLink from '@/components/docket-link';
+import { buildEntityHref } from '@/lib/authenticated-route';
 
 import type { WorkViewDefinitionFor } from './view-state';
 import { workViewDisplayFieldCatalog, workViewFieldCatalog } from './view-state';
@@ -180,7 +184,24 @@ function WorkBoardCard<TTarget extends ViewTarget>({
               onChange={onToggle}
             />
           </span>
-          <span className="text-body-medium min-w-0 flex-1">{workViewRowTitle(row)}</span>
+          <DocketLink
+            href={buildEntityHref(entityNavigationSnapshotFromWorkViewRow(row))}
+            className="focus-visible:ring-primary text-body-medium min-w-0 flex-1 rounded-sm outline-none focus-visible:ring-2"
+            onClick={(event) => {
+              if (
+                event.button !== 0 ||
+                event.metaKey ||
+                event.ctrlKey ||
+                event.shiftKey ||
+                event.altKey
+              )
+                return;
+              event.preventDefault();
+              onActivate();
+            }}
+          >
+            {workViewRowTitle(row)}
+          </DocketLink>
         </div>
         {children}
         {relation.effectLabel ? (

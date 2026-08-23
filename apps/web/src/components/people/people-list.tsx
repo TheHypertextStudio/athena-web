@@ -23,7 +23,7 @@
 import { EmptyState } from '@docket/ui/components';
 import { Plus, Users } from '@docket/ui/icons';
 import { Button, Skeleton, Text, Toolbar } from '@docket/ui/primitives';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import { type JSX, useMemo, useState } from 'react';
 
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';

@@ -22,6 +22,7 @@ const snapshot = TaskNavigationSnapshot.parse({
 beforeEach(() => {
   seedNavigationSnapshot.mockReset();
   window.history.replaceState(null, '', '/today');
+  window.scrollTo = vi.fn();
 });
 
 describe('openEntity', () => {

@@ -30,6 +30,7 @@ function TaskRouteProbe(): React.JSX.Element {
 
 beforeEach(() => {
   window.history.replaceState(null, '', '/today');
+  window.scrollTo = vi.fn();
   nextPush.mockReset();
   nextReplace.mockReset();
 });
@@ -82,5 +83,21 @@ describe('authenticated app location', () => {
 
     expect(window.location.pathname).toBe(`/orgs/${ORG_ID}/tasks/${TASK_ID}`);
     expect(nextReplace).not.toHaveBeenCalled();
+  });
+
+  it('honors scroll false while default navigation resets the destination', () => {
+    navigateAuthenticated(
+      '/orgs/[orgId]/tasks/[taskId]',
+      { orgId: ORG_ID, taskId: TASK_ID },
+      { scroll: false },
+    );
+    expect(window.scrollTo).not.toHaveBeenCalled();
+
+    window.history.replaceState(null, '', '/today');
+    navigateAuthenticated('/orgs/[orgId]/tasks/[taskId]', {
+      orgId: ORG_ID,
+      taskId: TASK_ID,
+    });
+    expect(window.scrollTo).toHaveBeenCalledWith({ left: 0, top: 0 });
   });
 });

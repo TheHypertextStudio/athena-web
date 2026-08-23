@@ -30,7 +30,7 @@ import {
   menuDestructiveItem,
 } from '@docket/ui/primitives';
 import { EmptyState } from '@docket/ui/components';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import { type JSX, useEffect, useMemo, useState } from 'react';
 
 import { readStoredBoolean, writeStoredValue } from '@docket/ui/lib/browser-storage';

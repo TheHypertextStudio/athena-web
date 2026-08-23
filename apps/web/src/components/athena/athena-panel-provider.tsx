@@ -9,7 +9,7 @@ import {
   SheetTitle,
   Skeleton,
 } from '@docket/ui/primitives';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import {
   createContext,
   type JSX,

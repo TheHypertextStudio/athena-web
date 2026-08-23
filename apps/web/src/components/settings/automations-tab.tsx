@@ -13,7 +13,7 @@ import type { AutomationRuleCreate, AutomationRuleOut } from '@docket/types';
 import { EmptyState } from '@docket/ui/components';
 import { Workflow } from '@docket/ui/icons';
 import { Badge, Button, Field, Input, Select, Skeleton } from '@docket/ui/primitives';
-import NextLink from 'next/link';
+import NextLink from '@/components/docket-link';
 import { type JSX, useEffect, useRef, useState } from 'react';
 
 import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';

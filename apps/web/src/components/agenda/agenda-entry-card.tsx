@@ -25,7 +25,7 @@ import {
 } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { STRETCHED_LINK } from '@docket/ui/lib/stretched-link';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import { type JSX, useRef } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';

@@ -13,7 +13,7 @@
  * someone who picked wrong gets across.
  */
 import { Button } from '@docket/ui/primitives';
-import NextLink from 'next/link';
+import NextLink from '@/components/docket-link';
 import type { JSX } from 'react';
 
 /** Props for {@link IntegrationsIntro}. */

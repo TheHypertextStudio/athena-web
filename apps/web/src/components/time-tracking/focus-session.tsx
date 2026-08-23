@@ -26,7 +26,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@docket/ui/primitives';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import { type JSX, useEffect, useRef, useState } from 'react';
 
 import { formatClock, spokenDuration } from './format-duration';

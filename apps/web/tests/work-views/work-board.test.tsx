@@ -99,6 +99,7 @@ describe('WorkBoard', () => {
 
   it('omits hidden columns and keeps create inside the destination column', () => {
     const onCreate = vi.fn();
+    const onActivate = vi.fn();
     const onHideColumn = vi.fn();
     const onShowAllColumns = vi.fn();
     render(
@@ -122,7 +123,7 @@ describe('WorkBoard', () => {
         selectedIds={new Set()}
         onSelectionChange={vi.fn()}
         onCreate={onCreate}
-        onActivate={vi.fn()}
+        onActivate={onActivate}
         onDrop={vi.fn()}
         onLoadMore={vi.fn()}
         onHideColumn={onHideColumn}
@@ -134,6 +135,16 @@ describe('WorkBoard', () => {
     expect(
       screen.getByRole('checkbox', { name: 'Select Board task' }).parentElement?.parentElement,
     ).toHaveClass('opacity-0');
+    const rowLink = screen.getByRole('link', { name: /Board task/ });
+    expect(rowLink).toHaveAttribute(
+      'href',
+      '/orgs/01ARZ3NDEKTSV4RRFFQ69G5FA0/tasks/01ARZ3NDEKTSV4RRFFQ69G5FD0',
+    );
+    fireEvent.click(rowLink);
+    expect(onActivate).toHaveBeenCalledOnce();
+    onActivate.mockClear();
+    fireEvent.click(rowLink, { ctrlKey: true });
+    expect(onActivate).not.toHaveBeenCalled();
     expect(screen.queryByRole('region', { name: 'Done column' })).not.toBeInTheDocument();
     fireEvent.click(
       within(screen.getByRole('region', { name: 'Todo column' })).getByRole('button', {

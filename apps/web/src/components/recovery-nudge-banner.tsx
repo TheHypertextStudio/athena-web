@@ -15,7 +15,7 @@
  * self-resets once the account is healthy again so a later low state re-prompts.
  */
 import { Shield, X } from '@docket/ui/icons';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import { type JSX, useEffect, useState } from 'react';
 
 import { sectionHref } from '@/components/settings/settings-registry';

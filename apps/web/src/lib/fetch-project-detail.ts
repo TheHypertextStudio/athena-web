@@ -23,7 +23,7 @@ import type {
   SessionActivityOut,
   TaskOut,
 } from '@docket/types';
-import { defaultEntityDisplay, ProjectId } from '@docket/types';
+import { defaultEntityDisplay, ProjectId, ProjectSubjectRef } from '@docket/types';
 
 import type { AgentHere } from '@/components/project-detail/agents-strip';
 import type { AgentActivityEntry } from '@/components/project-detail/agent-activity-feed';
@@ -97,6 +97,7 @@ export function fetchProjectDetail(
   projectId: string,
 ): () => Promise<RpcResponse<ProjectDetailData>> {
   return async () => {
+    const subject = ProjectSubjectRef.parse({ subjectType: 'project', subjectId: projectId });
     const [
       projectsRes,
       progressRes,
@@ -127,7 +128,7 @@ export function fetchProjectDetail(
       api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
       api.v1.orgs[':orgId'].projects[':id'].rollup.$get({ param: { orgId, id: projectId } }),
       api.v1.orgs[':orgId'].display[':subjectType'][':subjectId'].$get({
-        param: { orgId, subjectType: 'project', subjectId: projectId },
+        param: { orgId, ...subject },
       }),
       api.v1.orgs[':orgId'].labels.$get({ param: { orgId }, query: {} }),
     ]);

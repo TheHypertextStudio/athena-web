@@ -19,7 +19,7 @@
 import { AppBar } from '@docket/ui/components';
 import { ChevronLeft } from '@docket/ui/icons';
 import { Button, Surface, Tooltip, TooltipContent, TooltipTrigger } from '@docket/ui/primitives';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import type { JSX } from 'react';
 
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';

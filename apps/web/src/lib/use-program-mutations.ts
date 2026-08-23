@@ -4,6 +4,7 @@ import {
   type ProgramDetail,
   type ProgramOut,
   type ProgramStatus,
+  ProgramSubjectRef,
   type ProgramUpdate,
   type Visibility,
 } from '@docket/types';
@@ -66,6 +67,7 @@ export function useProgramMutations(
   updatesKey: readonly unknown[],
 ): ProgramMutations {
   const queryClient = useQueryClient();
+  const subject = ProgramSubjectRef.parse({ subjectType: 'program', subjectId: programId });
   const programsKey = useMemo(() => queryKeys.programs(orgId), [orgId]);
 
   const patchCachedProgram = useCallback(
@@ -86,8 +88,7 @@ export function useProgramMutations(
           api.v1.orgs[':orgId'].updates.$post({
             param: { orgId },
             json: {
-              subjectType: 'program',
-              subjectId: programId,
+              ...subject,
               body,
               ...(health ? { health } : {}),
             },

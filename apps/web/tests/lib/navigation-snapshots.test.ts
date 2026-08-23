@@ -114,6 +114,26 @@ describe('navigation snapshot persistence', () => {
     expect((await repository.read('user-a', 'task', IDS[3]))?.id).toBe(IDS[3]);
   });
 
+  it('refreshes durable LRU order when a snapshot is read', async () => {
+    const storage = memoryStorage();
+    let clock = NOW;
+    const repository = createNavigationSnapshotRepository({
+      storage,
+      now: () => clock,
+      maxBytes: 850,
+    });
+    await repository.write('user-a', task(IDS[0], 'x'.repeat(120)));
+    clock += 1;
+    await repository.write('user-a', task(IDS[1], 'x'.repeat(120)));
+    clock += 1;
+    await repository.read('user-a', 'task', IDS[0]);
+    clock += 1;
+    await repository.write('user-a', task(IDS[2], 'x'.repeat(120)));
+
+    expect((await repository.read('user-a', 'task', IDS[0]))?.id).toBe(IDS[0]);
+    expect(await repository.read('user-a', 'task', IDS[1])).toBeNull();
+  });
+
   it('purges every account bucket on sign-out', async () => {
     const storage = memoryStorage();
     const repository = createNavigationSnapshotRepository({ storage, now: () => NOW });
@@ -155,5 +175,26 @@ describe('navigation snapshot runtime', () => {
 
     expect(store.values()).toHaveLength(0);
     expect(storage.records.size).toBe(0);
+  });
+
+  it('discards a durable read when the active account changes before it resolves', async () => {
+    const store = createNavigationSnapshotStore();
+    let resolveRead: ((value: EntityNavigationSnapshot) => void) | undefined;
+    const repository = {
+      write: async () => undefined,
+      read: () =>
+        new Promise<EntityNavigationSnapshot>((resolve) => {
+          resolveRead = resolve;
+        }),
+      purgeAll: async () => undefined,
+    };
+    const runtime = createNavigationSnapshotRuntime({ store, repository });
+    runtime.setUser('user-a');
+    const pending = runtime.read('task', IDS[0]);
+    runtime.setUser('user-b');
+    resolveRead?.(task(IDS[0]));
+
+    expect(await pending).toBeNull();
+    expect(store.values()).toEqual([]);
   });
 });

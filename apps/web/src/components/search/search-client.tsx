@@ -9,7 +9,7 @@ import type {
 import { EmptyState } from '@docket/ui/components';
 import { Activity, Search, type LucideIcon } from '@docket/ui/icons';
 import { Button, Input, Row, Skeleton, Stack } from '@docket/ui/primitives';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useAppPathname, useAppSearchParams } from '@/lib/app-location';
 import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';

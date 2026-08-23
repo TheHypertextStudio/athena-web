@@ -20,7 +20,7 @@
  */
 import type { HubTaskItem } from '@docket/types';
 import { Button, Skeleton, Stack } from '@docket/ui/primitives';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import type { JSX } from 'react';
 import { useMemo } from 'react';
 

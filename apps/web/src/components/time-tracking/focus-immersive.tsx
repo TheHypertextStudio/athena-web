@@ -3,7 +3,7 @@
 /** The chrome-free, task-dominant immersive Focus composition. */
 import { ChevronLeft, OpenInNew } from '@docket/ui/icons';
 import { Button, Skeleton, Text } from '@docket/ui/primitives';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { type JSX, useId, useState } from 'react';
 

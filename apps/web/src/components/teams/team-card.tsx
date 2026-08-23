@@ -19,7 +19,7 @@ import { ActorAvatar } from '@docket/ui/components';
 import { FolderKanban, ListChecks } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { Skeleton } from '@docket/ui/primitives';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import type { JSX } from 'react';
 
 import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';

@@ -15,6 +15,7 @@ import {
   type ProjectUpdate,
   ProgramId,
   ProjectId,
+  ProjectSubjectRef,
 } from '@docket/types';
 import type { DateResolution } from '@docket/work/planning-timeframe';
 import { useQueryClient } from '@tanstack/react-query';
@@ -91,6 +92,7 @@ export interface ProjectMutations {
  */
 export function useProjectMutations(orgId: string, projectId: string): ProjectMutations {
   const queryClient = useQueryClient();
+  const subject = ProjectSubjectRef.parse({ subjectType: 'project', subjectId: projectId });
   const detailKey = useMemo(() => queryKeys.project(orgId, projectId), [orgId, projectId]);
   const updatesKey = useMemo(() => [...detailKey, 'updates'] as const, [detailKey]);
 
@@ -207,7 +209,7 @@ export function useProjectMutations(orgId: string, projectId: string): ProjectMu
         () =>
           api.v1.orgs[':orgId'].updates.$post({
             param: { orgId },
-            json: { subjectType: 'project', subjectId: projectId, body },
+            json: { ...subject, body },
           }),
         'Could not post your update.',
       ),

@@ -3,7 +3,7 @@
 import type { SessionStatus } from '@docket/types';
 import { CircleDot, RefreshCw, Sparkles, XCircle } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import type { JSX } from 'react';
 
 /** The session statuses that read as "live" and get a pill in the work view. */

@@ -30,7 +30,7 @@ import type { Health, ProjectStatus } from '@docket/types';
 import { ArrowRight } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { Handle, type NodeProps, Position } from '@xyflow/react';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import { memo } from 'react';
 
 import { HEALTH_DOT_CLASS, HEALTH_LABEL } from '@/components/projects/health';

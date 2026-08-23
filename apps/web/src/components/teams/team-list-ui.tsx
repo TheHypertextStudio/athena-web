@@ -21,7 +21,7 @@ import { IdentityGlyph } from '@docket/ui/components';
 import { FolderKanban, ListChecks, Workflow } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { Badge, Skeleton } from '@docket/ui/primitives';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import type { ComponentPropsWithoutRef, JSX } from 'react';
 
 import { ObjectSurface } from '@/components/objects/object-surface';

@@ -1,6 +1,6 @@
 import { Button, Skeleton } from '@docket/ui/primitives';
 import { TaskAlt } from '@docket/ui/icons';
-import NextLink from 'next/link';
+import NextLink from '@/components/docket-link';
 import type { JSX } from 'react';
 
 import type { GtasksPickerModel } from './use-gtasks-controller';

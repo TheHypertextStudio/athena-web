@@ -23,7 +23,7 @@ import type { Health, ProjectOverviewItem, ProjectStatus } from '@docket/types';
 import { ArrowRight, X } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import type { JSX } from 'react';
 
 import { HEALTH_DOT_CLASS, HEALTH_LABEL } from '@/components/projects/health';

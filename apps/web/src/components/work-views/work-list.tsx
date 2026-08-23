@@ -1,6 +1,11 @@
 'use client';
 
-import { defaultEntityDisplay, type Health, type WorkViewActor } from '@docket/types';
+import {
+  defaultEntityDisplay,
+  entityNavigationSnapshotFromWorkViewRow,
+  type Health,
+  type WorkViewActor,
+} from '@docket/types';
 import { ActorAvatar, IdentityGlyph, ListCell, ListRow, ListView } from '@docket/ui/components';
 import { Calendar, Layers } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
@@ -25,6 +30,7 @@ import { HEALTH_FILL_CLASS } from '@/components/initiatives/health';
 import { ObjectSurface } from '@/components/objects/object-surface';
 import { PriorityGlyph } from '@/components/task-detail/PriorityGlyph';
 import type { ObjectRef } from '@/lib/actions';
+import { buildEntityHref } from '@/lib/authenticated-route';
 
 import { deriveInitiativeTreePositions, type InitiativeTreePosition } from './initiative-rails';
 import type { WorkViewDefinitionFor } from './view-state';
@@ -246,6 +252,7 @@ function WorkListObjectRow({
   rowId,
   contextRow,
   ariaLevel,
+  href,
   className,
   children,
 }: {
@@ -257,6 +264,7 @@ function WorkListObjectRow({
   readonly rowId: string;
   readonly contextRow: boolean;
   readonly ariaLevel: number | undefined;
+  readonly href: string;
   readonly className: string;
   readonly children: ReactNode;
 }): JSX.Element {
@@ -268,6 +276,7 @@ function WorkListObjectRow({
         ref={drop.dropProps.ref}
         active={active}
         selected={selected}
+        href={href}
         data-row-id={rowId}
         data-context-row={contextRow ? 'true' : undefined}
         aria-level={ariaLevel}
@@ -616,6 +625,7 @@ export function WorkList<TTarget extends ViewTarget>({
               contextRow={row.isContext}
               ariaLevel={position?.depth}
               onActivate={context.onActivate}
+              href={buildEntityHref(entityNavigationSnapshotFromWorkViewRow(row))}
               className={`group/roster relative min-h-14 gap-2 rounded-lg border-b-0 px-3 py-0 ${row.isContext ? 'text-on-surface-variant' : ''}`}
             >
               {position ? (

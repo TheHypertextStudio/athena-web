@@ -9,7 +9,7 @@
  * {@link ObjectSurface} owns object behavior.
  */
 import { cn } from '@docket/ui/lib/utils';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import type { JSX, ReactNode } from 'react';
 
 import { ObjectSurface } from '@/components/objects/object-surface';

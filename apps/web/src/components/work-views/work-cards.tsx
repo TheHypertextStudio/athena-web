@@ -1,5 +1,6 @@
 'use client';
 
+import { entityNavigationSnapshotFromWorkViewRow } from '@docket/types';
 import { Button, Card, Checkbox } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import type { ViewTarget } from '@docket/work/view-contract';
@@ -7,6 +8,9 @@ import { type JSX, type ReactNode } from 'react';
 
 import { useRelationDropTarget } from '@/components/dnd/use-relation-drop-target';
 import { ObjectSurface } from '@/components/objects/object-surface';
+
+import DocketLink from '@/components/docket-link';
+import { buildEntityHref } from '@/lib/authenticated-route';
 
 import type { WorkViewDefinitionFor } from './view-state';
 import { workViewDisplayFieldCatalog } from './view-state';
@@ -97,44 +101,55 @@ export function WorkCards<TTarget extends ViewTarget>({
         className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-3 p-1"
       >
         {rows.map((row) => (
-          <WorkObjectCard
-            key={row.id}
-            row={row}
-            onActivate={() => {
-              onActivate(row);
-            }}
-          >
-            <div className="flex items-start gap-3">
-              <span
-                className={`${selectedIds.size > 0 || selectedIds.has(row.id) ? 'opacity-100' : 'opacity-0 group-focus-within/card:opacity-100 group-hover/card:opacity-100'} transition-opacity`}
-              >
-                <Checkbox
-                  aria-label={`Select ${workViewRowTitle(row)}`}
-                  checked={selectedIds.has(row.id)}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                  }}
-                  onChange={() => {
-                    toggle(row.id);
-                  }}
-                />
-              </span>
-              <div className="min-w-0 flex-1">
-                <h2 className="text-title-medium truncate">{workViewRowTitle(row)}</h2>
-                {properties.length > 0 ? (
-                  <dl className="text-on-surface-variant text-body-small mt-3 grid gap-1">
-                    {properties.map((field) => (
-                      <div key={field.key} className="flex min-w-0 gap-2">
-                        <dt className="shrink-0">{field.label}</dt>
-                        <dd className="truncate">
-                          {formatWorkViewValue(workViewRowDisplayValue(row, field.key), field.kind)}
-                        </dd>
-                      </div>
-                    ))}
-                  </dl>
-                ) : null}
+          <WorkObjectCard key={row.id} row={row} onActivate={() => onActivate(row)}>
+            <span
+              className={`${selectedIds.size > 0 || selectedIds.has(row.id) ? 'opacity-100' : 'opacity-0 group-focus-within/card:opacity-100 group-hover/card:opacity-100'} absolute top-4 left-4 z-10 transition-opacity`}
+            >
+              <Checkbox
+                aria-label={`Select ${workViewRowTitle(row)}`}
+                checked={selectedIds.has(row.id)}
+                onClick={(event) => event.stopPropagation()}
+                onChange={() => toggle(row.id)}
+              />
+            </span>
+            <DocketLink
+              href={buildEntityHref(entityNavigationSnapshotFromWorkViewRow(row))}
+              className="focus-visible:ring-primary block min-h-36 rounded-xl p-4 outline-none focus-visible:ring-2"
+              onClick={(event) => {
+                if (
+                  event.button !== 0 ||
+                  event.metaKey ||
+                  event.ctrlKey ||
+                  event.shiftKey ||
+                  event.altKey
+                )
+                  return;
+                event.preventDefault();
+                onActivate(row);
+              }}
+            >
+              <div className="flex items-start gap-3">
+                <span aria-hidden className="size-6 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-title-medium truncate">{workViewRowTitle(row)}</h2>
+                  {properties.length > 0 ? (
+                    <dl className="text-on-surface-variant text-body-small mt-3 grid gap-1">
+                      {properties.map((field) => (
+                        <div key={field.key} className="flex min-w-0 gap-2">
+                          <dt className="shrink-0">{field.label}</dt>
+                          <dd className="truncate">
+                            {formatWorkViewValue(
+                              workViewRowDisplayValue(row, field.key),
+                              field.kind,
+                            )}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  ) : null}
+                </div>
               </div>
-            </div>
+            </DocketLink>
           </WorkObjectCard>
         ))}
       </div>

@@ -30,7 +30,7 @@ import {
   DropdownMenuTrigger,
 } from '@docket/ui/primitives';
 import { ChevronDown, LayoutTemplate, Settings } from '@docket/ui/icons';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import { type JSX, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 
 import { sectionHref } from '@/components/settings/settings-registry';

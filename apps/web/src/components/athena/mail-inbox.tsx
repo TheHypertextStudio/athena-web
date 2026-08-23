@@ -20,7 +20,7 @@
 import { Inbox, Link as LinkIcon, Mail, Plus, Trash2 } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { Badge, Button, ControlGroup, Skeleton, Text, Toolbar } from '@docket/ui/primitives';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import { type JSX, useState } from 'react';
 
 import { userErrorMessage } from '@/lib/problem';

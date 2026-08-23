@@ -5,7 +5,7 @@ import { EntityPicker } from '@docket/ui/components';
 import { Link as LinkIcon, X } from '@docket/ui/icons';
 import { Button, DecorativeIcon, Skeleton } from '@docket/ui/primitives';
 import type { QueryKey } from '@tanstack/react-query';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import type { JSX } from 'react';
 import { useMemo } from 'react';
 

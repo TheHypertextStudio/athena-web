@@ -3,7 +3,7 @@
 import type { HubTodaySuggestion } from '@docket/types';
 import { ArrowRight, Play, Plus, Sparkles, X } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import { type JSX, useMemo, useState } from 'react';
 
 import { OrgChip } from '@/components/org-chip';

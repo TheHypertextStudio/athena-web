@@ -12,7 +12,7 @@
  */
 import { ArrowRight, Mail, Plus } from '@docket/ui/icons';
 import { Badge, Button, ControlGroup, Skeleton, Text, Toolbar } from '@docket/ui/primitives';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import { type JSX, useState } from 'react';
 
 import { userErrorMessage } from '@/lib/problem';

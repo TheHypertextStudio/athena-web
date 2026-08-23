@@ -13,7 +13,7 @@ import {
   PopoverAnchor,
   PopoverContent,
 } from '@docket/ui/primitives';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import { type JSX, useRef, useState } from 'react';
 
 import { TimeboxForm } from '@/components/agenda/agenda-timebox-form';

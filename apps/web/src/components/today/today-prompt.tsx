@@ -29,7 +29,7 @@
  */
 import { ChevronDown, ListChecks, Sparkles } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import { type JSX, type KeyboardEvent, useCallback, useState } from 'react';
 
 import { useAthenaPanel } from '@/components/athena/athena-panel-provider';

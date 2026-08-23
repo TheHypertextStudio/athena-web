@@ -14,7 +14,7 @@
 import type { AuditEventOut } from '@docket/types';
 import { CheckCircle2, type LucideIcon, Sparkles, XCircle } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import { type JSX, type ReactNode } from 'react';
 
 import { OrgChip } from '@/components/org-chip';

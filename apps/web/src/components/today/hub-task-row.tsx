@@ -16,7 +16,7 @@
  */
 import type { HubTaskItem } from '@docket/types';
 import { StatusIcon } from '@docket/ui/components';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import type { JSX } from 'react';
 
 import { formatDay } from '@/components/date-picker';

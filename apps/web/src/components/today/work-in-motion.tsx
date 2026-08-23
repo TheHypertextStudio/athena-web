@@ -1,6 +1,6 @@
 import type { HubTodayStatusCard } from '@docket/types';
 import { ArrowRight, Flag, Layers } from '@docket/ui/icons';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import type { JSX } from 'react';
 
 import { OrgChip } from '@/components/org-chip';

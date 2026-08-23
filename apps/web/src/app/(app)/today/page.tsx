@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from '@docket/ui/primitives';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import { type JSX, useCallback, useState } from 'react';
 
 import { DayRecapEntry } from '@/components/today/day-recap-entry';

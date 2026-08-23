@@ -1,6 +1,6 @@
 import { Button, Select } from '@docket/ui/primitives';
 import type { IdentityOut } from '@docket/types';
-import NextLink from 'next/link';
+import NextLink from '@/components/docket-link';
 import type { JSX } from 'react';
 
 /** The "connect another Linear account" affordance, shown once under the Linear category. */

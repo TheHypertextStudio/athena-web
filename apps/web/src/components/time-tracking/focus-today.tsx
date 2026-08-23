@@ -3,7 +3,7 @@
 /** Today's real time-ledger summary shared by both Focus surfaces. */
 import type { TimeRecordOut } from '@docket/types';
 import { Text } from '@docket/ui/primitives';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import type { JSX } from 'react';
 
 import { formatDuration } from './format-duration';

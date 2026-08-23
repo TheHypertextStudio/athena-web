@@ -16,7 +16,7 @@
 import type { HighlightsDayOut } from '@docket/types';
 import { Skeleton, Stack, Text } from '@docket/ui/primitives';
 import { EntityList } from '@docket/ui/components';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import type { JSX } from 'react';
 
 import { userErrorMessage } from '@/lib/problem';

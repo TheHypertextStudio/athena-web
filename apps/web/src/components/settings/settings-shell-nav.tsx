@@ -15,7 +15,7 @@
  */
 import { useContextState } from '@docket/ui/components';
 import { cn } from '@docket/ui';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import { type JSX, useId, useMemo } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';

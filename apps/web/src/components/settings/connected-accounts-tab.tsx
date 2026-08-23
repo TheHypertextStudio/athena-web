@@ -18,7 +18,7 @@ import type { IdentityOut, IdentityProvider } from '@docket/types';
 import { WriteError } from './write-error';
 import { Skeleton } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
-import NextLink from 'next/link';
+import NextLink from '@/components/docket-link';
 import { type JSX, useCallback, useMemo, useState } from 'react';
 
 import { api } from '@/lib/api';

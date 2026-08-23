@@ -8,7 +8,7 @@ import type {
   ProjectOut,
   TaskOut,
 } from '@docket/types';
-import { ProjectId, TeamId } from '@docket/types';
+import { ProjectId, ProjectSubjectRef, TeamId } from '@docket/types';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Ellipsis, RefreshCw, Trash2 } from '@docket/ui/icons';
 import {
@@ -74,6 +74,7 @@ export default function ProjectDetailPage(): JSX.Element {
   const queryClient = useQueryClient();
   const { params } = useTypedRoute('/orgs/[orgId]/projects/[projectId]');
   const { orgId, projectId } = params;
+  const subject = ProjectSubjectRef.parse({ subjectType: 'project', subjectId: projectId });
   const navigationSnapshot = useNavigationSnapshot('project', projectId);
   const { defaultTeamId } = useActiveOrg();
   const { openCreate } = useCreateObject();
@@ -83,7 +84,7 @@ export default function ProjectDetailPage(): JSX.Element {
   const [tab, setTab] = useState<TabId>('overview');
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [repeatProjectOpen, setRepeatProjectOpen] = useState(false);
-  const entityMentions = useEntityMentions(orgId, 'project', projectId);
+  const entityMentions = useEntityMentions(orgId, subject);
   const planningCalendar = useFiscalYearStartMonth(orgId);
 
   const {
@@ -156,7 +157,7 @@ export default function ProjectDetailPage(): JSX.Element {
       unwrap(
         () =>
           api.v1.orgs[':orgId'].display[':subjectType'][':subjectId'].$put({
-            param: { orgId, subjectType: 'project', subjectId: projectId },
+            param: { orgId, ...subject },
             json,
           }),
         'Could not customize this project.',
@@ -169,8 +170,7 @@ export default function ProjectDetailPage(): JSX.Element {
           ? {
               ...current,
               display: {
-                subjectType: 'project',
-                subjectId: projectId,
+                ...subject,
                 iconKey,
                 colorKey,
                 customColor,

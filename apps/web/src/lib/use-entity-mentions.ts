@@ -8,7 +8,7 @@
  * its own beyond the description's own save: the reconciler runs on that write, and the standard
  * staleness tier picks the change up.
  */
-import type { EntityMention, MentionSubjectType } from '@docket/types';
+import type { EntityMention, MentionSubjectType, SubjectRef, TeamId } from '@docket/types';
 
 import { api } from './api';
 import { apiQueryOptions, queryKeys, STALE, useApiQuery } from './query';
@@ -34,19 +34,23 @@ export interface EntityMentionsData {
   readonly isPending: boolean;
 }
 
+/** A mention-bearing subject with its type correlated to its branded identifier. */
+export type EntityMentionSubjectRef =
+  | Extract<SubjectRef, { readonly subjectType: MentionSubjectType }>
+  | { readonly subjectType: 'team'; readonly subjectId: TeamId };
+
 /**
  * Read the derived references for one entity.
  *
  * @param orgId - The workspace the entity belongs to.
- * @param subjectType - Which kind of record it is.
- * @param subjectId - Which record.
+ * @param subject - The correlated kind and branded identifier of the record.
  * @returns The references, split by what they point at.
  */
 export function useEntityMentions(
   orgId: string,
-  subjectType: MentionSubjectType,
-  subjectId: string,
+  subject: EntityMentionSubjectRef,
 ): EntityMentionsData {
+  const { subjectType, subjectId } = subject;
   const segment = SUBJECT_PATH[subjectType];
 
   const query = useApiQuery(

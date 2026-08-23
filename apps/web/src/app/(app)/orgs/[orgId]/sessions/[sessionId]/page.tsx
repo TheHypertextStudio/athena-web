@@ -4,7 +4,7 @@ import { EmptyState } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { ChevronLeft, Sparkles } from '@docket/ui/icons';
 import { Skeleton } from '@docket/ui/primitives';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import { useAppParams } from '@/lib/app-location';
 import { type JSX } from 'react';
 

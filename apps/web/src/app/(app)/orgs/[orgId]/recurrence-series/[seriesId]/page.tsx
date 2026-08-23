@@ -11,7 +11,7 @@ import type {
 } from '@docket/types';
 import { Calendar, CheckCircle2, Pause, Play, RefreshCw, Stop } from '@docket/ui/icons';
 import { Badge, Button, Skeleton } from '@docket/ui/primitives';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import { useAppParams } from '@/lib/app-location';
 import { type JSX, useEffect, useMemo, useState } from 'react';
 

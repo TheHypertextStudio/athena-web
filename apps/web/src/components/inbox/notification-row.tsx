@@ -23,7 +23,7 @@ import { Check, Mail, MessageSquare } from '@docket/ui/icons';
 import { STRETCHED_LINK } from '@docket/ui/lib/stretched-link';
 import { cn } from '@docket/ui/lib/utils';
 import { Button } from '@docket/ui/primitives';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import { type JSX, type ReactNode } from 'react';
 
 import { OrgChip } from '@/components/org-chip';

@@ -4,7 +4,7 @@
 import type { GeneratedWorkRecurrenceOut } from '@docket/types';
 import { RefreshCw } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import type { JSX } from 'react';
 
 import { api } from '@/lib/api';

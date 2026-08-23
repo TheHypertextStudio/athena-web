@@ -10,7 +10,7 @@ import type {
 import { type Column, EntityTable, type EntityTableGroup, EmptyState } from '@docket/ui/components';
 import { Info, Library, Link as LinkIcon, RefreshCw, type LucideIcon } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import {
   type JSX,

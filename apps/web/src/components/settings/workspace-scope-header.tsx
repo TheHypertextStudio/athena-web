@@ -1,4 +1,4 @@
-import NextLink from 'next/link';
+import NextLink from '@/components/docket-link';
 import type { JSX } from 'react';
 
 /** Props for {@link WorkspaceScopeHeader}. */

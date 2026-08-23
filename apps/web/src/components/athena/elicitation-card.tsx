@@ -17,7 +17,7 @@ import type { ElicitationOut } from '@docket/athena/elicitation-api';
 import { AlarmClock, CircleAlert, HelpCircle, ListChecks, Sparkles } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { Badge, Button, Chip, ControlGroup, Text } from '@docket/ui/primitives';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 
 import { useNow } from '@/lib/use-now';
 import { type JSX, useMemo, useState } from 'react';

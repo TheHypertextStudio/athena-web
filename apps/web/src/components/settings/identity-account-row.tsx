@@ -10,7 +10,7 @@
  */
 import type { IdentityOut } from '@docket/types';
 import { Avatar, AvatarFallback, AvatarImage, Badge, Button } from '@docket/ui/primitives';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import type { JSX } from 'react';
 
 import { accessLabels } from './identity-providers';

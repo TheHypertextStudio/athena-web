@@ -11,7 +11,7 @@
  * a *workflow*, a different concern from linking the inbox itself.
  * See `docs/engineering/specs/email-to-task.md`.
  */
-import NextLink from 'next/link';
+import NextLink from '@/components/docket-link';
 import type { JSX } from 'react';
 
 import { EmptyState } from '@docket/ui/components';

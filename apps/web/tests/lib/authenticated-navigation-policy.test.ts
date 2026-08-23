@@ -22,4 +22,15 @@ describe('authenticated navigation source policy', () => {
 
     expect(violations).toEqual([]);
   });
+
+  it('keeps authenticated links behind DocketLink', () => {
+    const violations = roots
+      .flatMap(sourceFiles)
+      .filter((file) => !file.includes('/components/marketing/'))
+      .filter((file) => !file.endsWith('/components/docket-link.tsx'))
+      .filter((file) => readFileSync(file, 'utf8').includes("from 'next/link'"))
+      .map((file) => file.slice(webRoot.length + 1));
+
+    expect(violations).toEqual([]);
+  });
 });

@@ -17,7 +17,7 @@
 import { cn } from '@docket/ui';
 import { ChevronLeft } from '@docket/ui/icons';
 import { focusRing } from '@docket/ui/primitives';
-import NextLink from 'next/link';
+import NextLink from '@/components/docket-link';
 import type { JSX } from 'react';
 
 /**

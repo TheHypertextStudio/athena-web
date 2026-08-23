@@ -23,7 +23,7 @@ import { WriteError } from '../write-error';
 import { CheckCircle2, CircleAlert, User, UserOff, Users } from '@docket/ui/icons';
 import { EmptyState } from '@docket/ui/components';
 import { Avatar, AvatarFallback, Button, Select, Skeleton } from '@docket/ui/primitives';
-import NextLink from 'next/link';
+import NextLink from '@/components/docket-link';
 import type { JSX, ReactNode } from 'react';
 import { useState } from 'react';
 

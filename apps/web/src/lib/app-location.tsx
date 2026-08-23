@@ -20,7 +20,10 @@ import {
 } from './authenticated-route';
 import type { AuthenticatedRoutePattern } from './offline-routes.generated';
 import { ROUTE_PATTERNS } from './offline-routes.generated';
-import { ResponsiveNavigationProvider } from './interactions/navigation';
+import {
+  ResponsiveNavigationProvider,
+  type ResponsiveNavigationOptions,
+} from './interactions/navigation';
 import { matchRoutes } from './route-match';
 
 /**
@@ -103,19 +106,22 @@ export function syncLocation(): void {
  * @param href - The destination, as a same-origin path with optional query.
  */
 export function navigateWithoutRouter(href: string): void {
-  navigateHistory(href, false);
+  navigateHistory(href, false, true);
 }
 
-function navigateHistory(href: string, replace: boolean): void {
+function navigateHistory(href: string, replace: boolean, scroll: boolean): void {
   if (replace) window.history.replaceState(null, '', href);
   else window.history.pushState(null, '', href);
   syncLocation();
+  if (scroll) window.scrollTo({ left: 0, top: 0 });
 }
 
 /** Options for one validated browser-history navigation. */
 export interface AuthenticatedNavigationOptions {
   /** Replace the current history entry instead of pushing a new one. */
   readonly replace?: boolean;
+  /** Scroll the destination to the top. Defaults to true. */
+  readonly scroll?: boolean;
 }
 
 /**
@@ -130,7 +136,11 @@ export function navigateAuthenticated<TPattern extends AuthenticatedRoutePattern
   params: AuthenticatedRouteParams<TPattern>,
   options: AuthenticatedNavigationOptions = {},
 ): void {
-  navigateHistory(buildAuthenticatedHref(pattern, params), options.replace === true);
+  navigateHistory(
+    buildAuthenticatedHref(pattern, params),
+    options.replace === true,
+    options.scroll !== false,
+  );
 }
 
 /** Subscribe to location changes. */
@@ -209,13 +219,16 @@ export function AppLocationProvider({
   const getServerSnapshot = useCallback(() => serverHref, [serverHref]);
   const locationHref = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
-  const navigate = useCallback((href: string, replace: boolean): boolean => {
-    const queryAt = href.indexOf('?');
-    const pathname = queryAt === -1 ? href : href.slice(0, queryAt);
-    if (parseAuthenticatedRoute(pathname).kind !== 'matched') return false;
-    navigateHistory(href, replace);
-    return true;
-  }, []);
+  const navigate = useCallback(
+    (href: string, replace: boolean, options?: ResponsiveNavigationOptions): boolean => {
+      const queryAt = href.indexOf('?');
+      const pathname = queryAt === -1 ? href : href.slice(0, queryAt);
+      if (parseAuthenticatedRoute(pathname).kind !== 'matched') return false;
+      navigateHistory(href, replace, options?.scroll !== false);
+      return true;
+    },
+    [],
+  );
 
   useEffect(() => {
     syncLocation();

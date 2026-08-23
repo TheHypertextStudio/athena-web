@@ -13,7 +13,7 @@
 import { EmptyState } from '@docket/ui/components';
 import { Users } from '@docket/ui/icons';
 import { Button, Checkbox, Select } from '@docket/ui/primitives';
-import NextLink from 'next/link';
+import NextLink from '@/components/docket-link';
 import type {
   CalendarItemCreateIntent,
   CalendarLayerShareAccess,

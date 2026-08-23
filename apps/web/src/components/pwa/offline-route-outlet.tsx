@@ -4,8 +4,8 @@ import { useEffect, useState, type ComponentType, type JSX } from 'react';
 
 import { OfflineContent } from '@/components/offline-state';
 import { useAppLocation } from '@/lib/app-location';
-import { OFFLINE_ROUTES, ROUTE_PATTERNS } from '@/lib/offline-routes.generated';
-import { matchRoutes } from '@/lib/route-match';
+import { parseAuthenticatedRoute } from '@/lib/authenticated-route';
+import { OFFLINE_ROUTES } from '@/lib/offline-routes.generated';
 import { useOnlineStatus } from '@/lib/use-online-status';
 
 /**
@@ -31,9 +31,13 @@ import { useOnlineStatus } from '@/lib/use-online-status';
 
 /** What the outlet knows about the route it is trying to render. */
 type OutletState =
-  | { readonly status: 'loading' }
-  | { readonly status: 'ready'; readonly Component: ComponentType }
-  | { readonly status: 'unavailable' };
+  | { readonly pathname: string; readonly status: 'loading' }
+  | { readonly pathname: string; readonly status: 'ready'; readonly Component: ComponentType }
+  | {
+      readonly pathname: string;
+      readonly status: 'unavailable';
+      readonly reason: 'module' | 'not-found';
+    };
 
 /**
  * Load and render the route component for the current URL.
@@ -43,37 +47,36 @@ type OutletState =
 export default function OfflineRouteOutlet(): JSX.Element | null {
   const { pathname } = useAppLocation();
   const online = useOnlineStatus();
-  const [state, setState] = useState<OutletState>({ status: 'loading' });
+  const [state, setState] = useState<OutletState>({ pathname, status: 'loading' });
 
   useEffect(() => {
-    // The generated constant, not a fresh `.map()`: `matchRoutes` memoises its sort on the array
-    // identity, and a new array per navigation would re-sort 62 patterns every time.
-    const match = matchRoutes(ROUTE_PATTERNS, pathname);
-    const entry = match
-      ? OFFLINE_ROUTES.find((route) => route.pattern === match.pattern)
-      : undefined;
+    const match = parseAuthenticatedRoute(pathname);
+    const entry =
+      match.kind === 'matched'
+        ? OFFLINE_ROUTES.find((route) => route.pattern === match.route.pattern)
+        : undefined;
 
     if (!entry) {
-      setState({ status: 'unavailable' });
+      setState({ pathname, status: 'unavailable', reason: 'not-found' });
       return undefined;
     }
 
     // The pathname can change under us — offline navigation swaps the route without unmounting the
     // shell — so a load that resolves after the person has moved on must not be rendered.
     let current = true;
-    setState({ status: 'loading' });
+    setState({ pathname, status: 'loading' });
     entry
       .load()
       .then((Component) => {
         if (current) {
-          setState({ status: 'ready', Component });
+          setState({ pathname, status: 'ready', Component });
         }
       })
       .catch(() => {
         // The chunk is not in the cache and there is no network to fetch it from. Nothing is broken;
         // this route simply is not available on this device right now.
         if (current) {
-          setState({ status: 'unavailable' });
+          setState({ pathname, status: 'unavailable', reason: 'module' });
         }
       });
 
@@ -82,11 +85,20 @@ export default function OfflineRouteOutlet(): JSX.Element | null {
     };
   }, [pathname]);
 
-  if (state.status === 'loading') {
+  if (state.pathname !== pathname || state.status === 'loading') {
     return null;
   }
   if (state.status === 'unavailable') {
+    if (state.reason === 'not-found') {
+      return (
+        <div className="flex h-full items-center justify-center p-6">
+          <p role="alert" className="text-on-surface-variant text-body-medium">
+            Page not found.
+          </p>
+        </div>
+      );
+    }
     return <OfflineContent online={online} />;
   }
-  return <state.Component />;
+  return <state.Component key={pathname} />;
 }

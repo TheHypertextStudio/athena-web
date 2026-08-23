@@ -24,13 +24,13 @@
  * anyone else, and nothing here treats it as a lesser sort of team.
  */
 import type { EntityDisplayColorKey, EntityDisplayIconKey, EntityDisplayOut } from '@docket/types';
-import { defaultEntityDisplay } from '@docket/types';
+import { defaultEntityDisplay, TeamId } from '@docket/types';
 import { EmptyState } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { ChevronLeft, Folder } from '@docket/ui/icons';
 import { Button, Skeleton, Tabs } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import { type JSX, useMemo, useState } from 'react';
 
 import { EntityDocument } from '@/components/editor/entity-document';
@@ -171,7 +171,10 @@ export default function TeamDetailClient(): JSX.Element {
     ],
   });
 
-  const mentions = useEntityMentions(orgId, 'team', teamId);
+  const mentions = useEntityMentions(orgId, {
+    subjectType: 'team',
+    subjectId: TeamId.parse(teamId),
+  });
   const hasProse = Boolean(team?.description);
 
   if (teamQ.isPending) return <TeamDetailSkeleton />;

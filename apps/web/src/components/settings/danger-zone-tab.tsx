@@ -16,7 +16,7 @@ import type { AccountStatusOut } from '@docket/types';
 import { LoadFailure } from './load-failure';
 import { WriteError } from './write-error';
 import { Button, Skeleton } from '@docket/ui/primitives';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import { type JSX, useState } from 'react';
 
 import { api } from '@/lib/api';

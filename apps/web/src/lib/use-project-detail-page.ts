@@ -1,6 +1,7 @@
 'use client';
 
 import type { PickerOption } from '@docket/ui/components';
+import { ProjectSubjectRef } from '@docket/types';
 import { useMemo } from 'react';
 
 import type { ActorDirectory } from '@/components/project-detail/actor-directory';
@@ -19,6 +20,7 @@ import { useProjectMutations } from '@/lib/use-project-mutations';
 
 /** All data, queries, and mutations the project detail page needs. */
 export function useProjectDetailPage(orgId: string, projectId: string) {
+  const subject = ProjectSubjectRef.parse({ subjectType: 'project', subjectId: projectId });
   const detailKey = queryKeys.project(orgId, projectId);
   const updatesKey = useMemo(() => [...detailKey, 'updates'] as const, [detailKey]);
 
@@ -35,7 +37,7 @@ export function useProjectDetailPage(orgId: string, projectId: string) {
       () =>
         api.v1.orgs[':orgId'].updates.$get({
           param: { orgId },
-          query: { subjectType: 'project', subjectId: projectId },
+          query: subject,
         }),
       'Could not load updates.',
     ),

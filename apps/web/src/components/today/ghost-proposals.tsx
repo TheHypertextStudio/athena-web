@@ -13,7 +13,7 @@
  */
 import type { ProposalGroupOut } from '@docket/types';
 import { Button } from '@docket/ui/primitives';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import { type JSX, useCallback, useEffect, useState } from 'react';
 
 import { api } from '@/lib/api';

@@ -69,8 +69,13 @@ describe('WorkCards', () => {
     expect(
       screen.getByRole('checkbox', { name: 'Select Ship the roster' }).parentElement?.parentElement,
     ).toHaveClass('opacity-0');
-    fireEvent.click(screen.getByText('Ship the roster'));
+    const link = screen.getByRole('link', { name: /Ship the roster/ });
+    expect(link).toHaveAttribute('href', `/orgs/${task.organizationId}/tasks/${task.id}`);
+    fireEvent.click(link);
     expect(onActivate).toHaveBeenCalledWith(task);
+    onActivate.mockClear();
+    fireEvent.click(link, { metaKey: true });
+    expect(onActivate).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select Ship the roster' }));
     expect(onSelectionChange).toHaveBeenCalledWith(new Set([task.id]));
   });

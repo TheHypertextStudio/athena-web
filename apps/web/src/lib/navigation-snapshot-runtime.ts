@@ -61,7 +61,9 @@ export function createNavigationSnapshotRuntime(
       const live = options.store.get(target, id);
       if (live !== null) return live;
       if (userId === null) return null;
-      const persisted = await options.repository.read(userId, target, id).catch(() => null);
+      const readUserId = userId;
+      const persisted = await options.repository.read(readUserId, target, id).catch(() => null);
+      if (userId !== readUserId) return null;
       if (persisted !== null) options.store.seed(persisted);
       return persisted;
     },

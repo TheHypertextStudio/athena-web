@@ -15,7 +15,7 @@ import type { CycleOut, CycleStats } from '@docket/types';
 import { StatusGlyph } from '@docket/ui/components';
 import { cn } from '@docket/ui/lib/utils';
 import { Skeleton } from '@docket/ui/primitives';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import type { ComponentPropsWithoutRef, JSX } from 'react';
 
 import { EditableTitle } from '@/components/editor/editable-title';

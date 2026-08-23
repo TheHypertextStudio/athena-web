@@ -4,7 +4,7 @@
 import type { SearchResult } from '@docket/types';
 import { Download, OpenInNew, X } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import { type JSX, useEffect, useRef } from 'react';
 
 import { primaryResourceAction } from '@/components/library/resource-actions';

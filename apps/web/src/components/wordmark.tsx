@@ -28,7 +28,7 @@
  * @see {@link file://../app/(auth)/_components/auth-shell.tsx} for the auth-screen usage.
  */
 import { cn } from '@docket/ui/lib/utils';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import type { JSX } from 'react';
 
 /** Props for {@link Wordmark}. */

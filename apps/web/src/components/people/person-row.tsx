@@ -21,7 +21,7 @@
 import { ActorAvatar } from '@docket/ui/components';
 import { cn } from '@docket/ui/lib/utils';
 import { Badge, Text } from '@docket/ui/primitives';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import type { JSX } from 'react';
 
 /** One person as the roster renders them. */

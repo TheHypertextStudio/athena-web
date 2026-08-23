@@ -2,7 +2,7 @@
 
 import type { IntegrationDirectoryProvider, IntegrationOut } from '@docket/types';
 import { Button, DecorativeIcon } from '@docket/ui/primitives';
-import NextLink from 'next/link';
+import NextLink from '@/components/docket-link';
 import type { JSX } from 'react';
 
 import { CardAlert, CardNote } from './card-note';

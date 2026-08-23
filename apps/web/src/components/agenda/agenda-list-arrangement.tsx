@@ -1,7 +1,7 @@
 'use client';
 
 import { Button, Stack } from '@docket/ui/primitives';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import { type JSX, useMemo } from 'react';
 
 import { type AgendaEntry, isTimeboxed } from './agenda-context';

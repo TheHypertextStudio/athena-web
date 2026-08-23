@@ -16,7 +16,7 @@
 import { EntityListRow } from '@docket/ui/components';
 import { Activity, ChevronRight } from '@docket/ui/icons';
 import type { JSX } from 'react';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 
 import { useDayHighlights } from '@/components/activity/use-day-highlights';
 

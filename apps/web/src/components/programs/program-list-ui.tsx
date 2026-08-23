@@ -33,7 +33,7 @@ import { ActorAvatar, IdentityGlyph } from '@docket/ui/components';
 import { FolderKanban, Layers, ListChecks } from '@docket/ui/icons';
 import { Card, Skeleton } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
-import Link from 'next/link';
+import Link from '@/components/docket-link';
 import { type ComponentPropsWithoutRef, type JSX } from 'react';
 
 import { EditableTitle } from '@/components/editor/editable-title';

@@ -264,6 +264,15 @@ export function createNavigationSnapshotRepository(
           await removeRecord(userId, key);
           return null;
         }
+        const timestamp = now();
+        const refreshed = { ...record, lastAccessedAt: timestamp };
+        await options.storage.set(key, refreshed);
+        const keyForIndex = indexKey(userId);
+        const index = parseIndex(await options.storage.get(keyForIndex))
+          .filter((entry) => entry.key !== key)
+          .concat({ key, size: record.size, lastAccessedAt: timestamp })
+          .sort((left, right) => left.lastAccessedAt - right.lastAccessedAt);
+        await options.storage.set(keyForIndex, index);
         return record.snapshot;
       });
     },

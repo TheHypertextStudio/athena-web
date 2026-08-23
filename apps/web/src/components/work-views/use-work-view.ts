@@ -182,6 +182,18 @@ function parseDefaultResponse(
   return parsed;
 }
 
+function executionRequestKey(
+  request: WorkViewQueryRequestValue | WorkViewFacetRequestValue,
+): string {
+  const definition = {
+    version: request.definition.version,
+    target: request.definition.target,
+    filter: request.definition.filter,
+    arrangement: request.definition.arrangement,
+  };
+  return JSON.stringify({ ...request, definition });
+}
+
 /** Target-safe inputs for one shared work-view controller instance. */
 export interface UseWorkViewOptions<TTarget extends ViewTarget> {
   readonly organizationId: string;
@@ -480,7 +492,7 @@ export function useWorkView<TTarget extends ViewTarget>(
     ...(options.search?.trim() ? { search: options.search.trim() } : {}),
     limit: options.limit ?? 100,
   });
-  const requestKey = JSON.stringify(request);
+  const requestKey = executionRequestKey(request);
   const executionKey = `${controllerKey}:${requestKey}:${timezone}`;
   const readyToQuery =
     !preferencesQ.isPending && (options.savedView != null || !defaultQ.isPending);
@@ -531,7 +543,7 @@ export function useWorkView<TTarget extends ViewTarget>(
               organizationId,
               target,
               instanceKey,
-              JSON.stringify(pageRequest),
+              executionRequestKey(pageRequest),
               timezone,
             ),
             () =>
@@ -628,7 +640,7 @@ export function useWorkView<TTarget extends ViewTarget>(
         search: activeFacetInput.search,
       })
     : null;
-  const facetRequestKey = facetRequest ? JSON.stringify(facetRequest) : 'idle';
+  const facetRequestKey = facetRequest ? executionRequestKey(facetRequest) : 'idle';
   const facetQ = useInfiniteApiQuery(
     apiInfiniteQueryOptions<FacetResponseFor<TTarget>>(
       queryKeys.workViewFacets(organizationId, target, instanceKey, facetRequestKey, timezone),

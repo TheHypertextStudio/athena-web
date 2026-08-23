@@ -182,6 +182,33 @@ beforeEach(() => {
 });
 
 describe('useWorkView instance and request identity', () => {
+  it('changes presentation without refetching or dropping the loaded roster', async () => {
+    apiMocks.query.mockResolvedValue(okResponse(queryResponse('task', 3)));
+    const { wrapper } = makeQueryWrapper();
+    const { result } = renderHook(() => useWorkView(taskOptions()), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.response?.totalCount).toBe(3);
+    });
+    expect(apiMocks.query).toHaveBeenCalledTimes(1);
+
+    const boardDefinition = TaskViewDefinition.parse({
+      ...taskDefinition,
+      presentation: { ...taskDefinition.presentation, layout: 'board' },
+    });
+    act(() => {
+      result.current.setDefinition(boardDefinition);
+    });
+
+    expect(result.current.definition.presentation.layout).toBe('board');
+    expect(result.current.response?.totalCount).toBe(3);
+    await waitFor(() => {
+      expect(result.current.updatingPreferences).toBe(false);
+    });
+    expect(apiMocks.query).toHaveBeenCalledTimes(1);
+    expect(result.current.response?.totalCount).toBe(3);
+  });
+
   it('retries the failed roster request without changing the view definition', async () => {
     apiMocks.query.mockResolvedValueOnce({
       ok: false,

@@ -7,6 +7,26 @@
 
 ## Active Tasks
 
+### [WORK-VIEW-CONTINUITY-001] Keep rosters visible while changing presentation
+
+- **Status**: COMPLETED
+- **Started**: 2026-08-23
+- **Priority**: P0
+- **Description**: Changing a shared work roster from List to Board, Cards, or Timeline changed the
+  server-query cache key. The controller then discarded TanStack Query's retained data and briefly
+  rendered the empty state while it repeated an identical roster query.
+- **Approach**: Derive query identity from executable filter, grouping, sorting, context, and paging
+  state. Keep layout, density, visible properties, and empty-group presentation in personal view
+  state without treating them as server query inputs.
+- **Validation**: The controller regression now changes List to Board in place, keeps the loaded
+  three-item response visible, and proves that no second roster request occurs. All 15 controller
+  tests, the web typecheck, focused lint, and the diff check pass.
+- **Retrospective**: The wire schema carries presentation so one definition can be saved and shared,
+  but presentation does not participate in SQL execution. Cache identity must follow execution
+  semantics instead of serializing the entire persistence object.
+
+---
+
 ### [WORK-ROSTER-RESTORE-001] Restore Linear-style work rosters
 
 - **Status**: COMPLETED

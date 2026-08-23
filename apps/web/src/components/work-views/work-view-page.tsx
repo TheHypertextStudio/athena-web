@@ -15,7 +15,7 @@ import {
   ViewInstanceKey,
 } from '@docket/types';
 import { EmptyState } from '@docket/ui/components';
-import { FolderKanban, Heart, Layers, ListChecks, Plus, Target, Workflow } from '@docket/ui/icons';
+import { FolderKanban, Heart, Layers, ListChecks, Plus, Target } from '@docket/ui/icons';
 import {
   Button,
   Dialog,
@@ -193,7 +193,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
     id: `work-view:${target}`,
     rootRef,
     inputRef: searchInputRef,
-    enabled: layout === 'list' && !controller.loading && !controller.error,
+    enabled: layout === 'list' && !dependencyMode && !controller.loading && !controller.error,
     onOpen: () => {
       setFindOpen(true);
     },
@@ -404,7 +404,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
         }
         toolbar={
           <div className="flex min-w-0 flex-col gap-2">
-            {savedViews.length > 0 ? (
+            {savedViews.length > 0 || target === 'project' ? (
               <div
                 role="tablist"
                 aria-label={`${copy.title} views`}
@@ -413,9 +413,10 @@ export function WorkViewPage<TTarget extends ViewTarget>({
                 <Button
                   role="tab"
                   controlSize="sm"
-                  variant={selectedViewId === null ? 'secondary' : 'ghost'}
-                  aria-selected={selectedViewId === null}
+                  variant={!dependencyMode && selectedViewId === null ? 'secondary' : 'ghost'}
+                  aria-selected={!dependencyMode && selectedViewId === null}
                   onClick={() => {
+                    setDependencyMode(false);
                     setSelectedViewId(null);
                   }}
                 >
@@ -429,8 +430,9 @@ export function WorkViewPage<TTarget extends ViewTarget>({
                         role="tab"
                         controlSize="sm"
                         variant={selectedViewId === view.id ? 'secondary' : 'ghost'}
-                        aria-selected={selectedViewId === view.id}
+                        aria-selected={!dependencyMode && selectedViewId === view.id}
                         onClick={() => {
+                          setDependencyMode(false);
                           setSelectedViewId(view.id);
                         }}
                       >
@@ -452,9 +454,23 @@ export function WorkViewPage<TTarget extends ViewTarget>({
                     </div>
                   );
                 })}
+                {target === 'project' ? (
+                  <Button
+                    role="tab"
+                    controlSize="sm"
+                    variant={dependencyMode ? 'secondary' : 'ghost'}
+                    aria-selected={dependencyMode}
+                    onClick={() => {
+                      setDependencyMode(true);
+                      setSelectedViewId(null);
+                    }}
+                  >
+                    Dependencies
+                  </Button>
+                ) : null}
               </div>
             ) : null}
-            {findOpen ? (
+            {!dependencyMode && findOpen ? (
               <InPageSearchField
                 inputRef={searchInputRef}
                 value={search}
@@ -470,43 +486,29 @@ export function WorkViewPage<TTarget extends ViewTarget>({
                 className="w-full @2xl:max-w-md"
               />
             ) : null}
-            <div className="flex min-w-0 items-center gap-2">
-              <div className="min-w-0 flex-1">
-                <WorkViewToolbar
-                  target={target}
-                  timezone={controller.timezone}
-                  definition={controller.definition}
-                  onDefinitionChange={controller.setDefinition}
-                  onSaveView={() => {
-                    setSaveOpen(true);
-                  }}
-                  onSetDefault={controller.setAsDefault}
-                  onReset={controller.resetPersonalOverride}
-                  onFind={() => {
-                    setFindOpen(true);
-                  }}
-                  facetResponse={controller.facetResponse}
-                  facetMetadataResponse={controller.facetMetadataResponse}
-                  facetLoading={controller.facetLoading}
-                  facetHasMore={controller.facetHasMore}
-                  facetLoadingMore={controller.facetLoadingMore}
-                  onFacetLoadMore={controller.loadMoreFacets}
-                  onFacetRequest={controller.requestFacet}
-                />
-              </div>
-              {target === 'project' ? (
-                <Button
-                  variant={dependencyMode ? 'secondary' : 'outline'}
-                  className="shrink-0 gap-1.5"
-                  aria-pressed={dependencyMode}
-                  onClick={() => {
-                    setDependencyMode((current) => !current);
-                  }}
-                >
-                  <Workflow aria-hidden className="size-4" /> Dependencies
-                </Button>
-              ) : null}
-            </div>
+            {!dependencyMode ? (
+              <WorkViewToolbar
+                target={target}
+                timezone={controller.timezone}
+                definition={controller.definition}
+                onDefinitionChange={controller.setDefinition}
+                onSaveView={() => {
+                  setSaveOpen(true);
+                }}
+                onSetDefault={controller.setAsDefault}
+                onReset={controller.resetPersonalOverride}
+                onFind={() => {
+                  setFindOpen(true);
+                }}
+                facetResponse={controller.facetResponse}
+                facetMetadataResponse={controller.facetMetadataResponse}
+                facetLoading={controller.facetLoading}
+                facetHasMore={controller.facetHasMore}
+                facetLoadingMore={controller.facetLoadingMore}
+                onFacetLoadMore={controller.loadMoreFacets}
+                onFacetRequest={controller.requestFacet}
+              />
+            ) : null}
           </div>
         }
       >

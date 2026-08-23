@@ -53,7 +53,6 @@ export default function ViewsPage(): JSX.Element {
     tasks,
     loading,
     loadError,
-    viewsLabel,
     query,
     setQuery,
     composerOpen,
@@ -72,13 +71,9 @@ export default function ViewsPage(): JSX.Element {
   } = useViewsPage(orgId);
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
+    <div className="flex h-full w-full flex-col gap-4 px-3 py-4 @2xl:gap-5 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-1">
         <h1 className="text-on-surface text-title-large">Views</h1>
-        <p className="text-on-surface-variant text-xs">
-          Saved filters over your {viewsLabel.toLowerCase()} — open one, tweak it, or save the
-          current filter as a new view. Shared views show each person only the work they can see.
-        </p>
       </header>
 
       {/* placeholder: the saved views themselves — how many exist and each one's name, the filter
@@ -102,12 +97,9 @@ export default function ViewsPage(): JSX.Element {
               </h2>
             </div>
             {views.length === 0 ? (
-              <div className="border-outline-variant text-on-surface-variant text-body-medium flex flex-col items-center gap-2 rounded-xl border border-dashed p-8 text-center">
+              <div className="text-on-surface-variant text-body-medium flex flex-col items-center gap-2 p-8 text-center">
                 <LayoutGrid className="size-6 opacity-60" aria-hidden="true" />
-                <p>
-                  Build a filter below and save it to create your first view. Views can stay
-                  personal or be shared with your team or organization.
-                </p>
+                <p>No saved views</p>
               </div>
             ) : (
               <ViewList
@@ -175,7 +167,7 @@ export default function ViewsPage(): JSX.Element {
               />
             ) : null}
 
-            <div className="border-outline-variant min-h-64 flex-1 overflow-hidden rounded-xl border">
+            <div className="min-h-64 flex-1 overflow-hidden">
               <ViewRunner
                 tasks={tasks}
                 state={query.state}

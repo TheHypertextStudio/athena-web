@@ -93,7 +93,7 @@ export function PeopleList({ orgId }: PeopleListProps): JSX.Element {
     : null;
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 p-4 @2xl:p-6 @4xl:p-8">
+    <div className="flex w-full flex-col gap-4 px-3 py-4 @2xl:gap-5 @2xl:p-6 @4xl:p-8">
       {/* The title and the actions share the toolbar row; the explainer sits on its own line
           beneath it. Putting it inside the leading slot squeezed it into a five-line column
           beside the buttons at 390px — a toolbar has two edges, not a place for a paragraph. */}
@@ -122,10 +122,6 @@ export function PeopleList({ orgId }: PeopleListProps): JSX.Element {
           ) : null
         }
       />
-      <Text as="p" token="body-small" tone="muted" className="-mt-2">
-        Everyone this workspace works with — whether or not they sign in to Docket.
-      </Text>
-
       {canManage ? (
         <AddPersonDialog
           orgId={orgId}
@@ -139,25 +135,19 @@ export function PeopleList({ orgId }: PeopleListProps): JSX.Element {
       {loading ? (
         // placeholder: the roster itself. Its length and its names are the only unknowns; the
         // heading, the copy and the actions above are all static and already painted.
-        <div className="bg-surface-container-low flex flex-col gap-px overflow-hidden rounded-xl">
+        <div className="flex flex-col gap-px overflow-hidden">
           {[0, 1, 2, 3].map((n) => (
             <Skeleton key={n} className="h-14 w-full rounded-none" />
           ))}
         </div>
       ) : loadError ? (
-        <Text
-          as="p"
-          role="alert"
-          token="body-medium"
-          className="bg-surface-container-low rounded-xl p-4"
-        >
+        <Text as="p" role="alert" token="body-medium" className="text-error p-4">
           {loadError}
         </Text>
       ) : rows.length === 0 ? (
         <EmptyState
           icon={Users}
           title="No one here yet"
-          body="Add the people you work with — volunteers and contractors included — so work can be assigned to them by name."
           {...(canManage
             ? {
                 cta: {
@@ -172,7 +162,7 @@ export function PeopleList({ orgId }: PeopleListProps): JSX.Element {
       ) : (
         <ul
           aria-label="People"
-          className="bg-surface-container-low divide-outline-variant/50 flex flex-col divide-y overflow-hidden rounded-xl"
+          className="divide-outline-variant/50 flex flex-col divide-y overflow-hidden"
         >
           {rows.map((person) => (
             <PersonRow

@@ -53,12 +53,12 @@ export function PageContainer({
   return (
     <Element
       className={cn(
-        // Symmetric, minimal padding so the page content starts near the top and reads with even
-        // margins on every side. The narrow step is deliberately tighter than the rest: on a phone
-        // the content container is the scarce resource, and 16px of gutter on each side plus a
-        // card's own inset was costing a tenth of the usable width before any content was drawn.
-        'mx-auto flex w-full flex-col gap-4 px-3 py-4 @2xl:gap-5 @2xl:p-6 @4xl:p-8',
-        fill ? 'h-full min-h-0' : 'max-w-7xl',
+        'mx-auto flex w-full flex-col px-3 py-4',
+        // Roster and canvas surfaces use the viewport as working space. Their own rows and cards
+        // provide the inner rhythm, so a second 24-32px page inset only wastes width.
+        fill
+          ? 'h-full min-h-0 gap-3 @2xl:gap-4 @2xl:p-4 @4xl:p-4'
+          : 'max-w-7xl gap-4 @2xl:gap-5 @2xl:p-6 @4xl:p-8',
         className,
       )}
     >

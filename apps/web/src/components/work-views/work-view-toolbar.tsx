@@ -1,6 +1,6 @@
 'use client';
 
-import { Filter } from '@docket/ui/icons';
+import { Ellipsis, Filter } from '@docket/ui/icons';
 import {
   Button,
   Chip,
@@ -12,7 +12,7 @@ import {
   Stack,
 } from '@docket/ui/primitives';
 import type { ViewTarget } from '@docket/work/view-contract';
-import { type ReactElement, useState } from 'react';
+import { type ReactElement, type ReactNode, useState } from 'react';
 
 import { DisplayControls, DisplayControlsTrigger } from './display-controls';
 import { FilterBuilder } from './filter-builder';
@@ -104,6 +104,8 @@ export interface WorkViewToolbarProps<TTarget extends ViewTarget> {
   readonly onSaveView: () => void;
   readonly onSetDefault: () => void;
   readonly onReset: () => void;
+  /** View chips that lead the same control row as filter and display. */
+  readonly leading?: ReactNode;
   /** Open the target's temporary finder from Display. */
   readonly onFind?: () => void;
   readonly canSetDefault?: boolean;
@@ -125,6 +127,7 @@ export function WorkViewToolbar<TTarget extends ViewTarget>({
   onSaveView,
   onSetDefault,
   onReset,
+  leading,
   onFind,
   canSetDefault = true,
   facetResponse,
@@ -161,6 +164,8 @@ export function WorkViewToolbar<TTarget extends ViewTarget>({
           aria-label={`${targetLabel(target)} view controls`}
           className="w-full flex-nowrap overflow-x-hidden"
         >
+          {leading}
+          <span className="flex-1" aria-hidden />
           <FilterBuilder
             key={`${editingFilterIndex === null ? 'all' : String(editingFilterIndex)}:${JSON.stringify(filterToEdit)}`}
             target={target}
@@ -189,9 +194,14 @@ export function WorkViewToolbar<TTarget extends ViewTarget>({
               commit({ ...definition, filter: combineWorkViewFilters(target, nextNodes) });
             }}
             trigger={
-              <Chip icon={<Filter aria-hidden />} variant="filter" selected={filter !== null}>
-                Filter
-              </Chip>
+              <Button
+                variant={filter !== null ? 'secondary' : 'ghost'}
+                iconOnly
+                aria-label="Filter"
+                className="rounded-full"
+              >
+                <Filter aria-hidden />
+              </Button>
             }
           />
           <DisplayControls
@@ -200,16 +210,15 @@ export function WorkViewToolbar<TTarget extends ViewTarget>({
             definition={definition}
             onChange={commit}
             onFind={onFind}
-            trigger={<DisplayControlsTrigger kind="display" />}
+            trigger={<DisplayControlsTrigger kind="display" iconOnly className="rounded-full" />}
           />
-          <span className="flex-1" aria-hidden />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" aria-label="Views">
-                Views
+              <Button variant="ghost" iconOnly aria-label="View settings" className="rounded-full">
+                <Ellipsis aria-hidden />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" aria-label="Views">
+            <DropdownMenuContent align="end" aria-label="View settings">
               <DropdownMenuItem onSelect={onSaveView}>Save view</DropdownMenuItem>
               {canSetDefault ? (
                 <DropdownMenuItem onSelect={onSetDefault}>Set as default</DropdownMenuItem>

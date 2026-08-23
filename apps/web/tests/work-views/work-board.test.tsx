@@ -88,6 +88,9 @@ describe('WorkBoard', () => {
     );
 
     expect(screen.getByRole('region', { name: 'Todo column' })).toBeVisible();
+    expect(
+      screen.getByRole('checkbox', { name: 'Select Board task' }).parentElement?.parentElement,
+    ).toHaveClass('opacity-0');
     expect(screen.queryByRole('region', { name: 'Done column' })).not.toBeInTheDocument();
     fireEvent.click(
       within(screen.getByRole('region', { name: 'Todo column' })).getByRole('button', {

@@ -469,6 +469,8 @@ describe('queryWorkView', () => {
       .values({
         organizationId: orgId,
         name: 'Secondary-owned project',
+        summary: 'A compact roster summary',
+        leadId: humanActorId,
         teamId,
         status: 'planned',
         statusId: statusId('project', 'planned'),
@@ -476,6 +478,14 @@ describe('queryWorkView', () => {
       })
       .returning({ id: schema.project.id });
     if (!project) throw new Error('project was not seeded');
+    await schema.db.insert(schema.entityDisplay).values({
+      organizationId: orgId,
+      subjectType: 'project',
+      subjectId: project.id,
+      iconKey: 'folder',
+      colorKey: 'blue',
+      createdBy: humanActorId,
+    });
     await schema.db.insert(schema.projectTeam).values({
       organizationId: orgId,
       projectId: project.id,
@@ -506,6 +516,11 @@ describe('queryWorkView', () => {
     });
     expect(projectResponse.rows).toHaveLength(1);
     expect(projectResponse.rows[0]?.target).toBe('project');
+    expect(projectResponse.rows[0]).toMatchObject({
+      summary: 'A compact roster summary',
+      leadActor: { id: humanActorId, kind: 'human', displayName: 'Ada', avatar: null },
+      display: { iconKey: 'folder', colorKey: 'blue', customized: true },
+    });
     expect(projectResponse.groups).toContainEqual({
       path: [secondary.id],
       key: secondary.id,
@@ -519,6 +534,8 @@ describe('queryWorkView', () => {
     await schema.db.insert(schema.program).values({
       organizationId: orgId,
       name: 'Program output',
+      summary: 'Ongoing work area',
+      ownerId: humanActorId,
       status: 'active',
       statusId: statusId('program', 'active'),
       visibility: 'public',
@@ -531,6 +548,10 @@ describe('queryWorkView', () => {
     });
     expect(programResponse.rows).toHaveLength(1);
     expect(programResponse.rows[0]?.target).toBe('program');
+    expect(programResponse.rows[0]).toMatchObject({
+      summary: 'Ongoing work area',
+      ownerActor: { id: humanActorId, kind: 'human', displayName: 'Ada', avatar: null },
+    });
   });
 
   it('executes Project queries in a Team context through the compatibility primary Team', async () => {

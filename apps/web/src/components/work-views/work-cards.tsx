@@ -53,7 +53,7 @@ export function WorkCards<TTarget extends ViewTarget>({
           key={row.id}
           role="listitem"
           tabIndex={0}
-          className="focus-visible:ring-primary min-h-36 cursor-pointer p-4 outline-none focus-visible:ring-2"
+          className="group/card focus-visible:ring-primary min-h-36 cursor-pointer p-4 outline-none focus-visible:ring-2"
           onClick={() => {
             onActivate(row);
           }}
@@ -65,16 +65,20 @@ export function WorkCards<TTarget extends ViewTarget>({
           }}
         >
           <div className="flex items-start gap-3">
-            <Checkbox
-              aria-label={`Select ${workViewRowTitle(row)}`}
-              checked={selectedIds.has(row.id)}
-              onClick={(event) => {
-                event.stopPropagation();
-              }}
-              onChange={() => {
-                toggle(row.id);
-              }}
-            />
+            <span
+              className={`${selectedIds.size > 0 || selectedIds.has(row.id) ? 'opacity-100' : 'opacity-0 group-focus-within/card:opacity-100 group-hover/card:opacity-100'} transition-opacity`}
+            >
+              <Checkbox
+                aria-label={`Select ${workViewRowTitle(row)}`}
+                checked={selectedIds.has(row.id)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                }}
+                onChange={() => {
+                  toggle(row.id);
+                }}
+              />
+            </span>
             <div className="min-w-0 flex-1">
               <h2 className="text-title-medium truncate">{workViewRowTitle(row)}</h2>
               {properties.length > 0 ? (
@@ -83,7 +87,7 @@ export function WorkCards<TTarget extends ViewTarget>({
                     <div key={field.key} className="flex min-w-0 gap-2">
                       <dt className="shrink-0">{field.label}</dt>
                       <dd className="truncate">
-                        {formatWorkViewValue(workViewRowValue(row, field.key))}
+                        {formatWorkViewValue(workViewRowValue(row, field.key), field.kind)}
                       </dd>
                     </div>
                   ))}

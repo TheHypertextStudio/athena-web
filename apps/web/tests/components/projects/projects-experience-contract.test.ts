@@ -56,7 +56,8 @@ describe('Projects experience contract', () => {
   it('preserves dense, stable rows and full columns inside a local scroller', () => {
     const workList = source(workListPath);
     expect(workList).toContain('<ListView');
-    expect(workList).toContain('className="relative h-full min-h-0"');
+    expect(workList).toContain('bg-surface-container-low @container/table');
+    expect(workList).toContain('rowHeight={56}');
     expect(workList).toContain('truncate');
   });
 

@@ -177,8 +177,8 @@ describe('WorkViewToolbar', () => {
     expect(screen.getByRole('button', { name: 'Display' })).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Save view' })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Views' }));
-    const views = await screen.findByRole('menu', { name: 'Views' });
+    await user.click(screen.getByRole('button', { name: 'View settings' }));
+    const views = await screen.findByRole('menu', { name: 'View settings' });
     expect(within(views).getByRole('menuitem', { name: 'Save view' })).toBeVisible();
     expect(within(views).getByRole('menuitem', { name: 'Set as default' })).toBeVisible();
     expect(within(views).getByRole('menuitem', { name: 'Reset to default' })).toBeVisible();
@@ -190,7 +190,7 @@ describe('WorkViewToolbar', () => {
     const toolbar = screen.getByRole('toolbar', { name: 'Task view controls' });
     expect(within(toolbar).getByRole('button', { name: 'Filter' })).toBeVisible();
     expect(within(toolbar).getByRole('button', { name: 'Display' })).toBeVisible();
-    expect(within(toolbar).getByRole('button', { name: 'Views' })).toBeVisible();
+    expect(within(toolbar).getByRole('button', { name: 'View settings' })).toBeVisible();
     expect(within(toolbar).queryByRole('button', { name: 'Sort' })).not.toBeInTheDocument();
     expect(within(toolbar).queryByRole('button', { name: 'Group' })).not.toBeInTheDocument();
     expect(
@@ -211,7 +211,7 @@ describe('WorkViewToolbar', () => {
         onReset={onReset}
       />,
     );
-    await user.click(screen.getByRole('button', { name: 'Views' }));
+    await user.click(screen.getByRole('button', { name: 'View settings' }));
     await user.click(await screen.findByRole('menuitem', { name: 'Reset to default' }));
 
     expect(onReset).toHaveBeenCalledOnce();
@@ -431,7 +431,7 @@ describe('WorkViewToolbar', () => {
     expect(screen.queryByRole('button', { name: 'Sort' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Group' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Display' })).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Views' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'View settings' })).toBeVisible();
     expect(screen.queryByRole('button', { name: 'More controls' })).not.toBeInTheDocument();
   });
 

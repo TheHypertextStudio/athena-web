@@ -52,9 +52,10 @@ describe('Initiative visual contract', () => {
   it('keeps the hierarchy dense and gives every data column a clipping gutter', () => {
     const workList = source(workListPath);
     expect(workList).toContain('<ListView');
-    expect(workList).toContain('className="relative h-full min-h-0"');
-    expect(workList).toContain('className={`min-w-40 flex-1');
-    expect(workList).toContain('hidden max-w-40 shrink-0');
+    expect(workList).toContain('bg-surface-container-low @container/table');
+    expect(workList).toContain('rowHeight={56}');
+    expect(workList).toContain('min-w-72 flex-1');
+    expect(workList).toContain('hidden shrink-0');
     expect(workList).toContain('truncate');
     expect(workList).not.toContain('h-[72px]');
   });
@@ -146,9 +147,10 @@ describe('Initiative visual contract', () => {
     // since: the rhythm is a container-query step (a phone gives up gutter and gap so the surface's
     // own content keeps the width), and the reading measure applies only to *document* pages — a
     // canvas surface fills instead. Both are still declared exactly once, here.
-    expect(source(pageLayoutPath)).toContain('flex w-full flex-col gap-4');
+    expect(source(pageLayoutPath)).toContain('mx-auto flex w-full flex-col px-3 py-4');
     expect(source(pageLayoutPath)).toContain('@2xl:gap-5');
-    expect(source(pageLayoutPath)).toContain("'max-w-7xl'");
+    expect(source(pageLayoutPath)).toContain("'h-full min-h-0 gap-3 @2xl:gap-4 @2xl:p-4 @4xl:p-4'");
+    expect(source(pageLayoutPath)).toContain("'max-w-7xl gap-4");
     expect(overview).toContain('<WorkViewPage');
     expect(workPage).toContain('<ListPageLayout');
     expect(workPage).toContain('fill');
@@ -158,16 +160,17 @@ describe('Initiative visual contract', () => {
   it('keeps the complete roster inside the bounded shared virtual list', () => {
     const workList = source(workListPath);
     expect(workList).toContain('<ListView');
-    expect(workList).toContain('className="relative h-full min-h-0"');
-    expect(workList).toContain('text-on-surface-variant hidden max-w-40');
+    expect(workList).toContain('className="min-h-0 flex-1"');
+    expect(workList).toContain('text-on-surface-variant hidden shrink-0');
     expect(workList).toContain('truncate');
     expect(workList).not.toContain('border-b md:table-row');
   });
 
   it('keeps the five-level hierarchy and authorized ancestor context in the shared list', () => {
     const workList = source(workListPath);
-    expect(workList).toContain('initiativeDepth');
-    expect(workList).toContain('while (parent && depth < 4');
+    expect(workList).toContain('initiativePositions');
+    expect(workList).toContain("while (parent?.target === 'initiative'");
+    expect(workList).toContain('data-testid="initiative-hierarchy-rail"');
     expect(workList).toContain('data-context-row');
     expect(workList).toContain('text-on-surface-variant');
     expect(workList).not.toContain('Collapse ${item.name}');

@@ -36,10 +36,39 @@ function scalarRelation(definition: TenantScalarRelationDefinition, columnName: 
   );
 }
 
+/** Resolve one tenant-local actor into the compact identity a roster renders. */
+function actorIdentity(columnName: string): SQL {
+  return sql`(select json_build_object(
+      'id', related.id,
+      'kind', related.kind,
+      'displayName', related.display_name,
+      'avatar', related.avatar
+    ) from actor related
+    where related.id=e.${sql.raw(columnName)}
+      and related.organization_id=e.organization_id)`;
+}
+
+/** Read optional customized display metadata without manufacturing domain fields. */
+function entityDisplay(subjectType: 'initiative' | 'project'): SQL {
+  return sql`(select json_build_object(
+      'subjectType', display.subject_type,
+      'subjectId', display.subject_id,
+      'iconKey', display.icon_key,
+      'colorKey', display.color_key,
+      'customColor', display.custom_color,
+      'coverImage', display.cover_image,
+      'customized', true
+    ) from entity_display display
+    where display.organization_id=e.organization_id
+      and display.subject_type=${subjectType}
+      and display.subject_id=e.id)`;
+}
+
 const projections = {
   task: (): SQL => sql`${base()},
-    e.id, e.title, e.state as status, e.priority,
+    e.id, e.title, e.description, e.state as status, e.priority,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.actor, 'assignee_id')} as assignee,
+    ${actorIdentity('assignee_id')} as assignee_actor,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.actor, 'delegate_id')} as delegate,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.team, 'team_id')} as team,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.project, 'project_id')} as project,
@@ -56,8 +85,10 @@ const projections = {
     e._blocked as blocked, e._blocking as blocking, e._unfiled as unfiled,
     e._archived as archived`,
   project: (): SQL => sql`${base()},
-    e.id, e.name, e.status, e.priority, e.health,
+    e.id, e.name, e.summary, e.status, e.priority, e.health,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.actor, 'lead_id')} as lead,
+    ${actorIdentity('lead_id')} as lead_actor,
+    ${entityDisplay('project')} as display,
     ${compileTenantRelationArraySql(
       WORK_VIEW_RELATIONS.projectMembers,
       sql`e.id`,
@@ -97,8 +128,9 @@ const projections = {
       from project_dependency d join authorized related on related.id=d.blocked_project_id
       where d.blocking_project_id=e.id and d.organization_id=e.organization_id), '[]'::json) blocks_ids`,
   program: (): SQL => sql`${base()},
-    e.id, e.name, e.status, e.health,
+    e.id, e.name, e.summary, e.status, e.health,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.actor, 'owner_id')} as owner,
+    ${actorIdentity('owner_id')} as owner_actor,
     ${compileTenantRelationArraySql(
       WORK_VIEW_RELATIONS.programInitiatives,
       sql`e.id`,
@@ -112,8 +144,10 @@ const projections = {
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.actor, 'created_by')} as creator, e.updated_at,
     e._project_count::int project_count, e._task_count::int task_count`,
   initiative: (_context: WorkViewSqlContext, organizationId: string): SQL => sql`${base()},
-    e.id, e.name, e.status, e.priority, e.health,
+    e.id, e.name, e.summary, e.status, e.priority, e.health,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.actor, 'owner_id')} as owner,
+    ${actorIdentity('owner_id')} as owner_actor,
+    ${entityDisplay('initiative')} as display,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.team, 'lead_team_id')} as lead_team,
     ${compileTenantRelationArraySql(
       WORK_VIEW_RELATIONS.initiativeLabels,

@@ -61,7 +61,7 @@ const FALLBACKS = {
     version: 2,
     target: 'task',
     filter: null,
-    arrangement: { groupBy: 'status', subGroupBy: null, orderBy: [] },
+    arrangement: { groupBy: null, subGroupBy: null, orderBy: [] },
     presentation: {
       layout: 'list',
       properties: ['status', 'priority', 'assignee', 'dueDate'],
@@ -73,7 +73,7 @@ const FALLBACKS = {
     version: 2,
     target: 'project',
     filter: null,
-    arrangement: { groupBy: 'status', subGroupBy: null, orderBy: [] },
+    arrangement: { groupBy: null, subGroupBy: null, orderBy: [] },
     presentation: {
       layout: 'list',
       properties: ['status', 'priority', 'health', 'lead', 'targetDate', 'progress'],
@@ -85,7 +85,7 @@ const FALLBACKS = {
     version: 2,
     target: 'program',
     filter: null,
-    arrangement: { groupBy: 'status', subGroupBy: null, orderBy: [] },
+    arrangement: { groupBy: null, subGroupBy: null, orderBy: [] },
     presentation: {
       layout: 'list',
       properties: ['status', 'health', 'owner', 'projectCount', 'taskCount'],
@@ -97,7 +97,7 @@ const FALLBACKS = {
     version: 2,
     target: 'initiative',
     filter: null,
-    arrangement: { groupBy: 'status', subGroupBy: null, orderBy: [] },
+    arrangement: { groupBy: null, subGroupBy: null, orderBy: [] },
     presentation: {
       layout: 'list',
       properties: ['status', 'priority', 'health', 'owner', 'targetDate', 'activeProjectCount'],
@@ -260,9 +260,21 @@ export function WorkViewPage<TTarget extends ViewTarget>({
     content = <ProjectDependencyLens organizationId={organizationId} />;
   } else if (controller.loading) {
     content = (
-      <div className="space-y-2" aria-label={`Loading ${copy.title.toLowerCase()}`}>
+      <div
+        className="bg-surface-container-low h-full min-h-0 rounded-xl p-2"
+        aria-label={`Loading ${copy.title.toLowerCase()}`}
+      >
+        <div className="h-8 px-3 py-2">
+          <Skeleton className="h-3 w-24 rounded" />
+        </div>
         {Array.from({ length: 8 }, (_, index) => (
-          <Skeleton key={index} className="h-9 w-full" />
+          <div key={index} className="flex h-14 items-center gap-3 rounded-lg px-3">
+            <Skeleton className="size-8 shrink-0 rounded-full" />
+            <Skeleton className="h-3.5 w-[min(28rem,45%)] rounded" />
+            <span className="flex-1" />
+            <Skeleton className="hidden h-3 w-24 rounded @2xl:block" />
+            <Skeleton className="hidden h-3 w-20 rounded @2xl:block" />
+          </div>
         ))}
       </div>
     );
@@ -279,7 +291,6 @@ export function WorkViewPage<TTarget extends ViewTarget>({
       <EmptyState
         icon={copy.icon}
         title={`No ${copy.title.toLowerCase()} yet`}
-        body={`Create the first ${copy.singular} in this workspace.`}
         cta={{ label: `Create ${copy.singular}`, onClick: create }}
       />
     );
@@ -386,6 +397,76 @@ export function WorkViewPage<TTarget extends ViewTarget>({
     );
   }
 
+  const viewTabs = (
+    <div
+      role="tablist"
+      aria-label={`${copy.title} views`}
+      className="flex min-w-0 items-center gap-1 overflow-x-auto"
+    >
+      <Button
+        role="tab"
+        controlSize="sm"
+        className="rounded-full"
+        variant={!dependencyMode && selectedViewId === null ? 'secondary' : 'ghost'}
+        aria-selected={!dependencyMode && selectedViewId === null}
+        onClick={() => {
+          setDependencyMode(false);
+          setSelectedViewId(null);
+        }}
+      >
+        All {copy.title.toLowerCase()}
+      </Button>
+      {savedViews.map((view) => {
+        const favorite = controller.favoriteViewIds.has(view.id);
+        return (
+          <div key={view.id} className="flex shrink-0 items-center">
+            <Button
+              role="tab"
+              controlSize="sm"
+              className="rounded-full"
+              variant={selectedViewId === view.id ? 'secondary' : 'ghost'}
+              aria-selected={!dependencyMode && selectedViewId === view.id}
+              onClick={() => {
+                setDependencyMode(false);
+                setSelectedViewId(view.id);
+              }}
+            >
+              {view.name}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              iconOnly
+              controlSize="sm"
+              aria-label={`${favorite ? 'Remove' : 'Add'} ${view.name} ${favorite ? 'from' : 'to'} favorites`}
+              aria-pressed={favorite}
+              onClick={() => {
+                controller.toggleFavoriteView(view.id);
+              }}
+            >
+              <Heart aria-hidden className={favorite ? 'text-primary' : undefined} />
+            </Button>
+          </div>
+        );
+      })}
+      {target === 'project' ? (
+        <Button
+          role="tab"
+          controlSize="sm"
+          className="rounded-full"
+          variant={dependencyMode ? 'secondary' : 'ghost'}
+          aria-selected={dependencyMode}
+          onClick={() => {
+            setDependencyMode(true);
+            setSelectedViewId(null);
+          }}
+        >
+          Dependencies
+        </Button>
+      ) : null}
+    </div>
+  );
+
   return (
     <div ref={rootRef} className="contents">
       <ListPageLayout
@@ -403,72 +484,6 @@ export function WorkViewPage<TTarget extends ViewTarget>({
         }
         toolbar={
           <div className="flex min-w-0 flex-col gap-2">
-            {savedViews.length > 0 || target === 'project' ? (
-              <div
-                role="tablist"
-                aria-label={`${copy.title} views`}
-                className="flex min-w-0 items-center gap-1 overflow-x-auto"
-              >
-                <Button
-                  role="tab"
-                  controlSize="sm"
-                  variant={!dependencyMode && selectedViewId === null ? 'secondary' : 'ghost'}
-                  aria-selected={!dependencyMode && selectedViewId === null}
-                  onClick={() => {
-                    setDependencyMode(false);
-                    setSelectedViewId(null);
-                  }}
-                >
-                  All
-                </Button>
-                {savedViews.map((view) => {
-                  const favorite = controller.favoriteViewIds.has(view.id);
-                  return (
-                    <div key={view.id} className="flex shrink-0 items-center">
-                      <Button
-                        role="tab"
-                        controlSize="sm"
-                        variant={selectedViewId === view.id ? 'secondary' : 'ghost'}
-                        aria-selected={!dependencyMode && selectedViewId === view.id}
-                        onClick={() => {
-                          setDependencyMode(false);
-                          setSelectedViewId(view.id);
-                        }}
-                      >
-                        {view.name}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        iconOnly
-                        controlSize="sm"
-                        aria-label={`${favorite ? 'Remove' : 'Add'} ${view.name} ${favorite ? 'from' : 'to'} favorites`}
-                        aria-pressed={favorite}
-                        onClick={() => {
-                          controller.toggleFavoriteView(view.id);
-                        }}
-                      >
-                        <Heart aria-hidden className={favorite ? 'text-primary' : undefined} />
-                      </Button>
-                    </div>
-                  );
-                })}
-                {target === 'project' ? (
-                  <Button
-                    role="tab"
-                    controlSize="sm"
-                    variant={dependencyMode ? 'secondary' : 'ghost'}
-                    aria-selected={dependencyMode}
-                    onClick={() => {
-                      setDependencyMode(true);
-                      setSelectedViewId(null);
-                    }}
-                  >
-                    Dependencies
-                  </Button>
-                ) : null}
-              </div>
-            ) : null}
             {!dependencyMode && findOpen ? (
               <InPageSearchField
                 inputRef={searchInputRef}
@@ -491,6 +506,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
                 timezone={controller.timezone}
                 definition={controller.definition}
                 onDefinitionChange={controller.setDefinition}
+                leading={viewTabs}
                 onSaveView={() => {
                   setSaveOpen(true);
                 }}
@@ -507,7 +523,9 @@ export function WorkViewPage<TTarget extends ViewTarget>({
                 onFacetLoadMore={controller.loadMoreFacets}
                 onFacetRequest={controller.requestFacet}
               />
-            ) : null}
+            ) : (
+              viewTabs
+            )}
           </div>
         }
       >

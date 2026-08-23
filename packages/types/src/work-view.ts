@@ -30,6 +30,8 @@ import {
 
 import { Health, Priority, Visibility } from './capability';
 import { InitiativePriority, InitiativeUpdateCadence } from './initiative';
+import { ActorOut } from './actor';
+import { EntityDisplayOut } from './entity-display';
 import {
   ActorId,
   CycleId,
@@ -1226,6 +1228,16 @@ export const InitiativeContributingProject = z
 /** A validated contributing Project schedule in an Initiative work-view row. */
 export type InitiativeContributingProject = z.infer<typeof InitiativeContributingProject>;
 
+/** Resolved actor identity carried only to roster presentation. */
+export const WorkViewActor = ActorOut.pick({
+  id: true,
+  kind: true,
+  displayName: true,
+  avatar: true,
+}).strict();
+/** A resolved actor identity for a work-view row. */
+export type WorkViewActor = z.infer<typeof WorkViewActor>;
+
 /** Task projection returned by the work-view query operation. */
 export const TaskViewRow = z
   .object({
@@ -1233,9 +1245,11 @@ export const TaskViewRow = z
     target: z.literal('task'),
     id: TaskId,
     title: z.string(),
+    description: z.string().nullable().default(null),
     status: TaskStatusKey,
     priority: Priority,
     assignee: nullableActor,
+    assigneeActor: WorkViewActor.nullable().default(null),
     delegate: nullableActor,
     team: TeamId,
     project: ProjectId.nullable(),
@@ -1267,10 +1281,13 @@ export const ProjectViewRow = z
     target: z.literal('project'),
     id: ProjectId,
     name: z.string(),
+    summary: z.string().nullable().default(null),
     status: ProjectStatusKey,
     priority: Priority,
     health: Health.nullable(),
     lead: nullableActor,
+    leadActor: WorkViewActor.nullable().default(null),
+    display: EntityDisplayOut.nullable().default(null),
     members: z.array(ActorId),
     teams: z.array(TeamId),
     program: ProgramId.nullable(),
@@ -1299,9 +1316,11 @@ export const ProgramViewRow = z
     target: z.literal('program'),
     id: ProgramId,
     name: z.string(),
+    summary: z.string().nullable().default(null),
     status: ProgramStatusKey,
     health: Health.nullable(),
     owner: nullableActor,
+    ownerActor: WorkViewActor.nullable().default(null),
     initiatives: z.array(InitiativeId),
     labels: z.array(LabelId),
     visibility: Visibility,
@@ -1321,10 +1340,13 @@ export const InitiativeViewRow = z
     target: z.literal('initiative'),
     id: InitiativeId,
     name: z.string(),
+    summary: z.string().nullable().default(null),
     status: InitiativeStatusKey,
     priority: InitiativePriority,
     health: Health.nullable(),
     owner: nullableActor,
+    ownerActor: WorkViewActor.nullable().default(null),
+    display: EntityDisplayOut.nullable().default(null),
     leadTeam: TeamId.nullable(),
     labels: z.array(LabelId),
     targetDate: nullableDate,

@@ -122,6 +122,11 @@ describe('WorkList', () => {
     );
 
     const grid = screen.getByRole('grid', { name: 'Tasks' });
+    expect(screen.getByRole('columnheader', { name: 'Task' })).toBeVisible();
+    expect(screen.getByRole('columnheader', { name: 'Status' })).toBeVisible();
+    expect(
+      screen.getByRole('checkbox', { name: 'Select Task 0' }).parentElement?.parentElement,
+    ).toHaveClass('opacity-0');
     expect(screen.getAllByRole('row').length).toBeLessThan(60);
     fireEvent.keyDown(grid, { key: 'ArrowDown' });
     fireEvent.keyDown(grid, { key: 'x' });
@@ -286,5 +291,6 @@ describe('WorkList', () => {
       },
       parent.id,
     );
+    expect(screen.getAllByTestId('initiative-hierarchy-rail')).not.toHaveLength(0);
   });
 });

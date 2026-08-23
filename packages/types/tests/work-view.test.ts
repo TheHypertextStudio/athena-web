@@ -17,6 +17,7 @@ import {
   TaskWorkViewFacetRequest,
   TaskWorkViewOrderRequest,
   InitiativeViewDefinition,
+  ProjectViewRow,
   RelativeDateOperand,
   TaskWorkViewQueryRequest,
   ViewInstanceKey,
@@ -149,6 +150,59 @@ describe('work-view contracts', () => {
         queryFingerprint: 'sha256:0123456789abcdef',
       }),
     ).toMatchObject({ target: 'task', totalCount: 0 });
+  });
+
+  it('keeps roster presentation metadata beside executable project fields', () => {
+    const row = ProjectViewRow.parse({
+      target: 'project',
+      organizationId: ACTOR_ID,
+      id: '01ARZ3NDEKTSV4RRFFQ69G5FBV',
+      name: 'Project Lovelace',
+      summary: 'A typed work-view row can still render a designed identity.',
+      status: 'active',
+      priority: 'high',
+      health: 'on_track',
+      lead: ACTOR_ID,
+      leadActor: {
+        id: ACTOR_ID,
+        kind: 'human',
+        displayName: 'Ada Lovelace',
+        avatar: null,
+      },
+      display: {
+        subjectType: 'project',
+        subjectId: '01ARZ3NDEKTSV4RRFFQ69G5FBV',
+        iconKey: 'folder',
+        colorKey: 'blue',
+        customColor: null,
+        coverImage: null,
+        customized: true,
+      },
+      members: [],
+      teams: [],
+      program: null,
+      initiatives: [],
+      labels: [],
+      startDate: null,
+      targetDate: null,
+      creator: null,
+      createdAt: '2026-08-23T12:00:00.000Z',
+      updatedAt: '2026-08-23T12:00:00.000Z',
+      progress: 0.5,
+      taskCount: 4,
+      dependencyCount: 1,
+      milestones: [],
+      blockedByIds: [],
+      blocksIds: [],
+      manualRank: 'a0',
+      isContext: false,
+    });
+
+    expect(row).toMatchObject({
+      summary: 'A typed work-view row can still render a designed identity.',
+      leadActor: { displayName: 'Ada Lovelace' },
+      display: { iconKey: 'folder', colorKey: 'blue' },
+    });
   });
 
   it('validates view instance keys and mutable group keys', () => {

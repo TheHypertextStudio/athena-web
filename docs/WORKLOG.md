@@ -7,6 +7,37 @@
 
 ## Active Tasks
 
+### [WORK-ROSTER-RESTORE-001] Restore Linear-style work rosters
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-08-23
+- **Priority**: P0
+- **Description**: The typed work-view migration kept filter, sort, grouping, pagination, and
+  hierarchy writes, but replaced the designed Initiative, Project, Program, and Task rows with one
+  generic value renderer. The result exposes raw relation ids, gives every row a permanent
+  checkbox, weakens Initiative nesting to indentation, and removes the identity glyphs, summaries,
+  semantic status treatment, and aligned object-specific columns that made the prior rosters scan.
+- **Approach**: Keep `WorkViewPage` as the shared query, persistence, and layout controller. Restore
+  an opinionated list presentation registry beneath it. The list renderer will use the same quiet
+  full-width row structure for all four targets while each target declares its identity treatment
+  and useful columns. Initiative rows will restore visible hierarchy rails and an ungrouped default.
+  Selection will replace the leading glyph only on row hover, keyboard focus, or after selection
+  starts. The API projection will carry presentation enrichment such as summaries, display metadata,
+  and resolved actors instead of making the UI print opaque ids.
+- **Subtasks**:
+  - [ ] Add failing contracts for contextual selection, hierarchy rails, target-specific columns,
+        and enriched work-view rows.
+  - [ ] Restore the four roster presentations without coupling renderer availability to object type.
+  - [ ] Put view chips and display controls on one Linear-style control row.
+  - [ ] Run focused tests, type checks, lint, builds, and visual checks in both themes.
+  - [ ] Commit, push `main`, deploy, and verify all four production rosters.
+- **Risks**: Initiative grouping can duplicate ancestor context and obscure the tree. The default
+  must stay ungrouped while explicit grouped saved views remain supported. Presentation enrichment
+  must remain tenant-scoped and permission-scoped inside the existing work-view SQL boundary.
+- **Blockers**: None.
+
+---
+
 ### [WORK-VIEW-RECOVERY-001] Restore work-view loading and failure recovery
 
 - **Status**: COMPLETED

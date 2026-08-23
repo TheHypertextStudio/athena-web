@@ -256,7 +256,7 @@ export function WorkBoard<TTarget extends ViewTarget>({
                           key={row.id}
                           aria-label={workViewRowTitle(row)}
                           draggable={mutable}
-                          className="border-outline-variant bg-surface text-on-surface hover:bg-surface-container-high rounded-lg border p-3"
+                          className="group/card border-outline-variant bg-surface text-on-surface hover:bg-surface-container-high rounded-lg border p-3"
                           onDragStart={(event) => {
                             event.dataTransfer.effectAllowed = 'move';
                             event.dataTransfer.setData(
@@ -269,13 +269,17 @@ export function WorkBoard<TTarget extends ViewTarget>({
                           }}
                         >
                           <div className="flex items-start gap-2">
-                            <Checkbox
-                              aria-label={`Select ${workViewRowTitle(row)}`}
-                              checked={selectedIds.has(row.id)}
-                              onChange={() => {
-                                toggle(row.id);
-                              }}
-                            />
+                            <span
+                              className={`${selectedIds.size > 0 || selectedIds.has(row.id) ? 'opacity-100' : 'opacity-0 group-focus-within/card:opacity-100 group-hover/card:opacity-100'} transition-opacity`}
+                            >
+                              <Checkbox
+                                aria-label={`Select ${workViewRowTitle(row)}`}
+                                checked={selectedIds.has(row.id)}
+                                onChange={() => {
+                                  toggle(row.id);
+                                }}
+                              />
+                            </span>
                             <span className="text-body-medium min-w-0 flex-1">
                               {workViewRowTitle(row)}
                             </span>
@@ -289,7 +293,10 @@ export function WorkBoard<TTarget extends ViewTarget>({
                                 >
                                   <dt className="sr-only">{field.label}</dt>
                                   <dd className="max-w-36 truncate">
-                                    {formatWorkViewValue(workViewRowValue(row, field.key))}
+                                    {formatWorkViewValue(
+                                      workViewRowValue(row, field.key),
+                                      field.kind,
+                                    )}
                                   </dd>
                                 </div>
                               ))}

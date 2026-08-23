@@ -271,15 +271,16 @@ export function DisplayControls<TTarget extends ViewTarget>({
 /** Compact MD3 trigger for one display-control section. */
 export function DisplayControlsTrigger({
   kind,
+  iconOnly,
   ...props
 }: {
   readonly kind: DisplayControlKind;
 } & Omit<ButtonProps, 'children'>): ReactElement {
   const label = titleFor(kind);
   return (
-    <Button variant="ghost" aria-label={label} {...props}>
+    <Button variant="ghost" iconOnly={iconOnly} aria-label={label} {...props}>
       <TuneRounded aria-hidden />
-      {label}
+      {iconOnly ? null : label}
     </Button>
   );
 }

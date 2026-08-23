@@ -66,6 +66,9 @@ describe('WorkCards', () => {
     );
 
     expect(screen.getByRole('list', { name: 'Task cards' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('checkbox', { name: 'Select Ship the roster' }).parentElement?.parentElement,
+    ).toHaveClass('opacity-0');
     fireEvent.click(screen.getByText('Ship the roster'));
     expect(onActivate).toHaveBeenCalledWith(task);
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select Ship the roster' }));

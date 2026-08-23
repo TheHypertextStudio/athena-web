@@ -11,6 +11,7 @@ import {
   useMemo,
   useRef,
 } from 'react';
+import { flushSync } from 'react-dom';
 
 /** A virtualized surface that can claim the browser find command. */
 export interface InPageSearchTargetOptions {
@@ -163,12 +164,13 @@ export function InPageSearchProvider({ children }: InPageSearchProviderProps): J
           return;
         }
         if (!target.open) continue;
-        target.open();
-        event.preventDefault();
-        window.setTimeout(() => {
-          focus();
-        }, 0);
-        return;
+        flushSync(() => {
+          target.open?.();
+        });
+        if (focus()) {
+          event.preventDefault();
+          return;
+        }
       }
     };
 

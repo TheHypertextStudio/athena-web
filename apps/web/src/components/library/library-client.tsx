@@ -100,6 +100,7 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
   const urlQuery = searchParams.get('q')?.trim() ?? '';
   const openedId = searchParams.get('resourceId');
   const [draft, setDraft] = useState(urlQuery);
+  const [findOpen, setFindOpen] = useState(false);
   const query = useDebouncedValue(draft.trim(), SEARCH_DEBOUNCE_MS);
   const searchActive = query.length > 0;
   const gridRef = useRef<HTMLDivElement>(null);
@@ -112,6 +113,9 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
     id: 'library',
     rootRef: gridRef,
     inputRef: searchInputRef,
+    onOpen: () => {
+      setFindOpen(true);
+    },
   });
 
   useEffect(() => {
@@ -359,16 +363,21 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
       fill
       toolbar={
         <div className="flex min-w-0 flex-col gap-3">
-          <InPageSearchField
-            inputRef={searchInputRef}
-            value={draft}
-            onValueChange={setDraft}
-            onEscapeEmpty={restoreFocus}
-            label="Search the Library"
-            placeholder="Search documents, links, and files"
-            resultCount={applied.rows.length}
-            pending={draft.trim() !== query || resourcesQ.isFetching}
-          />
+          {findOpen ? (
+            <InPageSearchField
+              inputRef={searchInputRef}
+              value={draft}
+              onValueChange={setDraft}
+              onEscapeEmpty={() => {
+                setFindOpen(false);
+                restoreFocus();
+              }}
+              label="Search the Library"
+              placeholder="Search Library"
+              resultCount={applied.rows.length}
+              pending={draft.trim() !== query || resourcesQ.isFetching}
+            />
+          ) : null}
           <FilterToolbar
             catalog={catalog}
             state={state}

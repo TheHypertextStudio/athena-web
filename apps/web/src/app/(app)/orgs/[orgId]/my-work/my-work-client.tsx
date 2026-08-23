@@ -67,6 +67,7 @@ export default function MyWorkClient(): JSX.Element {
   const visible = useMemo(() => visibleTasks(tab), [tab, visibleTasks]);
   const rootRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const [findOpen, setFindOpen] = useState(false);
   const source = useMemo(() => ({ completeness: 'complete' as const, items: visible }), [visible]);
   const searchableText = useCallback(
     (task: (typeof visible)[number]): string => {
@@ -92,6 +93,9 @@ export default function MyWorkClient(): JSX.Element {
     rootRef,
     inputRef: searchInputRef,
     enabled: !loading && !loadError,
+    onOpen: () => {
+      setFindOpen(true);
+    },
   });
 
   const openTaskComposer = (): void => {
@@ -150,16 +154,21 @@ export default function MyWorkClient(): JSX.Element {
         ]}
       />
 
-      <InPageSearchField
-        inputRef={searchInputRef}
-        value={search.draft}
-        onValueChange={search.setDraft}
-        onEscapeEmpty={restoreFocus}
-        label="Search My Work"
-        placeholder="Search every task in this tab"
-        resultCount={search.items.length}
-        pending={search.draft !== search.settledQuery}
-      />
+      {findOpen ? (
+        <InPageSearchField
+          inputRef={searchInputRef}
+          value={search.draft}
+          onValueChange={search.setDraft}
+          onEscapeEmpty={() => {
+            setFindOpen(false);
+            restoreFocus();
+          }}
+          label="Search My Work"
+          placeholder="Search My Work"
+          resultCount={search.items.length}
+          pending={search.draft !== search.settledQuery}
+        />
+      ) : null}
 
       <section
         id={`tabpanel-${tab}`}

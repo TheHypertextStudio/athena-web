@@ -21,7 +21,7 @@ import type { TaskOut } from '@docket/types';
 import { type GroupKey, ListView, type TaskRowData, TaskRow } from '@docket/ui/components';
 import type { WorkflowStateType } from '@docket/ui/components';
 import type { JSX } from 'react';
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { useCategoryOf } from '@/components/entity-display/use-work-status';
 import { InPageSearchField } from '@/components/in-page-search/in-page-search-field';
@@ -100,6 +100,7 @@ export function ViewRunner({
   const categoryOf = useCategoryOf('task');
   const rootRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const [findOpen, setFindOpen] = useState(false);
   const source = useMemo(() => ({ completeness: 'complete' as const, items: tasks }), [tasks]);
   const searchableText = useMemo(() => compileCatalogSearchText(catalog), [catalog]);
   const search = useResidentInPageSearch({ source, searchableText });
@@ -107,6 +108,9 @@ export function ViewRunner({
     id: `saved-view:${label}`,
     rootRef,
     inputRef: searchInputRef,
+    onOpen: () => {
+      setFindOpen(true);
+    },
   });
 
   /** The filtered + sorted + (optionally) grouped result for this query. */
@@ -152,17 +156,22 @@ export function ViewRunner({
 
   return (
     <div ref={rootRef} className="flex h-full min-h-0 flex-col gap-3 p-3">
-      <InPageSearchField
-        inputRef={searchInputRef}
-        value={search.draft}
-        onValueChange={search.setDraft}
-        onEscapeEmpty={restoreFocus}
-        label={`Search ${label}`}
-        placeholder="Search every task in this view"
-        resultCount={applied.rows.length}
-        pending={search.draft !== search.settledQuery}
-        className="shrink-0"
-      />
+      {findOpen ? (
+        <InPageSearchField
+          inputRef={searchInputRef}
+          value={search.draft}
+          onValueChange={search.setDraft}
+          onEscapeEmpty={() => {
+            setFindOpen(false);
+            restoreFocus();
+          }}
+          label={`Search ${label}`}
+          placeholder={`Search ${label.toLowerCase()}`}
+          resultCount={applied.rows.length}
+          pending={search.draft !== search.settledQuery}
+          className="shrink-0"
+        />
+      ) : null}
       <div className="relative min-h-0 flex-1">
         <ListView
           // `ListView`'s expand/collapse state is keyed by bucket id, and the synthesized "no value"

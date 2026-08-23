@@ -6,7 +6,7 @@ import { Inbox } from '@docket/ui/icons';
 import { Skeleton } from '@docket/ui/primitives';
 import { useRouter } from 'next/navigation';
 import { useAppParams } from '@/lib/app-location';
-import { type JSX, useCallback, useMemo, useRef } from 'react';
+import { type JSX, useCallback, useMemo, useRef, useState } from 'react';
 
 import { InPageSearchField } from '@/components/in-page-search/in-page-search-field';
 import { useInPageSearchTarget } from '@/components/in-page-search/in-page-search-provider';
@@ -48,6 +48,7 @@ export default function TriagePage(): JSX.Element {
   } = useTriage(orgId, categoryOf);
   const rootRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const [findOpen, setFindOpen] = useState(false);
   const source = useMemo(() => ({ completeness: 'complete' as const, items: queue }), [queue]);
   const searchableText = useCallback(
     (task: (typeof queue)[number]): string => {
@@ -68,6 +69,9 @@ export default function TriagePage(): JSX.Element {
     rootRef,
     inputRef: searchInputRef,
     enabled: !loading && !loadError,
+    onOpen: () => {
+      setFindOpen(true);
+    },
   });
 
   return (
@@ -86,16 +90,21 @@ export default function TriagePage(): JSX.Element {
 
       <SuggestionsLane orgId={orgId} canAct />
 
-      <InPageSearchField
-        inputRef={searchInputRef}
-        value={search.draft}
-        onValueChange={search.setDraft}
-        onEscapeEmpty={restoreFocus}
-        label="Search the triage queue"
-        placeholder="Search every triage item"
-        resultCount={search.items.length}
-        pending={search.draft !== search.settledQuery}
-      />
+      {findOpen ? (
+        <InPageSearchField
+          inputRef={searchInputRef}
+          value={search.draft}
+          onValueChange={search.setDraft}
+          onEscapeEmpty={() => {
+            setFindOpen(false);
+            restoreFocus();
+          }}
+          label="Search the triage queue"
+          placeholder="Search triage"
+          resultCount={search.items.length}
+          pending={search.draft !== search.settledQuery}
+        />
+      ) : null}
 
       {!loading && !loadError ? (
         <p className="text-on-surface-variant text-xs tabular-nums">

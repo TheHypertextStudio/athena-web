@@ -128,6 +128,11 @@ import { InPageSearchProvider } from '@/components/in-page-search/in-page-search
 
 const ORG_ID = OrganizationId.parse('01HZZZ0000000000000000000G');
 
+function openLibrarySearch(): HTMLInputElement {
+  expect(fireEvent.keyDown(document, { key: 'f', metaKey: true })).toBe(false);
+  return screen.getByRole<HTMLInputElement>('searchbox', { name: 'Search the Library' });
+}
+
 function resource(id: string, usedIn: SearchResult['usedIn'] = [], title = id): SearchResult {
   return {
     id,
@@ -273,7 +278,7 @@ describe('LibraryClient cursor and presentation behavior', () => {
     fireEvent.scroll(browseGrid);
 
     harness.queryResult = queryResult([page([resource('search-row')])]);
-    fireEvent.change(screen.getByRole('searchbox', { name: 'Search the Library' }), {
+    fireEvent.change(openLibrarySearch(), {
       target: { value: 'needle' },
     });
     rendered.rerender(<LibraryFixture />);
@@ -285,7 +290,7 @@ describe('LibraryClient cursor and presentation behavior', () => {
     });
 
     harness.queryResult = queryResult([page([resource('browse-row')])]);
-    fireEvent.change(screen.getByRole('searchbox', { name: 'Search the Library' }), {
+    fireEvent.change(openLibrarySearch(), {
       target: { value: '' },
     });
     rendered.rerender(<LibraryFixture />);
@@ -309,7 +314,7 @@ describe('LibraryClient cursor and presentation behavior', () => {
       isFetching: true,
       isPlaceholderData: true,
     });
-    fireEvent.change(screen.getByRole('searchbox', { name: 'Search the Library' }), {
+    fireEvent.change(openLibrarySearch(), {
       target: { value: 'needle' },
     });
 
@@ -394,11 +399,9 @@ describe('LibraryClient cursor and presentation behavior', () => {
     harness.search = 'q=launch';
     harness.queryResult = queryResult([page([resource('one', [], 'Launch plan')])]);
     render(<LibraryFixture />);
-    const search = screen.getByRole<HTMLInputElement>('searchbox', {
-      name: 'Search the Library',
-    });
+    expect(screen.queryByRole('searchbox', { name: 'Search the Library' })).not.toBeInTheDocument();
+    const search = openLibrarySearch();
 
-    expect(fireEvent.keyDown(document, { key: 'f', metaKey: true })).toBe(false);
     expect(search).toHaveFocus();
     expect(search.selectionStart).toBe(0);
     expect(search.selectionEnd).toBe('launch'.length);

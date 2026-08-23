@@ -127,9 +127,7 @@ export type MutableGroupKey<TContract extends ViewContract> = KeysWithCapability
 >;
 
 /** Renderer families accepted by every persisted collection definition. */
-export type LayoutFor<TContract extends ViewContract> = TContract extends ViewContract
-  ? ViewLayout
-  : never;
+export type LayoutFor<TContract extends ViewContract> = ViewLayout | Extract<TContract, never>;
 
 /** A readonly array whose first item is guaranteed to exist. */
 export type NonEmptyReadonlyArray<T> = readonly [T, ...T[]];

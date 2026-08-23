@@ -207,8 +207,8 @@ export interface CycleRowsProps extends ComponentPropsWithoutRef<'div'> {
 /** The Cycles roster frame: the 72px-row grid's shared column header + its data rows. */
 export function CycleRows({ rows, ariaLabel, className, ...rest }: CycleRowsProps): JSX.Element {
   return (
-    <div {...rest} className={cn('bg-surface-container-low relative rounded-xl p-2', className)}>
-      <div className="overflow-x-auto overscroll-x-contain pb-1">
+    <div {...rest} className={cn('relative', className)}>
+      <div className="overflow-x-auto overscroll-x-contain">
         <div role="grid" aria-label={ariaLabel} className="text-body-medium min-w-[46rem]">
           <div
             role="row"

@@ -233,7 +233,7 @@ export default function TeamsListClient(): JSX.Element {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 p-4 @2xl:p-6 @4xl:p-8">
+    <div className="flex w-full flex-col gap-4 px-3 py-4 @2xl:gap-5 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-3 @2xl:flex-row @2xl:flex-wrap @2xl:items-center @2xl:justify-between">
         <div className="flex flex-col gap-1">
           <h1 className="text-on-surface text-title-large">Teams</h1>
@@ -265,28 +265,20 @@ export default function TeamsListClient(): JSX.Element {
           <TeamCardsSkeleton />
         )
       ) : loadError ? (
-        <p
-          role="alert"
-          className="border-outline-variant text-error text-body-medium rounded-xl border p-4"
-        >
+        <p role="alert" className="text-error text-body-medium p-4">
           {loadError}
         </p>
       ) : teams.length === 0 ? (
         <EmptyState
           icon={Users}
           title="No teams yet"
-          body="Teams are the units that own work — each with its own workflow, cycles, and triage queue. Create one to start organizing your work."
           cta={{
             label: 'Create your first team',
             onClick: openTeamComposer,
           }}
         />
       ) : applied.rows.length === 0 ? (
-        <EmptyState
-          icon={Users}
-          title="No matching teams"
-          body="No team matches the active filters. Adjust or clear them to see more."
-        />
+        <EmptyState icon={Users} title="No matching teams" />
       ) : applied.groups ? (
         <div className="flex flex-col gap-4">
           {applied.groups.map((group) => (

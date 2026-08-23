@@ -217,6 +217,7 @@ export default function CyclesClient(): JSX.Element {
   return (
     <ListPageLayout
       title={cycleNounPlural}
+      fill
       toolbar={
         !loading && !loadError && total > 0 ? (
           <FilterToolbar
@@ -244,25 +245,14 @@ export default function CyclesClient(): JSX.Element {
       {loading ? (
         <ListSkeleton />
       ) : loadError ? (
-        <p
-          role="alert"
-          className="border-outline-variant text-error text-body-medium rounded-xl border p-4"
-        >
+        <p role="alert" className="text-error text-body-medium p-4">
           {loadError}
         </p>
       ) : total === 0 ? (
         // Only reachable with no team to roll for — cycles auto-materialize per team cadence.
-        <EmptyState
-          icon={RefreshCw}
-          title={`${cycleNounPlural} roll on their own`}
-          body={`As soon as your space has a team, Docket keeps a rolling window of ${cycleNounPlural.toLowerCase()} — past, current, and upcoming — on its cadence. Nothing to set up.`}
-        />
+        <EmptyState icon={RefreshCw} title={`${cycleNounPlural} roll on their own`} />
       ) : applied.rows.length === 0 ? (
-        <EmptyState
-          icon={RefreshCw}
-          title={`No matching ${cycleNounPlural.toLowerCase()}`}
-          body={`No ${cycleNoun.toLowerCase()} matches the active filters. Adjust or clear them to see more.`}
-        />
+        <EmptyState icon={RefreshCw} title={`No matching ${cycleNounPlural.toLowerCase()}`} />
       ) : applied.groups ? (
         <div className="flex flex-col gap-6">
           {applied.groups.map((group) => (

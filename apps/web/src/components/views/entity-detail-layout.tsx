@@ -272,7 +272,11 @@ export function fitEntityMetadataPriority({
 interface EntityMetadataLaneContext {
   readonly lane: 'inline' | 'overflow';
   readonly visiblePriority: EntityMetadataPriority;
-  readonly declareItem?: (priority: EntityMetadataPriority, element: HTMLElement) => () => void;
+  readonly declareItem?: (
+    priority: EntityMetadataPriority,
+    element: HTMLElement,
+    overflowOnly: boolean,
+  ) => () => void;
 }
 
 const MetadataLaneContext = createContext<EntityMetadataLaneContext | null>(null);
@@ -281,6 +285,8 @@ const MetadataLaneContext = createContext<EntityMetadataLaneContext | null>(null
 export interface EntityMetadataItemProps {
   /** Lower priorities remain inline at narrower widths; priority zero is always visible. */
   priority: EntityMetadataPriority;
+  /** Keep supplemental information in overflow even when the inline row has room. */
+  overflowOnly?: boolean;
   /** Optional width policy for property types that must remain intrinsically readable. */
   className?: string;
   /** One property picker or compact read-only value. */
@@ -295,6 +301,7 @@ export interface EntityMetadataItemProps {
  */
 export function EntityMetadataItem({
   priority,
+  overflowOnly = false,
   className,
   children,
 }: EntityMetadataItemProps): JSX.Element | null {
@@ -305,11 +312,11 @@ export function EntityMetadataItem({
   useLayoutEffect(() => {
     const element = itemRef.current;
     if (!declareItem || !element) return;
-    return declareItem(priority, element);
-  }, [declareItem, priority]);
+    return declareItem(priority, element, overflowOnly);
+  }, [declareItem, overflowOnly, priority]);
 
-  const hiddenInline = lane?.lane === 'inline' && priority > lane.visiblePriority;
-  if (lane?.lane === 'overflow' && priority <= lane.visiblePriority) return null;
+  const hiddenInline = lane?.lane === 'inline' && (overflowOnly || priority > lane.visiblePriority);
+  if (lane?.lane === 'overflow' && !overflowOnly && priority <= lane.visiblePriority) return null;
 
   return (
     <div
@@ -348,18 +355,24 @@ export function EntityMetadataRow({ ariaLabel, children }: EntityMetadataRowProp
   const inlineRef = useRef<HTMLDivElement>(null);
   const availableWidth = useRef(0);
   const itemMeasurements = useRef(
-    new Map<HTMLElement, { priority: EntityMetadataPriority; width: number }>(),
+    new Map<
+      HTMLElement,
+      { priority: EntityMetadataPriority; width: number; overflowOnly: boolean }
+    >(),
   );
   const [visiblePriority, setVisiblePriority] = useState<EntityMetadataPriority>(7);
   const [declaredPriority, setDeclaredPriority] = useState<EntityMetadataPriority>(0);
+  const [hasSupplemental, setHasSupplemental] = useState(false);
 
   const recomputeVisibility = useCallback(() => {
     const measurements = [...itemMeasurements.current.values()];
-    const nextDeclared = measurements.reduce<EntityMetadataPriority>(
+    const inlineMeasurements = measurements.filter((item) => !item.overflowOnly);
+    const nextDeclared = inlineMeasurements.reduce<EntityMetadataPriority>(
       (highest, item) => Math.max(highest, item.priority) as EntityMetadataPriority,
       0,
     );
     setDeclaredPriority(nextDeclared);
+    setHasSupplemental(measurements.some((item) => item.overflowOnly));
     if (availableWidth.current <= 0) {
       setVisiblePriority(nextDeclared);
       return;
@@ -367,7 +380,7 @@ export function EntityMetadataRow({ ariaLabel, children }: EntityMetadataRowProp
     setVisiblePriority(
       fitEntityMetadataPriority({
         availableWidth: availableWidth.current,
-        itemWidths: measurements,
+        itemWidths: inlineMeasurements,
         // The row inherits the shared `sm` control step: 6px gap and a 28px icon control.
         gap: 6,
         overflowWidth: 28,
@@ -376,11 +389,11 @@ export function EntityMetadataRow({ ariaLabel, children }: EntityMetadataRowProp
   }, []);
 
   const declareItem = useCallback(
-    (priority: EntityMetadataPriority, element: HTMLElement) => {
+    (priority: EntityMetadataPriority, element: HTMLElement, overflowOnly: boolean) => {
       const measure = (): void => {
         const width = element.getBoundingClientRect().width;
-        if (width <= 0) return;
-        itemMeasurements.current.set(element, { priority, width });
+        if (width <= 0 && !overflowOnly) return;
+        itemMeasurements.current.set(element, { priority, width, overflowOnly });
         recomputeVisibility();
       };
       measure();
@@ -423,7 +436,7 @@ export function EntityMetadataRow({ ariaLabel, children }: EntityMetadataRowProp
     () => ({ lane: 'overflow', visiblePriority }),
     [visiblePriority],
   );
-  const hasOverflow = declaredPriority > visiblePriority;
+  const hasOverflow = hasSupplemental || declaredPriority > visiblePriority;
 
   return (
     <ControlGroup

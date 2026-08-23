@@ -312,7 +312,7 @@ export default function ProgramDetailPage(): JSX.Element {
             onSave={(description) => {
               patchProgram({ description });
             }}
-            placeholder={`Add the ${programLabel} brief…`}
+            placeholder={`Describe this ${programLabel.toLowerCase()}…`}
           />
         </div>
       ) : null}

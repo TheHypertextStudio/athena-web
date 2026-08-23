@@ -245,4 +245,28 @@ describe('EntityMetadataRow', () => {
       screen.queryByRole('button', { name: 'More Program properties' }),
     ).not.toBeInTheDocument();
   });
+
+  it('keeps supplemental properties in overflow even when the row has room', async () => {
+    render(
+      <EntityMetadataRow ariaLabel="Initiative properties">
+        <EntityMetadataItem priority={0}>
+          <button type="button">Status</button>
+        </EntityMetadataItem>
+        <EntityMetadataItem priority={1} overflowOnly>
+          <button type="button">Set parent</button>
+        </EntityMetadataItem>
+      </EntityMetadataRow>,
+    );
+
+    resizeRow(700);
+
+    const inline = screen
+      .getByRole('group', { name: 'Initiative properties' })
+      .querySelector<HTMLElement>('[data-entity-metadata-inline]');
+    expect(within(assertDefined(inline)).queryByRole('button', { name: 'Set parent' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'More Initiative properties' }));
+    const overflow = await screen.findByRole('group', { name: 'More Initiative properties' });
+    expect(within(overflow).getByRole('button', { name: 'Set parent' })).toBeVisible();
+  });
 });

@@ -502,7 +502,7 @@ export default function ProjectDetailPage(): JSX.Element {
               onSave={(description) => {
                 patchProject({ description });
               }}
-              placeholder="Add the Project brief…"
+              placeholder="Describe this project…"
             />
           </section>
 

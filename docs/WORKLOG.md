@@ -18,17 +18,19 @@
   also kept a live DOM button as its virtual anchor. Dismissing the source menu unmounted the
   button, collapsed its rectangle to the page origin, and moved the picker to the upper-left corner.
 - **Approach**: Measure each metadata control and the row container. Fit consecutive priority
-  groups into the space that remains after reserving the overflow control. Snapshot the invoking
+  groups into the space that remains after reserving the overflow control. Keep supplemental
+  relationships such as Initiative parent in overflow at every width. Snapshot the invoking
   control's rectangle before the source menu can unmount it, and use that frozen rectangle for the
-  moved picker while retaining the live element only as an optional focus return target.
+  moved picker while retaining the live element only as an optional focus return target. Replace
+  the vague "Add the brief" document prompt with the direct "Describe this initiative" pattern.
 - **Validation**: The metadata-row regression proves that realistic controls through priority seven
   remain inline in 1,000px and that a 260px row keeps only the controls that fit. The picker-overlay
-  regression proves that an anchor at 640 by 224 keeps its geometry after unmount. All 43 affected
+  regression proves that an anchor at 640 by 224 keeps its geometry after unmount. All 44 affected
   Cycle, metadata, hierarchy, and picker tests pass. The web typecheck, focused lint, formatting,
-  and diff checks pass.
-  A local browser check shows all eight Initiative properties inline at 1,800px. At 640px it keeps
-  five properties inline, moves the remaining three into overflow, and opens Set parent directly
-  beneath its 366px by 459px source position instead of at the page origin.
+  and diff checks pass. A local browser check shows seven primary Initiative properties inline at
+  1,800px while Set parent remains supplemental. At 640px it keeps five primary properties inline,
+  moves the remaining properties into overflow, and opens Set parent directly beneath its 372px by
+  459px source position instead of at the page origin.
 - **Retrospective**: A page-width breakpoint cannot answer whether rendered controls fit. Responsive
   disclosure must use the actual control geometry, and a popover that outlives its trigger must own
   a geometry snapshot instead of a reference to disposable DOM.

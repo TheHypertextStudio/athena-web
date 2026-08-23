@@ -418,7 +418,7 @@ export default function InitiativeDetailPage(): JSX.Element {
                 );
               }}
             />
-            <EntityMetadataItem priority={7}>
+            <EntityMetadataItem priority={7} overflowOnly>
               <Button
                 variant="ghost"
                 className={ENTITY_METADATA_CHIP_CLASS}
@@ -690,7 +690,7 @@ export default function InitiativeDetailPage(): JSX.Element {
           onSave={(description) => {
             mutations.patchInitiative({ description });
           }}
-          placeholder="Add the Initiative brief…"
+          placeholder="Describe this initiative…"
         />
       </div>
 

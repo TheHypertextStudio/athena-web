@@ -218,6 +218,7 @@ export interface WorkViewController<TTarget extends ViewTarget> {
   readonly facetMetadataResponse: WorkViewFacetResponseForTarget<TTarget> | undefined;
   readonly loading: boolean;
   readonly loadingMoreRows: boolean;
+  readonly retrying: boolean;
   readonly facetLoading: boolean;
   readonly facetHasMore: boolean;
   readonly facetLoadingMore: boolean;
@@ -230,6 +231,7 @@ export interface WorkViewController<TTarget extends ViewTarget> {
   readonly loadMoreFacets: () => void;
   readonly loadMoreGroup: (path: readonly string[]) => void;
   readonly loadMoreRows: () => void;
+  readonly retry: () => void;
   readonly toggleCollapsedGroup: (key: string) => void;
   readonly toggleHiddenBoardColumn: (key: string) => void;
   readonly showAllBoardColumns: () => void;
@@ -996,6 +998,10 @@ export function useWorkView<TTarget extends ViewTarget>(
     timezone,
   ]);
 
+  const retry = useCallback((): void => {
+    void queryQ.refetch();
+  }, [queryQ]);
+
   const response = useMemo<QueryResponseFor<TTarget> | undefined>(() => {
     const first = queryQ.isPlaceholderData ? undefined : queryQ.data;
     const continuation = rootPageState?.key === executionKey ? rootPageState : null;
@@ -1021,6 +1027,7 @@ export function useWorkView<TTarget extends ViewTarget>(
       facetMetadataResponse,
       loading: !readyToQuery || queryQ.isPending,
       loadingMoreRows: rootPageState?.key === executionKey && rootPageState.loading,
+      retrying: queryQ.isFetching && queryQ.isError,
       facetLoading: facetQ.isPending,
       facetHasMore: facetQ.hasNextPage,
       facetLoadingMore: facetQ.isFetchingNextPage,
@@ -1042,6 +1049,7 @@ export function useWorkView<TTarget extends ViewTarget>(
       loadMoreFacets,
       loadMoreGroup,
       loadMoreRows,
+      retry,
       toggleCollapsedGroup,
       toggleHiddenBoardColumn,
       showAllBoardColumns,
@@ -1079,9 +1087,12 @@ export function useWorkView<TTarget extends ViewTarget>(
       queryQ.data,
       queryQ.error,
       queryQ.isPending,
+      queryQ.isFetching,
+      queryQ.isError,
       readyToQuery,
       response,
       rootPageState,
+      retry,
       showAllBoardColumns,
       requestFacet,
       resetPersonalOverride,

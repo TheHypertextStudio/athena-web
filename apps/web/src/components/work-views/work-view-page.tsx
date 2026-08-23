@@ -52,6 +52,7 @@ import { useProjectTimelineMutations } from './use-project-timeline-mutations';
 import type { WorkViewDefinitionFor } from './view-state';
 import { WorkBoard } from './work-board';
 import { WorkList } from './work-list';
+import { WorkViewLoadFailure } from './work-view-load-failure';
 import { WorkViewToolbar } from './work-view-toolbar';
 
 const FALLBACKS = {
@@ -261,9 +262,11 @@ export function WorkViewPage<TTarget extends ViewTarget>({
     );
   } else if (controller.error) {
     content = (
-      <p role="alert" className="text-error text-body-medium">
-        {userErrorMessage(controller.error, `Could not load ${copy.title.toLowerCase()}.`)}
-      </p>
+      <WorkViewLoadFailure
+        title={copy.title}
+        retrying={controller.retrying}
+        onRetry={controller.retry}
+      />
     );
   } else if ((controller.response?.totalCount ?? 0) === 0) {
     content = (

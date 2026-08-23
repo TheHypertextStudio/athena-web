@@ -182,6 +182,31 @@ beforeEach(() => {
 });
 
 describe('useWorkView instance and request identity', () => {
+  it('retries the failed roster request without changing the view definition', async () => {
+    apiMocks.query.mockResolvedValueOnce({
+      ok: false,
+      status: 422,
+      json: async () => ({ code: 'validation_error' }),
+    });
+    const { wrapper } = makeQueryWrapper();
+    const { result } = renderHook(() => useWorkView(taskOptions()), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.error).toBeDefined();
+    });
+
+    apiMocks.query.mockResolvedValue(okResponse(queryResponse('task', 0)));
+    act(() => {
+      result.current.retry();
+    });
+
+    await waitFor(() => {
+      expect(result.current.error).toBeNull();
+    });
+    expect(apiMocks.query).toHaveBeenCalledTimes(2);
+    expect(result.current.definition).toEqual(taskDefinition);
+  });
+
   it('sends transient in-page search through the server query without changing the view', async () => {
     const options = taskOptions();
     const { wrapper } = makeQueryWrapper();

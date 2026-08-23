@@ -16,7 +16,7 @@ import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import type { AppEnv } from '../../src/context';
 import { getSession } from '../support/auth-mock';
-import { getDb, seedUserWithHub } from '../support/routes-harness';
+import { getDb, seedBaseOrg, seedUserWithHub } from '../support/routes-harness';
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
@@ -73,6 +73,40 @@ describe('creating a resource', () => {
     const location = res.headers.get('location');
     // Absolute, and carrying the mount prefix — a client must be able to follow it verbatim.
     expect(location).toBe(`https://api.docket.localhost/v1/time/categories/${id}`);
+  });
+});
+
+describe('typed work-view requests', () => {
+  it('accepts the browser project query through the complete production middleware stack', async () => {
+    const { app, db, schema } = await setup();
+    const base = await seedBaseOrg(db, schema);
+    await db.update(schema.actor).set({ userId }).where(eq(schema.actor.id, base.humanActorId));
+
+    const response = await app.request(`/v1/orgs/${base.orgId}/work-views/query`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        target: 'project',
+        definition: {
+          version: 2,
+          target: 'project',
+          filter: null,
+          arrangement: { groupBy: 'status', subGroupBy: null, orderBy: [] },
+          presentation: {
+            layout: 'list',
+            properties: ['status', 'priority', 'health', 'lead', 'targetDate', 'progress'],
+            density: 'compact',
+            showEmptyGroups: false,
+          },
+        },
+        temporaryFilter: null,
+        context: { kind: 'organization' },
+        limit: 100,
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ target: 'project', rows: [], groups: [] });
   });
 });
 

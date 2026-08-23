@@ -7,6 +7,48 @@
 
 ## Active Tasks
 
+### [WORK-VIEW-RECOVERY-001] Restore work-view loading and failure recovery
+
+- **Status**: REVIEW
+- **Started**: 2026-08-22
+- **Priority**: P0
+- **Description**: Production Projects sends a valid typed work-view request but receives a 422
+  before the route handler reads it. The shared roster shell then renders one small error sentence
+  inside a viewport-height container with no retry action, which makes every affected planning page
+  look unfinished.
+- **Evidence**: The authenticated production browser sends a 367-byte JSON request with
+  `content-type: application/json`. The request fails through both the Vercel rewrite and the API
+  origin. The same payload passes the isolated work-view route suite with all 41 tests and the
+  composed API stack with every production middleware enabled. This rules out the Project
+  definition, the Hono client, the service worker, the web proxy, and the checked-in API stack. The
+  remaining data-load discrepancy is specific to the deployed API artifact or runtime.
+- **Approach**: Keep a production-stack regression around the exact captured Project payload so
+  another checked-in middleware cannot reproduce the 422 unnoticed. Replace the bare paragraph in the
+  shared `WorkViewPage` with one bounded, application-owned recovery state. The controller will
+  expose query retry as an operation, while the recovery component will own presentation and
+  accessibility. This keeps query policy separate from rendering and applies to Tasks, Projects,
+  Programs, and Initiatives.
+- **Subtasks**:
+  - [x] Prove the exact production payload passes the complete local API application stack.
+  - [x] Add a failing shared work-view recovery-state test with a retry assertion.
+  - [x] Replace the shared roster failure presentation and expose controller-owned retry.
+  - [x] Run focused API and web validation, a production build, and the four-shot design review.
+  - [ ] Deploy the exact revision and verify Projects through an authenticated production browser.
+- **Risks**: A request-body fix at shared middleware scope can affect every JSON mutation. The
+  implementation must preserve media-type rejection, size limits, idempotency hashing, and Hono RPC
+  inference. The recovery state must not expose provider or exception copy.
+- **Blockers**: Cloud Logging cannot be read from this machine because the active Google credential
+  requires interactive reauthentication. Browser evidence and local production-stack reproduction
+  remain available.
+- **Validation**: The controller and recovery-state suites pass 16 tests. The complete API
+  mechanics suite passes 38 tests, including the captured Project query through session, body-size,
+  media-type, cache, authorization, idempotency, precondition, organization, and capability
+  middleware. Web and API type checks pass. Focused lint passes. The web production build compiles
+  all 75 routes and emits the production service worker. The responsive browser test passes at
+  1440×900 and 390×844 in light and dark. It proves keyboard focus, a second request from Retry,
+  and zero horizontal overflow. The design review records a SHIP verdict with every dimension at
+  3 and every hard gate green.
+
 ### [LIBRARY-FINDER-DEPLOY-001] Integrate and deploy Library finder
 
 - **Status**: COMPLETED

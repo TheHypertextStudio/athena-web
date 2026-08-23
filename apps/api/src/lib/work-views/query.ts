@@ -178,7 +178,9 @@ export async function queryWorkView(input: QueryWorkViewInput): Promise<WorkView
           priority: {
             value: manualRank.value,
             cursor: manualRank.cursor,
+            /* v8 ignore next -- @preserve Every priority compiler defines semantic ranks. */
             semanticRanks: [...(priority.semanticRanks ?? []), priority.value],
+            /* v8 ignore next -- @preserve Every priority compiler defines cursor schemas. */
             semanticCursorSchemas: [...(priority.semanticCursorSchemas ?? []), priority.cursor],
             valueDirection: 'asc',
           },
@@ -288,6 +290,7 @@ export async function queryWorkView(input: QueryWorkViewInput): Promise<WorkView
     workViewAggregateRecordSchema,
   );
   const aggregate = aggregateRows[0];
+  /* v8 ignore next -- @preserve A SELECT of SQL aggregates always returns exactly one row. */
   if (!aggregate) throw new TypeError('A work-view aggregate query returned no row.');
   const hasMore = aggregate.rows.length > pageLimit;
   const pageRows = aggregate.rows.slice(0, pageLimit);

@@ -89,6 +89,40 @@ describe('queryWorkView', () => {
     ).toEqual(['Needle launch brief', 'Needle rollout notes']);
   });
 
+  it('searches non-Task work views by name', async () => {
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(schema.db, schema);
+    await schema.db.insert(schema.project).values([
+      {
+        organizationId: orgId,
+        teamId,
+        name: 'Needle launch project',
+        status: 'planned',
+        statusId: statusId('project', 'planned'),
+        visibility: 'public',
+      },
+      {
+        organizationId: orgId,
+        teamId,
+        name: 'Unrelated project',
+        status: 'planned',
+        statusId: statusId('project', 'planned'),
+        visibility: 'public',
+      },
+    ]);
+
+    const result = await queryWorkView({
+      database: schema.db,
+      organizationId: orgId,
+      actorId: humanActorId,
+      request: projectRequest({ search: 'Needle' }),
+    });
+
+    expect(result.totalCount).toBe(1);
+    expect(result.rows).toEqual([
+      expect.objectContaining({ target: 'project', name: 'Needle launch project' }),
+    ]);
+  });
+
   it('authorizes before filtering, distinct counts, label fan-out groups, and pagination', async () => {
     const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(schema.db, schema);
     const [red, blue] = await schema.db

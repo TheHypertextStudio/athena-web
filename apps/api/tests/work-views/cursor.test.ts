@@ -111,6 +111,7 @@ describe('work-view cursors', () => {
     const fingerprint = fingerprintWorkViewQuery<'task'>(request, execution);
 
     expect(() => decodeWorkViewCursor('wv2:not-json', fingerprint)).toThrow(ApiError);
+    expect(() => decodeWorkViewCursor('legacy:not-json', fingerprint)).toThrow(ApiError);
   });
 
   it('fingerprints equivalent object key order identically and excludes the page cursor', () => {
@@ -151,6 +152,62 @@ describe('work-view cursors', () => {
     );
   });
 
+  it('canonicalizes nested duplicate filters and double negation', () => {
+    const predicate = {
+      kind: 'predicate',
+      field: 'priority',
+      operator: 'is',
+      operand: 'urgent',
+    } as const;
+    const nested: TaskQueryRequest = {
+      ...request,
+      definition: {
+        ...request.definition,
+        filter: {
+          kind: 'all',
+          children: [
+            predicate,
+            { kind: 'all', children: [predicate, predicate] },
+            { kind: 'not', child: { kind: 'not', child: predicate } },
+          ],
+        },
+      },
+    };
+
+    const canonical: TaskQueryRequest = {
+      ...request,
+      definition: {
+        ...request.definition,
+        filter: { kind: 'all', children: [predicate] },
+      },
+    };
+
+    expect(fingerprintWorkViewQuery<'task'>(nested, execution)).toBe(
+      fingerprintWorkViewQuery<'task'>(canonical, execution),
+    );
+  });
+
+  it('fingerprints structurally incomplete input deterministically', () => {
+    const fingerprint = (value: unknown): string => fingerprintWorkViewQuery(value as object);
+    const values = [
+      [],
+      {},
+      { definition: [] },
+      { definition: { filter: 'invalid' } },
+      { definition: { filter: { kind: 'unknown' } } },
+      { definition: { filter: { kind: 'all', children: 'invalid' } } },
+      {
+        definition: { filter: { kind: 'predicate', field: 'priority', operator: 'is' } },
+        temporaryFilter: { kind: 'predicate', field: 'archived', operator: 'is', operand: false },
+      },
+    ];
+
+    const fingerprints = values.map(fingerprint);
+    expect(values.map(fingerprint)).toEqual(fingerprints);
+    expect(new Set(fingerprints).size).toBeGreaterThan(3);
+    expect(fingerprint({})).toBe(fingerprint({ definition: {}, temporaryFilter: null }));
+  });
+
   it('binds organization, actor, user, timezone, and frozen time into execution identity', () => {
     const fingerprint = fingerprintWorkViewQuery<'task'>(request, execution);
     for (const changed of [
@@ -180,5 +237,50 @@ describe('work-view cursors', () => {
     const tampered = `wv2:${Buffer.from(JSON.stringify(envelope)).toString('base64url')}`;
 
     expect(() => decodeWorkViewCursor(tampered, fingerprint)).toThrow(ApiError);
+  });
+
+  it('rejects missing signing secrets and accepts decoding without optional bindings', () => {
+    const fingerprint = fingerprintWorkViewQuery<'task'>(request, execution);
+    const cursor = encodeWorkViewCursor<'task'>({
+      fingerprint,
+      groupPath: ['started'],
+      sortTuple: ['urgent'],
+      entityId: 'task_02',
+      asOf: execution.asOf,
+    });
+    const secret = process.env['BETTER_AUTH_SECRET'];
+
+    expect(decodeWorkViewCursor(cursor)).toMatchObject({ entityId: 'task_02' });
+    delete process.env['BETTER_AUTH_SECRET'];
+    try {
+      expect(() =>
+        encodeWorkViewCursor<'task'>({
+          fingerprint,
+          groupPath: [],
+          sortTuple: [],
+          entityId: 'task_02',
+          asOf: execution.asOf,
+        }),
+      ).toThrow('BETTER_AUTH_SECRET is required');
+      expect(() => decodeWorkViewCursor(cursor, fingerprint)).toThrow(ApiError);
+    } finally {
+      if (secret === undefined) delete process.env['BETTER_AUTH_SECRET'];
+      else process.env['BETTER_AUTH_SECRET'] = secret;
+    }
+  });
+
+  it('rejects a cursor whose group path has another depth', () => {
+    const fingerprint = fingerprintWorkViewQuery<'task'>(request, execution);
+    const cursor = encodeWorkViewCursor<'task'>({
+      fingerprint,
+      groupPath: ['started'],
+      sortTuple: ['urgent'],
+      entityId: 'task_02',
+      asOf: execution.asOf,
+    });
+
+    expect(() => decodeWorkViewCursor(cursor, fingerprint, [])).toThrow(
+      'This page cursor belongs to another group',
+    );
   });
 });

@@ -474,6 +474,130 @@ describe('work-view SQL compilers', () => {
     ).toEqual(['c']);
   });
 
+  it('executes every scalar and relation operator used by validated view contracts', async () => {
+    const cases: readonly (readonly [ExecutableFilterNode<FixtureField>, string[]])[] = [
+      [{ kind: 'predicate', field: 'status', operator: 'isNoneOf', operand: ['done'] }, ['a', 'b']],
+      [
+        { kind: 'predicate', field: 'title', operator: 'notContains', operand: 'repair' },
+        ['a', 'c'],
+      ],
+      [
+        {
+          kind: 'predicate',
+          field: 'dueDate',
+          operator: 'before',
+          operand: { kind: 'absolute', value: '2026-08-22' },
+        },
+        ['a'],
+      ],
+      [{ kind: 'predicate', field: 'estimate', operator: 'lessThan', operand: 8 }, ['a']],
+      [
+        {
+          kind: 'predicate',
+          field: 'dueDate',
+          operator: 'after',
+          operand: { kind: 'absolute', value: '2026-08-20' },
+        },
+        ['c'],
+      ],
+      [{ kind: 'predicate', field: 'estimate', operator: 'greaterThan', operand: 3 }, ['b']],
+      [{ kind: 'predicate', field: 'estimate', operator: 'after', operand: 3 }, ['b']],
+      [{ kind: 'predicate', field: 'estimate', operator: 'onOrBefore', operand: 3 }, ['a']],
+      [
+        {
+          kind: 'predicate',
+          field: 'dueDate',
+          operator: 'onOrAfter',
+          operand: { kind: 'absolute', value: '2026-08-22' },
+        },
+        ['c'],
+      ],
+      [{ kind: 'predicate', field: 'estimate', operator: 'lessThanOrEqual', operand: 3 }, ['a']],
+      [{ kind: 'predicate', field: 'estimate', operator: 'between', operand: [3, 8] }, ['a', 'b']],
+      [{ kind: 'predicate', field: 'dueDate', operator: 'isNotEmpty' }, ['a', 'c']],
+      [{ kind: 'predicate', field: 'labels', operator: 'includesAny', operand: ['red'] }, ['a']],
+      [{ kind: 'predicate', field: 'labels', operator: 'isNotEmpty' }, ['a', 'b']],
+      [{ kind: 'all', children: [] }, ['a', 'b', 'c']],
+      [{ kind: 'any', children: [] }, []],
+    ];
+
+    for (const [filter, expected] of cases) {
+      expect(await ids(compileFilterSql(filter, filterFields))).toEqual(expected);
+    }
+
+    expect(
+      await ids(
+        compileFilterSql(
+          {
+            kind: 'predicate',
+            field: 'status',
+            operator: 'is',
+            operand: { kind: 'current-actor' },
+          },
+          filterFields,
+          { currentActorId: 'todo' },
+        ),
+      ),
+    ).toEqual(['a']);
+    expect(
+      await ids(
+        compileFilterSql(
+          {
+            kind: 'predicate',
+            field: 'status',
+            operator: 'is',
+            operand: { kind: 'actor', actorId: 'todo' },
+          },
+          filterFields,
+        ),
+      ),
+    ).toEqual(['a']);
+  });
+
+  it('rejects operands and operators that bypass target validation', () => {
+    expect(() =>
+      compileFilterSql(
+        { kind: 'predicate', field: 'status', operator: 'isAnyOf', operand: [] },
+        filterFields,
+      ),
+    ).toThrow('A set predicate requires at least one operand');
+    expect(() =>
+      compileFilterSql(
+        { kind: 'predicate', field: 'status', operator: 'isAnyOf', operand: 'urgent' },
+        filterFields,
+      ),
+    ).toThrow('A set predicate requires at least one operand');
+    expect(() =>
+      compileFilterSql(
+        { kind: 'predicate', field: 'estimate', operator: 'between', operand: [3] },
+        filterFields,
+      ),
+    ).toThrow('A between predicate requires exactly two operands');
+    expect(() =>
+      compileFilterSql(
+        {
+          kind: 'predicate',
+          field: 'status',
+          operator: 'is',
+          operand: { kind: 'current-actor' },
+        },
+        filterFields,
+      ),
+    ).toThrow('A current-actor filter requires an authenticated actor');
+    expect(() =>
+      compileFilterSql(
+        { kind: 'predicate', field: 'status', operator: 'unsupported' },
+        filterFields,
+      ),
+    ).toThrow('Unsupported enum filter operator');
+    expect(() =>
+      compileFilterSql(
+        { kind: 'predicate', field: 'labels', operator: 'unsupported' },
+        filterFields,
+      ),
+    ).toThrow('Unsupported relation filter operator');
+  });
+
   it('orders semantic priority first, places nulls last, preserves multi-sort order, and ties by id', async () => {
     const order = compileSortSql(
       [

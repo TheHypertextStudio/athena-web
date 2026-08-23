@@ -41,7 +41,7 @@ describe('MenuActionRow', () => {
     expect(row).toHaveAttribute('aria-current', 'true');
     expect(row).toHaveAttribute('data-menu-action-row');
     expect(row).toHaveClass(
-      'rounded-corner-md',
+      'rounded-corner-md!',
       'bg-tertiary-container',
       'text-on-tertiary-container',
     );

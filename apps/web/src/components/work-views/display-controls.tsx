@@ -27,6 +27,7 @@ import {
   workViewGroupFieldCatalog,
 } from './view-state';
 import { workViewRendererLayouts } from './work-view-renderers';
+import { SortBuilder } from './sort-builder';
 
 /** The arrangement or presentation section shown by one compact toolbar trigger. */
 export type DisplayControlKind = 'group' | 'display' | 'layout' | 'properties';
@@ -90,7 +91,7 @@ export function DisplayControlsContent<TTarget extends ViewTarget>({
 
   return (
     <>
-      {kind === 'group' ? (
+      {kind === 'group' || kind === 'display' ? (
         <Stack gap={3}>
           <label>
             <Text as="span" token="label-medium">
@@ -148,6 +149,24 @@ export function DisplayControlsContent<TTarget extends ViewTarget>({
                 ))}
             </Select>
           </label>
+        </Stack>
+      ) : null}
+
+      {kind === 'display' ? (
+        <Stack gap={2}>
+          <Text as="h3" token="label-medium">
+            Sort
+          </Text>
+          <SortBuilder
+            target={target}
+            terms={definition.arrangement.orderBy}
+            onChange={(orderBy) => {
+              commit({
+                ...definition,
+                arrangement: { ...definition.arrangement, orderBy },
+              });
+            }}
+          />
         </Stack>
       ) : null}
 
@@ -232,7 +251,11 @@ export function DisplayControls<TTarget extends ViewTarget>({
   return (
     <Popover {...(open !== undefined ? { open } : {})} {...(onOpenChange ? { onOpenChange } : {})}>
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
-      <PopoverContent role="dialog" aria-label={`${titleFor(kind)} view`}>
+      <PopoverContent
+        role="dialog"
+        aria-label={`${titleFor(kind)} view`}
+        className={kind === 'display' ? 'w-80 overflow-y-auto' : undefined}
+      >
         <DisplayControlsContent
           kind={kind}
           target={target}

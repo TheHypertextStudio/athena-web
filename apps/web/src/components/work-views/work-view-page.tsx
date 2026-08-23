@@ -20,7 +20,6 @@ import {
   Button,
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -572,7 +571,6 @@ export function WorkViewPage<TTarget extends ViewTarget>({
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Save view</DialogTitle>
-              <DialogDescription>Save the current filter and display settings.</DialogDescription>
             </DialogHeader>
             <label className="text-label-large flex flex-col gap-2">
               View name

@@ -1,9 +1,9 @@
 import '@testing-library/jest-dom/vitest';
 
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { type ReactElement, useState } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   InitiativeViewDefinition,
@@ -118,38 +118,6 @@ function PaginatedFacetBuilder(): ReactElement {
 }
 
 describe('WorkViewToolbar', () => {
-  let resize: ResizeObserverCallback;
-
-  beforeEach(() => {
-    vi.stubGlobal(
-      'ResizeObserver',
-      class ResizeObserverMock {
-        constructor(callback: ResizeObserverCallback) {
-          resize = callback;
-        }
-        observe(): void {
-          return undefined;
-        }
-        unobserve(): void {
-          return undefined;
-        }
-        disconnect(): void {
-          return undefined;
-        }
-      },
-    );
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
-  function resizeToolbar(width: number): void {
-    act(() => {
-      resize([{ contentRect: { width } } as ResizeObserverEntry], {} as ResizeObserver);
-    });
-  }
-
   function renderToolbar(target: 'task' | 'initiative' = 'task'): void {
     if (target === 'task') {
       render(
@@ -190,7 +158,6 @@ describe('WorkViewToolbar', () => {
 
   it('uses a non-wrapping MD3 control group and compact active-filter chips', () => {
     renderToolbar();
-    resizeToolbar(1400);
 
     const toolbar = screen.getByRole('toolbar', { name: 'Task view controls' });
     expect(toolbar).toHaveClass('flex-nowrap');
@@ -206,7 +173,6 @@ describe('WorkViewToolbar', () => {
   it('separates display controls from saved-view persistence', async () => {
     const user = userEvent.setup();
     renderToolbar();
-    resizeToolbar(1400);
 
     expect(screen.getByRole('button', { name: 'Display' })).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Save view' })).not.toBeInTheDocument();
@@ -218,30 +184,18 @@ describe('WorkViewToolbar', () => {
     expect(within(views).getByRole('menuitem', { name: 'Reset to default' })).toBeVisible();
   });
 
-  it('partitions responsive controls so overflow never duplicates visible options', async () => {
-    const user = userEvent.setup();
+  it('keeps the roster toolbar to query and view controls', () => {
     renderToolbar();
-    resizeToolbar(600);
 
     const toolbar = screen.getByRole('toolbar', { name: 'Task view controls' });
     expect(within(toolbar).getByRole('button', { name: 'Filter' })).toBeVisible();
+    expect(within(toolbar).getByRole('button', { name: 'Display' })).toBeVisible();
     expect(within(toolbar).getByRole('button', { name: 'Views' })).toBeVisible();
     expect(within(toolbar).queryByRole('button', { name: 'Sort' })).not.toBeInTheDocument();
     expect(within(toolbar).queryByRole('button', { name: 'Group' })).not.toBeInTheDocument();
-
-    const visibleLabels = within(toolbar)
-      .getAllByRole('button')
-      .map((button) => button.textContent.trim())
-      .filter(Boolean);
-    await user.click(within(toolbar).getByRole('button', { name: 'More controls' }));
-    const overflow = await screen.findByRole('menu', { name: 'More controls' });
-    const hiddenLabels = within(overflow)
-      .getAllByRole('menuitem')
-      .map((item) => item.textContent.trim())
-      .filter(Boolean);
-
-    expect(hiddenLabels).toEqual(['Sort', 'Group', 'Display']);
-    expect(hiddenLabels.filter((label) => visibleLabels.includes(label))).toEqual([]);
+    expect(
+      within(toolbar).queryByRole('button', { name: 'More controls' }),
+    ).not.toBeInTheDocument();
   });
 
   it('resets personal state from the Views menu', async () => {
@@ -257,15 +211,13 @@ describe('WorkViewToolbar', () => {
         onReset={onReset}
       />,
     );
-    resizeToolbar(600);
-
     await user.click(screen.getByRole('button', { name: 'Views' }));
     await user.click(await screen.findByRole('menuitem', { name: 'Reset to default' }));
 
     expect(onReset).toHaveBeenCalledOnce();
   });
 
-  it('changes grouping and display options from the compact controls menu', async () => {
+  it('changes grouping and display options from one display menu', async () => {
     const user = userEvent.setup();
     const onDefinitionChange = vi.fn();
     render(
@@ -278,22 +230,12 @@ describe('WorkViewToolbar', () => {
         onReset={vi.fn()}
       />,
     );
-    resizeToolbar(600);
-
-    async function openControl(label: 'Group' | 'Display'): Promise<HTMLElement> {
-      await user.click(screen.getByRole('button', { name: 'More controls' }));
-      await user.click(await screen.findByRole('menuitem', { name: label }));
-      return screen.findByRole('dialog', { name: `${label} view` });
-    }
-
-    let dialog = await openControl('Group');
+    await user.click(screen.getByRole('button', { name: 'Display' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Display view' });
     await user.selectOptions(within(dialog).getByRole('combobox', { name: 'Group by' }), 'status');
     expect(onDefinitionChange).toHaveBeenLastCalledWith(
       expect.objectContaining({ arrangement: expect.objectContaining({ groupBy: 'status' }) }),
     );
-    await user.keyboard('{Escape}');
-
-    dialog = await openControl('Display');
     await user.click(within(dialog).getByRole('radio', { name: 'Board' }));
     expect(onDefinitionChange).toHaveBeenLastCalledWith(
       expect.objectContaining({ presentation: expect.objectContaining({ layout: 'board' }) }),
@@ -483,41 +425,28 @@ describe('WorkViewToolbar', () => {
     expect(trigger).toHaveFocus();
   });
 
-  it('removes overflow when the measured row fits every control', () => {
+  it('does not promote arrangement controls into the toolbar on wide screens', () => {
     renderToolbar();
-    resizeToolbar(1400);
 
-    expect(screen.getByRole('button', { name: 'Sort' })).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Group' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Sort' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Group' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Display' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Views' })).toBeVisible();
     expect(screen.queryByRole('button', { name: 'More controls' })).not.toBeInTheDocument();
   });
 
-  it('opens the ordered-sort editor from its visible toolbar trigger', async () => {
+  it('opens the ordered-sort editor from display options', async () => {
     const user = userEvent.setup();
     renderToolbar();
-    resizeToolbar(1400);
 
-    await user.click(screen.getByRole('button', { name: 'Sort' }));
+    await user.click(screen.getByRole('button', { name: 'Display' }));
 
-    expect(screen.getByRole('menu', { name: 'Sort' })).toBeVisible();
-  });
-
-  it('opens grouping from its visible toolbar trigger', async () => {
-    const user = userEvent.setup();
-    renderToolbar();
-    resizeToolbar(1400);
-
-    await user.click(screen.getByRole('button', { name: 'Group' }));
-
-    expect(screen.getByRole('dialog', { name: 'Group view' })).toBeVisible();
+    expect(screen.getByRole('list', { name: 'Ordered sort terms' })).toBeVisible();
   });
 
   it('uses health throughout Initiative controls and never renders verdict', async () => {
     const user = userEvent.setup();
     renderToolbar('initiative');
-    resizeToolbar(1400);
 
     await user.click(screen.getByRole('button', { name: 'Filter' }));
     const builder = await screen.findByRole('dialog', { name: 'Filter initiatives' });

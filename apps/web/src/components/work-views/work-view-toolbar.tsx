@@ -1,15 +1,10 @@
 'use client';
 
-import { Ellipsis, Filter } from '@docket/ui/icons';
+import { Filter } from '@docket/ui/icons';
 import {
   Button,
   Chip,
   ControlGroup,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -17,15 +12,10 @@ import {
   Stack,
 } from '@docket/ui/primitives';
 import type { ViewTarget } from '@docket/work/view-contract';
-import { type ReactElement, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactElement, useState } from 'react';
 
-import {
-  DisplayControls,
-  DisplayControlsContent,
-  DisplayControlsTrigger,
-} from './display-controls';
+import { DisplayControls, DisplayControlsTrigger } from './display-controls';
 import { FilterBuilder } from './filter-builder';
-import { SortBuilder, SortBuilderTrigger } from './sort-builder';
 import {
   combineWorkViewFilters,
   parseWorkViewDefinition,
@@ -37,38 +27,6 @@ import {
   workViewFilterFieldCatalog,
   workViewFieldCatalog,
 } from './view-state';
-
-type ToolbarControl = 'sort' | 'group' | 'display';
-type ToolbarPriority = 0 | 1 | 2 | 3;
-
-const CONTROL_PRIORITY = {
-  sort: 1,
-  group: 2,
-  display: 3,
-} as const satisfies Record<ToolbarControl, ToolbarPriority>;
-
-const PRIORITY_MIN_WIDTH: Readonly<Record<ToolbarPriority, number>> = {
-  0: 0,
-  1: 720,
-  2: 840,
-  3: 960,
-};
-
-const CONTROL_LABEL = {
-  sort: 'Sort',
-  group: 'Group',
-  display: 'Display',
-} as const satisfies Record<ToolbarControl, string>;
-
-/** Return the highest lower-priority toolbar tier that fits the measured container. */
-export function visibleToolbarPriority(width: number): ToolbarPriority {
-  let result: ToolbarPriority = 0;
-  for (const priority of [1, 2, 3] as const) {
-    if (width < PRIORITY_MIN_WIDTH[priority]) break;
-    result = priority;
-  }
-  return result;
-}
 
 function targetLabel(target: ViewTarget): string {
   return `${target.charAt(0).toUpperCase()}${target.slice(1)}`;
@@ -177,62 +135,11 @@ export function WorkViewToolbar<TTarget extends ViewTarget>({
   onFacetLoadMore,
   onFacetRequest,
 }: WorkViewToolbarProps<TTarget>): ReactElement {
-  const toolbarRef = useRef<HTMLDivElement | null>(null);
-  const [visiblePriority, setVisiblePriority] = useState<ToolbarPriority>(0);
-  const [overflowPanel, setOverflowPanel] = useState<ToolbarControl | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const [editingFilterIndex, setEditingFilterIndex] = useState<number | null>(null);
-  const controls = useMemo<readonly ToolbarControl[]>(() => ['sort', 'group', 'display'], []);
-  const visibleControls = controls.filter(
-    (control) => CONTROL_PRIORITY[control] <= visiblePriority,
-  );
-  const hiddenControls = controls.filter((control) => CONTROL_PRIORITY[control] > visiblePriority);
-
-  useEffect(() => {
-    const element = toolbarRef.current;
-    if (!element || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(([entry]) => {
-      if (!entry) return;
-      setVisiblePriority(visibleToolbarPriority(entry.contentRect.width));
-    });
-    observer.observe(element);
-    return () => {
-      observer.disconnect();
-    };
-  }, []);
 
   function commit(next: WorkViewDefinitionFor<TTarget>): void {
     onDefinitionChange(parseWorkViewDefinition(target, next));
-  }
-
-  function renderControl(control: ToolbarControl): ReactElement {
-    if (control === 'sort') {
-      return (
-        <SortBuilder
-          key={control}
-          target={target}
-          terms={definition.arrangement.orderBy}
-          onChange={(orderBy) => {
-            commit({
-              ...definition,
-              arrangement: { ...definition.arrangement, orderBy },
-            });
-          }}
-          trigger={<SortBuilderTrigger />}
-        />
-      );
-    }
-    return (
-      <DisplayControls
-        key={control}
-        kind={control}
-        target={target}
-        definition={definition}
-        onChange={commit}
-        onFind={onFind}
-        trigger={<DisplayControlsTrigger kind={control} />}
-      />
-    );
   }
 
   const filter = definition.filter;
@@ -247,7 +154,7 @@ export function WorkViewToolbar<TTarget extends ViewTarget>({
 
   return (
     <Stack gap={2}>
-      <div ref={toolbarRef} className="min-w-0">
+      <div className="min-w-0">
         <ControlGroup
           controlSize="sm"
           role="toolbar"
@@ -287,7 +194,14 @@ export function WorkViewToolbar<TTarget extends ViewTarget>({
               </Chip>
             }
           />
-          {visibleControls.map(renderControl)}
+          <DisplayControls
+            kind="display"
+            target={target}
+            definition={definition}
+            onChange={commit}
+            onFind={onFind}
+            trigger={<DisplayControlsTrigger kind="display" />}
+          />
           <span className="flex-1" aria-hidden />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -303,27 +217,6 @@ export function WorkViewToolbar<TTarget extends ViewTarget>({
               <DropdownMenuItem onSelect={onReset}>Reset to default</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          {hiddenControls.length > 0 ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" iconOnly aria-label="More controls">
-                  <Ellipsis aria-hidden />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" aria-label="More controls">
-                {hiddenControls.map((control) => (
-                  <DropdownMenuItem
-                    key={control}
-                    onSelect={() => {
-                      setOverflowPanel(control);
-                    }}
-                  >
-                    {CONTROL_LABEL[control]}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : null}
         </ControlGroup>
       </div>
 
@@ -363,47 +256,6 @@ export function WorkViewToolbar<TTarget extends ViewTarget>({
           })}
         </ControlGroup>
       ) : null}
-
-      <Dialog
-        open={overflowPanel !== null}
-        onOpenChange={(next) => {
-          if (!next) setOverflowPanel(null);
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {overflowPanel ? `${CONTROL_LABEL[overflowPanel]} view` : 'View controls'}
-            </DialogTitle>
-            <DialogDescription>
-              Change the arrangement and presentation for this view.
-            </DialogDescription>
-          </DialogHeader>
-          {overflowPanel === 'sort' ? (
-            <SortBuilder
-              target={target}
-              terms={definition.arrangement.orderBy}
-              onChange={(orderBy) => {
-                commit({
-                  ...definition,
-                  arrangement: { ...definition.arrangement, orderBy },
-                });
-              }}
-            />
-          ) : null}
-          {overflowPanel === 'group' || overflowPanel === 'display' ? (
-            <DisplayControlsContent
-              kind={overflowPanel}
-              target={target}
-              definition={definition}
-              onChange={(nextDefinition) => {
-                commit(nextDefinition);
-              }}
-              onFind={onFind}
-            />
-          ) : null}
-        </DialogContent>
-      </Dialog>
     </Stack>
   );
 }

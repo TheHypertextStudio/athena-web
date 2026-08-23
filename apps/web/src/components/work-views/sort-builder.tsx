@@ -51,7 +51,7 @@ export function SortBuilder<TTarget extends ViewTarget>({
     <Stack gap={2} aria-label={`Sort ${target}s`}>
       {terms.length === 0 ? (
         <Text token="body-small" tone="muted">
-          The shared manual order is active.
+          Manual order
         </Text>
       ) : (
         <Stack as="ol" gap={1} aria-label="Ordered sort terms">

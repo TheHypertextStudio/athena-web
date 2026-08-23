@@ -179,9 +179,10 @@ describe('WorkViewToolbar', () => {
 
     await user.click(screen.getByRole('button', { name: 'View settings' }));
     const views = await screen.findByRole('menu', { name: 'View settings' });
-    expect(within(views).getByRole('menuitem', { name: 'Save view' })).toBeVisible();
-    expect(within(views).getByRole('menuitem', { name: 'Set as default' })).toBeVisible();
-    expect(within(views).getByRole('menuitem', { name: 'Reset to default' })).toBeVisible();
+    expect(within(views).getByRole('menuitem', { name: 'Save as new view' })).toBeVisible();
+    expect(within(views).getByRole('separator')).toBeVisible();
+    expect(within(views).getByRole('menuitem', { name: 'Use as workspace default' })).toBeVisible();
+    expect(within(views).getByRole('menuitem', { name: 'Restore default view' })).toBeVisible();
   });
 
   it('keeps the roster toolbar to query and view controls', () => {
@@ -212,7 +213,7 @@ describe('WorkViewToolbar', () => {
       />,
     );
     await user.click(screen.getByRole('button', { name: 'View settings' }));
-    await user.click(await screen.findByRole('menuitem', { name: 'Reset to default' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Restore default view' }));
 
     expect(onReset).toHaveBeenCalledOnce();
   });
@@ -232,6 +233,9 @@ describe('WorkViewToolbar', () => {
     );
     await user.click(screen.getByRole('button', { name: 'Display' }));
     const dialog = await screen.findByRole('dialog', { name: 'Display view' });
+    expect(within(dialog).getByRole('heading', { name: 'Layout' })).toBeVisible();
+    expect(within(dialog).getByRole('heading', { name: 'Organize' })).toBeVisible();
+    expect(within(dialog).getByRole('heading', { name: 'Properties' })).toBeVisible();
     await user.selectOptions(within(dialog).getByRole('combobox', { name: 'Group by' }), 'status');
     expect(onDefinitionChange).toHaveBeenLastCalledWith(
       expect.objectContaining({ arrangement: expect.objectContaining({ groupBy: 'status' }) }),
@@ -414,7 +418,7 @@ describe('WorkViewToolbar', () => {
     renderToolbar();
     const trigger = screen.getByRole('button', { name: 'Filter' });
     await user.click(trigger);
-    await user.click(screen.getByRole('button', { name: 'Choose property' }));
+    await user.click(screen.getByRole('button', { name: 'Back to properties' }));
     const search = screen.getByRole('searchbox', { name: 'Search filters' });
     await user.type(search, 'due');
     await user.keyboard('{ArrowDown}');
@@ -465,12 +469,19 @@ describe('FilterBuilder', () => {
     await user.type(screen.getByRole('searchbox', { name: 'Search filters' }), 'due');
     expect(screen.getByRole('button', { name: 'Due date' })).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Assignee' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Apply filter' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Choose a filter property.')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Advanced filter' }));
+    expect(screen.queryByText('Choose a filter property.')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Back to properties' }));
 
     await user.click(screen.getByRole('button', { name: 'Due date' }));
+    expect(screen.getByRole('button', { name: 'Back to properties' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Apply filter' })).toBeVisible();
+    expect(screen.queryByRole('searchbox', { name: 'Search filters' })).not.toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'Filter field' })).toHaveValue('dueDate');
     expect(screen.getByRole('combobox', { name: 'Filter operator' })).toHaveTextContent('Is');
 
-    await user.clear(screen.getByRole('searchbox', { name: 'Search filters' }));
     await user.click(screen.getByRole('button', { name: 'Add group to root filter group' }));
     expect(screen.getAllByRole('group', { name: /Filter group/ })).toHaveLength(2);
     expect(screen.getByRole('button', { name: 'Apply filter' })).toBeDisabled();

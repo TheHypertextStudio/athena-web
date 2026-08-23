@@ -49,11 +49,7 @@ export function SortBuilder<TTarget extends ViewTarget>({
 
   const editor = (
     <Stack gap={2} aria-label={`Sort ${target}s`}>
-      {terms.length === 0 ? (
-        <Text token="body-small" tone="muted">
-          Manual order
-        </Text>
-      ) : (
+      {terms.length > 0 ? (
         <Stack as="ol" gap={1} aria-label="Ordered sort terms">
           {terms.map((term, index) => {
             const label = fieldLabel.get(String(term.field)) ?? term.field;
@@ -120,7 +116,7 @@ export function SortBuilder<TTarget extends ViewTarget>({
             );
           })}
         </Stack>
-      )}
+      ) : null}
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

@@ -7,6 +7,36 @@
 
 ## Active Tasks
 
+### [WORK-VIEW-POPOVERS-001] Standardize work-view popovers
+
+- **Status**: COMPLETED
+- **Started**: 2026-08-23
+- **Priority**: P0
+- **Description**: Filter, Display, and View settings used unrelated widths, spacing, row
+  treatments, and action structures. Display mixed layout selection, grouping, sorting, property
+  visibility, and find controls without section hierarchy. Filter showed a disabled Apply action
+  before a property existed and printed parser instructions as user copy. Selected menu rows also
+  rendered the 4px base radius even though the class list requested the 12px MD3 Expressive shape.
+- **Approach**: Compose all three surfaces from the shared menu recipes. Use one 288px container,
+  44px rows, 16px row insets, shared section labels and dividers, and the existing control-size
+  scale. Keep property choice separate from advanced filter editing. Group Display by Layout,
+  Organize, and Properties. Keep view creation separate from workspace-default actions.
+- **Subtasks**:
+  - [x] Add one shared work-view popover row, label, separator, and focus recipe.
+  - [x] Remove instructional placeholder copy and inactive actions from Filter and Sort.
+  - [x] Reorganize Display and View settings by responsibility.
+  - [x] Correct selected-row shape precedence in the shared menu system.
+  - [x] Verify desktop, mobile, light, dark, keyboard, touch, and 320px overflow states.
+- **Validation**: The focused toolbar suite passes 26 tests, and the shared menu contract passes
+  68 tests. The runtime browser check confirms a 12px selected-row radius, a visible 3px inset
+  focus ring, 40px coarse-pointer controls, and zero horizontal overflow at 320px. The six-shot
+  craft audit records a SHIP verdict with every dimension at 3 or 4 and every hard gate green.
+- **Retrospective**: The shape bug survived source-string coverage because both radius classes were
+  present. The browser computed 4px, which proved that emitted CSS order defeated the selected
+  token. Visual state claims need a runtime geometry assertion, not a class-presence assertion.
+
+---
+
 ### [WORK-VIEW-CONTINUITY-001] Keep rosters visible while changing presentation
 
 - **Status**: COMPLETED

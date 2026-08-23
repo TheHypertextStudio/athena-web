@@ -1,13 +1,10 @@
 'use client';
 
 import { LayoutGrid, ListView, Search, TuneRounded } from '@docket/ui/icons';
-import { cn } from '@docket/ui';
 import {
   Button,
   type ButtonProps,
   Checkbox,
-  controlChrome,
-  ControlGroup,
   Popover,
   PopoverContent,
   PopoverTrigger,
@@ -27,6 +24,11 @@ import {
   workViewGroupFieldCatalog,
 } from './view-state';
 import { workViewRendererLayouts } from './work-view-renderers';
+import {
+  workViewPopoverItem,
+  workViewPopoverLabel,
+  workViewPopoverSeparator,
+} from './work-view-popover-styles';
 import { SortBuilder } from './sort-builder';
 
 /** The arrangement or presentation section shown by one compact toolbar trigger. */
@@ -89,150 +91,176 @@ export function DisplayControlsContent<TTarget extends ViewTarget>({
     onChange(parseWorkViewDefinition(target, next));
   }
 
-  return (
-    <>
-      {kind === 'group' || kind === 'display' ? (
-        <Stack gap={3}>
-          <label>
-            <Text as="span" token="label-medium">
-              Group by
-            </Text>
-            <Select
-              value={controlValue(definition.arrangement.groupBy)}
-              onChange={(event) => {
-                const groupBy = selectedFieldKey(groupable, event.target.value);
-                commit({
-                  ...definition,
-                  arrangement: {
-                    ...definition.arrangement,
-                    groupBy,
-                    subGroupBy: sameKey(definition.arrangement.subGroupBy, groupBy)
-                      ? null
-                      : definition.arrangement.subGroupBy,
-                  },
-                });
-              }}
-            >
-              <option value="">No grouping</option>
-              {groupable.map((field) => (
-                <option key={field.key} value={field.key}>
-                  {field.label}
-                </option>
-              ))}
-            </Select>
-          </label>
-          <label>
-            <Text as="span" token="label-medium">
-              Subgroup by
-            </Text>
-            <Select
-              value={controlValue(definition.arrangement.subGroupBy)}
-              disabled={controlValue(definition.arrangement.groupBy) === ''}
-              onChange={(event) => {
-                const subGroupBy = selectedFieldKey(groupable, event.target.value);
-                commit({
-                  ...definition,
-                  arrangement: {
-                    ...definition.arrangement,
-                    subGroupBy,
-                  },
-                });
-              }}
-            >
-              <option value="">No subgroup</option>
-              {groupable
-                .filter((field) => String(field.key) !== String(definition.arrangement.groupBy))
-                .map((field) => (
-                  <option key={field.key} value={field.key}>
-                    {field.label}
-                  </option>
-                ))}
-            </Select>
-          </label>
-        </Stack>
-      ) : null}
+  const grouping = (
+    <Stack gap={3}>
+      <Stack as="label" gap={1}>
+        <Text as="span" token="label-medium">
+          Group by
+        </Text>
+        <Select
+          controlSize="lg"
+          value={controlValue(definition.arrangement.groupBy)}
+          onChange={(event) => {
+            const groupBy = selectedFieldKey(groupable, event.target.value);
+            commit({
+              ...definition,
+              arrangement: {
+                ...definition.arrangement,
+                groupBy,
+                subGroupBy: sameKey(definition.arrangement.subGroupBy, groupBy)
+                  ? null
+                  : definition.arrangement.subGroupBy,
+              },
+            });
+          }}
+        >
+          <option value="">No grouping</option>
+          {groupable.map((field) => (
+            <option key={field.key} value={field.key}>
+              {field.label}
+            </option>
+          ))}
+        </Select>
+      </Stack>
+      <Stack as="label" gap={1}>
+        <Text as="span" token="label-medium">
+          Subgroup by
+        </Text>
+        <Select
+          controlSize="lg"
+          value={controlValue(definition.arrangement.subGroupBy)}
+          disabled={controlValue(definition.arrangement.groupBy) === ''}
+          onChange={(event) => {
+            const subGroupBy = selectedFieldKey(groupable, event.target.value);
+            commit({
+              ...definition,
+              arrangement: {
+                ...definition.arrangement,
+                subGroupBy,
+              },
+            });
+          }}
+        >
+          <option value="">No subgroup</option>
+          {groupable
+            .filter((field) => String(field.key) !== String(definition.arrangement.groupBy))
+            .map((field) => (
+              <option key={field.key} value={field.key}>
+                {field.label}
+              </option>
+            ))}
+        </Select>
+      </Stack>
+    </Stack>
+  );
 
-      {kind === 'display' ? (
-        <Stack gap={2}>
-          <Text as="h3" token="label-medium">
-            Sort
-          </Text>
-          <SortBuilder
-            target={target}
-            terms={definition.arrangement.orderBy}
-            onChange={(orderBy) => {
+  const sorting = (
+    <Stack gap={1}>
+      <Text as="h4" token="label-medium">
+        Sort
+      </Text>
+      <SortBuilder
+        target={target}
+        terms={definition.arrangement.orderBy}
+        onChange={(orderBy) => {
+          commit({
+            ...definition,
+            arrangement: { ...definition.arrangement, orderBy },
+          });
+        }}
+      />
+    </Stack>
+  );
+
+  const layoutControls = (
+    <Stack role="radiogroup">
+      {layouts.map((layout) => {
+        const selected = definition.presentation.layout === layout;
+        return (
+          <button
+            type="button"
+            key={layout}
+            role="radio"
+            aria-checked={selected}
+            className={workViewPopoverItem(selected)}
+            onClick={() => {
               commit({
                 ...definition,
-                arrangement: { ...definition.arrangement, orderBy },
+                presentation: { ...definition.presentation, layout },
               });
             }}
-          />
-        </Stack>
-      ) : null}
+          >
+            {layout === 'list' ? <ListView aria-hidden /> : <LayoutGrid aria-hidden />}
+            {layout[0]?.toUpperCase()}
+            {layout.slice(1)}
+          </button>
+        );
+      })}
+    </Stack>
+  );
 
-      {kind === 'layout' || kind === 'display' ? (
-        <ControlGroup controlSize="sm" orientation="vertical" role="radiogroup">
-          {layouts.map((layout) => (
-            <Button
-              key={layout}
-              variant={definition.presentation.layout === layout ? 'secondary' : 'ghost'}
-              role="radio"
-              aria-checked={definition.presentation.layout === layout}
-              className="justify-start"
-              onClick={() => {
+  const propertyControls = (
+    <Stack role="group" aria-label="Displayed properties">
+      {displayable.map((field) => {
+        const checked = definition.presentation.properties.some(
+          (property) => String(property) === String(field.key),
+        );
+        return (
+          <label key={field.key} className={workViewPopoverItem()}>
+            <Checkbox
+              checked={checked}
+              onChange={(event) => {
                 commit({
                   ...definition,
-                  presentation: { ...definition.presentation, layout },
+                  presentation: {
+                    ...definition.presentation,
+                    properties: toggleDisplayedProperty<WorkViewDisplayFieldKey<TTarget>>(
+                      definition.presentation.properties,
+                      field.key,
+                      event.target.checked,
+                    ),
+                  },
                 });
               }}
-            >
-              {layout === 'list' ? <ListView aria-hidden /> : <LayoutGrid aria-hidden />}
-              {layout[0]?.toUpperCase()}
-              {layout.slice(1)}
-            </Button>
-          ))}
-        </ControlGroup>
-      ) : null}
+            />
+            <Text as="span" token="label-medium">
+              {field.label}
+            </Text>
+          </label>
+        );
+      })}
+    </Stack>
+  );
 
-      {kind === 'display' && onFind ? (
-        <Button variant="ghost" className="mt-2 justify-start" onClick={onFind}>
-          <Search aria-hidden /> Find
-        </Button>
-      ) : null}
+  if (kind === 'group') return grouping;
+  if (kind === 'layout') return layoutControls;
+  if (kind === 'properties') return propertyControls;
 
-      {kind === 'properties' || kind === 'display' ? (
-        <Stack gap={1} role="group" aria-label="Displayed properties">
-          {displayable.map((field) => {
-            const checked = definition.presentation.properties.some(
-              (property) => String(property) === String(field.key),
-            );
-            return (
-              <label
-                key={field.key}
-                className={cn(controlChrome('sm'), 'hover:bg-surface-container justify-start')}
-              >
-                <Checkbox
-                  checked={checked}
-                  onChange={(event) => {
-                    commit({
-                      ...definition,
-                      presentation: {
-                        ...definition.presentation,
-                        properties: toggleDisplayedProperty<WorkViewDisplayFieldKey<TTarget>>(
-                          definition.presentation.properties,
-                          field.key,
-                          event.target.checked,
-                        ),
-                      },
-                    });
-                  }}
-                />
-                <Text token="label-medium">{field.label}</Text>
-              </label>
-            );
-          })}
-        </Stack>
+  return (
+    <>
+      {onFind ? (
+        <button type="button" className={workViewPopoverItem()} onClick={onFind}>
+          <Search aria-hidden /> Find in this view
+        </button>
       ) : null}
+      {onFind ? <div role="separator" className={workViewPopoverSeparator} /> : null}
+      <Text as="h3" token="label-medium" className={workViewPopoverLabel}>
+        Layout
+      </Text>
+      {layoutControls}
+      <div role="separator" className={workViewPopoverSeparator} />
+      <Text as="h3" token="label-medium" className={workViewPopoverLabel}>
+        Organize
+      </Text>
+      <Stack gap={3} className="px-3 pb-2">
+        {grouping}
+        {sorting}
+      </Stack>
+      <div role="separator" className={workViewPopoverSeparator} />
+      <Text as="h3" token="label-medium" className={workViewPopoverLabel}>
+        Properties
+      </Text>
+      {propertyControls}
     </>
   );
 }
@@ -254,7 +282,8 @@ export function DisplayControls<TTarget extends ViewTarget>({
       <PopoverContent
         role="dialog"
         aria-label={`${titleFor(kind)} view`}
-        className={kind === 'display' ? 'w-80 overflow-y-auto' : undefined}
+        align="end"
+        className={kind === 'display' ? 'overflow-y-auto' : undefined}
       >
         <DisplayControlsContent
           kind={kind}

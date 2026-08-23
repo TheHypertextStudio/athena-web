@@ -327,6 +327,8 @@ export interface MenuItemClassOptions {
  * A selected row also changes shape: `menu-item.selected.shape` is `corner.medium` (12dp) against
  * `corner.extra-small` (4dp) unselected. Only the corners and the colour move, so this stays
  * inside the design system's rule that interaction never changes geometry.
+ * The important modifier is required because the row keeps its base 4dp class. Tailwind emits
+ * the custom corner utilities in an order that otherwise lets the base shape win at runtime.
  *
  * @example
  * ```tsx
@@ -350,7 +352,7 @@ export function menuItemClass(variant: MenuVariant, options?: MenuItemClassOptio
 
   return cn(
     menuItemBase,
-    'rounded-corner-md',
+    'rounded-corner-md!',
     SELECTED_STATE_LAYER[variant],
     variant === 'vibrant'
       ? 'bg-tertiary text-on-tertiary [&_svg]:text-on-tertiary'
@@ -372,7 +374,7 @@ export function menuItemClass(variant: MenuVariant, options?: MenuItemClassOptio
 export function menuCheckedItemClass(variant: MenuVariant): string {
   if (variant === 'vibrant') {
     return cn(
-      'data-[state=checked]:rounded-corner-md',
+      'data-[state=checked]:rounded-corner-md!',
       'data-[state=checked]:bg-tertiary data-[state=checked]:text-on-tertiary',
       'data-[state=checked]:[&_svg]:text-on-tertiary',
       'data-[state=checked]:hover:bg-[color-mix(in_oklab,var(--on-tertiary)_8%,var(--tertiary))]',
@@ -381,7 +383,7 @@ export function menuCheckedItemClass(variant: MenuVariant): string {
   }
 
   return cn(
-    'data-[state=checked]:rounded-corner-md',
+    'data-[state=checked]:rounded-corner-md!',
     'data-[state=checked]:bg-tertiary-container data-[state=checked]:text-on-tertiary-container',
     'data-[state=checked]:[&_svg]:text-on-tertiary-container',
     'data-[state=checked]:hover:bg-[color-mix(in_oklab,var(--on-tertiary-container)_8%,var(--tertiary-container))]',

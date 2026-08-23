@@ -1,6 +1,6 @@
 'use client';
 
-import { Filter, Plus, Search, X } from '@docket/ui/icons';
+import { Filter, Plus, X } from '@docket/ui/icons';
 import {
   Button,
   Checkbox,
@@ -29,6 +29,7 @@ import {
   type WorkViewFilterShape,
   workViewFilterFieldCatalog,
 } from './view-state';
+import { workViewPopoverItem, workViewPopoverSeparator } from './work-view-popover-styles';
 
 type DraftGroup<TTarget extends ViewTarget> = Extract<
   WorkViewFilterDraftFor<TTarget>,
@@ -1019,16 +1020,16 @@ export function FilterBuilder<TTarget extends ViewTarget>({
   return (
     <Popover open={actualOpen} onOpenChange={setOpen}>
       {trigger ? <PopoverTrigger asChild>{trigger}</PopoverTrigger> : null}
-      <PopoverContent role="dialog" aria-label={`Filter ${labelTarget(target)}`}>
-        <Stack gap={3}>
-          <ControlGroup controlSize="sm">
+      <PopoverContent align="end" role="dialog" aria-label={`Filter ${labelTarget(target)}`}>
+        <Stack gap={1}>
+          {!advanced ? (
             <Input
               variant="filled"
+              controlSize="lg"
               type="search"
               role="searchbox"
               aria-label="Search filters"
               placeholder="Search properties"
-              prefix=""
               value={query}
               onChange={(event) => {
                 setQuery(event.target.value);
@@ -1040,19 +1041,18 @@ export function FilterBuilder<TTarget extends ViewTarget>({
                 fieldButtons.current[index]?.focus();
               }}
             />
-            <Search aria-hidden />
-          </ControlGroup>
+          ) : null}
 
           {!advanced ? (
-            <Stack as="ul" aria-label="Filter properties" gap={1}>
+            <Stack as="ul" aria-label="Filter properties" gap={0}>
               {fields.map((field, index) => (
                 <li key={field.key}>
-                  <Button
+                  <button
+                    type="button"
                     ref={(element) => {
                       fieldButtons.current[index] = element;
                     }}
-                    variant="ghost"
-                    className="w-full justify-start"
+                    className={workViewPopoverItem()}
                     onKeyDown={(event) => {
                       if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
                       event.preventDefault();
@@ -1082,7 +1082,7 @@ export function FilterBuilder<TTarget extends ViewTarget>({
                     }}
                   >
                     {field.label}
-                  </Button>
+                  </button>
                 </li>
               ))}
             </Stack>
@@ -1125,33 +1125,40 @@ export function FilterBuilder<TTarget extends ViewTarget>({
             />
           )}
 
-          <ControlGroup controlSize="sm" className="justify-between">
-            <Button
-              variant="ghost"
-              aria-pressed={advanced}
+          <div role="separator" className={workViewPopoverSeparator} />
+          {!advanced ? (
+            <button
+              type="button"
+              className={workViewPopoverItem()}
               onClick={() => {
-                setAdvanced((current) => !current);
+                setAdvanced(true);
               }}
             >
-              {advanced ? 'Choose property' : 'Advanced filter'}
-            </Button>
-            <Button
-              disabled={!parsed.success}
-              onClick={() => {
-                if (!parsed.success) return;
-                onApply(parsed.data);
-                setOpen(false);
-              }}
-            >
-              <Filter aria-hidden />
-              Apply filter
-            </Button>
-          </ControlGroup>
-          {!parsed.success ? (
-            <Text token="body-small" tone="muted">
-              {parsed.error}
-            </Text>
-          ) : null}
+              Advanced filter
+            </button>
+          ) : (
+            <ControlGroup controlSize="lg" className="justify-between px-2 py-1">
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setAdvanced(false);
+                }}
+              >
+                Back to properties
+              </Button>
+              <Button
+                disabled={!parsed.success}
+                onClick={() => {
+                  if (!parsed.success) return;
+                  onApply(parsed.data);
+                  setOpen(false);
+                }}
+              >
+                <Filter aria-hidden />
+                Apply filter
+              </Button>
+            </ControlGroup>
+          )}
         </Stack>
       </PopoverContent>
     </Popover>

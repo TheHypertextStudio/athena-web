@@ -8,6 +8,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
   Stack,
 } from '@docket/ui/primitives';
@@ -218,12 +219,15 @@ export function WorkViewToolbar<TTarget extends ViewTarget>({
                 <Ellipsis aria-hidden />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" aria-label="View settings">
-              <DropdownMenuItem onSelect={onSaveView}>Save view</DropdownMenuItem>
+            <DropdownMenuContent align="end" aria-label="View settings" width="lg">
+              <DropdownMenuItem onSelect={onSaveView}>Save as new view</DropdownMenuItem>
+              <DropdownMenuSeparator />
               {canSetDefault ? (
-                <DropdownMenuItem onSelect={onSetDefault}>Set as default</DropdownMenuItem>
+                <DropdownMenuItem onSelect={onSetDefault}>
+                  Use as workspace default
+                </DropdownMenuItem>
               ) : null}
-              <DropdownMenuItem onSelect={onReset}>Reset to default</DropdownMenuItem>
+              <DropdownMenuItem onSelect={onReset}>Restore default view</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </ControlGroup>

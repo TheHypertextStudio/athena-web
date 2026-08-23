@@ -505,7 +505,7 @@ describe('MD3 menu spec — layout and shape', () => {
     // menu-item.selected.shape 12dp.
     const row = menuItemClass('standard');
     expect(row).toContain('rounded-corner-xs');
-    expect(menuItemClass('standard', { selected: true })).toContain('rounded-corner-md');
+    expect(menuItemClass('standard', { selected: true })).toContain('rounded-corner-md!');
     // The 12dp edge corner belongs to whichever element owns the padded surface, because "is this
     // row on the menu's outer edge?" is not a question the row can answer: at a seam in a gapped
     // menu it is its block's last child and is not on the edge at all.
@@ -741,7 +741,7 @@ describe('MD3 menu spec — both mappings render from one source', () => {
     expect(menuCheckedItemClass('standard')).toContain(
       'data-[state=checked]:bg-tertiary-container',
     );
-    expect(menuCheckedItemClass('standard')).toContain('data-[state=checked]:rounded-corner-md');
+    expect(menuCheckedItemClass('standard')).toContain('data-[state=checked]:rounded-corner-md!');
     expect(menuCheckedItemClass('vibrant')).toContain('data-[state=checked]:bg-tertiary');
   });
 

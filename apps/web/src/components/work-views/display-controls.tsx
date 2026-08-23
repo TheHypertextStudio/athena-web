@@ -21,12 +21,12 @@ import type { ReactElement, ReactNode } from 'react';
 import {
   parseWorkViewDefinition,
   toggleDisplayedProperty,
-  workViewContract,
   type WorkViewDefinitionFor,
   type WorkViewDisplayFieldKey,
   workViewDisplayFieldCatalog,
   workViewGroupFieldCatalog,
 } from './view-state';
+import { workViewRendererLayouts } from './work-view-renderers';
 
 /** The arrangement or presentation section shown by one compact toolbar trigger. */
 export type DisplayControlKind = 'group' | 'display' | 'layout' | 'properties';
@@ -82,7 +82,7 @@ export function DisplayControlsContent<TTarget extends ViewTarget>({
 }: DisplayControlsContentProps<TTarget>): ReactElement {
   const groupable = workViewGroupFieldCatalog(target);
   const displayable = workViewDisplayFieldCatalog(target);
-  const layouts = workViewContract(target).layouts;
+  const layouts = workViewRendererLayouts(target);
 
   function commit(next: WorkViewDefinitionFor<TTarget>): void {
     onChange(parseWorkViewDefinition(target, next));

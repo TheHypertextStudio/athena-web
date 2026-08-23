@@ -51,8 +51,10 @@ import { useInitiativeHierarchy } from './use-initiative-hierarchy';
 import { useProjectTimelineMutations } from './use-project-timeline-mutations';
 import type { WorkViewDefinitionFor } from './view-state';
 import { WorkBoard } from './work-board';
+import { WorkCards } from './work-cards';
 import { WorkList } from './work-list';
 import { WorkViewLoadFailure } from './work-view-load-failure';
+import { supportsWorkViewRenderer } from './work-view-renderers';
 import { WorkViewToolbar } from './work-view-toolbar';
 
 const FALLBACKS = {
@@ -185,7 +187,8 @@ export function WorkViewPage<TTarget extends ViewTarget>({
   // The target discriminator was validated by `useWorkView`. TypeScript loses that correlation
   // when it indexes the four response variants through a generic target.
   const rows = (controller.response?.rows ?? []) as unknown as readonly WorkViewRowFor<TTarget>[];
-  const layout = controller.definition.presentation.layout as string;
+  const requestedLayout = controller.definition.presentation.layout;
+  const layout = supportsWorkViewRenderer(target, requestedLayout) ? requestedLayout : 'list';
   const { restoreFocus } = useInPageSearchTarget({
     id: `work-view:${target}`,
     rootRef,
@@ -311,6 +314,17 @@ export function WorkViewPage<TTarget extends ViewTarget>({
         onLoadMore={controller.loadMoreGroup}
         onHideColumn={controller.toggleHiddenBoardColumn}
         onShowAllColumns={controller.showAllBoardColumns}
+      />
+    );
+  } else if (layout === 'cards') {
+    content = (
+      <WorkCards
+        target={target}
+        definition={controller.definition}
+        rows={rows}
+        selectedIds={selectedIds}
+        onSelectionChange={setSelectedIds}
+        onActivate={openRow}
       />
     );
   } else if (target === 'project' && layout === 'timeline') {

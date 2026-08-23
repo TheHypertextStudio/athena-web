@@ -298,6 +298,10 @@ describe('WorkViewToolbar', () => {
     expect(onDefinitionChange).toHaveBeenLastCalledWith(
       expect.objectContaining({ presentation: expect.objectContaining({ layout: 'board' }) }),
     );
+    await user.click(within(dialog).getByRole('radio', { name: 'Cards' }));
+    expect(onDefinitionChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ presentation: expect.objectContaining({ layout: 'cards' }) }),
+    );
     await user.click(within(dialog).getByRole('checkbox', { name: 'Due date' }));
     expect(onDefinitionChange).toHaveBeenLastCalledWith(
       expect.objectContaining({

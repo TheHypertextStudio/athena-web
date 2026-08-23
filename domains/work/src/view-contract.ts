@@ -6,8 +6,11 @@ export const VIEW_TARGETS = ['task', 'project', 'program', 'initiative'] as cons
 /** A work record family that can back a durable view. */
 export type ViewTarget = (typeof VIEW_TARGETS)[number];
 
-/** A renderer family supported by at least one work record target. */
-export type ViewLayout = 'list' | 'board' | 'timeline';
+/** Renderer families that a collection can persist independently of its record contract. */
+export const VIEW_LAYOUTS = ['list', 'board', 'cards', 'timeline'] as const;
+
+/** A renderer family selected by a collection view. */
+export type ViewLayout = (typeof VIEW_LAYOUTS)[number];
 
 /** The storage and editor behavior of one view field. */
 export type ViewFieldKind =
@@ -55,12 +58,9 @@ export interface ViewFieldDefinition<
 export interface ViewContract<
   TTarget extends ViewTarget = ViewTarget,
   TFields extends Record<string, ViewFieldDefinition> = Record<string, ViewFieldDefinition>,
-  TLayouts extends NonEmptyReadonlyArray<ViewLayout> = NonEmptyReadonlyArray<ViewLayout>,
 > {
   /** The work record family this contract queries. */
   target: TTarget;
-  /** The renderer families valid for this target. */
-  layouts: TLayouts;
   /** The closed field registry for this work record family. */
   fields: TFields;
 }
@@ -69,8 +69,7 @@ export interface ViewContract<
 export function defineViewContract<
   const TTarget extends ViewTarget,
   const TFields extends Record<string, ViewFieldDefinition>,
-  const TLayouts extends NonEmptyReadonlyArray<ViewLayout>,
->(contract: ViewContract<TTarget, TFields, TLayouts>): ViewContract<TTarget, TFields, TLayouts> {
+>(contract: ViewContract<TTarget, TFields>): ViewContract<TTarget, TFields> {
   for (const [field, definition] of Object.entries(contract.fields)) {
     if (definition.capabilities.mutateGroup === true && definition.capabilities.group !== true) {
       throw new TypeError(`View field "${field}" can mutate a group only when it is groupable.`);
@@ -127,8 +126,10 @@ export type MutableGroupKey<TContract extends ViewContract> = KeysWithCapability
   'mutateGroup'
 >;
 
-/** Renderer families accepted by this contract. */
-export type LayoutFor<TContract extends ViewContract> = TContract['layouts'][number];
+/** Renderer families accepted by every persisted collection definition. */
+export type LayoutFor<TContract extends ViewContract> = TContract extends ViewContract
+  ? ViewLayout
+  : never;
 
 /** A readonly array whose first item is guaranteed to exist. */
 export type NonEmptyReadonlyArray<T> = readonly [T, ...T[]];

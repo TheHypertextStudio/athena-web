@@ -36,15 +36,21 @@ import {
 const ACTOR_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 
 describe('work-view contracts', () => {
-  it('closes each target over its supported layouts', () => {
-    expectTypeOf<LayoutFor<typeof TASK_VIEW_CONTRACT>>().toEqualTypeOf<'list' | 'board'>();
-    expectTypeOf<LayoutFor<typeof PROJECT_VIEW_CONTRACT>>().toEqualTypeOf<
-      'list' | 'board' | 'timeline'
+  it('keeps persisted layouts independent from each target field contract', () => {
+    expectTypeOf<LayoutFor<typeof TASK_VIEW_CONTRACT>>().toEqualTypeOf<
+      'list' | 'board' | 'cards' | 'timeline'
     >();
-    expectTypeOf<LayoutFor<typeof PROGRAM_VIEW_CONTRACT>>().toEqualTypeOf<'list' | 'board'>();
-    expectTypeOf<LayoutFor<typeof INITIATIVE_VIEW_CONTRACT>>().toEqualTypeOf<'list' | 'timeline'>();
+    expectTypeOf<LayoutFor<typeof PROJECT_VIEW_CONTRACT>>().toEqualTypeOf<
+      'list' | 'board' | 'cards' | 'timeline'
+    >();
+    expectTypeOf<LayoutFor<typeof PROGRAM_VIEW_CONTRACT>>().toEqualTypeOf<
+      'list' | 'board' | 'cards' | 'timeline'
+    >();
+    expectTypeOf<LayoutFor<typeof INITIATIVE_VIEW_CONTRACT>>().toEqualTypeOf<
+      'list' | 'board' | 'cards' | 'timeline'
+    >();
 
-    expect(() =>
+    expect(
       InitiativeViewDefinition.parse({
         version: 2,
         target: 'initiative',
@@ -57,13 +63,12 @@ describe('work-view contracts', () => {
           showEmptyGroups: false,
         },
       }),
-    ).toThrow();
+    ).toHaveProperty('presentation.layout', 'board');
   });
 
   it('rejects a contract that cannot supply any view fields', () => {
     const filterOnlyContract = defineViewContract({
       target: 'task',
-      layouts: ['list'],
       fields: {
         name: {
           kind: 'text',
@@ -398,13 +403,12 @@ const invalidTaskStatus = {
   operand: projectStatus,
 } as const satisfies TaskPredicate;
 
-const invalidInitiativeLayout = {
+const rendererIndependentInitiativeLayout = {
   version: 2,
   target: 'initiative',
   filter: null,
   arrangement: { groupBy: null, subGroupBy: null, orderBy: [] },
   presentation: {
-    // @ts-expect-error Initiative views do not support boards.
     layout: 'board',
     properties: [],
     density: 'comfortable',
@@ -414,5 +418,5 @@ const invalidInitiativeLayout = {
 
 void validTaskStatus;
 void invalidTaskStatus;
-void invalidInitiativeLayout;
+void rendererIndependentInitiativeLayout;
 void (null as InitiativeStatusKey | null);

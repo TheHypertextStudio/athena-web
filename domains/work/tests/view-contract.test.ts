@@ -28,7 +28,6 @@ const DateOperand = z.discriminatedUnion('kind', [
 
 const TASK_VIEW = defineViewContract({
   target: 'task',
-  layouts: ['list', 'board'],
   fields: {
     status: {
       kind: 'enum',
@@ -109,10 +108,12 @@ describe('typed work-view contract', () => {
     >();
     expectTypeOf<GroupableFieldKey<typeof TASK_VIEW>>().toEqualTypeOf<'status' | 'assigneeId'>();
     expectTypeOf<MutableGroupKey<typeof TASK_VIEW>>().toEqualTypeOf<'status' | 'assigneeId'>();
-    expectTypeOf<LayoutFor<typeof TASK_VIEW>>().toEqualTypeOf<'list' | 'board'>();
+    expectTypeOf<LayoutFor<typeof TASK_VIEW>>().toEqualTypeOf<
+      'list' | 'board' | 'cards' | 'timeline'
+    >();
   });
 
-  it('uses the derived keys and layouts throughout a view definition', () => {
+  it('uses the derived keys and renderer-independent layouts throughout a view definition', () => {
     const definition = {
       version: 2,
       target: 'task',
@@ -126,7 +127,7 @@ describe('typed work-view contract', () => {
         ],
       },
       presentation: {
-        layout: 'board',
+        layout: 'cards',
         properties: ['status', 'assigneeId', 'createdAt'],
         density: 'compact',
         showEmptyGroups: false,
@@ -233,13 +234,12 @@ void invalidAssigneeDate;
 void invalidEmptyOperand;
 void invalidStatusValue;
 
-const invalidLayout = {
+const rendererIndependentLayout = {
   version: 2,
   target: 'task',
   filter: null,
   arrangement: { groupBy: null, subGroupBy: null, orderBy: [] },
   presentation: {
-    // @ts-expect-error Task views do not support timelines.
     layout: 'timeline',
     properties: [],
     density: 'comfortable',
@@ -247,4 +247,4 @@ const invalidLayout = {
   },
 } as const satisfies TaskViewDefinition;
 
-void invalidLayout;
+void rendererIndependentLayout;

@@ -11,6 +11,7 @@ import {
   canonicalizeFilter,
   createFilterNodeSchema,
   defineViewContract,
+  VIEW_LAYOUTS,
   type DisplayableFieldKey,
   type FieldOperandFor,
   type FieldValueFor,
@@ -179,7 +180,6 @@ const ratio = z.number().min(0).max(1);
 /** The closed Task field catalog. */
 export const TASK_VIEW_CONTRACT = defineViewContract({
   target: 'task',
-  layouts: ['list', 'board'],
   fields: {
     status: {
       kind: 'enum',
@@ -310,7 +310,6 @@ export const TASK_VIEW_CONTRACT = defineViewContract({
 /** The closed Project field catalog. */
 export const PROJECT_VIEW_CONTRACT = defineViewContract({
   target: 'project',
-  layouts: ['list', 'board', 'timeline'],
   fields: {
     status: {
       kind: 'enum',
@@ -418,7 +417,6 @@ export const PROJECT_VIEW_CONTRACT = defineViewContract({
 /** The closed Program field catalog. */
 export const PROGRAM_VIEW_CONTRACT = defineViewContract({
   target: 'program',
-  layouts: ['list', 'board'],
   fields: {
     status: {
       kind: 'enum',
@@ -486,7 +484,6 @@ export const PROGRAM_VIEW_CONTRACT = defineViewContract({
 /** The closed Initiative field catalog. */
 export const INITIATIVE_VIEW_CONTRACT = defineViewContract({
   target: 'initiative',
-  layouts: ['list', 'timeline'],
   fields: {
     status: {
       kind: 'enum',
@@ -605,7 +602,7 @@ export function createViewDefinitionSchema<const TContract extends ViewContract>
         ),
       presentation: z
         .object({
-          layout: z.enum(enumValues(contract.layouts, 'Layouts')),
+          layout: z.enum(VIEW_LAYOUTS),
           properties: z.array(z.enum(enumValues(displayFields, 'Display fields'))),
           density: z.enum(['comfortable', 'compact']),
           showEmptyGroups: z.boolean(),
@@ -1176,7 +1173,7 @@ function preferenceState<const TContract extends ViewContract>(
         .optional(),
       presentation: z
         .object({
-          layout: z.enum(enumValues(contract.layouts, 'Preference layouts')).optional(),
+          layout: z.enum(VIEW_LAYOUTS).optional(),
           properties: z
             .array(z.enum(enumValues(displayFields, 'Preference display fields')))
             .optional(),
@@ -1188,7 +1185,7 @@ function preferenceState<const TContract extends ViewContract>(
       collapsedGroups: z.array(z.string()).default([]),
       hiddenBoardColumns: z.array(z.string()).default([]),
       favoriteViewIds: z.array(SavedViewId).default([]),
-      lastUsedLayout: z.enum(enumValues(contract.layouts, 'Last-used layouts')).optional(),
+      lastUsedLayout: z.enum(VIEW_LAYOUTS).optional(),
     })
     .strict() as unknown as z.ZodType<PersonalWorkViewStateFor<TContract>>;
 }

@@ -231,7 +231,7 @@ export function WorkList<TTarget extends ViewTarget>({
                 />
               </ListCell>
               <ListCell className={`min-w-40 flex-1 ${INITIATIVE_DEPTH_CLASS[depth]}`}>
-                <span className="text-on-surface truncate font-medium">
+                <span className="text-on-surface text-body-medium truncate">
                   {workViewRowTitle(row)}
                 </span>
               </ListCell>

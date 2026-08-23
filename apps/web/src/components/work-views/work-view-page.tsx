@@ -30,10 +30,12 @@ import {
 } from '@docket/ui/primitives';
 import type { ViewTarget } from '@docket/work/view-contract';
 import { useRouter } from 'next/navigation';
-import { type JSX, useState } from 'react';
+import { type JSX, useRef, useState } from 'react';
 
 import { useCreateObject } from '@/components/create-object/create-object-provider';
 import { useActiveOrg } from '@/components/active-org';
+import { InPageSearchField } from '@/components/in-page-search/in-page-search-field';
+import { useInPageSearchTarget } from '@/components/in-page-search/in-page-search-provider';
 import { ListPageLayout } from '@/components/views/page-layout';
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
@@ -149,6 +151,9 @@ export function WorkViewPage<TTarget extends ViewTarget>({
   const [viewTeamId, setViewTeamId] = useState('');
   const [dependencyMode, setDependencyMode] = useState(false);
   const [selectedViewId, setSelectedViewId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const copy = PAGE_COPY[target];
   const savedViewsQuery = useApiQuery(
     apiQueryOptions(
@@ -169,6 +174,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
       : ViewInstanceKey.parse(`builtin:${target}:${organizationId}`),
     fallback: fallbackFor(target),
     context: { kind: 'organization' },
+    search,
     savedView: selectedSavedView as Extract<SavedWorkViewOutValue, { target: TTarget }> | null,
   });
   const orderMutation = useWorkViewOrder(organizationId);
@@ -178,6 +184,12 @@ export function WorkViewPage<TTarget extends ViewTarget>({
   // when it indexes the four response variants through a generic target.
   const rows = (controller.response?.rows ?? []) as unknown as readonly WorkViewRowFor<TTarget>[];
   const layout = controller.definition.presentation.layout as string;
+  const { restoreFocus } = useInPageSearchTarget({
+    id: `work-view:${target}`,
+    rootRef,
+    inputRef: searchInputRef,
+    enabled: layout === 'list' && !controller.loading && !controller.error,
+  });
   const openRow = (row: WorkViewRowFor<TTarget>): void => {
     router.push(`/orgs/${organizationId}/${target}s/${row.id}`);
   };
@@ -355,248 +367,261 @@ export function WorkViewPage<TTarget extends ViewTarget>({
   }
 
   return (
-    <ListPageLayout
-      title={copy.title}
-      fill
-      actions={
-        <Button
-          className="min-h-10 gap-1.5"
-          onClick={() => {
-            create();
-          }}
-        >
-          <Plus aria-hidden className="size-4" /> New {copy.singular}
-        </Button>
-      }
-      toolbar={
-        <div className="flex min-w-0 flex-col gap-2">
-          {savedViews.length > 0 ? (
-            <div
-              role="tablist"
-              aria-label={`${copy.title} views`}
-              className="flex min-w-0 items-center gap-1 overflow-x-auto"
-            >
-              <Button
-                role="tab"
-                controlSize="sm"
-                variant={selectedViewId === null ? 'secondary' : 'ghost'}
-                aria-selected={selectedViewId === null}
-                onClick={() => {
-                  setSelectedViewId(null);
-                }}
+    <div ref={rootRef} className="contents">
+      <ListPageLayout
+        title={copy.title}
+        fill
+        actions={
+          <Button
+            className="min-h-10 gap-1.5"
+            onClick={() => {
+              create();
+            }}
+          >
+            <Plus aria-hidden className="size-4" /> New {copy.singular}
+          </Button>
+        }
+        toolbar={
+          <div className="flex min-w-0 flex-col gap-2">
+            {savedViews.length > 0 ? (
+              <div
+                role="tablist"
+                aria-label={`${copy.title} views`}
+                className="flex min-w-0 items-center gap-1 overflow-x-auto"
               >
-                All
-              </Button>
-              {savedViews.map((view) => {
-                const favorite = controller.favoriteViewIds.has(view.id);
-                return (
-                  <div key={view.id} className="flex shrink-0 items-center">
-                    <Button
-                      role="tab"
-                      controlSize="sm"
-                      variant={selectedViewId === view.id ? 'secondary' : 'ghost'}
-                      aria-selected={selectedViewId === view.id}
-                      onClick={() => {
-                        setSelectedViewId(view.id);
-                      }}
-                    >
-                      {view.name}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      iconOnly
-                      controlSize="sm"
-                      aria-label={`${favorite ? 'Remove' : 'Add'} ${view.name} ${favorite ? 'from' : 'to'} favorites`}
-                      aria-pressed={favorite}
-                      onClick={() => {
-                        controller.toggleFavoriteView(view.id);
-                      }}
-                    >
-                      <Heart aria-hidden className={favorite ? 'text-primary' : undefined} />
-                    </Button>
-                  </div>
-                );
-              })}
-            </div>
-          ) : null}
-          <div className="flex min-w-0 items-center gap-2">
-            <div className="min-w-0 flex-1">
-              <WorkViewToolbar
-                target={target}
-                timezone={controller.timezone}
-                definition={controller.definition}
-                onDefinitionChange={controller.setDefinition}
-                onSaveView={() => {
-                  setSaveOpen(true);
-                }}
-                onSetDefault={controller.setAsDefault}
-                onReset={controller.resetPersonalOverride}
-                facetResponse={controller.facetResponse}
-                facetMetadataResponse={controller.facetMetadataResponse}
-                facetLoading={controller.facetLoading}
-                facetHasMore={controller.facetHasMore}
-                facetLoadingMore={controller.facetLoadingMore}
-                onFacetLoadMore={controller.loadMoreFacets}
-                onFacetRequest={controller.requestFacet}
-              />
-            </div>
-            {target === 'project' ? (
-              <Button
-                variant={dependencyMode ? 'secondary' : 'outline'}
-                className="shrink-0 gap-1.5"
-                aria-pressed={dependencyMode}
-                onClick={() => {
-                  setDependencyMode((current) => !current);
-                }}
-              >
-                <Workflow aria-hidden className="size-4" /> Dependencies
-              </Button>
+                <Button
+                  role="tab"
+                  controlSize="sm"
+                  variant={selectedViewId === null ? 'secondary' : 'ghost'}
+                  aria-selected={selectedViewId === null}
+                  onClick={() => {
+                    setSelectedViewId(null);
+                  }}
+                >
+                  All
+                </Button>
+                {savedViews.map((view) => {
+                  const favorite = controller.favoriteViewIds.has(view.id);
+                  return (
+                    <div key={view.id} className="flex shrink-0 items-center">
+                      <Button
+                        role="tab"
+                        controlSize="sm"
+                        variant={selectedViewId === view.id ? 'secondary' : 'ghost'}
+                        aria-selected={selectedViewId === view.id}
+                        onClick={() => {
+                          setSelectedViewId(view.id);
+                        }}
+                      >
+                        {view.name}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        iconOnly
+                        controlSize="sm"
+                        aria-label={`${favorite ? 'Remove' : 'Add'} ${view.name} ${favorite ? 'from' : 'to'} favorites`}
+                        aria-pressed={favorite}
+                        onClick={() => {
+                          controller.toggleFavoriteView(view.id);
+                        }}
+                      >
+                        <Heart aria-hidden className={favorite ? 'text-primary' : undefined} />
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
             ) : null}
-          </div>
-        </div>
-      }
-    >
-      <div className="border-outline-variant bg-surface-container-lowest flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border">
-        {projectTimeline.error || orderMutation.error || initiativeHierarchy.error ? (
-          <p role="alert" className="text-error text-body-medium px-3 py-2">
-            {projectTimeline.error
-              ? userErrorMessage(projectTimeline.error, 'Could not reschedule this project.')
-              : initiativeHierarchy.error
-                ? userErrorMessage(
-                    initiativeHierarchy.error,
-                    'Could not change this initiative hierarchy.',
-                  )
-                : userErrorMessage(orderMutation.error, `Could not move this ${copy.singular}.`)}
-          </p>
-        ) : null}
-        {content}
-      </div>
-      {selectedIds.size > 0 ? (
-        <div
-          role="toolbar"
-          aria-label="Bulk actions"
-          className="border-outline-variant bg-surface-container-high text-body-medium flex min-h-12 shrink-0 items-center gap-3 rounded-xl border px-4"
-        >
-          <span>{selectedIds.size} selected</span>
-          <Button
-            variant="secondary"
-            onClick={() => {
-              const links = [...selectedIds].map(
-                (id) => `${window.location.origin}/orgs/${organizationId}/${target}s/${id}`,
-              );
-              void navigator.clipboard.writeText(links.join('\n')).then(() => {
-                setCopiedSelection(true);
-              });
-            }}
-          >
-            {copiedSelection ? 'Copied' : 'Copy links'}
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={() => {
-              setSelectedIds(new Set());
-              setCopiedSelection(false);
-            }}
-          >
-            Clear
-          </Button>
-        </div>
-      ) : null}
-      <Dialog
-        open={saveOpen}
-        onOpenChange={(open) => {
-          setSaveOpen(open);
-          if (!open) {
-            setViewName('');
-            setViewScope('personal');
-            setViewTeamId('');
-          }
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Save view</DialogTitle>
-            <DialogDescription>Save the current filter and display settings.</DialogDescription>
-          </DialogHeader>
-          <label className="text-label-large flex flex-col gap-2">
-            View name
-            <Input
-              autoFocus
-              value={viewName}
-              onChange={(event) => {
-                setViewName(event.target.value);
-              }}
+            <InPageSearchField
+              inputRef={searchInputRef}
+              value={search}
+              onValueChange={setSearch}
+              onEscapeEmpty={restoreFocus}
+              label={`Search ${copy.title}`}
+              placeholder={`Search every ${copy.singular}`}
+              resultCount={controller.response?.totalCount ?? 0}
+              pending={controller.loading}
+              className="w-full @2xl:max-w-md"
             />
-          </label>
-          <label className="text-label-large flex flex-col gap-2">
-            Share with
-            <Select
-              value={viewScope}
-              onChange={(event) => {
-                const scope = event.target.value as ViewScope;
-                setViewScope(scope);
-                if (scope !== 'team') setViewTeamId('');
+            <div className="flex min-w-0 items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <WorkViewToolbar
+                  target={target}
+                  timezone={controller.timezone}
+                  definition={controller.definition}
+                  onDefinitionChange={controller.setDefinition}
+                  onSaveView={() => {
+                    setSaveOpen(true);
+                  }}
+                  onSetDefault={controller.setAsDefault}
+                  onReset={controller.resetPersonalOverride}
+                  facetResponse={controller.facetResponse}
+                  facetMetadataResponse={controller.facetMetadataResponse}
+                  facetLoading={controller.facetLoading}
+                  facetHasMore={controller.facetHasMore}
+                  facetLoadingMore={controller.facetLoadingMore}
+                  onFacetLoadMore={controller.loadMoreFacets}
+                  onFacetRequest={controller.requestFacet}
+                />
+              </div>
+              {target === 'project' ? (
+                <Button
+                  variant={dependencyMode ? 'secondary' : 'outline'}
+                  className="shrink-0 gap-1.5"
+                  aria-pressed={dependencyMode}
+                  onClick={() => {
+                    setDependencyMode((current) => !current);
+                  }}
+                >
+                  <Workflow aria-hidden className="size-4" /> Dependencies
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        }
+      >
+        <div className="border-outline-variant bg-surface-container-lowest flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border">
+          {projectTimeline.error || orderMutation.error || initiativeHierarchy.error ? (
+            <p role="alert" className="text-error text-body-medium px-3 py-2">
+              {projectTimeline.error
+                ? userErrorMessage(projectTimeline.error, 'Could not reschedule this project.')
+                : initiativeHierarchy.error
+                  ? userErrorMessage(
+                      initiativeHierarchy.error,
+                      'Could not change this initiative hierarchy.',
+                    )
+                  : userErrorMessage(orderMutation.error, `Could not move this ${copy.singular}.`)}
+            </p>
+          ) : null}
+          {content}
+        </div>
+        {selectedIds.size > 0 ? (
+          <div
+            role="toolbar"
+            aria-label="Bulk actions"
+            className="border-outline-variant bg-surface-container-high text-body-medium flex min-h-12 shrink-0 items-center gap-3 rounded-xl border px-4"
+          >
+            <span>{selectedIds.size} selected</span>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                const links = [...selectedIds].map(
+                  (id) => `${window.location.origin}/orgs/${organizationId}/${target}s/${id}`,
+                );
+                void navigator.clipboard.writeText(links.join('\n')).then(() => {
+                  setCopiedSelection(true);
+                });
               }}
             >
-              <option value="personal">Only me</option>
-              <option value="team">A team</option>
-              <option value="organization">Everyone in this workspace</option>
-            </Select>
-          </label>
-          {viewScope === 'team' ? (
-            <label className="text-label-large flex flex-col gap-2">
-              Team
-              <Select
-                value={viewTeamId}
-                onChange={(event) => {
-                  setViewTeamId(event.target.value);
-                }}
-              >
-                <option value="">Choose a team</option>
-                {teams.map((team) => (
-                  <option key={team.id} value={team.id}>
-                    {team.name}
-                  </option>
-                ))}
-              </Select>
-            </label>
-          ) : null}
-          <DialogFooter>
+              {copiedSelection ? 'Copied' : 'Copy links'}
+            </Button>
             <Button
               variant="ghost"
               onClick={() => {
-                setSaveOpen(false);
-                setViewName('');
-                setViewScope('personal');
-                setViewTeamId('');
+                setSelectedIds(new Set());
+                setCopiedSelection(false);
               }}
             >
-              Cancel
+              Clear
             </Button>
-            <Button
-              disabled={
-                viewName.trim().length === 0 ||
-                controller.saving ||
-                (viewScope === 'team' && viewTeamId.length === 0)
-              }
-              onClick={() => {
-                controller.saveView({
-                  name: viewName.trim(),
-                  scope: viewScope,
-                  ...(viewScope === 'team' ? { teamId: TeamId.parse(viewTeamId) } : {}),
-                });
-                setSaveOpen(false);
-                setViewName('');
-                setViewScope('personal');
-                setViewTeamId('');
-              }}
-            >
-              {controller.saving ? 'Saving…' : 'Save view'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </ListPageLayout>
+          </div>
+        ) : null}
+        <Dialog
+          open={saveOpen}
+          onOpenChange={(open) => {
+            setSaveOpen(open);
+            if (!open) {
+              setViewName('');
+              setViewScope('personal');
+              setViewTeamId('');
+            }
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Save view</DialogTitle>
+              <DialogDescription>Save the current filter and display settings.</DialogDescription>
+            </DialogHeader>
+            <label className="text-label-large flex flex-col gap-2">
+              View name
+              <Input
+                autoFocus
+                value={viewName}
+                onChange={(event) => {
+                  setViewName(event.target.value);
+                }}
+              />
+            </label>
+            <label className="text-label-large flex flex-col gap-2">
+              Share with
+              <Select
+                value={viewScope}
+                onChange={(event) => {
+                  const scope = event.target.value as ViewScope;
+                  setViewScope(scope);
+                  if (scope !== 'team') setViewTeamId('');
+                }}
+              >
+                <option value="personal">Only me</option>
+                <option value="team">A team</option>
+                <option value="organization">Everyone in this workspace</option>
+              </Select>
+            </label>
+            {viewScope === 'team' ? (
+              <label className="text-label-large flex flex-col gap-2">
+                Team
+                <Select
+                  value={viewTeamId}
+                  onChange={(event) => {
+                    setViewTeamId(event.target.value);
+                  }}
+                >
+                  <option value="">Choose a team</option>
+                  {teams.map((team) => (
+                    <option key={team.id} value={team.id}>
+                      {team.name}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+            ) : null}
+            <DialogFooter>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setSaveOpen(false);
+                  setViewName('');
+                  setViewScope('personal');
+                  setViewTeamId('');
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                disabled={
+                  viewName.trim().length === 0 ||
+                  controller.saving ||
+                  (viewScope === 'team' && viewTeamId.length === 0)
+                }
+                onClick={() => {
+                  controller.saveView({
+                    name: viewName.trim(),
+                    scope: viewScope,
+                    ...(viewScope === 'team' ? { teamId: TeamId.parse(viewTeamId) } : {}),
+                  });
+                  setSaveOpen(false);
+                  setViewName('');
+                  setViewScope('personal');
+                  setViewTeamId('');
+                }}
+              >
+                {controller.saving ? 'Saving…' : 'Save view'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </ListPageLayout>
+    </div>
   );
 }

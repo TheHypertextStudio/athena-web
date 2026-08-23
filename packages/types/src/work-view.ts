@@ -699,6 +699,7 @@ function queryRequest<const TContract extends ViewContract, const TContext exten
       definition,
       temporaryFilter: createFilterNodeSchema(contract).nullable().default(null),
       context: context.default(organizationContext as never),
+      search: z.string().trim().min(1).optional(),
       groupPath: z.array(z.string()).max(2).optional(),
       cursor: ViewCursorValue.nullable().optional(),
       limit: z.number().int().min(1).max(100).default(100),

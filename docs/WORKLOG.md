@@ -7,6 +7,30 @@
 
 ## Active Tasks
 
+### [LIBRARY-FINDER-DEPLOY-001] Integrate and deploy Library finder
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-08-22
+- **Priority**: P1
+- **Description**: Fast-forward the completed Library finder and shared virtualized-search work
+  onto current `main`, repair policy drift exposed by the combined tree, and deploy the exact
+  integrated revision to production.
+- **Subtasks**:
+  - [x] Rebase the five Library commits onto current `origin/main` with zero merge commits.
+  - [x] Fast-forward and push `main`.
+  - [x] Repair the combined-tree CI policy failures.
+  - [ ] Pass the production deployment workflow for the corrected revision.
+  - [ ] Verify the deployed revision and live production routes.
+- **Blockers**: None. CI run 32614320165 blocked the first deployment attempt because the newer
+  work-view slice did not register its virtualized list with the shared in-page search contract.
+  The same slice left one domain export, one exported overload implementation, and design-token
+  debt out of sync with the repository policy gates.
+- **Validation**: The four formerly failing repository policy files pass 27 tests. Focused web and
+  API regressions prove that work-view search reaches the server, searches only the authorized
+  corpus, applies before counts and cursor pagination, and remains separate from saved view state.
+  The API typecheck passed. The local web typecheck produced no diagnostic but exceeded five
+  minutes on the integrated graph, so the exact-SHA CI run remains the authoritative web typecheck.
+
 ### [WEB-SWITCHER-003] Correct the open-document switcher layout and actions
 
 - **Status**: COMPLETED

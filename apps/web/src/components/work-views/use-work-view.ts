@@ -191,6 +191,8 @@ export interface UseWorkViewOptions<TTarget extends ViewTarget> {
   readonly context: QueryRequestFor<TTarget>['context'];
   readonly savedView?: SavedViewFor<TTarget> | null;
   readonly temporaryFilter?: WorkViewFilterFor<TTarget> | null;
+  /** Transient full-corpus text search that does not alter the durable view definition. */
+  readonly search?: string;
   readonly limit?: number;
 }
 
@@ -473,6 +475,7 @@ export function useWorkView<TTarget extends ViewTarget>(
     definition,
     temporaryFilter: options.temporaryFilter ?? null,
     context: options.savedView?.context ?? options.context,
+    ...(options.search?.trim() ? { search: options.search.trim() } : {}),
     limit: options.limit ?? 100,
   });
   const requestKey = JSON.stringify(request);

@@ -93,6 +93,7 @@
         "./task-titles",
         "./parent-resolution",
         "./planning-timeframe",
+        "./view-contract",
         "./vocabulary"
       ],
       "allowedRuntimeDependencies": ["zod"],

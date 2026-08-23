@@ -153,7 +153,7 @@ export function WorkBoard<TTarget extends ViewTarget>({
             className="bg-surface-container-low flex min-h-0 w-72 flex-col rounded-xl"
           >
             <header className="border-outline-variant flex h-10 shrink-0 items-center gap-2 border-b px-3">
-              <h2 className="text-on-surface text-label-large min-w-0 flex-1 truncate font-medium">
+              <h2 className="text-on-surface text-label-large min-w-0 flex-1 truncate">
                 {column.label}
               </h2>
               <span className="text-on-surface-variant text-label-small tabular-nums">
@@ -276,7 +276,7 @@ export function WorkBoard<TTarget extends ViewTarget>({
                                 toggle(row.id);
                               }}
                             />
-                            <span className="text-body-medium min-w-0 flex-1 font-medium">
+                            <span className="text-body-medium min-w-0 flex-1">
                               {workViewRowTitle(row)}
                             </span>
                           </div>

@@ -30,6 +30,66 @@ describe('queryWorkView', () => {
     schema = await getDb();
   });
 
+  it('searches the authorized title corpus before cursor pagination', async () => {
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(schema.db, schema);
+    await schema.db.insert(schema.task).values([
+      {
+        organizationId: orgId,
+        teamId,
+        title: 'Needle launch brief',
+        state: 'todo',
+        statusId: statusId('task', 'todo'),
+        visibility: 'public',
+      },
+      {
+        organizationId: orgId,
+        teamId,
+        title: 'Needle rollout notes',
+        state: 'todo',
+        statusId: statusId('task', 'todo'),
+        visibility: 'public',
+      },
+      {
+        organizationId: orgId,
+        teamId,
+        title: 'Unrelated task',
+        state: 'todo',
+        statusId: statusId('task', 'todo'),
+        visibility: 'public',
+      },
+      {
+        organizationId: orgId,
+        teamId,
+        title: 'Private needle',
+        state: 'todo',
+        statusId: statusId('task', 'todo'),
+        visibility: 'private',
+      },
+    ]);
+    const request = taskRequest({ search: 'Needle', limit: 1 });
+
+    const first = await queryWorkView({
+      database: schema.db,
+      organizationId: orgId,
+      actorId: humanActorId,
+      request,
+    });
+
+    expect(first.totalCount).toBe(2);
+    expect(first.rows).toHaveLength(1);
+    expect(first.nextCursor).not.toBeNull();
+    const second = await queryWorkView({
+      database: schema.db,
+      organizationId: orgId,
+      actorId: humanActorId,
+      request: { ...request, cursor: first.nextCursor },
+    });
+    expect([...first.rows, ...second.rows].map((row) => row.title).sort()).toEqual([
+      'Needle launch brief',
+      'Needle rollout notes',
+    ]);
+  });
+
   it('authorizes before filtering, distinct counts, label fan-out groups, and pagination', async () => {
     const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(schema.db, schema);
     const [red, blue] = await schema.db

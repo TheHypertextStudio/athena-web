@@ -268,6 +268,7 @@ export function unwrap<TResponse extends RpcResponse<unknown>>(
   call: () => Promise<TResponse>,
   fallbackMessage: string,
 ): Promise<RpcResponseBody<TResponse>>;
+/** Keep the runtime implementation erased while the public overload preserves each RPC body. */
 export async function unwrap(
   call: () => Promise<RpcResponse<unknown>>,
   fallbackMessage: string,

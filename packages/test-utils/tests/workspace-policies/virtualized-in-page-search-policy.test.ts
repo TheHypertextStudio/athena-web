@@ -13,6 +13,7 @@ interface SearchIntegration {
   readonly adapter: SearchAdapter;
   readonly evidenceFile: string;
   readonly evidenceText: string;
+  readonly integrationFile?: string;
   readonly primitive: VirtualPrimitive;
 }
 
@@ -39,6 +40,13 @@ const SEARCH_INTEGRATIONS: Readonly<Record<string, SearchIntegration>> = {
     adapter: 'resident-complete',
     evidenceFile: 'apps/web/src/app/(app)/orgs/[orgId]/views/use-views-page.ts',
     evidenceText: 'tasks.$get({ param: { orgId }, query: {} })',
+    primitive: 'ListView',
+  },
+  'apps/web/src/components/work-views/work-list.tsx': {
+    adapter: 'server-cursor',
+    evidenceFile: 'apps/web/src/components/work-views/use-work-view.ts',
+    evidenceText: "api.v1.orgs[':orgId']['work-views'].query.$post",
+    integrationFile: 'apps/web/src/components/work-views/work-view-page.tsx',
     primitive: 'ListView',
   },
 };
@@ -149,19 +157,20 @@ describe('virtualized in-page search policy', () => {
       expect(integration, `${path} has no reviewed search adapter`).toBeDefined();
       if (!integration) continue;
       const absolutePath = resolve(WORKSPACE_ROOT, path);
-      const source = readFileSync(absolutePath, 'utf8');
+      const integrationSource = readFileSync(
+        resolve(WORKSPACE_ROOT, integration.integrationFile ?? path),
+        'utf8',
+      );
       expect(usesPrimitive(sourceFile(absolutePath), integration.primitive)).toBe(true);
       expect(
         readFileSync(resolve(WORKSPACE_ROOT, integration.evidenceFile), 'utf8'),
         `${path} no longer has the reviewed ${integration.adapter} completeness evidence`,
       ).toContain(integration.evidenceText);
-      expect(source).toContain('useInPageSearchTarget');
-      expect(source).toContain('InPageSearchField');
+      expect(integrationSource).toContain('useInPageSearchTarget');
+      expect(integrationSource).toContain('InPageSearchField');
       if (integration.adapter === 'resident-complete') {
-        expect(source).toContain("completeness: 'complete'");
-        expect(source).toContain('useResidentInPageSearch');
-      } else {
-        expect(source).toContain('apiInfiniteQueryOptions');
+        expect(integrationSource).toContain("completeness: 'complete'");
+        expect(integrationSource).toContain('useResidentInPageSearch');
       }
     }
   });

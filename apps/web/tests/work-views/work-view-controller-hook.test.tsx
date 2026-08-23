@@ -182,6 +182,30 @@ beforeEach(() => {
 });
 
 describe('useWorkView instance and request identity', () => {
+  it('sends transient in-page search through the server query without changing the view', async () => {
+    const options = taskOptions();
+    const { wrapper } = makeQueryWrapper();
+    const { result, rerender } = renderHook(
+      ({ search }: { search: string }) => useWorkView({ ...options, search }),
+      { wrapper, initialProps: { search: '' } },
+    );
+    await waitFor(() => {
+      expect(result.current.response).toBeDefined();
+    });
+    expect(apiMocks.query).toHaveBeenLastCalledWith(
+      expect.objectContaining({ json: expect.not.objectContaining({ search: expect.anything() }) }),
+    );
+
+    rerender({ search: '  launch brief  ' });
+
+    await waitFor(() => {
+      expect(apiMocks.query).toHaveBeenLastCalledWith(
+        expect.objectContaining({ json: expect.objectContaining({ search: 'launch brief' }) }),
+      );
+    });
+    expect(result.current.definition).toEqual(taskDefinition);
+  });
+
   it('does not expose a same-target response from the previous instance', async () => {
     const pending: ((value: ReturnType<typeof okResponse>) => void)[] = [];
     apiMocks.query.mockImplementation(() => new Promise((resolve) => pending.push(resolve)));

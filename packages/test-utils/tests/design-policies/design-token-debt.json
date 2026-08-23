@@ -48,23 +48,14 @@
   "apps/web/src/app/(app)/orgs/[orgId]/initiatives/[initiativeId]/initiative-detail-client.tsx": {
     "raw-type-utility": 11
   },
-  "apps/web/src/app/(app)/orgs/[orgId]/initiatives/initiatives-client.tsx": {
-    "raw-type-utility": 31
-  },
   "apps/web/src/app/(app)/orgs/[orgId]/my-work/my-work-client.tsx": {
     "raw-type-utility": 3
   },
   "apps/web/src/app/(app)/orgs/[orgId]/programs/[programId]/program-detail-client.tsx": {
     "raw-type-utility": 3
   },
-  "apps/web/src/app/(app)/orgs/[orgId]/programs/programs-client.tsx": {
-    "raw-type-utility": 3
-  },
   "apps/web/src/app/(app)/orgs/[orgId]/projects/[projectId]/project-detail-client.tsx": {
     "raw-type-utility": 9
-  },
-  "apps/web/src/app/(app)/orgs/[orgId]/projects/projects-client.tsx": {
-    "raw-type-utility": 22
   },
   "apps/web/src/app/(app)/orgs/[orgId]/sessions/[sessionId]/page.tsx": {
     "raw-type-utility": 3
@@ -246,9 +237,6 @@
   },
   "apps/web/src/components/initiatives/distribution-bar.tsx": {
     "raw-type-utility": 2
-  },
-  "apps/web/src/components/initiatives/health-pill.tsx": {
-    "raw-type-utility": 4
   },
   "apps/web/src/components/initiatives/initiative-relationship-panels.tsx": {
     "raw-type-utility": 2

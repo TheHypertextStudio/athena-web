@@ -53,6 +53,7 @@ interface InternalRequest {
     };
   };
   readonly temporaryFilter: ExecutableFilterNode | null;
+  readonly search?: string;
   readonly context: WorkViewSqlContext;
   readonly groupPath: readonly string[];
   readonly cursor?: string | null;
@@ -94,7 +95,19 @@ function filterSql(
   now: Date,
   timeZone: string,
 ): SQL {
-  const filters = [request.definition.filter, request.temporaryFilter]
+  const searchField = request.target === 'task' ? 'title' : 'name';
+  const searchFilter: ExecutableFilterNode | null = request.search
+    ? {
+        kind: 'all',
+        children: request.search.split(/\s+/).map((term) => ({
+          kind: 'predicate',
+          field: searchField,
+          operator: 'contains',
+          operand: term,
+        })),
+      }
+    : null;
+  const filters = [request.definition.filter, request.temporaryFilter, searchFilter]
     .filter((value): value is ExecutableFilterNode => value !== null)
     .map((filter) => compileFilterSql(filter, fields, { currentActorId: actorId, now, timeZone }));
   return and(...filters) ?? sql`true`;
@@ -105,6 +118,7 @@ function internalRequest(request: WorkViewQueryRequest): InternalRequest {
     target: request.target,
     definition: request.definition,
     temporaryFilter: request.temporaryFilter,
+    ...(request.search !== undefined ? { search: request.search } : {}),
     context: z.object({ kind: z.string() }).loose().parse(request.context),
     groupPath: request.groupPath ?? [],
     limit: request.limit,

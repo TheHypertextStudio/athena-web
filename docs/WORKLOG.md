@@ -7,6 +7,37 @@
 
 ## Active Tasks
 
+### [CORE-SCREEN-STABILITY-001] Keep the release screen gate strict without incidental flakes
+
+- **Status**: REVIEW
+- **Started**: 2026-08-24
+- **Priority**: P0
+- **Description**: The required screen journey reuses one Page for 26 document loads, so a late
+  response from one route can be attributed to the next route. It also waits an arbitrary 250 ms
+  after readiness and expresses detail readiness as raw CSS selectors. Those choices add timing
+  and implementation coupling without strengthening the user-visible contract.
+- **Approach**: Keep one authenticated BrowserContext, but open a fresh Page for each screen. Attach
+  failure listeners before that Page navigates and close it after the screen settles. Express full
+  detail readiness as named accessible controls, and validate the aggregate response inside the
+  same per-screen observation window. Preserve the fixed desktop geometry, visible-content,
+  application-error, runtime-error, and API-failure checks.
+- **Subtasks**:
+  - [x] Audit selectors, timing, request ownership, and viewport assumptions.
+  - [x] Isolate each screen without creating a new account or browser context.
+  - [x] Remove fixed-delay and raw-selector coupling while preserving failure coverage.
+  - [x] Prove the complete PostgreSQL production-build gate remains under five minutes.
+  - [ ] Pass review, repository validation, commit, and deployment gates.
+- **Decision**: Do not add screenshot snapshots to the release gate. They would turn routine visual
+  changes into release failures. Keep screenshot review in the design suites and make this gate
+  enforce settled, usable application behavior.
+- **Validation**: The production Web build and API ran against PostgreSQL 16.15. One normal run
+  passed all 22 primary screens and four detail screens in 21.9 seconds. Three consecutive runs
+  then passed without retries in 21.5, 24.0, and 21.0 seconds. The repeated journey finished in
+  68.8 seconds, which stays below the five-minute release budget. Type-aware ESLint, Prettier, and
+  Playwright test discovery pass. Both temporary PostgreSQL databases were removed after the run.
+
+---
+
 ### [CORE-SCREEN-GATE-001] Block production when a core screen does not settle
 
 - **Status**: COMPLETED

@@ -1,4 +1,4 @@
-import type { Page, Response } from '@playwright/test';
+import type { BrowserContext, Page, Response } from '@playwright/test';
 
 import { signUpAndOnboard } from '../helpers/app';
 import { orgHref, TIMEOUTS } from '../helpers/constants';
@@ -13,7 +13,10 @@ interface ScreenCase {
 
 interface DetailCase extends ScreenCase {
   readonly aggregatePath: string;
-  readonly loadedSelector: string;
+  readonly loadedControl: {
+    readonly name: string;
+    readonly role: 'textbox';
+  };
 }
 
 const FAILURE_COPY =
@@ -34,11 +37,16 @@ function isCriticalFailure(response: Response): boolean {
   );
 }
 
-/** Require one authenticated screen to settle into a usable, non-empty main surface. */
-async function expectAcceptableScreen(page: Page, screen: ScreenCase): Promise<void> {
+/** Require one isolated authenticated screen to settle into a usable, non-empty main surface. */
+async function expectAcceptableScreen(context: BrowserContext, screen: ScreenCase): Promise<void> {
+  const page = await context.newPage();
   const failedResponses: string[] = [];
   const runtimeErrors: string[] = [];
+  const aggregateResponses: Response[] = [];
   const onResponse = (response: Response): void => {
+    if ('aggregatePath' in screen && new URL(response.url()).pathname === screen.aggregatePath) {
+      aggregateResponses.push(response);
+    }
     if (isCriticalFailure(response)) {
       failedResponses.push(`${response.status()} ${new URL(response.url()).pathname}`);
     }
@@ -63,9 +71,9 @@ async function expectAcceptableScreen(page: Page, screen: ScreenCase): Promise<v
     await expect(surface, `${screen.name} should render its primary surface`).toBeVisible({
       timeout: TIMEOUTS.pageReady,
     });
-    if ('loadedSelector' in screen) {
+    if ('loadedControl' in screen) {
       await expect(
-        page.locator(screen.loadedSelector).first(),
+        page.getByRole(screen.loadedControl.role, { name: screen.loadedControl.name }).first(),
         `${screen.name} should replace the navigation snapshot with its full detail surface`,
       ).toBeVisible({ timeout: TIMEOUTS.ui });
     }
@@ -107,12 +115,22 @@ async function expectAcceptableScreen(page: Page, screen: ScreenCase): Promise<v
       10,
     );
 
-    await page.waitForTimeout(250);
     expect(runtimeErrors, `${screen.name} should not throw in the browser`).toEqual([]);
     expect(failedResponses, `${screen.name} should not receive a failed API response`).toEqual([]);
+    if ('aggregatePath' in screen) {
+      expect(
+        aggregateResponses,
+        `${screen.name} should reconcile through one aggregate response`,
+      ).toHaveLength(1);
+      expect(
+        aggregateResponses[0]?.status(),
+        `${screen.name} aggregate should pass its response contract`,
+      ).toBe(200);
+    }
   } finally {
     page.off('response', onResponse);
     page.off('pageerror', onPageError);
+    await page.close();
   }
 }
 
@@ -157,6 +175,8 @@ test('every primary authenticated screen and local-first detail settles', async 
   test.setTimeout(300_000);
   const { orgId } = await signUpAndOnboard(page, 'CoreScreenAcceptance');
   const ids = await seedDetails(page, orgId);
+  const context = page.context();
+  await page.close();
 
   const primaryScreens: readonly ScreenCase[] = [
     { name: 'Today', href: '/today' },
@@ -183,44 +203,36 @@ test('every primary authenticated screen and local-first detail settles', async 
     { name: 'Settings', href: orgHref(orgId, 'settings'), surface: 'dialog' },
   ];
 
-  for (const screen of primaryScreens) await expectAcceptableScreen(page, screen);
+  for (const screen of primaryScreens) await expectAcceptableScreen(context, screen);
 
   const details: readonly DetailCase[] = [
     {
       name: 'Task detail',
       href: orgHref(orgId, `tasks/${ids.taskId}`),
       aggregatePath: `/v1/orgs/${orgId}/tasks/${ids.taskId}/aggregate-detail`,
-      loadedSelector: '[aria-label="Task title"]',
+      loadedControl: { role: 'textbox', name: 'Task title' },
     },
     {
       name: 'Project detail',
       href: orgHref(orgId, `projects/${ids.projectId}`),
       aggregatePath: `/v1/orgs/${orgId}/projects/${ids.projectId}/aggregate-detail`,
-      loadedSelector: '[aria-label="Project name"]',
+      loadedControl: { role: 'textbox', name: 'Project name' },
     },
     {
       name: 'Program detail',
       href: orgHref(orgId, `programs/${ids.programId}`),
       aggregatePath: `/v1/orgs/${orgId}/programs/${ids.programId}/aggregate-detail`,
-      loadedSelector: '[aria-label="Program name"]',
+      loadedControl: { role: 'textbox', name: 'Program name' },
     },
     {
       name: 'Initiative detail',
       href: orgHref(orgId, `initiatives/${ids.initiativeId}`),
       aggregatePath: `/v1/orgs/${orgId}/initiatives/${ids.initiativeId}/aggregate-detail`,
-      loadedSelector: '[aria-label="Initiative name"]',
+      loadedControl: { role: 'textbox', name: 'Initiative name' },
     },
   ];
 
   for (const detail of details) {
-    const aggregate = page.waitForResponse(
-      (response) => new URL(response.url()).pathname === detail.aggregatePath,
-      { timeout: TIMEOUTS.pageReady },
-    );
-    await expectAcceptableScreen(page, detail);
-    const response = await aggregate;
-    expect(response.status(), `${detail.name} aggregate should pass its response contract`).toBe(
-      200,
-    );
+    await expectAcceptableScreen(context, detail);
   }
 });

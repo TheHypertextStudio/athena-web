@@ -628,6 +628,22 @@ describe('canActor', () => {
     queries.mockRestore();
   });
 
+  it('denies a cross-organization target inside an otherwise local batch', async () => {
+    const otherOrg = '0000000000000000000000000Z';
+
+    await expect(
+      canActorBatch(
+        ownerActorId,
+        'view',
+        [orgTarget(), { kind: 'organization', id: otherOrg, orgId: otherOrg }],
+        db,
+      ),
+    ).resolves.toEqual([
+      { allow: true, reason: 'allow', effectiveCapability: 'manage' },
+      { allow: false, reason: 'cross_org', effectiveCapability: null },
+    ]);
+  });
+
   it('an Owner has manage org-wide', async () => {
     const r = await canActor(ownerActorId, 'manage', orgTarget(), db);
     expect(r.allow).toBe(true);

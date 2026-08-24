@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import {
   ancestorChain,
   loadExplicitAuthorizationFacts,
+  loadExplicitAuthorizationFactsBatch,
   type ResourceKind,
   type ResourceRef,
 } from '@docket/db/identity-access';
@@ -403,6 +404,211 @@ describe('loadExplicitAuthorizationFacts', () => {
         grants: [],
       },
     });
+  });
+});
+
+describe('loadExplicitAuthorizationFactsBatch', () => {
+  it('returns an empty result without querying resources for an empty batch', async () => {
+    await expect(loadExplicitAuthorizationFactsBatch(activeAgentId, [], db)).resolves.toEqual([]);
+  });
+
+  it.each(['actor_not_found', 'actor_suspended', 'actor_archived'] as const)(
+    'returns %s principal denials in target order',
+    async (kind) => {
+      const actorId =
+        kind === 'actor_not_found'
+          ? 'missing-actor'
+          : kind === 'actor_suspended'
+            ? suspendedActorId
+            : archivedActorId;
+
+      await expect(
+        loadExplicitAuthorizationFactsBatch(
+          actorId,
+          [target('organization', orgId), target('task', taskId)],
+          db,
+        ),
+      ).resolves.toEqual([{ kind }, { kind }]);
+    },
+  );
+
+  it('hydrates mixed resource chains and grants while denying foreign targets in place', async () => {
+    const results = await loadExplicitAuthorizationFactsBatch(
+      activeAgentId,
+      [
+        target('task', taskId),
+        target('project', projectId),
+        target('organization', orgId),
+        target('team', teamId),
+        target('task', 'missing-task'),
+        target('project', 'missing-project'),
+        target('organization', foreignOrgId, foreignOrgId),
+      ],
+      db,
+    );
+
+    expect(results.map((result) => result.kind)).toEqual([
+      'ready',
+      'ready',
+      'ready',
+      'ready',
+      'ready',
+      'ready',
+      'cross_org',
+    ]);
+
+    const [taskResult, projectResult, organizationResult, teamResult, missingTask, missingProject] =
+      results;
+    expect(taskResult).toMatchObject({
+      facts: {
+        principal: { organizationId: orgId, actorId: activeAgentId, roleId },
+        resourceChain: {
+          organizationId: orgId,
+          resources: [
+            { kind: 'task', id: taskId },
+            { kind: 'team', id: teamId },
+            { kind: 'project', id: projectId },
+            { kind: 'program', id: programId },
+            { kind: 'organization', id: orgId },
+          ],
+        },
+      },
+    });
+    expect(taskResult?.kind === 'ready' ? taskResult.facts.grants : []).toHaveLength(6);
+    expect(projectResult).toMatchObject({
+      facts: {
+        resourceChain: {
+          resources: [
+            { kind: 'project', id: projectId },
+            { kind: 'team', id: teamId },
+            { kind: 'program', id: programId },
+            { kind: 'organization', id: orgId },
+          ],
+        },
+      },
+    });
+    expect(projectResult?.kind === 'ready' ? projectResult.facts.grants : []).toHaveLength(4);
+    expect(organizationResult).toMatchObject({
+      facts: { resourceChain: { resources: [{ kind: 'organization', id: orgId }] }, grants: [] },
+    });
+    expect(teamResult).toMatchObject({
+      facts: {
+        resourceChain: {
+          resources: [
+            { kind: 'team', id: teamId },
+            { kind: 'organization', id: orgId },
+          ],
+        },
+      },
+    });
+    expect(teamResult?.kind === 'ready' ? teamResult.facts.grants : []).toHaveLength(1);
+    expect(missingTask).toMatchObject({
+      facts: {
+        resourceChain: {
+          resources: [
+            { kind: 'task', id: 'missing-task' },
+            { kind: 'organization', id: orgId },
+          ],
+        },
+        grants: [],
+      },
+    });
+    expect(missingProject).toMatchObject({
+      facts: {
+        resourceChain: {
+          resources: [
+            { kind: 'project', id: 'missing-project' },
+            { kind: 'organization', id: orgId },
+          ],
+        },
+        grants: [],
+      },
+    });
+  });
+
+  it('keeps optional project and program ancestors out of batch chains when they are absent', async () => {
+    const standaloneProjectId = insertedId(
+      await db
+        .insert(project)
+        .values({
+          organizationId: orgId,
+          name: 'Standalone adapter project',
+          statusId: statusId('project', 'planned'),
+        })
+        .returning({ id: project.id }),
+    );
+    const standaloneTaskId = insertedId(
+      await db
+        .insert(task)
+        .values({
+          organizationId: orgId,
+          title: 'Standalone adapter task',
+          teamId,
+          state: 'todo',
+          statusId: statusId('task', 'todo'),
+        })
+        .returning({ id: task.id }),
+    );
+
+    await expect(
+      loadExplicitAuthorizationFactsBatch(
+        activeAgentId,
+        [target('task', standaloneTaskId), target('project', standaloneProjectId)],
+        db,
+      ),
+    ).resolves.toMatchObject([
+      {
+        kind: 'ready',
+        facts: {
+          resourceChain: {
+            resources: [
+              { kind: 'task', id: standaloneTaskId },
+              { kind: 'team', id: teamId },
+              { kind: 'organization', id: orgId },
+            ],
+          },
+        },
+      },
+      {
+        kind: 'ready',
+        facts: {
+          resourceChain: {
+            resources: [
+              { kind: 'project', id: standaloneProjectId },
+              { kind: 'organization', id: orgId },
+            ],
+          },
+        },
+      },
+    ]);
+  });
+
+  it('does not load local resources or grants for a foreign-only batch', async () => {
+    await expect(
+      loadExplicitAuthorizationFactsBatch(
+        activeAgentId,
+        [target('organization', foreignOrgId, foreignOrgId)],
+        db,
+      ),
+    ).resolves.toEqual([{ kind: 'cross_org' }]);
+  });
+
+  it('suppresses a role from another organization in batch facts', async () => {
+    await expect(
+      loadExplicitAuthorizationFactsBatch(foreignRoleActorId, [target('organization', orgId)], db),
+    ).resolves.toEqual([
+      {
+        kind: 'ready',
+        facts: {
+          principal: { organizationId: orgId, actorId: foreignRoleActorId, roleId: null },
+          resourceChain: {
+            organizationId: orgId,
+            resources: [{ kind: 'organization', id: orgId }],
+          },
+          grants: [],
+        },
+      },
+    ]);
   });
 });
 

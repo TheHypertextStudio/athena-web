@@ -35,7 +35,8 @@
   - [x] Rebase the five product commits onto `7dec5703` from `origin/main` with linear history.
   - [x] Commit the post-rebase integration corrections and repeat the affected repository gates.
   - [x] Complete responsive light and dark visual, keyboard, and accessibility review.
-  - [ ] Fast-forward `main`, deploy the exact revision, and verify the production workflows.
+  - [x] Fast-forward the executable canvas revision to `main` with linear history.
+  - [ ] Pass the release gates, deploy the exact final revision, and verify production.
 - **Decisions**: Forward bulk commands remain atomic. Undo and redo compare the receipt's expected
   state and skip collaborator conflicts. Creation remains outside history. Each canvas route and
   scope keeps 50 receipts in memory. Project and Task trash retains object ids and relationships.
@@ -70,7 +71,11 @@
   command schema reduced the `@docket/types` trust-spine coverage gate below 100 percent. Contract
   tests now reject duplicate Project initiative associations and receipt properties owned by the
   other object kind. They also accept complete canonical Task and Project status tuples, which
-  covers the valid branch of the tuple invariant.
+  covers the valid branch of the tuple invariant. Replacement run `32737956163` then exposed the
+  same boundary error in the batch authorization work: Authz tested only an allowed batch, and DB
+  did not test the batch fact loader it owns. Authz now covers a mixed local and cross-organization
+  decision. DB integration tests cover empty batches, principal denials, mixed local and foreign
+  targets, missing rows, optional ancestors, grant filtering, and suppression of a foreign role.
 - **Validation**: The pure layout suite covers projected Task roots, weak components,
   non-overlapping rectangles, group ownership, deterministic aspect-aware packing, property-only
   stability, and the 363-Task and 28-dependency fixture within the 100 ms budget. The command route
@@ -87,9 +92,14 @@
   lifecycle harness passes six tests, and the stable projection API file passes seven tests. The
   final review regressions pass 40 aggregate-route cases and four canvas notice and history cases.
   The shared types package passes 779 tests and its exact coverage gate at 100 percent statements,
-  branches, functions, and lines. Repository tooling passes 164 tests. Formatting, migration drift,
-  all 26 typecheck tasks, all 25 lint tasks, and the four-package serialized production build pass.
-  Deployment and production checks remain open.
+  branches, functions, and lines. Authz passes 51 tests at 100 percent coverage in every category.
+  DB passes 31 files and 203 tests at 94.86 percent statements, 94.28 percent branches, 91.2 percent
+  functions, and 94.62 percent lines. The exact 26-package non-Web and non-API coverage command
+  passes 21 executable tasks. A post-correction code review found no remaining code findings and
+  repeated the Authz, DB identity-access, canvas-history, and Program aggregate regressions.
+  Repository tooling passes 164 tests. Formatting, migration drift, all 26 typecheck tasks, all 25
+  lint tasks, and the four-package serialized production build pass. Deployment and production
+  checks remain open.
 - **Blockers**: None.
 
 ---

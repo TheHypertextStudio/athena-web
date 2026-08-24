@@ -73,8 +73,7 @@ import { type CanvasDensity } from './use-dagre-layout';
 import { useCanvasAspectRatio } from './use-canvas-aspect-ratio';
 import { type TaskGraphScope, useTaskGraph } from './use-task-graph';
 import { taskGraphScopeKey } from './scope';
-import { useTaskGraphMutations } from './use-task-graph-mutations';
-import { useTaskHierarchyDrag } from './use-task-hierarchy-drag';
+import { useTaskGraphCreation } from './use-task-graph-creation';
 import { focusCanvasNode } from './focus-canvas-node';
 import { canvasCommandId, useCanvasCommandHistory } from './use-canvas-command-history';
 
@@ -269,7 +268,7 @@ export default function TaskGraphPanel({
     resolveAssignee,
     resolveProjectName,
   });
-  const mutations = useTaskGraphMutations(effectiveScope);
+  const creation = useTaskGraphCreation(effectiveScope);
   const graphKey = useMemo(
     () => queryKeys.taskGraph(orgId, taskGraphScopeKey(effectiveScope)),
     [effectiveScope, orgId],
@@ -279,7 +278,6 @@ export default function TaskGraphPanel({
     queryKeys.tasks(orgId),
   ]);
   const [flowInstance, setFlowInstance] = useState<ReactFlowInstance | null>(null);
-  const [selectedFlowNodes, setSelectedFlowNodes] = useState<readonly Node[]>([]);
 
   const toOptions = useCallback(
     (items: readonly { id: string; name: string }[] | undefined): readonly FieldOption[] =>
@@ -422,10 +420,10 @@ export default function TaskGraphPanel({
       canEdit,
       navigate,
       setComplete,
-      createSubtask: mutations.createSubtask,
+      createSubtask: creation.createSubtask,
       removeDependency,
     }),
-    [canEdit, navigate, setComplete, mutations.createSubtask, removeDependency],
+    [canEdit, navigate, setComplete, creation.createSubtask, removeDependency],
   );
 
   // Grouping reads straight off the catalog, so every groupable field the catalog declares works
@@ -472,32 +470,20 @@ export default function TaskGraphPanel({
     () => taskNodesToPropertySnapshots(filtered.nodes, orgId),
     [filtered.nodes, orgId],
   );
-  const commitHierarchy = useCallback(
-    (subjectIds: readonly string[], parentTaskId: string) => {
+  const reparentTask = useCallback(
+    (taskId: string, parentTaskId: string) => {
       const command = {
         commandId: canvasCommandId(),
         objectKind: 'task',
-        objectIds: [...subjectIds],
+        objectIds: [taskId],
         operation: { type: 'change_parent', parentId: parentTaskId },
       } as ObjectCommandIn;
-      void history.execute(
-        command,
-        subjectIds.length === 1
-          ? 'Move Task branch'
-          : `Move ${String(subjectIds.length)} Task branches`,
-      );
+      void history.execute(command, 'Move Task branch');
     },
     [history],
   );
-  const hierarchyDrag = useTaskHierarchyDrag({
-    nodes: canvasNodes,
-    selectedIds: selectedFlowNodes.map(({ id }) => id),
-    organizationId: orgId,
-    instance: flowInstance,
-    onCommit: commitHierarchy,
-  });
-  const activeError = mutations.error;
-  const clearActiveError = mutations.clearError;
+  const activeError = creation.error;
+  const clearActiveError = creation.clearError;
   const createTask = useCallback(() => {
     openCreate({
       kind: 'task',
@@ -567,12 +553,7 @@ export default function TaskGraphPanel({
             setSelectedId(object.id);
           }}
         >
-          <CanvasSelectionFrame
-            label="Task graph"
-            onDragOver={canEdit ? hierarchyDrag.onNativeDragOver : undefined}
-            onDragLeave={canEdit ? hierarchyDrag.onNativeDragLeave : undefined}
-            onDrop={canEdit ? hierarchyDrag.onNativeDrop : undefined}
-          >
+          <CanvasSelectionFrame label="Task graph">
             <CanvasActionsProvider value={canvasActions}>
               <Canvas
                 nodes={canvasNodes}
@@ -595,16 +576,13 @@ export default function TaskGraphPanel({
                 onDeleteEdge={(edge) => {
                   removeDependency(edge.source, edge.target);
                 }}
+                onReparentEdge={reparentTask}
                 onInit={setFlowInstance}
-                onNodeDragStart={canEdit ? hierarchyDrag.onNodeDragStart : undefined}
-                onNodeDrag={canEdit ? hierarchyDrag.onNodeDrag : undefined}
-                onNodeDragStop={canEdit ? hierarchyDrag.onNodeDragStop : undefined}
                 onRelayout={() => {
                   setLayoutEpoch((current) => current + 1);
                 }}
               >
                 <CanvasSelectionBridge
-                  onChange={setSelectedFlowNodes}
                   requestedSelectionId={createdSelectionId}
                   requestedSelectionReady={
                     createdSelectionId !== null &&
@@ -612,9 +590,6 @@ export default function TaskGraphPanel({
                   }
                   onRequestedSelectionApplied={applyCreatedSelection}
                 />
-                <div className="sr-only" aria-live="polite">
-                  {hierarchyDrag.status}
-                </div>
                 <BulkActionsBar />
                 <CanvasCommandNotice />
                 {createdHidden ? (

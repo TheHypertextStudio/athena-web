@@ -6,7 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ActionRegistryProvider } from '../../src/lib/actions/registry-context';
 import { createActionRegistry, defineActionDomain } from '../../src/lib/actions/registry';
 import type { ObjectRef } from '../../src/lib/actions/object';
-import { useRelationDropTarget } from '../../src/components/dnd/use-relation-drop-target';
+import {
+  type RelationDropExecutor,
+  useRelationDropTarget,
+} from '../../src/components/dnd/use-relation-drop-target';
 
 let currentSource: { readonly data: unknown } | null = null;
 let isDropTarget = false;
@@ -39,8 +42,14 @@ const project: ObjectRef = {
   title: 'Launch Athena',
 };
 
-function Target({ object = project }: { readonly object?: ObjectRef }): React.JSX.Element {
-  const drop = useRelationDropTarget({ target: object });
+function Target({
+  object = project,
+  execute,
+}: {
+  readonly object?: ObjectRef;
+  readonly execute?: RelationDropExecutor;
+}): React.JSX.Element {
+  const drop = useRelationDropTarget({ target: object, execute });
   return (
     <div {...drop.dropProps} data-testid="target">
       {drop.effectLabel}
@@ -133,6 +142,33 @@ describe('useRelationDropTarget', () => {
         target: project,
         source: 'drag',
         organizationId: 'org-1',
+      }),
+    );
+  });
+
+  it('prefers a surface-owned executor so a canvas drop stays in its receipt history', async () => {
+    const execute = vi.fn<RelationDropExecutor>().mockResolvedValue('applied');
+    render(<Target execute={execute} />);
+
+    expect(screen.getByTestId('target')).toHaveAttribute('data-drop-state', 'accept');
+    expect(screen.getByTestId('target')).toHaveTextContent('Move to Launch Athena');
+
+    const input = droppableInput as { readonly id: string; readonly data: unknown };
+    monitor.onDragEnd?.({
+      operation: {
+        source: currentSource,
+        target: { id: input.id, data: input.data },
+      },
+    });
+
+    await vi.waitFor(() => {
+      expect(execute).toHaveBeenCalledOnce();
+    });
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        relationId: 'task.project',
+        subjects: [expect.objectContaining({ id: task.id })],
+        target: expect.objectContaining({ id: project.id }),
       }),
     );
   });

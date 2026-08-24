@@ -67,7 +67,9 @@ const projectRollup = new Hono<AppEnv>()
         db
           .select({ id: project.id })
           .from(project)
-          .where(and(eq(project.id, id), eq(project.organizationId, orgId), isNull(project.archivedAt)))
+          .where(
+            and(eq(project.id, id), eq(project.organizationId, orgId), isNull(project.archivedAt)),
+          )
           .limit(1),
         db
           .select()
@@ -120,7 +122,9 @@ const projectRollup = new Hono<AppEnv>()
       const projectRows = await db
         .select({ id: project.id })
         .from(project)
-        .where(and(eq(project.id, id), eq(project.organizationId, orgId), isNull(project.archivedAt)))
+        .where(
+          and(eq(project.id, id), eq(project.organizationId, orgId), isNull(project.archivedAt)),
+        )
         .limit(1);
       if (!projectRows[0]) throw new NotFoundError('Project not found');
 

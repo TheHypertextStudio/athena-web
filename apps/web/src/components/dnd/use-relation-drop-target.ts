@@ -2,6 +2,7 @@
 
 import {
   type RelationId,
+  type RelationIntent,
   type RelationRejectionReason,
   type RelationResolution,
 } from '@docket/work/relation-contract';
@@ -19,6 +20,12 @@ import { useDragController } from './drag-context';
 /** Shared visual state for a canonical destination. */
 export type DropState = 'idle' | 'accept' | 'reject';
 
+/** Result from a surface that owns persistence for the resolved drop. */
+export type RelationDropExecutionResult = 'applied' | 'unchanged' | 'failed';
+
+/** Execute a resolved drop through the surface's own command boundary. */
+export type RelationDropExecutor = (intent: RelationIntent) => Promise<RelationDropExecutionResult>;
+
 /** Options for one object relationship destination. */
 export interface UseRelationDropTargetOptions {
   /** Object that will receive the resolved relationship. */
@@ -27,6 +34,8 @@ export interface UseRelationDropTargetOptions {
   readonly disabled?: boolean | undefined;
   /** Observe the registered action result for application-owned feedback. */
   readonly onResult?: ((result: ActionInvocationResult) => void) | undefined;
+  /** Prefer a surface-owned command path over the global registered action. */
+  readonly execute?: RelationDropExecutor | undefined;
   /** Collision tier for nested destinations. Object rows outrank groups, which outrank roots. */
   readonly priority?: 'object' | 'group' | 'root' | undefined;
 }
@@ -125,7 +134,7 @@ function rejectedLabel(reason: RelationRejectionReason): string {
 export function useRelationDropTarget(
   options: UseRelationDropTargetOptions,
 ): RelationDropTargetBinding {
-  const { target, disabled = false, onResult, priority = 'object' } = options;
+  const { target, disabled = false, onResult, execute, priority = 'object' } = options;
   const instanceId = useId();
   const dragController = useDragController();
   const registry = useOptionalActionRegistry();
@@ -133,9 +142,10 @@ export function useRelationDropTarget(
   const resolution = resolutionFor(operation.source?.data, target);
   const relationId = resolution?.accepted === true ? resolution.intent.relationId : null;
   const action = relationId === null ? undefined : registry?.getByRelation(relationId);
-  const canDrop = !disabled && action !== undefined;
+  const hasExecutor = execute !== undefined || action !== undefined;
+  const canDrop = !disabled && hasExecutor;
   const previewLabel =
-    resolution?.accepted === true && action !== undefined
+    resolution?.accepted === true && hasExecutor
       ? acceptedLabel(resolution.intent.relationId, target)
       : null;
   const droppableId = `docket-relation-target:${target.kind}:${target.id}:${instanceId}`;
@@ -159,21 +169,38 @@ export function useRelationDropTarget(
     !isOver || resolution === null
       ? null
       : resolution.accepted
-        ? action === undefined
+        ? !hasExecutor
           ? 'This relationship is not available'
           : previewLabel
         : rejectedLabel(resolution.reason);
 
   useDragDropMonitor({
     onDragEnd: (event) => {
-      if (event.operation.target?.id !== droppableId || disabled || registry === null) return;
+      if (event.operation.target?.id !== droppableId || disabled) return;
       const dropped = resolutionFor(event.operation.source?.data, target);
       if (dropped?.accepted !== true) return;
-      const definition = registry.getByRelation(dropped.intent.relationId);
-      if (definition === undefined) return;
       const source = event.operation.source?.data;
       if (!isObjectDragData(source)) return;
       const resultLabel = acceptedLabel(dropped.intent.relationId, target);
+      if (execute !== undefined) {
+        void execute(dropped.intent)
+          .then((result) => {
+            dragController.announce(
+              result === 'failed'
+                ? `Could not complete: ${resultLabel}`
+                : result === 'unchanged'
+                  ? `No change needed: ${resultLabel}`
+                  : `Completed: ${resultLabel}`,
+            );
+          })
+          .catch(() => {
+            dragController.announce(`Could not complete: ${resultLabel}`);
+          });
+        return;
+      }
+      if (registry === null) return;
+      const definition = registry.getByRelation(dropped.intent.relationId);
+      if (definition === undefined) return;
       void registry
         .invoke(definition.id, () => ({
           objects: source.objects,

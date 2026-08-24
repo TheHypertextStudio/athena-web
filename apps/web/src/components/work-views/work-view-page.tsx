@@ -4,9 +4,11 @@ import {
   entityNavigationSnapshotFromWorkViewRow,
   InitiativeViewDefinition,
   type InitiativeViewRow,
+  OrganizationId,
   pageOf,
   ProgramViewDefinition,
   ProjectViewDefinition,
+  ProjectId,
   type ProjectViewRow,
   SavedWorkViewOut,
   type SavedWorkViewOut as SavedWorkViewOutValue,
@@ -624,13 +626,10 @@ export function WorkViewPage<TTarget extends ViewTarget>({
                 controlSize="sm"
                 onClick={() => {
                   setCreatedProjectSelection(null);
-                  navigateAuthenticated(
-                    '/orgs/[orgId]/projects/[projectId]',
-                    {
-                      orgId: organizationId,
-                      projectId: activeCreatedProjectSelection.id,
-                    },
-                  );
+                  navigateAuthenticated('/orgs/[orgId]/projects/[projectId]', {
+                    orgId: OrganizationId.parse(organizationId),
+                    projectId: ProjectId.parse(activeCreatedProjectSelection.id),
+                  });
                 }}
               >
                 Open project

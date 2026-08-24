@@ -4,7 +4,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { act, type JSX, type ReactNode, useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { controller, createState, lensState, routerPush } = vi.hoisted(() => ({
+const { controller, createState, lensState, navigateAuthenticatedMock } = vi.hoisted(() => ({
   controller: {
     definition: {
       version: 2,
@@ -22,11 +22,11 @@ const { controller, createState, lensState, routerPush } = vi.hoisted(() => ({
   },
   createState: { request: null as null | Record<string, unknown> },
   lensState: { props: null as null | Record<string, unknown>, refetches: vi.fn() },
-  routerPush: vi.fn(),
+  navigateAuthenticatedMock: vi.fn(),
 }));
 
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: routerPush }),
+vi.mock('../../src/lib/app-location', () => ({
+  navigateAuthenticated: navigateAuthenticatedMock,
 }));
 
 vi.mock('../../src/components/active-org', () => ({
@@ -205,7 +205,7 @@ beforeEach(() => {
   controller.setDefinition.mockReset();
   lensState.props = null;
   lensState.refetches.mockReset();
-  routerPush.mockReset();
+  navigateAuthenticatedMock.mockReset();
 });
 
 describe('WorkViewPage creation continuity', () => {
@@ -244,7 +244,7 @@ describe('WorkViewPage creation continuity', () => {
     );
     expect(screen.queryByText('Created, but hidden by current filters')).toBeNull();
     expect(screen.getByTestId('lens-request')).toHaveTextContent('none');
-    expect(routerPush).not.toHaveBeenCalled();
+    expect(navigateAuthenticatedMock).not.toHaveBeenCalled();
 
     act(() => {
       request.onCreated({ id: DISMISSED_PROJECT_ID });
@@ -261,7 +261,10 @@ describe('WorkViewPage creation continuity', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open project' }));
     expect(screen.queryByText('Created, but hidden by current filters')).toBeNull();
     expect(screen.getByTestId('lens-request')).toHaveTextContent('none');
-    expect(routerPush).toHaveBeenCalledWith(`/orgs/${ALPHA_ID}/projects/${OPENED_PROJECT_ID}`);
+    expect(navigateAuthenticatedMock).toHaveBeenCalledWith('/orgs/[orgId]/projects/[projectId]', {
+      orgId: ALPHA_ID,
+      projectId: OPENED_PROJECT_ID,
+    });
   });
 
   it('never passes an Alpha creation or stale callback into Bravo after an org switch', () => {

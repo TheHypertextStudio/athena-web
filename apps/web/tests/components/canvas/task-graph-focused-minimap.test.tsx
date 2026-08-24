@@ -9,7 +9,6 @@ const wiring = vi.hoisted(() => ({
   canvasProps: null as null | Record<string, unknown>,
   commandProviderProps: null as null | Record<string, unknown>,
   actions: null as null | Record<string, unknown>,
-  hierarchyOptions: null as null | Record<string, unknown>,
   history: {
     execute: vi.fn().mockResolvedValue({
       appliedIds: [],
@@ -31,13 +30,6 @@ const wiring = vi.hoisted(() => ({
     pending: false,
     notice: null,
     clearNotice: vi.fn(),
-  },
-  legacy: {
-    setState: vi.fn(),
-    removeDependency: vi.fn(),
-    reverseDependency: vi.fn(),
-    addDependency: vi.fn(),
-    reparent: vi.fn(),
   },
 }));
 
@@ -76,42 +68,15 @@ vi.mock('../../../src/components/statuses/status-registry', () => ({
     defaultOf: () => ({ key: 'todo' }),
   }),
 }));
-vi.mock('../../../src/components/tasks/use-task-hierarchy-mutation', () => ({
-  useTaskHierarchyMutation: () => ({
-    reparent: wiring.legacy.reparent,
-    error: null,
-    clearError: vi.fn(),
-    undo: null,
-  }),
-}));
 vi.mock('../../../src/components/canvas/use-task-graph', () => ({
   useTaskGraph: () => ({ nodes: [], edges: [], isLoading: false, error: null, isEmpty: true }),
 }));
-vi.mock('../../../src/components/canvas/use-task-graph-mutations', () => ({
-  useTaskGraphMutations: () => ({
-    setState: wiring.legacy.setState,
+vi.mock('../../../src/components/canvas/use-task-graph-creation', () => ({
+  useTaskGraphCreation: () => ({
     createSubtask: vi.fn(),
-    removeDependency: wiring.legacy.removeDependency,
-    reverseDependency: wiring.legacy.reverseDependency,
-    addDependency: wiring.legacy.addDependency,
     error: null,
     clearError: vi.fn(),
-    undo: null,
   }),
-}));
-vi.mock('../../../src/components/canvas/use-task-hierarchy-drag', () => ({
-  useTaskHierarchyDrag: (options: Record<string, unknown>) => {
-    wiring.hierarchyOptions = options;
-    return {
-      onNativeDragOver: vi.fn(),
-      onNativeDragLeave: vi.fn(),
-      onNativeDrop: vi.fn(),
-      onNodeDragStart: vi.fn(),
-      onNodeDrag: vi.fn(),
-      onNodeDragStop: vi.fn(),
-      status: '',
-    };
-  },
 }));
 vi.mock('../../../src/components/canvas/task-hierarchy-layout', () => ({
   retainTaskHierarchyAncestors: (nodes: unknown[]) => nodes,
@@ -194,9 +159,6 @@ describe('focused Task graph navigation', () => {
   it('routes dependency, status, hierarchy, and reverse edits through one command history', async () => {
     wiring.canEdit = true;
     wiring.history.execute.mockClear();
-    Object.values(wiring.legacy).forEach((mutation) => {
-      mutation.mockClear();
-    });
     const panel = () => (
       <TaskGraphPanel
         scope={{ orgId: 'org-1' }}
@@ -209,18 +171,16 @@ describe('focused Task graph navigation', () => {
     const canvas = wiring.canvasProps as {
       onConnectEdge: (source: string, target: string) => void;
       onDeleteEdge: (edge: { source: string; target: string }) => void;
+      onReparentEdge: (childId: string, parentId: string) => void;
     };
     const actions = wiring.actions as {
       setComplete: (id: string, complete: boolean) => void;
-    };
-    const hierarchy = wiring.hierarchyOptions as {
-      onCommit: (ids: readonly string[], parentId: string) => void;
     };
 
     canvas.onConnectEdge('task-a', 'task-b');
     canvas.onDeleteEdge({ source: 'task-a', target: 'task-b' });
     actions.setComplete('task-a', true);
-    hierarchy.onCommit(['task-a'], 'task-parent');
+    canvas.onReparentEdge('task-a', 'task-parent');
 
     await waitFor(() => {
       expect(wiring.history.execute.mock.calls.map(([command]) => command.operation)).toEqual([
@@ -232,9 +192,6 @@ describe('focused Task graph navigation', () => {
     });
     expect(wiring.actions).not.toHaveProperty('reverseDependency');
     expect(wiring.canvasProps).not.toHaveProperty('onReverseDependency');
-    expect(Object.values(wiring.legacy).every((mutation) => mutation.mock.calls.length === 0)).toBe(
-      true,
-    );
     expect(wiring.commandProviderProps?.['history']).toBe(wiring.history);
 
     wiring.canEdit = false;

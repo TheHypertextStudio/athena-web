@@ -21,11 +21,11 @@ import { formatCalendarDate } from '@/lib/format-date';
 import { isEnded } from '@/lib/work-category';
 
 import { ObjectSurface } from '@/components/objects/object-surface';
-import { useRelationDropTarget } from '@/components/dnd/use-relation-drop-target';
 import { useSelectableRow } from '@/components/selection';
 
 import { useCanvasActions } from './canvas-actions-context';
 import { taskNodeTransitionName } from './transition-name';
+import { useCanvasRelationDropTarget } from './use-canvas-relation-drop-target';
 import { useLod } from './use-lod';
 
 /** Whether an ISO `dueDate` is in the past relative to now (start of today). */
@@ -143,13 +143,9 @@ function TaskNodeComponent({ id, data, selected }: NodeProps): React.JSX.Element
     meta: { state, parentTaskId },
   };
   const selection = useSelectableRow(object);
-  const {
-    onClick: selectionClick,
-    ref: selectionRef,
-    ...selectionRowProps
-  } = selection.rowProps;
+  const { onClick: selectionClick, ref: selectionRef, ...selectionRowProps } = selection.rowProps;
   void selectionClick;
-  const relation = useRelationDropTarget({ target: object });
+  const relation = useCanvasRelationDropTarget(object);
   return (
     <ObjectSurface
       object={object}
@@ -173,10 +169,8 @@ function TaskNodeComponent({ id, data, selected }: NodeProps): React.JSX.Element
           relation.dropProps.className,
           relation.dropState === 'accept' && 'ring-primary bg-primary/8 ring-2 ring-inset',
           relation.dropState === 'reject' && 'ring-error/60 bg-error/5 ring-2 ring-inset',
-          data['hierarchyDropState'] === 'accept' &&
-            'ring-primary bg-primary/8 ring-2 ring-inset',
-          data['hierarchyDropState'] === 'reject' &&
-            'ring-error/60 bg-error/5 ring-2 ring-inset',
+          data['hierarchyDropState'] === 'accept' && 'ring-primary bg-primary/8 ring-2 ring-inset',
+          data['hierarchyDropState'] === 'reject' && 'ring-error/60 bg-error/5 ring-2 ring-inset',
           data['hierarchyDragOrigin'] === true && 'opacity-40',
         )}
       >

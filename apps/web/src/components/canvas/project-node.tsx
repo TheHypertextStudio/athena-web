@@ -35,13 +35,13 @@ import { memo } from 'react';
 
 import { HEALTH_DOT_CLASS, HEALTH_LABEL } from '@/components/projects/health';
 import { ObjectSurface } from '@/components/objects/object-surface';
-import { useRelationDropTarget } from '@/components/dnd/use-relation-drop-target';
 import { useWorkStatus } from '@/components/entity-display/use-work-status';
 import { WorkStatusBadge, WorkStatusIcon } from '@/components/entity-display/work-status';
 import { formatCalendarDate } from '@/lib/format-date';
 import { useSelectableRow } from '@/components/selection';
 
 import { projectNodeTransitionName } from './transition-name';
+import { useCanvasRelationDropTarget } from './use-canvas-relation-drop-target';
 import { useLod } from './use-lod';
 
 /** Project card dimensions shared by the renderer and component-aware layout adapter. */
@@ -124,13 +124,9 @@ function ProjectNodeComponent({ id, data, selected }: NodeProps): React.JSX.Elem
     meta: { taskCount },
   };
   const selection = useSelectableRow(object);
-  const {
-    onClick: selectionClick,
-    ref: selectionRef,
-    ...selectionRowProps
-  } = selection.rowProps;
+  const { onClick: selectionClick, ref: selectionRef, ...selectionRowProps } = selection.rowProps;
   void selectionClick;
-  const relation = useRelationDropTarget({ target: object });
+  const relation = useCanvasRelationDropTarget(object);
 
   return (
     <ObjectSurface object={object} surfaceId="project-canvas" associationModifier="alt" href={href}>

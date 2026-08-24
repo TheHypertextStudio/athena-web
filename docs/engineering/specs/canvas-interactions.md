@@ -73,6 +73,12 @@ never renders exception or Problem text. It shows application-owned result and f
 Project and Task dependency changes, Task status actions, and Task hierarchy moves use the same
 history instance as trash. Project dependency editing requires `contribute`. Project trash and
 restore require `manage`, so a contributor never reaches the confirmation step for that action.
+Dragging the parent end of a Task hierarchy edge and Option-dragging a Task card onto another Task
+both emit `change_parent` through that history. Option-dragging a Project card onto another Project
+emits `add_dependency` through the Project canvas history. The shared Dnd Kit transport resolves
+the relation and announces its result, but it delegates persistence to the canvas executor instead
+of invoking the global relation action. Subtask creation remains a creation operation outside
+history. The Task canvas does not construct the retired direct dependency or status mutations.
 
 The command transaction owns the domain write, durable change-set receipt, completed idempotency
 response, and versioned consequence job. A committed command therefore cannot remain permanently

@@ -7,6 +7,69 @@
 
 ## Active Tasks
 
+### [CANVAS-GRAPH-CRUD-001] Make graph canvases usable for organizing work
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-08-23
+- **Priority**: P0
+- **Description**: Project Dependencies and Task graph treated the canvas as a mostly read-only
+  diagram. Large disconnected graphs collapsed into an unreadable line, creation could replace the
+  page behind the composer, Project nodes did not participate in shared selection, bulk properties
+  were incomplete, and the canvas lacked recoverable deletion and normal undo and redo commands.
+- **Approach**: Lay out connected components independently and pack them to the viewport. Keep the
+  page mounted behind same-workspace composers. Route Project and Task canvas mutations through
+  shared transactional object commands that return conflict-safe receipts. Replace normal deletion
+  with recoverable trash operations. Keep the current Dnd Kit object-relation transport and route
+  Task hierarchy edge reconnection through the same receipt history instead of restoring the
+  removed native HTML drag transport.
+- **Subtasks**:
+  - [x] Add component-aware layout, readable initial framing, viewport controls, and a 363-Task
+        regression fixture.
+  - [x] Keep Project and Task creation inside the mounted canvas and preserve viewport and scope.
+  - [x] Correct the shared picker hover, selected tone, and first and last item inner geometry.
+  - [x] Add typed object commands, durable receipts, conflict-safe undo and redo, and an effect
+        outbox committed in the same transaction.
+  - [x] Add shared Project and Task selection, area selection, context creation, bulk properties,
+        dependency and hierarchy commands, and recoverable trash.
+  - [x] Filter archived Projects from active reads while preserving relationships for restoration.
+  - [x] Rebase the five product commits onto `7dec5703` from `origin/main` with linear history.
+  - [ ] Commit the post-rebase integration corrections and repeat the affected repository gates.
+  - [ ] Complete responsive light and dark visual, keyboard, and accessibility review.
+  - [ ] Fast-forward `main`, deploy the exact revision, and verify the production workflows.
+- **Decisions**: Forward bulk commands remain atomic. Undo and redo compare the receipt's expected
+  state and skip collaborator conflicts. Creation remains outside history. Each canvas route and
+  scope keeps 50 receipts in memory. Project and Task trash retains object ids and relationships.
+  The canvas exposes no permanent-delete action. The current Dnd Kit relation system remains the
+  shared object drag boundary. Task parent changes made by reconnecting a hierarchy edge use the
+  canvas object-command history.
+- **Rebase integration**: Current `main` replaced the old native relation payload with the shared
+  Dnd Kit `ObjectSurface` and typed navigation. Project and Task nodes now combine that surface with
+  shared selection metadata and measured graph dimensions. The work-view creation fallback uses
+  branded ids and `navigateAuthenticated`. The new outbox schema regenerated as migration
+  `0098_chief_virginia_dare.sql` after `main` claimed migration 0097. Project work and rollup reads
+  now reject archived Projects.
+- **Post-rebase review correction**: Same-kind Dnd Kit drops on canvas nodes now delegate to the
+  route-scoped object-command history instead of invoking global Project or Task actions. Project
+  drops create dependencies, while Task drops change hierarchy. The Task panel no longer constructs
+  unused direct dependency and status mutations; only subtask creation remains outside history.
+  The shared selection frame also dropped the obsolete native drag handler surface.
+- **Validation**: The pure layout suite covers projected Task roots, weak components,
+  non-overlapping rectangles, group ownership, deterministic aspect-aware packing, property-only
+  stability, and the 363-Task and 28-dependency fixture within the 100 ms budget. The command route
+  suite covers 500-object atomic writes, destination permissions, idempotency, durable receipts,
+  conflict-safe partial replay, trash and restore, relation cycles, invalid references, batching,
+  and transactional effect delivery. The complete canvas component suite passes 93 tests across 29
+  files. Before the rebase, the serialized repository typecheck passed 26 tasks, lint passed 25
+  tasks, all 26 package test graphs passed, and the production API, runner, admin, web, and service
+  worker build passed with a process-local 4 GB Node heap. After the rebase, the four affected
+  package typechecks pass and 20 conflict-focused web tests pass. The post-rebase relation and node
+  correction passes 16 focused tests after its expected failing regressions. Focused ESLint,
+  Prettier, the diff check, and the zero-merge history check pass. The post-rebase full gates, browser review,
+  deployment, and production checks remain open.
+- **Blockers**: None.
+
+---
+
 ### [ATHENA-RAIL-001] Make Athena the shared utility-rail workspace
 
 - **Status**: COMPLETED

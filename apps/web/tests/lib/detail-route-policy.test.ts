@@ -69,13 +69,16 @@ describe('detail route ownership', () => {
     expect(source).not.toContain('.aggregate.$get');
   });
 
-  it('keeps Task identity on its aggregate while the legacy roster queries stay dormant', () => {
+  it('keeps Task identity on its aggregate while pickers and activity stay dormant', () => {
     const source = readFileSync(join(root, 'src/lib/use-task-detail.ts'), 'utf8');
 
     expect(source).toContain('taskDetailAggregateDef');
     expect(source).toContain('defaultView.task');
     expect(source).toContain('enabled: options.projectsOpen ?? false');
+    expect(source).toContain('enabled: options.programsOpen ?? false');
     expect(source).toContain('enabled: options.membersOpen ?? false');
+    expect(source).toContain('enabled: options.milestonesOpen ?? false');
+    expect(source).toContain('enabled: options.cyclesOpen ?? false');
     expect(source).toContain('enabled: options.activityOpen ?? false');
   });
 

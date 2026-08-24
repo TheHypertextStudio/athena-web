@@ -17,6 +17,8 @@ export interface InitiativeRelationshipPanelsProps {
   readonly tab: string;
   readonly children: readonly InitiativeHierarchyReference[];
   readonly connectedWork: readonly InitiativeConnectedWork[];
+  /** True while the selected relationship section is loading. */
+  readonly loading?: boolean;
   readonly initiativeNoun: string;
   readonly programNoun: string;
   readonly projectNoun: string;
@@ -28,6 +30,7 @@ export function InitiativeRelationshipPanels({
   tab,
   children,
   connectedWork,
+  loading = false,
   initiativeNoun,
   programNoun,
   projectNoun,
@@ -49,7 +52,11 @@ export function InitiativeRelationshipPanels({
             Add sub-{initiativeNoun.toLowerCase()}
           </Button>
         </div>
-        {children.length ? (
+        {loading ? (
+          <p className="text-on-surface-variant rounded-xl px-4 py-8 text-center text-sm">
+            Loading sub-{initiativeNoun.toLowerCase()}…
+          </p>
+        ) : children.length ? (
           <div className="flex flex-col gap-2">
             {children.map((child) => (
               <ObjectListRow
@@ -89,7 +96,11 @@ export function InitiativeRelationshipPanels({
         aria-labelledby="tab-work"
         className="no-print flex min-w-0 flex-col gap-2"
       >
-        {connectedWork.length ? (
+        {loading ? (
+          <p className="text-on-surface-variant rounded-xl px-4 py-8 text-center text-sm">
+            Loading connected work…
+          </p>
+        ) : connectedWork.length ? (
           connectedWork.map((item) => {
             const noun = item.kind === 'program' ? programNoun : projectNoun;
             return (

@@ -17,6 +17,8 @@ import {
 /** Props for {@link ResourcesTab}. */
 export interface ResourcesTabProps {
   resources: readonly AttachmentOut[];
+  /** True while the resource collection is loading. */
+  loading?: boolean;
   canEdit: boolean;
   pending: boolean;
   error: string | null;
@@ -65,6 +67,7 @@ function attachedKeys(resources: readonly AttachmentOut[]): ReadonlySet<string> 
 /** Render URL resources in a dedicated, dense tab rather than burying them in metadata. */
 export function ResourcesTab({
   resources,
+  loading = false,
   canEdit,
   pending,
   error,
@@ -160,7 +163,11 @@ export function ResourcesTab({
         </form>
       ) : null}
 
-      {resources.length > 0 ? (
+      {loading ? (
+        <p className="text-on-surface-variant bg-surface-container-low rounded-xl px-4 py-8 text-center text-sm">
+          Loading resources…
+        </p>
+      ) : resources.length > 0 ? (
         <ul className="bg-surface-container-low rounded-xl p-2">
           {resources.map((resource) => (
             <li

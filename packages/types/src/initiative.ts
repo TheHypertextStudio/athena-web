@@ -443,18 +443,29 @@ export const InitiativeConnectedWork = z.object({
 /** Connected Initiative work row value. */
 export type InitiativeConnectedWork = z.infer<typeof InitiativeConnectedWork>;
 
-/** Aggregate document-detail read in one workspace hierarchy context. */
-export const InitiativeAggregateDetail = InitiativeDetail.extend({
+/** The hierarchy and connected-work sections opened from an Initiative detail page. */
+export const InitiativeRelationshipSections = z.object({
   contextOrganizationId: OrganizationId,
   parentLinkId: Id.nullable(),
   parent: InitiativeReference.nullable(),
   children: z.array(InitiativeHierarchyReference),
   connectedWork: z.array(InitiativeConnectedWork),
-  labels: z.array(LabelOut),
-  resources: z.array(AttachmentOut),
-  latestUpdate: UpdateOut.nullable(),
-  updateCount: z.number().int().min(0),
-}).meta({ id: 'InitiativeAggregateDetail', description: 'Aggregate Initiative document detail.' });
+  truncated: z.boolean(),
+});
+/** Deferred Initiative hierarchy and connected-work sections. */
+export type InitiativeRelationshipSections = z.infer<typeof InitiativeRelationshipSections>;
+
+/** Aggregate document-detail read in one workspace hierarchy context. */
+export const InitiativeAggregateDetail = InitiativeDetail.extend(
+  InitiativeRelationshipSections.shape,
+)
+  .extend({
+    labels: z.array(LabelOut),
+    resources: z.array(AttachmentOut),
+    latestUpdate: UpdateOut.nullable(),
+    updateCount: z.number().int().min(0),
+  })
+  .meta({ id: 'InitiativeAggregateDetail', description: 'Aggregate Initiative document detail.' });
 /** Aggregate Initiative detail value. */
 export type InitiativeAggregateDetail = z.infer<typeof InitiativeAggregateDetail>;
 

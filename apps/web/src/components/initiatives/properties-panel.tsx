@@ -68,8 +68,18 @@ export interface InitiativePropertiesPanelProps {
   priority: InitiativePriority;
   updateCadence: InitiativeUpdateCadence;
   memberOptions: readonly PickerOption[];
+  /** Whether the owner roster is loading after its picker opened. */
+  ownerLoading?: boolean;
+  /** Observe owner-picker visibility so the host can load its roster on demand. */
+  onOwnerPickerOpenChange?: (open: boolean) => void;
   labels: readonly LabelOut[];
   availableLabels: readonly LabelOut[];
+  /** Whether label assignments and options are loading after the picker opened. */
+  labelsLoading?: boolean;
+  /** Observe label-picker visibility so the host can load labels on demand. */
+  onLabelsPickerOpenChange?: (open: boolean) => void;
+  /** Observe target-picker visibility so the host can load fiscal settings on demand. */
+  onTargetPickerOpenChange?: (open: boolean) => void;
   canEdit: boolean;
   onStatusChange: (status: InitiativeStatus) => void;
   onHealthChange: (health: Health | null) => void;
@@ -115,8 +125,13 @@ export function InitiativePropertiesPanel({
   priority,
   updateCadence,
   memberOptions,
+  ownerLoading,
+  onOwnerPickerOpenChange,
   labels,
   availableLabels,
+  labelsLoading,
+  onLabelsPickerOpenChange,
+  onTargetPickerOpenChange,
   canEdit,
   onStatusChange,
   onHealthChange,
@@ -153,7 +168,6 @@ export function InitiativePropertiesPanel({
           placeholder="Choose status"
           ariaLabel="Status"
           readOnly={readOnly}
-          disabled={planningCalendarLoading}
           {...CHIP}
         />
       </EntityMetadataItem>
@@ -176,7 +190,9 @@ export function InitiativePropertiesPanel({
           fiscalYearStartMonth={fiscalYearStartMonth}
           edge="target"
           onChange={onTargetChange}
+          onOpenChange={onTargetPickerOpenChange}
           readOnly={readOnly}
+          disabled={planningCalendarLoading}
           {...CHIP}
         />
       </EntityMetadataItem>
@@ -188,6 +204,8 @@ export function InitiativePropertiesPanel({
           placeholder="Set owner"
           clearLabel="No owner"
           ariaLabel="Owner"
+          loading={ownerLoading ?? false}
+          {...(onOwnerPickerOpenChange ? { onOpenChange: onOwnerPickerOpenChange } : {})}
           readOnly={readOnly}
           {...CHIP}
         />
@@ -233,6 +251,8 @@ export function InitiativePropertiesPanel({
           searchPlaceholder="Filter labels…"
           emptyText="No labels"
           ariaLabel="Labels"
+          loading={labelsLoading ?? false}
+          {...(onLabelsPickerOpenChange ? { onOpenChange: onLabelsPickerOpenChange } : {})}
           readOnly={readOnly}
           {...CHIP}
         />

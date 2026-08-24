@@ -1,12 +1,14 @@
 import {
   ActorId,
   type Health,
-  type InitiativeAggregateDetail,
+  type InitiativeDetail,
+  type InitiativeDetailAggregate,
   type InitiativeOut,
   type InitiativePriority,
   type InitiativeStatus,
   type InitiativeUpdate,
   type InitiativeUpdateCadence,
+  InitiativeStatusKey,
   LabelId,
   ProgramId,
   ProjectId,
@@ -16,7 +18,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
 import { api } from './api';
-import type { InitiativeDetailData } from './fetch-initiative-detail';
 import { userErrorMessage } from './problem';
 import { queryKeys, unwrap, useApiMutation } from './query';
 
@@ -33,6 +34,37 @@ export interface InitiativePatch {
   targetDate?: string | null | undefined;
   targetDateResolution?: DateResolution | null | undefined;
   labelIds?: string[] | undefined;
+}
+
+/**
+ * Apply one Initiative change to the aggregate cache without allowing the local navigation
+ * identity to diverge from the document it represents.
+ *
+ * @param current - The aggregate currently cached for the Initiative, if any.
+ * @param apply - The Initiative document update to apply.
+ * @returns The aligned aggregate, or `undefined` when no aggregate has been cached.
+ */
+export function patchInitiativeAggregate(
+  current: InitiativeDetailAggregate | undefined,
+  apply: (initiative: InitiativeDetail) => InitiativeDetail,
+): InitiativeDetailAggregate | undefined {
+  if (!current) return undefined;
+  const initiative = apply(current.defaultView.initiative);
+  return {
+    ...current,
+    references:
+      initiative.ownerId === current.defaultView.initiative.ownerId
+        ? current.references
+        : { ...current.references, owner: null },
+    snapshot: {
+      ...current.snapshot,
+      name: initiative.name,
+      status: InitiativeStatusKey.parse(initiative.status),
+      priority: initiative.priority,
+      health: initiative.health ?? null,
+    },
+    defaultView: { initiative },
+  };
 }
 
 function toInitiativePatchBody(patch: InitiativePatch): InitiativeUpdate {
@@ -83,20 +115,28 @@ export function useInitiativeMutations(
   projectNounLower: string,
 ): InitiativeMutations {
   const queryClient = useQueryClient();
-  const detailKey = useMemo(() => queryKeys.initiative(orgId, initiativeId), [orgId, initiativeId]);
+  const detailKey = useMemo(
+    () => queryKeys.initiativeAggregate(orgId, initiativeId),
+    [orgId, initiativeId],
+  );
   const timelineKey = useMemo(() => [...detailKey, 'timeline'] as const, [detailKey]);
+  const labelsKey = useMemo(() => [...detailKey, 'labels'] as const, [detailKey]);
+  const relationshipKey = useMemo(
+    () => [...queryKeys.initiative(orgId, initiativeId), 'relationship-sections'] as const,
+    [orgId, initiativeId],
+  );
   const overviewKey = useMemo(() => queryKeys.initiatives(orgId), [orgId]);
   const associationKeys = useMemo(
-    () => [timelineKey, detailKey, overviewKey] as const,
-    [timelineKey, detailKey, overviewKey],
+    () => [timelineKey, detailKey, relationshipKey, overviewKey] as const,
+    [timelineKey, detailKey, relationshipKey, overviewKey],
   );
 
   const patchDetail = (
-    apply: (d: InitiativeAggregateDetail) => InitiativeAggregateDetail,
-  ): InitiativeDetailData | undefined => {
-    const previous = queryClient.getQueryData<InitiativeDetailData>(detailKey);
-    queryClient.setQueryData<InitiativeDetailData>(detailKey, (cur) =>
-      cur ? { ...cur, detail: apply(cur.detail) } : cur,
+    apply: (initiative: InitiativeDetail) => InitiativeDetail,
+  ): InitiativeDetailAggregate | undefined => {
+    const previous = queryClient.getQueryData<InitiativeDetailAggregate>(detailKey);
+    queryClient.setQueryData<InitiativeDetailAggregate>(detailKey, (current) =>
+      patchInitiativeAggregate(current, apply),
     );
     return previous;
   };
@@ -104,7 +144,7 @@ export function useInitiativeMutations(
   const patch = useApiMutation<
     InitiativeOut,
     InitiativePatch,
-    { previous?: InitiativeDetailData | undefined }
+    { previous?: InitiativeDetailAggregate | undefined }
   >({
     mutationFn: (patchBody) =>
       unwrap(
@@ -118,44 +158,28 @@ export function useInitiativeMutations(
     onMutate: async (patchBody) => {
       await queryClient.cancelQueries({ queryKey: detailKey });
       const body = toInitiativePatchBody(patchBody);
-      const cached = queryClient.getQueryData<InitiativeDetailData>(detailKey);
-      const { labelIds, ...properties } = body;
-      const previous = patchDetail((d) =>
-        Object.assign(
-          {},
-          d,
-          properties,
-          labelIds
-            ? { labels: (cached?.labels ?? []).filter((label) => labelIds.includes(label.id)) }
-            : {},
-        ),
-      );
+      const { labelIds: _labelIds, ...properties } = body;
+      const previous = patchDetail((initiative) => Object.assign({}, initiative, properties));
       return { previous };
     },
     onError: (_err, _body, ctx) => {
       if (ctx?.previous) queryClient.setQueryData(detailKey, ctx.previous);
     },
     onSuccess: (updated) => {
-      queryClient.setQueryData<InitiativeDetailData>(detailKey, (cur) =>
-        cur
-          ? {
-              ...cur,
-              detail: {
-                ...cur.detail,
-                ...updated,
-                childMix: cur.detail.childMix,
-                distribution: cur.detail.distribution,
-                rolledUpHealth: cur.detail.rolledUpHealth,
-              },
-            }
-          : cur,
-      );
+      patchDetail((initiative) => ({
+        ...initiative,
+        ...updated,
+        childMix: initiative.childMix,
+        distribution: initiative.distribution,
+        rolledUpHealth: initiative.rolledUpHealth,
+      }));
     },
     // The Resources tab's derived sections are a projection of this record's prose, and the query
     // cache survives a reload — so without this, adding a mention to the description leaves that
     // tab showing the pre-edit answer until the staleness tier happens to expire.
     invalidateKeys: [
       detailKey,
+      labelsKey,
       overviewKey,
       queryKeys.entityMentions(orgId, 'initiative', initiativeId),
     ],

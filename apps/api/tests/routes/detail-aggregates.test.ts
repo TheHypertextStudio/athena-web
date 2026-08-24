@@ -135,5 +135,49 @@ describe('detail aggregate routes', () => {
         initiative: { id: initiative.id, childMix: { programs: 0, projects: 0 } },
       },
     });
+
+    const labels = await writer.request(`/${initiative.id}/labels`);
+    expect(labels.status).toBe(200);
+    expect(await labels.json()).toEqual([]);
+
+    const relationships = await writer.request(`/${initiative.id}/relationships`);
+    expect(relationships.status).toBe(200);
+    const relationshipBody = (await relationships.json()) as Record<string, unknown>;
+    expect(relationshipBody).toMatchObject({
+      contextOrganizationId: orgId,
+      parent: null,
+      children: [],
+      connectedWork: [],
+      truncated: false,
+    });
+    expect(relationshipBody).not.toHaveProperty('labels');
+    expect(relationshipBody).not.toHaveProperty('resources');
+    expect(relationshipBody).not.toHaveProperty('latestUpdate');
+  });
+
+  it('does not expose a foreign label through a corrupt Initiative-label association', async () => {
+    const local = await seedBaseOrg(db, schema);
+    const foreign = await seedBaseOrg(db, schema);
+    const writer = appWithActor(initiatives, local.orgId, ['contribute'], local.humanActorId);
+    const created = await writer.request('/', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Local Initiative' }),
+    });
+    const initiative = (await created.json()) as { id: string };
+    const [foreignLabel] = await db
+      .insert(schema.label)
+      .values({ organizationId: foreign.orgId, name: 'Foreign label', color: '#7c3aed' })
+      .returning({ id: schema.label.id });
+    if (!foreignLabel) throw new Error('foreign label was not seeded');
+    await db.insert(schema.initiativeLabel).values({
+      initiativeId: initiative.id,
+      labelId: foreignLabel.id,
+      organizationId: foreign.orgId,
+    });
+
+    const labels = await writer.request(`/${initiative.id}/labels`);
+    expect(labels.status).toBe(200);
+    expect(await labels.json()).toEqual([]);
   });
 });

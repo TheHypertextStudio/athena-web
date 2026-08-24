@@ -87,6 +87,8 @@ export interface TimeframePickerProps {
   readonly invalid?: boolean | undefined;
   /** Id of the host validation message. */
   readonly describedBy?: string | undefined;
+  /** Observe visibility so hosts can load calendar settings only when this editor opens. */
+  readonly onOpenChange?: ((open: boolean) => void) | undefined;
 }
 
 /**
@@ -109,6 +111,7 @@ export function TimeframePicker({
   max = CALENDAR_MAX_DAY,
   invalid,
   describedBy,
+  onOpenChange,
 }: TimeframePickerProps): React.JSX.Element {
   const [open, setOpen] = React.useState(false);
   const [mode, setMode] = React.useState<TimeframeMode>(() => savedMode(value));
@@ -169,6 +172,7 @@ export function TimeframePicker({
           setWindowOffset(0);
         }
         setOpen(nextOpen);
+        onOpenChange?.(nextOpen);
       }}
     >
       <PopoverTrigger asChild disabled={disabled}>

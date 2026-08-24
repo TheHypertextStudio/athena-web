@@ -21,12 +21,13 @@ import {
   InitiativeDetailAggregate,
   InitiativeId,
   InitiativeOverviewOut,
+  InitiativeRelationshipSections,
 } from '@docket/types';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
-import type { AppEnv } from '../context';
+import type { AppEnv, AuthSession } from '../context';
 import { NotFoundError } from '../error';
 import { detailCapabilities } from '../lib/detail-capabilities';
 import { ok } from '../lib/ok';
@@ -56,6 +57,179 @@ function toReference(
     status: row.status,
     health: row.health,
     crossWorkspace: row.organizationId !== contextOrganizationId,
+  };
+}
+
+const MAX_RELATIONSHIP_LINKS = 200;
+const MAX_RELATIONSHIP_NODES = 100;
+const MAX_CONNECTED_WORK = 100;
+
+/** Build only the hierarchy sections a reader asks for after opening a relationship tab. */
+async function loadRelationshipSections(
+  contextOrganizationId: string,
+  id: string,
+  session: AuthSession,
+): Promise<z.input<typeof InitiativeRelationshipSections>> {
+  const [linkRows, accessibleIds] = await Promise.all([
+    db
+      .select()
+      .from(initiativeHierarchyLink)
+      .where(eq(initiativeHierarchyLink.contextOrganizationId, contextOrganizationId))
+      .orderBy(asc(initiativeHierarchyLink.id))
+      .limit(MAX_RELATIONSHIP_LINKS + 1),
+    accessibleInitiativeOrganizationIds(contextOrganizationId, session),
+  ]);
+  let truncated = linkRows.length > MAX_RELATIONSHIP_LINKS;
+  const links = linkRows.slice(0, MAX_RELATIONSHIP_LINKS);
+  const linkedIds = [
+    ...new Set(links.flatMap((row) => [row.parentInitiativeId, row.childInitiativeId])),
+  ];
+  const candidateRows = await db
+    .select()
+    .from(initiative)
+    .where(inArray(initiative.id, [...new Set([id, ...linkedIds])]));
+  const rowsById = new Map(
+    candidateRows
+      .filter((row) => accessibleIds.has(row.organizationId))
+      .map((row) => [row.id, row]),
+  );
+  const target = rowsById.get(id);
+  const appearsInContext =
+    target?.organizationId === contextOrganizationId ||
+    links.some((row) => row.parentInitiativeId === id || row.childInitiativeId === id);
+  if (!target || !appearsInContext) throw new NotFoundError('Initiative not found');
+
+  const visibleLinks = links.filter(
+    (row) => rowsById.has(row.parentInitiativeId) && rowsById.has(row.childInitiativeId),
+  );
+  const parentLink = visibleLinks.find((row) => row.childInitiativeId === id) ?? null;
+  const childLinks = visibleLinks.filter((row) => row.parentInitiativeId === id);
+  const childrenByParent = new Map<string, string[]>();
+  for (const row of visibleLinks) {
+    const children = childrenByParent.get(row.parentInitiativeId) ?? [];
+    children.push(row.childInitiativeId);
+    childrenByParent.set(row.parentInitiativeId, children);
+  }
+  const descendantIds: string[] = [];
+  const inheritedThrough = new Map<string, string>();
+  const visit = (parentId: string, firstHop: string): void => {
+    for (const childId of childrenByParent.get(parentId) ?? []) {
+      if (descendantIds.includes(childId)) continue;
+      if (descendantIds.length >= MAX_RELATIONSHIP_NODES) {
+        truncated = true;
+        return;
+      }
+      descendantIds.push(childId);
+      inheritedThrough.set(childId, firstHop);
+      visit(childId, firstHop);
+    }
+  };
+  for (const child of childLinks) {
+    if (descendantIds.length >= MAX_RELATIONSHIP_NODES) {
+      truncated = true;
+      break;
+    }
+    descendantIds.push(child.childInitiativeId);
+    inheritedThrough.set(child.childInitiativeId, child.childInitiativeId);
+    visit(child.childInitiativeId, child.childInitiativeId);
+  }
+  const rollupIds = [id, ...descendantIds];
+  const [programLinks, projectLinks] = await Promise.all([
+    db
+      .select({ initiativeId: initiativeProgram.initiativeId, row: program })
+      .from(initiativeProgram)
+      .innerJoin(program, eq(program.id, initiativeProgram.programId))
+      .where(inArray(initiativeProgram.initiativeId, rollupIds))
+      .orderBy(asc(program.id))
+      .limit(MAX_CONNECTED_WORK + 1),
+    db
+      .select({ initiativeId: initiativeProject.initiativeId, row: project })
+      .from(initiativeProject)
+      .innerJoin(project, eq(project.id, initiativeProject.projectId))
+      .where(inArray(initiativeProject.initiativeId, rollupIds))
+      .orderBy(asc(project.id))
+      .limit(MAX_CONNECTED_WORK + 1),
+  ]);
+  if (programLinks.length > MAX_CONNECTED_WORK || projectLinks.length > MAX_CONNECTED_WORK)
+    truncated = true;
+  const connectedByKey = new Map<
+    string,
+    z.input<typeof InitiativeRelationshipSections>['connectedWork'][number]
+  >();
+  const inheritedThroughInitiativeId = (initiativeId: string): string | null =>
+    initiativeId === id ? null : (inheritedThrough.get(initiativeId) ?? null);
+  for (const item of programLinks) {
+    if (!accessibleIds.has(item.row.organizationId)) continue;
+    const key = `program:${item.row.id}`;
+    const direct = item.initiativeId === id;
+    const existing = connectedByKey.get(key);
+    if (existing?.direct || (existing && !direct)) continue;
+    connectedByKey.set(key, {
+      kind: 'program',
+      id: item.row.id,
+      organizationId: item.row.organizationId,
+      name: item.row.name,
+      status: item.row.status,
+      health: item.row.health,
+      direct,
+      inheritedThroughInitiativeId: inheritedThroughInitiativeId(item.initiativeId),
+    });
+  }
+  for (const item of projectLinks) {
+    if (!accessibleIds.has(item.row.organizationId)) continue;
+    const key = `project:${item.row.id}`;
+    const direct = item.initiativeId === id;
+    const existing = connectedByKey.get(key);
+    if (existing?.direct || (existing && !direct)) continue;
+    connectedByKey.set(key, {
+      kind: 'project',
+      id: item.row.id,
+      organizationId: item.row.organizationId,
+      name: item.row.name,
+      status: item.row.status,
+      health: item.row.health,
+      direct,
+      inheritedThroughInitiativeId: inheritedThroughInitiativeId(item.initiativeId),
+    });
+  }
+  const parentRow = parentLink ? rowsById.get(parentLink.parentInitiativeId) : null;
+  const children = childLinks.flatMap((link) => {
+    const child = rowsById.get(link.childInitiativeId);
+    return child ? [{ child, link }] : [];
+  });
+  if (children.length > MAX_RELATIONSHIP_NODES) truncated = true;
+  const visibleChildren = children.slice(0, MAX_RELATIONSHIP_NODES);
+  const connectedWork = [...connectedByKey.values()];
+  if (connectedWork.length > MAX_CONNECTED_WORK) truncated = true;
+  const visibleConnectedWork = connectedWork.slice(0, MAX_CONNECTED_WORK);
+  const referenceOrganizationIds = [parentRow, ...visibleChildren.map(({ child }) => child)]
+    .filter((row): row is typeof initiative.$inferSelect => row !== null && row !== undefined)
+    .map((row) => row.organizationId);
+  const orgRows =
+    referenceOrganizationIds.length === 0
+      ? []
+      : await db
+          .select({ id: organization.id, name: organization.name })
+          .from(organization)
+          .where(inArray(organization.id, [...new Set(referenceOrganizationIds)]));
+  const orgNameById = new Map(orgRows.map((row) => [row.id, row.name]));
+  return {
+    contextOrganizationId,
+    parentLinkId: parentLink?.id ?? null,
+    parent: parentRow
+      ? toReference(
+          parentRow,
+          contextOrganizationId,
+          orgNameById.get(parentRow.organizationId) ?? '',
+        )
+      : null,
+    children: visibleChildren.map(({ child, link }) => ({
+      ...toReference(child, contextOrganizationId, orgNameById.get(child.organizationId) ?? ''),
+      parentInitiativeId: id,
+      parentLinkId: link.id,
+    })),
+    connectedWork: visibleConnectedWork,
+    truncated,
   };
 }
 
@@ -282,6 +456,26 @@ const initiativeAggregates = new Hono<AppEnv>()
         }),
         attention,
       });
+    },
+  )
+  .get(
+    '/:id/relationships',
+    apiDoc({
+      tag: 'Initiatives',
+      summary: 'Get deferred Initiative relationship sections',
+      description:
+        'Returns only the selected Initiative hierarchy context and connected work after a reader opens one of those tabs. It excludes labels, resources, updates, and organization rosters.',
+      response: InitiativeRelationshipSections,
+    }),
+    zParam(z.object({ id: InitiativeId })),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+      return ok(
+        c,
+        InitiativeRelationshipSections,
+        await loadRelationshipSections(orgId, id, c.get('session')),
+      );
     },
   )
   .get(
@@ -541,6 +735,7 @@ const initiativeAggregates = new Hono<AppEnv>()
         parent,
         children,
         connectedWork,
+        truncated: false,
         labels: labelLinks.map(({ row }) => ({
           id: row.id,
           organizationId: row.organizationId,

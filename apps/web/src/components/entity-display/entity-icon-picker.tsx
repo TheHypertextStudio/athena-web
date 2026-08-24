@@ -18,6 +18,8 @@ export interface EntityIconPickerProps {
   entityName: string;
   editable: boolean;
   pending: boolean;
+  /** True while the host is reading the persisted display after this editor opens. */
+  loading?: boolean;
   /** Visual glyph diameter; detail mastheads use 48dp while list surfaces keep 32dp. */
   size?: number;
   onChange: (
@@ -25,6 +27,8 @@ export interface EntityIconPickerProps {
     colorKey: EntityDisplayColorKey,
     customColor: string | null,
   ) => void;
+  /** Observe popover visibility so hosts can defer loading a custom display until editing starts. */
+  onOpenChange?: (open: boolean) => void;
 }
 
 /** Render a stable entity glyph and, when editable, its anchored customization popover. */
@@ -33,8 +37,10 @@ export function EntityIconPicker({
   entityName,
   editable,
   pending,
+  loading = false,
   size = 32,
   onChange,
+  onOpenChange,
 }: EntityIconPickerProps): JSX.Element {
   const [search, setSearch] = useState('');
   const filteredOptions = useMemo(() => {
@@ -67,7 +73,7 @@ export function EntityIconPicker({
   }
 
   return (
-    <Popover>
+    <Popover {...(onOpenChange ? { onOpenChange } : {})}>
       <PopoverTrigger asChild>
         <button
           type="button"
@@ -110,6 +116,7 @@ export function EntityIconPicker({
                 data-testid="initiative-icon-option"
                 aria-label={option.label}
                 aria-pressed={display.iconKey === option.key}
+                disabled={pending || loading}
                 className={cn(
                   'hover:bg-surface-container-high focus-visible:ring-ring flex size-10 items-center justify-center rounded-md focus-visible:ring-2 focus-visible:outline-none',
                   display.iconKey === option.key && 'bg-surface-container-highest',
@@ -136,6 +143,7 @@ export function EntityIconPicker({
                 type="button"
                 aria-label={option.label}
                 aria-pressed={selected}
+                disabled={pending || loading}
                 className={cn(
                   'hover:bg-surface-container-high focus-visible:ring-ring flex size-10 items-center justify-center rounded-md focus-visible:ring-2 focus-visible:outline-none',
                   selected && 'bg-surface-container-highest',
@@ -168,6 +176,7 @@ export function EntityIconPicker({
               type="color"
               aria-label="Custom color"
               value={display.customColor ?? '#3b82f6'}
+              disabled={pending || loading}
               onChange={(event) => {
                 onChange(display.iconKey, display.colorKey, event.target.value);
               }}

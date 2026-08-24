@@ -30,4 +30,27 @@ describe('detail route ownership', () => {
     expect(source).toContain("enabled: tab === 'updates'");
     expect(source).toContain('seedNavigationSnapshot(aggregate.snapshot)');
   });
+
+  it('keeps the Initiative shell on its bounded aggregate instead of the legacy catch-all read', () => {
+    const source = readFileSync(join(root, details[3]), 'utf8');
+
+    expect(source).toContain('initiativeDetailAggregateDef');
+    expect(source).not.toContain('initiativeDetailDef');
+    expect(source).toContain("tab === 'updates'");
+    expect(source).toContain("tab === 'resources'");
+    expect(source).toContain('enabled: aggregate !== null');
+    expect(source).toContain('enabled: ownerPickerOpen');
+    expect(source).toContain('enabled: labelsPickerOpen');
+    expect(source).toContain('seedNavigationSnapshot(aggregate.snapshot)');
+    expect(source).toContain('Could not refresh this');
+    expect(source).toContain('Could not load Initiative relationships.');
+    expect(source).toContain('Could not load resources.');
+  });
+
+  it('uses the bounded relationship endpoint after an Initiative relationship tab opens', () => {
+    const source = readFileSync(join(root, 'src/lib/fetch-initiative-sections.ts'), 'utf8');
+
+    expect(source).toContain('.relationships.$get');
+    expect(source).not.toContain('.aggregate.$get');
+  });
 });

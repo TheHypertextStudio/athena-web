@@ -1,6 +1,12 @@
 /** URL-only resource routes for Initiative strategic documents. */
-import { attachment, db } from '@docket/db';
-import { AttachmentOut, AttachmentRemoved, InitiativeResourceCreate, pageOf } from '@docket/types';
+import { attachment, db, initiativeLabel, label } from '@docket/db';
+import {
+  AttachmentOut,
+  AttachmentRemoved,
+  InitiativeResourceCreate,
+  LabelOut,
+  pageOf,
+} from '@docket/types';
 import { and, asc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -36,6 +42,47 @@ function attachmentOut(row: typeof attachment.$inferSelect): z.input<typeof Atta
 
 /** Initiative resource router, mounted beside core Initiative routes. */
 const initiativeResources = new Hono<AppEnv>()
+  .get(
+    '/:id/labels',
+    apiDoc({
+      tag: 'Initiatives',
+      summary: 'List labels attached to an Initiative',
+      description:
+        'Lists only the labels currently attached to this Initiative. The workspace label catalog remains a separate, on-demand picker read.',
+      response: z.array(LabelOut),
+    }),
+    zParam(idParam),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+      await loadInitiative(orgId, id);
+      const rows = await db
+        .select({ row: label })
+        .from(initiativeLabel)
+        .innerJoin(label, eq(label.id, initiativeLabel.labelId))
+        .where(
+          and(
+            eq(initiativeLabel.initiativeId, id),
+            eq(initiativeLabel.organizationId, orgId),
+            eq(label.organizationId, orgId),
+          ),
+        );
+      return ok(
+        c,
+        z.array(LabelOut),
+        rows.map(({ row }) => ({
+          id: row.id,
+          organizationId: row.organizationId,
+          name: row.name,
+          color: row.color,
+          groupId: row.groupId,
+          teamId: row.teamId,
+          external: row.externalId !== null,
+          createdAt: row.createdAt.toISOString(),
+        })),
+      );
+    },
+  )
   .get(
     '/:id/resources',
     apiDoc({

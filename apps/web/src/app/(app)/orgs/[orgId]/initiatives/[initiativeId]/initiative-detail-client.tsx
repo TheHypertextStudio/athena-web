@@ -6,6 +6,7 @@ import type {
   EntityDisplayIconKey,
   EntityDisplayOut,
   Health,
+  LabelOut,
   UpdateOut,
 } from '@docket/types';
 import { defaultEntityDisplay, InitiativeSubjectRef } from '@docket/types';
@@ -25,7 +26,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import Link from '@/components/docket-link';
 import { useAppSearchParams, useTypedRoute } from '@/lib/app-location';
-import { type JSX, useMemo, useState } from 'react';
+import { type JSX, useEffect, useMemo, useState } from 'react';
 
 import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
 import { TemplateAwareEntityDocument } from '@/components/editor/apply-description-template';
@@ -56,18 +57,25 @@ import {
 import { useDocumentTitle } from '@/components/tabs/use-document-title';
 import { useRegisterTabTitle } from '@/components/tabs/use-register-tab-title';
 import { api } from '@/lib/api';
-import { initiativeRecordDef } from '@/lib/entity-records';
-import { initiativeDetailDef } from '@/lib/fetch-initiative-detail';
-import { queryKeys, apiQueryOptions, useApiMutation, useApiQuery, unwrap } from '@/lib/query';
-import { useCreateLabel } from '@/components/labels/queries';
+import { aggregateLoadState, initiativeDetailAggregateDef } from '@/lib/detail-aggregate';
+import { initiativeRelationshipSectionsDef } from '@/lib/fetch-initiative-sections';
+import {
+  apiQueryOptions,
+  queryKeys,
+  useApiListQuery,
+  useApiMutation,
+  useApiQuery,
+  unwrap,
+} from '@/lib/query';
+import { labelsDef, useCreateLabel } from '@/components/labels/queries';
 import { useInitiativeMutations } from '@/lib/use-initiative-mutations';
-import { useOrgCapability } from '@/lib/use-org-capability';
 import { userErrorMessage } from '@/lib/problem';
-import { useSession } from '@/lib/auth-client';
 import { formatPlanningTimeframe, toPlanningTimeframe } from '@/lib/planning-timeframe';
 import { useFiscalYearStartMonth } from '@/lib/use-fiscal-year-start-month';
 import { useNavigationSnapshot } from '@/lib/use-navigation-snapshot';
 import { useAppRouter } from '@/lib/interactions/navigation';
+import { seedNavigationSnapshot } from '@/lib/navigation-snapshot-runtime';
+import { orgMembersDef } from '@/lib/use-org-membership';
 
 type TabId = 'overview' | 'subinitiatives' | 'work' | 'updates' | 'resources';
 
@@ -80,7 +88,6 @@ export default function InitiativeDetailPage(): JSX.Element {
     subjectId: initiativeId,
   });
   const navigationSnapshot = useNavigationSnapshot('initiative', initiativeId);
-  const entityMentions = useEntityMentions(orgId, subject);
   const router = useAppRouter();
   const queryClient = useQueryClient();
   const pickerOverlay = usePickerOverlay();
@@ -95,25 +102,75 @@ export default function InitiativeDetailPage(): JSX.Element {
       : 'overview',
   );
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [ownerPickerOpen, setOwnerPickerOpen] = useState(false);
+  const [labelsPickerOpen, setLabelsPickerOpen] = useState(false);
+  const [targetPickerOpen, setTargetPickerOpen] = useState(false);
+  const [displayPickerOpen, setDisplayPickerOpen] = useState(false);
   const initiativeNoun = useVocabulary('initiative');
   const initiativePlural = useVocabulary('initiative', { plural: true });
   const programNoun = useVocabulary('program');
   const projectNoun = useVocabulary('project');
-  const detailQ = useApiQuery(initiativeDetailDef(orgId, initiativeId));
-  const planningCalendar = useFiscalYearStartMonth(orgId);
-  // The initiative's own row, read apart from the composite above it, so the masthead can paint
-  // from whatever arrived first — the composer that just created it, a warmed list, or one read.
-  const recordQ = useApiQuery(initiativeRecordDef(orgId, initiativeId));
-  const data = detailQ.data;
-  const detail = data?.detail;
-  // Resolved unconditionally, above the loading branches, because a hook cannot wait for the read.
-  const status = useWorkStatus('initiative', detail?.status ?? '');
-
-  // The tab bar and the browser tab both follow the name on screen, including through a rename.
-  const initiativeName = detail?.name ?? recordQ.data?.name;
-  useRegisterTabTitle('initiative', orgId, initiativeId, initiativeName);
-  useDocumentTitle(initiativeName);
-  const updatesKey = [...queryKeys.initiative(orgId, initiativeId), 'updates'] as const;
+  const aggregateDef = initiativeDetailAggregateDef(orgId, initiativeId);
+  const aggregateKey = aggregateDef.queryKey;
+  const aggregateQ = useApiQuery(aggregateDef);
+  const aggregate = aggregateQ.data ?? null;
+  const detail = aggregate?.defaultView.initiative ?? null;
+  const aggregateState = aggregateLoadState(
+    aggregateQ.data,
+    navigationSnapshot !== null,
+    aggregateQ.isPending,
+    aggregateQ.isError,
+  );
+  const relationshipsQ = useApiQuery({
+    ...initiativeRelationshipSectionsDef(orgId, initiativeId),
+    enabled: aggregate !== null && (tab === 'subinitiatives' || tab === 'work'),
+  });
+  const relationships = relationshipsQ.data ?? null;
+  const entityMentions = useEntityMentions(
+    orgId,
+    subject,
+    aggregate !== null && tab === 'resources',
+  );
+  const planningCalendar = useFiscalYearStartMonth(orgId, targetPickerOpen);
+  const membersQ = useApiQuery({ ...orgMembersDef(orgId), enabled: ownerPickerOpen });
+  const members = membersQ.data?.items ?? [];
+  const selectedLabelsQ = useApiQuery(
+    apiQueryOptions<readonly LabelOut[]>(
+      [...aggregateKey, 'labels'],
+      () =>
+        api.v1.orgs[':orgId'].initiatives[':id'].labels.$get({
+          param: { orgId, id: initiativeId },
+        }),
+      'Could not load Initiative labels.',
+      { enabled: labelsPickerOpen },
+    ),
+  );
+  const labelsQ = useApiListQuery({ ...labelsDef(orgId), enabled: labelsPickerOpen });
+  const displayKey = [...aggregateKey, 'display'] as const;
+  const displayQ = useApiQuery(
+    apiQueryOptions(
+      displayKey,
+      () =>
+        api.v1.orgs[':orgId'].display[':subjectType'][':subjectId'].$get({
+          param: { orgId, ...subject },
+        }),
+      'Could not load display settings.',
+      { enabled: displayPickerOpen },
+    ),
+  );
+  const resourcesKey = [...aggregateKey, 'resources'] as const;
+  const resourcesQ = useApiQuery(
+    apiQueryOptions(
+      resourcesKey,
+      () =>
+        api.v1.orgs[':orgId'].initiatives[':id'].resources.$get({
+          param: { orgId, id: initiativeId },
+        }),
+      'Could not load resources.',
+      { enabled: aggregate !== null && tab === 'resources' },
+    ),
+  );
+  const updatesKey = [...aggregateKey, 'updates'] as const;
   const updatesQ = useApiQuery(
     apiQueryOptions(
       updatesKey,
@@ -123,40 +180,36 @@ export default function InitiativeDetailPage(): JSX.Element {
           query: subject,
         }),
       'Could not load updates.',
+      { enabled: aggregate !== null && tab === 'updates' },
     ),
   );
   const updates = updatesQ.data?.items ?? [];
-
-  const displayKey = [...queryKeys.initiative(orgId, initiativeId), 'display'] as const;
-  const displayQ = useApiQuery(
-    apiQueryOptions(
-      displayKey,
-      () =>
-        api.v1.orgs[':orgId'].display[':subjectType'][':subjectId'].$get({
-          param: { orgId, ...subject },
-        }),
-      'Could not load display settings.',
-    ),
-  );
   const display = displayQ.data ?? defaultEntityDisplay('initiative', initiativeId);
-
-  const members = data?.members ?? [];
-  const roles = data?.roles ?? [];
-  const canEdit = useOrgCapability(members, roles, 'contribute');
-  const canManage = useOrgCapability(members, roles, 'manage');
-  const { data: session } = useSession();
-  const currentActorId =
-    members.find((member) => member.userId === session?.user.id)?.actorId ?? null;
-  const memberOptions = useMemo<readonly PickerOption[]>(
-    () => memberActorOptions(members),
-    [members],
-  );
-  const children = detail?.children ?? [];
+  const canEdit = aggregate?.capabilities.contribute ?? false;
+  const canManage = aggregate?.capabilities.manage ?? false;
+  const currentActorId = aggregate?.viewer.actorId ?? null;
+  const memberOptions = useMemo<readonly PickerOption[]>(() => {
+    const owner = aggregate?.references.owner;
+    const options = memberActorOptions(members);
+    if (!owner || options.some((option) => option.value === owner.actorId)) return options;
+    return [{ value: owner.actorId, label: owner.displayName }, ...options];
+  }, [aggregate?.references.owner, members]);
+  const assignedLabels = selectedLabelsQ.data ?? [];
   const availableLabels = useMemo(
     () =>
-      (data?.labels ?? []).filter((label) => label.teamId === null || label.teamId === undefined),
-    [data?.labels],
+      (labelsQ.data?.items ?? []).filter(
+        (label) => label.teamId === null || label.teamId === undefined,
+      ),
+    [labelsQ.data?.items],
   );
+  const status = useWorkStatus('initiative', detail?.status ?? '');
+
+  useEffect(() => {
+    if (aggregate) seedNavigationSnapshot(aggregate.snapshot);
+  }, [aggregate]);
+
+  useRegisterTabTitle('initiative', orgId, initiativeId, detail?.name ?? navigationSnapshot?.name);
+  useDocumentTitle(detail?.name ?? navigationSnapshot?.name);
 
   const mutations = useInitiativeMutations(
     orgId,
@@ -180,11 +233,7 @@ export default function InitiativeDetailPage(): JSX.Element {
           }),
         'Could not post the update.',
       ),
-    invalidateKeys: [
-      updatesKey,
-      queryKeys.initiative(orgId, initiativeId),
-      queryKeys.initiatives(orgId),
-    ],
+    invalidateKeys: [updatesKey, aggregateKey, queryKeys.initiatives(orgId)],
   });
   const displayMutation = useApiMutation<
     EntityDisplayOut,
@@ -234,7 +283,7 @@ export default function InitiativeDetailPage(): JSX.Element {
           }),
         'Could not add the resource.',
       ),
-    invalidateKeys: [queryKeys.initiative(orgId, initiativeId)],
+    invalidateKeys: [resourcesKey],
   });
   const removeResource = useApiMutation<{ id: string; removed: true }, string>({
     mutationFn: (resourceId) =>
@@ -245,7 +294,7 @@ export default function InitiativeDetailPage(): JSX.Element {
           }),
         'Could not remove the resource.',
       ),
-    invalidateKeys: [queryKeys.initiative(orgId, initiativeId)],
+    invalidateKeys: [resourcesKey],
   });
   const deleteInitiative = useApiMutation({
     mutationFn: () =>
@@ -262,45 +311,47 @@ export default function InitiativeDetailPage(): JSX.Element {
     },
   });
 
-  // Failure and absence are decided first: a read that finished without an initiative is a
-  // missing initiative, not a slow one, and must not sit under a placeholder forever.
-  if (detailQ.isError || (!detailQ.isPending && !detail))
+  if (aggregateState === 'loading' || aggregateState === 'snapshot')
+    return (
+      <>
+        <EntityDetailSkeleton
+          label={`Loading ${initiativeNoun.toLowerCase()}`}
+          title={navigationSnapshot?.name}
+        />
+        {aggregateQ.isError ? (
+          <p role="alert" className="text-error text-body-medium px-6 pb-6">
+            Could not refresh this {initiativeNoun.toLowerCase()}.
+          </p>
+        ) : null}
+      </>
+    );
+  if (aggregateState === 'error')
     return (
       <p role="alert" className="text-error mx-auto max-w-7xl p-6">
-        {detailQ.isError
-          ? userErrorMessage(detailQ.error, 'Could not load this initiative.')
-          : 'Initiative not found.'}
+        {userErrorMessage(aggregateQ.error, 'Could not load this initiative.')}
       </p>
     );
-  if (!detail)
-    // placeholder: the initiative's own record — its breadcrumb trail, its name, and the projects,
-    // health and timeline beneath it. The route carries only an id, so nothing here has a
-    // compile-time value to render instead.
-    return (
-      <EntityDetailSkeleton
-        label="Loading initiative"
-        // The row often lands well before the aggregate that fills the body — seeded by the
-        // composer that created it, or warmed by the list the reader came from. Showing the real
-        // name the moment it exists is the difference between a page that is loading and a page
-        // that gives no sign of what it is.
-        title={recordQ.data?.name ?? navigationSnapshot?.name}
-        subtitle={recordQ.data?.summary ?? undefined}
-      />
-    );
+  if (!detail) return <p className="mx-auto max-w-7xl p-6">Initiative not found.</p>;
 
   const resolveActor = (actorId: string | null | undefined) => {
     const member = members.find((item) => item.actorId === actorId);
-    return { name: member?.displayName ?? 'Unknown', kind: 'human' as const };
+    const owner = aggregate?.references.owner;
+    return {
+      name:
+        member?.displayName ??
+        (owner?.actorId === actorId ? (owner?.displayName ?? 'Unknown') : 'Unknown'),
+      kind: 'human' as const,
+    };
   };
-  const ownerName = members.find((member) => member.actorId === detail.ownerId)?.displayName ?? '—';
+  const ownerName = aggregate?.references.owner?.displayName ?? '—';
   const initiativeObject = {
     kind: 'initiative' as const,
     id: initiativeId,
     organizationId: orgId,
     title: detail.name,
     meta: {
-      parentInitiativeId: detail.parent?.id ?? null,
-      parentLinkId: detail.parentLinkId,
+      parentInitiativeId: relationships?.parent?.id ?? null,
+      parentLinkId: relationships?.parentLinkId ?? null,
     },
   };
 
@@ -320,14 +371,14 @@ export default function InitiativeDetailPage(): JSX.Element {
             <ChevronLeft className="size-4" />
             All {initiativePlural.toLowerCase()}
           </Link>
-          {detail.parent ? (
+          {relationships?.parent ? (
             <>
               <span aria-hidden>/</span>
               <Link
-                href={`/orgs/${detail.parent.organizationId}/initiatives/${detail.parent.id}`}
+                href={`/orgs/${relationships.parent.organizationId}/initiatives/${relationships.parent.id}`}
                 className="hover:text-on-surface truncate"
               >
-                {detail.parent.name}
+                {relationships.parent.name}
               </Link>
             </>
           ) : null}
@@ -339,10 +390,13 @@ export default function InitiativeDetailPage(): JSX.Element {
           entityName={detail.name}
           editable={canEdit}
           pending={displayMutation.isPending}
+          loading={displayPickerOpen && displayQ.isPending}
           size={48}
           onChange={(iconKey, colorKey, customColor) => {
+            if (displayQ.data === undefined) return;
             displayMutation.mutate({ iconKey, colorKey, customColor });
           }}
+          onOpenChange={setDisplayPickerOpen}
         />
       }
       title={
@@ -383,8 +437,18 @@ export default function InitiativeDetailPage(): JSX.Element {
               priority={detail.priority}
               updateCadence={detail.updateCadence}
               memberOptions={memberOptions}
-              labels={detail.labels}
+              ownerLoading={ownerPickerOpen && membersQ.isPending}
+              onOwnerPickerOpenChange={setOwnerPickerOpen}
+              labels={assignedLabels}
               availableLabels={availableLabels}
+              labelsLoading={
+                labelsPickerOpen &&
+                !selectedLabelsQ.isError &&
+                !labelsQ.isError &&
+                (selectedLabelsQ.data === undefined || labelsQ.data === undefined)
+              }
+              onLabelsPickerOpenChange={setLabelsPickerOpen}
+              onTargetPickerOpenChange={setTargetPickerOpen}
               canEdit={canEdit}
               onStatusChange={(status) => {
                 mutations.patchInitiative({ status });
@@ -408,20 +472,25 @@ export default function InitiativeDetailPage(): JSX.Element {
                 mutations.patchInitiative({ updateCadence });
               }}
               onLabelsChange={(labelIds) => {
+                if (selectedLabelsQ.data === undefined) return;
                 mutations.patchInitiative({ labelIds: [...labelIds] });
               }}
-              onCreateLabel={(name) => {
-                createLabel.mutate(
-                  { name },
-                  {
-                    onSuccess: (created) => {
-                      mutations.patchInitiative({
-                        labelIds: [...detail.labels.map((l) => l.id), created.id],
-                      });
+              {...(selectedLabelsQ.data === undefined
+                ? {}
+                : {
+                    onCreateLabel: (name: string) => {
+                      createLabel.mutate(
+                        { name },
+                        {
+                          onSuccess: (created) => {
+                            mutations.patchInitiative({
+                              labelIds: [...assignedLabels.map((label) => label.id), created.id],
+                            });
+                          },
+                        },
+                      );
                     },
-                  },
-                );
-              }}
+                  })}
             />
             <EntityMetadataItem priority={7} overflowOnly>
               <Button
@@ -438,13 +507,23 @@ export default function InitiativeDetailPage(): JSX.Element {
                 }}
               >
                 <CornerDownLeft aria-hidden className="size-5" />
-                {detail.parent ? detail.parent.name : 'Set parent'}
+                Manage hierarchy
               </Button>
             </EntityMetadataItem>
           </EntityMetadataRow>
-          {mutations.propsError || planningCalendar.error ? (
+          {mutations.propsError ||
+          (targetPickerOpen ? planningCalendar.error : null) ||
+          (ownerPickerOpen && membersQ.isError ? 'Could not load members.' : null) ||
+          (labelsPickerOpen && (selectedLabelsQ.isError || labelsQ.isError)
+            ? 'Could not load labels.'
+            : null) ? (
             <p role="alert" className="text-error mt-2 text-sm">
-              {mutations.propsError ?? planningCalendar.error}
+              {mutations.propsError ??
+                planningCalendar.error ??
+                (ownerPickerOpen && membersQ.isError ? 'Could not load members.' : null) ??
+                (labelsPickerOpen && (selectedLabelsQ.isError || labelsQ.isError)
+                  ? 'Could not load labels.'
+                  : null)}
             </p>
           ) : null}
           {displayMutation.error ? (
@@ -453,6 +532,11 @@ export default function InitiativeDetailPage(): JSX.Element {
                 displayMutation.error,
                 `Could not customize this ${initiativeNoun.toLowerCase()}.`,
               )}
+            </p>
+          ) : null}
+          {displayPickerOpen && displayQ.isError ? (
+            <p role="alert" className="text-error mt-2 text-sm">
+              Could not load display settings.
             </p>
           ) : null}
         </div>
@@ -511,6 +595,11 @@ export default function InitiativeDetailPage(): JSX.Element {
         />
       }
     >
+      {aggregateQ.isError ? (
+        <p role="alert" className="text-error text-sm">
+          Could not refresh this {initiativeNoun.toLowerCase()}.
+        </p>
+      ) : null}
       <ConfirmDestructiveDialog
         open={confirmDeleteOpen}
         onOpenChange={(next) => {
@@ -575,14 +664,14 @@ export default function InitiativeDetailPage(): JSX.Element {
           />
           <PrintProperty
             label="Labels"
-            value={detail.labels.map((label) => label.name).join(', ') || '—'}
+            value={assignedLabels.map((label) => label.name).join(', ') || '—'}
           />
         </dl>
-        {detail.resources.length ? (
+        {(resourcesQ.data?.items ?? []).length ? (
           <div className="mt-4 text-sm">
             <p className="font-medium">Resources</p>
             <ul className="mt-1 list-disc pl-5">
-              {detail.resources.map((resource) => (
+              {(resourcesQ.data?.items ?? []).map((resource) => (
                 <li key={resource.id}>
                   {resource.title}
                   {resource.url ? ` — ${resource.url}` : ''}
@@ -629,15 +718,18 @@ export default function InitiativeDetailPage(): JSX.Element {
           aria-labelledby="tab-resources"
         >
           <ResourcesTab
-            resources={detail.resources}
+            resources={resourcesQ.data?.items ?? []}
+            loading={resourcesQ.isPending}
             canEdit={canEdit}
             pending={addResource.isPending || removeResource.isPending}
             error={
-              addResource.error
-                ? userErrorMessage(addResource.error, 'Could not add the resource.')
-                : removeResource.error
-                  ? userErrorMessage(removeResource.error, 'Could not remove the resource.')
-                  : null
+              resourcesQ.isError
+                ? 'Could not load resources.'
+                : addResource.error
+                  ? userErrorMessage(addResource.error, 'Could not add the resource.')
+                  : removeResource.error
+                    ? userErrorMessage(removeResource.error, 'Could not remove the resource.')
+                    : null
             }
             onAdd={addResource.mutate}
             onRemove={removeResource.mutate}
@@ -650,22 +742,48 @@ export default function InitiativeDetailPage(): JSX.Element {
         </div>
       ) : null}
 
-      <InitiativeRelationshipPanels
-        tab={tab}
-        children={children}
-        connectedWork={detail.connectedWork}
-        initiativeNoun={initiativeNoun}
-        programNoun={programNoun}
-        projectNoun={projectNoun}
-        onAddSubinitiative={() => {
-          pickerOverlay.open({
-            kind: 'initiative-hierarchy',
-            mode: 'child',
-            organizationId: orgId,
-            subject: initiativeObject,
-          });
-        }}
-      />
+      {(tab === 'subinitiatives' || tab === 'work') && relationshipsQ.isError ? (
+        <p role="alert" className="text-error text-sm">
+          Could not load Initiative relationships.
+        </p>
+      ) : (
+        <>
+          {relationships?.truncated ? (
+            <p className="text-on-surface-variant text-sm">
+              Some relationships are not shown. Browse all{' '}
+              <Link href={`/orgs/${orgId}/initiatives`} className="underline">
+                {initiativePlural.toLowerCase()}
+              </Link>
+              ,{' '}
+              <Link href={`/orgs/${orgId}/projects`} className="underline">
+                {projectNoun.toLowerCase()}s
+              </Link>
+              , or{' '}
+              <Link href={`/orgs/${orgId}/programs`} className="underline">
+                {programNoun.toLowerCase()}s
+              </Link>
+              .
+            </p>
+          ) : null}
+          <InitiativeRelationshipPanels
+            tab={tab}
+            children={relationships?.children ?? []}
+            connectedWork={relationships?.connectedWork ?? []}
+            loading={relationshipsQ.isPending}
+            initiativeNoun={initiativeNoun}
+            programNoun={programNoun}
+            projectNoun={projectNoun}
+            onAddSubinitiative={() => {
+              pickerOverlay.open({
+                kind: 'initiative-hierarchy',
+                mode: 'child',
+                organizationId: orgId,
+                subject: initiativeObject,
+              });
+            }}
+          />
+        </>
+      )}
 
       <div
         className={`${tab === 'overview' ? 'flex' : 'hidden'} initiative-overview min-w-0 flex-col gap-6`}
@@ -673,19 +791,6 @@ export default function InitiativeDetailPage(): JSX.Element {
         id="tabpanel-overview"
         aria-labelledby="tab-overview"
       >
-        {detail.latestUpdate ? (
-          <section className="bg-surface-container-low rounded-xl px-5 py-4">
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <h2 className="text-on-surface text-sm font-medium">Latest update</h2>
-              <span className="text-on-surface-variant text-xs">
-                {detail.latestUpdate.createdAt.slice(0, 10)}
-              </span>
-            </div>
-            <p className="text-on-surface text-sm leading-relaxed whitespace-pre-wrap">
-              {detail.latestUpdate.body}
-            </p>
-          </section>
-        ) : null}
         <TemplateAwareEntityDocument
           orgId={orgId}
           kind="initiative"

@@ -49,6 +49,7 @@ export type EntityMentionSubjectRef =
 export function useEntityMentions(
   orgId: string,
   subject: EntityMentionSubjectRef,
+  enabled = true,
 ): EntityMentionsData {
   const { subjectType, subjectId } = subject;
   const segment = SUBJECT_PATH[subjectType];
@@ -61,13 +62,13 @@ export function useEntityMentions(
           param: { orgId, id: subjectId },
         }),
       'Could not load what this record references.',
-      { enabled: segment !== undefined, staleTime: STALE.standard },
+      { enabled: enabled && segment !== undefined, staleTime: STALE.standard },
     ),
   );
 
   return {
     external: query.data?.external ?? [],
     entities: query.data?.entities ?? [],
-    isPending: segment !== undefined && query.isPending,
+    isPending: enabled && segment !== undefined && query.isPending,
   };
 }

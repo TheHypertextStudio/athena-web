@@ -40,7 +40,7 @@ import {
   TooltipTrigger,
 } from '@docket/ui/primitives';
 import { Globe } from '@docket/ui/icons';
-import { useState, type JSX } from 'react';
+import { useEffect, useRef, useState, type JSX } from 'react';
 
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
@@ -69,6 +69,24 @@ export interface PublishActionProps {
   readonly canPublish: boolean;
 }
 
+/** The mutually exclusive publication state a newly opened dialog may render. */
+export type PublicationDialogState = 'loading' | 'published' | 'unpublished';
+
+/**
+ * Keep a deferred publication lookup from being mistaken for an unpublished document.
+ *
+ * @param publication - The resolved publication row, if one exists.
+ * @param loading - Whether the dialog's publication lookup is still in flight.
+ * @returns The single action state the dialog may render.
+ */
+export function publicationDialogState(
+  publication: ReturnType<typeof usePublicationState>['publication'],
+  loading: boolean,
+): PublicationDialogState {
+  if (loading) return 'loading';
+  return publication?.published === true ? 'published' : 'unpublished';
+}
+
 /**
  * The publish icon button and its dialog.
  *
@@ -84,7 +102,14 @@ export function PublishAction({
   canPublish,
 }: PublishActionProps): JSX.Element | null {
   const [open, setOpen] = useState(false);
-  const { publication } = usePublicationState(orgId, subjectKind, subjectId, open);
+  const [dialogGeneration, setDialogGeneration] = useState(0);
+  const initializedGeneration = useRef<number | null>(null);
+  const { publication, loading: publicationLoading } = usePublicationState(
+    orgId,
+    subjectKind,
+    subjectId,
+    open,
+  );
   // Gated on `open` — nobody needs the workspace's address until they open this dialog.
   const orgQ = useApiQuery(
     apiQueryOptions(
@@ -99,16 +124,22 @@ export function PublishAction({
   const move = useMoveBriefMutation(orgId);
   const [slug, setSlug] = useState('');
 
+  useEffect(() => {
+    if (!open || publicationLoading || initializedGeneration.current === dialogGeneration) return;
+    setSlug(publication?.slug ?? suggestPublicSlug(title));
+    initializedGeneration.current = dialogGeneration;
+  }, [dialogGeneration, open, publication?.slug, publicationLoading, title]);
+
   if (!canPublish) return null;
 
   // One narrowed binding rather than a boolean plus a nullable object: every branch below needs
   // both facts together, and splitting them is how a "published but no row" impossible state
   // gets written by accident.
-  const live = publication?.published === true ? publication : null;
-  const published = live !== null;
+  const dialogState = publicationDialogState(publication, publicationLoading);
+  const live = dialogState === 'published' ? publication : null;
+  const published = dialogState === 'published';
   const lower = noun.toLowerCase();
   const label = published ? `Published to the web — manage` : `Publish this ${lower} to the web`;
-  const proposed = publication?.slug ?? suggestPublicSlug(title);
   const pending = publish.isPending || withdraw.isPending || move.isPending;
   const error = publish.error ?? withdraw.error ?? move.error;
   // The full prefix a record's own slug sits under: the shared brief host plus the workspace's
@@ -137,7 +168,7 @@ export function PublishAction({
               publish.reset();
               withdraw.reset();
               move.reset();
-              setSlug(proposed);
+              setDialogGeneration((generation) => generation + 1);
               setOpen(true);
             }}
           >
@@ -151,12 +182,18 @@ export function PublishAction({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {published ? 'Published to the web' : `Publish this ${lower}`}
+              {dialogState === 'loading'
+                ? 'Loading publishing status'
+                : published
+                  ? 'Published to the web'
+                  : `Publish this ${lower}`}
             </DialogTitle>
             <DialogDescription>
-              {published
-                ? 'Anyone with the link can read this page. It always shows the current record — there is no separate copy.'
-                : `Anyone with the link will be able to read this ${lower} as a public page — Docket calls it a brief. It stays in step with the record automatically, so there's no separate copy to keep up to date.`}
+              {dialogState === 'loading'
+                ? 'Checking whether this page is already published.'
+                : published
+                  ? 'Anyone with the link can read this page. It always shows the current record — there is no separate copy.'
+                  : `Anyone with the link will be able to read this ${lower} as a public page — Docket calls it a brief. It stays in step with the record automatically, so there's no separate copy to keep up to date.`}
             </DialogDescription>
           </DialogHeader>
 
@@ -171,6 +208,7 @@ export function PublishAction({
                 value={slug}
                 spellCheck={false}
                 autoComplete="off"
+                disabled={dialogState === 'loading'}
                 {...(prefix === undefined ? {} : { prefix })}
                 onChange={(event) => {
                   setSlug(event.target.value);
@@ -178,7 +216,7 @@ export function PublishAction({
               />
             </Field>
 
-            {live ? (
+            {dialogState === 'loading' ? null : live ? (
               live.urls.length > 0 ? (
                 <div className="flex flex-col gap-1">
                   <Text as="p" token="label-medium" tone="muted">
@@ -212,7 +250,11 @@ export function PublishAction({
           </div>
 
           <DialogFooter>
-            {live ? (
+            {dialogState === 'loading' ? (
+              <Text as="p" token="body-small" tone="muted">
+                Loading…
+              </Text>
+            ) : live ? (
               <>
                 <Button
                   variant="ghost"

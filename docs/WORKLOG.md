@@ -28,8 +28,9 @@
 
 ### [RELEASE-COVERAGE-001] Restore entity navigation coverage
 
-- **Status**: REVIEW
+- **Status**: COMPLETED
 - **Started**: 2026-08-24
+- **Completed**: 2026-08-24
 - **Priority**: P0
 - **Description**: The required non-web/API coverage shard stopped production because the entity
   navigation projector had untested Task, Program, and Initiative branches. The same CI pass
@@ -48,8 +49,8 @@
   - [x] Cover Initiative owner and label tenant-isolation branches that remained below the API coverage gate.
   - [x] Cover empty aggregate rows, ownerless records, cross-workspace hierarchy visibility,
         duplicate inherited work, corrupt relationship suppression, and project-window boundaries.
-  - [ ] Push the repair and verify the production rollout.
-- **Blockers**: The CI run for the latest repair must complete before deployment can start.
+  - [x] Push the repair and verify the production rollout.
+- **Blockers**: None.
 - **Validation**: The focused aggregate suite passes 39 cases. The full API suite passes 384 files
   and 4,662 tests with 89.22 percent branch coverage (16,053 of 17,992 branches), above the 89
   percent release gate. The relationship coverage checks an empty and manager capability bundle,
@@ -57,8 +58,10 @@
   an ownerless Initiative, cross-workspace visibility, corrupt foreign links, duplicate inherited
   work, project-window boundaries, and a 101-child hierarchy bounded to 100 visible rows. CI run
   32714355581 passed all build, lint, type, test, freshness, image, migration, deployment, and
-  Scheduler jobs for the preceding executable revision `7d0a0421`. All five production
-  deployment records report success, and the live web, admin, and API health routes return HTTP 200.
+  Scheduler jobs for the preceding executable revision `7d0a0421`. CI run 32719074296 passed the
+  same gates for executable revision `adb1dd25`, including the 89.22 percent API branch gate.
+  Independent production checks returned `{"status":"ok"}` from the API health route and HTTP 200
+  from the public web and admin origins.
 - **Retrospective**: Focused Initiative tests proved the changed behavior but did not protect the
   repository-wide API coverage ratchet after concurrent detail-route work reached `main`. Release
   validation must run the exact deploy-gating coverage command against the integrated revision.

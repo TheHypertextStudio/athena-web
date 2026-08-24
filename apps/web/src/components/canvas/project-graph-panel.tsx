@@ -38,10 +38,10 @@ import { useQueryClient } from '@tanstack/react-query';
 import { type JSX, useCallback, useMemo, useState } from 'react';
 
 import Canvas from '@/components/canvas/canvas';
-import { packIsolatedNodes } from '@/components/canvas/pack-isolated';
+import { useProjectGraphLayout } from '@/components/canvas/project-graph-layout';
 import ProjectNode, { type ProjectNodeData } from '@/components/canvas/project-node';
 import ProjectPeek, { type ProjectPeekNeighbor } from '@/components/canvas/project-peek';
-import { NODE_SIZE, useDagreLayout } from '@/components/canvas/use-dagre-layout';
+import { useCanvasAspectRatio } from '@/components/canvas/use-canvas-aspect-ratio';
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiListQuery, useApiMutation } from '@/lib/query';
@@ -70,6 +70,7 @@ export interface ProjectGraphPanelProps {
  */
 export function ProjectGraphPanel({ rows, orgId }: ProjectGraphPanelProps): JSX.Element {
   const queryClient = useQueryClient();
+  const { containerRef, aspectRatio, ready: aspectReady } = useCanvasAspectRatio();
   const overviewKey = useMemo(() => [...queryKeys.projects(orgId), 'overview'] as const, [orgId]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -274,37 +275,9 @@ export function ProjectGraphPanel({ rows, orgId }: ProjectGraphPanelProps): JSX.
     );
   }, [rows]);
 
-  /**
-   * The final node positions: dagre over the chains, a packed block for everything else.
-   *
-   * @remarks
-   * Most projects in a real portfolio depend on nothing, and a layered layout has no opinion about
-   * a node with no edges — dagre stacks every one of them in a single rank-0 column. That column
-   * then dominates the canvas's height and drags `fitView` down until the chains, the only thing
-   * this lens is for, are illegible. Laying out the connected subgraph on its own and packing the
-   * rest into a block underneath keeps the fitted graph close to the viewport's own proportions.
-   */
-  const connectedIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const edge of edges) {
-      ids.add(edge.source);
-      ids.add(edge.target);
-    }
-    return ids;
-  }, [edges]);
-  const connected = useMemo(
-    () => nodes.filter((node) => connectedIds.has(node.id)),
-    [nodes, connectedIds],
-  );
-  const isolated = useMemo(
-    () => nodes.filter((node) => !connectedIds.has(node.id)),
-    [nodes, connectedIds],
-  );
-  const laidOutConnected = useDagreLayout(connected, edges, 'full');
-  const positioned = useMemo(
-    () => packIsolatedNodes(laidOutConnected, isolated, NODE_SIZE.full),
-    [laidOutConnected, isolated],
-  );
+  // The shared engine runs Dagre once per dependency component and then packs those measured
+  // rectangles. Project cards remain fixed at their full-density dimensions.
+  const positioned = useProjectGraphLayout(nodes, edges, aspectRatio).nodes;
 
   if (rows.length === 0)
     return (
@@ -318,20 +291,17 @@ export function ProjectGraphPanel({ rows, orgId }: ProjectGraphPanelProps): JSX.
     // cancelled because a scrolling list does not show it either — its rows are simply clipped by
     // the panel — so leaving it in place is what made this lens sit 24px shorter than the list it
     // is meant to match pixel for pixel.
-    <div className="-mb-4 min-h-0 w-full flex-1 @2xl:-mb-6 @4xl:-mb-8">
+    <div ref={containerRef} className="-mb-4 min-h-0 w-full flex-1 @2xl:-mb-6 @4xl:-mb-8">
       <Canvas
         nodes={positioned}
         edges={edges}
         nodeTypes={NODE_TYPES}
         interactive={canEdit}
         density="full"
-        // Positions are computed above (dagre over the chains + a packed block for the rest), so
-        // the canvas must not re-run its own pass over the combined set.
+        // Positions are computed above, so the canvas must not re-run a flat Dagre pass.
         disableLayout
-        // A portfolio holds a few dozen wide cards, all of which fit; the minimap would be an
-        // abstracted grey block of them parked over the canvas, which is what the launch review
-        // photographed.
-        minimap={false}
+        layoutReady={aspectReady}
+        minimap
         // Hovering a card should not fade the rest of the portfolio; the chain-dimming is for dense
         // task graphs, not a handful of projects.
         highlightChains={false}

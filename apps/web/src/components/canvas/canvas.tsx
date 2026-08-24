@@ -29,14 +29,18 @@ import {
 import '@xyflow/react/dist/style.css';
 import { Maximize } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
-import { type ReactNode } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useCanvasMenus } from './canvas-menus';
 import { useControlledFlow, useFitViewOnChange } from './use-controlled-flow';
+import { deriveGraphInitialFrame } from './graph-initial-frame';
 import { type CanvasDensity, type LayoutDirection, useDagreLayout } from './use-dagre-layout';
 import { useGraphHighlight } from './use-graph-highlight';
 import { type GraphInteractionHandlers, useGraphInteractions } from './use-graph-interactions';
 import { LodProvider, useLodValue } from './use-lod';
+
+const READABLE_INITIAL_ZOOM = 0.5;
+const WORKING_AREA_PADDING = 24;
 
 /** Props for {@link Canvas}. */
 export interface CanvasProps extends GraphInteractionHandlers {
@@ -54,6 +58,8 @@ export interface CanvasProps extends GraphInteractionHandlers {
   layoutDirection?: LayoutDirection | undefined;
   /** Skip the dagre pass and render `nodes` at their given positions (e.g. swimlane layout). */
   disableLayout?: boolean | undefined;
+  /** Whether an aspect-aware host has applied its first measured layout. Defaults to true. */
+  layoutReady?: boolean | undefined;
   /** When true, handles are connectable and dependency edges are deletable/reconnectable. */
   interactive?: boolean | undefined;
   /** When set, persistently dims everything off this id set (e.g. the critical path). */
@@ -92,10 +98,8 @@ export interface CanvasProps extends GraphInteractionHandlers {
    * Whether to render the minimap. Defaults to `density === 'full'`.
    *
    * @remarks
-   * A minimap earns its space on a graph too large to hold in view — hundreds of task nodes. On a
-   * portfolio of a dozen wide project cards it is a grey block of abstracted rectangles parked over
-   * the canvas, telling you nothing the canvas is not already showing. Hosts of the second kind
-   * turn it off.
+   * The focused Task and Project graph hosts keep it visible so navigation remains available when
+   * component-aware layout places work beyond the first readable frame.
    */
   minimap?: boolean | undefined;
   /** When provided, renders an expand affordance that calls this. */
@@ -125,6 +129,7 @@ function CanvasInner({
   density = 'full',
   layoutDirection = 'LR',
   disableLayout = false,
+  layoutReady = true,
   interactive = false,
   highlightIds,
   highlightChains = true,
@@ -146,22 +151,119 @@ function CanvasInner({
   children,
   className,
 }: CanvasProps): React.JSX.Element {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [flowInstance, setFlowInstance] = useState<Parameters<OnInit>[0] | null>(null);
+  const framed = useRef(false);
   // Grouped/swimlane layouts arrive pre-positioned; otherwise dagre lays the flat graph out.
   const dagreLaidOut = useDagreLayout(rawNodes, rawEdges, density, layoutDirection);
   const laidOut = disableLayout ? rawNodes : dagreLaidOut;
-  const { nodes, edges, onNodesChange, onEdgesChange } = useControlledFlow(laidOut, rawEdges);
+  const { nodes, edges, onNodesChange, onEdgesChange, layoutApplied } = useControlledFlow(
+    laidOut,
+    rawEdges,
+  );
 
   const interactions = useGraphInteractions({ onConnectEdge, onDeleteEdge, onReparentEdge });
   const highlight = useGraphHighlight(nodes, edges, highlightIds, highlightChains);
-  useFitViewOnChange(focusOn, fitMaxZoom);
+  useFitViewOnChange(focusOn, fitMaxZoom, layoutReady && layoutApplied);
   // An edge and the empty pane are not core objects, so the app's object-level right-click handler
   // never claims them; these are the canvas's own menus for the two.
   const menus = useCanvasMenus();
   const lod = useLodValue();
+  const initialFrame = useMemo(() => deriveGraphInitialFrame(nodes, edges), [nodes, edges]);
+  const initializeFlow = useCallback<OnInit>(
+    (instance) => {
+      setFlowInstance(instance);
+      onInit?.(instance);
+    },
+    [onInit],
+  );
+  useEffect(() => {
+    if (
+      flowInstance === null ||
+      !layoutReady ||
+      !layoutApplied ||
+      framed.current ||
+      initialFrame.nodeIds.length === 0
+    ) {
+      return;
+    }
+    if (focusOn !== undefined && focusOn.length > 0) {
+      framed.current = true;
+      return;
+    }
+    let canceled = false;
+    let frameId = 0;
+    const frameGraph = (): void => {
+      if (canceled) return;
+      const measured = initialFrame.nodeIds.every((id) => {
+        const node = flowInstance.getInternalNode(id);
+        return (node?.measured.width ?? 0) > 0 && (node?.measured.height ?? 0) > 0;
+      });
+      if (!measured) {
+        frameId = requestAnimationFrame(frameGraph);
+        return;
+      }
+      const element = containerRef.current;
+      if (element === null) return;
+      framed.current = true;
+      const allNodeIds = flowInstance
+        .getNodes()
+        .filter((node) => node.type !== 'group')
+        .map(({ id }) => id);
+      const availableWidth = Math.max(1, element.clientWidth - WORKING_AREA_PADDING * 2);
+      const availableHeight = Math.max(1, element.clientHeight - WORKING_AREA_PADDING * 2);
+      const allBounds = flowInstance.getNodesBounds(allNodeIds);
+      const allZoom = Math.min(
+        availableWidth / Math.max(allBounds.width, 1),
+        availableHeight / Math.max(allBounds.height, 1),
+        fitMaxZoom,
+      );
+      if (allZoom >= READABLE_INITIAL_ZOOM) {
+        void flowInstance.fitView({
+          nodes: allNodeIds.map((id) => ({ id })),
+          minZoom: READABLE_INITIAL_ZOOM,
+          maxZoom: fitMaxZoom,
+          padding: 0.15,
+        });
+        return;
+      }
+      const primaryBounds = flowInstance.getNodesBounds([...initialFrame.nodeIds]);
+      const primaryZoom = Math.min(
+        availableWidth / Math.max(primaryBounds.width, 1),
+        availableHeight / Math.max(primaryBounds.height, 1),
+        fitMaxZoom,
+      );
+      if (primaryZoom >= READABLE_INITIAL_ZOOM) {
+        void flowInstance.fitView({
+          nodes: initialFrame.nodeIds.map((id) => ({ id })),
+          minZoom: READABLE_INITIAL_ZOOM,
+          maxZoom: fitMaxZoom,
+          padding: 0.15,
+        });
+        return;
+      }
+      const anchor =
+        initialFrame.anchorNodeId === null
+          ? undefined
+          : flowInstance.getInternalNode(initialFrame.anchorNodeId);
+      if (anchor === undefined) return;
+      const position = anchor.internals.positionAbsolute;
+      void flowInstance.setViewport({
+        x: WORKING_AREA_PADDING - position.x * READABLE_INITIAL_ZOOM,
+        y: WORKING_AREA_PADDING - position.y * READABLE_INITIAL_ZOOM,
+        zoom: READABLE_INITIAL_ZOOM,
+      });
+    };
+    frameId = requestAnimationFrame(frameGraph);
+    return () => {
+      canceled = true;
+      cancelAnimationFrame(frameId);
+    };
+  }, [fitMaxZoom, flowInstance, focusOn, initialFrame, layoutApplied, layoutReady]);
 
   return (
     <LodProvider value={lod}>
-      <div className={cn('relative h-full min-h-0 w-full', className)}>
+      <div ref={containerRef} className={cn('relative h-full min-h-0 w-full', className)}>
         <ReactFlow
           nodes={highlight.nodes}
           edges={highlight.edges}
@@ -171,7 +273,7 @@ function CanvasInner({
           {...(edgeTypes !== undefined ? { edgeTypes } : {})}
           onNodeClick={(_, node) => onSelectNode?.(node.id)}
           onNodeDoubleClick={(_, node) => onNavigate?.(node.id)}
-          {...(onInit !== undefined ? { onInit } : {})}
+          onInit={initializeFlow}
           {...(onNodeDragStart !== undefined ? { onNodeDragStart } : {})}
           {...(onNodeDrag !== undefined ? { onNodeDrag } : {})}
           {...(onNodeDragStop !== undefined ? { onNodeDragStop } : {})}
@@ -190,7 +292,7 @@ function CanvasInner({
           deleteKeyCode={interactive ? ['Delete', 'Backspace'] : null}
           elementsSelectable
           onlyRenderVisibleElements
-          fitView
+          fitView={false}
           proOptions={{ hideAttribution: true }}
           minZoom={0.1}
           maxZoom={maxZoom}

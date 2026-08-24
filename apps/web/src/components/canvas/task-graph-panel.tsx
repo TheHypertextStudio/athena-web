@@ -59,8 +59,9 @@ import { type GroupSpec } from './use-grouped-layout';
 import NodePeek from './node-peek';
 import TaskNode, { type ResolvedAssignee, taskData } from './task-node';
 import TaskBranchNode from './task-branch-node';
-import { layoutTaskHierarchy, retainTaskHierarchyAncestors } from './task-hierarchy-layout';
+import { retainTaskHierarchyAncestors, useTaskHierarchyLayout } from './task-hierarchy-layout';
 import { type CanvasDensity } from './use-dagre-layout';
+import { useCanvasAspectRatio } from './use-canvas-aspect-ratio';
 import { type TaskGraphScope, useTaskGraph } from './use-task-graph';
 import { useTaskGraphMutations } from './use-task-graph-mutations';
 
@@ -146,6 +147,7 @@ export default function TaskGraphPanel({
   className,
 }: TaskGraphPanelProps): React.JSX.Element {
   const router = useRouter();
+  const { containerRef, aspectRatio, ready: aspectReady } = useCanvasAspectRatio();
   const { orgId } = scope;
 
   // Org reference data for avatars, project chips, the edit gate, and filter options.
@@ -404,10 +406,13 @@ export default function TaskGraphPanel({
   }, [viewState.groupBy, catalog]);
 
   // Hierarchy is always a pre-positioned compound layout; optional grouping wraps whole roots.
-  const canvasNodes = useMemo(
-    () =>
-      layoutTaskHierarchy(filtered.nodes, filtered.edges, density, display.direction, groupSpec),
-    [groupSpec, filtered, density, display.direction],
+  const canvasNodes = useTaskHierarchyLayout(
+    filtered.nodes,
+    filtered.edges,
+    density,
+    display.direction,
+    groupSpec,
+    aspectRatio,
   );
 
   const selectionItems = useMemo<readonly ObjectRef[]>(
@@ -465,6 +470,7 @@ export default function TaskGraphPanel({
               density={density}
               layoutDirection={display.direction}
               disableLayout
+              layoutReady={aspectReady}
               nodeColor={taskStateColor}
               minimap={display.minimap}
               interactive={canEdit}
@@ -583,7 +589,9 @@ export default function TaskGraphPanel({
   return (
     <div className={cn('flex h-full min-h-0 w-full flex-col', className)}>
       {renderChrome?.(bar)}
-      <div className="relative min-h-0 flex-1">{body}</div>
+      <div ref={containerRef} className="relative min-h-0 flex-1">
+        {body}
+      </div>
     </div>
   );
 }

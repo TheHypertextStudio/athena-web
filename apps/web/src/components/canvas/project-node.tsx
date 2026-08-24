@@ -43,6 +43,12 @@ import { formatCalendarDate } from '@/lib/format-date';
 import { projectNodeTransitionName } from './transition-name';
 import { useLod } from './use-lod';
 
+/** Project card dimensions shared by the renderer and component-aware layout adapter. */
+export const PROJECT_NODE_SIZE = {
+  compact: { width: 224, height: 56 },
+  full: { width: 268, height: 96 },
+} as const;
+
 /**
  * The data a {@link ProjectNode} renders; lives on the xyflow node's `data`.
  *
@@ -96,6 +102,7 @@ function ProjectNodeComponent({ id, data, selected }: NodeProps): React.JSX.Elem
     isRoot,
   } = data as ProjectNodeData;
   const compact = density === 'compact';
+  const size = PROJECT_NODE_SIZE[density];
   const resolved = useWorkStatus('project', status);
   // Low-detail (zoomed out): show just the glyph + name, dropping the badge row and progress.
   const lod = useLod();
@@ -117,10 +124,14 @@ function ProjectNodeComponent({ id, data, selected }: NodeProps): React.JSX.Elem
         ref={relation.dropProps.ref}
         tabIndex={0}
         data-drop-state={relation.dropProps['data-drop-state']}
-        style={{ viewTransitionName: projectNodeTransitionName(id) }}
+        style={{
+          viewTransitionName: projectNodeTransitionName(id),
+          width: size.width,
+          height: size.height,
+        }}
         className={cn(
           'group bg-surface-container-high relative flex flex-col justify-center gap-1.5 overflow-hidden rounded-lg transition-colors',
-          compact ? 'h-14 w-[224px] px-3' : 'h-[96px] w-[268px] px-3.5',
+          compact ? 'px-3' : 'px-3.5',
           selected && 'ring-primary ring-2',
           relation.dropProps.className,
           relation.dropState === 'accept' && 'ring-primary bg-primary/8 ring-2 ring-inset',

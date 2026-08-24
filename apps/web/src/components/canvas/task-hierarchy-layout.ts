@@ -1,9 +1,16 @@
+'use client';
+
 /** Compound xyflow layout for indented task hierarchy trees and independent dependencies. */
 import { type Edge, type Node, Position } from '@xyflow/react';
-import dagre from 'dagre';
+import { useMemo } from 'react';
 
 import { createTaskHierarchy } from '@/components/tasks/task-hierarchy-model';
 
+import {
+  coarseGraphAspectRatio,
+  layoutMeasuredGraph,
+  projectGraphEdges,
+} from './graph-layout-engine';
 import type { GroupSpec } from './use-grouped-layout';
 import { type CanvasDensity, type LayoutDirection, NODE_SIZE } from './use-dagre-layout';
 
@@ -98,40 +105,20 @@ function layoutRoots(
   measured: ReadonlyMap<string, MeasuredBranch>,
   taskRoots: ReadonlyMap<string, string>,
   direction: LayoutDirection,
+  aspectRatio: number,
 ): ReadonlyMap<string, { x: number; y: number }> {
-  const graph = new dagre.graphlib.Graph();
-  graph.setGraph({ rankdir: direction, nodesep: 36, ranksep: 96 });
-  graph.setDefaultEdgeLabel(() => ({}));
-  for (const root of roots) {
-    const size = measured.get(root.id) ?? NODE_SIZE.full;
-    graph.setNode(root.id, size);
-  }
-  const edgeKeys = new Set<string>();
-  for (const edge of edges) {
-    const source = taskRoots.get(edge.source);
-    const target = taskRoots.get(edge.target);
-    if (
-      !source ||
-      !target ||
-      source === target ||
-      !graph.hasNode(source) ||
-      !graph.hasNode(target)
-    ) {
-      continue;
-    }
-    const key = `${source}>${target}`;
-    if (edgeKeys.has(key)) continue;
-    edgeKeys.add(key);
-    graph.setEdge(source, target);
-  }
-  dagre.layout(graph);
-  return new Map(
-    roots.map((root) => {
-      const point = graph.node(root.id);
-      const size = measured.get(root.id) ?? NODE_SIZE.full;
-      return [root.id, { x: point.x - size.width / 2, y: point.y - size.height / 2 }];
-    }),
+  const rootIds = new Set(roots.map(({ id }) => id));
+  const projected = projectGraphEdges(edges, taskRoots).filter(
+    (edge) => rootIds.has(edge.source) && rootIds.has(edge.target),
   );
+  return layoutMeasuredGraph(
+    roots.map((root) => {
+      const size = measured.get(root.id) ?? NODE_SIZE.full;
+      return { id: root.id, width: size.width, height: size.height };
+    }),
+    projected,
+    { direction, aspectRatio },
+  ).positions;
 }
 
 /**
@@ -142,6 +129,7 @@ function layoutRoots(
  * @param density - Task-card dimensions.
  * @param direction - Top-level dependency flow direction.
  * @param groupSpec - Optional lane grouping; every hierarchy follows its root task's lane.
+ * @param aspectRatio - Coarse viewport aspect used to pack independent components.
  * @returns lane containers followed by parent-before-child compound task nodes.
  */
 export function layoutTaskHierarchy(
@@ -150,6 +138,7 @@ export function layoutTaskHierarchy(
   density: CanvasDensity,
   direction: LayoutDirection,
   groupSpec?: GroupSpec | null,
+  aspectRatio = 16 / 9,
 ): Node[] {
   const hierarchyRows = nodes.map((node) => ({ id: node.id, parentTaskId: parentOf(node) }));
   const hierarchy = createTaskHierarchy(hierarchyRows);
@@ -174,7 +163,7 @@ export function layoutTaskHierarchy(
     }
     let laneOffset = 0;
     for (const [groupId, roots] of groups) {
-      const local = layoutRoots(roots, edges, measured, taskRoots, direction);
+      const local = layoutRoots(roots, edges, measured, taskRoots, direction, aspectRatio);
       let maxX = 0;
       let maxY = 0;
       for (const root of roots) {
@@ -209,6 +198,7 @@ export function layoutTaskHierarchy(
       measured,
       taskRoots,
       direction,
+      aspectRatio,
     )) {
       rootPositions.set(id, position);
     }
@@ -248,4 +238,93 @@ export function layoutTaskHierarchy(
     });
   }
   return [...groupNodes, ...taskNodes];
+}
+
+/** Build the memo key for hierarchy geometry while ignoring application-owned Task properties. */
+export function taskHierarchyStructureKey(
+  nodes: readonly Node[],
+  edges: readonly Edge[],
+  density: CanvasDensity,
+  direction: LayoutDirection,
+  groupSpec: GroupSpec | null | undefined,
+  aspectRatio: number,
+): string {
+  const measured = measureBranches(nodes, density);
+  return `${density}|${direction}|${String(coarseGraphAspectRatio(aspectRatio))}|${nodes
+    .map((node) => {
+      const size = measured.get(node.id) ?? NODE_SIZE[density];
+      const group = groupSpec?.groupOf(node) ?? '';
+      return `${node.id}:${parentOf(node) ?? ''}:${group}:${size.width}x${size.height}`;
+    })
+    .join(',')}|${edges.map((edge) => `${edge.source}>${edge.target}`).join(',')}`;
+}
+
+/** Apply cached hierarchy geometry to the latest Task and group presentation data. */
+function applyTaskHierarchyGeometry(
+  geometry: readonly Node[],
+  nodes: readonly Node[],
+  groupSpec: GroupSpec | null | undefined,
+): Node[] {
+  const currentById = new Map(nodes.map((node) => [node.id, node]));
+  return geometry.map((positioned) => {
+    if (positioned.type === 'group') {
+      const groupId = positioned.id.slice('group:'.length);
+      return {
+        ...positioned,
+        data: {
+          ...positioned.data,
+          label:
+            groupId === '__ungrouped__' ? 'Ungrouped' : (groupSpec?.labelOf(groupId) ?? groupId),
+        },
+      };
+    }
+    const current = currentById.get(positioned.id);
+    if (current === undefined) return positioned;
+    return {
+      ...current,
+      ...positioned,
+      data: {
+        ...current.data,
+        hierarchyDepth: positioned.data['hierarchyDepth'],
+        hierarchyChildYs: positioned.data['hierarchyChildYs'],
+      },
+    };
+  });
+}
+
+/**
+ * Memoize Task hierarchy geometry from structural inputs and apply current Task properties.
+ *
+ * @param nodes - Task nodes carrying hierarchy and optional grouping data.
+ * @param edges - Task dependency edges.
+ * @param density - Task-card dimensions.
+ * @param direction - Top-level dependency flow direction.
+ * @param groupSpec - Optional active lane grouping.
+ * @param aspectRatio - Coarse viewport aspect used to pack independent components.
+ * @returns lane containers followed by current parent-before-child compound Task nodes.
+ */
+export function useTaskHierarchyLayout(
+  nodes: readonly Node[],
+  edges: readonly Edge[],
+  density: CanvasDensity,
+  direction: LayoutDirection,
+  groupSpec: GroupSpec | null | undefined,
+  aspectRatio: number,
+): Node[] {
+  const structureKey = taskHierarchyStructureKey(
+    nodes,
+    edges,
+    density,
+    direction,
+    groupSpec,
+    aspectRatio,
+  );
+  const geometry = useMemo(
+    () => layoutTaskHierarchy(nodes, edges, density, direction, groupSpec, aspectRatio),
+    [structureKey],
+  );
+  return useMemo(
+    () => applyTaskHierarchyGeometry(geometry, nodes, groupSpec),
+    [geometry, nodes, groupSpec],
+  );
 }

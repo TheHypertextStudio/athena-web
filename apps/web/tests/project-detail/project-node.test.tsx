@@ -16,7 +16,10 @@ import { ReactFlowProvider } from '@xyflow/react';
 import type { JSX } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import ProjectNode, { type ProjectNodeData } from '@/components/canvas/project-node';
+import ProjectNode, {
+  PROJECT_NODE_SIZE,
+  type ProjectNodeData,
+} from '@/components/canvas/project-node';
 
 afterEach(cleanup);
 
@@ -48,6 +51,17 @@ function renderNode(overrides: Partial<ProjectNodeData> = {}): { container: HTML
 }
 
 describe('the card separates itself by tone, not by a stroke', () => {
+  it('uses the exported size contract consumed by Project graph layout', () => {
+    const { container } = renderNode();
+    const card = container.querySelector('[style*="view-transition-name"]');
+    if (!(card instanceof HTMLElement)) throw new Error('expected the card root');
+
+    expect(card).toHaveStyle({
+      width: `${String(PROJECT_NODE_SIZE.full.width)}px`,
+      height: `${String(PROJECT_NODE_SIZE.full.height)}px`,
+    });
+  });
+
   it('renders no border utility and no shadow anywhere in the card', () => {
     const { container } = renderNode();
     // `getAttribute`, not `.className`: SVG elements expose an `SVGAnimatedString` there, and the

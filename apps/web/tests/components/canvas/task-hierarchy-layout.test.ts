@@ -1,11 +1,37 @@
 /** `@docket/web` — compound xyflow task hierarchy layout tests. */
+import { renderHook } from '@testing-library/react';
 import type { Edge, Node } from '@xyflow/react';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type {
+  GraphLayoutOptions,
+  GraphLayoutResult,
+  MeasuredGraphNode,
+  ProjectedGraphEdge,
+} from '@/components/canvas/graph-layout-engine';
+
+type LayoutMeasuredGraph = (
+  nodes: readonly MeasuredGraphNode[],
+  edges: readonly ProjectedGraphEdge[],
+  options: GraphLayoutOptions,
+) => GraphLayoutResult;
+
+const { layoutMeasuredGraphSpy } = vi.hoisted(() => ({ layoutMeasuredGraphSpy: vi.fn() }));
+
+vi.mock('@/components/canvas/graph-layout-engine', async (importOriginal) => {
+  const actual = await importOriginal<{ layoutMeasuredGraph: LayoutMeasuredGraph }>();
+  layoutMeasuredGraphSpy.mockImplementation(actual.layoutMeasuredGraph);
+  return { ...actual, layoutMeasuredGraph: layoutMeasuredGraphSpy };
+});
 
 import {
   layoutTaskHierarchy,
   retainTaskHierarchyAncestors,
+  useTaskHierarchyLayout,
 } from '@/components/canvas/task-hierarchy-layout';
+
+beforeEach(() => {
+  layoutMeasuredGraphSpy.mockClear();
+});
 
 function node(id: string, parentTaskId: string | null, projectId = 'p1'): Node {
   return {
@@ -94,5 +120,38 @@ describe('layoutTaskHierarchy', () => {
     expect(laidOut.findIndex(({ id }) => id === 'group:p1')).toBeLessThan(
       laidOut.findIndex(({ id }) => id === 'root-a'),
     );
+  });
+
+  it('packs disconnected hierarchy roots into rows instead of one Dagre rank', () => {
+    const roots = Array.from({ length: 12 }, (_, index) => node(`root-${index}`, null));
+    const laidOut = layoutTaskHierarchy(roots, [], 'compact', 'LR');
+    const positions = laidOut.map(({ position }) => `${position.x}:${position.y}`);
+
+    expect(new Set(laidOut.map(({ position }) => position.x)).size).toBeGreaterThan(1);
+    expect(new Set(laidOut.map(({ position }) => position.y)).size).toBeGreaterThan(1);
+    expect(new Set(positions).size).toBe(roots.length);
+  });
+
+  it('reuses hierarchy geometry when only Task properties change', () => {
+    const { result, rerender } = renderHook(
+      ({ items }: { items: Node[] }) =>
+        useTaskHierarchyLayout(items, edges, 'compact', 'LR', null, 16 / 9),
+      { initialProps: { items: nodes } },
+    );
+    const firstPositions = result.current.map(({ position }) => position);
+
+    rerender({
+      items: nodes.map((item) =>
+        item.id === 'root-a'
+          ? { ...item, data: { ...item.data, title: 'Renamed', status: 'completed' } }
+          : item,
+      ),
+    });
+
+    expect(layoutMeasuredGraphSpy).toHaveBeenCalledTimes(1);
+    expect(result.current.map(({ position }) => position)).toEqual(firstPositions);
+    expect(result.current.find(({ id }) => id === 'root-a')?.data).toMatchObject({
+      title: 'Renamed',
+    });
   });
 });

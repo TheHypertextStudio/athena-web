@@ -32,13 +32,22 @@ export interface ControlledFlow {
   edges: Edge[];
   onNodesChange: OnNodesChange;
   onEdgesChange: OnEdgesChange;
+  /** Whether xyflow state contains the latest incoming geometry and data. */
+  layoutApplied: boolean;
 }
 
-/** A structural+data signature so we re-sync only when the graph genuinely changes. */
+/** A structure, geometry, and data signature so layout-only changes reach xyflow state. */
 function graphSignature(nodes: readonly Node[], edges: readonly Edge[]): string {
-  return `${nodes.map((n) => `${n.id}:${JSON.stringify(n.data)}`).join('|')}::${edges
-    .map((e) => e.id)
-    .join('|')}`;
+  return `${nodes
+    .map(
+      (node) =>
+        `${node.id}:${node.type ?? ''}:${node.parentId ?? ''}:` +
+        `${node.sourcePosition ?? ''},${node.targetPosition ?? ''}:` +
+        `${node.position.x},${node.position.y}:` +
+        `${String(node.style?.width ?? '')}x${String(node.style?.height ?? '')}:` +
+        JSON.stringify(node.data),
+    )
+    .join('|')}::${edges.map((edge) => edge.id).join('|')}`;
 }
 
 /**
@@ -64,7 +73,8 @@ export function useControlledFlow(laidOut: Node[], rawEdges: Edge[]): Controlled
     });
   }, [signature, laidOut, rawEdges, setNodes, setEdges]);
 
-  return { nodes, edges, onNodesChange, onEdgesChange };
+  const layoutApplied = graphSignature(nodes, edges) === signature;
+  return { nodes, edges, onNodesChange, onEdgesChange, layoutApplied };
 }
 
 /**
@@ -74,13 +84,18 @@ export function useControlledFlow(laidOut: Node[], rawEdges: Edge[]): Controlled
  * @param maxZoom - The zoom ceiling for this fit. Shares the canvas's `fitMaxZoom` so narrowing a
  *   search to one node lands it at the same scale the graph opens at, rather than magnifying it to
  *   fill the viewport.
+ * @param enabled - Whether measured layout and xyflow state are ready for viewport work.
  */
-export function useFitViewOnChange(ids: readonly string[] | undefined, maxZoom: number): void {
+export function useFitViewOnChange(
+  ids: readonly string[] | undefined,
+  maxZoom: number,
+  enabled = true,
+): void {
   const { fitView } = useReactFlow();
   const key = ids?.join(',') ?? '';
   useEffect(() => {
-    if (ids === undefined || ids.length === 0) return;
+    if (!enabled || ids === undefined || ids.length === 0) return;
     // Keyed on the joined id list (not the array identity); `fitView` is stable from the store.
     void fitView({ nodes: ids.map((id) => ({ id })), duration: 400, maxZoom, padding: 0.3 });
-  }, [key, fitView, ids, maxZoom]);
+  }, [enabled, key, fitView, ids, maxZoom]);
 }

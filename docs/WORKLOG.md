@@ -66,6 +66,11 @@
   replayable receipt. A replay lock prevents a repeated notice click, keyboard shortcut, or menu
   command from consuming an older receipt while the first Undo or Redo request is pending. The hook
   clears the stale notice before that request starts.
+- **Release coverage correction**: CI run `32737226950` stopped deployment because the new object
+  command schema reduced the `@docket/types` trust-spine coverage gate below 100 percent. Contract
+  tests now reject duplicate Project initiative associations and receipt properties owned by the
+  other object kind. They also accept complete canonical Task and Project status tuples, which
+  covers the valid branch of the tuple invariant.
 - **Validation**: The pure layout suite covers projected Task roots, weak components,
   non-overlapping rectangles, group ownership, deterministic aspect-aware packing, property-only
   stability, and the 363-Task and 28-dependency fixture within the 100 ms budget. The command route
@@ -81,9 +86,10 @@
   console has no warnings or errors. Six live-review Web files pass 41 focused tests, the complete
   lifecycle harness passes six tests, and the stable projection API file passes seven tests. The
   final review regressions pass 40 aggregate-route cases and four canvas notice and history cases.
-  Repository tooling passes 164 tests. Formatting, migration drift, all 26 typecheck tasks, all 25
-  lint tasks, and the four-package serialized production build pass. Deployment and production
-  checks remain open.
+  The shared types package passes 779 tests and its exact coverage gate at 100 percent statements,
+  branches, functions, and lines. Repository tooling passes 164 tests. Formatting, migration drift,
+  all 26 typecheck tasks, all 25 lint tasks, and the four-package serialized production build pass.
+  Deployment and production checks remain open.
 - **Blockers**: None.
 
 ---

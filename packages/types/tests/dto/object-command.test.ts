@@ -111,6 +111,24 @@ describe('ObjectCommandIn', () => {
     expect(ProjectLeadActorId.description).toContain('active human');
   });
 
+  it('rejects duplicate Project initiative associations', () => {
+    const projectId = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
+    const initiativeId = '01BRZ3NDEKTSV4RRFFQ69G5FAV';
+
+    expect(
+      ObjectCommandIn.safeParse({
+        commandId: 'duplicate-initiatives',
+        objectKind: 'project',
+        objectIds: [projectId],
+        operation: {
+          type: 'add_association',
+          association: 'initiative',
+          associationIds: [initiativeId, initiativeId],
+        },
+      }).success,
+    ).toBe(false);
+  });
+
   it('rejects Task dates outside the supported calendar range', () => {
     for (const value of ['1969-12-31', '2201-01-01']) {
       expect(
@@ -341,6 +359,34 @@ describe('ObjectCommandReplayIn', () => {
     }
   });
 
+  it('rejects receipt properties owned by a different object kind', () => {
+    for (const candidate of [
+      { objectKind: 'task', property: 'health', before: null, after: 'on_track' },
+      { objectKind: 'project', property: 'state', before: 'backlog', after: 'done' },
+    ] as const) {
+      expect(
+        ObjectCommandReplayIn.safeParse({
+          commandId: `wrong-kind-${candidate.property}`,
+          direction: 'undo',
+          receipt: {
+            commandId: 'wrong-kind-forward',
+            objectKind: candidate.objectKind,
+            action: 'replace_property',
+            entries: [
+              {
+                kind: 'object',
+                objectId: taskIds[0],
+                property: candidate.property,
+                before: candidate.before,
+                after: candidate.after,
+              },
+            ],
+          },
+        }).success,
+      ).toBe(false);
+    }
+  });
+
   it('requires complete canonical status tuples without duplicate properties', () => {
     const objectId = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
     const taskEntries = [
@@ -392,6 +438,11 @@ describe('ObjectCommandReplayIn', () => {
         ).success,
       ).toBe(false);
     }
+    expect(ObjectCommandReplayIn.safeParse(replay('task', taskEntries)).success).toBe(true);
+    expect(
+      ObjectCommandReplayIn.safeParse(replay('project', projectEntries as typeof taskEntries))
+        .success,
+    ).toBe(true);
     expect(
       ObjectCommandReplayIn.safeParse(replay('task', [...taskEntries, ...taskEntries.slice(0, 1)]))
         .success,

@@ -35,8 +35,7 @@ import {
   useState,
 } from 'react';
 
-import { ObjectSurface } from '@/components/objects/object-surface';
-import type { ObjectRef } from '@/lib/actions/object';
+import { objectTargetProps, type ObjectRef } from '@/lib/actions/object';
 
 import { useDetailHeaderCollapse } from './entity-detail-collapse';
 
@@ -70,7 +69,7 @@ export interface EntityDetailLayoutProps {
   children: ReactNode;
   /** Extra container classes (e.g. a page print scope). */
   className?: string;
-  /** Canonical object identity for drag and the shared right-click action surface. */
+  /** Canonical object identity for the shared right-click action surface. */
   object?: ObjectRef;
 }
 
@@ -109,7 +108,10 @@ export function EntityDetailLayout({
   const scrollRef = useDetailHeaderCollapse({ hasCover: Boolean(cover) });
 
   const header = (
-    <header className="detail-header page-bleed page-grid bg-surface sticky top-0 isolate z-10 gap-y-0">
+    <header
+      {...(object ? objectTargetProps(object) : {})}
+      className="detail-header page-bleed page-grid bg-surface sticky top-0 isolate z-10 gap-y-0"
+    >
       {/* The masthead band: the cover, eyebrow, and identity live inside this one wrapper, and
           nothing else does. `.detail-tabs` is this wrapper's sibling, not its descendant, so the
           cover's box structurally ends at the wrapper's bottom edge — there is no lower boundary
@@ -190,13 +192,7 @@ export function EntityDetailLayout({
       {/* Bleeds the full pane so the backdrop can reach both edges, and re-measures its own
           children through the nested grid, so nothing inside has to know it sits in a bleeding
           section. */}
-      {object ? (
-        <ObjectSurface object={object} dragDisabled surfaceId="entity-detail">
-          {header}
-        </ObjectSurface>
-      ) : (
-        header
-      )}
+      {header}
 
       {/* This nested grid preserves the page measure while guaranteeing enough stable block-size
           for the scroll-linked header to reach its compact endpoint on short panels. */}

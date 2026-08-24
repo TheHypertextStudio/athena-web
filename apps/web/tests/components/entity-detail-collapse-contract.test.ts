@@ -54,8 +54,8 @@ describe('entity detail collapse contract', () => {
     expect(css).toMatch(/\.detail-glyph\s*\{[^}]*transform-origin:\s*left top/);
   });
 
-  it('keeps masthead actions in the compact identity row and disables body dragging', () => {
-    expect(layout).toContain('<ObjectSurface object={object} dragDisabled');
+  it('keeps masthead actions in the compact identity row without making the masthead an object surface', () => {
+    expect(layout).not.toContain('<ObjectSurface');
     expect(layout).toMatch(/detail-primary[\s\S]*detail-identity[\s\S]*detail-actions/);
     expect(css).toMatch(
       /\.detail-primary\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) auto/,

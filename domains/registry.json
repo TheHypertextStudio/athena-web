@@ -93,6 +93,7 @@
         "./task-titles",
         "./parent-resolution",
         "./planning-timeframe",
+        "./relation-contract",
         "./view-contract",
         "./vocabulary"
       ],

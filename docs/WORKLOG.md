@@ -7,6 +7,38 @@
 
 ## Active Tasks
 
+### [OBJECT-RELATIONS-001] Unify object activation and relation drops
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-08-23
+- **Priority**: P0
+- **Description**: Repeated object surfaces used separate click, drag payload, drop-target, and
+  relation mutation paths. Initiative hierarchy rails also derived continuation segments from the
+  wrong sibling branch. Rows could stop opening from whitespace, drags could end without a visible
+  destination, and relation support drifted between layouts.
+- **Approach**: Keep relation definitions and validation in `@docket/work`. Execute each relation
+  through its owning domain action and injected typed command port. Use one Dnd Kit adapter and one
+  zero-wrapper `ObjectSurface` for repeated object renderers. Keep detail mastheads outside the drag
+  adapter while retaining their object identity for contextual actions.
+- **Subtasks**:
+  - [x] Add the pure relation catalog and stable rejection codes.
+  - [x] Register one action and one typed command port per supported relation.
+  - [x] Replace the legacy drag transports across repeated object surfaces.
+  - [x] Correct Initiative hierarchy continuation rails and drop previews.
+  - [x] Add pointer, keyboard, activation, registry, adapter, hierarchy, and source-policy coverage.
+  - [ ] Pass replacement release gates and verify the deployed production revision.
+- **Blockers**: The standalone E2E workflow contains pre-existing failures. Three Notion mirror
+  tests receive HTTP 402 from the test connector. Two scheduling tests still expect a calendar Tasks
+  rail that `e99ac26b` removed from `main` to preserve a seven-day layout. Neither workflow failure
+  comes from this task, and the deploy-gating CI workflow does not use those stale journeys.
+- **Validation**: The initial release run exposed two owned integration gaps. The work-domain export
+  registry omitted `./relation-contract`, and `EntityDetailLayout` routed a non-draggable masthead
+  through `ObjectSurface`, which gave the header button semantics. Focused regressions now cover the
+  export registry and the non-draggable masthead boundary. Final release and production checks are
+  pending.
+
+---
+
 ### [CI-PERF-ISOLATION-001] Isolate the release performance gate
 
 - **Status**: REVIEW

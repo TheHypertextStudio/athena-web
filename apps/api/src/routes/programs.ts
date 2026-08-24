@@ -228,7 +228,14 @@ const programs = new Hono<AppEnv>()
             visibility: task.visibility,
           })
           .from(task)
-          .where(and(eq(task.organizationId, orgId), isNull(task.archivedAt))),
+          .leftJoin(project, eq(task.projectId, project.id))
+          .where(
+            and(
+              eq(task.organizationId, orgId),
+              isNull(task.archivedAt),
+              or(eq(task.programId, id), eq(project.programId, id)),
+            ),
+          ),
         row.ownerId === null
           ? Promise.resolve([])
           : db
@@ -237,14 +244,8 @@ const programs = new Hono<AppEnv>()
               .where(and(eq(actor.id, row.ownerId), eq(actor.organizationId, orgId)))
               .limit(1),
       ]);
-      const projectIds = new Set(projectRows.map((projectRow) => projectRow.id));
       const canView = await buildTaskViewFilter(orgId, actorId);
-      const taskCount = taskRows.filter(
-        (taskRow) =>
-          canView(taskRow) &&
-          (taskRow.programId === id ||
-            (taskRow.projectId !== null && projectIds.has(taskRow.projectId))),
-      ).length;
+      const taskCount = taskRows.filter(canView).length;
 
       return ok(c, ProgramDetailAggregate, {
         target: 'program',

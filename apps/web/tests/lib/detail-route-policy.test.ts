@@ -77,4 +77,13 @@ describe('detail route ownership', () => {
     expect(source).toContain('enabled: options.propertiesOpen ?? false');
     expect(source).toContain('enabled: options.activityOpen ?? false');
   });
+
+  it('defers task-linked request owners until the user asks for them', () => {
+    const source = readFileSync(join(root, details[0]), 'utf8');
+
+    expect(source).toContain('const [linkedContentOpen, setLinkedContentOpen] = useState(false)');
+    expect(source).toContain('linkedContentOpen ? <TaskRepeatingWorkBacklink');
+    expect(source).toContain('linkedContentOpen ? (');
+    expect(source).toContain('Load attachments and dependency map');
+  });
 });

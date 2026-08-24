@@ -69,6 +69,7 @@ export default function TaskDetailPage(): JSX.Element {
 
   const [activityOpen, setActivityOpen] = useState(false);
   const [propertiesOpen, setPropertiesOpen] = useState(false);
+  const [linkedContentOpen, setLinkedContentOpen] = useState(false);
   const {
     task,
     workflowStates,
@@ -383,7 +384,7 @@ export default function TaskDetailPage(): JSX.Element {
         ) : null}
       </header>
 
-      <TaskRepeatingWorkBacklink orgId={orgId} entityId={taskId} />
+      {linkedContentOpen ? <TaskRepeatingWorkBacklink orgId={orgId} entityId={taskId} /> : null}
 
       <div className="grid grid-cols-1 gap-6 @4xl:grid-cols-[minmax(0,1fr)_18rem]">
         <div className="flex min-w-0 flex-col gap-6">
@@ -422,8 +423,12 @@ export default function TaskDetailPage(): JSX.Element {
             canEdit={canEdit}
           />
 
-          <TaskAttachments orgId={orgId} taskId={taskId} canEdit={canEdit} />
-          <MailAttachmentsPanel subjectType="task" subjectId={taskId} organizationId={orgId} />
+          {linkedContentOpen ? (
+            <>
+              <TaskAttachments orgId={orgId} taskId={taskId} canEdit={canEdit} />
+              <MailAttachmentsPanel subjectType="task" subjectId={taskId} organizationId={orgId} />
+            </>
+          ) : null}
 
           <Dependencies
             blocking={task.blocking}
@@ -435,18 +440,32 @@ export default function TaskDetailPage(): JSX.Element {
             onRename={renameSubtask}
           />
 
-          <section className="flex flex-col gap-2">
-            <h2 className="text-on-surface text-title-small font-medium">Dependency map</h2>
-            <div className="bg-surface-container h-80 overflow-hidden rounded-xl">
-              <TaskGraphPanel
-                scope={{ orgId, rootTaskId: taskId, depth: 2 }}
-                density="compact"
-                onExpand={() => {
-                  router.push(`/orgs/${orgId}/graph?rootTaskId=${taskId}`);
+          {linkedContentOpen ? (
+            <section className="flex flex-col gap-2">
+              <h2 className="text-on-surface text-title-small font-medium">Dependency map</h2>
+              <div className="bg-surface-container h-80 overflow-hidden rounded-xl">
+                <TaskGraphPanel
+                  scope={{ orgId, rootTaskId: taskId, depth: 2 }}
+                  density="compact"
+                  onExpand={() => {
+                    router.push(`/orgs/${orgId}/graph?rootTaskId=${taskId}`);
+                  }}
+                />
+              </div>
+            </section>
+          ) : (
+            <section aria-label="Linked task content">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setLinkedContentOpen(true);
                 }}
-              />
-            </div>
-          </section>
+              >
+                Load attachments and dependency map
+              </Button>
+            </section>
+          )}
 
           {activityOpen ? (
             <>

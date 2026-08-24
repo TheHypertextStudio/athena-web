@@ -56,6 +56,7 @@ import {
 } from '@/components/create-object/create-object-provider';
 import { useCreationContext } from '@/components/create-object/creation-context';
 import { WorkspacePicker } from '@/components/create-object/workspace-picker';
+import { EntityMetadataItem } from '@/components/views/entity-detail-layout';
 import { useDefaultedStatus } from '@/components/entity-display/use-work-status';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { templatePatch } from '@/components/templates/queries';
@@ -274,22 +275,27 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
       open={open}
       onOpenChange={onOpenChange}
       heading={`New ${initiativeNounLower}`}
+      propertyAriaLabel={`${initiativeNoun} properties`}
       contextRow={
         globalCreation ? (
           <>
-            <WorkspacePicker disabled={creating} />
-            <ChevronRight aria-hidden className="text-on-surface-variant size-4 shrink-0" />
-            <ActorPicker
-              options={options.actorOptions}
-              value={draft.ownerId}
-              onChange={(next) => {
-                setField('ownerId', next);
-              }}
-              placeholder="Set owner"
-              clearLabel="No owner"
-              ariaLabel="Owner"
-              disabled={creating || !destinationReady}
-            />
+            <EntityMetadataItem priority={0} className="max-w-none">
+              <WorkspacePicker disabled={creating} />
+            </EntityMetadataItem>
+            <EntityMetadataItem priority={1} className="flex max-w-none gap-2">
+              <ChevronRight aria-hidden className="text-on-surface-variant size-4 shrink-0" />
+              <ActorPicker
+                options={options.actorOptions}
+                value={draft.ownerId}
+                onChange={(next) => {
+                  setField('ownerId', next);
+                }}
+                placeholder="Set owner"
+                clearLabel="No owner"
+                ariaLabel="Owner"
+                disabled={creating || !destinationReady}
+              />
+            </EntityMetadataItem>
             <ComposerTemplateControl
               orgId={orgId}
               kind="initiative"
@@ -297,6 +303,7 @@ export const CreateInitiativeDialog = withComposerReset(function CreateInitiativ
               autoApplyId={contextualRequestDefaultsApply ? defaultTemplateId : null}
               currentActorId={globalCreation.currentActorId}
               teamId={null}
+              contextPriority={2}
               leadingSeparator={
                 <ChevronRight aria-hidden className="text-on-surface-variant size-4 shrink-0" />
               }

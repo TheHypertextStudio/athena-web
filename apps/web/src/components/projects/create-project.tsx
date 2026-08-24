@@ -59,6 +59,7 @@ import {
 import { useCreationContext } from '@/components/create-object/creation-context';
 import { WorkspacePicker } from '@/components/create-object/workspace-picker';
 import { useDefaultedStatus } from '@/components/entity-display/use-work-status';
+import { EntityMetadataItem } from '@/components/views/entity-detail-layout';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { templatePatch } from '@/components/templates/queries';
 import { useSession } from '@/lib/auth-client';
@@ -343,24 +344,29 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
       open={open}
       onOpenChange={onOpenChange}
       heading={`New ${projectNounLower}`}
+      propertyAriaLabel={`${projectNoun} properties`}
       contextRow={
         globalCreation ? (
           <>
-            <WorkspacePicker disabled={creating} />
-            <ChevronRight aria-hidden className="text-on-surface-variant size-4 shrink-0" />
-            <EntityPicker
-              options={options.programOptions}
-              value={draft.programId}
-              onChange={(next) => {
-                setField('programId', next);
-              }}
-              placeholder={`Set ${programNoun.toLowerCase()}`}
-              triggerIcon={<Layers className="text-on-surface-variant size-4" />}
-              clearLabel={`No ${programNoun.toLowerCase()}`}
-              searchPlaceholder={`Search ${programNoun.toLowerCase()}s…`}
-              ariaLabel={programNoun}
-              disabled={creating || !destinationReady}
-            />
+            <EntityMetadataItem priority={0} className="max-w-none">
+              <WorkspacePicker disabled={creating} />
+            </EntityMetadataItem>
+            <EntityMetadataItem priority={1} className="flex max-w-none gap-2">
+              <ChevronRight aria-hidden className="text-on-surface-variant size-4 shrink-0" />
+              <EntityPicker
+                options={options.programOptions}
+                value={draft.programId}
+                onChange={(next) => {
+                  setField('programId', next);
+                }}
+                placeholder={`Set ${programNoun.toLowerCase()}`}
+                triggerIcon={<Layers className="text-on-surface-variant size-4" />}
+                clearLabel={`No ${programNoun.toLowerCase()}`}
+                searchPlaceholder={`Search ${programNoun.toLowerCase()}s…`}
+                ariaLabel={programNoun}
+                disabled={creating || !destinationReady}
+              />
+            </EntityMetadataItem>
             <ComposerTemplateControl
               orgId={orgId}
               kind="project"
@@ -368,6 +374,7 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
               autoApplyId={contextualRequestDefaultsApply ? defaultTemplateId : null}
               currentActorId={globalCreation.currentActorId}
               teamId={teamId}
+              contextPriority={2}
               leadingSeparator={
                 <ChevronRight aria-hidden className="text-on-surface-variant size-4 shrink-0" />
               }

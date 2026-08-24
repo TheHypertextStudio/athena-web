@@ -39,6 +39,7 @@ import { runConfirmedCreateCallback } from '@/components/create-object/create-ob
 import { withComposerReset } from '@/components/composer/reset-on-open';
 import { enumOptions } from '@/components/pickers/options';
 import { TeamPicker } from '@/components/teams/team-picker';
+import { EntityMetadataItem } from '@/components/views/entity-detail-layout';
 import { formatCalendarDate } from '@/lib/format-date';
 import { userErrorMessage, readProblemError } from '@/lib/problem';
 import { todayISODate } from '@/lib/today';
@@ -244,6 +245,7 @@ export const CreateCycleDialog = withComposerReset(function CreateCycleComposer(
       open={open}
       onOpenChange={onOpenChange}
       heading={`New ${cycleNoun.toLowerCase()}`}
+      propertyAriaLabel={`${cycleNoun} properties`}
       continuation={{
         checked: continuation.createMore,
         onCheckedChange: continuation.setCreateMore,
@@ -266,31 +268,37 @@ export const CreateCycleDialog = withComposerReset(function CreateCycleComposer(
       onSubmit={() => void submit(continuation.createMore)}
       submitLabel={`Create ${cycleNoun}`}
     >
-      <TeamPicker teams={teams} value={teamId} onChange={setTeamOverride} disabled={creating} />
-      <DateRangePicker
-        value={{ start: startsAt, end: endsAt }}
-        onChange={({ start, end }) => {
-          setStartsAt(start);
-          setEndsAt(end);
-        }}
-        startPlaceholder="Set start date"
-        endPlaceholder="Set end date"
-        formatLabel={triggerDate}
-        ariaLabel="Dates"
-        startLabel="Starts"
-        endLabel="Ends"
-        disabled={creating}
-      />
-      <EnumPicker
-        options={enumOptions(CYCLE_STATUS_ORDER, CYCLE_STATUS_LABEL)}
-        value={status}
-        onChange={(next) => {
-          if (next) setStatus(next);
-        }}
-        placeholder="Status"
-        ariaLabel="Status"
-        disabled={creating}
-      />
+      <EntityMetadataItem priority={1}>
+        <TeamPicker teams={teams} value={teamId} onChange={setTeamOverride} disabled={creating} />
+      </EntityMetadataItem>
+      <EntityMetadataItem priority={2}>
+        <DateRangePicker
+          value={{ start: startsAt, end: endsAt }}
+          onChange={({ start, end }) => {
+            setStartsAt(start);
+            setEndsAt(end);
+          }}
+          startPlaceholder="Set start date"
+          endPlaceholder="Set end date"
+          formatLabel={triggerDate}
+          ariaLabel="Dates"
+          startLabel="Starts"
+          endLabel="Ends"
+          disabled={creating}
+        />
+      </EntityMetadataItem>
+      <EntityMetadataItem priority={0}>
+        <EnumPicker
+          options={enumOptions(CYCLE_STATUS_ORDER, CYCLE_STATUS_LABEL)}
+          value={status}
+          onChange={(next) => {
+            if (next) setStatus(next);
+          }}
+          placeholder="Status"
+          ariaLabel="Status"
+          disabled={creating}
+        />
+      </EntityMetadataItem>
     </ComposerShell>
   );
 });

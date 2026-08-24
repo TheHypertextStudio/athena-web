@@ -31,6 +31,7 @@ import { type JSX, type ReactNode, type RefObject, useId, useState } from 'react
 
 import { FreeformTextEditor } from '@/components/editor/freeform-text';
 import MentionHydrationProvider from '@/components/mentions/mention-hydration';
+import { EntityMetadataRow } from '@/components/views/entity-detail-layout';
 
 /** The shared controls for submitting a composer and keeping it open. */
 export interface ComposerContinuation {
@@ -67,6 +68,10 @@ export interface ComposerShellProps {
    * compatibility seam for the page-owned composers that have not migrated yet.
    */
   contextRow?: ReactNode | undefined;
+  /** Accessible label for the compact property controls. */
+  propertyAriaLabel?: string | undefined;
+  /** Keep a non-picker child form outside the compact metadata-row behavior. */
+  propertyLayout?: 'compact' | 'freeform' | undefined;
   /**
    * The template control, pinned to the right of the top row.
    *
@@ -169,6 +174,8 @@ export function ComposerShell({
   icon,
   context,
   contextRow,
+  propertyAriaLabel = 'Composer properties',
+  propertyLayout = 'compact',
   templateSlot,
   templateSlotVisible,
   continuation,
@@ -315,8 +322,10 @@ export function ComposerShell({
         {/* A migrated composer owns the order of its whole context row. Older page-owned composers
             retain their breadcrumb + right-pinned template layout until their own migration lands. */}
         {contextRow !== undefined ? (
-          <div className="text-label-large flex flex-wrap items-center justify-start gap-2 px-6 pt-5 pr-16">
-            {contextRow}
+          <div data-composer-context-row="" className="min-w-0 px-6 pt-5">
+            <EntityMetadataRow ariaLabel="Composer context" className="text-label-large min-w-0">
+              {contextRow}
+            </EntityMetadataRow>
           </div>
         ) : icon || context || templateSlot ? (
           <div
@@ -416,7 +425,11 @@ export function ComposerShell({
 
         {/* Properties: one compact row of Linear-style pills. */}
         <div className="flex flex-col gap-2 px-6 pt-2 pb-4">
-          <PropertyStrip>{children}</PropertyStrip>
+          {propertyLayout === 'compact' ? (
+            <PropertyStrip ariaLabel={propertyAriaLabel}>{children}</PropertyStrip>
+          ) : (
+            children
+          )}
           {error ? (
             <p role="alert" className="text-error text-body-medium">
               {error}
@@ -490,30 +503,28 @@ export function ComposerShell({
 
 /** Props for {@link PropertyStrip}. */
 interface PropertyStripProps {
-  /** Extra classes for the strip wrapper. */
-  className?: string;
-  /** The compact property pickers laid out as a wrapping row. */
+  /** Accessible label for the compact property controls. */
+  ariaLabel: string;
+  /** The compact property pickers laid out in one measured row. */
   children: ReactNode;
 }
 
 /**
- * The inline, wrapping row of compact property pills.
+ * The inline, measured row of compact property pills.
  *
  * @remarks
  * Borderless tonal pills: each picker trigger gets a `surface-container-highest` fill (one
  * elevation step off the dialog panel, so it reads as a distinct chip in both themes without an
- * outline) and a fully-rounded shape; hover lifts to the indigo `secondary-container`. Pickers
- * wrap on narrow widths so the row never overflows the dialog.
+ * outline) and a fully-rounded shape; hover lifts to the indigo `secondary-container`. Measured
+ * overflow moves later controls into More rather than wrapping the dialog taller.
  */
-function PropertyStrip({ className, children }: PropertyStripProps): JSX.Element {
+function PropertyStrip({ ariaLabel, children }: PropertyStripProps): JSX.Element {
   return (
-    <div
-      className={cn(
-        '[&_button]:bg-surface-container-highest [&_button:hover]:bg-secondary-container [&_button:hover]:text-on-secondary-container flex flex-wrap items-center gap-1.5 [&_button]:rounded-full',
-        className,
-      )}
+    <EntityMetadataRow
+      ariaLabel={ariaLabel}
+      className="[&_button]:bg-surface-container-highest [&_button:hover]:bg-secondary-container [&_button:hover]:text-on-secondary-container [&_button]:rounded-full"
     >
       {children}
-    </div>
+    </EntityMetadataRow>
   );
 }

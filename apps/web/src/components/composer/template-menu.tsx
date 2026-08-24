@@ -35,6 +35,10 @@ import { type JSX, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef }
 
 import { sectionHref } from '@/components/settings/settings-registry';
 import {
+  EntityMetadataItem,
+  type EntityMetadataPriority,
+} from '@/components/views/entity-detail-layout';
+import {
   sortTemplates,
   templateMatchesContext,
   templatesOfKindDef,
@@ -197,6 +201,8 @@ export interface ComposerTemplateControlProps {
   onManage?: (() => void) | undefined;
   /** Whether the composer is submitting. */
   disabled: boolean;
+  /** Priority for a global composer context row. */
+  contextPriority?: EntityMetadataPriority | undefined;
 }
 
 /**
@@ -222,6 +228,7 @@ export function ComposerTemplateControl({
   onVisibilityChange,
   onManage,
   disabled,
+  contextPriority,
 }: ComposerTemplateControlProps): JSX.Element | null {
   const query = useApiQuery({ ...templatesOfKindDef(orgId, kind), enabled: open });
   const items = query.data?.items;
@@ -260,7 +267,7 @@ export function ComposerTemplateControl({
   // of the way instead of sitting there greyed out asking to be understood.
   if (!visible) return null;
 
-  return (
+  const menu = (
     <>
       {leadingSeparator}
       <TemplateMenu
@@ -269,7 +276,15 @@ export function ComposerTemplateControl({
         manageHref={sectionHref(orgId, 'templates')}
         onManage={onManage}
         disabled={disabled}
+        triggerLabel="Start from template"
+        compact
+        showScopeLabels={false}
       />
     </>
+  );
+  return contextPriority === undefined ? (
+    menu
+  ) : (
+    <EntityMetadataItem priority={contextPriority}>{menu}</EntityMetadataItem>
   );
 }

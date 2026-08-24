@@ -39,6 +39,7 @@ import {
 } from '@/components/create-object/create-object-provider';
 import { useCreationContext } from '@/components/create-object/creation-context';
 import { WorkspacePicker } from '@/components/create-object/workspace-picker';
+import { EntityMetadataItem } from '@/components/views/entity-detail-layout';
 import { userErrorMessage, readProblemError } from '@/lib/problem';
 import { queryKeys } from '@/lib/query';
 
@@ -208,7 +209,14 @@ export const CreateTeamDialog = withComposerReset(function CreateTeamComposer({
       open={open}
       onOpenChange={onOpenChange}
       heading={`New ${teamNounLower}`}
-      contextRow={globalCreation ? <WorkspacePicker disabled={creating} /> : undefined}
+      contextRow={
+        globalCreation ? (
+          <EntityMetadataItem priority={0} className="max-w-none">
+            <WorkspacePicker disabled={creating} />
+          </EntityMetadataItem>
+        ) : undefined
+      }
+      propertyLayout="freeform"
       continuation={{
         checked: continuation.createMore,
         onCheckedChange: continuation.setCreateMore,

@@ -262,7 +262,7 @@ function programTemplate(
 }
 
 describe('CreateProgramDialog — visibility picker', () => {
-  it('renders Workspace, Owner, then Template above the title without a duplicate Owner', async () => {
+  it('renders Workspace, Owner, then Start from template above the title without a duplicate Owner', async () => {
     templatesGet.mockResolvedValue(
       jsonResponse(true, {
         items: [
@@ -275,7 +275,7 @@ describe('CreateProgramDialog — visibility picker', () => {
 
     const workspace = screen.getByRole('combobox', { name: 'Workspace' });
     const owner = screen.getByRole('button', { name: /Owner/ });
-    const template = await screen.findByRole('button', { name: 'Template' });
+    const template = await screen.findByRole('button', { name: 'Start from template' });
     const title = screen.getByLabelText('Program name');
 
     expect(

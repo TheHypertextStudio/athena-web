@@ -15,6 +15,7 @@ import type { JSX } from 'react';
 
 import { PRIORITY_OPTIONS } from '@/components/pickers/options';
 import { EstimatePicker } from '@/components/task-detail/EstimatePicker';
+import { EntityMetadataItem } from '@/components/views/entity-detail-layout';
 import { formatCalendarDate } from '@/lib/format-date';
 
 interface TaskComposerPickersProps {
@@ -94,103 +95,125 @@ export function TaskComposerPickers({
   return (
     <>
       {statusOptions.length > 0 ? (
+        <EntityMetadataItem priority={0}>
+          <EnumPicker
+            options={statusOptions}
+            value={state}
+            onChange={(next) => {
+              if (next) onStateChange(next);
+            }}
+            placeholder="Status"
+            ariaLabel="Status"
+            disabled={creating}
+          />
+        </EntityMetadataItem>
+      ) : null}
+      <EntityMetadataItem priority={1}>
         <EnumPicker
-          options={statusOptions}
-          value={state}
+          options={PRIORITY_OPTIONS}
+          value={priority}
           onChange={(next) => {
-            if (next) onStateChange(next);
+            onPriorityChange(next ?? 'none');
           }}
-          placeholder="Status"
-          ariaLabel="Status"
+          placeholder="Priority"
+          ariaLabel="Priority"
           disabled={creating}
         />
-      ) : null}
-      <EnumPicker
-        options={PRIORITY_OPTIONS}
-        value={priority}
-        onChange={(next) => {
-          onPriorityChange(next ?? 'none');
-        }}
-        placeholder="Priority"
-        ariaLabel="Priority"
-        disabled={creating}
-      />
-      <ActorPicker
-        options={actorOptions}
-        value={assigneeId}
-        onChange={onAssigneeChange}
-        placeholder="Assignee"
-        clearLabel="Unassigned"
-        ariaLabel="Assignee"
-        disabled={creating}
-      />
-      <EntityPicker
-        options={projectOptions}
-        value={projectId}
-        onChange={onProjectChange}
-        placeholder={`Set ${projectNounLower}`}
-        triggerIcon={<FolderKanban className="text-on-surface-variant size-4" />}
-        clearLabel={`No ${projectNounLower}`}
-        searchPlaceholder={`Search ${projectNounLower}s…`}
-        ariaLabel={projectNoun}
-        disabled={creating}
-      />
-      <EntityPicker
-        options={milestoneOptionsForProject}
-        value={milestoneId}
-        onChange={onMilestoneChange}
-        placeholder={projectId ? 'Set milestone' : `Set a ${projectNounLower} first`}
-        triggerIcon={<Flag className="text-on-surface-variant size-4" />}
-        clearLabel="No milestone"
-        searchPlaceholder="Search milestones…"
-        emptyText={projectId ? 'No milestones' : `Set a ${projectNounLower} to choose a milestone`}
-        ariaLabel="Milestone"
-        disabled={creating || !projectId}
-      />
-      {cycleOptionsForTeam.length > 0 ? (
+      </EntityMetadataItem>
+      <EntityMetadataItem priority={2}>
+        <ActorPicker
+          options={actorOptions}
+          value={assigneeId}
+          onChange={onAssigneeChange}
+          placeholder="Assignee"
+          clearLabel="Unassigned"
+          ariaLabel="Assignee"
+          disabled={creating}
+        />
+      </EntityMetadataItem>
+      <EntityMetadataItem priority={3}>
         <EntityPicker
-          options={cycleOptionsForTeam}
-          value={cycleId}
-          onChange={onCycleChange}
-          placeholder={`Set ${cycleNounLower}`}
-          triggerIcon={<RefreshCw className="text-on-surface-variant size-4" />}
-          clearLabel={`No ${cycleNounLower}`}
-          searchPlaceholder={`Search ${cycleNounLower}s…`}
-          ariaLabel={cycleNoun}
+          options={projectOptions}
+          value={projectId}
+          onChange={onProjectChange}
+          placeholder={`Set ${projectNounLower}`}
+          triggerIcon={<FolderKanban className="text-on-surface-variant size-4" />}
+          clearLabel={`No ${projectNounLower}`}
+          searchPlaceholder={`Search ${projectNounLower}s…`}
+          ariaLabel={projectNoun}
           disabled={creating}
         />
+      </EntityMetadataItem>
+      <EntityMetadataItem priority={4}>
+        <EntityPicker
+          options={milestoneOptionsForProject}
+          value={milestoneId}
+          onChange={onMilestoneChange}
+          placeholder={projectId ? 'Set milestone' : `Set a ${projectNounLower} first`}
+          triggerIcon={<Flag className="text-on-surface-variant size-4" />}
+          clearLabel="No milestone"
+          searchPlaceholder="Search milestones…"
+          emptyText={
+            projectId ? 'No milestones' : `Set a ${projectNounLower} to choose a milestone`
+          }
+          ariaLabel="Milestone"
+          disabled={creating || !projectId}
+        />
+      </EntityMetadataItem>
+      {cycleOptionsForTeam.length > 0 ? (
+        <EntityMetadataItem priority={5}>
+          <EntityPicker
+            options={cycleOptionsForTeam}
+            value={cycleId}
+            onChange={onCycleChange}
+            placeholder={`Set ${cycleNounLower}`}
+            triggerIcon={<RefreshCw className="text-on-surface-variant size-4" />}
+            clearLabel={`No ${cycleNounLower}`}
+            searchPlaceholder={`Search ${cycleNounLower}s…`}
+            ariaLabel={cycleNoun}
+            disabled={creating}
+          />
+        </EntityMetadataItem>
       ) : null}
-      <DatePicker
-        value={startDate}
-        onChange={onStartDateChange}
-        placeholder="Anticipated start"
-        formatLabel={triggerDate}
-        ariaLabel="Anticipated start"
-        disabled={creating}
-      />
-      <DatePicker
-        value={dueDate}
-        onChange={onDueDateChange}
-        placeholder="Due date"
-        formatLabel={triggerDate}
-        ariaLabel="Due date"
-        disabled={creating}
-      />
-      <LabelsPicker
-        options={labelOptions}
-        value={labelIds}
-        onToggle={onLabelToggle}
-        placeholder="Labels"
-        ariaLabel="Labels"
-        disabled={creating}
-      />
-      {estimationScale && estimationScale !== 'none' ? (
-        <EstimatePicker
-          scale={estimationScale}
-          value={estimate}
-          onChange={onEstimateChange}
+      <EntityMetadataItem priority={6}>
+        <DatePicker
+          value={startDate}
+          onChange={onStartDateChange}
+          placeholder="Anticipated start"
+          formatLabel={triggerDate}
+          ariaLabel="Anticipated start"
           disabled={creating}
         />
+      </EntityMetadataItem>
+      <EntityMetadataItem priority={7}>
+        <DatePicker
+          value={dueDate}
+          onChange={onDueDateChange}
+          placeholder="Due date"
+          formatLabel={triggerDate}
+          ariaLabel="Due date"
+          disabled={creating}
+        />
+      </EntityMetadataItem>
+      <EntityMetadataItem priority={7}>
+        <LabelsPicker
+          options={labelOptions}
+          value={labelIds}
+          onToggle={onLabelToggle}
+          placeholder="Labels"
+          ariaLabel="Labels"
+          disabled={creating}
+        />
+      </EntityMetadataItem>
+      {estimationScale && estimationScale !== 'none' ? (
+        <EntityMetadataItem priority={7}>
+          <EstimatePicker
+            scale={estimationScale}
+            value={estimate}
+            onChange={onEstimateChange}
+            disabled={creating}
+          />
+        </EntityMetadataItem>
       ) : null}
     </>
   );

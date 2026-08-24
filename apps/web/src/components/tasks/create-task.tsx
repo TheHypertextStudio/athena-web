@@ -63,6 +63,7 @@ import {
 } from '@/components/create-object/create-object-provider';
 import { useCreationContext } from '@/components/create-object/creation-context';
 import { WorkspacePicker } from '@/components/create-object/workspace-picker';
+import { EntityMetadataItem } from '@/components/views/entity-detail-layout';
 import { workflowStateOptions } from '@/components/pickers/options';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { templatePatch } from '@/components/templates/queries';
@@ -434,12 +435,15 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
       open={open}
       onOpenChange={onOpenChange}
       heading="New task"
+      propertyAriaLabel="Task properties"
       contextRow={
         globalCreation ? (
           <>
-            <WorkspacePicker disabled={creating || completedTask !== null} />
+            <EntityMetadataItem priority={0} className="max-w-none">
+              <WorkspacePicker disabled={creating || completedTask !== null} />
+            </EntityMetadataItem>
             {teams.length > 1 ? (
-              <>
+              <EntityMetadataItem priority={1} className="flex max-w-none gap-2">
                 <ChevronRight aria-hidden className="text-on-surface-variant size-4 shrink-0" />
                 <TeamPicker
                   teams={teams}
@@ -447,7 +451,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
                   onChange={changeTeam}
                   disabled={creating || completedTask !== null}
                 />
-              </>
+              </EntityMetadataItem>
             ) : null}
             <ComposerTemplateControl
               orgId={orgId}
@@ -456,6 +460,7 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
               autoApplyId={contextualRequestDefaultsApply ? defaultTemplateId : null}
               currentActorId={globalCreation.currentActorId}
               teamId={teamId}
+              contextPriority={2}
               leadingSeparator={
                 <ChevronRight aria-hidden className="text-on-surface-variant size-4 shrink-0" />
               }

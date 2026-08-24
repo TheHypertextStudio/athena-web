@@ -22,6 +22,7 @@ import { type JSX, useMemo } from 'react';
 
 import { enumOptions, HEALTH_OPTIONS, statusOptions } from '@/components/pickers/options';
 import { useStatusRegistry } from '@/components/statuses/status-registry';
+import { EntityMetadataItem } from '@/components/views/entity-detail-layout';
 
 const PRIORITY_ORDER: readonly InitiativePriority[] = ['none', 'low', 'medium', 'high'];
 const PRIORITY_LABEL: Record<InitiativePriority, string> = {
@@ -120,66 +121,78 @@ export function InitiativeComposerPickers({
   return (
     <>
       {onOwnerChange ? (
-        <ActorPicker
-          options={actorOptions}
-          value={ownerId ?? null}
-          onChange={onOwnerChange}
-          placeholder="Set owner"
-          clearLabel="No owner"
-          ariaLabel="Owner"
+        <EntityMetadataItem priority={1}>
+          <ActorPicker
+            options={actorOptions}
+            value={ownerId ?? null}
+            onChange={onOwnerChange}
+            placeholder="Set owner"
+            clearLabel="No owner"
+            ariaLabel="Owner"
+            disabled={disabled}
+          />
+        </EntityMetadataItem>
+      ) : null}
+      <EntityMetadataItem priority={0}>
+        <EnumPicker
+          options={initiativeStatusOptions}
+          value={status}
+          onChange={(next) => {
+            if (next) onStatusChange(next);
+          }}
+          placeholder="Status"
+          ariaLabel="Status"
           disabled={disabled}
         />
-      ) : null}
-      <EnumPicker
-        options={initiativeStatusOptions}
-        value={status}
-        onChange={(next) => {
-          if (next) onStatusChange(next);
-        }}
-        placeholder="Status"
-        ariaLabel="Status"
-        disabled={disabled}
-      />
+      </EntityMetadataItem>
       {onTargetTimeframeChange ? (
-        <TimeframePicker
-          label="Initiative target"
-          value={targetTimeframe ?? null}
-          fiscalYearStartMonth={fiscalYearStartMonth}
-          edge="target"
-          onChange={onTargetTimeframeChange}
-          disabled={disabled || planningCalendarLoading}
-        />
+        <EntityMetadataItem priority={2}>
+          <TimeframePicker
+            label="Initiative target"
+            value={targetTimeframe ?? null}
+            fiscalYearStartMonth={fiscalYearStartMonth}
+            edge="target"
+            onChange={onTargetTimeframeChange}
+            disabled={disabled || planningCalendarLoading}
+          />
+        </EntityMetadataItem>
       ) : null}
-      <EnumPicker
-        options={HEALTH_OPTIONS}
-        value={health}
-        onChange={onHealthChange}
-        placeholder="Set health"
-        triggerIcon={<Activity className="text-on-surface-variant size-4" />}
-        clearLabel="No health"
-        ariaLabel="Health"
-        disabled={disabled}
-      />
-      <EnumPicker
-        options={enumOptions(PRIORITY_ORDER, PRIORITY_LABEL)}
-        value={priority}
-        onChange={(next) => {
-          if (next) onPriorityChange(next);
-        }}
-        placeholder="Priority"
-        ariaLabel="Priority"
-        disabled={disabled}
-      />
-      <EnumPicker
-        options={enumOptions(CADENCE_ORDER, CADENCE_LABEL)}
-        value={updateCadence}
-        onChange={(next) => {
-          if (next) onUpdateCadenceChange(next);
-        }}
-        placeholder="Update cadence"
-        ariaLabel="Update cadence"
-        disabled={disabled}
-      />
+      <EntityMetadataItem priority={3}>
+        <EnumPicker
+          options={HEALTH_OPTIONS}
+          value={health}
+          onChange={onHealthChange}
+          placeholder="Set health"
+          triggerIcon={<Activity className="text-on-surface-variant size-4" />}
+          clearLabel="No health"
+          ariaLabel="Health"
+          disabled={disabled}
+        />
+      </EntityMetadataItem>
+      <EntityMetadataItem priority={4}>
+        <EnumPicker
+          options={enumOptions(PRIORITY_ORDER, PRIORITY_LABEL)}
+          value={priority}
+          onChange={(next) => {
+            if (next) onPriorityChange(next);
+          }}
+          placeholder="Priority"
+          ariaLabel="Priority"
+          disabled={disabled}
+        />
+      </EntityMetadataItem>
+      <EntityMetadataItem priority={5}>
+        <EnumPicker
+          options={enumOptions(CADENCE_ORDER, CADENCE_LABEL)}
+          value={updateCadence}
+          onChange={(next) => {
+            if (next) onUpdateCadenceChange(next);
+          }}
+          placeholder="Update cadence"
+          ariaLabel="Update cadence"
+          disabled={disabled}
+        />
+      </EntityMetadataItem>
     </>
   );
 }

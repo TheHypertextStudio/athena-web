@@ -15,6 +15,7 @@ import { type JSX, useMemo } from 'react';
 
 import { HEALTH_OPTIONS, statusOptions, VISIBILITY_OPTIONS } from '@/components/pickers/options';
 import { useStatusRegistry } from '@/components/statuses/status-registry';
+import { EntityMetadataItem } from '@/components/views/entity-detail-layout';
 
 /** Props for {@link ProgramComposerPickers}. */
 export interface ProgramComposerPickersProps {
@@ -67,46 +68,54 @@ export function ProgramComposerPickers({
   return (
     <>
       {onOwnerChange ? (
-        <ActorPicker
-          options={actorOptions}
-          value={ownerId ?? null}
-          onChange={onOwnerChange}
-          placeholder="Set owner"
-          clearLabel="No owner"
-          ariaLabel="Owner"
+        <EntityMetadataItem priority={1}>
+          <ActorPicker
+            options={actorOptions}
+            value={ownerId ?? null}
+            onChange={onOwnerChange}
+            placeholder="Set owner"
+            clearLabel="No owner"
+            ariaLabel="Owner"
+            disabled={disabled}
+          />
+        </EntityMetadataItem>
+      ) : null}
+      <EntityMetadataItem priority={0}>
+        <EnumPicker
+          options={programStatusOptions}
+          value={status}
+          onChange={(next) => {
+            if (next) onStatusChange(next);
+          }}
+          placeholder="Status"
+          ariaLabel="Status"
           disabled={disabled}
         />
-      ) : null}
-      <EnumPicker
-        options={programStatusOptions}
-        value={status}
-        onChange={(next) => {
-          if (next) onStatusChange(next);
-        }}
-        placeholder="Status"
-        ariaLabel="Status"
-        disabled={disabled}
-      />
-      <EnumPicker
-        options={HEALTH_OPTIONS}
-        value={health}
-        onChange={onHealthChange}
-        placeholder="Set health"
-        triggerIcon={<Activity className="text-on-surface-variant size-4" />}
-        clearLabel="No health"
-        ariaLabel="Health"
-        disabled={disabled}
-      />
-      <EnumPicker
-        options={VISIBILITY_OPTIONS}
-        value={visibility}
-        onChange={(next) => {
-          if (next) onVisibilityChange(next);
-        }}
-        placeholder="Visibility"
-        ariaLabel="Visibility"
-        disabled={disabled}
-      />
+      </EntityMetadataItem>
+      <EntityMetadataItem priority={2}>
+        <EnumPicker
+          options={HEALTH_OPTIONS}
+          value={health}
+          onChange={onHealthChange}
+          placeholder="Set health"
+          triggerIcon={<Activity className="text-on-surface-variant size-4" />}
+          clearLabel="No health"
+          ariaLabel="Health"
+          disabled={disabled}
+        />
+      </EntityMetadataItem>
+      <EntityMetadataItem priority={3}>
+        <EnumPicker
+          options={VISIBILITY_OPTIONS}
+          value={visibility}
+          onChange={(next) => {
+            if (next) onVisibilityChange(next);
+          }}
+          placeholder="Visibility"
+          ariaLabel="Visibility"
+          disabled={disabled}
+        />
+      </EntityMetadataItem>
     </>
   );
 }

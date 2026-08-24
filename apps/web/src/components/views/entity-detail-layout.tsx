@@ -331,6 +331,8 @@ export function EntityMetadataItem({
 export interface EntityMetadataRowProps {
   /** Accessible label for the property group (e.g. "Project properties"). */
   ariaLabel: string;
+  /** Additional row styling for the surface that owns these controls. */
+  className?: string | undefined;
   /** The property chips (pickers) to lay out inline. */
   children: ReactNode;
 }
@@ -347,7 +349,11 @@ export interface EntityMetadataRowProps {
  * @param props - The {@link EntityMetadataRowProps}.
  * @returns a labelled group wrapping its property chips.
  */
-export function EntityMetadataRow({ ariaLabel, children }: EntityMetadataRowProps): JSX.Element {
+export function EntityMetadataRow({
+  ariaLabel,
+  className,
+  children,
+}: EntityMetadataRowProps): JSX.Element {
   const inlineRef = useRef<HTMLDivElement>(null);
   const availableWidth = useRef(0);
   const itemMeasurements = useRef(
@@ -439,7 +445,7 @@ export function EntityMetadataRow({ ariaLabel, children }: EntityMetadataRowProp
       role="group"
       aria-label={ariaLabel}
       controlSize="sm"
-      className="entity-metadata-row min-w-0 flex-nowrap"
+      className={cn('entity-metadata-row min-w-0 flex-nowrap', className)}
     >
       <div ref={inlineRef} className="min-w-0 flex-1 overflow-hidden">
         <ControlGroup data-entity-metadata-inline="" className="flex-nowrap">

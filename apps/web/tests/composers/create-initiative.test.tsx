@@ -234,7 +234,7 @@ function initiativeTemplate(
 }
 
 describe('GlobalInitiativeComposer', () => {
-  it('renders Workspace, Owner, then Template above the title with no duplicate Owner', async () => {
+  it('renders Workspace, Owner, then Start from template above the title with no duplicate Owner', async () => {
     templatesGet.mockResolvedValue(
       jsonResponse(true, {
         items: [
@@ -247,7 +247,7 @@ describe('GlobalInitiativeComposer', () => {
 
     const workspace = screen.getByRole('combobox', { name: 'Workspace' });
     const owner = screen.getByRole('button', { name: /Owner/ });
-    const template = await screen.findByRole('button', { name: 'Template' });
+    const template = await screen.findByRole('button', { name: 'Start from template' });
     const title = screen.getByLabelText('Initiative name');
 
     expect(

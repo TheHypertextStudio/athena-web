@@ -30,6 +30,7 @@ import { type JSX, useMemo } from 'react';
 import { HEALTH_OPTIONS, statusOptions } from '@/components/pickers/options';
 import { useStatusRegistry } from '@/components/statuses/status-registry';
 import { TeamPicker } from '@/components/teams/team-picker';
+import { EntityMetadataItem } from '@/components/views/entity-detail-layout';
 
 /** The optional reference axes, supplied together or not at all. */
 export interface ProjectComposerReferenceAxes {
@@ -111,76 +112,90 @@ export function ProjectComposerPickers({
 
   return (
     <>
-      <EnumPicker
-        options={projectStatusOptions}
-        value={status}
-        onChange={(next) => {
-          if (next) onStatusChange(next);
-        }}
-        placeholder="Status"
-        ariaLabel="Status"
-        disabled={disabled}
-      />
-      <EnumPicker
-        options={HEALTH_OPTIONS}
-        value={health}
-        onChange={onHealthChange}
-        placeholder="Set health"
-        triggerIcon={<Activity className="text-on-surface-variant size-4" />}
-        clearLabel="No health"
-        ariaLabel="Health"
-        disabled={disabled}
-      />
+      <EntityMetadataItem priority={0}>
+        <EnumPicker
+          options={projectStatusOptions}
+          value={status}
+          onChange={(next) => {
+            if (next) onStatusChange(next);
+          }}
+          placeholder="Status"
+          ariaLabel="Status"
+          disabled={disabled}
+        />
+      </EntityMetadataItem>
+      <EntityMetadataItem priority={1}>
+        <EnumPicker
+          options={HEALTH_OPTIONS}
+          value={health}
+          onChange={onHealthChange}
+          placeholder="Set health"
+          triggerIcon={<Activity className="text-on-surface-variant size-4" />}
+          clearLabel="No health"
+          ariaLabel="Health"
+          disabled={disabled}
+        />
+      </EntityMetadataItem>
       {references ? (
         <>
-          <TeamPicker
-            teams={references.teams}
-            value={references.teamId}
-            onChange={references.onTeamChange}
-            disabled={disabled}
-          />
-          <ActorPicker
-            options={references.actorOptions}
-            value={references.leadId}
-            onChange={references.onLeadChange}
-            placeholder="Set lead"
-            clearLabel="No lead"
-            ariaLabel="Lead"
-            disabled={disabled}
-          />
-          {references.showProgram !== false ? (
-            <EntityPicker
-              options={references.programOptions}
-              value={references.programId}
-              onChange={references.onProgramChange}
-              placeholder={`Set ${programLabel.toLowerCase()}`}
-              triggerIcon={<Layers className="text-on-surface-variant size-4" />}
-              clearLabel={`No ${programLabel.toLowerCase()}`}
-              searchPlaceholder={`Search ${programLabel.toLowerCase()}s…`}
-              ariaLabel={programLabel}
+          <EntityMetadataItem priority={2}>
+            <TeamPicker
+              teams={references.teams}
+              value={references.teamId}
+              onChange={references.onTeamChange}
               disabled={disabled}
             />
+          </EntityMetadataItem>
+          <EntityMetadataItem priority={3}>
+            <ActorPicker
+              options={references.actorOptions}
+              value={references.leadId}
+              onChange={references.onLeadChange}
+              placeholder="Set lead"
+              clearLabel="No lead"
+              ariaLabel="Lead"
+              disabled={disabled}
+            />
+          </EntityMetadataItem>
+          {references.showProgram !== false ? (
+            <EntityMetadataItem priority={4}>
+              <EntityPicker
+                options={references.programOptions}
+                value={references.programId}
+                onChange={references.onProgramChange}
+                placeholder={`Set ${programLabel.toLowerCase()}`}
+                triggerIcon={<Layers className="text-on-surface-variant size-4" />}
+                clearLabel={`No ${programLabel.toLowerCase()}`}
+                searchPlaceholder={`Search ${programLabel.toLowerCase()}s…`}
+                ariaLabel={programLabel}
+                disabled={disabled}
+              />
+            </EntityMetadataItem>
           ) : null}
-          <TimeframeRangePicker
-            value={{ start: references.startTimeframe, target: references.targetTimeframe }}
-            fiscalYearStartMonth={references.fiscalYearStartMonth}
-            onChange={references.onTimelineChange}
-            ariaLabel="Timeline"
-            startLabel="Project start"
-            targetLabel="Project target"
-            disabled={disabled || references.planningCalendarLoading}
-          />
-          <LabelsPicker
-            options={references.initiativeOptions}
-            value={references.initiativeIds}
-            onToggle={references.onInitiativeToggle}
-            placeholder={`Link ${initiativeNoun.toLowerCase()}s`}
-            triggerIcon={<Target className="text-on-surface-variant size-4" />}
-            searchPlaceholder={`Search ${initiativeNoun.toLowerCase()}s…`}
-            emptyText={`No ${initiativeNoun.toLowerCase()}s`}
-            ariaLabel={`${initiativeNoun}s`}
-            disabled={disabled}
-          />
+          <EntityMetadataItem priority={5}>
+            <TimeframeRangePicker
+              value={{ start: references.startTimeframe, target: references.targetTimeframe }}
+              fiscalYearStartMonth={references.fiscalYearStartMonth}
+              onChange={references.onTimelineChange}
+              ariaLabel="Timeline"
+              startLabel="Project start"
+              targetLabel="Project target"
+              disabled={disabled || references.planningCalendarLoading}
+            />
+          </EntityMetadataItem>
+          <EntityMetadataItem priority={6}>
+            <LabelsPicker
+              options={references.initiativeOptions}
+              value={references.initiativeIds}
+              onToggle={references.onInitiativeToggle}
+              placeholder={`Link ${initiativeNoun.toLowerCase()}s`}
+              triggerIcon={<Target className="text-on-surface-variant size-4" />}
+              searchPlaceholder={`Search ${initiativeNoun.toLowerCase()}s…`}
+              emptyText={`No ${initiativeNoun.toLowerCase()}s`}
+              ariaLabel={`${initiativeNoun}s`}
+              disabled={disabled}
+            />
+          </EntityMetadataItem>
         </>
       ) : null}
     </>

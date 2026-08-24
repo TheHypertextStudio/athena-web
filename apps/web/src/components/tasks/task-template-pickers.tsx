@@ -18,6 +18,7 @@ import { EnumPicker } from '@docket/ui/components';
 import type { JSX } from 'react';
 
 import { PRIORITY_OPTIONS } from '@/components/pickers/options';
+import { EntityMetadataItem } from '@/components/views/entity-detail-layout';
 
 /** Props for {@link TaskTemplatePickers}. */
 export interface TaskTemplatePickersProps {
@@ -41,15 +42,17 @@ export function TaskTemplatePickers({
   disabled,
 }: TaskTemplatePickersProps): JSX.Element {
   return (
-    <EnumPicker
-      options={PRIORITY_OPTIONS}
-      value={priority}
-      onChange={(next) => {
-        onPriorityChange(next ?? 'none');
-      }}
-      placeholder="Priority"
-      ariaLabel="Priority"
-      disabled={disabled}
-    />
+    <EntityMetadataItem priority={0}>
+      <EnumPicker
+        options={PRIORITY_OPTIONS}
+        value={priority}
+        onChange={(next) => {
+          onPriorityChange(next ?? 'none');
+        }}
+        placeholder="Priority"
+        ariaLabel="Priority"
+        disabled={disabled}
+      />
+    </EntityMetadataItem>
   );
 }

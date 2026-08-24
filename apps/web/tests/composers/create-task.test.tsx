@@ -566,7 +566,7 @@ function taskTemplate(
 }
 
 describe('CreateTaskDialog — robust composer', () => {
-  it('renders Workspace, Team, then Template above the task title for a global task', async () => {
+  it('renders Workspace, Team, then Start from template above the task title for a global task', async () => {
     templatesGet.mockResolvedValue(
       jsonResponse(true, {
         items: [taskTemplate('My template', 'personal', ADA_ID, null)],
@@ -576,7 +576,7 @@ describe('CreateTaskDialog — robust composer', () => {
 
     const workspace = screen.getByRole('combobox', { name: 'Workspace' });
     const team = screen.getByRole('button', { name: /Team — currently General/ });
-    const template = await screen.findByRole('button', { name: 'Template' });
+    const template = await screen.findByRole('button', { name: 'Start from template' });
     const title = screen.getByLabelText('Task title');
 
     expect(workspace.compareDocumentPosition(team) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -595,7 +595,7 @@ describe('CreateTaskDialog — robust composer', () => {
     renderGlobalTask({ teams: TEAMS });
 
     expect(screen.getByRole('combobox', { name: 'Workspace' })).toBeVisible();
-    expect(await screen.findByRole('button', { name: 'Template' })).toBeVisible();
+    expect(await screen.findByRole('button', { name: 'Start from template' })).toBeVisible();
     expect(screen.queryByRole('button', { name: /Team/ })).toBeNull();
     expect(document.querySelectorAll('[data-testid="ChevronRightIcon"]')).toHaveLength(1);
   });
@@ -608,7 +608,7 @@ describe('CreateTaskDialog — robust composer', () => {
     });
 
     expect(screen.getByLabelText('Task title').closest('form')).toHaveClass('pt-5');
-    expect(screen.queryByRole('button', { name: 'Template' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Start from template' })).toBeNull();
   });
 
   it('keeps the legacy Team context visible when no templates are available', async () => {
@@ -636,7 +636,7 @@ describe('CreateTaskDialog — robust composer', () => {
     );
     renderComposer();
 
-    const template = await screen.findByRole('button', { name: 'Template' });
+    const template = await screen.findByRole('button', { name: 'Start from template' });
     const title = screen.getByLabelText('Task title');
 
     expect(template.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -827,7 +827,7 @@ describe('CreateTaskDialog — robust composer', () => {
     );
     const { closeCreate } = renderGlobalTask();
 
-    fireEvent.pointerDown(await screen.findByRole('button', { name: 'Template' }), {
+    fireEvent.pointerDown(await screen.findByRole('button', { name: 'Start from template' }), {
       button: 0,
       ctrlKey: false,
     });
@@ -836,7 +836,7 @@ describe('CreateTaskDialog — robust composer', () => {
     expect(closeCreate).toHaveBeenCalledOnce();
   });
 
-  it('labels a sole personal template group as Yours', async () => {
+  it('lists a sole personal template without a scope heading', async () => {
     templatesGet.mockResolvedValue(
       jsonResponse(true, {
         items: [taskTemplate('My template', 'personal', ADA_ID, null)],
@@ -844,12 +844,13 @@ describe('CreateTaskDialog — robust composer', () => {
     );
     renderGlobalTask();
 
-    fireEvent.pointerDown(await screen.findByRole('button', { name: 'Template' }), {
+    fireEvent.pointerDown(await screen.findByRole('button', { name: 'Start from template' }), {
       button: 0,
     });
 
-    expect(await screen.findByText('Yours')).toBeVisible();
-    expect(screen.getByText('My template')).toBeVisible();
+    const menu = await screen.findByRole('menu');
+    expect(within(menu).queryByText('Yours')).not.toBeInTheDocument();
+    expect(within(menu).getByText('My template')).toBeVisible();
   });
 
   it('clears a prior team workflow and cycle before submitting under the newly selected team', async () => {
@@ -962,7 +963,7 @@ describe('CreateTaskDialog — robust composer', () => {
     await waitFor(() => {
       expect(templatesGet).toHaveBeenCalled();
     });
-    fireEvent.pointerDown(await screen.findByRole('button', { name: 'Template' }), {
+    fireEvent.pointerDown(await screen.findByRole('button', { name: 'Start from template' }), {
       button: 0,
       ctrlKey: false,
     });

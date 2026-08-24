@@ -250,6 +250,8 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 /** Render the composer open with the standard rosters; returns the spy callbacks. */
@@ -503,7 +505,47 @@ function projectTemplate(
 }
 
 describe('CreateProjectDialog — robust composer', () => {
-  it('renders Workspace, Program, then Template above the title without duplicating Program below', async () => {
+  it('keeps the context and properties on one measured row and moves later controls into More', async () => {
+    let contextResize: ResizeObserverCallback | undefined;
+    let propertiesResize: ResizeObserverCallback | undefined;
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      const priority = this.getAttribute('data-entity-metadata-priority');
+      const width = priority === null ? 0 : 80;
+      return {
+        x: 0,
+        y: 0,
+        top: 0,
+        right: width,
+        bottom: 28,
+        left: 0,
+        width,
+        height: 28,
+        toJSON: () => ({}),
+      };
+    });
+    vi.stubGlobal(
+      'ResizeObserver',
+      class ResizeObserverMock {
+        constructor(readonly callback: ResizeObserverCallback) {}
+
+        observe(target: Element): void {
+          if (target.getAttribute('aria-label') === 'Composer context') {
+            contextResize = this.callback;
+          }
+          if (target.getAttribute('aria-label') === 'Project properties') {
+            propertiesResize = this.callback;
+          }
+        }
+        unobserve(): void {
+          return undefined;
+        }
+        disconnect(): void {
+          return undefined;
+        }
+      },
+    );
     templatesGet.mockResolvedValue(
       jsonResponse(true, {
         items: [projectTemplate('General project', 'team', GRACE_ID, TEAM_ID)],
@@ -513,7 +555,7 @@ describe('CreateProjectDialog — robust composer', () => {
 
     const workspace = screen.getByRole('combobox', { name: 'Workspace' });
     const program = screen.getByRole('button', { name: /Program/ });
-    const template = await screen.findByRole('button', { name: 'Template' });
+    const template = await screen.findByRole('button', { name: 'Start from template' });
     const title = screen.getByLabelText('Project name');
 
     expect(
@@ -526,7 +568,56 @@ describe('CreateProjectDialog — robust composer', () => {
     expect(screen.getAllByRole('button', { name: /Program/ })).toHaveLength(1);
     expect(screen.getByRole('button', { name: /Team/ })).toBeVisible();
     expect(document.querySelectorAll('[data-testid="ChevronRightIcon"]')).toHaveLength(2);
-    expect(workspace.closest('div.flex.flex-wrap')).toHaveClass('flex-wrap', 'justify-start');
+    expect(screen.getByRole('group', { name: 'Composer context' })).toHaveClass('flex-nowrap');
+    expect(template).toHaveClass('h-7', 'border', 'bg-transparent');
+
+    fireEvent.pointerDown(template);
+    const menu = await screen.findByRole('menu');
+    expect(within(menu).getByRole('menuitem', { name: 'General project' })).toBeVisible();
+    expect(within(menu).queryByText('Workspace')).not.toBeInTheDocument();
+    expect(within(menu).queryByText('Team')).not.toBeInTheDocument();
+    fireEvent.keyDown(menu, { key: 'Escape' });
+
+    const properties = screen.getByRole('group', { name: 'Project properties' });
+    expect(properties).toHaveClass('flex-nowrap');
+    expect(contextResize).toBeDefined();
+    expect(propertiesResize).toBeDefined();
+    act(() => {
+      contextResize?.(
+        [{ contentRect: { width: 180 } } as ResizeObserverEntry],
+        {} as ResizeObserver,
+      );
+      propertiesResize?.(
+        [{ contentRect: { width: 180 } } as ResizeObserverEntry],
+        {} as ResizeObserver,
+      );
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'More Composer context' }));
+    const moreContext = await screen.findByRole('group', { name: 'More Composer context' });
+    expect(within(moreContext).getByRole('button', { name: /Program/ })).toBeVisible();
+    expect(within(moreContext).getByRole('button', { name: 'Start from template' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'More Project properties' }));
+    const overflow = await screen.findByRole('group', { name: 'More Project properties' });
+    expect(within(overflow).getByRole('group', { name: 'Timeline' })).toBeVisible();
+
+    act(() => {
+      contextResize?.(
+        [{ contentRect: { width: 1_000 } } as ResizeObserverEntry],
+        {} as ResizeObserver,
+      );
+      propertiesResize?.(
+        [{ contentRect: { width: 1_000 } } as ResizeObserverEntry],
+        {} as ResizeObserver,
+      );
+    });
+
+    expect(screen.queryByRole('button', { name: 'More Composer context' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'More Project properties' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Program/ })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Start from template' })).toBeVisible();
+    expect(within(properties).getByRole('group', { name: 'Timeline' })).toBeVisible();
   });
 
   it.each(BLOCKED_PROJECT_DESTINATIONS)('disables submission when %s', (_reason, destination) => {

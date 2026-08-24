@@ -317,6 +317,14 @@ export default function InitiativeDetailPage(): JSX.Element {
         <EntityDetailSkeleton
           label={`Loading ${initiativeNoun.toLowerCase()}`}
           title={navigationSnapshot?.name}
+          snapshotMetadata={
+            navigationSnapshot ? (
+              <span className="text-on-surface-variant text-body-small">
+                {navigationSnapshot.status} · {navigationSnapshot.priority}
+                {navigationSnapshot.health ? ` · ${navigationSnapshot.health}` : ''}
+              </span>
+            ) : undefined
+          }
         />
         {aggregateQ.isError ? (
           <p role="alert" className="text-error text-body-medium px-6 pb-6">

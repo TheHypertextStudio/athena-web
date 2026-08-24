@@ -213,7 +213,10 @@ const programs = new Hono<AppEnv>()
     async (c) => {
       const { orgId, actorId, capabilities } = c.get('actorCtx');
       const { id } = c.req.valid('param');
-      const row = await loadProgram(orgId, id);
+      const [row, canView] = await Promise.all([
+        loadProgram(orgId, id),
+        buildTaskViewFilter(orgId, actorId),
+      ]);
       const [projectRows, taskRows, ownerRows] = await Promise.all([
         db
           .select({ id: project.id })
@@ -244,7 +247,6 @@ const programs = new Hono<AppEnv>()
               .where(and(eq(actor.id, row.ownerId), eq(actor.organizationId, orgId)))
               .limit(1),
       ]);
-      const canView = await buildTaskViewFilter(orgId, actorId);
       const taskCount = taskRows.filter(canView).length;
 
       return ok(c, ProgramDetailAggregate, {

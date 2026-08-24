@@ -299,6 +299,14 @@ export default function ProjectDetailPage(): JSX.Element {
       <EntityDetailSkeleton
         label={`Loading ${projectNoun.toLowerCase()}`}
         title={navigationSnapshot?.name}
+        snapshotMetadata={
+          navigationSnapshot ? (
+            <span className="text-on-surface-variant text-body-small">
+              {navigationSnapshot.status} · {navigationSnapshot.priority}
+              {navigationSnapshot.health ? ` · ${navigationSnapshot.health}` : ''}
+            </span>
+          ) : undefined
+        }
       />
     );
   }

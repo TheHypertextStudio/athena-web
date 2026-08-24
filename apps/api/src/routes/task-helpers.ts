@@ -3,7 +3,7 @@ import type { cycle, program } from '@docket/db';
 import { actor, db, grant, milestone, project, role, task } from '@docket/db';
 import type { GrantResourceKind } from '@docket/identity-access/grants';
 import type { TaskOut, TaskRef } from '@docket/types';
-import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { CapabilityError, NotFoundError, ValidationError } from '../error';
@@ -158,15 +158,30 @@ export async function buildTaskViewFilter(
   orgId: string,
   actorId: string,
 ): Promise<(t: ViewableTaskParts) => boolean> {
-  const actorRows = await db
+  const rows = await db
     .select({
       id: actor.id,
       roleId: role.id,
       roleKey: role.key,
       roleDefaultVisibility: role.defaultVisibility,
+      grantSubjectKind: grant.subjectKind,
+      grantSubjectId: grant.subjectId,
+      grantResourceKind: grant.resourceKind,
+      grantResourceId: grant.resourceId,
+      grantCapabilities: grant.capabilities,
+      grantEffect: grant.effect,
+      grantCascades: grant.cascades,
+      grantExpiresAt: grant.expiresAt,
     })
     .from(actor)
     .leftJoin(role, and(eq(actor.roleId, role.id), eq(actor.organizationId, role.organizationId)))
+    .leftJoin(
+      grant,
+      and(
+        eq(grant.organizationId, orgId),
+        or(eq(grant.subjectId, actor.id), eq(grant.subjectId, actor.roleId)),
+      ),
+    )
     .where(
       and(
         eq(actor.id, actorId),
@@ -175,25 +190,9 @@ export async function buildTaskViewFilter(
         eq(actor.status, 'active'),
         isNull(actor.archivedAt),
       ),
-    )
-    .limit(1);
-  const caller = actorRows[0];
+    );
+  const caller = rows[0];
   if (caller === undefined) return () => false;
-
-  const subjects = [caller.id, caller.roleId].filter((x): x is string => Boolean(x));
-  const grants = await db
-    .select({
-      subjectKind: grant.subjectKind,
-      subjectId: grant.subjectId,
-      resourceKind: grant.resourceKind,
-      resourceId: grant.resourceId,
-      capabilities: grant.capabilities,
-      effect: grant.effect,
-      cascades: grant.cascades,
-      expiresAt: grant.expiresAt,
-    })
-    .from(grant)
-    .where(and(eq(grant.organizationId, orgId), inArray(grant.subjectId, subjects)));
 
   const now = Date.now();
   const cascadingGrants = {
@@ -206,18 +205,30 @@ export async function buildTaskViewFilter(
     task: new Set<string>(),
   } satisfies Record<GrantResourceKind, Set<string>>;
   const exactTaskGrants = new Set<string>();
-  for (const g of grants) {
+  for (const g of rows) {
+    if (
+      g.grantSubjectKind === null ||
+      g.grantSubjectId === null ||
+      g.grantResourceKind === null ||
+      g.grantResourceId === null ||
+      g.grantCapabilities === null ||
+      g.grantEffect === null ||
+      g.grantCascades === null
+    )
+      continue;
     const matchesCaller =
-      (g.subjectKind === 'actor' && g.subjectId === caller.id) ||
-      (g.subjectKind === 'role' && caller.roleId !== null && g.subjectId === caller.roleId);
+      (g.grantSubjectKind === 'actor' && g.grantSubjectId === caller.id) ||
+      (g.grantSubjectKind === 'role' &&
+        caller.roleId !== null &&
+        g.grantSubjectId === caller.roleId);
     if (!matchesCaller) continue;
-    if (g.effect !== 'allow') continue;
-    if (g.capabilities.length === 0) continue;
-    if (g.expiresAt && g.expiresAt.getTime() < now) continue;
-    if (g.resourceKind === 'task') {
-      exactTaskGrants.add(g.resourceId);
-    } else if (g.cascades) {
-      cascadingGrants[g.resourceKind].add(g.resourceId);
+    if (g.grantEffect !== 'allow') continue;
+    if (g.grantCapabilities.length === 0) continue;
+    if (g.grantExpiresAt && g.grantExpiresAt.getTime() < now) continue;
+    if (g.grantResourceKind === 'task') {
+      exactTaskGrants.add(g.grantResourceId);
+    } else if (g.grantCascades) {
+      cascadingGrants[g.grantResourceKind].add(g.grantResourceId);
     }
   }
   const orgRootView = cascadingGrants.organization.has(orgId);

@@ -16,7 +16,7 @@
  * decide is only how many placeholders a given entity's metadata row and body should show.
  */
 import { Skeleton, SkeletonChip, SkeletonGlyph, SkeletonText } from '@docket/ui/primitives';
-import type { JSX } from 'react';
+import type { JSX, ReactNode } from 'react';
 
 import {
   EntityDetailLayout,
@@ -47,6 +47,8 @@ export interface EntityDetailSkeletonProps {
   title?: string | undefined;
   /** The entity's real one-line summary, when it is already known. */
   subtitle?: string | undefined;
+  /** Core status values carried by a local navigation snapshot. */
+  snapshotMetadata?: ReactNode | undefined;
 }
 
 /**
@@ -62,6 +64,7 @@ export function EntityDetailSkeleton({
   label,
   title,
   subtitle,
+  snapshotMetadata,
 }: EntityDetailSkeletonProps): JSX.Element {
   return (
     <div role="status" aria-busy="true" aria-label={label} className="h-full">
@@ -81,15 +84,16 @@ export function EntityDetailSkeleton({
         }
         metadata={
           <EntityMetadataRow ariaLabel={label}>
-            {Array.from({ length: chipCount }, (_, index) => (
-              // placeholder: one property whose value is part of the record being read.
-              <EntityMetadataItem
-                key={index}
-                priority={Math.min(index, 7) as EntityMetadataPriority}
-              >
-                <SkeletonChip />
-              </EntityMetadataItem>
-            ))}
+            {snapshotMetadata ??
+              Array.from({ length: chipCount }, (_, index) => (
+                // placeholder: one property whose value is part of the record being read.
+                <EntityMetadataItem
+                  key={index}
+                  priority={Math.min(index, 7) as EntityMetadataPriority}
+                >
+                  <SkeletonChip />
+                </EntityMetadataItem>
+              ))}
           </EntityMetadataRow>
         }
         tabs={

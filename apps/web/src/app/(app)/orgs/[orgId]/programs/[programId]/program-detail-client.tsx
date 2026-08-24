@@ -171,6 +171,14 @@ export default function ProgramDetailPage(): JSX.Element {
           tabCount={3}
           label={`Loading ${programLabel.toLowerCase()}`}
           title={navigationSnapshot?.name}
+          snapshotMetadata={
+            navigationSnapshot ? (
+              <span className="text-on-surface-variant text-body-small">
+                {navigationSnapshot.status}
+                {navigationSnapshot.health ? ` · ${navigationSnapshot.health}` : ''}
+              </span>
+            ) : undefined
+          }
         />
         {aggregateQ.isError ? (
           <p role="alert" className="text-error text-body-medium px-6 pb-6">

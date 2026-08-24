@@ -35,6 +35,7 @@ import { detailCapabilities } from '../lib/detail-capabilities';
 import { guardsInOrder } from '../lib/guards-in-order';
 import { labelsForSubject, labelsForSubjects, replaceLabels, resolveLabelSet } from '../lib/labels';
 import { created, ok } from '../lib/ok';
+import { rawResultRows } from '../lib/raw-result';
 import { diffTaskFields, recordTaskChanges, resolveTaskChangeLabels } from '../lib/task-audit';
 import { setTaskState } from '../lib/task-state';
 import { encodeListCursor, pageResult, seekAfter } from '../lib/list-cursor';
@@ -85,99 +86,79 @@ async function loadTaskDetailAggregate(
   readonly detail: z.input<typeof TaskDetail>;
   readonly workflowStates: z.input<typeof TaskDetailAggregate>['references']['workflowStates'];
 }> {
-  const [row, canView] = await Promise.all([
-    loadTask(orgId, id),
+  const [taskWithTeamRows, canView] = await Promise.all([
+    db
+      .select({ row: task, workflowStates: team.workflowStates })
+      .from(task)
+      .innerJoin(team, and(eq(task.teamId, team.id), eq(team.organizationId, orgId)))
+      .where(and(eq(task.id, id), eq(task.organizationId, orgId), isNull(task.archivedAt)))
+      .limit(1),
     buildTaskViewFilter(orgId, actorId),
   ]);
+  const taskWithTeam = taskWithTeamRows[0];
+  if (!taskWithTeam) throw new NotFoundError('Task not found');
+  const { row, workflowStates } = taskWithTeam;
   if (!canView(row)) throw new NotFoundError('Task not found');
 
-  const [teamRows, parentRows, blockedByRows, blockingRows, subtaskRows, labels] =
-    await Promise.all([
-      db
-        .select({ workflowStates: team.workflowStates })
-        .from(team)
-        .where(and(eq(team.id, row.teamId), eq(team.organizationId, orgId)))
-        .limit(1),
-      row.parentTaskId === null
-        ? Promise.resolve([])
-        : db
-            .select({
-              id: task.id,
-              teamId: task.teamId,
-              projectId: task.projectId,
-              programId: task.programId,
-              visibility: task.visibility,
-            })
-            .from(task)
-            .where(
-              and(
-                eq(task.id, row.parentTaskId),
-                eq(task.organizationId, orgId),
-                isNull(task.archivedAt),
-              ),
-            )
-            .limit(1),
-      db
-        .select({
-          id: task.id,
-          title: task.title,
-          state: task.state,
-          teamId: task.teamId,
-          projectId: task.projectId,
-          programId: task.programId,
-          visibility: task.visibility,
-        })
-        .from(taskDependency)
-        .innerJoin(task, eq(taskDependency.blockingTaskId, task.id))
-        .where(
-          and(
-            eq(taskDependency.blockedTaskId, id),
-            eq(taskDependency.organizationId, orgId),
-            isNull(task.archivedAt),
-          ),
-        ),
-      db
-        .select({
-          id: task.id,
-          title: task.title,
-          state: task.state,
-          teamId: task.teamId,
-          projectId: task.projectId,
-          programId: task.programId,
-          visibility: task.visibility,
-        })
-        .from(taskDependency)
-        .innerJoin(task, eq(taskDependency.blockedTaskId, task.id))
-        .where(
-          and(
-            eq(taskDependency.blockingTaskId, id),
-            eq(taskDependency.organizationId, orgId),
-            isNull(task.archivedAt),
-          ),
-        ),
-      db
-        .select({
-          id: task.id,
-          title: task.title,
-          state: task.state,
-          teamId: task.teamId,
-          projectId: task.projectId,
-          programId: task.programId,
-          visibility: task.visibility,
-        })
-        .from(task)
-        .where(
-          and(eq(task.parentTaskId, id), eq(task.organizationId, orgId), isNull(task.archivedAt)),
-        ),
-      labelsForSubject('task', orgId, row.id),
-    ]);
-  const teamRow = teamRows[0];
-  if (!teamRow) throw new NotFoundError('Team not found');
-  const visibleParentId = parentRows[0] && canView(parentRows[0]) ? parentRows[0].id : null;
+  const [relatedResult, labels] = await Promise.all([
+    db.execute(sql`
+      WITH related AS (
+        SELECT 'parent'::text AS relation, t.id, t.title, t.state,
+          t.team_id AS "teamId", t.project_id AS "projectId",
+          t.program_id AS "programId", t.visibility
+        FROM task t
+        WHERE t.id = ${row.parentTaskId}
+          AND t.organization_id = ${orgId}
+          AND t.archived_at IS NULL
+        UNION ALL
+        SELECT 'blockedBy'::text AS relation, t.id, t.title, t.state,
+          t.team_id AS "teamId", t.project_id AS "projectId",
+          t.program_id AS "programId", t.visibility
+        FROM task_dependency d
+        INNER JOIN task t ON t.id = d.blocking_task_id
+        WHERE d.blocked_task_id = ${id}
+          AND d.organization_id = ${orgId}
+          AND t.archived_at IS NULL
+        UNION ALL
+        SELECT 'blocking'::text AS relation, t.id, t.title, t.state,
+          t.team_id AS "teamId", t.project_id AS "projectId",
+          t.program_id AS "programId", t.visibility
+        FROM task_dependency d
+        INNER JOIN task t ON t.id = d.blocked_task_id
+        WHERE d.blocking_task_id = ${id}
+          AND d.organization_id = ${orgId}
+          AND t.archived_at IS NULL
+        UNION ALL
+        SELECT 'subtask'::text AS relation, t.id, t.title, t.state,
+          t.team_id AS "teamId", t.project_id AS "projectId",
+          t.program_id AS "programId", t.visibility
+        FROM task t
+        WHERE t.parent_task_id = ${id}
+          AND t.organization_id = ${orgId}
+          AND t.archived_at IS NULL
+      )
+      SELECT * FROM related
+    `),
+    labelsForSubject('task', orgId, row.id),
+  ]);
+  interface RelatedTaskRow {
+    readonly relation: 'parent' | 'blockedBy' | 'blocking' | 'subtask';
+    readonly id: string;
+    readonly title: string;
+    readonly state: string;
+    readonly teamId: string;
+    readonly projectId: string | null;
+    readonly programId: string | null;
+    readonly visibility: 'public' | 'private';
+  }
+  const relatedRows = rawResultRows<RelatedTaskRow>(relatedResult).filter(canView);
+  const related = (relation: RelatedTaskRow['relation']) =>
+    relatedRows.filter((candidate) => candidate.relation === relation);
+  const visibleParentId = related('parent')[0]?.id ?? null;
 
   return {
     row,
-    workflowStates: teamRow.workflowStates,
+    workflowStates,
     detail: {
       ...toOut(row, labels),
       milestoneId: row.milestoneId,
@@ -187,9 +168,9 @@ async function loadTaskDetailAggregate(
       estimateMinutes: row.estimateMinutes,
       completedAt: row.completedAt?.toISOString() ?? null,
       canceledAt: row.canceledAt?.toISOString() ?? null,
-      blocking: blockingRows.filter(canView).map(toRef),
-      blockedBy: blockedByRows.filter(canView).map(toRef),
-      subtasks: subtaskRows.filter(canView).map(toRef),
+      blocking: related('blocking').map(toRef),
+      blockedBy: related('blockedBy').map(toRef),
+      subtasks: related('subtask').map(toRef),
     },
   };
 }

@@ -538,15 +538,22 @@ const projects = new Hono<AppEnv>()
     async (c) => {
       const { orgId, actorId, capabilities } = c.get('actorCtx');
       const { id } = c.req.valid('param');
-      const rows = await db
-        .select()
+      const aggregateRows = await db
+        .select({ row: project, programRow: program, teamRow: team, leadRow: actor })
         .from(project)
+        .leftJoin(
+          program,
+          and(eq(project.programId, program.id), eq(program.organizationId, orgId)),
+        )
+        .leftJoin(team, and(eq(project.teamId, team.id), eq(team.organizationId, orgId)))
+        .leftJoin(actor, and(eq(project.leadId, actor.id), eq(actor.organizationId, orgId)))
         .where(and(eq(project.id, id), eq(project.organizationId, orgId)))
         .limit(1);
-      const row = rows[0];
-      if (!row) throw new NotFoundError('Project not found');
+      const aggregateRow = aggregateRows[0];
+      if (!aggregateRow) throw new NotFoundError('Project not found');
+      const { row, programRow, teamRow, leadRow } = aggregateRow;
 
-      const [taskRows, programRows, teamRows, leadRows] = await Promise.all([
+      const [taskRows, canView] = await Promise.all([
         db
           .select({
             id: task.id,
@@ -559,29 +566,8 @@ const projects = new Hono<AppEnv>()
           })
           .from(task)
           .where(and(eq(task.organizationId, orgId), eq(task.projectId, row.id))),
-        row.programId === null
-          ? Promise.resolve([])
-          : db
-              .select()
-              .from(program)
-              .where(and(eq(program.id, row.programId), eq(program.organizationId, orgId)))
-              .limit(1),
-        row.teamId === null
-          ? Promise.resolve([])
-          : db
-              .select()
-              .from(team)
-              .where(and(eq(team.id, row.teamId), eq(team.organizationId, orgId)))
-              .limit(1),
-        row.leadId === null
-          ? Promise.resolve([])
-          : db
-              .select()
-              .from(actor)
-              .where(and(eq(actor.id, row.leadId), eq(actor.organizationId, orgId)))
-              .limit(1),
+        buildTaskViewFilter(orgId, actorId),
       ]);
-      const canView = await buildTaskViewFilter(orgId, actorId);
       const visibleTaskRows = taskRows.filter(canView);
 
       return ok(c, ProjectDetailAggregate, {
@@ -599,9 +585,9 @@ const projects = new Hono<AppEnv>()
         viewer: { actorId },
         capabilities: detailCapabilities(capabilities),
         references: {
-          lead: leadRows[0] ? actorReference(leadRows[0]) : null,
-          program: programRows[0] ? programToOut(programRows[0]) : null,
-          team: teamRows[0] ? teamToOut(teamRows[0]) : null,
+          lead: leadRow ? actorReference(leadRow) : null,
+          program: programRow ? programToOut(programRow) : null,
+          team: teamRow ? teamToOut(teamRow) : null,
         },
         defaultView: { project: toOut(row), progress: computeProgress(visibleTaskRows) },
       });

@@ -16,7 +16,15 @@ import {
   projectOverlapsWindow,
   type ProjectRow,
 } from '../../src/routes/initiative-helpers';
-import { appWithActor, getDb, seedBaseOrg, seedStatuses } from '../support/routes-harness';
+import {
+  appWithActor,
+  getDb,
+  seedBaseOrg,
+  seedInitiative,
+  seedProgram,
+  seedProject,
+  seedStatuses,
+} from '../support/routes-harness';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -569,6 +577,331 @@ describe('detail aggregate routes', () => {
     expect(body.children).toHaveLength(100);
     const childIds = new Set(children.map((child) => child.id));
     expect(body.children.every((child) => childIds.has(child.id))).toBe(true);
+  });
+
+  it('bounds connected work and terminates cyclic stored Initiative hierarchy data', async () => {
+    const { orgId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const reader = appWithActor(initiatives, orgId, ['view'], humanActorId);
+    const root = await seedInitiative(db, schema, statusId, {
+      organizationId: orgId,
+      name: 'Bounded connected work',
+      createdBy: humanActorId,
+    });
+    const firstChild = await seedInitiative(db, schema, statusId, {
+      organizationId: orgId,
+      name: 'First connected-work child',
+      createdBy: humanActorId,
+    });
+    const secondChild = await seedInitiative(db, schema, statusId, {
+      organizationId: orgId,
+      name: 'Second connected-work child',
+      createdBy: humanActorId,
+    });
+    await db.insert(schema.initiativeHierarchyLink).values([
+      {
+        contextOrganizationId: orgId,
+        parentInitiativeId: root.id,
+        childInitiativeId: firstChild.id,
+        createdBy: humanActorId,
+      },
+      {
+        contextOrganizationId: orgId,
+        parentInitiativeId: root.id,
+        childInitiativeId: secondChild.id,
+        createdBy: humanActorId,
+      },
+    ]);
+    const programRows = await db
+      .insert(schema.program)
+      .values(
+        Array.from({ length: 101 }, (_, index) => ({
+          organizationId: orgId,
+          name: `Bounded program ${index}`,
+          status: 'active' as const,
+          statusId: statusId('program', 'active'),
+          createdBy: humanActorId,
+        })),
+      )
+      .returning();
+    const projectRows = await db
+      .insert(schema.project)
+      .values(
+        Array.from({ length: 101 }, (_, index) => ({
+          organizationId: orgId,
+          name: `Bounded project ${index}`,
+          status: 'planned' as const,
+          statusId: statusId('project', 'planned'),
+          createdBy: humanActorId,
+        })),
+      )
+      .returning();
+    const sharedProgram = programRows[0];
+    const sharedProject = projectRows[0];
+    if (!sharedProgram || !sharedProject)
+      throw new Error('connected-work fixtures were not created');
+    await db.insert(schema.initiativeProgram).values([
+      ...programRows.slice(1).map((program) => ({
+        initiativeId: root.id,
+        programId: program.id,
+        organizationId: orgId,
+      })),
+      {
+        initiativeId: firstChild.id,
+        programId: sharedProgram.id,
+        organizationId: orgId,
+      },
+      {
+        initiativeId: secondChild.id,
+        programId: sharedProgram.id,
+        organizationId: orgId,
+      },
+    ]);
+    await db.insert(schema.initiativeProject).values([
+      ...projectRows.slice(1).map((project) => ({
+        initiativeId: root.id,
+        projectId: project.id,
+        organizationId: orgId,
+      })),
+      {
+        initiativeId: firstChild.id,
+        projectId: sharedProject.id,
+        organizationId: orgId,
+      },
+      {
+        initiativeId: secondChild.id,
+        projectId: sharedProject.id,
+        organizationId: orgId,
+      },
+    ]);
+
+    const boundedResponse = await reader.request(`/${root.id}/relationships`);
+    expect(boundedResponse.status).toBe(200);
+    const bounded = (await boundedResponse.json()) as {
+      connectedWork: unknown[];
+      truncated: boolean;
+    };
+    expect(bounded.truncated).toBe(true);
+    expect(bounded.connectedWork).toHaveLength(100);
+    expect(await (await reader.request(`/${root.id}/aggregate-detail`)).json()).toMatchObject({
+      references: { owner: null },
+    });
+
+    const cycleNodes = await db
+      .insert(schema.initiative)
+      .values(
+        ['Cycle root', 'Cycle child', 'Cycle grandchild'].map((name) => ({
+          organizationId: orgId,
+          name,
+          status: 'active' as const,
+          statusId: statusId('initiative', 'active'),
+          createdBy: humanActorId,
+        })),
+      )
+      .returning();
+    const [cycleRoot, cycleChild, cycleGrandchild] = cycleNodes;
+    if (!cycleRoot || !cycleChild || !cycleGrandchild)
+      throw new Error('cyclic hierarchy fixtures were not created');
+    await db.insert(schema.initiativeHierarchyLink).values([
+      {
+        contextOrganizationId: orgId,
+        parentInitiativeId: cycleRoot.id,
+        childInitiativeId: cycleChild.id,
+        createdBy: humanActorId,
+      },
+      {
+        contextOrganizationId: orgId,
+        parentInitiativeId: cycleChild.id,
+        childInitiativeId: cycleGrandchild.id,
+        createdBy: humanActorId,
+      },
+      {
+        contextOrganizationId: orgId,
+        parentInitiativeId: cycleGrandchild.id,
+        childInitiativeId: cycleRoot.id,
+        createdBy: humanActorId,
+      },
+    ]);
+    expect((await reader.request(`/${cycleRoot.id}/relationships`)).status).toBe(200);
+    expect((await reader.request(`/${cycleRoot.id}`)).status).toBe(200);
+    expect((await reader.request(`/${cycleRoot.id}/timeline`)).status).toBe(200);
+  });
+
+  it('covers Initiative association, hierarchy mutation, and tenant-filter branches', async () => {
+    const local = await seedBaseOrg(db, schema);
+    const foreign = await seedBaseOrg(db, schema);
+    const writer = appWithActor(
+      initiatives,
+      local.orgId,
+      ['view', 'contribute', 'manage'],
+      local.humanActorId,
+    );
+    const firstParent = await seedInitiative(db, schema, local.statusId, {
+      organizationId: local.orgId,
+      name: 'First parent',
+      createdBy: local.humanActorId,
+    });
+    const secondParent = await seedInitiative(db, schema, local.statusId, {
+      organizationId: local.orgId,
+      name: 'Second parent',
+      createdBy: local.humanActorId,
+    });
+    const child = await seedInitiative(db, schema, local.statusId, {
+      organizationId: local.orgId,
+      name: 'Movable child',
+      createdBy: local.humanActorId,
+    });
+    const foreignChild = await seedInitiative(db, schema, foreign.statusId, {
+      organizationId: foreign.orgId,
+      name: 'Foreign child',
+      createdBy: foreign.humanActorId,
+    });
+    const project = await seedProject(db, schema, local.statusId, {
+      organizationId: local.orgId,
+      name: 'Linked project',
+      createdBy: local.humanActorId,
+    });
+    const program = await seedProgram(db, schema, local.statusId, {
+      organizationId: local.orgId,
+      name: 'Linked program',
+      createdBy: local.humanActorId,
+    });
+    const missingId = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
+
+    expect(
+      (
+        await writer.request(`/${firstParent.id}/projects`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ projectId: missingId }),
+        })
+      ).status,
+    ).toBe(404);
+    const linkProject = () =>
+      writer.request(`/${firstParent.id}/projects`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ projectId: project.id }),
+      });
+    expect((await linkProject()).status).toBe(201);
+    expect((await linkProject()).status).toBe(409);
+    expect(
+      (
+        await writer.request(`/${firstParent.id}/projects/${project.id}`, {
+          method: 'DELETE',
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await writer.request(`/${firstParent.id}/projects/${project.id}`, {
+          method: 'DELETE',
+        })
+      ).status,
+    ).toBe(404);
+
+    expect(
+      (
+        await writer.request(`/${firstParent.id}/programs`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ programId: missingId }),
+        })
+      ).status,
+    ).toBe(404);
+    const linkProgram = () =>
+      writer.request(`/${firstParent.id}/programs`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ programId: program.id }),
+      });
+    expect((await linkProgram()).status).toBe(201);
+    expect((await linkProgram()).status).toBe(409);
+    expect(
+      (
+        await writer.request(`/${firstParent.id}/programs/${program.id}`, {
+          method: 'DELETE',
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await writer.request(`/${firstParent.id}/programs/${program.id}`, {
+          method: 'DELETE',
+        })
+      ).status,
+    ).toBe(404);
+
+    const linkedResponse = await writer.request('/hierarchy-links', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        parentInitiativeId: firstParent.id,
+        childInitiativeId: child.id,
+      }),
+    });
+    expect(linkedResponse.status).toBe(201);
+    const link = (await linkedResponse.json()) as { id: string };
+    expect(
+      (
+        await writer.request(`/hierarchy-links/${link.id}`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ parentInitiativeId: secondParent.id }),
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await writer.request(`/hierarchy-links/${missingId}`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ parentInitiativeId: firstParent.id }),
+        })
+      ).status,
+    ).toBe(404);
+    expect((await writer.request(`/hierarchy-links/${link.id}`, { method: 'DELETE' })).status).toBe(
+      200,
+    );
+    expect((await writer.request(`/hierarchy-links/${link.id}`, { method: 'DELETE' })).status).toBe(
+      404,
+    );
+
+    expect(
+      (
+        await writer.request(`/${firstParent.id}`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ leadTeamId: local.teamId, health: null }),
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await writer.request(`/${firstParent.id}`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ leadTeamId: missingId }),
+        })
+      ).status,
+    ).toBe(404);
+
+    await db.insert(schema.initiativeHierarchyLink).values([
+      {
+        contextOrganizationId: local.orgId,
+        parentInitiativeId: firstParent.id,
+        childInitiativeId: child.id,
+        createdBy: local.humanActorId,
+      },
+      {
+        contextOrganizationId: local.orgId,
+        parentInitiativeId: secondParent.id,
+        childInitiativeId: foreignChild.id,
+        createdBy: local.humanActorId,
+      },
+    ]);
+    expect((await writer.request(`/${secondParent.id}/timeline`)).status).toBe(200);
+    expect((await writer.request(`/${firstParent.id}`, { method: 'DELETE' })).status).toBe(200);
+    expect((await writer.request(`/${child.id}`)).status).toBe(200);
   });
 
   it('settles each initial aggregate within four database round trips', async () => {

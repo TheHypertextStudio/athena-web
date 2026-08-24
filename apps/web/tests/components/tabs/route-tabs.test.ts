@@ -11,7 +11,8 @@
  * - a malformed id segment — above all the literal `undefined` (which produced the infamous
  *   "Session undefi…" junk tab) — resolves to `null`, so no junk tab is ever opened.
  */
-import { describe, expect, it } from 'vitest';
+import type { OrganizationId, ProjectId } from '@docket/types';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 
 import { tabRefFromPath } from '@/components/tabs/route-tabs';
 
@@ -39,6 +40,14 @@ describe('tabRefFromPath', () => {
       orgId: ORG,
       id: ID,
     });
+  });
+
+  it('correlates the route discriminator with branded identifiers', () => {
+    const ref = tabRefFromPath(`/orgs/${ORG}/projects/${ID}`);
+    if (ref?.type !== 'project') throw new Error('Expected a project tab');
+
+    expectTypeOf(ref.orgId).toEqualTypeOf<OrganizationId>();
+    expectTypeOf(ref.id).toEqualTypeOf<ProjectId>();
   });
 
   it('returns null for list, cross-org, and unknown-segment routes', () => {

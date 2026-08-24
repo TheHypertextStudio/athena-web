@@ -653,8 +653,9 @@ export function WorkList<TTarget extends ViewTarget>({
                       'focus-visible:ring-primary min-w-0 rounded-sm outline-none focus-visible:ring-2',
                       STRETCHED_LINK,
                     )}
-                    onClick={() => {
+                    onClick={(event) => {
                       seedNavigationSnapshot(navigationSnapshot);
+                      event.stopPropagation();
                     }}
                   >
                     <span className="text-on-surface text-body-medium block truncate">

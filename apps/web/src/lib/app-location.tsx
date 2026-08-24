@@ -82,6 +82,7 @@ interface ShellScrollPosition {
 }
 
 const HISTORY_ENTRY_KEY = '__docketNavigationEntry';
+const SHELL_SCROLL_HISTORY_CAPACITY = 100;
 const shellScrollPositions = new Map<string, ShellScrollPosition>();
 let activeHistoryEntry: string | null = null;
 let historyEntrySequence = 0;
@@ -95,6 +96,16 @@ function historyState(value: unknown): Readonly<Record<string, unknown>> {
 function nextHistoryEntry(): string {
   historyEntrySequence += 1;
   return `docket-${String(historyEntrySequence)}`;
+}
+
+function rememberShellScroll(entry: string, position: ShellScrollPosition): void {
+  shellScrollPositions.delete(entry);
+  shellScrollPositions.set(entry, position);
+  while (shellScrollPositions.size > SHELL_SCROLL_HISTORY_CAPACITY) {
+    const oldest = shellScrollPositions.keys().next().value;
+    if (oldest === undefined) return;
+    shellScrollPositions.delete(oldest);
+  }
 }
 
 function ensureHistoryEntry(): string {
@@ -165,14 +176,14 @@ export function navigateWithoutRouter(href: string): void {
 function navigateHistory(href: string, replace: boolean, scroll: boolean): void {
   const previousEntry = ensureHistoryEntry();
   const previousPosition = shellScrollPosition();
-  shellScrollPositions.set(previousEntry, previousPosition);
+  rememberShellScroll(previousEntry, previousPosition);
   const nextEntry = nextHistoryEntry();
   const nextPosition = scroll ? { left: 0, top: 0 } : previousPosition;
   const state = { [HISTORY_ENTRY_KEY]: nextEntry };
   if (replace) window.history.replaceState(state, '', href);
   else window.history.pushState(state, '', href);
   activeHistoryEntry = nextEntry;
-  shellScrollPositions.set(nextEntry, nextPosition);
+  rememberShellScroll(nextEntry, nextPosition);
   syncLocation();
   restoreShellScroll(nextPosition);
 }
@@ -300,7 +311,7 @@ export function AppLocationProvider({
     ensureHistoryEntry();
     const handlePopState = (event: PopStateEvent): void => {
       if (activeHistoryEntry !== null) {
-        shellScrollPositions.set(activeHistoryEntry, shellScrollPosition());
+        rememberShellScroll(activeHistoryEntry, shellScrollPosition());
       }
       const stored = historyState(event.state)[HISTORY_ENTRY_KEY];
       activeHistoryEntry = typeof stored === 'string' ? stored : ensureHistoryEntry();

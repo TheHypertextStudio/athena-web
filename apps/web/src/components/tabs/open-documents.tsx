@@ -41,7 +41,7 @@ import {
 
 import { resolveTabTitle, titleFromCache } from './resolve-title';
 import { tabRefFromPath } from './route-tabs';
-import { hrefForTab, type TabRef, tabKey } from './types';
+import { hrefForTab, parseTabRef, type TabRef, tabKey } from './types';
 
 /** The controls + state exposed by {@link useOpenDocuments}. */
 export interface OpenDocumentsValue {
@@ -63,9 +63,9 @@ function storageKey(userId: string): string {
   return `docket:open-tabs:${userId}`;
 }
 
-interface PersistedTab extends TabRef {
+type PersistedTab = TabRef & {
   readonly title: string | null;
-}
+};
 
 const TAB_TYPES = new Set<PersistedTab['type']>([
   'task',
@@ -84,14 +84,17 @@ function readPersisted(userId: string): readonly OpenTab[] {
   // and document ids must be real ULIDs, so any junk tab persisted before the route guard
   // landed — e.g. a stale "Session undefined" with `id: 'undefined'` — is dropped on hydration
   // rather than resurrected.
-  return parsed.filter(isPersistedTab).map((tab) => newTab(tab, tab.title));
+  return parsed.flatMap((value) => {
+    const tab = parsePersistedTab(value);
+    return tab === null ? [] : [newTab(tab, tab.title)];
+  });
 }
 
-/** Whether one parsed entry is a usable descriptor rather than drift from an older schema. */
-function isPersistedTab(value: unknown): value is PersistedTab {
-  if (typeof value !== 'object' || value === null) return false;
+/** Parse one stored descriptor while tolerating corrupt or older session data. */
+function parsePersistedTab(value: unknown): PersistedTab | null {
+  if (typeof value !== 'object' || value === null) return null;
   const tab = value as Readonly<Record<string, unknown>>;
-  return (
+  const structurallyValid =
     typeof tab['type'] === 'string' &&
     TAB_TYPES.has(tab['type'] as PersistedTab['type']) &&
     typeof tab['id'] === 'string' &&
@@ -100,16 +103,26 @@ function isPersistedTab(value: unknown): value is PersistedTab {
     // unnamed rather than named after its id, and re-resolves on the next visit.
     (typeof tab['title'] === 'string' || tab['title'] === null) &&
     ULID_REGEX.test(tab['id']) &&
-    ULID_REGEX.test(tab['orgId'])
-  );
+    ULID_REGEX.test(tab['orgId']);
+  if (!structurallyValid) return null;
+  try {
+    return {
+      ...parseTabRef(
+        tab['type'] as PersistedTab['type'],
+        tab['orgId'] as string,
+        tab['id'] as string,
+      ),
+      title: tab['title'] as string | null,
+    };
+  } catch {
+    return null;
+  }
 }
 
 /** Persist the tab set for a user, ignoring storage failures (quota/private mode). */
 function persist(userId: string, tabs: readonly OpenTab[]): void {
   const descriptors: readonly PersistedTab[] = tabs.map(({ type, orgId, id, title }) => ({
-    type,
-    orgId,
-    id,
+    ...parseTabRef(type, orgId, id),
     title,
   }));
   writeStoredJson(storageKey(userId), descriptors, 'session');
@@ -307,7 +320,8 @@ export function OpenDocumentsProvider({
       // updater) so we don't trigger the router's state change while rendering this provider.
       if (key === activeKey) {
         const neighbor = next[index] ?? next[index - 1] ?? null;
-        if (neighbor) router.push(hrefForTab(neighbor));
+        if (neighbor)
+          router.push(hrefForTab(parseTabRef(neighbor.type, neighbor.orgId, neighbor.id)));
         else if (closed) router.push(`/orgs/${closed.orgId}/my-work`);
         else router.push('/today');
       }
@@ -326,7 +340,7 @@ export function OpenDocumentsProvider({
             : tabs.length - 1
           : (activeIndex + direction + tabs.length) % tabs.length;
       const target = tabs[targetIndex];
-      if (target) router.push(hrefForTab(target));
+      if (target) router.push(hrefForTab(parseTabRef(target.type, target.orgId, target.id)));
     },
     [tabs, activeKey, router],
   );

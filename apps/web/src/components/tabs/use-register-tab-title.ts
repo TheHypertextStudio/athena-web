@@ -15,7 +15,7 @@
 import { useEffect } from 'react';
 
 import { useOptionalOpenDocuments } from './open-documents';
-import type { TabDocType } from './types';
+import { parseTabRef, type TabDocType } from './types';
 
 /**
  * Keep this document's tab titled with the name the page is displaying.
@@ -42,6 +42,6 @@ export function useRegisterTabTitle(
   const registerTitle = store?.registerTitle;
   useEffect(() => {
     if (!title || !registerTitle) return;
-    registerTitle({ type: kind, orgId, id }, title);
+    registerTitle(parseTabRef(kind, orgId, id), title);
   }, [registerTitle, kind, orgId, id, title]);
 }

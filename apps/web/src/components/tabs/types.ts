@@ -16,6 +16,13 @@ import {
   ProgramId,
   ProjectId,
   TaskId,
+  type AgentSessionId as AgentSessionIdValue,
+  type CycleId as CycleIdValue,
+  type InitiativeId as InitiativeIdValue,
+  type OrganizationId as OrganizationIdValue,
+  type ProgramId as ProgramIdValue,
+  type ProjectId as ProjectIdValue,
+  type TaskId as TaskIdValue,
 } from '@docket/types';
 import type { OpenTab, TabDocType } from '@docket/ui/components';
 
@@ -23,14 +30,40 @@ import { buildAuthenticatedHref } from '@/lib/authenticated-route';
 
 export type { OpenTab, TabDocType };
 
-/** The minimal identity of an open document: its kind, owning org, and id. */
-export interface TabRef {
-  /** The document kind (selects the glyph + the title-resolution + href shape). */
-  readonly type: TabDocType;
-  /** The owning org id (tabs are org-scoped). */
-  readonly orgId: string;
-  /** The document id. */
-  readonly id: string;
+/** The minimal identity of an open document, with its kind correlated to its branded id. */
+export type TabRef =
+  | { readonly type: 'task'; readonly orgId: OrganizationIdValue; readonly id: TaskIdValue }
+  | { readonly type: 'project'; readonly orgId: OrganizationIdValue; readonly id: ProjectIdValue }
+  | { readonly type: 'program'; readonly orgId: OrganizationIdValue; readonly id: ProgramIdValue }
+  | {
+      readonly type: 'initiative';
+      readonly orgId: OrganizationIdValue;
+      readonly id: InitiativeIdValue;
+    }
+  | { readonly type: 'cycle'; readonly orgId: OrganizationIdValue; readonly id: CycleIdValue }
+  | {
+      readonly type: 'session';
+      readonly orgId: OrganizationIdValue;
+      readonly id: AgentSessionIdValue;
+    };
+
+/** Parse a persisted or legacy tab identity into its correlated branded descriptor. */
+export function parseTabRef(type: TabDocType, orgId: string, id: string): TabRef {
+  const organizationId = OrganizationId.parse(orgId);
+  switch (type) {
+    case 'task':
+      return { type, orgId: organizationId, id: TaskId.parse(id) };
+    case 'project':
+      return { type, orgId: organizationId, id: ProjectId.parse(id) };
+    case 'program':
+      return { type, orgId: organizationId, id: ProgramId.parse(id) };
+    case 'initiative':
+      return { type, orgId: organizationId, id: InitiativeId.parse(id) };
+    case 'cycle':
+      return { type, orgId: organizationId, id: CycleId.parse(id) };
+    case 'session':
+      return { type, orgId: organizationId, id: AgentSessionId.parse(id) };
+  }
 }
 
 /** The stable tab key for a document ref (`<type>:<orgId>:<id>`). */
@@ -56,37 +89,36 @@ export const TAB_ROUTE_SEGMENT: Record<TabDocType, string> = {
 
 /** Build the detail-route href for a document ref. */
 export function hrefForTab(ref: TabRef): string {
-  const orgId = OrganizationId.parse(ref.orgId);
   switch (ref.type) {
     case 'task':
       return buildAuthenticatedHref('/orgs/[orgId]/tasks/[taskId]', {
-        orgId,
-        taskId: TaskId.parse(ref.id),
+        orgId: ref.orgId,
+        taskId: ref.id,
       });
     case 'project':
       return buildAuthenticatedHref('/orgs/[orgId]/projects/[projectId]', {
-        orgId,
-        projectId: ProjectId.parse(ref.id),
+        orgId: ref.orgId,
+        projectId: ref.id,
       });
     case 'program':
       return buildAuthenticatedHref('/orgs/[orgId]/programs/[programId]', {
-        orgId,
-        programId: ProgramId.parse(ref.id),
+        orgId: ref.orgId,
+        programId: ref.id,
       });
     case 'initiative':
       return buildAuthenticatedHref('/orgs/[orgId]/initiatives/[initiativeId]', {
-        orgId,
-        initiativeId: InitiativeId.parse(ref.id),
+        orgId: ref.orgId,
+        initiativeId: ref.id,
       });
     case 'cycle':
       return buildAuthenticatedHref('/orgs/[orgId]/cycles/[cycleId]', {
-        orgId,
-        cycleId: CycleId.parse(ref.id),
+        orgId: ref.orgId,
+        cycleId: ref.id,
       });
     case 'session':
       return buildAuthenticatedHref('/orgs/[orgId]/sessions/[sessionId]', {
-        orgId,
-        sessionId: AgentSessionId.parse(ref.id),
+        orgId: ref.orgId,
+        sessionId: ref.id,
       });
   }
 }

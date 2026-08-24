@@ -108,6 +108,7 @@ function task(index: number) {
 describe('WorkList', () => {
   it('keeps the mounted row count bounded and selects the active row with X', () => {
     const onSelectionChange = vi.fn();
+    const onActivate = vi.fn();
     render(
       <WorkList
         target="task"
@@ -117,7 +118,7 @@ describe('WorkList', () => {
         groupPages={[]}
         selectedIds={new Set()}
         onSelectionChange={onSelectionChange}
-        onActivate={vi.fn()}
+        onActivate={onActivate}
       />,
     );
 
@@ -134,6 +135,8 @@ describe('WorkList', () => {
       '/orgs/01ARZ3NDEKTSV4RRFFQ69G5FA0/tasks/01ARZ3NDEKTSV4RRFFQ6900000',
     );
     expect(taskLink).not.toContainElement(screen.getByRole('checkbox', { name: 'Select Task 0' }));
+    fireEvent.click(taskLink, { metaKey: true });
+    expect(onActivate).not.toHaveBeenCalled();
     fireEvent.keyDown(grid, { key: 'ArrowDown' });
     fireEvent.keyDown(grid, { key: 'x' });
     expect(onSelectionChange).toHaveBeenCalledWith(new Set([task(0).id]));

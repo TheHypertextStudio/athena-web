@@ -9,7 +9,7 @@
  */
 import { ULID_REGEX } from '@docket/types';
 
-import { type TabDocType, type TabRef, TAB_ROUTE_SEGMENT } from './types';
+import { parseTabRef, type TabDocType, type TabRef, TAB_ROUTE_SEGMENT } from './types';
 
 /** The route segment → document kind lookup, inverted from {@link TAB_ROUTE_SEGMENT}. */
 const SEGMENT_TYPE: ReadonlyMap<string, TabDocType> = new Map(
@@ -41,5 +41,5 @@ export function tabRefFromPath(pathname: string): TabRef | null {
   if (!ULID_REGEX.test(orgId) || !ULID_REGEX.test(id)) return null;
   const type = SEGMENT_TYPE.get(segment);
   if (!type) return null;
-  return { type, orgId, id };
+  return parseTabRef(type, orgId, id);
 }

@@ -11,11 +11,13 @@ import { idempotency } from '../../src/lib/idempotency';
 import { flushDeferredWork } from '../../src/lib/after-response';
 import { EntityWriteBus, type EntityWriteEvent } from '../../src/events/entity-write-bus';
 import { setEntityWriteBus } from '../../src/events/entity-write-registry';
+import { objectCommandChangeSetId } from '../../src/mcp/change-set';
 import {
   appWithActor,
   fakeSession,
   getDb,
   seedBaseOrg,
+  seedProgram,
   seedProject,
   seedTaskAccessOrg,
 } from '../support/routes-harness';
@@ -46,11 +48,607 @@ async function send(
   });
 }
 
+async function sendReplayAccess(
+  app: ReturnType<typeof appWithActor>,
+  direction: 'undo' | 'redo',
+  receipt: Record<string, unknown>,
+): Promise<Response> {
+  return app.request('/replay-access', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ direction, receipt }),
+  });
+}
+
 async function seedCommandOrg(): Promise<Awaited<ReturnType<typeof seedBaseOrg>>> {
   return seedTaskAccessOrg(db, schema, 'manage');
 }
 
+async function setOrgGrantCapability(
+  seeded: Awaited<ReturnType<typeof seedBaseOrg>>,
+  capability: 'contribute' | 'assign' | 'manage',
+): Promise<void> {
+  await db
+    .update(schema.grant)
+    .set({ capabilities: [capability] })
+    .where(
+      and(
+        eq(schema.grant.organizationId, seeded.orgId),
+        eq(schema.grant.subjectId, seeded.humanActorId),
+        eq(schema.grant.resourceKind, 'organization'),
+        eq(schema.grant.resourceId, seeded.orgId),
+      ),
+    );
+}
+
+type DirectionalReferenceKind = 'task' | 'project' | 'program' | 'team';
+
+interface DirectionalReferenceScenario {
+  readonly key: string;
+  readonly objectKind: 'task' | 'project';
+  readonly objectId: string;
+  readonly before: { readonly kind: DirectionalReferenceKind; readonly id: string };
+  readonly after: { readonly kind: DirectionalReferenceKind; readonly id: string };
+  readonly receipt: Record<string, unknown>;
+}
+
+async function seedDirectionalReferenceScenarios(): Promise<{
+  readonly seeded: Awaited<ReturnType<typeof seedBaseOrg>>;
+  readonly app: ReturnType<typeof appWithActor>;
+  readonly scenarios: readonly DirectionalReferenceScenario[];
+}> {
+  const seeded = await seedCommandOrg();
+  const projectBefore = await seedProject(db, schema, seeded.statusId, {
+    organizationId: seeded.orgId,
+    teamId: seeded.teamId,
+    createdBy: seeded.humanActorId,
+    name: 'Reference Project before',
+  });
+  const projectAfter = await seedProject(db, schema, seeded.statusId, {
+    organizationId: seeded.orgId,
+    teamId: seeded.teamId,
+    createdBy: seeded.humanActorId,
+    name: 'Reference Project after',
+  });
+  const programBefore = await seedProgram(db, schema, seeded.statusId, {
+    organizationId: seeded.orgId,
+    createdBy: seeded.humanActorId,
+    name: 'Reference Program before',
+  });
+  const programAfter = await seedProgram(db, schema, seeded.statusId, {
+    organizationId: seeded.orgId,
+    createdBy: seeded.humanActorId,
+    name: 'Reference Program after',
+  });
+  const [teamAfter] = await db
+    .insert(schema.team)
+    .values({
+      organizationId: seeded.orgId,
+      name: 'Reference Team after',
+      key: `A${Math.random().toString(36).slice(2, 6)}`,
+    })
+    .returning({ id: schema.team.id });
+  const parents = await db
+    .insert(schema.task)
+    .values(
+      ['Reference parent before', 'Reference parent after'].map((title) => ({
+        organizationId: seeded.orgId,
+        teamId: seeded.teamId,
+        title,
+        state: 'backlog',
+        statusId: seeded.statusId('task', 'backlog'),
+      })),
+    )
+    .returning({ id: schema.task.id, title: schema.task.title });
+  const parentBefore = parents.find(({ title }) => title.endsWith('before'));
+  const parentAfter = parents.find(({ title }) => title.endsWith('after'));
+  if (!teamAfter || !parentBefore || !parentAfter) {
+    throw new Error('Directional reference target fixture insert failed');
+  }
+  const taskSources = await db
+    .insert(schema.task)
+    .values([
+      {
+        organizationId: seeded.orgId,
+        teamId: seeded.teamId,
+        title: 'Task Project reference source',
+        state: 'backlog',
+        statusId: seeded.statusId('task', 'backlog'),
+        projectId: projectBefore.id,
+      },
+      {
+        organizationId: seeded.orgId,
+        teamId: seeded.teamId,
+        title: 'Task Program reference source',
+        state: 'backlog',
+        statusId: seeded.statusId('task', 'backlog'),
+        programId: programBefore.id,
+      },
+      {
+        organizationId: seeded.orgId,
+        teamId: seeded.teamId,
+        title: 'Task parent reference source',
+        state: 'backlog',
+        statusId: seeded.statusId('task', 'backlog'),
+        parentTaskId: parentBefore.id,
+      },
+    ])
+    .returning({ id: schema.task.id, title: schema.task.title });
+  const taskProject = taskSources.find(({ title }) => title.includes('Project'));
+  const taskProgram = taskSources.find(({ title }) => title.includes('Program'));
+  const taskParent = taskSources.find(({ title }) => title.includes('parent'));
+  if (!taskProject || !taskProgram || !taskParent) {
+    throw new Error('Directional Task source fixture insert failed');
+  }
+  const projectTeam = await seedProject(db, schema, seeded.statusId, {
+    organizationId: seeded.orgId,
+    teamId: seeded.teamId,
+    createdBy: seeded.humanActorId,
+    name: 'Project Team reference source',
+  });
+  const projectProgram = await seedProject(db, schema, seeded.statusId, {
+    organizationId: seeded.orgId,
+    teamId: seeded.teamId,
+    programId: programBefore.id,
+    createdBy: seeded.humanActorId,
+    name: 'Project Program reference source',
+  });
+  const app = appWithActor(objectCommands, seeded.orgId, ['manage'], seeded.humanActorId);
+  const definitions = [
+    {
+      key: 'task-project',
+      objectKind: 'task' as const,
+      objectId: taskProject.id,
+      operation: {
+        type: 'replace_property',
+        property: 'projectId',
+        value: projectAfter.id,
+      },
+      before: { kind: 'project' as const, id: projectBefore.id },
+      after: { kind: 'project' as const, id: projectAfter.id },
+    },
+    {
+      key: 'task-program',
+      objectKind: 'task' as const,
+      objectId: taskProgram.id,
+      operation: {
+        type: 'replace_property',
+        property: 'programId',
+        value: programAfter.id,
+      },
+      before: { kind: 'program' as const, id: programBefore.id },
+      after: { kind: 'program' as const, id: programAfter.id },
+    },
+    {
+      key: 'task-parent',
+      objectKind: 'task' as const,
+      objectId: taskParent.id,
+      operation: { type: 'change_parent', parentId: parentAfter.id },
+      before: { kind: 'task' as const, id: parentBefore.id },
+      after: { kind: 'task' as const, id: parentAfter.id },
+    },
+    {
+      key: 'project-team',
+      objectKind: 'project' as const,
+      objectId: projectTeam.id,
+      operation: {
+        type: 'replace_property',
+        property: 'teamId',
+        value: teamAfter.id,
+      },
+      before: { kind: 'team' as const, id: seeded.teamId },
+      after: { kind: 'team' as const, id: teamAfter.id },
+    },
+    {
+      key: 'project-program',
+      objectKind: 'project' as const,
+      objectId: projectProgram.id,
+      operation: {
+        type: 'replace_property',
+        property: 'programId',
+        value: programAfter.id,
+      },
+      before: { kind: 'program' as const, id: programBefore.id },
+      after: { kind: 'program' as const, id: programAfter.id },
+    },
+  ];
+  const scenarios: DirectionalReferenceScenario[] = [];
+  for (const definition of definitions) {
+    const response = await send(app, {
+      commandId: `directional-${definition.key}`,
+      objectKind: definition.objectKind,
+      objectIds: [definition.objectId],
+      operation: definition.operation,
+    });
+    expect(response.status, definition.key).toBe(200);
+    const payload = (await response.json()) as { receipt: Record<string, unknown> };
+    scenarios.push({ ...definition, receipt: payload.receipt });
+  }
+  return { seeded, app, scenarios };
+}
+
+async function replaceDirectionalReplayGrants(
+  seeded: Awaited<ReturnType<typeof seedBaseOrg>>,
+  scenarios: readonly DirectionalReferenceScenario[],
+  referenceSide: 'before' | 'after',
+): Promise<void> {
+  await db
+    .delete(schema.grant)
+    .where(
+      and(
+        eq(schema.grant.organizationId, seeded.orgId),
+        eq(schema.grant.subjectKind, 'actor'),
+        eq(schema.grant.subjectId, seeded.humanActorId),
+      ),
+    );
+  const resources = new Map<string, { kind: DirectionalReferenceKind; id: string }>();
+  for (const scenario of scenarios) {
+    resources.set(`${scenario.objectKind}:${scenario.objectId}`, {
+      kind: scenario.objectKind,
+      id: scenario.objectId,
+    });
+    const reference = scenario[referenceSide];
+    resources.set(`${reference.kind}:${reference.id}`, reference);
+  }
+  await db.insert(schema.grant).values(
+    [...resources.values()].map((resource) => ({
+      organizationId: seeded.orgId,
+      subjectKind: 'actor' as const,
+      subjectId: seeded.humanActorId,
+      resourceKind: resource.kind,
+      resourceId: resource.id,
+      capabilities: ['contribute' as const],
+      effect: 'allow' as const,
+      cascades: false,
+    })),
+  );
+}
+
 describe('object commands', () => {
+  it('checks Undo access against each before reference using its actual resource kind', async () => {
+    const { seeded, app, scenarios } = await seedDirectionalReferenceScenarios();
+    await replaceDirectionalReplayGrants(seeded, scenarios, 'after');
+    for (const scenario of scenarios) {
+      expect(
+        await (await sendReplayAccess(app, 'undo', scenario.receipt)).json(),
+        scenario.key,
+      ).toEqual({ allowed: false, deniedIds: [scenario.before.id] });
+    }
+    await replaceDirectionalReplayGrants(seeded, scenarios, 'before');
+    for (const scenario of scenarios) {
+      expect(
+        await (await sendReplayAccess(app, 'undo', scenario.receipt)).json(),
+        scenario.key,
+      ).toEqual({ allowed: true, deniedIds: [] });
+    }
+  });
+
+  it('checks Redo access against each after reference using its actual resource kind', async () => {
+    const { seeded, app, scenarios } = await seedDirectionalReferenceScenarios();
+    await replaceDirectionalReplayGrants(seeded, scenarios, 'before');
+    for (const scenario of scenarios) {
+      expect(
+        await (await sendReplayAccess(app, 'redo', scenario.receipt)).json(),
+        scenario.key,
+      ).toEqual({ allowed: false, deniedIds: [scenario.after.id] });
+    }
+    await replaceDirectionalReplayGrants(seeded, scenarios, 'after');
+    for (const scenario of scenarios) {
+      expect(
+        await (await sendReplayAccess(app, 'redo', scenario.receipt)).json(),
+        scenario.key,
+      ).toEqual({ allowed: true, deniedIds: [] });
+    }
+  });
+
+  it('requires contribute to preflight a Task archivedAt receipt', async () => {
+    const seeded = await seedCommandOrg();
+    const [taskRow] = await db
+      .insert(schema.task)
+      .values({
+        organizationId: seeded.orgId,
+        teamId: seeded.teamId,
+        title: 'Contribute archive preflight',
+        state: 'backlog',
+        statusId: seeded.statusId('task', 'backlog'),
+      })
+      .returning({ id: schema.task.id });
+    if (!taskRow) throw new Error('Task archive fixture insert failed');
+    const app = appWithActor(objectCommands, seeded.orgId, ['manage'], seeded.humanActorId);
+    const forward = await send(app, {
+      commandId: 'task-archive-access-requirement',
+      objectKind: 'task',
+      objectIds: [taskRow.id],
+      operation: { type: 'trash' },
+    });
+    expect(forward.status).toBe(200);
+    const payload = (await forward.json()) as { receipt: Record<string, unknown> };
+    await setOrgGrantCapability(seeded, 'contribute');
+
+    expect(await (await sendReplayAccess(app, 'undo', payload.receipt)).json()).toEqual({
+      allowed: true,
+      deniedIds: [],
+    });
+  });
+
+  it('requires assign to preflight a Task assigneeId receipt', async () => {
+    const seeded = await seedCommandOrg();
+    const [taskRow] = await db
+      .insert(schema.task)
+      .values({
+        organizationId: seeded.orgId,
+        teamId: seeded.teamId,
+        title: 'Assign preflight',
+        state: 'backlog',
+        statusId: seeded.statusId('task', 'backlog'),
+      })
+      .returning({ id: schema.task.id });
+    if (!taskRow) throw new Error('Task assignment fixture insert failed');
+    const app = appWithActor(objectCommands, seeded.orgId, ['manage'], seeded.humanActorId);
+    const forward = await send(app, {
+      commandId: 'task-assignee-access-requirement',
+      objectKind: 'task',
+      objectIds: [taskRow.id],
+      operation: {
+        type: 'replace_property',
+        property: 'assigneeId',
+        value: seeded.humanActorId,
+      },
+    });
+    expect(forward.status).toBe(200);
+    const payload = (await forward.json()) as { receipt: Record<string, unknown> };
+    await setOrgGrantCapability(seeded, 'contribute');
+    expect(await (await sendReplayAccess(app, 'undo', payload.receipt)).json()).toEqual({
+      allowed: false,
+      deniedIds: [taskRow.id],
+    });
+    await setOrgGrantCapability(seeded, 'assign');
+
+    expect(await (await sendReplayAccess(app, 'undo', payload.receipt)).json()).toEqual({
+      allowed: true,
+      deniedIds: [],
+    });
+  });
+
+  it('requires assign to preflight a Project leadId receipt', async () => {
+    const seeded = await seedCommandOrg();
+    const projectRow = await seedProject(db, schema, seeded.statusId, {
+      organizationId: seeded.orgId,
+      teamId: seeded.teamId,
+      createdBy: seeded.humanActorId,
+      name: 'Lead preflight',
+    });
+    const app = appWithActor(objectCommands, seeded.orgId, ['manage'], seeded.humanActorId);
+    const forward = await send(app, {
+      commandId: 'project-lead-access-requirement',
+      objectKind: 'project',
+      objectIds: [projectRow.id],
+      operation: {
+        type: 'replace_property',
+        property: 'leadId',
+        value: seeded.humanActorId,
+      },
+    });
+    expect(forward.status).toBe(200);
+    const payload = (await forward.json()) as { receipt: Record<string, unknown> };
+    await setOrgGrantCapability(seeded, 'contribute');
+    expect(await (await sendReplayAccess(app, 'undo', payload.receipt)).json()).toEqual({
+      allowed: false,
+      deniedIds: [projectRow.id],
+    });
+    await setOrgGrantCapability(seeded, 'assign');
+
+    expect(await (await sendReplayAccess(app, 'undo', payload.receipt)).json()).toEqual({
+      allowed: true,
+      deniedIds: [],
+    });
+  });
+
+  it('requires manage to preflight a Project archivedAt receipt', async () => {
+    const seeded = await seedCommandOrg();
+    const projectRow = await seedProject(db, schema, seeded.statusId, {
+      organizationId: seeded.orgId,
+      teamId: seeded.teamId,
+      createdBy: seeded.humanActorId,
+      name: 'Manage archive preflight',
+    });
+    const app = appWithActor(objectCommands, seeded.orgId, ['manage'], seeded.humanActorId);
+    const forward = await send(app, {
+      commandId: 'project-archive-access-requirement',
+      objectKind: 'project',
+      objectIds: [projectRow.id],
+      operation: { type: 'trash' },
+    });
+    expect(forward.status).toBe(200);
+    const payload = (await forward.json()) as { receipt: Record<string, unknown> };
+    await setOrgGrantCapability(seeded, 'assign');
+    expect(await (await sendReplayAccess(app, 'undo', payload.receipt)).json()).toEqual({
+      allowed: false,
+      deniedIds: [projectRow.id],
+    });
+    await setOrgGrantCapability(seeded, 'manage');
+
+    expect(await (await sendReplayAccess(app, 'undo', payload.receipt)).json()).toEqual({
+      allowed: true,
+      deniedIds: [],
+    });
+  });
+
+  it('keeps the strongest requirement for mixed entries on one target', async () => {
+    const seeded = await seedCommandOrg();
+    const projectRow = await seedProject(db, schema, seeded.statusId, {
+      organizationId: seeded.orgId,
+      teamId: seeded.teamId,
+      createdBy: seeded.humanActorId,
+      name: 'Mixed requirement preflight',
+    });
+    const commandId = 'mixed-project-access-requirement';
+    const changeSetId = objectCommandChangeSetId(seeded.orgId, seeded.humanActorId, commandId);
+    await db.insert(schema.changeSet).values({
+      id: changeSetId,
+      organizationId: seeded.orgId,
+      actorId: seeded.humanActorId,
+      origin: { tool: 'canvas' },
+      summary: 'replace property',
+    });
+    await db.insert(schema.changeSetEntry).values({
+      changeSetId,
+      entityKind: 'project',
+      entityId: projectRow.id,
+      op: 'update',
+      before: { leadId: null, priority: 'none' },
+      after: { leadId: seeded.humanActorId, priority: 'high' },
+    });
+    const receipt = {
+      commandId,
+      objectKind: 'project',
+      action: 'replace_property',
+      entries: [
+        {
+          kind: 'object',
+          objectId: projectRow.id,
+          property: 'leadId',
+          before: null,
+          after: seeded.humanActorId,
+        },
+        {
+          kind: 'object',
+          objectId: projectRow.id,
+          property: 'priority',
+          before: 'none',
+          after: 'high',
+        },
+      ],
+    };
+    const app = appWithActor(objectCommands, seeded.orgId, ['manage'], seeded.humanActorId);
+    await setOrgGrantCapability(seeded, 'contribute');
+    expect(await (await sendReplayAccess(app, 'undo', receipt)).json()).toEqual({
+      allowed: false,
+      deniedIds: [projectRow.id],
+    });
+    await setOrgGrantCapability(seeded, 'assign');
+
+    expect(await (await sendReplayAccess(app, 'undo', receipt)).json()).toEqual({
+      allowed: true,
+      deniedIds: [],
+    });
+  });
+
+  it('rejects a tampered receipt during replay access preflight', async () => {
+    const seeded = await seedCommandOrg();
+    const projectRow = await seedProject(db, schema, seeded.statusId, {
+      organizationId: seeded.orgId,
+      teamId: seeded.teamId,
+      createdBy: seeded.humanActorId,
+      name: 'Tampered access preflight',
+    });
+    const app = appWithActor(objectCommands, seeded.orgId, ['manage'], seeded.humanActorId);
+    const forward = await send(app, {
+      commandId: 'tampered-project-access',
+      objectKind: 'project',
+      objectIds: [projectRow.id],
+      operation: { type: 'replace_property', property: 'priority', value: 'high' },
+    });
+    expect(forward.status).toBe(200);
+    const payload = (await forward.json()) as {
+      receipt: { entries: { property: string; before: unknown }[] } & Record<string, unknown>;
+    };
+    const tampered = structuredClone(payload.receipt);
+    const priority = tampered.entries.find((entry) => entry.property === 'priority');
+    if (!priority) throw new Error('Priority receipt entry missing');
+    priority.before = 'urgent';
+
+    expect((await sendReplayAccess(app, 'undo', tampered)).status).toBe(422);
+  });
+
+  it('allows replay preflight through a cascading resource grant', async () => {
+    const seeded = await seedBaseOrg(db, schema);
+    const projectRow = await seedProject(db, schema, seeded.statusId, {
+      organizationId: seeded.orgId,
+      teamId: seeded.teamId,
+      createdBy: seeded.humanActorId,
+      name: 'Inherited access',
+    });
+    await db.insert(schema.grant).values({
+      organizationId: seeded.orgId,
+      subjectKind: 'actor',
+      subjectId: seeded.humanActorId,
+      resourceKind: 'team',
+      resourceId: seeded.teamId,
+      capabilities: ['contribute'],
+      effect: 'allow',
+    });
+    const app = appWithActor(objectCommands, seeded.orgId, ['view'], seeded.humanActorId);
+    const changed = await send(app, {
+      commandId: 'cascading-project-access',
+      objectKind: 'project',
+      objectIds: [projectRow.id],
+      operation: { type: 'replace_property', property: 'priority', value: 'high' },
+    });
+    expect(changed.status).toBe(200);
+    const payload = (await changed.json()) as { receipt: Record<string, unknown> };
+
+    const access = await sendReplayAccess(app, 'undo', payload.receipt);
+
+    expect(access.status).toBe(200);
+    expect(await access.json()).toEqual({ allowed: true, deniedIds: [] });
+  });
+
+  it('reports a denied dependency endpoint after a direct grant is removed', async () => {
+    const seeded = await seedBaseOrg(db, schema);
+    const first = await seedProject(db, schema, seeded.statusId, {
+      organizationId: seeded.orgId,
+      teamId: seeded.teamId,
+      createdBy: seeded.humanActorId,
+      name: 'Directly granted source',
+    });
+    const second = await seedProject(db, schema, seeded.statusId, {
+      organizationId: seeded.orgId,
+      teamId: seeded.teamId,
+      createdBy: seeded.humanActorId,
+      name: 'Directly granted destination',
+    });
+    await db.insert(schema.grant).values(
+      [first.id, second.id].map((resourceId) => ({
+        organizationId: seeded.orgId,
+        subjectKind: 'actor' as const,
+        subjectId: seeded.humanActorId,
+        resourceKind: 'project' as const,
+        resourceId,
+        capabilities: ['contribute' as const],
+        effect: 'allow' as const,
+      })),
+    );
+    const app = appWithActor(objectCommands, seeded.orgId, ['view'], seeded.humanActorId);
+    const changed = await send(app, {
+      commandId: 'direct-dependency-access',
+      objectKind: 'project',
+      objectIds: [first.id, second.id],
+      operation: { type: 'add_dependency', blockingId: first.id, blockedId: second.id },
+    });
+    const changedText = await changed.text();
+    expect(changed.status, changedText).toBe(200);
+    const payload = JSON.parse(changedText) as { receipt: Record<string, unknown> };
+    expect(await (await sendReplayAccess(app, 'undo', payload.receipt)).json()).toEqual({
+      allowed: true,
+      deniedIds: [],
+    });
+    await db
+      .delete(schema.grant)
+      .where(
+        and(
+          eq(schema.grant.subjectId, seeded.humanActorId),
+          eq(schema.grant.resourceKind, 'project'),
+          eq(schema.grant.resourceId, second.id),
+        ),
+      );
+
+    const denied = await sendReplayAccess(app, 'undo', payload.receipt);
+
+    expect(denied.status).toBe(200);
+    expect(await denied.json()).toEqual({ allowed: false, deniedIds: [second.id] });
+  });
+
   it('requires a resource grant for every selected Project and dependency endpoint', async () => {
     const seeded = await seedBaseOrg(db, schema);
     const first = await seedProject(db, schema, seeded.statusId, {

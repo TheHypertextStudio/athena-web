@@ -1,12 +1,17 @@
 'use client';
 
 /** Object-command client plus session-local, conflict-safe canvas undo and redo. */
-import type { ObjectCommandIn, ObjectCommandRequest, ObjectCommandResult } from '@docket/types';
+import type {
+  ObjectCommandIn,
+  ObjectCommandReplayAccessResult,
+  ObjectCommandRequest,
+  ObjectCommandResult,
+} from '@docket/types';
 import type { QueryKey } from '@tanstack/react-query';
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { api } from '@/lib/api';
-import { unwrap, useApiMutation } from '@/lib/query';
+import { apiQueryOptions, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 
 import {
   CanvasCommandHistory,
@@ -68,6 +73,26 @@ function shouldOfferNoticeUndo(command: ObjectCommandIn): boolean {
   );
 }
 
+function replayAccessDef(
+  orgId: string,
+  scopeKey: string,
+  direction: 'undo' | 'redo',
+  receipt: CanvasHistoryEntry['receipt'] | null,
+) {
+  return apiQueryOptions<ObjectCommandReplayAccessResult>(
+    ['org', orgId, 'canvas-command-replay-access', scopeKey, direction, receipt],
+    () => {
+      if (receipt === null) throw new Error('Replay access requested without a receipt');
+      return api.v1.orgs[':orgId']['object-commands']['replay-access'].$post({
+        param: { orgId },
+        json: { direction, receipt },
+      });
+    },
+    'Could not check whether this action is still allowed.',
+    { enabled: receipt !== null, staleTime: 0 },
+  );
+}
+
 /**
  * Bind the typed object-command endpoint to one graph route and scope.
  *
@@ -100,6 +125,13 @@ export function useCanvasCommandHistory(
   const refresh = useCallback(() => {
     setVersion((current) => current + 1);
   }, []);
+  const snapshot = useMemo(() => commandHistory.snapshot(scopeKey), [scopeKey, version]);
+  const newestUndo = snapshot.undo.at(-1);
+  const newestRedo = snapshot.redo.at(-1);
+  const undoReceipt = newestUndo?.receipt ?? null;
+  const redoReceipt = newestRedo?.receipt ?? null;
+  const undoAccess = useApiQuery(replayAccessDef(orgId, scopeKey, 'undo', undoReceipt));
+  const redoAccess = useApiQuery(replayAccessDef(orgId, scopeKey, 'redo', redoReceipt));
 
   const execute = useCallback(
     async (command: ObjectCommandIn, label: string): Promise<ObjectCommandResult | null> => {
@@ -133,14 +165,51 @@ export function useCanvasCommandHistory(
   const replay = useCallback(
     async (direction: 'undo' | 'redo'): Promise<void> => {
       if (replayInFlight.current) return;
-      const entry =
-        direction === 'undo'
-          ? commandHistory.takeUndo(scopeKey)
-          : commandHistory.takeRedo(scopeKey);
-      if (entry === null) return;
+      const currentSnapshot = commandHistory.snapshot(scopeKey);
+      const entry = (direction === 'undo' ? currentSnapshot.undo : currentSnapshot.redo).at(-1);
+      if (entry === undefined) return;
+      const renderedEntry = direction === 'undo' ? newestUndo : newestRedo;
+      if (entry !== renderedEntry) {
+        refresh();
+        return;
+      }
       replayInFlight.current = true;
       setNotice(null);
       refresh();
+      let accessAllowed = false;
+      try {
+        const checked = await (direction === 'undo' ? undoAccess : redoAccess).refetch({
+          throwOnError: true,
+        });
+        accessAllowed = checked.data?.allowed === true;
+      } catch {
+        setNotice({
+          copy: `Could not ${direction} ${entry.label.toLowerCase()}. No collaborator changes were overwritten.`,
+          offerUndo: false,
+          tone: 'error',
+        });
+      }
+      if (!accessAllowed) {
+        replayInFlight.current = false;
+        refresh();
+        return;
+      }
+      const latestSnapshot = commandHistory.snapshot(scopeKey);
+      const latest = (direction === 'undo' ? latestSnapshot.undo : latestSnapshot.redo).at(-1);
+      if (latest !== entry) {
+        replayInFlight.current = false;
+        refresh();
+        return;
+      }
+      const taken =
+        direction === 'undo'
+          ? commandHistory.takeUndo(scopeKey)
+          : commandHistory.takeRedo(scopeKey);
+      if (taken !== entry) {
+        replayInFlight.current = false;
+        refresh();
+        return;
+      }
       const destination = direction === 'undo' ? 'redo' : 'undo';
       try {
         const result = await mutation.mutateAsync({
@@ -178,23 +247,28 @@ export function useCanvasCommandHistory(
         refresh();
       }
     },
-    [applyReceipt, mutation, refresh, scopeKey],
+    [applyReceipt, mutation, newestRedo, newestUndo, redoAccess, refresh, scopeKey, undoAccess],
   );
 
   const undo = useCallback(() => replay('undo'), [replay]);
   const redo = useCallback(() => replay('redo'), [replay]);
 
-  const snapshot = useMemo(() => commandHistory.snapshot(scopeKey), [scopeKey, version]);
-  const newest = (entries: readonly CanvasHistoryEntry[]): CanvasHistoryEntry | undefined =>
-    entries.at(-1);
   return {
     execute,
     undo,
     redo,
-    canUndo: snapshot.undo.length > 0,
-    canRedo: snapshot.redo.length > 0,
-    undoLabel: newest(snapshot.undo)?.label ?? null,
-    redoLabel: newest(snapshot.redo)?.label ?? null,
+    canUndo:
+      newestUndo !== undefined &&
+      !undoAccess.isFetching &&
+      !undoAccess.isError &&
+      undoAccess.data?.allowed === true,
+    canRedo:
+      newestRedo !== undefined &&
+      !redoAccess.isFetching &&
+      !redoAccess.isError &&
+      redoAccess.data?.allowed === true,
+    undoLabel: newestUndo?.label ?? null,
+    redoLabel: newestRedo?.label ?? null,
     pending: mutation.isPending || replayInFlight.current,
     notice,
     clearNotice: () => {

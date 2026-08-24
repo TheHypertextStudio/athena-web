@@ -8,6 +8,8 @@ const EDITABLE_TARGET_SELECTOR = [
   '[contenteditable="true"]',
   '[role="textbox"]',
   '[role="combobox"]',
+  '[role="listbox"]',
+  '[role="option"]',
   '[role="dialog"]',
   '[data-canvas-shortcuts="ignore"]',
 ].join(',');

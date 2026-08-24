@@ -162,6 +162,8 @@ export function CanvasCommandProviderWithHistory({
   const [pendingTrash, setPendingTrash] = useState<CanvasTrashConfirmation | null>(null);
   const [propertiesOpen, setPropertiesOpen] = useState(false);
   const propertiesInvokerRef = useRef<HTMLElement | null>(null);
+  const canUndo = history.canUndo;
+  const canRedo = history.canRedo;
 
   const openProperties = useCallback(
     (invoker?: HTMLElement | null): void => {
@@ -221,8 +223,7 @@ export function CanvasCommandProviderWithHistory({
       if (isCanvasEditableTarget(event.target)) return;
       const historyAction = resolveCanvasHistoryShortcut(event.nativeEvent);
       if (historyAction !== null) {
-        if (!canEdit) return;
-        const available = historyAction === 'undo' ? history.canUndo : history.canRedo;
+        const available = historyAction === 'undo' ? canUndo : canRedo;
         if (!available || history.pending) return;
         event.preventDefault();
         void (historyAction === 'undo' ? history.undo() : history.redo());
@@ -234,19 +235,19 @@ export function CanvasCommandProviderWithHistory({
       event.preventDefault();
       trashSelection();
     },
-    [canEdit, canTrash, history, selection.count, trashSelection],
+    [canRedo, canTrash, canUndo, history, selection.count, trashSelection],
   );
 
   const value = useMemo<CanvasCommandContextValue>(
     () => ({
       ...history,
-      canUndo: canEdit && history.canUndo,
-      canRedo: canEdit && history.canRedo,
+      canUndo,
+      canRedo,
       undo: async () => {
-        if (canEdit) await history.undo();
+        if (canUndo) await history.undo();
       },
       redo: async () => {
-        if (canEdit) await history.redo();
+        if (canRedo) await history.redo();
       },
       objectKind,
       canEdit,
@@ -271,7 +272,9 @@ export function CanvasCommandProviderWithHistory({
     }),
     [
       canEdit,
+      canRedo,
       canTrash,
+      canUndo,
       history,
       objectKind,
       onCanvasKeyDown,

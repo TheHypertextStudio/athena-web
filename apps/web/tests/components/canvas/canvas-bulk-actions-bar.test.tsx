@@ -3,7 +3,7 @@ import '@testing-library/jest-dom/vitest';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const state = vi.hoisted(() => ({
   globalOpen: vi.fn(),
@@ -50,6 +50,15 @@ vi.mock('@/components/context-menu', () => ({
 import BulkActionsBar from '@/components/canvas/bulk-actions-bar';
 
 describe('canvas selection overflow', () => {
+  beforeEach(() => {
+    state.commands.canEdit = true;
+    state.commands.canUndo = true;
+    state.commands.canRedo = true;
+    state.commands.pending = false;
+    state.undo.mockReset();
+    state.redo.mockReset();
+  });
+
   it('keeps global Task mutations unreachable and exposes canvas history instead', async () => {
     render(<BulkActionsBar />);
 
@@ -63,5 +72,19 @@ describe('canvas selection overflow', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: 'Undo Move Task branch' }));
     expect(state.undo).toHaveBeenCalledOnce();
     expect(state.setComplete).not.toHaveBeenCalled();
+  });
+
+  it('keeps server-approved history available when selection editing is read-only', async () => {
+    state.commands.canEdit = false;
+    render(<BulkActionsBar />);
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'More selection actions' }));
+
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Undo Move Task branch' }));
+    expect(state.undo).toHaveBeenCalledOnce();
+
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'More selection actions' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Redo Change status' }));
+    expect(state.redo).toHaveBeenCalledOnce();
   });
 });

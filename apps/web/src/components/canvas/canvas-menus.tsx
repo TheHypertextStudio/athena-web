@@ -220,9 +220,7 @@ export function useCanvasMenus(options: CanvasMenuOptions): CanvasMenus {
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                disabled={
-                  commands === null || !commands.canEdit || !commands.canUndo || commands.pending
-                }
+                disabled={commands === null || !commands.canUndo || commands.pending}
                 onSelect={() => {
                   void commands?.undo();
                   close();
@@ -232,9 +230,7 @@ export function useCanvasMenus(options: CanvasMenuOptions): CanvasMenus {
                 Undo{commands?.undoLabel ? ` ${commands.undoLabel}` : ''}
               </DropdownMenuItem>
               <DropdownMenuItem
-                disabled={
-                  commands === null || !commands.canEdit || !commands.canRedo || commands.pending
-                }
+                disabled={commands === null || !commands.canRedo || commands.pending}
                 onSelect={() => {
                   void commands?.redo();
                   close();

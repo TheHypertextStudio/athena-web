@@ -1,10 +1,10 @@
 /** Organization-scoped transactional object commands and conflict-safe receipt replay. */
-import type { db } from '@docket/db';
 import {
   actor,
   changeSet,
   changeSetEntry,
   cycle,
+  db,
   initiative,
   initiativeProject,
   label,
@@ -20,6 +20,8 @@ import {
   team,
 } from '@docket/db';
 import {
+  ObjectCommandReplayAccessIn,
+  ObjectCommandReplayAccessResult,
   ObjectCommandRequest,
   ObjectCommandResult,
   type ObjectCommandIn,
@@ -28,7 +30,13 @@ import {
   type ObjectCommandRequest as ObjectCommandRequestValue,
   type ObjectCommandValue,
 } from '@docket/types';
-import { canActor, canActorBatch, type Capability, type ResourceKind } from '@docket/authz';
+import {
+  canActor,
+  canActorBatch,
+  CAPABILITY_RANK,
+  type Capability,
+  type ResourceKind,
+} from '@docket/authz';
 import type { DateResolution } from '@docket/work/planning-timeframe';
 import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -228,6 +236,110 @@ function assertReceiptTimeframeTupleShape(receipt: ObjectCommandReceipt): void {
   }
 }
 
+function validateReplayReceipt(receipt: ObjectCommandReceipt): void {
+  assertReceiptStatusTupleShape(receipt);
+  assertReceiptTimeframeTupleShape(receipt);
+  for (const entry of receipt.entries) validateReceiptEntryShape(receipt, entry);
+}
+
+interface ReplayRequirement {
+  readonly kind: ResourceKind;
+  readonly id: string;
+  readonly capability: Capability;
+}
+
+function replayRequirementKey(kind: ResourceKind, id: string): string {
+  return `${kind}:${id}`;
+}
+
+function replayReferenceRequirement(
+  objectKind: ObjectCommandReceipt['objectKind'],
+  property: string,
+  target: ObjectCommandValue,
+): ReplayRequirement | null {
+  if (target === null) return null;
+  const id = String(target);
+  if (objectKind === 'task') {
+    if (property === 'projectId') return { kind: 'project', id, capability: 'contribute' };
+    if (property === 'programId') return { kind: 'program', id, capability: 'contribute' };
+    if (property === 'parentTaskId') return { kind: 'task', id, capability: 'contribute' };
+    return null;
+  }
+  if (property === 'teamId') return { kind: 'team', id, capability: 'contribute' };
+  if (property === 'programId') return { kind: 'program', id, capability: 'contribute' };
+  return null;
+}
+
+function replayRequirements(
+  receipt: ObjectCommandReceipt,
+  direction: 'undo' | 'redo',
+): ReadonlyMap<string, ReplayRequirement> {
+  const requiredByTarget = new Map<string, ReplayRequirement>();
+  const require = (requirement: ReplayRequirement): void => {
+    const key = replayRequirementKey(requirement.kind, requirement.id);
+    const current = requiredByTarget.get(key);
+    if (
+      current === undefined ||
+      CAPABILITY_RANK[requirement.capability] > CAPABILITY_RANK[current.capability]
+    ) {
+      requiredByTarget.set(key, requirement);
+    }
+  };
+  for (const entry of receipt.entries) {
+    let capability: Capability = 'contribute';
+    if (
+      entry.kind === 'object' &&
+      receipt.objectKind === 'project' &&
+      entry.property === 'archivedAt'
+    ) {
+      capability = 'manage';
+    } else if (
+      entry.kind === 'object' &&
+      (entry.property === 'assigneeId' || entry.property === 'leadId')
+    ) {
+      capability = 'assign';
+    }
+    require({ kind: receipt.objectKind, id: entry.objectId, capability });
+    if (entry.kind === 'relation' && entry.relation === 'dependency') {
+      require({ kind: receipt.objectKind, id: entry.relatedId, capability: 'contribute' });
+    }
+    if (entry.kind === 'object') {
+      const target = direction === 'undo' ? entry.before : entry.after;
+      const reference = replayReferenceRequirement(receipt.objectKind, entry.property, target);
+      if (reference !== null) require(reference);
+    }
+  }
+  return requiredByTarget;
+}
+
+type ReplayAccessDecision = Awaited<ReturnType<typeof canActorBatch>>[number];
+
+async function replayCapabilityByTarget(
+  database: Dbh,
+  orgId: string,
+  actorId: string,
+  requiredByTarget: ReadonlyMap<string, ReplayRequirement>,
+): Promise<ReadonlyMap<string, ReplayAccessDecision>> {
+  const capabilityByTarget = new Map<string, ReplayAccessDecision>();
+  for (const required of ['contribute', 'assign', 'manage'] as const) {
+    const targets = [...requiredByTarget.values()].filter(
+      ({ capability }) => capability === required,
+    );
+    if (targets.length === 0) continue;
+    const decisions = await canActorBatch(
+      actorId,
+      required,
+      targets.map(({ kind, id }) => ({ kind, id, orgId })),
+      database,
+    );
+    targets.forEach(({ kind, id }, index) => {
+      const decision = decisions[index];
+      if (decision) capabilityByTarget.set(replayRequirementKey(kind, id), decision);
+    });
+  }
+  return capabilityByTarget;
+}
+
 function durableValueMatches(left: unknown, right: unknown): boolean {
   const normalized = (value: unknown): unknown =>
     value instanceof Date ? value.toISOString() : value;
@@ -261,13 +373,13 @@ function durableRelationKind(
 }
 
 async function assertReceiptMatchesDurableChange(
-  tx: Tx,
+  database: Dbh,
   orgId: string,
   actorId: string,
   receipt: ObjectCommandReceipt,
 ): Promise<void> {
   const durableId = objectCommandChangeSetId(orgId, actorId, receipt.commandId);
-  const [set] = await tx
+  const [set] = await database
     .select({ summary: changeSet.summary, origin: changeSet.origin })
     .from(changeSet)
     .where(
@@ -281,7 +393,7 @@ async function assertReceiptMatchesDurableChange(
   if (set?.origin.tool !== 'canvas' || set.summary !== receipt.action.replaceAll('_', ' ')) {
     throw ownedValidation('Receipt does not match a recorded canvas command');
   }
-  const recorded = await tx
+  const recorded = await database
     .select()
     .from(changeSetEntry)
     .where(eq(changeSetEntry.changeSetId, durableId));
@@ -1943,25 +2055,9 @@ async function assertReplayObjectTarget(
     if (property === 'assigneeId') await assertActiveTaskAssignee(database, orgId, String(target));
     if (property === 'projectId') {
       await assertActiveProject(database, orgId, String(target));
-      await assertResourceCapability(
-        database,
-        orgId,
-        actorId,
-        'project',
-        String(target),
-        'contribute',
-      );
     }
     if (property === 'programId') {
       await assertReference(database, program, orgId, String(target), 'Program not found');
-      await assertResourceCapability(
-        database,
-        orgId,
-        actorId,
-        'program',
-        String(target),
-        'contribute',
-      );
     }
     if (property === 'cycleId')
       await assertReference(database, cycle, orgId, String(target), 'Cycle not found');
@@ -1976,40 +2072,47 @@ async function assertReplayObjectTarget(
         )
         .limit(1);
       if (!rows[0]) throw new NotFoundError('Task not found');
-      await assertResourceCapability(
-        database,
-        orgId,
-        actorId,
-        'task',
-        String(target),
-        'contribute',
-      );
     }
   } else {
     if (property === 'leadId') await assertActiveHumanProjectLead(database, orgId, String(target));
     if (property === 'teamId') {
       await assertReference(database, team, orgId, String(target), 'Team not found');
-      await assertResourceCapability(
-        database,
-        orgId,
-        actorId,
-        'team',
-        String(target),
-        'contribute',
-      );
     }
     if (property === 'programId') {
       await assertReference(database, program, orgId, String(target), 'Program not found');
-      await assertResourceCapability(
-        database,
-        orgId,
-        actorId,
-        'program',
-        String(target),
-        'contribute',
-      );
     }
   }
+  const requirement = replayReferenceRequirement(kind, property, target);
+  if (requirement !== null) {
+    await assertResourceCapability(
+      database,
+      orgId,
+      actorId,
+      requirement.kind,
+      requirement.id,
+      requirement.capability,
+    );
+  }
+}
+
+async function checkReplayAccess(
+  orgId: string,
+  actorId: string,
+  direction: 'undo' | 'redo',
+  receipt: ObjectCommandReceipt,
+): Promise<z.input<typeof ObjectCommandReplayAccessResult>> {
+  validateReplayReceipt(receipt);
+  await assertReceiptMatchesDurableChange(db, orgId, actorId, receipt);
+  const requiredByTarget = replayRequirements(receipt, direction);
+  const capabilityByTarget = await replayCapabilityByTarget(db, orgId, actorId, requiredByTarget);
+  const deniedIds = [
+    ...new Set(
+      [...requiredByTarget.values()]
+        .filter(({ kind, id }) => !capabilityByTarget.get(replayRequirementKey(kind, id))?.allow)
+        .map(({ id }) => id),
+    ),
+  ];
+  return { allowed: deniedIds.length === 0, deniedIds };
 }
 
 async function executeReplay(
@@ -2019,8 +2122,8 @@ async function executeReplay(
   idempotencyClaim?: IdempotencyClaim,
 ): Promise<CommandExecution> {
   const { receipt, direction } = request;
-  assertReceiptStatusTupleShape(receipt);
-  assertReceiptTimeframeTupleShape(receipt);
+  validateReplayReceipt(receipt);
+  const requiredByTarget = replayRequirements(receipt, direction);
   const apply = async (tx: Tx): Promise<CommandExecution> => {
     const effects: CommandEffects = {
       taskStateMutations: [],
@@ -2040,47 +2143,20 @@ async function executeReplay(
     for (const entry of receipt.entries) {
       entriesByObject.set(entry.objectId, [...(entriesByObject.get(entry.objectId) ?? []), entry]);
     }
-    const authorizationIds = new Set(entriesByObject.keys());
+    const receiptObjectIds = new Set(entriesByObject.keys());
     for (const entry of receipt.entries) {
       if (entry.kind === 'relation' && entry.relation === 'dependency') {
-        authorizationIds.add(entry.relatedId);
+        receiptObjectIds.add(entry.relatedId);
       }
     }
     const table = receipt.objectKind === 'task' ? task : project;
     const lockedRows = await tx
       .select()
       .from(table)
-      .where(and(eq(table.organizationId, orgId), inArray(table.id, [...authorizationIds])))
+      .where(and(eq(table.organizationId, orgId), inArray(table.id, [...receiptObjectIds])))
       .for('update');
     const lockedById = new Map(lockedRows.map((row) => [row.id, row as Record<string, unknown>]));
-    const requiredById = new Map<string, Capability>(
-      [...authorizationIds].map((id) => [id, 'contribute']),
-    );
-    for (const entry of receipt.entries) {
-      if (entry.kind !== 'object') continue;
-      if (receipt.objectKind === 'project' && entry.property === 'archivedAt') {
-        requiredById.set(entry.objectId, 'manage');
-      } else if (['assigneeId', 'leadId'].includes(entry.property)) {
-        requiredById.set(entry.objectId, 'assign');
-      }
-    }
-    const capabilityById = new Map<string, Awaited<ReturnType<typeof canActorBatch>>[number]>();
-    for (const required of ['contribute', 'assign', 'manage'] as const) {
-      const ids = [...requiredById]
-        .filter(([, capability]) => capability === required)
-        .map(([id]) => id);
-      if (ids.length === 0) continue;
-      const decisions = await canActorBatch(
-        actorId,
-        required,
-        ids.map((id) => ({ kind: receipt.objectKind, id, orgId })),
-        tx,
-      );
-      ids.forEach((id, index) => {
-        const decision = decisions[index];
-        if (decision) capabilityById.set(id, decision);
-      });
-    }
+    const capabilityByTarget = await replayCapabilityByTarget(tx, orgId, actorId, requiredByTarget);
     const relationEntries = receipt.entries.filter(
       (entry): entry is ObjectCommandRelationReceiptEntry => entry.kind === 'relation',
     );
@@ -2104,7 +2180,7 @@ async function executeReplay(
         denied.add(objectId);
         continue;
       }
-      if (!capabilityById.get(objectId)?.allow) {
+      if (!capabilityByTarget.get(replayRequirementKey(receipt.objectKind, objectId))?.allow) {
         denied.add(objectId);
         continue;
       }
@@ -2144,7 +2220,11 @@ async function executeReplay(
         } else {
           if (entry.relation === 'dependency') {
             const related = lockedById.get(entry.relatedId);
-            if (related?.['archivedAt'] !== null || !capabilityById.get(entry.relatedId)?.allow) {
+            if (
+              related?.['archivedAt'] !== null ||
+              !capabilityByTarget.get(replayRequirementKey(receipt.objectKind, entry.relatedId))
+                ?.allow
+            ) {
               denied.add(objectId);
               break;
             }
@@ -2427,36 +2507,61 @@ async function executeReplay(
   return serializableTx(apply);
 }
 
-/** POST endpoint for atomic forward commands and conflict-safe receipt replay. */
-const objectCommands = new Hono<AppEnv>().post(
-  '/',
-  bodyLimit({
-    maxSize: MAX_OBJECT_COMMAND_BYTES,
-    onError: () => {
-      throw new PayloadTooLargeError(MAX_OBJECT_COMMAND_BYTES);
+/** POST endpoints for replay access checks and transactional object commands. */
+const objectCommands = new Hono<AppEnv>()
+  .post(
+    '/replay-access',
+    bodyLimit({
+      maxSize: MAX_OBJECT_COMMAND_BYTES,
+      onError: () => {
+        throw new PayloadTooLargeError(MAX_OBJECT_COMMAND_BYTES);
+      },
+    }),
+    apiDoc({
+      tag: 'Objects',
+      summary: 'Check current access to replay an object command',
+      response: ObjectCommandReplayAccessResult,
+    }),
+    zJson(ObjectCommandReplayAccessIn),
+    async (c) => {
+      const { direction, receipt } = c.req.valid('json');
+      const { orgId, actorId } = c.get('actorCtx');
+      return ok(
+        c,
+        ObjectCommandReplayAccessResult,
+        await checkReplayAccess(orgId, actorId, direction, receipt),
+      );
     },
-  }),
-  apiDoc({
-    tag: 'Objects',
-    summary: 'Apply, undo, or redo an object command',
-    response: ObjectCommandResult,
-  }),
-  zJson(ObjectCommandRequest),
-  async (c) => {
-    const request = c.req.valid('json');
-    const key = c.req.header('Idempotency-Key');
-    if (key !== request.commandId)
-      throw ownedValidation('Idempotency-Key must match commandId', ['commandId']);
-    const { orgId, actorId } = c.get('actorCtx');
-    const idempotencyClaim = c.get('idempotencyClaim');
-    const execution =
-      'direction' in request
-        ? await executeReplay(orgId, actorId, request, idempotencyClaim)
-        : await executeForward(orgId, actorId, request, idempotencyClaim);
-    if (idempotencyClaim) c.set('idempotencyCompleted', true);
-    scheduleCommandEffects();
-    return ok(c, ObjectCommandResult, execution.result);
-  },
-);
+  )
+  .post(
+    '/',
+    bodyLimit({
+      maxSize: MAX_OBJECT_COMMAND_BYTES,
+      onError: () => {
+        throw new PayloadTooLargeError(MAX_OBJECT_COMMAND_BYTES);
+      },
+    }),
+    apiDoc({
+      tag: 'Objects',
+      summary: 'Apply, undo, or redo an object command',
+      response: ObjectCommandResult,
+    }),
+    zJson(ObjectCommandRequest),
+    async (c) => {
+      const request = c.req.valid('json');
+      const key = c.req.header('Idempotency-Key');
+      if (key !== request.commandId)
+        throw ownedValidation('Idempotency-Key must match commandId', ['commandId']);
+      const { orgId, actorId } = c.get('actorCtx');
+      const idempotencyClaim = c.get('idempotencyClaim');
+      const execution =
+        'direction' in request
+          ? await executeReplay(orgId, actorId, request, idempotencyClaim)
+          : await executeForward(orgId, actorId, request, idempotencyClaim);
+      if (idempotencyClaim) c.set('idempotencyCompleted', true);
+      scheduleCommandEffects();
+      return ok(c, ObjectCommandResult, execution.result);
+    },
+  );
 
 export default objectCommands;

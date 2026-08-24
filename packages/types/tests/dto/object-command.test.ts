@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ObjectCommandIn,
+  ObjectCommandReplayAccessIn,
+  ObjectCommandReplayAccessResult,
   ObjectCommandReplayIn,
   ProjectLeadActorId,
 } from '../../src/object-command';
@@ -495,5 +497,37 @@ describe('ObjectCommandReplayIn', () => {
         ObjectCommandReplayIn.safeParse(replay([...tuple, ...tuple.slice(0, 1)])).success,
       ).toBe(false);
     }
+  });
+});
+
+describe('ObjectCommandReplayAccess', () => {
+  it('accepts a receipt preflight request and its denied target result', () => {
+    const receipt = {
+      commandId: 'original-command',
+      objectKind: 'project' as const,
+      action: 'add_dependency' as const,
+      entries: [
+        {
+          kind: 'relation' as const,
+          objectId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+          relation: 'dependency' as const,
+          relatedId: '01BRZ3NDEKTSV4RRFFQ69G5FAV',
+          before: false,
+          after: true,
+        },
+      ],
+    };
+
+    expect(ObjectCommandReplayAccessIn.parse({ direction: 'undo', receipt })).toEqual({
+      direction: 'undo',
+      receipt,
+    });
+    expect(ObjectCommandReplayAccessIn.safeParse({ receipt }).success).toBe(false);
+    expect(
+      ObjectCommandReplayAccessResult.parse({
+        allowed: false,
+        deniedIds: ['01BRZ3NDEKTSV4RRFFQ69G5FAV'],
+      }),
+    ).toEqual({ allowed: false, deniedIds: ['01BRZ3NDEKTSV4RRFFQ69G5FAV'] });
   });
 });

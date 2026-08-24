@@ -111,7 +111,7 @@ export default function BulkActionsBar({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem
-                disabled={!commands.canEdit || !commands.canUndo || commands.pending}
+                disabled={!commands.canUndo || commands.pending}
                 onSelect={() => {
                   void commands.undo();
                 }}
@@ -120,7 +120,7 @@ export default function BulkActionsBar({
                 Undo{commands.undoLabel ? ` ${commands.undoLabel}` : ''}
               </DropdownMenuItem>
               <DropdownMenuItem
-                disabled={!commands.canEdit || !commands.canRedo || commands.pending}
+                disabled={!commands.canRedo || commands.pending}
                 onSelect={() => {
                   void commands.redo();
                 }}

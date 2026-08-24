@@ -3,7 +3,7 @@ import '@testing-library/jest-dom/vitest';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const state = vi.hoisted(() => ({
   removeDependency: vi.fn(),
@@ -154,6 +154,15 @@ function Harness(): React.JSX.Element {
 }
 
 describe('canvas pane menu', () => {
+  beforeEach(() => {
+    state.commands.canEdit = false;
+    state.commands.canUndo = false;
+    state.commands.canRedo = false;
+    state.commands.pending = false;
+    state.commands.undo.mockReset();
+    state.commands.redo.mockReset();
+  });
+
   it('keeps viewport and selection tools available while mutations stay disabled or absent', () => {
     render(<Harness />);
     act(() => {
@@ -191,6 +200,16 @@ describe('canvas pane menu', () => {
       launcher.closest('[data-canvas-selection-frame]'),
     );
     state.commands.canEdit = false;
+  });
+
+  it('keeps server-approved history available without broad canvas edit access', () => {
+    state.commands.canUndo = true;
+    state.commands.canRedo = true;
+    render(<Harness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open pane menu' }));
+
+    expect(screen.getByRole('menuitem', { name: 'Undo' })).toBeEnabled();
+    expect(screen.getByRole('menuitem', { name: 'Redo' })).toBeEnabled();
   });
 
   it('labels and removes a Project dependency through the accessible edge menu', () => {

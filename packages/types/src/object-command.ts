@@ -441,6 +441,22 @@ export const ObjectCommandReplayIn = z.object({
 /** A request to undo or redo a normalized receipt. */
 export type ObjectCommandReplayIn = z.infer<typeof ObjectCommandReplayIn>;
 
+/** A read-only request to check whether the current actor may replay one receipt. */
+export const ObjectCommandReplayAccessIn = z.object({
+  direction: z.enum(['undo', 'redo']),
+  receipt: ObjectCommandReceipt,
+});
+/** A direction and receipt whose current replay access should be checked without applying it. */
+export type ObjectCommandReplayAccessIn = z.infer<typeof ObjectCommandReplayAccessIn>;
+
+/** Current replay access for every object and dependency endpoint in one receipt. */
+export const ObjectCommandReplayAccessResult = z.object({
+  allowed: z.boolean(),
+  deniedIds: z.array(z.string()),
+});
+/** Whether replay is allowed plus every target whose required capability is missing. */
+export type ObjectCommandReplayAccessResult = z.infer<typeof ObjectCommandReplayAccessResult>;
+
 /** Result of a forward command or conflict-safe replay. */
 export const ObjectCommandResult = z.object({
   appliedIds: z.array(z.string()),

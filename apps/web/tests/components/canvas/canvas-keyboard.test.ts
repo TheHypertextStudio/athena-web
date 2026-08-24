@@ -45,4 +45,16 @@ describe('isCanvasEditableTarget', () => {
     }
     expect(isCanvasEditableTarget(host)).toBe(false);
   });
+
+  it('protects portaled picker listboxes and their options', () => {
+    const listbox = document.createElement('ul');
+    listbox.setAttribute('role', 'listbox');
+    listbox.innerHTML = '<li role="option"><button data-target="option">Active</button></li>';
+    document.body.append(listbox);
+
+    expect(isCanvasEditableTarget(listbox)).toBe(true);
+    expect(isCanvasEditableTarget(listbox.querySelector('[data-target="option"]'))).toBe(true);
+
+    listbox.remove();
+  });
 });

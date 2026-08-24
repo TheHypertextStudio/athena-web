@@ -10,8 +10,10 @@ import type { CanvasPropertySnapshot, ObjectRef } from '@/lib/actions';
 const { mutateAsync } = vi.hoisted(() => ({ mutateAsync: vi.fn() }));
 
 vi.mock('@/lib/query', () => ({
+  apiQueryOptions: vi.fn(() => ({})),
   unwrap: vi.fn(),
   useApiMutation: () => ({ mutateAsync, isPending: false }),
+  useApiQuery: () => ({ data: undefined, isFetching: false, refetch: vi.fn() }),
 }));
 
 import {

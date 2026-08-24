@@ -32,17 +32,16 @@ import type { Health, ProgramOut } from '@docket/types';
 import { ActorAvatar, IdentityGlyph } from '@docket/ui/components';
 import { FolderKanban, Layers, ListChecks } from '@docket/ui/icons';
 import { Card, Skeleton } from '@docket/ui/primitives';
-import { dragSourceProps } from '@docket/ui/lib/draggable';
 import { cn } from '@docket/ui/lib/utils';
 import Link from 'next/link';
-import { type ComponentPropsWithoutRef, type JSX, useRef } from 'react';
+import { type ComponentPropsWithoutRef, type JSX } from 'react';
 
 import { EditableTitle } from '@/components/editor/editable-title';
+import { ObjectSurface } from '@/components/objects/object-surface';
 import { HEALTH_DOT_CLASS, HEALTH_LABEL } from '@/components/programs/health';
 import { useWorkStatus } from '@/components/entity-display/use-work-status';
 import { WorkStatusBadge } from '@/components/entity-display/work-status';
 import { ROSTER_DATA_CELL_CLASS, ROSTER_HEADER_CELL_CLASS } from '@/components/views/roster-grid';
-import { entityDragSource } from '@/lib/entity-drag';
 
 /** The row view-model derived for one Program (owner + child-work roll-up). */
 export interface ProgramRow {
@@ -148,32 +147,6 @@ function ProgramName({
   );
 }
 
-/** Build this item's drag source, wired to suppress the post-drop synthetic click. */
-function useProgramDrag(program: ProgramOut, dragOccurredRef: { current: boolean }) {
-  return dragSourceProps(
-    entityDragSource(
-      {
-        kind: 'program',
-        id: program.id,
-        organizationId: program.organizationId,
-        title: program.name,
-      },
-      {
-        onDragStart: () => {
-          dragOccurredRef.current = true;
-        },
-        onDragEnd: () => {
-          // Clear on the next tick so the post-drop synthesized click (dispatched before this
-          // macrotask) is still suppressed, while later genuine clicks open normally.
-          window.setTimeout(() => {
-            dragOccurredRef.current = false;
-          }, 0);
-        },
-      },
-    ),
-  );
-}
-
 /** One 56px identity row: glyph + name/summary, then aligned status/health/owner/count columns. */
 function ProgramGridRow({
   row: { program, ownerName, projectCount, taskCount },
@@ -185,74 +158,79 @@ function ProgramGridRow({
   canRename,
   onRename,
 }: ProgramItemProps): JSX.Element {
-  const dragOccurredRef = useRef(false);
-  const dragProps = useProgramDrag(program, dragOccurredRef);
   const status = useWorkStatus('program', program.status);
+  const object = {
+    kind: 'program' as const,
+    id: program.id,
+    organizationId: program.organizationId,
+    title: program.name,
+  };
 
   return (
-    <div
-      role="row"
-      {...dragProps}
-      className={cn(
-        'hover:bg-surface-container-high relative grid min-h-14 cursor-pointer grid-cols-[minmax(24rem,1fr)_8rem_8rem_12rem_7rem_7rem] items-center rounded-lg transition-colors',
-        dragProps?.className,
-      )}
-      onClick={(event) => {
-        if (dragOccurredRef.current) return;
-        if ((event.target as HTMLElement).closest('a, button')) return;
+    <ObjectSurface
+      object={object}
+      surfaceId="program-list"
+      href={`/orgs/${program.organizationId}/programs/${program.id}`}
+      onActivate={() => {
         onOpen(program.id);
       }}
     >
-      <div role="gridcell" className={`${ROSTER_DATA_CELL_CLASS} gap-3 py-2`}>
-        <ProgramGlyph />
-        <div className="min-w-0">
-          <ProgramName
-            program={program}
-            canRename={canRename}
-            onRename={onRename}
-            onOpen={onOpen}
-            className="text-on-surface line-clamp-1 text-sm leading-5 font-semibold"
-          />
-          {program.summary ? (
-            <p className="text-on-surface-variant mt-0.5 line-clamp-1 max-w-[48ch] text-xs leading-4">
-              {program.summary}
-            </p>
-          ) : null}
+      <div
+        role="row"
+        tabIndex={0}
+        className="hover:bg-surface-container-high relative grid min-h-14 cursor-pointer grid-cols-[minmax(24rem,1fr)_8rem_8rem_12rem_7rem_7rem] items-center rounded-lg transition-colors"
+      >
+        <div role="gridcell" className={`${ROSTER_DATA_CELL_CLASS} gap-3 py-2`}>
+          <ProgramGlyph />
+          <div className="min-w-0">
+            <ProgramName
+              program={program}
+              canRename={canRename}
+              onRename={onRename}
+              onOpen={onOpen}
+              className="text-on-surface line-clamp-1 text-sm leading-5 font-semibold"
+            />
+            {program.summary ? (
+              <p className="text-on-surface-variant mt-0.5 line-clamp-1 max-w-[48ch] text-xs leading-4">
+                {program.summary}
+              </p>
+            ) : null}
+          </div>
+        </div>
+        <div role="gridcell" className={ROSTER_DATA_CELL_CLASS}>
+          <WorkStatusBadge name={status.name} category={status.category} />
+        </div>
+        <div role="gridcell" className={`${ROSTER_DATA_CELL_CLASS} whitespace-nowrap`}>
+          <HealthLabel health={program.health ?? null} />
+        </div>
+        <div role="gridcell" className={`${ROSTER_DATA_CELL_CLASS} gap-1.5`}>
+          {ownerName ? (
+            <>
+              <ActorAvatar kind="human" name={ownerName} size={20} />
+              <span className="text-on-surface truncate text-sm">{ownerName}</span>
+            </>
+          ) : (
+            <span className="text-on-surface-variant text-sm">Unowned</span>
+          )}
+        </div>
+        <div
+          role="gridcell"
+          className={`${ROSTER_DATA_CELL_CLASS} text-on-surface-variant gap-1.5 text-sm tabular-nums`}
+        >
+          <FolderKanban aria-hidden="true" className="size-4" />
+          {projectCount}
+          <span className="sr-only">{projectCount === 1 ? projectNoun : projectNounPlural}</span>
+        </div>
+        <div
+          role="gridcell"
+          className={`${ROSTER_DATA_CELL_CLASS} text-on-surface-variant gap-1.5 text-sm tabular-nums`}
+        >
+          <ListChecks aria-hidden="true" className="size-4" />
+          {taskCount}
+          <span className="sr-only">{taskCount === 1 ? taskNoun : taskNounPlural}</span>
         </div>
       </div>
-      <div role="gridcell" className={ROSTER_DATA_CELL_CLASS}>
-        <WorkStatusBadge name={status.name} category={status.category} />
-      </div>
-      <div role="gridcell" className={`${ROSTER_DATA_CELL_CLASS} whitespace-nowrap`}>
-        <HealthLabel health={program.health ?? null} />
-      </div>
-      <div role="gridcell" className={`${ROSTER_DATA_CELL_CLASS} gap-1.5`}>
-        {ownerName ? (
-          <>
-            <ActorAvatar kind="human" name={ownerName} size={20} />
-            <span className="text-on-surface truncate text-sm">{ownerName}</span>
-          </>
-        ) : (
-          <span className="text-on-surface-variant text-sm">Unowned</span>
-        )}
-      </div>
-      <div
-        role="gridcell"
-        className={`${ROSTER_DATA_CELL_CLASS} text-on-surface-variant gap-1.5 text-sm tabular-nums`}
-      >
-        <FolderKanban aria-hidden="true" className="size-4" />
-        {projectCount}
-        <span className="sr-only">{projectCount === 1 ? projectNoun : projectNounPlural}</span>
-      </div>
-      <div
-        role="gridcell"
-        className={`${ROSTER_DATA_CELL_CLASS} text-on-surface-variant gap-1.5 text-sm tabular-nums`}
-      >
-        <ListChecks aria-hidden="true" className="size-4" />
-        {taskCount}
-        <span className="sr-only">{taskCount === 1 ? taskNoun : taskNounPlural}</span>
-      </div>
-    </div>
+    </ObjectSurface>
   );
 }
 
@@ -352,69 +330,76 @@ function ProgramCard({
   canRename,
   onRename,
 }: ProgramItemProps): JSX.Element {
-  const dragOccurredRef = useRef(false);
-  const dragProps = useProgramDrag(program, dragOccurredRef);
   const status = useWorkStatus('program', program.status);
+  const object = {
+    kind: 'program' as const,
+    id: program.id,
+    organizationId: program.organizationId,
+    title: program.name,
+  };
 
   return (
-    <Card
-      role="listitem"
-      {...dragProps}
-      className={cn(
-        'hover:bg-surface-container-high flex cursor-pointer flex-col gap-3 p-4 transition-colors',
-        dragProps?.className,
-      )}
-      onClick={(event) => {
-        if (dragOccurredRef.current) return;
-        if ((event.target as HTMLElement).closest('a, button')) return;
+    <ObjectSurface
+      object={object}
+      surfaceId="program-cards"
+      href={`/orgs/${program.organizationId}/programs/${program.id}`}
+      onActivate={() => {
         onOpen(program.id);
       }}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex min-w-0 flex-1 items-center gap-3">
-          <ProgramGlyph />
-          <ProgramName
-            program={program}
-            canRename={canRename}
-            onRename={onRename}
-            onOpen={onOpen}
-            className="text-on-surface line-clamp-1 min-w-0 text-sm leading-5 font-semibold"
-          />
+      <Card
+        role="listitem"
+        tabIndex={0}
+        className="hover:bg-surface-container-high flex cursor-pointer flex-col gap-3 p-4 transition-colors"
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <ProgramGlyph />
+            <ProgramName
+              program={program}
+              canRename={canRename}
+              onRename={onRename}
+              onOpen={onOpen}
+              className="text-on-surface line-clamp-1 min-w-0 text-sm leading-5 font-semibold"
+            />
+          </div>
+          <span className="shrink-0">
+            <WorkStatusBadge name={status.name} category={status.category} />
+          </span>
         </div>
-        <span className="shrink-0">
-          <WorkStatusBadge name={status.name} category={status.category} />
-        </span>
-      </div>
 
-      {program.summary ? (
-        <p className="text-on-surface-variant line-clamp-2 text-xs leading-4">{program.summary}</p>
-      ) : null}
+        {program.summary ? (
+          <p className="text-on-surface-variant line-clamp-2 text-xs leading-4">
+            {program.summary}
+          </p>
+        ) : null}
 
-      <div className="border-outline-variant/60 mt-auto flex items-center justify-between gap-2 border-t pt-3">
-        <div className="flex min-w-0 items-center gap-1.5">
-          {ownerName ? (
-            <>
-              <ActorAvatar kind="human" name={ownerName} size={18} />
-              <span className="text-on-surface-variant truncate text-xs">{ownerName}</span>
-            </>
-          ) : (
-            <span className="text-on-surface-variant text-xs">Unowned</span>
-          )}
+        <div className="border-outline-variant/60 mt-auto flex items-center justify-between gap-2 border-t pt-3">
+          <div className="flex min-w-0 items-center gap-1.5">
+            {ownerName ? (
+              <>
+                <ActorAvatar kind="human" name={ownerName} size={18} />
+                <span className="text-on-surface-variant truncate text-xs">{ownerName}</span>
+              </>
+            ) : (
+              <span className="text-on-surface-variant text-xs">Unowned</span>
+            )}
+          </div>
+          <HealthLabel health={program.health ?? null} />
         </div>
-        <HealthLabel health={program.health ?? null} />
-      </div>
 
-      <div className="text-on-surface-variant flex items-center gap-4 text-xs tabular-nums">
-        <span className="flex items-center gap-1.5">
-          <FolderKanban aria-hidden="true" className="size-4" />
-          {projectCount} {projectCount === 1 ? projectNoun : projectNounPlural}
-        </span>
-        <span className="flex items-center gap-1.5">
-          <ListChecks aria-hidden="true" className="size-4" />
-          {taskCount} {taskCount === 1 ? taskNoun : taskNounPlural}
-        </span>
-      </div>
-    </Card>
+        <div className="text-on-surface-variant flex items-center gap-4 text-xs tabular-nums">
+          <span className="flex items-center gap-1.5">
+            <FolderKanban aria-hidden="true" className="size-4" />
+            {projectCount} {projectCount === 1 ? projectNoun : projectNounPlural}
+          </span>
+          <span className="flex items-center gap-1.5">
+            <ListChecks aria-hidden="true" className="size-4" />
+            {taskCount} {taskCount === 1 ? taskNoun : taskNounPlural}
+          </span>
+        </div>
+      </Card>
+    </ObjectSurface>
   );
 }
 

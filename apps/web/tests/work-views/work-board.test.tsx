@@ -148,9 +148,9 @@ describe('WorkBoard', () => {
     expect(onHideColumn).toHaveBeenCalledWith('todo');
   });
 
-  it('paginates one swimlane and routes a mutable drop through its full group path', () => {
-    const onDrop = vi.fn();
+  it('paginates one swimlane and opens a card from one click without native dragging', () => {
     const onLoadMore = vi.fn();
+    const onActivate = vi.fn();
     const row = task('01ARZ3NDEKTSV4RRFFQ69G5FD1', 'Movable task');
     render(
       <WorkBoard
@@ -170,8 +170,8 @@ describe('WorkBoard', () => {
         selectedIds={new Set()}
         onSelectionChange={vi.fn()}
         onCreate={vi.fn()}
-        onActivate={vi.fn()}
-        onDrop={onDrop}
+        onActivate={onActivate}
+        onDrop={vi.fn()}
         onLoadMore={onLoadMore}
       />,
     );
@@ -180,22 +180,11 @@ describe('WorkBoard', () => {
     expect(onLoadMore).toHaveBeenCalledWith(['todo', 'medium']);
 
     const card = screen.getByRole('article', { name: 'Movable task' });
-    const values = new Map<string, string>();
-    const transfer = {
-      effectAllowed: 'none',
-      dropEffect: 'none',
-      setData: (type: string, value: string) => values.set(type, value),
-      getData: (type: string) => values.get(type) ?? '',
-    };
-    fireEvent.dragStart(card, { dataTransfer: transfer });
-    fireEvent.drop(screen.getByTestId('board-cell-started-medium'), { dataTransfer: transfer });
-    expect(onDrop).toHaveBeenCalledWith({
-      item: row,
-      sourcePath: ['todo', 'medium'],
-      destinationPath: ['started', 'medium'],
-      beforeId: null,
-      afterId: null,
-    });
+    expect(card).toHaveAttribute('data-object-kind', 'task');
+    expect(card).toHaveAttribute('data-object-id', row.id);
+    expect(card).not.toHaveAttribute('draggable');
+    fireEvent.click(card);
+    expect(onActivate).toHaveBeenCalledWith(row);
   });
 
   it('renders the projected assignee name instead of the relation id', () => {

@@ -14,6 +14,7 @@
  * `<select>`s — with focus rings and keyboard operation.
  */
 import type { CycleCarryoverAction } from '@docket/types';
+import { cn } from '@docket/ui';
 import { StatusIcon, type WorkflowStateType } from '@docket/ui/components';
 import { ChevronDown } from '@docket/ui/icons';
 import {
@@ -24,11 +25,9 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from '@docket/ui/primitives';
-import { dragSourceProps } from '@docket/ui/lib/draggable';
-import { cn } from '@docket/ui/lib/utils';
 import type { JSX } from 'react';
 
-import { entityDragSource } from '@/lib/entity-drag';
+import { ObjectSurface } from '@/components/objects/object-surface';
 
 /** A destination cycle a carryover task can be moved to. */
 export interface CarryoverTarget {
@@ -98,81 +97,82 @@ export function CarryoverRow({
     : 'Choose a cycle';
   const noTargets = targets.length === 0;
 
-  const dragProps = dragSourceProps(
-    entityDragSource({
-      kind: 'task',
-      id: item.taskId,
-      organizationId: item.organizationId,
-      title: item.title,
-    }),
-  );
+  const object = {
+    kind: 'task' as const,
+    id: item.taskId,
+    organizationId: item.organizationId,
+    title: item.title,
+  };
 
   return (
-    <div
-      {...dragProps}
-      className={cn(
-        'border-outline-variant flex flex-wrap items-center gap-3 border-b py-2.5 last:border-b-0',
-        dragProps?.className,
-      )}
+    <ObjectSurface
+      object={object}
+      surfaceId="cycle-carryover"
+      href={`/orgs/${item.organizationId}/tasks/${item.taskId}`}
     >
-      <span className="flex min-w-0 flex-1 items-center gap-2">
-        <StatusIcon type={item.stateType} className="shrink-0" />
-        <span className="text-on-surface text-body-medium truncate">{item.title}</span>
-      </span>
+      <div className="border-outline-variant flex flex-wrap items-center gap-3 border-b py-2.5 last:border-b-0">
+        <span className="flex min-w-0 flex-1 items-center gap-2">
+          <StatusIcon type={item.stateType} className="shrink-0" />
+          <span className="text-on-surface text-body-medium truncate">{item.title}</span>
+        </span>
 
-      {/* Action picker. */}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" className="gap-1.5">
-            <span>{actionLabel(item.action)}</span>
-            <ChevronDown className="h-4 w-4 opacity-60" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" width="sm">
-          <DropdownMenuRadioGroup
-            value={item.action}
-            onValueChange={(next) => {
-              onActionChange(next as CycleCarryoverAction);
-            }}
-          >
-            {ACTION_OPTIONS.map((option) => (
-              <DropdownMenuRadioItem
-                key={option.value}
-                value={option.value}
-                disabled={option.value === 'move' && noTargets}
-              >
-                {option.label}
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      {/* Destination picker — only when moving. */}
-      {needsTarget ? (
+        {/* Action picker. */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={noTargets}
-              className={cn('gap-1.5', !item.targetCycleId && 'text-on-surface-variant')}
-            >
-              <span>{noTargets ? 'No cycle to move to' : targetLabel}</span>
+            <Button variant="outline" size="sm" className="gap-1.5">
+              <span>{actionLabel(item.action)}</span>
               <ChevronDown className="h-4 w-4 opacity-60" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" width="md">
-            <DropdownMenuRadioGroup value={item.targetCycleId ?? ''} onValueChange={onTargetChange}>
-              {targets.map((target) => (
-                <DropdownMenuRadioItem key={target.id} value={target.id}>
-                  {target.label}
+          <DropdownMenuContent align="end" width="sm">
+            <DropdownMenuRadioGroup
+              value={item.action}
+              onValueChange={(next) => {
+                onActionChange(next as CycleCarryoverAction);
+              }}
+            >
+              {ACTION_OPTIONS.map((option) => (
+                <DropdownMenuRadioItem
+                  key={option.value}
+                  value={option.value}
+                  disabled={option.value === 'move' && noTargets}
+                >
+                  {option.label}
                 </DropdownMenuRadioItem>
               ))}
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
-      ) : null}
-    </div>
+
+        {/* Destination picker — only when moving. */}
+        {needsTarget ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={noTargets}
+                className={cn('gap-1.5', !item.targetCycleId && 'text-on-surface-variant')}
+              >
+                <span>{noTargets ? 'No cycle to move to' : targetLabel}</span>
+                <ChevronDown className="h-4 w-4 opacity-60" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" width="md">
+              <DropdownMenuRadioGroup
+                value={item.targetCycleId ?? ''}
+                onValueChange={onTargetChange}
+              >
+                {targets.map((target) => (
+                  <DropdownMenuRadioItem key={target.id} value={target.id}>
+                    {target.label}
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
+      </div>
+    </ObjectSurface>
   );
 }

@@ -4,7 +4,7 @@
 import { useMemo } from 'react';
 
 import { useDragState } from '@/components/dnd/drag-context';
-import { useDropTarget } from '@/components/dnd/use-drop-target';
+import { useRelationDropTarget } from '@/components/dnd/use-relation-drop-target';
 import {
   createTaskHierarchy,
   type TaskHierarchyItem,
@@ -13,7 +13,7 @@ import type { ObjectRef } from '@/lib/actions';
 
 /** Binding a task row merges into its selectable root. */
 export interface TaskHierarchyDropBinding {
-  readonly rowProps: ReturnType<typeof useDropTarget>['dropProps'];
+  readonly rowProps: ReturnType<typeof useRelationDropTarget>['dropProps'];
   readonly className: string;
   readonly status: string | null;
 }
@@ -44,22 +44,9 @@ export function useTaskHierarchyDrop(
     [draggedTaskIds, hierarchy],
   );
 
-  const drop = useDropTarget({
-    accepts: (object) =>
-      object.kind === 'task' &&
-      object.organizationId === target.organizationId &&
-      validTargets.has(target.id),
-    action: 'task.makeSubtaskOf',
-    effect: 'move',
-    resolveContext: (primary) =>
-      validTargets.has(target.id)
-        ? {
-            objects: draggedObjects.length > 0 ? draggedObjects : [primary],
-            target,
-            source: 'drag',
-            organizationId: target.organizationId,
-          }
-        : null,
+  const drop = useRelationDropTarget({
+    target,
+    disabled: draggedTaskIds.length > 0 && !validTargets.has(target.id),
   });
 
   const count = draggedTaskIds.length || 1;

@@ -15,7 +15,6 @@ import { useResidentInPageSearch } from '@/components/in-page-search/use-residen
 import SuggestionsLane from '@/components/triage/suggestions-lane';
 import { TriageRow } from '@/components/triage/triage-row';
 import { taskListKey } from '@/components/views/task-list-key';
-import { entityDragSource } from '@/lib/entity-drag';
 import { useCategoryOf } from '@/components/entity-display/use-work-status';
 import { useTriage } from '@/lib/use-triage';
 
@@ -156,12 +155,6 @@ export default function TriagePage(): JSX.Element {
               renderRow={(task, ctx) => (
                 <TriageRow
                   task={toRow(task)}
-                  drag={entityDragSource({
-                    kind: 'task',
-                    id: task.id,
-                    organizationId: task.organizationId,
-                    title: task.title,
-                  })}
                   active={ctx.active}
                   onActivate={ctx.onActivate}
                   rowProps={ctx.rowProps}

@@ -120,6 +120,11 @@ export function useActionRegistry(): ActionRegistry {
   return useActionRegistryContext().registry;
 }
 
+/** Read the mounted registry when an interaction can degrade inertly in isolation. */
+export function useOptionalActionRegistry(): ActionRegistry | null {
+  return useContext(ActionRegistryContext)?.registry ?? null;
+}
+
 /**
  * Register one domain's actions for as long as the calling component is mounted.
  *

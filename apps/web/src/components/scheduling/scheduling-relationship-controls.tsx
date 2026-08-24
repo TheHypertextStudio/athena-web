@@ -2,13 +2,13 @@
 
 import type { JSX, ReactNode } from 'react';
 
-import { DRAGGABLE } from '@docket/ui/lib/draggable';
+import { ObjectSurface } from '@/components/objects/object-surface';
+import type { ObjectRef } from '@/lib/actions/object';
 
-import { writeScheduleDragObject } from './scheduling-drag-object';
-import type { ScheduleDragObject, ScheduleItem, ScheduleLane } from './scheduling-types';
+import type { ScheduleItem, ScheduleLane } from './scheduling-types';
 import type { SchedulingRelationshipMode } from './use-scheduling-relationship-mode';
 
-/** Render the dual-purpose native-drag and keyboard/touch relationship source control. */
+/** Render one Dnd Kit and keyboard relationship source control. */
 export function SchedulingRelationshipSourceControl({
   item,
   object,
@@ -19,7 +19,7 @@ export function SchedulingRelationshipSourceControl({
   children,
 }: {
   readonly item: ScheduleItem;
-  readonly object: ScheduleDragObject;
+  readonly object: ObjectRef;
   readonly mode: SchedulingRelationshipMode;
   readonly className: string;
   readonly activeClassName: string;
@@ -29,43 +29,40 @@ export function SchedulingRelationshipSourceControl({
   const active = mode.source?.item.id === item.id;
 
   return (
-    <button
-      type="button"
-      draggable
-      aria-label={
-        mode.enabled
-          ? active
-            ? `Cancel relationship from ${item.title}`
-            : `Create relationship from ${item.title}`
-          : `Drag ${item.title} to create a relationship`
-      }
-      aria-pressed={mode.enabled ? active : undefined}
-      className={`${DRAGGABLE} ${className} ${active ? activeClassName : inactiveClassName}`}
-      onPointerDown={(event) => {
-        event.stopPropagation();
-      }}
-      onClick={(event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        if (!mode.enabled) return;
-        if (active) {
-          mode.cancel();
-          return;
+    <ObjectSurface object={object} surfaceId="scheduling-relationship-control">
+      <button
+        type="button"
+        aria-label={
+          mode.enabled
+            ? active
+              ? `Cancel relationship from ${item.title}`
+              : `Create relationship from ${item.title}`
+            : `Drag ${item.title} to create a relationship`
         }
-        mode.begin({
-          item,
-          object,
-          control: event.currentTarget,
-          focusFirstTarget: event.detail === 0,
-        });
-      }}
-      onDragStart={(event) => {
-        event.stopPropagation();
-        writeScheduleDragObject(event.dataTransfer, object);
-      }}
-    >
-      {children}
-    </button>
+        aria-pressed={mode.enabled ? active : undefined}
+        className={`${className} ${active ? activeClassName : inactiveClassName}`}
+        onPointerDown={(event) => {
+          event.stopPropagation();
+        }}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          if (!mode.enabled) return;
+          if (active) {
+            mode.cancel();
+            return;
+          }
+          mode.begin({
+            item,
+            object,
+            control: event.currentTarget,
+            focusFirstTarget: event.detail === 0,
+          });
+        }}
+      >
+        {children}
+      </button>
+    </ObjectSurface>
   );
 }
 

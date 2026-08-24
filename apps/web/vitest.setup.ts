@@ -31,3 +31,23 @@ Object.defineProperty(window, 'matchMedia', {
     dispatchEvent: () => false,
   }),
 });
+
+// jsdom does not lay out elements and therefore omits ResizeObserver. Dnd Kit registers one while
+// its DOM package loads, so provide the inert observer that component tests need before imports.
+class TestResizeObserver implements ResizeObserver {
+  observe(): void {
+    return undefined;
+  }
+  unobserve(): void {
+    return undefined;
+  }
+  disconnect(): void {
+    return undefined;
+  }
+}
+
+Object.defineProperty(globalThis, 'ResizeObserver', {
+  configurable: true,
+  writable: true,
+  value: TestResizeObserver,
+});

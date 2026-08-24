@@ -8,7 +8,7 @@ import { useRegisterInitiativeActions } from '../../../src/components/initiative
 import { InteractionProvider } from '../../../src/lib/actions/interaction-provider';
 import type { ObjectRef } from '../../../src/lib/actions/object';
 import { createActionRegistry } from '../../../src/lib/actions/registry';
-import type * as InitiativeHierarchyMutations from '../../../src/components/initiatives/initiative-hierarchy-mutations';
+import * as initiativeMutations from '../../../src/components/initiatives/initiative-hierarchy-mutations';
 import { makeQueryWrapper } from '../../support/query';
 
 const push = vi.fn();
@@ -20,7 +20,7 @@ vi.mock('../../../src/components/pickers/picker-overlay', () => ({
 }));
 
 vi.mock('../../../src/components/initiatives/initiative-hierarchy-mutations', async () => {
-  const actual = await vi.importActual<typeof InitiativeHierarchyMutations>(
+  const actual = await vi.importActual<typeof initiativeMutations>(
     '../../../src/components/initiatives/initiative-hierarchy-mutations',
   );
   return { ...actual, writeInitiativeHierarchyMutation: vi.fn().mockResolvedValue(undefined) };
@@ -60,12 +60,39 @@ describe('Initiative actions', () => {
   it('registers one Initiative action set for navigation and hierarchy editing', () => {
     const registry = setup();
     expect(registry.snapshot().ids).toEqual([
+      'initiative.addLabel',
       'initiative.addSubinitiative',
       'initiative.changeParent',
       'initiative.copy',
       'initiative.moveToTopLevel',
       'initiative.open',
+      'initiative.setLeadTeam',
+      'initiative.setOwner',
     ]);
+    expect(registry.getByRelation('initiative.parent')?.id).toBe('initiative.changeParent');
+  });
+
+  it('routes a dropped parent through the Initiative-owned command port', async () => {
+    const registry = setup();
+    await registry.invoke('initiative.changeParent', () => ({
+      objects: [child],
+      target: {
+        kind: 'initiative',
+        id: 'new-parent',
+        organizationId: 'org-1',
+        title: 'New parent',
+      },
+      source: 'drag',
+      organizationId: 'org-1',
+    }));
+
+    expect(initiativeMutations.writeInitiativeHierarchyMutation).toHaveBeenCalledWith('org-1', {
+      kind: 'move',
+      linkId: 'link-child',
+      parentInitiativeId: 'new-parent',
+      childInitiativeId: 'child',
+    });
+    expect(open).not.toHaveBeenCalled();
   });
 
   it('opens the same hierarchy picker for parent and child operations', async () => {

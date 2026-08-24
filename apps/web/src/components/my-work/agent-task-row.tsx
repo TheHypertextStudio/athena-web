@@ -9,10 +9,10 @@ import {
   StatusIcon,
   type WorkflowStateType,
 } from '@docket/ui/components';
-import type { DragSource } from '@docket/ui/lib/draggable';
 import type { JSX } from 'react';
 
 import { EditableTitle } from '@/components/editor/editable-title';
+import { ObjectSurface } from '@/components/objects/object-surface';
 import { TaskTimerButton } from '@/components/time-tracking';
 
 import { LiveSessionPill, type PillStatus } from './live-session-pill';
@@ -31,6 +31,8 @@ export interface RowActor {
 export interface AgentTaskRowData {
   /** Stable task id. */
   id: string;
+  /** Workspace that owns the task. */
+  organizationId: string;
   /** Task title. */
   title: string;
   /** Canonical workflow-state type driving the leading status glyph. */
@@ -53,12 +55,6 @@ export interface AgentTaskRowProps {
   canEdit?: boolean;
   /** Persist a renamed task title. Enables inline rename when provided with `canEdit`. */
   onRename?: (taskId: string, title: string) => void;
-  /**
-   * Makes the whole row a drag source, forwarded to the underlying {@link ListRow}. Callers build
-   * this from the task's canonical entity object (`entityDragSource({ kind: 'task', … })`) since
-   * the row's view-model does not carry the workspace the drop target needs.
-   */
-  drag?: DragSource;
   /** Semantic attributes supplied by the virtualized list for this grid row. */
   rowProps?: ListViewRowProps | undefined;
 }
@@ -86,48 +82,58 @@ export function AgentTaskRow({
   onActivate,
   canEdit,
   onRename,
-  drag,
   rowProps,
 }: AgentTaskRowProps): JSX.Element {
   return (
-    <ListRow {...rowProps} active={active} onActivate={onActivate} drag={drag}>
-      <ListCell className="shrink-0">
-        <StatusIcon type={task.stateType} />
-      </ListCell>
-      <ListCell className="flex-1">
-        {canEdit && onRename ? (
-          <EditableTitle
-            value={task.title}
-            onSave={(title) => {
-              onRename(task.id, title);
-            }}
-            canEdit
-            activate="doubleClick"
-            {...(onActivate ? { onActivate } : {})}
-            ariaLabel="Task title"
-            className="text-on-surface truncate"
-          />
-        ) : (
-          <span className="text-on-surface truncate">{task.title}</span>
-        )}
-      </ListCell>
-      {task.session ? (
+    <ObjectSurface
+      object={{
+        kind: 'task',
+        id: task.id,
+        organizationId: task.organizationId,
+        title: task.title,
+      }}
+      surfaceId="my-work-list"
+      onActivate={() => onActivate?.()}
+    >
+      <ListRow {...rowProps} active={active}>
         <ListCell className="shrink-0">
-          <LiveSessionPill status={task.session.status} href={task.session.href} />
+          <StatusIcon type={task.stateType} />
         </ListCell>
-      ) : null}
-      {task.actor ? (
+        <ListCell className="flex-1">
+          {canEdit && onRename ? (
+            <EditableTitle
+              value={task.title}
+              onSave={(title) => {
+                onRename(task.id, title);
+              }}
+              canEdit
+              activate="doubleClick"
+              {...(onActivate ? { onActivate } : {})}
+              ariaLabel="Task title"
+              className="text-on-surface truncate"
+            />
+          ) : (
+            <span className="text-on-surface truncate">{task.title}</span>
+          )}
+        </ListCell>
+        {task.session ? (
+          <ListCell className="shrink-0">
+            <LiveSessionPill status={task.session.status} href={task.session.href} />
+          </ListCell>
+        ) : null}
+        {task.actor ? (
+          <ListCell className="shrink-0">
+            <ActorAvatar
+              kind={task.actor.kind}
+              name={task.actor.name}
+              avatarUrl={task.actor.avatarUrl}
+            />
+          </ListCell>
+        ) : null}
         <ListCell className="shrink-0">
-          <ActorAvatar
-            kind={task.actor.kind}
-            name={task.actor.name}
-            avatarUrl={task.actor.avatarUrl}
-          />
+          <TaskTimerButton taskId={task.id} title={task.title} controlSize="sm" withLabel={false} />
         </ListCell>
-      ) : null}
-      <ListCell className="shrink-0">
-        <TaskTimerButton taskId={task.id} title={task.title} controlSize="sm" withLabel={false} />
-      </ListCell>
-    </ListRow>
+      </ListRow>
+    </ObjectSurface>
   );
 }

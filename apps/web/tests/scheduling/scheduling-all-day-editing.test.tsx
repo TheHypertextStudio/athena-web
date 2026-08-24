@@ -14,9 +14,10 @@ const OFFSITE: ScheduleItem = {
   endsAt: '2026-07-04T00:00:00.000Z',
   allDay: true,
   editable: true,
-  dragObject: {
-    kind: 'calendar_item',
-    itemId: 'offsite',
+  object: {
+    kind: 'calendar_event',
+    id: 'offsite',
+    organizationId: null,
     title: 'Team offsite',
   },
 };
@@ -236,38 +237,5 @@ describe('SchedulingCanvas all-day direct manipulation', () => {
 
     expect(screen.queryByRole('button', { name: 'Move Team offsite' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Resize Team offsite/ })).not.toBeInTheDocument();
-  });
-
-  it('preserves keyboard relationship targeting on an editable all-day item', async () => {
-    const user = userEvent.setup();
-    const onDropObjectOnItem = vi.fn();
-    const target: ScheduleItem = {
-      id: 'launch',
-      title: 'Launch day',
-      startsAt: '2026-07-01T00:00:00.000Z',
-      endsAt: '2026-07-02T00:00:00.000Z',
-      allDay: true,
-      dropTarget: true,
-    };
-    const lane: ScheduleLane = { ...assertDefined(LANES[0]), items: [OFFSITE, target] };
-    render(
-      <SchedulingCanvas
-        displayTimezone="UTC"
-        lanes={[lane]}
-        pixelsPerHour={60}
-        viewportWidth={500}
-        onMoveAllDayItem={vi.fn()}
-        onDropObjectOnItem={onDropObjectOnItem}
-      />,
-    );
-
-    await user.click(screen.getByRole('button', { name: 'Create relationship from Team offsite' }));
-    await user.click(screen.getByRole('button', { name: 'Link Team offsite to Launch day' }));
-
-    expect(onDropObjectOnItem).toHaveBeenCalledWith({
-      object: OFFSITE.dragObject,
-      targetItem: target,
-      targetLane: lane,
-    });
   });
 });

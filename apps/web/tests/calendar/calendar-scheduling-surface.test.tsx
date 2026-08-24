@@ -1173,64 +1173,7 @@ describe('CalendarSchedulingSurface persistence', () => {
     expect(fold.onSelectRegion).not.toHaveBeenCalled();
   });
 
-  it('clears stale mutation failures before a different relationship action', () => {
-    renderSurface();
-    mutationState.update.reset.mockClear();
-    mutationState.link.reset.mockClear();
-    mutationState.relate.reset.mockClear();
-    const props = canvasProps();
-    act(() => {
-      props.onDropObjectOnItem?.({
-        object: {
-          kind: 'task',
-          taskId: '01ARZ3NDEKTSV4RRFFQ69G5FA0',
-          organizationId: '01BX5ZZKBKACTAV9WEVGEMMVRZ',
-          title: 'Draft launch memo',
-        },
-        targetItem: assertDefined(assertDefined(props.lanes[0]).items[0]),
-        targetLane: assertDefined(props.lanes[0]),
-      });
-    });
-
-    expect(mutationState.update.reset).toHaveBeenCalledOnce();
-    expect(mutationState.link.reset).toHaveBeenCalledOnce();
-    expect(mutationState.relate.reset).toHaveBeenCalledOnce();
-    expect(mutationState.link.mutate).toHaveBeenCalledOnce();
-  });
-
-  it('rejects derived relationship targets and calendar-item self drops', () => {
-    const derived = calendarItem();
-    derived.kind = 'availability_block';
-    renderSurface('dates', derived);
-    let props = canvasProps();
-    act(() => {
-      props.onDropObjectOnItem?.({
-        object: {
-          kind: 'task',
-          taskId: '01ARZ3NDEKTSV4RRFFQ69G5FA0',
-          organizationId: '01BX5ZZKBKACTAV9WEVGEMMVRZ',
-          title: 'Draft launch memo',
-        },
-        targetItem: assertDefined(assertDefined(props.lanes[0]).items[0]),
-        targetLane: assertDefined(props.lanes[0]),
-      });
-    });
-    expect(mutationState.link.mutate).not.toHaveBeenCalled();
-
-    cleanup();
-    renderSurface();
-    props = canvasProps();
-    act(() => {
-      props.onDropObjectOnItem?.({
-        object: { kind: 'calendar_item', itemId: ITEM_ID, title: 'Planning session' },
-        targetItem: assertDefined(assertDefined(props.lanes[0]).items[0]),
-        targetLane: assertDefined(props.lanes[0]),
-      });
-    });
-    expect(mutationState.relate.mutate).not.toHaveBeenCalled();
-  });
-
-  it.each(['update', 'link', 'relate'] as const)(
+  it.each(['update'] as const)(
     'keeps the grid, lane, and item mounted under fixed safe %s failure copy',
     (failure) => {
       mutationState[failure].isError = true;

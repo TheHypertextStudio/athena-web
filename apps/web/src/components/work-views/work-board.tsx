@@ -1,6 +1,7 @@
 'use client';
 
 import { Ellipsis, Plus } from '@docket/ui/icons';
+import { cn } from '@docket/ui/lib/utils';
 import {
   Button,
   Checkbox,
@@ -10,7 +11,12 @@ import {
   DropdownMenuTrigger,
 } from '@docket/ui/primitives';
 import type { ViewTarget } from '@docket/work/view-contract';
-import { type DragEvent, type JSX, useMemo } from 'react';
+import { useDragDropMonitor, useDragOperation, useDroppable } from '@dnd-kit/react';
+import { type JSX, type ReactNode, useMemo } from 'react';
+
+import { isObjectDragData } from '@/components/dnd/object-drag-data';
+import { useRelationDropTarget } from '@/components/dnd/use-relation-drop-target';
+import { ObjectSurface } from '@/components/objects/object-surface';
 
 import type { WorkViewDefinitionFor } from './view-state';
 import { workViewDisplayFieldCatalog, workViewFieldCatalog } from './view-state';
@@ -23,8 +29,8 @@ import {
   workViewRowDisplayValue,
   workViewRowTitle,
 } from './renderer-types';
+import { objectForWorkViewRow } from './work-view-object';
 
-const BOARD_DRAG_TYPE = 'application/x-docket-work-view-row';
 const MAX_MOUNTED_CARDS_PER_CELL = 100;
 
 /** Property-changing move emitted by a mutable board group. */
@@ -57,30 +63,134 @@ export interface WorkBoardProps<TTarget extends ViewTarget> {
   readonly onShowAllColumns?: (() => void) | undefined;
 }
 
-interface DragPayload {
-  readonly id: string;
-  readonly sourcePath: readonly string[];
+interface BoardCellData {
+  readonly kind: 'work-board-cell';
+  readonly path: readonly string[];
+  readonly effectLabel: string;
+  readonly canDrop: boolean;
 }
 
-function readDrag(event: DragEvent): DragPayload | null {
+function isBoardCellData(value: unknown): value is BoardCellData {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'kind' in value &&
+    value.kind === 'work-board-cell'
+  );
+}
+
+function boardSurfaceId(path: readonly string[]): string {
+  return `work-board:${JSON.stringify(path)}`;
+}
+
+function boardSourcePath(surfaceId: string | null): readonly string[] | null {
+  if (!surfaceId?.startsWith('work-board:')) return null;
   try {
-    const value: unknown = JSON.parse(event.dataTransfer.getData(BOARD_DRAG_TYPE));
-    if (
-      typeof value !== 'object' ||
-      value === null ||
-      !('id' in value) ||
-      !('sourcePath' in value)
-    ) {
-      return null;
-    }
-    const id = (value as { readonly id: unknown }).id;
-    const sourcePath = (value as { readonly sourcePath: unknown }).sourcePath;
-    return typeof id === 'string' && Array.isArray(sourcePath)
-      ? { id, sourcePath: sourcePath.filter((part): part is string => typeof part === 'string') }
+    const value: unknown = JSON.parse(surfaceId.slice('work-board:'.length));
+    return Array.isArray(value)
+      ? value.filter((part): part is string => typeof part === 'string')
       : null;
   } catch {
     return null;
   }
+}
+
+function WorkBoardCell({
+  path,
+  label,
+  mutable,
+  children,
+}: {
+  readonly path: readonly string[];
+  readonly label: string;
+  readonly mutable: boolean;
+  readonly children: ReactNode;
+}): JSX.Element {
+  const operation = useDragOperation();
+  const carriesObject = isObjectDragData(operation.source?.data);
+  const drop = useDroppable<BoardCellData>({
+    id: `work-board-cell:${workViewGroupPathKey(path)}`,
+    type: 'work-board-cell',
+    collisionPriority: mutable ? 2 : -2,
+    data: { kind: 'work-board-cell', path, effectLabel: `Move to ${label}`, canDrop: mutable },
+    disabled: !mutable,
+  });
+  const accepting = drop.isDropTarget && mutable && carriesObject;
+  return (
+    <section
+      ref={drop.ref}
+      data-testid={`board-cell-${path.join('-')}`}
+      data-drop-state={drop.isDropTarget ? (accepting ? 'accept' : 'reject') : 'idle'}
+      className={cn(
+        'min-h-20 rounded-lg',
+        accepting && 'ring-primary bg-primary/8 ring-2 ring-inset',
+        drop.isDropTarget && !accepting && 'ring-error/60 bg-error/5 ring-1 ring-inset',
+      )}
+    >
+      {accepting ? (
+        <div className="border-primary bg-primary-container text-on-primary-container text-label-medium mb-2 flex min-h-12 w-full items-center justify-center rounded-lg border border-dashed px-3">
+          Move to {label}
+        </div>
+      ) : null}
+      {children}
+    </section>
+  );
+}
+
+function WorkBoardCard<TTarget extends ViewTarget>({
+  row,
+  sourcePath,
+  selected,
+  selectionActive,
+  onToggle,
+  onActivate,
+  children,
+}: {
+  readonly row: WorkViewRowFor<TTarget>;
+  readonly sourcePath: readonly string[];
+  readonly selected: boolean;
+  readonly selectionActive: boolean;
+  readonly onToggle: () => void;
+  readonly onActivate: () => void;
+  readonly children: ReactNode;
+}): JSX.Element {
+  const object = objectForWorkViewRow(row);
+  const relation = useRelationDropTarget({ target: object });
+  return (
+    <ObjectSurface object={object} surfaceId={boardSurfaceId(sourcePath)} onActivate={onActivate}>
+      <article
+        ref={relation.dropProps.ref}
+        role="article"
+        aria-label={workViewRowTitle(row)}
+        data-drop-state={relation.dropState}
+        className={cn(
+          'group/card border-outline-variant bg-surface text-on-surface hover:bg-surface-container-high relative rounded-lg border p-3',
+          relation.dropProps.className,
+          relation.dropState === 'accept' && 'ring-primary bg-primary/8 ring-2',
+          relation.dropState === 'reject' && 'ring-error/60 bg-error/5 ring-1',
+        )}
+      >
+        <div className="flex items-start gap-2">
+          <span
+            className={`${selectionActive || selected ? 'opacity-100' : 'opacity-0 group-focus-within/card:opacity-100 group-hover/card:opacity-100'} transition-opacity`}
+          >
+            <Checkbox
+              aria-label={`Select ${workViewRowTitle(row)}`}
+              checked={selected}
+              onChange={onToggle}
+            />
+          </span>
+          <span className="text-body-medium min-w-0 flex-1">{workViewRowTitle(row)}</span>
+        </div>
+        {children}
+        {relation.effectLabel ? (
+          <span className="bg-primary-container text-on-primary-container text-label-small mt-2 block rounded-md px-2 py-1">
+            {relation.effectLabel}
+          </span>
+        ) : null}
+      </article>
+    </ObjectSurface>
+  );
 }
 
 /** Render columns and optional swimlanes from independently paginated server groups. */
@@ -144,6 +254,24 @@ export function WorkBoard<TTarget extends ViewTarget>({
     else next.add(id);
     onSelectionChange(next);
   };
+
+  useDragDropMonitor({
+    onDragEnd: (event) => {
+      const source = event.operation.source?.data;
+      const destination = event.operation.target?.data;
+      if (!mutable || !isObjectDragData(source) || !isBoardCellData(destination)) return;
+      const sourcePath = boardSourcePath(source.sourceSurfaceId);
+      const item = rows.get(source.object.id);
+      if (sourcePath === null || item === undefined) return;
+      onDrop({
+        item,
+        sourcePath,
+        destinationPath: destination.path,
+        beforeId: null,
+        afterId: null,
+      });
+    },
+  });
 
   return (
     <div
@@ -236,35 +364,11 @@ export function WorkBoard<TTarget extends ViewTarget>({
                   ? (page?.rows ?? [])
                   : (page?.rows ?? []).slice(-MAX_MOUNTED_CARDS_PER_CELL);
                 return (
-                  <section
+                  <WorkBoardCell
                     key={workViewGroupPathKey(path)}
-                    data-testid={`board-cell-${path.join('-')}`}
-                    className="min-h-20 rounded-lg"
-                    onDragOver={
-                      mutable
-                        ? (event) => {
-                            event.preventDefault();
-                            event.dataTransfer.dropEffect = 'move';
-                          }
-                        : undefined
-                    }
-                    onDrop={
-                      mutable
-                        ? (event) => {
-                            event.preventDefault();
-                            const payload = readDrag(event);
-                            const item = payload ? rows.get(payload.id) : undefined;
-                            if (!payload || !item) return;
-                            onDrop({
-                              item,
-                              sourcePath: payload.sourcePath,
-                              destinationPath: path,
-                              beforeId: null,
-                              afterId: null,
-                            });
-                          }
-                        : undefined
-                    }
+                    path={path}
+                    label={lane?.label ?? column.label}
+                    mutable={mutable}
                   >
                     {lane ? (
                       <h3 className="text-on-surface-variant text-label-medium mb-2 flex items-center justify-between px-1">
@@ -274,38 +378,19 @@ export function WorkBoard<TTarget extends ViewTarget>({
                     ) : null}
                     <div className="flex flex-col gap-2">
                       {mountedRows.map((row) => (
-                        <article
+                        <WorkBoardCard
                           key={row.id}
-                          aria-label={workViewRowTitle(row)}
-                          draggable={mutable}
-                          className="group/card border-outline-variant bg-surface text-on-surface hover:bg-surface-container-high rounded-lg border p-3"
-                          onDragStart={(event) => {
-                            event.dataTransfer.effectAllowed = 'move';
-                            event.dataTransfer.setData(
-                              BOARD_DRAG_TYPE,
-                              JSON.stringify({ id: row.id, sourcePath: page?.path ?? path }),
-                            );
+                          row={row}
+                          sourcePath={page?.path ?? path}
+                          selected={selectedIds.has(row.id)}
+                          selectionActive={selectedIds.size > 0}
+                          onToggle={() => {
+                            toggle(row.id);
                           }}
-                          onDoubleClick={() => {
+                          onActivate={() => {
                             onActivate(row);
                           }}
                         >
-                          <div className="flex items-start gap-2">
-                            <span
-                              className={`${selectedIds.size > 0 || selectedIds.has(row.id) ? 'opacity-100' : 'opacity-0 group-focus-within/card:opacity-100 group-hover/card:opacity-100'} transition-opacity`}
-                            >
-                              <Checkbox
-                                aria-label={`Select ${workViewRowTitle(row)}`}
-                                checked={selectedIds.has(row.id)}
-                                onChange={() => {
-                                  toggle(row.id);
-                                }}
-                              />
-                            </span>
-                            <span className="text-body-medium min-w-0 flex-1">
-                              {workViewRowTitle(row)}
-                            </span>
-                          </div>
                           {properties.length > 0 ? (
                             <dl className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
                               {properties.map((field) => (
@@ -324,7 +409,7 @@ export function WorkBoard<TTarget extends ViewTarget>({
                               ))}
                             </dl>
                           ) : null}
-                        </article>
+                        </WorkBoardCard>
                       ))}
                     </div>
                     {ungrouped && hasMoreRows && onLoadMoreRows ? (
@@ -351,7 +436,7 @@ export function WorkBoard<TTarget extends ViewTarget>({
                         Load more {lane?.label ?? column.label} in {column.label}
                       </Button>
                     ) : null}
-                  </section>
+                  </WorkBoardCell>
                 );
               })}
             </div>

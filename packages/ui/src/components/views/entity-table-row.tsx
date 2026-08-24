@@ -2,7 +2,6 @@
 
 import * as React from 'react';
 
-import { type DragSource, dragSourceProps } from '../../lib/draggable';
 import { cn } from '../../lib/utils';
 import { focusRingInset } from '../../primitives/focus';
 
@@ -36,8 +35,6 @@ export interface EntityTableRowProps<T> {
   onRowPrefetch?: (() => void) | undefined;
   onActivate?: (() => void) | undefined;
   onSelect?: (() => void) | undefined;
-  /** Makes the whole row a drag source (bound to this row by EntityTable's `rowDrag`). */
-  drag?: DragSource | undefined;
   /** Application-owned row selection/focus binding. */
   interaction?: EntityTableRowInteraction | undefined;
   /** When set, only this column renders the row href. */
@@ -65,11 +62,9 @@ export function EntityTableRow<T>({
   onRowPrefetch,
   onActivate,
   onSelect,
-  drag,
   interaction,
   linkColumnKey,
 }: EntityTableRowProps<T>): React.JSX.Element {
-  const dragProps = dragSourceProps(drag);
   const rowClassName = cn(
     TABLE_ROW_BASE,
     TABLE_ROW_INTERACTIVE,
@@ -77,7 +72,6 @@ export function EntityTableRow<T>({
     // (its inset focus ring already marks it) so a dense table never over-colors.
     selected && 'bg-secondary-container',
     active && !selected && 'bg-surface-container-highest',
-    dragProps?.className,
   );
 
   const handleClick = React.useCallback(() => {
@@ -94,6 +88,31 @@ export function EntityTableRow<T>({
       }
     },
     [href, onSelect, onActivate],
+  );
+
+  const activateBodyHref = React.useCallback(
+    (event: React.MouseEvent<HTMLElement>) => {
+      const control = (event.target as HTMLElement).closest(
+        'a, button, input, textarea, select, [contenteditable="true"], [role="button"]',
+      );
+      if (control !== null && control !== event.currentTarget) return;
+      const opensNewTab = event.button === 1 || event.metaKey || event.ctrlKey || event.shiftKey;
+      if (opensNewTab && href) {
+        const anchor = document.createElement('a');
+        anchor.href = href;
+        anchor.target = '_blank';
+        anchor.rel = 'noopener noreferrer';
+        anchor.click();
+        return;
+      }
+      onSelect?.();
+      onActivate?.();
+      if (!href || onActivate) return;
+      const anchor = document.createElement('a');
+      anchor.href = href;
+      anchor.click();
+    },
+    [href, onActivate, onSelect],
   );
 
   const cells = (
@@ -148,12 +167,37 @@ export function EntityTableRow<T>({
     return (
       <div
         {...interaction?.rowProps}
-        {...dragProps}
         id={id}
         role="row"
         aria-rowindex={ariaRowIndex}
         aria-current={ariaCurrent}
         className={cn(rowClassName, 'group/row', interaction?.className)}
+        onClick={(event) => {
+          interaction?.rowProps.onClick(event);
+          if (event.defaultPrevented) return;
+          if (interaction === undefined) {
+            activateBodyHref(event);
+            return;
+          }
+          if (event.metaKey || event.ctrlKey || event.shiftKey) activateBodyHref(event);
+        }}
+        onAuxClick={(event) => {
+          if (event.button === 1) activateBodyHref(event);
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== 'Enter' || event.defaultPrevented) return;
+          const control = (event.target as HTMLElement).closest(
+            'a, button, input, textarea, select, [contenteditable="true"], [role="button"]',
+          );
+          if (control !== null && control !== event.currentTarget) return;
+          event.preventDefault();
+          onSelect?.();
+          onActivate?.();
+          if (!href || onActivate) return;
+          const anchor = document.createElement('a');
+          anchor.href = href;
+          anchor.click();
+        }}
       >
         {cells}
       </div>
@@ -174,13 +218,6 @@ export function EntityTableRow<T>({
           onFocus: onRowPrefetch,
           tabIndex: -1,
           'aria-current': ariaCurrent,
-          ...(dragProps
-            ? {
-                draggable: dragProps.draggable,
-                onDragStart: dragProps.onDragStart,
-                ...(dragProps.onDragEnd ? { onDragEnd: dragProps.onDragEnd } : {}),
-              }
-            : {}),
           children: cells,
         })}
       </>
@@ -203,7 +240,6 @@ export function EntityTableRow<T>({
         onMouseEnter={onRowPrefetch}
         onFocus={onRowPrefetch}
         onKeyDown={handleKeyDown}
-        {...dragProps}
         className={rowClassName}
       >
         {cells}
@@ -224,7 +260,6 @@ export function EntityTableRow<T>({
       tabIndex={-1}
       onClick={handleClick}
       onKeyDown={handleKeyDown}
-      {...dragProps}
       className={cn(rowClassName, 'text-left')}
     >
       {cells}

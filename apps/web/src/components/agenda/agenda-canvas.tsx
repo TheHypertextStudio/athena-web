@@ -14,11 +14,7 @@ import CreateBlockForm, {
   type CalendarRegionSelection,
 } from '@/components/calendar/create-block-form';
 import { formatDay } from '@/components/date-picker';
-import {
-  useLinkTaskToCalendarItem,
-  useRelateCalendarItems,
-  useUpdateCalendarItemById,
-} from '@/components/calendar/calendar-mutations';
+import { useUpdateCalendarItemById } from '@/components/calendar/calendar-mutations';
 import {
   isInlineEditableScheduleItem,
   itemBoundsInLane,
@@ -35,11 +31,7 @@ import { useNow } from '@/lib/use-now';
 
 import { type AgendaEntry, shiftISODate, useAgenda } from './agenda-context';
 import { AgendaListArrangement } from './agenda-list-arrangement';
-import {
-  isAgendaEntryInlineEditable,
-  isAgendaRelationshipTarget,
-  toAgendaScheduleItem,
-} from './agenda-schedule-item';
+import { isAgendaEntryInlineEditable, toAgendaScheduleItem } from './agenda-schedule-item';
 
 const INLINE_UPDATE_FAILURE_COPY =
   'Could not update this item. Your previous time has been restored.';
@@ -109,17 +101,11 @@ function TimelineArrangement({
   const draftAnchorRef = useRef<HTMLDivElement>(null);
   const allDayDraftAnchorRef = useRef<HTMLElement>(null);
   const updateCalendarItem = useUpdateCalendarItemById();
-  const linkTask = useLinkTaskToCalendarItem();
-  const relateItems = useRelateCalendarItems();
   const resetCalendarItem = updateCalendarItem.reset;
-  const resetLinkTask = linkTask.reset;
-  const resetRelateItems = relateItems.reset;
   const clearInlineFailures = useCallback(() => {
     clearTimeboxFailure();
     resetCalendarItem();
-    resetLinkTask();
-    resetRelateItems();
-  }, [clearTimeboxFailure, resetCalendarItem, resetLinkTask, resetRelateItems]);
+  }, [clearTimeboxFailure, resetCalendarItem]);
   useEffect(() => {
     clearInlineFailures();
     allDayDraftAnchorRef.current = null;
@@ -322,11 +308,7 @@ function TimelineArrangement({
             else if (shortcut === 'next') goToNextDay();
             else goToToday();
           }}
-          error={
-            timeboxFailed || updateCalendarItem.isError || linkTask.isError || relateItems.isError
-              ? INLINE_UPDATE_FAILURE_COPY
-              : null
-          }
+          error={timeboxFailed || updateCalendarItem.isError ? INLINE_UPDATE_FAILURE_COPY : null}
           emptyMessage={loading ? '' : 'Nothing scheduled.'}
           emptyAction={
             loading ? null : (
@@ -351,28 +333,6 @@ function TimelineArrangement({
           }}
           onResizeItem={({ item, lane: targetLane, edge, startMinutes, endMinutes }) => {
             persistResize(item, targetLane, edge, startMinutes, endMinutes);
-          }}
-          onDropObjectOnItem={({ object, targetItem }) => {
-            const targetEntry = entryById.get(targetItem.id);
-            const target = targetEntry?.calendarItem;
-            if (!targetEntry || !target || !isAgendaRelationshipTarget(targetEntry)) return;
-            if (object.kind === 'calendar_item' && object.itemId === target.id) return;
-            clearInlineFailures();
-            const role = target.kind === 'timebox' ? 'contained' : 'related';
-            if (object.kind === 'task') {
-              linkTask.mutate({
-                itemId: target.id,
-                taskId: object.taskId,
-                organizationId: object.organizationId,
-                role,
-              });
-            } else {
-              relateItems.mutate({
-                sourceItemId: target.id,
-                targetItemId: object.itemId,
-                role,
-              });
-            }
           }}
         />
       )}

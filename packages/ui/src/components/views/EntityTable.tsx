@@ -22,7 +22,6 @@ import { cn } from '../../lib/utils';
 import { focusRingInset } from '../../primitives/focus';
 import { useListKeyboard } from '../../hooks/useListKeyboard';
 import { GroupHeader } from './GroupHeader';
-import type { DragSource } from '../../lib/draggable';
 
 import type { Column, ColumnPriority, EntityTableRowLinkProps } from './entity-table-columns';
 import { columnClassName, columnStyle } from './entity-table-columns';
@@ -84,8 +83,6 @@ export interface EntityTableProps<T> {
    *
    * @remarks
    * Forward every prop you are handed — spreading (`{...props}`) rather than cherry-picking.
-   * A dropped {@link EntityTableProps.rowDrag} prop silently un-draggables the row with no type
-   * error.
    */
   renderRowLink?: ((props: EntityTableRowLinkProps) => React.ReactNode) | undefined;
   /** Activate (open) a row on click / Enter. */
@@ -102,11 +99,6 @@ export interface EntityTableProps<T> {
   onRowPropertyKey?: ((key: string, row: T, anchor: HTMLElement | null) => boolean) | undefined;
   /** Warm a row's destination cache on hover/focus (prefetch-on-intent). Optional; no-op if unset. */
   onRowPrefetch?: ((row: T) => void) | undefined;
-  /**
-   * Make each data row a drag source, draggable from anywhere in its bounds. Return `undefined` for
-   * rows that must not be dragged (a read-only projection, a cross-workspace reference).
-   */
-  rowDrag?: ((row: T) => DragSource | undefined) | undefined;
   /** Inject application-owned row selection/focus behavior. */
   renderRowInteraction?:
     | ((props: EntityTableRowInteractionProps<T>) => React.ReactNode)
@@ -176,7 +168,6 @@ export function EntityTable<T>({
   onRowClick,
   onRowPropertyKey,
   onRowPrefetch,
-  rowDrag,
   renderRowInteraction,
   rowLinkColumnKey,
   containerInteraction,
@@ -391,7 +382,6 @@ export function EntityTable<T>({
         selected={interaction?.selected ?? selected?.has(key) ?? false}
         href={rowHref?.(entry.row)}
         renderRowLink={renderRowLink}
-        drag={rowDrag?.(entry.row)}
         interaction={interaction}
         linkColumnKey={rowLinkColumnKey}
         onRowPrefetch={

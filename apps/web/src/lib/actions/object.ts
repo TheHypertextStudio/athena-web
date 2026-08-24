@@ -33,14 +33,17 @@
  */
 import {
   Calendar,
+  Flag,
   FolderKanban,
   GanttChart,
   Layers,
   ListChecks,
   type LucideIcon,
   Schedule,
+  Tag,
   Target,
   Users,
+  User,
 } from '@docket/ui/icons';
 
 /**
@@ -56,19 +59,23 @@ export type ObjectKind =
   | 'task'
   | 'project'
   | 'initiative'
+  | 'initiative_root'
   | 'program'
   | 'cycle'
   | 'calendar_event'
   | 'time_block'
-  | 'team';
+  | 'team'
+  | 'milestone'
+  | 'actor'
+  | 'label'
+  | 'calendar_slot';
 
 /**
  * Extra, kind-specific facts an object carries alongside its identity.
  *
  * @remarks
- * Constrained to JSON scalars because an {@link ObjectRef} has to survive a round trip through
- * `DataTransfer`, which only carries strings. Anything richer belongs in the record the action
- * fetches by id, not on the reference.
+ * Constrained to domain scalars because the pure relation catalog validates these facts without
+ * importing application records. Anything richer belongs in the record the action fetches by id.
  */
 export type ObjectMeta = Readonly<Record<string, string | number | boolean | null>>;
 
@@ -169,6 +176,16 @@ export const OBJECT_DESCRIPTORS: Readonly<Record<ObjectKind, ObjectDescriptor>> 
     // The hierarchy treegrid re-parents by moving an edge, so the edge travels with the drag.
     metaKeys: ['parentInitiativeId', 'parentLinkId'],
   },
+  initiative_root: {
+    kind: 'initiative_root',
+    noun: 'Initiative top level',
+    pluralNoun: 'Initiative top levels',
+    vocabularyKey: null,
+    icon: Target,
+    draggable: false,
+    selectable: false,
+    metaKeys: [],
+  },
   program: {
     kind: 'program',
     noun: 'Program',
@@ -218,6 +235,46 @@ export const OBJECT_DESCRIPTORS: Readonly<Record<ObjectKind, ObjectDescriptor>> 
     draggable: false,
     selectable: true,
     metaKeys: [],
+  },
+  milestone: {
+    kind: 'milestone',
+    noun: 'Milestone',
+    pluralNoun: 'Milestones',
+    vocabularyKey: null,
+    icon: Flag,
+    draggable: false,
+    selectable: true,
+    metaKeys: ['projectId'],
+  },
+  actor: {
+    kind: 'actor',
+    noun: 'Person',
+    pluralNoun: 'People',
+    vocabularyKey: null,
+    icon: User,
+    draggable: false,
+    selectable: true,
+    metaKeys: [],
+  },
+  label: {
+    kind: 'label',
+    noun: 'Label',
+    pluralNoun: 'Labels',
+    vocabularyKey: null,
+    icon: Tag,
+    draggable: false,
+    selectable: true,
+    metaKeys: [],
+  },
+  calendar_slot: {
+    kind: 'calendar_slot',
+    noun: 'Calendar slot',
+    pluralNoun: 'Calendar slots',
+    vocabularyKey: null,
+    icon: Schedule,
+    draggable: false,
+    selectable: false,
+    metaKeys: ['startsAt', 'endsAt', 'laneId'],
   },
 };
 
@@ -318,11 +375,16 @@ const OBJECT_ROUTE_SEGMENTS: Readonly<Record<ObjectKind, string | null>> = {
   task: 'tasks',
   project: 'projects',
   initiative: 'initiatives',
+  initiative_root: null,
   program: 'programs',
   cycle: 'cycles',
   team: 'teams',
   calendar_event: null,
   time_block: null,
+  milestone: null,
+  actor: null,
+  label: null,
+  calendar_slot: null,
 };
 
 /**

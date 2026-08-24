@@ -73,7 +73,12 @@ function renderRow(onActivate: () => void): void {
     <QueryClientProvider client={client}>
       <TooltipProvider>
         <AgentTaskRow
-          task={{ id: 'task_1', title: 'Review the PR', stateType: 'started' }}
+          task={{
+            id: 'task_1',
+            organizationId: 'org_1',
+            title: 'Review the PR',
+            stateType: 'started',
+          }}
           onActivate={onActivate}
         />
       </TooltipProvider>

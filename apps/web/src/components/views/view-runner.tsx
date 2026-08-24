@@ -25,9 +25,9 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { useCategoryOf } from '@/components/entity-display/use-work-status';
 import { InPageSearchField } from '@/components/in-page-search/in-page-search-field';
+import { ObjectSurface } from '@/components/objects/object-surface';
 import { useInPageSearchTarget } from '@/components/in-page-search/in-page-search-provider';
 import { useResidentInPageSearch } from '@/components/in-page-search/use-resident-in-page-search';
-import { entityDragSource } from '@/lib/entity-drag';
 import { taskListKey } from './task-list-key';
 
 import { applyView, EMPTY_GROUP_ID } from './apply-view';
@@ -189,18 +189,20 @@ export function ViewRunner({
           rowHeight={40}
           className={applied.rows.length === 0 ? 'invisible' : undefined}
           renderRow={(task, ctx) => (
-            <TaskRow
-              task={toRow(task)}
-              active={ctx.active}
-              onActivate={ctx.onActivate}
-              rowProps={ctx.rowProps}
-              drag={entityDragSource({
+            <ObjectSurface
+              object={{
                 kind: 'task',
                 id: task.id,
                 organizationId: task.organizationId,
                 title: task.title,
-              })}
-            />
+              }}
+              surfaceId="saved-view-list"
+              onActivate={() => {
+                ctx.onActivate();
+              }}
+            >
+              <TaskRow task={toRow(task)} active={ctx.active} rowProps={ctx.rowProps} />
+            </ObjectSurface>
           )}
           onActivateItem={(task) => {
             onOpenTask(task.id);

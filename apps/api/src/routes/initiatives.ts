@@ -16,10 +16,13 @@ import {
   organization,
   program,
   project,
+  team,
 } from '@docket/db';
 import {
   InitiativeCreate,
   InitiativeDetail,
+  InitiativeLabelLink,
+  InitiativeLabelLinked,
   InitiativeOut,
   InitiativeProgramLink,
   InitiativeProgramLinked,
@@ -40,7 +43,13 @@ import type { AppEnv } from '../context';
 import { ConflictError, NotFoundError } from '../error';
 import { clearableTextPatch } from '../lib/clearable-text';
 import { planningDatePatch } from '../lib/planning-timeframe';
-import { replaceLabels, resolveLabelSet } from '../lib/labels';
+import {
+  attachLabels,
+  labelsForSubject,
+  replaceLabels,
+  resolveAttachedLabels,
+  resolveLabelSet,
+} from '../lib/labels';
 import { deferAfterResponse } from '../lib/after-response';
 import { created, memberUrl, ok } from '../lib/ok';
 import { resolveContainerStatus } from '../lib/work-status';
@@ -263,6 +272,14 @@ const initiatives = new Hono<AppEnv>()
       const { id } = c.req.valid('param');
       const body = c.req.valid('json');
       await assertOwnerInOrg(orgId, body.ownerId);
+      if (body.leadTeamId !== undefined && body.leadTeamId !== null) {
+        const rows = await db
+          .select({ id: team.id })
+          .from(team)
+          .where(and(eq(team.id, body.leadTeamId), eq(team.organizationId, orgId)))
+          .limit(1);
+        if (!rows[0]) throw new NotFoundError('Team not found');
+      }
       // Through the shared resolver, so an initiative obeys label-group exclusivity exactly as a
       // task does. Initiatives have no team, so only workspace-wide labels are offerable.
       const labels = await resolveLabelSet(orgId, body.labelIds);
@@ -298,6 +315,7 @@ const initiatives = new Hono<AppEnv>()
           ...clearableTextPatch('summary', body.summary),
           ...clearableTextPatch('description', body.description),
           ...(body.ownerId !== undefined ? { ownerId: body.ownerId } : {}),
+          ...(body.leadTeamId !== undefined ? { leadTeamId: body.leadTeamId } : {}),
           ...(nextStatus === undefined
             ? {}
             : { status: nextStatus.status, statusId: nextStatus.statusId }),
@@ -354,6 +372,41 @@ const initiatives = new Hono<AppEnv>()
       }
       await enqueueSearchUpsert(orgId, 'initiative', row.id);
       return ok(c, InitiativeOut, toOut(row));
+    },
+  )
+  .post(
+    '/:id/labels',
+    capabilityGuard('contribute'),
+    apiDoc({
+      tag: 'Initiatives',
+      summary: 'Add a label to an initiative',
+      capability: 'contribute',
+      response: InitiativeLabelLinked,
+      description:
+        'Add one workspace-wide Label to an Initiative without replacing existing Labels. Repeating an existing link succeeds without another write.',
+    }),
+    zParam(idParam),
+    zJson(InitiativeLabelLink),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+      const { labelId } = c.req.valid('json');
+      await loadInitiative(orgId, id);
+      await db.transaction(async (tx) => {
+        const refs = await labelsForSubject('initiative', orgId, id, tx);
+        if (refs.some((label) => label.id === labelId)) return;
+        const [existing, incoming] = await Promise.all([
+          resolveAttachedLabels(
+            orgId,
+            refs.map((label) => label.id),
+            tx,
+          ),
+          resolveLabelSet(orgId, [labelId], { dbh: tx }),
+        ]);
+        await attachLabels(tx, 'initiative', id, orgId, existing, incoming);
+      });
+      await enqueueSearchUpsert(orgId, 'initiative', id);
+      return ok(c, InitiativeLabelLinked, { initiativeId: id, labelId, linked: true });
     },
   )
   .delete(

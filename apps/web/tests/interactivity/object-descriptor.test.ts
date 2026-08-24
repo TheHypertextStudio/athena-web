@@ -26,10 +26,16 @@ describe('object descriptor registry', () => {
       'task',
       'project',
       'initiative',
+      'initiative_root',
       'program',
       'cycle',
+      'team',
+      'milestone',
+      'actor',
+      'label',
       'calendar_event',
       'time_block',
+      'calendar_slot',
     ];
     for (const kind of required) {
       expect(OBJECT_DESCRIPTORS[kind].kind).toBe(kind);
@@ -50,7 +56,7 @@ describe('object descriptor registry', () => {
 
   it('rejects values that do not name a described kind', () => {
     expect(isObjectKind('task')).toBe(true);
-    expect(isObjectKind('milestone')).toBe(false);
+    expect(isObjectKind('not_an_object')).toBe(false);
     expect(isObjectKind(42)).toBe(false);
     expect(isObjectKind(null)).toBe(false);
   });
@@ -77,7 +83,7 @@ describe('object keys', () => {
     expect(parseObjectKey('task')).toBeNull();
     expect(parseObjectKey(':abc')).toBeNull();
     expect(parseObjectKey('task:')).toBeNull();
-    expect(parseObjectKey('milestone:abc')).toBeNull();
+    expect(parseObjectKey('not_an_object:abc')).toBeNull();
   });
 
   it('compares objects by kind and id only', () => {
@@ -133,7 +139,7 @@ describe('DOM object markings', () => {
     expect(readObjectTarget(partial)).toBeNull();
 
     const unknownKind = markedElement(task);
-    unknownKind.setAttribute('data-object-kind', 'milestone');
+    unknownKind.setAttribute('data-object-kind', 'not_an_object');
     expect(readObjectTarget(unknownKind)).toBeNull();
   });
 

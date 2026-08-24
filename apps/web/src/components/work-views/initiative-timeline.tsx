@@ -3,7 +3,6 @@
 import type { InitiativeViewRow } from '@docket/types';
 import type { JSX } from 'react';
 
-import { entityDragSource } from '@/lib/entity-drag';
 import type { AppliedView } from '@/components/views/apply-view';
 import type { ViewDisplayState } from '@/components/views/field-catalog';
 import TimelineCanvas from '@/components/timeline/timeline-canvas';
@@ -62,17 +61,16 @@ export function buildInitiativeTimelineCatalog(
     },
     edges: () => ({ blockedBy: [], blocks: [] }),
     statusLabel: (row) => row.status.replaceAll('_', ' '),
-    dragSource: (row) =>
+    object: (row) =>
       row.isContext
         ? null
-        : entityDragSource({
+        : ({
             kind: 'initiative',
             id: row.id,
             organizationId: row.organizationId,
             title: row.name,
-            parentInitiativeId: row.parent,
-            parentLinkId: null,
-          }),
+            meta: { parentInitiativeId: row.parent, parentLinkId: null },
+          } as const),
   };
 }
 

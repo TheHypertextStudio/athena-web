@@ -1,7 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SchedulingCanvas, type ScheduleItem, type ScheduleLane } from '@/components/scheduling';
@@ -180,7 +179,12 @@ describe('SchedulingCanvas item presentation', () => {
       const timed = {
         ...item('focus', 'Focus block'),
         color,
-        dragObject: { kind: 'calendar_item' as const, itemId: 'focus', title: 'Focus block' },
+        object: {
+          kind: 'calendar_event' as const,
+          id: 'focus',
+          organizationId: null,
+          title: 'Focus block',
+        },
       };
       const allDay = {
         ...item('offsite', 'Team offsite'),
@@ -188,7 +192,12 @@ describe('SchedulingCanvas item presentation', () => {
         allDay: true,
         startsAt: '2026-07-01T00:00:00.000Z',
         endsAt: '2026-07-02T00:00:00.000Z',
-        dragObject: { kind: 'calendar_item' as const, itemId: 'offsite', title: 'Team offsite' },
+        object: {
+          kind: 'calendar_event' as const,
+          id: 'offsite',
+          organizationId: null,
+          title: 'Team offsite',
+        },
       };
       render(
         <SchedulingCanvas
@@ -230,16 +239,17 @@ describe('SchedulingCanvas item presentation', () => {
   );
 
   it('renders timeboxes as dashed provisional surfaces without changing timed or all-day gestures', () => {
-    const dragObject = {
-      kind: 'calendar_item' as const,
-      itemId: 'timebox',
+    const object = {
+      kind: 'calendar_event' as const,
+      id: 'timebox',
+      organizationId: null,
       title: 'Focus block',
     };
     const timed = {
       ...item('timebox', 'Focus block'),
       appearance: 'timebox' as const,
       color: '#316eb4',
-      dragObject,
+      object,
     };
     const allDay = {
       ...item('all-day-timebox', 'Planning day'),
@@ -248,7 +258,7 @@ describe('SchedulingCanvas item presentation', () => {
       allDay: true,
       startsAt: '2026-07-01T00:00:00.000Z',
       endsAt: '2026-07-02T00:00:00.000Z',
-      dragObject: { ...dragObject, itemId: 'all-day-timebox', title: 'Planning day' },
+      object: { ...object, id: 'all-day-timebox', title: 'Planning day' },
     };
     render(
       <SchedulingCanvas
@@ -295,166 +305,6 @@ describe('SchedulingCanvas item presentation', () => {
       allDayItem.querySelector('[aria-label="Drag Planning day to create a relationship"]'),
     ).toBeInTheDocument();
   });
-
-  it.each(['event', 'timebox'] as const)(
-    'routes timed %s open, move, resize, and relationship gestures through shared callbacks',
-    async (appearance) => {
-      const user = userEvent.setup();
-      const title = appearance === 'event' ? 'Event planning' : 'Timebox planning';
-      const source = {
-        ...item(`${appearance}-source`, title),
-        appearance,
-        dragObject: {
-          kind: 'calendar_item' as const,
-          itemId: `${appearance}-source`,
-          title,
-        },
-      };
-      const target = {
-        ...item(`${appearance}-target`, 'Planning review'),
-        startsAt: '2026-07-01T11:00:00.000Z',
-        endsAt: '2026-07-01T12:00:00.000Z',
-        dropTarget: true,
-      };
-      const sourceLane = lane([source, target]);
-      const onOpenItem = vi.fn();
-      const onMoveItem = vi.fn();
-      const onResizeItem = vi.fn();
-      const onDropObjectOnItem = vi.fn();
-      render(
-        <SchedulingCanvas
-          displayTimezone="UTC"
-          lanes={[sourceLane]}
-          pixelsPerHour={60}
-          viewportWidth={500}
-          onOpenItem={onOpenItem}
-          onMoveItem={onMoveItem}
-          onResizeItem={onResizeItem}
-          onDropObjectOnItem={onDropObjectOnItem}
-        />,
-      );
-
-      await user.click(screen.getByRole('button', { name: new RegExp(`^${title}`) }));
-      fireEvent.keyDown(screen.getByRole('button', { name: `Move ${title}` }), {
-        key: 'ArrowDown',
-      });
-      fireEvent.keyDown(screen.getByRole('button', { name: `Resize ${title} from end` }), {
-        key: 'ArrowUp',
-      });
-      const relationshipSource = screen.getByRole('button', {
-        name: `Create relationship from ${title}`,
-      });
-      await user.click(relationshipSource);
-      expect(relationshipSource).toHaveClass('[--color-ring:var(--color-on-primary-container)]');
-      await user.click(screen.getByRole('button', { name: `Link ${title} to Planning review` }));
-
-      expect(onOpenItem).toHaveBeenCalledWith({ item: source, lane: sourceLane });
-      expect(onMoveItem).toHaveBeenCalledWith({
-        item: source,
-        fromLane: sourceLane,
-        toLane: sourceLane,
-        startMinutes: 9 * 60 + 10,
-        endMinutes: 10 * 60 + 10,
-      });
-      expect(onResizeItem).toHaveBeenCalledWith({
-        item: source,
-        lane: sourceLane,
-        edge: 'end',
-        startMinutes: 9 * 60,
-        endMinutes: 10 * 60 - 10,
-      });
-      expect(onDropObjectOnItem).toHaveBeenCalledWith({
-        object: source.dragObject,
-        targetItem: target,
-        targetLane: sourceLane,
-      });
-    },
-  );
-
-  it.each(['event', 'timebox'] as const)(
-    'routes all-day %s open, move, resize, and relationship gestures through shared callbacks',
-    async (appearance) => {
-      const user = userEvent.setup();
-      const title = appearance === 'event' ? 'Event day' : 'Timebox day';
-      const source = {
-        ...item(`${appearance}-all-day-source`, title),
-        appearance,
-        allDay: true,
-        startsAt: '2026-07-01T00:00:00.000Z',
-        endsAt: '2026-07-02T00:00:00.000Z',
-        dragObject: {
-          kind: 'calendar_item' as const,
-          itemId: `${appearance}-all-day-source`,
-          title,
-        },
-      };
-      const target = {
-        ...item(`${appearance}-all-day-target`, 'Planning review'),
-        startsAt: '2026-07-01T11:00:00.000Z',
-        endsAt: '2026-07-01T12:00:00.000Z',
-        dropTarget: true,
-      };
-      const sourceLane = lane([source, target]);
-      const targetLane: ScheduleLane = {
-        id: 'next-date',
-        label: 'Thu, Jul 2',
-        date: '2026-07-02',
-        items: [],
-      };
-      const onOpenItem = vi.fn();
-      const onMoveAllDayItem = vi.fn();
-      const onResizeAllDayItem = vi.fn();
-      const onDropObjectOnItem = vi.fn();
-      render(
-        <SchedulingCanvas
-          displayTimezone="UTC"
-          lanes={[sourceLane, targetLane]}
-          pixelsPerHour={60}
-          viewportWidth={800}
-          onOpenItem={onOpenItem}
-          onMoveAllDayItem={onMoveAllDayItem}
-          onResizeAllDayItem={onResizeAllDayItem}
-          onDropObjectOnItem={onDropObjectOnItem}
-        />,
-      );
-
-      await user.click(screen.getByRole('button', { name: title }));
-      fireEvent.keyDown(screen.getByRole('button', { name: `Move ${title}` }), {
-        key: 'ArrowRight',
-      });
-      fireEvent.keyDown(screen.getByRole('button', { name: `Resize ${title} from end` }), {
-        key: 'ArrowRight',
-      });
-      const relationshipSource = screen.getByRole('button', {
-        name: `Create relationship from ${title}`,
-      });
-      await user.click(relationshipSource);
-      expect(relationshipSource).toHaveClass('[--color-ring:var(--color-on-primary-container)]');
-      await user.click(screen.getByRole('button', { name: `Link ${title} to Planning review` }));
-
-      expect(onOpenItem).toHaveBeenCalledWith({ item: source, lane: sourceLane });
-      expect(onMoveAllDayItem).toHaveBeenCalledWith({
-        item: source,
-        fromLane: sourceLane,
-        toLane: targetLane,
-        startDate: '2026-07-02',
-        endDate: '2026-07-03',
-      });
-      expect(onResizeAllDayItem).toHaveBeenCalledWith({
-        item: source,
-        fromLane: sourceLane,
-        toLane: targetLane,
-        edge: 'end',
-        startDate: '2026-07-01',
-        endDate: '2026-07-03',
-      });
-      expect(onDropObjectOnItem).toHaveBeenCalledWith({
-        object: source.dragObject,
-        targetItem: target,
-        targetLane: sourceLane,
-      });
-    },
-  );
 
   it.each(['availability', 'busy'] as const)(
     'keeps %s surfaces subordinate without dimming their text',
@@ -580,7 +430,12 @@ describe('SchedulingCanvas item presentation', () => {
   it('keeps edit affordances touch-sized but visually contextual', () => {
     const linked = {
       ...item('focus', 'Focus block'),
-      dragObject: { kind: 'calendar_item' as const, itemId: 'focus', title: 'Focus block' },
+      object: {
+        kind: 'calendar_event' as const,
+        id: 'focus',
+        organizationId: null,
+        title: 'Focus block',
+      },
     };
     render(
       <SchedulingCanvas
@@ -613,7 +468,12 @@ describe('SchedulingCanvas item presentation', () => {
       allDay: true,
       startsAt: '2026-07-01T00:00:00.000Z',
       endsAt: '2026-07-02T00:00:00.000Z',
-      dragObject: { kind: 'calendar_item' as const, itemId: 'offsite', title: 'Team offsite' },
+      object: {
+        kind: 'calendar_event' as const,
+        id: 'offsite',
+        organizationId: null,
+        title: 'Team offsite',
+      },
     };
     render(
       <SchedulingCanvas

@@ -54,6 +54,7 @@ function renderRow(onActivate: () => void): void {
         <TriageRow
           task={{
             id: 'task_1',
+            organizationId: 'org_1',
             title: 'Unfiled bug report',
             stateType: 'unstarted',
             provenance: { source: 'native', sourceIntegrationId: null, externalId: null },

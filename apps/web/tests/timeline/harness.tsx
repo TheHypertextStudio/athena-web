@@ -121,7 +121,7 @@ export const catalog: TimelineCatalog<Row> = {
   progress: () => null,
   edges: (r) => ({ blockedBy: [], blocks: r.blocks ?? [] }),
   statusLabel: () => 'Planned',
-  dragSource: () => null,
+  object: () => null,
 };
 
 /** An ungrouped applied view over the given rows. */

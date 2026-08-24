@@ -144,10 +144,18 @@ export function toScheduleItem(
           displayTimezone,
         })),
     readOnlyLabel: calendarReadOnlyLabel(item),
-    dragObject:
+    object:
       item.kind === 'task_timebox' || item.kind === 'availability_block'
         ? undefined
-        : { kind: 'calendar_item', itemId: item.id, title: item.title },
+        : {
+            kind:
+              item.kind === 'native_block' || item.kind === 'timebox'
+                ? 'time_block'
+                : 'calendar_event',
+            id: item.id,
+            organizationId: null,
+            title: item.title,
+          },
     dropTarget: ['provider_event', 'native_event', 'native_block', 'timebox'].includes(item.kind),
   };
 }

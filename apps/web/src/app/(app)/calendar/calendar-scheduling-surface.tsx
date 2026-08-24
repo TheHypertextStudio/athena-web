@@ -1,14 +1,8 @@
 'use client';
 
-import type { CalendarItemOut } from '@docket/types';
 import { type JSX, useCallback, useEffect } from 'react';
 
-import {
-  useCreateCalendarItem,
-  useLinkTaskToCalendarItem,
-  useRelateCalendarItems,
-  useUpdateCalendarItemById,
-} from '@/components/calendar/calendar-mutations';
+import { useUpdateCalendarItemById } from '@/components/calendar/calendar-mutations';
 import { containedTaskLink } from '@/components/calendar/calendar-item-task-link';
 import {
   resolveScheduleWallInstant,
@@ -16,7 +10,6 @@ import {
   type ScheduleItemMove,
   type ScheduleItemResize,
   type ScheduleLane,
-  type ScheduleObjectGridDrop,
   type ScheduleRegionSelection,
   SchedulingCanvas,
 } from '@/components/scheduling';
@@ -38,13 +31,6 @@ export type {
   CalendarCanvasRegionSelection,
   CalendarSchedulingSurfaceProps,
 } from './calendar-scheduling-contract';
-
-const RELATIONSHIP_TARGET_KINDS: ReadonlySet<CalendarItemOut['kind']> = new Set([
-  'provider_event',
-  'native_event',
-  'native_block',
-  'timebox',
-]);
 
 /** Default length of a timebox created by dropping a task onto empty grid time. */
 const DROPPED_TASK_TIMEBOX_MINUTES = 30;
@@ -87,18 +73,11 @@ export function CalendarSchedulingSurface({
   onZoomGesture,
 }: CalendarSchedulingSurfaceProps): JSX.Element {
   const updateItem = useUpdateCalendarItemById();
-  const linkTask = useLinkTaskToCalendarItem();
-  const relateItems = useRelateCalendarItems();
-  const createItem = useCreateCalendarItem();
   const resetUpdateItem = updateItem.reset;
-  const resetLinkTask = linkTask.reset;
-  const resetRelateItems = relateItems.reset;
-  const inlineMutationFailed = updateItem.isError || linkTask.isError || relateItems.isError;
+  const inlineMutationFailed = updateItem.isError;
   const clearInlineFailures = useCallback(() => {
     resetUpdateItem();
-    resetLinkTask();
-    resetRelateItems();
-  }, [resetLinkTask, resetRelateItems, resetUpdateItem]);
+  }, [resetUpdateItem]);
   useEffect(() => {
     clearInlineFailures();
   }, [
@@ -240,31 +219,25 @@ export function CalendarSchedulingSurface({
                 onResizeAllDayItem: ({ item, startDate, endDate }) => {
                   persistAllDayBounds(item.id, startDate, endDate);
                 },
-                // Drop a task from the rail onto empty grid time: create a timebox at that
-                // moment titled after the task, then link the task into it.
-                onDropObjectOnGrid: ({ object, lane, startMinutes }: ScheduleObjectGridDrop) => {
-                  if (object.kind !== 'task') return;
+                calendarSlotTarget: ({ lane, startMinutes }) => {
                   const endMinutes = Math.min(
                     startMinutes + DROPPED_TASK_TIMEBOX_MINUTES,
                     MINUTES_PER_DAY,
                   );
                   const startsAt = resolveWallInstant(lane.date, startMinutes);
                   const endsAt = resolveWallInstant(lane.date, endMinutes);
-                  if (!startsAt || !endsAt) return;
-                  clearInlineFailures();
-                  createItem.mutate(
-                    { intent: 'timebox', title: object.title, startsAt, endsAt },
-                    {
-                      onSuccess: (created) => {
-                        linkTask.mutate({
-                          itemId: created.id,
-                          taskId: object.taskId,
-                          organizationId: object.organizationId,
-                          role: 'contained',
-                        });
-                      },
-                    },
-                  );
+                  if (!startsAt || !endsAt) return null;
+                  return {
+                    kind: 'calendar_slot',
+                    id: `${lane.id}:${String(startMinutes)}`,
+                    organizationId: null,
+                    title: new Intl.DateTimeFormat(undefined, {
+                      hour: 'numeric',
+                      minute: '2-digit',
+                      timeZone: displayTimezone,
+                    }).format(new Date(startsAt)),
+                    meta: { startsAt, endsAt },
+                  };
                 },
               }
             : {})}
@@ -296,27 +269,6 @@ export function CalendarSchedulingSurface({
                 withLabel={false}
               />
             );
-          }}
-          onDropObjectOnItem={({ object, targetItem }) => {
-            const target = dateAxis.itemById.get(targetItem.id);
-            if (!target || !RELATIONSHIP_TARGET_KINDS.has(target.kind)) return;
-            if (object.kind === 'calendar_item' && object.itemId === target.id) return;
-            clearInlineFailures();
-            const role = target.kind === 'timebox' ? 'contained' : 'related';
-            if (object.kind === 'task') {
-              linkTask.mutate({
-                itemId: target.id,
-                taskId: object.taskId,
-                organizationId: object.organizationId,
-                role,
-              });
-            } else {
-              relateItems.mutate({
-                sourceItemId: target.id,
-                targetItemId: object.itemId,
-                role,
-              });
-            }
           }}
           onZoomGesture={onZoomGesture}
         />

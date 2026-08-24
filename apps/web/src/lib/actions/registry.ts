@@ -27,6 +27,7 @@
  * {@link ./registry-context} mounts one for the app.
  */
 import { describeObject } from './object';
+import type { RelationId } from '@docket/work/relation-contract';
 import {
   ACTION_SECTION_ORDER,
   type ActionContext,
@@ -95,6 +96,25 @@ export class DuplicateActionIdError extends Error {
     super(`Action id "${actionId}" is already registered by the "${ownedBy}" domain.`);
     this.name = 'DuplicateActionIdError';
     this.actionId = actionId;
+    this.ownedBy = ownedBy;
+  }
+}
+
+/** Thrown when two actions claim the same relation gesture. */
+export class DuplicateRelationRegistrationError extends Error {
+  /** The relation claimed more than once. */
+  readonly relationId: RelationId;
+  /** The first action that already owns the relation. */
+  readonly ownedBy: ActionId;
+
+  /**
+   * @param relationId - The relation claimed twice.
+   * @param ownedBy - The action that already owns it.
+   */
+  constructor(relationId: RelationId, ownedBy: ActionId) {
+    super(`Relation "${relationId}" is already registered by action "${ownedBy}".`);
+    this.name = 'DuplicateRelationRegistrationError';
+    this.relationId = relationId;
     this.ownedBy = ownedBy;
   }
 }
@@ -168,6 +188,8 @@ export interface ActionRegistry {
   register: (domain: ActionDomain, definitions: readonly ActionDefinition[]) => () => void;
   /** Look up a definition by id. */
   get: (id: string) => ActionDefinition | undefined;
+  /** Look up the one action registered for a relation gesture. */
+  getByRelation: (relationId: RelationId) => ActionDefinition | undefined;
   /** Every registered definition, in registration order. */
   list: () => readonly ActionDefinition[];
   /**
@@ -318,6 +340,12 @@ export function createActionRegistry(options: ActionRegistryOptions = {}): Actio
     }
 
     const seenInBatch = new Set<string>();
+    const seenRelations = new Map<RelationId, ActionId>();
+    for (const definition of flatten()) {
+      if (definition.relationId !== undefined) {
+        seenRelations.set(definition.relationId, definition.id);
+      }
+    }
     for (const definition of definitions) {
       if (!definition.id.startsWith(`${domain}.`) || definition.domain !== domain) {
         throw new MalformedActionIdError(definition.id, domain);
@@ -326,6 +354,13 @@ export function createActionRegistry(options: ActionRegistryOptions = {}): Actio
         throw new DuplicateActionIdError(definition.id, domain);
       }
       seenInBatch.add(definition.id);
+      if (definition.relationId !== undefined) {
+        const owner = seenRelations.get(definition.relationId);
+        if (owner !== undefined && owner !== definition.id && strictMode()) {
+          throw new DuplicateRelationRegistrationError(definition.relationId, owner);
+        }
+        seenRelations.set(definition.relationId, definition.id);
+      }
     }
 
     domains.set(domain, { definitions, refs: 1 });
@@ -339,6 +374,10 @@ export function createActionRegistry(options: ActionRegistryOptions = {}): Actio
       if (found !== undefined) return found;
     }
     return undefined;
+  }
+
+  function getByRelation(relationId: RelationId): ActionDefinition | undefined {
+    return flatten().find((definition) => definition.relationId === relationId);
   }
 
   async function invoke(
@@ -428,6 +467,7 @@ export function createActionRegistry(options: ActionRegistryOptions = {}): Actio
   return {
     register,
     get,
+    getByRelation,
     list: flatten,
     resolve,
     invoke,

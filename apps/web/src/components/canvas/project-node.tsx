@@ -34,6 +34,8 @@ import Link from 'next/link';
 import { memo } from 'react';
 
 import { HEALTH_DOT_CLASS, HEALTH_LABEL } from '@/components/projects/health';
+import { ObjectSurface } from '@/components/objects/object-surface';
+import { useRelationDropTarget } from '@/components/dnd/use-relation-drop-target';
 import { useWorkStatus } from '@/components/entity-display/use-work-status';
 import { WorkStatusBadge, WorkStatusIcon } from '@/components/entity-display/work-status';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -105,98 +107,114 @@ function ProjectNodeComponent({ id, data, selected }: NodeProps): React.JSX.Elem
     taskCount === 0
       ? 'No tasks yet'
       : `${String(completedTaskCount)} of ${String(taskCount)} tasks complete (${String(pct)}%)`;
+  const href = `/orgs/${orgId}/projects/${id}`;
+  const object = { kind: 'project' as const, id, organizationId: orgId, title: name };
+  const relation = useRelationDropTarget({ target: object });
 
   return (
-    <div
-      style={{ viewTransitionName: projectNodeTransitionName(id) }}
-      className={cn(
-        'group bg-surface-container-high relative flex flex-col justify-center gap-1.5 overflow-hidden rounded-lg transition-colors',
-        compact ? 'h-14 w-[224px] px-3' : 'h-[96px] w-[268px] px-3.5',
-        selected && 'ring-primary ring-2',
-      )}
-    >
-      {/*
+    <ObjectSurface object={object} surfaceId="project-canvas" associationModifier="alt" href={href}>
+      <div
+        ref={relation.dropProps.ref}
+        tabIndex={0}
+        data-drop-state={relation.dropProps['data-drop-state']}
+        style={{ viewTransitionName: projectNodeTransitionName(id) }}
+        className={cn(
+          'group bg-surface-container-high relative flex flex-col justify-center gap-1.5 overflow-hidden rounded-lg transition-colors',
+          compact ? 'h-14 w-[224px] px-3' : 'h-[96px] w-[268px] px-3.5',
+          selected && 'ring-primary ring-2',
+          relation.dropProps.className,
+          relation.dropState === 'accept' && 'ring-primary bg-primary/8 ring-2 ring-inset',
+          relation.dropState === 'reject' && 'ring-error/60 bg-error/5 ring-2 ring-inset',
+        )}
+      >
+        {/*
         The states the border used to encode, carried by a leading accent instead: the focus of a
         neighbourhood view, and a project with upstream work still open.
       */}
-      {isRoot || waiting ? (
-        <span
-          aria-hidden="true"
-          className={cn(
-            'absolute inset-y-0 left-0 w-1',
-            isRoot ? 'bg-primary' : 'bg-state-started/70',
-          )}
-        />
-      ) : null}
-      <Handle type="target" position={Position.Left} className="!bg-outline-variant !size-2" />
-
-      {/* Explicit navigation affordance: the card itself never navigates (too easy to mis-click
-          while panning or connecting), so a deliberate corner button reveals on hover/focus. */}
-      <Link
-        href={`/orgs/${orgId}/projects/${id}`}
-        aria-label={`Open ${name}`}
-        onClick={(event) => {
-          event.stopPropagation();
-        }}
-        className="nodrag nopan bg-surface-container-highest text-on-surface-variant hover:bg-secondary-container hover:text-on-secondary-container focus-visible:ring-ring absolute top-1 right-1 z-10 inline-flex size-6 items-center justify-center rounded-md opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none"
-      >
-        <ArrowRight className="size-4" />
-      </Link>
-
-      <div className="flex min-w-0 items-center gap-2">
-        <WorkStatusIcon name={resolved.name} category={resolved.category} />
-        <span className="text-on-surface text-label-large min-w-0 flex-1 truncate">{name}</span>
-        {health !== null ? (
+        {isRoot || waiting ? (
           <span
-            aria-label={HEALTH_LABEL[health]}
-            title={HEALTH_LABEL[health]}
-            className={cn('size-2 shrink-0 rounded-full', HEALTH_DOT_CLASS[health])}
+            aria-hidden="true"
+            className={cn(
+              'absolute inset-y-0 left-0 w-1',
+              isRoot ? 'bg-primary' : 'bg-state-started/70',
+            )}
           />
         ) : null}
-      </div>
+        <Handle type="target" position={Position.Left} className="!bg-outline-variant !size-2" />
 
-      {showDetail ? (
-        <>
-          <div className="flex min-w-0 items-center gap-2">
-            <WorkStatusBadge name={resolved.name} category={resolved.category} />
-            {waiting ? (
-              <span className="text-state-started text-label-small shrink-0">
-                {waitingCount} waiting
-              </span>
-            ) : null}
-            {targetLabel !== null ? (
-              <span className="text-on-surface-variant text-label-small ml-auto shrink-0 tabular-nums">
-                {targetLabel}
-              </span>
-            ) : null}
-          </div>
-          {/*
+        {/* Explicit navigation affordance: the card itself never navigates (too easy to mis-click
+          while panning or connecting), so a deliberate corner button reveals on hover/focus. */}
+        <Link
+          href={href}
+          aria-label={`Open ${name}`}
+          onClick={(event) => {
+            event.stopPropagation();
+          }}
+          className="nodrag nopan bg-surface-container-highest text-on-surface-variant hover:bg-secondary-container hover:text-on-secondary-container focus-visible:ring-ring absolute top-1 right-1 z-10 inline-flex size-6 items-center justify-center rounded-md opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none"
+        >
+          <ArrowRight className="size-4" />
+        </Link>
+
+        <div className="flex min-w-0 items-center gap-2">
+          <WorkStatusIcon name={resolved.name} category={resolved.category} />
+          <span className="text-on-surface text-label-large min-w-0 flex-1 truncate">{name}</span>
+          {health !== null ? (
+            <span
+              aria-label={HEALTH_LABEL[health]}
+              title={HEALTH_LABEL[health]}
+              className={cn('size-2 shrink-0 rounded-full', HEALTH_DOT_CLASS[health])}
+            />
+          ) : null}
+        </div>
+
+        {showDetail ? (
+          <>
+            <div className="flex min-w-0 items-center gap-2">
+              <WorkStatusBadge name={resolved.name} category={resolved.category} />
+              {waiting ? (
+                <span className="text-state-started text-label-small shrink-0">
+                  {waitingCount} waiting
+                </span>
+              ) : null}
+              {targetLabel !== null ? (
+                <span className="text-on-surface-variant text-label-small ml-auto shrink-0 tabular-nums">
+                  {targetLabel}
+                </span>
+              ) : null}
+            </div>
+            {/*
             The bar and its reading are one thing. Read alone the bar encodes nothing a viewer can
             name; read together they say "3/8 tasks" and the fill is just that number drawn.
           */}
-          <div className="flex min-w-0 items-center gap-2" title={taskReading}>
-            <span className="text-on-surface-variant text-label-small shrink-0 tabular-nums">
-              {taskCount === 0 ? 'No tasks' : `${completedTaskCount}/${taskCount} tasks`}
-            </span>
-            <div
-              role="progressbar"
-              aria-valuenow={pct}
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-label={taskReading}
-              className="bg-surface-container h-1.5 min-w-0 flex-1 overflow-hidden rounded-full"
-            >
+            <div className="flex min-w-0 items-center gap-2" title={taskReading}>
+              <span className="text-on-surface-variant text-label-small shrink-0 tabular-nums">
+                {taskCount === 0 ? 'No tasks' : `${completedTaskCount}/${taskCount} tasks`}
+              </span>
               <div
-                className="bg-primary h-full rounded-full transition-[width] duration-500 ease-out"
-                style={{ width: `${pct}%` }}
-              />
+                role="progressbar"
+                aria-valuenow={pct}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label={taskReading}
+                className="bg-surface-container h-1.5 min-w-0 flex-1 overflow-hidden rounded-full"
+              >
+                <div
+                  className="bg-primary h-full rounded-full transition-[width] duration-500 ease-out"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
             </div>
-          </div>
-        </>
-      ) : null}
+          </>
+        ) : null}
 
-      <Handle type="source" position={Position.Right} className="!bg-outline-variant !size-2" />
-    </div>
+        <Handle type="source" position={Position.Right} className="!bg-outline-variant !size-2" />
+        {relation.effectLabel ? (
+          <span className="bg-surface text-on-surface text-label-small pointer-events-none absolute -top-7 left-1/2 z-50 -translate-x-1/2 rounded px-2 py-1 whitespace-nowrap shadow-md">
+            {relation.effectLabel}
+          </span>
+        ) : null}
+      </div>
+    </ObjectSurface>
   );
 }
 

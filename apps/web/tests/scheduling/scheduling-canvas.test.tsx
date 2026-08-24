@@ -9,7 +9,6 @@ import { StrictMode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  SCHEDULE_DRAG_MIME,
   scheduleWallPositionForInstant,
   SchedulingCanvas,
   type ScheduleItem,
@@ -17,11 +16,6 @@ import {
   type ScheduleLane,
 } from '@/components/scheduling';
 import { assertDefined } from '@docket/test-utils';
-
-import {
-  SCHEDULE_TEST_THEMES,
-  scheduleSurfaceContrast,
-} from './scheduling-surface-contrast-test-utils';
 
 const TIMED_ITEM: ScheduleItem = {
   id: 'focus',
@@ -825,14 +819,15 @@ describe('SchedulingCanvas', () => {
     const onOpenItem = vi.fn();
     const onMoveItem = vi.fn();
     const onResizeItem = vi.fn();
-    const dragObject = {
-      kind: 'calendar_item' as const,
-      itemId: 'short-overview',
+    const object = {
+      kind: 'calendar_event' as const,
+      id: 'short-overview',
+      organizationId: null,
       title: 'Short overview',
     };
     const short = {
       ...timedItem('short-overview', 'Short overview', '09:00', '09:05'),
-      dragObject,
+      object,
     };
     const sourceLane = lane('ada', 'Ada', [short]);
     render(
@@ -863,7 +858,8 @@ describe('SchedulingCanvas', () => {
     expect(body).not.toHaveClass('overflow-hidden');
     expect(move).toHaveClass('z-30');
     expect(link).toHaveClass('z-30');
-    expect(link).toHaveAttribute('draggable', 'true');
+    expect(link).toHaveAttribute('data-object-kind', 'calendar_event');
+    expect(link).toHaveAttribute('data-drag-state', 'idle');
     expect(startGrip).toHaveClass(
       '-top-3',
       'left-0',
@@ -892,15 +888,9 @@ describe('SchedulingCanvas', () => {
       endMinutes: 9 * 60 + 35,
     });
 
-    const transfer = { effectAllowed: 'none', setData: vi.fn() };
     fireEvent.pointerDown(link, { button: 0, pointerId: 16, clientX: 100, clientY: 100 });
     fireEvent.pointerMove(window, { pointerId: 16, clientX: 100, clientY: 112 });
     fireEvent.pointerUp(window, { pointerId: 16, clientX: 100, clientY: 112 });
-    fireEvent.dragStart(link, { dataTransfer: transfer });
-    expect(transfer.setData.mock.calls).toEqual([
-      [SCHEDULE_DRAG_MIME, JSON.stringify(dragObject)],
-      ['text/plain', short.title],
-    ]);
     expect(onMoveItem).toHaveBeenCalledOnce();
 
     for (const edge of ['start', 'end'] as const) {
@@ -1228,154 +1218,6 @@ describe('SchedulingCanvas', () => {
     expect(consoleError).not.toHaveBeenCalled();
   });
 
-  it('emits a typed object drop only for an explicit item target', () => {
-    const onDropObjectOnItem = vi.fn();
-    const target = { ...TIMED_ITEM, dropTarget: true };
-    const payload = {
-      kind: 'task',
-      taskId: 'task_1',
-      organizationId: 'org_1',
-      title: 'Prepare review',
-    };
-    const transfer = {
-      types: [SCHEDULE_DRAG_MIME],
-      dropEffect: 'none',
-      getData: (type: string) => (type === SCHEDULE_DRAG_MIME ? JSON.stringify(payload) : ''),
-    };
-
-    render(
-      <SchedulingCanvas
-        displayTimezone="UTC"
-        lanes={[lane('ada', 'Ada', [target])]}
-        pixelsPerHour={60}
-        viewportWidth={500}
-        onDropObjectOnItem={onDropObjectOnItem}
-      />,
-    );
-
-    fireEvent.dragOver(screen.getByRole('button', { name: /^Focus block/ }), {
-      dataTransfer: transfer,
-    });
-    const dropItem = renderedItem('focus');
-    const dropFill = dropItem.style.getPropertyValue('--schedule-item-fill');
-    const dropFocus = dropItem.style.getPropertyValue('--schedule-item-focus');
-    expect(dropFill).toBe('var(--color-primary-container)');
-    expect(dropItem.style.getPropertyValue('--schedule-item-foreground')).toBe(
-      'var(--color-on-primary-container)',
-    );
-    expect(
-      dropItem.querySelector<HTMLElement>('[data-schedule-item-surface]')?.style.backgroundColor,
-    ).toBe('var(--schedule-item-fill)');
-    for (const theme of SCHEDULE_TEST_THEMES) {
-      expect(scheduleSurfaceContrast(dropFill, dropFocus, theme)).toBeGreaterThanOrEqual(3);
-    }
-    fireEvent.drop(screen.getByRole('button', { name: /^Focus block/ }), {
-      dataTransfer: transfer,
-    });
-
-    expect(onDropObjectOnItem).toHaveBeenCalledWith({
-      object: payload,
-      targetItem: target,
-      targetLane: expect.objectContaining({ id: 'ada' }),
-    });
-  });
-
-  it('keeps a read-only all-day pill openable, droppable, and relationship-draggable', () => {
-    const dragObject = {
-      kind: 'calendar_item' as const,
-      itemId: ALL_DAY_ITEM.id,
-      title: ALL_DAY_ITEM.title,
-    };
-    const target = {
-      ...ALL_DAY_ITEM,
-      editable: false,
-      dragObject,
-      dropTarget: true,
-    };
-    const sourceLane = lane('ada', 'Ada', [target], false);
-    const onOpenItem = vi.fn();
-    const onDropObjectOnItem = vi.fn();
-    render(
-      <SchedulingCanvas
-        displayTimezone="UTC"
-        lanes={[sourceLane]}
-        pixelsPerHour={60}
-        viewportWidth={500}
-        onOpenItem={onOpenItem}
-        onDropObjectOnItem={onDropObjectOnItem}
-      />,
-    );
-
-    const pill = screen.getByRole('button', { name: ALL_DAY_ITEM.title });
-    expect(pill).toHaveClass(
-      'focus-visible:ring-2',
-      'transition-colors',
-      'motion-reduce:transition-none',
-    );
-    expect(pill).not.toHaveClass('hover:bg-surface-container-high');
-    expect(pill.closest('[data-schedule-all-day-item]')).toHaveAttribute(
-      'data-schedule-item-appearance',
-      'event',
-    );
-    fireEvent.click(pill);
-    expect(onOpenItem).toHaveBeenCalledWith({ item: target, lane: sourceLane });
-
-    const affordance = screen.getByRole('button', {
-      name: `Create relationship from ${ALL_DAY_ITEM.title}`,
-    });
-    expect(affordance).toHaveAttribute('draggable', 'true');
-    const dragTransfer = { effectAllowed: 'none', setData: vi.fn() };
-    fireEvent.dragStart(affordance, { dataTransfer: dragTransfer });
-    expect(dragTransfer.effectAllowed).toBe('link');
-    expect(dragTransfer.setData.mock.calls).toEqual([
-      [SCHEDULE_DRAG_MIME, JSON.stringify(dragObject)],
-      ['text/plain', ALL_DAY_ITEM.title],
-    ]);
-
-    const taskPayload = {
-      kind: 'task',
-      taskId: 'task_1',
-      organizationId: 'org_1',
-      title: 'Prepare offsite',
-    };
-    const taskTransfer = {
-      types: [SCHEDULE_DRAG_MIME],
-      dropEffect: 'none',
-      getData: (type: string) => (type === SCHEDULE_DRAG_MIME ? JSON.stringify(taskPayload) : ''),
-    };
-    fireEvent.dragOver(pill, { dataTransfer: taskTransfer });
-    const allDayDropItem = assertDefined(pill.closest<HTMLElement>('[data-schedule-all-day-item]'));
-    const allDayDropFill = allDayDropItem.style.getPropertyValue('--schedule-item-fill');
-    const allDayDropFocus = allDayDropItem.style.getPropertyValue('--schedule-item-focus');
-    expect(allDayDropFill).toBe('var(--color-primary-container)');
-    expect(allDayDropItem.style.getPropertyValue('--schedule-item-foreground')).toBe(
-      'var(--color-on-primary-container)',
-    );
-    expect(
-      allDayDropItem.querySelector<HTMLElement>('[data-schedule-item-surface]')?.style
-        .backgroundColor,
-    ).toBe('var(--schedule-item-fill)');
-    for (const theme of SCHEDULE_TEST_THEMES) {
-      expect(
-        scheduleSurfaceContrast(allDayDropFill, allDayDropFocus, theme),
-      ).toBeGreaterThanOrEqual(3);
-    }
-    fireEvent.drop(pill, { dataTransfer: taskTransfer });
-    expect(onDropObjectOnItem).toHaveBeenCalledWith({
-      object: taskPayload,
-      targetItem: target,
-      targetLane: sourceLane,
-    });
-
-    const selfTransfer = {
-      types: [SCHEDULE_DRAG_MIME],
-      dropEffect: 'none',
-      getData: (type: string) => (type === SCHEDULE_DRAG_MIME ? JSON.stringify(dragObject) : ''),
-    };
-    fireEvent.drop(pill, { dataTransfer: selfTransfer });
-    expect(onDropObjectOnItem).toHaveBeenCalledOnce();
-  });
-
   it('describes an explicit all-day domain read-only label from its open control', () => {
     const item = { ...ALL_DAY_ITEM, editable: false, readOnlyLabel: 'Read-only' };
     render(
@@ -1410,51 +1252,6 @@ describe('SchedulingCanvas', () => {
     const descriptionIds = screen.getAllByText('Read-only').map((description) => description.id);
     expect(descriptionIds).toHaveLength(4);
     expect(new Set(descriptionIds).size).toBe(4);
-  });
-
-  it('separates relationship drag onto a dedicated affordance with the exact typed payload', () => {
-    const dragObject = {
-      kind: 'calendar_item' as const,
-      itemId: TIMED_ITEM.id,
-      title: TIMED_ITEM.title,
-    };
-    const onOpenItem = vi.fn();
-    const onMoveItem = vi.fn();
-    render(
-      <SchedulingCanvas
-        displayTimezone="UTC"
-        lanes={[lane('ada', 'Ada', [{ ...TIMED_ITEM, dragObject }], false)]}
-        pixelsPerHour={60}
-        viewportWidth={500}
-        onOpenItem={onOpenItem}
-        onMoveItem={onMoveItem}
-      />,
-    );
-
-    const article = renderedItem('focus');
-    expect(article).not.toHaveAttribute('draggable');
-    const affordance = screen.getByRole('button', {
-      name: 'Drag Focus block to create a relationship',
-    });
-    expect(affordance).toHaveAttribute('draggable', 'true');
-
-    const transfer = { effectAllowed: 'none', setData: vi.fn() };
-    fireEvent.pointerDown(affordance, {
-      button: 0,
-      pointerId: 21,
-      clientX: 100,
-      clientY: 100,
-    });
-    fireEvent.pointerMove(window, { pointerId: 21, clientX: 100, clientY: 130 });
-    fireEvent.pointerUp(window, { pointerId: 21, clientX: 100, clientY: 130 });
-    fireEvent.dragStart(affordance, { dataTransfer: transfer });
-    expect(transfer.effectAllowed).toBe('link');
-    expect(transfer.setData.mock.calls).toEqual([
-      [SCHEDULE_DRAG_MIME, JSON.stringify(dragObject)],
-      ['text/plain', TIMED_ITEM.title],
-    ]);
-    expect(onMoveItem).not.toHaveBeenCalled();
-    expect(onOpenItem).not.toHaveBeenCalled();
   });
 
   it('does not expose a relationship-drag affordance without a drag object', () => {
@@ -2023,7 +1820,12 @@ describe('SchedulingCanvas', () => {
           lane('edit', 'Edit', [
             {
               ...TIMED_ITEM,
-              dragObject: { kind: 'calendar_item', itemId: TIMED_ITEM.id, title: TIMED_ITEM.title },
+              object: {
+                kind: 'calendar_event',
+                id: TIMED_ITEM.id,
+                organizationId: null,
+                title: TIMED_ITEM.title,
+              },
             },
           ]),
         ]}

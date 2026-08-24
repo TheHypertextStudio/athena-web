@@ -6,9 +6,8 @@
  * A calendar item can carry several linked tasks with different {@link CalendarItemTaskRole}s
  * (`prep`, `agenda`, `follow_up`, `outcome`, `related`, `contained`) — only `'contained'` means
  * "this block IS the scheduled work on this task", the same meaning the scheduling surface itself
- * assigns when a task is dropped onto empty grid time (see `onDropObjectOnGrid` in
- * `calendar-scheduling-surface.tsx`, which links with `role: 'contained'` after creating the
- * block). A `prep`/`agenda`/`follow_up`/`outcome`/`related` link is a looser association — a task
+ * assigns when the registered calendar-slot relation creates and links a block. A
+ * `prep`/`agenda`/`follow_up`/`outcome`/`related` link is a looser association — a task
  * to review before a meeting, say — not the thing the block itself represents doing.
  *
  * `'timebox'` is the first-class kind that flow produces and is what the live personal calendar

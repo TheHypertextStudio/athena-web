@@ -14,7 +14,6 @@
  */
 import type { ProjectOverviewItem } from '@docket/types';
 
-import { entityDragSource } from '@/lib/entity-drag';
 import { formatPlanningTimeframe, toPlanningTimeframe } from '@/lib/planning-timeframe';
 
 import {
@@ -95,12 +94,11 @@ export function buildProjectTimelineCatalog(
     statusLabel: (row) => statusLabel(row.status),
     // A Project is draggable as an object from its label cell, matching every other core-object
     // surface; the bar itself is reserved for the pointer gesture that reschedules it.
-    dragSource: (row) =>
-      entityDragSource({
-        kind: 'project',
-        id: row.id,
-        organizationId: row.organizationId,
-        title: row.name,
-      }),
+    object: (row) => ({
+      kind: 'project',
+      id: row.id,
+      organizationId: row.organizationId,
+      title: row.name,
+    }),
   };
 }

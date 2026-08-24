@@ -277,7 +277,7 @@ describe('WorkList', () => {
     );
   });
 
-  it('turns an Initiative row drop into a hierarchy move', () => {
+  it('publishes Initiative rows through the shared object interaction contract', () => {
     const definition = InitiativeViewDefinition.parse({
       version: 2,
       target: 'initiative',
@@ -320,14 +320,7 @@ describe('WorkList', () => {
       parentLinkId: '01ARZ3NDEKTSV4RRFFQ69G5FD0',
       manualRank: 'a1',
     });
-    const onInitiativeReparent = vi.fn();
-    const values = new Map<string, string>();
-    const dataTransfer = {
-      effectAllowed: 'none',
-      dropEffect: 'none',
-      setData: (type: string, value: string) => values.set(type, value),
-      getData: (type: string) => values.get(type) ?? '',
-    } as unknown as DataTransfer;
+    const onActivate = vi.fn();
 
     render(
       <WorkList
@@ -338,27 +331,20 @@ describe('WorkList', () => {
         groupPages={[]}
         selectedIds={new Set()}
         onSelectionChange={vi.fn()}
-        onActivate={vi.fn()}
-        onInitiativeReparent={onInitiativeReparent}
+        onActivate={onActivate}
       />,
     );
 
     const childRow = screen.getByText('Child').closest('[role="row"]');
-    const parentRow = screen.getByText('Parent').closest('[role="row"]');
-    if (!(childRow instanceof HTMLElement) || !(parentRow instanceof HTMLElement)) {
+    if (!(childRow instanceof HTMLElement)) {
       throw new Error('Initiative rows did not render.');
     }
-    fireEvent.dragStart(childRow, { dataTransfer });
-    fireEvent.drop(parentRow, { dataTransfer });
-
-    expect(onInitiativeReparent).toHaveBeenCalledWith(
-      {
-        id: child.id,
-        parentInitiativeId: parent.id,
-        parentLinkId: child.parentLinkId,
-      },
-      parent.id,
-    );
+    expect(childRow).toHaveAttribute('data-object-kind', 'initiative');
+    expect(childRow).toHaveAttribute('data-object-id', child.id);
+    expect(childRow).not.toHaveAttribute('draggable');
+    expect(childRow).toHaveClass('cursor-grab');
+    fireEvent.click(childRow);
+    expect(onActivate).toHaveBeenCalledWith(child);
     expect(screen.getAllByTestId('initiative-hierarchy-rail')).not.toHaveLength(0);
   });
 });

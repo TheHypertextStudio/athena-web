@@ -86,13 +86,21 @@ export function toAgendaScheduleItem(
         : 'event',
     editable: isAgendaEntryInlineEditable(entry, displayTimezone),
     readOnlyLabel: agendaReadOnlyLabel(entry),
-    dragObject:
+    object:
       calendarItem && !derivedCalendarItem
-        ? { kind: 'calendar_item', itemId: calendarItem.id, title: entry.title }
+        ? {
+            kind:
+              calendarItem.kind === 'native_block' || calendarItem.kind === 'timebox'
+                ? 'time_block'
+                : 'calendar_event',
+            id: calendarItem.id,
+            organizationId: null,
+            title: entry.title,
+          }
         : entry.taskId && entry.organizationId
           ? {
               kind: 'task',
-              taskId: entry.taskId,
+              id: entry.taskId,
               organizationId: entry.organizationId,
               title: entry.title,
             }

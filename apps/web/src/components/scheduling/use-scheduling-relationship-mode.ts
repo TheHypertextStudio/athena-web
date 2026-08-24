@@ -2,17 +2,16 @@
 
 import { type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
-import type {
-  ScheduleDragObject,
-  ScheduleItem,
-  ScheduleLane,
-  SchedulingCanvasProps,
-} from './scheduling-types';
+import { resolveObjectRelation } from '@/components/dnd/object-drag-data';
+import type { ObjectRef } from '@/lib/actions/object';
+import { useOptionalActionRegistry } from '@/lib/actions/registry-context';
+
+import type { ScheduleItem, ScheduleLane } from './scheduling-types';
 
 /** The consumer-owned object and rendered item that began relationship targeting. */
 export interface SchedulingRelationshipSource {
   readonly item: ScheduleItem;
-  readonly object: ScheduleDragObject;
+  readonly object: ObjectRef;
   readonly focusFirstTarget: boolean;
 }
 
@@ -22,7 +21,7 @@ export interface SchedulingRelationshipMode {
   readonly source: SchedulingRelationshipSource | null;
   readonly begin: (options: {
     readonly item: ScheduleItem;
-    readonly object: ScheduleDragObject;
+    readonly object: ObjectRef;
     readonly control: HTMLButtonElement;
     readonly focusFirstTarget: boolean;
   }) => void;
@@ -34,13 +33,12 @@ export interface SchedulingRelationshipMode {
 /** Own the short-lived keyboard/touch mode without changing the object-drop contract. */
 export function useSchedulingRelationshipMode({
   viewportRef,
-  onDropObjectOnItem,
   onAnnouncementChange,
 }: {
   readonly viewportRef: RefObject<HTMLElement | null>;
-  readonly onDropObjectOnItem?: SchedulingCanvasProps['onDropObjectOnItem'];
   readonly onAnnouncementChange: (announcement: string) => void;
 }): SchedulingRelationshipMode {
+  const registry = useOptionalActionRegistry();
   const [source, setSource] = useState<SchedulingRelationshipSource | null>(null);
   const sourceControlRef = useRef<HTMLButtonElement | null>(null);
 
@@ -64,39 +62,58 @@ export function useSchedulingRelationshipMode({
       focusFirstTarget,
     }: {
       readonly item: ScheduleItem;
-      readonly object: ScheduleDragObject;
+      readonly object: ObjectRef;
       readonly control: HTMLButtonElement;
       readonly focusFirstTarget: boolean;
     }): void => {
-      if (!onDropObjectOnItem) return;
+      if (!registry) return;
       sourceControlRef.current = control;
       setSource({ item, object, focusFirstTarget });
       onAnnouncementChange(
         `Choose an event or timebox to link with ${item.title}. Press Escape to cancel.`,
       );
     },
-    [onAnnouncementChange, onDropObjectOnItem],
+    [onAnnouncementChange, registry],
   );
 
   const isTarget = useCallback(
     (item: ScheduleItem): boolean =>
       Boolean(
-        source && onDropObjectOnItem && item.dropTarget === true && item.id !== source.item.id,
+        source &&
+        registry &&
+        item.object &&
+        item.dropTarget === true &&
+        item.id !== source.item.id &&
+        (() => {
+          const resolution = resolveObjectRelation([source.object], item.object);
+          return resolution.accepted && registry.getByRelation(resolution.intent.relationId);
+        })(),
       ),
-    [onDropObjectOnItem, source],
+    [registry, source],
   );
 
   const activateTarget = useCallback(
-    (item: ScheduleItem, lane: ScheduleLane): void => {
-      if (!source || !onDropObjectOnItem || !isTarget(item)) return;
-      onDropObjectOnItem({ object: source.object, targetItem: item, targetLane: lane });
+    (item: ScheduleItem, _lane: ScheduleLane): void => {
+      if (!source || !registry || !item.object || !isTarget(item)) return;
+      const targetObject = item.object;
+      const resolution = resolveObjectRelation([source.object], targetObject);
+      if (!resolution.accepted) return;
+      const action = registry.getByRelation(resolution.intent.relationId);
+      if (!action) return;
+      void registry.invoke(action.id, () => ({
+        objects: [source.object],
+        target: targetObject,
+        source: 'shortcut',
+        organizationId: source.object.organizationId,
+        params: { relationId: resolution.intent.relationId },
+      }));
       setSource(null);
       onAnnouncementChange(
         `Relationship requested between ${source.item.title} and ${item.title}.`,
       );
       restoreSourceFocus();
     },
-    [isTarget, onAnnouncementChange, onDropObjectOnItem, restoreSourceFocus, source],
+    [isTarget, onAnnouncementChange, registry, restoreSourceFocus, source],
   );
 
   useEffect(() => {
@@ -120,7 +137,7 @@ export function useSchedulingRelationshipMode({
   }, [source, viewportRef]);
 
   return {
-    enabled: onDropObjectOnItem !== undefined,
+    enabled: registry !== null,
     source,
     begin,
     cancel,

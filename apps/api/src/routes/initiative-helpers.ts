@@ -43,6 +43,7 @@ export function toOut(i: InitiativeRow): z.input<typeof InitiativeOut> {
     summary: i.summary,
     description: i.description,
     ownerId: i.ownerId,
+    leadTeamId: i.leadTeamId,
     status: i.status,
     priority: i.priority,
     updateCadence: i.updateCadence,

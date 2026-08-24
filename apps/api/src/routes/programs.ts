@@ -8,6 +8,8 @@ import {
   pageOf,
   ProgramCreate,
   ProgramDetail,
+  ProgramLabelLink,
+  ProgramLabelLinked,
   ProgramOut,
   ProgramUpdate,
   ProgramWorkOut,
@@ -21,7 +23,14 @@ import { z } from 'zod';
 import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
 import { clearableTextPatch } from '../lib/clearable-text';
-import { labelsForSubjects, type LabelRefRow } from '../lib/labels';
+import {
+  attachLabels,
+  labelsForSubject,
+  labelsForSubjects,
+  resolveAttachedLabels,
+  resolveLabelSet,
+  type LabelRefRow,
+} from '../lib/labels';
 import { deferAfterResponse } from '../lib/after-response';
 import { created, ok } from '../lib/ok';
 import { resolveContainerStatus } from '../lib/work-status';
@@ -278,6 +287,41 @@ const programs = new Hono<AppEnv>()
       }
       await enqueueSearchUpsert(orgId, 'program', row.id);
       return ok(c, ProgramOut, toOut(row));
+    },
+  )
+  .post(
+    '/:id/labels',
+    capabilityGuard('manage'),
+    apiDoc({
+      tag: 'Programs',
+      summary: 'Add a label to a program',
+      capability: 'manage',
+      response: ProgramLabelLinked,
+      description:
+        'Add one workspace-wide Label to a Program without replacing its existing Labels. Repeating an existing link succeeds without another write.',
+    }),
+    zParam(idParam),
+    zJson(ProgramLabelLink),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+      const { labelId } = c.req.valid('json');
+      await loadProgram(orgId, id);
+      await db.transaction(async (tx) => {
+        const refs = await labelsForSubject('program', orgId, id, tx);
+        if (refs.some((label) => label.id === labelId)) return;
+        const [existing, incoming] = await Promise.all([
+          resolveAttachedLabels(
+            orgId,
+            refs.map((label) => label.id),
+            tx,
+          ),
+          resolveLabelSet(orgId, [labelId], { dbh: tx }),
+        ]);
+        await attachLabels(tx, 'program', id, orgId, existing, incoming);
+      });
+      await enqueueSearchUpsert(orgId, 'program', id);
+      return ok(c, ProgramLabelLinked, { programId: id, labelId, linked: true });
     },
   )
   .delete(

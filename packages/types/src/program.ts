@@ -4,7 +4,7 @@
 import { z } from 'zod';
 
 import { Health, Visibility } from './capability';
-import { CycleId, OrganizationId, ProjectId, ActorId, ProgramId } from './primitives';
+import { ActorId, CycleId, LabelId, OrganizationId, ProgramId, ProjectId } from './primitives';
 import { TaskOut } from './task';
 
 /**
@@ -103,6 +103,20 @@ export const ProgramUpdate = z
   .meta({ id: 'ProgramUpdate', description: 'Update a program.' });
 /** Validated program-update body. */
 export type ProgramUpdate = z.infer<typeof ProgramUpdate>;
+
+/** Body for incrementally adding one Label to a Program. */
+export const ProgramLabelLink = z
+  .object({ labelId: LabelId })
+  .meta({ id: 'ProgramLabelLink', description: 'Add one Label to a Program.' });
+/** Program Label-link request value. */
+export type ProgramLabelLink = z.infer<typeof ProgramLabelLink>;
+
+/** Idempotent result of adding one Label to a Program. */
+export const ProgramLabelLinked = z
+  .object({ programId: ProgramId, labelId: LabelId, linked: z.literal(true) })
+  .meta({ id: 'ProgramLabelLinked', description: 'A Program Label association.' });
+/** Program Label-link response value. */
+export type ProgramLabelLinked = z.infer<typeof ProgramLabelLinked>;
 
 /** Full program representation returned by reads. */
 export const ProgramOut = z

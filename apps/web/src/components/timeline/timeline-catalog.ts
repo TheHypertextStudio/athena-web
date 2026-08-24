@@ -17,7 +17,7 @@
  * learns what "health" is; a consumer maps its own vocabulary onto the four tones.
  */
 
-import type { DragSource } from '@docket/ui/lib/draggable';
+import type { ObjectRef } from '@/lib/actions/object';
 
 /** A resolved on-axis span in epoch milliseconds. */
 export interface TimelineSpan {
@@ -102,20 +102,8 @@ export interface TimelineCatalog<T> {
   edges: (row: T) => TimelineEdges;
   /** A short status word for the row, used in accessible descriptions and tray chips. */
   statusLabel: (row: T) => string;
-  /**
-   * How this row is dragged *as an object* (onto a calendar, another surface), or `null` when it
-   * is not draggable.
-   *
-   * @remarks
-   * Applied to the row's **label cell**, never to its bar. The bar owns a pointer-driven drag that
-   * reschedules it, and a native HTML5 `draggable` on the same element would pre-empt those
-   * pointer events — the two gestures cannot share one target. Splitting them is also the honest
-   * division: the label is the row's identity handle, the bar is its schedule.
-   *
-   * `DragSource` is the design system's domain-free primitive, so the engine still learns nothing
-   * about what any consumer's rows actually are.
-   */
-  dragSource: (row: T) => DragSource | null;
+  /** Canonical object identity used by the shared interaction adapter, or `null` for context rows. */
+  object: (row: T) => ObjectRef | null;
 }
 
 /**

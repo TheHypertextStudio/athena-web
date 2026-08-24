@@ -15,8 +15,8 @@ import { SchedulingCanvasHeader } from './scheduling-canvas-header';
 import { SchedulingCanvasNotice } from './scheduling-canvas-notice';
 import { arrangeDenseScheduleItems } from './scheduling-dense-overflow';
 import { SchedulingDenseOverflow } from './scheduling-dense-overflow-ui';
-import { readScheduleDragObject, SCHEDULE_DRAG_MIME } from './scheduling-drag-object';
-import { deriveSnapMinutes, pixelsToMinutes } from './scheduling-geometry';
+import { SchedulingRelationSlotLane } from './scheduling-relation-slot-lane';
+import { deriveSnapMinutes, minutesToPixels, pixelsToMinutes } from './scheduling-geometry';
 import { deriveInitialScheduleScrollMinutes } from './scheduling-initial-scroll';
 import { SchedulingItemCard } from './scheduling-item-card';
 import { positionScheduleLaneItems } from './scheduling-overlap-layout';
@@ -77,8 +77,7 @@ export default function SchedulingCanvas({
   onResizeItem,
   onMoveAllDayItem,
   onResizeAllDayItem,
-  onDropObjectOnItem,
-  onDropObjectOnGrid,
+  calendarSlotTarget,
   onZoomGesture,
 }: SchedulingCanvasProps): JSX.Element {
   const [gestureAnnouncement, setGestureAnnouncement] = useState('');
@@ -147,7 +146,6 @@ export default function SchedulingCanvas({
   }, [captureZoomAnchor, onZoomGesture, viewportRef]);
   const relationshipMode = useSchedulingRelationshipMode({
     viewportRef,
-    onDropObjectOnItem,
     onAnnouncementChange: setGestureAnnouncement,
   });
   const densePromotion = useSchedulingDensePromotion({
@@ -271,7 +269,6 @@ export default function SchedulingCanvas({
           onOpenItem={onOpenItem}
           onMoveAllDayItem={onMoveAllDayItem}
           onResizeAllDayItem={onResizeAllDayItem}
-          onDropObjectOnItem={onDropObjectOnItem}
           relationshipMode={relationshipMode}
           onGestureAnnouncementChange={setGestureAnnouncement}
           onSelectAllDayRegion={onSelectAllDayRegion}
@@ -289,12 +286,21 @@ export default function SchedulingCanvas({
           >
             <div className="absolute inset-0 flex">
               {lanes.map((lane, laneIndex) => (
-                <div
+                <SchedulingRelationSlotLane
                   key={lane.id}
                   aria-label={`${lane.label} time grid`}
                   // A single hairline between lanes, and none after the last one — the separator
                   // exists to divide days, not to draw a box around the grid.
                   className={`relative shrink-0 touch-none ${laneIndex === lanes.length - 1 ? '' : 'border-outline-variant/30 border-r'}`}
+                  disabled={calendarSlotTarget === undefined}
+                  startMinutesAt={(clientY, bounds) =>
+                    pixelsToMinutes(clientY - bounds.top, effectivePixelsPerHour, snapMinutes)
+                  }
+                  targetAt={(startMinutes) => calendarSlotTarget?.({ lane, startMinutes }) ?? null}
+                  previewTop={(startMinutes) =>
+                    minutesToPixels(startMinutes, effectivePixelsPerHour)
+                  }
+                  previewHeight={minutesToPixels(30, effectivePixelsPerHour)}
                   data-schedule-lane={lane.id}
                   tabIndex={onSelectRegion ? 0 : undefined}
                   style={{ width: geometry.laneWidth, height: 24 * effectivePixelsPerHour }}
@@ -354,34 +360,6 @@ export default function SchedulingCanvas({
                     regionSelection.onPointerDown(lane, event);
                   }}
                   onClickCapture={regionSelection.onClickCapture}
-                  // Accept a native drag object dropped onto empty grid time and schedule it there.
-                  // Drops onto an item are handled by the card (which stops propagation), so this
-                  // fires only for empty-time drops.
-                  onDragOver={
-                    onDropObjectOnGrid
-                      ? (event) => {
-                          if (!event.dataTransfer.types.includes(SCHEDULE_DRAG_MIME)) return;
-                          event.preventDefault();
-                          event.dataTransfer.dropEffect = 'copy';
-                        }
-                      : undefined
-                  }
-                  onDrop={
-                    onDropObjectOnGrid
-                      ? (event) => {
-                          const object = readScheduleDragObject(event.dataTransfer);
-                          if (!object) return;
-                          event.preventDefault();
-                          const rect = event.currentTarget.getBoundingClientRect();
-                          const startMinutes = pixelsToMinutes(
-                            event.clientY - rect.top,
-                            effectivePixelsPerHour,
-                            snapMinutes,
-                          );
-                          onDropObjectOnGrid({ object, lane, startMinutes });
-                        }
-                      : undefined
-                  }
                 >
                   {renderTimedLaneUnderlay ? (
                     <div
@@ -464,7 +442,6 @@ export default function SchedulingCanvas({
                         onOpenItem={onOpenItem}
                         onMoveItem={onMoveItem}
                         onResizeItem={onResizeItem}
-                        onDropObjectOnItem={onDropObjectOnItem}
                         relationshipMode={relationshipMode}
                         onGestureAnnouncementChange={setGestureAnnouncement}
                       />
@@ -481,7 +458,7 @@ export default function SchedulingCanvas({
                       onRevealItem={densePromotion.revealItem}
                     />
                   ))}
-                </div>
+                </SchedulingRelationSlotLane>
               ))}
             </div>
           </SchedulingTimeGrid>

@@ -1,3 +1,8 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
+import { RELATION_DEFINITIONS } from '@docket/work/relation-contract';
+import ts from 'typescript';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { ObjectRef } from '../../src/lib/actions/object';
@@ -6,6 +11,7 @@ import {
   defineActionDomain,
   DuplicateActionIdError,
   DuplicateDomainRegistrationError,
+  DuplicateRelationRegistrationError,
   MalformedActionIdError,
   UnknownActionError,
 } from '../../src/lib/actions/registry';
@@ -27,12 +33,58 @@ const project: ObjectRef = {
   title: 'Launch',
 };
 
+/** Read relation metadata only from action-definition object literals. */
+function actionRelationIds(source: string): readonly string[] {
+  const file = ts.createSourceFile(
+    'actions.tsx',
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const ids: string[] = [];
+  const visit = (node: ts.Node): void => {
+    if (ts.isObjectLiteralExpression(node)) {
+      const values = new Map<string, string>();
+      for (const property of node.properties) {
+        if (
+          ts.isPropertyAssignment(property) &&
+          ts.isIdentifier(property.name) &&
+          ts.isStringLiteralLike(property.initializer)
+        ) {
+          values.set(property.name.text, property.initializer.text);
+        }
+      }
+      const id = values.get('id');
+      const relationId = values.get('relationId');
+      if (id?.includes('.') && relationId) ids.push(relationId);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+  return ids;
+}
+
 /** A context for `objects`, defaulting to the surface the tests care least about. */
 function contextFor(objects: readonly ObjectRef[]): ActionContext {
   return { objects, source: 'context-menu', organizationId: 'org1' };
 }
 
 describe('action registry: registration', () => {
+  it('declares exactly one application action for every domain relation', () => {
+    const actionSources = [
+      'src/components/tasks/task-actions.ts',
+      'src/components/actions/entity-navigation-actions.ts',
+      'src/components/initiatives/initiative-actions.ts',
+      'src/components/calendar/calendar-actions.ts',
+    ].map((path) => readFileSync(resolve(import.meta.dirname, '../..', path), 'utf8'));
+    const registered = actionSources.flatMap(actionRelationIds);
+    const expected = RELATION_DEFINITIONS.map(({ id }) => id);
+
+    expect([...registered].sort()).toEqual([...expected].sort());
+    expect(new Set(registered).size).toBe(registered.length);
+  });
+
   it('requires declared receipt metadata for asynchronous actions', () => {
     const missingReceipt = defineActionDomain('task', [
       // @ts-expect-error Promise-returning actions must declare closed responsiveness metadata.
@@ -162,6 +214,51 @@ describe('action registry: registration', () => {
       { id: 'task.open', label: 'Open in tab', run: () => undefined },
     ]);
     expect(() => registry.register('task', duplicated)).toThrow(DuplicateActionIdError);
+  });
+
+  it('resolves each drag relation through exactly one registered action', () => {
+    const registry = createActionRegistry();
+    registry.register(
+      'task',
+      defineActionDomain('task', [
+        {
+          id: 'task.moveToProject',
+          relationId: 'task.project',
+          label: 'Move to project',
+          objectKinds: ['task'],
+          run: () => undefined,
+        },
+      ]),
+    );
+
+    expect(registry.getByRelation('task.project')?.id).toBe('task.moveToProject');
+  });
+
+  it('refuses a second action for the same drag relation', () => {
+    const registry = createActionRegistry();
+    registry.register(
+      'task',
+      defineActionDomain('task', [
+        {
+          id: 'task.moveToProject',
+          relationId: 'task.project',
+          label: 'Move to project',
+          run: () => undefined,
+        },
+      ]),
+    );
+    const duplicateRelation = defineActionDomain('project', [
+      {
+        id: 'project.acceptTask',
+        relationId: 'task.project',
+        label: 'Accept task',
+        run: () => undefined,
+      },
+    ]);
+
+    expect(() => registry.register('project', duplicateRelation)).toThrow(
+      DuplicateRelationRegistrationError,
+    );
   });
 
   it('makes a cross-domain id collision structurally impossible', () => {

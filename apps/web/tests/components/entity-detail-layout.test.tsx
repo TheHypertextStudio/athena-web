@@ -32,7 +32,7 @@ describe('EntityDetailLayout', () => {
 
     const header = container.querySelector('header');
     expect(header).toHaveAttribute('data-object-kind', 'project');
-    expect(header).toHaveAttribute('draggable', 'false');
+    expect(header).not.toHaveAttribute('draggable');
     expect(header).not.toHaveClass('cursor-grab');
 
     const primary = header?.querySelector('.detail-primary');

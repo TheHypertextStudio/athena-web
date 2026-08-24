@@ -57,6 +57,7 @@ export {
   type ActionRegistryProviderProps,
   useActionDispatch,
   useActionRegistry,
+  useOptionalActionRegistry,
   useRegisterActionDomain,
   useResolvedActions,
 } from './registry-context';

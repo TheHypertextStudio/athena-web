@@ -39,11 +39,8 @@ import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DragProvider } from '../../../src/components/dnd/drag-context';
-import { readObjectSetPayload } from '../../../src/components/dnd/drag-payload';
 import { InteractionProvider } from '../../../src/lib/actions/interaction-provider';
-import { createActionRegistry, defineActionDomain } from '../../../src/lib/actions/registry';
-import type { ActionContext } from '../../../src/lib/actions/types';
-import { fakeDataTransfer } from '../../interactivity/harness';
+import { createActionRegistry } from '../../../src/lib/actions/registry';
 
 import { buildTaskCatalog } from '../../../src/components/views/task-catalog';
 import {
@@ -214,7 +211,7 @@ describe('buildTaskColumns', () => {
 });
 
 describe('TaskTable', () => {
-  it('selects rows without hijacking title navigation and drags the ordered selection', () => {
+  it('selects rows without hijacking title navigation and publishes shared drag identity', () => {
     const registry = createActionRegistry();
     const first = task({ id: TASK_1, title: 'First' });
     const second = task({ id: TASK_2, title: 'Second' });
@@ -256,28 +253,14 @@ describe('TaskTable', () => {
     expect(row(TASK_1)).toHaveAttribute('aria-selected', 'true');
     expect(row(TASK_2)).toHaveAttribute('aria-selected', 'true');
 
-    const transfer = fakeDataTransfer();
-    fireEvent.dragStart(row(TASK_2), { dataTransfer: transfer });
-    expect(readObjectSetPayload(transfer).map(({ id }) => id)).toEqual([TASK_1, TASK_2]);
+    expect(row(TASK_1)).toHaveAttribute('data-object-kind', 'task');
+    expect(row(TASK_2)).toHaveAttribute('data-object-id', TASK_2);
+    expect(row(TASK_2)).not.toHaveAttribute('draggable');
+    expect(row(TASK_2)).toHaveClass('cursor-grab');
   });
 
-  it('previews and dispatches a selected-root hierarchy drop onto another task', async () => {
-    const seen: ActionContext[] = [];
+  it('publishes every row as a hierarchy relation destination', () => {
     const registry = createActionRegistry();
-    registry.register(
-      'task',
-      defineActionDomain('task', [
-        {
-          id: 'task.makeSubtaskOf',
-          label: 'Make subtask of',
-          objectKinds: ['task'],
-          multi: true,
-          run: (context) => {
-            seen.push(context);
-          },
-        },
-      ]),
-    );
     render(
       withQueryClient(
         <InteractionProvider registry={registry}>
@@ -301,24 +284,9 @@ describe('TaskTable', () => {
       if (!element) throw new Error(`Expected task row ${id}`);
       return element;
     };
-    fireEvent.click(row(TASK_1));
-    fireEvent.click(row(TASK_2), { metaKey: true });
-    const transfer = fakeDataTransfer();
-    fireEvent.dragStart(row(TASK_1), { dataTransfer: transfer });
-
-    fireEvent.dragEnter(row(TASK_3), { dataTransfer: transfer });
-    expect(row(TASK_3)).toHaveAttribute('data-drop-state', 'accept');
-    expect(await screen.findByText('Move 2 tasks under Target')).toBeInTheDocument();
-    fireEvent.drop(row(TASK_3), { dataTransfer: transfer });
-
-    await waitFor(() => {
-      expect(seen).toHaveLength(1);
-    });
-    expect(seen[0]).toMatchObject({
-      objects: [{ id: TASK_1 }, { id: TASK_2 }],
-      target: { id: TASK_3 },
-      source: 'drag',
-    });
+    expect(row(TASK_1)).toHaveAttribute('data-drop-state', 'idle');
+    expect(row(TASK_2)).toHaveAttribute('data-drop-state', 'idle');
+    expect(row(TASK_3)).toHaveAttribute('data-drop-state', 'idle');
   });
 
   it('renders the status glyph, title, assignee, formatted estimate, and a task-detail link', () => {

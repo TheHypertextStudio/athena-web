@@ -20,6 +20,8 @@ import {
   defaultEntityDisplay,
   pageOf,
   ProjectCreate,
+  ProjectLabelLink,
+  ProjectLabelLinked,
   ProjectOut,
   ProjectOverviewOut,
   ProjectProgress,
@@ -35,7 +37,13 @@ import { deferAfterResponse } from '../lib/after-response';
 import { clearableTextPatch } from '../lib/clearable-text';
 import { guardsInOrder } from '../lib/guards-in-order';
 import { assertPlanningDateRange, planningDatePatch } from '../lib/planning-timeframe';
-import { replaceLabels, resolveLabelSet } from '../lib/labels';
+import {
+  attachLabels,
+  labelsForSubject,
+  replaceLabels,
+  resolveAttachedLabels,
+  resolveLabelSet,
+} from '../lib/labels';
 import { created, ok } from '../lib/ok';
 import { resolveContainerStatus } from '../lib/work-status';
 import { pageResult, seekAfter } from '../lib/list-cursor';
@@ -616,6 +624,46 @@ const projects = new Hono<AppEnv>()
       }
       await enqueueSearchUpsert(orgId, 'project', row.id);
       return ok(c, ProjectOut, toOut(row));
+    },
+  )
+  .post(
+    '/:id/labels',
+    capabilityGuard('contribute'),
+    apiDoc({
+      tag: 'Projects',
+      summary: 'Add a label to a project',
+      capability: 'contribute',
+      response: ProjectLabelLinked,
+      description:
+        'Add one eligible Label to a Project without replacing existing Labels. Repeating an existing link succeeds without another write.',
+    }),
+    zParam(idParam),
+    zJson(ProjectLabelLink),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+      const { labelId } = c.req.valid('json');
+      const [row] = await db
+        .select({ teamId: project.teamId })
+        .from(project)
+        .where(and(eq(project.organizationId, orgId), eq(project.id, id)))
+        .limit(1);
+      if (!row) throw new NotFoundError('Project not found');
+      await db.transaction(async (tx) => {
+        const refs = await labelsForSubject('project', orgId, id, tx);
+        if (refs.some((label) => label.id === labelId)) return;
+        const [existing, incoming] = await Promise.all([
+          resolveAttachedLabels(
+            orgId,
+            refs.map((label) => label.id),
+            tx,
+          ),
+          resolveLabelSet(orgId, [labelId], { teamId: row.teamId, dbh: tx }),
+        ]);
+        await attachLabels(tx, 'project', id, orgId, existing, incoming);
+      });
+      await enqueueSearchUpsert(orgId, 'project', id);
+      return ok(c, ProjectLabelLinked, { projectId: id, labelId, linked: true });
     },
   )
   .delete(

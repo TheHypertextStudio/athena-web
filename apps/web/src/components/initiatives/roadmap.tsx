@@ -25,11 +25,10 @@ import type { Health, InitiativeTimelineBar, InitiativeTimelineLane } from '@doc
 import type { DateResolution } from '@docket/work/planning-timeframe';
 import { cn } from '@docket/ui';
 import { Flag, FolderKanban } from '@docket/ui/icons';
-import { dragSourceProps } from '@docket/ui/lib/draggable';
 import type { JSX } from 'react';
 
 import { useWorkStatusResolver } from '@/components/entity-display/use-work-status';
-import { entityDragSource } from '@/lib/entity-drag';
+import { ObjectSurface } from '@/components/objects/object-surface';
 
 import { formatAxisTick, formatPlanningDate, toMillis } from './format-date';
 import { HEALTH_FILL_CLASS, HEALTH_LABEL, HEALTH_UNKNOWN_FILL_CLASS } from './health';
@@ -227,35 +226,34 @@ export function Roadmap({
                   startLabel && targetLabel
                     ? `${startLabel} – ${targetLabel}`
                     : (startLabel ?? targetLabel ?? 'Unscheduled');
-                // The bar is the Project's row on this roadmap, so it is also its drag source.
-                const dragProps = dragSourceProps(
-                  entityDragSource({
-                    kind: 'project',
-                    id: bar.id,
-                    organizationId,
-                    title: bar.name,
-                  }),
-                );
                 return (
                   <li key={bar.id} className="relative h-8">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onOpenProject(bar.id);
+                    <ObjectSurface
+                      object={{
+                        kind: 'project',
+                        id: bar.id,
+                        organizationId,
+                        title: bar.name,
                       }}
-                      aria-label={`${bar.name} — ${projectStatusOf(bar.status).name}, ${spanCopy}${
-                        bar.health ? `, ${HEALTH_LABEL[bar.health]}` : ''
-                      }`}
-                      {...dragProps}
-                      className={cn(
-                        'focus-visible:ring-ring absolute top-0 flex h-8 min-w-0 items-center gap-2 rounded-md px-2.5 text-left text-xs font-medium text-white shadow-sm transition-[filter] hover:brightness-110 focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-none',
-                        fillFor(bar.health),
-                        dragProps?.className,
-                      )}
-                      style={{ left: `${left}%`, width: `${width}%` }}
+                      surfaceId="initiative-roadmap"
                     >
-                      <span className="truncate">{bar.name}</span>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onOpenProject(bar.id);
+                        }}
+                        aria-label={`${bar.name} — ${projectStatusOf(bar.status).name}, ${spanCopy}${
+                          bar.health ? `, ${HEALTH_LABEL[bar.health]}` : ''
+                        }`}
+                        className={cn(
+                          'focus-visible:ring-ring absolute top-0 flex h-8 min-w-0 items-center gap-2 rounded-md px-2.5 text-left text-xs font-medium text-white shadow-sm transition-[filter] hover:brightness-110 focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:outline-none',
+                          fillFor(bar.health),
+                        )}
+                        style={{ left: `${left}%`, width: `${width}%` }}
+                      >
+                        <span className="truncate">{bar.name}</span>
+                      </button>
+                    </ObjectSurface>
                   </li>
                 );
               })}
@@ -268,41 +266,37 @@ export function Roadmap({
             <h3 className="text-on-surface-variant text-xs font-medium">Unscheduled</h3>
             <ul className="flex flex-wrap gap-2">
               {unscheduled.map((bar) => {
-                // A dateless Project is exactly what a calendar or cycle drop target wants to
-                // schedule, so the chip drags the same object a placed bar does.
-                const dragProps = dragSourceProps(
-                  entityDragSource({
-                    kind: 'project',
-                    id: bar.id,
-                    organizationId,
-                    title: bar.name,
-                  }),
-                );
                 return (
                   <li key={bar.id}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        onOpenProject(bar.id);
+                    <ObjectSurface
+                      object={{
+                        kind: 'project',
+                        id: bar.id,
+                        organizationId,
+                        title: bar.name,
                       }}
-                      aria-label={`${bar.name} — ${projectStatusOf(bar.status).name}, unscheduled${
-                        bar.health ? `, ${HEALTH_LABEL[bar.health]}` : ''
-                      }`}
-                      {...dragProps}
-                      className={cn(
-                        'border-outline-variant bg-surface-container-low hover:bg-surface-container-high focus-visible:ring-ring inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none',
-                        dragProps?.className,
-                      )}
+                      surfaceId="initiative-roadmap-unscheduled"
                     >
-                      <span
-                        aria-hidden="true"
-                        className={cn('size-2 rounded-full', fillFor(bar.health))}
-                      />
-                      <span className="text-on-surface truncate">{bar.name}</span>
-                      <span className="text-on-surface-variant">
-                        {projectStatusOf(bar.status).name}
-                      </span>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onOpenProject(bar.id);
+                        }}
+                        aria-label={`${bar.name} — ${projectStatusOf(bar.status).name}, unscheduled${
+                          bar.health ? `, ${HEALTH_LABEL[bar.health]}` : ''
+                        }`}
+                        className="border-outline-variant bg-surface-container-low hover:bg-surface-container-high focus-visible:ring-ring inline-flex items-center gap-2 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                      >
+                        <span
+                          aria-hidden="true"
+                          className={cn('size-2 rounded-full', fillFor(bar.health))}
+                        />
+                        <span className="text-on-surface truncate">{bar.name}</span>
+                        <span className="text-on-surface-variant">
+                          {projectStatusOf(bar.status).name}
+                        </span>
+                      </button>
+                    </ObjectSurface>
                   </li>
                 );
               })}

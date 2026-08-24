@@ -425,9 +425,6 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
                   onFocus,
                   tabIndex,
                   'aria-current': ariaCurrent,
-                  draggable,
-                  onDragStart,
-                  onDragEnd,
                 } = linkProps;
                 if (href.startsWith('/v1/')) {
                   return (
@@ -467,9 +464,6 @@ export default function LibraryClient({ orgId }: LibraryClientProps): JSX.Elemen
                     aria-current={ariaCurrent}
                     {...(onMouseEnter ? { onMouseEnter } : {})}
                     {...(onFocus ? { onFocus } : {})}
-                    {...(draggable === undefined ? {} : { draggable })}
-                    {...(onDragStart ? { onDragStart } : {})}
-                    {...(onDragEnd ? { onDragEnd } : {})}
                   >
                     {children}
                   </Link>

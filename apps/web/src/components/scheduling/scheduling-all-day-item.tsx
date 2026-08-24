@@ -1,16 +1,9 @@
 'use client';
 
 import { DRAGGABLE } from '@docket/ui/lib/draggable';
-import {
-  type CSSProperties,
-  type DragEvent as ReactDragEvent,
-  type JSX,
-  type RefObject,
-  useId,
-  useState,
-} from 'react';
+import { type CSSProperties, type JSX, type RefObject, useId } from 'react';
 
-import { readScheduleDragObject, SCHEDULE_DRAG_MIME } from './scheduling-drag-object';
+import { useRelationDropTarget } from '@/components/dnd/use-relation-drop-target';
 import {
   formatAllDayDateRange,
   scheduleAllDayEditCapabilities,
@@ -43,7 +36,6 @@ interface SchedulingAllDayItemProps {
   readonly onOpenItem?: SchedulingCanvasProps['onOpenItem'];
   readonly onMoveAllDayItem?: SchedulingCanvasProps['onMoveAllDayItem'];
   readonly onResizeAllDayItem?: SchedulingCanvasProps['onResizeAllDayItem'];
-  readonly onDropObjectOnItem?: SchedulingCanvasProps['onDropObjectOnItem'];
   readonly relationshipMode: SchedulingRelationshipMode;
   readonly onGestureAnnouncementChange: (announcement: string) => void;
 }
@@ -61,13 +53,20 @@ export function SchedulingAllDayItem({
   onOpenItem,
   onMoveAllDayItem,
   onResizeAllDayItem,
-  onDropObjectOnItem,
   relationshipMode,
   onGestureAnnouncementChange,
 }: SchedulingAllDayItemProps): JSX.Element {
-  const [dropActive, setDropActive] = useState(false);
   const readOnlyDescriptionId = useId();
-  const dragObject = item.dragObject;
+  const dragObject = item.object;
+  const relationTarget = useRelationDropTarget({
+    target: item.object ?? {
+      kind: 'calendar_event',
+      id: item.id,
+      organizationId: null,
+      title: item.title,
+    },
+    disabled: item.dropTarget !== true || item.object === undefined,
+  });
   const editable = isScheduleItemEditable(item, lane);
   const openable = item.openable !== false;
   const editCapabilities = scheduleAllDayEditCapabilities(item, lane, displayTimezone);
@@ -96,21 +95,21 @@ export function SchedulingAllDayItem({
   const exposesEndResize = editCapabilities.canResizeEnd && onResizeAllDayItem !== undefined;
   const isRelationshipTarget = relationshipMode.isTarget(item);
   const appearance = item.appearance ?? 'event';
-  const surfaceState = dropActive ? 'drop' : gesture.preview ? 'preview' : 'rest';
+  const surfaceState =
+    relationTarget.canDrop && relationTarget.isOver ? 'drop' : gesture.preview ? 'preview' : 'rest';
   const surfacePalette = scheduleItemSurfacePalette(appearance, item.color, surfaceState);
   const edgePadding = `${exposesStartResize ? 'pl-1' : ''} ${exposesEndResize ? 'pr-1' : ''}`;
-  const acceptsDrop = (event: ReactDragEvent<HTMLElement>): boolean =>
-    item.dropTarget === true && event.dataTransfer.types.includes(SCHEDULE_DRAG_MIME);
-
   return (
     <div
+      ref={relationTarget.dropProps.ref}
       className={
-        dropActive
-          ? `${DRAGGABLE} ring-primary group relative isolate flex max-w-full items-center rounded-sm ring-2 ${edgePadding}`
+        relationTarget.isOver
+          ? `${DRAGGABLE} ${relationTarget.dropProps.className} ring-primary group relative isolate flex max-w-full items-center rounded-sm ring-2 ${edgePadding}`
           : gesture.preview
-            ? `${DRAGGABLE} ring-primary group relative isolate z-40 flex max-w-full items-center rounded-sm ring-2 ${edgePadding}`
-            : `${DRAGGABLE} group relative isolate flex max-w-full items-center rounded-sm ${edgePadding}`
+            ? `${DRAGGABLE} ${relationTarget.dropProps.className} ring-primary group relative isolate z-40 flex max-w-full items-center rounded-sm ring-2 ${edgePadding}`
+            : `${DRAGGABLE} ${relationTarget.dropProps.className} group relative isolate flex max-w-full items-center rounded-sm ${edgePadding}`
       }
+      data-drop-state={relationTarget.dropState}
       data-schedule-all-day-item={item.id}
       data-schedule-item-appearance={appearance}
       data-schedule-all-day-preview={gesture.preview ? gesture.previewMode : undefined}
@@ -123,23 +122,6 @@ export function SchedulingAllDayItem({
           '--color-ring': surfacePalette.focusIndicator,
         } as CSSProperties
       }
-      onDragOver={(event) => {
-        if (!acceptsDrop(event)) return;
-        event.preventDefault();
-        event.dataTransfer.dropEffect = 'link';
-        setDropActive(true);
-      }}
-      onDragLeave={() => {
-        setDropActive(false);
-      }}
-      onDrop={(event) => {
-        setDropActive(false);
-        if (!acceptsDrop(event) || !onDropObjectOnItem) return;
-        event.preventDefault();
-        const object = readScheduleDragObject(event.dataTransfer);
-        if (!object || (object.kind === 'calendar_item' && object.itemId === item.id)) return;
-        onDropObjectOnItem({ object, targetItem: item, targetLane: lane });
-      }}
     >
       <span
         aria-hidden="true"
@@ -225,6 +207,11 @@ export function SchedulingAllDayItem({
         mode={relationshipMode}
         className="ring-primary/70 focus-visible:ring-ring bg-primary/5 absolute inset-0 z-50 cursor-pointer rounded ring-2 outline-none ring-inset focus-visible:ring-4"
       />
+      {relationTarget.isOver && relationTarget.effectLabel ? (
+        <span className="bg-primary text-on-primary pointer-events-none absolute inset-x-1 top-1/2 z-[60] -translate-y-1/2 rounded px-2 py-1 text-center text-xs font-medium">
+          {relationTarget.effectLabel}
+        </span>
+      ) : null}
     </div>
   );
 }

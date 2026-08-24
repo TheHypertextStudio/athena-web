@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { dragSourceProps } from '../../src/lib/draggable';
 import { getOrgAccent, ORG_ACCENT_PALETTE } from '../../src/lib/org-accent';
 import { STRETCHED_LINK } from '../../src/lib/stretched-link';
 import { cn } from '../../src/lib/utils';
@@ -54,14 +53,6 @@ describe('STRETCHED_LINK', () => {
   it('stretches an absolutely-positioned, empty-content overlay', () => {
     expect(STRETCHED_LINK).toContain('after:absolute');
     expect(STRETCHED_LINK).toContain('after:inset-0');
-  });
-});
-
-describe('dragSourceProps onDragEnd', () => {
-  it('includes onDragEnd when the source supplies cleanup', () => {
-    const onDragEnd = vi.fn();
-    const props = dragSourceProps({ onDragStart: vi.fn(), onDragEnd });
-    expect(props?.onDragEnd).toBe(onDragEnd);
   });
 });
 

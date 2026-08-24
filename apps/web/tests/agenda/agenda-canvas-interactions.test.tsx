@@ -529,9 +529,10 @@ describe('Agenda scheduling interactions', () => {
       editable: false,
       dropTarget: true,
       readOnlyLabel: undefined,
-      dragObject: {
-        kind: 'calendar_item',
-        itemId: item.id,
+      object: {
+        kind: 'calendar_event',
+        id: item.id,
+        organizationId: null,
         title: item.title,
       },
     });
@@ -540,24 +541,6 @@ describe('Agenda scheduling interactions', () => {
     expect(screen.queryByRole('button', { name: `Move ${item.title}` })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: `Resize ${item.title}` })).not.toBeInTheDocument();
 
-    act(() => {
-      props.onDropObjectOnItem?.({
-        object: {
-          kind: 'task',
-          taskId: TASK_ID,
-          organizationId: ORG_ID,
-          title: 'Draft launch memo',
-        },
-        targetItem: scheduleItem,
-        targetLane: lane,
-      });
-    });
-    expect(mutationState.link.mutate).toHaveBeenCalledWith({
-      itemId: item.id,
-      taskId: TASK_ID,
-      organizationId: ORG_ID,
-      role: 'related',
-    });
     fireEvent.click(screen.getByRole('button', { name: `Open ${item.title}` }));
     expect(screen.getByLabelText('Calendar item drawer')).toHaveTextContent(item.id);
   });
@@ -704,8 +687,6 @@ describe('Agenda scheduling interactions', () => {
 
     expect(agendaState.clearTimeboxFailure).toHaveBeenCalledOnce();
     expect(mutationState.update.reset).toHaveBeenCalledOnce();
-    expect(mutationState.link.reset).toHaveBeenCalledOnce();
-    expect(mutationState.relate.reset).toHaveBeenCalledOnce();
     expect(agendaState.setTimebox).toHaveBeenCalledWith(
       entry,
       '2026-07-13T17:00:00Z',
@@ -713,42 +694,7 @@ describe('Agenda scheduling interactions', () => {
     );
   });
 
-  it('rejects derived relationship targets and calendar-item self drops', () => {
-    const derived = calendarItem('01BX5ZZKBKACTAV9WEVGEMMVE1', 'Availability', {
-      kind: 'availability_block',
-      provider: null,
-    });
-    renderTimeline([calendarEntry(derived)]);
-    let props = canvasProps();
-    act(() => {
-      props.onDropObjectOnItem?.({
-        object: {
-          kind: 'task',
-          taskId: TASK_ID,
-          organizationId: ORG_ID,
-          title: 'Draft launch memo',
-        },
-        targetItem: assertDefined(assertDefined(props.lanes[0]).items[0]),
-        targetLane: assertDefined(props.lanes[0]),
-      });
-    });
-    expect(mutationState.link.mutate).not.toHaveBeenCalled();
-
-    cleanup();
-    const target = calendarItem('01BX5ZZKBKACTAV9WEVGEMMVE2', 'Provider event');
-    renderTimeline([calendarEntry(target)]);
-    props = canvasProps();
-    act(() => {
-      props.onDropObjectOnItem?.({
-        object: { kind: 'calendar_item', itemId: target.id, title: target.title },
-        targetItem: assertDefined(assertDefined(props.lanes[0]).items[0]),
-        targetLane: assertDefined(props.lanes[0]),
-      });
-    });
-    expect(mutationState.relate.mutate).not.toHaveBeenCalled();
-  });
-
-  it.each(['timebox', 'calendar', 'link', 'relate'] as const)(
+  it.each(['timebox', 'calendar'] as const)(
     'keeps the axis, lane, and item mounted under fixed safe %s failure copy',
     (failure) => {
       const hostile = new Error('Provider leaked hostile payload calendar-secret-7');
@@ -756,14 +702,6 @@ describe('Agenda scheduling interactions', () => {
       if (failure === 'calendar') {
         mutationState.update.isError = true;
         mutationState.update.error = hostile;
-      }
-      if (failure === 'link') {
-        mutationState.link.isError = true;
-        mutationState.link.error = hostile;
-      }
-      if (failure === 'relate') {
-        mutationState.relate.isError = true;
-        mutationState.relate.error = hostile;
       }
 
       renderTimeline([planTimebox()]);

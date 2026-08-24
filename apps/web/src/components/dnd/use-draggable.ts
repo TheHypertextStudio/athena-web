@@ -13,14 +13,14 @@
  * `objectTargetProps`, are needed whether or not a thing is draggable (the right-click menu wants
  * them on a detail-page header too), and belong to the object descriptor rather than to drag.
  */
-import { useCallback, useMemo } from 'react';
-import type { DragEvent as ReactDragEvent } from 'react';
+import { useDraggable as useDndKitDraggable } from '@dnd-kit/react';
+import { useEffect, useId, useMemo, useRef } from 'react';
 
 import { CURSOR_DRAGGABLE } from '@/lib/actions/cursor';
 import { describeObject, type ObjectRef } from '@/lib/actions/object';
 
-import { useDragController } from './drag-context';
-import { writeObjectPayload, writeObjectSetPayload } from './drag-payload';
+import type { ObjectDragData } from './object-drag-data';
+import { OBJECT_POINTER_SENSOR } from './object-pointer-sensor';
 
 /** Options for {@link useDraggable}. */
 export interface UseDraggableOptions {
@@ -52,14 +52,12 @@ export interface UseDraggableOptions {
 
 /** The props {@link useDraggable} contributes to an element. */
 export interface DraggableBinding {
-  /** Whether the element is draggable at all. */
-  readonly draggable: boolean;
+  /** Register the source element with the shared drag manager. */
+  readonly ref: (element: Element | null) => void;
   /** Cursor + selection-suppression classes; merge with the element's own via `cn`. */
   readonly className: string;
-  /** Writes the payload and opens the gesture. */
-  readonly onDragStart: (event: ReactDragEvent) => void;
-  /** Closes the gesture. */
-  readonly onDragEnd: (event: ReactDragEvent) => void;
+  /** Stable state hook for source styling and tests. */
+  readonly 'data-drag-state': 'idle' | 'dragging';
 }
 
 /**
@@ -87,33 +85,41 @@ export interface DraggableBinding {
  */
 export function useDraggable(options: UseDraggableOptions): DraggableBinding {
   const { object, objects, disabled = false, surfaceId, onDragStart, onDragEnd } = options;
-  const controller = useDragController();
-
+  const instanceId = useId();
   const canDrag = object !== null && !disabled && describeObject(object.kind).draggable;
-
-  const handleDragStart = useCallback(
-    (event: ReactDragEvent) => {
-      if (object === null || !canDrag) return;
-      if (objects && objects.length > 0) writeObjectSetPayload(event.dataTransfer, objects, object);
-      else writeObjectPayload(event.dataTransfer, object);
-      controller.begin(object, surfaceId ?? null, objects);
-      onDragStart?.();
-    },
-    [object, objects, canDrag, controller, surfaceId, onDragStart],
+  const data = useMemo<ObjectDragData | undefined>(
+    () =>
+      object === null
+        ? undefined
+        : {
+            kind: 'docket-object',
+            object,
+            objects: objects && objects.length > 0 ? objects : [object],
+            sourceSurfaceId: surfaceId ?? null,
+          },
+    [object, objects, surfaceId],
   );
+  const drag = useDndKitDraggable<ObjectDragData>({
+    id: `docket-object:${surfaceId ?? 'surface'}:${object?.kind ?? 'none'}:${object?.id ?? 'none'}:${instanceId}`,
+    type: 'docket-object',
+    ...(data ? { data } : {}),
+    disabled: !canDrag,
+    sensors: [OBJECT_POINTER_SENSOR],
+  });
+  const wasDragging = useRef(false);
 
-  const handleDragEnd = useCallback(() => {
-    controller.end();
-    onDragEnd?.();
-  }, [controller, onDragEnd]);
+  useEffect(() => {
+    if (drag.isDragging && !wasDragging.current) onDragStart?.();
+    if (!drag.isDragging && wasDragging.current) onDragEnd?.();
+    wasDragging.current = drag.isDragging;
+  }, [drag.isDragging, onDragStart, onDragEnd]);
 
   return useMemo<DraggableBinding>(
     () => ({
-      draggable: canDrag,
+      ref: drag.ref,
       className: canDrag ? CURSOR_DRAGGABLE : '',
-      onDragStart: handleDragStart,
-      onDragEnd: handleDragEnd,
+      'data-drag-state': drag.isDragging ? 'dragging' : 'idle',
     }),
-    [canDrag, handleDragStart, handleDragEnd],
+    [canDrag, drag.ref, drag.isDragging],
   );
 }

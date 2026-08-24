@@ -13,7 +13,6 @@ import { InPageFindButton } from '@/components/in-page-search/in-page-find-butto
 import { useInPageSearchTarget } from '@/components/in-page-search/in-page-search-provider';
 import { useResidentInPageSearch } from '@/components/in-page-search/use-resident-in-page-search';
 import { useSession } from '@/lib/auth-client';
-import { entityDragSource } from '@/lib/entity-drag';
 import { useCreateObject } from '@/components/create-object/create-object-provider';
 import { AgentTaskRow } from '@/components/my-work/agent-task-row';
 import { pillLabelOf } from '@/components/my-work/live-session-pill';
@@ -224,12 +223,6 @@ export default function MyWorkClient(): JSX.Element {
               renderRow={(task, ctx) => (
                 <AgentTaskRow
                   task={toRow(task, tab)}
-                  drag={entityDragSource({
-                    kind: 'task',
-                    id: task.id,
-                    organizationId: task.organizationId,
-                    title: task.title,
-                  })}
                   active={ctx.active}
                   onActivate={ctx.onActivate}
                   rowProps={ctx.rowProps}

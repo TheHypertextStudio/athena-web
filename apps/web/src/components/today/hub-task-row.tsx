@@ -16,13 +16,12 @@
  */
 import type { HubTaskItem } from '@docket/types';
 import { StatusIcon } from '@docket/ui/components';
-import { dragSourceProps } from '@docket/ui/lib/draggable';
 import Link from 'next/link';
 import type { JSX } from 'react';
 
 import { formatDay } from '@/components/date-picker';
 import { OrgChip } from '@/components/org-chip';
-import { entityDragSource } from '@/lib/entity-drag';
+import { ObjectSurface } from '@/components/objects/object-surface';
 import { todayISODate } from '@/lib/today';
 
 /** Props for {@link HubTaskRow}. */
@@ -40,38 +39,37 @@ export default function HubTaskRow({ task, orgLabel, lead }: HubTaskRowProps): J
   const overdue = task.dueDate != null && task.dueDate < todayISODate();
   const due =
     task.dueDate == null ? null : formatDay(task.dueDate, { month: 'short', day: 'numeric' });
-  // The same canonical task object every other surface publishes, so a row drags onto the calendar
-  // rail exactly as the rail's own rows do.
-  const dragProps = dragSourceProps(
-    entityDragSource({
-      kind: 'task',
-      id: task.id,
-      organizationId: task.organizationId,
-      title: task.title,
-    }),
-  );
+  const object = {
+    kind: 'task' as const,
+    id: task.id,
+    organizationId: task.organizationId,
+    title: task.title,
+  };
 
   return (
-    <Link
-      href={`/orgs/${task.organizationId}/tasks/${task.id}`}
-      {...dragProps}
-      className="hover:bg-surface-container-low focus-visible:ring-ring -mx-2 flex items-center gap-2.5 rounded-lg px-2 py-2 transition-colors focus-visible:ring-2 focus-visible:outline-none"
-    >
-      <StatusIcon type={task.stateType} />
-      {lead ? (
-        <span className="text-on-surface-variant text-body-small w-14 shrink-0 tabular-nums">
-          {lead}
+    <ObjectSurface object={object} surfaceId="today">
+      <Link
+        href={`/orgs/${task.organizationId}/tasks/${task.id}`}
+        className="hover:bg-surface-container-low focus-visible:ring-ring -mx-2 flex items-center gap-2.5 rounded-lg px-2 py-2 transition-colors focus-visible:ring-2 focus-visible:outline-none"
+      >
+        <StatusIcon type={task.stateType} />
+        {lead ? (
+          <span className="text-on-surface-variant text-body-small w-14 shrink-0 tabular-nums">
+            {lead}
+          </span>
+        ) : null}
+        <span className="text-on-surface text-body-medium min-w-0 flex-1 truncate">
+          {task.title}
         </span>
-      ) : null}
-      <span className="text-on-surface text-body-medium min-w-0 flex-1 truncate">{task.title}</span>
-      {due ? (
-        <span
-          className={`text-body-small shrink-0 tabular-nums ${overdue ? 'text-error' : 'text-on-surface-variant'}`}
-        >
-          {due}
-        </span>
-      ) : null}
-      <OrgChip orgId={task.organizationId} name={orgLabel} />
-    </Link>
+        {due ? (
+          <span
+            className={`text-body-small shrink-0 tabular-nums ${overdue ? 'text-error' : 'text-on-surface-variant'}`}
+          >
+            {due}
+          </span>
+        ) : null}
+        <OrgChip orgId={task.organizationId} name={orgLabel} />
+      </Link>
+    </ObjectSurface>
   );
 }

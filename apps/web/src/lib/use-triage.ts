@@ -199,6 +199,7 @@ export function useTriage(orgId: string, categoryOf: CategoryOfState): TriageSta
       const member = task.assigneeId ? memberByActor.get(task.assigneeId) : undefined;
       return {
         id: task.id,
+        organizationId: task.organizationId,
         title: task.title,
         stateType: categoryOf(task.state),
         provenance: task.provenance,

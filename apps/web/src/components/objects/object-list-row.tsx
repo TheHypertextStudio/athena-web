@@ -55,7 +55,7 @@ export function ObjectListRow({
   const DescriptorIcon = describeObject(object.kind).icon;
 
   return (
-    <ObjectSurface object={object} dragDisabled={dragDisabled} surfaceId={surfaceId}>
+    <ObjectSurface object={object} dragDisabled={dragDisabled} surfaceId={surfaceId} href={href}>
       <div
         data-testid="object-list-row"
         className={cn(

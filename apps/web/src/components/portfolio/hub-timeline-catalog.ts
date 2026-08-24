@@ -20,7 +20,6 @@ import {
   resolveSpan,
 } from '@/components/timeline/timeline-catalog';
 import { parseDate } from '@/components/timeline/time-scale';
-import { entityDragSource } from '@/lib/entity-drag';
 import type { AppliedView } from '@/components/views/apply-view';
 
 /**
@@ -117,12 +116,11 @@ export function buildHubTimelineCatalog(): TimelineCatalog<HubTimelineRow> {
     // Dependency edges are an org-scoped concept; the cross-org read does not resolve them.
     edges: () => ({ blockedBy: [], blocks: [] }),
     statusLabel: (row) => statusLabel(row.bar.status),
-    dragSource: (row) =>
-      entityDragSource({
-        kind: 'project',
-        id: row.bar.id,
-        organizationId: row.bar.organizationId,
-        title: row.bar.name,
-      }),
+    object: (row) => ({
+      kind: 'project',
+      id: row.bar.id,
+      organizationId: row.bar.organizationId,
+      title: row.bar.name,
+    }),
   };
 }

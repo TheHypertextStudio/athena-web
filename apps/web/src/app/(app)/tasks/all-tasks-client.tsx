@@ -20,9 +20,7 @@
  */
 import type { TaskOut } from '@docket/types';
 import type { Priority } from '@docket/work/task-contract';
-import { cn } from '@docket/ui';
 import { StatusGlyph } from '@docket/ui/components';
-import { dragSourceProps } from '@docket/ui/lib/draggable';
 import { Button, Row, Skeleton, Stack } from '@docket/ui/primitives';
 import { useQueries } from '@tanstack/react-query';
 import Link from 'next/link';
@@ -32,10 +30,10 @@ import { type JSX, useMemo, useState } from 'react';
 import { useActiveOrg } from '@/components/active-org';
 import { formatDay } from '@/components/date-picker';
 import { EditableTitle } from '@/components/editor/editable-title';
+import { ObjectSurface } from '@/components/objects/object-surface';
 import { OrgChip } from '@/components/org-chip';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
-import { entityDragSource } from '@/lib/entity-drag';
 import { myWorkDefs } from '@/lib/my-work-defs';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, STALE, useApiListQuery } from '@/lib/query';
@@ -221,59 +219,55 @@ function TaskRow({ task, orgLabel }: TaskRowProps): JSX.Element {
   );
   const rename = useRenameTask(task.organizationId, [queryKeys.tasks(task.organizationId)]);
 
-  // The canonical entity payload also mirrors the legacy scheduling object, so dragging a row onto
-  // the calendar still timeboxes it.
-  const dragProps = dragSourceProps(
-    entityDragSource({
-      kind: 'task',
-      id: task.id,
-      organizationId: task.organizationId,
-      title: task.title,
-    }),
-  );
-
   return (
-    <Link
+    <ObjectSurface
+      object={{
+        kind: 'task',
+        id: task.id,
+        organizationId: task.organizationId,
+        title: task.title,
+      }}
+      surfaceId="all-tasks-list"
       href={href}
-      {...dragProps}
-      className={cn(
-        'hover:bg-surface-container-low focus-visible:ring-ring flex min-h-[72px] items-center gap-3 rounded-lg px-3 transition-colors focus-visible:ring-2 focus-visible:outline-none',
-        dragProps?.className,
-      )}
     >
-      <StatusGlyph type={categoryOf(task.state)} />
-      {canEdit ? (
-        <EditableTitle
-          value={task.title}
-          onSave={(title) => {
-            rename(task.id, title);
-          }}
-          canEdit
-          activate="doubleClick"
-          onActivate={() => {
-            router.push(href);
-          }}
-          ariaLabel="Task title"
-          className="text-on-surface min-w-0 flex-1 truncate text-sm font-medium"
-        />
-      ) : (
-        <span className="text-on-surface min-w-0 flex-1 truncate text-sm font-medium">
-          {task.title}
-        </span>
-      )}
-      {task.dueDate ? (
-        <span
-          className={
-            overdue
-              ? 'text-error shrink-0 text-xs tabular-nums'
-              : 'text-on-surface-variant shrink-0 text-xs tabular-nums'
-          }
-        >
-          {formatDue(task.dueDate)}
-        </span>
-      ) : null}
-      <OrgChip orgId={task.organizationId} name={orgLabel} />
-    </Link>
+      <Link
+        href={href}
+        className="hover:bg-surface-container-low focus-visible:ring-ring flex min-h-[72px] items-center gap-3 rounded-lg px-3 transition-colors focus-visible:ring-2 focus-visible:outline-none"
+      >
+        <StatusGlyph type={categoryOf(task.state)} />
+        {canEdit ? (
+          <EditableTitle
+            value={task.title}
+            onSave={(title) => {
+              rename(task.id, title);
+            }}
+            canEdit
+            activate="doubleClick"
+            onActivate={() => {
+              router.push(href);
+            }}
+            ariaLabel="Task title"
+            className="text-on-surface min-w-0 flex-1 truncate text-sm font-medium"
+          />
+        ) : (
+          <span className="text-on-surface min-w-0 flex-1 truncate text-sm font-medium">
+            {task.title}
+          </span>
+        )}
+        {task.dueDate ? (
+          <span
+            className={
+              overdue
+                ? 'text-error shrink-0 text-xs tabular-nums'
+                : 'text-on-surface-variant shrink-0 text-xs tabular-nums'
+            }
+          >
+            {formatDue(task.dueDate)}
+          </span>
+        ) : null}
+        <OrgChip orgId={task.organizationId} name={orgLabel} />
+      </Link>
+    </ObjectSurface>
   );
 }
 

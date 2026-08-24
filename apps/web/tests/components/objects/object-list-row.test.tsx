@@ -1,7 +1,8 @@
 import '@testing-library/jest-dom/vitest';
 
 import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ObjectRef } from '../../../src/lib/actions/object';
 import { ObjectListRow } from '../../../src/components/objects/object-list-row';
@@ -15,10 +16,14 @@ const project: ObjectRef = {
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
 });
 
 describe('ObjectListRow', () => {
-  it('keeps identity, navigation, supporting context, and state in one standard object row', () => {
+  it('keeps identity, navigation, supporting context, and state in one standard object row', async () => {
+    const anchorClick = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => undefined);
     render(
       <ObjectListRow
         object={project}
@@ -31,7 +36,9 @@ describe('ObjectListRow', () => {
 
     const row = screen.getByTestId('object-list-row');
     expect(row).toHaveAttribute('data-object-kind', 'project');
-    expect(row).toHaveAttribute('draggable', 'true');
+    expect(row).not.toHaveAttribute('draggable');
+    expect(row).toHaveAttribute('data-drag-state', 'idle');
+    expect(row).toHaveClass('cursor-grab');
 
     const identity = screen.getByTestId('object-identity-target');
     expect(identity).toHaveClass('size-10');
@@ -44,5 +51,10 @@ describe('ObjectListRow', () => {
     expect(screen.getByText('Project · inherited')).toBeVisible();
     expect(screen.getByText('Active')).toBeVisible();
     expect(screen.queryByText(/\b1\b/)).not.toBeInTheDocument();
+
+    await userEvent.click(identity);
+    expect(anchorClick).toHaveBeenCalledOnce();
+    const syntheticAnchor = anchorClick.mock.instances[0];
+    expect(syntheticAnchor).toHaveAttribute('href', '/orgs/org-1/projects/project-1');
   });
 });

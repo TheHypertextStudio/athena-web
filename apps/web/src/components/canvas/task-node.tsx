@@ -20,7 +20,8 @@ import { memo } from 'react';
 import { formatCalendarDate } from '@/lib/format-date';
 import { isEnded } from '@/lib/work-category';
 
-import { objectTargetProps } from '@/lib/actions';
+import { ObjectSurface } from '@/components/objects/object-surface';
+import { useRelationDropTarget } from '@/components/dnd/use-relation-drop-target';
 
 import { useCanvasActions } from './canvas-actions-context';
 import { taskNodeTransitionName } from './transition-name';
@@ -123,111 +124,126 @@ function TaskNodeComponent({ id, data, selected }: NodeProps): React.JSX.Element
   // Low-detail (zoomed out): show just the glyph + title, dropping the meta row and trailing cluster.
   const lod = useLod();
   const showDetail = !compact && !lod;
+  const object = {
+    kind: 'task' as const,
+    id,
+    organizationId: orgId,
+    title,
+    meta: { state, parentTaskId },
+  };
+  const relation = useRelationDropTarget({ target: object });
   return (
-    <div
-      // Opting the card into the app's one right-click handler: it walks up from the pointer
-      // target looking for exactly these attributes, then asks the registry what applies. A task
-      // therefore gets the same menu here as it will anywhere else it is ever rendered.
-      {...objectTargetProps({
-        kind: 'task',
-        id,
-        organizationId: orgId,
-        title,
-        meta: { state, parentTaskId },
-      })}
-      style={{ viewTransitionName: taskNodeTransitionName(id) }}
-      className={cn(
-        'task-branch-header group bg-surface-container-high border-outline-variant relative flex items-start gap-2.5 rounded-xl border transition-colors',
-        compact ? 'h-14 w-[240px] px-2.5 py-2' : 'h-[84px] w-[300px] px-3 py-2.5',
-        selected && 'ring-primary ring-2',
-        data['hierarchyDropState'] === 'accept' && 'ring-primary bg-primary/8 ring-2 ring-inset',
-        data['hierarchyDropState'] === 'reject' && 'ring-error/60 bg-error/5 ring-2 ring-inset',
-        data['hierarchyDragOrigin'] === true && 'opacity-40',
-      )}
+    <ObjectSurface
+      object={object}
+      surfaceId="task-canvas"
+      associationModifier="alt"
+      onActivate={() => actions?.navigate(id)}
     >
-      {actions !== null ? (
-        <NodeToolbar position={Position.Top} offset={8}>
-          <div className="border-outline-variant bg-surface-container flex items-center gap-1 rounded-lg border p-1 shadow-md">
-            <button
-              type="button"
-              onClick={() => {
-                actions.navigate(id);
-              }}
-              className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface rounded px-2 py-1 text-xs"
-            >
-              Open
-            </button>
-            {actions.canEdit ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => {
-                    actions.setComplete(id, !done);
-                  }}
-                  className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface rounded px-2 py-1 text-xs"
-                >
-                  {done ? 'Reopen' : 'Done'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    actions.createSubtask(id, 'New subtask');
-                  }}
-                  className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface rounded px-2 py-1 text-xs"
-                >
-                  + Subtask
-                </button>
-              </>
-            ) : null}
-          </div>
-        </NodeToolbar>
-      ) : null}
+      <div
+        ref={relation.dropProps.ref}
+        tabIndex={0}
+        data-drop-state={relation.dropProps['data-drop-state']}
+        style={{ viewTransitionName: taskNodeTransitionName(id) }}
+        className={cn(
+          'task-branch-header group bg-surface-container-high border-outline-variant relative flex items-start gap-2.5 rounded-xl border transition-colors',
+          compact ? 'h-14 w-[240px] px-2.5 py-2' : 'h-[84px] w-[300px] px-3 py-2.5',
+          selected && 'ring-primary ring-2',
+          relation.dropProps.className,
+          relation.dropState === 'accept' && 'ring-primary bg-primary/8 ring-2 ring-inset',
+          relation.dropState === 'reject' && 'ring-error/60 bg-error/5 ring-2 ring-inset',
+        )}
+      >
+        {actions !== null ? (
+          <NodeToolbar position={Position.Top} offset={8}>
+            <div className="border-outline-variant bg-surface-container flex items-center gap-1 rounded-lg border p-1 shadow-md">
+              <button
+                type="button"
+                onClick={() => {
+                  actions.navigate(id);
+                }}
+                className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface rounded px-2 py-1 text-xs"
+              >
+                Open
+              </button>
+              {actions.canEdit ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      actions.setComplete(id, !done);
+                    }}
+                    className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface rounded px-2 py-1 text-xs"
+                  >
+                    {done ? 'Reopen' : 'Done'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      actions.createSubtask(id, 'New subtask');
+                    }}
+                    className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface rounded px-2 py-1 text-xs"
+                  >
+                    + Subtask
+                  </button>
+                </>
+              ) : null}
+            </div>
+          </NodeToolbar>
+        ) : null}
 
-      <Handle
-        type="target"
-        position={Position.Left}
-        className="!border-outline-variant !bg-surface !size-2"
-      />
+        <Handle
+          type="target"
+          position={Position.Left}
+          className="!border-outline-variant !bg-surface !size-2"
+        />
 
-      <StatusIcon type={stateType} label={statusName} className="mt-0.5 shrink-0" />
+        <StatusIcon type={stateType} label={statusName} className="mt-0.5 shrink-0" />
 
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="text-on-surface text-body-medium line-clamp-2 leading-snug font-medium break-words">
-          {title}
-        </span>
-        {showDetail ? (
-          <div className="text-on-surface-variant flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
-            {projectName !== null ? <span className="min-w-0 truncate">{projectName}</span> : null}
-            {dueLabel !== null ? (
-              <span className={cn('shrink-0', overdue && 'text-state-canceled font-medium')}>
-                {dueLabel}
-              </span>
-            ) : null}
-            {isBlocked ? (
-              <span className="text-state-started shrink-0 font-medium">Blocked</span>
-            ) : isReady ? (
-              <span className="text-primary shrink-0 font-medium">Ready</span>
-            ) : null}
-          </div>
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className="text-on-surface text-body-medium line-clamp-2 leading-snug font-medium break-words">
+            {title}
+          </span>
+          {showDetail ? (
+            <div className="text-on-surface-variant flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+              {projectName !== null ? (
+                <span className="min-w-0 truncate">{projectName}</span>
+              ) : null}
+              {dueLabel !== null ? (
+                <span className={cn('shrink-0', overdue && 'text-state-canceled font-medium')}>
+                  {dueLabel}
+                </span>
+              ) : null}
+              {isBlocked ? (
+                <span className="text-state-started shrink-0 font-medium">Blocked</span>
+              ) : isReady ? (
+                <span className="text-primary shrink-0 font-medium">Ready</span>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+
+        {!lod && assignee !== null ? (
+          <ActorAvatar
+            kind={assignee.kind}
+            name={assignee.name}
+            avatarUrl={assignee.avatarUrl}
+            size={compact ? 18 : 22}
+            className="mt-0.5 shrink-0"
+          />
+        ) : null}
+
+        <Handle
+          type="source"
+          position={Position.Right}
+          className="!border-outline-variant !bg-surface !size-2"
+        />
+        {relation.effectLabel ? (
+          <span className="bg-surface text-on-surface text-label-small pointer-events-none absolute -top-7 left-1/2 z-50 -translate-x-1/2 rounded px-2 py-1 whitespace-nowrap shadow-md">
+            {relation.effectLabel}
+          </span>
         ) : null}
       </div>
-
-      {!lod && assignee !== null ? (
-        <ActorAvatar
-          kind={assignee.kind}
-          name={assignee.name}
-          avatarUrl={assignee.avatarUrl}
-          size={compact ? 18 : 22}
-          className="mt-0.5 shrink-0"
-        />
-      ) : null}
-
-      <Handle
-        type="source"
-        position={Position.Right}
-        className="!border-outline-variant !bg-surface !size-2"
-      />
-    </div>
+    </ObjectSurface>
   );
 }
 

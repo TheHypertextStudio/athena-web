@@ -23,13 +23,28 @@
 import {
   ArrowRight,
   ArrowUp,
+  CalendarToday,
   CheckCircle2,
   CornerDownLeft,
+  Flag,
+  FolderKanban,
+  GanttChart,
+  Layers,
   Link,
   Plus,
   Tag,
+  User,
+  Users,
   Workflow,
 } from '@docket/ui/icons';
+import {
+  CalendarItemId,
+  LabelId,
+  OrganizationId,
+  TaskId,
+  TaskUpdate,
+  WorkViewOrderRequest,
+} from '@docket/types';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useCallback, useMemo } from 'react';
@@ -38,6 +53,12 @@ import { copyObjectAction } from '@/components/actions/copy-object-action';
 import { useCopyOutcome } from '@/components/clipboard';
 import { usePickerOverlay } from '@/components/pickers/picker-overlay';
 import { useTaskHierarchyMutation } from '@/components/tasks/use-task-hierarchy-mutation';
+import {
+  createTaskAssociationCommandPort,
+  createTaskRelationCommandPort,
+  createTaskTeamRelationCommandPort,
+  type PatchableTaskRelationId,
+} from '@/components/tasks/task-relation-port';
 import { api } from '@/lib/api';
 import {
   type ActionContext,
@@ -51,6 +72,12 @@ import {
 import { useStatusRegistry } from '@/components/statuses/status-registry';
 import { queryKeys, unwrap } from '@/lib/query';
 import type { CategoryOfState } from '@/lib/work-category';
+
+const RELATION_RESPONSIVENESS = {
+  // The drag adapter paints and announces the accepted destination, then announces settlement.
+  // No separate mutation receipt surface exists for these relation commands.
+  ownership: 'autonomous',
+} as const;
 
 /** Every task the context names, or an empty list when it names none. */
 function taskIds(context: ActionContext): readonly string[] {
@@ -120,6 +147,179 @@ export function useRegisterTaskActions(): void {
       void queryClient.invalidateQueries({ queryKey: queryKeys.task(orgId, id) });
       void queryClient.invalidateQueries({ queryKey: ['org', orgId, 'task-graph'] });
       void queryClient.invalidateQueries({ queryKey: ['org', orgId, 'tasks'] });
+    };
+    const relationPort = createTaskRelationCommandPort({
+      patchTask: async (organizationId, taskId, patch) => {
+        await unwrap(
+          () =>
+            api.v1.orgs[':orgId'].tasks[':id'].$patch({
+              param: { orgId: organizationId, id: taskId },
+              json: TaskUpdate.parse(patch),
+            }),
+          'Could not change where this task belongs.',
+        );
+        refresh(organizationId, taskId);
+      },
+    });
+    const teamPort = createTaskTeamRelationCommandPort({
+      moveTaskToTeam: async (organizationId, taskId, teamId) => {
+        await unwrap(
+          () =>
+            api.v1.orgs[':orgId']['work-views'].order.$patch({
+              param: { orgId: organizationId },
+              json: WorkViewOrderRequest.parse({
+                target: 'task',
+                itemId: taskId,
+                context: { kind: 'organization' },
+                groupField: 'team',
+                groupValue: teamId,
+                beforeId: null,
+                afterId: null,
+              }),
+            }),
+          'Could not move this task to the team.',
+        );
+        refresh(organizationId, taskId);
+      },
+    });
+    const associationPort = createTaskAssociationCommandPort({
+      reparent: (organizationId, moves) => {
+        reparentHierarchy({ organizationId, moves, preserveSelectedSubtrees: true });
+      },
+      addDependency: async (organizationId, blockingTaskId, blockedTaskId) => {
+        await unwrap(
+          () =>
+            api.v1.orgs[':orgId'].tasks[':id'].dependencies.$post({
+              param: { orgId: organizationId, id: blockingTaskId },
+              json: { blockedTaskId },
+            }),
+          'Could not create the task dependency.',
+        );
+        refresh(organizationId, blockingTaskId);
+        refresh(organizationId, blockedTaskId);
+        return 'applied';
+      },
+      addLabel: async (organizationId, taskId, labelId) => {
+        const detail = await unwrap(
+          () =>
+            api.v1.orgs[':orgId'].tasks[':id'].$get({
+              param: { orgId: organizationId, id: taskId },
+            }),
+          'Could not load the task labels.',
+        );
+        const labels = detail.labels.map((label) => label.id);
+        const parsedLabelId = LabelId.parse(labelId);
+        if (labels.includes(parsedLabelId)) return 'unchanged';
+        await unwrap(
+          () =>
+            api.v1.orgs[':orgId'].tasks[':id'].$patch({
+              param: { orgId: organizationId, id: taskId },
+              json: TaskUpdate.parse({ labels: [...labels, parsedLabelId] }),
+            }),
+          'Could not add the label.',
+        );
+        refresh(organizationId, taskId);
+        return 'applied';
+      },
+      linkCalendarItem: async (organizationId, taskId, calendarItemId) => {
+        await unwrap(
+          () =>
+            api.v1.me.calendar.items[':id'].tasks.$post({
+              param: { id: CalendarItemId.parse(calendarItemId) },
+              json: {
+                mode: 'link',
+                taskId: TaskId.parse(taskId),
+                organizationId: OrganizationId.parse(organizationId),
+                role: 'related',
+              },
+            }),
+          'Could not link the task to the calendar item.',
+        );
+        void queryClient.invalidateQueries({ queryKey: queryKeys.calendarItem(calendarItemId) });
+        return 'applied';
+      },
+      scheduleCalendarSlot: async (organizationId, taskId, title, startsAt, endsAt) => {
+        const created = await unwrap(
+          () =>
+            api.v1.me.calendar.items.$post({
+              json: { intent: 'timebox', title, startsAt, endsAt },
+            }),
+          'Could not schedule the task.',
+        );
+        await unwrap(
+          () =>
+            api.v1.me.calendar.items[':id'].tasks.$post({
+              param: { id: created.id },
+              json: {
+                mode: 'link',
+                taskId: TaskId.parse(taskId),
+                organizationId: OrganizationId.parse(organizationId),
+                role: 'contained',
+              },
+            }),
+          'The time block was created, but the task could not be linked.',
+        );
+        void queryClient.invalidateQueries({ queryKey: queryKeys.calendarLayers() });
+        return 'applied';
+      },
+    });
+    const taskSubjects = (context: ActionContext, organizationId: string) =>
+      context.objects.flatMap((object) =>
+        object.kind === 'task'
+          ? [
+              {
+                kind: 'task' as const,
+                id: object.id,
+                organizationId,
+                meta: { ...object.meta, title: object.title },
+              },
+            ]
+          : [],
+      );
+    const executeRelation = async (
+      context: ActionContext,
+      relationId: PatchableTaskRelationId,
+      targetKind: 'project' | 'program' | 'cycle' | 'milestone' | 'actor',
+    ): Promise<void> => {
+      const target = context.target;
+      const organizationId = context.organizationId;
+      if (target?.kind !== targetKind || organizationId === null) return;
+      const subjects = taskSubjects(context, organizationId);
+      if (subjects.length === 0) return;
+      await relationPort.execute({
+        relationId,
+        effect: 'move',
+        subjects,
+        target: {
+          kind: targetKind,
+          id: target.id,
+          organizationId,
+          ...(target.meta === undefined ? {} : { meta: target.meta }),
+        },
+      });
+    };
+    const executeTeamRelation = async (context: ActionContext): Promise<void> => {
+      const target = context.target;
+      const organizationId = context.organizationId;
+      if (organizationId === null) return;
+      if (target === undefined) {
+        pickerOverlay.open({
+          kind: 'relation-target',
+          relationId: 'task.team',
+          organizationId,
+          subjects: context.objects,
+        });
+        return;
+      }
+      if (target.kind !== 'team') return;
+      const subjects = taskSubjects(context, organizationId);
+      if (subjects.length === 0) return;
+      await teamPort.execute({
+        relationId: 'task.team',
+        effect: 'move',
+        subjects,
+        target: { kind: 'team', id: target.id, organizationId },
+      });
     };
 
     return defineActionDomain('task', [
@@ -202,26 +402,31 @@ export function useRegisterTaskActions(): void {
       },
       {
         id: 'task.makeSubtaskOf',
+        relationId: 'task.parent',
+        responsiveness: RELATION_RESPONSIVENESS,
         label: 'Make subtask of…',
         icon: CornerDownLeft,
         objectKinds: ['task'],
         multi: true,
         section: 'organize',
         keywords: ['parent', 'nest', 'move under'],
-        run: (context) => {
+        run: async (context) => {
           if (context.organizationId === null) return;
           const subjects = context.objects.filter(
             (object): object is ObjectRef & { readonly kind: 'task' } => object.kind === 'task',
           );
           if (subjects.length === 0) return;
           if (context.target?.kind === 'task') {
-            reparentHierarchy({
-              organizationId: context.organizationId,
-              moves: subjects.map(({ id }) => ({
-                taskId: id,
-                parentTaskId: context.target?.id ?? null,
-              })),
-              preserveSelectedSubtrees: true,
+            await associationPort.execute({
+              relationId: 'task.parent',
+              effect: 'move',
+              subjects: taskSubjects(context, context.organizationId),
+              target: {
+                kind: 'task',
+                id: context.target.id,
+                organizationId: context.organizationId,
+                ...(context.target.meta === undefined ? {} : { meta: context.target.meta }),
+              },
             });
             return;
           }
@@ -262,7 +467,173 @@ export function useRegisterTaskActions(): void {
         },
       },
       {
+        id: 'task.moveToProject',
+        relationId: 'task.project',
+        responsiveness: RELATION_RESPONSIVENESS,
+        label: 'Move to project…',
+        icon: FolderKanban,
+        objectKinds: ['task'],
+        multi: true,
+        section: 'organize',
+        keywords: ['file', 'project'],
+        run: async (context) => {
+          if (context.target?.kind === 'project') {
+            await executeRelation(context, 'task.project', 'project');
+            return;
+          }
+          if (context.organizationId === null) return;
+          pickerOverlay.open({
+            kind: 'relation-target',
+            relationId: 'task.project',
+            organizationId: context.organizationId,
+            subjects: context.objects,
+          });
+        },
+      },
+      {
+        id: 'task.moveToProgram',
+        relationId: 'task.program',
+        responsiveness: RELATION_RESPONSIVENESS,
+        label: 'Move to program…',
+        icon: Layers,
+        objectKinds: ['task'],
+        multi: true,
+        section: 'organize',
+        keywords: ['file', 'program'],
+        run: async (context) => {
+          if (context.target?.kind === 'program') {
+            await executeRelation(context, 'task.program', 'program');
+            return;
+          }
+          if (context.organizationId === null) return;
+          pickerOverlay.open({
+            kind: 'relation-target',
+            relationId: 'task.program',
+            organizationId: context.organizationId,
+            subjects: context.objects,
+          });
+        },
+      },
+      {
+        id: 'task.moveToTeam',
+        relationId: 'task.team',
+        responsiveness: RELATION_RESPONSIVENESS,
+        label: 'Move to team',
+        icon: Users,
+        objectKinds: ['task'],
+        multi: true,
+        section: 'organize',
+        run: executeTeamRelation,
+      },
+      {
+        id: 'task.commitToCycle',
+        relationId: 'task.cycle',
+        responsiveness: RELATION_RESPONSIVENESS,
+        label: 'Commit to cycle',
+        icon: GanttChart,
+        objectKinds: ['task'],
+        multi: true,
+        section: 'organize',
+        run: async (context) => {
+          if (context.target === undefined && context.organizationId !== null) {
+            pickerOverlay.open({
+              kind: 'relation-target',
+              relationId: 'task.cycle',
+              organizationId: context.organizationId,
+              subjects: context.objects,
+            });
+            return;
+          }
+          if (context.target?.kind === 'cycle') {
+            await executeRelation(context, 'task.cycle', 'cycle');
+          }
+        },
+      },
+      {
+        id: 'task.setMilestone',
+        relationId: 'task.milestone',
+        responsiveness: RELATION_RESPONSIVENESS,
+        label: 'Set milestone',
+        icon: Flag,
+        objectKinds: ['task'],
+        multi: true,
+        section: 'organize',
+        run: async (context) => {
+          if (context.target === undefined && context.organizationId !== null) {
+            pickerOverlay.open({
+              kind: 'relation-target',
+              relationId: 'task.milestone',
+              organizationId: context.organizationId,
+              subjects: context.objects,
+            });
+            return;
+          }
+          if (context.target?.kind === 'milestone') {
+            await executeRelation(context, 'task.milestone', 'milestone');
+          }
+        },
+      },
+      {
+        id: 'task.assign',
+        relationId: 'task.assignee',
+        responsiveness: RELATION_RESPONSIVENESS,
+        label: 'Assign',
+        icon: User,
+        objectKinds: ['task'],
+        multi: true,
+        section: 'organize',
+        run: async (context) => {
+          if (context.target === undefined && context.organizationId !== null) {
+            pickerOverlay.open({
+              kind: 'relation-target',
+              relationId: 'task.assignee',
+              organizationId: context.organizationId,
+              subjects: context.objects,
+            });
+            return;
+          }
+          if (context.target?.kind === 'actor') {
+            await executeRelation(context, 'task.assignee', 'actor');
+          }
+        },
+      },
+      {
+        id: 'task.blocks',
+        relationId: 'task.blocks',
+        responsiveness: RELATION_RESPONSIVENESS,
+        label: 'Create dependency',
+        icon: Workflow,
+        objectKinds: ['task'],
+        multi: false,
+        section: 'organize',
+        run: async (context) => {
+          const relationTarget = context.target;
+          if (relationTarget === undefined && context.organizationId !== null) {
+            pickerOverlay.open({
+              kind: 'relation-target',
+              relationId: 'task.blocks',
+              organizationId: context.organizationId,
+              subjects: context.objects,
+            });
+            return;
+          }
+          if (relationTarget?.kind !== 'task' || context.organizationId === null) return;
+          await associationPort.execute({
+            relationId: 'task.blocks',
+            effect: 'link',
+            subjects: taskSubjects(context, context.organizationId),
+            target: {
+              kind: 'task',
+              id: relationTarget.id,
+              organizationId: context.organizationId,
+            },
+          });
+        },
+      },
+      {
         id: 'task.label',
+        relationId: 'task.label',
+        responsiveness: RELATION_RESPONSIVENESS,
         label: 'Labels…',
         icon: Tag,
         objectKinds: ['task'],
@@ -270,12 +641,104 @@ export function useRegisterTaskActions(): void {
         section: 'organize',
         shortcutHint: 'L',
         keywords: ['tag', 'tags'],
-        run: (context) => {
+        run: async (context) => {
           if (context.organizationId === null) return;
+          const relationTarget = context.target;
+          if (relationTarget?.kind === 'label') {
+            await associationPort.execute({
+              relationId: 'task.label',
+              effect: 'link',
+              subjects: taskSubjects(context, context.organizationId),
+              target: {
+                kind: 'label',
+                id: relationTarget.id,
+                organizationId: context.organizationId,
+              },
+            });
+            return;
+          }
           pickerOverlay.open({
             kind: 'labels',
             organizationId: context.organizationId,
             objects: context.objects,
+          });
+        },
+      },
+      {
+        id: 'task.linkCalendarItem',
+        relationId: 'task.calendar-item',
+        responsiveness: RELATION_RESPONSIVENESS,
+        label: 'Link to calendar item',
+        icon: CalendarToday,
+        objectKinds: ['task'],
+        multi: false,
+        section: 'organize',
+        run: async (context) => {
+          if (context.target === undefined) {
+            pickerOverlay.open({
+              kind: 'relation-target',
+              relationId: 'task.calendar-item',
+              organizationId: context.organizationId,
+              subjects: context.objects,
+            });
+            return;
+          }
+          if (
+            (context.target.kind !== 'calendar_event' && context.target.kind !== 'time_block') ||
+            context.organizationId === null
+          )
+            return;
+          await associationPort.execute({
+            relationId: 'task.calendar-item',
+            effect: 'link',
+            subjects: taskSubjects(context, context.organizationId),
+            target: {
+              kind: 'calendar_item',
+              id: context.target.id,
+              organizationId: null,
+            },
+          });
+        },
+      },
+      {
+        id: 'task.scheduleCalendarSlot',
+        relationId: 'task.calendar-slot',
+        responsiveness: RELATION_RESPONSIVENESS,
+        label: 'Schedule on calendar',
+        icon: CalendarToday,
+        objectKinds: ['task'],
+        multi: false,
+        section: 'organize',
+        run: async (context) => {
+          const target = context.target;
+          if (target === undefined) {
+            pickerOverlay.open({
+              kind: 'relation-target',
+              relationId: 'task.calendar-slot',
+              organizationId: context.organizationId,
+              subjects: context.objects,
+            });
+            return;
+          }
+          const startsAt = target.meta?.['startsAt'];
+          const endsAt = target.meta?.['endsAt'];
+          if (
+            target.kind !== 'calendar_slot' ||
+            context.organizationId === null ||
+            typeof startsAt !== 'string' ||
+            typeof endsAt !== 'string'
+          )
+            return;
+          await associationPort.execute({
+            relationId: 'task.calendar-slot',
+            effect: 'copy',
+            subjects: taskSubjects(context, context.organizationId),
+            target: {
+              kind: 'calendar_slot',
+              id: target.id,
+              organizationId: null,
+              meta: { startsAt, endsAt },
+            },
           });
         },
       },

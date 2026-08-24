@@ -1,8 +1,12 @@
 'use client';
 
 import { Button, Card, Checkbox } from '@docket/ui/primitives';
+import { cn } from '@docket/ui/lib/utils';
 import type { ViewTarget } from '@docket/work/view-contract';
-import { type JSX } from 'react';
+import { type JSX, type ReactNode } from 'react';
+
+import { useRelationDropTarget } from '@/components/dnd/use-relation-drop-target';
+import { ObjectSurface } from '@/components/objects/object-surface';
 
 import type { WorkViewDefinitionFor } from './view-state';
 import { workViewDisplayFieldCatalog } from './view-state';
@@ -12,6 +16,43 @@ import {
   workViewRowDisplayValue,
   workViewRowTitle,
 } from './renderer-types';
+import { objectForWorkViewRow } from './work-view-object';
+
+function WorkObjectCard<TTarget extends ViewTarget>({
+  row,
+  onActivate,
+  children,
+}: {
+  readonly row: WorkViewRowFor<TTarget>;
+  readonly onActivate: () => void;
+  readonly children: ReactNode;
+}): JSX.Element {
+  const object = objectForWorkViewRow(row);
+  const drop = useRelationDropTarget({ target: object });
+  return (
+    <ObjectSurface object={object} surfaceId={`work-cards:${row.target}`} onActivate={onActivate}>
+      <Card
+        ref={drop.dropProps.ref}
+        role="listitem"
+        tabIndex={0}
+        data-drop-state={drop.dropState}
+        className={cn(
+          'group/card focus-visible:ring-primary relative min-h-36 cursor-pointer p-4 outline-none focus-visible:ring-2',
+          drop.dropProps.className,
+          drop.dropState === 'accept' && 'ring-primary bg-primary/8 ring-2',
+          drop.dropState === 'reject' && 'ring-error/60 bg-error/5 ring-1',
+        )}
+      >
+        {children}
+        {drop.effectLabel ? (
+          <span className="bg-primary-container text-on-primary-container text-label-small absolute right-3 bottom-3 rounded-md px-2 py-1">
+            {drop.effectLabel}
+          </span>
+        ) : null}
+      </Card>
+    </ObjectSurface>
+  );
+}
 
 /** Props for the renderer-independent card presentation of a work collection. */
 export interface WorkCardsProps<TTarget extends ViewTarget> {
@@ -56,19 +97,11 @@ export function WorkCards<TTarget extends ViewTarget>({
         className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-3 p-1"
       >
         {rows.map((row) => (
-          <Card
+          <WorkObjectCard
             key={row.id}
-            role="listitem"
-            tabIndex={0}
-            className="group/card focus-visible:ring-primary min-h-36 cursor-pointer p-4 outline-none focus-visible:ring-2"
-            onClick={() => {
+            row={row}
+            onActivate={() => {
               onActivate(row);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault();
-                onActivate(row);
-              }
             }}
           >
             <div className="flex items-start gap-3">
@@ -102,7 +135,7 @@ export function WorkCards<TTarget extends ViewTarget>({
                 ) : null}
               </div>
             </div>
-          </Card>
+          </WorkObjectCard>
         ))}
       </div>
       {hasMoreRows && onLoadMoreRows ? (

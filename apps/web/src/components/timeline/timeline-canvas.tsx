@@ -34,7 +34,6 @@
  * a downstream ripple — are offered together in a non-modal bar beneath the canvas.
  */
 import { cn } from '@docket/ui';
-import { dragSourceProps, type DragSource } from '@docket/ui/lib/draggable';
 import { Undo } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
 import {
@@ -50,6 +49,8 @@ import {
 } from 'react';
 
 import { CURSOR_DRAGGABLE } from '@/lib/actions/cursor';
+import { ObjectSurface } from '@/components/objects/object-surface';
+import type { ObjectRef } from '@/lib/actions/object';
 import type { AppliedView } from '@/components/views/apply-view';
 import type { ViewDisplayState } from '@/components/views/field-catalog';
 
@@ -439,7 +440,8 @@ export default function TimelineCanvas<T>({
                   top={track.top}
                   height={track.height}
                   hovered={hoveredId === track.id}
-                  drag={catalog.dragSource(track.row)}
+                  object={catalog.object(track.row)}
+                  href={catalog.href(track.row)}
                   onEnter={() => {
                     setHoveredId(track.id);
                     onPrefetch(track.id);
@@ -730,8 +732,10 @@ interface LabelRowProps {
   height: number;
   /** Whether this row is the hovered one (the plot half highlights in step). */
   hovered: boolean;
-  /** How this row is dragged as an object, or `null` when it is not draggable. */
-  drag: DragSource | null;
+  /** Canonical object identity, or `null` for a non-interactive context row. */
+  object: ObjectRef | null;
+  /** Detail route opened from any non-control part of the label row. */
+  href: string;
   /** The pointer entered the row. */
   onEnter: () => void;
   /** The pointer left the row. */
@@ -756,22 +760,20 @@ function LabelRow({
   top,
   height,
   hovered,
-  drag,
+  object,
+  href,
   onEnter,
   onLeave,
   children,
 }: LabelRowProps): JSX.Element {
-  const dragProps = dragSourceProps(drag ?? undefined);
-  return (
+  const row = (
     <div
       role="row"
       data-timeline-track="row"
-      {...dragProps}
       className={cn(
         'absolute inset-x-0 flex items-center gap-2 transition-colors',
         LABEL_PAD_CLASS,
         hovered && 'bg-surface-container/40',
-        dragProps?.className,
       )}
       style={{ top, height }}
       onMouseEnter={onEnter}
@@ -779,6 +781,12 @@ function LabelRow({
     >
       {children}
     </div>
+  );
+  if (object === null) return row;
+  return (
+    <ObjectSurface object={object} surfaceId="timeline-label" href={href}>
+      {row}
+    </ObjectSurface>
   );
 }
 

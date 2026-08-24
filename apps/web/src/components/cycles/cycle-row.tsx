@@ -13,14 +13,13 @@
  */
 import type { CycleOut, CycleStats } from '@docket/types';
 import { StatusGlyph } from '@docket/ui/components';
-import { dragSourceProps } from '@docket/ui/lib/draggable';
 import { cn } from '@docket/ui/lib/utils';
 import { Skeleton } from '@docket/ui/primitives';
 import Link from 'next/link';
 import type { ComponentPropsWithoutRef, JSX } from 'react';
 
 import { EditableTitle } from '@/components/editor/editable-title';
-import { entityDragSource } from '@/lib/entity-drag';
+import { ObjectSurface } from '@/components/objects/object-surface';
 
 import { formatWindow } from './format-window';
 import { WorkStatusBadge } from '@/components/entity-display/work-status';
@@ -93,100 +92,98 @@ export function CycleRow({
   const taskPct =
     stats && stats.committed > 0 ? Math.round((stats.completed / stats.committed) * 100) : 0;
 
-  const dragProps = dragSourceProps(
-    entityDragSource({
-      kind: 'cycle',
-      id: cycle.id,
-      organizationId: cycle.organizationId,
-      title,
-    }),
-  );
+  const object = {
+    kind: 'cycle' as const,
+    id: cycle.id,
+    organizationId: cycle.organizationId,
+    title,
+  };
 
   const status = CYCLE_STATUS[cycle.status];
 
   return (
-    <Link
-      href={href}
-      role="row"
-      aria-label={`${title}, ${teamName}`}
-      {...dragProps}
-      {...(onPrefetch !== undefined ? { onMouseEnter: onPrefetch, onFocus: onPrefetch } : {})}
-      className={cn(
-        'hover:bg-surface-container-high grid min-h-[72px] cursor-pointer items-center rounded-lg transition-colors',
-        ROW_GRID,
-        dragProps?.className,
-      )}
-    >
-      <div className="flex min-w-0 items-center gap-3 px-2 py-2">
-        <StatusGlyph type={status.category} label={status.name} />
-        <div className="min-w-0">
-          <span className="flex min-w-0 items-center gap-2">
-            {canRename && onRename ? (
-              // Rename writes `name` and only `name`, so an unnamed cycle opens an EMPTY field
-              // with its window as the placeholder — never pre-filled with a derived title the
-              // author did not write.
-              <EditableTitle
-                value={cycle.name ?? ''}
-                onSave={(name) => {
-                  onRename(cycle.id, name);
-                }}
-                canEdit
-                activate="doubleClick"
-                {...(onOpen ? { onActivate: onOpen } : {})}
-                ariaLabel={`${cycleNoun} name`}
-                placeholder={cycle.displayName}
-                className="text-on-surface text-body-medium line-clamp-1 min-w-0 font-medium"
-              />
-            ) : (
-              <span className="text-on-surface text-body-medium line-clamp-1 font-medium">
-                {title}
-              </span>
-            )}
-          </span>
-          <p className="text-on-surface-variant text-body-small mt-0.5 truncate">{subtitle}</p>
+    <ObjectSurface object={object} surfaceId="cycles">
+      <Link
+        href={href}
+        role="row"
+        aria-label={`${title}, ${teamName}`}
+        {...(onPrefetch !== undefined ? { onMouseEnter: onPrefetch, onFocus: onPrefetch } : {})}
+        className={cn(
+          'hover:bg-surface-container-high grid min-h-[72px] cursor-pointer items-center rounded-lg transition-colors',
+          ROW_GRID,
+        )}
+      >
+        <div className="flex min-w-0 items-center gap-3 px-2 py-2">
+          <StatusGlyph type={status.category} label={status.name} />
+          <div className="min-w-0">
+            <span className="flex min-w-0 items-center gap-2">
+              {canRename && onRename ? (
+                // Rename writes `name` and only `name`, so an unnamed cycle opens an EMPTY field
+                // with its window as the placeholder — never pre-filled with a derived title the
+                // author did not write.
+                <EditableTitle
+                  value={cycle.name ?? ''}
+                  onSave={(name) => {
+                    onRename(cycle.id, name);
+                  }}
+                  canEdit
+                  activate="doubleClick"
+                  {...(onOpen ? { onActivate: onOpen } : {})}
+                  ariaLabel={`${cycleNoun} name`}
+                  placeholder={cycle.displayName}
+                  className="text-on-surface text-body-medium line-clamp-1 min-w-0 font-medium"
+                />
+              ) : (
+                <span className="text-on-surface text-body-medium line-clamp-1 font-medium">
+                  {title}
+                </span>
+              )}
+            </span>
+            <p className="text-on-surface-variant text-body-small mt-0.5 truncate">{subtitle}</p>
+          </div>
         </div>
-      </div>
-      <div className="px-3">
-        <WorkStatusBadge name={status.name} category={status.category} />
-      </div>
-      <div className="px-3">
-        {stats ? (
-          <div className="flex items-center gap-2">
-            <div className="bg-surface-container-highest h-1.5 w-14 overflow-hidden rounded-full">
-              <span
-                className="bg-primary block h-full rounded-full"
-                style={{ width: `${taskPct}%` }}
-              />
+        <div className="px-3">
+          <WorkStatusBadge name={status.name} category={status.category} />
+        </div>
+        <div className="px-3">
+          {stats ? (
+            <div className="flex items-center gap-2">
+              <div className="bg-surface-container-highest h-1.5 w-14 overflow-hidden rounded-full">
+                <span
+                  className="bg-primary block h-full rounded-full"
+                  style={{ width: `${taskPct}%` }}
+                />
+              </div>
+              <span className="text-body-medium tabular-nums">
+                <span className="text-on-surface font-medium">{stats.completed}</span>
+                <span className="text-on-surface-variant">/{stats.committed}</span>
+              </span>
             </div>
-            <span className="text-body-medium tabular-nums">
-              <span className="text-on-surface font-medium">{stats.completed}</span>
-              <span className="text-on-surface-variant">/{stats.committed}</span>
-            </span>
-          </div>
-        ) : (
-          // placeholder: this cycle's completion stats — the committed/completed counts behind the
-          // progress bar. They come from a separate per-cycle read, so the row's name, dates and
-          // status render immediately and only the numbers wait.
-          <div className="flex items-center gap-2">
-            <Skeleton className="h-1.5 w-14 rounded-full" />
-            <Skeleton className="h-3 w-10" />
-          </div>
-        )}
-      </div>
-      <div className="text-on-surface-variant text-body-medium px-3 tabular-nums">
-        {stats ? (
-          stats.carryover > 0 && cycle.status !== 'completed' ? (
-            <span className="text-state-started font-medium">{stats.carryover} open</span>
           ) : (
-            <span>
-              {stats.completedCapacity}/{stats.capacity} pts
-            </span>
-          )
-        ) : (
-          <Skeleton className="h-3 w-12" />
-        )}
-      </div>
-    </Link>
+            // placeholder: this cycle's completion stats — the committed/completed counts behind the
+            // progress bar. They come from a separate per-cycle read, so the row's name, dates and
+            // status render immediately and only the numbers wait.
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-1.5 w-14 rounded-full" />
+              <Skeleton className="h-3 w-10" />
+            </div>
+          )}
+        </div>
+        <div className="text-on-surface-variant text-body-medium px-3 tabular-nums">
+          {stats ? (
+            stats.carryover > 0 && cycle.status !== 'completed' ? (
+              <span className="text-state-started font-medium">{stats.carryover} open</span>
+            ) : (
+              <span>
+                {stats.completedCapacity}/{stats.capacity} pts
+              </span>
+            )
+          ) : (
+            <Skeleton className="h-3 w-12" />
+          )}
+        </div>
+      </Link>
+    </ObjectSurface>
   );
 }
 

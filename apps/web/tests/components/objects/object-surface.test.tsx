@@ -2,12 +2,11 @@ import '@testing-library/jest-dom/vitest';
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { MouseEvent as ReactMouseEvent } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ObjectRef } from '../../../src/lib/actions/object';
-import { readObjectPayload } from '../../../src/components/dnd/drag-payload';
 import { ObjectSurface } from '../../../src/components/objects/object-surface';
-import { fakeDataTransfer } from '../../interactivity/harness';
 
 const initiative: ObjectRef = {
   kind: 'initiative',
@@ -19,10 +18,89 @@ const initiative: ObjectRef = {
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
 });
 
 describe('ObjectSurface', () => {
-  it('makes the object body draggable and context-addressable without swallowing nested controls', async () => {
+  it('activates from every non-control part of the surface', async () => {
+    const onActivate = vi.fn();
+    const onChildClick = vi.fn();
+    const onDragStart = vi.fn();
+    render(
+      <ObjectSurface object={initiative} onActivate={onActivate} onDragStart={onDragStart}>
+        <div
+          data-testid="activatable-row"
+          onClick={(event) => {
+            onChildClick(event.defaultPrevented);
+          }}
+        >
+          <span>Summary text</span>
+          <button type="button">Open menu</button>
+          <a
+            href="/other"
+            onClick={(event) => {
+              event.preventDefault();
+            }}
+          >
+            Related link
+          </a>
+          <input aria-label="Rename" />
+        </div>
+      </ObjectSurface>,
+    );
+
+    expect(screen.getByTestId('activatable-row')).toHaveAttribute('data-drag-state', 'idle');
+    await userEvent.click(screen.getByTestId('activatable-row'));
+    await userEvent.click(screen.getByText('Summary text'));
+    expect(onChildClick).toHaveBeenNthCalledWith(1, false);
+    expect(onChildClick).toHaveBeenNthCalledWith(2, false);
+    expect(onDragStart).not.toHaveBeenCalled();
+    expect(onActivate).toHaveBeenCalledTimes(2);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Open menu' }));
+    await userEvent.click(screen.getByRole('link', { name: 'Related link' }));
+    await userEvent.click(screen.getByRole('textbox', { name: 'Rename' }));
+    expect(onActivate).toHaveBeenCalledTimes(2);
+  });
+
+  it('opens from Enter on the surface without stealing a nested control key', async () => {
+    const onActivate = vi.fn();
+    render(
+      <ObjectSurface object={initiative} onActivate={onActivate}>
+        <div data-testid="keyboard-row" tabIndex={0}>
+          <button type="button">Edit</button>
+        </div>
+      </ObjectSurface>,
+    );
+
+    screen.getByTestId('keyboard-row').focus();
+    await userEvent.keyboard('{Enter}');
+    expect(onActivate).toHaveBeenCalledOnce();
+
+    screen.getByRole('button', { name: 'Edit' }).focus();
+    await userEvent.keyboard('{Enter}');
+    expect(onActivate).toHaveBeenCalledOnce();
+  });
+
+  it('lets an enhanced anchor perform its one native activation', async () => {
+    const onActivate = vi.fn();
+    const onAnchorClick = vi.fn((event: ReactMouseEvent<HTMLAnchorElement>) => {
+      event.preventDefault();
+    });
+    render(
+      <ObjectSurface object={initiative} onActivate={onActivate} href="/initiatives/initiative-1">
+        <a href="/initiatives/initiative-1" onClick={onAnchorClick}>
+          Core infrastructure
+        </a>
+      </ObjectSurface>,
+    );
+
+    await userEvent.click(screen.getByRole('link', { name: 'Core infrastructure' }));
+    expect(onAnchorClick).toHaveBeenCalledOnce();
+    expect(onActivate).not.toHaveBeenCalled();
+  });
+
+  it('registers the object body with the shared transport without native draggable state', async () => {
     const onNestedClick = vi.fn();
     render(
       <ObjectSurface object={initiative} surfaceId="initiative-list">
@@ -38,25 +116,13 @@ describe('ObjectSurface', () => {
     expect(row).toHaveAttribute('data-object-kind', 'initiative');
     expect(row).toHaveAttribute('data-object-id', 'initiative-1');
     expect(row).toHaveAttribute('data-object-org', 'org-1');
-    expect(row).toHaveAttribute('draggable', 'true');
+    expect(row).not.toHaveAttribute('draggable');
     expect(row).toHaveClass('cursor-grab');
     expect(row).toHaveClass('rounded-xl');
     expect(row.querySelector('[data-drag-handle]')).toBeNull();
 
-    const dataTransfer = fakeDataTransfer();
-    fireEvent.dragStart(row, { dataTransfer });
-    expect(readObjectPayload(dataTransfer)).toEqual(initiative);
-
     await userEvent.click(screen.getByRole('button', { name: 'Edit title' }));
     expect(onNestedClick).toHaveBeenCalledOnce();
-
-    const nestedTransfer = fakeDataTransfer();
-    fireEvent.pointerDown(screen.getByRole('button', { name: 'Edit title' }));
-    const blockedDrag = new Event('dragstart', { bubbles: true, cancelable: true });
-    Object.defineProperty(blockedDrag, 'dataTransfer', { value: nestedTransfer });
-    fireEvent(row, blockedDrag);
-    expect(blockedDrag.defaultPrevented).toBe(true);
-    expect(readObjectPayload(nestedTransfer)).toBeNull();
   });
 
   it('keeps a non-draggable object context-addressable without a grab cursor', () => {
@@ -68,7 +134,31 @@ describe('ObjectSurface', () => {
 
     const row = screen.getByTestId('read-only-initiative');
     expect(row).toHaveAttribute('data-object-kind', 'initiative');
-    expect(row).toHaveAttribute('draggable', 'false');
+    expect(row).not.toHaveAttribute('draggable');
     expect(row).not.toHaveClass('cursor-grab');
+  });
+
+  it('lets the object sensor see Alt presses while shielding the spatial parent', () => {
+    const parentPointerDown = vi.fn();
+    const objectPointerDown = vi.fn();
+    const { container } = render(
+      <div data-testid="spatial-parent">
+        <ObjectSurface object={initiative} associationModifier="alt">
+          <div data-testid="spatial-object" />
+        </ObjectSurface>
+      </div>,
+    );
+    const parent = screen.getByTestId('spatial-parent');
+    const object = screen.getByTestId('spatial-object');
+    parent.addEventListener('pointerdown', parentPointerDown);
+    object.addEventListener('pointerdown', objectPointerDown);
+
+    fireEvent.pointerDown(object, { pointerType: 'mouse', altKey: true });
+    expect(objectPointerDown).toHaveBeenCalledOnce();
+    expect(parentPointerDown).not.toHaveBeenCalled();
+
+    fireEvent.pointerDown(object, { pointerType: 'mouse', altKey: false });
+    expect(parentPointerDown).toHaveBeenCalledOnce();
+    expect(container).toContainElement(object);
   });
 });

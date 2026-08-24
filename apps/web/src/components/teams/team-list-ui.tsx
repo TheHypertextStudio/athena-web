@@ -19,14 +19,12 @@
 import type { TeamOut } from '@docket/types';
 import { IdentityGlyph } from '@docket/ui/components';
 import { FolderKanban, ListChecks, Workflow } from '@docket/ui/icons';
-import { dragSourceProps } from '@docket/ui/lib/draggable';
 import { cn } from '@docket/ui/lib/utils';
 import { Badge, Skeleton } from '@docket/ui/primitives';
 import Link from 'next/link';
 import type { ComponentPropsWithoutRef, JSX } from 'react';
-import { useRef } from 'react';
 
-import { entityDragSource } from '@/lib/entity-drag';
+import { ObjectSurface } from '@/components/objects/object-surface';
 import { ROSTER_DATA_CELL_CLASS, ROSTER_HEADER_CELL_CLASS } from '@/components/views/roster-grid';
 
 /** The row view-model derived for one Team (scope + workflow roll-up). */
@@ -74,80 +72,69 @@ function TeamGridRow({
     TeamRowsProps,
     'orgId' | 'projectNoun' | 'projectNounPlural' | 'taskNoun' | 'taskNounPlural'
   >): JSX.Element {
-  const dragOccurredRef = useRef(false);
-  const dragProps = dragSourceProps(
-    entityDragSource(
-      { kind: 'team', id: team.id, organizationId: team.organizationId, title: team.name },
-      {
-        onDragStart: () => {
-          dragOccurredRef.current = true;
-        },
-        onDragEnd: () => {
-          window.setTimeout(() => {
-            dragOccurredRef.current = false;
-          }, 0);
-        },
-      },
-    ),
-  );
   const projectWord = projectCount === 1 ? projectNoun : projectNounPlural;
   const taskWord = taskCount === 1 ? taskNoun : taskNounPlural;
+  const href = `/orgs/${orgId}/teams/${team.id}`;
 
   return (
-    <Link
-      role="row"
-      href={`/orgs/${orgId}/teams/${team.id}`}
-      aria-label={`${team.key} ${team.name}`}
-      onClick={(event) => {
-        // A drag that ends over this row still fires a click. Swallowing it keeps a drop from
-        // navigating away from the screen the person was arranging.
-        if (dragOccurredRef.current) event.preventDefault();
+    <ObjectSurface
+      object={{
+        kind: 'team',
+        id: team.id,
+        organizationId: team.organizationId,
+        title: team.name,
       }}
-      {...dragProps}
-      className={cn(
-        'hover:bg-surface-container focus-visible:ring-ring grid min-h-14 items-center',
-        'rounded-lg transition-colors outline-none focus-visible:ring-2 motion-reduce:transition-none',
-        ROW_GRID,
-        dragProps?.className,
-      )}
+      surfaceId="team-list"
+      href={href}
     >
-      <div className={`${ROSTER_DATA_CELL_CLASS} gap-3 py-2`}>
-        <IdentityGlyph>
-          <span className="text-xs font-semibold">{team.key}</span>
-        </IdentityGlyph>
-        <span className="text-on-surface line-clamp-1 text-sm leading-5 font-semibold">
-          {team.name}
-        </span>
-      </div>
-      <div
-        className={`${ROSTER_DATA_CELL_CLASS} text-on-surface-variant gap-1.5 text-sm tabular-nums`}
-      >
-        {workflowStateCount > 0 ? (
-          <>
-            <Workflow aria-hidden="true" className="size-4" />
-            {workflowStateCount}
-            <span className="sr-only">workflow states</span>
-          </>
-        ) : (
-          '—'
+      <Link
+        role="row"
+        href={href}
+        aria-label={`${team.key} ${team.name}`}
+        className={cn(
+          'hover:bg-surface-container focus-visible:ring-ring grid min-h-14 items-center',
+          'rounded-lg transition-colors outline-none focus-visible:ring-2 motion-reduce:transition-none',
+          ROW_GRID,
         )}
-      </div>
-      <div
-        className={`${ROSTER_DATA_CELL_CLASS} text-on-surface-variant gap-1.5 text-sm tabular-nums`}
       >
-        <FolderKanban aria-hidden="true" className="size-4" />
-        {projectCount}
-        <span className="sr-only">{projectWord}</span>
-      </div>
-      <div className={`${ROSTER_DATA_CELL_CLASS} justify-between gap-2`}>
-        <span className="text-on-surface-variant flex items-center gap-1.5 text-sm tabular-nums">
-          <ListChecks aria-hidden="true" className="size-4" />
-          {taskCount}
-          <span className="sr-only">{taskWord}</span>
-        </span>
-        {team.triageEnabled ? <Badge variant="secondary">Triage</Badge> : null}
-      </div>
-    </Link>
+        <div className={`${ROSTER_DATA_CELL_CLASS} gap-3 py-2`}>
+          <IdentityGlyph>
+            <span className="text-xs font-semibold">{team.key}</span>
+          </IdentityGlyph>
+          <span className="text-on-surface line-clamp-1 text-sm leading-5 font-semibold">
+            {team.name}
+          </span>
+        </div>
+        <div
+          className={`${ROSTER_DATA_CELL_CLASS} text-on-surface-variant gap-1.5 text-sm tabular-nums`}
+        >
+          {workflowStateCount > 0 ? (
+            <>
+              <Workflow aria-hidden="true" className="size-4" />
+              {workflowStateCount}
+              <span className="sr-only">workflow states</span>
+            </>
+          ) : (
+            '—'
+          )}
+        </div>
+        <div
+          className={`${ROSTER_DATA_CELL_CLASS} text-on-surface-variant gap-1.5 text-sm tabular-nums`}
+        >
+          <FolderKanban aria-hidden="true" className="size-4" />
+          {projectCount}
+          <span className="sr-only">{projectWord}</span>
+        </div>
+        <div className={`${ROSTER_DATA_CELL_CLASS} justify-between gap-2`}>
+          <span className="text-on-surface-variant flex items-center gap-1.5 text-sm tabular-nums">
+            <ListChecks aria-hidden="true" className="size-4" />
+            {taskCount}
+            <span className="sr-only">{taskWord}</span>
+          </span>
+          {team.triageEnabled ? <Badge variant="secondary">Triage</Badge> : null}
+        </div>
+      </Link>
+    </ObjectSurface>
   );
 }
 

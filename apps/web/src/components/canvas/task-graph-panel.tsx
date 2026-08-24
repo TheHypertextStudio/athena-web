@@ -23,9 +23,9 @@ import { EmptyState } from '@docket/ui/components';
 import { Undo, Workflow, X } from '@docket/ui/icons';
 import { Button, Skeleton, Surface } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
-import { type Edge, type Node, Panel, type ReactFlowInstance } from '@xyflow/react';
+import { type Edge, type Node, Panel } from '@xyflow/react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useMemo, useState, type DragEventHandler } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
 import { useStatusRegistry } from '@/components/statuses/status-registry';
 import { api } from '@/lib/api';
@@ -43,7 +43,6 @@ import {
 } from '@/components/views/field-catalog';
 import { filterRows } from '@/components/views/apply-view';
 import { SelectionProvider, useSelection } from '@/components/selection';
-import { useTaskHierarchyMutation } from '@/components/tasks/use-task-hierarchy-mutation';
 import type { ObjectRef } from '@/lib/actions';
 
 import BulkActionsBar from './bulk-actions-bar';
@@ -64,7 +63,6 @@ import { layoutTaskHierarchy, retainTaskHierarchyAncestors } from './task-hierar
 import { type CanvasDensity } from './use-dagre-layout';
 import { type TaskGraphScope, useTaskGraph } from './use-task-graph';
 import { useTaskGraphMutations } from './use-task-graph-mutations';
-import { useTaskHierarchyDrag } from './use-task-hierarchy-drag';
 
 /** Stable registries (must not be re-created per render — xyflow warns otherwise). */
 const NODE_TYPES = { task: TaskNode, taskBranch: TaskBranchNode, group: GroupNode };
@@ -117,14 +115,8 @@ function pruneEdges(nodes: readonly Node[], edges: readonly Edge[]): Edge[] {
 /** Bind the graph DOM to the shared selection registry and keyboard contract. */
 function TaskGraphSelectionFrame({
   children,
-  onDragOver,
-  onDragLeave,
-  onDrop,
 }: {
   readonly children: React.ReactNode;
-  readonly onDragOver?: DragEventHandler<HTMLDivElement> | undefined;
-  readonly onDragLeave?: DragEventHandler<HTMLDivElement> | undefined;
-  readonly onDrop?: DragEventHandler<HTMLDivElement> | undefined;
 }): React.JSX.Element {
   const { containerProps } = useSelection();
   return (
@@ -133,9 +125,6 @@ function TaskGraphSelectionFrame({
       role="tree"
       aria-label="Task graph"
       tabIndex={0}
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
       className="size-full focus:outline-none"
     >
       {children}
@@ -278,9 +267,6 @@ export default function TaskGraphPanel({
     resolveProjectName,
   });
   const mutations = useTaskGraphMutations(effectiveScope);
-  const hierarchyMutation = useTaskHierarchyMutation();
-  const [flowInstance, setFlowInstance] = useState<ReactFlowInstance | null>(null);
-  const [selectedFlowNodes, setSelectedFlowNodes] = useState<readonly Node[]>([]);
 
   const toOptions = useCallback(
     (items: readonly { id: string; name: string }[] | undefined): readonly FieldOption[] =>
@@ -438,28 +424,9 @@ export default function TaskGraphPanel({
       }),
     [filtered.nodes, orgId],
   );
-  const commitHierarchy = useCallback(
-    (subjectIds: readonly string[], parentTaskId: string) => {
-      hierarchyMutation.reparent({
-        organizationId: orgId,
-        moves: subjectIds.map((taskId) => ({ taskId, parentTaskId })),
-        preserveSelectedSubtrees: true,
-      });
-    },
-    [hierarchyMutation.reparent, orgId],
-  );
-  const hierarchyDrag = useTaskHierarchyDrag({
-    nodes: canvasNodes,
-    selectedIds: selectedFlowNodes.map(({ id }) => id),
-    organizationId: orgId,
-    instance: flowInstance,
-    onCommit: commitHierarchy,
-  });
-  const activeError = hierarchyMutation.error ?? mutations.error;
-  const clearActiveError = hierarchyMutation.error
-    ? hierarchyMutation.clearError
-    : mutations.clearError;
-  const activeUndo = hierarchyMutation.undo ?? mutations.undo;
+  const activeError = mutations.error;
+  const clearActiveError = mutations.clearError;
+  const activeUndo = mutations.undo;
 
   const body = (() => {
     if (isLoading) {
@@ -488,11 +455,7 @@ export default function TaskGraphPanel({
     }
     return (
       <SelectionProvider items={selectionItems} organizationId={orgId}>
-        <TaskGraphSelectionFrame
-          onDragOver={canEdit ? hierarchyDrag.onNativeDragOver : undefined}
-          onDragLeave={canEdit ? hierarchyDrag.onNativeDragLeave : undefined}
-          onDrop={canEdit ? hierarchyDrag.onNativeDrop : undefined}
-        >
+        <TaskGraphSelectionFrame>
           <CanvasActionsProvider value={canvasActions}>
             <Canvas
               nodes={canvasNodes}
@@ -514,15 +477,8 @@ export default function TaskGraphPanel({
               onDeleteEdge={(edge) => {
                 mutations.removeDependency(edge.source, edge.target);
               }}
-              onInit={setFlowInstance}
-              onNodeDragStart={canEdit ? hierarchyDrag.onNodeDragStart : undefined}
-              onNodeDrag={canEdit ? hierarchyDrag.onNodeDrag : undefined}
-              onNodeDragStop={canEdit ? hierarchyDrag.onNodeDragStop : undefined}
             >
-              <CanvasSelectionBridge onChange={setSelectedFlowNodes} />
-              <div className="sr-only" aria-live="polite">
-                {hierarchyDrag.status}
-              </div>
+              <CanvasSelectionBridge />
               <BulkActionsBar />
               {display.ready && readyNodes.length > 0 ? (
                 <Panel position="bottom-left">

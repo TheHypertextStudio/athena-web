@@ -162,6 +162,20 @@ describe('CalendarItemCard', () => {
     expect(onOpen).toHaveBeenCalledWith(ITEM_ID);
   });
 
+  it('opens from card whitespace and keeps the positioning handle from opening details', () => {
+    const onOpen = vi.fn();
+    render(
+      <CalendarItemCard item={makeItem()} onOpen={onOpen} onDragHandlePointerDown={vi.fn()} />,
+    );
+    const root = screen.getByRole('button', { name: /Focus block/ }).parentElement;
+    if (root === null) throw new Error('The calendar card root did not render.');
+    fireEvent.click(root);
+    expect(onOpen).toHaveBeenCalledOnce();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Move' }));
+    expect(onOpen).toHaveBeenCalledOnce();
+  });
+
   it('renders no drag/resize handles and a labeled read-only indicator when canEditCore is false', () => {
     render(
       <CalendarItemCard

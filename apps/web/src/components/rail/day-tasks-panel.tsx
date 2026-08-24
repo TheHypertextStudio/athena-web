@@ -7,17 +7,15 @@
  * One of the shell's supplemental rail panels (paired with the Agenda). On the calendar it is the
  * default panel — a Sunsama-style *day plan* of the tasks relevant to today (the cross-workspace
  * `hub.today` `plan` set), so the rail shows work you can act on instead of duplicating the
- * calendar's own timeline. Each row is a shared `entityDragSource` of `kind: 'task'`, so a task can
- * be dragged straight onto the calendar to timebox it (the drop side is a follow-up).
+ * calendar's own timeline. Each row uses the shared object interaction contract, so it opens from
+ * any non-control area and can be dragged to an eligible task target.
  *
  * Reads through the shared TanStack Query layer (`hub.today`, org-agnostic); rows mirror the proven
  * `/tasks` row (status glyph · title · due · workspace chip) and link into the task. Tonal cards, no
  * borders — the surface step carries the separation.
  */
 import type { HubTaskItem } from '@docket/types';
-import { cn } from '@docket/ui';
 import { StatusIcon } from '@docket/ui/components';
-import { dragSourceProps } from '@docket/ui/lib/draggable';
 import { Skeleton } from '@docket/ui/primitives';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -25,10 +23,10 @@ import type { JSX } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { EditableTitle } from '@/components/editor/editable-title';
+import { ObjectSurface } from '@/components/objects/object-surface';
 import { OrgChip } from '@/components/org-chip';
 import { api } from '@/lib/api';
 import { formatDay } from '@/components/date-picker';
-import { entityDragSource } from '@/lib/entity-drag';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, STALE, useApiListQuery, useApiQuery } from '@/lib/query';
 import { todayISODate } from '@/lib/today';
@@ -79,55 +77,49 @@ function DayTaskRow({
   );
   const rename = useRenameTask(task.organizationId, [queryKeys.today(date)]);
 
-  // The canonical entity payload also mirrors the legacy scheduling object, so dropping a row on
-  // the calendar still timeboxes it.
-  const dragProps = dragSourceProps(
-    entityDragSource({
-      kind: 'task',
-      id: task.id,
-      organizationId: task.organizationId,
-      title: task.title,
-    }),
-  );
+  const object = {
+    kind: 'task' as const,
+    id: task.id,
+    organizationId: task.organizationId,
+    title: task.title,
+  };
 
   return (
-    <Link
-      href={href}
-      {...dragProps}
-      className={cn(
-        'bg-surface-container-low hover:bg-surface-container focus-visible:ring-ring flex items-center gap-2.5 rounded-lg px-3 py-2.5 transition-colors focus-visible:ring-2 focus-visible:outline-none',
-        dragProps?.className,
-      )}
-    >
-      <StatusIcon type={task.stateType} />
-      {canEdit ? (
-        <EditableTitle
-          value={task.title}
-          onSave={(title) => {
-            rename(task.id, title);
-          }}
-          canEdit
-          activate="doubleClick"
-          onActivate={() => {
-            router.push(href);
-          }}
-          ariaLabel="Task title"
-          className="text-on-surface text-body-medium min-w-0 flex-1 truncate"
-        />
-      ) : (
-        <span className="text-on-surface text-body-medium min-w-0 flex-1 truncate">
-          {task.title}
-        </span>
-      )}
-      {task.dueDate ? (
-        <span
-          className={`text-body-small shrink-0 tabular-nums ${overdue ? 'text-error' : 'text-on-surface-variant'}`}
-        >
-          {formatDue(task.dueDate)}
-        </span>
-      ) : null}
-      <OrgChip orgId={task.organizationId} name={orgLabel} />
-    </Link>
+    <ObjectSurface object={object} surfaceId="today-rail" href={href}>
+      <Link
+        href={href}
+        className="bg-surface-container-low hover:bg-surface-container focus-visible:ring-ring flex items-center gap-2.5 rounded-lg px-3 py-2.5 transition-colors focus-visible:ring-2 focus-visible:outline-none"
+      >
+        <StatusIcon type={task.stateType} />
+        {canEdit ? (
+          <EditableTitle
+            value={task.title}
+            onSave={(title) => {
+              rename(task.id, title);
+            }}
+            canEdit
+            activate="doubleClick"
+            onActivate={() => {
+              router.push(href);
+            }}
+            ariaLabel="Task title"
+            className="text-on-surface text-body-medium min-w-0 flex-1 truncate"
+          />
+        ) : (
+          <span className="text-on-surface text-body-medium min-w-0 flex-1 truncate">
+            {task.title}
+          </span>
+        )}
+        {task.dueDate ? (
+          <span
+            className={`text-body-small shrink-0 tabular-nums ${overdue ? 'text-error' : 'text-on-surface-variant'}`}
+          >
+            {formatDue(task.dueDate)}
+          </span>
+        ) : null}
+        <OrgChip orgId={task.organizationId} name={orgLabel} />
+      </Link>
+    </ObjectSurface>
   );
 }
 

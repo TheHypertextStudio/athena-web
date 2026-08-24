@@ -16,7 +16,6 @@
  */
 import * as React from 'react';
 
-import { type DragSource, dragSourceProps } from '../../lib/draggable';
 import { cn } from '../../lib/utils';
 import { focusRingInset } from '../../primitives/focus';
 import { ActorAvatar, type ActorKind } from '../atoms/ActorAvatar';
@@ -35,11 +34,6 @@ export interface ListRowProps extends React.ComponentPropsWithoutRef<'div'> {
   onActivate?: (() => void) | undefined;
   /** Tab index for roving-tabindex keyboard navigation; defaults to `-1`. */
   tabIndex?: number | undefined;
-  /**
-   * Makes the whole row a drag source — draggable from anywhere in its bounds, with text selection
-   * suppressed so the gesture never paints a stray highlight.
-   */
-  drag?: DragSource | undefined;
   /** Extra classes merged onto the row. */
   className?: string | undefined;
 }
@@ -88,19 +82,9 @@ export function ListCell({ children, className }: ListCellProps): React.JSX.Elem
  * keeping the virtualized list's row measurement intact.
  */
 export const ListRow = React.forwardRef<HTMLDivElement, ListRowProps>(function ListRow(
-  {
-    children,
-    active = false,
-    selected = false,
-    onActivate,
-    tabIndex = -1,
-    drag,
-    className,
-    ...rest
-  },
+  { children, active = false, selected = false, onActivate, tabIndex = -1, className, ...rest },
   ref,
 ): React.JSX.Element {
-  const dragProps = dragSourceProps(drag);
   return (
     <div
       ref={ref}
@@ -116,7 +100,6 @@ export const ListRow = React.forwardRef<HTMLDivElement, ListRowProps>(function L
         }
       }}
       {...rest}
-      {...dragProps}
       className={cn(
         'border-outline-variant text-body-medium flex min-h-(--row-h) w-full cursor-pointer items-center gap-2 border-b px-3 py-(--row-py) transition-colors outline-none',
         'hover:bg-surface-container-high focus-visible:bg-surface-container-high',
@@ -124,7 +107,6 @@ export const ListRow = React.forwardRef<HTMLDivElement, ListRowProps>(function L
         // Explicit selection takes the indigo tonal fill; the roving keyboard cursor stays neutral.
         active && !selected && 'bg-surface-container-highest',
         selected && 'bg-secondary-container',
-        dragProps?.className,
         className,
       )}
     >
@@ -161,11 +143,6 @@ export interface TaskRowProps {
   onActivate?: () => void;
   /** Tab index for roving-tabindex keyboard navigation; defaults to `-1`. */
   tabIndex?: number;
-  /**
-   * Makes the whole row a drag source, forwarded to the underlying {@link ListRow} — so a task in a
-   * preset row is draggable from anywhere in its bounds, exactly like a hand-composed row.
-   */
-  drag?: DragSource;
   /** Semantic attributes supplied by {@link ListView} for the rendered grid row. */
   rowProps?: ListViewRowProps | undefined;
 }
@@ -189,7 +166,6 @@ export function TaskRow({
   selected,
   onActivate,
   tabIndex,
-  drag,
   rowProps,
 }: TaskRowProps): React.JSX.Element {
   return (
@@ -199,7 +175,6 @@ export function TaskRow({
       selected={selected}
       onActivate={onActivate}
       tabIndex={tabIndex}
-      drag={drag}
     >
       <ListCell className="shrink-0">
         <StatusIcon type={task.stateType} />

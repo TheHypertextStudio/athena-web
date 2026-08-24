@@ -15,6 +15,7 @@ import {
   OrganizationId,
   ProgramId,
   ProjectId,
+  TeamId,
 } from './primitives';
 import { UpdateOut } from './update';
 import { EntityDisplayOut } from './entity-display';
@@ -124,6 +125,9 @@ export const InitiativeUpdate = z
       .describe(
         'Re-point the owner (must be an Actor in the caller’s org). Omit to leave unchanged; `null` clears it.',
       ),
+    leadTeamId: TeamId.nullable()
+      .optional()
+      .describe('Re-point the lead Team, or null to clear it. Omit to leave unchanged.'),
     status: InitiativeStatus.optional().describe(
       'New lifecycle status. Including this emits a status-change observation.',
     ),
@@ -155,6 +159,20 @@ export const InitiativeUpdate = z
 /** Validated initiative-update body. */
 export type InitiativeUpdate = z.infer<typeof InitiativeUpdate>;
 
+/** Body for incrementally adding one Label to an Initiative. */
+export const InitiativeLabelLink = z
+  .object({ labelId: LabelId })
+  .meta({ id: 'InitiativeLabelLink', description: 'Add one Label to an Initiative.' });
+/** Initiative Label-link request value. */
+export type InitiativeLabelLink = z.infer<typeof InitiativeLabelLink>;
+
+/** Idempotent result of adding one Label to an Initiative. */
+export const InitiativeLabelLinked = z
+  .object({ initiativeId: InitiativeId, labelId: LabelId, linked: z.literal(true) })
+  .meta({ id: 'InitiativeLabelLinked', description: 'An Initiative Label association.' });
+/** Initiative Label-link response value. */
+export type InitiativeLabelLinked = z.infer<typeof InitiativeLabelLinked>;
+
 /** Full initiative representation returned by reads. */
 export const InitiativeOut = z
   .object({
@@ -170,6 +188,9 @@ export const InitiativeOut = z
     ownerId: ActorId.nullable()
       .optional()
       .describe('The owning Actor (accountable person), or `null` when unowned.'),
+    leadTeamId: TeamId.nullable()
+      .optional()
+      .describe('The Team accountable for delivery, or `null` when none is set.'),
     status: InitiativeStatus.describe('The manually owned lifecycle status.'),
     priority: InitiativePriority.describe('The Initiative priority.'),
     updateCadence: InitiativeUpdateCadence.describe('The expected narrative update interval.'),

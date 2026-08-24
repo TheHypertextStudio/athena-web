@@ -260,6 +260,44 @@ describe('EntityTable — rows + chrome', () => {
 });
 
 describe('EntityTable — selection', () => {
+  it('opens once from row whitespace and leaves nested controls in charge', () => {
+    const onRowClick = vi.fn();
+    const anchorClick = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => undefined);
+    const columns: Column<Row>[] = [
+      { key: 'name', header: 'Name', flex: true, render: (row) => row.name },
+      {
+        key: 'control',
+        header: 'Control',
+        render: () => <button type="button">Edit</button>,
+      },
+    ];
+    render(
+      <EntityTable
+        aria-label="Items"
+        columns={columns}
+        rows={[assertDefined(ROWS[0])]}
+        getRowKey={getRowKey}
+        rowHref={(row) => `/items/${row.id}`}
+        rowLinkColumnKey="name"
+        onRowClick={onRowClick}
+      />,
+    );
+
+    const row = screen.getByRole('row', { name: /Billing revamp/ });
+    fireEvent.click(row);
+    expect(onRowClick).toHaveBeenCalledOnce();
+
+    fireEvent.click(within(row).getByRole('button', { name: 'Edit' }));
+    expect(onRowClick).toHaveBeenCalledOnce();
+
+    fireEvent(row, new MouseEvent('auxclick', { bubbles: true, button: 1 }));
+    expect(anchorClick).toHaveBeenCalledOnce();
+    expect(anchorClick.mock.instances[0]).toHaveAttribute('href', '/items/r1');
+    expect(anchorClick.mock.instances[0]).toHaveAttribute('target', '_blank');
+  });
+
   it('binds injected row refs and DOM interaction while keeping navigation on the title column', () => {
     const onRowClick = vi.fn();
     const register = vi.fn();
@@ -306,7 +344,7 @@ describe('EntityTable — selection', () => {
       '/items/r1',
     );
     fireEvent.click(row);
-    expect(onRowClick).toHaveBeenCalled();
+    expect(onRowClick).toHaveBeenCalledOnce();
   });
 
   it('adopts the MD3 selected tone for rows in the selected set and toggles via onSelect', () => {

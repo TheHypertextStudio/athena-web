@@ -40,6 +40,7 @@ import {
 } from '@docket/ui/components';
 import Link from 'next/link';
 import type { JSX, ReactNode } from 'react';
+import { cn } from '@docket/ui/lib/utils';
 
 import { EditableTitle } from '@/components/editor/editable-title';
 import {
@@ -48,8 +49,7 @@ import {
   WorkStatusIcon,
 } from '@/components/entity-display/work-status';
 import { usePickerOverlay } from '@/components/pickers/picker-overlay';
-import { useDragController } from '@/components/dnd/drag-context';
-import { writeObjectSetPayload } from '@/components/dnd/drag-payload';
+import { useDraggable } from '@/components/dnd/use-draggable';
 import {
   SelectAllCheckbox,
   SelectionCheckbox,
@@ -83,11 +83,9 @@ function headerFor<T>(catalog: FieldCatalog<T>, key: string, fallback: string): 
 }
 
 /**
- * Build the canonical `kind: 'task'` object literal a row publishes — both as its drag payload
- * ({@link entityDragSource}) and as the `L` hotkey's {@link ObjectRef} for the label picker. Kept
- * un-annotated (rather than typed as `ObjectRef`) so `organizationId` stays the task's own
- * non-nullable `OrganizationId`, satisfying `EntityDragItem`'s stricter `organizationId: string`
- * as well as the wider `ObjectRef.organizationId: string | null`.
+ * Build the canonical `kind: 'task'` identity used by drag, selection, actions, and label editing.
+ * The object stays intentionally small so each interaction reads the same stable facts instead of
+ * copying a full Task record into UI-specific payloads.
  */
 function taskObject(task: TaskOut) {
   return {
@@ -370,13 +368,28 @@ function TaskRowInteraction({
 }): JSX.Element {
   const object = taskObject(row);
   const binding = useSelectableRow(object);
+  const selection = useSelection();
+  const drag = useDraggable({
+    object,
+    surfaceId: selection.surfaceId,
+    objects: selection.isSelected(objectKey(object)) ? selection.selectedObjects : [object],
+  });
   const drop = useTaskHierarchyDrop(object, tasks);
   return (
     <>
       {children({
         ...binding,
-        rowProps: { ...binding.rowProps, ...objectTargetProps(object), ...drop.rowProps },
-        className: drop.className,
+        rowProps: {
+          ...binding.rowProps,
+          ...objectTargetProps(object),
+          ...drop.rowProps,
+          ref: (element: HTMLElement | null) => {
+            binding.rowProps.ref(element);
+            drag.ref(element);
+            drop.rowProps.ref(element);
+          },
+        },
+        className: cn(drop.className, drag.className),
       })}
       {drop.status ? (
         <span className="sr-only" role="status">
@@ -402,7 +415,6 @@ function SelectableTaskTable({
   const pickerOverlay = usePickerOverlay();
   const selection = useSelection();
   const selectionRef = useSelectionContainerRef();
-  const dragController = useDragController();
   const visibleTasks = groups ? groups.flatMap((group) => group.rows) : (tasks ?? []);
   const selectableColumns: readonly Column<TaskOut>[] = [
     {
@@ -453,21 +465,6 @@ function SelectableTaskTable({
           {children}
         </TaskRowInteraction>
       )}
-      rowDrag={(task) => {
-        const object = taskObject(task);
-        return {
-          onDragStart: (event) => {
-            const objects = selection.isSelected(objectKey(object))
-              ? selection.selectedObjects
-              : [object];
-            writeObjectSetPayload(event.dataTransfer, objects, object);
-            dragController.begin(object, selection.surfaceId, objects);
-          },
-          onDragEnd: () => {
-            dragController.end();
-          },
-        };
-      }}
       renderRowLink={({ children, ...linkProps }) => (
         // Spread rather than cherry-pick: a dropped `draggable`/`onDragStart` would silently turn
         // the row back into an undraggable one with no type error. `withoutUndefinedValues` keeps

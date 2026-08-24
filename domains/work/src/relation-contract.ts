@@ -7,6 +7,7 @@ export type RelationEndpointKind =
   | 'project'
   | 'program'
   | 'initiative'
+  | 'initiative_root'
   | 'team'
   | 'cycle'
   | 'milestone'
@@ -38,6 +39,7 @@ export type RelationId =
   | 'program.owner'
   | 'program.label'
   | 'initiative.parent'
+  | 'initiative.root'
   | 'initiative.lead-team'
   | 'initiative.owner'
   | 'initiative.label'
@@ -77,7 +79,15 @@ export interface RelationDefinition {
   readonly cardinality: RelationCardinality;
   /** Whether an unlabeled drop for this source-target pair chooses this relationship. */
   readonly isDefault: boolean;
+  /** Optional pure validation for domain facts already carried by the endpoints. */
+  readonly guard?: RelationGuard;
 }
+
+/** Pure validation that can reject an otherwise compatible relation without I/O. */
+export type RelationGuard = (
+  subjects: readonly RelationEndpoint[],
+  target: RelationEndpoint,
+) => RelationRejectionReason | null;
 
 /** The complete relationship command passed from an application action to its injected port. */
 export interface RelationIntent {
@@ -98,7 +108,10 @@ export type RelationRejectionReason =
   | 'unsupported_pair'
   | 'cross_organization'
   | 'self_relation'
-  | 'incompatible_parent';
+  | 'incompatible_parent'
+  | 'hierarchy_cycle'
+  | 'archived_target'
+  | 'permission_denied';
 
 /** Result of resolving a default relationship gesture. */
 export type RelationResolution =
@@ -117,6 +130,31 @@ export interface RelationCommandPort<TIntent extends RelationIntent = RelationIn
   execute(intent: TIntent): Promise<RelationCommandResult>;
 }
 
+/** Reject a hierarchy edge that the current surface has already proved would make a cycle. */
+function rejectHierarchyCycle(
+  _subjects: readonly RelationEndpoint[],
+  target: RelationEndpoint,
+): RelationRejectionReason | null {
+  return target.meta?.['wouldCreateCycle'] === true ? 'hierarchy_cycle' : null;
+}
+
+/** Keep a Task milestone inside the Task's current Project when both facts are available. */
+function rejectForeignMilestone(
+  subjects: readonly RelationEndpoint[],
+  target: RelationEndpoint,
+): RelationRejectionReason | null {
+  const targetProjectId = target.meta?.['projectId'];
+  const incompatible = subjects.some((subject) => {
+    const subjectProjectId = subject.meta?.['projectId'];
+    return (
+      typeof subjectProjectId === 'string' &&
+      typeof targetProjectId === 'string' &&
+      subjectProjectId !== targetProjectId
+    );
+  });
+  return incompatible ? 'incompatible_parent' : null;
+}
+
 /** The domain relationship catalog. It contains no presentation or transport details. */
 export const RELATION_DEFINITIONS = [
   {
@@ -126,6 +164,7 @@ export const RELATION_DEFINITIONS = [
     effect: 'move',
     cardinality: 'one',
     isDefault: true,
+    guard: rejectHierarchyCycle,
   },
   {
     id: 'task.blocks',
@@ -174,6 +213,7 @@ export const RELATION_DEFINITIONS = [
     effect: 'move',
     cardinality: 'one',
     isDefault: true,
+    guard: rejectForeignMilestone,
   },
   {
     id: 'task.assignee',
@@ -286,6 +326,15 @@ export const RELATION_DEFINITIONS = [
     effect: 'move',
     cardinality: 'one',
     isDefault: true,
+    guard: rejectHierarchyCycle,
+  },
+  {
+    id: 'initiative.root',
+    sourceKind: 'initiative',
+    targetKind: 'initiative_root',
+    effect: 'move',
+    cardinality: 'one',
+    isDefault: true,
   },
   {
     id: 'initiative.lead-team',
@@ -374,18 +423,11 @@ export function resolveDefaultRelation(input: ResolveDefaultRelationInput): Rela
     return { accepted: false, reason: 'self_relation' };
   }
 
-  if (definition.id === 'task.milestone') {
-    const targetProjectId = target.meta?.['projectId'];
-    const hasIncompatibleProject = subjects.some((subject) => {
-      const subjectProjectId = subject.meta?.['projectId'];
-      return (
-        typeof subjectProjectId === 'string' &&
-        typeof targetProjectId === 'string' &&
-        subjectProjectId !== targetProjectId
-      );
-    });
-    if (hasIncompatibleProject) return { accepted: false, reason: 'incompatible_parent' };
-  }
+  if (target.meta?.['archived'] === true) return { accepted: false, reason: 'archived_target' };
+  if (target.meta?.['canRelate'] === false) return { accepted: false, reason: 'permission_denied' };
+
+  const guardedRejection = 'guard' in definition ? definition.guard(subjects, target) : null;
+  if (guardedRejection !== null) return { accepted: false, reason: guardedRejection };
 
   return {
     accepted: true,

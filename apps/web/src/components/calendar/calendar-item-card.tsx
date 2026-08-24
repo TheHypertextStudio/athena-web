@@ -44,6 +44,8 @@ import { cn } from '@docket/ui/lib/utils';
 import { type JSX, type PointerEvent as ReactPointerEvent } from 'react';
 
 import { TaskTimerButton } from '@/components/time-tracking';
+import { ObjectSurface } from '@/components/objects/object-surface';
+import { useRelationDropTarget } from '@/components/dnd/use-relation-drop-target';
 
 import { containedTaskLink } from './calendar-item-task-link';
 
@@ -153,104 +155,131 @@ export default function CalendarItemCard({
   // itself is the natural place to start tracking it. Every other item has nothing here
   // for the timer to attach to, so the control appears only once a contained task has arrived.
   const timeboxedTask = containedTaskLink(item);
+  const object = {
+    kind:
+      item.kind === 'native_block' || item.kind === 'timebox'
+        ? ('time_block' as const)
+        : ('calendar_event' as const),
+    id: item.id,
+    organizationId: null,
+    title: item.title,
+  };
+  const relationTarget = useRelationDropTarget({ target: object });
 
   return (
-    <div
-      style={{ viewTransitionName: calendarItemTransitionName(item.id) }}
-      className={cn(
-        DRAGGABLE,
-        'border-outline-variant bg-surface-container-low hover:bg-surface-container relative flex h-full w-full items-start gap-2 overflow-hidden rounded-lg border pr-2 pl-3 transition-[opacity,background-color]',
-        block ? 'py-2' : 'py-1.5',
-      )}
+    <ObjectSurface
+      object={object}
+      surfaceId="calendar-item-card"
+      onActivate={() => {
+        onOpen(item.id);
+      }}
     >
-      <span
-        aria-hidden="true"
-        className="absolute inset-y-0 left-0 w-1"
-        style={{ backgroundColor: color ?? 'var(--color-outline-variant)' }}
-      />
-      <button
-        type="button"
-        onClick={() => {
-          onOpen(item.id);
-        }}
+      <div
+        ref={relationTarget.dropProps.ref}
+        data-drop-state={relationTarget.dropState}
+        style={{ viewTransitionName: calendarItemTransitionName(item.id) }}
         className={cn(
-          'focus-visible:ring-ring flex min-w-0 flex-1 rounded-sm text-left focus-visible:ring-2 focus-visible:outline-none',
-          block ? 'flex-col gap-0.5' : 'flex-row items-start gap-2',
+          DRAGGABLE,
+          relationTarget.dropProps.className,
+          relationTarget.isOver && 'ring-primary bg-primary-container/30 ring-2',
+          'border-outline-variant bg-surface-container-low hover:bg-surface-container relative flex h-full w-full items-start gap-2 overflow-hidden rounded-lg border pr-2 pl-3 transition-[opacity,background-color]',
+          block ? 'py-2' : 'py-1.5',
         )}
       >
-        <Icon
+        <span
           aria-hidden="true"
-          className="text-on-surface-variant mt-0.5 shrink-0 [&_svg]:size-4"
-          style={{ color: color ?? undefined }}
+          className="absolute inset-y-0 left-0 w-1"
+          style={{ backgroundColor: color ?? 'var(--color-outline-variant)' }}
         />
-        {block ? (
-          <>
-            <span className="text-on-surface text-title-small truncate">{item.title}</span>
-            <span className="text-on-surface-variant text-body-small truncate tabular-nums">
-              {time}
-            </span>
-            <span className="text-on-surface-variant text-body-small mt-auto truncate">
-              {metaLine}
-            </span>
-          </>
-        ) : (
-          <>
-            <span className="text-on-surface-variant text-body-small w-14 shrink-0 pt-0.5 tabular-nums">
-              {time}
-            </span>
-            <span className="text-on-surface text-title-small flex-1 truncate">{item.title}</span>
-            <span className="text-on-surface-variant text-body-small max-w-28 truncate">
-              {metaLine}
-            </span>
-          </>
-        )}
-      </button>
-
-      <div className="flex shrink-0 items-center gap-1">
-        {timeboxedTask ? (
-          <TaskTimerButton
-            taskId={timeboxedTask.taskId}
-            title={timeboxedTask.title}
-            controlSize="sm"
-            withLabel={false}
-          />
-        ) : null}
-        {readOnlyLabel ? (
-          <span
-            role="img"
-            aria-label={readOnlyLabel}
-            title={readOnlyLabel}
-            className="text-on-surface-variant [&_svg]:size-4"
-          >
-            <Shield />
-          </span>
-        ) : null}
-        {canEdit && onDragHandlePointerDown ? (
-          <button
-            type="button"
-            aria-label="Move"
-            title="Drag to move"
-            onPointerDown={(event) => {
-              onDragHandlePointerDown(item.id, event);
-            }}
-            className="text-on-surface-variant hover:text-on-surface focus-visible:ring-ring cursor-grab touch-none rounded-sm focus-visible:ring-2 focus-visible:outline-none active:cursor-grabbing [&_svg]:size-4"
-          >
-            <MoreHorizontal />
-          </button>
-        ) : null}
-      </div>
-
-      {canEdit && block && onResizeHandlePointerDown ? (
         <button
           type="button"
-          aria-label="Resize"
-          title="Drag to resize"
-          onPointerDown={(event) => {
-            onResizeHandlePointerDown(item.id, event);
+          onClick={() => {
+            onOpen(item.id);
           }}
-          className="hover:bg-primary/40 absolute inset-x-0 bottom-0 h-1.5 cursor-ns-resize touch-none"
-        />
-      ) : null}
-    </div>
+          className={cn(
+            'focus-visible:ring-ring flex min-w-0 flex-1 rounded-sm text-left focus-visible:ring-2 focus-visible:outline-none',
+            block ? 'flex-col gap-0.5' : 'flex-row items-start gap-2',
+          )}
+        >
+          <Icon
+            aria-hidden="true"
+            className="text-on-surface-variant mt-0.5 shrink-0 [&_svg]:size-4"
+            style={{ color: color ?? undefined }}
+          />
+          {block ? (
+            <>
+              <span className="text-on-surface text-title-small truncate">{item.title}</span>
+              <span className="text-on-surface-variant text-body-small truncate tabular-nums">
+                {time}
+              </span>
+              <span className="text-on-surface-variant text-body-small mt-auto truncate">
+                {metaLine}
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="text-on-surface-variant text-body-small w-14 shrink-0 pt-0.5 tabular-nums">
+                {time}
+              </span>
+              <span className="text-on-surface text-title-small flex-1 truncate">{item.title}</span>
+              <span className="text-on-surface-variant text-body-small max-w-28 truncate">
+                {metaLine}
+              </span>
+            </>
+          )}
+        </button>
+
+        <div className="flex shrink-0 items-center gap-1">
+          {timeboxedTask ? (
+            <TaskTimerButton
+              taskId={timeboxedTask.taskId}
+              title={timeboxedTask.title}
+              controlSize="sm"
+              withLabel={false}
+            />
+          ) : null}
+          {readOnlyLabel ? (
+            <span
+              role="img"
+              aria-label={readOnlyLabel}
+              title={readOnlyLabel}
+              className="text-on-surface-variant [&_svg]:size-4"
+            >
+              <Shield />
+            </span>
+          ) : null}
+          {canEdit && onDragHandlePointerDown ? (
+            <button
+              type="button"
+              aria-label="Move"
+              title="Drag to move"
+              onPointerDown={(event) => {
+                onDragHandlePointerDown(item.id, event);
+              }}
+              className="text-on-surface-variant hover:text-on-surface focus-visible:ring-ring cursor-grab touch-none rounded-sm focus-visible:ring-2 focus-visible:outline-none active:cursor-grabbing [&_svg]:size-4"
+            >
+              <MoreHorizontal />
+            </button>
+          ) : null}
+        </div>
+
+        {canEdit && block && onResizeHandlePointerDown ? (
+          <button
+            type="button"
+            aria-label="Resize"
+            title="Drag to resize"
+            onPointerDown={(event) => {
+              onResizeHandlePointerDown(item.id, event);
+            }}
+            className="hover:bg-primary/40 absolute inset-x-0 bottom-0 h-1.5 cursor-ns-resize touch-none"
+          />
+        ) : null}
+        {relationTarget.isOver && relationTarget.effectLabel ? (
+          <span className="bg-primary text-on-primary pointer-events-none absolute inset-x-2 top-1/2 z-40 -translate-y-1/2 rounded px-2 py-1 text-center text-xs font-medium">
+            {relationTarget.effectLabel}
+          </span>
+        ) : null}
+      </div>
+    </ObjectSurface>
   );
 }

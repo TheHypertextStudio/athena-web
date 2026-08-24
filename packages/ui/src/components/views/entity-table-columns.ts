@@ -59,10 +59,6 @@ export interface EntityTableRowLinkProps {
   onFocus?: (() => void) | undefined;
   tabIndex: number;
   'aria-current': 'true' | undefined;
-  /** Present when the row is a drag source; spread onto the rendered link element. */
-  draggable?: boolean | undefined;
-  onDragStart?: ((event: React.DragEvent) => void) | undefined;
-  onDragEnd?: ((event: React.DragEvent) => void) | undefined;
   children: React.ReactNode;
 }
 

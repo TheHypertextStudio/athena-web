@@ -101,6 +101,7 @@ describe('task hierarchy action registration', () => {
 
     expect(registry.get('task.addSubtask')?.label).toBe('Create subtask');
     expect(registry.get('task.makeSubtaskOf')?.multi).toBe(true);
+    expect(registry.getByRelation('task.parent')?.id).toBe('task.makeSubtaskOf');
     expect(registry.get('task.moveToTopLevel')?.multi).toBe(true);
   });
 
@@ -177,8 +178,37 @@ describe('task hierarchy action registration', () => {
   });
 });
 
+describe('task placement relation actions', () => {
+  it('opens a keyboard-accessible relation target picker when no drop target is injected', async () => {
+    open.mockClear();
+    const registry = createActionRegistry();
+    const { client } = makeQueryWrapper();
+    render(
+      <QueryClientProvider client={client}>
+        <InteractionProvider registry={registry}>
+          <TaskActionRegistration />
+        </InteractionProvider>
+      </QueryClientProvider>,
+    );
+    const subjects = [{ kind: 'task' as const, id: 't1', organizationId: 'org_1', title: 'One' }];
+
+    await registry.invoke('task.moveToProject', () => ({
+      objects: subjects,
+      source: 'context-menu',
+      organizationId: 'org_1',
+    }));
+
+    expect(open).toHaveBeenCalledWith({
+      kind: 'relation-target',
+      relationId: 'task.project',
+      organizationId: 'org_1',
+      subjects,
+    });
+  });
+});
+
 describe('task action responsiveness metadata', () => {
-  it('declares root receipts only for promise-returning task actions', () => {
+  it('keeps painted mutation owners separate from adapter-owned relation feedback', () => {
     const registry = createActionRegistry();
     const { client } = makeQueryWrapper();
     render(
@@ -198,8 +228,10 @@ describe('task action responsiveness metadata', () => {
     expect(registry.get('task.addSubtask')?.responsiveness).toMatchObject({ ownership: 'root' });
     expect(registry.get('task.copyLink')?.responsiveness).toMatchObject({ ownership: 'root' });
     expect(registry.get('task.open')?.responsiveness).toBeUndefined();
-    expect(registry.get('task.label')?.responsiveness).toBeUndefined();
-    expect(registry.get('task.makeSubtaskOf')?.responsiveness).toBeUndefined();
+    expect(registry.get('task.label')?.responsiveness).toMatchObject({ ownership: 'autonomous' });
+    expect(registry.get('task.makeSubtaskOf')?.responsiveness).toMatchObject({
+      ownership: 'autonomous',
+    });
     expect(registry.get('task.moveToTopLevel')?.responsiveness).toBeUndefined();
     expect(registry.get('task.showInGraph')?.responsiveness).toBeUndefined();
   });

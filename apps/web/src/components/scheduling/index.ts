@@ -6,11 +6,6 @@ export {
   type ScheduleContextSegment,
 } from './scheduling-context-intersections';
 export {
-  readScheduleDragObject,
-  SCHEDULE_DRAG_MIME,
-  writeScheduleDragObject,
-} from './scheduling-drag-object';
-export {
   dateKeyForInstant,
   findDateLane,
   isInlineEditableScheduleItem,
@@ -79,7 +74,6 @@ export type {
   ScheduleAllDayItemMove,
   ScheduleAllDayItemResize,
   ScheduleAllDayLaneRenderContext,
-  ScheduleDragObject,
   ScheduleInstantRange,
   ScheduleItem,
   ScheduleItemAppearance,

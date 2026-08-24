@@ -31,7 +31,6 @@ import {
 } from '@docket/ui/components';
 import { cn } from '@docket/ui';
 import { FolderKanban, Target, XCircle } from '@docket/ui/icons';
-import type { DragSource } from '@docket/ui/lib/draggable';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -51,6 +50,7 @@ import {
 import type { JSX } from 'react';
 
 import { EditableTitle } from '@/components/editor/editable-title';
+import { ObjectSurface } from '@/components/objects/object-surface';
 import { TaskTimerButton } from '@/components/time-tracking';
 
 import { SourceTag } from './source-tag';
@@ -60,6 +60,8 @@ import { TriageActions, type TriageDestination } from './triage-actions';
 export interface TriageRowData {
   /** Stable task id. */
   id: string;
+  /** Workspace that owns the task. */
+  organizationId: string;
   /** Task title. */
   title: string;
   /** The canonical workflow-state type driving the leading {@link StatusIcon}. */
@@ -102,13 +104,6 @@ export interface TriageRowProps {
   onAssignProgram: (programId: string) => void;
   /** Dismiss (archive) this task out of the queue. */
   onDismiss: () => void;
-  /**
-   * Makes the whole row a drag source, forwarded to the underlying {@link ListRow} — so an unsorted
-   * item can be dragged onto a destination instead of walked through the menu. Callers build this
-   * from the task's canonical entity object (`entityDragSource({ kind: 'task', … })`) since the
-   * row's view-model does not carry the workspace the drop target needs.
-   */
-  drag?: DragSource;
   /** Semantic attributes supplied by the virtualized list for this grid row. */
   rowProps?: ListViewRowProps | undefined;
 }
@@ -148,7 +143,6 @@ export function TriageRow({
   onAssignProject,
   onAssignProgram,
   onDismiss,
-  drag,
   rowProps,
 }: TriageRowProps): JSX.Element {
   return (
@@ -160,99 +154,110 @@ export function TriageRow({
         row measurement.
       */}
       <ContextMenuTrigger asChild>
-        <ListRow {...rowProps} active={active} onActivate={onActivate} drag={drag}>
-          <ListCell className="shrink-0">
-            <StatusIcon type={task.stateType} />
-          </ListCell>
-
-          <ListCell className="min-w-0 flex-1">
-            {canEdit && onRename ? (
-              <EditableTitle
-                value={task.title}
-                onSave={(title) => {
-                  onRename(task.id, title);
-                }}
-                canEdit
-                activate="doubleClick"
-                {...(onActivate ? { onActivate } : {})}
-                ariaLabel="Task title"
-                className="text-on-surface truncate"
-              />
-            ) : (
-              <span className="text-on-surface truncate">{task.title}</span>
-            )}
-          </ListCell>
-
-          <ListCell className="shrink-0">
-            <SourceTag provenance={task.provenance} providerName={providerName} />
-          </ListCell>
-
-          {task.assigneeName ? (
+        <ObjectSurface
+          object={{
+            kind: 'task',
+            id: task.id,
+            organizationId: task.organizationId,
+            title: task.title,
+          }}
+          surfaceId="triage-list"
+          onActivate={() => onActivate?.()}
+        >
+          <ListRow {...rowProps} active={active}>
             <ListCell className="shrink-0">
-              {/*
+              <StatusIcon type={task.stateType} />
+            </ListCell>
+
+            <ListCell className="min-w-0 flex-1">
+              {canEdit && onRename ? (
+                <EditableTitle
+                  value={task.title}
+                  onSave={(title) => {
+                    onRename(task.id, title);
+                  }}
+                  canEdit
+                  activate="doubleClick"
+                  {...(onActivate ? { onActivate } : {})}
+                  ariaLabel="Task title"
+                  className="text-on-surface truncate"
+                />
+              ) : (
+                <span className="text-on-surface truncate">{task.title}</span>
+              )}
+            </ListCell>
+
+            <ListCell className="shrink-0">
+              <SourceTag provenance={task.provenance} providerName={providerName} />
+            </ListCell>
+
+            {task.assigneeName ? (
+              <ListCell className="shrink-0">
+                {/*
             The assignee avatar reveals a HoverCard preview on hover/focus so a triager can place
             who owns the item without opening the task — the richer sibling of a Tooltip.
           */}
-              <HoverCard>
-                <HoverCardTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label={`Assignee: ${task.assigneeName}`}
-                    className={cn('rounded-full', focusRing)}
-                    onClick={(event) => {
-                      // The avatar is a preview affordance, not row activation.
-                      event.stopPropagation();
-                    }}
-                  >
-                    <ActorAvatar
-                      kind="human"
-                      name={task.assigneeName}
-                      avatarUrl={task.assigneeAvatarUrl}
-                    />
-                  </button>
-                </HoverCardTrigger>
-                <HoverCardContent align="end" className="w-56">
-                  <div className="flex items-center gap-3">
-                    <ActorAvatar
-                      kind="human"
-                      name={task.assigneeName}
-                      avatarUrl={task.assigneeAvatarUrl}
-                      size={36}
-                    />
-                    <div className="flex min-w-0 flex-col">
-                      <span className="text-on-surface text-body-medium truncate font-medium">
-                        {task.assigneeName}
-                      </span>
-                      <span className="text-on-surface-variant text-xs">Assignee</span>
+                <HoverCard>
+                  <HoverCardTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label={`Assignee: ${task.assigneeName}`}
+                      className={cn('rounded-full', focusRing)}
+                      onClick={(event) => {
+                        // The avatar is a preview affordance, not row activation.
+                        event.stopPropagation();
+                      }}
+                    >
+                      <ActorAvatar
+                        kind="human"
+                        name={task.assigneeName}
+                        avatarUrl={task.assigneeAvatarUrl}
+                      />
+                    </button>
+                  </HoverCardTrigger>
+                  <HoverCardContent align="end" className="w-56">
+                    <div className="flex items-center gap-3">
+                      <ActorAvatar
+                        kind="human"
+                        name={task.assigneeName}
+                        avatarUrl={task.assigneeAvatarUrl}
+                        size={36}
+                      />
+                      <div className="flex min-w-0 flex-col">
+                        <span className="text-on-surface text-body-medium truncate font-medium">
+                          {task.assigneeName}
+                        </span>
+                        <span className="text-on-surface-variant text-xs">Assignee</span>
+                      </div>
                     </div>
-                  </div>
-                </HoverCardContent>
-              </HoverCard>
+                  </HoverCardContent>
+                </HoverCard>
+              </ListCell>
+            ) : null}
+
+            <ListCell className="shrink-0">
+              <TaskTimerButton
+                taskId={task.id}
+                title={task.title}
+                controlSize="sm"
+                withLabel={false}
+              />
             </ListCell>
-          ) : null}
 
-          <ListCell className="shrink-0">
-            <TaskTimerButton
-              taskId={task.id}
-              title={task.title}
-              controlSize="sm"
-              withLabel={false}
-            />
-          </ListCell>
-
-          <ListCell className="shrink-0">
-            <TriageActions
-              projects={projects}
-              programs={programs}
-              projectNoun={projectNoun}
-              programNoun={programNoun}
-              busy={busy}
-              onAssignProject={onAssignProject}
-              onAssignProgram={onAssignProgram}
-              onDismiss={onDismiss}
-            />
-          </ListCell>
-        </ListRow>
+            <ListCell className="shrink-0">
+              <TriageActions
+                projects={projects}
+                programs={programs}
+                projectNoun={projectNoun}
+                programNoun={programNoun}
+                busy={busy}
+                onAssignProject={onAssignProject}
+                onAssignProgram={onAssignProgram}
+                onDismiss={onDismiss}
+              />
+            </ListCell>
+          </ListRow>
+        </ObjectSurface>
       </ContextMenuTrigger>
 
       <ContextMenuContent width="md">

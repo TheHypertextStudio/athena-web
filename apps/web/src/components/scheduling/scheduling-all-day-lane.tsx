@@ -19,7 +19,6 @@ export function SchedulingAllDayLane({
   onOpenItem,
   onMoveAllDayItem,
   onResizeAllDayItem,
-  onDropObjectOnItem,
   relationshipMode,
   onGestureAnnouncementChange,
   onSelectAllDayRegion,
@@ -35,7 +34,6 @@ export function SchedulingAllDayLane({
   readonly onOpenItem?: SchedulingCanvasProps['onOpenItem'];
   readonly onMoveAllDayItem?: SchedulingCanvasProps['onMoveAllDayItem'];
   readonly onResizeAllDayItem?: SchedulingCanvasProps['onResizeAllDayItem'];
-  readonly onDropObjectOnItem?: SchedulingCanvasProps['onDropObjectOnItem'];
   readonly relationshipMode: SchedulingRelationshipMode;
   readonly onGestureAnnouncementChange: (announcement: string) => void;
   readonly onSelectAllDayRegion?: SchedulingCanvasProps['onSelectAllDayRegion'];
@@ -63,7 +61,6 @@ export function SchedulingAllDayLane({
       onOpenItem={onOpenItem}
       onMoveAllDayItem={onMoveAllDayItem}
       onResizeAllDayItem={onResizeAllDayItem}
-      onDropObjectOnItem={onDropObjectOnItem}
       relationshipMode={relationshipMode}
       onGestureAnnouncementChange={onGestureAnnouncementChange}
     />

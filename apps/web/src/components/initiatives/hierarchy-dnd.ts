@@ -1,65 +1,19 @@
 /**
- * `initiatives` — the pure logic and typed payload behind dragging one initiative onto another to
- * nest it.
+ * `initiatives` — pure reparenting logic behind relating one initiative to another.
  *
  * @remarks
  * Kept free of React and the DOM so the reparent decision — which is where the real correctness
- * lives (self-drops, no-op re-nests, and cycle prevention) — is unit-tested directly. The treegrid
- * only reads/writes the drag payload and calls {@link planReparent}; it owns no nesting rules.
+ * lives (self-relations, no-op re-nests, and cycle prevention) — is unit-tested directly. The
+ * Action Registry supplies the subject and target. The treegrid owns no nesting rules.
  */
 
-/** The MIME type carrying an initiative being dragged to a new parent. */
-export const INITIATIVE_DRAG_MIME = 'application/x-docket-initiative';
-
-/** The payload written when an initiative row starts dragging. */
+/** The hierarchy facts needed to plan an Initiative reparent command. */
 export interface InitiativeDragObject {
   readonly id: string;
   /** The row's current parent, or null at the root. */
   readonly parentInitiativeId: string | null;
   /** The hierarchy edge tying the row to its parent, or null at the root. */
   readonly parentLinkId: string | null;
-}
-
-/** Write an initiative drag payload onto a native drag event's dataTransfer. */
-export function writeInitiativeDragObject(
-  dataTransfer: DataTransfer,
-  object: InitiativeDragObject,
-): void {
-  dataTransfer.effectAllowed = 'move';
-  dataTransfer.setData(INITIATIVE_DRAG_MIME, JSON.stringify(object));
-}
-
-/**
- * Read an initiative drag payload, returning null for anything not written by
- * {@link writeInitiativeDragObject}. Defensive against malformed or foreign drags.
- */
-export function readInitiativeDragObject(dataTransfer: DataTransfer): InitiativeDragObject | null {
-  const raw = dataTransfer.getData(INITIATIVE_DRAG_MIME);
-  if (!raw) return null;
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (
-      typeof parsed === 'object' &&
-      parsed !== null &&
-      'id' in parsed &&
-      typeof parsed.id === 'string'
-    ) {
-      const candidate = parsed as {
-        id: string;
-        parentInitiativeId?: unknown;
-        parentLinkId?: unknown;
-      };
-      return {
-        id: candidate.id,
-        parentInitiativeId:
-          typeof candidate.parentInitiativeId === 'string' ? candidate.parentInitiativeId : null,
-        parentLinkId: typeof candidate.parentLinkId === 'string' ? candidate.parentLinkId : null,
-      };
-    }
-  } catch {
-    return null;
-  }
-  return null;
 }
 
 /** The mutation a drop resolves to, or a no-op when the drop changes nothing / would be illegal. */

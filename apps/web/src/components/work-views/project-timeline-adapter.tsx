@@ -3,7 +3,6 @@
 import type { ProjectViewRow } from '@docket/types';
 import type { JSX } from 'react';
 
-import { entityDragSource } from '@/lib/entity-drag';
 import type { AppliedView } from '@/components/views/apply-view';
 import type { ViewDisplayState } from '@/components/views/field-catalog';
 import type { ScheduleChange } from '@/components/timeline/cascade';
@@ -43,13 +42,12 @@ export function buildProjectViewTimelineCatalog(
     progress: (row) => row.progress,
     edges: (row) => ({ blockedBy: row.blockedByIds, blocks: row.blocksIds }),
     statusLabel: (row) => row.status.replaceAll('_', ' '),
-    dragSource: (row) =>
-      entityDragSource({
-        kind: 'project',
-        id: row.id,
-        organizationId: row.organizationId,
-        title: row.name,
-      }),
+    object: (row) => ({
+      kind: 'project',
+      id: row.id,
+      organizationId: row.organizationId,
+      title: row.name,
+    }),
   };
 }
 

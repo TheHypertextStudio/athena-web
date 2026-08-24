@@ -4,18 +4,23 @@
  * `components/dnd/drag-context` — what is currently in the air.
  *
  * @remarks
- * Native HTML5 drag hides its payload until the drop (protected mode), so a drop target cannot
- * read what it is being offered at the moment it must decide whether to accept it. Every drag-and-
- * drop implementation on the web solves this the same way: keep the in-flight object in
- * application state for the duration of the gesture. This is that state, held once for the app.
+ * Dnd Kit carries the canonical object identity in memory for the duration of the gesture. This
+ * adapter exposes the same state to surfaces that only need to reveal contextual destinations.
  *
  * It also publishes the drag on `<html data-dragging-kind="task">`, so a surface can reveal its
  * drop zones from CSS alone — no prop threading, no re-render per row. A calendar lane can light
  * up for a dragged task and stay inert for a dragged team without either side importing the other.
  *
- * The provider is intentionally not the drag *mechanism*: {@link ./use-draggable} starts and ends
- * gestures, {@link ./use-drop-target} consumes them. This only remembers.
+ * {@link ./use-draggable} starts gestures and {@link ./use-relation-drop-target} resolves them.
  */
+import {
+  DragDropProvider,
+  DragOverlay,
+  type DragEndEvent,
+  type DragOverEvent,
+  type DragStartEvent,
+  useDragOperation,
+} from '@dnd-kit/react';
 import {
   createContext,
   type JSX,
@@ -27,7 +32,12 @@ import {
   useState,
 } from 'react';
 
-import type { ObjectRef } from '@/lib/actions/object';
+import { describeObject, type ObjectRef } from '@/lib/actions/object';
+
+import { isObjectDragData } from './object-drag-data';
+import { OBJECT_POINTER_SENSOR } from './object-pointer-sensor';
+
+export { dragActivationProfile, type DragActivationProfile } from './object-pointer-sensor';
 
 /** The drag currently in flight, if any. */
 export interface DragState {
@@ -49,12 +59,49 @@ export interface DragController {
   ) => void;
   /** Record the end of a gesture, whether it dropped or was cancelled. */
   readonly end: () => void;
+  /** Publish application-owned drag or relation feedback through the shared live region. */
+  readonly announce: (message: string) => void;
 }
 
 const IDLE: DragState = { object: null, objects: [], sourceSurfaceId: null };
 
 const DragStateContext = createContext<DragState>(IDLE);
 const DragControllerContext = createContext<DragController | null>(null);
+
+/** Read application-owned effect copy carried by a destination adapter. */
+function targetEffectLabel(data: unknown): string | null {
+  if (typeof data !== 'object' || data === null || !('effectLabel' in data)) return null;
+  const label = (data as { readonly effectLabel?: unknown }).effectLabel;
+  return typeof label === 'string' ? label : null;
+}
+
+/** Render the one object overlay with the live resolved destination effect. */
+function ObjectDragOverlay(): JSX.Element {
+  const operation = useDragOperation();
+  const effectLabel = targetEffectLabel(operation.target?.data);
+  return (
+    <DragOverlay className="pointer-events-none z-50" dropAnimation={null}>
+      {(source) => {
+        const data = source.data;
+        if (!isObjectDragData(data)) return null;
+        const Icon = describeObject(data.object.kind).icon;
+        return (
+          <div className="bg-surface-container-high text-on-surface ring-outline-variant/40 flex max-w-80 items-center gap-2 rounded-lg px-3 py-2 shadow-lg ring-1">
+            <Icon className="size-4 shrink-0" aria-hidden="true" />
+            <span className="min-w-0">
+              <span className="block truncate text-sm font-medium">{data.object.title}</span>
+              {effectLabel ? (
+                <span className="text-on-surface-variant block truncate text-xs">
+                  {effectLabel}
+                </span>
+              ) : null}
+            </span>
+          </div>
+        );
+      }}
+    </DragOverlay>
+  );
+}
 
 /** Props for {@link DragProvider}. */
 export interface DragProviderProps {
@@ -75,6 +122,7 @@ export interface DragProviderProps {
  */
 export function DragProvider({ children }: DragProviderProps): JSX.Element {
   const [state, setState] = useState<DragState>(IDLE);
+  const [announcement, setAnnouncement] = useState('');
 
   const controller = useMemo<DragController>(
     () => ({
@@ -84,6 +132,7 @@ export function DragProvider({ children }: DragProviderProps): JSX.Element {
       end: () => {
         setState(IDLE);
       },
+      announce: setAnnouncement,
     }),
     [],
   );
@@ -101,9 +150,44 @@ export function DragProvider({ children }: DragProviderProps): JSX.Element {
     };
   }, [state.object]);
 
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    const data = event.operation.source?.data;
+    if (!isObjectDragData(data)) return;
+    setState({
+      object: data.object,
+      objects: data.objects,
+      sourceSurfaceId: data.sourceSurfaceId,
+    });
+    setAnnouncement(`Dragging ${data.object.title}`);
+  }, []);
+
+  const handleDragOver = useCallback((event: DragOverEvent) => {
+    const label = targetEffectLabel(event.operation.target?.data);
+    if (label !== null) setAnnouncement(label);
+  }, []);
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const label = targetEffectLabel(event.operation.target?.data);
+    setAnnouncement(label === null ? 'Drag cancelled' : `Dropped: ${label}`);
+    setState(IDLE);
+  }, []);
+
   return (
     <DragControllerContext.Provider value={controller}>
-      <DragStateContext.Provider value={state}>{children}</DragStateContext.Provider>
+      <DragStateContext.Provider value={state}>
+        <DragDropProvider
+          sensors={[OBJECT_POINTER_SENSOR]}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDragEnd={handleDragEnd}
+        >
+          {children}
+          <ObjectDragOverlay />
+          <span className="sr-only" role="status" aria-live="polite">
+            {announcement}
+          </span>
+        </DragDropProvider>
+      </DragStateContext.Provider>
     </DragControllerContext.Provider>
   );
 }
@@ -132,9 +216,10 @@ export function useDragController(): DragController {
   const controller = useContext(DragControllerContext);
   const fallbackBegin = useCallback(() => undefined, []);
   const fallbackEnd = useCallback(() => undefined, []);
+  const fallbackAnnounce = useCallback(() => undefined, []);
   const fallback = useMemo<DragController>(
-    () => ({ begin: fallbackBegin, end: fallbackEnd }),
-    [fallbackBegin, fallbackEnd],
+    () => ({ begin: fallbackBegin, end: fallbackEnd, announce: fallbackAnnounce }),
+    [fallbackAnnounce, fallbackBegin, fallbackEnd],
   );
   return controller ?? fallback;
 }

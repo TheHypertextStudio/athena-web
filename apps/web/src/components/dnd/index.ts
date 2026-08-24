@@ -2,11 +2,9 @@
  * `@/components/dnd` — the drag contract.
  *
  * @remarks
- * Any core object can be picked up ({@link useDraggable}) and any surface can declare what it
- * accepts ({@link useDropTarget}). Neither side imports the other: the object in flight is the
- * whole interface between them, which is what makes "drag a task into a project", "drag a task
- * into a time block", and "associate a project with a calendar event" the same mechanism rather
- * than three features.
+ * Any core object can be picked up through {@link useDraggable}. Relationship destinations use
+ * the pure domain catalog and Action Registry through {@link useRelationDropTarget}. Dnd Kit is
+ * the only transport, while each domain keeps ownership of the command it executes.
  */
 export {
   DragProvider,
@@ -16,17 +14,10 @@ export {
   useDragController,
   useDragState,
 } from './drag-context';
-export {
-  OBJECT_DRAG_MIME,
-  hasObjectPayload,
-  readObjectPayload,
-  writeObjectPayload,
-} from './drag-payload';
 export { type DraggableBinding, type UseDraggableOptions, useDraggable } from './use-draggable';
 export {
   type DropState,
-  type DropTargetBinding,
-  type DropTargetProps,
-  type UseDropTargetOptions,
-  useDropTarget,
-} from './use-drop-target';
+  type RelationDropTargetBinding,
+  type UseRelationDropTargetOptions,
+  useRelationDropTarget,
+} from './use-relation-drop-target';

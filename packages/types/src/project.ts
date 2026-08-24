@@ -180,6 +180,20 @@ export const ProjectUpdate = z
 /** Validated project-update body. */
 export type ProjectUpdate = z.infer<typeof ProjectUpdate>;
 
+/** Body for incrementally adding one Label to a Project. */
+export const ProjectLabelLink = z
+  .object({ labelId: LabelId })
+  .meta({ id: 'ProjectLabelLink', description: 'Add one Label to a Project.' });
+/** Project Label-link request value. */
+export type ProjectLabelLink = z.infer<typeof ProjectLabelLink>;
+
+/** Idempotent result of adding one Label to a Project. */
+export const ProjectLabelLinked = z
+  .object({ projectId: ProjectId, labelId: LabelId, linked: z.literal(true) })
+  .meta({ id: 'ProjectLabelLinked', description: 'A Project Label association.' });
+/** Project Label-link response value. */
+export type ProjectLabelLinked = z.infer<typeof ProjectLabelLinked>;
+
 /** URL resource attached to a Project's operating record. */
 export const ProjectResourceCreate = z
   .object({

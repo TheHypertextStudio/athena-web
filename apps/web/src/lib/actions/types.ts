@@ -17,6 +17,7 @@
  * @see {@link ./registry} for the registry that stores and resolves these.
  */
 import type { LucideIcon } from '@docket/ui/icons';
+import type { RelationId } from '@docket/work/relation-contract';
 
 import type { ObjectKind, ObjectMeta, ObjectRef } from './object';
 import type { InteractionCategory, InteractionId, RouteTemplateId } from '../interactions';
@@ -170,6 +171,8 @@ export type ActionContextResolver = () => ActionContext;
 interface ActionDefinitionBase {
   /** Stable id, `<domain>.<verb>`; must be prefixed by {@link ActionDefinition.domain}. */
   readonly id: ActionId;
+  /** Relation resolved by this action when the same capability is invoked through a drop. */
+  readonly relationId?: RelationId;
   /** The domain that owns and registers this action. */
   readonly domain: ActionDomain;
   /**

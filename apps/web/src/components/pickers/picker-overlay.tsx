@@ -28,10 +28,12 @@ import {
 import type { PopoverVirtualAnchor } from '@docket/ui/primitives';
 
 import type { ObjectRef } from '@/lib/actions';
+import type { RelationId } from '@docket/work/relation-contract';
 
 import { InitiativeHierarchyPickerOverlay } from '../initiatives/initiative-hierarchy-picker-overlay';
 import { TaskHierarchyPickerOverlay } from '../tasks/task-hierarchy-picker-overlay';
 import { LabelPickerOverlay } from './label-picker-overlay';
+import { RelationTargetPickerOverlay } from './relation-target-picker-overlay';
 
 /** A request to edit the label set of one or more objects. */
 export interface LabelPickerRequest {
@@ -67,11 +69,21 @@ export interface TaskHierarchyPickerRequest {
   readonly anchor?: HTMLElement | null;
 }
 
+/** A request to choose the target for one registered relation action. */
+export interface RelationTargetPickerRequest {
+  readonly kind: 'relation-target';
+  readonly relationId: RelationId;
+  readonly organizationId: string | null;
+  readonly subjects: readonly ObjectRef[];
+  readonly anchor?: HTMLElement | null;
+}
+
 /** Every picker the single app overlay can move to an invoking object. */
 export type PickerOverlayRequest =
   | LabelPickerRequest
   | InitiativeHierarchyPickerRequest
-  | TaskHierarchyPickerRequest;
+  | TaskHierarchyPickerRequest
+  | RelationTargetPickerRequest;
 
 /** Stable fallback geometry and focus ownership captured when a moved picker opens. */
 export interface CapturedPickerAnchor {
@@ -169,8 +181,16 @@ export function PickerOverlayProvider({ children }: PickerOverlayProviderProps):
               setRequest(null);
             }}
           />
-        ) : (
+        ) : request.kind === 'task-hierarchy' ? (
           <TaskHierarchyPickerOverlay
+            key={sequenceRef.current}
+            request={request}
+            onClose={() => {
+              setRequest(null);
+            }}
+          />
+        ) : (
+          <RelationTargetPickerOverlay
             key={sequenceRef.current}
             request={request}
             onClose={() => {

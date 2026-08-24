@@ -80,6 +80,7 @@ calendar-day contract.
 | Surface                             | File                                                                    | Field                    | Control                                               |
 | ----------------------------------- | ----------------------------------------------------------------------- | ------------------------ | ----------------------------------------------------- |
 | Calendar → create/edit block        | `apps/web/src/components/calendar/calendar-time-field.tsx`              | Starts at, Ends at       | `datetime-local` + explicit Earlier/Later fold choice |
+| Relation command → schedule Task    | `apps/web/src/components/pickers/relation-target-picker-overlay.tsx`    | Schedule start           | Shared `CalendarTimeField` + explicit DST fold choice |
 | Athena → elicitation answer         | `apps/web/src/components/athena/elicitation-control.tsx`                | Agent-requested datetime | `datetime-local`, shape chosen by the agent's schema  |
 | Settings → notification quiet hours | `apps/web/src/components/settings/notification-preferences-section.tsx` | Quiet hours start/end    | `time` (a clock, no date)                             |
 | Settings → work locations           | `apps/web/src/app/(app)/settings/work-locations/page.tsx`               | Planned start/end        | `time` + explicit Earlier/Later fold choice           |

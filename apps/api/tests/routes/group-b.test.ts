@@ -24,6 +24,7 @@ beforeAll(async () => {
   r['agents'] = (await import('../../src/routes/agents')).default;
   r['tasks'] = (await import('../../src/routes/tasks')).default;
   r['projects'] = (await import('../../src/routes/projects')).default;
+  r['programs'] = (await import('../../src/routes/programs')).default;
   r['initiatives'] = (await import('../../src/routes/initiatives')).default;
   r['updates'] = (await import('../../src/routes/updates')).default;
   r['activity'] = (await import('../../src/routes/activity')).default;
@@ -1893,5 +1894,40 @@ describe('project + initiative labels obey group exclusivity', () => {
       .from(schema.initiativeLabel)
       .where(eq(schema.initiativeLabel.initiativeId, initiativeId));
     expect(attached.map((a) => a.labelId)).toEqual([bugId]);
+  });
+
+  it('adds Project, Program, and Initiative labels idempotently through domain routes', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const [label] = await db
+      .insert(schema.label)
+      .values({ organizationId: orgId, name: 'Transit', color: 'blue' })
+      .returning({ id: schema.label.id });
+    const labelId = assertDefined(label).id;
+    const targets = [
+      { router: r['projects'], body: { name: 'Project' }, join: schema.projectLabel },
+      { router: r['programs'], body: { name: 'Program' }, join: schema.programLabel },
+      { router: r['initiatives'], body: { name: 'Initiative' }, join: schema.initiativeLabel },
+    ] as const;
+
+    for (const target of targets) {
+      const app = appWithActor(target.router, orgId, ['manage', 'contribute'], humanActorId);
+      const created = await app.request('/', {
+        method: 'POST',
+        headers: J,
+        body: JSON.stringify(target.body),
+      });
+      expect(created.status).toBe(201);
+      const id = (await body<{ id: string }>(created)).id;
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const linked = await app.request(`/${id}/labels`, {
+          method: 'POST',
+          headers: J,
+          body: JSON.stringify({ labelId }),
+        });
+        expect(linked.status).toBe(200);
+      }
+      const rows = await db.select().from(target.join);
+      expect(rows.filter((row) => Object.values(row).includes(id))).toHaveLength(1);
+    }
   });
 });

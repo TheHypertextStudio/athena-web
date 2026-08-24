@@ -249,6 +249,7 @@ export function useMyWork(
           : null;
       return {
         id: task.id,
+        organizationId: task.organizationId,
         title: task.title,
         stateType: categoryOf(task.state),
         actor,

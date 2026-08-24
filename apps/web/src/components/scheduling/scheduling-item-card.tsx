@@ -1,21 +1,15 @@
 'use client';
 
 import { DRAGGABLE } from '@docket/ui/lib/draggable';
-import {
-  type CSSProperties,
-  type DragEvent as ReactDragEvent,
-  type JSX,
-  type RefObject,
-  useId,
-  useState,
-} from 'react';
+import { type CSSProperties, type JSX, type RefObject, useId } from 'react';
+
+import { useRelationDropTarget } from '@/components/dnd/use-relation-drop-target';
 
 import {
   isScheduleItemEditable,
   scheduleItemEditCapabilities,
   type ScheduleItemLaneBounds,
 } from './scheduling-date-lanes';
-import { readScheduleDragObject, SCHEDULE_DRAG_MIME } from './scheduling-drag-object';
 import { MINUTES_PER_DAY, minutesToPixels } from './scheduling-geometry';
 import {
   scheduleOverlapHorizontalStyle,
@@ -63,7 +57,6 @@ export interface SchedulingItemCardProps {
   readonly onOpenItem?: SchedulingCanvasProps['onOpenItem'];
   readonly onMoveItem?: SchedulingCanvasProps['onMoveItem'];
   readonly onResizeItem?: SchedulingCanvasProps['onResizeItem'];
-  readonly onDropObjectOnItem?: SchedulingCanvasProps['onDropObjectOnItem'];
   readonly relationshipMode: SchedulingRelationshipMode;
   readonly onGestureAnnouncementChange: (announcement: string) => void;
 }
@@ -110,12 +103,19 @@ export function SchedulingItemCard({
   onOpenItem,
   onMoveItem,
   onResizeItem,
-  onDropObjectOnItem,
   relationshipMode,
   onGestureAnnouncementChange,
 }: SchedulingItemCardProps): JSX.Element {
-  const [dropActive, setDropActive] = useState(false);
   const readOnlyDescriptionId = useId();
+  const relationTarget = useRelationDropTarget({
+    target: item.object ?? {
+      kind: 'calendar_event',
+      id: item.id,
+      organizationId: null,
+      title: item.title,
+    },
+    disabled: item.dropTarget !== true || item.object === undefined,
+  });
   const editable = isScheduleItemEditable(item, lane);
   const editCapabilities = scheduleItemEditCapabilities(item, lane, displayTimezone);
   const gesture = useSchedulingGesture({
@@ -199,53 +199,34 @@ export function SchedulingItemCard({
         columnCount: placement.columnCount,
       },
     }) ?? null;
-  const dragObject = item.dragObject;
+  const dragObject = item.object;
   const bodyOpenable = item.openable !== false;
   const bodyMovable = editCapabilities.canMove && onMoveItem !== undefined;
   const isRelationshipTarget = relationshipMode.isTarget(item);
   const appearance = item.appearance ?? 'event';
-  const surfaceState = dropActive ? 'drop' : gesture.preview ? 'preview' : 'rest';
+  const surfaceState =
+    relationTarget.canDrop && relationTarget.isOver ? 'drop' : gesture.preview ? 'preview' : 'rest';
   const surfacePalette = scheduleItemSurfacePalette(appearance, item.color, surfaceState);
   const horizontalStyle = scheduleOverlapHorizontalStyle(placement);
-  const acceptsDrop = (event: ReactDragEvent<HTMLElement>): boolean =>
-    item.dropTarget === true && event.dataTransfer.types.includes(SCHEDULE_DRAG_MIME);
-
   return (
     <article
+      ref={relationTarget.dropProps.ref}
       // The visual surface stops one pixel before the item's exact geometry. Adjacent blocks keep
       // separate silhouettes without shrinking the hit targets or changing gesture math.
-      className={`${DRAGGABLE} isolate ${
-        dropActive
+      className={`${DRAGGABLE} ${relationTarget.dropProps.className} isolate ${
+        relationTarget.isOver
           ? 'ring-primary group absolute z-30 overflow-visible rounded-sm ring-2'
           : gesture.preview
             ? 'ring-primary group absolute z-40 overflow-visible rounded-sm ring-2'
             : 'group absolute z-10 overflow-visible rounded-sm focus-within:z-20 hover:z-20'
       }`}
       data-item-density={density}
+      data-drop-state={relationTarget.dropState}
       data-layout-column={placement.columnIndex}
       data-layout-column-count={placement.columnCount}
       data-schedule-item={item.id}
       data-schedule-item-appearance={appearance}
       data-gesture-preview={gesture.preview ? gesture.previewMode : undefined}
-      onDragOver={(event) => {
-        if (!acceptsDrop(event)) return;
-        event.preventDefault();
-        event.dataTransfer.dropEffect = 'link';
-        setDropActive(true);
-      }}
-      onDragLeave={() => {
-        setDropActive(false);
-      }}
-      onDrop={(event) => {
-        setDropActive(false);
-        if (!acceptsDrop(event) || !onDropObjectOnItem) return;
-        event.preventDefault();
-        // Consume the drop here so it doesn't also bubble to the lane's grid-drop handler.
-        event.stopPropagation();
-        const object = readScheduleDragObject(event.dataTransfer);
-        if (!object || (object.kind === 'calendar_item' && object.itemId === item.id)) return;
-        onDropObjectOnItem({ object, targetItem: item, targetLane: lane });
-      }}
       style={
         {
           top: visibleTop,
@@ -391,6 +372,11 @@ export function SchedulingItemCard({
         mode={relationshipMode}
         className="ring-primary/70 focus-visible:ring-ring bg-primary/5 absolute inset-0 z-50 cursor-pointer rounded-md ring-2 outline-none ring-inset focus-visible:ring-4"
       />
+      {relationTarget.isOver && relationTarget.effectLabel ? (
+        <span className="bg-primary text-on-primary pointer-events-none absolute inset-x-1 top-1/2 z-[60] -translate-y-1/2 rounded px-2 py-1 text-center text-xs font-medium">
+          {relationTarget.effectLabel}
+        </span>
+      ) : null}
     </article>
   );
 }

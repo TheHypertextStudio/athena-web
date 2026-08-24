@@ -3,22 +3,30 @@
 import { defaultEntityDisplay, type Health, type WorkViewActor } from '@docket/types';
 import { ActorAvatar, IdentityGlyph, ListCell, ListRow, ListView } from '@docket/ui/components';
 import { Calendar, Layers } from '@docket/ui/icons';
+import { cn } from '@docket/ui/lib/utils';
 import { Button, Checkbox } from '@docket/ui/primitives';
 import type { ViewTarget } from '@docket/work/view-contract';
-import { type DragEvent, type JSX, type KeyboardEvent, useMemo, useRef, useState } from 'react';
+import {
+  type ComponentProps,
+  type JSX,
+  type KeyboardEvent,
+  type ReactNode,
+  useMemo,
+  useRef,
+} from 'react';
 
+import { useRelationDropTarget } from '@/components/dnd/use-relation-drop-target';
+import { useDragState } from '@/components/dnd/drag-context';
 import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
 import { useWorkStatusResolver } from '@/components/entity-display/use-work-status';
 import { WorkStatusIcon } from '@/components/entity-display/work-status';
 import { formatDate } from '@/components/initiatives/format-date';
 import { HEALTH_FILL_CLASS } from '@/components/initiatives/health';
-import {
-  type InitiativeDragObject,
-  readInitiativeDragObject,
-  writeInitiativeDragObject,
-} from '@/components/initiatives/hierarchy-dnd';
+import { ObjectSurface } from '@/components/objects/object-surface';
 import { PriorityGlyph } from '@/components/task-detail/PriorityGlyph';
+import type { ObjectRef } from '@/lib/actions';
 
+import { deriveInitiativeTreePositions, type InitiativeTreePosition } from './initiative-rails';
 import type { WorkViewDefinitionFor } from './view-state';
 import { workViewDisplayFieldCatalog } from './view-state';
 import {
@@ -29,17 +37,11 @@ import {
   workViewRowTitle,
   workViewRowValue,
 } from './renderer-types';
+import { objectForWorkViewRow } from './work-view-object';
 
 interface ListMembership<TTarget extends ViewTarget> {
   readonly row: WorkViewRowFor<TTarget>;
   readonly path: readonly string[];
-}
-
-interface InitiativeTreePosition {
-  readonly depth: number;
-  readonly continuationDepths: readonly number[];
-  readonly hasChildren: boolean;
-  readonly isLastSibling: boolean;
 }
 
 interface RosterField {
@@ -63,9 +65,6 @@ export interface WorkListProps<TTarget extends ViewTarget> {
   readonly loadingMoreRows?: boolean;
   readonly onLoadMoreRows?: (() => void) | undefined;
   readonly onToggleGroup?: ((key: string) => void) | undefined;
-  readonly onInitiativeReparent?:
-    | ((dragged: InitiativeDragObject, targetId: string | null) => void)
-    | undefined;
 }
 
 const TARGET_LABEL = {
@@ -154,40 +153,27 @@ function orderInitiativeMemberships<TTarget extends ViewTarget>(
 function initiativePositions<TTarget extends ViewTarget>(
   memberships: readonly ListMembership<TTarget>[],
 ): ReadonlyMap<string, InitiativeTreePosition> {
-  const rows = new Map(memberships.map(({ row }) => [row.id, row]));
-  const children = new Map<string | null, WorkViewRowFor<TTarget>[]>();
-  for (const { row } of memberships) {
-    if (row.target !== 'initiative') continue;
-    const parent = row.parent && rows.has(row.parent) ? row.parent : null;
-    children.set(parent, [...(children.get(parent) ?? []), row]);
+  return deriveInitiativeTreePositions(
+    memberships.flatMap(({ row }) =>
+      row.target === 'initiative' ? [{ id: row.id, parentId: row.parent }] : [],
+    ),
+  );
+}
+
+/** Return whether the candidate sits below the ancestor in the visible Initiative tree. */
+function isInitiativeDescendant(
+  parentById: ReadonlyMap<string, string | null>,
+  ancestorId: string,
+  candidateId: string,
+): boolean {
+  const visited = new Set<string>();
+  let current = parentById.get(candidateId) ?? null;
+  while (current !== null && !visited.has(current)) {
+    if (current === ancestorId) return true;
+    visited.add(current);
+    current = parentById.get(current) ?? null;
   }
-  const result = new Map<string, InitiativeTreePosition>();
-  for (const { row } of memberships) {
-    if (row.target !== 'initiative') continue;
-    const ancestors: WorkViewRowFor<TTarget>[] = [];
-    let parent = row.parent ? rows.get(row.parent) : undefined;
-    const visited = new Set<string>();
-    while (parent?.target === 'initiative' && !visited.has(parent.id)) {
-      visited.add(parent.id);
-      ancestors.unshift(parent);
-      parent = parent.parent ? rows.get(parent.parent) : undefined;
-    }
-    const continuationDepths = ancestors.flatMap((ancestor, index) => {
-      if (ancestor.target !== 'initiative') return [];
-      const parentId = ancestor.parent && rows.has(ancestor.parent) ? ancestor.parent : null;
-      const siblings = children.get(parentId) ?? [];
-      return siblings.at(-1)?.id === ancestor.id ? [] : [index + 1];
-    });
-    const parentId = row.parent && rows.has(row.parent) ? row.parent : null;
-    const siblings = children.get(parentId) ?? [];
-    result.set(row.id, {
-      depth: ancestors.length + 1,
-      continuationDepths,
-      hasChildren: (children.get(row.id)?.length ?? 0) > 0,
-      isLastSibling: siblings.at(-1)?.id === row.id,
-    });
-  }
-  return result;
+  return false;
 }
 
 function HierarchyRails({
@@ -197,8 +183,8 @@ function HierarchyRails({
   position: InitiativeTreePosition;
   hasSummary: boolean;
 }): JSX.Element | null {
-  const { depth, continuationDepths, hasChildren, isLastSibling } = position;
-  if (depth === 1 && !hasChildren && continuationDepths.length === 0) return null;
+  const { depth, ancestorHasFollowingSibling, hasChildren, isLastSibling } = position;
+  if (depth === 1 && !hasChildren && !ancestorHasFollowingSibling.some(Boolean)) return null;
   const iconTop = hasSummary ? 8 : 16;
   const targetLeft = 12 + (depth - 1) * 44;
   const iconCenter = targetLeft + 16;
@@ -219,7 +205,9 @@ function HierarchyRails({
         strokeLinecap="round"
         strokeLinejoin="round"
       >
-        {continuationDepths.map((railDepth) => {
+        {ancestorHasFollowingSibling.map((hasFollowingSibling, index) => {
+          if (!hasFollowingSibling) return null;
+          const railDepth = index + 1;
           const railX = 12 + (railDepth - 1) * 44 + 16;
           return <line key={railDepth} x1={railX} y1="0" x2={railX} y2="56" />;
         })}
@@ -246,6 +234,60 @@ function rowSummary(row: WorkViewRowFor<ViewTarget>): string | null {
     case 'initiative':
       return row.summary;
   }
+}
+
+/** Shared object, activation, drag, and relation-target binding for a virtual work row. */
+function WorkListObjectRow({
+  object,
+  onActivate,
+  rowProps,
+  active,
+  selected,
+  rowId,
+  contextRow,
+  ariaLevel,
+  className,
+  children,
+}: {
+  readonly object: ObjectRef;
+  readonly onActivate: () => void;
+  readonly rowProps: Omit<ComponentProps<typeof ListRow>, 'children'>;
+  readonly active: boolean;
+  readonly selected: boolean;
+  readonly rowId: string;
+  readonly contextRow: boolean;
+  readonly ariaLevel: number | undefined;
+  readonly className: string;
+  readonly children: ReactNode;
+}): JSX.Element {
+  const drop = useRelationDropTarget({ target: object });
+  return (
+    <ObjectSurface object={object} surfaceId={`work-list:${object.kind}`} onActivate={onActivate}>
+      <ListRow
+        {...rowProps}
+        ref={drop.dropProps.ref}
+        active={active}
+        selected={selected}
+        data-row-id={rowId}
+        data-context-row={contextRow ? 'true' : undefined}
+        aria-level={ariaLevel}
+        data-drop-state={drop.dropState}
+        className={cn(
+          className,
+          drop.dropProps.className,
+          drop.dropState === 'accept' && 'ring-primary bg-primary/8 z-10 ring-2 ring-inset',
+          drop.dropState === 'reject' && 'ring-error/60 bg-error/5 z-10 ring-1 ring-inset',
+        )}
+      >
+        {children}
+        {drop.effectLabel ? (
+          <span className="bg-primary-container text-on-primary-container text-label-small absolute right-3 bottom-1 rounded-full px-2 py-0.5">
+            {drop.effectLabel}
+          </span>
+        ) : null}
+      </ListRow>
+    </ObjectSurface>
+  );
 }
 
 function rowActor(row: WorkViewRowFor<ViewTarget>, field: string): WorkViewActor | null {
@@ -426,10 +468,19 @@ export function WorkList<TTarget extends ViewTarget>({
   loadingMoreRows = false,
   onLoadMoreRows,
   onToggleGroup,
-  onInitiativeReparent,
 }: WorkListProps<TTarget>): JSX.Element {
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const [draggingInitiative, setDraggingInitiative] = useState(false);
+  const dragState = useDragState();
+  const initiativeRoot = useRelationDropTarget({
+    target: {
+      kind: 'initiative_root',
+      id: `${rows[0]?.organizationId ?? 'unknown'}:initiative-root`,
+      organizationId: rows[0]?.organizationId ?? null,
+      title: 'top level',
+    },
+    disabled: target !== 'initiative',
+    priority: 'root',
+  });
   const statusOf = useWorkStatusResolver(target);
   const groupField = definition.arrangement.groupBy as string | null;
   const subGroupField = definition.arrangement.subGroupBy as string | null;
@@ -443,6 +494,15 @@ export function WorkList<TTarget extends ViewTarget>({
     return grouped ? source : orderInitiativeMemberships(source);
   }, [groupPages, grouped, rows]);
   const treePositions = useMemo(() => initiativePositions(memberships), [memberships]);
+  const initiativeParentById = useMemo(
+    () =>
+      new Map(
+        memberships.flatMap(({ row }) =>
+          row.target === 'initiative' ? [[row.id, row.parent] as const] : [],
+        ),
+      ),
+    [memberships],
+  );
   const properties = workViewDisplayFieldCatalog(target).filter((field) =>
     definition.presentation.properties.includes(field.key),
   );
@@ -466,20 +526,26 @@ export function WorkList<TTarget extends ViewTarget>({
     const id = active?.dataset['rowId'];
     if (id) toggle(id);
   };
-  const dropInitiative = (event: DragEvent<HTMLElement>, targetId: string | null): void => {
-    if (!onInitiativeReparent) return;
-    event.preventDefault();
-    const dragged = readInitiativeDragObject(event.dataTransfer);
-    setDraggingInitiative(false);
-    if (dragged) onInitiativeReparent(dragged, targetId);
-  };
-
   return (
     <div
-      ref={rootRef}
-      className="bg-surface-container-low @container/table relative flex h-full min-h-0 flex-col overflow-hidden rounded-xl p-2"
+      ref={(element) => {
+        rootRef.current = element;
+        initiativeRoot.dropProps.ref(element);
+      }}
+      data-drop-state={initiativeRoot.dropState}
+      className={cn(
+        'bg-surface-container-low @container/table relative flex h-full min-h-0 flex-col overflow-hidden rounded-xl p-2',
+        initiativeRoot.dropProps.className,
+        initiativeRoot.dropState === 'accept' && 'ring-primary bg-primary/8 ring-2 ring-inset',
+        initiativeRoot.dropState === 'reject' && 'ring-error/60 bg-error/5 ring-1 ring-inset',
+      )}
       onKeyDownCapture={handleKeys}
     >
+      {initiativeRoot.effectLabel ? (
+        <span className="bg-primary-container text-on-primary-container text-label-small pointer-events-none absolute top-2 right-3 z-50 rounded-full px-2 py-1">
+          {initiativeRoot.effectLabel}
+        </span>
+      ) : null}
       <div
         role="row"
         className="text-on-surface-variant text-label-small flex h-8 shrink-0 items-center gap-2 px-3"
@@ -497,22 +563,6 @@ export function WorkList<TTarget extends ViewTarget>({
           </span>
         ))}
       </div>
-      {draggingInitiative ? (
-        <div
-          role="button"
-          tabIndex={0}
-          className="border-primary bg-primary-container text-on-primary-container text-label-large absolute inset-x-3 top-10 z-10 flex min-h-10 items-center justify-center rounded-lg border"
-          onDragOver={(event) => {
-            event.preventDefault();
-            event.dataTransfer.dropEffect = 'move';
-          }}
-          onDrop={(event) => {
-            dropInitiative(event, null);
-          }}
-        >
-          Move to top level
-        </div>
-      ) : null}
       <ListView<ListMembership<TTarget>>
         items={memberships}
         rowHeight={56}
@@ -545,38 +595,28 @@ export function WorkList<TTarget extends ViewTarget>({
           const selected = selectedIds.has(row.id);
           const summary = rowSummary(row);
           const position = row.target === 'initiative' ? treePositions.get(row.id) : undefined;
+          const baseObject = objectForWorkViewRow(row);
+          const wouldCreateCycle =
+            row.target === 'initiative' &&
+            dragState.objects.some(
+              (source) =>
+                source.kind === 'initiative' &&
+                isInitiativeDescendant(initiativeParentById, source.id, row.id),
+            );
+          const object = wouldCreateCycle
+            ? { ...baseObject, meta: { ...baseObject.meta, wouldCreateCycle: true } }
+            : baseObject;
           return (
-            <ListRow
-              {...context.rowProps}
+            <WorkListObjectRow
+              object={object}
+              rowProps={context.rowProps}
               active={context.active}
               selected={selected}
+              rowId={row.id}
+              contextRow={row.isContext}
+              ariaLevel={position?.depth}
               onActivate={context.onActivate}
-              data-row-id={row.id}
-              data-context-row={row.isContext ? 'true' : undefined}
-              aria-level={position?.depth}
               className={`group/roster relative min-h-14 gap-2 rounded-lg border-b-0 px-3 py-0 ${row.isContext ? 'text-on-surface-variant' : ''}`}
-              draggable={row.target === 'initiative' && onInitiativeReparent !== undefined}
-              onDragStart={(event) => {
-                if (row.target !== 'initiative' || !onInitiativeReparent) return;
-                writeInitiativeDragObject(event.dataTransfer, {
-                  id: row.id,
-                  parentInitiativeId: row.parent,
-                  parentLinkId: row.parentLinkId,
-                });
-                setDraggingInitiative(true);
-              }}
-              onDragEnd={() => {
-                setDraggingInitiative(false);
-              }}
-              onDragOver={(event) => {
-                if (row.target !== 'initiative' || !onInitiativeReparent) return;
-                event.preventDefault();
-                event.dataTransfer.dropEffect = 'move';
-              }}
-              onDrop={(event) => {
-                if (row.target !== 'initiative') return;
-                dropInitiative(event, row.id);
-              }}
             >
               {position ? (
                 <HierarchyRails position={position} hasSummary={Boolean(summary)} />
@@ -622,7 +662,7 @@ export function WorkList<TTarget extends ViewTarget>({
                   />
                 </ListCell>
               ))}
-            </ListRow>
+            </WorkListObjectRow>
           );
         }}
       />

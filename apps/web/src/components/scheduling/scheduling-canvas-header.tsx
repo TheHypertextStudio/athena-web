@@ -122,7 +122,6 @@ export function SchedulingCanvasHeader({
   onOpenItem,
   onMoveAllDayItem,
   onResizeAllDayItem,
-  onDropObjectOnItem,
   relationshipMode,
   onGestureAnnouncementChange,
   onSelectAllDayRegion,
@@ -159,7 +158,6 @@ export function SchedulingCanvasHeader({
   readonly onOpenItem?: SchedulingCanvasProps['onOpenItem'] | undefined;
   readonly onMoveAllDayItem?: SchedulingCanvasProps['onMoveAllDayItem'] | undefined;
   readonly onResizeAllDayItem?: SchedulingCanvasProps['onResizeAllDayItem'] | undefined;
-  readonly onDropObjectOnItem?: SchedulingCanvasProps['onDropObjectOnItem'] | undefined;
   readonly relationshipMode: SchedulingRelationshipMode;
   readonly onGestureAnnouncementChange: (announcement: string) => void;
   readonly onSelectAllDayRegion?: SchedulingCanvasProps['onSelectAllDayRegion'] | undefined;
@@ -215,7 +213,6 @@ export function SchedulingCanvasHeader({
               onOpenItem={onOpenItem}
               onMoveAllDayItem={onMoveAllDayItem}
               onResizeAllDayItem={onResizeAllDayItem}
-              onDropObjectOnItem={onDropObjectOnItem}
               relationshipMode={relationshipMode}
               onGestureAnnouncementChange={onGestureAnnouncementChange}
               onSelectAllDayRegion={onSelectAllDayRegion}

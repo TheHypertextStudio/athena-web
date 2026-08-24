@@ -10,6 +10,7 @@ const overviewPath = join(
 );
 const workPagePath = join(root, 'apps/web/src/components/work-views/work-view-page.tsx');
 const workListPath = join(root, 'apps/web/src/components/work-views/work-list.tsx');
+const initiativeRailsPath = join(root, 'apps/web/src/components/work-views/initiative-rails.ts');
 const detailPath = join(
   root,
   'apps/web/src/app/(app)/orgs/[orgId]/initiatives/[initiativeId]/initiative-detail-client.tsx',
@@ -168,8 +169,11 @@ describe('Initiative visual contract', () => {
 
   it('keeps the five-level hierarchy and authorized ancestor context in the shared list', () => {
     const workList = source(workListPath);
+    const initiativeRails = source(initiativeRailsPath);
     expect(workList).toContain('initiativePositions');
-    expect(workList).toContain("while (parent?.target === 'initiative'");
+    expect(initiativeRails).toContain('ancestorHasFollowingSibling');
+    expect(initiativeRails).toContain('isLastSibling');
+    expect(initiativeRails).toContain('children.get(node.id)');
     expect(workList).toContain('data-testid="initiative-hierarchy-rail"');
     expect(workList).toContain('data-context-row');
     expect(workList).toContain('text-on-surface-variant');

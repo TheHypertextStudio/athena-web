@@ -1,5 +1,7 @@
 import type { ReactNode, Ref } from 'react';
 
+import type { ObjectRef } from '@/lib/actions/object';
+
 /** An inclusive-start, exclusive-end range of exact ISO instants. */
 export interface ScheduleInstantRange {
   /** Inclusive exact instant at which the range begins. */
@@ -41,34 +43,31 @@ export interface ScheduleItem {
   readonly openable?: boolean | undefined;
   /** Optional application-owned label for a domain-level read-only state. */
   readonly readOnlyLabel?: string | undefined;
-  /** Optional app object exposed when this item is dragged onto another scheduling item. */
-  readonly dragObject?: ScheduleDragObject | undefined;
+  /** Canonical app object used for activation, actions, and association dragging. */
+  readonly object?: ObjectRef | undefined;
   /** Whether tasks/events may be dropped onto this item as a relationship target. */
   readonly dropTarget?: boolean | undefined;
 }
 
 /** Cross-surface objects that may be associated with a calendar target. */
-export type ScheduleDragObject =
-  | {
-      readonly kind: 'task';
-      readonly taskId: string;
-      readonly organizationId: string;
-      readonly title: string;
-    }
-  | { readonly kind: 'calendar_item'; readonly itemId: string; readonly title: string };
-
 /** One object-on-item drop interpreted by the scheduling canvas. */
 export interface ScheduleObjectDrop {
-  readonly object: ScheduleDragObject;
+  readonly object: ObjectRef;
   readonly targetItem: ScheduleItem;
   readonly targetLane: ScheduleLane;
 }
 
 /** One object dropped onto empty grid time (not onto an existing item) — schedule it there. */
 export interface ScheduleObjectGridDrop {
-  readonly object: ScheduleDragObject;
+  readonly object: ObjectRef;
   readonly lane: ScheduleLane;
   /** Snapped minute-of-day of the drop position (the new block's start). */
+  readonly startMinutes: number;
+}
+
+/** Resolve one exact empty-time destination into canonical object identity. */
+export interface ScheduleCalendarSlotTargetRequest {
+  readonly lane: ScheduleLane;
   readonly startMinutes: number;
 }
 
@@ -380,10 +379,10 @@ export interface SchedulingCanvasProps {
   readonly onMoveAllDayItem?: ((request: ScheduleAllDayItemMove) => void) | undefined;
   /** Receive a proposed calendar-date resize for an all-day item. */
   readonly onResizeAllDayItem?: ((request: ScheduleAllDayItemResize) => void) | undefined;
-  /** Associate a cross-surface task/event with an item target. */
-  readonly onDropObjectOnItem?: ((request: ScheduleObjectDrop) => void) | undefined;
-  /** Schedule a cross-surface object dropped onto empty grid time as a new block at that time. */
-  readonly onDropObjectOnGrid?: ((request: ScheduleObjectGridDrop) => void) | undefined;
+  /** Resolve exact empty grid time into a canonical relation target. */
+  readonly calendarSlotTarget?:
+    | ((request: ScheduleCalendarSlotTargetRequest) => ObjectRef | null)
+    | undefined;
   /**
    * Receive a pinch / ctrl+wheel zoom intent as a multiplicative scale factor.
    * `> 1` zooms in (more pixels per hour), `< 1` zooms out. The canvas emits raw intent only;

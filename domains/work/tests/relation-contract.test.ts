@@ -31,6 +31,16 @@ describe('relation contract', () => {
     expect(defaults).toContain('calendar_item:calendar_item');
   });
 
+  it('defines every relation id once with a valid effect and cardinality', () => {
+    const ids = RELATION_DEFINITIONS.map(({ id }) => id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).toHaveLength(28);
+    for (const definition of RELATION_DEFINITIONS) {
+      expect(['move', 'link', 'copy']).toContain(definition.effect);
+      expect(['one', 'many']).toContain(definition.cardinality);
+    }
+  });
+
   it('resolves the fixed default for a compatible pair', () => {
     expect(
       resolveDefaultRelation({
@@ -74,6 +84,36 @@ describe('relation contract', () => {
         },
       }),
     ).toEqual({ accepted: false, reason: 'incompatible_parent' });
+  });
+
+  it.each([
+    [
+      { kind: 'project', id: 'project_2', organizationId: 'org_1', meta: { archived: true } },
+      'archived_target',
+    ],
+    [
+      { kind: 'project', id: 'project_2', organizationId: 'org_1', meta: { canRelate: false } },
+      'permission_denied',
+    ],
+  ] as const)('rejects unavailable targets with the stable %s reason', (target, reason) => {
+    expect(resolveDefaultRelation({ subjects: [task], target })).toEqual({
+      accepted: false,
+      reason,
+    });
+  });
+
+  it('rejects hierarchy cycles reported by current hierarchy data', () => {
+    expect(
+      resolveDefaultRelation({
+        subjects: [task],
+        target: {
+          kind: 'task',
+          id: 'task_2',
+          organizationId: 'org_1',
+          meta: { wouldCreateCycle: true },
+        },
+      }),
+    ).toEqual({ accepted: false, reason: 'hierarchy_cycle' });
   });
 
   it('keeps execution behind an injected command port', () => {

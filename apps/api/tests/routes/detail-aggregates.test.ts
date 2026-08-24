@@ -6,6 +6,7 @@ import type projectsRouter from '../../src/routes/projects';
 import type projectRollupRouter from '../../src/routes/project-rollup';
 import type programsRouter from '../../src/routes/programs';
 import type initiativesRouter from '../../src/routes/initiatives';
+import { detailCapabilities } from '../../src/lib/detail-capabilities';
 import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
 
 let schema!: typeof DbModule;
@@ -43,6 +44,21 @@ beforeAll(async () => {
 });
 
 describe('detail aggregate routes', () => {
+  it('projects the control bundle from the viewer capability lattice', () => {
+    expect(detailCapabilities([])).toEqual({
+      comment: false,
+      contribute: false,
+      assign: false,
+      manage: false,
+    });
+    expect(detailCapabilities(['manage'])).toEqual({
+      comment: true,
+      contribute: true,
+      assign: true,
+      manage: true,
+    });
+  });
+
   it('returns one bounded Task detail aggregate with its local snapshot and no org roster', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const writer = appWithActor(tasks, orgId, ['contribute'], humanActorId);
@@ -218,6 +234,110 @@ describe('detail aggregate routes', () => {
     const labels = await writer.request(`/${initiative.id}/labels`);
     expect(labels.status).toBe(200);
     expect(await labels.json()).toEqual([]);
+  });
+
+  it('loads hierarchy and connected work only after the Initiative relationship section opens', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const initiativeWriter = appWithActor(initiatives, orgId, ['contribute'], humanActorId);
+    const manager = appWithActor(programs, orgId, ['manage'], humanActorId);
+    const projectWriter = appWithActor(projects, orgId, ['contribute'], humanActorId);
+    const [rootResponse, childResponse, programResponse, projectResponse] = await Promise.all([
+      initiativeWriter.request('/', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'Transit access' }),
+      }),
+      initiativeWriter.request('/', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'Bus stop safety' }),
+      }),
+      manager.request('/', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'Street operations', ownerId: humanActorId }),
+      }),
+      projectWriter.request('/', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'Shelter audit', teamId }),
+      }),
+    ]);
+    const [root, child, program, project] = (await Promise.all([
+      rootResponse.json(),
+      childResponse.json(),
+      programResponse.json(),
+      projectResponse.json(),
+    ])) as { id: string }[];
+    if (!root || !child || !program || !project)
+      throw new Error('relationship fixture was not created');
+
+    expect(
+      (
+        await initiativeWriter.request('/hierarchy-links', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ parentInitiativeId: root.id, childInitiativeId: child.id }),
+        })
+      ).status,
+    ).toBe(201);
+    expect(
+      (
+        await initiativeWriter.request(`/${child.id}/programs`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ programId: program.id }),
+        })
+      ).status,
+    ).toBe(201);
+    expect(
+      (
+        await initiativeWriter.request(`/${root.id}/projects`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ projectId: project.id }),
+        })
+      ).status,
+    ).toBe(201);
+
+    const rootRelationships = await initiativeWriter.request(`/${root.id}/relationships`);
+    expect(rootRelationships.status).toBe(200);
+    const rootRelationshipBody = (await rootRelationships.json()) as {
+      parent: unknown;
+      children: unknown[];
+      connectedWork: unknown[];
+      truncated: boolean;
+    };
+    expect(rootRelationshipBody).toMatchObject({
+      parent: null,
+      children: [{ id: child.id, parentInitiativeId: root.id, crossWorkspace: false }],
+      truncated: false,
+    });
+    expect(rootRelationshipBody.connectedWork).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: project.id,
+          kind: 'project',
+          direct: true,
+          inheritedThroughInitiativeId: null,
+        }),
+        expect.objectContaining({
+          id: program.id,
+          kind: 'program',
+          direct: false,
+          inheritedThroughInitiativeId: child.id,
+        }),
+      ]),
+    );
+
+    const childRelationships = await initiativeWriter.request(`/${child.id}/relationships`);
+    expect(childRelationships.status).toBe(200);
+    expect(await childRelationships.json()).toMatchObject({
+      parent: { id: root.id, crossWorkspace: false },
+      children: [],
+      connectedWork: [{ id: program.id, kind: 'program', direct: true }],
+      truncated: false,
+    });
   });
 
   it('settles each initial aggregate within four database round trips', async () => {

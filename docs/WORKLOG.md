@@ -28,8 +28,9 @@
 
 ### [RELEASE-COVERAGE-001] Restore entity navigation coverage
 
-- **Status**: REVIEW
+- **Status**: COMPLETED
 - **Started**: 2026-08-24
+- **Completed**: 2026-08-24
 - **Priority**: P0
 - **Description**: The required non-web/API coverage shard stopped production because the entity
   navigation projector had untested Task, Program, and Initiative branches. The same CI pass
@@ -46,11 +47,19 @@
   - [x] Give the full workspace import scan enough time on shared CI runners.
   - [x] Cover the deferred Initiative relationship, missing-target, and bounded-hierarchy branches.
   - [x] Cover Initiative owner and label tenant-isolation branches that remained below the API coverage gate.
-  - [ ] Push the repair and verify the production rollout.
-- **Blockers**: The CI run for the repair must complete before deployment can start.
+  - [x] Push the repair and verify the production rollout.
+- **Blockers**: None.
 - **Validation**: The focused aggregate suite passes 12 cases. The relationship coverage checks an
   empty and manager capability bundle, parent and child references, direct and inherited Program
   and Project rows, a missing Initiative, and a 101-child hierarchy bounded to 100 visible rows.
+  CI run 32714355581 passed all build, lint, type, test, freshness, image, migration, deployment,
+  and Scheduler jobs for executable revision `7d0a0421`. Its API shard passed 384 test files at
+  89.13 percent branch coverage without lowering the 89 percent threshold. All five production
+  deployment records report success, and the live web, admin, and API health routes return HTTP 200.
+- **Retrospective**: Focused Initiative tests proved the changed behavior but did not protect the
+  repository-wide API coverage ratchet after concurrent detail-route work reached `main`. Release
+  validation must run the exact deploy-gating coverage command against the integrated revision.
+  Public-route tests now cover the bounded and deferred branches that helper-only tests missed.
 
 ### [RELEASE-LINT-001] Restore the production lint gate
 
@@ -5878,6 +5887,11 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   fixture gave the root and parent different continuation states. Removing a persisted field also
   requires data repair before contract enforcement, because rejecting the old JSON would discard
   unrelated view settings.
+- **Retrospective**: The first focused validation proved the roster behavior but did not protect the
+  repository-wide API coverage ratchet after concurrent detail-route work reached `main`. The exact
+  deploy-gating coverage run caught that release blocker. The final review found no remaining
+  Critical, Important, or Minor issue in the contract removal, migration, shared width, or rail
+  derivation.
 
 ---
 

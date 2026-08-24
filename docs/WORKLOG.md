@@ -76,6 +76,13 @@
   did not test the batch fact loader it owns. Authz now covers a mixed local and cross-organization
   decision. DB integration tests cover empty batches, principal denials, mixed local and foreign
   targets, missing rows, optional ancestors, grant filtering, and suppression of a foreign role.
+  CI run `32740182709` then passed every executable gate except the repository-wide API branch
+  threshold. All 4,735 tests passed, but they covered 16,731 of 18,822 branches, which rounded to
+  88.89 percent against the required 89 percent. The correction now covers duplicate outbox
+  enqueues, corrupted persisted consequence jobs, non-Error retry diagnostics, empty Label
+  catalogs, nullable canvas reference edits, rejected bulk references, and Task dependency
+  conflicts. The exact local CI command passes 390 files and 4,742 tests at 89.06 percent branch
+  coverage, or 16,763 of 18,822 branches, without changing the threshold.
 - **Validation**: The pure layout suite covers projected Task roots, weak components,
   non-overlapping rectangles, group ownership, deterministic aspect-aware packing, property-only
   stability, and the 363-Task and 28-dependency fixture within the 100 ms budget. The command route
@@ -84,7 +91,7 @@
   and transactional effect delivery. The complete canvas component suite passes 125 tests across
   34 files, and the relation and node correction passes another 16 focused tests. The serialized
   repository typecheck passes 26 tasks, lint passes 25 tasks, all 26 package test graphs pass, and
-  the production build passes with a process-local 4 GB Node heap. The final API run passes 4,736
+  the production build passes with a process-local 4 GB Node heap. The final API run passes 4,742
   tests, and the final Web run passes 3,107 tests. Live review at 1440×900, 1024×768, 390×844, and
   320×720 covers both graph types, both themes at the three primary widths, context creation, bulk
   properties, selection, trash confirmation, undo, redo, focus return, and overflow. The browser
@@ -98,8 +105,9 @@
   passes 21 executable tasks. A post-correction code review found no remaining code findings and
   repeated the Authz, DB identity-access, canvas-history, and Program aggregate regressions.
   Repository tooling passes 164 tests. Formatting, migration drift, all 26 typecheck tasks, all 25
-  lint tasks, and the four-package serialized production build pass. Deployment and production
-  checks remain open.
+  lint tasks, and the four-package serialized production build pass. The release-correction API
+  typecheck and lint commands pass, and its four focused files pass 70 tests. Deployment and
+  production checks remain open.
 - **Blockers**: None.
 
 ---

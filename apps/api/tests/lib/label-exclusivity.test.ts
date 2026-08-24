@@ -10,7 +10,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { applyExclusivity, type ResolvedLabel } from '../../src/lib/labels';
+import { applyExclusivity, resolveLabelCatalog, type ResolvedLabel } from '../../src/lib/labels';
 
 /** Build a resolved label; `exclusiveGroup` null means ungrouped or a visual-only cluster. */
 function mk(id: string, exclusiveGroup: string | null = null): ResolvedLabel {
@@ -78,5 +78,17 @@ describe('applyExclusivity', () => {
     const incoming = [mk('bug', 'type')];
     const result = applyExclusivity([...existing, ...incoming]);
     expect(result.map((l) => l.id)).toEqual(['urgent', 'bug']);
+  });
+});
+
+describe('resolveLabelCatalog', () => {
+  it('does not query the database for an empty bulk selection', async () => {
+    const database = {
+      select: () => {
+        throw new Error('empty catalogs must not query');
+      },
+    };
+
+    expect(await resolveLabelCatalog('org-empty', [], database as never)).toEqual([]);
   });
 });

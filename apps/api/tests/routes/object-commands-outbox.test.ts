@@ -6,7 +6,10 @@ import type * as DbModule from '@docket/db';
 import type * as AfterResponseModule from '../../src/lib/after-response';
 import { EntityWriteBus, type EntityWriteEvent } from '../../src/events/entity-write-bus';
 import { setEntityWriteBus } from '../../src/events/entity-write-registry';
-import { processObjectCommandEffectJobs } from '../../src/lib/object-command-effects';
+import {
+  enqueueObjectCommandEffectJob,
+  processObjectCommandEffectJobs,
+} from '../../src/lib/object-command-effects';
 import type objectCommandsRouter from '../../src/routes/object-commands';
 import { appWithActor, getDb, seedTaskAccessOrg } from '../support/routes-harness';
 
@@ -75,6 +78,46 @@ describe('object command effect outbox', () => {
   it('exposes a worker that can drain committed consequence jobs', async () => {
     const effects = await import('../../src/lib/object-command-effects');
     expect(Reflect.get(effects, 'processObjectCommandEffectJobs')).toBeTypeOf('function');
+  });
+
+  it('treats a duplicate durable consequence enqueue as an idempotent no-op', async () => {
+    const seeded = await seedTaskAccessOrg(db, schema, 'manage');
+    const commandId = `duplicate-outbox-${seeded.orgId}`;
+    const payload = {
+      version: 1 as const,
+      organizationId: seeded.orgId,
+      actorId: seeded.humanActorId,
+      commandId,
+      occurredAt: new Date().toISOString(),
+      effects: [
+        {
+          kind: 'entity_write' as const,
+          sourceTable: 'project' as const,
+          entityId: 'project-idempotent',
+          operation: 'upsert' as const,
+        },
+      ],
+    };
+
+    const result = await db.transaction(async (tx) => ({
+      first: await enqueueObjectCommandEffectJob(tx, payload),
+      duplicate: await enqueueObjectCommandEffectJob(tx, payload),
+    }));
+
+    try {
+      expect(result.first).toEqual(expect.any(String));
+      expect(result.duplicate).toBeNull();
+      expect(
+        await db
+          .select({ id: schema.objectCommandEffectJob.id })
+          .from(schema.objectCommandEffectJob)
+          .where(eq(schema.objectCommandEffectJob.commandId, commandId)),
+      ).toHaveLength(1);
+    } finally {
+      await db
+        .delete(schema.objectCommandEffectJob)
+        .where(eq(schema.objectCommandEffectJob.commandId, commandId));
+    }
   });
 
   it('publishes a committed consequence after the request process loses deferred work', async () => {

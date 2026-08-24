@@ -93,6 +93,123 @@ describe('object command effect retries', () => {
     ).toEqual([{ status: 'failed' }]);
   });
 
+  it('keeps corrupted persisted jobs retryable and records application-owned diagnostics', async () => {
+    const seeded = await seedTaskAccessOrg(db, schema, 'manage');
+    const now = new Date('2026-01-02T00:00:00.000Z');
+    const cases: { readonly suffix: string; readonly payload: unknown; readonly error: string }[] =
+      [
+        { suffix: 'payload', payload: {}, error: 'Command effect payload is invalid' },
+        {
+          suffix: 'empty-effect',
+          payload: {
+            version: 1,
+            organizationId: seeded.orgId,
+            actorId: seeded.humanActorId,
+            commandId: 'ignored-empty-effect',
+            occurredAt: new Date().toISOString(),
+            effects: [null],
+          },
+          error: 'Command effect payload contains an empty effect',
+        },
+        {
+          suffix: 'time',
+          payload: {
+            version: 1,
+            organizationId: seeded.orgId,
+            actorId: seeded.humanActorId,
+            commandId: 'ignored-time',
+            occurredAt: 'not-a-time',
+            effects: [{ kind: 'entity_write' }],
+          },
+          error: 'Command effect time is invalid',
+        },
+        {
+          suffix: 'primitive-effect',
+          payload: {
+            version: 1,
+            organizationId: seeded.orgId,
+            actorId: seeded.humanActorId,
+            commandId: 'ignored-primitive-effect',
+            occurredAt: new Date().toISOString(),
+            effects: [42],
+          },
+          error: 'Unsupported command effect',
+        },
+      ];
+    const commandIds = cases.map(({ suffix }) => `corrupt-${suffix}-${seeded.orgId}`);
+    await db.insert(schema.objectCommandEffectJob).values(
+      cases.map(({ payload }, index) => ({
+        organizationId: seeded.orgId,
+        actorId: seeded.humanActorId,
+        commandId: commandIds[index] ?? `corrupt-fallback-${index}`,
+        payload,
+        runAfter: new Date('2026-01-01T00:00:00.000Z'),
+      })),
+    );
+
+    expect(await processObjectCommandEffectJobs({ now })).toEqual({
+      processed: cases.length,
+      succeeded: 0,
+      failed: cases.length,
+    });
+    expect(
+      await db
+        .select({
+          commandId: schema.objectCommandEffectJob.commandId,
+          status: schema.objectCommandEffectJob.status,
+          lastError: schema.objectCommandEffectJob.lastError,
+        })
+        .from(schema.objectCommandEffectJob)
+        .where(inArray(schema.objectCommandEffectJob.commandId, commandIds)),
+    ).toEqual(
+      expect.arrayContaining(
+        cases.map(({ error }, index) => ({
+          commandId: commandIds[index],
+          status: 'failed',
+          lastError: error,
+        })),
+      ),
+    );
+  });
+
+  it('normalizes a non-Error consequence failure before scheduling its retry', async () => {
+    const seeded = await seedTaskAccessOrg(db, schema, 'manage');
+    const commandId = `primitive-failure-${seeded.orgId}`;
+    const now = new Date('2026-01-02T00:00:00.000Z');
+    emitEventStrict.mockRejectedValueOnce('event write rejected');
+    await db.insert(schema.objectCommandEffectJob).values({
+      organizationId: seeded.orgId,
+      actorId: seeded.humanActorId,
+      commandId,
+      runAfter: new Date('2026-01-01T00:00:00.000Z'),
+      payload: {
+        version: 1,
+        organizationId: seeded.orgId,
+        actorId: seeded.humanActorId,
+        commandId,
+        occurredAt: new Date().toISOString(),
+        effects: [
+          {
+            kind: 'project_status',
+            project: { id: 'project-primitive', name: 'Primitive failure', status: 'active' },
+          },
+        ],
+      },
+    });
+
+    expect(await processObjectCommandEffectJobs({ limit: 1, now })).toEqual({
+      processed: 1,
+      succeeded: 0,
+      failed: 1,
+    });
+    expect(
+      await db
+        .select({ lastError: schema.objectCommandEffectJob.lastError })
+        .from(schema.objectCommandEffectJob)
+        .where(eq(schema.objectCommandEffectJob.commandId, commandId)),
+    ).toEqual([{ lastError: 'event write rejected' }]);
+  });
+
   it('removes expired successful jobs without removing recent retry evidence', async () => {
     const seeded = await seedTaskAccessOrg(db, schema, 'manage');
     const now = new Date('2026-08-24T12:00:00.000Z');

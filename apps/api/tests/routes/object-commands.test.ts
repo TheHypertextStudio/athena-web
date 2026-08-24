@@ -664,6 +664,259 @@ describe('object commands', () => {
     expect(unchanged).toMatchObject({ projectId: firstProject.id, milestoneId: milestone.id });
   });
 
+  it('supports the nullable reference values exposed by the canvas bulk editor', async () => {
+    const seeded = await seedCommandOrg();
+    const projectRow = await seedProject(db, schema, seeded.statusId, {
+      organizationId: seeded.orgId,
+      teamId: seeded.teamId,
+      createdBy: seeded.humanActorId,
+      name: 'Clearable Project references',
+    });
+    const [cycleRow] = await db
+      .insert(schema.cycle)
+      .values({
+        organizationId: seeded.orgId,
+        teamId: seeded.teamId,
+        number: Math.floor(Math.random() * 1_000_000),
+        startsAt: new Date('2026-08-01T00:00:00.000Z'),
+        endsAt: new Date('2026-08-08T00:00:00.000Z'),
+      })
+      .returning({ id: schema.cycle.id });
+    const [taskRow] = await db
+      .insert(schema.task)
+      .values({
+        organizationId: seeded.orgId,
+        teamId: seeded.teamId,
+        projectId: projectRow.id,
+        assigneeId: seeded.humanActorId,
+        title: 'Clearable Task references',
+        state: 'backlog',
+        statusId: seeded.statusId('task', 'backlog'),
+      })
+      .returning({ id: schema.task.id });
+    if (!cycleRow || !taskRow) throw new Error('nullable reference fixture insert failed');
+    const app = appWithActor(objectCommands, seeded.orgId, ['manage'], seeded.humanActorId);
+
+    const operations = [
+      {
+        commandId: 'set-task-cycle',
+        objectKind: 'task',
+        objectIds: [taskRow.id],
+        operation: { type: 'replace_property', property: 'cycleId', value: cycleRow.id },
+      },
+      {
+        commandId: 'clear-task-cycle',
+        objectKind: 'task',
+        objectIds: [taskRow.id],
+        operation: { type: 'replace_property', property: 'cycleId', value: null },
+      },
+      {
+        commandId: 'clear-task-assignee',
+        objectKind: 'task',
+        objectIds: [taskRow.id],
+        operation: { type: 'replace_property', property: 'assigneeId', value: null },
+      },
+      {
+        commandId: 'clear-task-project',
+        objectKind: 'task',
+        objectIds: [taskRow.id],
+        operation: { type: 'replace_property', property: 'projectId', value: null },
+      },
+      {
+        commandId: 'clear-task-program',
+        objectKind: 'task',
+        objectIds: [taskRow.id],
+        operation: { type: 'replace_property', property: 'programId', value: null },
+      },
+      {
+        commandId: 'clear-task-milestone',
+        objectKind: 'task',
+        objectIds: [taskRow.id],
+        operation: { type: 'replace_property', property: 'milestoneId', value: null },
+      },
+      {
+        commandId: 'clear-project-lead',
+        objectKind: 'project',
+        objectIds: [projectRow.id],
+        operation: { type: 'replace_property', property: 'leadId', value: null },
+      },
+      {
+        commandId: 'clear-project-team',
+        objectKind: 'project',
+        objectIds: [projectRow.id],
+        operation: { type: 'replace_property', property: 'teamId', value: null },
+      },
+      {
+        commandId: 'clear-project-program',
+        objectKind: 'project',
+        objectIds: [projectRow.id],
+        operation: { type: 'replace_property', property: 'programId', value: null },
+      },
+    ] as const;
+    for (const operation of operations) {
+      const response = await send(app, operation);
+      expect(response.status, operation.commandId).toBe(200);
+    }
+
+    const [clearedTask] = await db.select().from(schema.task).where(eq(schema.task.id, taskRow.id));
+    expect(clearedTask).toMatchObject({
+      assigneeId: null,
+      projectId: null,
+      programId: null,
+      milestoneId: null,
+      cycleId: null,
+    });
+    const [clearedProject] = await db
+      .select()
+      .from(schema.project)
+      .where(eq(schema.project.id, projectRow.id));
+    expect(clearedProject).toMatchObject({ leadId: null, teamId: null, programId: null });
+  });
+
+  it('rejects missing and cross-Project bulk references before changing Tasks', async () => {
+    const seeded = await seedCommandOrg();
+    const firstProject = await seedProject(db, schema, seeded.statusId, {
+      organizationId: seeded.orgId,
+      teamId: seeded.teamId,
+      createdBy: seeded.humanActorId,
+      name: 'Reference Project A',
+    });
+    const secondProject = await seedProject(db, schema, seeded.statusId, {
+      organizationId: seeded.orgId,
+      teamId: seeded.teamId,
+      createdBy: seeded.humanActorId,
+      name: 'Reference Project B',
+    });
+    const [milestoneRow] = await db
+      .insert(schema.milestone)
+      .values({
+        organizationId: seeded.orgId,
+        projectId: firstProject.id,
+        name: 'Project A milestone',
+      })
+      .returning({ id: schema.milestone.id });
+    const taskRows = await db
+      .insert(schema.task)
+      .values([
+        {
+          organizationId: seeded.orgId,
+          teamId: seeded.teamId,
+          projectId: firstProject.id,
+          title: 'Reference Task A',
+          state: 'backlog',
+          statusId: seeded.statusId('task', 'backlog'),
+        },
+        {
+          organizationId: seeded.orgId,
+          teamId: seeded.teamId,
+          projectId: secondProject.id,
+          title: 'Reference Task B',
+          state: 'backlog',
+          statusId: seeded.statusId('task', 'backlog'),
+        },
+      ])
+      .returning({ id: schema.task.id });
+    if (!milestoneRow || taskRows.length !== 2) throw new Error('reference fixture insert failed');
+    const firstTask = taskRows[0];
+    const secondTask = taskRows[1];
+    if (!firstTask || !secondTask) throw new Error('reference Task fixture missing');
+    const app = appWithActor(objectCommands, seeded.orgId, ['manage'], seeded.humanActorId);
+    const missingId = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
+
+    expect(
+      (
+        await send(app, {
+          commandId: 'missing-bulk-label',
+          objectKind: 'task',
+          objectIds: [firstTask.id],
+          operation: {
+            type: 'add_association',
+            association: 'label',
+            associationIds: [missingId],
+          },
+        })
+      ).status,
+    ).toBe(404);
+    expect(
+      (
+        await send(app, {
+          commandId: 'missing-parent',
+          objectKind: 'task',
+          objectIds: [firstTask.id],
+          operation: { type: 'change_parent', parentId: missingId },
+        })
+      ).status,
+    ).toBe(404);
+    expect(
+      (
+        await send(app, {
+          commandId: 'mixed-project-milestone',
+          objectKind: 'task',
+          objectIds: [firstTask.id, secondTask.id],
+          operation: {
+            type: 'replace_property',
+            property: 'milestoneId',
+            value: milestoneRow.id,
+          },
+        })
+      ).status,
+    ).toBe(422);
+    const unchanged = await db
+      .select({ milestoneId: schema.task.milestoneId })
+      .from(schema.task)
+      .where(inArray(schema.task.id, [firstTask.id, secondTask.id]));
+    expect(unchanged).toHaveLength(2);
+    expect(unchanged.every((row) => row.milestoneId === null)).toBe(true);
+  });
+
+  it('reports Task dependency conflicts without changing dependency direction', async () => {
+    const seeded = await seedCommandOrg();
+    const taskRows = await db
+      .insert(schema.task)
+      .values([
+        {
+          organizationId: seeded.orgId,
+          teamId: seeded.teamId,
+          title: 'Blocking Task',
+          state: 'backlog',
+          statusId: seeded.statusId('task', 'backlog'),
+        },
+        {
+          organizationId: seeded.orgId,
+          teamId: seeded.teamId,
+          title: 'Blocked Task',
+          state: 'backlog',
+          statusId: seeded.statusId('task', 'backlog'),
+        },
+      ])
+      .returning({ id: schema.task.id });
+    const blocking = taskRows[0];
+    const blocked = taskRows[1];
+    if (!blocking || !blocked) throw new Error('dependency Task fixture missing');
+    const app = appWithActor(objectCommands, seeded.orgId, ['manage'], seeded.humanActorId);
+    const body = (commandId: string, type: 'add_dependency' | 'remove_dependency') => ({
+      commandId,
+      objectKind: 'task',
+      objectIds: [blocking.id, blocked.id],
+      operation: { type, blockingId: blocking.id, blockedId: blocked.id },
+    });
+
+    expect(
+      (await send(app, body('remove-missing-task-dependency', 'remove_dependency'))).status,
+    ).toBe(404);
+    expect((await send(app, body('add-task-dependency', 'add_dependency'))).status).toBe(200);
+    expect((await send(app, body('add-existing-task-dependency', 'add_dependency'))).status).toBe(
+      409,
+    );
+    expect((await send(app, body('remove-task-dependency', 'remove_dependency'))).status).toBe(200);
+    expect(
+      await db
+        .select()
+        .from(schema.taskDependency)
+        .where(eq(schema.taskDependency.organizationId, seeded.orgId)),
+    ).toHaveLength(0);
+  });
+
   it('enforces label team scope and replaces exclusive-group labels with complete receipts', async () => {
     const seeded = await seedCommandOrg();
     const [otherTeam] = await db

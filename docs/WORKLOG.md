@@ -7,6 +7,22 @@
 
 ## Active Tasks
 
+### [RELEASE-COVERAGE-001] Restore entity navigation coverage
+
+- **Status**: REVIEW
+- **Started**: 2026-08-24
+- **Priority**: P0
+- **Description**: The required non-web/API coverage shard stopped production because the entity
+  navigation projector had untested Task, Program, and Initiative branches.
+- **Approach**: Add one parsed work-view row and exact navigation snapshot assertion for each
+  omitted target. Keep the coverage threshold unchanged at 100 percent.
+- **Subtasks**:
+  - [x] Reproduce the CI coverage failure locally.
+  - [x] Cover every target-specific snapshot branch.
+  - [x] Pass the full types coverage suite at the existing threshold.
+  - [ ] Push the repair and verify the production rollout.
+- **Blockers**: The CI run for the repair must complete before deployment can start.
+
 ### [RELEASE-LINT-001] Restore the production lint gate
 
 - **Status**: REVIEW

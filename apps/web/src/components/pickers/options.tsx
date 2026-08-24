@@ -186,8 +186,9 @@ export function actorOptions(
   members: readonly MemberOut[],
   agents: readonly AgentOut[] = [],
 ): readonly PickerOption[] {
+  const activeMembers = members.filter(({ status }) => status === 'active');
   const agentActorIds = new Set(agents.map((agent) => agent.actorId));
-  const options: PickerOption[] = members.map((member) => ({
+  const options: PickerOption[] = activeMembers.map((member) => ({
     value: member.actorId,
     label: member.displayName,
     icon: (
@@ -200,7 +201,7 @@ export function actorOptions(
     ),
   }));
   // Agents with no naming member row still need to be selectable.
-  const named = new Set(members.map((member) => member.actorId));
+  const named = new Set(activeMembers.map((member) => member.actorId));
   for (const agent of agents) {
     if (named.has(agent.actorId)) continue;
     options.push({

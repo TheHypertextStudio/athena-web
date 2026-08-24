@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { type ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -9,6 +9,9 @@ const wiring = vi.hoisted(() => ({
   canvasProps: null as null | Record<string, unknown>,
   commandProviderProps: null as null | Record<string, unknown>,
   actions: null as null | Record<string, unknown>,
+  openCreate: vi.fn(),
+  routerPush: vi.fn(),
+  invalidateQueries: vi.fn().mockResolvedValue(undefined),
   history: {
     execute: vi.fn().mockResolvedValue({
       appliedIds: [],
@@ -37,13 +40,15 @@ vi.mock('@xyflow/react', () => ({
   Panel: ({ children }: { children: ReactNode }) => <>{children}</>,
 }));
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock('../../../src/lib/interactions/navigation', () => ({
+  useAppRouter: () => ({ push: wiring.routerPush }),
+}));
 vi.mock('@tanstack/react-query', () => ({
-  useQueryClient: () => ({ invalidateQueries: vi.fn() }),
+  useQueryClient: () => ({ invalidateQueries: wiring.invalidateQueries }),
 }));
 vi.mock('../../../src/lib/app-location', () => ({ useAppPathname: () => '/orgs/org-1/graph' }));
 vi.mock('../../../src/components/create-object/create-object-provider', () => ({
-  useCreateObject: () => ({ openCreate: vi.fn() }),
+  useCreateObject: () => ({ openCreate: wiring.openCreate }),
 }));
 vi.mock('../../../src/lib/query', () => ({
   apiQueryOptions: () => ({}),
@@ -128,7 +133,19 @@ vi.mock('../../../src/components/canvas/canvas-selection-bridge', () => ({ defau
 vi.mock('../../../src/components/canvas/bulk-actions-bar', () => ({ default: () => null }));
 vi.mock('../../../src/components/canvas/canvas-command-notice', () => ({ default: () => null }));
 vi.mock('../../../src/components/canvas/canvas-created-hidden-notice', () => ({
-  default: () => null,
+  default: (props: {
+    message?: string;
+    actionLabel?: string;
+    onAction?: () => void;
+    onClearFilters?: () => void;
+  }) => (
+    <div role="status">
+      {props.message ?? 'Created, but hidden by current filters'}
+      <button type="button" onClick={props.onAction ?? props.onClearFilters}>
+        {props.actionLabel ?? 'Clear filters'}
+      </button>
+    </div>
+  ),
 }));
 vi.mock('../../../src/components/canvas/graph-view-bar', () => ({ default: () => null }));
 vi.mock('../../../src/components/canvas/group-node', () => ({ default: () => null }));
@@ -200,5 +217,43 @@ describe('focused Task graph navigation', () => {
       canEdit: false,
       history: wiring.history,
     });
+  });
+
+  it('keeps a Project-scoped graph mounted when the composer creates a Task outside its scope', async () => {
+    wiring.openCreate.mockClear();
+    wiring.routerPush.mockClear();
+    wiring.invalidateQueries.mockClear();
+    render(
+      <TaskGraphPanel
+        scope={{ orgId: 'org-1', projectId: 'project-current' }}
+        density="full"
+        display={DEFAULT_GRAPH_DISPLAY}
+        renderChrome={(bar) => <header>{bar}</header>}
+      />,
+    );
+
+    act(() => {
+      (wiring.commandProviderProps?.['onCreateObject'] as () => void)();
+    });
+    const request = wiring.openCreate.mock.calls[0]?.[0] as {
+      defaultProjectId?: string;
+      sameWorkspaceCompletion: string;
+      onCreated: (created: { id: string; projectId?: string | null }) => void;
+    };
+    expect(request).toMatchObject({
+      defaultProjectId: 'project-current',
+      sameWorkspaceCompletion: 'stay',
+    });
+
+    act(() => {
+      request.onCreated({ id: 'task-created', projectId: 'project-other' });
+    });
+
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Created, but outside this Project',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open Task' }));
+    expect(wiring.routerPush).toHaveBeenCalledWith('/orgs/org-1/tasks/task-created');
+    expect(screen.getByTestId('task-canvas')).toBeInTheDocument();
   });
 });

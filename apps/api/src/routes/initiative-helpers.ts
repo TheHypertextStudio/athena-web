@@ -138,6 +138,7 @@ export async function associatedProjects(
       and(
         eq(initiativeProject.initiativeId, initiativeId),
         eq(initiativeProject.organizationId, orgId),
+        isNull(project.archivedAt),
       ),
     )
     .then((rows) => rows.map((r) => r.p));
@@ -197,6 +198,7 @@ export async function associatedWorkSummary(
         and(
           eq(initiativeProject.initiativeId, initiativeId),
           eq(initiativeProject.organizationId, orgId),
+          isNull(project.archivedAt),
         ),
       ),
     db

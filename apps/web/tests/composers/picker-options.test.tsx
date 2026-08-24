@@ -41,6 +41,7 @@ const IDS = {
   org: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
   ada: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
   bot: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
+  suspended: '01ARZ3NDEKTSV4RRFFQ69G5FB7',
   lonelyBot: '01ARZ3NDEKTSV4RRFFQ69G5FAY',
   agent: '01ARZ3NDEKTSV4RRFFQ69G5FAZ',
   project: '01ARZ3NDEKTSV4RRFFQ69G5FB0',
@@ -55,13 +56,17 @@ const IDS = {
 const CREATED_AT = '2026-07-06T00:00:00.000Z';
 
 /** Build a member fixture through the shared DTO schema. */
-function member(actorId: string, displayName: string): MemberOut {
+function member(
+  actorId: string,
+  displayName: string,
+  status: MemberOut['status'] = 'active',
+): MemberOut {
   return MemberOut.parse({
     actorId,
     organizationId: IDS.org,
     displayName,
     avatar: null,
-    status: 'active',
+    status,
     roleId: null,
     userId: null,
     createdAt: CREATED_AT,
@@ -90,6 +95,15 @@ describe('picker option mappers', () => {
     const [option] = options;
     expect(option).toMatchObject({ value: IDS.ada, label: 'Ada Lovelace' });
     expect(option?.icon).toBeDefined();
+  });
+
+  it('omits suspended people from assignable actor options', () => {
+    const options = actorOptions([
+      member(IDS.ada, 'Ada Lovelace'),
+      member(IDS.suspended, 'Suspended Person', 'suspended'),
+    ]);
+
+    expect(options.map(({ value }) => value)).toEqual([IDS.ada]);
   });
 
   it('tags an actor as an agent when it appears in the agents list', () => {

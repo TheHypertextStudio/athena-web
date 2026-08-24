@@ -314,7 +314,11 @@ export async function hydrateInitiative(orgId: string, id: string): Promise<unkn
       .from(initiativeProject)
       .innerJoin(project, eq(initiativeProject.projectId, project.id))
       .where(
-        and(eq(initiativeProject.initiativeId, id), eq(initiativeProject.organizationId, orgId)),
+        and(
+          eq(initiativeProject.initiativeId, id),
+          eq(initiativeProject.organizationId, orgId),
+          isNull(project.archivedAt),
+        ),
       ),
     db
       .select({ id: program.id, name: program.name, health: program.health })

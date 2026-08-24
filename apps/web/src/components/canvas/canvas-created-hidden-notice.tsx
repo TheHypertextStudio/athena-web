@@ -6,13 +6,19 @@ import { Panel } from '@xyflow/react';
 
 /** Props for {@link CanvasCreatedHiddenNotice}. */
 export interface CanvasCreatedHiddenNoticeProps {
-  /** Clear the host's active filters and retry the graph query. */
-  readonly onClearFilters: () => void;
+  /** Explain why the created object cannot appear in the retained canvas. */
+  readonly message: string;
+  /** Name the recovery action in user terms. */
+  readonly actionLabel: string;
+  /** Recover by changing the view or opening the created object. */
+  readonly onAction: () => void;
 }
 
 /** Explain why creation succeeded without replacing the retained graph. */
 export default function CanvasCreatedHiddenNotice({
-  onClearFilters,
+  message,
+  actionLabel,
+  onAction,
 }: CanvasCreatedHiddenNoticeProps): React.JSX.Element {
   return (
     <Panel position="top-center">
@@ -22,9 +28,9 @@ export default function CanvasCreatedHiddenNotice({
         role="status"
         className="text-body-medium flex items-center gap-2 py-1.5 pr-2 pl-4"
       >
-        Created, but hidden by current filters
-        <Button type="button" variant="ghost" size="sm" onClick={onClearFilters}>
-          Clear filters
+        {message}
+        <Button type="button" variant="ghost" size="sm" onClick={onAction}>
+          {actionLabel}
         </Button>
       </Surface>
     </Panel>

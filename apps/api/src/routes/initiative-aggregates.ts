@@ -23,7 +23,7 @@ import {
   InitiativeOverviewOut,
   InitiativeRelationshipSections,
 } from '@docket/types';
-import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -153,7 +153,7 @@ async function loadRelationshipSections(
       .select({ initiativeId: initiativeProject.initiativeId, row: project })
       .from(initiativeProject)
       .innerJoin(project, eq(project.id, initiativeProject.projectId))
-      .where(inArray(initiativeProject.initiativeId, rollupIds))
+      .where(and(inArray(initiativeProject.initiativeId, rollupIds), isNull(project.archivedAt)))
       .orderBy(asc(project.id))
       .limit(MAX_CONNECTED_WORK + 1),
   ]);
@@ -624,7 +624,9 @@ const initiativeAggregates = new Hono<AppEnv>()
             .select({ initiativeId: initiativeProject.initiativeId, row: project })
             .from(initiativeProject)
             .innerJoin(project, eq(project.id, initiativeProject.projectId))
-            .where(inArray(initiativeProject.initiativeId, rollupIds)),
+            .where(
+              and(inArray(initiativeProject.initiativeId, rollupIds), isNull(project.archivedAt)),
+            ),
           db
             .select({ row: label })
             .from(initiativeLabel)

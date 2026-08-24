@@ -119,6 +119,58 @@ interface Detail {
 }
 
 describe('initiatives detail roll-up', () => {
+  it('omits archived Projects from every active Initiative detail projection', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId);
+    const initiativeId = await seedInitiative(orgId, humanActorId);
+    const activeProjectId = await seedProject(orgId, humanActorId, {
+      name: 'Active Project',
+      health: 'at_risk',
+    });
+    const archivedProjectId = await seedProject(orgId, humanActorId, {
+      name: 'Archived Project',
+      health: 'off_track',
+    });
+    await db.insert(schema.initiativeProject).values(
+      [activeProjectId, archivedProjectId].map((projectId) => ({
+        organizationId: orgId,
+        initiativeId,
+        projectId,
+      })),
+    );
+    await db
+      .update(schema.project)
+      .set({ archivedAt: new Date('2026-08-24T12:00:00.000Z') })
+      .where(eq(schema.project.id, archivedProjectId));
+
+    const detail = await json<Detail>(await writer.request(`/${initiativeId}`));
+    expect(detail).toMatchObject({
+      childMix: { programs: 0, projects: 1 },
+      distribution: { onTrack: 0, atRisk: 1, offTrack: 0, unknown: 0 },
+      rolledUpHealth: 'at_risk',
+    });
+
+    const bounded = await json<{
+      defaultView: { initiative: Detail };
+    }>(await writer.request(`/${initiativeId}/aggregate-detail`));
+    expect(bounded.defaultView.initiative).toMatchObject({
+      childMix: { programs: 0, projects: 1 },
+      distribution: { onTrack: 0, atRisk: 1, offTrack: 0, unknown: 0 },
+      rolledUpHealth: 'at_risk',
+    });
+
+    const relationships = await json<{ connectedWork: { id: string }[] }>(
+      await writer.request(`/${initiativeId}/relationships`),
+    );
+    const aggregate = await json<{ connectedWork: { id: string }[] }>(
+      await writer.request(`/${initiativeId}/aggregate`),
+    );
+    for (const projection of [relationships, aggregate]) {
+      expect(projection.connectedWork.map(({ id }) => id)).toEqual([activeProjectId]);
+      expect(JSON.stringify(projection)).not.toContain(archivedProjectId);
+    }
+  });
+
   it('persists broad target periods with the workspace fiscal basis', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     await db

@@ -252,6 +252,7 @@ export default function TaskGraphPanel({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [createdSelectionId, setCreatedSelectionId] = useState<string | null>(null);
   const [settledCreatedSelectionId, setSettledCreatedSelectionId] = useState<string | null>(null);
+  const [createdOutsideScopeId, setCreatedOutsideScopeId] = useState<string | null>(null);
   const [layoutEpoch, setLayoutEpoch] = useState(0);
 
   // In the neighborhood scope, the depth control overrides the incoming scope depth live.
@@ -486,6 +487,7 @@ export default function TaskGraphPanel({
   const clearActiveError = creation.clearError;
   const createTask = useCallback(
     (returnFocusTo?: HTMLElement | null) => {
+      setCreatedOutsideScopeId(null);
       openCreate(
         {
           kind: 'task',
@@ -493,7 +495,17 @@ export default function TaskGraphPanel({
           sameWorkspaceCompletion: 'stay',
           ...(scope.projectId === undefined ? {} : { defaultProjectId: scope.projectId }),
           onCreated: (created) => {
+            const outsideStructuralScope =
+              scope.rootTaskId !== undefined ||
+              (scope.projectId !== undefined && created.projectId !== scope.projectId);
+            if (outsideStructuralScope) {
+              setCreatedSelectionId(null);
+              setSettledCreatedSelectionId(null);
+              setCreatedOutsideScopeId(created.id);
+              return;
+            }
             setSelectedId(created.id);
+            setCreatedOutsideScopeId(null);
             setCreatedSelectionId(created.id);
             setSettledCreatedSelectionId(null);
             void queryClient.invalidateQueries({ queryKey: graphKey }).then(() => {
@@ -504,7 +516,7 @@ export default function TaskGraphPanel({
         returnFocusTo,
       );
     },
-    [graphKey, openCreate, orgId, queryClient, scope.projectId],
+    [graphKey, openCreate, orgId, queryClient, scope.projectId, scope.rootTaskId],
   );
 
   const applyCreatedSelection = useCallback(
@@ -600,13 +612,28 @@ export default function TaskGraphPanel({
                 <CanvasCommandNotice />
                 {createdHidden ? (
                   <CanvasCreatedHiddenNotice
-                    onClearFilters={() => {
+                    message="Created, but hidden by current filters"
+                    actionLabel="Clear filters"
+                    onAction={() => {
                       setFilters([]);
                       patchDisplay({ search: '' });
                       setSettledCreatedSelectionId(null);
                       void queryClient.invalidateQueries({ queryKey: graphKey }).then(() => {
                         setSettledCreatedSelectionId(createdSelectionId);
                       });
+                    }}
+                  />
+                ) : null}
+                {createdOutsideScopeId !== null ? (
+                  <CanvasCreatedHiddenNotice
+                    message={
+                      scope.projectId !== undefined
+                        ? 'Created, but outside this Project'
+                        : 'Created, but outside this Task neighborhood'
+                    }
+                    actionLabel="Open Task"
+                    onAction={() => {
+                      navigate(createdOutsideScopeId);
                     }}
                   />
                 ) : null}

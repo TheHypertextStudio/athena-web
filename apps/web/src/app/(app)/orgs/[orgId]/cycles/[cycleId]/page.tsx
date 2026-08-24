@@ -6,7 +6,6 @@ import { EmptyState, type EntityTableGroup } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Activity, RefreshCw } from '@docket/ui/icons';
 import { Button, Skeleton, Tabs, type TabsItem } from '@docket/ui/primitives';
-import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useTypedRoute } from '@/lib/app-location';
 import { type JSX, useMemo, useState } from 'react';
 
@@ -36,6 +35,7 @@ import { useRenameTask } from '@/lib/use-rename-task';
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { categoryRank } from '@/lib/work-category';
 import { userErrorMessage } from '@/lib/problem';
+import { openTaskRecord } from '@/lib/local-first-navigation';
 
 /** The detail page's two sections. */
 type TabId = 'tasks' | 'pace';
@@ -100,7 +100,6 @@ export function cycleSubtitle(
  *   `name` (the derived default keeps following the window until someone types a real name).
  */
 export default function CycleDetailPage(): JSX.Element {
-  const router = useRouter();
   const params = useTypedRoute('/orgs/[orgId]/cycles/[cycleId]').params;
   const { orgId, cycleId } = params;
   const prefetch = usePrefetchApi();
@@ -205,9 +204,7 @@ export default function CycleDetailPage(): JSX.Element {
       resolveActor: (id) => resolveActor(id),
       canEdit: canEditCycle,
       onRename: renameCycleTask,
-      onOpen: (task) => {
-        router.push(`/orgs/${orgId}/tasks/${task.id}`);
-      },
+      onOpen: openTaskRecord,
     });
   }, [
     statuses,
@@ -219,8 +216,6 @@ export default function CycleDetailPage(): JSX.Element {
     resolveActor,
     canEditCycle,
     renameCycleTask,
-    router,
-    orgId,
   ]);
 
   const orderedTasks = useMemo(() => {
@@ -439,9 +434,7 @@ export default function CycleDetailPage(): JSX.Element {
               onRowPrefetch={(task) => {
                 prefetch(taskDetailDef(orgId, task.id));
               }}
-              onOpenTask={(task) => {
-                router.push(`/orgs/${orgId}/tasks/${task.id}`);
-              }}
+              onOpenTask={openTaskRecord}
             />
           )}
 

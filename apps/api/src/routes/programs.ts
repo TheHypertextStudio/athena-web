@@ -18,7 +18,7 @@ import {
   ProgramWorkQuery,
   UpdateFeed,
 } from '@docket/types';
-import { and, desc, eq, inArray, isNull, or } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, isNull, or } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -44,7 +44,7 @@ import { capabilityGuard } from '../permissions/capability-guard';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 
 import { emitEvent } from './event-emit';
-import { buildTaskViewFilter } from './task-helpers';
+import { buildTaskViewCondition, buildTaskViewFilter } from './task-helpers';
 
 type ProgramRow = typeof program.$inferSelect;
 type TaskRow = typeof task.$inferSelect;
@@ -214,31 +214,23 @@ const programs = new Hono<AppEnv>()
     async (c) => {
       const { orgId, actorId, capabilities } = c.get('actorCtx');
       const { id } = c.req.valid('param');
-      const [aggregateRows, canView] = await Promise.all([
-        db
-          .select({ row: program, ownerRow: actor })
-          .from(program)
-          .leftJoin(actor, and(eq(program.ownerId, actor.id), eq(actor.organizationId, orgId)))
-          .where(and(eq(program.id, id), eq(program.organizationId, orgId)))
-          .limit(1),
-        buildTaskViewFilter(orgId, actorId),
-      ]);
+      const aggregateRows = await db
+        .select({ row: program, ownerRow: actor })
+        .from(program)
+        .leftJoin(actor, and(eq(program.ownerId, actor.id), eq(actor.organizationId, orgId)))
+        .where(and(eq(program.id, id), eq(program.organizationId, orgId)))
+        .limit(1);
       const aggregateRow = aggregateRows[0];
       if (!aggregateRow) throw new NotFoundError('Program not found');
       const { row, ownerRow } = aggregateRow;
-      const [projectRows, taskRows] = await Promise.all([
+      const taskView = await buildTaskViewCondition(orgId, actorId);
+      const [projectCountRows, taskCountRows] = await Promise.all([
         db
-          .select({ id: project.id })
+          .select({ total: count(project.id) })
           .from(project)
           .where(and(eq(project.programId, id), eq(project.organizationId, orgId))),
         db
-          .select({
-            id: task.id,
-            teamId: task.teamId,
-            projectId: task.projectId,
-            programId: task.programId,
-            visibility: task.visibility,
-          })
+          .select({ total: count(task.id) })
           .from(task)
           .leftJoin(project, eq(task.projectId, project.id))
           .where(
@@ -246,10 +238,10 @@ const programs = new Hono<AppEnv>()
               eq(task.organizationId, orgId),
               isNull(task.archivedAt),
               or(eq(task.programId, id), eq(project.programId, id)),
+              taskView,
             ),
           ),
       ]);
-      const taskCount = taskRows.filter(canView).length;
 
       return ok(c, ProgramDetailAggregate, {
         target: 'program',
@@ -266,7 +258,13 @@ const programs = new Hono<AppEnv>()
         capabilities: detailCapabilities(capabilities),
         references: { owner: ownerRow ? actorReference(ownerRow) : null },
         defaultView: {
-          program: { ...toOut(row), rollup: { projects: projectRows.length, tasks: taskCount } },
+          program: {
+            ...toOut(row),
+            rollup: {
+              projects: projectCountRows[0]?.total ?? 0,
+              tasks: taskCountRows[0]?.total ?? 0,
+            },
+          },
         },
       });
     },

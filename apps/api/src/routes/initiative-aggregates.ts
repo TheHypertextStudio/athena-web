@@ -36,10 +36,10 @@ import { zParam } from '../lib/validate';
 import { rankInitiativeAttention } from './initiative-attention';
 import { accessibleInitiativeOrganizationIds } from './initiative-hierarchy';
 import {
-  associatedPrograms,
-  associatedProjects,
   buildInitiativeDetail,
+  buildInitiativeDetailFromSummary,
   loadInitiative,
+  associatedWorkSummary,
   toOut,
 } from './initiative-helpers';
 
@@ -492,9 +492,8 @@ const initiativeAggregates = new Hono<AppEnv>()
       const { orgId, actorId, capabilities } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const row = await loadInitiative(orgId, id);
-      const [projects, programs, ownerRows] = await Promise.all([
-        associatedProjects(orgId, id),
-        associatedPrograms(orgId, id),
+      const [summary, ownerRows] = await Promise.all([
+        associatedWorkSummary(orgId, id),
         row.ownerId === null
           ? Promise.resolve([])
           : db
@@ -522,7 +521,7 @@ const initiativeAggregates = new Hono<AppEnv>()
         references: owner
           ? { owner: { actorId: owner.id, displayName: owner.displayName, avatar: owner.avatar } }
           : { owner: null },
-        defaultView: { initiative: buildInitiativeDetail(row, projects, programs) },
+        defaultView: { initiative: buildInitiativeDetailFromSummary(row, summary) },
       });
     },
   )

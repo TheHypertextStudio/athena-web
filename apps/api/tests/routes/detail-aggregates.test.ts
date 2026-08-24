@@ -246,17 +246,17 @@ describe('detail aggregate routes', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ name: 'Bounded query initiative', ownerId: humanActorId }),
     });
-    const ids = [
+    const [taskResult, projectResult, programResult, initiativeResult] = [
       (await taskResponse.json()) as { id: string },
       (await projectResponse.json()) as { id: string },
       (await programResponse.json()) as { id: string },
       (await initiativeResponse.json()) as { id: string },
-    ];
+    ] as const;
     const cases = [
-      ['Task', taskWriter, `/${ids[0].id}/aggregate-detail`],
-      ['Project', projectWriter, `/${ids[1].id}/aggregate-detail`],
-      ['Program', manager, `/${ids[2].id}/aggregate-detail`],
-      ['Initiative', initiativeWriter, `/${ids[3].id}/aggregate-detail`],
+      ['Task', taskWriter, `/${taskResult.id}/aggregate-detail`],
+      ['Project', projectWriter, `/${projectResult.id}/aggregate-detail`],
+      ['Program', manager, `/${programResult.id}/aggregate-detail`],
+      ['Initiative', initiativeWriter, `/${initiativeResult.id}/aggregate-detail`],
     ] as const;
 
     for (const [target, app, path] of cases) {

@@ -30,7 +30,7 @@ import {
   ProjectUpdate,
 } from '@docket/types';
 import type { ProgramOut, TeamOut } from '@docket/types';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -57,7 +57,7 @@ import { zJson, zParam, zQuery } from '../lib/validate';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 import { emitEvent } from './event-emit';
 import { projectDependencyRoutes } from './project-dependency-routes';
-import { buildTaskViewFilter } from './task-helpers';
+import { buildTaskViewCondition, buildTaskViewFilter } from './task-helpers';
 
 type ProjectRow = typeof project.$inferSelect;
 
@@ -231,6 +231,28 @@ function computeProgress(
 
   const percent = totalWeight > 0 ? completedWeight / totalWeight : 0;
   return { percent, completedWeight, totalWeight, taskCount, completedCount };
+}
+
+/** Convert one database aggregate row into the Project progress contract. */
+function progressFromAggregate(row: {
+  taskCount: number;
+  completedCount: number;
+  estimatedCount: number;
+  estimatedWeight: number;
+  completedEstimatedWeight: number;
+}): z.input<typeof ProjectProgress> {
+  const usesEstimates = row.estimatedCount > 0;
+  const taskCount = row.taskCount;
+  const completedCount = row.completedCount;
+  const totalWeight = usesEstimates ? row.estimatedWeight : taskCount;
+  const completedWeight = usesEstimates ? row.completedEstimatedWeight : completedCount;
+  return {
+    percent: totalWeight > 0 ? completedWeight / totalWeight : 0,
+    completedWeight,
+    totalWeight,
+    taskCount,
+    completedCount,
+  };
 }
 
 /** Projects router: org-scoped CRUD + weighted-progress; `contribute` to edit, `manage` to delete. */
@@ -554,22 +576,17 @@ const projects = new Hono<AppEnv>()
       if (!aggregateRow) throw new NotFoundError('Project not found');
       const { row, programRow, teamRow, leadRow } = aggregateRow;
 
-      const [taskRows, canView] = await Promise.all([
-        db
-          .select({
-            id: task.id,
-            teamId: task.teamId,
-            projectId: task.projectId,
-            programId: task.programId,
-            visibility: task.visibility,
-            estimate: task.estimate,
-            completedAt: task.completedAt,
-          })
-          .from(task)
-          .where(and(eq(task.organizationId, orgId), eq(task.projectId, row.id))),
-        buildTaskViewFilter(orgId, actorId),
-      ]);
-      const visibleTaskRows = taskRows.filter(canView);
+      const taskView = await buildTaskViewCondition(orgId, actorId);
+      const [progressRow] = await db
+        .select({
+          taskCount: count(task.id),
+          completedCount: sql<number>`count(*) filter (where ${task.completedAt} is not null)`,
+          estimatedCount: sql<number>`count(*) filter (where ${task.estimate} > 0)`,
+          estimatedWeight: sql<number>`coalesce(sum(case when ${task.estimate} > 0 then ${task.estimate} else 0 end), 0)`,
+          completedEstimatedWeight: sql<number>`coalesce(sum(case when ${task.completedAt} is not null and ${task.estimate} > 0 then ${task.estimate} else 0 end), 0)`,
+        })
+        .from(task)
+        .where(and(eq(task.organizationId, orgId), eq(task.projectId, row.id), taskView));
 
       return ok(c, ProjectDetailAggregate, {
         target: 'project',
@@ -590,7 +607,18 @@ const projects = new Hono<AppEnv>()
           program: programRow ? programToOut(programRow) : null,
           team: teamRow ? teamToOut(teamRow) : null,
         },
-        defaultView: { project: toOut(row), progress: computeProgress(visibleTaskRows) },
+        defaultView: {
+          project: toOut(row),
+          progress: progressFromAggregate(
+            progressRow ?? {
+              taskCount: 0,
+              completedCount: 0,
+              estimatedCount: 0,
+              estimatedWeight: 0,
+              completedEstimatedWeight: 0,
+            },
+          ),
+        },
       });
     },
   )

@@ -117,6 +117,23 @@ describe('authenticated navigation source policy', () => {
     expect(violations).toEqual([]);
   });
 
+  it('opens Task table rows through the typed snapshot transport', () => {
+    const files = [
+      'src/components/programs/program-work-view.tsx',
+      'src/app/(app)/orgs/[orgId]/cycles/[cycleId]/page.tsx',
+      'src/app/(app)/orgs/[orgId]/my-work/my-work-client.tsx',
+    ];
+    const violations = files.filter((file) => {
+      const source = readFileSync(join(webRoot, file), 'utf8');
+      return (
+        !source.includes('openTaskRecord') ||
+        source.includes('router.push(`/orgs/${orgId}/tasks/${task.id}`)')
+      );
+    });
+
+    expect(violations).toEqual([]);
+  });
+
   it('keeps authenticated links behind DocketLink', () => {
     const violations = roots
       .flatMap(sourceFiles)

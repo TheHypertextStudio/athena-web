@@ -22,7 +22,6 @@ import { EmptyState } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { ListChecks } from '@docket/ui/icons';
 import { Skeleton } from '@docket/ui/primitives';
-import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { type JSX, useEffect, useMemo, useRef } from 'react';
 
 import { applyView } from '@/components/views/apply-view';
@@ -38,6 +37,7 @@ import { apiQueryOptions, queryKeys, STALE, useApiListQuery, usePrefetchApi } fr
 import { useOrgCapability } from '@/lib/use-org-capability';
 import { taskDetailDef } from '@/lib/use-task-detail';
 import { useRenameTask } from '@/lib/use-rename-task';
+import { openTaskRecord } from '@/lib/local-first-navigation';
 
 /** Props for {@link ProgramWorkView}. */
 export interface ProgramWorkViewProps {
@@ -47,7 +47,6 @@ export interface ProgramWorkViewProps {
 
 /** This Program's task roster, filterable and groupable like every other list in the app. */
 export function ProgramWorkView({ orgId, programId }: ProgramWorkViewProps): JSX.Element {
-  const router = useRouter();
   const prefetch = usePrefetchApi();
   const projectNoun = useVocabulary('project');
   const programNoun = useVocabulary('program');
@@ -207,11 +206,9 @@ export function ProgramWorkView({ orgId, programId }: ProgramWorkViewProps): JSX
         },
         canEdit,
         onRename: renameTask,
-        onOpen: (task) => {
-          router.push(`/orgs/${orgId}/tasks/${task.id}`);
-        },
+        onOpen: openTaskRecord,
       }),
-    [canEdit, catalog, statuses, memberById, orgId, renameTask, router],
+    [canEdit, catalog, statuses, memberById, orgId, renameTask],
   );
 
   if (tasksQ.isPending) {

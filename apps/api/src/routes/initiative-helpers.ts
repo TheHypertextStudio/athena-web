@@ -10,7 +10,7 @@ import {
 } from '@docket/db';
 import type { Health } from '@docket/types';
 import type { InitiativeDetail, InitiativeOut } from '@docket/types';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, count, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { NotFoundError } from '../error';
@@ -161,6 +161,67 @@ export async function associatedPrograms(
     .then((rows) => rows.map((r) => r.p));
 }
 
+/** The bounded child-work rollup used by the local-first Initiative aggregate. */
+export interface InitiativeWorkSummary {
+  readonly projects: number;
+  readonly programs: number;
+  readonly onTrack: number;
+  readonly atRisk: number;
+  readonly offTrack: number;
+  readonly unknown: number;
+}
+
+/**
+ * Count associated work in SQL without returning a child roster.
+ *
+ * The initial detail route needs only counts and health distribution. Returning every Project and
+ * Program made a large Initiative's first paint scale with its entire hierarchy.
+ */
+export async function associatedWorkSummary(
+  orgId: string,
+  initiativeId: string,
+): Promise<InitiativeWorkSummary> {
+  const aggregate = (column: typeof project.health | typeof program.health) => ({
+    total: count(),
+    onTrack: sql<number>`count(*) filter (where ${column} = 'on_track')`,
+    atRisk: sql<number>`count(*) filter (where ${column} = 'at_risk')`,
+    offTrack: sql<number>`count(*) filter (where ${column} = 'off_track')`,
+    unknown: sql<number>`count(*) filter (where ${column} is null)`,
+  });
+  const [projectRows, programRows] = await Promise.all([
+    db
+      .select(aggregate(project.health))
+      .from(initiativeProject)
+      .innerJoin(project, eq(initiativeProject.projectId, project.id))
+      .where(
+        and(
+          eq(initiativeProject.initiativeId, initiativeId),
+          eq(initiativeProject.organizationId, orgId),
+        ),
+      ),
+    db
+      .select(aggregate(program.health))
+      .from(initiativeProgram)
+      .innerJoin(program, eq(initiativeProgram.programId, program.id))
+      .where(
+        and(
+          eq(initiativeProgram.initiativeId, initiativeId),
+          eq(initiativeProgram.organizationId, orgId),
+        ),
+      ),
+  ]);
+  const projectSummary = projectRows[0];
+  const programSummary = programRows[0];
+  return {
+    projects: projectSummary?.total ?? 0,
+    programs: programSummary?.total ?? 0,
+    onTrack: (projectSummary?.onTrack ?? 0) + (programSummary?.onTrack ?? 0),
+    atRisk: (projectSummary?.atRisk ?? 0) + (programSummary?.atRisk ?? 0),
+    offTrack: (projectSummary?.offTrack ?? 0) + (programSummary?.offTrack ?? 0),
+    unknown: (projectSummary?.unknown ?? 0) + (programSummary?.unknown ?? 0),
+  };
+}
+
 /**
  * Whether a dated Project overlaps a `[from, to]` window.
  *
@@ -197,5 +258,31 @@ export function buildInitiativeDetail(
     childMix: { programs: programs.length, projects: projects.length },
     distribution: healthDistribution(childHealths),
     rolledUpHealth: worstHealth(childHealths),
+  };
+}
+
+/** Build Initiative detail from the bounded SQL summary used during initial reconciliation. */
+export function buildInitiativeDetailFromSummary(
+  row: InitiativeRow,
+  summary: InitiativeWorkSummary,
+): z.input<typeof InitiativeDetail> {
+  const rolledUpHealth =
+    summary.offTrack > 0
+      ? 'off_track'
+      : summary.atRisk > 0
+        ? 'at_risk'
+        : summary.onTrack > 0
+          ? 'on_track'
+          : null;
+  return {
+    ...toOut(row),
+    childMix: { programs: summary.programs, projects: summary.projects },
+    distribution: {
+      onTrack: summary.onTrack,
+      atRisk: summary.atRisk,
+      offTrack: summary.offTrack,
+      unknown: summary.unknown,
+    },
+    rolledUpHealth,
   };
 }

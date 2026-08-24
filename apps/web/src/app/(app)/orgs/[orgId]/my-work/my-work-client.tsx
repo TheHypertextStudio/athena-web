@@ -4,7 +4,6 @@ import { ListView } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { ListChecks, Plus } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
-import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useTypedRoute } from '@/lib/app-location';
 import { type JSX, useCallback, useMemo, useRef, useState } from 'react';
 
@@ -21,6 +20,7 @@ import { useStatusRegistry } from '@/components/statuses/status-registry';
 import { useCategoryOf } from '@/components/entity-display/use-work-status';
 import { taskListKey } from '@/components/views/task-list-key';
 import { useMyWork } from '@/lib/use-my-work';
+import { openTaskRecord } from '@/lib/local-first-navigation';
 
 type WorkTab = 'mine' | 'delegated';
 
@@ -35,7 +35,6 @@ type WorkTab = 'mine' | 'delegated';
  * @returns the rendered screen.
  */
 export default function MyWorkClient(): JSX.Element {
-  const router = useRouter();
   const params = useTypedRoute('/orgs/[orgId]/my-work').params;
   const orgId = params.orgId;
   const { data: authSession } = useSession();
@@ -230,9 +229,7 @@ export default function MyWorkClient(): JSX.Element {
                   onRename={rename}
                 />
               )}
-              onActivateItem={(task) => {
-                router.push(`/orgs/${orgId}/tasks/${task.id}`);
-              }}
+              onActivateItem={openTaskRecord}
             />
             {search.items.length === 0 ? (
               <p className="text-on-surface-variant text-body-medium absolute inset-0 flex items-center justify-center p-8 text-center">

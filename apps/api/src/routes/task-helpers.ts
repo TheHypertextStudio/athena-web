@@ -3,7 +3,7 @@ import type { cycle, program } from '@docket/db';
 import { actor, db, grant, milestone, project, role, task } from '@docket/db';
 import type { GrantResourceKind } from '@docket/identity-access/grants';
 import type { TaskOut, TaskRef } from '@docket/types';
-import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { CapabilityError, NotFoundError, ValidationError } from '../error';
@@ -135,30 +135,16 @@ export type ViewableTaskParts = Pick<
   'id' | 'teamId' | 'projectId' | 'programId' | 'visibility'
 >;
 
-/**
- * Build a predicate deciding whether `actorId` may *view* a task, mirroring the
- * `canActor('view', …)` grant cascade (task → team/project/program → organization) in
- * bulk so a whole task set is filtered with a single grant read instead of one query
- * per task.
- *
- * @remarks
- * `task.ancestor_path` is not materialized yet, so the containment chain is derived from
- * the task's own FK columns — the same chain {@link "@docket/authz"#ancestorChain} walks.
- * A task is viewable when an active, unarchived human actor has access. `public` tasks supply a
- * baseline only to non-guests; otherwise the actor (or its authoritative in-org role) needs a
- * non-expired `allow` grant with at least one capability on the task, or a cascading grant on its
- * team, its project, its program, or the organization root.
- * This predicate is the task delivery boundary for both `GET /tasks` and the nested task reads
- * that project related task metadata.
- *
- * @param orgId - The caller's organization.
- * @param actorId - The caller's human actor id.
- * @returns a predicate over the minimal task columns.
- */
-export async function buildTaskViewFilter(
-  orgId: string,
-  actorId: string,
-): Promise<(t: ViewableTaskParts) => boolean> {
+/** The normalized task-visibility grants shared by in-memory and SQL predicates. */
+interface TaskViewScope {
+  readonly isGuest: boolean;
+  readonly orgRootView: boolean;
+  readonly exactTaskGrants: ReadonlySet<string>;
+  readonly cascadingGrants: Readonly<Record<GrantResourceKind, ReadonlySet<string>>>;
+}
+
+/** Load the one grant scope consumed by both in-memory and SQL task visibility predicates. */
+async function loadTaskViewScope(orgId: string, actorId: string): Promise<TaskViewScope | null> {
   const rows = await db
     .select({
       id: actor.id,
@@ -193,7 +179,7 @@ export async function buildTaskViewFilter(
       ),
     );
   const caller = rows[0];
-  if (caller === undefined) return () => false;
+  if (caller === undefined) return null;
 
   const now = Date.now();
   const cascadingGrants = {
@@ -235,13 +221,67 @@ export async function buildTaskViewFilter(
   const orgRootView = cascadingGrants.organization.has(orgId);
   const isGuest = caller.roleKey === 'guest' || caller.roleDefaultVisibility === 'private';
 
+  return {
+    isGuest,
+    orgRootView,
+    exactTaskGrants,
+    cascadingGrants,
+  };
+}
+
+/**
+ * Build an in-memory predicate deciding whether the caller may view a Task.
+ *
+ * `task.ancestor_path` is not materialized, so the scope follows the Task's team, Project,
+ * Program, and organization grants. The same scope also drives {@link buildTaskViewCondition},
+ * which keeps aggregate reads from drifting away from ordinary Task visibility.
+ *
+ * @param orgId - The caller's organization.
+ * @param actorId - The caller's human actor id.
+ * @returns a predicate over the minimal task columns.
+ */
+export async function buildTaskViewFilter(
+  orgId: string,
+  actorId: string,
+): Promise<(t: ViewableTaskParts) => boolean> {
+  const scope = await loadTaskViewScope(orgId, actorId);
+  if (scope === null) return () => false;
+
   return (t) =>
-    (t.visibility === 'public' && !isGuest) ||
-    orgRootView ||
-    exactTaskGrants.has(t.id) ||
-    cascadingGrants.team.has(t.teamId) ||
-    (t.projectId !== null && cascadingGrants.project.has(t.projectId)) ||
-    (t.programId !== null && cascadingGrants.program.has(t.programId));
+    (t.visibility === 'public' && !scope.isGuest) ||
+    scope.orgRootView ||
+    scope.exactTaskGrants.has(t.id) ||
+    scope.cascadingGrants.team.has(t.teamId) ||
+    (t.projectId !== null && scope.cascadingGrants.project.has(t.projectId)) ||
+    (t.programId !== null && scope.cascadingGrants.program.has(t.programId));
+}
+
+/**
+ * Build the database predicate for the same task-view policy as
+ * {@link buildTaskViewFilter}.
+ *
+ * Aggregate endpoints use this predicate instead of materializing every child Task in
+ * application memory just to discard inaccessible rows or count the remainder.
+ *
+ * @param orgId - The caller's organization.
+ * @param actorId - The caller's human actor id.
+ * @returns a Drizzle condition scoped to the task table.
+ */
+export async function buildTaskViewCondition(orgId: string, actorId: string): Promise<SQL> {
+  const scope = await loadTaskViewScope(orgId, actorId);
+  if (scope === null) return sql`false`;
+
+  const conditions: SQL[] = [];
+  if (!scope.isGuest) conditions.push(eq(task.visibility, 'public'));
+  if (scope.orgRootView) conditions.push(sql`true`);
+  if (scope.exactTaskGrants.size > 0) conditions.push(inArray(task.id, [...scope.exactTaskGrants]));
+  if (scope.cascadingGrants.team.size > 0)
+    conditions.push(inArray(task.teamId, [...scope.cascadingGrants.team]));
+  if (scope.cascadingGrants.project.size > 0)
+    conditions.push(inArray(task.projectId, [...scope.cascadingGrants.project]));
+  if (scope.cascadingGrants.program.size > 0)
+    conditions.push(inArray(task.programId, [...scope.cascadingGrants.program]));
+  return conditions.length > 0 ? (or(...conditions) ?? sql`false`) : sql`false`;
 }
 
 /**

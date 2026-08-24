@@ -608,6 +608,11 @@ Selected rows use **`tertiary-container`**, which is the Expressive spec's selec
 baseline menu says `secondary-container`; that is the legacy spec and is the value this drifted
 onto. Vibrant escalates selection to solid `tertiary`.
 
+`PickerList` uses that persistent selected fill only for multi-select lists. A single-select picker
+keeps the menu surface neutral and identifies its chosen row with the trailing check. Its 10% active
+layer starts on the chosen row and follows keyboard or pointer movement. This prevents a status
+glyph, check, and saturated container from competing to say the same thing.
+
 ### Sections: gap or divider, never both
 
 `DropdownMenuContent` takes `sections`: `'divider'` (the default) or `'gap'`. They are the spec's

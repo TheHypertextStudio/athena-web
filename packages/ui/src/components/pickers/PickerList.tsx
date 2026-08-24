@@ -6,11 +6,12 @@
  * @remarks
  * The shared engine behind the searchable pickers (actor / entity / labels). It renders a
  * filter `<input>` and a roving `listbox` of {@link PickerOption}s, owns the query + active
- * (keyboard-highlighted) index, and reports a selection through `onSelect`. Single-select
- * pickers close the popover on select (the caller flips `open`); multi-select pickers keep
- * it open and reflect the `selected` set with a trailing check. The list is plain DOM (no
- * Radix menu), so it composes inside {@link PopoverContent} without fighting the menu
- * typeahead. Empty states and a "Clear" affordance keep it Linear-calm.
+ * (keyboard-highlighted) index, and reports a selection through `onSelect`. The focus owner uses
+ * `aria-activedescendant` to identify that active row instead of drawing a ring around the whole
+ * list. Single-select pickers close the popover on select (the caller flips `open`). Multi-select
+ * pickers keep it open and reflect the `selected` set with a trailing check. The list uses plain
+ * DOM instead of a Radix menu, so it composes inside {@link PopoverContent} without fighting the
+ * menu typeahead. Empty states and a "Clear" affordance keep it Linear-calm.
  *
  * ## One row family, not two
  *
@@ -29,13 +30,7 @@ import * as React from 'react';
 
 import { Check, Plus, Search, X } from '../../icons';
 import { cn } from '../../lib/utils';
-import {
-  MENU_METRICS,
-  Skeleton,
-  menuFocusRing,
-  menuItemClass,
-  menuSupporting,
-} from '../../primitives';
+import { MENU_METRICS, Skeleton, menuItemClass, menuSupporting } from '../../primitives';
 
 import { type PickerOption, optionMatches } from './types';
 
@@ -43,9 +38,9 @@ import { type PickerOption, optionMatches } from './types';
  * Row metrics for the "clear" row and every option row.
  *
  * @remarks
- * `menuItemClass` verbatim, plus the two things a `<button role="option">` needs that a Radix
- * `role="menuitem"` does not: full width, and `disabled:` rather than `data-[disabled]:` for the
- * state layer, because this row is a real disabled button.
+ * `menuItemClass` verbatim, plus the two things a button nested inside a `role="option"` needs that
+ * a Radix `role="menuitem"` does not: full width, and `disabled:` rather than `data-[disabled]:`
+ * for the state layer, because this row is a real disabled button.
  */
 const PICKER_ROW_DENSITY =
   'min-h-9 gap-2 px-3 py-1.5 coarse:min-h-11 coarse:gap-3 coarse:px-4 coarse:py-2';
@@ -58,6 +53,34 @@ function pickerRowClass(selected = false): string {
     'w-full text-left disabled:pointer-events-none disabled:opacity-38',
   );
 }
+
+/** Fit edge rows to the menu's 12dp inner corner while keeping internal corners at 4dp. */
+function pickerRowShape(index: number, rowCount: number, searchable: boolean): string {
+  return cn(
+    !searchable && index === 0 && 'rounded-t-corner-md',
+    index === rowCount - 1 && 'rounded-b-corner-md',
+  );
+}
+
+interface PickerRow<TValue extends string> {
+  kind: 'clear' | 'option' | 'create';
+  option?: PickerOption<TValue>;
+}
+
+type ActiveSyncMode = 'navigation' | 'query' | 'selection';
+
+/** Return a stable DOM id for one row in the listbox. */
+function pickerRowId<TValue extends string>(listId: string, row: PickerRow<TValue>): string {
+  return `${listId}-option-${pickerRowKey(row)}`;
+}
+
+/** Return the stable identity used to preserve an active row through reordering. */
+function pickerRowKey<TValue extends string>(row: PickerRow<TValue>): string {
+  return row.option ? `value-${encodeURIComponent(row.option.value)}` : row.kind;
+}
+
+/** The menu focus indicator applied to the row named by `aria-activedescendant`. */
+const ACTIVE_PICKER_ROW = 'ring-[3px] ring-ring ring-inset' as const;
 
 /** Props for {@link PickerList}. */
 export interface PickerListProps<TValue extends string = string> {
@@ -178,7 +201,6 @@ export function PickerList<TValue extends string = string>({
   ariaLabel,
 }: PickerListProps<TValue>): React.JSX.Element {
   const [ownQuery, setOwnQuery] = React.useState('');
-  const [activeIndex, setActiveIndex] = React.useState(0);
   const listId = React.useId();
 
   // Controlled when a `query` is supplied, uncontrolled otherwise — React's own convention.
@@ -204,22 +226,84 @@ export function PickerList<TValue extends string = string>({
   // Build the flat row model: an optional clear row, the filtered options, then an optional
   // create row. Keeping a single flat array makes arrow-key navigation and Enter activation
   // uniform across every row kind — the create row is reachable by Down-arrow like any other.
-  const rows = React.useMemo<
-    { kind: 'clear' | 'option' | 'create'; option?: PickerOption<TValue> }[]
-  >(() => {
-    const list: { kind: 'clear' | 'option' | 'create'; option?: PickerOption<TValue> }[] = [];
+  const rows = React.useMemo<PickerRow<TValue>[]>(() => {
+    const list: PickerRow<TValue>[] = [];
     if (clear) list.push({ kind: 'clear' });
     for (const option of filtered) list.push({ kind: 'option', option });
     if (showCreate) list.push({ kind: 'create' });
     return list;
   }, [clear, filtered, showCreate]);
 
-  // Clamp the active index whenever the row set shrinks (e.g. as the query narrows).
+  const selectedValue = !multiple && typeof selected === 'string' ? selected : null;
+  const chosenRowKey = React.useMemo(() => {
+    if (selectedValue === null) return null;
+    const chosenRow = rows.find((row) => row.option?.value === selectedValue);
+    return chosenRow ? pickerRowKey(chosenRow) : null;
+  }, [rows, selectedValue]);
+  const firstRowKey = rows[0] ? pickerRowKey(rows[0]) : null;
+  const [activeRowKey, setActiveRowKey] = React.useState(chosenRowKey ?? firstRowKey);
+  const previousSelectedValue = React.useRef(selectedValue);
+  const previousQuery = React.useRef(query);
+  const activeSyncMode = React.useRef<ActiveSyncMode>('selection');
+  const pendingSelectionValue = React.useRef(
+    selectedValue !== null && chosenRowKey === null ? selectedValue : null,
+  );
+  const rowElements = React.useRef(new Map<string, HTMLLIElement>());
+
+  // Selection synchronization, query resets, and explicit navigation have different ownership.
+  // A missing controlled selection remains pending until its row arrives. Query changes consume
+  // one reset to the first result. Navigation then owns the stable key across ordinary reorders.
   React.useEffect(() => {
-    setActiveIndex((current) =>
-      current > rows.length - 1 ? Math.max(0, rows.length - 1) : current,
-    );
-  }, [rows.length]);
+    const selectionChanged = previousSelectedValue.current !== selectedValue;
+    const queryChanged = previousQuery.current !== query;
+
+    if (selectionChanged) {
+      activeSyncMode.current = 'selection';
+      pendingSelectionValue.current = chosenRowKey === null ? selectedValue : null;
+    } else if (queryChanged) {
+      activeSyncMode.current = 'query';
+    }
+
+    let synchronizedKey: string | null | undefined;
+    if (
+      pendingSelectionValue.current !== null &&
+      pendingSelectionValue.current === selectedValue &&
+      chosenRowKey !== null
+    ) {
+      synchronizedKey = chosenRowKey;
+      pendingSelectionValue.current = null;
+      activeSyncMode.current = 'navigation';
+    } else if (activeSyncMode.current === 'selection') {
+      if (chosenRowKey !== null) synchronizedKey = chosenRowKey;
+      if (selectedValue === null || chosenRowKey !== null) activeSyncMode.current = 'navigation';
+    } else if (activeSyncMode.current === 'query') {
+      synchronizedKey = firstRowKey;
+      activeSyncMode.current = 'navigation';
+    }
+
+    setActiveRowKey((current) => {
+      if (synchronizedKey !== undefined) return synchronizedKey;
+      if (current !== null && rows.some((row) => pickerRowKey(row) === current)) return current;
+      return firstRowKey;
+    });
+    previousSelectedValue.current = selectedValue;
+    previousQuery.current = query;
+  }, [chosenRowKey, firstRowKey, query, rows, selectedValue]);
+
+  const activeIndex = rows.findIndex((row) => pickerRowKey(row) === activeRowKey);
+  const activeRow = rows[activeIndex];
+  const activeRowId = activeRow ? pickerRowId(listId, activeRow) : undefined;
+
+  const setActiveRow = React.useCallback((row: PickerRow<TValue>, scroll: boolean): void => {
+    const key = pickerRowKey(row);
+    activeSyncMode.current = 'navigation';
+    setActiveRowKey(key);
+    const element = rowElements.current.get(key);
+    const maybeScrollable = element as
+      | { scrollIntoView?: (options?: ScrollIntoViewOptions) => void }
+      | undefined;
+    if (scroll) maybeScrollable?.scrollIntoView?.({ block: 'nearest' });
+  }, []);
 
   const activate = React.useCallback(
     (index: number): void => {
@@ -241,22 +325,27 @@ export function PickerList<TValue extends string = string>({
 
   const onKeyDown = React.useCallback(
     (event: React.KeyboardEvent): void => {
+      const moveToIndex = (index: number): void => {
+        const row = rows[index];
+        if (row) setActiveRow(row, true);
+      };
+
       switch (event.key) {
         case 'ArrowDown':
           event.preventDefault();
-          setActiveIndex((current) => Math.min(rows.length - 1, current + 1));
+          if (rows.length > 0) moveToIndex(Math.min(rows.length - 1, Math.max(0, activeIndex + 1)));
           break;
         case 'ArrowUp':
           event.preventDefault();
-          setActiveIndex((current) => Math.max(0, current - 1));
+          if (rows.length > 0) moveToIndex(Math.max(0, activeIndex < 0 ? 0 : activeIndex - 1));
           break;
         case 'Home':
           event.preventDefault();
-          setActiveIndex(0);
+          moveToIndex(0);
           break;
         case 'End':
           event.preventDefault();
-          setActiveIndex(rows.length - 1);
+          if (rows.length > 0) moveToIndex(rows.length - 1);
           break;
         case 'Enter':
           event.preventDefault();
@@ -266,7 +355,7 @@ export function PickerList<TValue extends string = string>({
           break;
       }
     },
-    [rows.length, activate, activeIndex],
+    [rows, setActiveRow, activeIndex, activate],
   );
 
   return (
@@ -281,12 +370,14 @@ export function PickerList<TValue extends string = string>({
             autoFocus
             value={query}
             onChange={(event) => {
+              activeSyncMode.current = 'query';
               setQuery(event.target.value);
-              setActiveIndex(0);
+              setActiveRowKey(null);
             }}
             onKeyDown={onKeyDown}
             aria-label={ariaLabel ? `Search ${ariaLabel}` : 'Search'}
             aria-controls={listId}
+            aria-activedescendant={activeRowId}
             placeholder={searchPlaceholder}
             className="placeholder:text-on-surface-variant text-on-surface text-label-large h-7 w-full bg-transparent outline-none"
           />
@@ -298,11 +389,12 @@ export function PickerList<TValue extends string = string>({
         role="listbox"
         aria-label={ariaLabel}
         aria-multiselectable={multiple || undefined}
+        aria-activedescendant={!searchable ? activeRowId : undefined}
         // When the search input is hidden the list itself must catch the arrow keys.
         tabIndex={searchable ? -1 : 0}
         onKeyDown={searchable ? undefined : onKeyDown}
         aria-busy={loading || undefined}
-        className="max-h-64 min-h-0 flex-1 overflow-y-auto overscroll-contain"
+        className="max-h-64 min-h-0 flex-1 overflow-y-auto overscroll-contain outline-none"
       >
         {rows.length === 0 ? (
           loading ? (
@@ -326,19 +418,32 @@ export function PickerList<TValue extends string = string>({
             const active = index === activeIndex;
             if (row.kind === 'clear') {
               return (
-                <li key="__clear__" role="option" aria-selected={false}>
+                <li
+                  key="__clear__"
+                  id={pickerRowId(listId, row)}
+                  ref={(element) => {
+                    const key = pickerRowKey(row);
+                    if (element) rowElements.current.set(key, element);
+                    else rowElements.current.delete(key);
+                  }}
+                  role="option"
+                  aria-selected={false}
+                  data-active={active || undefined}
+                >
                   <button
                     type="button"
+                    tabIndex={-1}
                     onClick={() => {
                       clear?.onClear();
                     }}
                     onMouseEnter={() => {
-                      setActiveIndex(index);
+                      setActiveRow(row, false);
                     }}
                     className={cn(
                       pickerRowClass(),
                       'text-on-surface-variant',
-                      menuFocusRing,
+                      pickerRowShape(index, rows.length, searchable),
+                      active && ACTIVE_PICKER_ROW,
                       // The keyboard-highlighted row is the focus state, so it takes the 10%
                       // layer. Pointer hover comes from menuItemClass at the spec's 8%.
                       { 'bg-on-surface/10': active },
@@ -352,19 +457,35 @@ export function PickerList<TValue extends string = string>({
             }
             if (row.kind === 'create') {
               return (
-                <li key="__create__" role="option" aria-selected={false}>
+                <li
+                  key="__create__"
+                  id={pickerRowId(listId, row)}
+                  ref={(element) => {
+                    const key = pickerRowKey(row);
+                    if (element) rowElements.current.set(key, element);
+                    else rowElements.current.delete(key);
+                  }}
+                  role="option"
+                  aria-selected={false}
+                  data-active={active || undefined}
+                >
                   <button
                     type="button"
+                    tabIndex={-1}
                     onClick={() => {
                       create?.onCreate(trimmedQuery);
                       setQuery('');
                     }}
                     onMouseEnter={() => {
-                      setActiveIndex(index);
+                      setActiveRow(row, false);
                     }}
-                    className={cn(pickerRowClass(), 'text-on-surface', menuFocusRing, {
-                      'bg-on-surface/10': active,
-                    })}
+                    className={cn(
+                      pickerRowClass(),
+                      'text-on-surface',
+                      pickerRowShape(index, rows.length, searchable),
+                      active && ACTIVE_PICKER_ROW,
+                      { 'bg-on-surface/10': active },
+                    )}
                   >
                     <Plus aria-hidden="true" className="shrink-0 opacity-70" />
                     <span className="truncate">{create?.render(trimmedQuery)}</span>
@@ -380,24 +501,37 @@ export function PickerList<TValue extends string = string>({
             /* v8 ignore stop */
             const chosen = isSelected(option.value, selected);
             return (
-              <li key={option.value} role="option" aria-selected={chosen}>
+              <li
+                key={option.value}
+                id={pickerRowId(listId, row)}
+                ref={(element) => {
+                  const key = pickerRowKey(row);
+                  if (element) rowElements.current.set(key, element);
+                  else rowElements.current.delete(key);
+                }}
+                role="option"
+                aria-selected={chosen}
+                aria-disabled={option.disabled}
+                data-active={active || undefined}
+              >
                 <button
                   type="button"
+                  tabIndex={-1}
                   disabled={option.disabled}
                   onClick={() => {
                     if (!option.disabled) onSelect(option.value);
                   }}
                   onMouseEnter={() => {
-                    setActiveIndex(index);
+                    setActiveRow(row, false);
                   }}
                   className={cn(
-                    // The chosen row escalates into the spec's selection roles — the same
-                    // `tertiary-container` a checked DropdownMenu/ContextMenu row takes — rather
-                    // than relying on the trailing check alone. `menuItemClass` carries both
-                    // cases, so a picker row and a menu row are the same element in two places.
-                    pickerRowClass(chosen),
-                    { 'bg-on-surface/10': active && !chosen },
-                    menuFocusRing,
+                    // A single-select row already has a trailing check and semantic leading glyph,
+                    // so it stays on the neutral menu surface. Multi-select needs a persistent
+                    // fill because several checked rows can remain in view at once.
+                    pickerRowClass(multiple && chosen),
+                    { 'bg-on-surface/10': active && !(multiple && chosen) },
+                    pickerRowShape(index, rows.length, searchable),
+                    active && ACTIVE_PICKER_ROW,
                   )}
                 >
                   {hasAnyIcon ? (
@@ -416,7 +550,7 @@ export function PickerList<TValue extends string = string>({
                     {option.supporting ? (
                       <span
                         className={cn(menuSupporting('standard'), {
-                          'text-on-tertiary-container': chosen,
+                          'text-on-tertiary-container': multiple && chosen,
                         })}
                       >
                         {option.supporting}
@@ -427,7 +561,9 @@ export function PickerList<TValue extends string = string>({
                     <span
                       className={cn(
                         'text-label-large shrink-0 tabular-nums',
-                        chosen ? 'text-on-tertiary-container' : 'text-on-surface-variant',
+                        multiple && chosen
+                          ? 'text-on-tertiary-container'
+                          : 'text-on-surface-variant',
                       )}
                     >
                       {option.hint}

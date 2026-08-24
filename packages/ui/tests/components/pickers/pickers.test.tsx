@@ -351,12 +351,27 @@ describe('PickerList', () => {
     );
   });
 
-  it('gives the chosen row the same tertiary-container selection role a checked menu item uses', () => {
+  it('keeps a chosen single-select row neutral and marks it with the trailing check', () => {
     render(<PickerList options={PROJECTS} selected="p1" onSelect={vi.fn()} ariaLabel="Project" />);
     const chosen = within(screen.getByRole('option', { name: /Migration/ })).getByRole('button');
-    expect(chosen).toHaveClass('bg-tertiary-container', 'text-on-tertiary-container');
+    expect(chosen).not.toHaveClass('bg-tertiary-container', 'text-on-tertiary-container');
+    expect(chosen.querySelector('svg')).toBeInTheDocument();
     const unchosen = within(screen.getByRole('option', { name: /Onboarding/ })).getByRole('button');
     expect(unchosen).not.toHaveClass('bg-tertiary-container');
+  });
+
+  it('keeps a clear selected treatment for multi-select rows', () => {
+    render(
+      <PickerList
+        options={PROJECTS}
+        selected={['p1']}
+        onSelect={vi.fn()}
+        multiple
+        ariaLabel="Project"
+      />,
+    );
+    const chosen = within(screen.getByRole('option', { name: /Migration/ })).getByRole('button');
+    expect(chosen).toHaveClass('bg-tertiary-container', 'text-on-tertiary-container');
   });
 
   it('reserves the leading-icon column for every row once any option in the list has one', () => {
@@ -448,16 +463,119 @@ describe('PickerList', () => {
     expect(screen.getByText('No project').closest('button')).toHaveClass('bg-on-surface/10');
   });
 
-  it('keeps the chosen row on its selection color instead of the hover overlay while highlighted', () => {
-    render(<PickerList options={PROJECTS} selected="p1" onSelect={vi.fn()} ariaLabel="Project" />);
+  it('initializes the neutral active state from the chosen single value', () => {
+    render(<PickerList options={PROJECTS} selected="p2" onSelect={vi.fn()} ariaLabel="Project" />);
+    const search = screen.getByLabelText('Search Project');
     const migrationOption = screen.getByRole('option', { name: /Migration/ });
-    const button = within(migrationOption).getByRole('button');
-    fireEvent.mouseEnter(button);
-    expect(button).toHaveClass('bg-tertiary-container');
-    expect(button).not.toHaveClass('bg-on-surface/10');
+    const onboardingOption = screen.getByRole('option', { name: /Onboarding/ });
+    expect(search).toHaveAttribute('aria-activedescendant', onboardingOption.id);
+    expect(within(onboardingOption).getByRole('button')).toHaveClass('bg-on-surface/10');
+    expect(within(onboardingOption).getByRole('button')).not.toHaveClass('bg-tertiary-container');
+    expect(within(migrationOption).getByRole('button')).not.toHaveClass('bg-on-surface/10');
   });
 
-  it('hides the search input when not searchable and navigates on the listbox', () => {
+  it('recovers the active row after empty-list keyboard input and async loading', async () => {
+    const { rerender } = render(
+      <PickerList options={[]} selected="p2" onSelect={vi.fn()} ariaLabel="Project" />,
+    );
+    const search = screen.getByLabelText('Search Project');
+    fireEvent.keyDown(search, { key: 'End' });
+    fireEvent.keyDown(search, { key: 'ArrowDown' });
+    expect(search).not.toHaveAttribute('aria-activedescendant');
+    rerender(
+      <PickerList options={PROJECTS} selected="p2" onSelect={vi.fn()} ariaLabel="Project" />,
+    );
+    const chosenOption = screen.getByRole('option', { name: /Onboarding/ });
+    await waitFor(() => {
+      expect(search).toHaveAttribute('aria-activedescendant', chosenOption.id);
+    });
+  });
+
+  it('activates a changed controlled selection when its option arrives later', async () => {
+    const lateOption: PickerOption = { value: 'p3', label: 'Launch' };
+    const { rerender } = render(
+      <PickerList options={PROJECTS} selected="p1" onSelect={vi.fn()} ariaLabel="Project" />,
+    );
+    const search = screen.getByLabelText('Search Project');
+    search.focus();
+    const originalOption = screen.getByRole('option', { name: /Migration/ });
+    expect(search).toHaveAttribute('aria-activedescendant', originalOption.id);
+
+    rerender(
+      <PickerList options={PROJECTS} selected="p3" onSelect={vi.fn()} ariaLabel="Project" />,
+    );
+    expect(search).toHaveAttribute('aria-activedescendant', originalOption.id);
+
+    rerender(
+      <PickerList
+        options={[...PROJECTS, lateOption]}
+        selected="p3"
+        onSelect={vi.fn()}
+        ariaLabel="Project"
+      />,
+    );
+    const lateSelectedOption = screen.getByRole('option', { name: /Launch/ });
+    await waitFor(() => {
+      expect(search).toHaveAttribute('aria-activedescendant', lateSelectedOption.id);
+    });
+  });
+
+  it('activates and chooses the first current result after a query change', async () => {
+    const onSelect = vi.fn();
+    const options: PickerOption[] = [
+      { value: 'alpha', label: 'Alpha' },
+      { value: 'alpine', label: 'Alpine' },
+    ];
+    render(
+      <PickerList options={options} selected="alpine" onSelect={onSelect} ariaLabel="Project" />,
+    );
+    const search = screen.getByLabelText('Search Project');
+    search.focus();
+    fireEvent.change(search, { target: { value: 'al' } });
+    const firstResult = screen.getByRole('option', { name: 'Alpha' });
+    await waitFor(() => {
+      expect(search).toHaveAttribute('aria-activedescendant', firstResult.id);
+    });
+    fireEvent.keyDown(search, { key: 'Enter' });
+    expect(onSelect).toHaveBeenCalledWith('alpha');
+  });
+
+  it('selects the first valid row when an empty unselected list gains options', async () => {
+    const { rerender } = render(
+      <PickerList options={[]} selected={null} onSelect={vi.fn()} ariaLabel="Project" />,
+    );
+    const search = screen.getByLabelText('Search Project');
+    fireEvent.keyDown(search, { key: 'ArrowDown' });
+    rerender(
+      <PickerList options={PROJECTS} selected={null} onSelect={vi.fn()} ariaLabel="Project" />,
+    );
+    const firstOption = screen.getByRole('option', { name: /Migration/ });
+    await waitFor(() => {
+      expect(search).toHaveAttribute('aria-activedescendant', firstOption.id);
+    });
+  });
+
+  it('preserves active row identity when options reorder after explicit navigation', () => {
+    const { rerender } = render(
+      <PickerList options={PROJECTS} selected="p2" onSelect={vi.fn()} ariaLabel="Project" />,
+    );
+    const search = screen.getByLabelText('Search Project');
+    fireEvent.keyDown(search, { key: 'ArrowUp' });
+    const migrationOption = screen.getByRole('option', { name: /Migration/ });
+    expect(search).toHaveAttribute('aria-activedescendant', migrationOption.id);
+
+    rerender(
+      <PickerList
+        options={[assertDefined(PROJECTS[1]), assertDefined(PROJECTS[0])]}
+        selected="p2"
+        onSelect={vi.fn()}
+        ariaLabel="Project"
+      />,
+    );
+    expect(search).toHaveAttribute('aria-activedescendant', migrationOption.id);
+  });
+
+  it('keeps listbox focus inside the active row while keyboard navigation remains accessible', () => {
     const onSelect = vi.fn();
     render(
       <PickerList
@@ -469,10 +587,115 @@ describe('PickerList', () => {
       />,
     );
     expect(screen.queryByLabelText('Search Project')).not.toBeInTheDocument();
-    const listbox = screen.getByRole('listbox');
+    const listbox = screen.getByRole('listbox', { name: 'Project' });
+    const firstOption = screen.getByRole('option', { name: /Migration/ });
+    const lastOption = screen.getByRole('option', { name: /Onboarding/ });
+    expect(listbox).toHaveClass('outline-none');
+    expect(listbox).toHaveAttribute('aria-activedescendant', firstOption.id);
+    expect(within(firstOption).getByRole('button')).toHaveAttribute('tabindex', '-1');
     fireEvent.keyDown(listbox, { key: 'End' });
+    expect(listbox).toHaveAttribute('aria-activedescendant', lastOption.id);
+    expect(within(lastOption).getByRole('button')).toHaveClass('bg-on-surface/10');
     fireEvent.keyDown(listbox, { key: 'Enter' });
     expect(onSelect).toHaveBeenCalledWith('p2');
+  });
+
+  it('shows the active descendant distinctly when the chosen multi-select row is active', () => {
+    render(
+      <PickerList
+        options={PROJECTS}
+        selected={['p1']}
+        onSelect={vi.fn()}
+        multiple
+        searchable={false}
+        ariaLabel="Project"
+      />,
+    );
+    const listbox = screen.getByRole('listbox', { name: 'Project' });
+    listbox.focus();
+    const chosenOption = screen.getByRole('option', { name: /Migration/ });
+    const chosenButton = within(chosenOption).getByRole('button');
+    expect(document.activeElement).toBe(listbox);
+    expect(listbox).toHaveAttribute('aria-activedescendant', chosenOption.id);
+    expect(chosenOption).toHaveAttribute('data-active', 'true');
+    expect(chosenButton).toHaveClass('ring-[3px]', 'ring-ring', 'ring-inset');
+    expect(chosenButton).toHaveClass('bg-tertiary-container');
+  });
+
+  it('scrolls the active option into view during keyboard navigation', () => {
+    const scrollIntoView = vi.fn();
+    const originalDescriptor = Object.getOwnPropertyDescriptor(
+      HTMLElement.prototype,
+      'scrollIntoView',
+    );
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView,
+    });
+
+    try {
+      render(
+        <PickerList options={PROJECTS} selected={null} onSelect={vi.fn()} ariaLabel="Project" />,
+      );
+      const search = screen.getByLabelText('Search Project');
+      search.focus();
+      fireEvent.keyDown(search, { key: 'ArrowDown' });
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' });
+      expect(search).toHaveAttribute(
+        'aria-activedescendant',
+        screen.getByRole('option', { name: /Onboarding/ }).id,
+      );
+    } finally {
+      if (originalDescriptor) {
+        Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', originalDescriptor);
+      } else {
+        Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
+      }
+    }
+  });
+
+  it('exposes disabled option semantics on the role option', () => {
+    render(<PickerList options={ACTORS} selected={null} onSelect={vi.fn()} ariaLabel="Assignee" />);
+    const disabledOption = screen.getByRole('option', { name: /Alan Turing/ });
+    expect(disabledOption).toHaveAttribute('aria-disabled', 'true');
+    expect(within(disabledOption).getByRole('button')).toBeDisabled();
+  });
+
+  it('fits the first and last unsearchable row states to the menu inner corners', () => {
+    const options: PickerOption[] = [
+      { value: 'first', label: 'First' },
+      { value: 'middle', label: 'Middle' },
+      { value: 'last', label: 'Last' },
+    ];
+    render(
+      <PickerList
+        options={options}
+        selected="middle"
+        onSelect={vi.fn()}
+        searchable={false}
+        ariaLabel="Position"
+      />,
+    );
+    const first = within(screen.getByRole('option', { name: 'First' })).getByRole('button');
+    const middle = within(screen.getByRole('option', { name: 'Middle' })).getByRole('button');
+    const last = within(screen.getByRole('option', { name: 'Last' })).getByRole('button');
+    expect(first).toHaveClass('rounded-t-corner-md', 'rounded-corner-xs');
+    expect(first).not.toHaveClass('rounded-b-corner-md');
+    expect(middle).toHaveClass('rounded-corner-xs');
+    expect(middle).not.toHaveClass('rounded-t-corner-md', 'rounded-b-corner-md');
+    expect(last).toHaveClass('rounded-b-corner-md', 'rounded-corner-xs');
+    expect(last).not.toHaveClass('rounded-t-corner-md');
+  });
+
+  it('keeps the searchable first row internal while fitting the final row to the menu', () => {
+    render(<PickerList options={PROJECTS} selected="p1" onSelect={vi.fn()} ariaLabel="Project" />);
+    const search = screen.getByLabelText('Search Project');
+    const firstOption = screen.getByRole('option', { name: /Migration/ });
+    const first = within(firstOption).getByRole('button');
+    const last = within(screen.getByRole('option', { name: /Onboarding/ })).getByRole('button');
+    expect(first).not.toHaveClass('rounded-t-corner-md');
+    expect(last).toHaveClass('rounded-b-corner-md');
+    expect(search).toHaveAttribute('aria-activedescendant', firstOption.id);
   });
 });
 

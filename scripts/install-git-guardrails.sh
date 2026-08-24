@@ -62,7 +62,13 @@ if ! command -v pnpm >/dev/null 2>&1; then
   exit 1
 fi
 
-exec pnpm lint-staged
+pnpm lint-staged
+
+# lint-staged only formats indexed files. The full lint below is the one authoritative check: a
+# prior commit can otherwise leave a package lint failure behind when a later commit changes
+# unrelated files. CI lints the complete workspace, so commits must do the same before they create
+# a revision that can later reach main.
+NODE_OPTIONS=--max-old-space-size=3072 pnpm turbo run lint --concurrency=1
 HOOK
 
 cat > "$hooks_dir/commit-msg" <<'HOOK'

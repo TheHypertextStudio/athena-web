@@ -139,7 +139,8 @@ git config --local core.hooksPath "$(git rev-parse --git-common-dir)/docket-hook
 
 The generated native Git hooks are:
 
-- `pre-commit` - runs `pnpm lint-staged`
+- `pre-commit` - formats staged files, then runs the one repository-wide lint gate with one worker
+  and a 3GB heap so an existing package lint failure cannot bypass a later commit
 - `commit-msg` - runs `node scripts/validate-commit-message.mjs "$1"`
 - `pre-merge-commit` - rejects merge commits before Git opens an editor
 - `prepare-commit-msg` - blocks commits while `.git/MERGE_HEAD` exists

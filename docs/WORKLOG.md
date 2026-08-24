@@ -9,8 +9,9 @@
 
 ### [CANVAS-GRAPH-CRUD-001] Make graph canvases usable for organizing work
 
-- **Status**: REVIEW
+- **Status**: COMPLETED
 - **Started**: 2026-08-23
+- **Completed**: 2026-08-24
 - **Priority**: P0
 - **Description**: Project Dependencies and Task graph treated the canvas as a mostly read-only
   diagram. Large disconnected graphs collapsed into an unreadable line, creation could replace the
@@ -36,7 +37,7 @@
   - [x] Commit the post-rebase integration corrections and repeat the affected repository gates.
   - [x] Complete responsive light and dark visual, keyboard, and accessibility review.
   - [x] Fast-forward the executable canvas revision to `main` with linear history.
-  - [ ] Pass the release gates, deploy the exact final revision, and verify production.
+  - [x] Pass the release gates, deploy the exact final revision, and verify production.
 - **Decisions**: Forward bulk commands remain atomic. Undo and redo compare the receipt's expected
   state and skip collaborator conflicts. Creation remains outside history. Each canvas route and
   scope keeps 50 receipts in memory. Project and Task trash retains object ids and relationships.
@@ -106,9 +107,24 @@
   repeated the Authz, DB identity-access, canvas-history, and Program aggregate regressions.
   Repository tooling passes 164 tests. Formatting, migration drift, all 26 typecheck tasks, all 25
   lint tasks, and the four-package serialized production build pass. The release-correction API
-  typecheck and lint commands pass, and its four focused files pass 70 tests. Deployment and
-  production checks remain open.
+  typecheck and lint commands pass, and its four focused files pass 70 tests. CI run `32746124488`
+  passes the build, image, type, lint, coverage, freshness, database migration, API, admin, and
+  Scheduler gates for executable revision `ee83411eb90c2065b4235f5881de0c8c0c4281bd`. Vercel marks
+  that revision's Web deployment complete. The Cloud Run logs deploy API and admin images tagged
+  with that exact revision. Production returns `{"status":"ok"}` from `/v1/health`, HTTP 200 from
+  the session route, and HTTP 200 from the Web and admin origins. Exact E2E run `32746124216`
+  reproduces the preceding baseline failures in account lifecycle, passkeys, recovery codes,
+  Calendar event association, fluid scheduling, Notion mirroring, clipboard fidelity, and
+  Initiative detail. It reports no Project Dependencies, Task graph, canvas CRUD, layout,
+  selection, creation, trash, undo, or redo failure. The in-app browser and connected Chrome
+  session are both signed out of production, so this release has no authenticated post-deploy
+  canvas inspection; the authenticated production-build review remains the visual evidence.
 - **Blockers**: None.
+- **Retrospective**: Focused canvas tests and the first exact package gates did not protect the
+  repository-wide API branch denominator after the final authorization changes. Release closeout
+  must run the exact deploy-gating command against the integrated SHA before pushing `main`.
+  Outbox tests must also isolate their clocks and delete pending rows because the API suite shares
+  one database across two workers.
 
 ---
 

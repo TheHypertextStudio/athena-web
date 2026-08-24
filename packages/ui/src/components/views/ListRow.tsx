@@ -16,7 +16,6 @@
  */
 import * as React from 'react';
 
-import { type DragSource, dragSourceProps } from '../../lib/draggable';
 import { cn } from '../../lib/utils';
 import { focusRingInset } from '../../primitives/focus';
 import { ActorAvatar, type ActorKind } from '../atoms/ActorAvatar';
@@ -33,8 +32,6 @@ export interface ListRowProps extends React.ComponentPropsWithoutRef<'div'> {
   selected?: boolean | undefined;
   /** Activate the row (Enter / click). */
   onActivate?: (() => void) | undefined;
-  /** Makes the whole row a drag source without changing its row semantics. */
-  drag?: DragSource | undefined;
   /** Tab index for roving-tabindex keyboard navigation; defaults to `-1`. */
   tabIndex?: number | undefined;
   /** Extra classes merged onto the row. */
@@ -91,7 +88,6 @@ export const ListRow = React.forwardRef<HTMLDivElement, ListRowProps>(function L
     selected = false,
     onActivate,
     tabIndex = -1,
-    drag,
     className,
     onClick,
     onKeyDown,
@@ -99,14 +95,12 @@ export const ListRow = React.forwardRef<HTMLDivElement, ListRowProps>(function L
   },
   ref,
 ): React.JSX.Element {
-  const dragProps = dragSourceProps(drag);
   const rowClassName = cn(
     'border-outline-variant text-body-medium flex min-h-(--row-h) w-full cursor-pointer items-center gap-2 border-b px-3 py-(--row-py) transition-colors outline-none',
     'hover:bg-surface-container-high focus-visible:bg-surface-container-high',
     focusRingInset,
     active && !selected && 'bg-surface-container-highest',
     selected && 'bg-secondary-container',
-    dragProps?.className,
     className,
   );
   return (
@@ -129,7 +123,6 @@ export const ListRow = React.forwardRef<HTMLDivElement, ListRowProps>(function L
         }
       }}
       {...rest}
-      {...dragProps}
       className={rowClassName}
     >
       {children}

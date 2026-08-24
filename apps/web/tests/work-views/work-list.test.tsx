@@ -253,6 +253,7 @@ describe('WorkList', () => {
       contributingProjects: [],
       manualRank: 'a0',
       isContext: true,
+      updatedAt: '2026-08-23T00:00:00.000Z',
     });
     const child = InitiativeViewRow.parse({
       ...parent,

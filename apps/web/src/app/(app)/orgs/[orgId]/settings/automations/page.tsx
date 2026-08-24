@@ -1,6 +1,6 @@
 'use client';
 
-import { useAppParams } from '@/lib/app-location';
+import { useTypedRoute } from '@/lib/app-location';
 
 /**
  * The Automations settings section.
@@ -21,7 +21,9 @@ import { SettingsSectionPage } from '@/components/settings/settings-section-page
 
 /** The Automations section page. */
 export default function AutomationsSettingsPage(): JSX.Element {
-  const { orgId } = useAppParams<{ orgId: string }>();
+  const {
+    params: { orgId },
+  } = useTypedRoute('/orgs/[orgId]/settings/automations');
   const { activeOrg } = useActiveOrg();
   const { canManage } = useCanManageOrg(orgId);
 

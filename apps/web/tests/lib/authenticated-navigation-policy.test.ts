@@ -95,6 +95,15 @@ describe('authenticated navigation source policy', () => {
     expect(violations).toEqual([]);
   });
 
+  it('requires authenticated components to name their exact generated route', () => {
+    const violations = roots
+      .flatMap(sourceFiles)
+      .filter((file) => readFileSync(file, 'utf8').includes('useAppParams'))
+      .map((file) => file.slice(webRoot.length + 1));
+
+    expect(violations).toEqual([]);
+  });
+
   it('keeps authenticated links behind DocketLink', () => {
     const violations = roots
       .flatMap(sourceFiles)

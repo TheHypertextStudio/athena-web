@@ -5,7 +5,7 @@ import { useVocabulary } from '@docket/ui/hooks';
 import { ListChecks, Plus } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
-import { useAppParams } from '@/lib/app-location';
+import { useTypedRoute } from '@/lib/app-location';
 import { type JSX, useCallback, useMemo, useRef, useState } from 'react';
 
 import { InPageSearchField } from '@/components/in-page-search/in-page-search-field';
@@ -36,7 +36,7 @@ type WorkTab = 'mine' | 'delegated';
  */
 export default function MyWorkClient(): JSX.Element {
   const router = useRouter();
-  const params = useAppParams<{ orgId: string }>();
+  const params = useTypedRoute('/orgs/[orgId]/my-work').params;
   const orgId = params.orgId;
   const { data: authSession } = useSession();
   const userId = authSession?.user.id ?? null;

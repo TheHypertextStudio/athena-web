@@ -367,27 +367,6 @@ export function useAppLocation(): AppLocation {
 }
 
 /**
- * The current route's params.
- *
- * @remarks
- * Compatibility access for authenticated surfaces that have not yet moved to
- * {@link useTypedRoute}. It validates the current pathname through the generated route map before
- * exposing values, so an invalid URL cannot start a query through this escape hatch.
- *
- * @typeParam T - The params this route is expected to carry.
- * @returns The params for the matched route.
- */
-// eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
-export function useAppParams<T extends Record<string, string | readonly string[]>>(): T {
-  const { pathname } = useAppLocation();
-  const result = parseAuthenticatedRoute(pathname);
-  if (result.kind !== 'matched') {
-    throw new Error(`Cannot read parameters from invalid authenticated route ${pathname}.`);
-  }
-  return result.route.params as T;
-}
-
-/**
  * Read one exact generated route and its runtime-validated, branded parameters.
  *
  * @param pattern - The route pattern the mounted component implements.

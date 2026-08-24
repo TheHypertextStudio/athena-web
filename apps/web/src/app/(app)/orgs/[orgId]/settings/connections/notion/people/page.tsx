@@ -12,13 +12,15 @@ import type { JSX } from 'react';
 
 import { NotionPeoplePanel } from '@/components/settings/notion/notion-people-panel';
 import { useNotionMirror } from '@/components/settings/notion/use-notion-mirror-controller';
-import { useAppParams } from '@/lib/app-location';
+import { useTypedRoute } from '@/lib/app-location';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 
 /** The Notion identity-matching page. */
 export default function NotionPeoplePage(): JSX.Element {
-  const { orgId } = useAppParams<{ orgId: string }>();
+  const {
+    params: { orgId },
+  } = useTypedRoute('/orgs/[orgId]/settings/connections/notion/people');
   const { integration, loading } = useNotionMirror(orgId);
   // Folded into the same pending branch below: resolving the permission after the panel has
   // painted would flash write controls the caller may not hold.

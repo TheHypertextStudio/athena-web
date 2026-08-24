@@ -12,7 +12,7 @@ import type {
 import { Calendar, CheckCircle2, Pause, Play, RefreshCw, Stop } from '@docket/ui/icons';
 import { Badge, Button, Skeleton } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
-import { useAppParams } from '@/lib/app-location';
+import { useTypedRoute } from '@/lib/app-location';
 import { type JSX, useEffect, useMemo, useState } from 'react';
 
 import { DatePicker } from '@/components/date-picker';
@@ -113,7 +113,9 @@ function occurrenceLabel(
 
 /** RecurrenceSeriesPage renders the authenticated series-management page. */
 export default function RecurrenceSeriesPage(): JSX.Element {
-  const { orgId, seriesId } = useAppParams<{ orgId: string; seriesId: string }>();
+  const {
+    params: { orgId, seriesId },
+  } = useTypedRoute('/orgs/[orgId]/recurrence-series/[seriesId]');
   const key = queryKeys.recurrenceSeriesDetail(orgId, seriesId);
   const detailQ = useApiQuery(
     apiQueryOptions(

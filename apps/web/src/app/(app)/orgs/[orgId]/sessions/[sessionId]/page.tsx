@@ -5,7 +5,7 @@ import { useVocabulary } from '@docket/ui/hooks';
 import { ChevronLeft, Sparkles } from '@docket/ui/icons';
 import { Skeleton } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
-import { useAppParams } from '@/lib/app-location';
+import { useTypedRoute } from '@/lib/app-location';
 import { type JSX } from 'react';
 
 import { OrgChip } from '@/components/org-chip';
@@ -17,7 +17,7 @@ import { useSessionDetail } from '@/lib/use-session-detail';
 
 /** SessionViewPage renders the authenticated agent session page. */
 export default function SessionViewPage(): JSX.Element {
-  const params = useAppParams<{ orgId: string; sessionId: string }>();
+  const params = useTypedRoute('/orgs/[orgId]/sessions/[sessionId]').params;
   const { orgId, sessionId } = params;
   const taskLabel = useVocabulary('task');
 

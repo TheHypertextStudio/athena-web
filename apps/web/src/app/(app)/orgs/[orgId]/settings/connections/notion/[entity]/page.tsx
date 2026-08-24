@@ -17,14 +17,16 @@ import type { JSX } from 'react';
 
 import { entityLabel } from '@/components/settings/notion/notion-copy';
 import { NotionTableDesigner } from '@/components/settings/notion/notion-table-designer';
-import { useAppParams } from '@/lib/app-location';
+import { useTypedRoute } from '@/lib/app-location';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { useNotionMirror } from '@/components/settings/notion/use-notion-mirror-controller';
 import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 
 /** The per-entity table designer page. */
 export default function NotionTableDesignerPage(): JSX.Element {
-  const { orgId, entity } = useAppParams<{ orgId: string; entity: string }>();
+  const {
+    params: { orgId, entity },
+  } = useTypedRoute('/orgs/[orgId]/settings/connections/notion/[entity]');
   const { integration, loading } = useNotionMirror(orgId);
   const { canManage, loading: permissionLoading } = useCanManageOrg(orgId);
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useAppParams } from '@/lib/app-location';
+import { useTypedRoute } from '@/lib/app-location';
 
 /**
  * Email-safe export destination.
@@ -16,7 +16,9 @@ import { ExportDataTab } from '@/components/settings/export-data-tab';
 
 /** Render the authenticated export destination linked from export-ready email. */
 export default function AccountExportEmailPage(): JSX.Element {
-  const { exportId } = useAppParams<{ exportId: string }>();
+  const {
+    params: { exportId },
+  } = useTypedRoute('/exports/[exportId]');
   return (
     <div className="flex max-w-3xl flex-col gap-6">
       <div className="flex flex-col gap-1">

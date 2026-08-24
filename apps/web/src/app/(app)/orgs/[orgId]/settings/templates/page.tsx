@@ -40,7 +40,7 @@ import {
   useCreateTemplate,
   useDeleteTemplate,
 } from '@/components/templates/queries';
-import { useAppParams } from '@/lib/app-location';
+import { useTypedRoute } from '@/lib/app-location';
 import { userErrorMessage } from '@/lib/problem';
 import { useApiListQuery } from '@/lib/query';
 import { SettingsSectionPage } from '@/components/settings/settings-section-page';
@@ -65,13 +65,15 @@ interface EditorTarget {
  * Manage the workspace's reusable create drafts.
  *
  * @remarks
- * Reads the org id with `useAppParams` rather than taking Next's `params` promise as a prop. The
+ * Reads the org id from the generated typed route rather than taking Next's `params` promise as a prop. The
  * offline route table mounts every route with no props at all — offline there is no server to
  * resolve that promise — so a page with a props signature reads `undefined` the moment it renders
  * without a network. See `scripts/offline-route-policy.ts`.
  */
 export default function TemplatesSettingsPage(): JSX.Element {
-  const { orgId } = useAppParams<{ orgId: string }>();
+  const {
+    params: { orgId },
+  } = useTypedRoute('/orgs/[orgId]/settings/templates');
   const query = useApiListQuery(templatesDef(orgId));
   const duplicate = useCreateTemplate(orgId);
   const remove = useDeleteTemplate(orgId);

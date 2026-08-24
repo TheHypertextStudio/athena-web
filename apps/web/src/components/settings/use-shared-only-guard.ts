@@ -19,7 +19,6 @@ import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useEffect } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
-import { useAppParams } from '@/lib/app-location';
 
 import { defaultSettingsSection, findSettingsSection, sectionHref } from './settings-registry';
 
@@ -27,11 +26,14 @@ import { defaultSettingsSection, findSettingsSection, sectionHref } from './sett
  * Redirect away from a shared-only section when the selected workspace is personal.
  *
  * @param sectionKey - The registry key of the section being rendered, if it has one.
+ * @param orgId - The validated workspace id from the route rendering the section.
  * @returns whether the caller should render nothing because a redirect is under way.
  */
-export function useSharedOnlyGuard(sectionKey: string | undefined): boolean {
+export function useSharedOnlyGuard(
+  sectionKey: string | undefined,
+  orgId: string | undefined,
+): boolean {
   const router = useRouter();
-  const { orgId } = useAppParams<{ orgId?: string }>();
   const { activeOrg } = useActiveOrg();
 
   const isPersonal = activeOrg?.isPersonal ?? false;

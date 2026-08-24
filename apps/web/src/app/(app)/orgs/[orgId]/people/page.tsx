@@ -1,6 +1,6 @@
 'use client';
 
-import { useAppParams } from '@/lib/app-location';
+import { useTypedRoute } from '@/lib/app-location';
 
 /**
  * `/orgs/[orgId]/people` — the workspace People roster.
@@ -26,7 +26,9 @@ import { PeopleList } from '@/components/people/people-list';
  * @returns the rendered roster.
  */
 export default function PeoplePage(): JSX.Element {
-  const { orgId } = useAppParams<{ orgId: string }>();
+  const {
+    params: { orgId },
+  } = useTypedRoute('/orgs/[orgId]/people');
   const router = useRouter();
   const { activeOrg } = useActiveOrg();
   const isPersonal = activeOrg?.isPersonal ?? false;

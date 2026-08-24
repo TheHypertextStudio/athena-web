@@ -8,7 +8,7 @@ import {
 } from '@docket/types';
 import { Field, Select, Skeleton } from '@docket/ui/primitives';
 import { LoadFailure } from '@/components/settings/load-failure';
-import { useAppParams } from '@/lib/app-location';
+import { useTypedRoute } from '@/lib/app-location';
 import { useEffect, useState, type JSX } from 'react';
 
 import { SettingRowStatus } from '@/components/settings/setting-row-status';
@@ -42,7 +42,9 @@ function scaleValuesCopy(scale: EstimationScale): string | null {
 
 /** Configure the maximum Initiative hierarchy depth for a workspace. */
 export default function WorkStructureSettingsPage(): JSX.Element {
-  const { orgId } = useAppParams<{ orgId: string }>();
+  const {
+    params: { orgId },
+  } = useTypedRoute('/orgs/[orgId]/settings/work-structure');
   const { canManage, loading: permissionLoading } = useCanManageOrg(orgId);
   const key = queryKeys.settings(orgId, 'work-structure');
   const settingsQ = useLiveApiQuery(

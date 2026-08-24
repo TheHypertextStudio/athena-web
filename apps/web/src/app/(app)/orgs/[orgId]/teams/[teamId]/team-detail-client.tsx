@@ -42,7 +42,7 @@ import { TeamPeople, TeamPeopleSkeleton } from '@/components/team-detail/team-pe
 import { TeamCover } from '@/components/teams/team-cover';
 import { EntityDetailLayout } from '@/components/views/entity-detail-layout';
 import { api } from '@/lib/api';
-import { useAppParams } from '@/lib/app-location';
+import { useTypedRoute } from '@/lib/app-location';
 import {
   apiQueryOptions,
   queryKeys,
@@ -68,7 +68,9 @@ type ActivityLens = 'capacity' | 'throughput';
  * @returns the rendered page.
  */
 export default function TeamDetailClient(): JSX.Element {
-  const { orgId, teamId } = useAppParams<{ orgId: string; teamId: string }>();
+  const {
+    params: { orgId, teamId },
+  } = useTypedRoute('/orgs/[orgId]/teams/[teamId]');
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<TabId>('overview');
   const [lens, setLens] = useState<ActivityLens>('capacity');

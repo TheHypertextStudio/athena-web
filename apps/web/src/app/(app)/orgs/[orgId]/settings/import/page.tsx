@@ -1,6 +1,6 @@
 'use client';
 
-import { useAppParams } from '@/lib/app-location';
+import { useTypedRoute } from '@/lib/app-location';
 
 /**
  * The Import settings section.
@@ -23,7 +23,9 @@ import { SettingsSectionPage } from '@/components/settings/settings-section-page
 
 /** The Import section page. */
 export default function ImportSettingsPage(): JSX.Element {
-  const { orgId } = useAppParams<{ orgId: string }>();
+  const {
+    params: { orgId },
+  } = useTypedRoute('/orgs/[orgId]/settings/import');
   const { activeOrg } = useActiveOrg();
   const { canManage } = useCanManageOrg(orgId);
 

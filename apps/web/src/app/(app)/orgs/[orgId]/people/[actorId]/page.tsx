@@ -1,6 +1,6 @@
 'use client';
 
-import { useAppParams } from '@/lib/app-location';
+import { useTypedRoute } from '@/lib/app-location';
 
 /**
  * `/orgs/[orgId]/people/[actorId]` — one person's workspace profile.
@@ -24,7 +24,9 @@ import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
  * @returns the rendered profile.
  */
 export default function PersonProfilePage(): JSX.Element {
-  const { orgId, actorId } = useAppParams<{ orgId: string; actorId: string }>();
+  const {
+    params: { orgId, actorId },
+  } = useTypedRoute('/orgs/[orgId]/people/[actorId]');
   const { canManage } = useCanManageOrg(orgId);
   return <PersonProfileView orgId={orgId} actorId={actorId} canManage={canManage} />;
 }

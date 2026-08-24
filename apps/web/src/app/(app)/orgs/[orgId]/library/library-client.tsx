@@ -16,7 +16,7 @@ import { useTypedRoute } from '@/lib/app-location';
  *
  * It also mounts that module with **no props**, which is why this is a component rather than a
  * re-export: `LibraryClient` needs an `orgId`, and offline the only place to get one is the URL.
- * `useAppParams` reads it from there, so the route renders the same either side of a network.
+ * The generated route contract reads it from there, so the route renders the same either side of a network.
  *
  * @returns the Library roster for the org in the current URL.
  */

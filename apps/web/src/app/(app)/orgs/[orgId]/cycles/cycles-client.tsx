@@ -39,7 +39,7 @@ import { useVocabulary } from '@docket/ui/hooks';
 import { RefreshCw } from '@docket/ui/icons';
 import { Skeleton } from '@docket/ui/primitives';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
-import { useAppParams } from '@/lib/app-location';
+import { useTypedRoute } from '@/lib/app-location';
 import { type JSX, useCallback, useMemo } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
@@ -87,7 +87,7 @@ const EMPTY_STATS: Readonly<Record<string, CycleStats>> = {};
  * @returns the rendered roster.
  */
 export default function CyclesClient(): JSX.Element {
-  const params = useAppParams<{ orgId: string }>();
+  const params = useTypedRoute('/orgs/[orgId]/cycles').params;
   const orgId = params.orgId;
   const prefetch = usePrefetchApi();
   const router = useRouter();

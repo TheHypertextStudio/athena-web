@@ -7,7 +7,7 @@ import { useVocabulary } from '@docket/ui/hooks';
 import { Activity, RefreshCw } from '@docket/ui/icons';
 import { Button, Skeleton, Tabs, type TabsItem } from '@docket/ui/primitives';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
-import { useAppParams } from '@/lib/app-location';
+import { useTypedRoute } from '@/lib/app-location';
 import { type JSX, useMemo, useState } from 'react';
 
 import { useDocumentTitle } from '@/components/tabs/use-document-title';
@@ -101,7 +101,7 @@ export function cycleSubtitle(
  */
 export default function CycleDetailPage(): JSX.Element {
   const router = useRouter();
-  const params = useAppParams<{ orgId: string; cycleId: string }>();
+  const params = useTypedRoute('/orgs/[orgId]/cycles/[cycleId]').params;
   const { orgId, cycleId } = params;
   const prefetch = usePrefetchApi();
 

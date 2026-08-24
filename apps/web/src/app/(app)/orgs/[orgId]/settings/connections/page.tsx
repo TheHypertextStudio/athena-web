@@ -1,6 +1,6 @@
 'use client';
 
-import { useAppParams } from '@/lib/app-location';
+import { useTypedRoute } from '@/lib/app-location';
 
 /**
  * The Connections settings section.
@@ -22,10 +22,12 @@ import { SettingsSectionPage } from '@/components/settings/settings-section-page
 
 /** The Connections section page. */
 export default function ConnectionsSettingsPage(): JSX.Element {
-  const { orgId } = useAppParams<{ orgId: string }>();
+  const {
+    params: { orgId },
+  } = useTypedRoute('/orgs/[orgId]/settings/connections');
   const { canManage } = useCanManageOrg(orgId);
 
-  if (useSharedOnlyGuard('connections')) return <></>;
+  if (useSharedOnlyGuard('connections', orgId)) return <></>;
 
   return (
     <SettingsSectionPage sectionKey="connections">

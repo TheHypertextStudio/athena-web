@@ -1,7 +1,7 @@
 'use client';
 
 import { useSharedOnlyGuard } from '@/components/settings/use-shared-only-guard';
-import { useAppParams } from '@/lib/app-location';
+import { useTypedRoute } from '@/lib/app-location';
 import type { JSX } from 'react';
 import { PublishingSettings } from '@/components/publishing/publishing-settings';
 
@@ -23,11 +23,13 @@ import { PublishingSettings } from '@/components/publishing/publishing-settings'
  * @returns The publishing settings section, or a redirect on a personal workspace.
  */
 export default function PublishingSettingsPage(): JSX.Element {
-  const { orgId } = useAppParams<{ orgId: string }>();
+  const {
+    params: { orgId },
+  } = useTypedRoute('/orgs/[orgId]/settings/publishing');
 
   // See `use-shared-only-guard.ts`: the condition comes from the registry, so a fourth
   // shared-only section cannot acquire a guard that disagrees with the nav.
-  if (useSharedOnlyGuard('publishing')) return <></>;
+  if (useSharedOnlyGuard('publishing', orgId)) return <></>;
 
   return <PublishingSettings orgId={orgId} />;
 }

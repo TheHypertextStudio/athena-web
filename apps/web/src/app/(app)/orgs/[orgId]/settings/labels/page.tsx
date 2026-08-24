@@ -42,7 +42,7 @@ import {
 } from '@/components/labels/queries';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { api } from '@/lib/api';
-import { useAppParams } from '@/lib/app-location';
+import { useTypedRoute } from '@/lib/app-location';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, STALE, useApiListQuery } from '@/lib/query';
 import { SettingsSectionPage } from '@/components/settings/settings-section-page';
@@ -59,11 +59,13 @@ interface EditorTarget {
  * Manage the workspace's labels.
  *
  * @remarks
- * Reads the org id with `useAppParams` rather than Next's `params` promise, matching every other
+ * Reads the org id from the generated typed route rather than Next's `params` promise, matching every other
  * settings page — the offline route table mounts routes with no props at all.
  */
 export default function LabelsSettingsPage(): JSX.Element {
-  const { orgId } = useAppParams<{ orgId: string }>();
+  const {
+    params: { orgId },
+  } = useTypedRoute('/orgs/[orgId]/settings/labels');
   const { activeOrg } = useActiveOrg();
   // Creating a label is a `contribute` write server-side; restructuring the label set (groups,
   // scope, delete) is `manage`. Gating both on `canManage` hid the New label button from every

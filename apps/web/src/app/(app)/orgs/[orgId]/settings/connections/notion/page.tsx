@@ -14,13 +14,15 @@ import type { JSX } from 'react';
 
 import { NotionMirrorPanel } from '@/components/settings/notion/notion-mirror-panel';
 import { useConnectionsParent } from '@/components/settings/use-connections-parent';
-import { useAppParams } from '@/lib/app-location';
+import { useTypedRoute } from '@/lib/app-location';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 
 /** The Notion mirror hub page. */
 export default function NotionMirrorPage(): JSX.Element {
-  const { orgId } = useAppParams<{ orgId: string }>();
+  const {
+    params: { orgId },
+  } = useTypedRoute('/orgs/[orgId]/settings/connections/notion');
   const { canManage } = useCanManageOrg(orgId);
   const parent = useConnectionsParent(orgId);
 

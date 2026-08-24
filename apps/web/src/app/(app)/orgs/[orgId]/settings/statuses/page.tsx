@@ -4,7 +4,7 @@
  * Manage the workspace's statuses.
  *
  * @remarks
- * Reads the org id with `useAppParams` rather than Next's `params` promise, matching every other
+ * Reads the org id from the generated typed route rather than Next's `params` promise, matching every other
  * settings page — the offline route table mounts routes with no props at all.
  *
  * The four sets live on one page because they share one taxonomy, and seeing them together is what
@@ -40,7 +40,7 @@ import { StatusEditorDialog } from '@/components/statuses/status-editor-dialog';
 import { StatusEntitySection, type TeamChoice } from '@/components/statuses/status-entity-section';
 import type { StatusLike } from '@/components/statuses/status-registry';
 import { api } from '@/lib/api';
-import { useAppParams } from '@/lib/app-location';
+import { useTypedRoute } from '@/lib/app-location';
 import { apiQueryOptions, queryKeys, STALE, useApiListQuery, useApiQuery } from '@/lib/query';
 import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 
@@ -63,7 +63,9 @@ interface DeleteTarget {
  * @returns the page element.
  */
 export default function StatusesSettingsPage(): JSX.Element {
-  const { orgId } = useAppParams<{ orgId: string }>();
+  const {
+    params: { orgId },
+  } = useTypedRoute('/orgs/[orgId]/settings/statuses');
   const { activeOrg } = useActiveOrg();
   const { canManage } = useCanManageOrg(orgId);
 

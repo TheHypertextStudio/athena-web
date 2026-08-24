@@ -5,12 +5,14 @@ import type { JSX } from 'react';
 
 import GoogleCalendarSettings from '@/components/settings/google-calendar-settings';
 import { useConnectionsParent } from '@/components/settings/use-connections-parent';
-import { useAppParams } from '@/lib/app-location';
+import { useTypedRoute } from '@/lib/app-location';
 import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 
 /** Configure first-party Google Calendar accounts and visible calendars. */
 export default function GoogleCalendarSettingsPage(): JSX.Element {
-  const { orgId } = useAppParams<{ orgId: string }>();
+  const {
+    params: { orgId },
+  } = useTypedRoute('/orgs/[orgId]/settings/connections/google-calendar');
   const parent = useConnectionsParent(orgId);
 
   return (

@@ -1,6 +1,6 @@
 'use client';
 
-import { useAppParams } from '@/lib/app-location';
+import { useTypedRoute } from '@/lib/app-location';
 
 /**
  * The Settings area root — redirects to the workspace's default section.
@@ -31,7 +31,9 @@ import { defaultSettingsSection, sectionHref } from '@/components/settings/setti
  * @returns a calm placeholder while it resolves the destination, then redirects.
  */
 export default function SettingsRootPage(): JSX.Element {
-  const { orgId } = useAppParams<{ orgId: string }>();
+  const {
+    params: { orgId },
+  } = useTypedRoute('/orgs/[orgId]/settings');
   const router = useRouter();
   const { activeOrg } = useActiveOrg();
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useAppParams } from '@/lib/app-location';
+import { useTypedRoute } from '@/lib/app-location';
 import type { JSX } from 'react';
 
 import { AppContentFallback } from '@/components/app-content-fallback';
@@ -21,7 +21,7 @@ import { AppContentFallback } from '@/components/app-content-fallback';
  * paths that have no real screen.
  */
 export default function OrgNotFoundPage(): JSX.Element {
-  const params = useAppParams<{ orgId: string }>();
+  const params = useTypedRoute('/orgs/[orgId]/[...unmatched]').params;
   const orgId = params.orgId;
 
   return (

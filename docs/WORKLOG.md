@@ -9,8 +9,9 @@
 
 ### [CORE-SCREEN-GATE-001] Block production when a core screen does not settle
 
-- **Status**: REVIEW
+- **Status**: COMPLETED
 - **Started**: 2026-08-24
+- **Completed**: 2026-08-24
 - **Priority**: P0
 - **Description**: The browser suite is advisory, uses PGlite, and does not gate production. Its
   local-first coverage opens only a Task and does not require the aggregate-backed detail surface
@@ -25,7 +26,7 @@
   - [x] Audit the current E2E coverage and production dependency graph.
   - [x] Add the core-screen acceptance spec and prove it against PostgreSQL.
   - [x] Add the required CI job and policy tests that prevent it from becoming advisory.
-  - [ ] Pass focused validation, review, commit, and deploy the required gate.
+  - [x] Pass focused validation, review, commit, and deploy the required gate.
 - **Decision**: The full browser suite remains advisory until its unrelated failures are removed.
   A bounded core-screen suite becomes mandatory now. Making the known-red full suite mandatory
   would stop all releases without giving the core navigation contract a stable signal.
@@ -36,13 +37,21 @@
   22 primary screens and four entity details in 25.5 seconds. Every detail aggregate returned 200,
   and every full detail surface replaced its snapshot. All 42 detail aggregate tests, all 30 CI
   policy tests, targeted type-aware ESLint, API and Web type checks, Prettier, actionlint, and the
-  live gate-policy command pass.
+  live gate-policy command pass. CI run `32764846320` passed the required `Core screen acceptance`
+  job against PostgreSQL 17, every existing lint, type, build, and coverage gate, the latest-main
+  check, database migration, API deployment, admin deployment, and Scheduler reconciliation for
+  revision `bf20022c5145632cf85c37ec38c77089fa953d9d`. Vercel marked that revision's Web deployment
+  complete. The production API returned HTTP 200 with `{"status":"ok"}` after deployment.
+- **Retrospective**: The advisory browser suite and PGlite route tests did not exercise the
+  production database-driver boundary. A release gate must use the production build and a real
+  PostgreSQL service, and it must require settled content instead of accepting a cached title as a
+  successful screen.
 
 ---
 
 ### [PROJECT-DETAIL-500-001] Restore Project detail reconciliation
 
-- **Status**: IN_PROGRESS
+- **Status**: REVIEW
 - **Started**: 2026-08-24
 - **Priority**: P0
 - **Description**: Production Project detail navigation paints its local identity, but the bounded
@@ -57,16 +66,20 @@
   - [x] Isolate the failing response-contract boundary in the Project progress aggregate.
   - [x] Add a failing postgres-js parity regression.
   - [x] Correct the aggregate numeric mapping and pass focused API and Web tests.
-  - [ ] Review, commit, push, pass CI, deploy, and verify the affected production Project.
+  - [x] Review, commit, push, pass CI, and deploy the correction.
+  - [ ] Recheck the affected private production Project in an authenticated browser.
 - **Validation**: The postgres-js parity test failed with the same four response-schema numeric
-  errors as production before the fix and passes afterward. All 41 detail aggregate route tests and
+  errors as production before the fix and passes afterward. All 42 detail aggregate route tests and
   all five detail aggregate client tests pass. Targeted ESLint and API and Web type checks pass. The
-  Web production build succeeds with the local environment contract and precaches 273 assets.
+  Web production build succeeds with the local environment contract and precaches 273 assets. CI
+  run `32764846320` passed the PostgreSQL core-screen sweep and deployed the exact API and Web
+  revision. The public production health endpoint returns HTTP 200 after deployment.
 - **Failure-state correction**: Tasks, Projects, Programs, and Initiatives now show the delayed
   syncing label only while their aggregate request remains pending. A settled failure retains the
   truthful snapshot and refresh error without claiming that network work is still in flight.
-- **Blockers**: Cloud logging requires interactive reauthentication. The response contract and
-  production request trace provide enough evidence to continue without log access.
+- **Blockers**: Browser control lost the signed-in Chrome tab after deployment. The available
+  in-app browser redirects the private Project URL to sign-in, so this record does not claim an
+  authenticated post-deploy inspection of that exact Project.
 
 ---
 

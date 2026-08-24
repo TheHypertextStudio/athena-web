@@ -1,54 +1,183 @@
 'use client';
 
-/**
- * `components/canvas/bulk-actions-bar` — batch actions over a multi-selection.
- *
- * @remarks
- * Rendered inside the flow (under `ReactFlowProvider`) so it can read xyflow's own selection via
- * `useOnSelectionChange` — no selection state is threaded through the host. Shift-drag (xyflow's
- * default box-select) or shift-click selects several task nodes; when two or more are selected and
- * the viewer may edit, a small bar offers a bulk state toggle. Actions come from the shared
- * {@link useCanvasActions} context, so the bar stays host-agnostic.
- */
-import { type Node, Panel, useOnSelectionChange } from '@xyflow/react';
-import { Button } from '@docket/ui/primitives';
-import { useCallback, useState } from 'react';
+/** Shared compact action bar over a Project or Task canvas selection. */
+import { Ellipsis, Folder, RefreshCw, Trash2, TuneRounded, Undo } from '@docket/ui/icons';
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  Surface,
+} from '@docket/ui/primitives';
+import { Panel } from '@xyflow/react';
+import { useEffect, useRef } from 'react';
+
+import type { CanvasPropertySnapshot } from '@/lib/actions';
 
 import { useCanvasActions } from './canvas-actions-context';
-import { taskData } from './task-node';
+import { useCanvasCommandContext } from './canvas-command-context';
+import CanvasPropertiesEditor from './canvas-properties-editor';
+import { useOptionalCanvasPropertySnapshots } from './canvas-selection-retention';
 
-/** The floating bulk-actions bar (renders nothing unless a multi-selection is editable). */
-export default function BulkActionsBar(): React.JSX.Element | null {
-  const [selected, setSelected] = useState<Node[]>([]);
-  useOnSelectionChange({
-    onChange: useCallback(({ nodes }: { nodes: Node[] }) => {
-      setSelected(nodes.filter((n) => n.type === 'task' || n.type === 'taskBranch'));
-    }, []),
-  });
-  const actions = useCanvasActions();
+/** Props for {@link BulkActionsBar}. */
+export interface BulkActionsBarProps {
+  /** Full property snapshots available on this canvas. */
+  readonly propertySnapshots?: readonly CanvasPropertySnapshot[] | undefined;
+}
 
-  if (selected.length < 2 || !actions?.canEdit) return null;
+/** Selection actions that remain reachable without a context-menu gesture. */
+export default function BulkActionsBar({
+  propertySnapshots = [],
+}: BulkActionsBarProps): React.JSX.Element | null {
+  const commands = useCanvasCommandContext();
+  const taskActions = useCanvasActions();
+  const propertiesHeadingRef = useRef<HTMLHeadingElement>(null);
+  const retainedSnapshots = useOptionalCanvasPropertySnapshots();
 
-  const allDone = selected.every((n) => taskData(n).stateType === 'completed');
-  const applyComplete = (complete: boolean): void => {
-    for (const n of selected) actions.setComplete(n.id, complete);
-  };
+  useEffect(() => {
+    if (commands?.propertiesOpen === true) {
+      propertiesHeadingRef.current?.focus();
+    }
+  }, [commands?.propertiesOpen]);
+
+  if (commands === null || commands.selectedObjects.length === 0) return null;
+  const count = commands.selectedObjects.length;
+  const availableSnapshots = retainedSnapshots ?? propertySnapshots;
+  const selectedIds = new Set(commands.selectedObjects.map(({ id }) => id));
+  const activeSnapshots = availableSnapshots.filter(
+    ({ id, kind }) => selectedIds.has(id) && kind === commands.objectKind,
+  );
 
   return (
-    <Panel position="top-center">
-      <div className="border-outline-variant bg-surface-container text-on-surface flex items-center gap-3 rounded-lg border px-3 py-1.5 shadow-lg">
-        <span className="text-body-medium">{selected.length} selected</span>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={() => {
-            applyComplete(!allDone);
-          }}
+    <>
+      <Panel position="top-center">
+        <Surface
+          tone="raised"
+          shape="pill"
+          className="text-on-surface flex max-w-[calc(100vw-1rem)] flex-nowrap items-center gap-1 overflow-x-auto px-2 py-1.5"
+          aria-label={`${String(count)} selected`}
+          data-testid="canvas-selection-bar"
         >
-          {allDone ? 'Reopen all' : 'Mark all done'}
-        </Button>
-      </div>
-    </Panel>
+          <span className="text-label-large px-2">{count} selected</span>
+          <Button type="button" size="sm" variant="ghost" onClick={commands.openSelection}>
+            <Folder className="size-4" /> Open
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            disabled={!commands.canEdit}
+            onClick={(event) => {
+              commands.openProperties(event.currentTarget);
+            }}
+          >
+            <TuneRounded className="size-4" /> Properties
+          </Button>
+          {commands.objectKind === 'task' &&
+          commands.canEdit &&
+          taskActions !== null &&
+          count === 1 ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                const task = commands.selectedObjects[0];
+                if (task !== undefined) taskActions.setComplete(task.id, true);
+              }}
+            >
+              Mark done
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            disabled={!commands.canTrash || commands.pending}
+            onClick={commands.trashSelection}
+          >
+            <Trash2 className="size-4" /> Move to trash
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                iconOnly
+                aria-label="More selection actions"
+              >
+                <Ellipsis className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                disabled={!commands.canEdit || !commands.canUndo || commands.pending}
+                onSelect={() => {
+                  void commands.undo();
+                }}
+              >
+                <Undo />
+                Undo{commands.undoLabel ? ` ${commands.undoLabel}` : ''}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={!commands.canEdit || !commands.canRedo || commands.pending}
+                onSelect={() => {
+                  void commands.redo();
+                }}
+              >
+                <RefreshCw />
+                Redo{commands.redoLabel ? ` ${commands.redoLabel}` : ''}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </Surface>
+      </Panel>
+      {commands.propertiesOpen ? (
+        <Panel position="top-center" className="!mt-14">
+          <Surface
+            tone="raised"
+            pad="tight"
+            className="flex max-h-[min(42rem,calc(100vh-6rem))] w-96 max-w-[calc(100vw-1rem)] flex-col"
+            data-testid="canvas-properties-editor"
+            role="dialog"
+            aria-labelledby="canvas-properties-heading"
+          >
+            <div className="flex shrink-0 items-center justify-between gap-3">
+              <div>
+                <h2
+                  ref={propertiesHeadingRef}
+                  id="canvas-properties-heading"
+                  className="text-title-small text-on-surface"
+                  tabIndex={-1}
+                >
+                  Properties
+                </h2>
+                <p className="text-body-small text-on-surface-variant">
+                  Choose a property to change for {String(count)} selected.
+                </p>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  commands.closeProperties();
+                }}
+              >
+                Close
+              </Button>
+            </div>
+            <div
+              className="mt-2 min-h-0 flex-1 overflow-y-auto pr-1"
+              data-testid="canvas-properties-body"
+            >
+              <CanvasPropertiesEditor snapshots={activeSnapshots} />
+            </div>
+          </Surface>
+        </Panel>
+      ) : null}
+    </>
   );
 }

@@ -312,6 +312,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
         requestedSelectionAttempt={activeCreatedProjectSelection?.attempt ?? 0}
         onRequestedSelectionResolved={resolveCreatedProjectSelection}
         onRequestedSelectionMissing={markCreatedProjectMissing}
+        onCreateProject={create}
       />
     );
   } else if (controller.loading) {
@@ -596,12 +597,14 @@ export function WorkViewPage<TTarget extends ViewTarget>({
           activeCreatedProjectSelection?.state === 'missing' ? (
             <div className="bg-secondary-container text-on-secondary-container text-body-medium flex shrink-0 items-center gap-2 rounded-lg px-3 py-2">
               <span role="status" className="min-w-0 flex-1">
-                Project created, but it is not visible yet.
+                Created, but hidden by current filters
               </span>
               <Button
                 variant="ghost"
                 controlSize="sm"
                 onClick={() => {
+                  controller.setDefinition({ ...controller.definition, filter: null });
+                  setSearch('');
                   setCreatedProjectSelection((selection) =>
                     selection?.organizationId === organizationId &&
                     selection.id === activeCreatedProjectSelection.id
@@ -614,7 +617,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
                   );
                 }}
               >
-                Retry
+                Clear filters
               </Button>
               <Button
                 variant="ghost"

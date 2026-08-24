@@ -46,7 +46,7 @@ import type {
   PublicBriefOut,
   PublicationSubjectKind,
 } from '@docket/types';
-import { and, asc, desc, eq, inArray, isNotNull } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 import type { z } from 'zod';
 
 import { env } from '../env';
@@ -361,6 +361,7 @@ async function initiativeBrief(
         and(
           eq(initiativeProject.initiativeId, row.id),
           eq(initiativeProject.organizationId, resolved.organizationId),
+          isNull(project.archivedAt),
         ),
       )
       .orderBy(asc(project.targetDate), asc(project.name)),
@@ -431,7 +432,11 @@ async function programBrief(
       .select()
       .from(project)
       .where(
-        and(eq(project.organizationId, resolved.organizationId), eq(project.programId, row.id)),
+        and(
+          eq(project.organizationId, resolved.organizationId),
+          eq(project.programId, row.id),
+          isNull(project.archivedAt),
+        ),
       )
       .orderBy(asc(project.targetDate), asc(project.name)),
     ownerName(resolved.organizationId, row.ownerId),
@@ -470,7 +475,11 @@ async function projectBrief(
     .select()
     .from(project)
     .where(
-      and(eq(project.id, resolved.subjectId), eq(project.organizationId, resolved.organizationId)),
+      and(
+        eq(project.id, resolved.subjectId),
+        eq(project.organizationId, resolved.organizationId),
+        isNull(project.archivedAt),
+      ),
     )
     .limit(1);
   const row = rows[0];

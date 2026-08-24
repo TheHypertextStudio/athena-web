@@ -20,6 +20,7 @@ import ProjectNode, {
   PROJECT_NODE_SIZE,
   type ProjectNodeData,
 } from '@/components/canvas/project-node';
+import { SelectionProvider } from '@/components/selection';
 
 afterEach(cleanup);
 
@@ -44,13 +45,37 @@ function renderNode(overrides: Partial<ProjectNodeData> = {}): { container: HTML
     selected: boolean;
   }) => JSX.Element;
   return render(
-    <ReactFlowProvider>
-      <Node id="p-1" data={data} selected={false} />
-    </ReactFlowProvider>,
+    <SelectionProvider
+      items={[
+        {
+          kind: 'project',
+          id: 'p-1',
+          organizationId: data.orgId,
+          title: data.name,
+          meta: { taskCount: data.taskCount },
+        },
+      ]}
+      organizationId={data.orgId}
+    >
+      <ReactFlowProvider>
+        <Node id="p-1" data={data} selected={false} />
+      </ReactFlowProvider>
+    </SelectionProvider>,
   );
 }
 
 describe('the card separates itself by tone, not by a stroke', () => {
+  it('publishes Project identity and Task count to the shared object interaction layer', () => {
+    const { container } = renderNode();
+    const card = container.querySelector('[data-object-kind="project"]');
+    if (!(card instanceof HTMLElement)) throw new Error('expected the object target');
+
+    expect(card.dataset['objectId']).toBe('p-1');
+    expect(card.dataset['objectOrg']).toBe('org-1');
+    expect(card.dataset['objectTitle']).toBe('Payments migration');
+    expect(JSON.parse(card.dataset['objectMeta'] ?? '{}')).toEqual({ taskCount: 8 });
+  });
+
   it('uses the exported size contract consumed by Project graph layout', () => {
     const { container } = renderNode();
     const card = container.querySelector('[style*="view-transition-name"]');

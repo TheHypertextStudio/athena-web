@@ -9,7 +9,7 @@ import {
 } from '@docket/db';
 import type { HubProgramLane, HubProjectBar } from '@docket/types';
 import type { HubPortfolioOut } from '@docket/types';
-import { and, eq, inArray, notInArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull, notInArray } from 'drizzle-orm';
 import type { z } from 'zod';
 
 import {
@@ -79,6 +79,7 @@ export async function buildHubPortfolioPayload(
       and(
         inArray(project.organizationId, orgIds),
         inArray(project.status, [...IN_FLIGHT_PROJECT_STATES]),
+        isNull(project.archivedAt),
       ),
     );
 

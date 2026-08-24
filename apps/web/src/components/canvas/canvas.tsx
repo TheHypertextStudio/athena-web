@@ -29,15 +29,29 @@ import {
 import '@xyflow/react/dist/style.css';
 import { Maximize } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import { useCanvasMenus } from './canvas-menus';
+import CanvasViewportToolbar from './canvas-viewport-toolbar';
 import { useControlledFlow, useFitViewOnChange } from './use-controlled-flow';
 import { deriveGraphInitialFrame } from './graph-initial-frame';
 import { type CanvasDensity, type LayoutDirection, useDagreLayout } from './use-dagre-layout';
 import { useGraphHighlight } from './use-graph-highlight';
-import { type GraphInteractionHandlers, useGraphInteractions } from './use-graph-interactions';
+import {
+  edgeKind,
+  type GraphInteractionHandlers,
+  useGraphInteractions,
+} from './use-graph-interactions';
 import { LodProvider, useLodValue } from './use-lod';
+import { isCanvasEditableTarget } from './canvas-keyboard';
 
 const READABLE_INITIAL_ZOOM = 0.5;
 const WORKING_AREA_PADDING = 24;
@@ -114,6 +128,8 @@ export interface CanvasProps extends GraphInteractionHandlers {
   onNodeDragStart?: OnNodeDrag | undefined;
   onNodeDrag?: OnNodeDrag | undefined;
   onNodeDragStop?: OnNodeDrag | undefined;
+  /** Recompute the host's deterministic structural layout. */
+  onRelayout?: (() => void) | undefined;
   /** Overlays rendered inside the flow (e.g. `<Panel>` legend/toolbar/peek). */
   children?: ReactNode | undefined;
   /** Extra classes for the canvas container. */
@@ -145,6 +161,7 @@ function CanvasInner({
   onNodeDragStart,
   onNodeDrag,
   onNodeDragStop,
+  onRelayout,
   onConnectEdge,
   onDeleteEdge,
   onReparentEdge,
@@ -153,6 +170,8 @@ function CanvasInner({
 }: CanvasProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
   const [flowInstance, setFlowInstance] = useState<Parameters<OnInit>[0] | null>(null);
+  const [shiftSelecting, setShiftSelecting] = useState(false);
+  const [oneShotSelecting, setOneShotSelecting] = useState(false);
   const framed = useRef(false);
   // Grouped/swimlane layouts arrive pre-positioned; otherwise dagre lays the flat graph out.
   const dagreLaidOut = useDagreLayout(rawNodes, rawEdges, density, layoutDirection);
@@ -167,9 +186,76 @@ function CanvasInner({
   useFitViewOnChange(focusOn, fitMaxZoom, layoutReady && layoutApplied);
   // An edge and the empty pane are not core objects, so the app's object-level right-click handler
   // never claims them; these are the canvas's own menus for the two.
-  const menus = useCanvasMenus();
+  const menus = useCanvasMenus({
+    onSelectArea: () => {
+      setOneShotSelecting(true);
+      containerRef.current?.focus();
+    },
+    onRelayout: () => {
+      framed.current = false;
+      onRelayout?.();
+    },
+    onRemoveDependency:
+      onDeleteEdge === undefined
+        ? undefined
+        : (sourceId, targetId) => {
+            const edge = rawEdges.find(
+              (candidate) => candidate.source === sourceId && candidate.target === targetId,
+            );
+            if (edge !== undefined) onDeleteEdge(edge);
+          },
+  });
   const lod = useLodValue();
   const initialFrame = useMemo(() => deriveGraphInitialFrame(nodes, edges), [nodes, edges]);
+  const areaSelecting = shiftSelecting || oneShotSelecting;
+  const handleCanvasKeyDown = useCallback(
+    (event: ReactKeyboardEvent<HTMLDivElement>): void => {
+      if (
+        !interactive ||
+        onDeleteEdge === undefined ||
+        isCanvasEditableTarget(event.target) ||
+        (event.key !== 'Delete' && event.key !== 'Backspace') ||
+        nodes.some(({ selected }) => selected)
+      ) {
+        return;
+      }
+      const selectedDependencies = edges.filter(
+        (edge) => edge.selected === true && edgeKind(edge) !== 'subtask',
+      );
+      if (selectedDependencies.length === 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      for (const edge of selectedDependencies) onDeleteEdge(edge);
+    },
+    [edges, interactive, nodes, onDeleteEdge],
+  );
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Shift') setShiftSelecting(true);
+      if (event.key !== 'Escape' || isCanvasEditableTarget(event.target)) return;
+      if (!containerRef.current?.contains(document.activeElement)) return;
+      setOneShotSelecting(false);
+      flowInstance?.setNodes((current) =>
+        current.map((node) => (node.selected ? { ...node, selected: false } : node)),
+      );
+      onSelectNode?.(null);
+    };
+    const onKeyUp = (event: KeyboardEvent): void => {
+      if (event.key === 'Shift') setShiftSelecting(false);
+    };
+    const onBlur = (): void => {
+      setShiftSelecting(false);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', onBlur);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+      window.removeEventListener('blur', onBlur);
+    };
+  }, [flowInstance, onSelectNode]);
   const initializeFlow = useCallback<OnInit>(
     (instance) => {
       setFlowInstance(instance);
@@ -263,7 +349,12 @@ function CanvasInner({
 
   return (
     <LodProvider value={lod}>
-      <div ref={containerRef} className={cn('relative h-full min-h-0 w-full', className)}>
+      <div
+        ref={containerRef}
+        tabIndex={-1}
+        onKeyDown={handleCanvasKeyDown}
+        className={cn('relative h-full min-h-0 w-full focus:outline-none', className)}
+      >
         <ReactFlow
           nodes={highlight.nodes}
           edges={highlight.edges}
@@ -272,6 +363,15 @@ function CanvasInner({
           {...(nodeTypes !== undefined ? { nodeTypes } : {})}
           {...(edgeTypes !== undefined ? { edgeTypes } : {})}
           onNodeClick={(_, node) => onSelectNode?.(node.id)}
+          onNodeContextMenu={(event, node) => {
+            if (!node.selected) {
+              flowInstance?.setNodes((current) =>
+                current.map((candidate) => ({ ...candidate, selected: candidate.id === node.id })),
+              );
+              onSelectNode?.(node.id);
+            }
+            menus.onNodeContextMenu(event, node);
+          }}
           onNodeDoubleClick={(_, node) => onNavigate?.(node.id)}
           onInit={initializeFlow}
           {...(onNodeDragStart !== undefined ? { onNodeDragStart } : {})}
@@ -289,8 +389,16 @@ function CanvasInner({
           onReconnect={interactions.onReconnect}
           onBeforeDelete={interactions.onBeforeDelete}
           onEdgesDelete={interactions.onEdgesDelete}
-          deleteKeyCode={interactive ? ['Delete', 'Backspace'] : null}
+          // Object deletion is a recoverable server command owned by the host. Letting xyflow
+          // consume this key would remove selected nodes only from local render state.
+          deleteKeyCode={null}
+          panOnDrag={!areaSelecting}
+          selectionOnDrag={areaSelecting}
+          onSelectionEnd={() => {
+            if (oneShotSelecting) setOneShotSelecting(false);
+          }}
           elementsSelectable
+          nodesFocusable={false}
           onlyRenderVisibleElements
           fitView={false}
           proOptions={{ hideAttribution: true }}
@@ -323,6 +431,12 @@ function CanvasInner({
               className="!rounded-lg"
             />
           ) : null}
+          <CanvasViewportToolbar
+            onRelayout={() => {
+              framed.current = false;
+              onRelayout?.();
+            }}
+          />
           {children}
         </ReactFlow>
         {menus.menu}

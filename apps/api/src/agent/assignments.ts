@@ -60,7 +60,13 @@ async function targetTitle(
     const [row] = await db
       .select({ title: project.name })
       .from(project)
-      .where(and(eq(project.id, entityId), eq(project.organizationId, organizationId)))
+      .where(
+        and(
+          eq(project.id, entityId),
+          eq(project.organizationId, organizationId),
+          isNull(project.archivedAt),
+        ),
+      )
       .limit(1);
     return row?.title ?? null;
   }
@@ -134,7 +140,13 @@ async function resolveEventSubjectTitle(
     const [row] = await db
       .select({ title: project.name })
       .from(project)
-      .where(and(eq(project.id, subject.id), eq(project.organizationId, organizationId)))
+      .where(
+        and(
+          eq(project.id, subject.id),
+          eq(project.organizationId, organizationId),
+          isNull(project.archivedAt),
+        ),
+      )
       .limit(1);
     return row?.title ?? null;
   }

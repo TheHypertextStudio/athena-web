@@ -45,6 +45,8 @@ import {
   Users,
   User,
 } from '@docket/ui/icons';
+import type { Health, Priority } from '@docket/types';
+import type { PlanningTimeframe } from '@docket/work/planning-timeframe';
 
 /**
  * Every core data type the app treats as a first-class object.
@@ -99,6 +101,45 @@ export interface ObjectRef {
   /** Kind-specific extras a drop target or action needs (e.g. an initiative's parent edge). */
   readonly meta?: ObjectMeta;
 }
+
+/** Every Task value the canvas bulk Properties editor may replace. */
+export interface CanvasTaskPropertySnapshot {
+  readonly kind: 'task';
+  readonly id: string;
+  readonly organizationId: string;
+  readonly state: string;
+  readonly priority: Priority;
+  readonly assigneeId: string | null;
+  readonly projectId: string | null;
+  readonly programId: string | null;
+  readonly milestoneId: string | null;
+  readonly cycleId: string | null;
+  readonly labelIds: readonly string[];
+  readonly teamId: string;
+  readonly startDate: string | null;
+  readonly dueDate: string | null;
+  readonly estimate: number | null;
+}
+
+/** Every Project value the canvas bulk Properties editor may replace. */
+export interface CanvasProjectPropertySnapshot {
+  readonly kind: 'project';
+  readonly id: string;
+  readonly organizationId: string;
+  readonly status: string;
+  readonly health: Health | null;
+  readonly priority: Priority;
+  readonly leadId: string | null;
+  readonly teamId: string | null;
+  readonly programId: string | null;
+  readonly labelIds: readonly string[];
+  readonly initiativeIds: readonly string[];
+  readonly startTimeframe: PlanningTimeframe | null;
+  readonly targetTimeframe: PlanningTimeframe | null;
+}
+
+/** Full property state carried beside scalar-only {@link ObjectRef} interaction identity. */
+export type CanvasPropertySnapshot = CanvasTaskPropertySnapshot | CanvasProjectPropertySnapshot;
 
 /** The presentation and capability facts one {@link ObjectKind} publishes. */
 export interface ObjectDescriptor {

@@ -301,6 +301,21 @@ describe('app.ts route composition', () => {
     const res = await app.request('/v1/orgs');
     expect(res.status).toBe(401);
   });
+
+  it('rejects oversized object commands before authentication and idempotency', async () => {
+    const { app } = await import('../../src/app');
+    const { onError } = await import('../../src/error');
+    app.onError(onError);
+    const response = await app.request('/v1/orgs/01ARZ3NDEKTSV4RRFFQ69G5FAV/object-commands', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'Idempotency-Key': 'oversized-production-command',
+      },
+      body: JSON.stringify({ padding: 'x'.repeat(4 * 1024 * 1024) }),
+    });
+    expect(response.status).toBe(413);
+  });
 });
 
 describe('openapi', () => {

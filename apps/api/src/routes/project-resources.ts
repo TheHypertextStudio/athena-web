@@ -1,7 +1,7 @@
 /** URL-only resource routes for Project operating records. */
 import { attachment, db, project } from '@docket/db';
 import { AttachmentOut, AttachmentRemoved, ProjectResourceCreate, pageOf } from '@docket/types';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -19,7 +19,13 @@ async function loadProject(organizationId: string, projectId: string): Promise<v
   const rows = await db
     .select({ id: project.id })
     .from(project)
-    .where(and(eq(project.organizationId, organizationId), eq(project.id, projectId)))
+    .where(
+      and(
+        eq(project.organizationId, organizationId),
+        eq(project.id, projectId),
+        isNull(project.archivedAt),
+      ),
+    )
     .limit(1);
   if (!rows[0]) throw new NotFoundError('Project not found');
 }

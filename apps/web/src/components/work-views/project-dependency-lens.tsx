@@ -25,6 +25,8 @@ export interface ProjectDependencyLensProps {
   readonly onRequestedSelectionMissing?: ((id: string) => void) | undefined;
   /** Incremented by the host when clearing filters should retry the same Project id. */
   readonly requestedSelectionAttempt?: number | undefined;
+  /** Route canvas creation through the retained Project work-view host. */
+  readonly onCreateProject?: (() => void) | undefined;
 }
 
 /** Load the dependency projection only after the viewer opens its dedicated lens. */
@@ -34,6 +36,7 @@ export function ProjectDependencyLens({
   onRequestedSelectionResolved,
   onRequestedSelectionMissing,
   requestedSelectionAttempt = 0,
+  onCreateProject,
 }: ProjectDependencyLensProps): JSX.Element {
   const query = useApiQuery(projectOverviewDef(organizationId));
   const [settledSelection, setSettledSelection] = useState<{
@@ -75,6 +78,7 @@ export function ProjectDependencyLens({
         settledSelection.attempt === requestedSelectionAttempt
       }
       onRequestedSelectionMissing={onRequestedSelectionMissing}
+      onCreateProject={onCreateProject}
     />
   );
 }

@@ -58,6 +58,11 @@ export interface ResolvedLabel extends LabelRefRow {
   readonly exclusiveGroupId: string | null;
 }
 
+/** A resolved Label plus the Team scope used to validate bulk attachment targets. */
+export interface ScopedResolvedLabel extends ResolvedLabel {
+  readonly teamId: string | null;
+}
+
 /**
  * Delete + insert for one join table.
  *
@@ -261,6 +266,41 @@ export function applyExclusivity(labels: readonly ResolvedLabel[]): ResolvedLabe
     keptIds.add(candidate.id);
   }
   return labels.filter((l) => keptIds.has(l.id));
+}
+
+/**
+ * Hydrate a Label catalog once for bulk in-memory scope and exclusivity validation.
+ *
+ * @param orgId - The verified tenant id.
+ * @param labelIds - Label ids to hydrate.
+ * @param dbh - Optional transaction-owned database handle.
+ * @returns resolved Labels including their owning Team scope.
+ */
+export async function resolveLabelCatalog(
+  orgId: string,
+  labelIds: readonly string[],
+  dbh: Db = db,
+): Promise<ScopedResolvedLabel[]> {
+  const unique = [...new Set(labelIds)];
+  if (unique.length === 0) return [];
+  const rows = await dbh
+    .select({
+      ...LABEL_REF_COLUMNS,
+      teamId: label.teamId,
+      groupId: label.groupId,
+      groupExclusive: labelGroup.exclusive,
+    })
+    .from(label)
+    .leftJoin(labelGroup, eq(labelGroup.id, label.groupId))
+    .where(and(eq(label.organizationId, orgId), inArray(label.id, unique)));
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    color: row.color,
+    teamId: row.teamId,
+    groupId: row.groupId,
+    exclusiveGroupId: row.groupExclusive === true ? row.groupId : null,
+  }));
 }
 
 /**

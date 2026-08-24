@@ -18,7 +18,16 @@
  * the target for us through `onEdgeContextMenu` / `onPaneContextMenu`, so this module takes those
  * events and renders one menu anchored at the pointer, the same way the object menu does.
  */
-import { Maximize, RefreshCw, Trash2, Workflow } from '@docket/ui/icons';
+import {
+  Folder,
+  Maximize,
+  Plus,
+  RefreshCw,
+  Search,
+  Trash2,
+  TuneRounded,
+  Undo,
+} from '@docket/ui/icons';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,12 +36,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@docket/ui/primitives';
-import { type Edge, useReactFlow } from '@xyflow/react';
+import { type Edge, type Node, useReactFlow } from '@xyflow/react';
 import { type JSX, useCallback, useState } from 'react';
 
-import { useCanvasActions } from './canvas-actions-context';
+import { useCanvasCommandContext } from './canvas-command-context';
 import { edgeKind } from './use-graph-interactions';
-import { taskData } from './task-node';
 
 /** Which canvas menu is open, and where. */
 interface OpenMenu {
@@ -42,16 +50,38 @@ interface OpenMenu {
   y: number;
   /** The edge the menu is about, or null for the empty pane. */
   edge: Edge | null;
+  /** Node subject, or null for an edge or the empty pane. */
+  node: Node | null;
+  /** Connected canvas element that invoked the menu, used for Properties focus return. */
+  invoker: HTMLElement | null;
+}
+
+function menuInvoker(event: React.MouseEvent | MouseEvent): HTMLElement | null {
+  const current = 'currentTarget' in event ? event.currentTarget : null;
+  if (current instanceof HTMLElement) return current;
+  return event.target instanceof HTMLElement ? event.target : null;
 }
 
 /** What {@link useCanvasMenus} hands back to the canvas. */
 export interface CanvasMenus {
   /** Spread onto `<ReactFlow onEdgeContextMenu>`. */
   onEdgeContextMenu: (event: React.MouseEvent, edge: Edge) => void;
+  /** Spread onto `<ReactFlow onNodeContextMenu>`. */
+  onNodeContextMenu: (event: React.MouseEvent, node: Node) => void;
   /** Spread onto `<ReactFlow onPaneContextMenu>`. */
   onPaneContextMenu: (event: React.MouseEvent | MouseEvent) => void;
   /** The menu element, or null when nothing is open. Render inside the flow. */
   menu: JSX.Element | null;
+}
+
+/** Pane commands owned by the generic canvas rather than a domain host. */
+export interface CanvasMenuOptions {
+  /** Enable one area-selection gesture. */
+  readonly onSelectArea: () => void;
+  /** Re-run the deterministic host layout. */
+  readonly onRelayout: () => void;
+  /** Remove one dependency edge through the host's command history. */
+  readonly onRemoveDependency?: ((sourceId: string, targetId: string) => void) | undefined;
 }
 
 /**
@@ -59,10 +89,10 @@ export interface CanvasMenus {
  *
  * @returns the two xyflow handlers plus the menu element to render.
  */
-export function useCanvasMenus(): CanvasMenus {
+export function useCanvasMenus(options: CanvasMenuOptions): CanvasMenus {
   const [open, setOpen] = useState<OpenMenu | null>(null);
-  const actions = useCanvasActions();
-  const { fitView, zoomTo, getNode } = useReactFlow();
+  const commands = useCanvasCommandContext();
+  const { fitView, getNode, getNodes } = useReactFlow();
 
   const close = useCallback(() => {
     setOpen(null);
@@ -73,25 +103,45 @@ export function useCanvasMenus(): CanvasMenus {
     // browser's own menu rather than being given one with nothing applicable on it.
     if (edgeKind(edge) === 'subtask') return;
     event.preventDefault();
-    setOpen({ x: event.clientX, y: event.clientY, edge });
+    setOpen({ x: event.clientX, y: event.clientY, edge, node: null, invoker: menuInvoker(event) });
+  }, []);
+
+  const onNodeContextMenu = useCallback((event: React.MouseEvent, node: Node) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setOpen({ x: event.clientX, y: event.clientY, edge: null, node, invoker: menuInvoker(event) });
   }, []);
 
   const onPaneContextMenu = useCallback((event: React.MouseEvent | MouseEvent) => {
     event.preventDefault();
-    setOpen({ x: event.clientX, y: event.clientY, edge: null });
+    setOpen({
+      x: event.clientX,
+      y: event.clientY,
+      edge: null,
+      node: null,
+      invoker: menuInvoker(event),
+    });
   }, []);
 
   const titleOf = (id: string): string => {
     const node = getNode(id);
-    return node === undefined ? 'this task' : taskData(node).title;
+    if (node === undefined) return 'this object';
+    const label = node.data['title'] ?? node.data['name'];
+    return typeof label === 'string' && label.length > 0 ? label : 'this object';
+  };
+
+  const nodeLabel = (node: Node): string => {
+    const label = node.data['title'] ?? node.data['name'];
+    return typeof label === 'string' && label.length > 0 ? label : 'Selection';
   };
 
   const menu = ((): JSX.Element | null => {
     if (open === null) return null;
-    const canEdit = actions?.canEdit === true;
+    const canEdit = commands?.canEdit === true;
+    const removeDependency = options.onRemoveDependency;
     // An edge menu with nothing on it is worse than the browser's; a read-only viewer gets the
     // pane menu (which is only viewport commands) and no edge menu at all.
-    if (open.edge !== null && !canEdit) return null;
+    if (open.edge !== null && (!canEdit || removeDependency === undefined)) return null;
 
     return (
       <DropdownMenu
@@ -108,49 +158,147 @@ export function useCanvasMenus(): CanvasMenus {
           />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" side="bottom" sideOffset={0} className="min-w-56">
-          {open.edge === null ? (
+          {open.node !== null ? (
             <>
+              <DropdownMenuLabel>{nodeLabel(open.node)}</DropdownMenuLabel>
+              <DropdownMenuSeparator />
               <DropdownMenuItem
                 onSelect={() => {
-                  void fitView({ duration: 300 });
+                  commands?.openObject(open.node?.id ?? '');
                   close();
                 }}
               >
-                <Maximize />
-                Fit to view
+                <Folder />
+                Open or peek
               </DropdownMenuItem>
               <DropdownMenuItem
+                disabled={commands?.canEdit !== true}
                 onSelect={() => {
-                  void zoomTo(1, { duration: 300 });
+                  commands?.openProperties(open.invoker);
+                  close();
+                }}
+              >
+                <TuneRounded />
+                Properties
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                disabled={commands === null || !commands.canTrash || commands.pending}
+                onSelect={() => {
+                  commands?.trashSelection();
+                  close();
+                }}
+              >
+                <Trash2 />
+                Move to trash
+              </DropdownMenuItem>
+            </>
+          ) : open.edge === null ? (
+            <>
+              {commands?.canEdit === true ? (
+                <DropdownMenuItem
+                  onSelect={() => {
+                    commands.createObject();
+                    close();
+                  }}
+                >
+                  <Plus />
+                  New {commands.objectKind === 'project' ? 'Project' : 'Task'}
+                </DropdownMenuItem>
+              ) : null}
+              <DropdownMenuItem
+                onSelect={() => {
+                  options.onSelectArea();
+                  close();
+                }}
+              >
+                <Search />
+                Select area
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                disabled={
+                  commands === null || !commands.canEdit || !commands.canUndo || commands.pending
+                }
+                onSelect={() => {
+                  void commands?.undo();
+                  close();
+                }}
+              >
+                <Undo />
+                Undo{commands?.undoLabel ? ` ${commands.undoLabel}` : ''}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={
+                  commands === null || !commands.canEdit || !commands.canRedo || commands.pending
+                }
+                onSelect={() => {
+                  void commands?.redo();
                   close();
                 }}
               >
                 <RefreshCw />
-                Reset zoom
+                Redo{commands?.redoLabel ? ` ${commands.redoLabel}` : ''}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                disabled={!getNodes().some(({ selected }) => selected)}
+                onSelect={() => {
+                  const selected = getNodes().filter(({ selected }) => selected);
+                  void fitView({ nodes: selected, duration: 300, maxZoom: 1, padding: 0.3 });
+                  close();
+                }}
+              >
+                <Search />
+                Fit selection
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => {
+                  void fitView({ duration: 300, minZoom: 0.1, padding: 0.15 });
+                  close();
+                }}
+              >
+                <Maximize />
+                Fit all
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => {
+                  options.onRelayout();
+                  close();
+                }}
+              >
+                <RefreshCw />
+                Re-layout
               </DropdownMenuItem>
             </>
-          ) : (
-            <EdgeItems edge={open.edge} titleOf={titleOf} onDone={close} />
-          )}
+          ) : removeDependency !== undefined ? (
+            <EdgeItems
+              edge={open.edge}
+              titleOf={titleOf}
+              onRemove={removeDependency}
+              onDone={close}
+            />
+          ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
     );
   })();
 
-  return { onEdgeContextMenu, onPaneContextMenu, menu };
+  return { onEdgeContextMenu, onNodeContextMenu, onPaneContextMenu, menu };
 }
 
 /** The items for one dependency edge, named after the two tasks it joins. */
 function EdgeItems({
   edge,
   titleOf,
+  onRemove,
   onDone,
 }: {
   edge: Edge;
   titleOf: (id: string) => string;
+  onRemove: (sourceId: string, targetId: string) => void;
   onDone: () => void;
 }): JSX.Element {
-  const actions = useCanvasActions();
   const source = titleOf(edge.source);
   const target = titleOf(edge.target);
   return (
@@ -161,16 +309,7 @@ function EdgeItems({
       <DropdownMenuSeparator />
       <DropdownMenuItem
         onSelect={() => {
-          actions?.reverseDependency(edge.source, edge.target);
-          onDone();
-        }}
-      >
-        <Workflow />
-        Reverse direction
-      </DropdownMenuItem>
-      <DropdownMenuItem
-        onSelect={() => {
-          actions?.removeDependency(edge.source, edge.target);
+          onRemove(edge.source, edge.target);
           onDone();
         }}
       >

@@ -12,6 +12,7 @@ import {
   program,
   project,
   projectDependency,
+  projectLabel,
   task,
   team,
 } from '@docket/db';
@@ -30,7 +31,7 @@ import {
   ProjectUpdate,
 } from '@docket/types';
 import type { ProgramOut, TeamOut } from '@docket/types';
-import { and, count, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, count, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -334,6 +335,7 @@ const projects = new Hono<AppEnv>()
             status: status.status,
             statusId: status.statusId,
             health: body.health,
+            priority: body.priority,
             ...(start === undefined
               ? {}
               : {
@@ -417,7 +419,11 @@ const projects = new Hono<AppEnv>()
         .select()
         .from(project)
         .where(
-          and(eq(project.organizationId, orgId), seekAfter(project.createdAt, project.id, cursor)),
+          and(
+            eq(project.organizationId, orgId),
+            isNull(project.archivedAt),
+            seekAfter(project.createdAt, project.id, cursor),
+          ),
         )
         .orderBy(desc(project.createdAt), desc(project.id));
       const rows = await (limit === undefined ? base : base.limit(limit + 1));
@@ -436,52 +442,66 @@ const projects = new Hono<AppEnv>()
     }),
     async (c) => {
       const { orgId, actorId } = c.get('actorCtx');
-      const [projectRows, taskRows, dependencyRows, displayRows, milestoneRows] = await Promise.all(
-        [
-          db
-            .select()
-            .from(project)
-            .where(eq(project.organizationId, orgId))
-            .orderBy(desc(project.createdAt), desc(project.id)),
-          db
-            .select({
-              id: task.id,
-              teamId: task.teamId,
-              projectId: task.projectId,
-              programId: task.programId,
-              visibility: task.visibility,
-              completedAt: task.completedAt,
-            })
-            .from(task)
-            .where(eq(task.organizationId, orgId)),
-          db
-            .select({
-              blockingProjectId: projectDependency.blockingProjectId,
-              blockedProjectId: projectDependency.blockedProjectId,
-            })
-            .from(projectDependency)
-            .where(eq(projectDependency.organizationId, orgId)),
-          db
-            .select()
-            .from(entityDisplay)
-            .where(
-              and(
-                eq(entityDisplay.organizationId, orgId),
-                eq(entityDisplay.subjectType, 'project'),
-              ),
-            ),
-          db
-            .select({
-              id: milestone.id,
-              projectId: milestone.projectId,
-              name: milestone.name,
-              targetDate: milestone.targetDate,
-            })
-            .from(milestone)
-            .where(eq(milestone.organizationId, orgId))
-            .orderBy(milestone.sort, milestone.id),
-        ],
-      );
+      const [
+        projectRows,
+        taskRows,
+        dependencyRows,
+        displayRows,
+        milestoneRows,
+        projectLabelRows,
+        initiativeProjectRows,
+      ] = await Promise.all([
+        db
+          .select()
+          .from(project)
+          .where(and(eq(project.organizationId, orgId), isNull(project.archivedAt)))
+          .orderBy(desc(project.createdAt), desc(project.id)),
+        db
+          .select({
+            id: task.id,
+            teamId: task.teamId,
+            projectId: task.projectId,
+            programId: task.programId,
+            visibility: task.visibility,
+            completedAt: task.completedAt,
+          })
+          .from(task)
+          .where(eq(task.organizationId, orgId)),
+        db
+          .select({
+            blockingProjectId: projectDependency.blockingProjectId,
+            blockedProjectId: projectDependency.blockedProjectId,
+          })
+          .from(projectDependency)
+          .where(eq(projectDependency.organizationId, orgId)),
+        db
+          .select()
+          .from(entityDisplay)
+          .where(
+            and(eq(entityDisplay.organizationId, orgId), eq(entityDisplay.subjectType, 'project')),
+          ),
+        db
+          .select({
+            id: milestone.id,
+            projectId: milestone.projectId,
+            name: milestone.name,
+            targetDate: milestone.targetDate,
+          })
+          .from(milestone)
+          .where(eq(milestone.organizationId, orgId))
+          .orderBy(milestone.sort, milestone.id),
+        db
+          .select({ projectId: projectLabel.projectId, labelId: projectLabel.labelId })
+          .from(projectLabel)
+          .where(eq(projectLabel.organizationId, orgId)),
+        db
+          .select({
+            projectId: initiativeProject.projectId,
+            initiativeId: initiativeProject.initiativeId,
+          })
+          .from(initiativeProject)
+          .where(eq(initiativeProject.organizationId, orgId)),
+      ]);
 
       const canView = await buildTaskViewFilter(orgId, actorId);
       const taskCounts = new Map<string, { total: number; completed: number }>();
@@ -494,7 +514,14 @@ const projects = new Hono<AppEnv>()
       }
       const blockedBy = new Map<string, string[]>();
       const blocks = new Map<string, string[]>();
+      const activeProjectIds = new Set(projectRows.map((row) => row.id));
       for (const row of dependencyRows) {
+        if (
+          !activeProjectIds.has(row.blockingProjectId) ||
+          !activeProjectIds.has(row.blockedProjectId)
+        ) {
+          continue;
+        }
         blockedBy.set(row.blockedProjectId, [
           ...(blockedBy.get(row.blockedProjectId) ?? []),
           row.blockingProjectId,
@@ -505,6 +532,20 @@ const projects = new Hono<AppEnv>()
         ]);
       }
       const displays = new Map(displayRows.map((row) => [row.subjectId, row]));
+      const labelIdsByProject = new Map<string, string[]>();
+      for (const row of projectLabelRows) {
+        labelIdsByProject.set(row.projectId, [
+          ...(labelIdsByProject.get(row.projectId) ?? []),
+          row.labelId,
+        ]);
+      }
+      const initiativeIdsByProject = new Map<string, string[]>();
+      for (const row of initiativeProjectRows) {
+        initiativeIdsByProject.set(row.projectId, [
+          ...(initiativeIdsByProject.get(row.projectId) ?? []),
+          row.initiativeId,
+        ]);
+      }
       // Milestones grouped per Project so each overview row carries its own checkpoint markers
       // without an N+1 read. Undated milestones are kept: the timeline decides how to treat them.
       const milestonesByProject = new Map<
@@ -527,6 +568,8 @@ const projects = new Hono<AppEnv>()
           const display = displays.get(row.id);
           return {
             ...toOut(row),
+            labelIds: labelIdsByProject.get(row.id) ?? [],
+            initiativeIds: initiativeIdsByProject.get(row.id) ?? [],
             display: display
               ? {
                   subjectType: 'project' as const,
@@ -637,7 +680,9 @@ const projects = new Hono<AppEnv>()
       const rows = await db
         .select()
         .from(project)
-        .where(and(eq(project.id, id), eq(project.organizationId, orgId)))
+        .where(
+          and(eq(project.id, id), eq(project.organizationId, orgId), isNull(project.archivedAt)),
+        )
         .limit(1);
       const row = rows[0];
       if (!row) throw new NotFoundError('Project not found');
@@ -673,7 +718,9 @@ const projects = new Hono<AppEnv>()
         await db
           .select({ teamId: project.teamId })
           .from(project)
-          .where(and(eq(project.id, id), eq(project.organizationId, orgId)))
+          .where(
+            and(eq(project.id, id), eq(project.organizationId, orgId), isNull(project.archivedAt)),
+          )
           .limit(1)
       )[0]?.teamId;
       const labels = await resolveLabelSet(orgId, body.labelIds, {
@@ -684,7 +731,11 @@ const projects = new Hono<AppEnv>()
         body.status === undefined
           ? undefined
           : await resolveContainerStatus(orgId, 'project', body.status);
-      const where = and(eq(project.id, id), eq(project.organizationId, orgId));
+      const where = and(
+        eq(project.id, id),
+        eq(project.organizationId, orgId),
+        isNull(project.archivedAt),
+      );
 
       const row = await db.transaction(async (tx) => {
         const [current] = await tx.select().from(project).where(where).limit(1).for('update');
@@ -725,6 +776,7 @@ const projects = new Hono<AppEnv>()
             ? {}
             : { status: nextStatus.status, statusId: nextStatus.statusId }),
           ...(body.health !== undefined ? { health: body.health } : {}),
+          ...(body.priority !== undefined ? { priority: body.priority } : {}),
           ...(start === undefined
             ? {}
             : {
@@ -863,7 +915,9 @@ const projects = new Hono<AppEnv>()
       const projectRows = await db
         .select({ id: project.id })
         .from(project)
-        .where(and(eq(project.id, id), eq(project.organizationId, orgId)))
+        .where(
+          and(eq(project.id, id), eq(project.organizationId, orgId), isNull(project.archivedAt)),
+        )
         .limit(1);
       if (!projectRows[0]) throw new NotFoundError('Project not found');
 

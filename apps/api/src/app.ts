@@ -31,7 +31,12 @@ import { bodyLimit } from 'hono/body-limit';
 import { etag } from 'hono/etag';
 
 import { cachePolicy } from './lib/cache-policy';
-import { MAX_REQUEST_BYTES, rejectOversizedBody, safeMethodsOnly } from './lib/http-limits';
+import {
+  MAX_OBJECT_COMMAND_BYTES,
+  MAX_REQUEST_BYTES,
+  rejectOversizedBody,
+  safeMethodsOnly,
+} from './lib/http-limits';
 import { mediaTypes } from './lib/media-types';
 import { idempotency } from './lib/idempotency';
 import { preconditions } from './lib/preconditions';
@@ -96,7 +101,14 @@ for (const path of [
 app.use('*', safeMethodsOnly(etag()));
 
 // Reject a body larger than anything this API legitimately accepts, before it is buffered.
-app.use('*', bodyLimit({ maxSize: MAX_REQUEST_BYTES, onError: rejectOversizedBody }));
+app.use('*', bodyLimit({ maxSize: MAX_REQUEST_BYTES, onError: () => rejectOversizedBody() }));
+app.use(
+  '/orgs/:orgId/object-commands',
+  bodyLimit({
+    maxSize: MAX_OBJECT_COMMAND_BYTES,
+    onError: () => rejectOversizedBody(MAX_OBJECT_COMMAND_BYTES),
+  }),
+);
 
 // Negotiate before doing any work: a body this API cannot read, or an `Accept` it cannot
 // satisfy, is the client's to fix and should not reach a handler as a 500.
@@ -215,7 +227,7 @@ export const adminApp = new Hono<AppEnv>();
 // The staff back-office gets the same protocol treatment as the product surface: its data is no
 // more cacheable than a tenant's own, and its requests negotiate the same way.
 adminApp.use('*', safeMethodsOnly(etag()));
-adminApp.use('*', bodyLimit({ maxSize: MAX_REQUEST_BYTES, onError: rejectOversizedBody }));
+adminApp.use('*', bodyLimit({ maxSize: MAX_REQUEST_BYTES, onError: () => rejectOversizedBody() }));
 adminApp.use('*', mediaTypes);
 adminApp.use('*', cachePolicy);
 

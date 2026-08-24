@@ -8,7 +8,11 @@
  * guest access, batching, and archive filtering remains outside this bridge.
  */
 import type { Database } from '@docket/db';
-import { loadExplicitAuthorizationFacts, type ResourceRef } from '@docket/db/identity-access';
+import {
+  loadExplicitAuthorizationFacts,
+  loadExplicitAuthorizationFactsBatch,
+  type ResourceRef,
+} from '@docket/db/identity-access';
 import { evaluateExplicitAllow } from '@docket/identity-access/authorization';
 import type { Capability } from '@docket/identity-access/capabilities';
 
@@ -44,4 +48,28 @@ export async function canActor(
   }
 
   return evaluateExplicitAllow({ ...result.facts, required, now: new Date() });
+}
+
+/**
+ * Resolve one capability for many resources through a shared principal and grant hydration.
+ *
+ * @param actorId - The acting Actor id.
+ * @param required - The capability every target requires.
+ * @param targets - Resources to resolve in result order.
+ * @param db - The database client.
+ * @returns one {@link ResolveResult} for each target.
+ */
+export async function canActorBatch(
+  actorId: string,
+  required: Capability,
+  targets: readonly ResourceRef[],
+  db: Database,
+): Promise<ResolveResult[]> {
+  const results = await loadExplicitAuthorizationFactsBatch(actorId, targets, db);
+  const now = new Date();
+  return results.map((result) =>
+    result.kind === 'ready'
+      ? evaluateExplicitAllow({ ...result.facts, required, now })
+      : { allow: false, reason: result.kind, effectiveCapability: null },
+  );
 }

@@ -4,6 +4,8 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import TaskBranchNode from '@/components/canvas/task-branch-node';
+import { SelectionProvider } from '@/components/selection';
+import type { ObjectRef } from '@/lib/actions';
 
 const props = {
   id: 'task-parent',
@@ -41,14 +43,31 @@ const props = {
 describe('TaskBranchNode', () => {
   it('keeps the compound bounds transparent and exposes only the task header as its drag handle', () => {
     render(
-      <ReactFlowProvider>
-        <TaskBranchNode {...props} />
-      </ReactFlowProvider>,
+      <SelectionProvider
+        items={[
+          {
+            kind: 'task',
+            id: 'task-parent',
+            title: 'Parent task',
+            organizationId: 'org-1',
+          } satisfies ObjectRef,
+        ]}
+        organizationId="org-1"
+      >
+        <ReactFlowProvider>
+          <TaskBranchNode {...props} />
+        </ReactFlowProvider>
+      </SelectionProvider>,
     );
 
     expect(screen.getByTestId('task-branch')).toHaveClass('bg-transparent');
     expect(screen.getByText('Parent task').closest('.task-branch-header')).toBeInTheDocument();
     expect(screen.getByTestId('task-hierarchy-rails').querySelectorAll('path')).toHaveLength(3);
     expect(screen.queryByRole('button', { name: /collapse/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('treeitem', { name: /Parent task/ })).toHaveAttribute(
+      'aria-selected',
+      'false',
+    );
+    expect(screen.getByRole('treeitem', { name: /Parent task/ })).toHaveAttribute('tabindex', '0');
   });
 });

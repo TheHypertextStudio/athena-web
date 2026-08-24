@@ -1,5 +1,5 @@
 /** `@docket/api` — task dependency-graph router (mounted at `/v1/orgs/:orgId/graph`). */
-import { db, task, taskDependency } from '@docket/db';
+import { db, task, taskDependency, taskLabel } from '@docket/db';
 import { dependencyEdgeId, GraphOut, subtaskEdgeId, type TaskGraphNode } from '@docket/types';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -42,7 +42,7 @@ const GraphQuery = z.object({
 });
 
 /** Project a task row into the slim graph-node shape. */
-function toGraphNode(t: TaskRow): z.input<typeof TaskGraphNode> {
+function toGraphNode(t: TaskRow, labelIds: readonly string[]): z.input<typeof TaskGraphNode> {
   return {
     id: t.id,
     title: t.title,
@@ -50,6 +50,8 @@ function toGraphNode(t: TaskRow): z.input<typeof TaskGraphNode> {
     priority: t.priority,
     teamId: t.teamId,
     projectId: t.projectId,
+    programId: t.programId,
+    labelIds: [...labelIds],
     assigneeId: t.assigneeId,
     parentTaskId: t.parentTaskId,
     startDate: t.startDate?.toISOString() ?? null,
@@ -105,9 +107,17 @@ Edges are pre-pruned to the viewable set so there are no dangling endpoints: a \
     const idsArr = [...ids];
 
     const edges: z.input<typeof GraphOut>['edges'] = [];
+    const labelIdsByTask = new Map<string, string[]>();
 
     // Dependency edges: both endpoints must be viewable.
     if (idsArr.length > 0) {
+      const labelRows = await db
+        .select({ taskId: taskLabel.taskId, labelId: taskLabel.labelId })
+        .from(taskLabel)
+        .where(and(eq(taskLabel.organizationId, orgId), inArray(taskLabel.taskId, idsArr)));
+      for (const row of labelRows) {
+        labelIdsByTask.set(row.taskId, [...(labelIdsByTask.get(row.taskId) ?? []), row.labelId]);
+      }
       const depRows = await db
         .select({
           blocking: taskDependency.blockingTaskId,
@@ -143,7 +153,10 @@ Edges are pre-pruned to the viewable set so there are no dangling endpoints: a \
       }
     }
 
-    return ok(c, GraphOut, { nodes: viewable.map(toGraphNode), edges });
+    return ok(c, GraphOut, {
+      nodes: viewable.map((row) => toGraphNode(row, labelIdsByTask.get(row.id) ?? [])),
+      edges,
+    });
   },
 );
 

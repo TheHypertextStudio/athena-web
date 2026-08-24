@@ -36,6 +36,7 @@ function applyProjectGeometry(nodes: readonly Node[], layout: GraphLayoutResult)
  * @param nodes - Project cards in stable portfolio order.
  * @param edges - Project dependency edges.
  * @param aspectRatio - Coarse host viewport aspect used for component packing.
+ * @param layoutEpoch - Explicit re-layout request counter.
  * @returns positioned Project cards and the shared layout result.
  */
 export function layoutProjectGraph(
@@ -66,12 +67,13 @@ export function useProjectGraphLayout(
   nodes: readonly Node[],
   edges: readonly Edge[],
   aspectRatio: number,
+  layoutEpoch = 0,
 ): ProjectGraphLayout {
   const measured = nodes.map(({ id }) => ({ id, ...PROJECT_NODE_SIZE.full }));
   const structureKey = graphLayoutStructureKey(measured, edges, 'LR', aspectRatio);
   const layout = useMemo(
     () => layoutMeasuredGraph(measured, edges, { direction: 'LR', aspectRatio }),
-    [structureKey],
+    [structureKey, layoutEpoch],
   );
   const positioned = useMemo(() => applyProjectGeometry(nodes, layout), [nodes, layout]);
   return { nodes: positioned, layout };

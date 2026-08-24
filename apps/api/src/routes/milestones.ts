@@ -9,7 +9,7 @@ import {
   MilestoneUpdate,
   pageOf,
 } from '@docket/types';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -78,7 +78,13 @@ const milestones = new Hono<AppEnv>()
       const projectRows = await db
         .select()
         .from(project)
-        .where(and(eq(project.id, body.projectId), eq(project.organizationId, orgId)))
+        .where(
+          and(
+            eq(project.id, body.projectId),
+            eq(project.organizationId, orgId),
+            isNull(project.archivedAt),
+          ),
+        )
         .limit(1);
       if (!projectRows[0]) throw new NotFoundError('Project not found');
 

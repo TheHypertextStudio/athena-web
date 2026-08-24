@@ -76,7 +76,7 @@ export async function writeTaskStateTransition(
 
 /** Publish the durable history, stream, search, and process consequences after commit. */
 export async function finishTaskStateTransition(
-  input: { readonly actorId: string | null },
+  input: { readonly actorId: string | null; readonly enqueueSearch?: boolean },
   mutation: TaskStateMutation,
 ): Promise<void> {
   const { before, after } = mutation;
@@ -95,7 +95,9 @@ export async function finishTaskStateTransition(
     actorId: input.actorId,
     changes: await resolveTaskChangeLabels(after.organizationId, diffTaskFields(before, after)),
   });
-  await enqueueSearchUpsert(after.organizationId, 'task', after.id);
+  if (input.enqueueSearch !== false) {
+    await enqueueSearchUpsert(after.organizationId, 'task', after.id);
+  }
   if (after.completedAt) {
     await advanceCompletedProcessTask(db, {
       organizationId: after.organizationId,

@@ -22,9 +22,13 @@ import {
   initiativeProject,
   program,
   project,
+  projectDependency,
+  projectLabel,
   task,
   taskDependency,
+  taskLabel,
 } from '@docket/db';
+import { createHash } from 'node:crypto';
 import { and, eq, isNull } from 'drizzle-orm';
 import type { AnyPgColumn, PgTable } from 'drizzle-orm/pg-core';
 
@@ -50,6 +54,21 @@ const RELATIONS = {
     table: taskDependency,
     from: taskDependency.blockingTaskId,
     to: taskDependency.blockedTaskId,
+  },
+  project_blocks: {
+    table: projectDependency,
+    from: projectDependency.blockingProjectId,
+    to: projectDependency.blockedProjectId,
+  },
+  task_has_label: {
+    table: taskLabel,
+    from: taskLabel.taskId,
+    to: taskLabel.labelId,
+  },
+  project_has_label: {
+    table: projectLabel,
+    from: projectLabel.projectId,
+    to: projectLabel.labelId,
   },
   project_contributes_to: {
     table: initiativeProject,
@@ -90,14 +109,19 @@ const TRACKED: Record<RecordableKind, readonly string[]> = {
     'title',
     'description',
     'state',
+    'statusId',
     'priority',
     'assigneeId',
     'delegateId',
     'projectId',
     'programId',
+    'milestoneId',
+    'cycleId',
     'parentTaskId',
     'teamId',
+    'startDate',
     'dueDate',
+    'estimate',
     'completedAt',
     'canceledAt',
     'archivedAt',
@@ -106,6 +130,8 @@ const TRACKED: Record<RecordableKind, readonly string[]> = {
     'name',
     'description',
     'status',
+    'statusId',
+    'priority',
     'health',
     'leadId',
     'programId',
@@ -189,64 +215,97 @@ export interface UndoOutcome {
   readonly reason?: string;
 }
 
-/**
- * Record a completed tool call as an undoable change set.
- *
- * @remarks
- * Called after the writes commit, not inside them: a change set that rolled back with its own
- * transaction would leave a caller unable to undo a change that did happen, which is the wrong way
- * round. A failure to record is therefore a real failure — unlike a missed notification, losing
- * the record means losing the undo.
- *
- * @param input - The org, acting actor, origin, summary, and the entities touched.
- * @returns the new change-set id, or null when nothing was touched.
- */
-export async function recordChangeSet(input: {
+/** The input shared by standalone and caller-owned change-set writes. */
+export interface RecordChangeSetInput {
+  /** Stable caller-owned id when the caller already has an idempotency key. */
+  id?: string;
   orgId: string;
   actorId: string;
   origin: ChangeOrigin;
   summary: string;
   changes: readonly RecordedChange[];
-}): Promise<string | null> {
+}
+
+/**
+ * Derive a globally collision-safe durable id from one actor-scoped canvas command id.
+ *
+ * @param orgId - The workspace that owns the command.
+ * @param actorId - The actor whose local history owns the command.
+ * @param commandId - The client idempotency key.
+ * @returns A deterministic change-set primary key that cannot collide across actors or workspaces.
+ */
+export function objectCommandChangeSetId(
+  orgId: string,
+  actorId: string,
+  commandId: string,
+): string {
+  const digest = createHash('sha256')
+    .update(orgId)
+    .update('\0')
+    .update(actorId)
+    .update('\0')
+    .update(commandId)
+    .digest('hex');
+  return `canvas_${digest}`;
+}
+
+/**
+ * Record a change set through an existing transaction.
+ *
+ * @param tx - The transaction that owns both the domain write and its audit record.
+ * @param input - The actor, origin, summary, and normalized changes.
+ * @returns the new change-set id, or null when nothing changed.
+ */
+export async function recordChangeSetInTx(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  input: RecordChangeSetInput,
+): Promise<string | null> {
   if (input.changes.length === 0) return null;
-  const id = genId();
-  await db.transaction(async (tx) => {
-    await tx.insert(changeSet).values({
-      id,
-      organizationId: input.orgId,
-      actorId: input.actorId,
-      origin: input.origin,
-      summary: input.summary,
-    });
+  const id = input.id ?? genId();
+  await tx.insert(changeSet).values({
+    id,
+    organizationId: input.orgId,
+    actorId: input.actorId,
+    origin: input.origin,
+    summary: input.summary,
+  });
+  const entries = input.changes.map((change) =>
+    isLinkRecord(change)
+      ? {
+          changeSetId: id,
+          entityKind: change.kind,
+          entityId: edgeKey(change.from, change.to),
+          op: 'link' as const,
+          before: change.linked ? null : { from: change.from, to: change.to },
+          after: change.linked ? { from: change.from, to: change.to } : null,
+        }
+      : {
+          changeSetId: id,
+          entityKind: change.kind,
+          entityId: change.id,
+          op: change.op,
+          before: change.before ?? null,
+          after: change.after ?? null,
+        },
+  );
+  const batchSize = 500;
+  for (let offset = 0; offset < entries.length; offset += batchSize) {
     await tx
       .insert(changeSetEntry)
-      .values(
-        input.changes.map((change) =>
-          isLinkRecord(change)
-            ? {
-                changeSetId: id,
-                entityKind: change.kind,
-                entityId: edgeKey(change.from, change.to),
-                op: 'link' as const,
-                // An edge has no columns, so which side is populated IS the direction: `after`
-                // means the call created it, `before` means the call removed it.
-                before: change.linked ? null : { from: change.from, to: change.to },
-                after: change.linked ? { from: change.from, to: change.to } : null,
-              }
-            : {
-                changeSetId: id,
-                entityKind: change.kind,
-                entityId: change.id,
-                op: change.op,
-                before: change.before ?? null,
-                after: change.after ?? null,
-              },
-        ),
-      )
-      // One call touching a row twice collapses to the last write, which is what reversing needs.
+      .values(entries.slice(offset, offset + batchSize))
       .onConflictDoNothing();
-  });
+  }
   return id;
+}
+
+/**
+ * Record a completed tool call as an undoable change set in its own transaction.
+ *
+ * @param input - The org, acting actor, origin, summary, and entities touched.
+ * @returns the new change-set id, or null when nothing was touched.
+ */
+export async function recordChangeSet(input: RecordChangeSetInput): Promise<string | null> {
+  return db.transaction((tx) => recordChangeSetInTx(tx, input));
 }
 
 /**
@@ -336,6 +395,12 @@ function endpointValues(kind: RelationKind, from: string, to: string): Record<st
   switch (kind) {
     case 'blocks':
       return { blockingTaskId: from, blockedTaskId: to };
+    case 'project_blocks':
+      return { blockingProjectId: from, blockedProjectId: to };
+    case 'task_has_label':
+      return { taskId: from, labelId: to };
+    case 'project_has_label':
+      return { projectId: from, labelId: to };
     case 'project_contributes_to':
       return { projectId: from, initiativeId: to };
     case 'program_contributes_to':

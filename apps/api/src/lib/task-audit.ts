@@ -220,6 +220,7 @@ async function loadNames(
   orgId: string,
   ids: readonly string[],
   kind: TaskAuditFieldKind,
+  database: Pick<typeof db, 'select'>,
 ): Promise<Map<string, string>> {
   const names = new Map<string, string>();
   if (ids.length === 0) return names;
@@ -227,7 +228,7 @@ async function loadNames(
 
   switch (kind) {
     case 'actor': {
-      const rows = await db
+      const rows = await database
         .select({ id: actor.id, name: actor.displayName })
         .from(actor)
         .where(and(inArray(actor.id, list), eq(actor.organizationId, orgId)));
@@ -235,7 +236,7 @@ async function loadNames(
       return names;
     }
     case 'project': {
-      const rows = await db
+      const rows = await database
         .select({ id: project.id, name: project.name })
         .from(project)
         .where(and(inArray(project.id, list), eq(project.organizationId, orgId)));
@@ -243,7 +244,7 @@ async function loadNames(
       return names;
     }
     case 'program': {
-      const rows = await db
+      const rows = await database
         .select({ id: program.id, name: program.name })
         .from(program)
         .where(and(inArray(program.id, list), eq(program.organizationId, orgId)));
@@ -251,7 +252,7 @@ async function loadNames(
       return names;
     }
     case 'milestone': {
-      const rows = await db
+      const rows = await database
         .select({ id: milestone.id, name: milestone.name })
         .from(milestone)
         .where(and(inArray(milestone.id, list), eq(milestone.organizationId, orgId)));
@@ -259,7 +260,7 @@ async function loadNames(
       return names;
     }
     case 'cycle': {
-      const rows = await db
+      const rows = await database
         .select({
           id: cycle.id,
           name: cycle.name,
@@ -278,7 +279,7 @@ async function loadNames(
     }
     /* v8 ignore next -- @preserve the switch is exhaustive over the reference kinds passed here */
     default: {
-      const rows = await db
+      const rows = await database
         .select({ id: task.id, name: task.title })
         .from(task)
         .where(and(inArray(task.id, list), eq(task.organizationId, orgId)));
@@ -327,8 +328,26 @@ function displayValue(
 export async function resolveTaskChangeLabels(
   orgId: string,
   diffs: readonly TaskFieldDiff[],
+  database: Pick<typeof db, 'select'> = db,
 ): Promise<TaskActivityChange[]> {
-  if (diffs.length === 0) return [];
+  return (await resolveTaskChangeLabelGroups(orgId, [diffs], database))[0] ?? [];
+}
+
+/**
+ * Resolve several Task change groups through one set of reference lookups.
+ *
+ * @param orgId - The organization the Tasks belong to.
+ * @param groups - Raw field diffs grouped by Task mutation.
+ * @param database - The transaction-owned database handle.
+ * @returns display-ready changes in the same group and field order.
+ */
+export async function resolveTaskChangeLabelGroups(
+  orgId: string,
+  groups: readonly (readonly TaskFieldDiff[])[],
+  database: Pick<typeof db, 'select'> = db,
+): Promise<TaskActivityChange[][]> {
+  const diffs = groups.flat();
+  if (diffs.length === 0) return groups.map(() => []);
 
   const kindOf = new Map(TASK_AUDIT_FIELDS.map((spec) => [spec.field as string, spec.kind]));
   const referenceKinds: readonly TaskAuditFieldKind[] = [
@@ -345,18 +364,20 @@ export async function resolveTaskChangeLabels(
   for (const kind of referenceKinds) {
     const ids = idsFor(diffs, kind);
     if (ids.length === 0) continue;
-    for (const [id, name] of await loadNames(orgId, ids, kind)) names.set(id, name);
+    for (const [id, name] of await loadNames(orgId, ids, kind, database)) names.set(id, name);
   }
 
-  return diffs.map((diff) => {
-    const kind = kindOf.get(diff.field) ?? 'text';
-    return {
-      field: diff.field,
-      label: diff.label,
-      from: displayValue(kind, diff.fromRaw, names),
-      to: displayValue(kind, diff.toRaw, names),
-    };
-  });
+  return groups.map((group) =>
+    group.map((diff) => {
+      const kind = kindOf.get(diff.field) ?? 'text';
+      return {
+        field: diff.field,
+        label: diff.label,
+        from: displayValue(kind, diff.fromRaw, names),
+        to: displayValue(kind, diff.toRaw, names),
+      };
+    }),
+  );
 }
 
 /**
@@ -382,6 +403,51 @@ export interface RecordTaskChangesInput {
   readonly actorId: string | null;
   /** The display-ready changes to record, in the order they should read. */
   readonly changes: readonly TaskActivityChange[];
+}
+
+/** Insert canonical Task field-change ledger rows through the caller's transaction. */
+export async function writeTaskChanges(
+  database: Pick<typeof db, 'insert'>,
+  input: RecordTaskChangesInput,
+): Promise<void> {
+  await writeTaskChangeGroups(database, [input]);
+}
+
+/**
+ * Insert canonical Task field-change rows for a bulk command in one statement.
+ *
+ * @param database - The transaction-owned database handle.
+ * @param inputs - Task mutations whose per-task field ordering must be preserved.
+ */
+export async function writeTaskChangeGroups(
+  database: Pick<typeof db, 'insert'>,
+  inputs: readonly RecordTaskChangesInput[],
+): Promise<void> {
+  const rows = inputs.flatMap((input) => {
+    const ids = input.changes.map(() => genId()).sort();
+    return input.changes.map((change, index) => ({
+      /* v8 ignore next -- @preserve `ids` is built from `changes`, so the index always hits */
+      id: ids[index] ?? genId(),
+      organizationId: input.organizationId,
+      actorId: input.actorId,
+      subjectType: 'task' as const,
+      subjectId: input.taskId,
+      type: 'updated' as const,
+      metadata: { ...change },
+    }));
+  });
+  if (rows.length === 0) return;
+  await database.insert(auditEvent).values(rows);
+}
+
+/** Emit the canonical post-commit stream consequence for recorded Task field changes. */
+export async function finishTaskChanges(input: RecordTaskChangesInput): Promise<void> {
+  await emitFieldChange({
+    organizationId: input.organizationId,
+    subject: { type: 'task', id: input.taskId, title: input.title },
+    actorId: input.actorId,
+    changes: input.changes.filter((change) => !SELF_ANNOUNCING_FIELDS.has(change.field)),
+  });
 }
 
 /**
@@ -410,20 +476,8 @@ export interface RecordTaskChangesInput {
  */
 export async function recordTaskChanges(input: RecordTaskChangesInput): Promise<void> {
   if (input.changes.length === 0) return;
-  const ids = input.changes.map(() => genId()).sort();
   try {
-    await db.insert(auditEvent).values(
-      input.changes.map((change, index) => ({
-        /* v8 ignore next -- @preserve `ids` is built from `changes`, so the index always hits */
-        id: ids[index] ?? genId(),
-        organizationId: input.organizationId,
-        actorId: input.actorId,
-        subjectType: 'task' as const,
-        subjectId: input.taskId,
-        type: 'updated' as const,
-        metadata: { ...change },
-      })),
-    );
+    await writeTaskChanges(db, input);
   } catch {
     // Best-effort: see the remarks above. History is never worth failing a mutation over.
     return;
@@ -431,10 +485,5 @@ export async function recordTaskChanges(input: RecordTaskChangesInput): Promise<
 
   // One event for the whole mutation, carrying only the fields that do not already announce
   // themselves. A status-only or assignment-only edit therefore emits nothing extra here.
-  await emitFieldChange({
-    organizationId: input.organizationId,
-    subject: { type: 'task', id: input.taskId, title: input.title },
-    actorId: input.actorId,
-    changes: input.changes.filter((change) => !SELF_ANNOUNCING_FIELDS.has(change.field)),
-  });
+  await finishTaskChanges(input);
 }

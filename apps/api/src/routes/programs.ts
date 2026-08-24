@@ -288,7 +288,13 @@ const programs = new Hono<AppEnv>()
       const projectRows = await db
         .select({ id: project.id })
         .from(project)
-        .where(and(eq(project.programId, id), eq(project.organizationId, orgId)));
+        .where(
+          and(
+            eq(project.programId, id),
+            eq(project.organizationId, orgId),
+            isNull(project.archivedAt),
+          ),
+        );
       const projectIds = projectRows.map((p) => p.id);
 
       const taskRows = await db
@@ -448,7 +454,13 @@ const programs = new Hono<AppEnv>()
       const projectRows = await db
         .select({ id: project.id, name: project.name })
         .from(project)
-        .where(and(eq(project.programId, id), eq(project.organizationId, orgId)));
+        .where(
+          and(
+            eq(project.programId, id),
+            eq(project.organizationId, orgId),
+            isNull(project.archivedAt),
+          ),
+        );
       const projectIds = projectRows.map((p) => p.id);
       const projectNameById = new Map(projectRows.map((p) => [p.id, p.name]));
 

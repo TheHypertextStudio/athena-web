@@ -22,6 +22,7 @@ import { isEnded } from '@/lib/work-category';
 
 import { ObjectSurface } from '@/components/objects/object-surface';
 import { useRelationDropTarget } from '@/components/dnd/use-relation-drop-target';
+import { useSelectableRow } from '@/components/selection';
 
 import { useCanvasActions } from './canvas-actions-context';
 import { taskNodeTransitionName } from './transition-name';
@@ -69,10 +70,16 @@ export interface TaskNodeData extends Record<string, unknown> {
   projectId: string | null;
   /** The owning project's display name, resolved for the chip, or null. */
   projectName: string | null;
+  /** The owning Program id, or null. */
+  programId: string | null;
+  /** Label associations retained for the bulk Properties editor. */
+  labelIds: readonly string[];
   /** The owning team id (used by the group-by control). */
   teamId: string;
   /** The owning milestone id, or null (used by the group-by control). */
   milestoneId: string | null;
+  /** The owning cycle id, or null. */
+  cycleId: string | null;
   /** Hierarchy parent, independent from dependency edges. */
   parentTaskId: string | null;
   /** The raw assignee actor id, or null (used by the toolbar's assignee filter). */
@@ -85,6 +92,10 @@ export interface TaskNodeData extends Record<string, unknown> {
   isReady: boolean;
   /** ISO due date, or null (drives the due line + overdue styling). */
   dueDate: string | null;
+  /** Anticipated ISO start day, or null. */
+  startDate: string | null;
+  /** Stored estimation points, or null. */
+  estimate: number | null;
   /** On the longest (critical) dependency path. */
   onCriticalPath: boolean;
   /** Transitively blocks a lot of downstream work (a bottleneck). */
@@ -131,6 +142,13 @@ function TaskNodeComponent({ id, data, selected }: NodeProps): React.JSX.Element
     title,
     meta: { state, parentTaskId },
   };
+  const selection = useSelectableRow(object);
+  const {
+    onClick: selectionClick,
+    ref: selectionRef,
+    ...selectionRowProps
+  } = selection.rowProps;
+  void selectionClick;
   const relation = useRelationDropTarget({ target: object });
   return (
     <ObjectSurface
@@ -140,17 +158,26 @@ function TaskNodeComponent({ id, data, selected }: NodeProps): React.JSX.Element
       onActivate={() => actions?.navigate(id)}
     >
       <div
-        ref={relation.dropProps.ref}
-        tabIndex={0}
+        role="treeitem"
+        {...selectionRowProps}
+        ref={(element) => {
+          selectionRef(element);
+          relation.dropProps.ref(element);
+        }}
         data-drop-state={relation.dropProps['data-drop-state']}
         style={{ viewTransitionName: taskNodeTransitionName(id) }}
         className={cn(
           'task-branch-header group bg-surface-container-high border-outline-variant relative flex items-start gap-2.5 rounded-xl border transition-colors',
           compact ? 'h-14 w-[240px] px-2.5 py-2' : 'h-[84px] w-[300px] px-3 py-2.5',
-          selected && 'ring-primary ring-2',
+          (selected || selection.selected) && 'ring-primary ring-2',
           relation.dropProps.className,
           relation.dropState === 'accept' && 'ring-primary bg-primary/8 ring-2 ring-inset',
           relation.dropState === 'reject' && 'ring-error/60 bg-error/5 ring-2 ring-inset',
+          data['hierarchyDropState'] === 'accept' &&
+            'ring-primary bg-primary/8 ring-2 ring-inset',
+          data['hierarchyDropState'] === 'reject' &&
+            'ring-error/60 bg-error/5 ring-2 ring-inset',
+          data['hierarchyDragOrigin'] === true && 'opacity-40',
         )}
       >
         {actions !== null ? (

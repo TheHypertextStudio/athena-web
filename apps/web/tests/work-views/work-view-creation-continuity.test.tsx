@@ -70,6 +70,7 @@ vi.mock('../../src/components/work-views/project-dependency-lens', () => ({
     requestedSelectionAttempt?: number;
     onRequestedSelectionResolved?: (id: string) => void;
     onRequestedSelectionMissing?: (id: string) => void;
+    onCreateProject?: () => void;
   }): JSX.Element => {
     lensState.props = props;
     const [instanceState, setInstanceState] = useState(0);
@@ -80,6 +81,9 @@ vi.mock('../../src/components/work-views/project-dependency-lens', () => ({
         <output data-testid="lens-request">{props.requestedSelectionId ?? 'none'}</output>
         <output data-testid="lens-attempt">{props.requestedSelectionAttempt ?? 0}</output>
         <output data-testid="lens-state">{instanceState}</output>
+        <button type="button" onClick={() => props.onCreateProject?.()}>
+          New Project from canvas
+        </button>
         <button
           type="button"
           onClick={() => {
@@ -222,12 +226,14 @@ describe('WorkViewPage creation continuity', () => {
     expect(screen.getByTestId('lens-request')).toHaveTextContent(PROJECT_ID);
 
     fireEvent.click(screen.getByRole('button', { name: 'Settle without row' }));
-    expect(screen.getByText('Project created, but it is not visible yet.')).toBeInTheDocument();
+    expect(screen.getByText('Created, but hidden by current filters')).toBeInTheDocument();
     expect(screen.getByTestId('lens-state')).toHaveTextContent('1');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
-    expect(controller.setDefinition).not.toHaveBeenCalled();
-    expect(screen.queryByText('Project created, but it is not visible yet.')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+    expect(controller.setDefinition).toHaveBeenCalledWith(
+      expect.objectContaining({ filter: null }),
+    );
+    expect(screen.queryByText('Created, but hidden by current filters')).toBeNull();
     expect(screen.getByTestId('lens-request')).toHaveTextContent(PROJECT_ID);
     expect(screen.getByTestId('lens-attempt')).toHaveTextContent('1');
     expect(screen.getByTestId('lens-state')).toHaveTextContent('1');
@@ -236,7 +242,7 @@ describe('WorkViewPage creation continuity', () => {
     expect(screen.getByRole('complementary', { name: 'Project peek' })).toHaveTextContent(
       PROJECT_ID,
     );
-    expect(screen.queryByText('Project created, but it is not visible yet.')).toBeNull();
+    expect(screen.queryByText('Created, but hidden by current filters')).toBeNull();
     expect(screen.getByTestId('lens-request')).toHaveTextContent('none');
     expect(routerPush).not.toHaveBeenCalled();
 
@@ -245,7 +251,7 @@ describe('WorkViewPage creation continuity', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Settle without row' }));
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss created Project notice' }));
-    expect(screen.queryByText('Project created, but it is not visible yet.')).toBeNull();
+    expect(screen.queryByText('Created, but hidden by current filters')).toBeNull();
     expect(screen.getByTestId('lens-request')).toHaveTextContent('none');
 
     act(() => {
@@ -253,7 +259,7 @@ describe('WorkViewPage creation continuity', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: 'Settle without row' }));
     fireEvent.click(screen.getByRole('button', { name: 'Open project' }));
-    expect(screen.queryByText('Project created, but it is not visible yet.')).toBeNull();
+    expect(screen.queryByText('Created, but hidden by current filters')).toBeNull();
     expect(screen.getByTestId('lens-request')).toHaveTextContent('none');
     expect(routerPush).toHaveBeenCalledWith(`/orgs/${ALPHA_ID}/projects/${OPENED_PROJECT_ID}`);
   });
@@ -277,6 +283,18 @@ describe('WorkViewPage creation continuity', () => {
     });
 
     expect(screen.getByTestId('lens-request')).toHaveTextContent('none');
-    expect(screen.queryByText('Project created, but it is not visible yet.')).toBeNull();
+    expect(screen.queryByText('Created, but hidden by current filters')).toBeNull();
+  });
+
+  it('routes canvas creation through the retained dependency host', () => {
+    render(<WorkViewPage organizationId={ALPHA_ID} target="project" />);
+    fireEvent.click(screen.getByRole('tab', { name: 'Dependencies' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New Project from canvas' }));
+
+    expect(createState.request).toMatchObject({
+      kind: 'project',
+      initialWorkspaceId: ALPHA_ID,
+      sameWorkspaceCompletion: 'stay',
+    });
   });
 });

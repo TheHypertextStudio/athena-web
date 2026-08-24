@@ -13,7 +13,7 @@ import {
   ProjectDependencyRemoved,
 } from '@docket/types';
 import type { ProjectRef } from '@docket/types';
-import { and, eq, or, sql } from 'drizzle-orm';
+import { and, eq, isNull, or, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -34,7 +34,7 @@ async function loadProject(orgId: string, id: string): Promise<ProjectRow> {
   const rows = await db
     .select()
     .from(project)
-    .where(and(eq(project.id, id), eq(project.organizationId, orgId)))
+    .where(and(eq(project.id, id), eq(project.organizationId, orgId), isNull(project.archivedAt)))
     .limit(1);
   const row = rows[0];
   if (!row) throw new NotFoundError('Project not found');
@@ -94,6 +94,7 @@ export const projectDependencyRoutes = new Hono<AppEnv>()
             and(
               eq(projectDependency.organizationId, orgId),
               eq(projectDependency.blockingProjectId, id),
+              isNull(project.archivedAt),
             ),
           ),
         db
@@ -104,6 +105,7 @@ export const projectDependencyRoutes = new Hono<AppEnv>()
             and(
               eq(projectDependency.organizationId, orgId),
               eq(projectDependency.blockedProjectId, id),
+              isNull(project.archivedAt),
             ),
           ),
       ]);

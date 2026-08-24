@@ -72,6 +72,7 @@ import milestones from './milestones';
 import programs from './programs';
 import processDefinitions from './process-definitions';
 import projects from './projects';
+import objectCommands from './object-commands';
 import publications from './publish';
 import publishingAddresses from './domains';
 import projectRollup from './project-rollup';
@@ -473,6 +474,7 @@ Related: \`GET /\` lists all orgs the caller belongs to; the nested routers unde
   .use('/:orgId/*', sharedWorkCapabilityGuard)
   .route('/:orgId/teams', teams)
   .route('/:orgId/projects', projects)
+  .route('/:orgId/object-commands', objectCommands)
   .route('/:orgId/projects', projectRollup)
   .route('/:orgId/projects', projectResources)
   .route('/:orgId/tasks', tasks)

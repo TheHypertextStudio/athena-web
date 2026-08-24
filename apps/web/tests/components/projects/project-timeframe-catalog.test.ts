@@ -85,6 +85,8 @@ describe('Project planning timeframe catalog', () => {
       startDate: '2026-04-01',
       startDateResolution: 'quarter' as const,
       startDateFiscalYearStartMonth: 3,
+      labelIds: [],
+      initiativeIds: [],
       display: {
         subjectType: 'project' as const,
         subjectId: MONTH_PROJECT.id,

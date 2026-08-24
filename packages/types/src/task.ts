@@ -728,6 +728,10 @@ export const TaskGraphNode = z
     projectId: ProjectId.nullable().describe(
       'Project id, or null when project-less. Always present (never omitted) to match the column.',
     ),
+    programId: ProgramId.nullable().describe(
+      'Program id, or null when the Task is not filed in one. Always present.',
+    ),
+    labelIds: z.array(LabelId).describe('Organization-global Labels attached to this Task.'),
     assigneeId: ActorId.nullable().describe(
       'Assignee id, or null when unassigned. Always present (never omitted).',
     ),

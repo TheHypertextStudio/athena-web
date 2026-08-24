@@ -130,6 +130,7 @@ function layoutRoots(
  * @param direction - Top-level dependency flow direction.
  * @param groupSpec - Optional lane grouping; every hierarchy follows its root task's lane.
  * @param aspectRatio - Coarse viewport aspect used to pack independent components.
+ * @param layoutEpoch - Explicit re-layout request counter.
  * @returns lane containers followed by parent-before-child compound task nodes.
  */
 export function layoutTaskHierarchy(
@@ -310,6 +311,7 @@ export function useTaskHierarchyLayout(
   direction: LayoutDirection,
   groupSpec: GroupSpec | null | undefined,
   aspectRatio: number,
+  layoutEpoch = 0,
 ): Node[] {
   const structureKey = taskHierarchyStructureKey(
     nodes,
@@ -321,7 +323,7 @@ export function useTaskHierarchyLayout(
   );
   const geometry = useMemo(
     () => layoutTaskHierarchy(nodes, edges, density, direction, groupSpec, aspectRatio),
-    [structureKey],
+    [structureKey, layoutEpoch],
   );
   return useMemo(
     () => applyTaskHierarchyGeometry(geometry, nodes, groupSpec),

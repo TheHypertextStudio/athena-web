@@ -12,6 +12,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 import type { GraphOut } from '@docket/types';
+import { eq } from 'drizzle-orm';
 
 import { appWithActor, getDb, one, seedBaseOrg, seedStatuses } from '../support/routes-harness';
 import type graphRouter from '../../src/routes/dependency-graph';
@@ -71,12 +72,31 @@ async function fetchGraph(orgId: string, actorId: string, query = ''): Promise<G
 
 describe('dependency graph — org scope', () => {
   it('returns public nodes with both edge kinds and omits private (ungranted) tasks', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const a = await seedTask(orgId, teamId, { title: 'A' });
     const b = await seedTask(orgId, teamId, { title: 'B' });
     const parent = await seedTask(orgId, teamId, { title: 'Parent' });
     const child = await seedTask(orgId, teamId, { title: 'Child', parentTaskId: parent });
     const secret = await seedTask(orgId, teamId, { title: 'Secret', visibility: 'private' });
+    const [program] = await db
+      .insert(schema.program)
+      .values({
+        organizationId: orgId,
+        name: 'Program',
+        status: 'active',
+        statusId: statusId('program', 'active'),
+        createdBy: humanActorId,
+      })
+      .returning({ id: schema.program.id });
+    const [label] = await db
+      .insert(schema.label)
+      .values({ organizationId: orgId, name: 'Graph label', color: 'blue' })
+      .returning({ id: schema.label.id });
+    if (!program || !label) throw new Error('graph projection fixtures failed');
+    await db.update(schema.task).set({ programId: program.id }).where(eq(schema.task.id, a));
+    await db
+      .insert(schema.taskLabel)
+      .values({ organizationId: orgId, taskId: a, labelId: label.id });
 
     // A blocks B (dependency edge), and a dangling edge A → secret that must be pruned.
     await db
@@ -103,6 +123,8 @@ describe('dependency graph — org scope', () => {
       estimate: null,
       milestoneId: null,
       cycleId: null,
+      programId: program.id,
+      labelIds: [label.id],
     });
 
     // Dependency edge A→B is present; A→secret is pruned (endpoint not viewable).

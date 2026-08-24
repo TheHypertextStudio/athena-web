@@ -397,6 +397,43 @@ describe('the underlying record disappearing after publication', () => {
     ).rejects.toThrow(NotFoundError);
   });
 
+  it('404s a published Project after it moves to trash', async () => {
+    const { orgId, statusId } = await seedBaseOrg(db, schema);
+    const slug = `ws-${Math.random().toString(36).slice(2, 8)}`;
+    await db.update(schema.organization).set({ slug }).where(eq(schema.organization.id, orgId));
+    const projectId = one(
+      await db
+        .insert(schema.project)
+        .values({
+          organizationId: orgId,
+          name: 'Archived public project',
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
+        })
+        .returning({ id: schema.project.id }),
+    ).id;
+    await db.insert(schema.publication).values({
+      organizationId: orgId,
+      subjectKind: 'project',
+      subjectId: projectId,
+      slug: 'archived-public-project',
+      publishedAt: new Date(),
+    });
+    await db
+      .update(schema.project)
+      .set({ archivedAt: new Date() })
+      .where(eq(schema.project.id, projectId));
+
+    const { loadPublicBrief } = await import('../../src/routes/publish-brief');
+    await expect(
+      loadPublicBrief({
+        host: undefined,
+        workspaceSlug: slug,
+        slug: 'archived-public-project',
+      }),
+    ).rejects.toThrow(NotFoundError);
+  });
+
   it('404s for a workspace name nobody has claimed', async () => {
     const { loadPublicBrief } = await import('../../src/routes/publish-brief');
     await expect(
@@ -555,6 +592,77 @@ describe('a deployment with no brief host and no verified domain', () => {
 });
 
 describe('a program brief’s directly-held tasks and the owner fallback', () => {
+  it('omits archived Projects from Program and Initiative briefs', async () => {
+    const { orgId, statusId } = await seedBaseOrg(db, schema);
+    const slug = `ws-${Math.random().toString(36).slice(2, 8)}`;
+    await db.update(schema.organization).set({ slug }).where(eq(schema.organization.id, orgId));
+    const programId = one(
+      await db
+        .insert(schema.program)
+        .values({
+          organizationId: orgId,
+          name: 'Public program',
+          status: 'active',
+          statusId: statusId('program', 'active'),
+        })
+        .returning({ id: schema.program.id }),
+    ).id;
+    const initiativeId = one(
+      await db
+        .insert(schema.initiative)
+        .values({
+          organizationId: orgId,
+          name: 'Public initiative',
+          status: 'active',
+          statusId: statusId('initiative', 'active'),
+        })
+        .returning({ id: schema.initiative.id }),
+    ).id;
+    const projectId = one(
+      await db
+        .insert(schema.project)
+        .values({
+          organizationId: orgId,
+          programId,
+          name: 'Archived child',
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
+          archivedAt: new Date(),
+        })
+        .returning({ id: schema.project.id }),
+    ).id;
+    await db.insert(schema.initiativeProject).values({
+      organizationId: orgId,
+      initiativeId,
+      projectId,
+    });
+    await db.insert(schema.publication).values([
+      {
+        organizationId: orgId,
+        subjectKind: 'program',
+        subjectId: programId,
+        slug: 'program-with-trash',
+        publishedAt: new Date(),
+      },
+      {
+        organizationId: orgId,
+        subjectKind: 'initiative',
+        subjectId: initiativeId,
+        slug: 'initiative-with-trash',
+        publishedAt: new Date(),
+      },
+    ]);
+    const { loadPublicBrief } = await import('../../src/routes/publish-brief');
+    for (const briefSlug of ['program-with-trash', 'initiative-with-trash']) {
+      const brief = await loadPublicBrief({
+        host: undefined,
+        workspaceSlug: slug,
+        slug: briefSlug,
+      });
+      expect(brief.sections.find((section) => section.key === 'projects')?.items).toEqual([]);
+    }
+  });
+
   it('reads a program’s own owner name and its direct task section', async () => {
     const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
     const slug = `ws-${Math.random().toString(36).slice(2, 8)}`;

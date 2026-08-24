@@ -29,6 +29,7 @@ import type {
   eventIsInAssignmentScope as EventIsInAssignmentScope,
   handleAthenaAssignmentEvent as HandleAthenaAssignmentEvent,
   sweepAthenaAssignmentTriggers as SweepAthenaAssignmentTriggers,
+  resolveAssignmentAccess as ResolveAssignmentAccess,
   AthenaAssignmentRow,
 } from '../../src/agent/assignments';
 import type { getContainer as GetContainer } from '../../src/container';
@@ -45,6 +46,7 @@ let personalAthena!: typeof personalAthenaRouter;
 let handleAthenaAssignmentEvent!: typeof HandleAthenaAssignmentEvent;
 let sweepAthenaAssignmentTriggers!: typeof SweepAthenaAssignmentTriggers;
 let eventIsInAssignmentScope!: typeof EventIsInAssignmentScope;
+let resolveAssignmentAccess!: typeof ResolveAssignmentAccess;
 let getContainer!: typeof GetContainer;
 let openToolbox!: typeof OpenToolbox;
 
@@ -52,8 +54,12 @@ beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
   personalAthena = (await import('../../src/routes/personal-athena')).default;
-  ({ handleAthenaAssignmentEvent, sweepAthenaAssignmentTriggers, eventIsInAssignmentScope } =
-    await import('../../src/agent/assignments'));
+  ({
+    handleAthenaAssignmentEvent,
+    sweepAthenaAssignmentTriggers,
+    eventIsInAssignmentScope,
+    resolveAssignmentAccess,
+  } = await import('../../src/agent/assignments'));
   ({ getContainer } = await import('../../src/container'));
   ({ openToolbox } = await import('../../src/agent/toolbox'));
 });
@@ -200,6 +206,29 @@ async function createAssignment(seedData: Seed, entityType: 'project' | 'task' =
 }
 
 describe('personal Athena assignments', () => {
+  it('does not resolve an archived Project as an assignment target', async () => {
+    const seedData = await seed();
+    await expect(
+      resolveAssignmentAccess({
+        ownerUserId: seedData.userId,
+        organizationId: seedData.orgId,
+        entityType: 'project',
+        entityId: seedData.projectId,
+      }),
+    ).resolves.toMatchObject({ title: 'Launch' });
+    await db
+      .update(schema.project)
+      .set({ archivedAt: new Date() })
+      .where(eq(schema.project.id, seedData.projectId));
+    await expect(
+      resolveAssignmentAccess({
+        ownerUserId: seedData.userId,
+        organizationId: seedData.orgId,
+        entityType: 'project',
+        entityId: seedData.projectId,
+      }),
+    ).resolves.toBeNull();
+  });
   it('keeps the human assignee and creates a personal notice plus durable owner run', async () => {
     const seedData = await seed();
     const assignment = await createAssignment(seedData);

@@ -25,30 +25,38 @@
  *   workspace to twice life size, so the canvas is capped at 1:1 — fitting means fitting, never
  *   enlarging.
  */
-import {
-  ProjectId,
-  type ProjectDependencyCreated,
-  type ProjectDependencyRemoved,
-  type ProjectOverviewItem,
-  type ProjectOverviewOut,
-} from '@docket/types';
-import { X } from '@docket/ui/icons';
-import { type Edge, type Node, Panel } from '@xyflow/react';
+import { type ObjectCommandIn, type ProjectOverviewItem } from '@docket/types';
+import { type Edge, type Node, Panel, type ReactFlowInstance } from '@xyflow/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
 import Canvas from '@/components/canvas/canvas';
+import BulkActionsBar from '@/components/canvas/bulk-actions-bar';
+import CanvasCommandNotice from '@/components/canvas/canvas-command-notice';
+import { CanvasCommandProviderWithHistory } from '@/components/canvas/canvas-command-context';
+import CanvasSelectionBridge from '@/components/canvas/canvas-selection-bridge';
+import CanvasSelectionFrame from '@/components/canvas/canvas-selection-frame';
 import { useProjectGraphLayout } from '@/components/canvas/project-graph-layout';
 import ProjectNode, { type ProjectNodeData } from '@/components/canvas/project-node';
 import ProjectPeek, { type ProjectPeekNeighbor } from '@/components/canvas/project-peek';
 import { useCanvasAspectRatio } from '@/components/canvas/use-canvas-aspect-ratio';
 import { api } from '@/lib/api';
-import { userErrorMessage } from '@/lib/problem';
-import { apiQueryOptions, queryKeys, unwrap, useApiListQuery, useApiMutation } from '@/lib/query';
+import { useAppPathname } from '@/lib/app-location';
+import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
 import { useOrgCapability } from '@/lib/use-org-capability';
+import { useCreateObject } from '@/components/create-object/create-object-provider';
+import type { ObjectRef } from '@/lib/actions';
+import { focusCanvasNode } from '@/components/canvas/focus-canvas-node';
+import { projectRowsToPropertySnapshots } from '@/components/canvas/canvas-properties-model';
+import { CanvasSelectionRetentionProvider } from '@/components/canvas/canvas-selection-retention';
+import {
+  canvasCommandId,
+  useCanvasCommandHistory,
+} from '@/components/canvas/use-canvas-command-history';
 
 /** The registered node renderers for this canvas (only the project card). */
 const NODE_TYPES = { project: ProjectNode };
+const PROJECT_SELECTION_NODE_TYPES = ['project'] as const;
 
 /** Weighted completion (0–100) from a row's task counts. */
 function progressPercent(item: ProjectOverviewItem): number {
@@ -69,6 +77,8 @@ export interface ProjectGraphPanelProps {
   requestedSelectionSettled?: boolean | undefined;
   /** Preserve the created id in host-owned missing-row state when refresh excludes it. */
   onRequestedSelectionMissing?: ((id: string) => void) | undefined;
+  /** Ask the retained work-view host to open Project creation. */
+  onCreateProject?: (() => void) | undefined;
 }
 
 /**
@@ -83,17 +93,25 @@ export function ProjectGraphPanel({
   onRequestedSelectionResolved,
   requestedSelectionSettled = false,
   onRequestedSelectionMissing,
+  onCreateProject,
 }: ProjectGraphPanelProps): JSX.Element {
   const queryClient = useQueryClient();
+  const pathname = useAppPathname();
+  const { openCreate } = useCreateObject();
   const { containerRef, aspectRatio, ready: aspectReady } = useCanvasAspectRatio();
   const overviewKey = useMemo(() => [...queryKeys.projects(orgId), 'overview'] as const, [orgId]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [createdSelectionId, setCreatedSelectionId] = useState<string | null>(null);
+  const [flowInstance, setFlowInstance] = useState<ReactFlowInstance | null>(null);
+  const [layoutEpoch, setLayoutEpoch] = useState(0);
+  const selectionSurfaceId = `project-graph:${orgId}`;
+  const commandScopeKey = `project:${pathname}:all`;
 
   useEffect(() => {
     if (requestedSelectionId === null) return;
     if (rows.some((project) => project.id === requestedSelectionId)) {
       setSelectedId(requestedSelectionId);
-      onRequestedSelectionResolved?.(requestedSelectionId);
+      setCreatedSelectionId(requestedSelectionId);
       return;
     }
     if (requestedSelectionSettled) onRequestedSelectionMissing?.(requestedSelectionId);
@@ -121,116 +139,47 @@ export function ProjectGraphPanel({
       'Could not load roles.',
     ),
   );
-  const canEdit = useOrgCapability(
+  const canEditDependencies = useOrgCapability(
     membersQ.data?.items ?? [],
     rolesQ.data?.items ?? [],
     'contribute',
   );
-
-  // Optimistically rewrite the target's blocker set (and the source's blocks set) so a dragged or
-  // removed edge shows immediately; the overview refetch then reconciles with the server truth.
-  const writeEdge = useCallback(
-    (source: string, target: string, present: boolean): ProjectOverviewOut | undefined => {
-      // The graph hands back raw string ids; the overview rows carry branded ProjectIds.
-      const src = ProjectId.parse(source);
-      const tgt = ProjectId.parse(target);
-      const previous = queryClient.getQueryData<ProjectOverviewOut>(overviewKey);
-      queryClient.setQueryData<ProjectOverviewOut>(overviewKey, (current) =>
-        current
-          ? {
-              ...current,
-              items: current.items.map((item) => {
-                if (item.id === tgt) {
-                  const set = new Set(item.blockedByIds);
-                  if (present) set.add(src);
-                  else set.delete(src);
-                  return { ...item, blockedByIds: [...set].sort() };
-                }
-                if (item.id === src) {
-                  const set = new Set(item.blocksIds);
-                  if (present) set.add(tgt);
-                  else set.delete(tgt);
-                  return { ...item, blocksIds: [...set].sort() };
-                }
-                return item;
-              }),
-            }
-          : current,
-      );
-      return previous;
-    },
-    [queryClient, overviewKey],
+  const canTrashProjects = useOrgCapability(
+    membersQ.data?.items ?? [],
+    rolesQ.data?.items ?? [],
+    'manage',
   );
-
-  const connectMutation = useApiMutation<
-    ProjectDependencyCreated,
-    { source: string; target: string },
-    { previous?: ProjectOverviewOut | undefined }
-  >({
-    mutationFn: ({ source, target }) =>
-      unwrap(
-        () =>
-          api.v1.orgs[':orgId'].projects[':id'].dependencies.$post({
-            param: { orgId, id: source },
-            json: { blockedProjectId: target },
-          }),
-        'Could not link these projects.',
-      ),
-    onMutate: async ({ source, target }) => {
-      await queryClient.cancelQueries({ queryKey: overviewKey });
-      return { previous: writeEdge(source, target, true) };
+  const history = useCanvasCommandHistory(orgId, commandScopeKey, [
+    queryKeys.projects(orgId),
+    overviewKey,
+  ]);
+  const executeDependency = useCallback(
+    (type: 'add_dependency' | 'remove_dependency', source: string, target: string) => {
+      const command = {
+        commandId: canvasCommandId(),
+        objectKind: 'project',
+        objectIds: [source, target],
+        operation: { type, blockingId: source, blockedId: target },
+      } as ObjectCommandIn;
+      void history.execute(
+        command,
+        type === 'add_dependency' ? 'Add dependency' : 'Remove dependency',
+      );
     },
-    onError: (_err, _vars, ctx) => {
-      if (ctx?.previous) queryClient.setQueryData(overviewKey, ctx.previous);
-    },
-    invalidateKeys: [overviewKey],
-  });
-
-  const disconnectMutation = useApiMutation<
-    ProjectDependencyRemoved,
-    { source: string; target: string },
-    { previous?: ProjectOverviewOut | undefined }
-  >({
-    mutationFn: ({ source, target }) =>
-      unwrap(
-        () =>
-          api.v1.orgs[':orgId'].projects[':id'].dependencies[':depId'].$delete({
-            param: { orgId, id: source, depId: target },
-          }),
-        'Could not remove this link.',
-      ),
-    onMutate: async ({ source, target }) => {
-      await queryClient.cancelQueries({ queryKey: overviewKey });
-      return { previous: writeEdge(source, target, false) };
-    },
-    onError: (_err, _vars, ctx) => {
-      if (ctx?.previous) queryClient.setQueryData(overviewKey, ctx.previous);
-    },
-    invalidateKeys: [overviewKey],
-  });
-
+    [history],
+  );
   const addDependency = useCallback(
     (source: string, target: string) => {
-      connectMutation.mutate({ source, target });
+      executeDependency('add_dependency', source, target);
     },
-    [connectMutation],
+    [executeDependency],
   );
   const removeDependency = useCallback(
     (edge: Edge) => {
-      disconnectMutation.mutate({ source: edge.source, target: edge.target });
+      executeDependency('remove_dependency', edge.source, edge.target);
     },
-    [disconnectMutation],
+    [executeDependency],
   );
-
-  const mutationError = connectMutation.error
-    ? userErrorMessage(connectMutation.error, 'Could not link these projects.')
-    : disconnectMutation.error
-      ? userErrorMessage(disconnectMutation.error, 'Could not remove this link.')
-      : null;
-  const clearError = useCallback(() => {
-    connectMutation.reset();
-    disconnectMutation.reset();
-  }, [connectMutation, disconnectMutation]);
 
   const nodes = useMemo<Node[]>(() => {
     const rowIds = new Set(rows.map((item) => item.id));
@@ -308,64 +257,136 @@ export function ProjectGraphPanel({
 
   // The shared engine runs Dagre once per dependency component and then packs those measured
   // rectangles. Project cards remain fixed at their full-density dimensions.
-  const positioned = useProjectGraphLayout(nodes, edges, aspectRatio).nodes;
+  const positioned = useProjectGraphLayout(nodes, edges, aspectRatio, layoutEpoch).nodes;
 
-  if (rows.length === 0)
-    return (
-      <p className="text-on-surface-variant text-body-medium p-8 text-center">
-        No matching projects.
-      </p>
-    );
+  const selectionItems = useMemo<readonly ObjectRef[]>(
+    () =>
+      rows.map((item) => ({
+        kind: 'project',
+        id: item.id,
+        organizationId: orgId,
+        title: item.name,
+        meta: { taskCount: item.taskCount },
+      })),
+    [orgId, rows],
+  );
+  const propertySnapshots = useMemo(
+    () => projectRowsToPropertySnapshots(rows, orgId),
+    [orgId, rows],
+  );
+  const createProject = useCallback(() => {
+    if (onCreateProject !== undefined) {
+      onCreateProject();
+      return;
+    }
+    openCreate({
+      kind: 'project',
+      initialWorkspaceId: orgId,
+      sameWorkspaceCompletion: 'stay',
+      onCreated: (created) => {
+        setSelectedId(created.id);
+        setCreatedSelectionId(created.id);
+        void queryClient.invalidateQueries({ queryKey: overviewKey });
+      },
+    });
+  }, [onCreateProject, openCreate, orgId, overviewKey, queryClient]);
+
+  const applyCreatedSelection = useCallback(
+    (node: Node) => {
+      setSelectedId(node.id);
+      void flowInstance?.fitView({
+        nodes: [{ id: node.id }],
+        duration: 300,
+        maxZoom: 1,
+        padding: 0.35,
+      });
+      focusCanvasNode(selectionSurfaceId, node.id);
+      setCreatedSelectionId(null);
+      if (node.id === requestedSelectionId) onRequestedSelectionResolved?.(node.id);
+    },
+    [flowInstance, onRequestedSelectionResolved, requestedSelectionId, selectionSurfaceId],
+  );
 
   return (
     // Fills the content panel and runs to its bottom edge. The page container's closing gutter is
     // cancelled because a scrolling list does not show it either — its rows are simply clipped by
     // the panel — so leaving it in place is what made this lens sit 24px shorter than the list it
     // is meant to match pixel for pixel.
-    <div ref={containerRef} className="-mb-4 min-h-0 w-full flex-1 @2xl:-mb-6 @4xl:-mb-8">
-      <Canvas
-        nodes={positioned}
-        edges={edges}
-        nodeTypes={NODE_TYPES}
-        interactive={canEdit}
-        density="full"
-        // Positions are computed above, so the canvas must not re-run a flat Dagre pass.
-        disableLayout
-        layoutReady={aspectReady}
-        minimap
-        // Hovering a card should not fade the rest of the portfolio; the chain-dimming is for dense
-        // task graphs, not a handful of projects.
-        highlightChains={false}
-        onSelectNode={setSelectedId}
-        onConnectEdge={addDependency}
-        onDeleteEdge={removeDependency}
+    <CanvasSelectionRetentionProvider
+      scopeKey={commandScopeKey}
+      items={selectionItems}
+      propertySnapshots={propertySnapshots}
+      surfaceId={selectionSurfaceId}
+      organizationId={orgId}
+    >
+      <CanvasCommandProviderWithHistory
+        objectKind="project"
+        canEdit={canEditDependencies}
+        canTrash={canTrashProjects}
+        history={history}
+        onCreateObject={createProject}
+        onOpenObject={(object) => {
+          setSelectedId(object.id);
+        }}
       >
-        {selected ? (
-          <Panel position="top-right">
-            <ProjectPeek
-              project={selected}
-              orgId={orgId}
-              leadName={selectedLeadName}
-              blockedBy={neighbors.blockedBy}
-              blocks={neighbors.blocks}
-              onSelect={setSelectedId}
-              onClose={() => {
-                setSelectedId(null);
+        <CanvasSelectionFrame label="Project dependency graph">
+          <div ref={containerRef} className="-mb-4 size-full min-h-0 flex-1 @2xl:-mb-6 @4xl:-mb-8">
+            <Canvas
+              nodes={positioned}
+              edges={edges}
+              nodeTypes={NODE_TYPES}
+              interactive={canEditDependencies}
+              density="full"
+              disableLayout
+              layoutReady={aspectReady}
+              minimap
+              highlightChains={false}
+              onSelectNode={setSelectedId}
+              onConnectEdge={addDependency}
+              onDeleteEdge={removeDependency}
+              onInit={setFlowInstance}
+              onRelayout={() => {
+                setLayoutEpoch((current) => current + 1);
               }}
-            />
-          </Panel>
-        ) : null}
-        {mutationError !== null ? (
-          <Panel position="bottom-center">
-            <div className="bg-error-container text-on-error-container text-body-medium flex items-center gap-2 rounded-lg px-3 py-1.5">
-              {mutationError}
-              <button type="button" onClick={clearError} aria-label="Dismiss">
-                <X className="size-4" />
-              </button>
-            </div>
-          </Panel>
-        ) : null}
-      </Canvas>
-    </div>
+            >
+              <CanvasSelectionBridge
+                objectKind="project"
+                nodeTypes={PROJECT_SELECTION_NODE_TYPES}
+                requestedSelectionId={createdSelectionId}
+                requestedSelectionReady={
+                  createdSelectionId !== null &&
+                  positioned.some(({ id }) => id === createdSelectionId)
+                }
+                onRequestedSelectionApplied={applyCreatedSelection}
+              />
+              <BulkActionsBar />
+              <CanvasCommandNotice />
+              {rows.length === 0 ? (
+                <Panel position="top-center" className="!top-1/2 !-translate-y-1/2">
+                  <p className="text-on-surface-variant text-body-medium rounded-lg px-5 py-3 text-center">
+                    No matching Projects. Right-click the canvas to create one.
+                  </p>
+                </Panel>
+              ) : null}
+              {selected ? (
+                <Panel position="top-right">
+                  <ProjectPeek
+                    project={selected}
+                    orgId={orgId}
+                    leadName={selectedLeadName}
+                    blockedBy={neighbors.blockedBy}
+                    blocks={neighbors.blocks}
+                    onSelect={setSelectedId}
+                    onClose={() => {
+                      setSelectedId(null);
+                    }}
+                  />
+                </Panel>
+              ) : null}
+            </Canvas>
+          </div>
+        </CanvasSelectionFrame>
+      </CanvasCommandProviderWithHistory>
+    </CanvasSelectionRetentionProvider>
   );
 }

@@ -39,6 +39,7 @@ import { useRelationDropTarget } from '@/components/dnd/use-relation-drop-target
 import { useWorkStatus } from '@/components/entity-display/use-work-status';
 import { WorkStatusBadge, WorkStatusIcon } from '@/components/entity-display/work-status';
 import { formatCalendarDate } from '@/lib/format-date';
+import { useSelectableRow } from '@/components/selection';
 
 import { projectNodeTransitionName } from './transition-name';
 import { useLod } from './use-lod';
@@ -115,14 +116,31 @@ function ProjectNodeComponent({ id, data, selected }: NodeProps): React.JSX.Elem
       ? 'No tasks yet'
       : `${String(completedTaskCount)} of ${String(taskCount)} tasks complete (${String(pct)}%)`;
   const href = `/orgs/${orgId}/projects/${id}`;
-  const object = { kind: 'project' as const, id, organizationId: orgId, title: name };
+  const object = {
+    kind: 'project' as const,
+    id,
+    organizationId: orgId,
+    title: name,
+    meta: { taskCount },
+  };
+  const selection = useSelectableRow(object);
+  const {
+    onClick: selectionClick,
+    ref: selectionRef,
+    ...selectionRowProps
+  } = selection.rowProps;
+  void selectionClick;
   const relation = useRelationDropTarget({ target: object });
 
   return (
     <ObjectSurface object={object} surfaceId="project-canvas" associationModifier="alt" href={href}>
       <div
-        ref={relation.dropProps.ref}
-        tabIndex={0}
+        role="treeitem"
+        {...selectionRowProps}
+        ref={(element) => {
+          selectionRef(element);
+          relation.dropProps.ref(element);
+        }}
         data-drop-state={relation.dropProps['data-drop-state']}
         style={{
           viewTransitionName: projectNodeTransitionName(id),
@@ -132,7 +150,7 @@ function ProjectNodeComponent({ id, data, selected }: NodeProps): React.JSX.Elem
         className={cn(
           'group bg-surface-container-high relative flex flex-col justify-center gap-1.5 overflow-hidden rounded-lg transition-colors',
           compact ? 'px-3' : 'px-3.5',
-          selected && 'ring-primary ring-2',
+          (selected || selection.selected) && 'ring-primary ring-2',
           relation.dropProps.className,
           relation.dropState === 'accept' && 'ring-primary bg-primary/8 ring-2 ring-inset',
           relation.dropState === 'reject' && 'ring-error/60 bg-error/5 ring-2 ring-inset',

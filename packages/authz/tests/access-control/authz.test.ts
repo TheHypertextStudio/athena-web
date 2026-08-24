@@ -23,10 +23,10 @@ import type {
 } from '@docket/identity-access/grants';
 import { PGlite } from '@electric-sql/pglite';
 import { drizzle } from 'drizzle-orm/pglite';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { ancestorChain, type ResourceRef } from '../../src/ancestor-chain';
-import { canActor } from '../../src/can-actor';
+import { canActor, canActorBatch } from '../../src/can-actor';
 import {
   CAPABILITY_RANK as authzCapabilityRank,
   satisfies as authzSatisfies,
@@ -609,6 +609,25 @@ function orgTarget(): ResourceRef {
 }
 
 describe('canActor', () => {
+  it('matches individual resolution for a mixed batch of nested resources', async () => {
+    const targets: ResourceRef[] = [
+      { kind: 'task', id: taskFullId, orgId },
+      { kind: 'task', id: taskBareId, orgId },
+      { kind: 'project', id: projectId, orgId },
+      { kind: 'project', id: projectUnderTeamOnlyId, orgId },
+    ];
+    const expected = await Promise.all(
+      targets.map((target) => canActor(memberActorId, 'contribute', target, db)),
+    );
+    if (!client) throw new Error('authorization database is unavailable');
+    const queries = vi.spyOn(client, 'query');
+    const start = queries.mock.calls.length;
+    const resolved = await canActorBatch(memberActorId, 'contribute', targets, db);
+    expect(resolved).toEqual(expected);
+    expect(queries.mock.calls.length - start).toBeLessThanOrEqual(4);
+    queries.mockRestore();
+  });
+
   it('an Owner has manage org-wide', async () => {
     const r = await canActor(ownerActorId, 'manage', orgTarget(), db);
     expect(r.allow).toBe(true);

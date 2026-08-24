@@ -68,6 +68,7 @@ export const ProjectCreate = z
       'Optional initial lifecycle status. Defaults to `planned` when omitted.',
     ),
     health: Health.optional().describe('Optional initial health verdict.'),
+    priority: Priority.optional().describe('Optional initial Project priority.'),
     startDate: z.iso
       .date()
       .optional()
@@ -149,6 +150,7 @@ export const ProjectUpdate = z
       .describe(
         'New health verdict (`on_track`/`at_risk`/`off_track`). Omit to leave unchanged; `null` clears it.',
       ),
+    priority: Priority.optional().describe('New Project priority. Omit to leave unchanged.'),
     startDate: z.iso
       .date()
       .nullable()
@@ -303,6 +305,8 @@ export type ProjectOverviewMilestone = z.infer<typeof ProjectOverviewMilestone>;
 
 /** One Project row composed for the high-density portfolio overview. */
 export const ProjectOverviewItem = ProjectOut.extend({
+  labelIds: z.array(LabelId).describe('Organization-global Labels attached to this Project.'),
+  initiativeIds: z.array(InitiativeId).describe('Initiatives associated with this Project.'),
   display: EntityDisplayOut.describe(
     'Presentation-only icon and semantic color metadata kept outside the Project record.',
   ),

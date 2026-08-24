@@ -1,13 +1,25 @@
 /** `@docket/web` — measured-layout and initial-framing lifecycle regressions. */
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { Edge, Node, ReactFlowInstance } from '@xyflow/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const flowState = vi.hoisted(() => ({
-  nodes: [] as Node[],
+const flowState = vi.hoisted<{
+  nodes: Node[];
+  fitView: ReturnType<typeof vi.fn>;
+  setViewport: ReturnType<typeof vi.fn>;
+  setNodes: ReturnType<typeof vi.fn>;
+  reactFlowProps: Record<string, unknown>;
+  menuOptions: Record<string, () => void>;
+  commandKeyDown: ReturnType<typeof vi.fn>;
+}>(() => ({
+  nodes: [],
   fitView: vi.fn(),
   setViewport: vi.fn(),
+  setNodes: vi.fn(),
+  reactFlowProps: {},
+  menuOptions: {},
+  commandKeyDown: vi.fn(),
 }));
 
 vi.mock('@xyflow/react', async () => {
@@ -23,6 +35,7 @@ vi.mock('@xyflow/react', async () => {
   const instance = {
     fitView: flowState.fitView,
     setViewport: flowState.setViewport,
+    setNodes: flowState.setNodes,
     getNodes: () => flowState.nodes,
     getEdges: () => [],
     getNodesBounds: (items: (string | { id: string })[]) =>
@@ -37,15 +50,13 @@ vi.mock('@xyflow/react', async () => {
           };
     },
   } as unknown as ReactFlowInstance;
-  const ReactFlow = ({
-    nodes,
-    onInit,
-    children,
-  }: {
+  const ReactFlow = (props: {
     nodes: Node[];
     onInit?: (value: ReactFlowInstance) => void;
     children?: ReactNode;
   }) => {
+    const { nodes, onInit, children } = props;
+    flowState.reactFlowProps = props;
     flowState.nodes = nodes;
     const initial = React.useRef(onInit);
     React.useEffect(() => {
@@ -89,11 +100,15 @@ vi.mock('@xyflow/react', async () => {
 });
 
 vi.mock('@/components/canvas/canvas-menus', () => ({
-  useCanvasMenus: () => ({
-    menu: null,
-    onEdgeContextMenu: vi.fn(),
-    onPaneContextMenu: vi.fn(),
-  }),
+  useCanvasMenus: (options: Record<string, () => void>) => {
+    flowState.menuOptions = options;
+    return {
+      menu: null,
+      onEdgeContextMenu: vi.fn(),
+      onNodeContextMenu: vi.fn(),
+      onPaneContextMenu: vi.fn(),
+    };
+  },
 }));
 vi.mock('@/components/canvas/use-graph-highlight', () => ({
   useGraphHighlight: (nodes: Node[], edges: Edge[]) => ({
@@ -104,6 +119,7 @@ vi.mock('@/components/canvas/use-graph-highlight', () => ({
   }),
 }));
 vi.mock('@/components/canvas/use-graph-interactions', () => ({
+  edgeKind: (edge: Edge) => (edge.data as { kind?: string } | undefined)?.kind,
   useGraphInteractions: () => ({
     isValidConnection: vi.fn(),
     onBeforeDelete: vi.fn(),
@@ -112,10 +128,15 @@ vi.mock('@/components/canvas/use-graph-interactions', () => ({
     onReconnect: vi.fn(),
   }),
 }));
+vi.mock('@/components/canvas/canvas-command-context', () => ({
+  useCanvasCommandContext: () => ({ onCanvasKeyDown: flowState.commandKeyDown }),
+}));
 
 import Canvas from '@/components/canvas/canvas';
+import CanvasSelectionFrame from '@/components/canvas/canvas-selection-frame';
 import { useProjectGraphLayout } from '@/components/canvas/project-graph-layout';
 import { useCanvasAspectRatio } from '@/components/canvas/use-canvas-aspect-ratio';
+import { SelectionProvider } from '@/components/selection';
 
 const projects: Node[] = Array.from({ length: 8 }, (_, index) => ({
   id: `project-${index}`,
@@ -151,6 +172,10 @@ describe('Canvas measured layout lifecycle', () => {
     flowState.nodes = [];
     flowState.fitView.mockReset().mockResolvedValue(true);
     flowState.setViewport.mockReset().mockResolvedValue(true);
+    flowState.setNodes.mockReset();
+    flowState.reactFlowProps = {};
+    flowState.menuOptions = {};
+    flowState.commandKeyDown.mockReset();
     frames = [];
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
       () => ({ width, height }) as DOMRect,
@@ -230,5 +255,126 @@ describe('Canvas measured layout lifecycle', () => {
     expect(flowState.fitView).toHaveBeenCalledWith(
       expect.objectContaining({ nodes: [{ id: 'project-7' }] }),
     );
+  });
+
+  it('keeps drag as pan until Shift or one-shot area selection activates', () => {
+    render(<Harness />);
+
+    expect(flowState.reactFlowProps['panOnDrag']).toBe(true);
+    expect(flowState.reactFlowProps['selectionOnDrag']).toBe(false);
+    expect(flowState.reactFlowProps['nodesFocusable']).toBe(false);
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Shift' }));
+    });
+    expect(flowState.reactFlowProps['panOnDrag']).toBe(false);
+    expect(flowState.reactFlowProps['selectionOnDrag']).toBe(true);
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keyup', { key: 'Shift' }));
+    });
+    expect(flowState.reactFlowProps['panOnDrag']).toBe(true);
+
+    act(() => {
+      flowState.menuOptions['onSelectArea']?.();
+    });
+    expect(flowState.reactFlowProps['selectionOnDrag']).toBe(true);
+    act(() => {
+      (flowState.reactFlowProps['onSelectionEnd'] as (() => void) | undefined)?.();
+    });
+    expect(flowState.reactFlowProps['selectionOnDrag']).toBe(false);
+  });
+
+  it('preserves an existing right-click selection and clears on the empty pane', async () => {
+    const onSelectNode = vi.fn();
+    render(
+      <Canvas
+        nodes={[{ id: 'project-1', type: 'project', position: { x: 0, y: 0 }, data: {} }]}
+        edges={[]}
+        disableLayout
+        onSelectNode={onSelectNode}
+      />,
+    );
+    await waitFor(() => {
+      expect(flowState.reactFlowProps['onNodeContextMenu']).toBeTypeOf('function');
+    });
+
+    act(() => {
+      (
+        flowState.reactFlowProps['onNodeContextMenu'] as (
+          event: { preventDefault(): void; stopPropagation(): void },
+          node: Node,
+        ) => void
+      )(
+        { preventDefault: vi.fn(), stopPropagation: vi.fn() },
+        { id: 'project-1', type: 'project', selected: true, position: { x: 0, y: 0 }, data: {} },
+      );
+    });
+    expect(flowState.setNodes).not.toHaveBeenCalled();
+
+    act(() => {
+      (flowState.reactFlowProps['onPaneClick'] as () => void)();
+    });
+    expect(onSelectNode).toHaveBeenCalledWith(null);
+  });
+
+  it('deletes a selected dependency edge before the gentle node-trash boundary handles the key', () => {
+    const onDeleteEdge = vi.fn();
+    render(
+      <SelectionProvider items={[]} surfaceId="project-keyboard">
+        <CanvasSelectionFrame label="Project dependency graph">
+          <Canvas
+            nodes={[
+              { id: 'project-a', position: { x: 0, y: 0 }, data: {} },
+              { id: 'project-b', position: { x: 300, y: 0 }, data: {} },
+            ]}
+            edges={[
+              {
+                id: 'project-a->project-b',
+                source: 'project-a',
+                target: 'project-b',
+                selected: true,
+                data: { kind: 'dependency' },
+              },
+            ]}
+            disableLayout
+            interactive
+            onDeleteEdge={onDeleteEdge}
+          />
+        </CanvasSelectionFrame>
+      </SelectionProvider>,
+    );
+
+    fireEvent.keyDown(screen.getByTestId('flow'), { key: 'Delete' });
+
+    expect(onDeleteEdge).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'project-a->project-b' }),
+    );
+    expect(flowState.commandKeyDown).not.toHaveBeenCalled();
+    expect(flowState.reactFlowProps['deleteKeyCode']).toBeNull();
+  });
+
+  it('lets selected nodes reach SelectionFrame gentle trash without local React Flow deletion', () => {
+    const onDeleteEdge = vi.fn();
+    render(
+      <SelectionProvider items={[]} surfaceId="task-keyboard">
+        <CanvasSelectionFrame label="Task graph">
+          <Canvas
+            nodes={[{ id: 'task-a', position: { x: 0, y: 0 }, selected: true, data: {} }]}
+            edges={[]}
+            disableLayout
+            interactive
+            onDeleteEdge={onDeleteEdge}
+          />
+        </CanvasSelectionFrame>
+      </SelectionProvider>,
+    );
+
+    fireEvent.keyDown(screen.getByTestId('flow'), { key: 'Backspace' });
+
+    expect(flowState.commandKeyDown).toHaveBeenCalledOnce();
+    expect(onDeleteEdge).not.toHaveBeenCalled();
+    expect(flowState.reactFlowProps['deleteKeyCode']).toBeNull();
+    expect(flowState.reactFlowProps['onNodesDelete']).toBeUndefined();
   });
 });

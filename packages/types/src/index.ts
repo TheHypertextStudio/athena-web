@@ -20,6 +20,7 @@ export * from './milestone';
 export * from './project';
 export * from './publish';
 export * from './task';
+export * from './object-command';
 export * from './actor';
 export * from './team';
 export * from './work-status';

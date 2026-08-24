@@ -35,7 +35,7 @@ import {
   CursorQuery,
   pageOf,
 } from '@docket/types';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { z } from 'zod';
 
@@ -527,7 +527,13 @@ const initiatives = new Hono<AppEnv>()
       const proj = await db
         .select({ id: project.id })
         .from(project)
-        .where(and(eq(project.id, projectId), eq(project.organizationId, orgId)))
+        .where(
+          and(
+            eq(project.id, projectId),
+            eq(project.organizationId, orgId),
+            isNull(project.archivedAt),
+          ),
+        )
         .limit(1);
       if (!proj[0]) throw new NotFoundError('Project not found');
 
@@ -724,7 +730,9 @@ const initiatives = new Hono<AppEnv>()
           .select({ row: project })
           .from(initiativeProject)
           .innerJoin(project, eq(project.id, initiativeProject.projectId))
-          .where(inArray(initiativeProject.initiativeId, rollupIds)),
+          .where(
+            and(inArray(initiativeProject.initiativeId, rollupIds), isNull(project.archivedAt)),
+          ),
         db
           .select({ row: program })
           .from(initiativeProgram)

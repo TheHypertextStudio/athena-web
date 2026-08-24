@@ -51,6 +51,31 @@ export type LoadExplicitAuthorizationFactsResult =
   | { readonly kind: 'ready'; readonly facts: ExplicitAuthorizationFacts }
   | { readonly kind: ExplicitAuthorizationFactsDenial };
 
+function explicitGrantFromRow(row: typeof grant.$inferSelect): ExplicitGrant {
+  const {
+    organizationId,
+    subjectKind,
+    subjectId,
+    resourceKind,
+    resourceId,
+    capabilities,
+    effect,
+    cascades,
+    expiresAt,
+  } = row;
+  return {
+    organizationId,
+    subjectKind,
+    subjectId,
+    resourceKind,
+    resourceId,
+    capabilities,
+    effect,
+    cascades,
+    expiresAt,
+  };
+}
+
 /**
  * Builds the containment chain for `target`: the target itself, its FK ancestors, and the
  * organization root.
@@ -155,30 +180,125 @@ export async function loadExplicitAuthorizationFacts(
       organizationId: target.orgId,
       resources: chain.map(({ kind, id }) => ({ kind, id })),
     },
-    grants: grantRows.map(
-      ({
-        organizationId,
-        subjectKind,
-        subjectId,
-        resourceKind,
-        resourceId,
-        capabilities,
-        effect,
-        cascades,
-        expiresAt,
-      }) => ({
-        organizationId,
-        subjectKind,
-        subjectId,
-        resourceKind,
-        resourceId,
-        capabilities,
-        effect,
-        cascades,
-        expiresAt,
-      }),
-    ),
+    grants: grantRows.map(explicitGrantFromRow),
   };
 
   return { kind: 'ready', facts };
+}
+
+/**
+ * Load explicit authorization facts for many targets with one principal and grant hydration.
+ *
+ * @param actorId - The acting Actor id shared by every decision.
+ * @param targets - Resources to resolve in result order.
+ * @param db - The database client.
+ * @returns one denial or normalized fact set for each target.
+ */
+export async function loadExplicitAuthorizationFactsBatch(
+  actorId: string,
+  targets: readonly ResourceRef[],
+  db: Database,
+): Promise<LoadExplicitAuthorizationFactsResult[]> {
+  if (targets.length === 0) return [];
+  const actorRows = await db
+    .select({ actor, role })
+    .from(actor)
+    .leftJoin(role, and(eq(actor.roleId, role.id), eq(actor.organizationId, role.organizationId)))
+    .where(eq(actor.id, actorId))
+    .limit(1);
+  const actorRow = actorRows[0];
+  if (!actorRow) return targets.map(() => ({ kind: 'actor_not_found' as const }));
+  if (actorRow.actor.status !== 'active') {
+    return targets.map(() => ({ kind: 'actor_suspended' as const }));
+  }
+  if (actorRow.actor.archivedAt !== null) {
+    return targets.map(() => ({ kind: 'actor_archived' as const }));
+  }
+
+  const localTargets = targets.filter((target) => target.orgId === actorRow.actor.organizationId);
+  const taskIds = localTargets
+    .filter((target) => target.kind === 'task')
+    .map((target) => target.id);
+  const projectIds = localTargets
+    .filter((target) => target.kind === 'project')
+    .map((target) => target.id);
+  const taskRows =
+    taskIds.length === 0
+      ? []
+      : await db
+          .select({
+            id: task.id,
+            teamId: task.teamId,
+            projectId: task.projectId,
+            programId: task.programId,
+          })
+          .from(task)
+          .where(inArray(task.id, taskIds));
+  const projectRows =
+    projectIds.length === 0
+      ? []
+      : await db
+          .select({ id: project.id, teamId: project.teamId, programId: project.programId })
+          .from(project)
+          .where(inArray(project.id, projectIds));
+  const tasksById = new Map(taskRows.map((row) => [row.id, row]));
+  const projectsById = new Map(projectRows.map((row) => [row.id, row]));
+  const chains = targets.map((target): ResourceRef[] => {
+    const root: ResourceRef = { kind: 'organization', id: target.orgId, orgId: target.orgId };
+    if (target.kind === 'organization') return [root];
+    const chain: ResourceRef[] = [target];
+    if (target.kind === 'task') {
+      const row = tasksById.get(target.id);
+      if (row) {
+        chain.push({ kind: 'team', id: row.teamId, orgId: target.orgId });
+        if (row.projectId) chain.push({ kind: 'project', id: row.projectId, orgId: target.orgId });
+        if (row.programId) chain.push({ kind: 'program', id: row.programId, orgId: target.orgId });
+      }
+    } else if (target.kind === 'project') {
+      const row = projectsById.get(target.id);
+      if (row?.teamId) chain.push({ kind: 'team', id: row.teamId, orgId: target.orgId });
+      if (row?.programId) chain.push({ kind: 'program', id: row.programId, orgId: target.orgId });
+    }
+    chain.push(root);
+    return chain;
+  });
+  const roleId = actorRow.role?.id ?? null;
+  const subjectIds = [actorId, roleId].filter((id): id is string => id !== null);
+  const resourceIds = [
+    ...new Set(
+      chains
+        .filter((_, index) => targets[index]?.orgId === actorRow.actor.organizationId)
+        .flatMap((chain) => chain.map((resource) => resource.id)),
+    ),
+  ];
+  const grantRows =
+    resourceIds.length === 0
+      ? []
+      : await db
+          .select()
+          .from(grant)
+          .where(
+            and(
+              eq(grant.organizationId, actorRow.actor.organizationId),
+              inArray(grant.subjectId, subjectIds),
+              inArray(grant.resourceId, resourceIds),
+            ),
+          );
+
+  return targets.map((target, index) => {
+    if (target.orgId !== actorRow.actor.organizationId) return { kind: 'cross_org' as const };
+    const chain = chains[index] ?? [];
+    const chainIds = new Set(chain.map((resource) => resource.id));
+    return {
+      kind: 'ready' as const,
+      facts: {
+        principal: { organizationId: target.orgId, actorId, roleId },
+        resourceChain: {
+          organizationId: target.orgId,
+          resources: chain.map(({ kind, id }) => ({ kind, id })),
+        },
+        grants: grantRows.filter((row) => chainIds.has(row.resourceId)).map(explicitGrantFromRow),
+      },
+    };
+  });
 }

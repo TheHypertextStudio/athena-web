@@ -89,7 +89,13 @@ export async function assertRefInOrg(
   const rows = await db
     .select({ id: table.id })
     .from(table)
-    .where(and(eq(table.id, refId), eq(table.organizationId, orgId)))
+    .where(
+      and(
+        eq(table.id, refId),
+        eq(table.organizationId, orgId),
+        ...(table === project ? [isNull(project.archivedAt)] : []),
+      ),
+    )
     .limit(1);
   if (!rows[0]) throw new NotFoundError(notFoundMessage);
 }

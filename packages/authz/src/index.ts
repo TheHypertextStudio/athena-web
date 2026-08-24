@@ -9,7 +9,7 @@
  */
 export { type Capability, CAPABILITY_RANK, satisfies } from '@docket/identity-access/capabilities';
 export { ancestorChain, type ResourceKind, type ResourceRef } from './ancestor-chain';
-export { canActor, type ResolveResult } from './can-actor';
+export { canActor, canActorBatch, type ResolveResult } from './can-actor';
 export { effectiveVisibility, visibilityGrantsView } from './visibility';
 export {
   lastOwnerGuard,

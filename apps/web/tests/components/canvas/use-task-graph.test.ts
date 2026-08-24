@@ -11,6 +11,8 @@ const node = (id: string, parentTaskId: string | null) => ({
   priority: 'medium',
   teamId: '01J00000000000000000000001',
   projectId: null,
+  programId: '01J00000000000000000000002',
+  labelIds: ['01J00000000000000000000003'],
   assigneeId: null,
   parentTaskId,
   startDate: null,
@@ -53,6 +55,13 @@ describe('taskGraphToFlow', () => {
     );
 
     expect(flow.nodes[1]?.data['parentTaskId']).toBe('01J00000000000000000000010');
+    expect(flow.nodes[0]?.data).toMatchObject({
+      programId: '01J00000000000000000000002',
+      labelIds: ['01J00000000000000000000003'],
+      cycleId: null,
+      startDate: null,
+      estimate: null,
+    });
     expect(flow.edges).toHaveLength(1);
     expect(flow.edges[0]).toMatchObject({ id: 'dep:parent:child', reconnectable: false });
   });

@@ -258,10 +258,12 @@ export function compileRosterCtes(
         from authorized e join ancestor_ids a on a.id=e.id
       )`;
   }
+  const activeProject = target === 'project' ? sql`and e.archived_at is null` : sql``;
   return sql`authorized_base as not materialized (
       select ${baseColumns(target)} from ${sql.raw(table)} e
       ${requiredScalarRelationsJoin(target)}
       where e.organization_id=${organizationId}
+        ${activeProject}
         and ${authorizationScope}
         and ${compileAuthorizationSql(target, organizationId, actorId, userId)}
     ), authorized as not materialized (

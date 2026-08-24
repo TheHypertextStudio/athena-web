@@ -163,7 +163,7 @@ describe('projects detail router', () => {
   });
 
   it('composes the portfolio overview with display, task progress, and dependency edges', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const reader = appWithActor(projects, orgId, ['view'], humanActorId);
     const blockingId = await seedProject(orgId, teamId, humanActorId);
     const blockedId = await seedProject(orgId, teamId, humanActorId);
@@ -182,6 +182,31 @@ describe('projects detail router', () => {
       colorKey: 'danger',
       createdBy: humanActorId,
     });
+    const [label] = await db
+      .insert(schema.label)
+      .values({ organizationId: orgId, name: 'Portfolio', color: 'blue' })
+      .returning({ id: schema.label.id });
+    const [initiative] = await db
+      .insert(schema.initiative)
+      .values({
+        organizationId: orgId,
+        name: 'Theme',
+        status: 'active',
+        statusId: statusId('initiative', 'active'),
+        createdBy: humanActorId,
+      })
+      .returning({ id: schema.initiative.id });
+    if (!label || !initiative) throw new Error('overview fixture insert returned no row');
+    await db
+      .update(schema.project)
+      .set({ priority: 'urgent' })
+      .where(eq(schema.project.id, blockedId));
+    await db
+      .insert(schema.projectLabel)
+      .values({ organizationId: orgId, projectId: blockedId, labelId: label.id });
+    await db
+      .insert(schema.initiativeProject)
+      .values({ organizationId: orgId, projectId: blockedId, initiativeId: initiative.id });
 
     const response = await reader.request('/overview');
     expect(response.status).toBe(200);
@@ -193,6 +218,9 @@ describe('projects detail router', () => {
         blockedByIds: string[];
         blocksIds: string[];
         display: { iconKey: string; colorKey: string; customized: boolean };
+        priority: string;
+        labelIds: string[];
+        initiativeIds: string[];
       }[];
     }>(response);
     const blocking = assertDefined(body.items.find((item) => item.id === blockingId));
@@ -202,6 +230,9 @@ describe('projects detail router', () => {
     expect(blocked).toMatchObject({
       taskCount: 2,
       completedTaskCount: 1,
+      priority: 'urgent',
+      labelIds: [label.id],
+      initiativeIds: [initiative.id],
       display: { iconKey: 'campaign', colorKey: 'danger', customized: true },
     });
   });

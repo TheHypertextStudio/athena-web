@@ -53,8 +53,6 @@ export interface TaskGraphMutations {
   addDependency: (blockingTaskId: string, blockedTaskId: string) => void;
   /** Remove a dependency edge (direction-agnostic; pass its endpoints). */
   removeDependency: (sourceTaskId: string, targetTaskId: string) => void;
-  /** Flip a dependency: drop `source → target` and add `target → source`. */
-  reverseDependency: (sourceTaskId: string, targetTaskId: string) => void;
   /** Set a task's workflow state. */
   setState: (taskId: string, state: string) => void;
   /** Create a subtask under a parent, adding a child node + subtask edge. */
@@ -245,21 +243,6 @@ export function useTaskGraphMutations(scope: TaskGraphScope): TaskGraphMutations
     },
     [removeMutation, addMutation, offerUndo, clearUndo],
   );
-  const reverseDependency = useCallback(
-    (sourceTaskId: string, targetTaskId: string) => {
-      removeMutation.mutate({ sourceTaskId, targetTaskId });
-      addMutation.mutate({ blockingTaskId: targetTaskId, blockedTaskId: sourceTaskId });
-      offerUndo({
-        label: 'Dependency reversed',
-        undo: () => {
-          clearUndo();
-          removeMutation.mutate({ sourceTaskId: targetTaskId, targetTaskId: sourceTaskId });
-          addMutation.mutate({ blockingTaskId: sourceTaskId, blockedTaskId: targetTaskId });
-        },
-      });
-    },
-    [removeMutation, addMutation, offerUndo, clearUndo],
-  );
   const setStateFn = useCallback(
     (taskId: string, state: string) => {
       stateMutation.mutate({ taskId, state });
@@ -279,7 +262,6 @@ export function useTaskGraphMutations(scope: TaskGraphScope): TaskGraphMutations
   return {
     addDependency,
     removeDependency,
-    reverseDependency,
     setState: setStateFn,
     createSubtask,
     error,

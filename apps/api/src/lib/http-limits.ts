@@ -19,6 +19,8 @@ import { PayloadTooLargeError } from '../error';
  * on the surface is orders of magnitude smaller.
  */
 export const MAX_REQUEST_BYTES = 32 * 1024 * 1024;
+/** Maximum JSON body accepted by the canvas object-command endpoint. */
+export const MAX_OBJECT_COMMAND_BYTES = 4 * 1024 * 1024;
 
 /**
  * Answer an over-long body through the Problem model rather than Hono's plain-text default.
@@ -27,8 +29,8 @@ export const MAX_REQUEST_BYTES = 32 * 1024 * 1024;
  * `bodyLimit` otherwise returns a bare `413` with a text body, which would be the one failure on
  * this API that a client parsing the documented error shape could not read.
  */
-export function rejectOversizedBody(): never {
-  throw new PayloadTooLargeError(MAX_REQUEST_BYTES);
+export function rejectOversizedBody(maxBytes = MAX_REQUEST_BYTES): never {
+  throw new PayloadTooLargeError(maxBytes);
 }
 
 /**

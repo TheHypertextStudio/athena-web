@@ -18,7 +18,14 @@
  *
  * @see {@link actorOptions} and friends for the pure DTO→option mappers this composes.
  */
-import type { CycleOut, MilestoneOut, ProjectOut, WorkflowState } from '@docket/types';
+import type {
+  CycleOut,
+  LabelOut,
+  MilestoneOut,
+  ProjectOut,
+  TeamOut,
+  WorkflowState,
+} from '@docket/types';
 import type { PickerOption } from '@docket/ui/components';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
@@ -27,6 +34,7 @@ import {
   actorOptions,
   initiativeOptions,
   labelOptions,
+  memberActorOptions,
   programOptions,
   projectOptions,
 } from '@/components/pickers/options';
@@ -41,12 +49,15 @@ export type ComposerOptionKind =
   | 'initiatives'
   | 'labels'
   | 'cycles'
-  | 'milestones';
+  | 'milestones'
+  | 'teams';
 
 /** The resolved option arrays + loaders returned by {@link useComposerOptions}. */
 export interface ComposerOptions {
   /** Searchable actor options (org members + agents), for assignee / lead / owner pickers. */
   readonly actorOptions: readonly PickerOption[];
+  /** Human-only options for accountable lead and owner fields. */
+  readonly memberOptions: readonly PickerOption[];
   /** Project entity options. */
   readonly projectOptions: readonly PickerOption[];
   /** The org's raw projects (each carries its `programId`, for callers that need more than a
@@ -58,6 +69,12 @@ export interface ComposerOptions {
   readonly initiativeOptions: readonly PickerOption[];
   /** Label multi-select options (each with its color swatch). */
   readonly labelOptions: readonly PickerOption[];
+  /** Raw Labels retained for Team-scope compatibility checks. */
+  readonly labels: readonly LabelOut[];
+  /** Team entity options. */
+  readonly teamOptions: readonly PickerOption[];
+  /** Raw Teams retained for option scoping. */
+  readonly teams: readonly TeamOut[];
   /** The org's raw cycles (each carries its `teamId` so callers can scope to a team). */
   readonly cycles: readonly CycleOut[];
   /** The org's raw milestones (each carries its `projectId` so callers can scope to a project). */
@@ -176,6 +193,14 @@ export function useComposerOptions(
       { enabled: on('milestones'), staleTime: STALE.static },
     ),
   );
+  const teamsQ = useApiQuery(
+    apiQueryOptions(
+      queryKeys.teams(orgId),
+      () => api.v1.orgs[':orgId'].teams.$get({ param: { orgId } }),
+      'Could not load teams.',
+      { enabled: on('teams'), staleTime: STALE.static },
+    ),
+  );
 
   // Only enabled, first-loading queries contribute (a gated-off query is idle, not loading).
   const loading =
@@ -188,7 +213,8 @@ export function useComposerOptions(
     initiativeDisplaysQ.isLoading ||
     labelsQ.isLoading ||
     cyclesQ.isLoading ||
-    milestonesQ.isLoading;
+    milestonesQ.isLoading ||
+    teamsQ.isLoading;
 
   const workflowStatesFor = useCallback(
     async (teamId: string | null): Promise<readonly WorkflowState[]> => {
@@ -220,15 +246,20 @@ export function useComposerOptions(
   const labels = labelsQ.data?.items ?? [];
   const cycles = cyclesQ.data?.items ?? [];
   const milestones = milestonesQ.data?.items ?? [];
+  const teams = teamsQ.data?.items ?? [];
 
   return useMemo(
     () => ({
       actorOptions: actorOptions(members, agents),
+      memberOptions: memberActorOptions(members.filter(({ status }) => status === 'active')),
       projectOptions: projectOptions(projects, projectDisplays),
       projects,
       programOptions: programOptions(programs),
       initiativeOptions: initiativeOptions(initiatives, initiativeDisplays),
       labelOptions: labelOptions(labels),
+      labels,
+      teamOptions: teams.map((team) => ({ value: team.id, label: team.name })),
+      teams,
       cycles,
       milestones,
       loading,
@@ -243,6 +274,7 @@ export function useComposerOptions(
       initiatives,
       initiativeDisplays,
       labels,
+      teams,
       cycles,
       milestones,
       loading,

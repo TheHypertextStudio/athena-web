@@ -14,7 +14,7 @@ import { db, task } from '@docket/db';
 import { and, eq, isNull } from 'drizzle-orm';
 
 import { resolveStateTransition } from '../routes/task-helpers';
-import { emitEvent } from '../routes/event-emit';
+import { emitEvent, emitEventStrict } from '../routes/event-emit';
 import { enqueueSearchUpsert } from '../search/write-through';
 
 import { diffTaskFields, recordTaskChanges, resolveTaskChangeLabels } from './task-audit';
@@ -74,26 +74,27 @@ export async function writeTaskStateTransition(
   return after ? { before: input.before, after } : null;
 }
 
-/** Publish the durable history, stream, search, and process consequences after commit. */
-export async function finishTaskStateTransition(
-  input: { readonly actorId: string | null; readonly enqueueSearch?: boolean },
+/** Publish the stream, search, and process consequences after durable history is committed. */
+export async function finishTaskStateConsequences(
+  input: {
+    readonly actorId: string | null;
+    readonly enqueueSearch?: boolean;
+    readonly occurredAt?: Date;
+    readonly dedupeToken?: string;
+    readonly strict?: boolean;
+  },
   mutation: TaskStateMutation,
 ): Promise<void> {
   const { before, after } = mutation;
-  await emitEvent({
+  await (input.strict ? emitEventStrict : emitEvent)({
     organizationId: after.organizationId,
     kind: after.completedAt ? 'completed' : 'status_change',
     actorId: input.actorId,
+    ...(input.occurredAt && { occurredAt: input.occurredAt }),
     title: after.title,
     subject: { type: 'task', id: after.id, title: after.title },
     detail: { schema: 'docket.state_change', fromState: before.state, toState: after.state },
-  });
-  await recordTaskChanges({
-    organizationId: after.organizationId,
-    taskId: after.id,
-    title: after.title,
-    actorId: input.actorId,
-    changes: await resolveTaskChangeLabels(after.organizationId, diffTaskFields(before, after)),
+    ...(input.dedupeToken && { dedupeToken: input.dedupeToken }),
   });
   if (input.enqueueSearch !== false) {
     await enqueueSearchUpsert(after.organizationId, 'task', after.id);
@@ -106,6 +107,22 @@ export async function finishTaskStateTransition(
       completedOn: after.completedAt.toISOString().slice(0, 10),
     });
   }
+}
+
+/** Publish durable history and every post-commit consequence for a state transition. */
+export async function finishTaskStateTransition(
+  input: { readonly actorId: string | null; readonly enqueueSearch?: boolean },
+  mutation: TaskStateMutation,
+): Promise<void> {
+  const { before, after } = mutation;
+  await recordTaskChanges({
+    organizationId: after.organizationId,
+    taskId: after.id,
+    title: after.title,
+    actorId: input.actorId,
+    changes: await resolveTaskChangeLabels(after.organizationId, diffTaskFields(before, after)),
+  });
+  await finishTaskStateConsequences(input, mutation);
 }
 
 /**

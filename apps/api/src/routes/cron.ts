@@ -32,6 +32,7 @@ import { getContainer } from '../container';
 import { sweepLegacyMentions } from '../content/legacy-mention-sweep';
 import { sweepResourceUnfurls } from '../content/unfurl-sweep';
 import { processSearchIndexJobs } from '../search/process-jobs';
+import { processObjectCommandEffectJobs } from '../lib/object-command-effects';
 import { sweepAthenaAssignmentTriggers } from '../agent/assignments';
 import { reapIdleSessions } from '../mcp/session-registry';
 import { sweepElicitations } from '../services/elicitation-service';
@@ -109,8 +110,9 @@ const cron = new Hono()
   // scheduler retry cannot double-apply a projection.
   .post('/search-index', async (c) => {
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
+    const objectCommands = await processObjectCommandEffectJobs({ limit: 50 });
     const result = await processSearchIndexJobs({ limit: 50 });
-    return c.json({ swept: true, ...result });
+    return c.json({ swept: true, ...result, objectCommands });
   })
   // Resource-unfurl drain: resolve titles, icons, and previews for URLs someone referenced. Rows
   // are created `pending` by the mention reconciler so a description save never waits on a

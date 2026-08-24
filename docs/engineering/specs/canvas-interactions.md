@@ -74,6 +74,23 @@ Project and Task dependency changes, Task status actions, and Task hierarchy mov
 history instance as trash. Project dependency editing requires `contribute`. Project trash and
 restore require `manage`, so a contributor never reaches the confirmation step for that action.
 
+The command transaction owns the domain write, durable change-set receipt, completed idempotency
+response, and versioned consequence job. A committed command therefore cannot remain permanently
+`in_progress`, and a process exit cannot lose its activity or search consequences. The
+after-response drain and the five-minute search-index cron both lease consequence jobs. Each job
+checkpoints its next effect, uses the command id and occurrence time as stable dedupe input, retries
+strict event failures with bounded backoff, and reclaims an abandoned lease after five minutes.
+The worker removes at most 100 successful jobs per sweep after seven days. Failed jobs remain
+retryable. The [object-command delivery component diagram](diagrams/object-command-delivery.md)
+shows the module boundary.
+
+Forward property writes batch the selected rows instead of issuing one update per object. Replay
+loads and authorizes targets in batches, validates every object before writing it, and applies each
+compatible property tuple in one update. A 500-object scalar write and replay must stay within the
+query ceilings asserted by the scale suite. The server still treats a forward command as atomic.
+Replay remains object-granular, so an inaccessible or collaborator-changed object appears in
+`deniedIds` or `conflictingIds` while independent objects continue.
+
 Reverse dependency is unavailable. The current server contract expresses dependency removal and
 creation as separate commands, which leaves the graph half-reversed when the second write fails.
 The canvas must not restore this action until one atomic composite command validates and commits
@@ -164,7 +181,10 @@ Task graph retains the approved Task values on `TaskNodeData` and projects from 
 A canvas-only retention provider keeps selected `ObjectRef` and snapshot pairs when a successful
 command or active filter removes their nodes from the refreshed graph. Ordinary list selection
 still prunes hidden rows. Canvas retention ends when selection clears or the route-and-graph scope
-identity changes.
+identity changes. The provider applies the server's successful receipt subset before the graph
+query reconciles. A selected Task moved outside the current Project filter therefore exposes its
+new Project to the next Properties command instead of reusing the stale visible projection. Undo
+and redo project the narrowed replay receipt in their respective directions.
 
 The Task editor includes status, priority, assignee, Project, Program, milestone, cycle, Labels,
 anticipated start date, due date, and estimate. The Project editor includes status, health,
@@ -201,8 +221,14 @@ states **Properties supports at most 500 selected objects.** and disables every 
 
 One controller in the canvas command context owns Properties visibility and focus return. The
 floating button and the node context-menu command call that controller, so both open the same
-editor and focus its heading. Closing returns focus to the connected invoking control when one
-still exists.
+editor. The shared Radix dialog traps focus, assigns the heading and description, closes on Escape,
+and focuses its heading on open. The canvas controller restores focus to the connected invoking
+control when one still exists.
+
+Roster-backed controls never interpret a failed query as an empty roster. The editor shows
+application-owned error copy with a retry action and disables only controls whose source failed.
+Status, estimation, and fiscal-calendar settings expose their own retry states. Other loaded
+properties remain editable while one source is unavailable.
 
 The selection bar does not wrap its actions. The editor stays within the viewport, bounds its
 height, and scrolls only its property body. The heading labels the editor dialog, every property has

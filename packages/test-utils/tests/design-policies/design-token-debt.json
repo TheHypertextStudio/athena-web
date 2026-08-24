@@ -176,9 +176,6 @@
   "apps/web/src/components/calendar/item-drawer/core-fields-form.tsx": {
     "raw-type-utility": 9
   },
-  "apps/web/src/components/canvas/bulk-actions-bar.tsx": {
-    "shadow-outside-overlay": 1
-  },
   "apps/web/src/components/canvas/group-node.tsx": {
     "raw-type-utility": 2
   },

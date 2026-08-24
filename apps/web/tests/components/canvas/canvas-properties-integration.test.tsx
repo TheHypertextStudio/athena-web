@@ -35,11 +35,16 @@ vi.mock('@/components/pickers/use-composer-options', () => ({
     cycles: [],
     milestones: [],
     loading: false,
+    error: null,
+    failedKinds: new Set(),
+    retry: vi.fn(),
   }),
 }));
 vi.mock('@/components/statuses/status-registry', () => ({
   useStatusRegistry: () => ({
     loaded: true,
+    error: null,
+    retry: vi.fn(),
     statusesFor: () => [
       { key: 'planned', name: 'Planned', category: 'backlog', description: null },
       { key: 'active', name: 'Active', category: 'started', description: null },
@@ -47,10 +52,15 @@ vi.mock('@/components/statuses/status-registry', () => ({
   }),
 }));
 vi.mock('@/lib/use-estimation-scale', () => ({
-  useEstimationScale: () => ({ scale: 'none', loading: false }),
+  useEstimationScale: () => ({ scale: 'none', loading: false, error: null, retry: vi.fn() }),
 }));
 vi.mock('@/lib/use-fiscal-year-start-month', () => ({
-  useFiscalYearStartMonth: () => ({ fiscalYearStartMonth: 0, loading: false, error: null }),
+  useFiscalYearStartMonth: () => ({
+    fiscalYearStartMonth: 0,
+    loading: false,
+    error: null,
+    retry: vi.fn(),
+  }),
 }));
 
 import BulkActionsBar from '@/components/canvas/bulk-actions-bar';
@@ -228,6 +238,10 @@ describe('canvas retained Properties integration', () => {
       expect(execute).toHaveBeenCalledTimes(2);
     });
 
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Properties' })).toBeNull();
+    });
     fireEvent.click(screen.getByRole('button', { name: 'Clear selection' }));
     await waitFor(() => {
       expect(screen.queryByText('1 selected')).toBeNull();
@@ -270,6 +284,27 @@ describe('canvas retained Properties integration', () => {
       expect(screen.getByRole('heading', { name: 'Properties' })).toHaveFocus();
     });
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-    await waitFor(() => expect(node).toHaveFocus());
+    await waitFor(() => {
+      expect(node).toHaveFocus();
+    });
+  });
+
+  it('closes Properties with Escape and restores focus to its toolbar opener', async () => {
+    render(<Harness scopeKey="projects:all" items={[projectRef]} snapshots={[projectSnapshot]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Select Project' }));
+    const opener = screen.getByRole('button', { name: 'Properties' });
+    opener.focus();
+    fireEvent.click(opener);
+
+    const dialog = await screen.findByRole('dialog', { name: 'Properties' });
+    expect(screen.getByRole('heading', { name: 'Properties' })).toHaveFocus();
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Properties' })).toBeNull();
+    });
+    await waitFor(() => {
+      expect(opener).toHaveFocus();
+    });
   });
 });

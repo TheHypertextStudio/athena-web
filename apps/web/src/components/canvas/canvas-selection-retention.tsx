@@ -15,7 +15,18 @@ import {
 import { SelectionProvider, useSelection } from '@/components/selection';
 import { objectKey, type CanvasPropertySnapshot, type ObjectRef } from '@/lib/actions';
 
-const CanvasPropertySnapshotsContext = createContext<readonly CanvasPropertySnapshot[] | null>(
+import {
+  applyCanvasReceiptToSnapshots,
+  type CanvasReceiptDirection,
+} from './canvas-retained-snapshots';
+import type { ObjectCommandReceipt } from '@docket/types';
+
+interface CanvasPropertySnapshotsContextValue {
+  readonly snapshots: readonly CanvasPropertySnapshot[];
+  readonly applyReceipt: (receipt: ObjectCommandReceipt, direction: CanvasReceiptDirection) => void;
+}
+
+const CanvasPropertySnapshotsContext = createContext<CanvasPropertySnapshotsContextValue | null>(
   null,
 );
 
@@ -89,7 +100,7 @@ function ScopedCanvasSelectionRetention({
     [items, retainedObjects],
   );
   const availableSnapshots = useMemo(
-    () => mergeByObjectKey(propertySnapshots, retainedSnapshots),
+    () => mergeByObjectKey(retainedSnapshots, propertySnapshots),
     [propertySnapshots, retainedSnapshots],
   );
 
@@ -113,11 +124,21 @@ function ScopedCanvasSelectionRetention({
     },
     [propertySnapshots],
   );
+  const applyReceipt = useCallback(
+    (receipt: ObjectCommandReceipt, direction: CanvasReceiptDirection): void => {
+      setRetainedSnapshots((current) => applyCanvasReceiptToSnapshots(current, receipt, direction));
+    },
+    [],
+  );
+  const snapshotContext = useMemo(
+    () => ({ snapshots: availableSnapshots, applyReceipt }),
+    [applyReceipt, availableSnapshots],
+  );
 
   return (
     <SelectionProvider items={selectionItems} surfaceId={surfaceId} organizationId={organizationId}>
       <RetentionTracker currentSnapshots={propertySnapshots} onSelection={retainSelection} />
-      <CanvasPropertySnapshotsContext.Provider value={availableSnapshots}>
+      <CanvasPropertySnapshotsContext.Provider value={snapshotContext}>
         {children}
       </CanvasPropertySnapshotsContext.Provider>
     </SelectionProvider>
@@ -139,10 +160,17 @@ export function CanvasSelectionRetentionProvider({
 
 /** Read the current and retained canvas property snapshots. */
 export function useCanvasPropertySnapshots(): readonly CanvasPropertySnapshot[] {
-  return useContext(CanvasPropertySnapshotsContext) ?? [];
+  return useContext(CanvasPropertySnapshotsContext)?.snapshots ?? [];
 }
 
 /** Read retained canvas property snapshots when the canvas boundary is mounted. */
 export function useOptionalCanvasPropertySnapshots(): readonly CanvasPropertySnapshot[] | null {
-  return useContext(CanvasPropertySnapshotsContext);
+  return useContext(CanvasPropertySnapshotsContext)?.snapshots ?? null;
+}
+
+/** Apply a successful command receipt when the caller is mounted inside a retention boundary. */
+export function useOptionalCanvasSnapshotReceiptApplier():
+  | CanvasPropertySnapshotsContextValue['applyReceipt']
+  | null {
+  return useContext(CanvasPropertySnapshotsContext)?.applyReceipt ?? null;
 }

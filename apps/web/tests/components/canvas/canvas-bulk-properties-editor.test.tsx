@@ -54,7 +54,7 @@ vi.mock('@/components/canvas/canvas-command-context', async () => {
         },
         closeProperties: () => {
           setPropertiesOpen(false);
-          invoker.current?.focus();
+          queueMicrotask(() => invoker.current?.focus());
         },
       };
     },
@@ -86,11 +86,16 @@ vi.mock('@/components/pickers/use-composer-options', () => ({
     cycles: [{ id: 'cycle-1', displayName: 'Cycle 1', teamId: 'team-1' }],
     milestones: [{ id: 'milestone-1', name: 'Beta', projectId: 'project-1' }],
     loading: false,
+    error: null,
+    failedKinds: new Set(),
+    retry: vi.fn(),
   }),
 }));
 vi.mock('@/components/statuses/status-registry', () => ({
   useStatusRegistry: () => ({
     loaded: true,
+    error: null,
+    retry: vi.fn(),
     statusesFor: (kind: string) =>
       kind === 'task'
         ? [
@@ -104,10 +109,20 @@ vi.mock('@/components/statuses/status-registry', () => ({
   }),
 }));
 vi.mock('@/lib/use-estimation-scale', () => ({
-  useEstimationScale: () => ({ scale: 'fibonacci', loading: false }),
+  useEstimationScale: () => ({
+    scale: 'fibonacci',
+    loading: false,
+    error: null,
+    retry: vi.fn(),
+  }),
 }));
 vi.mock('@/lib/use-fiscal-year-start-month', () => ({
-  useFiscalYearStartMonth: () => ({ fiscalYearStartMonth: 0, loading: false, error: null }),
+  useFiscalYearStartMonth: () => ({
+    fiscalYearStartMonth: 0,
+    loading: false,
+    error: null,
+    retry: vi.fn(),
+  }),
 }));
 
 import BulkActionsBar from '@/components/canvas/bulk-actions-bar';
@@ -496,6 +511,6 @@ describe('canvas bulk Properties editor', () => {
       expect(screen.getByRole('heading', { name: 'Properties' })).toHaveFocus();
     });
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-    expect(trigger).toHaveFocus();
+    await waitFor(() => expect(trigger).toHaveFocus());
   });
 });

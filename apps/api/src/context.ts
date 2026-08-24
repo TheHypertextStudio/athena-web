@@ -4,6 +4,8 @@
 import type { auth } from '@docket/auth';
 import type { RequestIdVariables } from 'hono/request-id';
 
+import type { IdempotencyClaim } from './lib/idempotency';
+
 /** The Better Auth session result (`{ session, user }` or null). */
 export type AuthSession = Awaited<ReturnType<typeof auth.api.getSession>>;
 
@@ -43,5 +45,9 @@ export interface AppEnv {
     actorCtx: ActorCtx;
     /** The service-operator staff context (set on `/admin/*`). */
     staffCtx: StaffCtx;
+    /** The caller-owned retry record claimed by the idempotency middleware. */
+    idempotencyClaim?: IdempotencyClaim;
+    /** Whether the route completed that retry record inside its domain transaction. */
+    idempotencyCompleted?: boolean;
   };
 }

@@ -28,7 +28,7 @@ import {
   type ObjectCommandRequest as ObjectCommandRequestValue,
   type ObjectCommandValue,
 } from '@docket/types';
-import { canActor, canActorBatch, type Capability } from '@docket/authz';
+import { canActor, canActorBatch, type Capability, type ResourceKind } from '@docket/authz';
 import type { DateResolution } from '@docket/work/planning-timeframe';
 import { and, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -44,6 +44,12 @@ import {
   ValidationError,
 } from '../error';
 import { deferAfterResponse } from '../lib/after-response';
+import { completeIdempotencyInTransaction, type IdempotencyClaim } from '../lib/idempotency';
+import {
+  enqueueObjectCommandEffectJob,
+  processObjectCommandEffectJobs,
+  type ObjectCommandEffect,
+} from '../lib/object-command-effects';
 import { assertPlanningDateRange, planningDatePatch } from '../lib/planning-timeframe';
 import { applyExclusivity, resolveLabelCatalog, type ResolvedLabel } from '../lib/labels';
 import { ok } from '../lib/ok';
@@ -52,7 +58,6 @@ import { MAX_OBJECT_COMMAND_BYTES } from '../lib/http-limits';
 import { rawResultRowCount } from '../lib/raw-result';
 import { serializableTx } from '../lib/serializable-tx';
 import { zJson } from '../lib/validate';
-import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 import {
   edgeKey,
   objectCommandChangeSetId,
@@ -60,19 +65,13 @@ import {
   type RecordedChange,
 } from '../mcp/change-set';
 import { resolveContainerStatus, resolveTaskStatus } from '../lib/work-status';
-import {
-  finishTaskStateTransition,
-  writeTaskStateTransition,
-  type TaskStateMutation,
-} from '../lib/task-state';
+import type { TaskStateMutation } from '../lib/task-state';
 import {
   diffTaskFields,
-  finishTaskChanges,
   resolveTaskChangeLabelGroups,
   writeTaskChangeGroups,
   type RecordTaskChangesInput,
 } from '../lib/task-audit';
-import { emitEvent } from './event-emit';
 
 type CommandEntry = ObjectCommandReceipt['entries'][number];
 
@@ -362,12 +361,10 @@ interface CommandExecution {
   readonly effects: CommandEffects;
 }
 
-function scheduleCommandEffects(
-  orgId: string,
-  actorId: string,
+function objectCommandEffects(
   request: ObjectCommandRequestValue,
   execution: CommandExecution,
-): void {
+): ObjectCommandEffect[] {
   const { result, effects } = execution;
   const changedIds = new Set(result.receipt.entries.map((entry) => entry.objectId));
   const archivedById = new Map<string, boolean>();
@@ -377,55 +374,33 @@ function scheduleCommandEffects(
       'direction' in request && request.direction === 'undo' ? entry.before : entry.after;
     archivedById.set(entry.objectId, target !== null);
   }
-  if (
-    changedIds.size === 0 &&
-    effects.taskStateMutations.length === 0 &&
-    effects.taskFieldChanges.length === 0 &&
-    effects.projectStatusRows.length === 0
-  ) {
-    return;
-  }
+  return [
+    ...effects.taskStateMutations.map(
+      (mutation): ObjectCommandEffect => ({ kind: 'task_state', mutation }),
+    ),
+    ...effects.taskFieldChanges.map(
+      (change): ObjectCommandEffect => ({ kind: 'task_fields', change }),
+    ),
+    ...effects.projectStatusRows.map(
+      (row): ObjectCommandEffect => ({
+        kind: 'project_status',
+        project: { id: row.id, name: row.name, status: row.status },
+      }),
+    ),
+    ...[...changedIds].map(
+      (entityId): ObjectCommandEffect => ({
+        kind: 'entity_write',
+        sourceTable: result.receipt.objectKind,
+        entityId,
+        operation: archivedById.get(entityId) === true ? 'delete' : 'upsert',
+      }),
+    ),
+  ];
+}
+
+function scheduleCommandEffects(): void {
   deferAfterResponse('object-command-consequences', async () => {
-    const work: (() => Promise<void>)[] = [
-      ...effects.taskStateMutations.map(
-        (mutation) => () => finishTaskStateTransition({ actorId, enqueueSearch: false }, mutation),
-      ),
-      ...effects.taskFieldChanges.flatMap((change) => [
-        () => finishTaskChanges(change),
-        ...(change.assignmentChanged
-          ? [
-              () =>
-                emitEvent({
-                  organizationId: change.organizationId,
-                  kind: 'assignment',
-                  actorId,
-                  title: change.title,
-                  subject: { type: 'task', id: change.taskId, title: change.title },
-                }),
-            ]
-          : []),
-      ]),
-      ...effects.projectStatusRows.map(
-        (row) => () =>
-          emitEvent({
-            organizationId: orgId,
-            kind: 'status_change',
-            actorId,
-            title: row.name,
-            subject: { type: 'project', id: row.id, title: row.name },
-            detail: { schema: 'docket.state_change', fromState: null, toState: row.status },
-          }),
-      ),
-      ...[...changedIds].map(
-        (id) => () =>
-          archivedById.get(id) === true
-            ? enqueueSearchDelete(orgId, result.receipt.objectKind, id)
-            : enqueueSearchUpsert(orgId, result.receipt.objectKind, id),
-      ),
-    ];
-    for (let offset = 0; offset < work.length; offset += 10) {
-      await Promise.all(work.slice(offset, offset + 10).map((run) => run()));
-    }
+    await processObjectCommandEffectJobs({ limit: 10 });
   });
 }
 
@@ -433,14 +408,14 @@ async function assertResourceCapability(
   database: Dbh,
   orgId: string,
   actorId: string,
-  kind: 'task' | 'project',
+  kind: ResourceKind,
   id: string,
   required: Capability,
 ): Promise<void> {
   const result = await canActor(actorId, required, { kind, id, orgId }, database);
   if (result.allow) return;
   if (result.effectiveCapability === null)
-    throw new NotFoundError(`${kind === 'task' ? 'Task' : 'Project'} not found`);
+    throw new NotFoundError(`${kind.charAt(0).toUpperCase()}${kind.slice(1)} not found`);
   throw new CapabilityError();
 }
 
@@ -519,6 +494,140 @@ async function taskParentWouldCycle(
   return rawResultRowCount(result) > 0;
 }
 
+async function taskParentWouldCycleAny(
+  database: Pick<typeof db, 'execute'>,
+  orgId: string,
+  taskIds: readonly string[],
+  parentId: string,
+): Promise<boolean> {
+  const ids = sql.join(
+    taskIds.map((id) => sql`${id}`),
+    sql`, `,
+  );
+  const result = await database.execute(sql`
+    WITH RECURSIVE descendants AS (
+      SELECT id FROM task WHERE organization_id = ${orgId} AND id IN (${ids})
+      UNION
+      SELECT child.id FROM task child
+        JOIN descendants parent ON child.parent_task_id = parent.id
+        WHERE child.organization_id = ${orgId}
+    )
+    SELECT 1 AS hit FROM descendants WHERE id = ${parentId} LIMIT 1
+  `);
+  return rawResultRowCount(result) > 0;
+}
+
+async function updateTaskStatuses(
+  tx: Tx,
+  orgId: string,
+  writes: readonly {
+    readonly id: string;
+    readonly patch: Record<string, unknown>;
+  }[],
+): Promise<(typeof task.$inferSelect)[]> {
+  if (writes.length === 0) return [];
+  const payload = JSON.stringify(
+    writes.map((write) => ({
+      id: write.id,
+      state: write.patch['state'],
+      status_id: write.patch['statusId'],
+      completed_at: write.patch['completedAt'],
+      canceled_at: write.patch['canceledAt'],
+    })),
+  );
+  const patches = sql`jsonb_to_recordset(${payload}::jsonb)
+    AS status_patch(id text, state text, status_id text, completed_at timestamp, canceled_at timestamp)`;
+  return tx
+    .update(task)
+    .set({
+      state: sql`status_patch.state`,
+      statusId: sql`status_patch.status_id`,
+      completedAt: sql`status_patch.completed_at`,
+      canceledAt: sql`status_patch.canceled_at`,
+    })
+    .from(patches)
+    .where(
+      and(
+        eq(task.organizationId, orgId),
+        isNull(task.archivedAt),
+        sql`${task.id} = status_patch.id`,
+      ),
+    )
+    .returning();
+}
+
+const REPLAY_INTEGER_PROPERTIES = new Set([
+  'estimate',
+  'startDateFiscalYearStartMonth',
+  'targetDateFiscalYearStartMonth',
+]);
+const REPLAY_TIMESTAMP_PROPERTIES = new Set([
+  'startDate',
+  'dueDate',
+  'targetDate',
+  'archivedAt',
+  'completedAt',
+  'canceledAt',
+]);
+
+function replayPatchSource(
+  kind: 'task' | 'project',
+  updates: readonly { readonly id: string; readonly patch: Record<string, unknown> }[],
+  properties: readonly string[],
+): ReturnType<typeof sql> {
+  const definitions = sql.join(
+    [
+      sql`${sql.identifier('id')} text`,
+      ...properties.map((property) => {
+        const type =
+          property === 'priority'
+            ? sql.raw('task_priority')
+            : property === 'health'
+              ? sql.raw('health')
+              : ['startDateResolution', 'targetDateResolution'].includes(property)
+                ? sql.raw('planning_date_resolution')
+                : REPLAY_INTEGER_PROPERTIES.has(property)
+                  ? sql.raw('integer')
+                  : REPLAY_TIMESTAMP_PROPERTIES.has(property)
+                    ? sql.raw('timestamp')
+                    : sql.raw('text');
+        return sql`${sql.identifier(property)} ${type}`;
+      }),
+    ],
+    sql`, `,
+  );
+  return sql`jsonb_to_recordset(${JSON.stringify(
+    updates.map((update) => ({ id: update.id, ...update.patch })),
+  )}::jsonb) AS replay_patch(${definitions})`;
+}
+
+async function updateReplayObjects(
+  tx: Tx,
+  orgId: string,
+  kind: 'task' | 'project',
+  updates: readonly { readonly id: string; readonly patch: Record<string, unknown> }[],
+): Promise<readonly (typeof task.$inferSelect | typeof project.$inferSelect)[]> {
+  if (updates.length === 0) return [];
+  const properties = [...new Set(updates.flatMap((update) => Object.keys(update.patch)))];
+  const patch = Object.fromEntries(
+    properties.map((property) => [property, sql`replay_patch.${sql.identifier(property)}`]),
+  );
+  const source = replayPatchSource(kind, updates, properties);
+  return kind === 'task'
+    ? tx
+        .update(task)
+        .set(patch)
+        .from(source)
+        .where(and(eq(task.organizationId, orgId), sql`${task.id} = replay_patch.id`))
+        .returning()
+    : tx
+        .update(project)
+        .set(patch)
+        .from(source)
+        .where(and(eq(project.organizationId, orgId), sql`${project.id} = replay_patch.id`))
+        .returning();
+}
+
 async function assertActiveProject(database: Dbh, orgId: string, id: string | null): Promise<void> {
   if (id === null) return;
   const rows = await database
@@ -550,6 +659,31 @@ async function assertMilestoneForProject(
     .limit(1);
   if (!rows[0]) throw new NotFoundError('Milestone not found');
   if (rows[0].projectId !== projectId) {
+    throw ownedValidation("Milestone must belong to the task's project", ['operation', 'value']);
+  }
+}
+
+async function assertMilestonesRemainInProject(
+  database: Dbh,
+  orgId: string,
+  milestoneIds: readonly string[],
+  projectId: string | null,
+): Promise<void> {
+  const ids = [...new Set(milestoneIds)];
+  if (ids.length === 0) return;
+  const rows = await database
+    .select({ id: milestone.id, projectId: milestone.projectId })
+    .from(milestone)
+    .innerJoin(project, eq(milestone.projectId, project.id))
+    .where(
+      and(
+        inArray(milestone.id, ids),
+        eq(project.organizationId, orgId),
+        isNull(project.archivedAt),
+      ),
+    );
+  if (rows.length !== ids.length) throw new NotFoundError('Milestone not found');
+  if (rows.some((row) => row.projectId !== projectId)) {
     throw ownedValidation("Milestone must belong to the task's project", ['operation', 'value']);
   }
 }
@@ -595,6 +729,7 @@ async function assertActiveHumanProjectLead(
 async function validateReferences(
   database: Dbh,
   orgId: string,
+  actorId: string,
   command: ObjectCommandIn,
   rows: readonly (typeof task.$inferSelect | typeof project.$inferSelect)[],
 ): Promise<void> {
@@ -603,27 +738,84 @@ async function validateReferences(
     if (command.objectKind === 'task') {
       if (op.property === 'assigneeId')
         await assertReference(database, actor, orgId, op.value, 'Assignee not found');
-      if (op.property === 'projectId') await assertActiveProject(database, orgId, op.value);
-      if (op.property === 'programId')
+      if (op.property === 'projectId') {
+        await assertActiveProject(database, orgId, op.value);
+        if (op.value !== null) {
+          await assertResourceCapability(
+            database,
+            orgId,
+            actorId,
+            'project',
+            op.value,
+            'contribute',
+          );
+        }
+      }
+      if (op.property === 'programId') {
         await assertReference(database, program, orgId, op.value, 'Program not found');
+        if (op.value !== null) {
+          await assertResourceCapability(
+            database,
+            orgId,
+            actorId,
+            'program',
+            op.value,
+            'contribute',
+          );
+        }
+      }
       if (op.property === 'cycleId')
         await assertReference(database, cycle, orgId, op.value, 'Cycle not found');
       if (op.property === 'milestoneId') {
-        for (const row of rows as readonly (typeof task.$inferSelect)[]) {
-          await assertMilestoneForProject(database, orgId, op.value, row.projectId);
+        if (op.value !== null) {
+          const projectIds = new Set(
+            (rows as readonly (typeof task.$inferSelect)[]).map((row) => row.projectId),
+          );
+          if (projectIds.size !== 1) {
+            throw ownedValidation("Milestone must belong to the task's project", [
+              'operation',
+              'value',
+            ]);
+          }
+          await assertMilestoneForProject(
+            database,
+            orgId,
+            op.value,
+            projectIds.values().next().value ?? null,
+          );
         }
       }
       if (op.property === 'projectId') {
-        for (const row of rows as readonly (typeof task.$inferSelect)[]) {
-          await assertMilestoneForProject(database, orgId, row.milestoneId, op.value);
-        }
+        await assertMilestonesRemainInProject(
+          database,
+          orgId,
+          (rows as readonly (typeof task.$inferSelect)[])
+            .map((row) => row.milestoneId)
+            .filter((id): id is string => id !== null),
+          op.value,
+        );
       }
     } else {
       if (op.property === 'leadId') await assertActiveHumanProjectLead(database, orgId, op.value);
-      if (op.property === 'teamId')
+      if (op.property === 'teamId') {
         await assertReference(database, team, orgId, op.value, 'Team not found');
-      if (op.property === 'programId')
+        if (op.value !== null) {
+          await assertResourceCapability(database, orgId, actorId, 'team', op.value, 'contribute');
+        }
+      }
+      if (op.property === 'programId') {
         await assertReference(database, program, orgId, op.value, 'Program not found');
+        if (op.value !== null) {
+          await assertResourceCapability(
+            database,
+            orgId,
+            actorId,
+            'program',
+            op.value,
+            'contribute',
+          );
+        }
+      }
     }
   }
   if (op.type === 'add_association' || op.type === 'remove_association') {
@@ -644,6 +836,7 @@ async function executeForward(
   orgId: string,
   actorId: string,
   command: ObjectCommandIn,
+  idempotencyClaim?: IdempotencyClaim,
 ): Promise<CommandExecution> {
   const apply = async (tx: Tx): Promise<CommandExecution> => {
     const effects: CommandEffects = {
@@ -687,7 +880,7 @@ async function executeForward(
             ? 'manage'
             : 'contribute',
     );
-    await validateReferences(tx, orgId, command, rows);
+    await validateReferences(tx, orgId, actorId, command, rows);
 
     const entries: CommandEntry[] = [];
     const audit: RecordedChange[] = [];
@@ -722,26 +915,34 @@ async function executeForward(
           );
         if (!parents[0]) throw new NotFoundError('Task not found');
         await assertResourceCapability(tx, orgId, actorId, 'task', parents[0].id, 'contribute');
-        for (const id of command.objectIds) {
-          if (id === op.parentId)
-            throw ownedValidation('A task cannot be its own parent', ['operation', 'parentId']);
-          if (await taskParentWouldCycle(tx, orgId, id, op.parentId))
-            throw new ConflictError('Task hierarchy would contain a cycle');
+        if (new Set<string>(command.objectIds).has(op.parentId)) {
+          throw ownedValidation('A task cannot be its own parent', ['operation', 'parentId']);
+        }
+        if (await taskParentWouldCycleAny(tx, orgId, command.objectIds, op.parentId)) {
+          throw new ConflictError('Task hierarchy would contain a cycle');
         }
       }
       if (command.objectKind === 'task') {
+        const taskRows = rows as (typeof task.$inferSelect)[];
+        const statusByTeam = new Map<string, Awaited<ReturnType<typeof resolveTaskStatus>>>();
+        if (property === 'state') {
+          if (typeof value !== 'string') throw ownedValidation('Task state must be a string');
+          for (const teamId of new Set(taskRows.map((row) => row.teamId))) {
+            statusByTeam.set(teamId, await resolveTaskStatus(orgId, teamId, value, 'state', tx));
+          }
+        }
         const writes: {
           id: string;
           patch: Record<string, unknown>;
           before: typeof task.$inferSelect;
         }[] = [];
-        for (const row of rows as (typeof task.$inferSelect)[]) {
+        for (const row of taskRows) {
           const patch: Record<string, unknown> = {
             [property]: dbValue(property, normalizeProperty(property, value)),
           };
           if (property === 'state') {
-            if (typeof value !== 'string') throw ownedValidation('Task state must be a string');
-            const status = await resolveTaskStatus(orgId, row.teamId, value, 'state', tx);
+            const status = statusByTeam.get(row.teamId);
+            if (!status) throw new NotFoundError('Task status not found');
             patch['state'] = status.state;
             patch['statusId'] = status.statusId;
             patch['completedAt'] = status.completedAt;
@@ -796,33 +997,44 @@ async function executeForward(
           before: typeof task.$inferSelect;
           after: typeof task.$inferSelect;
         }[] = [];
+        const updatedRows =
+          property === 'state'
+            ? await updateTaskStatuses(tx, orgId, writes)
+            : writes.length === 0
+              ? []
+              : await tx
+                  .update(task)
+                  .set(writes[0]?.patch ?? {})
+                  .where(
+                    and(
+                      eq(task.organizationId, orgId),
+                      inArray(
+                        task.id,
+                        writes.map((write) => write.id),
+                      ),
+                    ),
+                  )
+                  .returning();
+        if (updatedRows.length !== writes.length) {
+          throw new ConflictError('Task changed during update');
+        }
+        const updatedById = new Map(updatedRows.map((row) => [row.id, row]));
         for (const write of writes) {
+          const updated = updatedById.get(write.id);
+          if (!updated) throw new ConflictError('Task changed during update');
           if (property === 'state') {
-            const mutation = await writeTaskStateTransition(tx, {
-              before: write.before,
-              statusId: String(write.patch['statusId']),
-              state: String(write.patch['state']),
-              completedAt: (write.patch['completedAt'] as Date | null) ?? null,
-              canceledAt: (write.patch['canceledAt'] as Date | null) ?? null,
-            });
-            if (!mutation) throw new ConflictError('Task changed during status update');
-            effects.taskStateMutations.push(mutation);
+            effects.taskStateMutations.push({ before: write.before, after: updated });
           } else {
-            const [updated] = await tx
-              .update(task)
-              .set(write.patch)
-              .where(eq(task.id, write.id))
-              .returning();
-            if (!updated) throw new ConflictError('Task changed during update');
             changedTasks.push({ before: write.before, after: updated });
           }
         }
+        const auditedTasks = [...effects.taskStateMutations, ...changedTasks];
         const resolvedChanges = await resolveTaskChangeLabelGroups(
           orgId,
-          changedTasks.map(({ before, after }) => diffTaskFields(before, after)),
+          auditedTasks.map(({ before, after }) => diffTaskFields(before, after)),
           tx,
         );
-        const consequences = changedTasks.map(({ before, after }, index) => {
+        const consequences = auditedTasks.map(({ before, after }, index) => {
           const changes = resolvedChanges[index] ?? [];
           const consequence: RecordTaskChangesInput & { readonly assignmentChanged: boolean } = {
             organizationId: orgId,
@@ -848,6 +1060,14 @@ async function executeForward(
           .where(eq(organization.id, orgId))
           .limit(1);
         if (!settings) throw new NotFoundError('Organization not found');
+        const resolvedProjectStatus =
+          property === 'status'
+            ? typeof value !== 'string'
+              ? (() => {
+                  throw ownedValidation('Project status must be a string');
+                })()
+              : await resolveContainerStatus(orgId, 'project', value, 'status', tx)
+            : null;
         for (const row of rows as (typeof project.$inferSelect)[]) {
           if (property === 'startTimeframe' || property === 'targetTimeframe') {
             const timeframe = value as { date: string | null; resolution: DateResolution | null };
@@ -919,10 +1139,9 @@ async function executeForward(
             [property]: dbValue(property, normalize(value)),
           };
           if (property === 'status') {
-            if (typeof value !== 'string') throw ownedValidation('Project status must be a string');
-            const status = await resolveContainerStatus(orgId, 'project', value, 'status', tx);
-            patch['status'] = status.status;
-            patch['statusId'] = status.statusId;
+            if (!resolvedProjectStatus) throw new NotFoundError('Project status not found');
+            patch['status'] = resolvedProjectStatus.status;
+            patch['statusId'] = resolvedProjectStatus.statusId;
           }
           const changedProperties =
             property === 'status' ? (['status', 'statusId'] as const) : ([property] as const);
@@ -950,14 +1169,27 @@ async function executeForward(
           });
           writes.push({ id: row.id, patch, statusChanged: property === 'status' });
         }
-        for (const write of writes) {
-          const [updated] = await tx
-            .update(project)
-            .set(write.patch)
-            .where(eq(project.id, write.id))
-            .returning();
-          if (!updated) throw new ConflictError('Project changed during update');
-          if (write.statusChanged) effects.projectStatusRows.push(updated);
+        const updatedRows =
+          writes.length === 0
+            ? []
+            : await tx
+                .update(project)
+                .set(writes[0]?.patch ?? {})
+                .where(
+                  and(
+                    eq(project.organizationId, orgId),
+                    inArray(
+                      project.id,
+                      writes.map((write) => write.id),
+                    ),
+                  ),
+                )
+                .returning();
+        if (updatedRows.length !== writes.length) {
+          throw new ConflictError('Project changed during update');
+        }
+        if (writes[0]?.statusChanged) {
+          effects.projectStatusRows.push(...updatedRows);
         }
       }
     } else if (op.type === 'add_association' || op.type === 'remove_association') {
@@ -1279,20 +1511,34 @@ async function executeForward(
       summary: command.operation.type.replaceAll('_', ' '),
       changes: audit,
     });
-    return {
-      effects,
-      result: {
-        appliedIds: command.objectIds,
-        conflictingIds: [],
-        deniedIds: [],
-        receipt: {
-          commandId: command.commandId,
-          objectKind: command.objectKind,
-          action: command.operation.type,
-          entries,
-        },
+    const result: z.input<typeof ObjectCommandResult> = {
+      appliedIds: command.objectIds,
+      conflictingIds: [],
+      deniedIds: [],
+      receipt: {
+        commandId: command.commandId,
+        objectKind: command.objectKind,
+        action: command.operation.type,
+        entries,
       },
     };
+    const execution = { effects, result };
+    await enqueueObjectCommandEffectJob(tx, {
+      version: 1,
+      organizationId: orgId,
+      actorId,
+      commandId: command.commandId,
+      occurredAt: new Date().toISOString(),
+      effects: objectCommandEffects(command, execution),
+    });
+    if (idempotencyClaim) {
+      await completeIdempotencyInTransaction(tx, idempotencyClaim, {
+        organizationId: orgId,
+        responseStatus: 200,
+        responseBody: result,
+      });
+    }
+    return execution;
   };
   return serializableTx(apply);
 }
@@ -1674,9 +1920,28 @@ async function assertReplayObjectTarget(
   if (kind === 'task') {
     if (property === 'assigneeId')
       await assertReference(database, actor, orgId, String(target), 'Assignee not found');
-    if (property === 'projectId') await assertActiveProject(database, orgId, String(target));
-    if (property === 'programId')
+    if (property === 'projectId') {
+      await assertActiveProject(database, orgId, String(target));
+      await assertResourceCapability(
+        database,
+        orgId,
+        actorId,
+        'project',
+        String(target),
+        'contribute',
+      );
+    }
+    if (property === 'programId') {
       await assertReference(database, program, orgId, String(target), 'Program not found');
+      await assertResourceCapability(
+        database,
+        orgId,
+        actorId,
+        'program',
+        String(target),
+        'contribute',
+      );
+    }
     if (property === 'cycleId')
       await assertReference(database, cycle, orgId, String(target), 'Cycle not found');
     if (property === 'milestoneId')
@@ -1701,10 +1966,28 @@ async function assertReplayObjectTarget(
     }
   } else {
     if (property === 'leadId') await assertActiveHumanProjectLead(database, orgId, String(target));
-    if (property === 'teamId')
+    if (property === 'teamId') {
       await assertReference(database, team, orgId, String(target), 'Team not found');
-    if (property === 'programId')
+      await assertResourceCapability(
+        database,
+        orgId,
+        actorId,
+        'team',
+        String(target),
+        'contribute',
+      );
+    }
+    if (property === 'programId') {
       await assertReference(database, program, orgId, String(target), 'Program not found');
+      await assertResourceCapability(
+        database,
+        orgId,
+        actorId,
+        'program',
+        String(target),
+        'contribute',
+      );
+    }
   }
 }
 
@@ -1712,6 +1995,7 @@ async function executeReplay(
   orgId: string,
   actorId: string,
   request: Extract<ObjectCommandRequestValue, { direction: string }>,
+  idempotencyClaim?: IdempotencyClaim,
 ): Promise<CommandExecution> {
   const { receipt, direction } = request;
   assertReceiptStatusTupleShape(receipt);
@@ -1785,6 +2069,11 @@ async function executeReplay(
       receipt.objectKind,
       relationEntries,
     );
+    const taskStatusCache = new Map<string, Awaited<ReturnType<typeof resolveTaskStatus>>>();
+    const projectStatusCache = new Map<
+      string,
+      Awaited<ReturnType<typeof resolveContainerStatus>>
+    >();
 
     // Preflight every entry for an object before changing any of them. A composite timeframe emits
     // two receipt entries, and undo must skip both when a collaborator changed either half.
@@ -1839,7 +2128,8 @@ async function executeReplay(
               break;
             }
           } else if (!relationFacts.targetIds.has(`${entry.relation}:${entry.relatedId}`)) {
-            throw ownedValidation('Receipt contains an inaccessible relation target');
+            denied.add(objectId);
+            break;
           }
           if (relationFacts.existing.has(replayRelationKey(entry)) !== expected) {
             conflicting.add(objectId);
@@ -1858,13 +2148,18 @@ async function executeReplay(
       const hasTarget = (property: string): boolean =>
         entries.some((entry) => entry.kind === 'object' && entry.property === property);
       if (receipt.objectKind === 'task' && targetFor('state') !== undefined) {
-        const status = await resolveTaskStatus(
-          orgId,
-          String(row['teamId']),
-          String(targetFor('state')),
-          'state',
-          tx,
-        );
+        const cacheKey = `${String(row['teamId'])}:${String(targetFor('state'))}`;
+        let status = taskStatusCache.get(cacheKey);
+        if (!status) {
+          status = await resolveTaskStatus(
+            orgId,
+            String(row['teamId']),
+            String(targetFor('state')),
+            'state',
+            tx,
+          );
+          taskStatusCache.set(cacheKey, status);
+        }
         if (
           targetFor('state') !== status.state ||
           targetFor('statusId') !== status.statusId ||
@@ -1875,13 +2170,12 @@ async function executeReplay(
         }
       }
       if (receipt.objectKind === 'project' && targetFor('status') !== undefined) {
-        const status = await resolveContainerStatus(
-          orgId,
-          'project',
-          String(targetFor('status')),
-          'status',
-          tx,
-        );
+        const cacheKey = String(targetFor('status'));
+        let status = projectStatusCache.get(cacheKey);
+        if (!status) {
+          status = await resolveContainerStatus(orgId, 'project', cacheKey, 'status', tx);
+          projectStatusCache.set(cacheKey, status);
+        }
         if (targetFor('status') !== status.status || targetFor('statusId') !== status.statusId) {
           throw ownedValidation('Receipt contains an invalid Project status transition');
         }
@@ -1953,152 +2247,111 @@ async function executeReplay(
             (item) => item === undefined || (item.teamId !== null && item.teamId !== teamId),
           )
         ) {
-          throw new NotFoundError('Label not found');
+          denied.add(objectId);
+          continue;
         }
         if (
           applyExclusivity(
             resolved.filter((item): item is NonNullable<typeof item> => item !== undefined),
           ).length !== targetIds.size
         ) {
-          throw ownedValidation('Receipt would violate exclusive label groups');
+          conflicting.add(objectId);
+          continue;
         }
       }
     }
+    const tupleProperties =
+      receipt.objectKind === 'task'
+        ? new Set(['state', 'statusId', 'completedAt', 'canceledAt'])
+        : new Set(['status', 'statusId']);
     const tupleEntries = new Set<CommandEntry>();
+    const tupleUpdates: { id: string; patch: Record<string, unknown> }[] = [];
     for (const [objectId, entries] of entriesByObject) {
       if (conflicting.has(objectId) || denied.has(objectId)) continue;
-      const tupleProperties =
-        receipt.objectKind === 'task'
-          ? new Set(['state', 'statusId', 'completedAt', 'canceledAt'])
-          : new Set(['status', 'statusId']);
       const tuple = entries.filter(
         (entry) => entry.kind === 'object' && tupleProperties.has(entry.property),
       );
       if (tuple.length === 0) continue;
-      const locked = lockedById.get(objectId);
-      if (!locked) {
-        denied.add(objectId);
+      tupleUpdates.push({
+        id: objectId,
+        patch: Object.fromEntries(
+          tuple.map((entry) => {
+            if (entry.kind !== 'object') throw ownedValidation('Invalid status tuple');
+            const target = direction === 'undo' ? entry.before : entry.after;
+            return [entry.property, target];
+          }),
+        ),
+      });
+      for (const entry of tuple) tupleEntries.add(entry);
+    }
+    const tupleRows = await updateReplayObjects(tx, orgId, receipt.objectKind, tupleUpdates);
+    const tupleRowsById = new Map(tupleRows.map((row) => [row.id, row]));
+    for (const update of tupleUpdates) {
+      const updated = tupleRowsById.get(update.id);
+      const before = lockedById.get(update.id);
+      if (!updated || !before) {
+        conflicting.add(update.id);
         continue;
       }
-      const patch = Object.fromEntries(
-        tuple.map((entry) => {
-          if (entry.kind !== 'object') throw ownedValidation('Invalid status tuple');
-          const target = direction === 'undo' ? entry.before : entry.after;
-          return [entry.property, dbValue(entry.property, target)];
-        }),
-      );
       if (receipt.objectKind === 'task') {
-        const before = locked as typeof task.$inferSelect;
-        const mutation = await writeTaskStateTransition(tx, {
-          before,
-          statusId: String(patch['statusId']),
-          state: String(patch['state']),
-          completedAt: (patch['completedAt'] as Date | null) ?? null,
-          canceledAt: (patch['canceledAt'] as Date | null) ?? null,
+        effects.taskStateMutations.push({
+          before: before as typeof task.$inferSelect,
+          after: updated as typeof task.$inferSelect,
         });
-        if (!mutation) {
-          conflicting.add(objectId);
-          continue;
-        }
-        effects.taskStateMutations.push(mutation);
       } else {
-        const [updated] = await tx
-          .update(project)
-          .set(patch)
-          .where(eq(project.id, objectId))
-          .returning();
-        if (!updated) {
-          conflicting.add(objectId);
-          continue;
-        }
-        effects.projectStatusRows.push(updated);
+        effects.projectStatusRows.push(updated as typeof project.$inferSelect);
       }
-      for (const entry of tuple) {
-        tupleEntries.add(entry);
-        successful.push(entry);
-      }
+      successful.push(
+        ...(entriesByObject.get(update.id) ?? []).filter((entry) => tupleEntries.has(entry)),
+      );
     }
-    for (const entry of receipt.entries) {
-      if (tupleEntries.has(entry)) continue;
-      if (conflicting.has(entry.objectId) || denied.has(entry.objectId)) continue;
-      validateReceiptEntryShape(receipt, entry);
-      const expected = direction === 'undo' ? entry.after : entry.before;
-      const target = direction === 'undo' ? entry.before : entry.after;
-      if (entry.kind === 'object') {
-        const row = lockedById.get(entry.objectId);
-        if (!row) {
-          denied.add(entry.objectId);
-          continue;
-        }
-        if (normalizeProperty(entry.property, row[entry.property]) !== expected) {
-          conflicting.add(entry.objectId);
-          continue;
-        }
-        await assertReplayObjectTarget(
-          tx,
-          orgId,
-          actorId,
-          receipt.objectKind,
-          entry.property,
-          target,
-          row,
-        );
-        const patch: Record<string, unknown> = {
-          [entry.property]: dbValue(entry.property, target),
-        };
-        if (receipt.objectKind === 'task' && ['startDate', 'dueDate'].includes(entry.property)) {
-          const nextStart =
-            entry.property === 'startDate'
-              ? (patch['startDate'] as Date | null)
-              : (row['startDate'] as Date | null);
-          const nextDue =
-            entry.property === 'dueDate'
-              ? (patch['dueDate'] as Date | null)
-              : (row['dueDate'] as Date | null);
-          if (nextStart && nextDue && nextDue < nextStart) {
-            conflicting.add(entry.objectId);
-            continue;
-          }
-        }
-        if (
-          receipt.objectKind === 'project' &&
-          ['startDate', 'targetDate'].includes(entry.property)
-        ) {
-          const nextStart =
-            entry.property === 'startDate'
-              ? (patch['startDate'] as Date | null)
-              : (row['startDate'] as Date | null);
-          const nextTarget =
-            entry.property === 'targetDate'
-              ? (patch['targetDate'] as Date | null)
-              : (row['targetDate'] as Date | null);
-          try {
-            assertPlanningDateRange(nextStart, nextTarget);
-          } catch {
-            conflicting.add(entry.objectId);
-            continue;
-          }
-        }
-        const updated = await tx
-          .update(table)
-          .set(patch)
-          .where(eq(table.id, entry.objectId))
-          .returning();
-        if (!updated[0]) {
-          conflicting.add(entry.objectId);
-          continue;
-        }
-        if (receipt.objectKind === 'task') {
-          const before = row as typeof task.$inferSelect;
-          const after = updated[0] as typeof task.$inferSelect;
-          changedTasks.push({ before, after });
-        }
-      } else {
-        relationEntriesToApply.push(entry);
+
+    const objectUpdates: { id: string; patch: Record<string, unknown> }[] = [];
+    for (const [objectId, entries] of entriesByObject) {
+      if (conflicting.has(objectId) || denied.has(objectId)) continue;
+      const objectEntries = entries.filter(
+        (entry) => entry.kind === 'object' && !tupleEntries.has(entry),
+      );
+      if (objectEntries.length === 0) continue;
+      objectUpdates.push({
+        id: objectId,
+        patch: Object.fromEntries(
+          objectEntries.map((entry) => {
+            if (entry.kind !== 'object') throw ownedValidation('Invalid object receipt entry');
+            return [entry.property, direction === 'undo' ? entry.before : entry.after];
+          }),
+        ),
+      });
+    }
+    const objectRows = await updateReplayObjects(tx, orgId, receipt.objectKind, objectUpdates);
+    const objectRowsById = new Map(objectRows.map((row) => [row.id, row]));
+    for (const update of objectUpdates) {
+      const updated = objectRowsById.get(update.id);
+      const before = lockedById.get(update.id);
+      if (!updated || !before) {
+        conflicting.add(update.id);
         continue;
       }
-      successful.push(entry);
+      if (receipt.objectKind === 'task') {
+        changedTasks.push({
+          before: before as typeof task.$inferSelect,
+          after: updated as typeof task.$inferSelect,
+        });
+      }
+      successful.push(
+        ...(entriesByObject.get(update.id) ?? []).filter(
+          (entry) => entry.kind === 'object' && !tupleEntries.has(entry),
+        ),
+      );
     }
+    relationEntriesToApply.push(
+      ...receipt.entries.filter(
+        (entry): entry is ObjectCommandRelationReceiptEntry =>
+          entry.kind === 'relation' &&
+          !conflicting.has(entry.objectId) &&
+          !denied.has(entry.objectId),
+      ),
+    );
     successful.push(
       ...(await applyReplayRelationEntries(
         tx,
@@ -2109,12 +2362,13 @@ async function executeReplay(
         conflicting,
       )),
     );
+    const auditedTasks = [...effects.taskStateMutations, ...changedTasks];
     const resolvedChanges = await resolveTaskChangeLabelGroups(
       orgId,
-      changedTasks.map(({ before, after }) => diffTaskFields(before, after)),
+      auditedTasks.map(({ before, after }) => diffTaskFields(before, after)),
       tx,
     );
-    const taskConsequences = changedTasks.map(({ before, after }, index) => ({
+    const taskConsequences = auditedTasks.map(({ before, after }, index) => ({
       organizationId: orgId,
       taskId: after.id,
       title: after.title,
@@ -2125,15 +2379,29 @@ async function executeReplay(
     await writeTaskChangeGroups(tx, taskConsequences);
     effects.taskFieldChanges.push(...taskConsequences);
     const appliedIds = [...new Set(successful.map((entry) => entry.objectId))];
-    return {
-      effects,
-      result: {
-        appliedIds,
-        conflictingIds: [...conflicting],
-        deniedIds: [...denied],
-        receipt: { ...receipt, entries: successful },
-      },
+    const result: z.input<typeof ObjectCommandResult> = {
+      appliedIds,
+      conflictingIds: [...conflicting],
+      deniedIds: [...denied],
+      receipt: { ...receipt, entries: successful },
     };
+    const execution = { effects, result };
+    await enqueueObjectCommandEffectJob(tx, {
+      version: 1,
+      organizationId: orgId,
+      actorId,
+      commandId: request.commandId,
+      occurredAt: new Date().toISOString(),
+      effects: objectCommandEffects(request, execution),
+    });
+    if (idempotencyClaim) {
+      await completeIdempotencyInTransaction(tx, idempotencyClaim, {
+        organizationId: orgId,
+        responseStatus: 200,
+        responseBody: result,
+      });
+    }
+    return execution;
   };
   return serializableTx(apply);
 }
@@ -2159,11 +2427,13 @@ const objectCommands = new Hono<AppEnv>().post(
     if (key !== request.commandId)
       throw ownedValidation('Idempotency-Key must match commandId', ['commandId']);
     const { orgId, actorId } = c.get('actorCtx');
+    const idempotencyClaim = c.get('idempotencyClaim');
     const execution =
       'direction' in request
-        ? await executeReplay(orgId, actorId, request)
-        : await executeForward(orgId, actorId, request);
-    scheduleCommandEffects(orgId, actorId, request, execution);
+        ? await executeReplay(orgId, actorId, request, idempotencyClaim)
+        : await executeForward(orgId, actorId, request, idempotencyClaim);
+    if (idempotencyClaim) c.set('idempotencyCompleted', true);
+    scheduleCommandEffects();
     return ok(c, ObjectCommandResult, execution.result);
   },
 );

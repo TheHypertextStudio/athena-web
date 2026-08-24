@@ -25,7 +25,7 @@ describe('POST /cron/search-index', () => {
 
   it('processes pending search-index jobs when authorized', async () => {
     const { db, schema, cron } = await setup();
-    const { orgId, teamId, statusId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const taskRow = one(
       await db
         .insert(schema.task)
@@ -47,6 +47,26 @@ describe('POST /cron/search-index', () => {
       operation: 'upsert',
       reason: 'entity_write',
     });
+    await db.insert(schema.objectCommandEffectJob).values({
+      organizationId: orgId,
+      actorId: humanActorId,
+      commandId: `cron-command-effect-${taskRow.id}`,
+      payload: {
+        version: 1,
+        organizationId: orgId,
+        actorId: humanActorId,
+        commandId: `cron-command-effect-${taskRow.id}`,
+        occurredAt: new Date().toISOString(),
+        effects: [
+          {
+            kind: 'entity_write',
+            sourceTable: 'task',
+            entityId: taskRow.id,
+            operation: 'upsert',
+          },
+        ],
+      },
+    });
 
     const res = await cron.request('/search-index', { method: 'POST', headers: AUTH });
 
@@ -58,5 +78,11 @@ describe('POST /cron/search-index', () => {
       .from(schema.searchDocument)
       .where(eq(schema.searchDocument.entityId, taskRow.id));
     expect(docs).toHaveLength(1);
+    expect(
+      await db
+        .select({ status: schema.objectCommandEffectJob.status })
+        .from(schema.objectCommandEffectJob)
+        .where(eq(schema.objectCommandEffectJob.commandId, `cron-command-effect-${taskRow.id}`)),
+    ).toEqual([{ status: 'succeeded' }]);
   });
 });

@@ -687,6 +687,13 @@
       "when": 1787549367991,
       "tag": "0097_remove_initiative_project_count",
       "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "7",
+      "when": 1787572175063,
+      "tag": "0098_chief_virginia_dare",
+      "breakpoints": true
     }
   ]
 }

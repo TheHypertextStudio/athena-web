@@ -4,6 +4,10 @@
 import { Ellipsis, Folder, RefreshCw, Trash2, TuneRounded, Undo } from '@docket/ui/icons';
 import {
   Button,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -11,7 +15,7 @@ import {
   Surface,
 } from '@docket/ui/primitives';
 import { Panel } from '@xyflow/react';
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
 
 import type { CanvasPropertySnapshot } from '@/lib/actions';
 
@@ -34,12 +38,6 @@ export default function BulkActionsBar({
   const taskActions = useCanvasActions();
   const propertiesHeadingRef = useRef<HTMLHeadingElement>(null);
   const retainedSnapshots = useOptionalCanvasPropertySnapshots();
-
-  useEffect(() => {
-    if (commands?.propertiesOpen === true) {
-      propertiesHeadingRef.current?.focus();
-    }
-  }, [commands?.propertiesOpen]);
 
   if (commands === null || commands.selectedObjects.length === 0) return null;
   const count = commands.selectedObjects.length;
@@ -134,50 +132,60 @@ export default function BulkActionsBar({
           </DropdownMenu>
         </Surface>
       </Panel>
-      {commands.propertiesOpen ? (
-        <Panel position="top-center" className="!mt-14">
-          <Surface
-            tone="raised"
-            pad="tight"
-            className="flex max-h-[min(42rem,calc(100vh-6rem))] w-96 max-w-[calc(100vw-1rem)] flex-col"
-            data-testid="canvas-properties-editor"
-            role="dialog"
-            aria-labelledby="canvas-properties-heading"
-          >
-            <div className="flex shrink-0 items-center justify-between gap-3">
-              <div>
+      <Dialog
+        open={commands.propertiesOpen}
+        onOpenChange={(open) => {
+          if (!open) commands.closeProperties();
+        }}
+      >
+        <DialogContent
+          showClose={false}
+          className="flex max-h-[min(42rem,calc(100vh-2rem))] w-96 max-w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden p-2"
+          data-testid="canvas-properties-editor"
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            propertiesHeadingRef.current?.focus();
+          }}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+          }}
+        >
+          <div className="flex shrink-0 items-center justify-between gap-3">
+            <div>
+              <DialogTitle asChild>
                 <h2
                   ref={propertiesHeadingRef}
-                  id="canvas-properties-heading"
                   className="text-title-small text-on-surface"
                   tabIndex={-1}
                 >
                   Properties
                 </h2>
+              </DialogTitle>
+              <DialogDescription asChild>
                 <p className="text-body-small text-on-surface-variant">
                   Choose a property to change for {String(count)} selected.
                 </p>
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  commands.closeProperties();
-                }}
-              >
-                Close
-              </Button>
+              </DialogDescription>
             </div>
-            <div
-              className="mt-2 min-h-0 flex-1 overflow-y-auto pr-1"
-              data-testid="canvas-properties-body"
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                commands.closeProperties();
+              }}
             >
-              <CanvasPropertiesEditor snapshots={activeSnapshots} />
-            </div>
-          </Surface>
-        </Panel>
-      ) : null}
+              Close
+            </Button>
+          </div>
+          <div
+            className="mt-2 min-h-0 flex-1 overflow-y-auto pr-1"
+            data-testid="canvas-properties-body"
+          >
+            <CanvasPropertiesEditor snapshots={activeSnapshots} />
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

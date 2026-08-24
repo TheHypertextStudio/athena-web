@@ -440,13 +440,29 @@ export async function writeTaskChangeGroups(
   await database.insert(auditEvent).values(rows);
 }
 
+/** Options that keep a retried field-change consequence stable. */
+export interface FinishTaskChangesOptions {
+  /** The command time persisted with the outbox job. */
+  readonly occurredAt?: Date;
+  /** The command identity persisted with the outbox job. */
+  readonly dedupeToken?: string;
+  /** Propagate stream delivery failures so the outbox can retry them. */
+  readonly strict?: boolean;
+}
+
 /** Emit the canonical post-commit stream consequence for recorded Task field changes. */
-export async function finishTaskChanges(input: RecordTaskChangesInput): Promise<void> {
+export async function finishTaskChanges(
+  input: RecordTaskChangesInput,
+  options: FinishTaskChangesOptions = {},
+): Promise<void> {
   await emitFieldChange({
     organizationId: input.organizationId,
     subject: { type: 'task', id: input.taskId, title: input.title },
     actorId: input.actorId,
     changes: input.changes.filter((change) => !SELF_ANNOUNCING_FIELDS.has(change.field)),
+    ...(options.occurredAt && { occurredAt: options.occurredAt }),
+    ...(options.dedupeToken && { dedupeToken: options.dedupeToken }),
+    ...(options.strict && { strict: true }),
   });
 }
 

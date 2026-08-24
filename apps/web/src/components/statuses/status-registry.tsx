@@ -13,7 +13,7 @@
  * loads, and read from memory after that. Fetching them per consumer would put a request behind
  * every picker open, which is exactly the waterfall the composer options used to have.
  */
-import { createContext, useContext, useMemo, type JSX, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useMemo, type JSX, type ReactNode } from 'react';
 
 import type { WorkStatusCategory, WorkStatusEntityType, WorkStatusOut } from '@docket/types';
 import { compareWorkStatusOrder, DEFAULT_WORK_STATUSES } from '@docket/types';
@@ -32,6 +32,10 @@ export type StatusLike = Pick<
 export interface StatusRegistry {
   /** Whether the workspace's own sets have arrived; seeded defaults stand in until they do. */
   readonly loaded: boolean;
+  /** Application-owned error copy when the workspace status set failed to load. */
+  readonly error: string | null;
+  /** Retry the workspace status-set request. */
+  readonly retry: () => void;
   /**
    * One kind of work's set, in board order.
    *
@@ -117,6 +121,9 @@ export function StatusRegistryProvider({
 }: StatusRegistryProviderProps): JSX.Element {
   const query = useApiQuery(statusSetsDef(orgId ?? ''));
   const items = query.data?.items;
+  const retry = useCallback((): void => {
+    void query.refetch();
+  }, [query]);
 
   const value = useMemo<StatusRegistry>(() => {
     const bySet = new Map<WorkStatusEntityType, readonly StatusLike[]>();
@@ -147,6 +154,8 @@ export function StatusRegistryProvider({
       statusesFor(entityType, teamId).find((status) => status.key === key);
     return {
       loaded: items !== undefined,
+      error: query.isError ? 'Could not load statuses.' : null,
+      retry,
       statusesFor,
       statusOf,
       categoryOf: (entityType, key, teamId) =>
@@ -159,7 +168,7 @@ export function StatusRegistryProvider({
         statusesFor(entityType, teamId).find((status) => status.category === category),
       isForked: (teamId) => byTeam.has(teamId),
     };
-  }, [items]);
+  }, [items, query.isError, retry]);
 
   return <StatusRegistryContext.Provider value={value}>{children}</StatusRegistryContext.Provider>;
 }
@@ -186,6 +195,8 @@ export function useStatusRegistry(): StatusRegistry {
 
 const FALLBACK: StatusRegistry = {
   loaded: false,
+  error: null,
+  retry: () => undefined,
   statusesFor: (entityType) => SEEDED[entityType],
   statusOf: (entityType, key) => SEEDED[entityType].find((status) => status.key === key),
   categoryOf: (entityType, key) =>

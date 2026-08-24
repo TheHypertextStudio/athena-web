@@ -81,6 +81,12 @@ export interface ComposerOptions {
   readonly milestones: readonly MilestoneOut[];
   /** Whether any requested list is still loading. */
   readonly loading: boolean;
+  /** Application-owned error copy when any requested option source failed. */
+  readonly error: string | null;
+  /** Requested option kinds whose source query failed. */
+  readonly failedKinds: ReadonlySet<ComposerOptionKind>;
+  /** Retry every requested option source that is currently failed. */
+  readonly retry: () => void;
   /**
    * Load a team's ordered workflow states (the valid task-status set), memoized per team.
    *
@@ -215,6 +221,57 @@ export function useComposerOptions(
     cyclesQ.isLoading ||
     milestonesQ.isLoading ||
     teamsQ.isLoading;
+  const failedKinds = useMemo(() => {
+    const failed = new Set<ComposerOptionKind>();
+    if (membersQ.isError || agentsQ.isError) failed.add('actors');
+    if (projectsQ.isError || projectDisplaysQ.isError) failed.add('projects');
+    if (programsQ.isError) failed.add('programs');
+    if (initiativesQ.isError || initiativeDisplaysQ.isError) failed.add('initiatives');
+    if (labelsQ.isError) failed.add('labels');
+    if (cyclesQ.isError) failed.add('cycles');
+    if (milestonesQ.isError) failed.add('milestones');
+    if (teamsQ.isError) failed.add('teams');
+    return failed;
+  }, [
+    agentsQ.isError,
+    cyclesQ.isError,
+    initiativeDisplaysQ.isError,
+    initiativesQ.isError,
+    labelsQ.isError,
+    membersQ.isError,
+    milestonesQ.isError,
+    programsQ.isError,
+    projectDisplaysQ.isError,
+    projectsQ.isError,
+    teamsQ.isError,
+  ]);
+  const retry = useCallback((): void => {
+    const requests: Promise<unknown>[] = [];
+    if (membersQ.isError) requests.push(membersQ.refetch());
+    if (agentsQ.isError) requests.push(agentsQ.refetch());
+    if (projectsQ.isError) requests.push(projectsQ.refetch());
+    if (projectDisplaysQ.isError) requests.push(projectDisplaysQ.refetch());
+    if (programsQ.isError) requests.push(programsQ.refetch());
+    if (initiativesQ.isError) requests.push(initiativesQ.refetch());
+    if (initiativeDisplaysQ.isError) requests.push(initiativeDisplaysQ.refetch());
+    if (labelsQ.isError) requests.push(labelsQ.refetch());
+    if (cyclesQ.isError) requests.push(cyclesQ.refetch());
+    if (milestonesQ.isError) requests.push(milestonesQ.refetch());
+    if (teamsQ.isError) requests.push(teamsQ.refetch());
+    void Promise.all(requests);
+  }, [
+    agentsQ,
+    cyclesQ,
+    initiativeDisplaysQ,
+    initiativesQ,
+    labelsQ,
+    membersQ,
+    milestonesQ,
+    programsQ,
+    projectDisplaysQ,
+    projectsQ,
+    teamsQ,
+  ]);
 
   const workflowStatesFor = useCallback(
     async (teamId: string | null): Promise<readonly WorkflowState[]> => {
@@ -263,6 +320,9 @@ export function useComposerOptions(
       cycles,
       milestones,
       loading,
+      error: failedKinds.size > 0 ? 'Could not load some property choices.' : null,
+      failedKinds,
+      retry,
       workflowStatesFor,
     }),
     [
@@ -278,6 +338,8 @@ export function useComposerOptions(
       cycles,
       milestones,
       loading,
+      failedKinds,
+      retry,
       workflowStatesFor,
     ],
   );

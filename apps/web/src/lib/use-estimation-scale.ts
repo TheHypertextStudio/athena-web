@@ -1,4 +1,5 @@
 import type { EstimationScale } from '@docket/types';
+import { useCallback } from 'react';
 
 import { api } from './api';
 import { apiQueryOptions, queryKeys, useApiQuery } from './query';
@@ -7,6 +8,10 @@ import { apiQueryOptions, queryKeys, useApiQuery } from './query';
 export interface EstimationScaleState {
   scale: EstimationScale | null;
   loading: boolean;
+  /** Application-owned error copy when settings could not load. */
+  error: string | null;
+  /** Retry the work-structure settings request. */
+  retry: () => void;
 }
 
 /**
@@ -29,8 +34,13 @@ export function useEstimationScale(orgId: string, enabled = true): EstimationSca
     ),
     enabled,
   });
+  const retry = useCallback((): void => {
+    void settingsQ.refetch();
+  }, [settingsQ]);
   return {
     scale: settingsQ.data?.estimationScale ?? null,
     loading: enabled && settingsQ.isPending,
+    error: settingsQ.isError ? 'Could not load estimation settings.' : null,
+    retry,
   };
 }

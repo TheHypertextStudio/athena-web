@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 const { commands } = vi.hoisted(() => ({
   commands: {
     selectedObjects: [],
-    notice: { message: 'Moved Project to trash.', offerUndo: true, tone: 'status' as const },
+    notice: { copy: 'Moved Project to trash.', offerUndo: true, tone: 'status' as const },
     canUndo: true,
     undo: vi.fn(),
     clearNotice: vi.fn(),

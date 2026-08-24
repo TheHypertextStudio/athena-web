@@ -68,6 +68,27 @@ function Field({
   );
 }
 
+function SourceError({
+  message,
+  retryLabel,
+  onRetry,
+}: {
+  readonly message: string;
+  readonly retryLabel: string;
+  readonly onRetry: () => void;
+}): React.JSX.Element {
+  return (
+    <div className="bg-error-container text-on-error-container flex items-center justify-between gap-2 rounded-lg px-3 py-2">
+      <p className="text-body-small" role="alert">
+        {message}
+      </p>
+      <Button type="button" size="sm" variant="ghost" onClick={onRetry}>
+        {retryLabel}
+      </Button>
+    </div>
+  );
+}
+
 function scalarValue<T>(aggregation: ScalarAggregation<T>): T | null {
   return aggregation.state === 'same' ? aggregation.value : null;
 }
@@ -199,11 +220,9 @@ export default function CanvasPropertiesEditor({
   const estimation = useEstimationScale(organizationId, organizationId.length > 0);
   const planning = useFiscalYearStartMonth(organizationId, organizationId.length > 0);
   const disabled =
-    commands === null ||
-    !commands.canEdit ||
-    commands.pending ||
-    selectionIssue !== null ||
-    options.loading;
+    commands === null || !commands.canEdit || commands.pending || selectionIssue !== null;
+  const optionDisabled = (kind: (typeof OPTION_KINDS)[number]): boolean =>
+    disabled || options.loading || options.failedKinds.has(kind);
 
   const executeScalar = (property: CanvasScalarProperty, value: unknown, label: string): void => {
     if (commands === null || disabled) return;
@@ -286,6 +305,13 @@ export default function CanvasPropertiesEditor({
         {selectionIssue !== null ? (
           <p className="text-body-medium text-error">{selectionIssue}</p>
         ) : null}
+        {options.error != null ? (
+          <SourceError
+            message={options.error}
+            retryLabel="Retry property choices"
+            onRetry={options.retry}
+          />
+        ) : null}
         <Field label="Status">
           <EnumPicker
             options={statusPickerOptions}
@@ -295,8 +321,15 @@ export default function CanvasPropertiesEditor({
             }}
             placeholder={scalarPlaceholder(state, 'Set status')}
             ariaLabel="Status"
-            disabled={disabled || !registry.loaded}
+            disabled={disabled || !registry.loaded || registry.error != null}
           />
+          {registry.error != null ? (
+            <SourceError
+              message={registry.error}
+              retryLabel="Retry statuses"
+              onRetry={registry.retry}
+            />
+          ) : null}
         </Field>
         <Field label="Priority">
           <EnumPicker
@@ -320,7 +353,7 @@ export default function CanvasPropertiesEditor({
             placeholder={scalarPlaceholder(assignee, 'Assign')}
             clearLabel="Unassigned"
             ariaLabel="Assignee"
-            disabled={disabled}
+            disabled={optionDisabled('actors')}
           />
         </Field>
         <Field label="Project">
@@ -333,7 +366,7 @@ export default function CanvasPropertiesEditor({
             placeholder={scalarPlaceholder(project, 'Set Project')}
             clearLabel="No Project"
             ariaLabel="Project"
-            disabled={disabled}
+            disabled={optionDisabled('projects')}
           />
         </Field>
         <Field label="Program">
@@ -346,7 +379,7 @@ export default function CanvasPropertiesEditor({
             placeholder={scalarPlaceholder(program, 'Set Program')}
             clearLabel="No Program"
             ariaLabel="Program"
-            disabled={disabled}
+            disabled={optionDisabled('programs')}
           />
         </Field>
         <Field label="Milestone">
@@ -362,7 +395,7 @@ export default function CanvasPropertiesEditor({
             )}
             clearLabel="No milestone"
             ariaLabel="Milestone"
-            disabled={disabled}
+            disabled={optionDisabled('milestones')}
           />
         </Field>
         <Field label="Cycle">
@@ -378,7 +411,7 @@ export default function CanvasPropertiesEditor({
             )}
             clearLabel="No cycle"
             ariaLabel="Cycle"
-            disabled={disabled}
+            disabled={optionDisabled('cycles')}
           />
         </Field>
         <AssociationField
@@ -388,7 +421,7 @@ export default function CanvasPropertiesEditor({
           options={validLabelOptions}
           association="label"
           read={(snapshot) => snapshot.labelIds}
-          disabled={disabled}
+          disabled={optionDisabled('labels')}
           onToggle={executeAssociation}
           removeOnlyIds={removeOnlyLabelIds}
           onRemove={executeAssociationRemoval}
@@ -444,6 +477,12 @@ export default function CanvasPropertiesEditor({
         <Field label="Estimate">
           {estimation.loading ? (
             <p className="text-body-small text-on-surface-variant">Loading estimation scale…</p>
+          ) : estimation.error != null ? (
+            <SourceError
+              message={estimation.error}
+              retryLabel="Retry estimation settings"
+              onRetry={estimation.retry}
+            />
           ) : estimation.scale === null || estimation.scale === 'none' ? (
             <p className="text-body-small text-on-surface-variant">
               Estimation is disabled for this workspace.
@@ -485,6 +524,13 @@ export default function CanvasPropertiesEditor({
       {selectionIssue !== null ? (
         <p className="text-body-medium text-error">{selectionIssue}</p>
       ) : null}
+      {options.error != null ? (
+        <SourceError
+          message={options.error}
+          retryLabel="Retry property choices"
+          onRetry={options.retry}
+        />
+      ) : null}
       <Field label="Status">
         <EnumPicker
           options={statusOptions(registry.statusesFor('project'))}
@@ -494,8 +540,15 @@ export default function CanvasPropertiesEditor({
           }}
           placeholder={scalarPlaceholder(status, 'Set status')}
           ariaLabel="Status"
-          disabled={disabled || !registry.loaded}
+          disabled={disabled || !registry.loaded || registry.error != null}
         />
+        {registry.error != null ? (
+          <SourceError
+            message={registry.error}
+            retryLabel="Retry statuses"
+            onRetry={registry.retry}
+          />
+        ) : null}
       </Field>
       <Field label="Health">
         <EnumPicker
@@ -532,7 +585,7 @@ export default function CanvasPropertiesEditor({
           placeholder={scalarPlaceholder(lead, 'Set lead')}
           clearLabel="No lead"
           ariaLabel="Lead"
-          disabled={disabled}
+          disabled={optionDisabled('actors')}
         />
       </Field>
       <Field label="Team">
@@ -545,7 +598,7 @@ export default function CanvasPropertiesEditor({
           placeholder={scalarPlaceholder(team, 'Set Team')}
           clearLabel="No Team"
           ariaLabel="Team"
-          disabled={disabled}
+          disabled={optionDisabled('teams')}
         />
       </Field>
       <Field label="Program">
@@ -558,7 +611,7 @@ export default function CanvasPropertiesEditor({
           placeholder={scalarPlaceholder(program, 'Set Program')}
           clearLabel="No Program"
           ariaLabel="Program"
-          disabled={disabled}
+          disabled={optionDisabled('programs')}
         />
       </Field>
       <AssociationField
@@ -568,7 +621,7 @@ export default function CanvasPropertiesEditor({
         options={options.initiativeOptions}
         association="initiative"
         read={(snapshot) => (snapshot.kind === 'project' ? snapshot.initiativeIds : [])}
-        disabled={disabled}
+        disabled={optionDisabled('initiatives')}
         onToggle={executeAssociation}
         onRemove={executeAssociationRemoval}
       />
@@ -579,7 +632,7 @@ export default function CanvasPropertiesEditor({
         options={validLabelOptions}
         association="label"
         read={(snapshot) => snapshot.labelIds}
-        disabled={disabled}
+        disabled={optionDisabled('labels')}
         onToggle={executeAssociation}
         removeOnlyIds={removeOnlyLabelIds}
         onRemove={executeAssociationRemoval}
@@ -596,14 +649,14 @@ export default function CanvasPropertiesEditor({
           onChange={(value) => {
             executeScalar('startTimeframe', timeframeCommandValue(value), 'start timeframe');
           }}
-          disabled={disabled || planning.loading}
+          disabled={disabled || planning.loading || planning.error != null}
         />
         {start.state === 'mixed' ? (
           <Button
             type="button"
             size="sm"
             variant="ghost"
-            disabled={disabled || planning.loading}
+            disabled={disabled || planning.loading || planning.error != null}
             onClick={() => {
               executeScalar('startTimeframe', { date: null, resolution: null }, 'start timeframe');
             }}
@@ -624,14 +677,14 @@ export default function CanvasPropertiesEditor({
           onChange={(value) => {
             executeScalar('targetTimeframe', timeframeCommandValue(value), 'target timeframe');
           }}
-          disabled={disabled || planning.loading}
+          disabled={disabled || planning.loading || planning.error != null}
         />
         {target.state === 'mixed' ? (
           <Button
             type="button"
             size="sm"
             variant="ghost"
-            disabled={disabled || planning.loading}
+            disabled={disabled || planning.loading || planning.error != null}
             onClick={() => {
               executeScalar(
                 'targetTimeframe',
@@ -644,8 +697,12 @@ export default function CanvasPropertiesEditor({
           </Button>
         ) : null}
       </Field>
-      {planning.error !== null ? (
-        <p className="text-body-small text-error">{planning.error}</p>
+      {planning.error != null ? (
+        <SourceError
+          message={planning.error}
+          retryLabel="Retry planning settings"
+          onRetry={planning.retry}
+        />
       ) : null}
     </>
   );

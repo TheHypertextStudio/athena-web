@@ -1,6 +1,7 @@
 'use client';
 
 import { api } from './api';
+import { useCallback } from 'react';
 import { apiQueryOptions, queryKeys, useApiQuery } from './query';
 
 /** Current fiscal-calendar state used by new Project and Initiative planning selections. */
@@ -11,6 +12,8 @@ export interface FiscalYearStartMonthState {
   readonly loading: boolean;
   /** Application-owned read error shown beside the disabled planning control. */
   readonly error: string | null;
+  /** Retry the planning-calendar settings request. */
+  readonly retry: () => void;
 }
 
 /**
@@ -32,9 +35,13 @@ export function useFiscalYearStartMonth(orgId: string, enabled = true): FiscalYe
     ),
     enabled,
   });
+  const retry = useCallback((): void => {
+    void settings.refetch();
+  }, [settings]);
   return {
     fiscalYearStartMonth: settings.data?.fiscalYearStartMonth ?? 0,
     loading: enabled && settings.data === undefined,
     error: settings.isError ? 'Could not load planning calendar settings.' : null,
+    retry,
   };
 }

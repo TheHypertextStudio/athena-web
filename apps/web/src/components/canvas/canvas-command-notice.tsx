@@ -19,7 +19,7 @@ export default function CanvasCommandNotice(): React.JSX.Element | null {
         role={commands.notice.tone === 'error' ? 'alert' : 'status'}
         className="text-body-medium flex items-center gap-2 py-1.5 pr-2 pl-4"
       >
-        {commands.notice.message}
+        {commands.notice.copy}
         {commands.notice.offerUndo && commands.canUndo ? (
           <Button type="button" variant="ghost" size="sm" onClick={() => void commands.undo()}>
             <Undo className="size-4" /> Undo

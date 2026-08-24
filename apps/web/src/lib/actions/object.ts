@@ -45,8 +45,9 @@ import {
   Users,
   User,
 } from '@docket/ui/icons';
-import type { Health, Priority } from '@docket/types';
+import type { Health } from '@docket/types';
 import type { PlanningTimeframe } from '@docket/work/planning-timeframe';
+import type { Priority } from '@docket/work/task-contract';
 
 /**
  * Every core data type the app treats as a first-class object.

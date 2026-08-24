@@ -19,6 +19,7 @@ import { drizzle as drizzlePglite } from 'drizzle-orm/pglite';
 import type { PgDatabase } from 'drizzle-orm/pg-core';
 import type { PgQueryResultHKT } from 'drizzle-orm/pg-core/session';
 import { drizzle as drizzlePostgres } from 'drizzle-orm/postgres-js';
+import type { Logger } from 'drizzle-orm/logger';
 import { PGlite } from '@electric-sql/pglite';
 import postgres from 'postgres';
 
@@ -27,6 +28,26 @@ import * as schema from './schema';
 
 /** The combined drizzle schema namespace (tables + relations). */
 export const fullSchema = { ...schema, ...relations };
+
+/** A test or diagnostic hook that observes each SQL statement Drizzle sends. */
+export type DatabaseQueryObserver = (query: string, params: readonly unknown[]) => void;
+
+let queryObserver: DatabaseQueryObserver | undefined;
+
+const queryLogger: Logger = {
+  logQuery(query, params) {
+    queryObserver?.(query, params);
+  },
+};
+
+/**
+ * Install a process-local SQL observer, or clear it with `undefined`.
+ *
+ * @param observer - The observer used by bounded-query tests and development diagnostics.
+ */
+export function setDatabaseQueryObserver(observer: DatabaseQueryObserver | undefined): void {
+  queryObserver = observer;
+}
 
 /** The drizzle client type, parameterized over the full Docket schema. */
 export type Database = PgDatabase<PgQueryResultHKT, typeof fullSchema>;
@@ -96,7 +117,7 @@ function createDb(): Database {
       const unsub = await client.listen(channel, handler);
       return unsub;
     };
-    return drizzlePglite(client, { schema: fullSchema });
+    return drizzlePglite(client, { schema: fullSchema, logger: queryLogger });
   }
 
   /* v8 ignore start -- live-DB driver IO boundary: opening a real postgres/Neon
@@ -114,7 +135,7 @@ function createDb(): Database {
       await subscription.unlisten();
     };
   };
-  return drizzlePostgres(client, { schema: fullSchema });
+  return drizzlePostgres(client, { schema: fullSchema, logger: queryLogger });
   /* v8 ignore stop */
 }
 

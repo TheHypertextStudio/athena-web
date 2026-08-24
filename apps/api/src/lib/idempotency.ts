@@ -46,6 +46,58 @@ const RETENTION_MS = 24 * 60 * 60 * 1000;
 /** Marks a response that was replayed from an earlier attempt rather than freshly computed. */
 const REPLAY_HEADER = 'Idempotency-Replayed';
 
+/** The key ownership established before an idempotent route begins its write. */
+export interface IdempotencyClaim {
+  /** The authenticated account that owns the retry key. */
+  readonly userId: string;
+  /** The exact caller-provided retry key. */
+  readonly key: string;
+}
+
+/** The successful response a route can commit beside its domain mutation. */
+export interface AtomicIdempotencyResult {
+  /** The workspace the mutation belongs to, when the route is workspace-scoped. */
+  readonly organizationId: string | null;
+  /** The HTTP success status replayed to later attempts. */
+  readonly responseStatus: number;
+  /** The validated JSON body replayed to later attempts. */
+  readonly responseBody: unknown;
+}
+
+/**
+ * Complete a claimed retry key through the transaction that commits the domain mutation.
+ *
+ * @param database - The active domain transaction.
+ * @param claim - The retry key claimed by {@link idempotency}.
+ * @param result - The validated response to persist for later replay.
+ * @throws When the claim disappeared or was completed by another writer.
+ */
+export async function completeIdempotencyInTransaction(
+  database: Pick<typeof db, 'update'>,
+  claim: IdempotencyClaim,
+  result: AtomicIdempotencyResult,
+): Promise<void> {
+  const completed = await database
+    .update(idempotencyKey)
+    .set({
+      organizationId: result.organizationId,
+      status: 'completed',
+      responseStatus: result.responseStatus,
+      responseBody: result.responseBody,
+    })
+    .where(
+      and(
+        eq(idempotencyKey.userId, claim.userId),
+        eq(idempotencyKey.key, claim.key),
+        eq(idempotencyKey.status, 'in_progress'),
+      ),
+    )
+    .returning({ key: idempotencyKey.key });
+  if (completed.length !== 1) {
+    throw new ConflictError('The idempotent request claim is no longer active');
+  }
+}
+
 /** A stable fingerprint of the request a key was first used for. */
 function fingerprint(method: string, path: string, body: string): string {
   return createHash('sha256').update(`${method}\n${path}\n${body}`).digest('base64url');
@@ -113,7 +165,11 @@ export const idempotency: MiddlewareHandler<AppEnv> = async (c, next) => {
     return c.json(prior.responseBody, prior.responseStatus as ContentfulStatusCode);
   }
 
+  c.set('idempotencyClaim', { userId, key });
+
   await next();
+
+  if (c.get('idempotencyCompleted') === true) return;
 
   // Only a completed JSON response is worth replaying. A failure is not recorded at all, so
   // the key stays usable: retrying a create that 500ed is exactly what the header is for.

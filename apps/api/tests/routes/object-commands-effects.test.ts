@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
+import { eq } from 'drizzle-orm';
 
 import type objectCommandsRouter from '../../src/routes/object-commands';
 import type * as SearchWriteThroughModule from '../../src/search/write-through';
@@ -59,7 +60,14 @@ describe('object command consequences', () => {
       }),
     });
     expect(response.status).toBe(200);
-    expect(effectConcurrency.maximum).toBe(10);
+    expect(effectConcurrency.maximum).toBeGreaterThanOrEqual(1);
+    expect(effectConcurrency.maximum).toBeLessThanOrEqual(10);
     expect(effectConcurrency.active).toBe(0);
+    expect(
+      await db
+        .select({ status: schema.objectCommandEffectJob.status })
+        .from(schema.objectCommandEffectJob)
+        .where(eq(schema.objectCommandEffectJob.commandId, 'bounded-effect-command')),
+    ).toEqual([{ status: 'succeeded' }]);
   });
 });

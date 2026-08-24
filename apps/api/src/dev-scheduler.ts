@@ -25,6 +25,7 @@ import { sweepActivitySources } from './lib/activity/sweep';
 import { sweepConnectorSync } from './routes/integration-sync';
 import { sweepNotionMirror } from './routes/notion-mirror-reconcile';
 import { processSearchIndexJobs } from './search/process-jobs';
+import { processObjectCommandEffectJobs } from './lib/object-command-effects';
 import { sweepElicitations } from './services/elicitation-service';
 import { sweepRecurrenceMaterialization } from './lib/recurrence/sweep';
 
@@ -54,6 +55,7 @@ export function startDevScheduler(): void {
       // run in each window returns immediately without touching a provider.
       await sweepActivitySources(now);
       await sweepNotionMirror(now);
+      await processObjectCommandEffectJobs({ limit: 50, now });
       await processSearchIndexJobs({ limit: 50 });
       await sweepResourceUnfurls(getContainer().unfurler, now);
       await sweepLegacyMentions();

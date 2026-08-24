@@ -10,7 +10,7 @@ vi.mock('../../../src/components/canvas/use-canvas-command-history', () => ({
   canvasCommandId: () => 'trash-command',
   useCanvasCommandHistory: () => {
     const [notice, setNotice] = useState<{
-      message: string;
+      copy: string;
       offerUndo: boolean;
       tone: 'error';
     } | null>(null);
@@ -18,7 +18,7 @@ vi.mock('../../../src/components/canvas/use-canvas-command-history', () => ({
       execute: async () => {
         execute();
         setNotice({
-          message: 'Could not apply this change. Your selection was kept.',
+          copy: 'Could not apply this change. Your selection was kept.',
           offerUndo: false,
           tone: 'error',
         });

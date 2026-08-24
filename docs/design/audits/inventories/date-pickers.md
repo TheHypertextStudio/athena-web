@@ -39,31 +39,32 @@ delegation are asserted in `apps/web/tests/pickers/timeframe-picker-contract.tes
 
 ## Calendar-day pickers (`DatePicker` / `DateRangePicker`)
 
-| #   | Surface                                   | File                                                                        | Field(s)                          | Status                                        |
-| --- | ----------------------------------------- | --------------------------------------------------------------------------- | --------------------------------- | --------------------------------------------- |
-| 1   | Task detail → properties rail             | `apps/web/src/components/task-detail/task-properties-rail.tsx`              | Start date, Due date              | Shared picker                                 |
-| 2   | Task create/edit composer                 | `apps/web/src/components/tasks/task-form-pickers.tsx`                       | Due date                          | Shared picker                                 |
-| 3   | Project detail → properties panel         | `apps/web/src/components/project-detail/properties-panel.tsx`               | Timeline (start → target)         | Planning picker                               |
-| 4   | Project create composer                   | `apps/web/src/components/projects/create-project.tsx`                       | Timeline (start → target)         | Planning picker                               |
-| 5   | Initiative detail → properties panel      | `apps/web/src/components/initiatives/properties-panel.tsx`                  | Target date                       | Planning picker                               |
-| 6   | Initiative create composer                | `apps/web/src/components/initiatives/create-initiative.tsx`                 | Target date                       | Planning picker                               |
-| 7   | Cycle detail → metadata row               | `apps/web/src/components/cycle-detail/cycle-metadata-row.tsx`               | Cycle window (start → end)        | Shared picker                                 |
-| 8   | Cycle create composer                     | `apps/web/src/components/cycles/create-cycle.tsx`                           | Cycle window (start → end)        | Shared picker                                 |
-| 9   | Triage → Athena suggestion editor         | `apps/web/src/components/triage/suggestions-lane.tsx`                       | Due date                          | **Migrated** from a raw `<input type="date">` |
-| 10  | Agenda → move entry to another day        | `apps/web/src/components/agenda/agenda-entry-actions.tsx`                   | Move to                           | **Migrated** from a raw `<input type="date">` |
-| 11  | Search → date facet                       | `apps/web/src/components/search/search-client.tsx`                          | From, To                          | **Migrated** from a raw `<input type="date">` |
-| 12  | Athena conversation browser → search lens | `apps/web/src/components/athena/athena-conversation-browser.tsx`            | From, To                          | **Migrated** from a raw `<input type="date">` |
-| 13  | Calendar → item drawer, all-day item      | `apps/web/src/components/calendar/item-drawer/core-fields-form.tsx`         | Starts, Ends                      | **Migrated** from a raw `<input type="date">` |
-| 14  | Project detail → Milestones panel         | `apps/web/src/components/project-detail/project-milestones.tsx`             | Target date                       | Shared picker                                 |
-| 15  | Project create/edit composer → pickers    | `apps/web/src/components/projects/project-form-pickers.tsx`                 | Timeline (start → target)         | Planning picker                               |
-| 16  | Initiative create/edit composer → pickers | `apps/web/src/components/initiatives/initiative-form-pickers.tsx`           | Target date                       | Planning picker                               |
-| 17  | Agenda → quick create an all-day item     | `apps/web/src/components/calendar/create-block-form.tsx`                    | Starts, Ends                      | Shared picker                                 |
-| 18  | Agenda → quick create a timed item        | `apps/web/src/components/calendar/create-block-schedule-editor.tsx`         | Start date, End date              | Shared picker                                 |
-| 19  | Repeating work → schedule editor          | `apps/web/src/app/(app)/orgs/[orgId]/recurrence-series/[seriesId]/page.tsx` | Apply from, moved occurrence      | Shared picker                                 |
-| 20  | Task composer → repeat property           | `apps/web/src/components/recurrence/repeat-task-control.tsx`                | Start date, End date              | Shared picker                                 |
-| 21  | Settings → work locations                 | `apps/web/src/app/(app)/settings/work-locations/page.tsx`                   | Date, effective range, occurrence | Shared picker                                 |
-| 22  | Work locations → schedule editor          | `apps/web/src/components/work-location/schedule-editor-dialog.tsx`          | Date, effective range             | Shared picker                                 |
-| 23  | Work locations → occurrence editor        | `apps/web/src/components/work-location/occurrence-editor-dialog.tsx`        | Occurrence date                   | Shared picker                                 |
+| #   | Surface                                   | File                                                                        | Field(s)                           | Status                                        |
+| --- | ----------------------------------------- | --------------------------------------------------------------------------- | ---------------------------------- | --------------------------------------------- |
+| 1   | Task detail → properties rail             | `apps/web/src/components/task-detail/task-properties-rail.tsx`              | Start date, Due date               | Shared picker                                 |
+| 2   | Task create/edit composer                 | `apps/web/src/components/tasks/task-form-pickers.tsx`                       | Due date                           | Shared picker                                 |
+| 3   | Project detail → properties panel         | `apps/web/src/components/project-detail/properties-panel.tsx`               | Timeline (start → target)          | Planning picker                               |
+| 4   | Project create composer                   | `apps/web/src/components/projects/create-project.tsx`                       | Timeline (start → target)          | Planning picker                               |
+| 5   | Initiative detail → properties panel      | `apps/web/src/components/initiatives/properties-panel.tsx`                  | Target date                        | Planning picker                               |
+| 6   | Initiative create composer                | `apps/web/src/components/initiatives/create-initiative.tsx`                 | Target date                        | Planning picker                               |
+| 7   | Cycle detail → metadata row               | `apps/web/src/components/cycle-detail/cycle-metadata-row.tsx`               | Cycle window (start → end)         | Shared picker                                 |
+| 8   | Cycle create composer                     | `apps/web/src/components/cycles/create-cycle.tsx`                           | Cycle window (start → end)         | Shared picker                                 |
+| 9   | Triage → Athena suggestion editor         | `apps/web/src/components/triage/suggestions-lane.tsx`                       | Due date                           | **Migrated** from a raw `<input type="date">` |
+| 10  | Agenda → move entry to another day        | `apps/web/src/components/agenda/agenda-entry-actions.tsx`                   | Move to                            | **Migrated** from a raw `<input type="date">` |
+| 11  | Search → date facet                       | `apps/web/src/components/search/search-client.tsx`                          | From, To                           | **Migrated** from a raw `<input type="date">` |
+| 12  | Athena conversation browser → search lens | `apps/web/src/components/athena/athena-conversation-browser.tsx`            | From, To                           | **Migrated** from a raw `<input type="date">` |
+| 13  | Calendar → item drawer, all-day item      | `apps/web/src/components/calendar/item-drawer/core-fields-form.tsx`         | Starts, Ends                       | **Migrated** from a raw `<input type="date">` |
+| 14  | Project detail → Milestones panel         | `apps/web/src/components/project-detail/project-milestones.tsx`             | Target date                        | Shared picker                                 |
+| 15  | Project create/edit composer → pickers    | `apps/web/src/components/projects/project-form-pickers.tsx`                 | Timeline (start → target)          | Planning picker                               |
+| 16  | Initiative create/edit composer → pickers | `apps/web/src/components/initiatives/initiative-form-pickers.tsx`           | Target date                        | Planning picker                               |
+| 17  | Agenda → quick create an all-day item     | `apps/web/src/components/calendar/create-block-form.tsx`                    | Starts, Ends                       | Shared picker                                 |
+| 18  | Agenda → quick create a timed item        | `apps/web/src/components/calendar/create-block-schedule-editor.tsx`         | Start date, End date               | Shared picker                                 |
+| 19  | Repeating work → schedule editor          | `apps/web/src/app/(app)/orgs/[orgId]/recurrence-series/[seriesId]/page.tsx` | Apply from, moved occurrence       | Shared picker                                 |
+| 20  | Task composer → repeat property           | `apps/web/src/components/recurrence/repeat-task-control.tsx`                | Start date, End date               | Shared picker                                 |
+| 21  | Settings → work locations                 | `apps/web/src/app/(app)/settings/work-locations/page.tsx`                   | Date, effective range, occurrence  | Shared picker                                 |
+| 22  | Work locations → schedule editor          | `apps/web/src/components/work-location/schedule-editor-dialog.tsx`          | Date, effective range              | Shared picker                                 |
+| 23  | Work locations → occurrence editor        | `apps/web/src/components/work-location/occurrence-editor-dialog.tsx`        | Occurrence date                    | Shared picker                                 |
+| 24  | Canvas → bulk Properties editor           | `apps/web/src/components/canvas/canvas-properties-editor.tsx`               | Task start/due, Project timeframes | Shared and planning pickers                   |
 
 Before this pass, rows 9–12 each hosted their own `<input type="date">`, so four surfaces had four
 different behaviours and none of them had bounds. Rows 1–8 already shared a component, but that

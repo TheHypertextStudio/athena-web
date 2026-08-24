@@ -119,14 +119,23 @@ export interface EmitEventInput {
  * @param input - The event to record (see {@link EmitEventInput}).
  */
 export async function emitEvent(input: EmitEventInput): Promise<void> {
-  const occurredAt = input.occurredAt ?? new Date();
-  const token = input.dedupeToken ? `:${input.dedupeToken}` : '';
-  const dedupeKey = `docket:${input.subject.type}:${input.subject.id}:${input.kind}:${occurredAt.getTime()}${token}`;
   try {
-    await emitInternal(input, occurredAt, dedupeKey);
+    await emitEventStrict(input);
   } catch {
     // Best-effort awareness — never roll back or 500 the domain mutation that triggered it.
   }
+}
+
+/**
+ * Append one internal event and propagate failures so a durable outbox can retry delivery.
+ *
+ * @param input - The event to record with a stable occurrence time and dedupe token.
+ */
+export async function emitEventStrict(input: EmitEventInput): Promise<void> {
+  const occurredAt = input.occurredAt ?? new Date();
+  const token = input.dedupeToken ? `:${input.dedupeToken}` : '';
+  const dedupeKey = `docket:${input.subject.type}:${input.subject.id}:${input.kind}:${occurredAt.getTime()}${token}`;
+  await emitInternal(input, occurredAt, dedupeKey);
 }
 
 /** The actual emit work, separated so {@link emitEvent} can swallow its failures. */
@@ -604,6 +613,10 @@ export interface FieldChangeInput {
   readonly actorId?: string | null;
   /** When the edit was applied; defaults to now. */
   readonly occurredAt?: Date;
+  /** Stable command identity that makes an outbox retry emit the same event. */
+  readonly dedupeToken?: string;
+  /** Propagate delivery failures so a durable outbox can retry them. */
+  readonly strict?: boolean;
   /**
    * Every field that moved in this one mutation, with values already resolved to display
    * strings — the same rows the durable activity ledger writes.
@@ -632,7 +645,7 @@ export async function emitFieldChange(input: FieldChangeInput): Promise<void> {
   if (input.changes.length === 0) return; // nothing moved — nothing to say
   const changes = input.changes.slice(0, 50);
   const fields = changes.map((c) => c.field);
-  await emitEvent({
+  await (input.strict ? emitEventStrict : emitEvent)({
     organizationId: input.organizationId,
     kind: 'field_change',
     ...(input.occurredAt && { occurredAt: input.occurredAt }),
@@ -642,6 +655,6 @@ export async function emitFieldChange(input: FieldChangeInput): Promise<void> {
     subject: input.subject,
     detail: { schema: 'docket.field_change', changes: [...changes], fields },
     // Two different edits to the same entity inside one millisecond stay distinct.
-    dedupeToken: fields.join(','),
+    dedupeToken: input.dedupeToken ? `${fields.join(',')}:${input.dedupeToken}` : fields.join(','),
   });
 }

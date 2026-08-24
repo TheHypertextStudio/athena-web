@@ -13,13 +13,14 @@ import {
   type CanvasHistoryEntry,
   narrowReceiptToResult,
 } from './canvas-command-history';
+import { useOptionalCanvasSnapshotReceiptApplier } from './canvas-selection-retention';
 
 const commandHistory = new CanvasCommandHistory();
 
 /** Transient application-owned feedback shown over a canvas. */
 export interface CanvasCommandNotice {
   /** Safe status or failure copy. */
-  readonly message: string;
+  readonly copy: string;
   /** Whether the current notice should expose an Undo action. */
   readonly offerUndo: boolean;
   /** Whether assistive technology should announce this as a failure. */
@@ -73,6 +74,7 @@ export function useCanvasCommandHistory(
 ): CanvasCommandHistoryControls {
   const [version, setVersion] = useState(0);
   const [notice, setNotice] = useState<CanvasCommandNotice | null>(null);
+  const applyReceipt = useOptionalCanvasSnapshotReceiptApplier();
   const mutation = useApiMutation<ObjectCommandResult, ObjectCommandRequest>({
     mutationFn: (request) =>
       unwrap(
@@ -94,26 +96,27 @@ export function useCanvasCommandHistory(
       setNotice(null);
       try {
         const result = await mutation.mutateAsync(command);
+        applyReceipt?.(result.receipt, 'forward');
         if (result.receipt.entries.length > 0) {
           commandHistory.push(scopeKey, { label, receipt: result.receipt });
           refresh();
         }
         setNotice({
-          message: `${label} applied.`,
+          copy: `${label} applied.`,
           offerUndo: command.operation.type === 'trash',
           tone: 'status',
         });
         return result;
       } catch {
         setNotice({
-          message: 'Could not apply this change. Your selection was kept.',
+          copy: 'Could not apply this change. Your selection was kept.',
           offerUndo: false,
           tone: 'error',
         });
         return null;
       }
     },
-    [mutation, refresh, scopeKey],
+    [applyReceipt, mutation, refresh, scopeKey],
   );
 
   const replay = useCallback(
@@ -132,6 +135,7 @@ export function useCanvasCommandHistory(
           receipt: entry.receipt,
         });
         const narrowed = narrowReceiptToResult(entry.receipt, result);
+        applyReceipt?.(narrowed, direction);
         commandHistory.replaceTop(
           scopeKey,
           destination,
@@ -139,7 +143,7 @@ export function useCanvasCommandHistory(
         );
         const skipped = result.conflictingIds.length + result.deniedIds.length;
         setNotice({
-          message:
+          copy:
             skipped === 0
               ? `${direction === 'undo' ? 'Undid' : 'Redid'} ${entry.label.toLowerCase()}.`
               : `${direction === 'undo' ? 'Undid' : 'Redid'} ${String(result.appliedIds.length)} items. ${String(skipped)} items changed elsewhere or no longer allow this action.`,
@@ -151,7 +155,7 @@ export function useCanvasCommandHistory(
         // opposite action must not become available over a receipt the server never applied.
         commandHistory.restoreFailedReplay(scopeKey, direction, entry);
         setNotice({
-          message: `Could not ${direction} ${entry.label.toLowerCase()}. No collaborator changes were overwritten.`,
+          copy: `Could not ${direction} ${entry.label.toLowerCase()}. No collaborator changes were overwritten.`,
           offerUndo: false,
           tone: 'error',
         });
@@ -159,7 +163,7 @@ export function useCanvasCommandHistory(
         refresh();
       }
     },
-    [mutation, refresh, scopeKey],
+    [applyReceipt, mutation, refresh, scopeKey],
   );
 
   const undo = useCallback(() => replay('undo'), [replay]);

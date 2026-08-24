@@ -300,7 +300,7 @@ export function CanvasCommandProviderWithHistory({
         }
         confirmLabel="Move to trash"
         pending={history.pending}
-        error={history.notice?.tone === 'error' ? history.notice.message : null}
+        error={history.notice?.tone === 'error' ? history.notice.copy : null}
         onConfirm={() => {
           if (pendingTrash !== null) void applyTrash(pendingTrash.objects);
         }}

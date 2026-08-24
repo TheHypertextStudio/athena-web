@@ -780,6 +780,13 @@ export const searchIndexJobStatus = pgEnum('search_index_job_status', [
   'succeeded',
   'failed',
 ]);
+/** Durable lifecycle state for one canvas command consequence job. */
+export const objectCommandEffectStatus = pgEnum('object_command_effect_status', [
+  'pending',
+  'processing',
+  'succeeded',
+  'failed',
+]);
 
 /* ──────────────────────────────────────────────────────────────────────────
  * Ambient Context Intelligence — observation pipeline + daily digest

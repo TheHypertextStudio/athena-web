@@ -34,6 +34,10 @@ export interface ProjectPeopleRowProps {
   readonly assignedPeople: readonly ProjectAssignedPerson[];
   /** Whether the viewer may change ownership. */
   readonly canEdit: boolean;
+  /** Whether the owner roster is resolving after the picker opened. */
+  readonly ownerLoading?: boolean;
+  /** Observe owner-picker visibility so its roster can stay off the critical route path. */
+  readonly onOwnerPickerOpenChange?: (open: boolean) => void;
   /** Persist an owner selection or clear. */
   readonly onOwnerChange: (ownerId: string | null) => void;
 }
@@ -49,6 +53,8 @@ export function ProjectPeopleRow({
   ownerOptions,
   assignedPeople,
   canEdit,
+  ownerLoading = false,
+  onOwnerPickerOpenChange,
   onOwnerChange,
 }: ProjectPeopleRowProps): JSX.Element {
   const uniqueOthers = [
@@ -76,6 +82,8 @@ export function ProjectPeopleRow({
         searchPlaceholder="Search people…"
         ariaLabel="Project owner"
         readOnly={!canEdit}
+        loading={ownerLoading}
+        {...(onOwnerPickerOpenChange ? { onOpenChange: onOwnerPickerOpenChange } : {})}
         triggerVariant="ghost"
         triggerClassName={`${ENTITY_METADATA_CHIP_CLASS} max-w-56`}
       />

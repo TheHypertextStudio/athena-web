@@ -47,6 +47,21 @@ describe('detail route ownership', () => {
     expect(source).toContain('Could not load resources.');
   });
 
+  it('keeps the Project shell on one aggregate read and leaves roster-backed controls dormant', () => {
+    const source = readFileSync(join(root, details[1]), 'utf8');
+
+    expect(source).toContain('projectDetailAggregateDef');
+    expect(source).not.toContain('useProjectDetailPage');
+    expect(source).not.toContain('fetchProjectDetail');
+    expect(source).toContain('enabled: ownerPickerOpen');
+    expect(source).toContain("enabled: aggregate !== null && tab === 'updates'");
+    expect(source).toContain("enabled: aggregate !== null && tab === 'resources'");
+    expect(source).toContain(
+      "enabled: aggregate !== null && (tab === 'tasks' || repeatProjectOpen)",
+    );
+    expect(source).toContain('seedNavigationSnapshot(aggregate.snapshot)');
+  });
+
   it('uses the bounded relationship endpoint after an Initiative relationship tab opens', () => {
     const source = readFileSync(join(root, 'src/lib/fetch-initiative-sections.ts'), 'utf8');
 

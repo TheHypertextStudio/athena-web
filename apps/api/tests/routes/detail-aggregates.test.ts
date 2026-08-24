@@ -3,6 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type * as DbModule from '@docket/db';
 import type tasksRouter from '../../src/routes/tasks';
 import type projectsRouter from '../../src/routes/projects';
+import type projectRollupRouter from '../../src/routes/project-rollup';
 import type programsRouter from '../../src/routes/programs';
 import type initiativesRouter from '../../src/routes/initiatives';
 import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
@@ -11,6 +12,7 @@ let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let tasks!: typeof tasksRouter;
 let projects!: typeof projectsRouter;
+let projectRollup!: typeof projectRollupRouter;
 let programs!: typeof programsRouter;
 let initiatives!: typeof initiativesRouter;
 
@@ -19,6 +21,7 @@ beforeAll(async () => {
   db = schema.db;
   tasks = (await import('../../src/routes/tasks')).default;
   projects = (await import('../../src/routes/projects')).default;
+  projectRollup = (await import('../../src/routes/project-rollup')).default;
   programs = (await import('../../src/routes/programs')).default;
   initiatives = (await import('../../src/routes/initiatives')).default;
 });
@@ -87,6 +90,26 @@ describe('detail aggregate routes', () => {
       references: { team: { id: teamId }, lead: { actorId: humanActorId } },
       defaultView: { project: { id: project.id }, progress: { taskCount: 0 } },
     });
+  });
+
+  it('keeps Project work rows out of the aggregate and returns them only from the deferred section', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(projects, orgId, ['contribute'], humanActorId);
+    const created = await writer.request('/', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Deferred work', teamId }),
+    });
+    const project = (await created.json()) as { id: string };
+    const aggregate = (await writer.request(`/${project.id}/aggregate-detail`)).json() as Promise<
+      Record<string, unknown>
+    >;
+    expect(await aggregate).not.toHaveProperty('tasks');
+    const work = await appWithActor(projectRollup, orgId, ['contribute'], humanActorId).request(
+      `/${project.id}/work`,
+    );
+    expect(work.status).toBe(200);
+    expect(await work.json()).toMatchObject({ milestones: [], tasks: [], taskMilestones: [] });
   });
 
   it('returns one bounded Program detail aggregate with its rollup', async () => {

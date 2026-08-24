@@ -20,6 +20,8 @@ import {
   TaskId,
   TeamId,
 } from './primitives';
+import { MilestoneOut } from './milestone';
+import { TaskOut } from './task';
 
 /**
  * A Project's lifecycle status.
@@ -489,3 +491,20 @@ export const ProjectRollupOut = z
   });
 /** Project detail roll-up value. */
 export type ProjectRollupOut = z.infer<typeof ProjectRollupOut>;
+
+/** Bounded Project work content loaded only after the Project work surface opens. */
+export const ProjectWorkSectionsOut = z
+  .object({
+    milestones: z.array(MilestoneOut),
+    tasks: z.array(TaskOut),
+    taskMilestones: z.array(
+      z.object({ taskId: TaskId, milestoneId: MilestoneId.nullable() }).strict(),
+    ),
+  })
+  .strict()
+  .meta({
+    id: 'ProjectWorkSectionsOut',
+    description: 'Project-scoped work rows and milestone grouping, loaded outside initial detail.',
+  });
+/** Deferred Project work content. */
+export type ProjectWorkSectionsOut = z.infer<typeof ProjectWorkSectionsOut>;

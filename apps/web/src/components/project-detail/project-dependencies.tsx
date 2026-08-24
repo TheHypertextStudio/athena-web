@@ -7,7 +7,7 @@ import { Button, DecorativeIcon, Skeleton } from '@docket/ui/primitives';
 import type { QueryKey } from '@tanstack/react-query';
 import Link from '@/components/docket-link';
 import type { JSX } from 'react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { useProjectDependencies } from '@/lib/use-project-dependencies';
@@ -27,7 +27,8 @@ export function ProjectDependenciesPanel({
   projectDetailKey,
   canEdit,
 }: ProjectDependenciesPanelProps): JSX.Element {
-  const options = useComposerOptions(orgId, ['projects'], true);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const options = useComposerOptions(orgId, ['projects'], pickerOpen);
   const { dependencies, loading, error, add, remove, pending, mutationError } =
     useProjectDependencies(orgId, projectId, projectDetailKey);
   const projectOptions = useMemo(
@@ -64,6 +65,8 @@ export function ProjectDependenciesPanel({
             pickerLabel="Add blocker"
             pickerOptions={projectOptions}
             disabled={pending}
+            pickerLoading={pickerOpen && options.loading}
+            onPickerOpenChange={setPickerOpen}
             onAdd={(id) => {
               add('blockedBy', id);
             }}
@@ -78,6 +81,8 @@ export function ProjectDependenciesPanel({
             pickerLabel="Add dependent"
             pickerOptions={projectOptions}
             disabled={pending}
+            pickerLoading={pickerOpen && options.loading}
+            onPickerOpenChange={setPickerOpen}
             onAdd={(id) => {
               add('blocking', id);
             }}
@@ -103,6 +108,8 @@ interface DependencyColumnProps {
   pickerLabel: string;
   pickerOptions: readonly { value: string; label: string }[];
   disabled: boolean;
+  pickerLoading: boolean;
+  onPickerOpenChange: (open: boolean) => void;
   onAdd: (projectId: string) => void;
   onRemove: (projectId: string) => void;
 }
@@ -116,6 +123,8 @@ function DependencyColumn({
   pickerLabel,
   pickerOptions,
   disabled,
+  pickerLoading,
+  onPickerOpenChange,
   onAdd,
   onRemove,
 }: DependencyColumnProps): JSX.Element {
@@ -134,6 +143,8 @@ function DependencyColumn({
             searchPlaceholder="Search projects…"
             ariaLabel={pickerLabel}
             disabled={disabled}
+            loading={pickerLoading}
+            onOpenChange={onPickerOpenChange}
             triggerVariant="outline"
             triggerClassName="shrink-0"
           />

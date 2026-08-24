@@ -36,12 +36,26 @@ export interface PropertiesPanelProps {
   targetDateFiscalYearStartMonth: number | null;
   fiscalYearStartMonth: number;
   planningCalendarLoading: boolean;
+  /** Observe the timeframe picker so fiscal settings are not read for every route transition. */
+  onTimelinePickerOpenChange?: (open: boolean) => void;
   programId: string | null;
   programOptions: readonly PickerOption[];
+  /** Whether Program choices are resolving after the picker opened. */
+  programLoading?: boolean;
+  /** Observe Program-picker visibility for on-demand option loading. */
+  onProgramPickerOpenChange?: (open: boolean) => void;
   initiativeIds: readonly string[];
   initiativeOptions: readonly PickerOption[];
+  /** Whether Initiative choices are resolving after the picker opened. */
+  initiativesLoading?: boolean;
+  /** Observe Initiative-picker visibility for on-demand option loading. */
+  onInitiativesPickerOpenChange?: (open: boolean) => void;
   labels: readonly LabelOut[];
   availableLabels: readonly LabelOut[];
+  /** Whether label choices are resolving after the picker opened. */
+  labelsLoading?: boolean;
+  /** Observe label-picker visibility for on-demand option loading. */
+  onLabelsPickerOpenChange?: (open: boolean) => void;
   canEdit: boolean;
   onHealthChange: (health: Health | null) => void;
   onStatusChange: (status: ProjectStatus) => void;
@@ -85,12 +99,19 @@ export function PropertiesPanel({
   targetDateFiscalYearStartMonth,
   fiscalYearStartMonth,
   planningCalendarLoading,
+  onTimelinePickerOpenChange,
   programId,
   programOptions,
+  programLoading = false,
+  onProgramPickerOpenChange,
   initiativeIds,
   initiativeOptions,
+  initiativesLoading = false,
+  onInitiativesPickerOpenChange,
   labels,
   availableLabels,
+  labelsLoading = false,
+  onLabelsPickerOpenChange,
   canEdit,
   onHealthChange,
   onStatusChange,
@@ -160,6 +181,7 @@ export function PropertiesPanel({
           targetLabel="Target date"
           readOnly={readOnly}
           disabled={planningCalendarLoading}
+          {...(onTimelinePickerOpenChange ? { onOpenChange: onTimelinePickerOpenChange } : {})}
           {...CHIP}
         />
       </EntityMetadataItem>
@@ -174,6 +196,8 @@ export function PropertiesPanel({
           searchPlaceholder={`Search ${programLabel.toLowerCase()}s…`}
           ariaLabel={programLabel}
           readOnly={readOnly}
+          loading={programLoading}
+          {...(onProgramPickerOpenChange ? { onOpenChange: onProgramPickerOpenChange } : {})}
           {...CHIP}
         />
       </EntityMetadataItem>
@@ -195,6 +219,10 @@ export function PropertiesPanel({
           emptyText={`No ${initiativeLabel.toLowerCase()}s`}
           ariaLabel={`${initiativeLabel}s`}
           readOnly={readOnly}
+          loading={initiativesLoading}
+          {...(onInitiativesPickerOpenChange
+            ? { onOpenChange: onInitiativesPickerOpenChange }
+            : {})}
           {...CHIP}
         />
       </EntityMetadataItem>
@@ -214,6 +242,8 @@ export function PropertiesPanel({
           emptyText="No labels"
           ariaLabel="Labels"
           readOnly={readOnly}
+          loading={labelsLoading}
+          {...(onLabelsPickerOpenChange ? { onOpenChange: onLabelsPickerOpenChange } : {})}
           {...CHIP}
         />
       </EntityMetadataItem>

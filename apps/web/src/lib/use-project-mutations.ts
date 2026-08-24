@@ -9,12 +9,14 @@
 import {
   ActorId,
   type Health,
+  type ProjectDetailAggregate,
   LabelId,
   type ProjectOut,
   type ProjectStatus,
   type ProjectUpdate,
   ProgramId,
   ProjectId,
+  ProjectStatusKey,
   ProjectSubjectRef,
 } from '@docket/types';
 import type { DateResolution } from '@docket/work/planning-timeframe';
@@ -85,32 +87,84 @@ export interface ProjectMutations {
 }
 
 /**
+ * Apply one Project edit to the aggregate cache without separating the visible snapshot from the
+ * document it represents.
+ *
+ * @param current - The cached Project aggregate, if one has completed.
+ * @param apply - The edit to apply to the Project document.
+ * @returns The aligned aggregate, or `undefined` when the route has no cached aggregate yet.
+ */
+export function patchProjectAggregate(
+  current: ProjectDetailAggregate | undefined,
+  apply: (project: ProjectOut) => ProjectOut,
+): ProjectDetailAggregate | undefined {
+  if (!current) return undefined;
+  const project = apply(current.defaultView.project);
+  return {
+    ...current,
+    snapshot: {
+      ...current.snapshot,
+      name: project.name,
+      status: ProjectStatusKey.parse(project.status),
+      priority: project.priority,
+      health: project.health ?? null,
+    },
+    references: {
+      ...current.references,
+      lead: project.leadId === current.references.lead?.actorId ? current.references.lead : null,
+    },
+    defaultView: { ...current.defaultView, project },
+  };
+}
+
+/**
  * All write operations for the project detail page.
  *
  * @param orgId - The active organization id.
  * @param projectId - The project being mutated.
  */
-export function useProjectMutations(orgId: string, projectId: string): ProjectMutations {
+export function useProjectMutations(
+  orgId: string,
+  projectId: string,
+  aggregateKey: ReturnType<typeof queryKeys.projectAggregate> = queryKeys.projectAggregate(
+    orgId,
+    projectId,
+  ),
+  updatesKey = [...aggregateKey, 'updates'] as const,
+): ProjectMutations {
   const queryClient = useQueryClient();
   const subject = ProjectSubjectRef.parse({ subjectType: 'project', subjectId: projectId });
   const detailKey = useMemo(() => queryKeys.project(orgId, projectId), [orgId, projectId]);
-  const updatesKey = useMemo(() => [...detailKey, 'updates'] as const, [detailKey]);
 
   const patchCachedProject = useCallback(
-    (apply: (p: ProjectOut) => ProjectOut): ProjectDetailData | undefined => {
-      const previous = queryClient.getQueryData<ProjectDetailData>(detailKey);
+    (
+      apply: (p: ProjectOut) => ProjectOut,
+    ): {
+      aggregate?: ProjectDetailAggregate | undefined;
+      legacy?: ProjectDetailData | undefined;
+    } => {
+      const previous = queryClient.getQueryData<ProjectDetailAggregate>(aggregateKey);
+      queryClient.setQueryData<ProjectDetailAggregate>(aggregateKey, (cur) =>
+        patchProjectAggregate(cur, apply),
+      );
+      const legacy = queryClient.getQueryData<ProjectDetailData>(detailKey);
       queryClient.setQueryData<ProjectDetailData>(detailKey, (cur) =>
         cur && cur.project ? { ...cur, project: apply(cur.project) } : cur,
       );
-      return previous;
+      return { aggregate: previous, legacy };
     },
-    [queryClient, detailKey],
+    [queryClient, aggregateKey],
   );
 
   const patch = useApiMutation<
     ProjectOut,
     ProjectPatch,
-    { previous?: ProjectDetailData | undefined }
+    {
+      previous?: {
+        aggregate?: ProjectDetailAggregate | undefined;
+        legacy?: ProjectDetailData | undefined;
+      };
+    }
   >({
     mutationFn: (patchBody) =>
       unwrap(
@@ -122,21 +176,20 @@ export function useProjectMutations(orgId: string, projectId: string): ProjectMu
         'Could not update the project.',
       ),
     onMutate: async (patchBody) => {
-      await queryClient.cancelQueries({ queryKey: detailKey });
+      await queryClient.cancelQueries({ queryKey: aggregateKey });
       const body = toProjectPatchBody(patchBody);
       const previous = patchCachedProject((cur) => Object.assign({}, cur, body));
       if (patchBody.labelIds !== undefined) {
         const selected = new Set(patchBody.labelIds);
-        queryClient.setQueryData<ProjectDetailData>(detailKey, (cur) =>
-          cur
-            ? { ...cur, labels: cur.availableLabels.filter((item) => selected.has(item.id)) }
-            : cur,
-        );
+        // Labels are a picker-owned section rather than aggregate content. Its own query refetches
+        // after the write; the aggregate remains truthful without manufacturing label records.
+        void selected;
       }
       return { previous };
     },
     onError: (_err, _body, ctx) => {
-      if (ctx?.previous) queryClient.setQueryData(detailKey, ctx.previous);
+      if (ctx?.previous?.aggregate) queryClient.setQueryData(aggregateKey, ctx.previous.aggregate);
+      if (ctx?.previous?.legacy) queryClient.setQueryData(detailKey, ctx.previous.legacy);
     },
     onSuccess: (updated) => {
       patchCachedProject(() => updated);
@@ -145,7 +198,7 @@ export function useProjectMutations(orgId: string, projectId: string): ProjectMu
     // cache survives a reload — so without this, adding a mention to the description leaves that
     // tab showing the pre-edit answer until the staleness tier happens to expire.
     invalidateKeys: [
-      detailKey,
+      aggregateKey,
       queryKeys.projects(orgId),
       queryKeys.entityMentions(orgId, 'project', projectId),
     ],
@@ -159,7 +212,12 @@ export function useProjectMutations(orgId: string, projectId: string): ProjectMu
   const initiativeM = useApiMutation<
     undefined,
     readonly string[],
-    { previous?: ProjectDetailData | undefined }
+    {
+      previous?: {
+        aggregate?: ProjectDetailAggregate | undefined;
+        legacy?: ProjectDetailData | undefined;
+      };
+    }
   >({
     mutationFn: async (nextInitiativeIds) => {
       const current = initiativeIdsBeforeMutate.current;
@@ -189,18 +247,21 @@ export function useProjectMutations(orgId: string, projectId: string): ProjectMu
       return undefined;
     },
     onMutate: async (nextInitiativeIds) => {
-      await queryClient.cancelQueries({ queryKey: detailKey });
-      const previous = queryClient.getQueryData<ProjectDetailData>(detailKey);
-      initiativeIdsBeforeMutate.current = previous?.initiativeIds ?? [];
-      queryClient.setQueryData<ProjectDetailData>(detailKey, (cur) =>
-        cur ? { ...cur, initiativeIds: [...nextInitiativeIds].sort() } : cur,
+      await queryClient.cancelQueries({ queryKey: aggregateKey });
+      const aggregatePrevious = queryClient.getQueryData<ProjectDetailAggregate>(aggregateKey);
+      const legacyPrevious = queryClient.getQueryData<ProjectDetailData>(detailKey);
+      initiativeIdsBeforeMutate.current = legacyPrevious?.initiativeIds ?? [];
+      queryClient.setQueryData<ProjectDetailData>(detailKey, (current) =>
+        current ? { ...current, initiativeIds: [...nextInitiativeIds].sort() } : current,
       );
+      const previous = { aggregate: aggregatePrevious, legacy: legacyPrevious };
       return { previous };
     },
     onError: (_err, _next, ctx) => {
-      if (ctx?.previous) queryClient.setQueryData(detailKey, ctx.previous);
+      if (ctx?.previous?.aggregate) queryClient.setQueryData(aggregateKey, ctx.previous.aggregate);
+      if (ctx?.previous?.legacy) queryClient.setQueryData(detailKey, ctx.previous.legacy);
     },
-    invalidateKeys: [detailKey],
+    invalidateKeys: [aggregateKey, [...aggregateKey, 'relationships']],
   });
 
   const updateM = useApiMutation({
@@ -213,7 +274,7 @@ export function useProjectMutations(orgId: string, projectId: string): ProjectMu
           }),
         'Could not post your update.',
       ),
-    invalidateKeys: [updatesKey, detailKey],
+    invalidateKeys: [updatesKey, aggregateKey],
   });
 
   return {

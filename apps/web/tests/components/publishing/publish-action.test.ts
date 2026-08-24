@@ -5,6 +5,7 @@ import {
   publicationDialogState,
   resolvedPublicationDialogState,
 } from '@/components/publishing/publish-action';
+import { publicationStateStatus } from '@/components/publishing/use-publishing';
 
 const publication = PublicationOut.parse({
   id: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
@@ -27,6 +28,7 @@ describe('publicationDialogState', () => {
   });
 
   it('holds cached publication data until the current dialog opening initializes its slug', () => {
+    expect(publicationStateStatus(true, false, true, false)).toBe('loading');
     expect(resolvedPublicationDialogState('published', 2, 1)).toBe('loading');
     expect(resolvedPublicationDialogState('published', 2, 2)).toBe('published');
     expect(resolvedPublicationDialogState('error', 2, 1)).toBe('error');

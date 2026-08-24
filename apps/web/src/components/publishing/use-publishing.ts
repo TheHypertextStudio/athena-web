@@ -38,6 +38,18 @@ export interface PublicationState {
   readonly retry: () => void;
 }
 
+/** Derive the action-safe dialog state from a TanStack publication query. */
+export function publicationStateStatus(
+  enabled: boolean,
+  pending: boolean,
+  fetching: boolean,
+  failed: boolean,
+): PublicationState['status'] {
+  if (!enabled) return 'idle';
+  if (pending || fetching) return 'loading';
+  return failed ? 'error' : 'ready';
+}
+
 /**
  * Read one record's publication state.
  *
@@ -66,7 +78,12 @@ export function usePublicationState(
   );
   return {
     publication: query.data?.publication ?? null,
-    status: !enabled ? 'idle' : query.isPending ? 'loading' : query.isError ? 'error' : 'ready',
+    status: publicationStateStatus(
+      enabled,
+      query.isPending,
+      query.fetchStatus === 'fetching',
+      query.isError,
+    ),
     retry: () => {
       void query.refetch();
     },

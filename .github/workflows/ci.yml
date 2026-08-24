@@ -228,6 +228,12 @@ jobs:
 
       - run: pnpm turbo run test:coverage ${{ matrix.filter }} --concurrency=1
 
+      # A latency assertion cannot distinguish a query regression from coverage contention while
+      # hundreds of instrumented API suites occupy sibling workers. The API coverage command omits
+      # this one benchmark, then the API shard runs it alone with the same 300ms release limit.
+      - run: pnpm --filter @docket/api test:performance
+        if: matrix.group == 'api'
+
       # `turbo run test:coverage` only runs *package* suites. The repository-level suites under
       # `repo-tests/` — the CI gate policy (repo-tests/ci) and the launch-record reconciler
       # (repo-tests/launch) — belong to no workspace package, so turbo never sees them. Without

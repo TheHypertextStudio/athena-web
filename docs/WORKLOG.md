@@ -7,6 +7,34 @@
 
 ## Active Tasks
 
+### [CI-PERF-ISOLATION-001] Isolate the release performance gate
+
+- **Status**: REVIEW
+- **Started**: 2026-08-23
+- **Priority**: P0
+- **Description**: The work-view latency gate failed twice while it competed with 382
+  coverage-instrumented API suites. The Task query reported 499ms and 381ms p95 while the other
+  targets stayed below 111ms, so runner contention blocked production without identifying a query
+  regression.
+- **Approach**: Keep the existing 300ms release limit. Exclude the benchmark from the coverage run,
+  add a dedicated single-worker API performance command, and run that command as a required step in
+  the existing API test shard after coverage completes.
+- **Subtasks**:
+  - [x] Add a repository-policy regression for isolated performance gating.
+  - [x] Split the API coverage and performance commands without dropping either gate.
+  - [x] Run the isolated benchmark and CI policy validation.
+  - [ ] Deploy the exact integrated revision and verify production behavior.
+- **Blockers**: None.
+- **Validation**: The repository-policy regression failed while the benchmark still ran inside the
+  coverage suite. It now passes all 29 CI policy tests. The dedicated single-worker benchmark passes
+  at the unchanged 300ms p95 limit in 10.6 seconds. Vitest confirms that both the exclusion and
+  worker-bound options are supported by the installed version.
+- **Retrospective**: A latency gate must own the runner while it measures latency. Coverage remains
+  exhaustive after excluding only the benchmark because coverage measures source files, not test
+  files, and the benchmark remains a required step in the same deploy-gating job.
+
+---
+
 ### [COMPOSER-SIZE-001] Stabilize create-composer expansion
 
 - **Status**: COMPLETED

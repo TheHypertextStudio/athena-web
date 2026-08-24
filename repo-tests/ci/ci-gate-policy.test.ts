@@ -446,6 +446,26 @@ describe('the real workflows', () => {
     expect(test?.steps.every((step) => !step.continueOnError)).toBe(true);
   });
 
+  it('runs the API performance gate without coverage contention', () => {
+    const apiPackage = JSON.parse(
+      readFileSync(join(REPO_ROOT, 'apps/api/package.json'), 'utf8'),
+    ) as { scripts: Record<string, string> };
+    expect(apiPackage.scripts['test:coverage']).toContain(
+      '--exclude tests/work-views/performance.test.ts',
+    );
+    expect(apiPackage.scripts['test:performance']).toBe(
+      'vitest run tests/work-views/performance.test.ts --maxWorkers=1',
+    );
+
+    const ci = workflows.find((workflow) => workflow.path === '.github/workflows/ci.yml');
+    const test = ci?.jobs.find((job) => job.id === 'test');
+    const performanceStep = test?.steps.find(
+      (step) => step.run === 'pnpm --filter @docket/api test:performance',
+    );
+    expect(performanceStep?.condition).toBe("matrix.group == 'api'");
+    expect(performanceStep?.continueOnError).toBe(false);
+  });
+
   it('leaves no package untested when the test job is sharded', () => {
     // Sharding introduces a failure mode the coverage gate cannot see: a package that matches
     // no shard's filter is never run, and a suite that never runs cannot fail. The protection is

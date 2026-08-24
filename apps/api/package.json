@@ -28,7 +28,8 @@
     "openapi:export": "tsx scripts/export-openapi.ts",
     "clean": "rm -rf dist .turbo *.tsbuildinfo",
     "pretest:coverage": "tsc -p tsconfig.build.json",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage --exclude tests/work-views/performance.test.ts",
+    "test:performance": "vitest run tests/work-views/performance.test.ts --maxWorkers=1"
   },
   "dependencies": {
     "@docket/auth": "workspace:*",

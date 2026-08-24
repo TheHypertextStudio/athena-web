@@ -334,6 +334,7 @@ describe('project DTOs', () => {
       name: 'P',
       description: null,
       status: 'started',
+      priority: 'none',
       health: 'on_track',
       leadId: null,
       teamId: null,
@@ -345,6 +346,7 @@ describe('project DTOs', () => {
       targetDateResolution: null,
       targetDateFiscalYearStartMonth: null,
       createdAt: 'x',
+      updatedAt: 'x',
     });
     expect(parsed.health).toBe('on_track');
   });
@@ -491,6 +493,7 @@ describe('task DTOs', () => {
       dueDate: null,
       provenance: { source: 'native' },
       createdAt: 'x',
+      updatedAt: 'x',
     });
     expect(parsed.provenance.source).toBe('native');
     expect(parsed.startDate).toBeNull();

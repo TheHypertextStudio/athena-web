@@ -531,7 +531,7 @@ export default function TaskDetailPage(): JSX.Element {
 
           {linkedContentOpen ? (
             <section className="flex flex-col gap-2">
-              <h2 className="text-on-surface text-title-small font-medium">Dependency map</h2>
+              <h2 className="text-on-surface text-title-small">Dependency map</h2>
               <div className="bg-surface-container h-80 overflow-hidden rounded-xl">
                 <TaskGraphPanel
                   scope={{ orgId, rootTaskId: taskId, depth: 2 }}

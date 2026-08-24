@@ -440,6 +440,7 @@ describe('CalendarItemTaskLinkResultOut', () => {
           syncMode: null,
         },
         createdAt: '2026-07-01T00:00:00.000Z',
+        updatedAt: '2026-07-01T00:00:00.000Z',
       },
     });
     expect(parsed.link.taskId).toBe(TASK_ID);

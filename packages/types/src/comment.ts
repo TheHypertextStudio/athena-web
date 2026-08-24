@@ -34,6 +34,7 @@ const commentCreateFields = {
   ),
 };
 
+/** Body for creating a Comment on one validated subject. */
 export const CommentCreate = z
   .discriminatedUnion('subjectType', [
     TaskSubjectRef.extend(commentCreateFields),

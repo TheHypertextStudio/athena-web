@@ -164,7 +164,7 @@ export function ResourcesTab({
       ) : null}
 
       {loading ? (
-        <p className="text-on-surface-variant bg-surface-container-low rounded-xl px-4 py-8 text-center text-sm">
+        <p className="text-on-surface-variant bg-surface-container-low text-body-small rounded-xl px-4 py-8 text-center">
           Loading resources…
         </p>
       ) : resources.length > 0 ? (

@@ -48,6 +48,7 @@ describe('EntityDetailAggregate', () => {
           provenance: { source: 'native' },
           labels: [],
           createdAt: '2026-08-23T12:00:00.000Z',
+          updatedAt: '2026-08-23T12:00:00.000Z',
           milestoneId: null,
           cycleId: null,
           estimate: null,

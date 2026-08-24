@@ -51,6 +51,11 @@
 @docket/web typecheck` passes after the API build. The
   standalone E2E TypeScript project still has unrelated calendar, scheduler, MCP evidence, and JSX
   compiler errors, so CI must execute the new production-build browser test before rollout.
+  The first direct-main CI run stopped before deployment because this slice added three typed DTO
+  contracts without their required exported declarations and introduced four raw typography
+  utilities beyond the design-debt ledger. The affected contracts now have TSDoc, the detail UI
+  uses existing MD3 type roles, and all 761 types-package tests plus the nine documentation and
+  design-policy cases pass locally.
 
 ---
 

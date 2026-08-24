@@ -19,6 +19,7 @@ const UpdateSubjectRef = z.discriminatedUnion('subjectType', [
   InitiativeSubjectRef,
 ]);
 
+/** Query parameters for listing Updates on one validated subject. */
 export const UpdateListQuery = UpdateSubjectRef.meta({
   id: 'UpdateListQuery',
   description: 'List updates for a subject.',
@@ -34,6 +35,7 @@ const updateCreateFields = {
   body: z.string().min(1).describe('The update narrative (markdown). Required, non-empty.'),
 };
 
+/** Body for posting an Update on one validated subject. */
 export const UpdateCreate = z
   .discriminatedUnion('subjectType', [
     ProjectSubjectRef.extend(updateCreateFields),

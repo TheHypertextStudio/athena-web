@@ -53,7 +53,7 @@ export function InitiativeRelationshipPanels({
           </Button>
         </div>
         {loading ? (
-          <p className="text-on-surface-variant rounded-xl px-4 py-8 text-center text-sm">
+          <p className="text-on-surface-variant text-body-small rounded-xl px-4 py-8 text-center">
             Loading sub-{initiativeNoun.toLowerCase()}…
           </p>
         ) : children.length ? (
@@ -97,7 +97,7 @@ export function InitiativeRelationshipPanels({
         className="no-print flex min-w-0 flex-col gap-2"
       >
         {loading ? (
-          <p className="text-on-surface-variant rounded-xl px-4 py-8 text-center text-sm">
+          <p className="text-on-surface-variant text-body-small rounded-xl px-4 py-8 text-center">
             Loading connected work…
           </p>
         ) : connectedWork.length ? (

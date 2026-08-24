@@ -13,7 +13,7 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: nextPush, replace: nextReplace }),
 }));
 
-const { AppLocationProvider, navigateAuthenticated, useAppLocation, useTypedRoute } =
+const { AppLocationProvider, navigateAuthenticated, useAppLocation, useAppParams, useTypedRoute } =
   await import('@/lib/app-location');
 
 const ORG_ID = OrganizationId.parse('01ARZ3NDEKTSV4RRFFQ69G5FAV');
@@ -26,6 +26,11 @@ function LocationProbe(): React.JSX.Element {
 function TaskRouteProbe(): React.JSX.Element {
   const route = useTypedRoute('/orgs/[orgId]/tasks/[taskId]');
   return <output>{`${route.params.orgId}:${route.params.taskId}`}</output>;
+}
+
+function CompatibilityParamsProbe(): React.JSX.Element {
+  const { taskId } = useAppParams<{ taskId: string }>();
+  return <output>{taskId}</output>;
 }
 
 beforeEach(() => {
@@ -75,6 +80,18 @@ describe('authenticated app location', () => {
     );
 
     expect(screen.getByText(`${ORG_ID}:${TASK_ID}`)).toBeInTheDocument();
+  });
+
+  it('does not expose malformed parameters through the compatibility hook', () => {
+    window.history.replaceState(null, '', '/orgs/not-an-org/tasks/not-a-task');
+
+    expect(() =>
+      render(
+        <AppLocationProvider serverPath="/orgs/not-an-org/tasks/not-a-task">
+          <CompatibilityParamsProbe />
+        </AppLocationProvider>,
+      ),
+    ).toThrow('Cannot read parameters from invalid authenticated route');
   });
 
   it('replaces browser history through the same validated transport', () => {

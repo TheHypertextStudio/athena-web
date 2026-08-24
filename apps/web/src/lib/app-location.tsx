@@ -370,23 +370,21 @@ export function useAppLocation(): AppLocation {
  * The current route's params.
  *
  * @remarks
- * The direct replacement for `useParams`, down to the unchecked generic: the caller names the shape
- * it expects and gets it, exactly as Next's hook behaves. Keeping the signature identical is what
- * let every existing call site move here by changing its import and nothing else.
- *
- * A route with a catch-all segment yields an array for that param, so a caller naming it `string`
- * would be wrong — the same way it would be wrong with `useParams`.
+ * Compatibility access for authenticated surfaces that have not yet moved to
+ * {@link useTypedRoute}. It validates the current pathname through the generated route map before
+ * exposing values, so an invalid URL cannot start a query through this escape hatch.
  *
  * @typeParam T - The params this route is expected to carry.
  * @returns The params for the matched route.
  */
-// The type parameter appears once and is therefore an unchecked cast rather than a real generic —
-// which is exactly what Next's `useParams<T>()` is too. Matching that signature is what let 20 call
-// sites move here by changing an import and nothing else, and narrowing it to the union the matcher
-// actually returns would have meant editing every one of them to re-narrow at the use site.
 // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
 export function useAppParams<T extends Record<string, string | readonly string[]>>(): T {
-  return useAppLocation().params as T;
+  const { pathname } = useAppLocation();
+  const result = parseAuthenticatedRoute(pathname);
+  if (result.kind !== 'matched') {
+    throw new Error(`Cannot read parameters from invalid authenticated route ${pathname}.`);
+  }
+  return result.route.params as T;
 }
 
 /**

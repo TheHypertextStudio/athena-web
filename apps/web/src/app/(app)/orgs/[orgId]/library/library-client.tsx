@@ -3,7 +3,7 @@
 import type { JSX } from 'react';
 
 import LibraryClient from '@/components/library/library-client';
-import { useAppParams } from '@/lib/app-location';
+import { useTypedRoute } from '@/lib/app-location';
 
 /**
  * The Library route's client entry point.
@@ -21,6 +21,8 @@ import { useAppParams } from '@/lib/app-location';
  * @returns the Library roster for the org in the current URL.
  */
 export default function LibraryRouteClient(): JSX.Element {
-  const { orgId } = useAppParams<{ orgId: string }>();
+  const {
+    params: { orgId },
+  } = useTypedRoute('/orgs/[orgId]/library');
   return <LibraryClient orgId={orgId} />;
 }

@@ -23,7 +23,7 @@ import { FilterToolbar } from '@/components/views/filter-toolbar';
 import { type LayoutMode, useLayoutMode } from '@/components/views/use-layout-mode';
 import { useViewState } from '@/components/views/use-view-state';
 import { api } from '@/lib/api';
-import { useAppParams } from '@/lib/app-location';
+import { useTypedRoute } from '@/lib/app-location';
 import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
 import { userErrorMessage } from '@/lib/problem';
 
@@ -51,7 +51,9 @@ import { userErrorMessage } from '@/lib/problem';
  * twenty teams costs five requests rather than sixty.
  */
 export default function TeamsListClient(): JSX.Element {
-  const { orgId } = useAppParams<{ orgId: string }>();
+  const {
+    params: { orgId },
+  } = useTypedRoute('/orgs/[orgId]/teams');
   const { openCreate } = useCreateObject();
 
   const projectNoun = useVocabulary('project').toLowerCase();

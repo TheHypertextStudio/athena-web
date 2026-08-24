@@ -7,13 +7,15 @@ import type {
   EntityDisplayOut,
   Health,
   LabelOut,
-  ProjectOut,
+  ObjectCommandReceipt,
+  ObjectCommandRequest,
+  ObjectCommandResult,
   UpdateOut,
 } from '@docket/types';
 import { defaultEntityDisplay, ProjectSubjectRef } from '@docket/types';
 import type { PickerOption } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Ellipsis, RefreshCw, Trash2 } from '@docket/ui/icons';
+import { Ellipsis, RefreshCw, Trash2, Undo } from '@docket/ui/icons';
 import {
   Button,
   ControlGroup,
@@ -22,6 +24,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  Surface,
   Tabs,
   menuDestructiveItem,
 } from '@docket/ui/primitives';
@@ -108,6 +111,8 @@ export default function ProjectDetailPage(): JSX.Element {
   );
   const [tab, setTab] = useState<TabId>('overview');
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [trashedReceipt, setTrashedReceipt] = useState<ObjectCommandReceipt | null>(null);
+  const [restoreFailure, setRestoreFailure] = useState<string | null>(null);
   const [repeatProjectOpen, setRepeatProjectOpen] = useState(false);
   const [ownerPickerOpen, setOwnerPickerOpen] = useState(false);
   const [timelinePickerOpen, setTimelinePickerOpen] = useState(false);
@@ -118,15 +123,17 @@ export default function ProjectDetailPage(): JSX.Element {
 
   useEffect(() => {
     setTerminalState(null);
+    setTrashedReceipt(null);
+    setRestoreFailure(null);
   }, [projectId]);
 
   useEffect(() => {
-    if (terminalFailure === null) return;
+    if (trashedReceipt !== null || terminalFailure === null) return;
     setTerminalState(terminalFailure);
     setAggregateEnabled(false);
     void removeNavigationSnapshot('project', projectId);
     queryClient.removeQueries({ queryKey: aggregateKey, exact: true });
-  }, [aggregateKey, projectId, queryClient, terminalFailure]);
+  }, [aggregateKey, projectId, queryClient, terminalFailure, trashedReceipt]);
 
   const membersQ = useApiQuery({ ...orgMembersDef(orgId), enabled: ownerPickerOpen });
   const programsQ = useApiQuery(
@@ -202,6 +209,7 @@ export default function ProjectDetailPage(): JSX.Element {
   const createLabel = useCreateLabel(orgId);
   const canEdit = aggregate?.capabilities.contribute ?? false;
   const canDelete = aggregate?.capabilities.manage ?? false;
+  const projectTaskCount = aggregate?.defaultView.progress.taskCount ?? 0;
   const display = displayQ.data ?? defaultEntityDisplay('project', projectId);
   const memberOptions = useMemo<readonly PickerOption[]>(() => {
     const options = memberActorOptions(membersQ.data?.items ?? []);
@@ -314,17 +322,104 @@ export default function ProjectDetailPage(): JSX.Element {
       ),
     invalidateKeys: [updatesKey, aggregateKey],
   });
-  const deleteProject = useApiMutation<ProjectOut, undefined>({
-    mutationFn: () =>
+  const moveProjectToTrash = useApiMutation<ObjectCommandResult, ObjectCommandRequest>({
+    mutationFn: (request) =>
       unwrap(
-        () => api.v1.orgs[':orgId'].projects[':id'].$delete({ param: { orgId, id: projectId } }),
-        `Could not delete this ${projectNoun.toLowerCase()}.`,
+        () =>
+          api.v1.orgs[':orgId']['object-commands'].$post(
+            { param: { orgId }, json: request },
+            { headers: { 'Idempotency-Key': request.commandId } },
+          ),
+        `Could not move this ${projectNoun.toLowerCase()} to trash.`,
       ),
     invalidateKeys: [queryKeys.projects(orgId)],
-    onSuccess: () => {
-      router.push(`/orgs/${orgId}/projects`);
+    onSuccess: (result) => {
+      setTrashedReceipt(result.receipt);
+      setRestoreFailure(null);
+      setConfirmDeleteOpen(false);
     },
   });
+  const restoreProject = useApiMutation<ObjectCommandResult, ObjectCommandRequest>({
+    mutationFn: (request) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId']['object-commands'].$post(
+            { param: { orgId }, json: request },
+            { headers: { 'Idempotency-Key': request.commandId } },
+          ),
+        `Could not restore this ${projectNoun.toLowerCase()}.`,
+      ),
+    onSuccess: async (result) => {
+      if (!result.appliedIds.includes(projectId)) {
+        setRestoreFailure(
+          `This ${projectNoun.toLowerCase()} could not be restored because it changed elsewhere or you no longer have permission.`,
+        );
+        return;
+      }
+      setAggregateEnabled(true);
+      await queryClient.refetchQueries({ queryKey: aggregateKey, exact: true, type: 'active' });
+      if (queryClient.getQueryState(aggregateKey)?.error != null) {
+        setRestoreFailure(
+          `This ${projectNoun.toLowerCase()} was restored, but its page could not refresh. Try again or return to Projects.`,
+        );
+        return;
+      }
+      setTrashedReceipt(null);
+      setRestoreFailure(null);
+      setTerminalState(null);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projects(orgId) });
+    },
+  });
+
+  if (trashedReceipt !== null) {
+    return (
+      <div className="mx-auto flex min-h-80 max-w-3xl items-center p-6">
+        <Surface tone="card" pad="roomy" className="w-full space-y-4">
+          <div role="status" className="space-y-1">
+            <h1 className="text-on-surface text-headline-small">{projectNoun} moved to trash</h1>
+            <p className="text-on-surface-variant text-body-medium">
+              {projectTaskCount > 0
+                ? `${String(projectTaskCount)} ${projectTaskCount === 1 ? 'Task remains' : 'Tasks remain'} linked to this ${projectNoun.toLowerCase()}. Restoring it returns the same Tasks and relationships to active views.`
+                : `This ${projectNoun.toLowerCase()} is hidden from active views and can be restored.`}
+            </p>
+          </div>
+          {(restoreFailure ?? restoreProject.error) ? (
+            <p role="alert" className="text-error text-body-medium">
+              {restoreFailure ??
+                userErrorMessage(
+                  restoreProject.error,
+                  `Could not restore this ${projectNoun.toLowerCase()}.`,
+                )}
+            </p>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="default"
+              disabled={restoreProject.isPending}
+              onClick={() => {
+                setRestoreFailure(null);
+                restoreProject.mutate({
+                  commandId: crypto.randomUUID(),
+                  direction: 'undo',
+                  receipt: trashedReceipt,
+                });
+              }}
+            >
+              <Undo className="size-4" /> Undo
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => router.push(`/orgs/${orgId}/projects`)}
+            >
+              Back to Projects
+            </Button>
+          </div>
+        </Surface>
+      </div>
+    );
+  }
 
   if (terminalState !== null) {
     return (
@@ -543,12 +638,12 @@ export default function ProjectDetailPage(): JSX.Element {
                   <DropdownMenuItem
                     className={menuDestructiveItem()}
                     onSelect={() => {
-                      deleteProject.reset();
+                      moveProjectToTrash.reset();
                       setConfirmDeleteOpen(true);
                     }}
                   >
                     <Trash2 className="size-4" />
-                    Delete {projectNoun.toLowerCase()}
+                    Move {projectNoun.toLowerCase()} to trash
                   </DropdownMenuItem>
                 ) : null}
               </DropdownMenuContent>
@@ -702,23 +797,32 @@ export default function ProjectDetailPage(): JSX.Element {
       <ConfirmDestructiveDialog
         open={confirmDeleteOpen}
         onOpenChange={(next) => {
-          if (!next) deleteProject.reset();
+          if (!next) moveProjectToTrash.reset();
           setConfirmDeleteOpen(next);
         }}
-        title={`Delete this ${projectNoun.toLowerCase()}?`}
-        description={`This permanently removes “${project.name}” along with its milestones and tasks. This can't be undone.`}
-        confirmLabel={`Delete ${projectNoun.toLowerCase()}`}
-        pending={deleteProject.isPending}
+        title={`Move this ${projectNoun.toLowerCase()} to trash?`}
+        description={
+          projectTaskCount > 0
+            ? `This ${projectNoun.toLowerCase()} contains ${String(projectTaskCount)} ${projectTaskCount === 1 ? 'Task' : 'Tasks'}. Its Tasks and relationships stay linked, so Undo restores the same work.`
+            : `“${project.name}” will leave active views. You can restore it with Undo.`
+        }
+        confirmLabel="Move to trash"
+        pending={moveProjectToTrash.isPending}
         error={
-          deleteProject.error
+          moveProjectToTrash.error
             ? userErrorMessage(
-                deleteProject.error,
-                `Could not delete this ${projectNoun.toLowerCase()}.`,
+                moveProjectToTrash.error,
+                `Could not move this ${projectNoun.toLowerCase()} to trash.`,
               )
             : null
         }
         onConfirm={() => {
-          deleteProject.mutate(undefined);
+          moveProjectToTrash.mutate({
+            commandId: crypto.randomUUID(),
+            objectKind: 'project',
+            objectIds: [projectId],
+            operation: { type: 'trash' },
+          });
         }}
       />
       <RepeatProjectDialog

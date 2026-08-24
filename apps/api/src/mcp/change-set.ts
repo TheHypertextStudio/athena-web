@@ -219,6 +219,8 @@ export interface UndoOutcome {
 export interface RecordChangeSetInput {
   /** Stable caller-owned id when the caller already has an idempotency key. */
   id?: string;
+  /** Persist the command header even when the normalized change list is empty. */
+  recordEmpty?: boolean;
   orgId: string;
   actorId: string;
   origin: ChangeOrigin;
@@ -254,13 +256,13 @@ export function objectCommandChangeSetId(
  *
  * @param tx - The transaction that owns both the domain write and its audit record.
  * @param input - The actor, origin, summary, and normalized changes.
- * @returns the new change-set id, or null when nothing changed.
+ * @returns the new change-set id, or null when nothing changed and `recordEmpty` is false.
  */
 export async function recordChangeSetInTx(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
   input: RecordChangeSetInput,
 ): Promise<string | null> {
-  if (input.changes.length === 0) return null;
+  if (input.changes.length === 0 && input.recordEmpty !== true) return null;
   const id = input.id ?? genId();
   await tx.insert(changeSet).values({
     id,

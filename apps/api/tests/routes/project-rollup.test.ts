@@ -312,6 +312,30 @@ describe('project roll-up (GET /:id/rollup)', () => {
     expect((await reader.request(`/${MISSING_ULID}/work`)).status).toBe(404);
   });
 
+  it('omits archived Tasks from deferred work and roll-up membership', async () => {
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const projectId = await makeProject(statusId, orgId, teamId, humanActorId);
+    const activeTaskId = await makeTask(statusId, orgId, teamId, humanActorId, { projectId });
+    const archivedTaskId = await makeTask(statusId, orgId, teamId, humanActorId, { projectId });
+    await db
+      .update(schema.task)
+      .set({ visibility: 'public' })
+      .where(eq(schema.task.id, activeTaskId));
+    await db
+      .update(schema.task)
+      .set({ visibility: 'public', archivedAt: new Date() })
+      .where(eq(schema.task.id, archivedTaskId));
+    const reader = appWithActor(projectRollup, orgId, ['view'], humanActorId);
+
+    const work = await json<{ tasks: { id: string }[] }>(
+      await reader.request(`/${projectId}/work`),
+    );
+    expect(work.tasks.map((task) => task.id)).toEqual([activeTaskId]);
+
+    const rollup = await json<RollupBody>(await reader.request(`/${projectId}/rollup`));
+    expect(rollup.taskMilestones.map((entry) => entry.taskId)).toEqual([activeTaskId]);
+  });
+
   it('404s on a missing project', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const reader = appWithActor(projectRollup, orgId, ['view'], humanActorId);

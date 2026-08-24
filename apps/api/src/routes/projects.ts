@@ -466,7 +466,7 @@ const projects = new Hono<AppEnv>()
             completedAt: task.completedAt,
           })
           .from(task)
-          .where(eq(task.organizationId, orgId)),
+          .where(and(eq(task.organizationId, orgId), isNull(task.archivedAt))),
         db
           .select({
             blockingProjectId: projectDependency.blockingProjectId,
@@ -613,7 +613,9 @@ const projects = new Hono<AppEnv>()
         )
         .leftJoin(team, and(eq(project.teamId, team.id), eq(team.organizationId, orgId)))
         .leftJoin(actor, and(eq(project.leadId, actor.id), eq(actor.organizationId, orgId)))
-        .where(and(eq(project.id, id), eq(project.organizationId, orgId)))
+        .where(
+          and(eq(project.id, id), eq(project.organizationId, orgId), isNull(project.archivedAt)),
+        )
         .limit(1);
       const aggregateRow = aggregateRows[0];
       if (!aggregateRow) throw new NotFoundError('Project not found');
@@ -636,7 +638,14 @@ const projects = new Hono<AppEnv>()
             ),
         })
         .from(task)
-        .where(and(eq(task.organizationId, orgId), eq(task.projectId, row.id), taskView));
+        .where(
+          and(
+            eq(task.organizationId, orgId),
+            eq(task.projectId, row.id),
+            isNull(task.archivedAt),
+            taskView,
+          ),
+        );
 
       return ok(c, ProjectDetailAggregate, {
         target: 'project',
@@ -940,7 +949,9 @@ const projects = new Hono<AppEnv>()
           completedAt: task.completedAt,
         })
         .from(task)
-        .where(and(eq(task.projectId, id), eq(task.organizationId, orgId)));
+        .where(
+          and(eq(task.projectId, id), eq(task.organizationId, orgId), isNull(task.archivedAt)),
+        );
 
       const canView = await buildTaskViewFilter(orgId, actorId);
       return ok(c, ProjectProgress, computeProgress(taskRows.filter(canView)));

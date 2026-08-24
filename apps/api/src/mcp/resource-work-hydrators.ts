@@ -12,7 +12,7 @@ import {
   update,
 } from '@docket/db';
 import { defaultCycleName } from '@docket/types';
-import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, or } from 'drizzle-orm';
 
 import { NotFoundError } from '../error';
 import type { ViewableTaskParts } from '../routes/task-helpers';
@@ -167,7 +167,7 @@ export async function hydrateProject(
   const rows = await db
     .select()
     .from(project)
-    .where(and(eq(project.id, id), eq(project.organizationId, orgId)))
+    .where(and(eq(project.id, id), eq(project.organizationId, orgId), isNull(project.archivedAt)))
     .limit(1);
   const p = rows[0];
   if (!p) throw new NotFoundError();
@@ -247,8 +247,14 @@ export async function hydrateProgram(
   const projectRows = await db
     .select({ id: project.id, name: project.name })
     .from(project)
-    .where(and(eq(project.programId, id), eq(project.organizationId, orgId)));
+    .where(
+      and(eq(project.programId, id), eq(project.organizationId, orgId), isNull(project.archivedAt)),
+    );
   const projectIds = projectRows.map((r) => r.id);
+  const programTaskScope =
+    projectIds.length > 0
+      ? or(inArray(task.projectId, projectIds), and(isNull(task.projectId), eq(task.programId, id)))
+      : and(isNull(task.projectId), eq(task.programId, id));
 
   const [taskRows, initiativeRows, latestUpdate] = await Promise.all([
     db
@@ -260,13 +266,7 @@ export async function hydrateProgram(
         visibility: task.visibility,
       })
       .from(task)
-      .where(
-        and(
-          eq(task.organizationId, orgId),
-          isNull(task.archivedAt),
-          projectIds.length > 0 ? inArray(task.projectId, projectIds) : eq(task.programId, id),
-        ),
-      ),
+      .where(and(eq(task.organizationId, orgId), isNull(task.archivedAt), programTaskScope)),
     db
       .select({ id: initiative.id, name: initiative.name })
       .from(initiativeProgram)

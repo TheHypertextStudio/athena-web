@@ -343,7 +343,7 @@ export function registerStaticResources(server: McpRegistrar, ctx: McpContext): 
                   organizationId: project.organizationId,
                 })
                 .from(project)
-                .where(inArray(project.organizationId, orgIds)),
+                .where(and(inArray(project.organizationId, orgIds), isNull(project.archivedAt))),
             ])
           : [[], []];
       const access = await resolveResourceAccess(ctx.principal.userId, [

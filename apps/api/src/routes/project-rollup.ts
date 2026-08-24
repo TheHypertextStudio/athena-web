@@ -74,7 +74,9 @@ const projectRollup = new Hono<AppEnv>()
         db
           .select()
           .from(task)
-          .where(and(eq(task.projectId, id), eq(task.organizationId, orgId))),
+          .where(
+            and(eq(task.projectId, id), eq(task.organizationId, orgId), isNull(task.archivedAt)),
+          ),
         db
           .select()
           .from(milestone)
@@ -140,7 +142,9 @@ const projectRollup = new Hono<AppEnv>()
           visibility: task.visibility,
         })
         .from(task)
-        .where(and(eq(task.projectId, id), eq(task.organizationId, orgId)));
+        .where(
+          and(eq(task.projectId, id), eq(task.organizationId, orgId), isNull(task.archivedAt)),
+        );
       const canView = await buildTaskViewFilter(orgId, actorId);
       const visibleTaskRows = taskRows.filter((row) =>
         canView({

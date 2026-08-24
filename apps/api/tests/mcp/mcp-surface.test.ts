@@ -1551,6 +1551,34 @@ describe('hub resources', () => {
     );
   });
 
+  it('hides archived Projects and their Tasks from active Project, Program, and Hub resources', async () => {
+    const s = await seedOrg(['view']);
+    await db
+      .update(schema.project)
+      .set({ programId: s.programId, archivedAt: new Date() })
+      .where(eq(schema.project.id, s.projectId));
+    await db
+      .update(schema.task)
+      .set({ projectId: s.projectId, programId: s.programId })
+      .where(eq(schema.task.id, s.taskId));
+    const client = await connect(s.ctx);
+
+    await expect(
+      client.readResource({ uri: `docket://${s.orgId}/project/${s.projectId}` }),
+    ).rejects.toThrow(/not_found|Not found/i);
+
+    const program = readJson(
+      (await client.readResource({ uri: `docket://${s.orgId}/program/${s.programId}` })).contents,
+    );
+    expect(JSON.stringify(program)).not.toContain(s.projectId);
+    expect(JSON.stringify(program)).not.toContain(s.taskId);
+
+    const portfolio = readJson(
+      (await client.readResource({ uri: 'docket://hub/portfolio' })).contents,
+    );
+    expect(JSON.stringify(portfolio)).not.toContain(s.projectId);
+  });
+
   it('does not expose a private legacy plan pointer through the static Hub resource', async () => {
     const s = await seedOrg([]);
     const [guest] = await db

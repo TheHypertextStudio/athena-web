@@ -726,6 +726,28 @@ async function assertActiveHumanProjectLead(
   if (!rows[0]) throw new NotFoundError('Lead not found');
 }
 
+async function assertActiveTaskAssignee(
+  database: Dbh,
+  orgId: string,
+  id: string | null,
+): Promise<void> {
+  if (id === null) return;
+  const rows = await database
+    .select({ id: actor.id })
+    .from(actor)
+    .where(
+      and(
+        eq(actor.organizationId, orgId),
+        eq(actor.id, id),
+        inArray(actor.kind, ['human', 'agent']),
+        eq(actor.status, 'active'),
+        isNull(actor.archivedAt),
+      ),
+    )
+    .limit(1);
+  if (!rows[0]) throw new NotFoundError('Assignee not found');
+}
+
 async function validateReferences(
   database: Dbh,
   orgId: string,
@@ -736,8 +758,7 @@ async function validateReferences(
   const op = command.operation;
   if (op.type === 'replace_property') {
     if (command.objectKind === 'task') {
-      if (op.property === 'assigneeId')
-        await assertReference(database, actor, orgId, op.value, 'Assignee not found');
+      if (op.property === 'assigneeId') await assertActiveTaskAssignee(database, orgId, op.value);
       if (op.property === 'projectId') {
         await assertActiveProject(database, orgId, op.value);
         if (op.value !== null) {
@@ -1510,6 +1531,7 @@ async function executeForward(
       origin: { tool: 'canvas', client: 'web', sessionId: command.commandId },
       summary: command.operation.type.replaceAll('_', ' '),
       changes: audit,
+      recordEmpty: true,
     });
     const result: z.input<typeof ObjectCommandResult> = {
       appliedIds: command.objectIds,
@@ -1918,8 +1940,7 @@ async function assertReplayObjectTarget(
 ): Promise<void> {
   if (target === null) return;
   if (kind === 'task') {
-    if (property === 'assigneeId')
-      await assertReference(database, actor, orgId, String(target), 'Assignee not found');
+    if (property === 'assigneeId') await assertActiveTaskAssignee(database, orgId, String(target));
     if (property === 'projectId') {
       await assertActiveProject(database, orgId, String(target));
       await assertResourceCapability(

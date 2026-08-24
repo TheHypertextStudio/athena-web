@@ -1749,6 +1749,72 @@ describe('object commands', () => {
     expect(rows.every(({ leadId }) => leadId === mine.humanActorId)).toBe(true);
   });
 
+  it('rejects Team actors as Task assignees during forward commands and replay', async () => {
+    const seeded = await seedCommandOrg();
+    const [taskRow] = await db
+      .insert(schema.task)
+      .values({
+        organizationId: seeded.orgId,
+        teamId: seeded.teamId,
+        title: 'Person or agent only',
+        state: 'backlog',
+        statusId: seeded.statusId('task', 'backlog'),
+      })
+      .returning({ id: schema.task.id });
+    const [teamActor] = await db
+      .insert(schema.actor)
+      .values({
+        organizationId: seeded.orgId,
+        kind: 'team',
+        teamId: seeded.teamId,
+        displayName: 'Core team',
+      })
+      .returning({ id: schema.actor.id });
+    const [agentActor] = await db
+      .insert(schema.actor)
+      .values({ organizationId: seeded.orgId, kind: 'agent', displayName: 'Automation agent' })
+      .returning({ id: schema.actor.id });
+    if (!taskRow || !teamActor || !agentActor) throw new Error('assignee fixture insert failed');
+    const app = appWithActor(objectCommands, seeded.orgId, ['manage'], seeded.humanActorId);
+
+    const rejected = await send(app, {
+      commandId: 'reject-team-assignee',
+      objectKind: 'task',
+      objectIds: [taskRow.id],
+      operation: { type: 'replace_property', property: 'assigneeId', value: teamActor.id },
+    });
+    expect(rejected.status).toBe(404);
+
+    const assigned = await send(app, {
+      commandId: 'assign-agent-before-kind-drift',
+      objectKind: 'task',
+      objectIds: [taskRow.id],
+      operation: { type: 'replace_property', property: 'assigneeId', value: agentActor.id },
+    });
+    expect(assigned.status).toBe(200);
+    const assignedResult = (await assigned.json()) as { receipt: Record<string, unknown> };
+    const undone = await send(app, {
+      commandId: 'undo-agent-before-kind-drift',
+      direction: 'undo',
+      receipt: assignedResult.receipt,
+    });
+    expect(undone.status).toBe(200);
+    const undoneResult = (await undone.json()) as { receipt: Record<string, unknown> };
+    await db.delete(schema.actor).where(eq(schema.actor.id, teamActor.id));
+    await db
+      .update(schema.actor)
+      .set({ kind: 'team', teamId: seeded.teamId })
+      .where(eq(schema.actor.id, agentActor.id));
+
+    const redo = await send(app, {
+      commandId: 'redo-agent-after-kind-drift',
+      direction: 'redo',
+      receipt: undoneResult.receipt,
+    });
+    expect(redo.status).toBe(200);
+    expect(await redo.json()).toMatchObject({ appliedIds: [], deniedIds: [taskRow.id] });
+  });
+
   it('rejects a denied command without changing the object', async () => {
     const seeded = await seedBaseOrg(db, schema);
     const row = await seedProject(db, schema, seeded.statusId, {
@@ -1830,6 +1896,50 @@ describe('object commands', () => {
     expect(
       await db.select().from(schema.projectLabel).where(eq(schema.projectLabel.projectId, row.id)),
     ).toHaveLength(0);
+  });
+
+  it('accepts replay of a no-op association receipt', async () => {
+    const seeded = await seedCommandOrg();
+    const row = await seedProject(db, schema, seeded.statusId, {
+      organizationId: seeded.orgId,
+      teamId: seeded.teamId,
+      createdBy: seeded.humanActorId,
+      name: 'Already labeled',
+    });
+    const [label] = await db
+      .insert(schema.label)
+      .values({ organizationId: seeded.orgId, name: 'Existing', color: 'blue' })
+      .returning({ id: schema.label.id });
+    if (!label) throw new Error('label insert returned no row');
+    await db.insert(schema.projectLabel).values({
+      organizationId: seeded.orgId,
+      projectId: row.id,
+      labelId: label.id,
+    });
+    const app = appWithActor(objectCommands, seeded.orgId, ['contribute'], seeded.humanActorId);
+    const forward = await send(app, {
+      commandId: 'add-existing-label-no-op',
+      objectKind: 'project',
+      objectIds: [row.id],
+      operation: {
+        type: 'add_association',
+        association: 'label',
+        associationIds: [label.id],
+      },
+    });
+    expect(forward.status).toBe(200);
+    const forwardResult = (await forward.json()) as {
+      receipt: { entries: unknown[] } & Record<string, unknown>;
+    };
+    expect(forwardResult.receipt.entries).toEqual([]);
+
+    const replay = await send(app, {
+      commandId: 'replay-add-existing-label-no-op',
+      direction: 'undo',
+      receipt: forwardResult.receipt,
+    });
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toMatchObject({ appliedIds: [], receipt: { entries: [] } });
   });
 
   it('preserves dependency direction and rejects cycle-closing and self edges', async () => {

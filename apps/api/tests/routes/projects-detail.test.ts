@@ -162,6 +162,51 @@ describe('projects detail router', () => {
     expect(body.status).toBe('planned');
   });
 
+  it('hides archived Projects from the authoritative detail aggregate', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const reader = appWithActor(projects, orgId, ['view'], humanActorId);
+    const id = await seedProject(orgId, teamId, humanActorId);
+    await db
+      .update(schema.project)
+      .set({ archivedAt: new Date() })
+      .where(eq(schema.project.id, id));
+
+    expect((await reader.request(`/${id}/aggregate-detail`)).status).toBe(404);
+  });
+
+  it('omits archived Tasks from overview and Project progress aggregates', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const reader = appWithActor(projects, orgId, ['view'], humanActorId);
+    const id = await seedProject(orgId, teamId, humanActorId);
+    await seedTask({ orgId, teamId, projectId: id, completed: false });
+    const archivedTaskId = await seedTask({
+      orgId,
+      teamId,
+      projectId: id,
+      estimate: 50,
+      completed: true,
+    });
+    await db
+      .update(schema.task)
+      .set({ archivedAt: new Date() })
+      .where(eq(schema.task.id, archivedTaskId));
+
+    const overview = await json<{ items: { id: string; taskCount: number }[] }>(
+      await reader.request('/overview'),
+    );
+    expect(overview.items.find((item) => item.id === id)?.taskCount).toBe(1);
+
+    const detail = await json<{ defaultView: { progress: { taskCount: number } } }>(
+      await reader.request(`/${id}/aggregate-detail`),
+    );
+    expect(detail.defaultView.progress.taskCount).toBe(1);
+
+    const progress = await json<{ taskCount: number; completedCount: number }>(
+      await reader.request(`/${id}/progress`),
+    );
+    expect(progress).toMatchObject({ taskCount: 1, completedCount: 0 });
+  });
+
   it('composes the portfolio overview with display, task progress, and dependency edges', async () => {
     const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const reader = appWithActor(projects, orgId, ['view'], humanActorId);

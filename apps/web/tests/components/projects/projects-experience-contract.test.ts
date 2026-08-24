@@ -123,6 +123,18 @@ describe('Projects experience contract', () => {
     );
   });
 
+  it('moves a Project to recoverable trash and offers receipt replay', () => {
+    const detail = source(detailPath);
+
+    expect(detail).toContain("['object-commands'].$post");
+    expect(detail).toContain("operation: { type: 'trash' }");
+    expect(detail).toContain("direction: 'undo'");
+    expect(detail).toContain('Move to trash');
+    expect(detail).toContain('Undo');
+    expect(detail).not.toContain("projects[':id'].$delete");
+    expect(detail).not.toContain('permanently removes');
+  });
+
   it('operates properties as an inline metadata chip row, not an anchored disclosure', () => {
     const detail = source(detailPath);
     const layout = source(entityDetailLayoutPath);

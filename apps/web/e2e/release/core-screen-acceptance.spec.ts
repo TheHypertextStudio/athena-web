@@ -63,6 +63,12 @@ async function expectAcceptableScreen(page: Page, screen: ScreenCase): Promise<v
     await expect(surface, `${screen.name} should render its primary surface`).toBeVisible({
       timeout: TIMEOUTS.pageReady,
     });
+    if ('loadedSelector' in screen) {
+      await expect(
+        page.locator(screen.loadedSelector).first(),
+        `${screen.name} should replace the navigation snapshot with its full detail surface`,
+      ).toBeVisible({ timeout: TIMEOUTS.ui });
+    }
     await expect(
       surface,
       `${screen.name} should not render a whole-page failure`,
@@ -190,19 +196,19 @@ test('every primary authenticated screen and local-first detail settles', async 
       name: 'Project detail',
       href: orgHref(orgId, `projects/${ids.projectId}`),
       aggregatePath: `/v1/orgs/${orgId}/projects/${ids.projectId}/aggregate-detail`,
-      loadedSelector: '[data-detail-panel-scroll]',
+      loadedSelector: '[aria-label="Project name"]',
     },
     {
       name: 'Program detail',
       href: orgHref(orgId, `programs/${ids.programId}`),
       aggregatePath: `/v1/orgs/${orgId}/programs/${ids.programId}/aggregate-detail`,
-      loadedSelector: '[data-detail-panel-scroll]',
+      loadedSelector: '[aria-label="Program name"]',
     },
     {
       name: 'Initiative detail',
       href: orgHref(orgId, `initiatives/${ids.initiativeId}`),
       aggregatePath: `/v1/orgs/${orgId}/initiatives/${ids.initiativeId}/aggregate-detail`,
-      loadedSelector: '[data-detail-panel-scroll]',
+      loadedSelector: '[aria-label="Initiative name"]',
     },
   ];
 
@@ -216,9 +222,5 @@ test('every primary authenticated screen and local-first detail settles', async 
     expect(response.status(), `${detail.name} aggregate should pass its response contract`).toBe(
       200,
     );
-    await expect(
-      page.locator(detail.loadedSelector).first(),
-      `${detail.name} should replace the navigation snapshot with its full detail surface`,
-    ).toBeVisible({ timeout: TIMEOUTS.ui });
   }
 });

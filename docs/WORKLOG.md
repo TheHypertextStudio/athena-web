@@ -83,6 +83,40 @@
 
 ---
 
+### [CANVAS-GRAPH-CORRECTIONS-001] Close post-release canvas review
+
+- **Status**: REVIEW
+- **Started**: 2026-08-24
+- **Priority**: P0
+- **Description**: A full-range review of the deployed canvas work found archived Projects in
+  Initiative projections, scoped Task creation that could finish outside the retained graph, and
+  suspended people in shared assignee options. The branch also had to integrate the new core-screen
+  release gate that reached `main` while the corrections were under review.
+- **Approach**: Apply the active-Project predicate to every Initiative projection. Keep the graph
+  mounted and offer “Open Task” when a composer creates a Task outside its structural scope. Filter
+  suspended members before building assignee options. Make the core-screen gate wait for loaded
+  detail controls that snapshots and skeletons cannot render.
+- **Subtasks**:
+  - [x] Add failing regressions for all three canvas review findings and correct each behavior.
+  - [x] Rebase onto current `main` with linear history and preserve Initiative numeric decoding.
+  - [x] Pass final full-range review with no Critical or Important findings.
+  - [x] Prove the core-screen handoff race red, correct route readiness, and rerun it green.
+  - [x] Pass full API, Web, remaining-package, policy, type, lint, format, secret, build, and
+        browser gates.
+  - [ ] Fast-forward the correction to current `main`, pass CI, deploy its exact revision, and
+        verify production.
+- **Validation**: API coverage passes 390 files and 4,761 tests at 89.13 percent branch coverage.
+  Web coverage passes 415 files and 3,125 tests at 91.65 percent branch coverage. The remaining 21
+  package coverage tasks, 165 repository policy tests, all 26 typecheck tasks, all 25 lint tasks,
+  formatting, secret scanning, and the complete production build pass. The core-screen journey
+  passes all 22 primary screens and four aggregate-backed details in 59.4 seconds. The Task graph
+  hierarchy journey passes its menu and Alt-drag mutation contract. The design scorecard retains
+  its responsive, theme, accessibility, and screenshot gates, including the picker's single inset
+  hover shape.
+- **Blockers**: Final CI, deployment, and production verification remain pending.
+
+---
+
 ### [CANVAS-GRAPH-CRUD-001] Make graph canvases usable for organizing work
 
 - **Status**: COMPLETED

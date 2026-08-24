@@ -45,7 +45,7 @@ export function SchedulingRelationSlotLane({
       {drop.startMinutes !== null ? (
         <div
           className={cn(
-            'pointer-events-none absolute inset-x-1 z-[65] rounded-md border-2 px-2 py-1 text-xs font-medium',
+            'text-label-small pointer-events-none absolute inset-x-1 z-[65] rounded-md border-2 px-2 py-1',
             drop.dropState === 'accept'
               ? 'border-primary bg-primary-container text-on-primary-container'
               : 'border-error bg-error-container text-on-error-container',

@@ -275,7 +275,7 @@ export default function CalendarItemCard({
           />
         ) : null}
         {relationTarget.isOver && relationTarget.effectLabel ? (
-          <span className="bg-primary text-on-primary pointer-events-none absolute inset-x-2 top-1/2 z-40 -translate-y-1/2 rounded px-2 py-1 text-center text-xs font-medium">
+          <span className="bg-primary text-on-primary text-label-small pointer-events-none absolute inset-x-2 top-1/2 z-40 -translate-y-1/2 rounded px-2 py-1 text-center">
             {relationTarget.effectLabel}
           </span>
         ) : null}

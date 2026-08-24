@@ -34,7 +34,10 @@
 - **Validation**: The initial release run exposed two owned integration gaps. The work-domain export
   registry omitted `./relation-contract`, and `EntityDetailLayout` routed a non-draggable masthead
   through `ObjectSurface`, which gave the header button semantics. Focused regressions now cover the
-  export registry and the non-draggable masthead boundary. Final release and production checks are
+  export registry and the non-draggable masthead boundary. The replacement run then reached the
+  design-token ratchet and found raw typography utilities on drop-effect labels plus shadows on the
+  drag overlay and canvas controls. Those surfaces now use semantic MD3 label roles and tonal or
+  outlined separation, and the design-policy ledger shrank. Final release and production checks are
   pending.
 
 ---

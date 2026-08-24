@@ -209,7 +209,7 @@ function ProjectNodeComponent({ id, data, selected }: NodeProps): React.JSX.Elem
 
         <Handle type="source" position={Position.Right} className="!bg-outline-variant !size-2" />
         {relation.effectLabel ? (
-          <span className="bg-surface text-on-surface text-label-small pointer-events-none absolute -top-7 left-1/2 z-50 -translate-x-1/2 rounded px-2 py-1 whitespace-nowrap shadow-md">
+          <span className="bg-surface text-on-surface ring-outline-variant pointer-events-none absolute -top-7 left-1/2 z-50 -translate-x-1/2 rounded px-2 py-1 whitespace-nowrap ring-1">
             {relation.effectLabel}
           </span>
         ) : null}

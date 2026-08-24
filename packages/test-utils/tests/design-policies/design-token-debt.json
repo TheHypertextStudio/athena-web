@@ -189,8 +189,7 @@
     "raw-type-utility": 4
   },
   "apps/web/src/components/canvas/task-node.tsx": {
-    "raw-type-utility": 9,
-    "shadow-outside-overlay": 1
+    "raw-type-utility": 9
   },
   "apps/web/src/components/command-palette/command-palette-trigger.tsx": {
     "raw-type-utility": 2

@@ -208,7 +208,7 @@ export function SchedulingAllDayItem({
         className="ring-primary/70 focus-visible:ring-ring bg-primary/5 absolute inset-0 z-50 cursor-pointer rounded ring-2 outline-none ring-inset focus-visible:ring-4"
       />
       {relationTarget.isOver && relationTarget.effectLabel ? (
-        <span className="bg-primary text-on-primary pointer-events-none absolute inset-x-1 top-1/2 z-[60] -translate-y-1/2 rounded px-2 py-1 text-center text-xs font-medium">
+        <span className="bg-primary text-on-primary text-label-small pointer-events-none absolute inset-x-1 top-1/2 z-[60] -translate-y-1/2 rounded px-2 py-1 text-center">
           {relationTarget.effectLabel}
         </span>
       ) : null}

@@ -86,12 +86,12 @@ function ObjectDragOverlay(): JSX.Element {
         if (!isObjectDragData(data)) return null;
         const Icon = describeObject(data.object.kind).icon;
         return (
-          <div className="bg-surface-container-high text-on-surface ring-outline-variant/40 flex max-w-80 items-center gap-2 rounded-lg px-3 py-2 shadow-lg ring-1">
+          <div className="bg-surface-container-high text-on-surface ring-outline-variant/40 flex max-w-80 items-center gap-2 rounded-lg px-3 py-2 ring-1">
             <Icon className="size-4 shrink-0" aria-hidden="true" />
             <span className="min-w-0">
-              <span className="block truncate text-sm font-medium">{data.object.title}</span>
+              <span className="text-label-large block truncate">{data.object.title}</span>
               {effectLabel ? (
-                <span className="text-on-surface-variant block truncate text-xs">
+                <span className="text-on-surface-variant text-label-small block truncate">
                   {effectLabel}
                 </span>
               ) : null}

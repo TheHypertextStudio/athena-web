@@ -3,27 +3,32 @@ import { describe, expect, it } from 'vitest';
 import { deriveInitiativeTreePositions } from '../../src/components/work-views/initiative-rails';
 
 describe('deriveInitiativeTreePositions', () => {
-  it('keeps each ancestor rail only while that ancestor has a following sibling', () => {
+  it('derives continuation rails above the immediate-parent branch', () => {
     const positions = deriveInitiativeTreePositions([
       { id: 'root-a', parentId: null },
       { id: 'a-1', parentId: 'root-a' },
       { id: 'a-1-i', parentId: 'a-1' },
       { id: 'a-2', parentId: 'root-a' },
+      { id: 'a-2-i', parentId: 'a-2' },
       { id: 'root-b', parentId: null },
       { id: 'b-1', parentId: 'root-b' },
       { id: 'b-1-i', parentId: 'b-1' },
     ]);
 
     expect(positions.get('a-1-i')).toMatchObject({
-      ancestorHasFollowingSibling: [true, true],
+      ancestorRailContinues: [true],
       isLastSibling: true,
     });
     expect(positions.get('a-2')).toMatchObject({
-      ancestorHasFollowingSibling: [true],
+      ancestorRailContinues: [],
+      isLastSibling: true,
+    });
+    expect(positions.get('a-2-i')).toMatchObject({
+      ancestorRailContinues: [true],
       isLastSibling: true,
     });
     expect(positions.get('b-1-i')).toMatchObject({
-      ancestorHasFollowingSibling: [false, false],
+      ancestorRailContinues: [false],
       isLastSibling: true,
     });
   });
@@ -37,11 +42,11 @@ describe('deriveInitiativeTreePositions', () => {
     ]);
 
     expect(positions.get('first')).toMatchObject({
-      ancestorHasFollowingSibling: [false],
+      ancestorRailContinues: [],
       isLastSibling: false,
     });
     expect(positions.get('only-grandchild')).toMatchObject({
-      ancestorHasFollowingSibling: [false, false],
+      ancestorRailContinues: [false],
       isLastSibling: true,
     });
   });
@@ -53,7 +58,7 @@ describe('deriveInitiativeTreePositions', () => {
 
     expect(positions.get('visible-child')).toEqual({
       depth: 1,
-      ancestorHasFollowingSibling: [],
+      ancestorRailContinues: [],
       hasChildren: false,
       isLastSibling: true,
     });

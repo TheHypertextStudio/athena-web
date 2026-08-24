@@ -300,10 +300,6 @@ const initiativeFilter = {
     kind: 'datetime',
     value: column('_latest_update'),
   },
-  activeProjectCount: {
-    kind: 'number',
-    value: column('_active_project_count'),
-  },
   parent: {
     kind: 'relation-one',
     value: sql`(select h.parent_initiative_id from initiative_hierarchy_link h
@@ -322,7 +318,6 @@ const initiativeSort = {
   targetDate: stringSort(column('target_date')),
   updateCadence: stringSort(column('update_cadence')),
   latestUpdate: stringSort(initiativeFilter.latestUpdate.value),
-  activeProjectCount: numberSort(initiativeFilter.activeProjectCount.value),
   name: stringSort(column('name')),
 } satisfies SortCompilerMap<SortableFieldKey<typeof INITIATIVE_VIEW_CONTRACT>>;
 

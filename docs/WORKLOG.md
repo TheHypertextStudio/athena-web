@@ -5828,6 +5828,35 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [INITIATIVE-ROSTER-FIT-001] Correct Initiative roster columns and hierarchy rails
+
+- **Completed**: 2026-08-23
+- **Priority**: P0
+- **Summary**: The Initiative work-view capability no longer exposes or calculates Active Project
+  count. Health uses the shared 96px column width. Hierarchy connectors now separate ancestor
+  continuation from the immediate-parent segment, so each last child ends at its branch elbow.
+- **Files Changed**: Removed the field from the typed contract, API compiler and projection,
+  default presentation, labels, widths, and fixtures. Added a custom migration for saved views,
+  workspace defaults, and Hub personal overrides. Added contract, API, migration, rail, roster, and
+  production-browser evidence coverage.
+- **Validation**: The migration regression repairs nested `all`, `any`, and `not` filters without
+  resetting unrelated settings. The affected suites pass 763 type tests, 195 database tests, 85 API
+  work-view tests, and 84 web work-view tests. All 26 repository typecheck tasks and all 25 lint
+  tasks pass. The production build compiles the API, Worker, nine admin routes, 75 web routes, and
+  the service worker. Browser evidence at 1320x900 and 960x900 covers both themes. It measures
+  Health at 96px, finds no Project-count header, and proves the last-child rail stops at its elbow.
+  Independent review caught a root-first ancestor ordering error before closeout. Its
+  differentiating depth-three regression now passes. The final rebase preserves the Initiative
+  `updatedAt` navigation snapshot field.
+- **Learnings**: The renderer already owned the immediate-parent segment. Feeding the same parent
+  into the ancestor continuation set drew a second full-height line that defeated `isLastSibling`.
+  The root-first ancestor array required a prefix above the parent, which only became clear when a
+  fixture gave the root and parent different continuation states. Removing a persisted field also
+  requires data repair before contract enforcement, because rejecting the old JSON would discard
+  unrelated view settings.
+
+---
+
 ### [ROSTERS-002] Replace flat planning rosters with typed server queries
 
 - **Completed**: 2026-08-21

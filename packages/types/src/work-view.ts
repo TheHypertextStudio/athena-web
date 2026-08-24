@@ -536,11 +536,6 @@ export const INITIATIVE_VIEW_CONTRACT = defineViewContract({
       operandSchema: TimestampOperand,
       capabilities: { filter: true, sort: true, display: true },
     },
-    activeProjectCount: {
-      kind: 'number',
-      schema: count,
-      capabilities: { filter: true, sort: true, display: true },
-    },
     parent: {
       kind: 'relation-one',
       schema: InitiativeId.nullable(),
@@ -1353,7 +1348,6 @@ export const InitiativeViewRow = z
     updateCadence: InitiativeUpdateCadence,
     latestUpdate: nullableTimestamp,
     updatedAt: TimestampString,
-    activeProjectCount: count,
     parent: InitiativeId.nullable(),
     parentLinkId: Id.nullable().default(null),
     organization: OrganizationId,

@@ -155,7 +155,7 @@ const projections = {
       sql`e.organization_id`,
     )} labels,
     e.target_date, e.update_cadence,
-    e._latest_update latest_update, e.updated_at, e._active_project_count::int active_project_count,
+    e._latest_update latest_update, e.updated_at,
     (select h.parent_initiative_id from initiative_hierarchy_link h
       join authorized parent on parent.id=h.parent_initiative_id
       where h.child_initiative_id=e.id

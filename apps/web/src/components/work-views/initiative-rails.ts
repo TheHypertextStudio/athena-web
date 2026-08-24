@@ -10,8 +10,8 @@ export interface InitiativeRailNode {
 export interface InitiativeTreePosition {
   /** One-based depth in the visible hierarchy. */
   readonly depth: number;
-  /** Whether each visible ancestor has a sibling after it at the same level. */
-  readonly ancestorHasFollowingSibling: readonly boolean[];
+  /** Whether each hierarchy rail above the immediate parent continues through this row. */
+  readonly ancestorRailContinues: readonly boolean[];
   /** Whether the row has at least one visible child. */
   readonly hasChildren: boolean;
   /** Whether the row is the last visible child of its parent. */
@@ -49,14 +49,14 @@ export function deriveInitiativeTreePositions(
       parentId = visibleParent(parent);
     }
 
-    const ancestorHasFollowingSibling = ancestors.map((ancestor) => {
+    const ancestorRailContinues = ancestors.slice(0, -1).map((ancestor) => {
       const siblings = children.get(visibleParent(ancestor)) ?? [];
       return siblings.at(-1)?.id !== ancestor.id;
     });
     const siblings = children.get(visibleParent(node)) ?? [];
     result.set(node.id, {
       depth: ancestors.length + 1,
-      ancestorHasFollowingSibling,
+      ancestorRailContinues,
       hasChildren: (children.get(node.id)?.length ?? 0) > 0,
       isLastSibling: siblings.at(-1)?.id === node.id,
     });

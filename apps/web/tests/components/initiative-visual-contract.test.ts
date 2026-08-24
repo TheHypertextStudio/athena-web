@@ -61,6 +61,15 @@ describe('Initiative visual contract', () => {
     expect(workList).not.toContain('h-[72px]');
   });
 
+  it('fits the Initiative columns without exposing Active Project count', () => {
+    const workList = source(workListPath);
+    const workPage = source(workPagePath);
+
+    expect(workList).toContain("health: 'w-24'");
+    expect(workList).not.toContain("health: 'w-32'");
+    expect(workPage).not.toContain('activeProjectCount');
+  });
+
   it('uses the canonical MD3 headline for detail titles and keeps status in the properties rail', () => {
     const typography = source(typographyPath);
     const detail = source(detailPath);
@@ -171,7 +180,7 @@ describe('Initiative visual contract', () => {
     const workList = source(workListPath);
     const initiativeRails = source(initiativeRailsPath);
     expect(workList).toContain('initiativePositions');
-    expect(initiativeRails).toContain('ancestorHasFollowingSibling');
+    expect(initiativeRails).toContain('ancestorRailContinues');
     expect(initiativeRails).toContain('isLastSibling');
     expect(initiativeRails).toContain('children.get(node.id)');
     expect(workList).toContain('data-testid="initiative-hierarchy-rail"');

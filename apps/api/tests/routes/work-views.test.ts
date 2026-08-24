@@ -82,6 +82,27 @@ async function grantOrganizationCapability(
 }
 
 describe('work-view routes', () => {
+  it('omits Active Project count from Initiative work-view rows', async () => {
+    const { orgId, humanActorId, statusId } = await seedBaseOrg(schema.db, schema);
+    await schema.db.insert(schema.initiative).values({
+      organizationId: orgId,
+      name: 'Count-free Initiative',
+      status: 'active',
+      statusId: statusId('initiative', 'active'),
+    });
+    const app = appWithActor(workViews, orgId, ['view'], humanActorId);
+
+    const response = await app.request('/query', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify(initiativeRequest()),
+    });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { readonly rows?: readonly Record<string, unknown>[] };
+    expect(body.rows?.[0]).not.toHaveProperty('activeProjectCount');
+  });
+
   it('returns the target-discriminated Task page through the typed query route', async () => {
     const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(schema.db, schema);
     await schema.db.insert(schema.task).values({

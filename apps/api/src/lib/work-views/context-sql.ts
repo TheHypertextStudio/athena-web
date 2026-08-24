@@ -180,10 +180,7 @@ function enrichmentSql(target: ViewTarget): SQL {
     case 'initiative':
       return sql`${status},
         (select max(u.created_at) from "update" u where u.subject_type='initiative'
-          and u.subject_id=e.id and u.organization_id=e.organization_id) as _latest_update,
-        (select count(*) from initiative_project ip join project p on p.id=ip.project_id
-          and p.organization_id=e.organization_id where ip.initiative_id=e.id
-          and ip.organization_id=e.organization_id and p.archived_at is null)::int as _active_project_count`;
+          and u.subject_id=e.id and u.organization_id=e.organization_id) as _latest_update`;
   }
 }
 

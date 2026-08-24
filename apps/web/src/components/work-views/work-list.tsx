@@ -98,7 +98,7 @@ const HEALTH_TEXT_CLASS: Record<Health, string> = {
 const FIELD_WIDTH: Record<string, string> = {
   status: 'w-32',
   priority: 'w-20',
-  health: 'w-32',
+  health: 'w-24',
   assignee: 'w-44',
   lead: 'w-44',
   owner: 'w-44',
@@ -111,7 +111,6 @@ const FIELD_WIDTH: Record<string, string> = {
   estimateMinutes: 'w-24',
   taskCount: 'w-24',
   projectCount: 'w-24',
-  activeProjectCount: 'w-28',
   dependencyCount: 'w-28',
 };
 
@@ -192,8 +191,8 @@ function HierarchyRails({
   position: InitiativeTreePosition;
   hasSummary: boolean;
 }): JSX.Element | null {
-  const { depth, ancestorHasFollowingSibling, hasChildren, isLastSibling } = position;
-  if (depth === 1 && !hasChildren && !ancestorHasFollowingSibling.some(Boolean)) return null;
+  const { depth, ancestorRailContinues, hasChildren, isLastSibling } = position;
+  if (depth === 1 && !hasChildren && !ancestorRailContinues.some(Boolean)) return null;
   const iconTop = hasSummary ? 8 : 16;
   const targetLeft = 12 + (depth - 1) * 44;
   const iconCenter = targetLeft + 16;
@@ -214,8 +213,8 @@ function HierarchyRails({
         strokeLinecap="round"
         strokeLinejoin="round"
       >
-        {ancestorHasFollowingSibling.map((hasFollowingSibling, index) => {
-          if (!hasFollowingSibling) return null;
+        {ancestorRailContinues.map((continues, index) => {
+          if (!continues) return null;
           const railDepth = index + 1;
           const railX = 12 + (railDepth - 1) * 44 + 16;
           return <line key={railDepth} x1={railX} y1="0" x2={railX} y2="56" />;

@@ -24,8 +24,8 @@ import {
   WorkViewFacetResponse,
   WorkViewQueryRequest,
   WorkViewQueryResponse,
+  INITIATIVE_VIEW_CONTRACT,
   type InitiativeViewDefinition as InitiativeViewDefinitionType,
-  type INITIATIVE_VIEW_CONTRACT,
   type InitiativeStatusKey,
   type PROGRAM_VIEW_CONTRACT,
   type PROJECT_VIEW_CONTRACT,
@@ -37,6 +37,49 @@ import {
 const ACTOR_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 
 describe('work-view contracts', () => {
+  it('removes Active Project count from every Initiative view capability', () => {
+    const base = {
+      version: 2,
+      target: 'initiative',
+      filter: null,
+      arrangement: { groupBy: null, subGroupBy: null, orderBy: [] },
+      presentation: {
+        layout: 'list',
+        properties: [],
+        density: 'compact',
+        showEmptyGroups: false,
+      },
+    };
+
+    expect(Object.hasOwn(INITIATIVE_VIEW_CONTRACT.fields, 'activeProjectCount')).toBe(false);
+    expect(
+      InitiativeViewDefinition.safeParse({
+        ...base,
+        presentation: { ...base.presentation, properties: ['activeProjectCount'] },
+      }).success,
+    ).toBe(false);
+    expect(
+      InitiativeViewDefinition.safeParse({
+        ...base,
+        filter: {
+          kind: 'predicate',
+          field: 'activeProjectCount',
+          operator: 'greaterThan',
+          operand: 0,
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      InitiativeViewDefinition.safeParse({
+        ...base,
+        arrangement: {
+          ...base.arrangement,
+          orderBy: [{ field: 'activeProjectCount', direction: 'desc' }],
+        },
+      }).success,
+    ).toBe(false);
+  });
+
   it('keeps persisted layouts independent from each target field contract', () => {
     expectTypeOf<LayoutFor<typeof TASK_VIEW_CONTRACT>>().toEqualTypeOf<
       'list' | 'board' | 'cards' | 'timeline'

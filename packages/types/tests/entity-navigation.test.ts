@@ -226,7 +226,6 @@ describe('EntityNavigationSnapshot', () => {
           targetDate: null,
           updateCadence: 'monthly',
           latestUpdate: null,
-          activeProjectCount: 2,
           parent: null,
           parentLinkId: null,
           organization: ORG_ID,

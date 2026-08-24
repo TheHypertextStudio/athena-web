@@ -231,7 +231,6 @@ const FIELD_LABELS = {
     targetDate: 'Target date',
     updateCadence: 'Update cadence',
     latestUpdate: 'Latest update',
-    activeProjectCount: 'Active Project count',
     parent: 'Parent',
     organization: 'Organization',
     name: 'Name',

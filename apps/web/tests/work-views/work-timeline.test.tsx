@@ -69,7 +69,6 @@ describe('typed work-view timelines', () => {
       updateCadence: 'monthly',
       latestUpdate: null,
       updatedAt: '2026-08-21T00:00:00.000Z',
-      activeProjectCount: 2,
       parent: null,
       contributingProjects: [
         {

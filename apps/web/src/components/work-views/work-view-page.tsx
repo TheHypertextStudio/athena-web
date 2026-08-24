@@ -100,7 +100,7 @@ const FALLBACKS = {
     arrangement: { groupBy: null, subGroupBy: null, orderBy: [] },
     presentation: {
       layout: 'list',
-      properties: ['status', 'priority', 'health', 'owner', 'targetDate', 'activeProjectCount'],
+      properties: ['status', 'priority', 'health', 'owner', 'targetDate'],
       density: 'compact',
       showEmptyGroups: false,
     },

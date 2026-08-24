@@ -70,7 +70,7 @@ export interface PublishActionProps {
 }
 
 /** The mutually exclusive publication state a newly opened dialog may render. */
-export type PublicationDialogState = 'loading' | 'published' | 'unpublished';
+export type PublicationDialogState = 'loading' | 'error' | 'published' | 'unpublished';
 
 /**
  * Keep a deferred publication lookup from being mistaken for an unpublished document.
@@ -81,10 +81,30 @@ export type PublicationDialogState = 'loading' | 'published' | 'unpublished';
  */
 export function publicationDialogState(
   publication: ReturnType<typeof usePublicationState>['publication'],
-  loading: boolean,
+  status: ReturnType<typeof usePublicationState>['status'],
 ): PublicationDialogState {
-  if (loading) return 'loading';
+  if (status === 'loading' || status === 'idle') return 'loading';
+  if (status === 'error') return 'error';
   return publication?.published === true ? 'published' : 'unpublished';
+}
+
+/**
+ * Keep cached publication data behind the loading state until this dialog opening initializes its
+ * address field.
+ *
+ * @param lookupState - The publication read's state.
+ * @param dialogGeneration - The current dialog opening identifier.
+ * @param initializedGeneration - The opening whose address state has been initialized.
+ * @returns The state the dialog may expose to a person.
+ */
+export function resolvedPublicationDialogState(
+  lookupState: PublicationDialogState,
+  dialogGeneration: number,
+  initializedGeneration: number | null,
+): PublicationDialogState {
+  if (lookupState === 'error') return 'error';
+  if (lookupState === 'loading' || initializedGeneration !== dialogGeneration) return 'loading';
+  return lookupState;
 }
 
 /**
@@ -104,12 +124,14 @@ export function PublishAction({
   const [open, setOpen] = useState(false);
   const [dialogGeneration, setDialogGeneration] = useState(0);
   const initializedGeneration = useRef<number | null>(null);
-  const { publication, loading: publicationLoading } = usePublicationState(
-    orgId,
-    subjectKind,
-    subjectId,
-    open,
+  const [initializedDialogGeneration, setInitializedDialogGeneration] = useState<number | null>(
+    null,
   );
+  const {
+    publication,
+    status: publicationStatus,
+    retry: retryPublicationState,
+  } = usePublicationState(orgId, subjectKind, subjectId, open);
   // Gated on `open` — nobody needs the workspace's address until they open this dialog.
   const orgQ = useApiQuery(
     apiQueryOptions(
@@ -125,17 +147,28 @@ export function PublishAction({
   const [slug, setSlug] = useState('');
 
   useEffect(() => {
-    if (!open || publicationLoading || initializedGeneration.current === dialogGeneration) return;
+    if (
+      !open ||
+      publicationStatus !== 'ready' ||
+      initializedGeneration.current === dialogGeneration
+    )
+      return;
     setSlug(publication?.slug ?? suggestPublicSlug(title));
     initializedGeneration.current = dialogGeneration;
-  }, [dialogGeneration, open, publication?.slug, publicationLoading, title]);
+    setInitializedDialogGeneration(dialogGeneration);
+  }, [dialogGeneration, open, publication?.slug, publicationStatus, title]);
 
   if (!canPublish) return null;
 
   // One narrowed binding rather than a boolean plus a nullable object: every branch below needs
   // both facts together, and splitting them is how a "published but no row" impossible state
   // gets written by accident.
-  const dialogState = publicationDialogState(publication, publicationLoading);
+  const lookupState = publicationDialogState(publication, publicationStatus);
+  const dialogState = resolvedPublicationDialogState(
+    lookupState,
+    dialogGeneration,
+    initializedDialogGeneration,
+  );
   const live = dialogState === 'published' ? publication : null;
   const published = dialogState === 'published';
   const lower = noun.toLowerCase();
@@ -184,16 +217,20 @@ export function PublishAction({
             <DialogTitle>
               {dialogState === 'loading'
                 ? 'Loading publishing status'
-                : published
-                  ? 'Published to the web'
-                  : `Publish this ${lower}`}
+                : dialogState === 'error'
+                  ? 'Could not load publishing status'
+                  : published
+                    ? 'Published to the web'
+                    : `Publish this ${lower}`}
             </DialogTitle>
             <DialogDescription>
               {dialogState === 'loading'
                 ? 'Checking whether this page is already published.'
-                : published
-                  ? 'Anyone with the link can read this page. It always shows the current record — there is no separate copy.'
-                  : `Anyone with the link will be able to read this ${lower} as a public page — Docket calls it a brief. It stays in step with the record automatically, so there's no separate copy to keep up to date.`}
+                : dialogState === 'error'
+                  ? 'Try again before changing this page’s publication.'
+                  : published
+                    ? 'Anyone with the link can read this page. It always shows the current record — there is no separate copy.'
+                    : `Anyone with the link will be able to read this ${lower} as a public page — Docket calls it a brief. It stays in step with the record automatically, so there's no separate copy to keep up to date.`}
             </DialogDescription>
           </DialogHeader>
 
@@ -208,7 +245,7 @@ export function PublishAction({
                 value={slug}
                 spellCheck={false}
                 autoComplete="off"
-                disabled={dialogState === 'loading'}
+                disabled={dialogState === 'loading' || dialogState === 'error'}
                 {...(prefix === undefined ? {} : { prefix })}
                 onChange={(event) => {
                   setSlug(event.target.value);
@@ -216,7 +253,7 @@ export function PublishAction({
               />
             </Field>
 
-            {dialogState === 'loading' ? null : live ? (
+            {dialogState === 'loading' || dialogState === 'error' ? null : live ? (
               live.urls.length > 0 ? (
                 <div className="flex flex-col gap-1">
                   <Text as="p" token="label-medium" tone="muted">
@@ -254,6 +291,10 @@ export function PublishAction({
               <Text as="p" token="body-small" tone="muted">
                 Loading…
               </Text>
+            ) : dialogState === 'error' ? (
+              <Button type="button" onClick={retryPublicationState}>
+                Try again
+              </Button>
             ) : live ? (
               <>
                 <Button

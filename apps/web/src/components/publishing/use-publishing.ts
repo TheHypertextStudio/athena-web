@@ -32,8 +32,10 @@ import { apiQueryOptions, queryKeys, unwrap, useApiQuery, useApiMutation } from 
 export interface PublicationState {
   /** The publication, or `null` when the record has never been published. */
   readonly publication: PublicationOut | null;
-  /** Whether the state is still resolving. */
-  readonly loading: boolean;
+  /** The only resolved state a deferred publishing dialog may use for its actions. */
+  readonly status: 'idle' | 'loading' | 'ready' | 'error';
+  /** Retry a failed publication-state read without closing the dialog. */
+  readonly retry: () => void;
 }
 
 /**
@@ -62,7 +64,13 @@ export function usePublicationState(
       { enabled },
     ),
   );
-  return { publication: query.data?.publication ?? null, loading: query.isPending };
+  return {
+    publication: query.data?.publication ?? null,
+    status: !enabled ? 'idle' : query.isPending ? 'loading' : query.isError ? 'error' : 'ready',
+    retry: () => {
+      void query.refetch();
+    },
+  };
 }
 
 /** Publish (or re-publish) a record, optionally at a chosen address. */

@@ -1,7 +1,10 @@
 import { PublicationOut } from '@docket/types';
 import { describe, expect, it } from 'vitest';
 
-import { publicationDialogState } from '@/components/publishing/publish-action';
+import {
+  publicationDialogState,
+  resolvedPublicationDialogState,
+} from '@/components/publishing/publish-action';
 
 const publication = PublicationOut.parse({
   id: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
@@ -18,7 +21,14 @@ const publication = PublicationOut.parse({
 
 describe('publicationDialogState', () => {
   it('does not expose a publish action while an initially empty publication cache resolves', () => {
-    expect(publicationDialogState(null, true)).toBe('loading');
-    expect(publicationDialogState(publication, false)).toBe('published');
+    expect(publicationDialogState(null, 'loading')).toBe('loading');
+    expect(publicationDialogState(publication, 'ready')).toBe('published');
+    expect(publicationDialogState(null, 'error')).toBe('error');
+  });
+
+  it('holds cached publication data until the current dialog opening initializes its slug', () => {
+    expect(resolvedPublicationDialogState('published', 2, 1)).toBe('loading');
+    expect(resolvedPublicationDialogState('published', 2, 2)).toBe('published');
+    expect(resolvedPublicationDialogState('error', 2, 1)).toBe('error');
   });
 });

@@ -15,7 +15,7 @@
  * exception text ever reaches the screen. `unwrap` is the boundary that enforces it, so the
  * mutations are exercised through it rather than around it.
  */
-import { OrganizationId, type TaskDetail, TaskId } from '@docket/types';
+import { OrganizationId, type TaskDetail, type TaskDetailAggregate, TaskId } from '@docket/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { JSX, ReactNode } from 'react';
@@ -109,7 +109,9 @@ function makeHarness(): {
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   const detailKey = queryKeys.task(ORG_ID, TASK_ID);
-  client.setQueryData<TaskDetail>(detailKey, baseDetail());
+  client.setQueryData<TaskDetailAggregate>(detailKey, {
+    defaultView: { task: baseDetail() },
+  } as unknown as TaskDetailAggregate);
   const wrapper = ({ children }: { children: ReactNode }): JSX.Element => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
@@ -124,7 +126,8 @@ function mountMutations() {
   const { result } = renderHook(() => useTaskMutations(ORG_ID, TASK_ID, detailKey, commentsKey), {
     wrapper,
   });
-  const read = (): TaskDetail | undefined => client.getQueryData<TaskDetail>(detailKey);
+  const read = (): TaskDetail | undefined =>
+    client.getQueryData<TaskDetailAggregate>(detailKey)?.defaultView.task;
   return { client, detailKey, result, read };
 }
 

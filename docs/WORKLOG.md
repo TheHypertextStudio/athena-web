@@ -13,13 +13,15 @@
 - **Started**: 2026-08-24
 - **Priority**: P0
 - **Description**: The required non-web/API coverage shard stopped production because the entity
-  navigation projector had untested Task, Program, and Initiative branches.
+  navigation projector had untested Task, Program, and Initiative branches. The same CI pass
+  also exposed stale web fixtures and test harnesses after detail-aggregate and Athena-panel work.
 - **Approach**: Add one parsed work-view row and exact navigation snapshot assertion for each
   omitted target. Keep the coverage threshold unchanged at 100 percent.
 - **Subtasks**:
   - [x] Reproduce the CI coverage failure locally.
   - [x] Cover every target-specific snapshot branch.
   - [x] Pass the full types coverage suite at the existing threshold.
+  - [x] Restore the affected calendar, task mutation, picker, and visual-contract tests.
   - [ ] Push the repair and verify the production rollout.
 - **Blockers**: The CI run for the repair must complete before deployment can start.
 

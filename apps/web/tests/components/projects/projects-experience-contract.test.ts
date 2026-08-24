@@ -92,7 +92,7 @@ describe('Projects experience contract', () => {
     expect(detail.indexOf('<ProjectPeopleRow')).toBeLessThan(
       detail.indexOf('<EntityMetadataRow ariaLabel="Project properties">'),
     );
-    expect(detail).toContain('assignedPeople={participants}');
+    expect(detail).toContain('ownerId={project.leadId ?? null}');
     expect(detail).toContain('patchProject({ leadId })');
     expect(detail).not.toContain('aria-label="Project people"');
     // The canonical title token lives once in the shell as headline-medium; no detail page may

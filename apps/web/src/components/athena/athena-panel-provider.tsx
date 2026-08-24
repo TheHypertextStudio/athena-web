@@ -357,7 +357,7 @@ export function AthenaRailPanel(): JSX.Element {
             groups.map((group) =>
               group.items.length > 0 ? (
                 <section key={group.key} aria-labelledby={`athena-rail-${group.key}`}>
-                  <div className="text-on-surface-variant text-label-small px-3 pt-3 pb-1 uppercase">
+                  <div className="text-on-surface-variant text-label-small px-3 pt-3 pb-1">
                     <span id={`athena-rail-${group.key}`}>{group.label}</span>
                     <span className="float-right tabular-nums">{group.items.length}</span>
                   </div>

@@ -34,6 +34,7 @@ const {
   itemRelationsGet,
   itemRelationDelete,
   openCreate,
+  openAthena,
 } = vi.hoisted(() => ({
   itemGet: vi.fn(),
   layersGet: vi.fn(),
@@ -43,6 +44,7 @@ const {
   itemRelationsGet: vi.fn(),
   itemRelationDelete: vi.fn(),
   openCreate: vi.fn(),
+  openAthena: vi.fn(),
 }));
 
 vi.mock('../../src/lib/api', () => ({
@@ -75,6 +77,10 @@ vi.mock('../../src/lib/api', () => ({
 
 vi.mock('../../src/components/create-object/create-object-provider', () => ({
   useCreateObject: () => ({ request: null, openCreate, closeCreate: vi.fn() }),
+}));
+
+vi.mock('../../src/components/athena/athena-panel-provider', () => ({
+  useAthenaPanel: () => ({ openAthena }),
 }));
 
 import { ActiveOrgContext } from '../../src/components/active-org';
@@ -230,6 +236,7 @@ function renderDrawer(
 
 beforeEach(() => {
   openCreate.mockReset();
+  openAthena.mockReset();
   layersGet.mockReset().mockResolvedValue(okResponse({ items: [makeLayer()] }));
   itemGet.mockReset().mockResolvedValue(okResponse(makeItem()));
   itemTasksPost.mockReset().mockResolvedValue(

@@ -112,6 +112,7 @@ describe('picker option mappers', () => {
       name: 'Apollo',
       description: null,
       status: 'active',
+      priority: 'none',
       health: null,
       leadId: null,
       teamId: null,
@@ -123,6 +124,7 @@ describe('picker option mappers', () => {
       targetDateResolution: null,
       targetDateFiscalYearStartMonth: null,
       createdAt: CREATED_AT,
+      updatedAt: CREATED_AT,
     });
     const program = ProgramOut.parse({
       id: IDS.program,
@@ -168,6 +170,7 @@ describe('picker option mappers', () => {
       name: 'Apollo',
       description: null,
       status: 'active',
+      priority: 'none',
       health: null,
       leadId: null,
       teamId: null,
@@ -179,6 +182,7 @@ describe('picker option mappers', () => {
       targetDateResolution: null,
       targetDateFiscalYearStartMonth: null,
       createdAt: CREATED_AT,
+      updatedAt: CREATED_AT,
     });
     const initiative = InitiativeOut.parse({
       id: IDS.initiative,

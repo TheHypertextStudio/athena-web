@@ -23,6 +23,7 @@ function project(overrides: ProjectFixtureOverrides): Project {
     organizationId: '0RG00000000000000000000001',
     name: 'Launch',
     status: 'planned',
+    priority: 'none',
     teamId: null,
     startDate: null,
     startDateResolution: null,
@@ -31,6 +32,7 @@ function project(overrides: ProjectFixtureOverrides): Project {
     targetDateResolution: null,
     targetDateFiscalYearStartMonth: null,
     createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
   });
 }

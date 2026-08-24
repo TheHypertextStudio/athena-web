@@ -8,6 +8,8 @@ import type programsRouter from '../../src/routes/programs';
 import type initiativesRouter from '../../src/routes/initiatives';
 import { detailCapabilities } from '../../src/lib/detail-capabilities';
 import {
+  assertInitiativeLabels,
+  assertOwnerInOrg,
   buildInitiativeDetail,
   buildInitiativeDetailFromSummary,
   type InitiativeRow,
@@ -203,6 +205,43 @@ describe('detail aggregate routes', () => {
       expect(projectOverlapsWindow({ ...projectRow, ...dates }, from, to)).toBe(expected);
     },
   );
+
+  it('keeps optional Initiative owners as no-ops and rejects a foreign owner', async () => {
+    const local = await seedBaseOrg(db, schema);
+    const foreign = await seedBaseOrg(db, schema);
+    const [foreignActor] = await db
+      .insert(schema.actor)
+      .values({ organizationId: foreign.orgId, kind: 'human', displayName: 'Foreign owner' })
+      .returning({ id: schema.actor.id });
+    if (!foreignActor) throw new Error('foreign actor was not seeded');
+
+    await expect(assertOwnerInOrg(local.orgId, null)).resolves.toBeUndefined();
+    await expect(assertOwnerInOrg(local.orgId, undefined)).resolves.toBeUndefined();
+    await expect(assertOwnerInOrg(local.orgId, foreignActor.id)).rejects.toThrow('Owner not found');
+  });
+
+  it('keeps Initiative labels workspace-scoped and removes duplicate inputs', async () => {
+    const local = await seedBaseOrg(db, schema);
+    const foreign = await seedBaseOrg(db, schema);
+    const [localLabel] = await db
+      .insert(schema.label)
+      .values({ organizationId: local.orgId, name: 'Mobility', color: '#0f766e' })
+      .returning({ id: schema.label.id });
+    const [foreignLabel] = await db
+      .insert(schema.label)
+      .values({ organizationId: foreign.orgId, name: 'Foreign', color: '#dc2626' })
+      .returning({ id: schema.label.id });
+    if (!localLabel || !foreignLabel) throw new Error('labels were not seeded');
+
+    await expect(assertInitiativeLabels(local.orgId, undefined)).resolves.toEqual([]);
+    await expect(assertInitiativeLabels(local.orgId, [])).resolves.toEqual([]);
+    await expect(
+      assertInitiativeLabels(local.orgId, [localLabel.id, localLabel.id]),
+    ).resolves.toEqual([localLabel.id]);
+    await expect(assertInitiativeLabels(local.orgId, [foreignLabel.id])).rejects.toThrow(
+      'Label not found',
+    );
+  });
 
   it('returns one bounded Task detail aggregate with its local snapshot and no org roster', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);

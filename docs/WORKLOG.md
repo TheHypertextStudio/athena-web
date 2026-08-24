@@ -37,8 +37,10 @@
   export registry and the non-draggable masthead boundary. The replacement run then reached the
   design-token ratchet and found raw typography utilities on drop-effect labels plus shadows on the
   drag overlay and canvas controls. Those surfaces now use semantic MD3 label roles and tonal or
-  outlined separation, and the design-policy ledger shrank. Final release and production checks are
-  pending.
+  outlined separation, and the design-policy ledger shrank. The next run found that the relation
+  resolver's new rejection branches left `@docket/work` at 89.49% branch coverage. Empty, mixed,
+  unsupported, unscoped, and compatible guarded cases now lift it to 91.78%. Final release and
+  production checks are pending.
 
 ---
 

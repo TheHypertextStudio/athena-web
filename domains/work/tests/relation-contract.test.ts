@@ -58,6 +58,29 @@ describe('relation contract', () => {
     });
   });
 
+  it('rejects empty, mixed-kind, and unsupported gestures before dispatch', () => {
+    expect(
+      resolveDefaultRelation({
+        subjects: [],
+        target: { kind: 'project', id: 'project_2', organizationId: 'org_1' },
+      }),
+    ).toEqual({ accepted: false, reason: 'empty_subjects' });
+
+    expect(
+      resolveDefaultRelation({
+        subjects: [task, { kind: 'project', id: 'project_1', organizationId: 'org_1' }],
+        target: { kind: 'project', id: 'project_2', organizationId: 'org_1' },
+      }),
+    ).toEqual({ accepted: false, reason: 'mixed_subject_kinds' });
+
+    expect(
+      resolveDefaultRelation({
+        subjects: [task],
+        target: { kind: 'initiative', id: 'initiative_1', organizationId: 'org_1' },
+      }),
+    ).toEqual({ accepted: false, reason: 'unsupported_pair' });
+  });
+
   it('rejects cross-workspace and self relationships before dispatch', () => {
     expect(
       resolveDefaultRelation({
@@ -84,6 +107,31 @@ describe('relation contract', () => {
         },
       }),
     ).toEqual({ accepted: false, reason: 'incompatible_parent' });
+  });
+
+  it('accepts compatible guarded relations when optional local facts do not reject them', () => {
+    expect(
+      resolveDefaultRelation({
+        subjects: [task],
+        target: { kind: 'milestone', id: 'milestone_1', organizationId: 'org_1' },
+      }),
+    ).toMatchObject({ accepted: true, intent: { relationId: 'task.milestone' } });
+
+    expect(
+      resolveDefaultRelation({
+        subjects: [task],
+        target: { kind: 'task', id: 'task_2', organizationId: 'org_1' },
+      }),
+    ).toMatchObject({ accepted: true, intent: { relationId: 'task.parent' } });
+  });
+
+  it('permits an organization-scoped task to target an unscoped calendar slot', () => {
+    expect(
+      resolveDefaultRelation({
+        subjects: [task],
+        target: { kind: 'calendar_slot', id: 'slot_1', organizationId: null },
+      }),
+    ).toMatchObject({ accepted: true, intent: { relationId: 'task.calendar-slot' } });
   });
 
   it.each([

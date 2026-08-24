@@ -1,11 +1,40 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-08-23
+> **Last Updated**: 2026-08-24
 
 ---
 
 ## Active Tasks
+
+### [LOCAL-FIRST-DETAIL-NAV-001] Enforce local-first detail reconciliation budgets
+
+- **Status**: REVIEW
+- **Started**: 2026-08-23
+- **Priority**: P0
+- **Description**: Authenticated entity details had enough route and cache contracts to paint a
+  local snapshot, but the aggregate budget had no executable database-round-trip guard. The Program
+  aggregate still read its owner separately and took five round trips. The Task snapshot also hid
+  its known status and priority behind loading placeholders.
+- **Approach**: Count the real PGlite driver calls after fixture setup for every aggregate endpoint.
+  Keep Program's named owner on its root Program read, then retain the two existing rollup reads and
+  the visibility read. Render Task status and priority from its validated navigation snapshot until
+  its one aggregate response arrives. Migrate stale test doubles from the removed arbitrary route
+  parameter hook to exact typed route descriptors.
+- **Subtasks**:
+  - [x] Reproduce the five-read Program aggregate with a route-level query counter.
+  - [x] Join the Program owner into the aggregate's root read.
+  - [x] Enforce the four-round-trip cap for Task, Project, Program, and Initiative aggregates.
+  - [x] Keep Task snapshot status and priority visible during reconciliation.
+  - [x] Update the affected route-hook test doubles and run their six suites.
+  - [ ] Run production-build navigation acceptance coverage and production rollout verification.
+- **Blockers**: No development blocker. The production-build browser gate and production rollout
+  remain before this task can move to completed.
+- **Validation**: The aggregate route suite passes all eight cases, including the new database
+  round-trip cap. The detail-route policy passes all eleven cases. The six route-hook consumer
+  suites pass all 37 cases. `pnpm --filter @docket/web typecheck` passes after the API build.
+
+---
 
 ### [OBJECT-RELATIONS-001] Unify object activation and relation drops
 

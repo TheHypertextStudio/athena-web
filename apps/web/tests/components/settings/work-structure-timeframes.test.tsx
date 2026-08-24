@@ -12,7 +12,7 @@ const { settingsGet, settingsPatch } = vi.hoisted(() => ({
 }));
 
 vi.mock('../../../src/lib/app-location', () => ({
-  useAppParams: () => ({ orgId: 'org_1' }),
+  useTypedRoute: () => ({ params: { orgId: 'org_1' } }),
 }));
 
 vi.mock('../../../src/components/settings/use-can-manage-org', () => ({

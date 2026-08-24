@@ -86,4 +86,11 @@ describe('detail route ownership', () => {
     expect(source).toContain('linkedContentOpen ? (');
     expect(source).toContain('Load attachments and dependency map');
   });
+
+  it('keeps Task snapshot status and priority visible while the aggregate reconciles', () => {
+    const source = readFileSync(join(root, details[0]), 'utf8');
+
+    expect(source).toContain('navigationSnapshot.status');
+    expect(source).toContain('navigationSnapshot.priority');
+  });
 });

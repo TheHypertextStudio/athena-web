@@ -118,7 +118,7 @@ vi.mock('../../src/components/pickers/picker-overlay', () => ({
 // The URL is read through the app's own location source rather than Next's router, so that is what
 // a test presents. See `src/lib/app-location.tsx`.
 vi.mock('../../src/lib/app-location', () => ({
-  useAppParams: () => ({ orgId: '01ARZ3NDEKTSV4RRFFQ69G5FAV' }),
+  useTypedRoute: () => ({ params: { orgId: '01ARZ3NDEKTSV4RRFFQ69G5FAV' } }),
   useAppPathname: () => '/orgs/01ARZ3NDEKTSV4RRFFQ69G5FAV/cycles',
   useAppSearchParams: () => new URLSearchParams(),
 }));

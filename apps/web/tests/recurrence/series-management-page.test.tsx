@@ -6,9 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const calls = vi.hoisted(() => ({ detail: vi.fn(), lifecycle: vi.fn(), edit: vi.fn() }));
 
 vi.mock('../../src/lib/app-location', () => ({
-  useAppParams: () => ({
-    orgId: '01BX5ZZKBKACTAV9WEVGEMMVRC',
-    seriesId: '01BX5ZZKBKACTAV9WEVGEMMVRE',
+  useTypedRoute: () => ({
+    params: {
+      orgId: '01BX5ZZKBKACTAV9WEVGEMMVRC',
+      seriesId: '01BX5ZZKBKACTAV9WEVGEMMVRE',
+    },
   }),
 }));
 

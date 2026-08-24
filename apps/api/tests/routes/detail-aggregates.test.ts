@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 import type tasksRouter from '../../src/routes/tasks';
@@ -15,6 +15,22 @@ let projects!: typeof projectsRouter;
 let projectRollup!: typeof projectRollupRouter;
 let programs!: typeof programsRouter;
 let initiatives!: typeof initiativesRouter;
+
+/** Count database round trips for one aggregate request without counting its fixture setup. */
+function observeDatabaseQueries(): { readonly count: () => number; readonly restore: () => void } {
+  const client = Reflect.get(db, '$client') as {
+    query: (...args: unknown[]) => Promise<unknown>;
+  };
+  const original = client.query.bind(client);
+  const query = vi.fn(original);
+  client.query = query;
+  return {
+    count: () => query.mock.calls.length,
+    restore: () => {
+      client.query = original;
+    },
+  };
+}
 
 beforeAll(async () => {
   schema = await getDb();
@@ -202,5 +218,56 @@ describe('detail aggregate routes', () => {
     const labels = await writer.request(`/${initiative.id}/labels`);
     expect(labels.status).toBe(200);
     expect(await labels.json()).toEqual([]);
+  });
+
+  it('settles each initial aggregate within four database round trips', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const taskWriter = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const projectWriter = appWithActor(projects, orgId, ['contribute'], humanActorId);
+    const manager = appWithActor(programs, orgId, ['manage'], humanActorId);
+    const initiativeWriter = appWithActor(initiatives, orgId, ['contribute'], humanActorId);
+    const taskResponse = await taskWriter.request('/', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'Bounded query task', teamId }),
+    });
+    const projectResponse = await projectWriter.request('/', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Bounded query project', teamId }),
+    });
+    const programResponse = await manager.request('/', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Bounded query program', ownerId: humanActorId }),
+    });
+    const initiativeResponse = await initiativeWriter.request('/', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Bounded query initiative', ownerId: humanActorId }),
+    });
+    const ids = [
+      (await taskResponse.json()) as { id: string },
+      (await projectResponse.json()) as { id: string },
+      (await programResponse.json()) as { id: string },
+      (await initiativeResponse.json()) as { id: string },
+    ];
+    const cases = [
+      ['Task', taskWriter, `/${ids[0].id}/aggregate-detail`],
+      ['Project', projectWriter, `/${ids[1].id}/aggregate-detail`],
+      ['Program', manager, `/${ids[2].id}/aggregate-detail`],
+      ['Initiative', initiativeWriter, `/${ids[3].id}/aggregate-detail`],
+    ] as const;
+
+    for (const [target, app, path] of cases) {
+      const observed = observeDatabaseQueries();
+      try {
+        expect((await app.request(path)).status).toBe(200);
+        expect(observed.count(), `${target} must issue database reads`).toBeGreaterThan(0);
+        expect(observed.count(), `${target} exceeded the four-read budget`).toBeLessThanOrEqual(4);
+      } finally {
+        observed.restore();
+      }
+    }
   });
 });

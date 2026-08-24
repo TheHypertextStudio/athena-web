@@ -16,7 +16,7 @@ const { redirectMock } = vi.hoisted(() => ({ redirectMock: vi.fn() }));
 vi.mock('next/navigation', () => ({ redirect: redirectMock }));
 
 vi.mock('@/lib/app-location', () => ({
-  useAppParams: () => ({ orgId: ORG_ID }),
+  useTypedRoute: () => ({ params: { orgId: ORG_ID } }),
 }));
 
 vi.mock('next/link', () => ({

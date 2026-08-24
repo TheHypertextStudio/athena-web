@@ -213,11 +213,19 @@ const programs = new Hono<AppEnv>()
     async (c) => {
       const { orgId, actorId, capabilities } = c.get('actorCtx');
       const { id } = c.req.valid('param');
-      const [row, canView] = await Promise.all([
-        loadProgram(orgId, id),
+      const [aggregateRows, canView] = await Promise.all([
+        db
+          .select({ row: program, ownerRow: actor })
+          .from(program)
+          .leftJoin(actor, and(eq(program.ownerId, actor.id), eq(actor.organizationId, orgId)))
+          .where(and(eq(program.id, id), eq(program.organizationId, orgId)))
+          .limit(1),
         buildTaskViewFilter(orgId, actorId),
       ]);
-      const [projectRows, taskRows, ownerRows] = await Promise.all([
+      const aggregateRow = aggregateRows[0];
+      if (!aggregateRow) throw new NotFoundError('Program not found');
+      const { row, ownerRow } = aggregateRow;
+      const [projectRows, taskRows] = await Promise.all([
         db
           .select({ id: project.id })
           .from(project)
@@ -239,13 +247,6 @@ const programs = new Hono<AppEnv>()
               or(eq(task.programId, id), eq(project.programId, id)),
             ),
           ),
-        row.ownerId === null
-          ? Promise.resolve([])
-          : db
-              .select()
-              .from(actor)
-              .where(and(eq(actor.id, row.ownerId), eq(actor.organizationId, orgId)))
-              .limit(1),
       ]);
       const taskCount = taskRows.filter(canView).length;
 
@@ -262,7 +263,7 @@ const programs = new Hono<AppEnv>()
         },
         viewer: { actorId },
         capabilities: detailCapabilities(capabilities),
-        references: { owner: ownerRows[0] ? actorReference(ownerRows[0]) : null },
+        references: { owner: ownerRow ? actorReference(ownerRow) : null },
         defaultView: {
           program: { ...toOut(row), rollup: { projects: projectRows.length, tasks: taskCount } },
         },

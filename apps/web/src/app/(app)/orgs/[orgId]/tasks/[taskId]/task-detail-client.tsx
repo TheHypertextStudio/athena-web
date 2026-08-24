@@ -17,6 +17,7 @@ import { formatWindow } from '@/components/cycles/format-window';
 import { Dependencies } from '@/components/task-detail/Dependencies';
 import { CommentActivityFeed } from '@/components/task-detail/CommentActivityFeed';
 import { PriorityPicker } from '@/components/task-detail/PriorityPicker';
+import { PRIORITY_LABEL } from '@/components/task-detail/priority';
 import { StatusPicker } from '@/components/task-detail/StatusPicker';
 import { Subtasks } from '@/components/task-detail/Subtasks';
 import { MailAttachmentsPanel } from '@/components/athena/mail-attachments-panel';
@@ -234,11 +235,22 @@ export default function TaskDetailPage(): JSX.Element {
           ) : (
             <SkeletonText scale="title" className="w-2/3 max-w-lg" />
           )}
-          <div className="flex flex-wrap gap-2">
-            <SkeletonChip className="w-32" />
-            <SkeletonChip className="w-32" />
-            <SkeletonChip className="w-24" />
-          </div>
+          {navigationSnapshot ? (
+            <div className="text-on-surface-variant text-body-small flex flex-wrap gap-2">
+              <span className="bg-surface-container rounded-full px-3 py-1">
+                Status: {navigationSnapshot.status.replaceAll('_', ' ')}
+              </span>
+              <span className="bg-surface-container rounded-full px-3 py-1">
+                Priority: {PRIORITY_LABEL[navigationSnapshot.priority]}
+              </span>
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              <SkeletonChip className="w-32" />
+              <SkeletonChip className="w-32" />
+              <SkeletonChip className="w-24" />
+            </div>
+          )}
         </header>
         <div className="grid grid-cols-1 gap-6 @4xl:grid-cols-[minmax(0,1fr)_18rem]">
           <div className="flex flex-col gap-6">

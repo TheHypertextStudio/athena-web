@@ -9,7 +9,7 @@ const harness = vi.hoisted(() => ({
 }));
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
-vi.mock('@/lib/app-location', () => ({ useAppParams: () => ({ orgId: 'org-1' }) }));
+vi.mock('@/lib/app-location', () => ({ useTypedRoute: () => ({ params: { orgId: 'org-1' } }) }));
 vi.mock('@/lib/auth-client', () => ({ useSession: () => ({ data: { user: { id: 'user-1' } } }) }));
 vi.mock('@/components/create-object/create-object-provider', () => ({
   useCreateObject: () => ({ openCreate: vi.fn() }),

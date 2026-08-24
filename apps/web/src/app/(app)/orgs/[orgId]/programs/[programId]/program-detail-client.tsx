@@ -43,6 +43,7 @@ import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from 
 import {
   aggregateLoadState,
   programDetailAggregateDef,
+  snapshotReconciliationPending,
   terminalDetailFailure,
 } from '@/lib/detail-aggregate';
 import { orgMembersDef } from '@/lib/use-org-membership';
@@ -89,7 +90,10 @@ export default function ProgramDetailPage(): JSX.Element {
     aggregateQ.isPending,
     aggregateQ.isError,
   );
-  const snapshotSyncing = useDelayedBoolean(aggregateState === 'snapshot', 300);
+  const snapshotSyncing = useDelayedBoolean(
+    snapshotReconciliationPending(navigationSnapshot !== null, aggregateQ.isPending),
+    300,
+  );
 
   useEffect(() => {
     setTerminalState(null);

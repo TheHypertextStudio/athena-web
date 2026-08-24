@@ -623,10 +623,17 @@ const projects = new Hono<AppEnv>()
       const [progressRow] = await db
         .select({
           taskCount: count(task.id),
-          completedCount: sql<number>`count(*) filter (where ${task.completedAt} is not null)`,
-          estimatedCount: sql<number>`count(*) filter (where ${task.estimate} > 0)`,
-          estimatedWeight: sql<number>`coalesce(sum(case when ${task.estimate} > 0 then ${task.estimate} else 0 end), 0)`,
-          completedEstimatedWeight: sql<number>`coalesce(sum(case when ${task.completedAt} is not null and ${task.estimate} > 0 then ${task.estimate} else 0 end), 0)`,
+          completedCount:
+            sql<number>`count(*) filter (where ${task.completedAt} is not null)`.mapWith(Number),
+          estimatedCount: sql<number>`count(*) filter (where ${task.estimate} > 0)`.mapWith(Number),
+          estimatedWeight:
+            sql<number>`coalesce(sum(case when ${task.estimate} > 0 then ${task.estimate} else 0 end), 0)`.mapWith(
+              Number,
+            ),
+          completedEstimatedWeight:
+            sql<number>`coalesce(sum(case when ${task.completedAt} is not null and ${task.estimate} > 0 then ${task.estimate} else 0 end), 0)`.mapWith(
+              Number,
+            ),
         })
         .from(task)
         .where(and(eq(task.organizationId, orgId), eq(task.projectId, row.id), taskView));

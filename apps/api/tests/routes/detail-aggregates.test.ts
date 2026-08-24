@@ -402,6 +402,54 @@ describe('detail aggregate routes', () => {
     });
   });
 
+  it('serializes Project progress when postgres-js returns aggregate numerics as text', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(projects, orgId, ['contribute'], humanActorId);
+    const created = await writer.request('/', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Postgres aggregate project', teamId }),
+    });
+    const project = (await created.json()) as { id: string };
+    const client = Reflect.get(db, '$client') as {
+      query: (
+        query: string,
+        params?: unknown[],
+        options?: unknown,
+      ) => Promise<{ rows?: Record<string, unknown>[] }>;
+    };
+    const original = client.query.bind(client);
+    client.query = async (...args) => {
+      const result = await original(...args);
+      if (args[0].includes('count(*) filter')) {
+        for (const row of result.rows ?? []) {
+          for (const [key, value] of Object.entries(row)) {
+            if (typeof value === 'number') row[key] = String(value);
+          }
+        }
+      }
+      return result;
+    };
+
+    try {
+      const response = await writer.request(`/${project.id}/aggregate-detail`);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        defaultView: {
+          progress: {
+            percent: 0,
+            completedWeight: 0,
+            totalWeight: 0,
+            taskCount: 0,
+            completedCount: 0,
+          },
+        },
+      });
+    } finally {
+      client.query = original;
+    }
+  });
+
   it('keeps Project work rows out of the aggregate and returns them only from the deferred section', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const writer = appWithActor(projects, orgId, ['contribute'], humanActorId);

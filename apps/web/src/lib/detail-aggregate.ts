@@ -64,6 +64,20 @@ export function aggregateLoadState(
   return failed ? 'error' : 'missing';
 }
 
+/**
+ * Report whether a retained navigation snapshot is still reconciling.
+ *
+ * A failed request may leave the snapshot visible, but it has stopped syncing. Keeping those
+ * states separate prevents the route from claiming that a completed failure is still in flight.
+ *
+ * @param hasSnapshot - Whether the route has a matching navigation snapshot.
+ * @param pending - Whether the aggregate request is still pending.
+ * @returns Whether the snapshot should show its delayed syncing indicator.
+ */
+export function snapshotReconciliationPending(hasSnapshot: boolean, pending: boolean): boolean {
+  return hasSnapshot && pending;
+}
+
 /** Read a Task's bounded initial detail content. */
 export function taskDetailAggregateDef(orgId: string, taskId: string) {
   return apiQueryOptions<TaskDetailAggregate>(

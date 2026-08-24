@@ -57,6 +57,7 @@ import { useTypedRoute } from '@/lib/app-location';
 import {
   aggregateLoadState,
   projectDetailAggregateDef,
+  snapshotReconciliationPending,
   terminalDetailFailure,
 } from '@/lib/detail-aggregate';
 import { useEntityMentions } from '@/lib/use-entity-mentions';
@@ -101,7 +102,10 @@ export default function ProjectDetailPage(): JSX.Element {
     aggregateQ.isPending,
     aggregateQ.isError,
   );
-  const snapshotSyncing = useDelayedBoolean(aggregateState === 'snapshot', 300);
+  const snapshotSyncing = useDelayedBoolean(
+    snapshotReconciliationPending(navigationSnapshot !== null, aggregateQ.isPending),
+    300,
+  );
   const [tab, setTab] = useState<TabId>('overview');
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [repeatProjectOpen, setRepeatProjectOpen] = useState(false);

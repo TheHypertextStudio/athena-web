@@ -7,6 +7,36 @@
 
 ## Active Tasks
 
+### [PROJECT-DETAIL-500-001] Restore Project detail reconciliation
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-08-24
+- **Priority**: P0
+- **Description**: Production Project detail navigation paints its local identity, but the bounded
+  aggregate returns HTTP 500. The client retries once and then leaves the snapshot on screen with
+  “Syncing…” and “Could not refresh this project,” so none of the normal detail surface mounts.
+- **Approach**: Reproduce the production-driver aggregate value shape in a route test. Map every raw
+  PostgreSQL count and sum through an explicit numeric decoder before response validation. Preserve
+  the one-request and four-database-round-trip budgets, then deploy and verify the failing production
+  Project by request id and visible detail content.
+- **Subtasks**:
+  - [x] Reproduce the failure in the signed-in production browser and capture the aggregate 500.
+  - [x] Isolate the failing response-contract boundary in the Project progress aggregate.
+  - [x] Add a failing postgres-js parity regression.
+  - [x] Correct the aggregate numeric mapping and pass focused API and Web tests.
+  - [ ] Review, commit, push, pass CI, deploy, and verify the affected production Project.
+- **Validation**: The postgres-js parity test failed with the same four response-schema numeric
+  errors as production before the fix and passes afterward. All 41 detail aggregate route tests and
+  all five detail aggregate client tests pass. Targeted ESLint and API and Web type checks pass. The
+  Web production build succeeds with the local environment contract and precaches 273 assets.
+- **Failure-state correction**: Tasks, Projects, Programs, and Initiatives now show the delayed
+  syncing label only while their aggregate request remains pending. A settled failure retains the
+  truthful snapshot and refresh error without claiming that network work is still in flight.
+- **Blockers**: Cloud logging requires interactive reauthentication. The response contract and
+  production request trace provide enough evidence to continue without log access.
+
+---
+
 ### [CANVAS-GRAPH-CRUD-001] Make graph canvases usable for organizing work
 
 - **Status**: COMPLETED

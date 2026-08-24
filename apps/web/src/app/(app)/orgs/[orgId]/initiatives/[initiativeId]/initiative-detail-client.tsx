@@ -63,6 +63,7 @@ import { api } from '@/lib/api';
 import {
   aggregateLoadState,
   initiativeDetailAggregateDef,
+  snapshotReconciliationPending,
   terminalDetailFailure,
 } from '@/lib/detail-aggregate';
 import { initiativeRelationshipSectionsDef } from '@/lib/fetch-initiative-sections';
@@ -135,7 +136,10 @@ export default function InitiativeDetailPage(): JSX.Element {
     aggregateQ.isPending,
     aggregateQ.isError,
   );
-  const snapshotSyncing = useDelayedBoolean(aggregateState === 'snapshot', 300);
+  const snapshotSyncing = useDelayedBoolean(
+    snapshotReconciliationPending(navigationSnapshot !== null, aggregateQ.isPending),
+    300,
+  );
   const relationshipsQ = useApiQuery({
     ...initiativeRelationshipSectionsDef(orgId, initiativeId),
     enabled: aggregate !== null && (tab === 'subinitiatives' || tab === 'work'),

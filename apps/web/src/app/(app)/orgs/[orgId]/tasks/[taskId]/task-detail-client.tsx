@@ -45,6 +45,7 @@ import { useEstimationScale } from '@/lib/use-estimation-scale';
 import { useTaskDetail } from '@/lib/use-task-detail';
 import { useTaskMutations } from '@/lib/use-task-mutations';
 import { useDelayedBoolean } from '@/lib/use-delayed-boolean';
+import { snapshotReconciliationPending } from '@/lib/detail-aggregate';
 import { useRenameTask } from '@/lib/use-rename-task';
 import { useCategoryOf } from '@/components/entity-display/use-work-status';
 import { TaskRepeatingWorkBacklink } from '@/components/recurrence/repeating-work-backlink';
@@ -115,7 +116,7 @@ export default function TaskDetailPage(): JSX.Element {
     cyclesOpen,
   });
   const snapshotSyncing = useDelayedBoolean(
-    navigationSnapshot !== null && (isPending || isError),
+    snapshotReconciliationPending(navigationSnapshot !== null, isPending),
     300,
   );
 

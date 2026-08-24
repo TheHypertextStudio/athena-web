@@ -4,11 +4,12 @@ import { describe, expect, it } from 'vitest';
 
 import {
   aggregateLoadState,
-  terminalDetailFailure,
   initiativeDetailAggregateDef,
   programDetailAggregateDef,
   projectDetailAggregateDef,
+  snapshotReconciliationPending,
   taskDetailAggregateDef,
+  terminalDetailFailure,
 } from '@/lib/detail-aggregate';
 import { ApiRequestError } from '@/lib/query-core';
 
@@ -52,6 +53,12 @@ describe('detail aggregate query definitions', () => {
     expect(aggregateLoadState(undefined, true, false, true)).toBe('snapshot');
     expect(aggregateLoadState(undefined, false, true, false)).toBe('loading');
     expect(aggregateLoadState(undefined, false, false, true)).toBe('error');
+  });
+
+  it('stops calling a retained snapshot syncing after the aggregate request settles', () => {
+    expect(snapshotReconciliationPending(true, true)).toBe(true);
+    expect(snapshotReconciliationPending(true, false)).toBe(false);
+    expect(snapshotReconciliationPending(false, true)).toBe(false);
   });
 
   it('does not retain a snapshot after the server reports deletion or revoked access', () => {

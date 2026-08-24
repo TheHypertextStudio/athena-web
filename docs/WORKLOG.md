@@ -9,7 +9,7 @@
 
 ### [COMPOSER-SIZE-001] Stabilize create-composer expansion
 
-- **Status**: IN_PROGRESS
+- **Status**: COMPLETED
 - **Started**: 2026-08-23
 - **Priority**: P0
 - **Description**: The shared create composer opens with a 112px description editor, then expands
@@ -19,11 +19,20 @@
   bounded viewport-aware heights, let the editor flex into each state, and transition only height
   with the shared MD3 duration and easing tokens while respecting reduced-motion preferences.
 - **Subtasks**:
-  - [ ] Add a failing shared-shell geometry regression.
-  - [ ] Keep composer width stable and increase default height.
-  - [ ] Animate the height-only state change and preserve reduced-motion behavior.
-  - [ ] Run focused composer validation and record the result.
+  - [x] Add a failing shared-shell geometry regression.
+  - [x] Keep composer width stable and increase default height.
+  - [x] Animate the height-only state change and preserve reduced-motion behavior.
+  - [x] Run focused composer validation and record the result.
 - **Blockers**: None.
+- **Validation**: The shared-shell regression failed against the old 112px editor and width-changing
+  expansion. The corrected editor and Initiative, Project, Program, and Task composer suites pass
+  all 93 tests. The web typecheck, focused ESLint, Prettier, and diff checks pass. The production web
+  build compiles all 75 routes and emits the production service worker with the documented local
+  build environment. The independent review found that the expand glyph still animated under
+  reduced motion. Its failing regression now passes after removing the unrelated transform motion.
+- **Retrospective**: Expansion should change the amount of vertical writing space without changing
+  the dialog's reading measure. One fixed width and a height-only transition preserve the user's
+  spatial context while the editor remains mounted and keeps its draft and focus.
 
 ---
 

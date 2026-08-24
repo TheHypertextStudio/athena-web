@@ -231,10 +231,7 @@ export function ComposerShell({
         onSubmit={() => {
           if (canSubmit && !creating) onSubmit();
         }}
-        className={cn(
-          'bg-surface-container-low mt-3 min-h-0 overflow-y-auto overscroll-contain rounded-lg p-3',
-          expanded ? 'flex flex-1 flex-col [&>div]:flex-1' : 'h-28 max-h-[40vh]',
-        )}
+        className="bg-surface-container-low mt-3 flex min-h-28 flex-1 flex-col overflow-y-auto overscroll-contain rounded-lg p-3 [&>div]:flex-1"
       />
     );
 
@@ -264,8 +261,8 @@ export function ComposerShell({
     >
       <DialogContent
         className={cn(
-          'gap-0 overflow-hidden p-0',
-          expanded ? 'h-[min(48rem,85dvh)] max-w-5xl' : 'max-w-2xl',
+          'h-[min(34rem,75dvh)] max-w-2xl gap-0 overflow-hidden p-0 transition-[height] duration-(--dur-slow) ease-(--ease-in-out) motion-reduce:transition-none',
+          expanded && 'h-[min(48rem,85dvh)]',
         )}
         aria-describedby={undefined}
         // The whole form goes inert while a create is in flight. Without this, assistive tech has
@@ -311,10 +308,7 @@ export function ComposerShell({
             }}
             className="absolute top-4 right-14 z-10"
           >
-            <Maximize
-              aria-hidden="true"
-              className={cn('transition-transform', expanded && 'rotate-180')}
-            />
+            <Maximize aria-hidden="true" className={expanded ? 'rotate-180' : undefined} />
           </Button>
         ) : null}
 

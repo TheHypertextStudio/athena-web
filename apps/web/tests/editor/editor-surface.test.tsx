@@ -263,16 +263,34 @@ describe('clicking an editor-shaped surface starts editing', () => {
     const body = await screen.findByRole('textbox', { name: 'Add description' });
     const scrollSurface = body.closest('[data-editor-surface]');
 
-    expect(dialog).toHaveClass('max-w-2xl', 'overflow-hidden');
+    expect(dialog).toHaveClass(
+      'h-[min(34rem,75dvh)]',
+      'max-w-2xl',
+      'overflow-hidden',
+      'transition-[height]',
+      'duration-(--dur-slow)',
+      'ease-(--ease-in-out)',
+      'motion-reduce:transition-none',
+    );
     expect(dialog).not.toHaveClass('overflow-y-auto');
-    expect(scrollSurface).toHaveClass('min-h-0', 'overflow-y-auto', 'overscroll-contain');
+    expect(scrollSurface).toHaveClass(
+      'flex',
+      'min-h-28',
+      'flex-1',
+      'flex-col',
+      'overflow-y-auto',
+      'overscroll-contain',
+    );
 
     const bodyNode = body;
-    await user.click(screen.getByRole('button', { name: 'Expand editor' }));
+    const expandButton = screen.getByRole('button', { name: 'Expand editor' });
+    expect(expandButton.querySelector('svg')).not.toHaveClass('transition-transform');
+    await user.click(expandButton);
 
     expect(screen.getByRole('textbox', { name: 'Add description' })).toBe(bodyNode);
     expect(bodyNode).toHaveTextContent('A durable draft');
-    expect(dialog).toHaveClass('h-[min(48rem,85dvh)]', 'max-w-5xl');
+    expect(dialog).toHaveClass('h-[min(48rem,85dvh)]', 'max-w-2xl');
+    expect(dialog).not.toHaveClass('max-w-5xl');
     expect(screen.getByRole('button', { name: 'Collapse editor' })).toHaveFocus();
   });
 

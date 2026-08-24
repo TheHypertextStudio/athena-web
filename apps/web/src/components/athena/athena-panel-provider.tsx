@@ -300,13 +300,13 @@ export function AthenaRailPanel(): JSX.Element {
             Back
           </Button>
         ) : (
-          <span className="flex min-w-0 flex-1 items-center gap-2 font-semibold">
+          <span className="text-label-large flex min-w-0 flex-1 items-center gap-2">
             <Sparkles aria-hidden="true" className="text-primary size-4 shrink-0" />
             Athena
           </span>
         )}
         {counts ? (
-          <span className="text-on-surface-variant ml-auto text-xs tabular-nums">
+          <span className="text-on-surface-variant text-label-small ml-auto tabular-nums">
             {counts.needsYou > 0 ? `${counts.needsYou} need you` : `${counts.working} working`}
           </span>
         ) : null}
@@ -320,7 +320,7 @@ export function AthenaRailPanel(): JSX.Element {
       {athena.feedback ? (
         <p
           role="alert"
-          className="bg-error-container text-on-error-container border-outline-variant border-b px-3 py-2 text-sm"
+          className="bg-error-container text-on-error-container text-body-medium border-outline-variant border-b px-3 py-2"
         >
           {athena.feedback}
         </p>
@@ -335,7 +335,7 @@ export function AthenaRailPanel(): JSX.Element {
           <Skeleton className="h-14 w-4/5" />
         </div>
       ) : athena.queue.isError || athena.detailError ? (
-        <p role="status" className="text-on-surface-variant p-4 text-sm leading-6">
+        <p role="status" className="text-on-surface-variant text-body-medium p-4">
           Athena is temporarily unavailable. We&apos;ll keep checking.
         </p>
       ) : athena.selected ? (
@@ -350,14 +350,14 @@ export function AthenaRailPanel(): JSX.Element {
       ) : (
         <nav aria-label="Athena work" className="min-h-0 flex-1 overflow-y-auto py-2">
           {groups.every((group) => group.items.length === 0) ? (
-            <p className="text-on-surface-variant px-3 py-4 text-sm leading-6">
+            <p className="text-on-surface-variant text-body-medium px-3 py-4">
               Start Athena from Today or from a piece of work when it needs context.
             </p>
           ) : (
             groups.map((group) =>
               group.items.length > 0 ? (
                 <section key={group.key} aria-labelledby={`athena-rail-${group.key}`}>
-                  <div className="text-on-surface-variant px-3 pt-3 pb-1 text-xs font-semibold tracking-wide uppercase">
+                  <div className="text-on-surface-variant text-label-small px-3 pt-3 pb-1 uppercase">
                     <span id={`athena-rail-${group.key}`}>{group.label}</span>
                     <span className="float-right tabular-nums">{group.items.length}</span>
                   </div>
@@ -371,10 +371,10 @@ export function AthenaRailPanel(): JSX.Element {
                             athena.selectSession(session);
                           }}
                         >
-                          <span className="text-on-surface line-clamp-2 text-sm font-medium">
+                          <span className="text-on-surface text-label-large line-clamp-2">
                             {session.objective}
                           </span>
-                          <span className="text-on-surface-variant truncate text-xs">
+                          <span className="text-on-surface-variant text-body-small truncate">
                             {session.context?.source?.label ??
                               session.workspace?.name ??
                               'Personal Athena work'}
@@ -410,8 +410,8 @@ function AthenaRailComposer(): JSX.Element {
       }}
     >
       <div>
-        <h2 className="text-on-surface text-base font-semibold">Start this work</h2>
-        <p className="text-on-surface-variant mt-1 text-sm leading-6">
+        <h2 className="text-on-surface text-title-medium">Start this work</h2>
+        <p className="text-on-surface-variant text-body-medium mt-1">
           Athena keeps moving in the background. Return here when it needs direction.
         </p>
       </div>
@@ -423,7 +423,7 @@ function AthenaRailComposer(): JSX.Element {
         onChange={setDraft}
         {...(mentionOrgId === undefined ? {} : { orgId: mentionOrgId })}
         insertMode="context"
-        className="border-outline-variant bg-surface-container-low text-on-surface focus-visible:ring-ring w-full resize-none rounded-lg border p-3 text-sm leading-6 outline-none focus-visible:ring-2"
+        className="border-outline-variant bg-surface-container-low text-on-surface text-body-medium focus-visible:ring-ring w-full resize-none rounded-lg border p-3 outline-none focus-visible:ring-2"
       />
       <div className="flex justify-end gap-2">
         <Button type="button" variant="ghost" className="min-h-10" onClick={athena.closeAthena}>

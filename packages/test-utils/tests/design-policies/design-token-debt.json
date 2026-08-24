@@ -167,9 +167,6 @@
   "apps/web/src/components/athena/athena-conversation.tsx": {
     "raw-type-utility": 1
   },
-  "apps/web/src/components/athena/athena-panel-provider.tsx": {
-    "raw-type-utility": 13
-  },
   "apps/web/src/components/athena/athena-workbench.tsx": {
     "raw-type-utility": 26
   },

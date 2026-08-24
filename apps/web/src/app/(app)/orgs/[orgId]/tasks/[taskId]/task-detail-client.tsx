@@ -3,7 +3,7 @@
 import type { Priority } from '@docket/work/task-contract';
 import { ActorAvatar, ActorPicker, type ActorKind, type PickerOption } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Skeleton, SkeletonChip, SkeletonText } from '@docket/ui/primitives';
+import { Button, Skeleton, SkeletonChip, SkeletonText } from '@docket/ui/primitives';
 import { useTypedRoute } from '@/lib/app-location';
 import { type JSX, useCallback, useMemo, useState } from 'react';
 
@@ -67,6 +67,8 @@ export default function TaskDetailPage(): JSX.Element {
   const cycleLabel = useVocabulary('cycle');
   const categoryOf = useCategoryOf('task');
 
+  const [activityOpen, setActivityOpen] = useState(false);
+  const [propertiesOpen, setPropertiesOpen] = useState(false);
   const {
     task,
     workflowStates,
@@ -84,7 +86,7 @@ export default function TaskDetailPage(): JSX.Element {
     isPending,
     isError,
     error,
-  } = useTaskDetail(orgId, taskId);
+  } = useTaskDetail(orgId, taskId, { activityOpen, propertiesOpen });
 
   const { data: session } = useSession();
   const currentActorId =
@@ -110,7 +112,7 @@ export default function TaskDetailPage(): JSX.Element {
     deleteError,
   } = useTaskMutations(orgId, taskId, detailKey, commentsKey);
 
-  const { scale: estimationScale } = useEstimationScale(orgId);
+  const { scale: estimationScale } = useEstimationScale(orgId, propertiesOpen);
 
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
@@ -153,6 +155,7 @@ export default function TaskDetailPage(): JSX.Element {
           param: { orgId, subjectType: 'project' },
         }),
       'Could not load project icons.',
+      { enabled: propertiesOpen },
     ),
   );
   const projectDisplays = projectDisplaysQ.data?.items ?? [];
@@ -168,7 +171,7 @@ export default function TaskDetailPage(): JSX.Element {
     () => toCycleOptions(cycles, formatWindow),
     [cycles],
   );
-  const labelsQ = useApiListQuery(labelsDef(orgId));
+  const labelsQ = useApiListQuery({ ...labelsDef(orgId), enabled: propertiesOpen });
   const labelOptions = useMemo<readonly PickerOption[]>(
     () => toLabelOptions(labelsQ.data?.items ?? []),
     [labelsQ.data],
@@ -272,7 +275,12 @@ export default function TaskDetailPage(): JSX.Element {
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
-      <header className="flex flex-col gap-4">
+      <header
+        className="flex flex-col gap-4"
+        onFocusCapture={() => {
+          setPropertiesOpen(true);
+        }}
+      >
         <h1 className="leading-tight">
           <EditableTitle
             value={task.title}
@@ -440,32 +448,53 @@ export default function TaskDetailPage(): JSX.Element {
             </div>
           </section>
 
-          <CommentActivityFeed
-            comments={comments}
-            activities={activities}
-            resolveActor={resolveActor}
-            onComment={addComment}
-            canComment={canComment}
-          />
-
-          <TaskActivitySection orgId={orgId} taskId={taskId} />
+          {activityOpen ? (
+            <>
+              <CommentActivityFeed
+                comments={comments}
+                activities={activities}
+                resolveActor={resolveActor}
+                onComment={addComment}
+                canComment={canComment}
+              />
+              <TaskActivitySection orgId={orgId} taskId={taskId} />
+            </>
+          ) : (
+            <section aria-label="Task activity">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setActivityOpen(true);
+                }}
+              >
+                Load activity and comments
+              </Button>
+            </section>
+          )}
         </div>
 
-        <TaskPropertiesRail
-          task={task}
-          projectLabel={projectLabel}
-          programLabel={programLabel}
-          cycleLabel={cycleLabel}
-          projectOptions={projectOptions}
-          programOptions={programOptions}
-          milestoneOptions={milestoneOptions}
-          cycleOptions={cycleOptions}
-          labelOptions={labelOptions}
-          onCreateLabel={onCreateLabel}
-          estimationScale={estimationScale}
-          canEdit={canEdit}
-          onPatch={patchTask}
-        />
+        <div
+          onFocusCapture={() => {
+            setPropertiesOpen(true);
+          }}
+        >
+          <TaskPropertiesRail
+            task={task}
+            projectLabel={projectLabel}
+            programLabel={programLabel}
+            cycleLabel={cycleLabel}
+            projectOptions={projectOptions}
+            programOptions={programOptions}
+            milestoneOptions={milestoneOptions}
+            cycleOptions={cycleOptions}
+            labelOptions={labelOptions}
+            onCreateLabel={onCreateLabel}
+            estimationScale={estimationScale}
+            canEdit={canEdit}
+            onPatch={patchTask}
+          />
+        </div>
       </div>
 
       <ConfirmDestructiveDialog

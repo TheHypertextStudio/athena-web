@@ -68,4 +68,13 @@ describe('detail route ownership', () => {
     expect(source).toContain('.relationships.$get');
     expect(source).not.toContain('.aggregate.$get');
   });
+
+  it('keeps Task identity on its aggregate while the legacy roster queries stay dormant', () => {
+    const source = readFileSync(join(root, 'src/lib/use-task-detail.ts'), 'utf8');
+
+    expect(source).toContain('taskDetailAggregateDef');
+    expect(source).toContain('defaultView.task');
+    expect(source).toContain('enabled: options.propertiesOpen ?? false');
+    expect(source).toContain('enabled: options.activityOpen ?? false');
+  });
 });

@@ -15,8 +15,10 @@ import {
   ProgramId,
   ProjectId,
   TaskSubjectRef,
+  TaskStatusKey,
   type TaskArchived,
   type TaskDetail,
+  type TaskDetailAggregate,
   type TaskOut,
 } from '@docket/types';
 import type { Priority } from '@docket/work/task-contract';
@@ -103,6 +105,25 @@ export interface TaskMutations {
   resetDelete: () => void;
 }
 
+/** Keep the Task aggregate's navigation snapshot and visible document in lockstep. */
+export function patchTaskAggregate(
+  current: TaskDetailAggregate | undefined,
+  apply: (task: TaskDetail) => TaskDetail,
+): TaskDetailAggregate | undefined {
+  if (!current) return undefined;
+  const task = apply(current.defaultView.task);
+  return {
+    ...current,
+    snapshot: {
+      ...current.snapshot,
+      title: task.title,
+      status: TaskStatusKey.parse(task.state),
+      priority: task.priority,
+    },
+    defaultView: { task },
+  };
+}
+
 /**
  * All write operations for the task detail page.
  *
@@ -136,10 +157,10 @@ export function useTaskMutations(
   );
 
   const writeDetail = useCallback(
-    (patch: Partial<TaskDetail>): TaskDetail | undefined => {
-      const previous = queryClient.getQueryData<TaskDetail>(detailKey);
-      queryClient.setQueryData<TaskDetail>(detailKey, (current) =>
-        current ? { ...current, ...patch } : current,
+    (patch: Partial<TaskDetail>): TaskDetailAggregate | undefined => {
+      const previous = queryClient.getQueryData<TaskDetailAggregate>(detailKey);
+      queryClient.setQueryData<TaskDetailAggregate>(detailKey, (current) =>
+        patchTaskAggregate(current, (task) => ({ ...task, ...patch })),
       );
       return previous;
     },
@@ -148,22 +169,24 @@ export function useTaskMutations(
 
   const adoptTaskOut = useCallback(
     (updated: TaskOut): void => {
-      queryClient.setQueryData<TaskDetail>(detailKey, (current) =>
-        current
-          ? {
-              ...current,
-              ...updated,
-              blocking: current.blocking,
-              blockedBy: current.blockedBy,
-              subtasks: current.subtasks,
-            }
-          : current,
+      queryClient.setQueryData<TaskDetailAggregate>(detailKey, (current) =>
+        patchTaskAggregate(current, (task) => ({
+          ...task,
+          ...updated,
+          blocking: task.blocking,
+          blockedBy: task.blockedBy,
+          subtasks: task.subtasks,
+        })),
       );
     },
     [queryClient, detailKey],
   );
 
-  const stateMutation = useApiMutation<TaskOut, string, { previous?: TaskDetail | undefined }>({
+  const stateMutation = useApiMutation<
+    TaskOut,
+    string,
+    { previous?: TaskDetailAggregate | undefined }
+  >({
     mutationFn: (stateKey) =>
       unwrap(
         () =>
@@ -186,32 +209,38 @@ export function useTaskMutations(
     invalidateKeys: [detailKey, queryKeys.tasks(orgId)],
   });
 
-  const priorityMutation = useApiMutation<TaskOut, Priority, { previous?: TaskDetail | undefined }>(
-    {
-      mutationFn: (priority) =>
-        unwrap(
-          () =>
-            api.v1.orgs[':orgId'].tasks[':id'].$patch({
-              param: { orgId, id: taskId },
-              json: { priority },
-            }),
-          'Could not update the priority.',
-        ),
-      onMutate: async (priority) => {
-        await queryClient.cancelQueries({ queryKey: detailKey });
-        return { previous: writeDetail({ priority }) };
-      },
-      onError: (_err, _priority, ctx) => {
-        if (ctx?.previous) queryClient.setQueryData(detailKey, ctx.previous);
-      },
-      onSuccess: (updated) => {
-        adoptTaskOut(updated);
-      },
-      invalidateKeys: [detailKey, queryKeys.tasks(orgId)],
+  const priorityMutation = useApiMutation<
+    TaskOut,
+    Priority,
+    { previous?: TaskDetailAggregate | undefined }
+  >({
+    mutationFn: (priority) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].tasks[':id'].$patch({
+            param: { orgId, id: taskId },
+            json: { priority },
+          }),
+        'Could not update the priority.',
+      ),
+    onMutate: async (priority) => {
+      await queryClient.cancelQueries({ queryKey: detailKey });
+      return { previous: writeDetail({ priority }) };
     },
-  );
+    onError: (_err, _priority, ctx) => {
+      if (ctx?.previous) queryClient.setQueryData(detailKey, ctx.previous);
+    },
+    onSuccess: (updated) => {
+      adoptTaskOut(updated);
+    },
+    invalidateKeys: [detailKey, queryKeys.tasks(orgId)],
+  });
 
-  const patchMutation = useApiMutation<TaskOut, TaskPatch, { previous?: TaskDetail | undefined }>({
+  const patchMutation = useApiMutation<
+    TaskOut,
+    TaskPatch,
+    { previous?: TaskDetailAggregate | undefined }
+  >({
     mutationFn: (patch) => {
       const body = {
         ...(patch.title !== undefined ? { title: patch.title } : {}),
@@ -290,7 +319,7 @@ export function useTaskMutations(
   const toggleSubtaskMutation = useApiMutation<
     TaskOut,
     { subtaskId: string; done: boolean },
-    { previous?: TaskDetail | undefined }
+    { previous?: TaskDetailAggregate | undefined }
   >({
     mutationFn: ({ subtaskId, done }) => {
       const state = toggleTarget(done);
@@ -308,15 +337,19 @@ export function useTaskMutations(
     },
     onMutate: async ({ subtaskId, done }) => {
       await queryClient.cancelQueries({ queryKey: detailKey });
-      const previous = queryClient.getQueryData<TaskDetail>(detailKey);
+      const previous = queryClient.getQueryData<TaskDetailAggregate>(detailKey);
       const state = toggleTarget(done);
-      queryClient.setQueryData<TaskDetail>(detailKey, (current) =>
-        current && state !== null
-          ? {
-              ...current,
-              subtasks: current.subtasks.map((s) => (s.id === subtaskId ? { ...s, state } : s)),
-            }
-          : current,
+      queryClient.setQueryData<TaskDetailAggregate>(detailKey, (current) =>
+        patchTaskAggregate(current, (task) =>
+          state === null
+            ? task
+            : {
+                ...task,
+                subtasks: task.subtasks.map((subtask) =>
+                  subtask.id === subtaskId ? { ...subtask, state } : subtask,
+                ),
+              },
+        ),
       );
       return { previous };
     },

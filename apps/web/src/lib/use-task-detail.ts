@@ -29,6 +29,7 @@ import type { QueryKey } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
 import { api } from './api';
+import { taskDetailAggregateDef } from './detail-aggregate';
 import { userErrorMessage } from './problem';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery, useLiveApiQuery } from './query';
 
@@ -78,24 +79,20 @@ export interface TaskDetailData {
  * @param taskId - The task being viewed.
  * @returns All data slices + query-state flags.
  */
-export function useTaskDetail(orgId: string, taskId: string): TaskDetailData {
+export function useTaskDetail(
+  orgId: string,
+  taskId: string,
+  options: { activityOpen?: boolean; propertiesOpen?: boolean } = {},
+): TaskDetailData {
   const subject = TaskSubjectRef.parse({ subjectType: 'task', subjectId: taskId });
-  const detailKey = useMemo<QueryKey>(() => queryKeys.task(orgId, taskId), [orgId, taskId]);
+  const detailKey = useMemo<QueryKey>(
+    () => queryKeys.taskAggregate(orgId, taskId),
+    [orgId, taskId],
+  );
   const commentsKey = useMemo<QueryKey>(() => [...detailKey, 'comments'], [detailKey]);
 
-  const taskQ = useApiQuery(taskDetailDef(orgId, taskId));
-  const task = taskQ.data ?? null;
-  const teamId = task?.teamId ?? null;
-
-  const teamQ = useApiQuery(
-    apiQueryOptions(
-      [...queryKeys.team(orgId, teamId ?? ''), 'workflow'],
-      () => api.v1.orgs[':orgId'].teams[':teamId'].$get({ param: { orgId, teamId: teamId ?? '' } }),
-      'Could not load the workflow.',
-      { enabled: Boolean(teamId), staleTime: STALE.static },
-    ),
-  );
-
+  const taskQ = useApiQuery(taskDetailAggregateDef(orgId, taskId));
+  const task = taskQ.data?.defaultView.task ?? null;
   // Org rosters change rarely within a session — tier them `static` so reopening tasks doesn't
   // refetch the same projects/programs/members/agents/milestones/cycles/roles every 30s.
   const projectsQ = useApiQuery(
@@ -103,7 +100,7 @@ export function useTaskDetail(orgId: string, taskId: string): TaskDetailData {
       queryKeys.projects(orgId),
       () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId }, query: {} }),
       'Could not load projects.',
-      { staleTime: STALE.static },
+      { enabled: options.propertiesOpen ?? false, staleTime: STALE.static },
     ),
   );
   const programsQ = useApiQuery(
@@ -111,7 +108,7 @@ export function useTaskDetail(orgId: string, taskId: string): TaskDetailData {
       queryKeys.programs(orgId),
       () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId }, query: {} }),
       'Could not load programs.',
-      { staleTime: STALE.static },
+      { enabled: options.propertiesOpen ?? false, staleTime: STALE.static },
     ),
   );
   const membersQ = useApiQuery(
@@ -119,7 +116,7 @@ export function useTaskDetail(orgId: string, taskId: string): TaskDetailData {
       queryKeys.members(orgId),
       () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
       'Could not load members.',
-      { staleTime: STALE.static },
+      { enabled: options.propertiesOpen ?? false, staleTime: STALE.static },
     ),
   );
   const agentsQ = useApiQuery(
@@ -127,7 +124,7 @@ export function useTaskDetail(orgId: string, taskId: string): TaskDetailData {
       ['org', orgId, 'agents'],
       () => api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
       'Could not load agents.',
-      { staleTime: STALE.static },
+      { enabled: options.propertiesOpen ?? false, staleTime: STALE.static },
     ),
   );
   const milestonesQ = useApiQuery(
@@ -135,7 +132,7 @@ export function useTaskDetail(orgId: string, taskId: string): TaskDetailData {
       ['org', orgId, 'milestones'],
       () => api.v1.orgs[':orgId'].milestones.$get({ param: { orgId }, query: {} }),
       'Could not load milestones.',
-      { staleTime: STALE.static },
+      { enabled: options.propertiesOpen ?? false, staleTime: STALE.static },
     ),
   );
   const cyclesQ = useApiQuery(
@@ -143,7 +140,7 @@ export function useTaskDetail(orgId: string, taskId: string): TaskDetailData {
       queryKeys.cycles(orgId),
       () => api.v1.orgs[':orgId'].cycles.$get({ param: { orgId }, query: {} }),
       'Could not load cycles.',
-      { staleTime: STALE.static },
+      { enabled: options.propertiesOpen ?? false, staleTime: STALE.static },
     ),
   );
   const rolesQ = useApiQuery(
@@ -151,7 +148,7 @@ export function useTaskDetail(orgId: string, taskId: string): TaskDetailData {
       queryKeys.roles(orgId),
       () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
       'Could not load roles.',
-      { staleTime: STALE.static },
+      { enabled: options.propertiesOpen ?? false, staleTime: STALE.static },
     ),
   );
 
@@ -164,6 +161,7 @@ export function useTaskDetail(orgId: string, taskId: string): TaskDetailData {
           query: subject,
         }),
       'Could not load comments.',
+      { enabled: options.activityOpen ?? false },
     ),
   );
 
@@ -172,7 +170,7 @@ export function useTaskDetail(orgId: string, taskId: string): TaskDetailData {
       [...detailKey, 'session'],
       () => api.v1.orgs[':orgId'].sessions.$get({ param: { orgId }, query: {} }),
       'Could not load sessions.',
-      { staleTime: STALE.volatile },
+      { enabled: options.activityOpen ?? false, staleTime: STALE.volatile },
     ),
   );
   const taskSession = sessionQ.data?.items.find((s) => s.taskId === taskId) ?? null;
@@ -187,14 +185,14 @@ export function useTaskDetail(orgId: string, taskId: string): TaskDetailData {
           param: { orgId, id: taskSession?.id ?? '' },
         }),
       'Could not load activity.',
-      { enabled: Boolean(taskSession) },
+      { enabled: Boolean(options.activityOpen && taskSession) },
     ),
     TASK_ACTIVITY_POLL_MS,
   );
 
   return {
     task,
-    workflowStates: teamQ.data?.workflowStates ?? null,
+    workflowStates: taskQ.data?.references.workflowStates ?? null,
     projects: projectsQ.data?.items ?? [],
     programs: programsQ.data?.items ?? [],
     members: membersQ.data?.items ?? [],

@@ -39,7 +39,7 @@ import {
   useState,
 } from 'react';
 
-import { resolveTabTitle, titleFromCache } from './resolve-title';
+import { resolveTabTitle, titleFromCache, titleFromNavigationSnapshot } from './resolve-title';
 import { tabRefFromPath } from './route-tabs';
 import { hrefForTab, parseTabRef, type TabRef, tabKey } from './types';
 
@@ -258,7 +258,10 @@ export function OpenDocumentsProvider({
     // A detail page's own `useRegisterTabTitle` effect commits before this provider's does —
     // child effects run first — so a page that already knows its name reports it before the tab
     // it names exists. Reading that report here is what makes the two orders equivalent.
-    const cached = registeredTitles.current.get(key) ?? titleFromCache(queryClient, ref);
+    const cached =
+      registeredTitles.current.get(key) ??
+      titleFromNavigationSnapshot(ref) ??
+      titleFromCache(queryClient, ref);
     setTabs((current) => {
       const existing = current.find((t) => t.key === key);
       if (!existing) return [...current, newTab(ref, cached)];

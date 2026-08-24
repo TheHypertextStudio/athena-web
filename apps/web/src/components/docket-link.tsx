@@ -2,7 +2,14 @@
 
 import { cn } from '@docket/ui/lib/utils';
 import Link from 'next/link';
-import type { ComponentProps, JSX, MouseEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  type ComponentProps,
+  type JSX,
+  type MouseEvent,
+} from 'react';
 
 import { useServerReachable } from '@/components/reachability';
 import { navigateWithoutRouter } from '@/lib/app-location';
@@ -38,6 +45,8 @@ import { useOnlineStatus } from '@/lib/use-online-status';
 /** Props for {@link DocketLink}: `next/link`'s, unchanged. */
 export type DocketLinkProps = ComponentProps<typeof Link>;
 
+const MODULE_PREFETCH_DELAY_MS = 75;
+
 /**
  * Navigate without losing the shell when there is no server to ask.
  *
@@ -46,8 +55,10 @@ export type DocketLinkProps = ComponentProps<typeof Link>;
  */
 export default function DocketLink({
   onClick,
+  onBlur,
   onFocus,
   onMouseEnter,
+  onMouseLeave,
   prefetch,
   ...props
 }: DocketLinkProps): JSX.Element {
@@ -59,6 +70,23 @@ export default function DocketLink({
   const localRoute = href?.startsWith('/') === true && routePathIsAuthenticated(href);
   const availability = useOfflineAvailability(href, !routerReachable);
   const navigationPending = responsiveRouter?.requestedHref === href;
+  const prefetchTimer = useRef<number | null>(null);
+
+  const cancelIntent = useCallback((): void => {
+    if (prefetchTimer.current === null) return;
+    window.clearTimeout(prefetchTimer.current);
+    prefetchTimer.current = null;
+  }, []);
+
+  const handleIntent = useCallback((): void => {
+    if (href === null || !localRoute || prefetchTimer.current !== null) return;
+    prefetchTimer.current = window.setTimeout(() => {
+      prefetchTimer.current = null;
+      void prefetchAuthenticatedRoute(href);
+    }, MODULE_PREFETCH_DELAY_MS);
+  }, [href, localRoute]);
+
+  useEffect(() => cancelIntent, [cancelIntent]);
 
   const handleClick = (event: MouseEvent<HTMLAnchorElement>): void => {
     onClick?.(event);
@@ -71,6 +99,7 @@ export default function DocketLink({
     if (href?.startsWith('/') !== true) {
       return;
     }
+    cancelIntent();
     if (routerReachable) {
       if (responsiveRouter === null) return;
       const options = props.scroll === undefined ? undefined : { scroll: props.scroll };
@@ -82,10 +111,6 @@ export default function DocketLink({
     }
     event.preventDefault();
     navigateWithoutRouter(href);
-  };
-
-  const handleIntent = (): void => {
-    if (href !== null && localRoute) void prefetchAuthenticatedRoute(href);
   };
 
   if (availability === 'unavailable') {
@@ -120,9 +145,17 @@ export default function DocketLink({
         onFocus?.(event);
         if (!event.defaultPrevented) handleIntent();
       }}
+      onBlur={(event) => {
+        onBlur?.(event);
+        if (!event.defaultPrevented) cancelIntent();
+      }}
       onMouseEnter={(event) => {
         onMouseEnter?.(event);
         if (!event.defaultPrevented) handleIntent();
+      }}
+      onMouseLeave={(event) => {
+        onMouseLeave?.(event);
+        if (!event.defaultPrevented) cancelIntent();
       }}
     />
   );

@@ -9,7 +9,7 @@
  * says what kind of document it is, a cached name is used without a request at all, and a rename
  * on the detail page reaches the tab.
  */
-import type { ProjectOut } from '@docket/types';
+import { ProjectNavigationSnapshot, type ProjectOut } from '@docket/types';
 import type * as ResolveTitleModule from '../../../src/components/tabs/resolve-title';
 import { tabLabel, type OpenTab } from '@docket/ui/components';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -37,6 +37,8 @@ vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 const { OpenDocumentsProvider, useOpenDocuments } =
   await import('../../../src/components/tabs/open-documents');
 const { projectRecordDef } = await import('../../../src/lib/entity-records');
+const { purgeAllNavigationSnapshots, seedNavigationSnapshot } =
+  await import('../../../src/lib/navigation-snapshot-runtime');
 const { useRegisterTabTitle } = await import('../../../src/components/tabs/use-register-tab-title');
 
 const ORG = '01JAAAAAAAAAAAAAAAAAAAAAAA';
@@ -52,7 +54,8 @@ function harness(client: QueryClient) {
   return renderHook(() => useOpenDocuments(), { wrapper });
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  await purgeAllNavigationSnapshots();
   sessionStorage.clear();
   resolveTabTitle.mockReset();
   resolveTabTitle.mockResolvedValue(null);
@@ -108,6 +111,29 @@ describe('a tab whose document is already cached', () => {
     // Arriving from a list, from search, or from the composer that just created the document
     // means the answer is already on the client. Fetching it again is a round trip spent showing
     // the reader something other than the name.
+    expect(resolveTabTitle).not.toHaveBeenCalled();
+  });
+
+  it('uses the typed navigation snapshot without a title request', async () => {
+    const client = new QueryClient();
+    seedNavigationSnapshot(
+      ProjectNavigationSnapshot.parse({
+        target: 'project',
+        organizationId: ORG,
+        id: PROJECT,
+        name: 'Rewrite onboarding',
+        status: 'planned',
+        priority: 'none',
+        health: null,
+        updatedAt: '2026-08-24T00:00:00.000Z',
+      }),
+    );
+
+    const { result } = harness(client);
+
+    await waitFor(() => {
+      expect(result.current.tabs[0]?.title).toBe('Rewrite onboarding');
+    });
     expect(resolveTabTitle).not.toHaveBeenCalled();
   });
 });

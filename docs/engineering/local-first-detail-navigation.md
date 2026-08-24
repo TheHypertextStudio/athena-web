@@ -10,9 +10,10 @@ document, public pages, authentication pages, and hard reloads. `AppLocationProv
 generated authenticated route manifest will own subsequent route state online and offline.
 
 A work-view row will carry a small typed entity snapshot. Activating the row will seed that snapshot,
-commit browser history, and mount the destination client module before the API answers. The detail
-route will reconcile through one target-specific aggregate read. Optional sections will load only
-when the user opens them.
+commit browser history, and paint the destination identity before it starts the deferred detail
+module. A hover or keyboard focus starts the module import only after 75ms of sustained intent, and
+an immediate click cancels it. The detail route will then reconcile through one target-specific
+aggregate read. Optional sections will load only when the user opens them.
 
 TanStack Query will retain request state for minutes. It will no longer act as the offline database.
 A three-entry memory store will hold navigation snapshots, while a per-user IndexedDB LRU will retain

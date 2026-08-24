@@ -1,10 +1,13 @@
 'use client';
 
+import type { EntityNavigationSnapshot } from '@docket/types';
 import { useEffect, useState, type ComponentType, type JSX } from 'react';
 
 import { OfflineContent } from '@/components/offline-state';
+import { EntityDetailSnapshot } from '@/components/views/entity-detail-skeleton';
 import { useAppLocation } from '@/lib/app-location';
 import { parseAuthenticatedRoute } from '@/lib/authenticated-route';
+import { peekNavigationSnapshot } from '@/lib/navigation-snapshot-runtime';
 import { OFFLINE_ROUTES } from '@/lib/offline-routes.generated';
 import { useOnlineStatus } from '@/lib/use-online-status';
 
@@ -48,6 +51,7 @@ export default function OfflineRouteOutlet(): JSX.Element | null {
   const { pathname } = useAppLocation();
   const online = useOnlineStatus();
   const [state, setState] = useState<OutletState>({ pathname, status: 'loading' });
+  const snapshot = navigationSnapshotForPathname(pathname);
 
   useEffect(() => {
     const match = parseAuthenticatedRoute(pathname);
@@ -65,28 +69,34 @@ export default function OfflineRouteOutlet(): JSX.Element | null {
     // shell — so a load that resolves after the person has moved on must not be rendered.
     let current = true;
     setState({ pathname, status: 'loading' });
-    entry
-      .load()
-      .then((Component) => {
-        if (current) {
-          setState({ pathname, status: 'ready', Component });
-        }
-      })
-      .catch(() => {
-        // The chunk is not in the cache and there is no network to fetch it from. Nothing is broken;
-        // this route simply is not available on this device right now.
-        if (current) {
-          setState({ pathname, status: 'unavailable', reason: 'module' });
-        }
-      });
+    // A dynamic import evaluates its module synchronously enough to monopolize the current event
+    // turn in development and on cold devices. The snapshot above must get one browser paint before
+    // that work begins, or importing a deferred editor defeats local-first navigation.
+    const loadTimer = window.setTimeout(() => {
+      entry
+        .load()
+        .then((Component) => {
+          if (current) {
+            setState({ pathname, status: 'ready', Component });
+          }
+        })
+        .catch(() => {
+          // The chunk is not in the cache and there is no network to fetch it from. Nothing is broken;
+          // this route simply is not available on this device right now.
+          if (current) {
+            setState({ pathname, status: 'unavailable', reason: 'module' });
+          }
+        });
+    }, 0);
 
     return () => {
       current = false;
+      window.clearTimeout(loadTimer);
     };
   }, [pathname]);
 
   if (state.pathname !== pathname || state.status === 'loading') {
-    return null;
+    return snapshot === null ? null : <NavigationSnapshotPlaceholder snapshot={snapshot} />;
   }
   if (state.status === 'unavailable') {
     if (state.reason === 'not-found') {
@@ -101,4 +111,108 @@ export default function OfflineRouteOutlet(): JSX.Element | null {
     return <OfflineContent online={online} />;
   }
   return <state.Component key={pathname} />;
+}
+
+/** Return the route-correlated identity that the source row seeded before history changed. */
+function navigationSnapshotForPathname(pathname: string): EntityNavigationSnapshot | null {
+  const match = parseAuthenticatedRoute(pathname);
+  if (match.kind !== 'matched') return null;
+
+  switch (match.route.pattern) {
+    case '/orgs/[orgId]/tasks/[taskId]':
+      return matchingSnapshot('task', match.route.params.taskId, match.route.params.orgId);
+    case '/orgs/[orgId]/projects/[projectId]':
+      return matchingSnapshot('project', match.route.params.projectId, match.route.params.orgId);
+    case '/orgs/[orgId]/programs/[programId]':
+      return matchingSnapshot('program', match.route.params.programId, match.route.params.orgId);
+    case '/orgs/[orgId]/initiatives/[initiativeId]':
+      return matchingSnapshot(
+        'initiative',
+        match.route.params.initiativeId,
+        match.route.params.orgId,
+      );
+    default:
+      return null;
+  }
+}
+
+/** Refuse a cached identity whose entity or organization does not exactly match the requested URL. */
+function matchingSnapshot<TTarget extends EntityNavigationSnapshot['target']>(
+  target: TTarget,
+  id: string,
+  organizationId: string,
+): Extract<EntityNavigationSnapshot, { readonly target: TTarget }> | null {
+  const snapshot = peekNavigationSnapshot(target, id);
+  if (snapshot?.target !== target) return null;
+  if (snapshot.id !== id || snapshot.organizationId !== organizationId) {
+    return null;
+  }
+  return snapshot as Extract<EntityNavigationSnapshot, { readonly target: TTarget }>;
+}
+
+/** Paint a truthful entity identity immediately while the detail route module loads. */
+function NavigationSnapshotPlaceholder({
+  snapshot,
+}: {
+  readonly snapshot: EntityNavigationSnapshot;
+}): JSX.Element {
+  switch (snapshot.target) {
+    case 'task':
+      return (
+        <EntityDetailSnapshot
+          label="Task"
+          title={snapshot.title}
+          metadata={
+            <span className="text-on-surface-variant text-body-small">
+              Status: {snapshot.status.replaceAll('_', ' ')} · Priority: {snapshot.priority}
+            </span>
+          }
+          syncing={false}
+        />
+      );
+    case 'project':
+      return (
+        <EntityDetailSnapshot
+          label="Project"
+          title={snapshot.name}
+          metadata={<SnapshotMetadata snapshot={snapshot} />}
+          syncing={false}
+        />
+      );
+    case 'program':
+      return (
+        <EntityDetailSnapshot
+          label="Program"
+          title={snapshot.name}
+          metadata={<SnapshotMetadata snapshot={snapshot} />}
+          syncing={false}
+        />
+      );
+    case 'initiative':
+      return (
+        <EntityDetailSnapshot
+          label="Initiative"
+          title={snapshot.name}
+          metadata={<SnapshotMetadata snapshot={snapshot} />}
+          syncing={false}
+        />
+      );
+  }
+}
+
+/** Render the status fields every non-task local snapshot carries. */
+function SnapshotMetadata({
+  snapshot,
+}: {
+  readonly snapshot: Exclude<EntityNavigationSnapshot, { readonly target: 'task' }>;
+}): JSX.Element {
+  const priority = 'priority' in snapshot ? ` · ${snapshot.priority}` : '';
+  const health = snapshot.health === null ? '' : ` · ${snapshot.health}`;
+  return (
+    <span className="text-on-surface-variant text-body-small">
+      {snapshot.status}
+      {priority}
+      {health}
+    </span>
+  );
 }

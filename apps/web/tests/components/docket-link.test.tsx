@@ -44,7 +44,10 @@ beforeEach(() => {
   serverReachable.value = true;
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  vi.useRealTimers();
+  cleanup();
+});
 
 describe('DocketLink', () => {
   it('keeps an immediate offline click inside the running document', () => {
@@ -56,7 +59,8 @@ describe('DocketLink', () => {
     expect(navigateWithoutRouter).toHaveBeenCalledWith('/tasks');
   });
 
-  it('prefetches only the client module after explicit navigation intent', () => {
+  it('prefetches only the client module after sustained navigation intent', async () => {
+    vi.useFakeTimers();
     render(<DocketLink href="/tasks">Tasks</DocketLink>);
     const link = screen.getByRole('link', { name: 'Tasks' });
 
@@ -64,7 +68,21 @@ describe('DocketLink', () => {
     fireEvent.focus(link);
 
     expect(link).toHaveAttribute('data-prefetch', 'false');
-    expect(prefetchAuthenticatedRoute).toHaveBeenCalledTimes(2);
+    expect(prefetchAuthenticatedRoute).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(75);
+    expect(prefetchAuthenticatedRoute).toHaveBeenCalledTimes(1);
     expect(prefetchAuthenticatedRoute).toHaveBeenCalledWith('/tasks');
+  });
+
+  it('cancels a pending module prefetch when the person clicks immediately', () => {
+    vi.useFakeTimers();
+    render(<DocketLink href="/tasks">Tasks</DocketLink>);
+    const link = screen.getByRole('link', { name: 'Tasks' });
+
+    fireEvent.mouseEnter(link);
+    fireEvent.click(link);
+    vi.advanceTimersByTime(75);
+
+    expect(prefetchAuthenticatedRoute).not.toHaveBeenCalled();
   });
 });

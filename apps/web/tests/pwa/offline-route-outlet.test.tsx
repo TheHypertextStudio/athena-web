@@ -2,11 +2,23 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 let pathname = '/orgs/01ARZ3NDEKTSV4RRFFQ69G5FAV/projects/01ARZ3NDEKTSV4RRFFQ69G5FAW';
+let navigationSnapshot: {
+  readonly target: 'task';
+  readonly organizationId: string;
+  readonly id: string;
+  readonly title: string;
+  readonly status: 'todo';
+  readonly priority: 'none';
+  readonly updatedAt: string;
+} | null = null;
 
 vi.mock('@/lib/app-location', () => ({
   useAppLocation: () => ({ pathname, params: {}, searchParams: new URLSearchParams() }),
 }));
 vi.mock('@/lib/use-online-status', () => ({ useOnlineStatus: () => true }));
+vi.mock('@/lib/navigation-snapshot-runtime', () => ({
+  peekNavigationSnapshot: () => navigationSnapshot,
+}));
 vi.mock('@/lib/offline-routes.generated', () => ({
   ROUTE_PATTERNS: ['/orgs/[orgId]/projects/[projectId]', '/orgs/[orgId]/tasks/[taskId]'],
   OFFLINE_ROUTES: [
@@ -32,6 +44,7 @@ const OfflineRouteOutlet = (await import('@/components/pwa/offline-route-outlet'
 
 beforeEach(() => {
   pathname = '/orgs/01ARZ3NDEKTSV4RRFFQ69G5FAV/projects/01ARZ3NDEKTSV4RRFFQ69G5FAW';
+  navigationSnapshot = null;
 });
 
 describe('OfflineRouteOutlet', () => {
@@ -53,5 +66,24 @@ describe('OfflineRouteOutlet', () => {
     render(<OfflineRouteOutlet />);
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Page not found.');
+  });
+
+  it('paints the typed entity identity while its route module loads', () => {
+    pathname = '/orgs/01ARZ3NDEKTSV4RRFFQ69G5FAV/tasks/01ARZ3NDEKTSV4RRFFQ69G5FAX';
+    navigationSnapshot = {
+      target: 'task',
+      organizationId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+      id: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
+      title: 'Paint this task from the row snapshot',
+      status: 'todo',
+      priority: 'none',
+      updatedAt: '2026-08-24T00:00:00.000Z',
+    };
+
+    render(<OfflineRouteOutlet />);
+
+    expect(
+      screen.getByRole('heading', { name: 'Paint this task from the row snapshot' }),
+    ).toBeInTheDocument();
   });
 });

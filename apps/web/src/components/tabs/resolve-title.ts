@@ -16,6 +16,7 @@ import type { QueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api';
 import { initiativeRecordDef, programRecordDef, projectRecordDef } from '@/lib/entity-records';
+import { peekNavigationSnapshot } from '@/lib/navigation-snapshot-runtime';
 import { taskDetailDef } from '@/lib/use-task-detail';
 
 import type { TabRef } from './types';
@@ -60,6 +61,44 @@ export function titleFromCache(queryClient: QueryClient, ref: TabRef): string | 
     case 'initiative':
       return nameOf(queryClient.getQueryData(initiativeRecordDef(orgId, id).queryKey));
     default:
+      return null;
+  }
+}
+
+/**
+ * Read a tab's title from the local-first navigation snapshot without a request.
+ *
+ * @param ref - The document whose tab is opening.
+ * @returns The snapshot name when it belongs to this exact document, else `null`.
+ */
+export function titleFromNavigationSnapshot(ref: TabRef): string | null {
+  switch (ref.type) {
+    case 'task': {
+      const snapshot = peekNavigationSnapshot('task', ref.id);
+      return snapshot?.target === 'task' && snapshot.organizationId === ref.orgId
+        ? snapshot.title
+        : null;
+    }
+    case 'project': {
+      const snapshot = peekNavigationSnapshot('project', ref.id);
+      return snapshot?.target === 'project' && snapshot.organizationId === ref.orgId
+        ? snapshot.name
+        : null;
+    }
+    case 'program': {
+      const snapshot = peekNavigationSnapshot('program', ref.id);
+      return snapshot?.target === 'program' && snapshot.organizationId === ref.orgId
+        ? snapshot.name
+        : null;
+    }
+    case 'initiative': {
+      const snapshot = peekNavigationSnapshot('initiative', ref.id);
+      return snapshot?.target === 'initiative' && snapshot.organizationId === ref.orgId
+        ? snapshot.name
+        : null;
+    }
+    case 'cycle':
+    case 'session':
       return null;
   }
 }

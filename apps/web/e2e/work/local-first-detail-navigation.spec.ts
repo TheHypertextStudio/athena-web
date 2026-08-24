@@ -42,13 +42,47 @@ test('a task row paints locally without an RSC transition or speculative detail 
   });
 
   try {
-    const clickedAt = performance.now();
+    await page.evaluate((entityTitle) => {
+      const timing = { clickedAt: null as number | null, identityPaintAt: null as number | null };
+      (window as unknown as Record<string, unknown>)['__localFirstNavigationTiming'] = timing;
+      const observer = new MutationObserver(() => {
+        if (timing.identityPaintAt !== null) return;
+        const heading = Array.from(document.querySelectorAll('h1')).find(
+          (candidate) => candidate.textContent === entityTitle,
+        );
+        if (heading === undefined) return;
+        window.requestAnimationFrame(() => {
+          timing.identityPaintAt ??= performance.now();
+          observer.disconnect();
+        });
+      });
+      observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+      window.addEventListener(
+        'click',
+        () => {
+          timing.clickedAt = performance.now();
+        },
+        { capture: true, once: true },
+      );
+    }, title);
     await row.click();
     await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible({
       timeout: 200,
     });
-    expect(performance.now() - clickedAt).toBeLessThan(200);
-    expect(postShellApiPaths).toEqual([aggregatePath]);
+    const identityPaintMs = await page.evaluate(() => {
+      const timing = (window as unknown as Record<string, unknown>)['__localFirstNavigationTiming'];
+      if (typeof timing !== 'object' || timing === null) return null;
+      const { clickedAt, identityPaintAt } = timing as {
+        readonly clickedAt: unknown;
+        readonly identityPaintAt: unknown;
+      };
+      return typeof clickedAt === 'number' && typeof identityPaintAt === 'number'
+        ? identityPaintAt - clickedAt
+        : null;
+    });
+    if (identityPaintMs === null) throw new Error('The browser did not record the identity paint.');
+    expect(identityPaintMs).toBeLessThan(200);
+    await expect.poll(() => postShellApiPaths).toEqual([aggregatePath]);
     expect(rscRequests).toBe(0);
   } finally {
     releaseApi();

@@ -77,6 +77,7 @@ vi.mock('../../src/components/tabs/resolve-title', () => ({
   // Nothing cached in this harness, so a tab opens unnamed and the bar labels it by kind until
   // `resolveTabTitle` answers.
   titleFromCache: () => null,
+  titleFromNavigationSnapshot: () => null,
   resolveTabTitle,
 }));
 

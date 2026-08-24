@@ -1,13 +1,15 @@
 /**
  * `@docket/api` — programs router (mounted at `/v1/orgs/:orgId/programs`).
  */
-import { cycle, db, program, project, task, update } from '@docket/db';
+import { actor, cycle, db, program, project, task, update } from '@docket/db';
 import {
   CursorQuery,
   defaultCycleName,
   pageOf,
   ProgramCreate,
+  ProgramDetailAggregate,
   ProgramDetail,
+  ProgramId,
   ProgramLabelLink,
   ProgramLabelLinked,
   ProgramOut,
@@ -31,6 +33,7 @@ import {
   resolveLabelSet,
   type LabelRefRow,
 } from '../lib/labels';
+import { detailCapabilities } from '../lib/detail-capabilities';
 import { deferAfterResponse } from '../lib/after-response';
 import { created, ok } from '../lib/ok';
 import { resolveContainerStatus } from '../lib/work-status';
@@ -91,7 +94,14 @@ function taskToOut(
   };
 }
 
+/** Project one named actor without fetching the organization member roster. */
+function actorReference(row: typeof actor.$inferSelect) {
+  return { actorId: row.id, displayName: row.displayName, avatar: row.avatar };
+}
+
 const idParam = z.object({ id: z.string() });
+/** The aggregate route refuses malformed Program ids before it can start a data read. */
+const aggregateIdParam = z.object({ id: ProgramId });
 
 /** Load a single Program scoped to the org, or throw {@link NotFoundError}. */
 async function loadProgram(orgId: string, id: string): Promise<ProgramRow> {
@@ -188,6 +198,71 @@ const programs = new Hono<AppEnv>()
         enqueueSearchUpsert(orgId, 'program', row.id),
       );
       return created(c, ProgramOut, toOut(row));
+    },
+  )
+  .get(
+    '/:id/aggregate-detail',
+    apiDoc({
+      tag: 'Programs',
+      summary: 'Get the bounded Program detail aggregate',
+      response: ProgramDetailAggregate,
+      description:
+        'Returns the Program snapshot, visible-control capabilities, its named owner, and default rollup content in one request. It excludes project and work rosters until their tabs open.',
+    }),
+    zParam(aggregateIdParam),
+    async (c) => {
+      const { orgId, actorId, capabilities } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+      const row = await loadProgram(orgId, id);
+      const [projectRows, taskRows, ownerRows] = await Promise.all([
+        db
+          .select({ id: project.id })
+          .from(project)
+          .where(and(eq(project.programId, id), eq(project.organizationId, orgId))),
+        db
+          .select({
+            id: task.id,
+            teamId: task.teamId,
+            projectId: task.projectId,
+            programId: task.programId,
+            visibility: task.visibility,
+          })
+          .from(task)
+          .where(and(eq(task.organizationId, orgId), isNull(task.archivedAt))),
+        row.ownerId === null
+          ? Promise.resolve([])
+          : db
+              .select()
+              .from(actor)
+              .where(and(eq(actor.id, row.ownerId), eq(actor.organizationId, orgId)))
+              .limit(1),
+      ]);
+      const projectIds = new Set(projectRows.map((projectRow) => projectRow.id));
+      const canView = await buildTaskViewFilter(orgId, actorId);
+      const taskCount = taskRows.filter(
+        (taskRow) =>
+          canView(taskRow) &&
+          (taskRow.programId === id ||
+            (taskRow.projectId !== null && projectIds.has(taskRow.projectId))),
+      ).length;
+
+      return ok(c, ProgramDetailAggregate, {
+        target: 'program',
+        snapshot: {
+          target: 'program',
+          organizationId: row.organizationId,
+          id: row.id,
+          name: row.name,
+          status: row.status,
+          health: row.health,
+          updatedAt: row.updatedAt.toISOString(),
+        },
+        capabilities: detailCapabilities(capabilities),
+        references: { owner: ownerRows[0] ? actorReference(ownerRows[0]) : null },
+        defaultView: {
+          program: { ...toOut(row), rollup: { projects: projectRows.length, tasks: taskCount } },
+        },
+      });
     },
   )
   .get(

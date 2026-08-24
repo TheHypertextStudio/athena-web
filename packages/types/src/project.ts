@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { DateResolution } from '@docket/work/planning-timeframe';
 
 import { SessionActivityOut } from './agent';
-import { Health } from './capability';
+import { Health, Priority } from './capability';
 import { EntityDisplayOut } from './entity-display';
 import { LabelOut } from './label';
 import {
@@ -225,6 +225,7 @@ export const ProjectOut = z
       .describe(
         'Current lifecycle status — one of `planned`/`active`/`completed`/`canceled` (see {@link ProjectStatus}). Typed as a plain string on the wire; the enum captures the allowed values.',
       ),
+    priority: Priority.describe('Current work priority for ordering and attention treatment.'),
     health: Health.nullable()
       .optional()
       .describe('Current health verdict (`on_track`/`at_risk`/`off_track`), or `null` when unset.'),

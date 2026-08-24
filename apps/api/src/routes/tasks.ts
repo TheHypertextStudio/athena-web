@@ -15,6 +15,8 @@ import {
   TaskArchived,
   TaskCreate,
   TaskDetail,
+  TaskDetailAggregate,
+  TaskId,
   TaskListQuery,
   TaskOut,
   TaskReparentBatchIn,
@@ -24,11 +26,12 @@ import {
 } from '@docket/types';
 import { and, desc, eq, exists, inArray, isNull, or, type SQL, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
-import type { z } from 'zod';
+import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { NotFoundError, ValidationError } from '../error';
 import { deferAfterResponse } from '../lib/after-response';
+import { detailCapabilities } from '../lib/detail-capabilities';
 import { guardsInOrder } from '../lib/guards-in-order';
 import { labelsForSubject, labelsForSubjects, replaceLabels, resolveLabelSet } from '../lib/labels';
 import { created, ok } from '../lib/ok';
@@ -64,6 +67,135 @@ import { taskDependencyRoutes } from './task-dependency-routes';
 function dayOf(value: Date | null): string | null {
   return value === null ? null : value.toISOString().slice(0, 10);
 }
+
+/**
+ * Read the Task content needed by both the legacy detail route and the local-first aggregate.
+ *
+ * @param orgId - The tenant that scopes every read.
+ * @param actorId - The caller whose task grants filter the related records.
+ * @param id - The Task to read.
+ * @returns The Task row, its filtered detail projection, and its own team's workflow states.
+ */
+async function loadTaskDetailAggregate(
+  orgId: string,
+  actorId: string,
+  id: string,
+): Promise<{
+  readonly row: Awaited<ReturnType<typeof loadTask>>;
+  readonly detail: z.input<typeof TaskDetail>;
+  readonly workflowStates: z.input<typeof TaskDetailAggregate>['references']['workflowStates'];
+}> {
+  const [row, canView] = await Promise.all([
+    loadTask(orgId, id),
+    buildTaskViewFilter(orgId, actorId),
+  ]);
+  if (!canView(row)) throw new NotFoundError('Task not found');
+
+  const [teamRows, parentRows, blockedByRows, blockingRows, subtaskRows, labels] =
+    await Promise.all([
+      db
+        .select({ workflowStates: team.workflowStates })
+        .from(team)
+        .where(and(eq(team.id, row.teamId), eq(team.organizationId, orgId)))
+        .limit(1),
+      row.parentTaskId === null
+        ? Promise.resolve([])
+        : db
+            .select({
+              id: task.id,
+              teamId: task.teamId,
+              projectId: task.projectId,
+              programId: task.programId,
+              visibility: task.visibility,
+            })
+            .from(task)
+            .where(
+              and(
+                eq(task.id, row.parentTaskId),
+                eq(task.organizationId, orgId),
+                isNull(task.archivedAt),
+              ),
+            )
+            .limit(1),
+      db
+        .select({
+          id: task.id,
+          title: task.title,
+          state: task.state,
+          teamId: task.teamId,
+          projectId: task.projectId,
+          programId: task.programId,
+          visibility: task.visibility,
+        })
+        .from(taskDependency)
+        .innerJoin(task, eq(taskDependency.blockingTaskId, task.id))
+        .where(
+          and(
+            eq(taskDependency.blockedTaskId, id),
+            eq(taskDependency.organizationId, orgId),
+            isNull(task.archivedAt),
+          ),
+        ),
+      db
+        .select({
+          id: task.id,
+          title: task.title,
+          state: task.state,
+          teamId: task.teamId,
+          projectId: task.projectId,
+          programId: task.programId,
+          visibility: task.visibility,
+        })
+        .from(taskDependency)
+        .innerJoin(task, eq(taskDependency.blockedTaskId, task.id))
+        .where(
+          and(
+            eq(taskDependency.blockingTaskId, id),
+            eq(taskDependency.organizationId, orgId),
+            isNull(task.archivedAt),
+          ),
+        ),
+      db
+        .select({
+          id: task.id,
+          title: task.title,
+          state: task.state,
+          teamId: task.teamId,
+          projectId: task.projectId,
+          programId: task.programId,
+          visibility: task.visibility,
+        })
+        .from(task)
+        .where(
+          and(eq(task.parentTaskId, id), eq(task.organizationId, orgId), isNull(task.archivedAt)),
+        ),
+      labelsForSubject('task', orgId, row.id),
+    ]);
+  const teamRow = teamRows[0];
+  if (!teamRow) throw new NotFoundError('Team not found');
+  const visibleParentId = parentRows[0] && canView(parentRows[0]) ? parentRows[0].id : null;
+
+  return {
+    row,
+    workflowStates: teamRow.workflowStates,
+    detail: {
+      ...toOut(row, labels),
+      milestoneId: row.milestoneId,
+      cycleId: row.cycleId,
+      parentTaskId: visibleParentId,
+      estimate: row.estimate,
+      estimateMinutes: row.estimateMinutes,
+      completedAt: row.completedAt?.toISOString() ?? null,
+      canceledAt: row.canceledAt?.toISOString() ?? null,
+      blocking: blockingRows.filter(canView).map(toRef),
+      blockedBy: blockedByRows.filter(canView).map(toRef),
+      subtasks: subtaskRows.filter(canView).map(toRef),
+    },
+  };
+}
+
+/** The aggregate route refuses malformed Task ids before it can start a data read. */
+const aggregateIdParam = z.object({ id: TaskId });
 
 /**
  * Reject a PATCH that would leave the task due before it is anticipated to start.
@@ -382,6 +514,37 @@ When \`preserveSelectedSubtrees\` is true, a selected task whose ancestor is als
           ...c.req.valid('json'),
         }),
       );
+    },
+  )
+  .get(
+    '/:id/aggregate-detail',
+    apiDoc({
+      tag: 'Tasks',
+      summary: 'Get the bounded Task detail aggregate',
+      response: TaskDetailAggregate,
+      description:
+        'Returns the Task snapshot, visible-control capabilities, team workflow states, and initial document content in one request. It deliberately excludes organization-wide picker rosters and optional sections.',
+    }),
+    zParam(aggregateIdParam),
+    async (c) => {
+      const { orgId, actorId, capabilities } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+      const { row, detail, workflowStates } = await loadTaskDetailAggregate(orgId, actorId, id);
+      return ok(c, TaskDetailAggregate, {
+        target: 'task',
+        snapshot: {
+          target: 'task',
+          organizationId: row.organizationId,
+          id: row.id,
+          title: row.title,
+          status: row.state,
+          priority: row.priority,
+          updatedAt: row.updatedAt.toISOString(),
+        },
+        capabilities: detailCapabilities(capabilities),
+        references: { workflowStates },
+        defaultView: { task: detail },
+      });
     },
   )
   .get(

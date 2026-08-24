@@ -25,6 +25,7 @@ export * from './team';
 export * from './work-status';
 export * from './work-view';
 export * from './entity-navigation';
+export * from './detail-aggregate';
 export * from './label';
 export * from './comment';
 export * from './attachment';

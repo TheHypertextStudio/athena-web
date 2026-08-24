@@ -20,6 +20,8 @@ import {
   defaultEntityDisplay,
   pageOf,
   ProjectCreate,
+  ProjectDetailAggregate,
+  ProjectId,
   ProjectLabelLink,
   ProjectLabelLinked,
   ProjectOut,
@@ -27,6 +29,7 @@ import {
   ProjectProgress,
   ProjectUpdate,
 } from '@docket/types';
+import type { ProgramOut, TeamOut } from '@docket/types';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -35,6 +38,7 @@ import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
 import { deferAfterResponse } from '../lib/after-response';
 import { clearableTextPatch } from '../lib/clearable-text';
+import { detailCapabilities } from '../lib/detail-capabilities';
 import { guardsInOrder } from '../lib/guards-in-order';
 import { assertPlanningDateRange, planningDatePatch } from '../lib/planning-timeframe';
 import {
@@ -65,6 +69,7 @@ function toOut(p: ProjectRow): z.input<typeof ProjectOut> {
     summary: p.summary,
     description: p.description,
     status: p.status,
+    priority: p.priority,
     health: p.health,
     leadId: p.leadId,
     teamId: p.teamId,
@@ -79,8 +84,47 @@ function toOut(p: ProjectRow): z.input<typeof ProjectOut> {
   };
 }
 
+/** Project one Team row into the bounded detail reference contract. */
+function teamToOut(row: typeof team.$inferSelect): z.input<typeof TeamOut> {
+  return {
+    id: row.id,
+    organizationId: row.organizationId,
+    name: row.name,
+    key: row.key,
+    description: row.description,
+    summary: row.summary,
+    workflowStates: row.workflowStates,
+    triageEnabled: row.triageEnabled,
+    agentGuidance: row.agentGuidance,
+    approvalRouting: row.approvalRouting,
+  };
+}
+
+/** Project one Program row into the bounded Project detail reference contract. */
+function programToOut(row: typeof program.$inferSelect): z.input<typeof ProgramOut> {
+  return {
+    id: row.id,
+    organizationId: row.organizationId,
+    name: row.name,
+    description: row.description,
+    summary: row.summary,
+    ownerId: row.ownerId,
+    status: row.status,
+    health: row.health,
+    visibility: row.visibility,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+/** Project one named actor without loading an organization member roster. */
+function actorReference(row: typeof actor.$inferSelect) {
+  return { actorId: row.id, displayName: row.displayName, avatar: row.avatar };
+}
+
 /** Path-param schema for the single-project routes. */
 const idParam = z.object({ id: z.string() });
+/** The aggregate route refuses malformed Project ids before it can start a data read. */
+const aggregateIdParam = z.object({ id: ProjectId });
 
 /**
  * Assert that a referenced row belongs to the caller's org, or throw {@link NotFoundError}.
@@ -478,6 +522,87 @@ const projects = new Hono<AppEnv>()
             blocksIds: [...(blocks.get(row.id) ?? [])].sort(),
           };
         }),
+      });
+    },
+  )
+  .get(
+    '/:id/aggregate-detail',
+    apiDoc({
+      tag: 'Projects',
+      summary: 'Get the bounded Project detail aggregate',
+      response: ProjectDetailAggregate,
+      description:
+        'Returns the Project snapshot, visible-control capabilities, its named references, and the default document content in one request. It excludes organization-wide pickers and inactive sections.',
+    }),
+    zParam(aggregateIdParam),
+    async (c) => {
+      const { orgId, actorId, capabilities } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+      const rows = await db
+        .select()
+        .from(project)
+        .where(and(eq(project.id, id), eq(project.organizationId, orgId)))
+        .limit(1);
+      const row = rows[0];
+      if (!row) throw new NotFoundError('Project not found');
+
+      const [taskRows, programRows, teamRows, leadRows] = await Promise.all([
+        db
+          .select({
+            id: task.id,
+            teamId: task.teamId,
+            projectId: task.projectId,
+            programId: task.programId,
+            visibility: task.visibility,
+            estimate: task.estimate,
+            completedAt: task.completedAt,
+          })
+          .from(task)
+          .where(and(eq(task.organizationId, orgId), eq(task.projectId, row.id))),
+        row.programId === null
+          ? Promise.resolve([])
+          : db
+              .select()
+              .from(program)
+              .where(and(eq(program.id, row.programId), eq(program.organizationId, orgId)))
+              .limit(1),
+        row.teamId === null
+          ? Promise.resolve([])
+          : db
+              .select()
+              .from(team)
+              .where(and(eq(team.id, row.teamId), eq(team.organizationId, orgId)))
+              .limit(1),
+        row.leadId === null
+          ? Promise.resolve([])
+          : db
+              .select()
+              .from(actor)
+              .where(and(eq(actor.id, row.leadId), eq(actor.organizationId, orgId)))
+              .limit(1),
+      ]);
+      const canView = await buildTaskViewFilter(orgId, actorId);
+      const visibleTaskRows = taskRows.filter(canView);
+
+      return ok(c, ProjectDetailAggregate, {
+        target: 'project',
+        snapshot: {
+          target: 'project',
+          organizationId: row.organizationId,
+          id: row.id,
+          name: row.name,
+          status: row.status,
+          priority: row.priority,
+          health: row.health,
+          updatedAt: row.updatedAt.toISOString(),
+        },
+        capabilities: detailCapabilities(capabilities),
+        references: {
+          lead: leadRows[0] ? actorReference(leadRows[0]) : null,
+          program: programRows[0] ? programToOut(programRows[0]) : null,
+          team: teamRows[0] ? teamToOut(teamRows[0]) : null,
+        },
+        defaultView: { project: toOut(row), progress: computeProgress(visibleTaskRows) },
       });
     },
   )

@@ -18,19 +18,29 @@ import {
 import {
   defaultEntityDisplay,
   InitiativeAggregateDetail,
+  InitiativeDetailAggregate,
+  InitiativeId,
   InitiativeOverviewOut,
 } from '@docket/types';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
-import type { z } from 'zod';
+import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
+import { detailCapabilities } from '../lib/detail-capabilities';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
+import { zParam } from '../lib/validate';
 import { rankInitiativeAttention } from './initiative-attention';
 import { accessibleInitiativeOrganizationIds } from './initiative-hierarchy';
-import { buildInitiativeDetail, toOut } from './initiative-helpers';
+import {
+  associatedPrograms,
+  associatedProjects,
+  buildInitiativeDetail,
+  loadInitiative,
+  toOut,
+} from './initiative-helpers';
 
 /** Convert a hierarchy node to the compact reference returned by aggregate detail. */
 function toReference(
@@ -271,6 +281,53 @@ const initiativeAggregates = new Hono<AppEnv>()
           };
         }),
         attention,
+      });
+    },
+  )
+  .get(
+    '/:id/aggregate-detail',
+    apiDoc({
+      tag: 'Initiatives',
+      summary: 'Get the bounded Initiative detail aggregate',
+      description:
+        'Returns the Initiative snapshot, visible-control capabilities, its named owner, and direct rollup content in one request. Hierarchy, updates, resources, and pickers load only when opened.',
+      response: InitiativeDetailAggregate,
+    }),
+    zParam(z.object({ id: InitiativeId })),
+    async (c) => {
+      const { orgId, capabilities } = c.get('actorCtx');
+      const { id } = c.req.valid('param');
+      const row = await loadInitiative(orgId, id);
+      const [projects, programs, ownerRows] = await Promise.all([
+        associatedProjects(orgId, id),
+        associatedPrograms(orgId, id),
+        row.ownerId === null
+          ? Promise.resolve([])
+          : db
+              .select()
+              .from(actor)
+              .where(and(eq(actor.id, row.ownerId), eq(actor.organizationId, orgId)))
+              .limit(1),
+      ]);
+      const owner = ownerRows[0];
+
+      return ok(c, InitiativeDetailAggregate, {
+        target: 'initiative',
+        snapshot: {
+          target: 'initiative',
+          organizationId: row.organizationId,
+          id: row.id,
+          name: row.name,
+          status: row.status,
+          priority: row.priority,
+          health: row.health,
+          updatedAt: row.updatedAt.toISOString(),
+        },
+        capabilities: detailCapabilities(capabilities),
+        references: owner
+          ? { owner: { actorId: owner.id, displayName: owner.displayName, avatar: owner.avatar } }
+          : { owner: null },
+        defaultView: { initiative: buildInitiativeDetail(row, projects, programs) },
       });
     },
   )

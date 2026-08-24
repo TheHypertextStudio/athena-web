@@ -112,7 +112,11 @@
   passes all 22 primary screens and four aggregate-backed details in 59.4 seconds. The Task graph
   hierarchy journey passes its menu and Alt-drag mutation contract. The design scorecard retains
   its responsive, theme, accessibility, and screenshot gates, including the picker's single inset
-  hover shape.
+  hover shape. CI run `32769538608` found that the replay helper's local `require` name looked like
+  three dynamic CommonJS imports to the repository source-policy scanners. Renaming that accumulator
+  to `addRequirement` keeps the runtime behavior unchanged. The uncached policy package passes all
+  179 tests at 100 percent coverage after the correction, and the object-command route passes all 61
+  focused tests with API typecheck and lint clean.
 - **Blockers**: Final CI, deployment, and production verification remain pending.
 
 ---

@@ -275,7 +275,7 @@ function replayRequirements(
   direction: 'undo' | 'redo',
 ): ReadonlyMap<string, ReplayRequirement> {
   const requiredByTarget = new Map<string, ReplayRequirement>();
-  const require = (requirement: ReplayRequirement): void => {
+  const addRequirement = (requirement: ReplayRequirement): void => {
     const key = replayRequirementKey(requirement.kind, requirement.id);
     const current = requiredByTarget.get(key);
     if (
@@ -299,14 +299,14 @@ function replayRequirements(
     ) {
       capability = 'assign';
     }
-    require({ kind: receipt.objectKind, id: entry.objectId, capability });
+    addRequirement({ kind: receipt.objectKind, id: entry.objectId, capability });
     if (entry.kind === 'relation' && entry.relation === 'dependency') {
-      require({ kind: receipt.objectKind, id: entry.relatedId, capability: 'contribute' });
+      addRequirement({ kind: receipt.objectKind, id: entry.relatedId, capability: 'contribute' });
     }
     if (entry.kind === 'object') {
       const target = direction === 'undo' ? entry.before : entry.after;
       const reference = replayReferenceRequirement(receipt.objectKind, entry.property, target);
-      if (reference !== null) require(reference);
+      if (reference !== null) addRequirement(reference);
     }
   }
   return requiredByTarget;

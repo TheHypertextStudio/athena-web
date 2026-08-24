@@ -13,7 +13,11 @@ import { eq } from 'drizzle-orm';
 
 import type * as DbModule from '@docket/db';
 
-import { buildTaskViewFilter, type ViewableTaskParts } from '../../src/routes/task-helpers';
+import {
+  buildTaskViewCondition,
+  buildTaskViewFilter,
+  type ViewableTaskParts,
+} from '../../src/routes/task-helpers';
 import { getDb, one, seedBaseOrg } from '../support/routes-harness';
 
 interface PrivateTaskFixture {
@@ -145,6 +149,53 @@ async function assignGuestRole(fixture: PrivateTaskFixture): Promise<void> {
 }
 
 describe('buildTaskViewFilter', () => {
+  it('builds SQL conditions for each effective task-view scope', async () => {
+    const fixture = await seedPrivateTask();
+    await Promise.all([
+      grantView(fixture, 'task', fixture.task.id, false),
+      grantView(fixture, 'team', fixture.teamId, true),
+      grantView(fixture, 'project', fixture.projectId, true),
+      grantView(fixture, 'program', fixture.programId, true),
+      grantView(fixture, 'organization', fixture.orgId, true),
+    ]);
+    await fixture.schema.db.insert(fixture.schema.grant).values([
+      {
+        organizationId: fixture.orgId,
+        subjectKind: 'actor',
+        subjectId: fixture.actorId,
+        resourceKind: 'task',
+        resourceId: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
+        capabilities: ['view'],
+        effect: 'deny',
+        cascades: false,
+      },
+      {
+        organizationId: fixture.orgId,
+        subjectKind: 'actor',
+        subjectId: fixture.actorId,
+        resourceKind: 'task',
+        resourceId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
+        capabilities: ['view'],
+        effect: 'allow',
+        cascades: false,
+        expiresAt: new Date('2026-01-01T00:00:00.000Z'),
+      },
+    ]);
+
+    expect(
+      (await buildTaskViewCondition(fixture.orgId, fixture.actorId)).queryChunks,
+    ).not.toHaveLength(0);
+
+    const guestFixture = await seedPrivateTask();
+    await assignGuestRole(guestFixture);
+    expect(
+      (await buildTaskViewCondition(guestFixture.orgId, guestFixture.actorId)).queryChunks,
+    ).not.toHaveLength(0);
+    expect(
+      (await buildTaskViewCondition(guestFixture.orgId, '01ARZ3NDEKTSV4RRFFQ69G5FAV')).queryChunks,
+    ).not.toHaveLength(0);
+  });
+
   it('does not expose a private task through an allow grant with no capabilities', async () => {
     const fixture = await seedPrivateTask();
     await fixture.schema.db.insert(fixture.schema.grant).values({

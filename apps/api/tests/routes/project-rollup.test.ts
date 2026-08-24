@@ -9,6 +9,7 @@
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 
+import { eq } from 'drizzle-orm';
 import type * as DbModule from '@docket/db';
 
 import { appWithActor, getDb, seedBaseOrg, type StatusIdLookup } from '../support/routes-harness';
@@ -245,6 +246,70 @@ describe('project roll-up (GET /:id/rollup)', () => {
         color: '#6750a4',
       }),
     ]);
+  });
+
+  it('returns populated deferred work sections', async () => {
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const projectId = await makeProject(statusId, orgId, teamId, humanActorId);
+    const milestoneId = await makeMilestone(orgId, projectId, humanActorId);
+    await db
+      .update(schema.milestone)
+      .set({ targetDate: new Date('2026-12-31T00:00:00.000Z') })
+      .where(eq(schema.milestone.id, milestoneId));
+    const taskId = await makeTask(statusId, orgId, teamId, humanActorId, {
+      projectId,
+      milestoneId,
+    });
+    await db.update(schema.task).set({ visibility: 'public' }).where(eq(schema.task.id, taskId));
+    const [insertedTaskLabel] = await db
+      .insert(schema.label)
+      .values({ organizationId: orgId, name: 'Urgent', color: '#ba1a1a' })
+      .returning();
+    const taskLabel = assertDefined(insertedTaskLabel);
+    await db.insert(schema.taskLabel).values({
+      organizationId: orgId,
+      taskId,
+      labelId: taskLabel.id,
+    });
+    const undatedMilestoneId = await makeMilestone(orgId, projectId, humanActorId);
+    const unlabeledTaskId = await makeTask(statusId, orgId, teamId, humanActorId, {
+      projectId,
+      milestoneId: undatedMilestoneId,
+    });
+    await db
+      .update(schema.task)
+      .set({ visibility: 'public' })
+      .where(eq(schema.task.id, unlabeledTaskId));
+
+    const reader = appWithActor(projectRollup, orgId, ['view'], humanActorId);
+    const body = await json<{
+      milestones: { id: string; targetDate: string | null }[];
+      tasks: { id: string; labels: { id: string }[] }[];
+      taskMilestones: { taskId: string; milestoneId: string | null }[];
+    }>(await reader.request(`/${projectId}/work`));
+
+    expect(body.milestones).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: milestoneId, targetDate: expect.any(String) }),
+        expect.objectContaining({ id: undatedMilestoneId, targetDate: null }),
+      ]),
+    );
+    expect(body.tasks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: taskId,
+          labels: [expect.objectContaining({ id: taskLabel.id })],
+        }),
+        expect.objectContaining({ id: unlabeledTaskId, labels: [] }),
+      ]),
+    );
+    expect(body.taskMilestones).toEqual(
+      expect.arrayContaining([
+        { taskId, milestoneId },
+        { taskId: unlabeledTaskId, milestoneId: undatedMilestoneId },
+      ]),
+    );
+    expect((await reader.request(`/${MISSING_ULID}/work`)).status).toBe(404);
   });
 
   it('404s on a missing project', async () => {

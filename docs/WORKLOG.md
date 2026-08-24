@@ -9,7 +9,7 @@
 
 ### [CANVAS-GRAPH-CRUD-001] Make graph canvases usable for organizing work
 
-- **Status**: IN_PROGRESS
+- **Status**: REVIEW
 - **Started**: 2026-08-23
 - **Priority**: P0
 - **Description**: Project Dependencies and Task graph treated the canvas as a mostly read-only
@@ -33,7 +33,7 @@
         dependency and hierarchy commands, and recoverable trash.
   - [x] Filter archived Projects from active reads while preserving relationships for restoration.
   - [x] Rebase the five product commits onto `7dec5703` from `origin/main` with linear history.
-  - [ ] Commit the post-rebase integration corrections and repeat the affected repository gates.
+  - [x] Commit the post-rebase integration corrections and repeat the affected repository gates.
   - [x] Complete responsive light and dark visual, keyboard, and accessibility review.
   - [ ] Fast-forward `main`, deploy the exact revision, and verify the production workflows.
 - **Decisions**: Forward bulk commands remain atomic. Undo and redo compare the receipt's expected
@@ -61,6 +61,11 @@
   target into the shared composer. At 320px, view tabs no longer shrink into overlapping targets;
   the visible “All” label leaves Dependencies reachable while the accessible name stays “All
   projects.”
+- **Final review corrections**: Program detail aggregates now omit archived Projects and Tasks that
+  belong to them. Bulk property and association notices offer Undo when the server returned a
+  replayable receipt. A replay lock prevents a repeated notice click, keyboard shortcut, or menu
+  command from consuming an older receipt while the first Undo or Redo request is pending. The hook
+  clears the stale notice before that request starts.
 - **Validation**: The pure layout suite covers projected Task roots, weak components,
   non-overlapping rectangles, group ownership, deterministic aspect-aware packing, property-only
   stability, and the 363-Task and 28-dependency fixture within the 100 ms budget. The command route
@@ -69,13 +74,16 @@
   and transactional effect delivery. The complete canvas component suite passes 125 tests across
   34 files, and the relation and node correction passes another 16 focused tests. The serialized
   repository typecheck passes 26 tasks, lint passes 25 tasks, all 26 package test graphs pass, and
-  the production build passes with a process-local 4 GB Node heap. The final API run passes 4,735
-  tests, and the final Web run passes 3,104 tests. Live review at 1440×900, 1024×768, 390×844, and 320×720 covers both graph
-  types, both themes at the three primary widths, context creation, bulk properties, selection,
-  trash confirmation, undo, redo, focus return, and overflow. The browser console has no warnings
-  or errors. Six live-review Web files pass 41 focused tests, the complete lifecycle harness passes
-  six tests, and the stable projection API file passes seven tests. Formatting, migration drift,
-  and the serialized production build pass. Deployment and production checks remain open.
+  the production build passes with a process-local 4 GB Node heap. The final API run passes 4,736
+  tests, and the final Web run passes 3,107 tests. Live review at 1440×900, 1024×768, 390×844, and
+  320×720 covers both graph types, both themes at the three primary widths, context creation, bulk
+  properties, selection, trash confirmation, undo, redo, focus return, and overflow. The browser
+  console has no warnings or errors. Six live-review Web files pass 41 focused tests, the complete
+  lifecycle harness passes six tests, and the stable projection API file passes seven tests. The
+  final review regressions pass 40 aggregate-route cases and four canvas notice and history cases.
+  Repository tooling passes 164 tests. Formatting, migration drift, all 26 typecheck tasks, all 25
+  lint tasks, and the four-package serialized production build pass. Deployment and production
+  checks remain open.
 - **Blockers**: None.
 
 ---

@@ -30,6 +30,7 @@ import {
   seedProgram,
   seedProject,
   seedStatuses,
+  seedTask,
 } from '../support/routes-harness';
 
 let schema!: typeof DbModule;
@@ -441,6 +442,59 @@ describe('detail aggregate routes', () => {
       capabilities: { comment: true, contribute: true, assign: true, manage: true },
       references: { owner: { actorId: humanActorId } },
       defaultView: { program: { id: program.id, rollup: { projects: 0, tasks: 0 } } },
+    });
+  });
+
+  it('excludes archived Projects and their Tasks from the Program aggregate rollup', async () => {
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const manager = appWithActor(programs, orgId, ['manage'], humanActorId);
+    const program = await seedProgram(db, schema, statusId, {
+      organizationId: orgId,
+      name: 'Service delivery',
+      createdBy: humanActorId,
+    });
+    const activeProject = await seedProject(db, schema, statusId, {
+      organizationId: orgId,
+      name: 'Active service project',
+      teamId,
+      programId: program.id,
+      createdBy: humanActorId,
+    });
+    const archivedProject = await seedProject(db, schema, statusId, {
+      organizationId: orgId,
+      name: 'Archived service project',
+      teamId,
+      programId: program.id,
+      archivedAt: new Date('2026-08-24T12:00:00.000Z'),
+      createdBy: humanActorId,
+    });
+    await seedTask(db, schema, statusId, {
+      organizationId: orgId,
+      teamId,
+      title: 'Active Project task',
+      state: 'backlog',
+      projectId: activeProject.id,
+    });
+    await seedTask(db, schema, statusId, {
+      organizationId: orgId,
+      teamId,
+      title: 'Archived Project task',
+      state: 'backlog',
+      projectId: archivedProject.id,
+    });
+    await seedTask(db, schema, statusId, {
+      organizationId: orgId,
+      teamId,
+      title: 'Direct Program task',
+      state: 'backlog',
+      programId: program.id,
+    });
+
+    const response = await manager.request(`/${program.id}/aggregate-detail`);
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      defaultView: { program: { rollup: { projects: 1, tasks: 2 } } },
     });
   });
 

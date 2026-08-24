@@ -3,7 +3,7 @@
 /** Object-command client plus session-local, conflict-safe canvas undo and redo. */
 import type { ObjectCommandIn, ObjectCommandRequest, ObjectCommandResult } from '@docket/types';
 import type { QueryKey } from '@tanstack/react-query';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { unwrap, useApiMutation } from '@/lib/query';
@@ -59,6 +59,15 @@ export function canvasCommandId(): string {
   return crypto.randomUUID();
 }
 
+/** Decide whether a completed forward command needs an inline Undo shortcut. */
+function shouldOfferNoticeUndo(command: ObjectCommandIn): boolean {
+  if (command.operation.type === 'trash') return true;
+  if (command.objectIds.length < 2) return false;
+  return ['replace_property', 'add_association', 'remove_association'].includes(
+    command.operation.type,
+  );
+}
+
 /**
  * Bind the typed object-command endpoint to one graph route and scope.
  *
@@ -74,6 +83,7 @@ export function useCanvasCommandHistory(
 ): CanvasCommandHistoryControls {
   const [version, setVersion] = useState(0);
   const [notice, setNotice] = useState<CanvasCommandNotice | null>(null);
+  const replayInFlight = useRef(false);
   const applyReceipt = useOptionalCanvasSnapshotReceiptApplier();
   const mutation = useApiMutation<ObjectCommandResult, ObjectCommandRequest>({
     mutationFn: (request) =>
@@ -97,13 +107,14 @@ export function useCanvasCommandHistory(
       try {
         const result = await mutation.mutateAsync(command);
         applyReceipt?.(result.receipt, 'forward');
-        if (result.receipt.entries.length > 0) {
+        const storedReceipt = result.receipt.entries.length > 0;
+        if (storedReceipt) {
           commandHistory.push(scopeKey, { label, receipt: result.receipt });
           refresh();
         }
         setNotice({
           copy: `${label} applied.`,
-          offerUndo: command.operation.type === 'trash',
+          offerUndo: storedReceipt && shouldOfferNoticeUndo(command),
           tone: 'status',
         });
         return result;
@@ -121,11 +132,14 @@ export function useCanvasCommandHistory(
 
   const replay = useCallback(
     async (direction: 'undo' | 'redo'): Promise<void> => {
+      if (replayInFlight.current) return;
       const entry =
         direction === 'undo'
           ? commandHistory.takeUndo(scopeKey)
           : commandHistory.takeRedo(scopeKey);
       if (entry === null) return;
+      replayInFlight.current = true;
+      setNotice(null);
       refresh();
       const destination = direction === 'undo' ? 'redo' : 'undo';
       try {
@@ -160,6 +174,7 @@ export function useCanvasCommandHistory(
           tone: 'error',
         });
       } finally {
+        replayInFlight.current = false;
         refresh();
       }
     },
@@ -180,7 +195,7 @@ export function useCanvasCommandHistory(
     canRedo: snapshot.redo.length > 0,
     undoLabel: newest(snapshot.undo)?.label ?? null,
     redoLabel: newest(snapshot.redo)?.label ?? null,
-    pending: mutation.isPending,
+    pending: mutation.isPending || replayInFlight.current,
     notice,
     clearNotice: () => {
       setNotice(null);

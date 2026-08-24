@@ -228,7 +228,13 @@ const programs = new Hono<AppEnv>()
         db
           .select({ total: count(project.id) })
           .from(project)
-          .where(and(eq(project.programId, id), eq(project.organizationId, orgId))),
+          .where(
+            and(
+              eq(project.programId, id),
+              eq(project.organizationId, orgId),
+              isNull(project.archivedAt),
+            ),
+          ),
         db
           .select({ total: count(task.id) })
           .from(task)
@@ -237,7 +243,14 @@ const programs = new Hono<AppEnv>()
             and(
               eq(task.organizationId, orgId),
               isNull(task.archivedAt),
-              or(eq(task.programId, id), eq(project.programId, id)),
+              or(
+                eq(task.programId, id),
+                and(
+                  eq(project.programId, id),
+                  eq(project.organizationId, orgId),
+                  isNull(project.archivedAt),
+                ),
+              ),
               taskView,
             ),
           ),

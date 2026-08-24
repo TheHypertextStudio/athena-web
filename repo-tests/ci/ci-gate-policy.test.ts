@@ -411,7 +411,14 @@ describe('the real workflows', () => {
 
     // Recorded expectation: adding a check job to ci.yml must update this list *and*
     // deploy-production.needs, which is exactly the coupling the ungated-check-job rule enforces.
-    expect(checkJobs).toEqual(['lint', 'typecheck', 'secret-scan', 'test', 'build']);
+    expect(checkJobs).toEqual([
+      'lint',
+      'typecheck',
+      'secret-scan',
+      'test',
+      'build',
+      'core-screen-smoke',
+    ]);
     // `build-images` and `still-latest` are in `needs` without being check jobs, and the
     // asymmetry is deliberate: neither runs tests, so the ungated-check-job rule does not require
     // them, but the
@@ -424,10 +431,14 @@ describe('the real workflows', () => {
       'secret-scan',
       'test',
       'build',
+      'core-screen-smoke',
       'build-images',
       'still-latest',
     ]);
     expect(checkJobs.every((job) => deploy?.needs.includes(job))).toBe(true);
+
+    const freshness = ci?.jobs.find((job) => job.id === 'still-latest');
+    expect(freshness?.needs).toContain('core-screen-smoke');
   });
 
   it('runs the coverage gate — a bare `vitest run` enforces no thresholds', () => {
@@ -444,6 +455,20 @@ describe('the real workflows', () => {
     );
     expect(commands.some((command) => /^pnpm turbo run test(?:\s|$)/.test(command))).toBe(false);
     expect(test?.steps.every((step) => !step.continueOnError)).toBe(true);
+  });
+
+  it('runs the required core-screen gate against PostgreSQL', () => {
+    const ci = workflows.find((workflow) => workflow.path === '.github/workflows/ci.yml');
+    const smoke = ci?.jobs.find((job) => job.id === 'core-screen-smoke');
+    const commands = (smoke?.steps ?? []).flatMap((step) => (step.run ? [step.run] : []));
+    const source = readFileSync(join(REPO_ROOT, '.github/workflows/ci.yml'), 'utf8');
+
+    expect(commands.some((command) => command.includes('core-screen-acceptance.spec.ts'))).toBe(
+      true,
+    );
+    expect(source).toContain('image: postgres:17-alpine');
+    expect(source).toContain('DATABASE_URL: postgres://docket:docket@127.0.0.1:5432/docket');
+    expect(smoke?.continueOnError).toBe(false);
   });
 
   it('runs the API performance gate without coverage contention', () => {

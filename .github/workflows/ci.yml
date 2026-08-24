@@ -283,6 +283,130 @@ jobs:
 
       - run: pnpm turbo run build --concurrency=1
 
+  # This is the browser contract production depends on. The full E2E workflow remains advisory
+  # while it contains unrelated flaky and evidence-oriented journeys, but a release may not skip
+  # the basic proof that every primary authenticated screen and local-first detail can settle.
+  # PostgreSQL is required here. PGlite normalizes aggregate numerics to JavaScript numbers and
+  # therefore cannot expose the production postgres-js text-decoding failure that blanked Project
+  # details on 2026-08-24.
+  core-screen-smoke:
+    name: Core screen acceptance
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      # Test mode keeps the non-production sign-up code echo and mock providers without starting
+      # the local three-second background scheduler inside this bounded release check.
+      APP_MODE: test
+      APP_URL: http://docket.localhost:3000
+      WEB_URL: http://docket.localhost:3000
+      API_URL: http://api.docket.localhost:4000
+      NEXT_PUBLIC_APP_URL: http://docket.localhost:3000
+      NEXT_PUBLIC_API_URL: http://api.docket.localhost:4000
+      BETTER_AUTH_URL: http://api.docket.localhost:4000
+      BETTER_AUTH_PASSKEY_RP_ID: docket.localhost
+      NEXT_PUBLIC_PASSKEY_RP_ID: docket.localhost
+      BETTER_AUTH_TRUSTED_ORIGINS: http://docket.localhost:3000
+      DATABASE_URL: postgres://docket:docket@127.0.0.1:5432/docket
+      DATABASE_URL_UNPOOLED: postgres://docket:docket@127.0.0.1:5432/docket
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: docket
+          POSTGRES_PASSWORD: docket
+          POSTGRES_USER: docket
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U docket -d docket"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: '.node-version'
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Apply PostgreSQL migrations
+        # The job already owns a healthy PostgreSQL service. Running the root Turbo task would
+        # invoke db:up and try to start a second Docker Compose database inside the runner.
+        run: pnpm exec dotenv -e .env.local -- pnpm --filter @docket/db db:migrate
+
+      - name: Build the production Web app
+        env:
+          SKIP_ENV_VALIDATION: '1'
+        run: pnpm turbo run build --filter=@docket/web --concurrency=1
+
+      - name: Assemble the standalone Web server
+        run: |
+          set -euo pipefail
+          cp -r apps/web/.next/static apps/web/.next/standalone/apps/web/.next/static
+          cp -r apps/web/public apps/web/.next/standalone/apps/web/public
+
+      - name: Start the API and Web app
+        run: |
+          PORT=4000 pnpm exec dotenv -e .env.local -- \
+            pnpm --filter @docket/api exec tsx src/server.ts > /tmp/api.log 2>&1 &
+          cd apps/web/.next/standalone/apps/web
+          PORT=3000 HOSTNAME=127.0.0.1 node server.js > /tmp/web.log 2>&1 &
+
+      - name: Map test hosts to loopback
+        run: echo "127.0.0.1 docket.localhost api.docket.localhost" | sudo tee -a /etc/hosts
+
+      - uses: actions/cache@v5
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Install Playwright browser
+        run: pnpm --filter @docket/web exec playwright install --with-deps chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+
+      - name: Install Playwright OS dependencies
+        run: pnpm --filter @docket/web exec playwright install-deps chromium
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+
+      - name: Wait for the release stack
+        run: |
+          for _ in $(seq 1 60); do
+            web=$(curl -s -o /dev/null -w "%{http_code}" http://docket.localhost:3000/sign-in || true)
+            api=$(curl -s -o /dev/null -w "%{http_code}" http://api.docket.localhost:4000/v1/health || true)
+            echo "web=$web api=$api"
+            if [ "$web" = "200" ] && [ "$api" = "200" ]; then exit 0; fi
+            sleep 5
+          done
+          tail -100 /tmp/web.log /tmp/api.log >&2
+          exit 1
+
+      - name: Verify every core screen
+        run: >-
+          pnpm --filter @docket/web exec playwright test
+          e2e/release/core-screen-acceptance.spec.ts --workers=1
+
+      - name: Server logs
+        if: always()
+        run: tail -n 100 -- /tmp/web.log /tmp/api.log || true
+
+      - uses: actions/upload-artifact@v6
+        if: failure()
+        with:
+          name: core-screen-acceptance
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
   # Deliberately NO `needs`. The Docker builds take ~4 minutes and depend on nothing the check
   # jobs produce, so they run alongside them rather than after: by the time the gates are green
   # both images are already in Artifact Registry and `deploy-production` has only migrations and
@@ -317,7 +441,7 @@ jobs:
   still-latest:
     name: Still latest on main
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [lint, typecheck, secret-scan, test, build, build-images]
+    needs: [lint, typecheck, secret-scan, test, build, core-screen-smoke, build-images]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -328,7 +452,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          for attempt in 1 2 3; do
+          for _ in 1 2 3; do
             latest=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha') && break
             sleep 5
           done
@@ -352,7 +476,8 @@ jobs:
   deploy-production:
     name: Deploy production
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.still-latest.outputs.proceed == 'true'
-    needs: [lint, typecheck, secret-scan, test, build, build-images, still-latest]
+    needs:
+      [lint, typecheck, secret-scan, test, build, core-screen-smoke, build-images, still-latest]
     permissions:
       contents: read
       id-token: write

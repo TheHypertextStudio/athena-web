@@ -7,6 +7,39 @@
 
 ## Active Tasks
 
+### [CORE-SCREEN-GATE-001] Block production when a core screen does not settle
+
+- **Status**: REVIEW
+- **Started**: 2026-08-24
+- **Priority**: P0
+- **Description**: The browser suite is advisory, uses PGlite, and does not gate production. Its
+  local-first coverage opens only a Task and does not require the aggregate-backed detail surface
+  to mount. A Project aggregate could therefore return HTTP 500 while CI and deployment stayed
+  green.
+- **Approach**: Add a small release smoke suite that runs a production Web build and API against a
+  real PostgreSQL service. It will open every primary authenticated navigation destination and all
+  four local-first entity details. Each screen must render a non-empty main surface without generic
+  route errors, permanent syncing, runtime exceptions, or failed critical API responses. Wire that
+  job into both the latest-revision check and production deployment so the gate fails closed.
+- **Subtasks**:
+  - [x] Audit the current E2E coverage and production dependency graph.
+  - [x] Add the core-screen acceptance spec and prove it against PostgreSQL.
+  - [x] Add the required CI job and policy tests that prevent it from becoming advisory.
+  - [ ] Pass focused validation, review, commit, and deploy the required gate.
+- **Decision**: The full browser suite remains advisory until its unrelated failures are removed.
+  A bounded core-screen suite becomes mandatory now. Making the known-red full suite mandatory
+  would stop all releases without giving the core navigation contract a stable signal.
+- **Defect found by the gate**: The PostgreSQL run exposed the same raw-numeric decoding bug in
+  Initiative health distribution. All four filtered counts now decode at the Drizzle boundary, and
+  a postgres-js parity route test reproduces the prior response-contract 500.
+- **Validation**: The production Web build and API ran against PostgreSQL 16.15. The browser opened
+  22 primary screens and four entity details in 25.5 seconds. Every detail aggregate returned 200,
+  and every full detail surface replaced its snapshot. All 42 detail aggregate tests, all 30 CI
+  policy tests, targeted type-aware ESLint, API and Web type checks, Prettier, actionlint, and the
+  live gate-policy command pass.
+
+---
+
 ### [PROJECT-DETAIL-500-001] Restore Project detail reconciliation
 
 - **Status**: IN_PROGRESS

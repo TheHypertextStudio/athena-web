@@ -183,10 +183,10 @@ export async function associatedWorkSummary(
 ): Promise<InitiativeWorkSummary> {
   const aggregate = (column: typeof project.health | typeof program.health) => ({
     total: count(),
-    onTrack: sql<number>`count(*) filter (where ${column} = 'on_track')`,
-    atRisk: sql<number>`count(*) filter (where ${column} = 'at_risk')`,
-    offTrack: sql<number>`count(*) filter (where ${column} = 'off_track')`,
-    unknown: sql<number>`count(*) filter (where ${column} is null)`,
+    onTrack: sql<number>`count(*) filter (where ${column} = 'on_track')`.mapWith(Number),
+    atRisk: sql<number>`count(*) filter (where ${column} = 'at_risk')`.mapWith(Number),
+    offTrack: sql<number>`count(*) filter (where ${column} = 'off_track')`.mapWith(Number),
+    unknown: sql<number>`count(*) filter (where ${column} is null)`.mapWith(Number),
   });
   const [projectRows, programRows] = await Promise.all([
     db

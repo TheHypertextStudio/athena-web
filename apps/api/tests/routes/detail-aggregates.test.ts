@@ -604,6 +604,51 @@ describe('detail aggregate routes', () => {
     expect(await aggregate.json()).toMatchObject({ references: { owner: null } });
   });
 
+  it('serializes Initiative health counts when postgres-js returns numerics as text', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId);
+    const created = await writer.request('/', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Postgres aggregate Initiative' }),
+    });
+    const initiative = (await created.json()) as { id: string };
+    const client = Reflect.get(db, '$client') as {
+      query: (
+        query: string,
+        params?: unknown[],
+        options?: unknown,
+      ) => Promise<{ rows?: Record<string, unknown>[] }>;
+    };
+    const original = client.query.bind(client);
+    client.query = async (...args) => {
+      const result = await original(...args);
+      if (args[0].includes('count(*) filter')) {
+        for (const row of result.rows ?? []) {
+          for (const [key, value] of Object.entries(row)) {
+            if (typeof value === 'number') row[key] = String(value);
+          }
+        }
+      }
+      return result;
+    };
+
+    try {
+      const response = await writer.request(`/${initiative.id}/aggregate-detail`);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({
+        defaultView: {
+          initiative: {
+            childMix: { programs: 0, projects: 0 },
+            distribution: { atRisk: 0, offTrack: 0, onTrack: 0, unknown: 0 },
+          },
+        },
+      });
+    } finally {
+      client.query = original;
+    }
+  });
+
   it('does not expose a foreign label through a corrupt Initiative-label association', async () => {
     const local = await seedBaseOrg(db, schema);
     const foreign = await seedBaseOrg(db, schema);

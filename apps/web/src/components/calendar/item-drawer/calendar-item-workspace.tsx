@@ -1,8 +1,11 @@
 'use client';
 
 import type { CalendarItemOut, CalendarLayerOut, WorkPlaceOut } from '@docket/types';
-import { Badge, DialogDescription, DialogTitle } from '@docket/ui/primitives';
+import { Sparkles } from '@docket/ui/icons';
+import { Badge, Button, DialogDescription, DialogTitle } from '@docket/ui/primitives';
 import { type JSX } from 'react';
+
+import { useAthenaPanel } from '@/components/athena/athena-panel-provider';
 
 import { CALENDAR_ITEM_KIND_ICON, CALENDAR_ITEM_KIND_LABEL } from '../calendar-item-card';
 import { CalendarDrawerClose } from '../calendar-drawer-close';
@@ -56,6 +59,7 @@ export function CalendarItemWorkspace({
   onOpenTask,
   onOpenItem,
 }: CalendarItemWorkspaceProps): JSX.Element {
+  const { openAthena } = useAthenaPanel();
   const KindIcon = CALENDAR_ITEM_KIND_ICON[item.kind];
   const providerLabel = layer?.provider === 'google' ? 'Google Calendar' : 'source calendar';
   const showKind = item.kind !== 'provider_event' && item.kind !== 'native_event';
@@ -131,6 +135,22 @@ export function CalendarItemWorkspace({
 
       <div className="border-outline-variant flex shrink-0 justify-between border-t px-6 py-3">
         <DeleteCalendarItemAction item={item} onDeleted={onClose} />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="min-h-10"
+          onClick={() => {
+            const workspaceId = item.linkedTasks[0]?.organizationId;
+            openAthena({
+              ...(workspaceId ? { workspaceId } : {}),
+              source: { type: 'calendar_item', id: item.id, label: item.title },
+            });
+          }}
+        >
+          <Sparkles aria-hidden="true" />
+          Have Athena handle this
+        </Button>
       </div>
     </div>
   );

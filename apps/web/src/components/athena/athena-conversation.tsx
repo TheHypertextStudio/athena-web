@@ -11,8 +11,8 @@
  * medium: quick reads answer instantly, and "create a plan to make sure I get more sleep" flows
  * into the same loop as any delegated job.
  *
- * Shared by every door onto the thread — the standalone `/orgs/:orgId/athena` page, the ⌘J
- * slide-over panel ({@link AthenaPanelProvider}), and (in principle) any future entry point —
+ * Shared by every door onto the thread — the standalone `/athena` page, the ⌘J utility-rail panel
+ * ({@link AthenaPanelProvider}), and (in principle) any future entry point —
  * so the conversation itself is defined once and each door only supplies its own chrome.
  */
 import type { AgentSessionDetailOut, SessionActivityOut } from '@docket/types';

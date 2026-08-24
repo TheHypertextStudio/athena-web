@@ -15,7 +15,7 @@ import {
   type WorkspaceNavKey,
 } from '@docket/ui/components';
 import { VocabularyProvider } from '@docket/ui/hooks';
-import { Calendar, Search, Timer } from '@docket/ui/icons';
+import { Calendar, Search, Sparkles, Timer } from '@docket/ui/icons';
 import { Skeleton, Stack } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
@@ -31,7 +31,11 @@ import { GlobalProjectComposer } from '@/components/projects/create-project';
 import { GlobalTaskComposer } from '@/components/tasks/create-task';
 import { GlobalTeamComposer } from '@/components/teams/create-team';
 import Agenda from '@/components/agenda/agenda';
-import { AthenaPanelProvider } from '@/components/athena/athena-panel-provider';
+import {
+  AthenaPanelProvider,
+  AthenaRailPanel,
+  useAthenaPanel,
+} from '@/components/athena/athena-panel-provider';
 import { useAuthenticationInterlock } from '@/components/authentication-interlock';
 import { CommandPaletteProvider, useCommandPalette } from '@/components/command-palette';
 import { OfflineBanner, OfflineContent } from '@/components/offline-state';
@@ -65,6 +69,8 @@ import type { ServerSessionUser } from '@/lib/server-session';
 import { resolveSessionStatus } from '@/lib/session-status';
 import { useOnlineStatus } from '@/lib/use-online-status';
 import { CREATE_WORKSPACE_PATH } from '@/lib/workspace-creation';
+import { athenaHref } from '@/lib/athena/query-defs';
+import type { PersonalAthenaContext } from '@/lib/athena/presentation';
 
 /**
  * How long the session query may stay pending before the shell treats the server as unreachable.
@@ -339,7 +345,6 @@ export function AppShellFrame({ children, initialSession }: AppShellFrameProps):
                   sessionRejected={sessionRejected}
                   settingsSurface={settingsSurface}
                   calendarSurface={calendarSurface}
-                  showAthenaPulse={pathname !== '/athena'}
                   locationKey={pathname}
                   routeOrgId={routeOrgId}
                   userId={userId}
@@ -461,7 +466,11 @@ function SidebarRecoveryNudge({
  * @param timerStatus - The live tracker, which lends the Focus icon its status dot.
  * @returns The rail panel set and the panel shown until the viewer picks another.
  */
-function railAsideFor(identityUnknown: boolean, timerStatus: TimerStatus): AppShellAside {
+function railAsideFor(
+  identityUnknown: boolean,
+  timerStatus: TimerStatus,
+  athena: RailPanel,
+): AppShellAside {
   const status = identityUnknown ? null : focusRailStatus(timerStatus);
   const focus: RailPanel = {
     id: 'focus',
@@ -476,7 +485,7 @@ function railAsideFor(identityUnknown: boolean, timerStatus: TimerStatus): AppSh
     icon: <Calendar aria-hidden="true" />,
     node: identityUnknown ? <AppShellAgendaSkeleton /> : <Agenda />,
   };
-  return { panels: [agenda, focus], defaultPanelId: 'agenda' };
+  return { panels: [agenda, focus, athena], defaultPanelId: 'agenda' };
 }
 
 interface AppShellInnerProps {
@@ -499,7 +508,6 @@ interface AppShellInnerProps {
   sessionRejected: boolean;
   settingsSurface: boolean;
   calendarSurface: boolean;
-  showAthenaPulse: boolean;
   locationKey: string;
   routeOrgId: string | null;
   userId: string | null;
@@ -535,7 +543,6 @@ function AppShellInner({
   sessionRejected,
   settingsSurface,
   calendarSurface,
-  showAthenaPulse,
   locationKey,
   routeOrgId,
   userId,
@@ -719,69 +726,162 @@ function AppShellInner({
   return (
     <VocabularyProvider skin={skin}>
       <PageScrollProvider>
-        <AthenaPanelProvider
-          showPulse={showAthenaPulse}
+        <AthenaShell
+          sidebar={sidebar}
+          tabBar={tabBar}
+          mobileBrand={mobileBrand}
+          mobileActions={mobileActions}
+          identityUnknown={identityUnknown}
+          timerStatus={timerStatus}
+          settingsSurface={settingsSurface}
+          calendarSurface={calendarSurface}
           locationKey={locationKey}
           context={
             resolvedOrgId
               ? { workspaceId: resolvedOrgId, workspaceName: activeWorkspaceName }
               : null
           }
+          standingNotice={standingNotice}
+          hasQueuedWork={hasQueuedWork}
+          unavailable={unavailable}
+          offline={offline}
+          sessionRejected={sessionRejected}
         >
-          <AppShell
-            sidebar={sidebar}
-            tabBar={tabBar}
-            mobileBrand={mobileBrand}
-            mobileActions={mobileActions}
-            // Between clicking a document and its route payload arriving, the previous screen
-            // stays exactly as it was — which is indistinguishable from a click that did not
-            // register. This is the acknowledgement, and it costs no layout.
-            contentOverlay={<NavigationProgress />}
-            // The shell banner slot is a sibling of `<main>`, so these never disturb a page's
-            // `h-full` sizing the way page-level content would. Offline outranks the update prompt:
-            // reloading for a new version is pointless — and would land on the offline page —
-            // while there is no connection to fetch it over.
-            banner={
-              // The sync indicator is additive rather than exclusive: "you're offline" and "these
-              // three changes are waiting" are different facts, and collapsing them would drop the
-              // one that is actionable. It renders nothing at all when the queue is empty, which is
-              // why `hasQueuedWork` gates the wrapper — an empty banner slot would still occupy the
-              // shell's gap above `<main>`.
-              //
-              // The offline notice is suppressed while `unavailable`: its promise ("showing what was
-              // loaded earlier") is false when nothing was ever loaded, and the content state already
-              // says the same thing better.
-              standingNotice || hasQueuedWork ? (
-                <Stack gap={2}>
-                  {standingNotice}
-                  <OfflineSyncIndicator />
-                </Stack>
-              ) : undefined
-            }
-            aside={
-              settingsSurface || calendarSurface
-                ? undefined
-                : railAsideFor(identityUnknown, timerStatus)
-            }
-          >
-            {/* The page renders unconditionally while the session and workspace list resolve. Each
-              surface already paints its own heading and toolbar from static copy and owns an
-              in-region treatment for its own data, so a shell-level gate on top only delayed
-              content that was ready. The two exceptions are not loading states: `unavailable` has
-              nothing to show, and `sessionRejected` must not show it. */}
-            {unavailable ? (
-              <OfflineContent online={offline?.online ?? false} onRetry={offline?.onRetry} />
-            ) : sessionRejected ? null : (
-              <SettingsShell active={settingsSurface}>{children}</SettingsShell>
-            )}
-            <GlobalTaskComposer />
-            <GlobalProjectComposer />
-            <GlobalInitiativeComposer />
-            <GlobalProgramComposer />
-            <GlobalTeamComposer />
-          </AppShell>
-        </AthenaPanelProvider>
+          {children}
+        </AthenaShell>
       </PageScrollProvider>
     </VocabularyProvider>
+  );
+}
+
+interface AthenaShellProps {
+  readonly sidebar: ReactNode;
+  readonly tabBar: ReactNode;
+  readonly mobileBrand: ReactNode;
+  readonly mobileActions: ReactNode;
+  readonly identityUnknown: boolean;
+  readonly timerStatus: TimerStatus;
+  readonly settingsSurface: boolean;
+  readonly calendarSurface: boolean;
+  readonly locationKey: string;
+  readonly context: PersonalAthenaContext | null;
+  readonly standingNotice: ReactNode;
+  readonly hasQueuedWork: boolean;
+  readonly unavailable: boolean;
+  readonly offline: { readonly online: boolean; readonly onRetry: () => void } | null;
+  readonly sessionRejected: boolean;
+  readonly children: ReactNode;
+}
+
+/** Keep Athena's contextual state separate from the shell-owned rail selection and visibility. */
+function AthenaShell({
+  calendarSurface,
+  context,
+  locationKey,
+  ...props
+}: AthenaShellProps): JSX.Element {
+  const router = useRouter();
+  const [railRequest, setRailRequest] = useState<{
+    readonly panelId: string;
+    readonly version: number;
+  }>();
+  const [athenaRailVisible, setAthenaRailVisible] = useState(false);
+  const revealAthenaRail = useCallback(() => {
+    setRailRequest((current) => ({ panelId: 'athena', version: (current?.version ?? 0) + 1 }));
+  }, []);
+  const openFullAthena = useCallback(
+    (nextContext: PersonalAthenaContext | null, draft: string | undefined) => {
+      router.push(athenaHref(nextContext, null, draft !== undefined));
+    },
+    [router],
+  );
+
+  return (
+    <AthenaPanelProvider
+      context={context}
+      locationKey={locationKey}
+      railVisible={athenaRailVisible}
+      onRevealRail={calendarSurface ? undefined : revealAthenaRail}
+      onOpenFullAthena={openFullAthena}
+    >
+      <AthenaShellChrome
+        {...props}
+        calendarSurface={calendarSurface}
+        railRequest={railRequest}
+        onAthenaRailVisibilityChange={setAthenaRailVisible}
+      />
+    </AthenaPanelProvider>
+  );
+}
+
+interface AthenaShellChromeProps extends Omit<AthenaShellProps, 'context' | 'locationKey'> {
+  readonly railRequest: { readonly panelId: string; readonly version: number } | undefined;
+  readonly onAthenaRailVisibilityChange: (visible: boolean) => void;
+}
+
+/** Render the app shell after Athena can supply its panel content and accessibility status. */
+function AthenaShellChrome({
+  sidebar,
+  tabBar,
+  mobileBrand,
+  mobileActions,
+  identityUnknown,
+  timerStatus,
+  settingsSurface,
+  calendarSurface,
+  standingNotice,
+  hasQueuedWork,
+  unavailable,
+  offline,
+  sessionRejected,
+  railRequest,
+  onAthenaRailVisibilityChange,
+  children,
+}: AthenaShellChromeProps): JSX.Element {
+  const athena = useAthenaPanel();
+  const athenaRail: RailPanel = {
+    id: 'athena',
+    label: 'Athena',
+    icon: <Sparkles aria-hidden="true" />,
+    node: identityUnknown ? <AppShellAgendaSkeleton /> : <AthenaRailPanel />,
+    ...(identityUnknown || !athena.railStatus ? {} : { status: athena.railStatus }),
+  };
+
+  return (
+    <AppShell
+      sidebar={sidebar}
+      tabBar={tabBar}
+      mobileBrand={mobileBrand}
+      mobileActions={mobileActions}
+      contentOverlay={<NavigationProgress />}
+      banner={
+        standingNotice || hasQueuedWork ? (
+          <Stack gap={2}>
+            {standingNotice}
+            <OfflineSyncIndicator />
+          </Stack>
+        ) : undefined
+      }
+      aside={
+        settingsSurface || calendarSurface
+          ? undefined
+          : railAsideFor(identityUnknown, timerStatus, athenaRail)
+      }
+      railRequest={railRequest}
+      onRailStateChange={({ activePanelId, visible }) => {
+        onAthenaRailVisibilityChange(activePanelId === 'athena' && visible);
+      }}
+    >
+      {unavailable ? (
+        <OfflineContent online={offline?.online ?? false} onRetry={offline?.onRetry} />
+      ) : sessionRejected ? null : (
+        <SettingsShell active={settingsSurface}>{children}</SettingsShell>
+      )}
+      <GlobalTaskComposer />
+      <GlobalProjectComposer />
+      <GlobalInitiativeComposer />
+      <GlobalProgramComposer />
+      <GlobalTeamComposer />
+    </AppShell>
   );
 }

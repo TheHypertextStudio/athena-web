@@ -82,14 +82,9 @@ import { readStoredBoolean, readStoredString, writeStoredValue } from '../../lib
 import { Menu } from '../../icons';
 import { cn } from '../../lib/utils';
 import { Sheet, SheetContent, SheetTitle } from '../../primitives';
-import {
-  SHELL_ACTIVITY_BAR_INLINE_SIZE,
-  SHELL_RAIL_GUTTER_INLINE_SIZE,
-  ShellActivityBar,
-} from './ShellActivityBar';
+import { ShellActivityBar } from './ShellActivityBar';
 import { useContextState } from './ContextProvider';
 import {
-  RAIL_INLINE_SIZE,
   RAIL_MAX_INLINE_SIZE_PX,
   RAIL_MIN_INLINE_SIZE_PX,
   RAIL_VIEWPORT_SHARE,
@@ -292,6 +287,14 @@ function writeRailState(key: string, value: string): void {
   writeStoredValue(key, value);
 }
 
+/** A host request for the shell to select and expand one of its existing rail panels. */
+export interface AppShellRailRequest {
+  /** The stable id of a panel declared in {@link AppShellProps.aside}. */
+  readonly panelId: string;
+  /** A monotonically increasing caller-owned token that makes repeated requests observable. */
+  readonly version: number;
+}
+
 /** Props for {@link AppShell}. */
 export interface AppShellProps {
   /** The single integrated navigation {@link Sidebar} (host-wired). */
@@ -346,6 +349,22 @@ export interface AppShellProps {
    * rail's real inline size.
    */
   aside?: AppShellAside | undefined;
+  /**
+   * An optional, versioned request to select and expand an existing rail panel.
+   *
+   * @remarks
+   * The shell owns rail state. Hosts may request a reveal, but they cannot duplicate or mutate the
+   * active-panel and collapsed state that keeps the desktop and mobile rail presentations aligned.
+   */
+  railRequest?: AppShellRailRequest | undefined;
+  /** Report the resolved panel and whether its desktop host is expanded to the host application. */
+  onRailStateChange?:
+    | ((state: {
+        readonly activePanelId: string | null;
+        readonly expanded: boolean;
+        readonly visible: boolean;
+      }) => void)
+    | undefined;
   /** Extra class names for the root shell element. */
   className?: string | undefined;
   /** The main-area content. */
@@ -379,6 +398,8 @@ export function AppShell({
   mobileBrand,
   mobileActions,
   aside,
+  railRequest,
+  onRailStateChange,
   className,
   children,
 }: AppShellProps): React.JSX.Element {
@@ -434,6 +455,34 @@ export function AppShell({
     null;
   const activePanelIdResolved = activePanel?.id ?? '';
 
+  // A request can only select a panel that this route already declared. This keeps a feature such
+  // as Athena from manufacturing a second shell state or asking Calendar to host a rail it omitted.
+  const handledRailRequest = React.useRef<number | null>(null);
+  React.useEffect(() => {
+    if (!railRequest || handledRailRequest.current === railRequest.version) return;
+    handledRailRequest.current = railRequest.version;
+    if (!panels.some((panel) => panel.id === railRequest.panelId)) return;
+    setRail({ activeId: railRequest.panelId, collapsed: false });
+    writeRailState(RAIL_ACTIVE_KEY, railRequest.panelId);
+    writeRailState(RAIL_COLLAPSED_KEY, '0');
+    if (!isDesktop) setOverlayPanelOpen(true);
+  }, [isDesktop, panels, railRequest]);
+
+  React.useEffect(() => {
+    onRailStateChange?.({
+      activePanelId: activePanelIdResolved || null,
+      expanded: activePanel !== null && !railCollapsed,
+      visible: activePanel !== null && (isDesktop ? !railCollapsed : overlayPanelOpen),
+    });
+  }, [
+    activePanel,
+    activePanelIdResolved,
+    isDesktop,
+    onRailStateChange,
+    overlayPanelOpen,
+    railCollapsed,
+  ]);
+
   // Click a panel icon: collapse if it is the already-active, visible panel; otherwise switch to it
   // and expand. Only explicit clicks persist, so passive resolution never overwrites a real choice.
   //
@@ -477,29 +526,6 @@ export function AppShell({
       clearTimeout(timer);
     };
   }, [activeOrgId]);
-
-  // Publish how much of the viewport's right edge the rail occupies, so `position: fixed` chrome
-  // that is *not* inside this flex row can clear it. The Athena pill is the case that forced this:
-  // it is fixed to the viewport and mounted as a sibling of the shell, so it knew nothing about the
-  // rail and floated over the docked panel's lower-right corner — on the Agenda panel, directly
-  // over the evening hours and the current-time line.
-  //
-  // It goes on `documentElement` rather than on this root because a variable set here would only
-  // inherit to descendants, and the whole problem is chrome that is not one. Zero below `lg`, where
-  // both rail columns are CSS-hidden, and the activity bar alone while the panel is collapsed.
-  React.useEffect(() => {
-    const barAndGutter = `${SHELL_RAIL_GUTTER_INLINE_SIZE} + ${SHELL_ACTIVITY_BAR_INLINE_SIZE}`;
-    const railWidth =
-      !isDesktop || activePanel === null
-        ? '0px'
-        : railCollapsed
-          ? `calc(${barAndGutter})`
-          : `calc(${barAndGutter} + ${RAIL_INLINE_SIZE})`;
-    document.documentElement.style.setProperty('--shell-rail-inline-size', railWidth);
-    return () => {
-      document.documentElement.style.removeProperty('--shell-rail-inline-size');
-    };
-  }, [activePanel, isDesktop, railCollapsed]);
 
   return (
     <ShellOverlayProvider host={overlayHost}>
@@ -616,20 +642,15 @@ export function AppShell({
               // desktop, so `<main>`'s "a page's `h-full` means all the space `<main>` has left"
               // contract is unchanged there — and still holds when inset, just `inset` px shorter.
               //
-              // pb-28/lg:pb-6 additionally reserves room for the floating Athena launcher
-              // (fixed bottom-[4.75rem] on mobile, lg:bottom-6 on desktop — see
-              // athena-panel-provider.tsx), so it never sits on top of a page's last section.
-              //
               // No border and no shadow: the tonal step from the `surface-container` canvas onto
               // `surface` is the separation, exactly as every other panel in the shell does it. A
               // border plus a drop shadow on the outermost frame drew a second box around content
               // that already had one.
               'bg-surface @container min-h-0 flex-1 outline-none lg:rounded-xl',
               // The default: `<main>` is the shell's one scroll container, with a stable gutter so
-              // content does not shift when it grows past the viewport, and bottom padding clearing
-              // the floating Athena launcher.
+              // content does not shift when it grows past the viewport.
               pageScrollOwner === 'shell' &&
-                'scrollbar-gutter-stable overflow-auto pb-[calc(env(safe-area-inset-bottom)+7rem)] lg:pb-[calc(env(safe-area-inset-bottom)+1.5rem)]',
+                'scrollbar-gutter-stable overflow-auto pb-[env(safe-area-inset-bottom)]',
               // A page that scrolls itself gets the box whole: no scrolling here, so no reserved
               // gutter stealing the right edge, and no bottom padding — the page owns both.
               pageScrollOwner === 'page' && 'overflow-hidden',

@@ -5,13 +5,13 @@
  *
  * @remarks
  * The single entry point for getting work INTO Docket from the daily surface, wiring the
- * the direct capture path and the one shared personal Athena dock:
+ * the direct capture path and the one shared personal Athena rail:
  *
  * - **Capture** (`POST /v1/orgs/:orgId/capture`) — the explicit secondary destination. Free text becomes a real
  *   task in the active workspace (its default team's entry state, attached to the live
  *   cycle when one covers today). `Enter` submits.
- * - **Ask Athena** opens the global personal dock with this workspace and draft attached. The dock
- *   creates and supervises the work; Today does not grow its own mini session UI.
+ * - **Ask Athena** opens the personal rail with this workspace and draft attached. The rail creates
+ *   and supervises the work; Today does not grow its own mini session UI.
  *
  * **The two destinations are not a preference, and the box must not pretend otherwise.** Capture is
  * a deterministic insert: `deriveTitle` takes the first non-empty line, truncates it, and puts the
@@ -68,8 +68,8 @@ export interface TodayPromptProps {
    * Expand this page into the Athena conversation, carrying the draft with it.
    *
    * @remarks
-   * When the host supplies this, Athena mode stays on the page instead of opening the ⌘J dock, and
-   * the draft rides along. Same conversation either way — the dock and the page render the one
+   * When the host supplies this, Athena mode stays on the page instead of opening the ⌘J rail, and
+   * the draft rides along. Same conversation either way — the rail and the page render the one
    * persistent thread — so this only decides where it appears, not how many there are.
    */
   onStartSession?: ((draft: string) => void) | undefined;
@@ -137,7 +137,7 @@ export function TodayPrompt({
     const draft = text.trim();
     setText('');
     // Exactly one surface, never both. A host that shows the conversation itself takes the draft
-    // and expands in place; without one, the ⌘J dock is the door. Doing both put the dock on top of
+    // and expands in place; without one, the ⌘J rail is the door. Doing both put the rail on top of
     // the page that had just become the same conversation.
     if (onStartSession) onStartSession(draft);
     else openAthena({ workspaceId: orgId, workspaceName: orgLabel }, draft);

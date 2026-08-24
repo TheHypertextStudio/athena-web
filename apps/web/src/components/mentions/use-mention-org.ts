@@ -9,7 +9,7 @@ import { useActiveOrgIdOptional } from '@/components/active-org';
  * Resolve the workspace a composer's mentions belong to.
  *
  * @remarks
- * A composer that already knows its workspace has to use that one. The Athena dock and the Today
+ * A composer that already knows its workspace has to use that one. The Athena rail and the Today
  * capture box both open on routes with no `/orgs/:orgId` segment, so the route context resolves to
  * nothing there and `@` would quietly stay a plain character on surfaces the user reaches most
  * often. The route context is the fallback for a surface that genuinely has no workspace of its

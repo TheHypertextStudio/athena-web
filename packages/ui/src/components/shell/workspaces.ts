@@ -33,7 +33,7 @@ export interface Workspace {
  * The cross-org **Home** destinations, always available regardless of the active context.
  *
  * @remarks
- * `today`, `tasks`, `calendar`, `inbox`, `stream`, and `portfolio` map 1:1 to their cross-org
+ * `today`, `tasks`, `calendar`, `inbox`, `athena`, `stream`, and `portfolio` map 1:1 to their cross-org
  * routes; `search` is not a route but the command-palette opener.
  */
 export type HomeNavKey =
@@ -41,6 +41,7 @@ export type HomeNavKey =
   | 'tasks'
   | 'calendar'
   | 'inbox'
+  | 'athena'
   | 'stream'
   | 'portfolio'
   | 'search';
@@ -51,8 +52,8 @@ export type HomeNavKey =
  * @remarks
  * Each key maps 1:1 to its route segment under `/orgs/[orgId]/…`, so the host's navigation
  * table and active-key resolution stay in lockstep with the real route tree. The destinations are
- * `my-work`, `triage`, `tasks`, `athena`, `stream`, `initiatives`, `programs`, `projects`,
- * `cycles`, `library`, `teams`, `people`, `views`, `graph`, `agents`, and `settings`.
+ * `my-work`, `triage`, `tasks`, `stream`, `initiatives`, `programs`, `projects`, `cycles`,
+ * `library`, `teams`, `people`, `views`, `graph`, and `settings`.
  *
  * `library` is the workspace's material — the documents, files, and external pages its work
  * refers back to — as opposed to the work objects that surround it. It is not vocabulary-skinned,
@@ -67,7 +68,6 @@ export type WorkspaceNavKey =
   | 'my-work'
   | 'triage'
   | 'tasks'
-  | 'athena'
   | 'stream'
   | 'initiatives'
   | 'programs'
@@ -78,7 +78,6 @@ export type WorkspaceNavKey =
   | 'people'
   | 'views'
   | 'graph'
-  | 'agents'
   | 'settings';
 
 /** The org-scoped nav keys whose labels are vocabulary-skinned per org. */

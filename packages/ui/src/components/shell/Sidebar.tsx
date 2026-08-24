@@ -16,7 +16,7 @@
  * how many Workspace rows are above the fold. Below the switcher, two sections shown on every
  * route:
  *
- * - **Home** (cross-org, no header): Today · Inbox · Portfolio · Search (opens the command
+ * - **Home** (cross-org, no header): Today · Athena · Inbox · Portfolio · Search (opens the command
  *   palette). These route to `/today`, `/inbox`, `/portfolio` regardless of the active org.
  * - **Workspace** (the active org): My Work · Triage · Tasks · Stream · Initiatives · Programs ·
  *   Projects · Cycles · Teams · Views · Graph · Settings — entity-noun labels skinned per org via
@@ -61,6 +61,7 @@ import {
   RefreshCw,
   Search,
   Settings,
+  Sparkles,
   Target,
   User,
   Users,
@@ -80,13 +81,13 @@ import type { HomeNavKey, Workspace, WorkspaceNavKey } from './workspaces';
 export interface SidebarProps {
   /** Every workspace the caller can switch into (drives the switcher). */
   readonly workspaces: readonly Workspace[];
-  /** The active Home destination (highlights Today/Inbox/Portfolio), if any. */
+  /** The active Home destination (highlights cross-workspace destinations), if any. */
   readonly activeHomeKey?: HomeNavKey | undefined;
   /** The active Workspace nav key (highlights the org-scoped row), if any. */
   readonly activeWorkspaceKey?: WorkspaceNavKey | undefined;
   /** The caller's cross-org unread count, surfaced on the Inbox row. */
   readonly unreadCount?: number | undefined;
-  /** Build the href for a cross-org Home destination (Today/Inbox/Portfolio). */
+  /** Build the href for a cross-org Home destination. */
   readonly hrefForHome: (key: Exclude<HomeNavKey, 'search'>) => string;
   /** Build the href for an org-scoped Workspace destination under the active org. */
   readonly hrefForWorkspace: (orgId: string, key: WorkspaceNavKey) => string;
@@ -223,6 +224,7 @@ export function Sidebar({
     { key: 'tasks', label: 'Tasks', icon: ListChecks },
     { key: 'calendar', label: 'Calendar', icon: Calendar },
     { key: 'inbox', label: 'Inbox', icon: Inbox },
+    { key: 'athena', label: 'Athena', icon: Sparkles },
     { key: 'stream', label: 'Stream', icon: Activity },
     { key: 'portfolio', label: 'Portfolio', icon: GanttChart },
   ];

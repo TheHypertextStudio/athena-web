@@ -23,6 +23,7 @@ export function homeKeyFromPath(pathname: string): HomeNavKey | undefined {
   if (/^\/tasks(?:\/|$)/.test(pathname)) return 'tasks';
   if (/^\/calendar(?:\/|$)/.test(pathname)) return 'calendar';
   if (/^\/inbox(?:\/|$)/.test(pathname)) return 'inbox';
+  if (/^\/athena(?:\/|$)/.test(pathname)) return 'athena';
   if (/^\/stream(?:\/|$)/.test(pathname)) return 'stream';
   if (/^\/portfolio(?:\/|$)/.test(pathname)) return 'portfolio';
   return undefined;

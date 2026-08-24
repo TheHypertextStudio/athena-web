@@ -42,6 +42,18 @@ describe('hrefForSearchRoute', () => {
     ).toBe(`/orgs/${ORG}/tasks?filter=labels%3Aeq%3Alabel_1`);
   });
 
+  it('routes agent hits into personal Athena instead of the retired workspace route', () => {
+    expect(
+      hrefForSearchRoute({
+        type: 'entity',
+        organizationId: ORG,
+        entityKind: 'agent',
+        entityId: 'agent_1',
+        href: `/orgs/${ORG}/agents?agentId=agent_1`,
+      }),
+    ).toBe(`/athena?workspace=${ORG}`);
+  });
+
   it('routes content hits to their subject with a highlight query', () => {
     expect(
       hrefForSearchRoute({

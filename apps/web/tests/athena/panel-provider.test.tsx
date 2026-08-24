@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   AthenaPanelProvider,
+  AthenaRailPanel,
   useAthenaPanel,
 } from '../../src/components/athena/athena-panel-provider';
 import type { PersonalAthenaTransport } from '../../src/lib/athena/query-defs';
@@ -45,10 +46,11 @@ function transport(): PersonalAthenaTransport {
   };
 }
 
-function OpenButton(): ReactNode {
-  const { openAthena } = useAthenaPanel();
+function AthenaLaunchers(): ReactNode {
+  const { openAthena, railStatus } = useAthenaPanel();
   return (
     <>
+      <span data-testid="athena-rail-status">{railStatus?.tone ?? 'none'}</span>
       <button
         type="button"
         onClick={() => {
@@ -60,24 +62,33 @@ function OpenButton(): ReactNode {
       >
         Open contextual Athena
       </button>
-      <button
-        type="button"
-        onClick={() => {
-          openAthena({ workspaceId: 'workspace_1' }, 'Prepare the review');
-        }}
-      >
-        Start contextual Athena
-      </button>
     </>
   );
 }
 
-function renderPanel(api = transport(), showPulse = true): PersonalAthenaTransport {
+function renderPanel(
+  options: {
+    readonly api?: PersonalAthenaTransport;
+    readonly railVisible?: boolean;
+    readonly onRevealRail?: (() => void) | undefined;
+    readonly onOpenFullAthena?: ((context: unknown, draft: string | undefined) => void) | undefined;
+  } = {},
+): PersonalAthenaTransport {
+  const api = options.api ?? transport();
+  const railVisible = options.railVisible ?? true;
+  const onRevealRail = 'onRevealRail' in options ? options.onRevealRail : vi.fn();
+  const onOpenFullAthena = options.onOpenFullAthena ?? vi.fn();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
-      <AthenaPanelProvider transport={api} showPulse={showPulse}>
-        <OpenButton />
+      <AthenaPanelProvider
+        transport={api}
+        railVisible={railVisible}
+        onRevealRail={onRevealRail}
+        onOpenFullAthena={onOpenFullAthena}
+      >
+        <AthenaLaunchers />
+        <AthenaRailPanel />
       </AthenaPanelProvider>
     </QueryClientProvider>,
   );
@@ -85,201 +96,128 @@ function renderPanel(api = transport(), showPulse = true): PersonalAthenaTranspo
 }
 
 describe('AthenaPanelProvider', () => {
-  it('loads only compact pulse counts until the dock is opened', async () => {
-    const api = renderPanel();
+  it('uses attention before active work in the accessible rail status', async () => {
+    renderPanel();
+
+    await waitFor(() => {
+      expect(screen.getByTestId('athena-rail-status')).toHaveTextContent('attention');
+    });
+  });
+
+  it('does not fetch the full queue until the shell shows Athena’s panel', async () => {
+    const api = renderPanel({ railVisible: false });
 
     await waitFor(() => {
       expect(api.pulse).toHaveBeenCalled();
     });
     expect(api.queue).not.toHaveBeenCalled();
     expect(api.detail).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Open Athena' }));
-    await waitFor(() => {
-      expect(api.queue).toHaveBeenCalled();
-      expect(api.detail).toHaveBeenCalledWith('session_needs');
-    });
   });
 
-  it('keeps the redundant pulse read out of the full personal workspace', async () => {
-    const api = renderPanel(transport(), false);
-
-    expect(screen.queryByRole('button', { name: 'Open Athena' })).not.toBeInTheDocument();
-    await Promise.resolve();
-    expect(api.pulse).not.toHaveBeenCalled();
-  });
-
-  it('opens the same personal Athena everywhere with Cmd/Ctrl+J, including without a workspace', async () => {
-    renderPanel();
+  it('uses Cmd/Ctrl J to ask the shell to reveal Athena without rendering a floating dialog', async () => {
+    const onRevealRail = vi.fn();
+    renderPanel({ onRevealRail });
 
     fireEvent.keyDown(document, { key: 'j', metaKey: true });
 
-    expect(await screen.findByRole('dialog', { name: 'Athena' })).toBeVisible();
-    expect(await screen.findByText('1 needs you')).toBeVisible();
-    expect(screen.getByText('2 working')).toBeVisible();
-    expect(await screen.findByText('Confirm the private launch review change')).toBeVisible();
+    await waitFor(() => {
+      expect(onRevealRail).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.queryByRole('dialog', { name: 'Athena' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open Athena' })).not.toBeInTheDocument();
   });
 
-  it('ignores repeated shortcuts and shortcuts typed into editable controls', async () => {
-    renderPanel();
-
-    fireEvent.keyDown(document, { key: 'j', metaKey: true, repeat: true });
-    expect(screen.queryByRole('dialog', { name: 'Athena' })).not.toBeInTheDocument();
-
+  it('keeps the shortcut out of editable controls', () => {
+    const onRevealRail = vi.fn();
+    renderPanel({ onRevealRail });
     const input = document.createElement('input');
     document.body.append(input);
+
     fireEvent.keyDown(input, { key: 'j', metaKey: true });
-    expect(screen.queryByRole('dialog', { name: 'Athena' })).not.toBeInTheDocument();
+
+    expect(onRevealRail).not.toHaveBeenCalled();
     input.remove();
   });
 
-  it('opens contextual actions in scoped new-work mode without selecting unrelated work', async () => {
-    const api = renderPanel();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Open contextual Athena' }));
-
-    expect(await screen.findByText('Athena launch')).toBeVisible();
-    expect(await screen.findByRole('heading', { name: 'Start this work' })).toBeVisible();
-    expect(screen.getByLabelText('Athena objective')).toHaveValue('');
-    expect(api.detail).not.toHaveBeenCalled();
-    await waitFor(() => {
-      expect(screen.getByRole('link', { name: 'Open full Athena' })).toHaveAttribute(
-        'href',
-        '/athena?workspace=workspace_1&context=project%3Aproject_1&contextLabel=Athena+launch&new=1',
-      );
-    });
-    fireEvent.change(screen.getByLabelText('Athena objective'), {
-      target: { value: 'Review this project' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Start work' }));
-    await waitFor(() => {
-      expect(api.create).toHaveBeenCalledWith({
-        prompt: 'Review this project',
-        context: {
-          workspaceId: 'workspace_1',
-          source: { type: 'project', id: 'project_1', label: 'Athena launch' },
-        },
-      });
-    });
-  });
-
-  it('shows the scoped composer for contextual actions even when the queue is empty', async () => {
-    const api = transport();
-    vi.mocked(api.queue).mockResolvedValue(
-      okResponse({
-        counts: { needsYou: 0, working: 0, finished: 0 },
-        currentChat: null,
-        sessions: { needsYou: [], working: [], finished: [] },
-      }),
-    );
-    renderPanel(api);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Open contextual Athena' }));
-
-    expect(await screen.findByRole('heading', { name: 'Start this work' })).toBeVisible();
-    expect(screen.getByLabelText('Athena objective')).toHaveValue('');
-  });
-
-  it('tracks the latest shell workspace across persistent-shell navigation', async () => {
-    const api = transport();
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const view = render(
-      <QueryClientProvider client={client}>
-        <AthenaPanelProvider transport={api} context={{ workspaceId: 'workspace_1' }}>
-          <OpenButton />
-        </AthenaPanelProvider>
-      </QueryClientProvider>,
-    );
-
-    view.rerender(
-      <QueryClientProvider client={client}>
-        <AthenaPanelProvider transport={api} context={{ workspaceId: 'workspace_2' }}>
-          <OpenButton />
-        </AthenaPanelProvider>
-      </QueryClientProvider>,
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Open Athena' }));
-
-    await waitFor(() => {
-      expect(screen.getByRole('link', { name: 'Open full Athena' })).toHaveAttribute(
-        'href',
-        '/athena?workspace=workspace_2&session=session_needs',
-      );
-    });
-  });
-
-  it('clears source context on same-workspace route navigation', async () => {
-    const api = transport();
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const view = render(
-      <QueryClientProvider client={client}>
-        <AthenaPanelProvider
-          transport={api}
-          context={{ workspaceId: 'workspace_1' }}
-          locationKey="/orgs/workspace_1/projects/project_1"
-        >
-          <OpenButton />
-        </AthenaPanelProvider>
-      </QueryClientProvider>,
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Open contextual Athena' }));
-    expect(await screen.findByText('Athena launch')).toBeVisible();
-
-    view.rerender(
-      <QueryClientProvider client={client}>
-        <AthenaPanelProvider
-          transport={api}
-          context={{ workspaceId: 'workspace_1' }}
-          locationKey="/orgs/workspace_1/tasks/task_2"
-        >
-          <OpenButton />
-        </AthenaPanelProvider>
-      </QueryClientProvider>,
-    );
-
-    await waitFor(() => {
-      expect(screen.queryByText('Athena launch')).not.toBeInTheDocument();
-      expect(screen.getByRole('link', { name: 'Open full Athena' })).toHaveAttribute(
-        'href',
-        '/athena?workspace=workspace_1&session=session_needs',
-      );
-    });
-  });
-
-  it('clears stale source and draft state on every contextual open', async () => {
+  it('replaces the queue with one selected session and restores it with Back', async () => {
     renderPanel();
+    const session = await screen.findByRole('button', {
+      name: /Confirm the private launch review change/,
+    });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Start contextual Athena' }));
-    expect(await screen.findByLabelText('Athena objective')).toHaveValue('Prepare the review');
-    fireEvent.click(screen.getByRole('button', { name: 'Close Athena' }));
+    fireEvent.click(session);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Open contextual Athena' }));
-    expect(await screen.findByText('Athena launch')).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'Close Athena' }));
-
-    fireEvent.click(screen.getByRole('button', { name: 'Open Athena' }));
-    expect(screen.queryByText('Athena launch')).not.toBeInTheDocument();
-    expect(screen.queryByLabelText('Athena objective')).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Back' })).toBeVisible();
+    expect(
+      await screen.findByRole('heading', { name: 'Confirm the private launch review change' }),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(
+      await screen.findByRole('button', { name: /Confirm the private launch review change/ }),
+    ).toBeVisible();
   });
 
-  it('starts drafted work through the personal API instead of a local session route', async () => {
-    const api = renderPanel();
-    const create = vi.mocked(api.create);
+  it('opens a contextual composer in the rail and retains the context in the full-workspace URL', async () => {
+    const onRevealRail = vi.fn();
+    const api = renderPanel({ onRevealRail, railVisible: false });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Start contextual Athena' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open contextual Athena' }));
+
+    expect(onRevealRail).toHaveBeenCalledTimes(1);
     expect(await screen.findByRole('heading', { name: 'Start this work' })).toBeVisible();
-    expect(screen.getByLabelText('Athena objective')).toHaveValue('Prepare the review');
+    expect(screen.getByLabelText('Athena objective')).toHaveValue('');
     expect(screen.getByRole('link', { name: 'Open full Athena' })).toHaveAttribute(
       'href',
-      '/athena?workspace=workspace_1&new=1',
+      '/athena?workspace=workspace_1&context=project%3Aproject_1&contextLabel=Athena+launch&new=1',
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Start work' }));
+    expect(api.detail).not.toHaveBeenCalled();
+  });
 
-    await waitFor(() => {
-      expect(create).toHaveBeenCalledWith({
-        prompt: 'Prepare the review',
-        context: { workspaceId: 'workspace_1' },
-      });
+  it('opens Calendar context in the full Athena workspace because Calendar has no rail', () => {
+    const onOpenFullAthena = vi.fn();
+    renderPanel({ onRevealRail: undefined, onOpenFullAthena });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open contextual Athena' }));
+
+    expect(onOpenFullAthena).toHaveBeenCalledWith(
+      {
+        workspaceId: 'workspace_1',
+        source: { type: 'project', id: 'project_1', label: 'Athena launch' },
+      },
+      undefined,
+    );
+  });
+
+  it('uses owned copy when Athena’s queue cannot load', async () => {
+    const api = transport();
+    vi.mocked(api.queue).mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({}) as never,
     });
+    renderPanel({ api });
+
+    expect(
+      await screen.findByText("Athena is temporarily unavailable. We'll keep checking."),
+    ).toBeVisible();
+  });
+
+  it('keeps a Back path and owned copy when the selected session cannot load', async () => {
+    const api = transport();
+    vi.mocked(api.detail).mockResolvedValue({
+      ok: false,
+      status: 500,
+      json: async () => ({}) as never,
+    });
+    renderPanel({ api });
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Confirm the private launch review change/ }),
+    );
+
+    expect(
+      await screen.findByText("Athena is temporarily unavailable. We'll keep checking."),
+    ).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Back' })).toBeVisible();
   });
 });

@@ -56,7 +56,6 @@ const CREATABLE = [
 const ORG_DESTINATIONS = [
   { key: 'my-work', label: 'My Work', icon: ListChecks, keywords: ['tasks', 'assigned'] },
   { key: 'triage', label: 'Triage', icon: Inbox, keywords: ['inbox', 'unsorted'] },
-  { key: 'athena', label: 'Athena', icon: Sparkles, keywords: ['chat', 'assistant', 'ask'] },
   { key: 'initiatives', label: 'Initiatives', icon: Target, keywords: ['goals'] },
   { key: 'programs', label: 'Programs', icon: FolderKanban, keywords: ['streams'] },
   { key: 'projects', label: 'Projects', icon: FolderKanban, keywords: [] },
@@ -67,7 +66,6 @@ const ORG_DESTINATIONS = [
     icon: Library,
     keywords: ['resources', 'documents', 'docs', 'files', 'links'],
   },
-  { key: 'agents', label: 'Agents', icon: Sparkles, keywords: ['ai', 'sessions'] },
   { key: 'settings', label: 'Settings', icon: Settings, keywords: ['preferences', 'org'] },
 ] as const;
 
@@ -88,7 +86,7 @@ interface CommandActionsInput {
  * The non-search half of the palette. It assembles three sections, memoized against the
  * active-org state and scope:
  *
- * - **navigation** — the Hub destinations (Today, Inbox, Portfolio) always; when an org is
+ * - **navigation** — the Home destinations (Today, Athena, Inbox, Portfolio) always; when an org is
  *   bound (and the scope is `org`) the org-scoped sidebar destinations for that org, each
  *   org-chipped.
  * - **actions** — global actions (create each kind of work, new organization, sign out).
@@ -200,6 +198,15 @@ export function useCommandActions({
         icon: Inbox,
         keywords: ['notifications', 'unread', 'approvals'],
         run: go('/inbox'),
+      },
+      {
+        id: 'nav:athena',
+        section: 'navigation',
+        label: 'Go to Athena',
+        hint: 'Home',
+        icon: Sparkles,
+        keywords: ['chat', 'assistant', 'ask', 'sessions'],
+        run: go('/athena'),
       },
       {
         id: 'nav:portfolio',

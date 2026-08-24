@@ -147,6 +147,22 @@ beforeEach(() => {
 });
 
 describe('command palette create actions', () => {
+  it('offers Athena as a Home destination instead of an org-scoped redirect', () => {
+    const close = vi.fn();
+    const { result } = renderHook(() => useCommandActions({ scope: 'org', open: true, close }), {
+      wrapper,
+    });
+
+    expect(result.current.find((item) => item.id === 'nav:athena')?.hint).toBe('Home');
+    expect(result.current.find((item) => item.id === 'nav:org:athena')).toBeUndefined();
+    expect(result.current.find((item) => item.id === 'nav:org:agents')).toBeUndefined();
+
+    act(() => {
+      result.current.find((item) => item.id === 'nav:athena')?.run();
+    });
+    expect(routerPush).toHaveBeenCalledWith('/athena');
+  });
+
   it.each([
     ['task', 'action:new:task'],
     ['project', 'action:new:project'],

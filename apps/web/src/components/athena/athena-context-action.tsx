@@ -14,7 +14,7 @@ export interface AthenaContextMenuItemProps {
   readonly context?: PersonalAthenaContext | null;
 }
 
-/** Open the shared personal Athena dock from an overflow menu. */
+/** Open the shared personal Athena rail from an overflow menu. */
 export function AthenaContextMenuItem({
   label,
   context = null,

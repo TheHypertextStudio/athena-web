@@ -15,7 +15,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { Home } from '../../../src/icons';
-import { AppShell } from '../../../src/components/shell/AppShell';
+import { AppShell, SHELL_DESKTOP_QUERY } from '../../../src/components/shell/AppShell';
 import { useShellOverlayHost } from '../../../src/components/shell/ShellOverlayContext';
 import {
   ContextProvider,
@@ -61,8 +61,9 @@ function renderLink(href: string, content: React.ReactNode, className?: string):
 /** The full set of href builders a {@link Sidebar} needs. */
 function sidebarHrefs() {
   return {
-    hrefForHome: (key: 'today' | 'tasks' | 'calendar' | 'inbox' | 'stream' | 'portfolio') =>
-      `/${key}`,
+    hrefForHome: (
+      key: 'today' | 'tasks' | 'calendar' | 'inbox' | 'athena' | 'stream' | 'portfolio',
+    ) => `/${key}`,
     hrefForWorkspace: (orgId: string, key: string) => `/orgs/${orgId}/${key}`,
     renderLink,
     onCreateWorkspace: () => undefined,
@@ -405,6 +406,67 @@ describe('AppShell rail', () => {
     );
   });
 
+  it('selects and expands a requested panel through the versioned shell interface', () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query === SHELL_DESKTOP_QUERY,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(() => false),
+    }));
+    const onRailStateChange = vi.fn();
+    const sidebar = (
+      <Sidebar
+        workspaces={WORKSPACES}
+        {...sidebarHrefs()}
+        onSelectWorkspace={() => undefined}
+        onOpenSearch={() => undefined}
+      />
+    );
+    const agenda = { id: 'agenda', label: 'Agenda', icon: <Home />, node: <div>Agenda body</div> };
+    const athena = { id: 'athena', label: 'Athena', icon: <Home />, node: <div>Athena queue</div> };
+    const view = render(
+      <ContextProvider initialContext={ACME.id}>
+        <AppShell
+          sidebar={sidebar}
+          aside={{ panels: [agenda, athena], defaultPanelId: 'agenda' }}
+          onRailStateChange={onRailStateChange}
+        >
+          <div>Main</div>
+        </AppShell>
+      </ContextProvider>,
+    );
+
+    expect(screen.getByRole('complementary', { name: 'Agenda' })).toHaveClass(
+      'w-[clamp(17.5rem,17vw,22rem)]',
+    );
+
+    view.rerender(
+      <ContextProvider initialContext={ACME.id}>
+        <AppShell
+          sidebar={sidebar}
+          aside={{ panels: [agenda, athena], defaultPanelId: 'agenda' }}
+          railRequest={{ panelId: 'athena', version: 1 }}
+          onRailStateChange={onRailStateChange}
+        >
+          <div>Main</div>
+        </AppShell>
+      </ContextProvider>,
+    );
+
+    expect(screen.getByRole('complementary', { name: 'Athena' })).toHaveClass(
+      'w-[clamp(17.5rem,17vw,22rem)]',
+    );
+    expect(onRailStateChange).toHaveBeenLastCalledWith({
+      activePanelId: 'athena',
+      expanded: true,
+      visible: true,
+    });
+  });
+
   it('arms the width transition only for the duration of the collapse/expand motion', async () => {
     renderWithRail(() => true);
     const host = screen.getByRole('complementary', { name: 'Tasks' });
@@ -643,7 +705,7 @@ describe('Sidebar', () => {
       'href',
       `/orgs/${ACME.id}/settings`,
     );
-    expect(screen.queryByRole('link', { name: 'Athena' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Athena' })).toHaveAttribute('href', '/athena');
     expect(screen.queryByRole('link', { name: 'Agents' })).not.toBeInTheDocument();
   });
 

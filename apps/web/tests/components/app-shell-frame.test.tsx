@@ -176,6 +176,7 @@ describe('AppShellFrame session loading', () => {
     // own content, the Home rows and the Workspace rows are all on screen at first paint.
     expect(screen.getByText('Private route content')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Today' })).toHaveAttribute('href', '/today');
+    expect(screen.getByRole('link', { name: 'Athena' })).toHaveAttribute('href', '/athena');
     for (const label of ['My Work', 'Triage', 'Initiatives', 'Programs', 'Projects', 'Cycles']) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }

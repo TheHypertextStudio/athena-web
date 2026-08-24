@@ -12,7 +12,6 @@ describe('ambient Athena entry points', () => {
     'apps/web/src/app/(app)/orgs/[orgId]/projects/[projectId]/project-detail-client.tsx',
     'apps/web/src/app/(app)/orgs/[orgId]/initiatives/[initiativeId]/initiative-detail-client.tsx',
     'apps/web/src/app/(app)/stream/page.tsx',
-    'apps/web/src/app/(app)/calendar/calendar-client.tsx',
     'apps/web/src/app/(app)/inbox/inbox-client.tsx',
   ])('keeps the overview or detail route %s free of a page-local Athena button', (path) => {
     expect(read(path)).not.toContain('AthenaContextAction');
@@ -28,7 +27,16 @@ describe('ambient Athena entry points', () => {
     expect(detail).toContain("source: { type: 'task'");
   });
 
-  it('routes the Today prompt into the shared dock instead of creating a local mini session UI', () => {
+  it('keeps Calendar rail-free while its selected-item action carries calendar context to Athena', () => {
+    const calendar = read(
+      'apps/web/src/components/calendar/item-drawer/calendar-item-workspace.tsx',
+    );
+    expect(calendar).toContain('useAthenaPanel');
+    expect(calendar).toContain('Have Athena handle this');
+    expect(calendar).toContain("source: { type: 'calendar_item'");
+  });
+
+  it('routes the Today prompt into the shared rail instead of creating a local mini session UI', () => {
     const source = read('apps/web/src/components/today/today-prompt.tsx');
     expect(source).toContain('useAthenaPanel');
     // The contextual door `/today` used to carry as a masthead button. It hands Athena the
@@ -38,5 +46,9 @@ describe('ambient Athena entry points', () => {
     expect(source).not.toContain("api.v1.orgs[':orgId'].sessions.$post");
     expect(source).not.toContain('AthenaSessionNotice');
     expect(source).not.toContain('SessionStatusPill');
+    const today = read('apps/web/src/app/(app)/today/page.tsx');
+    expect(today).not.toContain('TodaySession');
+    expect(today).toContain("openTodayAthena('Plan today')");
+    expect(today).toContain("openTodayAthena('What else can I move today?')");
   });
 });

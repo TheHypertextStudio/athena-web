@@ -596,6 +596,7 @@ const projects = new Hono<AppEnv>()
           health: row.health,
           updatedAt: row.updatedAt.toISOString(),
         },
+        viewer: { actorId },
         capabilities: detailCapabilities(capabilities),
         references: {
           lead: leadRows[0] ? actorReference(leadRows[0]) : null,

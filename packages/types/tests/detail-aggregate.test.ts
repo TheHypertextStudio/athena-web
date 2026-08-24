@@ -23,6 +23,7 @@ describe('EntityDetailAggregate', () => {
         priority: 'high',
         updatedAt: '2026-08-23T12:00:00.000Z',
       },
+      viewer: { actorId: '01ARZ3NDEKTSV4RRFFQ69G5FAY' },
       capabilities: { comment: true, contribute: true, assign: false, manage: false },
       references: {
         workflowStates: [{ key: 'in_progress', name: 'In progress', type: 'started', position: 1 }],
@@ -73,6 +74,55 @@ describe('EntityDetailAggregate', () => {
         assign: false,
         manage: false,
         administer: true,
+      }).success,
+    ).toBe(false);
+  });
+
+  it('requires the authenticated actor identity without shipping the member roster', () => {
+    expect(
+      EntityDetailAggregate.safeParse({
+        target: 'task',
+        snapshot: {
+          target: 'task',
+          organizationId: ORG_ID,
+          id: TASK_ID,
+          title: 'Publish the rider guide',
+          status: 'in_progress',
+          priority: 'high',
+          updatedAt: '2026-08-23T12:00:00.000Z',
+        },
+        capabilities: { comment: true, contribute: true, assign: false, manage: false },
+        references: { workflowStates: [] },
+        defaultView: {
+          task: {
+            id: TASK_ID,
+            organizationId: ORG_ID,
+            title: 'Publish the rider guide',
+            description: null,
+            teamId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
+            state: 'in_progress',
+            priority: 'high',
+            assigneeId: null,
+            delegateId: null,
+            projectId: null,
+            programId: null,
+            parentTaskId: null,
+            estimateMinutes: null,
+            startDate: null,
+            dueDate: null,
+            provenance: { source: 'native' },
+            labels: [],
+            createdAt: '2026-08-23T12:00:00.000Z',
+            milestoneId: null,
+            cycleId: null,
+            estimate: null,
+            completedAt: null,
+            canceledAt: null,
+            blocking: [],
+            blockedBy: [],
+            subtasks: [],
+          },
+        },
       }).success,
     ).toBe(false);
   });

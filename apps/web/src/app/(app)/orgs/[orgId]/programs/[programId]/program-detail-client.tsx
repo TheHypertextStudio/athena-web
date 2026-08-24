@@ -1,7 +1,7 @@
 'use client';
 
 import type { UpdateOut } from '@docket/types';
-import type { PickerOption } from '@docket/ui/components';
+import { ActorAvatar, type PickerOption } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Ellipsis, Trash2 } from '@docket/ui/icons';
 import {
@@ -35,14 +35,11 @@ import { PublishAction } from '@/components/publishing/publish-action';
 import { useDocumentTitle } from '@/components/tabs/use-document-title';
 import { useRegisterTabTitle } from '@/components/tabs/use-register-tab-title';
 import { api } from '@/lib/api';
-import { programRecordDef } from '@/lib/entity-records';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
-import { useOrgCapability } from '@/lib/use-org-capability';
-import { useOrgMembership } from '@/lib/use-org-membership';
-import { fetchProgramDetail } from '@/lib/fetch-program-detail';
+import { programDetailAggregateDef } from '@/lib/detail-aggregate';
+import { orgMembersDef } from '@/lib/use-org-membership';
 import { useProgramMutations } from '@/lib/use-program-mutations';
 import { userErrorMessage } from '@/lib/problem';
-import { useSession } from '@/lib/auth-client';
 import { useNavigationSnapshot } from '@/lib/use-navigation-snapshot';
 import { useAppRouter } from '@/lib/interactions/navigation';
 
@@ -58,63 +55,48 @@ export default function ProgramDetailPage(): JSX.Element {
   const programLabel = useVocabulary('program');
   const projectNounCased = useVocabulary('project');
 
-  const detailKey = queryKeys.program(orgId, programId);
+  const aggregateDef = programDetailAggregateDef(orgId, programId);
+  const detailKey = aggregateDef.queryKey;
   const updatesKey = useMemo(() => [...detailKey, 'updates'] as const, [detailKey]);
 
   const [tab, setTab] = useState<TabId>('overview');
+  const [ownerPickerOpen, setOwnerPickerOpen] = useState(false);
 
-  const detailQ = useApiQuery(
-    apiQueryOptions(
-      detailKey,
-      fetchProgramDetail(orgId, programId),
-      `Could not load this ${programLabel.toLowerCase()}.`,
-    ),
-  );
-  // The program's own row, read apart from the composite above it, so the masthead can paint from
-  // whatever arrived first — the composer that just created it, a warmed list, or one cheap read.
-  const recordQ = useApiQuery(programRecordDef(orgId, programId));
-  const detail = detailQ.data ?? null;
-  const program = detail?.program ?? recordQ.data ?? null;
+  const aggregateQ = useApiQuery(aggregateDef);
+  const aggregate = aggregateQ.data ?? null;
+  const program = aggregate?.defaultView.program ?? null;
 
   // The tab bar and the browser tab both follow the name on screen, including through a rename.
   useRegisterTabTitle('program', orgId, programId, program?.name);
   useDocumentTitle(program?.name);
-  // Capabilities come from the org-wide roster keys rather than the composite, so they resolve on
-  // their own fast path. `useOrgCapability` fails closed, which is right for a guest and wrong for
-  // a page that is merely still loading — and on screen the two are the same inert page.
-  const membership = useOrgMembership(orgId);
-  const members = detail?.members ?? membership.members;
-  const agents = detail?.agents ?? [];
-  const roles = detail?.roles ?? membership.roles;
-  const { data: session } = useSession();
-  const currentActorId =
-    members.find((member) => member.userId === session?.user.id)?.actorId ?? null;
+  const membersQ = useApiQuery({
+    ...orgMembersDef(orgId),
+    enabled: ownerPickerOpen || tab === 'updates',
+  });
+  const members = membersQ.data?.items ?? [];
+  const currentActorId = aggregate?.viewer.actorId;
 
   const updatesQ = useApiQuery(
     apiQueryOptions(
       updatesKey,
       () => api.v1.orgs[':orgId'].programs[':id'].updates.$get({ param: { orgId, id: programId } }),
       'Could not load updates.',
+      { enabled: tab === 'updates' },
     ),
   );
   const updates = useMemo<readonly UpdateOut[]>(() => updatesQ.data?.items ?? [], [updatesQ.data]);
 
   const resolveActor = useMemo<ResolveActor>(() => {
     const byId = new Map<string, { name: string; kind: 'human' | 'agent' | 'team' }>();
+    const owner = aggregate?.references.owner;
+    if (owner) byId.set(owner.actorId, { name: owner.displayName, kind: 'human' });
     for (const member of members)
       byId.set(member.actorId, { name: member.displayName, kind: 'human' });
-    for (const agent of agents) {
-      const existing = byId.get(agent.actorId);
-      byId.set(
-        agent.actorId,
-        existing ? { ...existing, kind: 'agent' } : { name: 'Agent', kind: 'agent' },
-      );
-    }
     return (actorId) =>
       actorId
         ? (byId.get(actorId) ?? { name: 'System', kind: 'human' })
         : { name: 'System', kind: 'human' };
-  }, [members, agents]);
+  }, [aggregate?.references.owner, members]);
 
   const { patchProgram, postUpdate, propsError, updatePosting, updateError } = useProgramMutations(
     orgId,
@@ -124,7 +106,7 @@ export default function ProgramDetailPage(): JSX.Element {
     updatesKey,
   );
 
-  const canEdit = useOrgCapability(members, roles, 'manage');
+  const canEdit = aggregate?.capabilities.manage ?? false;
 
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const deleteProgram = useApiMutation({
@@ -139,10 +121,21 @@ export default function ProgramDetailPage(): JSX.Element {
     },
   });
 
-  const memberOptions = useMemo<readonly PickerOption[]>(
-    () => memberActorOptions(members),
-    [members],
-  );
+  const memberOptions = useMemo<readonly PickerOption[]>(() => {
+    const options = memberActorOptions(members);
+    const owner = aggregate?.references.owner;
+    if (!owner || options.some((option) => option.value === owner.actorId)) return options;
+    return [
+      {
+        value: owner.actorId,
+        label: owner.displayName,
+        icon: (
+          <ActorAvatar kind="human" name={owner.displayName} avatarUrl={owner.avatar} size={20} />
+        ),
+      },
+      ...options,
+    ];
+  }, [aggregate?.references.owner, members]);
 
   const tabs: readonly TabsItem[] = [
     { value: 'overview', label: 'Overview' },
@@ -151,13 +144,7 @@ export default function ProgramDetailPage(): JSX.Element {
     { value: 'updates', label: 'Updates' },
   ];
 
-  // Identity alone is not enough to render: without capabilities every control would be inert
-  // with nothing explaining why. Both roster keys are shared and `STALE.static`, so arriving from
-  // anywhere inside the app they are already warm and this costs nothing.
-  if (
-    (program === null && (detailQ.isPending || recordQ.isPending)) ||
-    (detail === null && membership.pending)
-  ) {
+  if (program === null && aggregateQ.isPending) {
     // placeholder: the program's own record — name, summary, the metric strip, detail tabs,
     // and the projects under it. The route carries only a program
     // id; even the tab row's counts come from the same read.
@@ -173,11 +160,25 @@ export default function ProgramDetailPage(): JSX.Element {
     );
   }
 
-  if (detailQ.isError) {
+  if (aggregateQ.isError) {
+    if (navigationSnapshot) {
+      return (
+        <>
+          <EntityDetailSkeleton
+            tabCount={3}
+            label={`Loading ${programLabel.toLowerCase()}`}
+            title={navigationSnapshot.name}
+          />
+          <p role="alert" className="text-error text-body-medium px-6 pb-6">
+            Could not refresh this {programLabel.toLowerCase()}.
+          </p>
+        </>
+      );
+    }
     return (
       <PageContainer>
         <p role="alert" className="text-error text-sm">
-          {userErrorMessage(detailQ.error, 'Could not load this program.')}
+          {userErrorMessage(aggregateQ.error, 'Could not load this program.')}
         </p>
       </PageContainer>
     );
@@ -238,6 +239,8 @@ export default function ProgramDetailPage(): JSX.Element {
             <ProgramPropertiesPanel
               ownerId={program.ownerId ?? null}
               memberOptions={memberOptions}
+              ownerLoading={membersQ.isPending}
+              onOwnerPickerOpenChange={setOwnerPickerOpen}
               status={program.status}
               health={health}
               visibility={program.visibility}
@@ -314,7 +317,7 @@ export default function ProgramDetailPage(): JSX.Element {
           <TemplateAwareEntityDocument
             orgId={orgId}
             kind="program"
-            currentActorId={currentActorId}
+            currentActorId={currentActorId ?? null}
             value={program.description}
             canEdit={canEdit}
             onSave={(description) => {

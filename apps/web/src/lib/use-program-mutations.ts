@@ -1,6 +1,7 @@
 import {
   ActorId,
   type Health,
+  type ProgramDetailAggregate,
   type ProgramDetail,
   type ProgramOut,
   type ProgramStatus,
@@ -12,7 +13,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo } from 'react';
 
 import { api } from './api';
-import type { ProgramDetailData } from './fetch-program-detail';
 import { userErrorMessage } from './problem';
 import { queryKeys, unwrap, useApiMutation } from './query';
 
@@ -63,7 +63,7 @@ export function useProgramMutations(
   orgId: string,
   programId: string,
   programLabel: string,
-  detailKey: readonly unknown[],
+  aggregateKey: readonly unknown[],
   updatesKey: readonly unknown[],
 ): ProgramMutations {
   const queryClient = useQueryClient();
@@ -71,14 +71,23 @@ export function useProgramMutations(
   const programsKey = useMemo(() => queryKeys.programs(orgId), [orgId]);
 
   const patchCachedProgram = useCallback(
-    (apply: (program: ProgramDetail) => ProgramDetail): ProgramDetailData | undefined => {
-      const previous = queryClient.getQueryData<ProgramDetailData>(detailKey);
-      queryClient.setQueryData<ProgramDetailData>(detailKey, (cur) =>
-        cur ? { ...cur, program: apply(cur.program) } : cur,
-      );
+    (apply: (program: ProgramDetail) => ProgramDetail): ProgramDetailAggregate | undefined => {
+      const previous = queryClient.getQueryData<ProgramDetailAggregate>(aggregateKey);
+      queryClient.setQueryData<ProgramDetailAggregate>(aggregateKey, (current) => {
+        if (!current) return current;
+        const program = apply(current.defaultView.program);
+        return {
+          ...current,
+          snapshot: {
+            ...current.snapshot,
+            name: program.name,
+          },
+          defaultView: { program },
+        };
+      });
       return previous;
     },
-    [queryClient, detailKey],
+    [queryClient, aggregateKey],
   );
 
   const postUpdateM = useApiMutation({
@@ -98,13 +107,13 @@ export function useProgramMutations(
     onSuccess: (_created, { health }) => {
       if (health) patchCachedProgram((cur) => ({ ...cur, health }));
     },
-    invalidateKeys: [updatesKey, detailKey],
+    invalidateKeys: [updatesKey, aggregateKey],
   });
 
   const patch = useApiMutation<
     ProgramOut,
     ProgramPatch,
-    { previous?: ProgramDetailData | undefined }
+    { previous?: ProgramDetailAggregate | undefined }
   >({
     mutationFn: (patchBody) =>
       unwrap(
@@ -116,13 +125,13 @@ export function useProgramMutations(
         `Could not update this ${programLabel.toLowerCase()}.`,
       ),
     onMutate: async (patchBody) => {
-      await queryClient.cancelQueries({ queryKey: detailKey as string[] });
+      await queryClient.cancelQueries({ queryKey: aggregateKey as string[] });
       const body = toProgramPatchBody(patchBody);
       const previous = patchCachedProgram((cur) => Object.assign({}, cur, body));
       return { previous };
     },
     onError: (_err, _body, ctx) => {
-      if (ctx?.previous) queryClient.setQueryData(detailKey as string[], ctx.previous);
+      if (ctx?.previous) queryClient.setQueryData(aggregateKey as string[], ctx.previous);
     },
     onSuccess: (updated) => {
       patchCachedProgram((cur) => ({ ...cur, ...updated, rollup: cur.rollup }));
@@ -130,7 +139,11 @@ export function useProgramMutations(
     // The Resources tab's derived sections are a projection of this record's prose, and the query
     // cache survives a reload — so without this, adding a mention to the description leaves that
     // tab showing the pre-edit answer until the staleness tier happens to expire.
-    invalidateKeys: [detailKey, programsKey, queryKeys.entityMentions(orgId, 'program', programId)],
+    invalidateKeys: [
+      aggregateKey,
+      programsKey,
+      queryKeys.entityMentions(orgId, 'program', programId),
+    ],
   });
 
   return {

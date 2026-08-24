@@ -73,6 +73,15 @@ describe('program ProgramPropertiesPanel — interactive rows (directive A)', ()
     expect(onOwnerChange).toHaveBeenCalledWith('actor_ada');
   });
 
+  it('loads the owner roster only after the owner picker opens', () => {
+    const onOwnerPickerOpenChange = vi.fn();
+    renderPanel({ onOwnerPickerOpenChange });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Owner — not set' }));
+
+    expect(onOwnerPickerOpenChange).toHaveBeenCalledWith(true);
+  });
+
   it('pauses the program through the status enum picker', () => {
     const { onStatusChange } = renderPanel({ status: 'active' });
     fireEvent.click(screen.getByRole('button', { name: 'Status — Active' }));

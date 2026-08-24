@@ -19,8 +19,12 @@ export const queryKeys = {
   // under the detail key so any coarse invalidation still reaches it.
   projectRecord: (orgId: string, projectId: string) =>
     ['org', orgId, 'projects', projectId, 'record'] as const,
+  projectAggregate: (orgId: string, projectId: string) =>
+    ['org', orgId, 'projects', projectId, 'aggregate-detail'] as const,
   tasks: (orgId: string) => ['org', orgId, 'tasks'] as const,
   task: (orgId: string, taskId: string) => ['org', orgId, 'tasks', taskId] as const,
+  taskAggregate: (orgId: string, taskId: string) =>
+    ['org', orgId, 'tasks', taskId, 'aggregate-detail'] as const,
   // Nested under the task's own detail key on purpose: every task mutation already invalidates
   // `queryKeys.task(...)`, and prefix matching carries that through to the history, so editing a
   // property re-reads the entry it just wrote without any call site knowing the log exists.
@@ -44,12 +48,16 @@ export const queryKeys = {
   /** The program's own row — see {@link queryKeys.projectRecord} for why this is separate. */
   programRecord: (orgId: string, programId: string) =>
     ['org', orgId, 'programs', programId, 'record'] as const,
+  programAggregate: (orgId: string, programId: string) =>
+    ['org', orgId, 'programs', programId, 'aggregate-detail'] as const,
   initiatives: (orgId: string) => ['org', orgId, 'initiatives'] as const,
   initiative: (orgId: string, initiativeId: string) =>
     ['org', orgId, 'initiatives', initiativeId] as const,
   /** The initiative's own row — see {@link queryKeys.projectRecord} for why this is separate. */
   initiativeRecord: (orgId: string, initiativeId: string) =>
     ['org', orgId, 'initiatives', initiativeId, 'record'] as const,
+  initiativeAggregate: (orgId: string, initiativeId: string) =>
+    ['org', orgId, 'initiatives', initiativeId, 'aggregate-detail'] as const,
   cycles: (orgId: string) => ['org', orgId, 'cycles'] as const,
   cycle: (orgId: string, cycleId: string) => ['org', orgId, 'cycles', cycleId] as const,
   teams: (orgId: string) => ['org', orgId, 'teams'] as const,

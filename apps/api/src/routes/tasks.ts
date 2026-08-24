@@ -541,6 +541,7 @@ When \`preserveSelectedSubtrees\` is true, a selected task whose ancestor is als
           priority: row.priority,
           updatedAt: row.updatedAt.toISOString(),
         },
+        viewer: { actorId },
         capabilities: detailCapabilities(capabilities),
         references: { workflowStates },
         defaultView: { task: detail },

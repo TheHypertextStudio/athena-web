@@ -38,6 +38,14 @@ export const DetailCapabilities = z
 /** Permission flags for an aggregate entity detail response. */
 export type DetailCapabilities = z.infer<typeof DetailCapabilities>;
 
+/** The authenticated actor whose template and editor visibility the detail route resolves. */
+export const DetailViewer = z.object({ actorId: ActorId }).strict().meta({
+  id: 'DetailViewer',
+  description: 'Authenticated actor identity for a bounded aggregate detail response.',
+});
+/** Authenticated actor identity for an aggregate entity detail response. */
+export type DetailViewer = z.infer<typeof DetailViewer>;
+
 /** A single named actor referenced by a detail document without sending the member roster. */
 export const DetailActorReference = z
   .object({
@@ -58,6 +66,7 @@ export const TaskDetailAggregate = z
   .object({
     target: z.literal('task'),
     snapshot: TaskNavigationSnapshot,
+    viewer: DetailViewer,
     capabilities: DetailCapabilities,
     references: z.object({ workflowStates: z.array(WorkflowState) }).strict(),
     defaultView: z.object({ task: TaskDetail }).strict(),
@@ -72,6 +81,7 @@ export const ProjectDetailAggregate = z
   .object({
     target: z.literal('project'),
     snapshot: ProjectNavigationSnapshot,
+    viewer: DetailViewer,
     capabilities: DetailCapabilities,
     references: z
       .object({
@@ -92,6 +102,7 @@ export const ProgramDetailAggregate = z
   .object({
     target: z.literal('program'),
     snapshot: ProgramNavigationSnapshot,
+    viewer: DetailViewer,
     capabilities: DetailCapabilities,
     references: z.object({ owner: DetailActorReference.nullable() }).strict(),
     defaultView: z.object({ program: ProgramDetail }).strict(),
@@ -106,6 +117,7 @@ export const InitiativeDetailAggregate = z
   .object({
     target: z.literal('initiative'),
     snapshot: InitiativeNavigationSnapshot,
+    viewer: DetailViewer,
     capabilities: DetailCapabilities,
     references: z.object({ owner: DetailActorReference.nullable() }).strict(),
     defaultView: z.object({ initiative: InitiativeDetail }).strict(),

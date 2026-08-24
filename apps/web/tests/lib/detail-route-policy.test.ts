@@ -18,4 +18,15 @@ describe('detail route ownership', () => {
     expect(source).toContain('useTypedRoute');
     expect(source).not.toContain("from 'next/navigation'");
   });
+
+  it('keeps the Program shell on one aggregate read and defers secondary sections', () => {
+    const source = readFileSync(join(root, details[2]), 'utf8');
+
+    expect(source).toContain('programDetailAggregateDef');
+    expect(source).not.toContain('fetchProgramDetail');
+    expect(source).not.toContain('programRecordDef');
+    expect(source).not.toContain('useOrgMembership');
+    expect(source).toContain("enabled: ownerPickerOpen || tab === 'updates'");
+    expect(source).toContain("enabled: tab === 'updates'");
+  });
 });

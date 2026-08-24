@@ -295,7 +295,7 @@ const initiativeAggregates = new Hono<AppEnv>()
     }),
     zParam(z.object({ id: InitiativeId })),
     async (c) => {
-      const { orgId, capabilities } = c.get('actorCtx');
+      const { orgId, actorId, capabilities } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const row = await loadInitiative(orgId, id);
       const [projects, programs, ownerRows] = await Promise.all([
@@ -323,6 +323,7 @@ const initiativeAggregates = new Hono<AppEnv>()
           health: row.health,
           updatedAt: row.updatedAt.toISOString(),
         },
+        viewer: { actorId },
         capabilities: detailCapabilities(capabilities),
         references: owner
           ? { owner: { actorId: owner.id, displayName: owner.displayName, avatar: owner.avatar } }

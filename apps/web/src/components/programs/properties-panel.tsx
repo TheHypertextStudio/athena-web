@@ -35,6 +35,10 @@ export interface ProgramPropertiesPanelProps {
   ownerId: string | null;
   /** Member options for the owner picker (each carrying an `ActorAvatar`). */
   memberOptions: readonly PickerOption[];
+  /** Whether the owner-picker roster is loading after the picker opened. */
+  ownerLoading?: boolean;
+  /** Observe owner-picker visibility so the host can load the roster on demand. */
+  onOwnerPickerOpenChange?: (open: boolean) => void;
   /** The current program status. */
   status: ProgramStatus;
   /** The current health verdict, or `null` when unset. */
@@ -66,6 +70,8 @@ const CHIP = { triggerVariant: 'ghost', triggerClassName: ENTITY_METADATA_CHIP_C
 export function ProgramPropertiesPanel({
   ownerId,
   memberOptions,
+  ownerLoading,
+  onOwnerPickerOpenChange,
   status,
   health,
   visibility,
@@ -118,6 +124,8 @@ export function ProgramPropertiesPanel({
           placeholder="Set owner"
           clearLabel="No owner"
           ariaLabel="Owner"
+          loading={ownerLoading ?? false}
+          {...(onOwnerPickerOpenChange ? { onOpenChange: onOwnerPickerOpenChange } : {})}
           readOnly={readOnly}
           {...CHIP}
         />

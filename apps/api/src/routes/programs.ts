@@ -257,6 +257,7 @@ const programs = new Hono<AppEnv>()
           health: row.health,
           updatedAt: row.updatedAt.toISOString(),
         },
+        viewer: { actorId },
         capabilities: detailCapabilities(capabilities),
         references: { owner: ownerRows[0] ? actorReference(ownerRows[0]) : null },
         defaultView: {

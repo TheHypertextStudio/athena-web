@@ -93,6 +93,6 @@ test('Athena uses the utility rail on normal pages and its full workspace on Cal
   await page.goto('/calendar');
   await expect(page.getByRole('complementary', { name: 'Athena' })).toHaveCount(0);
   await page.keyboard.press('Meta+J');
-  await expect(page).toHaveURL('/athena');
+  await expect(page).toHaveURL(/\/athena\?workspace=/);
   await expect(page.getByRole('heading', { name: 'Your Athena work' })).toBeVisible();
 });

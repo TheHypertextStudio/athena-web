@@ -74,7 +74,8 @@ describe('detail route ownership', () => {
 
     expect(source).toContain('taskDetailAggregateDef');
     expect(source).toContain('defaultView.task');
-    expect(source).toContain('enabled: options.propertiesOpen ?? false');
+    expect(source).toContain('enabled: options.projectsOpen ?? false');
+    expect(source).toContain('enabled: options.membersOpen ?? false');
     expect(source).toContain('enabled: options.activityOpen ?? false');
   });
 

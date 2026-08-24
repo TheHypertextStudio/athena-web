@@ -39,8 +39,6 @@ export const APP_GROUP = join(WEB_ROOT, 'src/app/(app)');
  */
 export const ROUTES_NOT_IN_TABLE: Readonly<Record<string, string>> = {
   '/orgs/[orgId]': 'redirects to /orgs/[orgId]/my-work',
-  '/orgs/[orgId]/agents': 'redirects to /athena',
-  '/orgs/[orgId]/athena': 'redirects to /athena',
   '/settings': 'redirects to /settings/profile',
 };
 

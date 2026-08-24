@@ -22,6 +22,7 @@
   - [x] Cover every target-specific snapshot branch.
   - [x] Pass the full types coverage suite at the existing threshold.
   - [x] Restore the affected calendar, task mutation, picker, and visual-contract tests.
+  - [x] Reconcile the route-policy, offline-route, and timeline fixtures with current code.
   - [ ] Push the repair and verify the production rollout.
 - **Blockers**: The CI run for the repair must complete before deployment can start.
 

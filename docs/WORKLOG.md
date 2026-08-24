@@ -7,6 +7,26 @@
 
 ## Active Tasks
 
+### [RELEASE-LINT-001] Restore the production lint gate
+
+- **Status**: REVIEW
+- **Started**: 2026-08-24
+- **Priority**: P0
+- **Description**: The current `main` candidate failed the required web lint job before deployment.
+- **Approach**: Preserve the two Project mutation suites under distinct filenames so TypeScript's
+  project service includes both. Expand the Work Cards callbacks that return `void` into block
+  bodies, which satisfies the existing strict lint rule without changing interaction behavior.
+- **Subtasks**:
+  - [x] Reproduce the four CI lint errors locally.
+  - [x] Remove the duplicate TypeScript program basename.
+  - [x] Correct the Work Cards callback forms.
+  - [x] Run the affected suites and the full web lint command.
+  - [ ] Push the repair and verify the production rollout.
+- **Blockers**: The CI run for the repair must complete before deployment can start.
+- **Validation**: The renamed Project suites and Work Cards suite pass all 11 cases. The exact
+  `@docket/web` and `@docket/admin` lint gate passes with a task-local 4GB Node heap. Web
+  typecheck, JSON parsing, and whitespace checks pass.
+
 ### [LOCAL-FIRST-DETAIL-NAV-001] Enforce local-first detail reconciliation budgets
 
 - **Status**: REVIEW

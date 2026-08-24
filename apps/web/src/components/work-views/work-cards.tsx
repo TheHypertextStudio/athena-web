@@ -101,15 +101,25 @@ export function WorkCards<TTarget extends ViewTarget>({
         className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-3 p-1"
       >
         {rows.map((row) => (
-          <WorkObjectCard key={row.id} row={row} onActivate={() => onActivate(row)}>
+          <WorkObjectCard
+            key={row.id}
+            row={row}
+            onActivate={() => {
+              onActivate(row);
+            }}
+          >
             <span
               className={`${selectedIds.size > 0 || selectedIds.has(row.id) ? 'opacity-100' : 'opacity-0 group-focus-within/card:opacity-100 group-hover/card:opacity-100'} absolute top-4 left-4 z-10 transition-opacity`}
             >
               <Checkbox
                 aria-label={`Select ${workViewRowTitle(row)}`}
                 checked={selectedIds.has(row.id)}
-                onClick={(event) => event.stopPropagation()}
-                onChange={() => toggle(row.id)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                }}
+                onChange={() => {
+                  toggle(row.id);
+                }}
               />
             </span>
             <DocketLink

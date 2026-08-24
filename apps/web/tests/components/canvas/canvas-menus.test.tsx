@@ -111,18 +111,21 @@ function Harness(): React.JSX.Element {
       >
         Open Task edge menu
       </button>
-      <button
-        type="button"
-        onClick={() => {
-          menus.onPaneContextMenu({
-            preventDefault: vi.fn(),
-            clientX: 10,
-            clientY: 10,
-          } as unknown as React.MouseEvent);
-        }}
-      >
-        Open pane menu
-      </button>
+      <div data-canvas-selection-frame="">
+        <button
+          type="button"
+          onContextMenu={menus.onPaneContextMenu}
+          onClick={() => {
+            menus.onPaneContextMenu({
+              preventDefault: vi.fn(),
+              clientX: 10,
+              clientY: 10,
+            } as unknown as React.MouseEvent);
+          }}
+        >
+          Open pane menu
+        </button>
+      </div>
       <button
         type="button"
         onClick={() => {
@@ -173,6 +176,21 @@ describe('canvas pane menu', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: 'Open or peek' }));
 
     expect(state.commands.openObject).toHaveBeenCalledWith('project-b');
+  });
+
+  it('passes the invoking canvas to creation for focus return', () => {
+    state.commands.canEdit = true;
+    state.commands.createObject.mockReset();
+    render(<Harness />);
+    const launcher = screen.getByRole('button', { name: 'Open pane menu' });
+
+    fireEvent.contextMenu(launcher, { clientX: 10, clientY: 10 });
+    fireEvent.click(screen.getByRole('menuitem', { name: 'New Project' }));
+
+    expect(state.commands.createObject).toHaveBeenCalledWith(
+      launcher.closest('[data-canvas-selection-frame]'),
+    );
+    state.commands.canEdit = false;
   });
 
   it('labels and removes a Project dependency through the accessible edge menu', () => {

@@ -102,7 +102,13 @@ Edges are pre-pruned to the viewable set so there are no dangling endpoints: a \
             );
 
     // 2. Keep only what the caller may view; edges live within this set.
-    const viewable = candidates.filter(canView);
+    // Postgres does not preserve row order without an ORDER BY, and an UPDATE may move one tuple
+    // behind its peers. The graph layout treats source order as its deterministic tie-breaker, so
+    // canonicalize by the stable object id before projecting nodes or hierarchy edges. A property
+    // edit must not make the same graph jump to a different arrangement.
+    const viewable = candidates
+      .filter(canView)
+      .sort((left, right) => left.id.localeCompare(right.id));
     const ids = new Set(viewable.map((t) => t.id));
     const idsArr = [...ids];
 
@@ -152,6 +158,7 @@ Edges are pre-pruned to the viewable set so there are no dangling endpoints: a \
         });
       }
     }
+    edges.sort((left, right) => left.id.localeCompare(right.id));
 
     return ok(c, GraphOut, {
       nodes: viewable.map((row) => toGraphNode(row, labelIdsByTask.get(row.id) ?? [])),

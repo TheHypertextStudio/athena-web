@@ -2,25 +2,32 @@ import '@testing-library/jest-dom/vitest';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 import { type ReactNode } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { fitView, onRelayout } = vi.hoisted(() => ({
+const { fitView, onRelayout, flowState } = vi.hoisted(() => ({
   fitView: vi.fn(),
   onRelayout: vi.fn(),
+  flowState: { nodes: [] as { id: string; selected: boolean }[] },
 }));
 
 vi.mock('@xyflow/react', () => ({
   Panel: ({ children }: { children: ReactNode }) => <>{children}</>,
   useReactFlow: () => ({
     fitView,
-    getNodes: () => [{ id: 'project-a', selected: true }],
+    getNodes: () => flowState.nodes,
   }),
-  useOnSelectionChange: () => undefined,
+  useStore: (selector: (state: typeof flowState) => unknown) => selector(flowState),
 }));
 
 import CanvasViewportToolbar from '../../../src/components/canvas/canvas-viewport-toolbar';
 
 describe('CanvasViewportToolbar', () => {
+  beforeEach(() => {
+    flowState.nodes = [{ id: 'project-a', selected: true }];
+    fitView.mockReset();
+    onRelayout.mockReset();
+  });
+
   it('exposes fit selection and deterministic re-layout without a context menu', () => {
     render(<CanvasViewportToolbar onRelayout={onRelayout} />);
 
@@ -31,5 +38,16 @@ describe('CanvasViewportToolbar', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Re-layout' }));
     expect(onRelayout).toHaveBeenCalledOnce();
+  });
+
+  it('updates Fit selection when the controlled flow store changes selection', () => {
+    flowState.nodes = [];
+    const { rerender } = render(<CanvasViewportToolbar onRelayout={onRelayout} />);
+    expect(screen.getByRole('button', { name: 'Fit selection' })).toBeDisabled();
+
+    flowState.nodes = [{ id: 'project-a', selected: true }];
+    rerender(<CanvasViewportToolbar onRelayout={onRelayout} />);
+
+    expect(screen.getByRole('button', { name: 'Fit selection' })).toBeEnabled();
   });
 });

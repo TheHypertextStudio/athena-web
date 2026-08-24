@@ -198,7 +198,10 @@ export function useCanvasMenus(options: CanvasMenuOptions): CanvasMenus {
               {commands?.canEdit === true ? (
                 <DropdownMenuItem
                   onSelect={() => {
-                    commands.createObject();
+                    commands.createObject(
+                      open.invoker?.closest<HTMLElement>('[data-canvas-selection-frame]') ??
+                        open.invoker,
+                    );
                     close();
                   }}
                 >

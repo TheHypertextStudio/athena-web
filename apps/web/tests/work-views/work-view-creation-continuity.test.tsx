@@ -20,7 +20,10 @@ const { controller, createState, lensState, navigateAuthenticatedMock } = vi.hoi
     },
     setDefinition: vi.fn(),
   },
-  createState: { request: null as null | Record<string, unknown> },
+  createState: {
+    request: null as null | Record<string, unknown>,
+    returnFocusTo: null as HTMLElement | null,
+  },
   lensState: { props: null as null | Record<string, unknown>, refetches: vi.fn() },
   navigateAuthenticatedMock: vi.fn(),
 }));
@@ -35,8 +38,9 @@ vi.mock('../../src/components/active-org', () => ({
 
 vi.mock('../../src/components/create-object/create-object-provider', () => ({
   useCreateObject: () => ({
-    openCreate: (request: Record<string, unknown>) => {
+    openCreate: (request: Record<string, unknown>, returnFocusTo?: HTMLElement | null) => {
       createState.request = request;
+      createState.returnFocusTo = returnFocusTo ?? null;
     },
   }),
 }));
@@ -70,7 +74,7 @@ vi.mock('../../src/components/work-views/project-dependency-lens', () => ({
     requestedSelectionAttempt?: number;
     onRequestedSelectionResolved?: (id: string) => void;
     onRequestedSelectionMissing?: (id: string) => void;
-    onCreateProject?: () => void;
+    onCreateProject?: (returnFocusTo?: HTMLElement | null) => void;
   }): JSX.Element => {
     lensState.props = props;
     const [instanceState, setInstanceState] = useState(0);
@@ -81,7 +85,12 @@ vi.mock('../../src/components/work-views/project-dependency-lens', () => ({
         <output data-testid="lens-request">{props.requestedSelectionId ?? 'none'}</output>
         <output data-testid="lens-attempt">{props.requestedSelectionAttempt ?? 0}</output>
         <output data-testid="lens-state">{instanceState}</output>
-        <button type="button" onClick={() => props.onCreateProject?.()}>
+        <button
+          type="button"
+          onClick={(event) => {
+            props.onCreateProject?.(event.currentTarget);
+          }}
+        >
           New Project from canvas
         </button>
         <button
@@ -202,6 +211,7 @@ function openDependencyCreation(): { onCreated: (project: { id: string }) => voi
 
 beforeEach(() => {
   createState.request = null;
+  createState.returnFocusTo = null;
   controller.setDefinition.mockReset();
   lensState.props = null;
   lensState.refetches.mockReset();
@@ -292,12 +302,14 @@ describe('WorkViewPage creation continuity', () => {
   it('routes canvas creation through the retained dependency host', () => {
     render(<WorkViewPage organizationId={ALPHA_ID} target="project" />);
     fireEvent.click(screen.getByRole('tab', { name: 'Dependencies' }));
-    fireEvent.click(screen.getByRole('button', { name: 'New Project from canvas' }));
+    const launcher = screen.getByRole('button', { name: 'New Project from canvas' });
+    fireEvent.click(launcher);
 
     expect(createState.request).toMatchObject({
       kind: 'project',
       initialWorkspaceId: ALPHA_ID,
       sameWorkspaceCompletion: 'stay',
     });
+    expect(createState.returnFocusTo).toBe(launcher);
   });
 });

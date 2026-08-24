@@ -94,8 +94,9 @@ vi.mock('@xyflow/react', async () => {
     },
     useOnSelectionChange: () => undefined,
     useReactFlow: () => instance,
-    useStore: (selector: (state: { transform: [number, number, number] }) => unknown) =>
-      selector({ transform: [0, 0, 1] }),
+    useStore: (
+      selector: (state: { nodes: Node[]; transform: [number, number, number] }) => unknown,
+    ) => selector({ nodes: flowState.nodes, transform: [0, 0, 1] }),
   };
 });
 

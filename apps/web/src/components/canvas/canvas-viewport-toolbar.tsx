@@ -3,8 +3,7 @@
 /** Visible canvas viewport commands that do not depend on a context-menu gesture. */
 import { RefreshCw, Search } from '@docket/ui/icons';
 import { Button, Surface } from '@docket/ui/primitives';
-import { Panel, useOnSelectionChange, useReactFlow } from '@xyflow/react';
-import { useState } from 'react';
+import { Panel, useReactFlow, useStore } from '@xyflow/react';
 
 /** Props for {@link CanvasViewportToolbar}. */
 export interface CanvasViewportToolbarProps {
@@ -17,14 +16,7 @@ export default function CanvasViewportToolbar({
   onRelayout,
 }: CanvasViewportToolbarProps): React.JSX.Element {
   const { fitView, getNodes } = useReactFlow();
-  const [selectionCount, setSelectionCount] = useState(
-    () => getNodes().filter(({ selected }) => selected).length,
-  );
-  useOnSelectionChange({
-    onChange: ({ nodes }) => {
-      setSelectionCount(nodes.length);
-    },
-  });
+  const hasSelection = useStore((state) => state.nodes.some(({ selected }) => selected));
   return (
     <Panel position="bottom-left" className="!mb-24">
       <Surface
@@ -38,7 +30,7 @@ export default function CanvasViewportToolbar({
           type="button"
           variant="ghost"
           size="sm"
-          disabled={selectionCount === 0}
+          disabled={!hasSelection}
           onClick={() => {
             const nodes = getNodes().filter(({ selected }) => selected);
             void fitView({ nodes, duration: 300, maxZoom: 1, padding: 0.3 });

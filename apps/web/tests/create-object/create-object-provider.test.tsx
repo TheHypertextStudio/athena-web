@@ -742,6 +742,36 @@ describe('CreateObjectProvider', () => {
     expect(screen.getByTestId('page-state')).toHaveTextContent('1');
   });
 
+  it('returns focus to the connected launcher when creation closes', async () => {
+    renderProvider();
+    const launcher = screen.getByRole('button', { name: 'Create project from page' });
+    launcher.focus();
+
+    fireEvent.click(launcher);
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel page create' }));
+    document.body.tabIndex = -1;
+    document.body.focus();
+
+    await waitFor(() => {
+      expect(launcher).toHaveFocus();
+    });
+  });
+
+  it('does not let a stale focus retry escape a newly opened composer', async () => {
+    renderProvider();
+    const firstLauncher = screen.getByRole('button', { name: 'Create project from page' });
+
+    fireEvent.click(firstLauncher);
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel page create' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create task from page' }));
+    document.body.tabIndex = -1;
+    document.body.focus();
+
+    await new Promise((resolve) => window.setTimeout(resolve, 250));
+    expect(firstLauncher).not.toHaveFocus();
+    expect(screen.getByTestId('request-kind')).toHaveTextContent('task');
+  });
+
   it('defaults the creation target to the shell workspace without rebinding the shell', async () => {
     renderProvider();
 

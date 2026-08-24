@@ -36,8 +36,8 @@ export interface CanvasCommandContextValue extends CanvasCommandHistoryControls 
   readonly canTrash: boolean;
   /** Objects selected in the shared selection provider. */
   readonly selectedObjects: readonly ObjectRef[];
-  /** Open the matching same-workspace composer. */
-  readonly createObject: () => void;
+  /** Open the matching same-workspace composer and retain the invoking canvas for focus return. */
+  readonly createObject: (returnFocusTo?: HTMLElement | null) => void;
   /** Open or peek the current primary selection. */
   readonly openSelection: () => void;
   /** Open or peek a specific context target without replacing the current selection. */
@@ -70,8 +70,8 @@ export interface CanvasCommandProviderProps {
   readonly canTrash?: boolean | undefined;
   /** Query keys that commands invalidate. */
   readonly invalidateKeys: readonly QueryKey[];
-  /** Launch same-workspace creation. */
-  readonly onCreateObject: () => void;
+  /** Launch same-workspace creation and retain the invoking canvas for focus return. */
+  readonly onCreateObject: (returnFocusTo?: HTMLElement | null) => void;
   /** Open the selected object. */
   readonly onOpenObject: (object: ObjectRef) => void;
   /** Observe the selected objects when the shared Properties editor opens. */

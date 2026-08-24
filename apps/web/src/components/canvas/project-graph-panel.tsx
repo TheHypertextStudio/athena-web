@@ -78,7 +78,7 @@ export interface ProjectGraphPanelProps {
   /** Preserve the created id in host-owned missing-row state when refresh excludes it. */
   onRequestedSelectionMissing?: ((id: string) => void) | undefined;
   /** Ask the retained work-view host to open Project creation. */
-  onCreateProject?: (() => void) | undefined;
+  onCreateProject?: ((returnFocusTo?: HTMLElement | null) => void) | undefined;
 }
 
 /**
@@ -274,22 +274,28 @@ export function ProjectGraphPanel({
     () => projectRowsToPropertySnapshots(rows, orgId),
     [orgId, rows],
   );
-  const createProject = useCallback(() => {
-    if (onCreateProject !== undefined) {
-      onCreateProject();
-      return;
-    }
-    openCreate({
-      kind: 'project',
-      initialWorkspaceId: orgId,
-      sameWorkspaceCompletion: 'stay',
-      onCreated: (created) => {
-        setSelectedId(created.id);
-        setCreatedSelectionId(created.id);
-        void queryClient.invalidateQueries({ queryKey: overviewKey });
-      },
-    });
-  }, [onCreateProject, openCreate, orgId, overviewKey, queryClient]);
+  const createProject = useCallback(
+    (returnFocusTo?: HTMLElement | null) => {
+      if (onCreateProject !== undefined) {
+        onCreateProject(returnFocusTo);
+        return;
+      }
+      openCreate(
+        {
+          kind: 'project',
+          initialWorkspaceId: orgId,
+          sameWorkspaceCompletion: 'stay',
+          onCreated: (created) => {
+            setSelectedId(created.id);
+            setCreatedSelectionId(created.id);
+            void queryClient.invalidateQueries({ queryKey: overviewKey });
+          },
+        },
+        returnFocusTo,
+      );
+    },
+    [onCreateProject, openCreate, orgId, overviewKey, queryClient],
+  );
 
   const applyCreatedSelection = useCallback(
     (node: Node) => {

@@ -26,7 +26,7 @@ export interface ProjectDependencyLensProps {
   /** Incremented by the host when clearing filters should retry the same Project id. */
   readonly requestedSelectionAttempt?: number | undefined;
   /** Route canvas creation through the retained Project work-view host. */
-  readonly onCreateProject?: (() => void) | undefined;
+  readonly onCreateProject?: ((returnFocusTo?: HTMLElement | null) => void) | undefined;
 }
 
 /** Load the dependency projection only after the viewer opens its dedicated lens. */

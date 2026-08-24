@@ -484,22 +484,28 @@ export default function TaskGraphPanel({
   );
   const activeError = creation.error;
   const clearActiveError = creation.clearError;
-  const createTask = useCallback(() => {
-    openCreate({
-      kind: 'task',
-      initialWorkspaceId: orgId,
-      sameWorkspaceCompletion: 'stay',
-      ...(scope.projectId === undefined ? {} : { defaultProjectId: scope.projectId }),
-      onCreated: (created) => {
-        setSelectedId(created.id);
-        setCreatedSelectionId(created.id);
-        setSettledCreatedSelectionId(null);
-        void queryClient.invalidateQueries({ queryKey: graphKey }).then(() => {
-          setSettledCreatedSelectionId(created.id);
-        });
-      },
-    });
-  }, [graphKey, openCreate, orgId, queryClient, scope.projectId]);
+  const createTask = useCallback(
+    (returnFocusTo?: HTMLElement | null) => {
+      openCreate(
+        {
+          kind: 'task',
+          initialWorkspaceId: orgId,
+          sameWorkspaceCompletion: 'stay',
+          ...(scope.projectId === undefined ? {} : { defaultProjectId: scope.projectId }),
+          onCreated: (created) => {
+            setSelectedId(created.id);
+            setCreatedSelectionId(created.id);
+            setSettledCreatedSelectionId(null);
+            void queryClient.invalidateQueries({ queryKey: graphKey }).then(() => {
+              setSettledCreatedSelectionId(created.id);
+            });
+          },
+        },
+        returnFocusTo,
+      );
+    },
+    [graphKey, openCreate, orgId, queryClient, scope.projectId],
+  );
 
   const applyCreatedSelection = useCallback(
     (node: Node) => {

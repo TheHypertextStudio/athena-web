@@ -34,7 +34,7 @@
   - [x] Filter archived Projects from active reads while preserving relationships for restoration.
   - [x] Rebase the five product commits onto `7dec5703` from `origin/main` with linear history.
   - [ ] Commit the post-rebase integration corrections and repeat the affected repository gates.
-  - [ ] Complete responsive light and dark visual, keyboard, and accessibility review.
+  - [x] Complete responsive light and dark visual, keyboard, and accessibility review.
   - [ ] Fast-forward `main`, deploy the exact revision, and verify the production workflows.
 - **Decisions**: Forward bulk commands remain atomic. Undo and redo compare the receipt's expected
   state and skip collaborator conflicts. Creation remains outside history. Each canvas route and
@@ -53,19 +53,29 @@
   drops create dependencies, while Task drops change hierarchy. The Task panel no longer constructs
   unused direct dependency and status mutations; only subtask creation remains outside history.
   The shared selection frame also dropped the obsolete native drag handler surface.
+- **Live review corrections**: Controlled query refreshes retain selected node ids, and the viewport
+  toolbar reads the React Flow store so Fit selection follows the visible selection. The API sorts
+  Task graph nodes and edges by id, which keeps property-only writes from changing Dagre's stable
+  source-order tie-breaker. Composer close returns focus to the canvas after a disappearing menu
+  portal finishes its own focus restore. The retained Project work-view host carries that focus
+  target into the shared composer. At 320px, view tabs no longer shrink into overlapping targets;
+  the visible “All” label leaves Dependencies reachable while the accessible name stays “All
+  projects.”
 - **Validation**: The pure layout suite covers projected Task roots, weak components,
   non-overlapping rectangles, group ownership, deterministic aspect-aware packing, property-only
   stability, and the 363-Task and 28-dependency fixture within the 100 ms budget. The command route
   suite covers 500-object atomic writes, destination permissions, idempotency, durable receipts,
   conflict-safe partial replay, trash and restore, relation cycles, invalid references, batching,
-  and transactional effect delivery. The complete canvas component suite passes 93 tests across 29
-  files. Before the rebase, the serialized repository typecheck passed 26 tasks, lint passed 25
-  tasks, all 26 package test graphs passed, and the production API, runner, admin, web, and service
-  worker build passed with a process-local 4 GB Node heap. After the rebase, the four affected
-  package typechecks pass and 20 conflict-focused web tests pass. The post-rebase relation and node
-  correction passes 16 focused tests after its expected failing regressions. Focused ESLint,
-  Prettier, the diff check, and the zero-merge history check pass. The post-rebase full gates, browser review,
-  deployment, and production checks remain open.
+  and transactional effect delivery. The complete canvas component suite passes 125 tests across
+  34 files, and the relation and node correction passes another 16 focused tests. The serialized
+  repository typecheck passes 26 tasks, lint passes 25 tasks, all 26 package test graphs pass, and
+  the production build passes with a process-local 4 GB Node heap. The final API run passes 4,735
+  tests, and the final Web run passes 3,104 tests. Live review at 1440×900, 1024×768, 390×844, and 320×720 covers both graph
+  types, both themes at the three primary widths, context creation, bulk properties, selection,
+  trash confirmation, undo, redo, focus return, and overflow. The browser console has no warnings
+  or errors. Six live-review Web files pass 41 focused tests, the complete lifecycle harness passes
+  six tests, and the stable projection API file passes seven tests. Formatting, migration drift,
+  and the serialized production build pass. Deployment and production checks remain open.
 - **Blockers**: None.
 
 ---

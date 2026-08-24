@@ -29,6 +29,7 @@ export default function CanvasSelectionFrame({
       ref={containerRef}
       role="tree"
       aria-label={label}
+      data-canvas-selection-frame=""
       tabIndex={0}
       onKeyDown={(event) => {
         containerProps.onKeyDown(event);

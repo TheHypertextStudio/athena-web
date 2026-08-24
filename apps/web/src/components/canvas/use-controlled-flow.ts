@@ -68,7 +68,14 @@ export function useControlledFlow(laidOut: Node[], rawEdges: Edge[]): Controlled
     if (prevSignature.current === signature) return;
     prevSignature.current = signature;
     startViewTransition(() => {
-      setNodes(laidOut);
+      setNodes((current) => {
+        const selectedIds = new Set(
+          current.filter(({ selected }) => selected === true).map(({ id }) => id),
+        );
+        return laidOut.map((node) =>
+          selectedIds.has(node.id) && node.selected !== true ? { ...node, selected: true } : node,
+        );
+      });
       setEdges(rawEdges);
     });
   }, [signature, laidOut, rawEdges, setNodes, setEdges]);

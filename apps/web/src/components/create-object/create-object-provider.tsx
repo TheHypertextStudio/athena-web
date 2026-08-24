@@ -10,6 +10,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 
@@ -131,8 +132,8 @@ export type CreateObjectRequest =
 export interface CreateObjectValue {
   /** The active request, or `null` when no creation surface is open. */
   readonly request: CreateObjectRequest | null;
-  /** Open the requested composer and snapshot its initial destination. */
-  readonly openCreate: (request: CreateObjectRequest) => void;
+  /** Open the requested composer, snapshot its destination, and retain an optional focus target. */
+  readonly openCreate: (request: CreateObjectRequest, returnFocusTo?: HTMLElement | null) => void;
   /** Close the active composer and clear its destination. */
   readonly closeCreate: () => void;
 }
@@ -163,10 +164,16 @@ export function CreateObjectProvider({ children }: CreateObjectProviderProps): J
   const { activeOrgId: shellWorkspaceId } = useContextState();
   const [request, setRequest] = useState<CreateObjectRequest | null>(null);
   const [targetWorkspaceId, setTargetWorkspaceId] = useState<string | null>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(null);
+  const focusRestoreGenerationRef = useRef(0);
 
   const openCreate = useCallback(
-    (nextRequest: CreateObjectRequest): void => {
+    (nextRequest: CreateObjectRequest, returnFocusTo?: HTMLElement | null): void => {
       const initialWorkspaceId = nextRequest.initialWorkspaceId ?? shellWorkspaceId ?? null;
+      focusRestoreGenerationRef.current += 1;
+      returnFocusRef.current =
+        returnFocusTo ??
+        (document.activeElement instanceof HTMLElement ? document.activeElement : null);
       // Persist the resolved workspace with the request, rather than leaving an omitted request
       // value to follow the shell later. Kind bodies use this immutable snapshot to decide whether
       // contextual defaults remain valid after a destination switch.
@@ -177,8 +184,28 @@ export function CreateObjectProvider({ children }: CreateObjectProviderProps): J
   );
 
   const closeCreate = useCallback((): void => {
+    const returnFocusTo = returnFocusRef.current;
+    const focusRestoreGeneration = focusRestoreGenerationRef.current + 1;
+    focusRestoreGenerationRef.current = focusRestoreGeneration;
+    returnFocusRef.current = null;
     setRequest(null);
     setTargetWorkspaceId(null);
+    const restoreUnclaimedFocus = (): void => {
+      const active = document.activeElement;
+      if (
+        focusRestoreGenerationRef.current === focusRestoreGeneration &&
+        returnFocusTo?.isConnected &&
+        (active === null || active === document.body || !active.isConnected)
+      ) {
+        returnFocusTo.focus();
+      }
+    };
+    window.setTimeout(restoreUnclaimedFocus, 0);
+    // Radix restores a closing portal to its trigger after the provider unmounts the composer.
+    // A canvas menu trigger disappears with that portal, so its later restore can leave focus on
+    // body after the first pass succeeded. Retry after the exit frame, but never steal focus that
+    // the user has already moved to another connected control.
+    window.setTimeout(restoreUnclaimedFocus, 200);
   }, []);
 
   // A create may open during the shell's brief no-active-workspace frame. Wait for the shell's

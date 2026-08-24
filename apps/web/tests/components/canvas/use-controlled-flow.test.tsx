@@ -55,4 +55,27 @@ describe('useControlledFlow', () => {
       });
     });
   });
+
+  it('preserves selected nodes when refreshed object data re-syncs the graph', async () => {
+    const initial = node(10);
+    const { result, rerender } = renderHook(
+      ({ nodes }: { nodes: Node[] }) => useControlledFlow(nodes, []),
+      { initialProps: { nodes: [initial] } },
+    );
+    act(() => {
+      result.current.onNodesChange([{ type: 'select', id: initial.id, selected: true }]);
+    });
+    expect(result.current.nodes[0]?.selected).toBe(true);
+
+    act(() => {
+      rerender({ nodes: [{ ...initial, data: { name: 'Updated' } }] });
+    });
+
+    await waitFor(() => {
+      expect(result.current.nodes[0]).toMatchObject({
+        data: { name: 'Updated' },
+        selected: true,
+      });
+    });
+  });
 });

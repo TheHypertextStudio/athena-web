@@ -180,6 +180,30 @@ describe('dependency graph — org scope', () => {
     expect(out.nodes.some((node) => node.id === secret)).toBe(false);
     expect(JSON.stringify(out)).not.toContain('Classified dependency node');
   });
+
+  it('keeps node and edge order stable after property-only updates', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const first = await seedTask(orgId, teamId, { title: 'First' });
+    const second = await seedTask(orgId, teamId, { title: 'Second' });
+    const third = await seedTask(orgId, teamId, { title: 'Third' });
+    await db.insert(schema.taskDependency).values([
+      { organizationId: orgId, blockingTaskId: second, blockedTaskId: third },
+      { organizationId: orgId, blockingTaskId: first, blockedTaskId: second },
+    ]);
+    const before = await fetchGraph(orgId, humanActorId);
+
+    await db.update(schema.task).set({ priority: 'high' }).where(eq(schema.task.id, second));
+    const after = await fetchGraph(orgId, humanActorId);
+
+    expect(after.nodes.map(({ id }) => id)).toEqual(before.nodes.map(({ id }) => id));
+    expect(after.edges.map(({ id }) => id)).toEqual(before.edges.map(({ id }) => id));
+    expect(after.nodes.map(({ id }) => id)).toEqual(
+      [...after.nodes.map(({ id }) => id)].sort((left, right) => left.localeCompare(right)),
+    );
+    expect(after.edges.map(({ id }) => id)).toEqual(
+      [...after.edges.map(({ id }) => id)].sort((left, right) => left.localeCompare(right)),
+    );
+  });
 });
 
 describe('dependency graph — project scope', () => {

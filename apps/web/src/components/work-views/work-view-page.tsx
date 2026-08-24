@@ -241,7 +241,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
   );
   const activeCreatedProjectSelection =
     createdProjectSelection?.organizationId === organizationId ? createdProjectSelection : null;
-  const create = (path: readonly string[] = []): void => {
+  const create = (path: readonly string[] = [], returnFocusTo?: HTMLElement | null): void => {
     const applyColumn = (itemId: string): void => {
       const groupValue = path[0] ?? null;
       if (path.length === 0) return;
@@ -267,22 +267,25 @@ export function WorkViewPage<TTarget extends ViewTarget>({
         });
         return;
       case 'project':
-        openCreate({
-          initialWorkspaceId: organizationId,
-          sameWorkspaceCompletion: dependencyMode ? 'stay' : 'open',
-          kind: 'project',
-          onCreated: (item) => {
-            applyColumn(item.id);
-            if (dependencyMode && activeOrganizationIdRef.current === organizationId) {
-              setCreatedProjectSelection({
-                organizationId,
-                id: item.id,
-                state: 'pending',
-                attempt: 0,
-              });
-            }
+        openCreate(
+          {
+            initialWorkspaceId: organizationId,
+            sameWorkspaceCompletion: dependencyMode ? 'stay' : 'open',
+            kind: 'project',
+            onCreated: (item) => {
+              applyColumn(item.id);
+              if (dependencyMode && activeOrganizationIdRef.current === organizationId) {
+                setCreatedProjectSelection({
+                  organizationId,
+                  id: item.id,
+                  state: 'pending',
+                  attempt: 0,
+                });
+              }
+            },
           },
-        });
+          returnFocusTo,
+        );
         return;
       case 'program':
         openCreate({
@@ -314,7 +317,9 @@ export function WorkViewPage<TTarget extends ViewTarget>({
         requestedSelectionAttempt={activeCreatedProjectSelection?.attempt ?? 0}
         onRequestedSelectionResolved={resolveCreatedProjectSelection}
         onRequestedSelectionMissing={markCreatedProjectMissing}
-        onCreateProject={create}
+        onCreateProject={(returnFocusTo) => {
+          create([], returnFocusTo);
+        }}
       />
     );
   } else if (controller.loading) {
@@ -463,7 +468,8 @@ export function WorkViewPage<TTarget extends ViewTarget>({
       <Button
         role="tab"
         controlSize="sm"
-        className="rounded-full"
+        className="shrink-0 rounded-full"
+        aria-label={`All ${copy.title.toLowerCase()}`}
         variant={!dependencyMode && selectedViewId === null ? 'secondary' : 'ghost'}
         aria-selected={!dependencyMode && selectedViewId === null}
         onClick={() => {
@@ -471,7 +477,12 @@ export function WorkViewPage<TTarget extends ViewTarget>({
           setSelectedViewId(null);
         }}
       >
-        All {copy.title.toLowerCase()}
+        <span aria-hidden className="sm:hidden">
+          All
+        </span>
+        <span aria-hidden className="hidden sm:inline">
+          All {copy.title.toLowerCase()}
+        </span>
       </Button>
       {savedViews.map((view) => {
         const favorite = controller.favoriteViewIds.has(view.id);
@@ -480,7 +491,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
             <Button
               role="tab"
               controlSize="sm"
-              className="rounded-full"
+              className="shrink-0 rounded-full"
               variant={selectedViewId === view.id ? 'secondary' : 'ghost'}
               aria-selected={!dependencyMode && selectedViewId === view.id}
               onClick={() => {
@@ -510,7 +521,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
         <Button
           role="tab"
           controlSize="sm"
-          className="rounded-full"
+          className="shrink-0 rounded-full"
           variant={dependencyMode ? 'secondary' : 'ghost'}
           aria-selected={dependencyMode}
           onClick={() => {

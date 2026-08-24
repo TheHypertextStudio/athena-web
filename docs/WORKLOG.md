@@ -25,8 +25,12 @@
   - [x] Reconcile the route-policy, offline-route, and timeline fixtures with current code.
   - [x] Run the E2E stack through parsed environment configuration so public config keeps its boolean contract.
   - [x] Give the full workspace import scan enough time on shared CI runners.
+  - [x] Cover the deferred Initiative relationship, missing-target, and bounded-hierarchy branches.
   - [ ] Push the repair and verify the production rollout.
 - **Blockers**: The CI run for the repair must complete before deployment can start.
+- **Validation**: The focused aggregate suite passes 12 cases. The relationship coverage checks an
+  empty and manager capability bundle, parent and child references, direct and inherited Program
+  and Project rows, a missing Initiative, and a 101-child hierarchy bounded to 100 visible rows.
 
 ### [RELEASE-LINT-001] Restore the production lint gate
 

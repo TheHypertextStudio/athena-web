@@ -7,7 +7,7 @@ import type projectRollupRouter from '../../src/routes/project-rollup';
 import type programsRouter from '../../src/routes/programs';
 import type initiativesRouter from '../../src/routes/initiatives';
 import { detailCapabilities } from '../../src/lib/detail-capabilities';
-import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
+import { appWithActor, getDb, seedBaseOrg, seedStatuses } from '../support/routes-harness';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -338,6 +338,53 @@ describe('detail aggregate routes', () => {
       connectedWork: [{ id: program.id, kind: 'program', direct: true }],
       truncated: false,
     });
+  });
+
+  it('reports a missing deferred Initiative relationship section as not found', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const reader = appWithActor(initiatives, orgId, ['view'], humanActorId);
+
+    expect((await reader.request('/01ARZ3NDEKTSV4RRFFQ69G5FAV/relationships')).status).toBe(404);
+  });
+
+  it('bounds an expanded Initiative hierarchy instead of returning every descendant', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId);
+    const rootResponse = await writer.request('/', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Bounded hierarchy root' }),
+    });
+    const root = (await rootResponse.json()) as { id: string };
+    const statusId = await seedStatuses(db, schema, orgId);
+    const children = await db
+      .insert(schema.initiative)
+      .values(
+        Array.from({ length: 101 }, (_, index) => ({
+          organizationId: orgId,
+          name: `Bounded child ${index}`,
+          createdBy: humanActorId,
+          status: 'active' as const,
+          statusId: statusId('initiative', 'active'),
+        })),
+      )
+      .returning({ id: schema.initiative.id });
+    await db.insert(schema.initiativeHierarchyLink).values(
+      children.map((child) => ({
+        contextOrganizationId: orgId,
+        parentInitiativeId: root.id,
+        childInitiativeId: child.id,
+        createdBy: humanActorId,
+      })),
+    );
+
+    const response = await writer.request(`/${root.id}/relationships`);
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { children: { id: string }[]; truncated: boolean };
+    expect(body).toMatchObject({ truncated: true });
+    expect(body.children).toHaveLength(100);
+    const childIds = new Set(children.map((child) => child.id));
+    expect(body.children.every((child) => childIds.has(child.id))).toBe(true);
   });
 
   it('settles each initial aggregate within four database round trips', async () => {

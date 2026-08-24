@@ -137,7 +137,12 @@ export interface CreateObjectValue {
   readonly closeCreate: () => void;
 }
 
-const CreateObjectContext = createContext<CreateObjectValue | null>(null);
+interface CreateObjectStateValue extends CreateObjectValue {
+  readonly targetWorkspaceId: string | null;
+  readonly setTargetWorkspaceId: (workspaceId: string) => void;
+}
+
+const CreateObjectContext = createContext<CreateObjectStateValue | null>(null);
 
 /** Props for {@link CreateObjectProvider}. */
 export interface CreateObjectProviderProps {
@@ -151,13 +156,11 @@ export interface CreateObjectProviderProps {
  * @remarks
  * Opening without an explicit destination snapshots the shell's current workspace. Later target
  * changes are local to the composer: they do not call `setContext`, write the last-workspace
- * preference, or navigate the background page. The selected target is resolved by
- * {@link CreationContextProvider}; kind-specific composer bodies will consume that context as they
- * migrate into this shell seam.
+ * preference, or navigate the background page. The composer-only
+ * {@link CreationDestinationProvider} resolves the selected target without owning the page.
  */
 export function CreateObjectProvider({ children }: CreateObjectProviderProps): JSX.Element {
   const { activeOrgId: shellWorkspaceId } = useContextState();
-  const { orgs } = useActiveOrg();
   const [request, setRequest] = useState<CreateObjectRequest | null>(null);
   const [targetWorkspaceId, setTargetWorkspaceId] = useState<string | null>(null);
 
@@ -195,22 +198,46 @@ export function CreateObjectProvider({ children }: CreateObjectProviderProps): J
     if (targetWorkspaceId === null) setTargetWorkspaceId(shellWorkspaceId);
   }, [request, shellWorkspaceId, targetWorkspaceId]);
 
-  const value = useMemo<CreateObjectValue>(
-    () => ({ request, openCreate, closeCreate }),
-    [request, openCreate, closeCreate],
+  const value = useMemo<CreateObjectStateValue>(
+    () => ({ request, openCreate, closeCreate, targetWorkspaceId, setTargetWorkspaceId }),
+    [request, openCreate, closeCreate, targetWorkspaceId],
   );
 
+  return <CreateObjectContext.Provider value={value}>{children}</CreateObjectContext.Provider>;
+}
+
+/** Props for {@link CreationDestinationProvider}. */
+export interface CreationDestinationProviderProps {
+  /** The composer-only subtree that needs destination queries and permissions. */
+  readonly children: ReactNode;
+}
+
+/**
+ * Resolve destination data around the global composers without owning the background page.
+ *
+ * @remarks
+ * The stable {@link CreateObjectProvider} keeps request state above the application page. This
+ * provider sits beside that page around the composer hosts, so switching between idle and resolved
+ * destination contexts cannot replace or remount the page subtree.
+ */
+export function CreationDestinationProvider({
+  children,
+}: CreationDestinationProviderProps): JSX.Element {
+  const { orgs } = useActiveOrg();
+  const state = useContext(CreateObjectContext);
+  if (state === null) {
+    throw new Error('CreationDestinationProvider must be used within a <CreateObjectProvider>.');
+  }
+
   return (
-    <CreateObjectContext.Provider value={value}>
-      <CreationContextProvider
-        workspaces={orgs}
-        requestKind={request?.kind ?? null}
-        targetWorkspaceId={targetWorkspaceId}
-        onTargetWorkspaceChange={setTargetWorkspaceId}
-      >
-        {children}
-      </CreationContextProvider>
-    </CreateObjectContext.Provider>
+    <CreationContextProvider
+      workspaces={orgs}
+      requestKind={state.request?.kind ?? null}
+      targetWorkspaceId={state.targetWorkspaceId}
+      onTargetWorkspaceChange={state.setTargetWorkspaceId}
+    >
+      {children}
+    </CreationContextProvider>
   );
 }
 

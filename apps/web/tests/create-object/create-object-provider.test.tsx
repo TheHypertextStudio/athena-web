@@ -60,6 +60,7 @@ import {
   type CreateInitiativeRequest,
   completeCreateObject,
   CreateObjectProvider,
+  CreationDestinationProvider,
   type CreateProgramRequest,
   type CreateProjectRequest,
   type CreateTaskRequest,
@@ -537,6 +538,47 @@ function ProviderProbe(): JSX.Element {
   );
 }
 
+/** A page-owned state cell that must outlive every global create request. */
+function StatefulPageProbe(): JSX.Element {
+  const { request, openCreate, closeCreate } = useCreateObject();
+  const [count, setCount] = useState(0);
+
+  return (
+    <section aria-label="Stateful page">
+      <button
+        type="button"
+        onClick={() => {
+          setCount((current) => current + 1);
+        }}
+      >
+        Increment page state
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          openCreate({ kind: 'project', sameWorkspaceCompletion: 'stay' });
+        }}
+      >
+        Create project from page
+      </button>
+      <button
+        type="button"
+        onClick={() => {
+          openCreate({ kind: 'task', sameWorkspaceCompletion: 'stay' });
+        }}
+      >
+        Create task from page
+      </button>
+      {request ? (
+        <button type="button" onClick={closeCreate}>
+          Cancel page create
+        </button>
+      ) : null}
+      <output data-testid="page-state">{count}</output>
+    </section>
+  );
+}
+
 /** Resolve shell workspace data after a creation request has already opened. */
 function DelayedProviderHarness(): JSX.Element {
   const [workspaces, setWorkspaces] = useState<readonly OrgSummary[]>([]);
@@ -570,7 +612,9 @@ function DelayedProviderHarness(): JSX.Element {
       </button>
       <ActiveOrgContext orgs={workspaces} activeOrgId={null} orgsError={null} orgsLoading={false}>
         <CreateObjectProvider>
-          <ProviderProbe />
+          <CreationDestinationProvider>
+            <ProviderProbe />
+          </CreationDestinationProvider>
         </CreateObjectProvider>
       </ActiveOrgContext>
     </>
@@ -590,7 +634,10 @@ function renderProvider(workspaces: readonly OrgSummary[] = WORKSPACES): {
       <ContextProvider initialContext={ALPHA_ID}>
         <ActiveOrgContext orgs={workspaces} activeOrgId={null} orgsError={null} orgsLoading={false}>
           <CreateObjectProvider>
-            <ProviderProbe />
+            <StatefulPageProbe />
+            <CreationDestinationProvider>
+              <ProviderProbe />
+            </CreationDestinationProvider>
           </CreateObjectProvider>
         </ActiveOrgContext>
       </ContextProvider>
@@ -668,6 +715,31 @@ describe('CreateObjectProvider', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open project' }));
 
     expect(screen.getByTestId('request-kind')).toHaveTextContent('project');
+  });
+
+  it('preserves page identity and state while Project and Task composers open and close', async () => {
+    renderProvider();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Increment page state' }));
+    expect(screen.getByTestId('page-state')).toHaveTextContent('1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create project from page' }));
+    await waitFor(() => {
+      expect(screen.getByTestId('target-name')).toHaveTextContent('Alpha workspace');
+    });
+    expect(screen.getByTestId('page-state')).toHaveTextContent('1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel page create' }));
+    expect(screen.getByTestId('page-state')).toHaveTextContent('1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Create task from page' }));
+    await waitFor(() => {
+      expect(screen.getByTestId('target-name')).toHaveTextContent('Alpha workspace');
+    });
+    expect(screen.getByTestId('page-state')).toHaveTextContent('1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel page create' }));
+    expect(screen.getByTestId('page-state')).toHaveTextContent('1');
   });
 
   it('defaults the creation target to the shell workspace without rebinding the shell', async () => {

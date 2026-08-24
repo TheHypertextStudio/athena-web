@@ -16,7 +16,7 @@ import {
   ViewInstanceKey,
 } from '@docket/types';
 import { EmptyState } from '@docket/ui/components';
-import { FolderKanban, Heart, Layers, ListChecks, Plus, Target } from '@docket/ui/icons';
+import { FolderKanban, Heart, Layers, ListChecks, Plus, Target, X } from '@docket/ui/icons';
 import {
   Button,
   Dialog,
@@ -29,7 +29,7 @@ import {
   Skeleton,
 } from '@docket/ui/primitives';
 import type { ViewTarget } from '@docket/work/view-contract';
-import { type JSX, useRef, useState } from 'react';
+import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 
 import { useCreateObject } from '@/components/create-object/create-object-provider';
 import { useActiveOrg } from '@/components/active-org';
@@ -37,6 +37,7 @@ import { InPageSearchField } from '@/components/in-page-search/in-page-search-fi
 import { useInPageSearchTarget } from '@/components/in-page-search/in-page-search-provider';
 import { ListPageLayout } from '@/components/views/page-layout';
 import { api } from '@/lib/api';
+import { navigateAuthenticated } from '@/lib/app-location';
 import { openEntity } from '@/lib/local-first-navigation';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, type RpcResponse, useApiQuery } from '@/lib/query';
@@ -116,6 +117,13 @@ const PAGE_COPY = {
 
 const SavedWorkViewPage = pageOf(SavedWorkViewOut);
 
+interface CreatedProjectSelection {
+  readonly organizationId: string;
+  readonly id: string;
+  readonly state: 'pending' | 'missing';
+  readonly attempt: number;
+}
+
 async function savedViewsResponse(
   organizationId: string,
 ): Promise<RpcResponse<ReturnType<typeof SavedWorkViewPage.parse>>> {
@@ -151,11 +159,15 @@ export function WorkViewPage<TTarget extends ViewTarget>({
   const [viewScope, setViewScope] = useState<ViewScope>('personal');
   const [viewTeamId, setViewTeamId] = useState('');
   const [dependencyMode, setDependencyMode] = useState(false);
+  const [createdProjectSelection, setCreatedProjectSelection] =
+    useState<CreatedProjectSelection | null>(null);
   const [selectedViewId, setSelectedViewId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [findOpen, setFindOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const activeOrganizationIdRef = useRef(organizationId);
+  activeOrganizationIdRef.current = organizationId;
   const copy = PAGE_COPY[target];
   const savedViewsQuery = useApiQuery(
     apiQueryOptions(
@@ -198,6 +210,35 @@ export function WorkViewPage<TTarget extends ViewTarget>({
   const openRow = (row: WorkViewRowFor<TTarget>): void => {
     openEntity(entityNavigationSnapshotFromWorkViewRow(row));
   };
+  useEffect(() => {
+    setCreatedProjectSelection((selection) =>
+      selection?.organizationId === organizationId ? selection : null,
+    );
+  }, [organizationId]);
+  const resolveCreatedProjectSelection = useCallback(
+    (projectId: string): void => {
+      if (activeOrganizationIdRef.current !== organizationId) return;
+      setCreatedProjectSelection((selection) =>
+        selection?.organizationId === organizationId && selection.id === projectId
+          ? null
+          : selection,
+      );
+    },
+    [organizationId],
+  );
+  const markCreatedProjectMissing = useCallback(
+    (projectId: string): void => {
+      if (activeOrganizationIdRef.current !== organizationId) return;
+      setCreatedProjectSelection((selection) =>
+        selection?.organizationId === organizationId && selection.id === projectId
+          ? { ...selection, state: 'missing' }
+          : selection,
+      );
+    },
+    [organizationId],
+  );
+  const activeCreatedProjectSelection =
+    createdProjectSelection?.organizationId === organizationId ? createdProjectSelection : null;
   const create = (path: readonly string[] = []): void => {
     const applyColumn = (itemId: string): void => {
       const groupValue = path[0] ?? null;
@@ -225,10 +266,19 @@ export function WorkViewPage<TTarget extends ViewTarget>({
         return;
       case 'project':
         openCreate({
-          ...base,
+          initialWorkspaceId: organizationId,
+          sameWorkspaceCompletion: dependencyMode ? 'stay' : 'open',
           kind: 'project',
           onCreated: (item) => {
             applyColumn(item.id);
+            if (dependencyMode && activeOrganizationIdRef.current === organizationId) {
+              setCreatedProjectSelection({
+                organizationId,
+                id: item.id,
+                state: 'pending',
+                attempt: 0,
+              });
+            }
           },
         });
         return;
@@ -255,7 +305,15 @@ export function WorkViewPage<TTarget extends ViewTarget>({
 
   let content: JSX.Element;
   if (target === 'project' && dependencyMode) {
-    content = <ProjectDependencyLens organizationId={organizationId} />;
+    content = (
+      <ProjectDependencyLens
+        organizationId={organizationId}
+        requestedSelectionId={activeCreatedProjectSelection?.id ?? null}
+        requestedSelectionAttempt={activeCreatedProjectSelection?.attempt ?? 0}
+        onRequestedSelectionResolved={resolveCreatedProjectSelection}
+        onRequestedSelectionMissing={markCreatedProjectMissing}
+      />
+    );
   } else if (controller.loading) {
     content = (
       <div
@@ -532,6 +590,60 @@ export function WorkViewPage<TTarget extends ViewTarget>({
                 ? userErrorMessage(projectTimeline.error, 'Could not reschedule this project.')
                 : userErrorMessage(orderMutation.error, `Could not move this ${copy.singular}.`)}
             </p>
+          ) : null}
+          {target === 'project' &&
+          dependencyMode &&
+          activeCreatedProjectSelection?.state === 'missing' ? (
+            <div className="bg-secondary-container text-on-secondary-container text-body-medium flex shrink-0 items-center gap-2 rounded-lg px-3 py-2">
+              <span role="status" className="min-w-0 flex-1">
+                Project created, but it is not visible yet.
+              </span>
+              <Button
+                variant="ghost"
+                controlSize="sm"
+                onClick={() => {
+                  setCreatedProjectSelection((selection) =>
+                    selection?.organizationId === organizationId &&
+                    selection.id === activeCreatedProjectSelection.id
+                      ? {
+                          ...selection,
+                          state: 'pending',
+                          attempt: selection.attempt + 1,
+                        }
+                      : selection,
+                  );
+                }}
+              >
+                Retry
+              </Button>
+              <Button
+                variant="ghost"
+                controlSize="sm"
+                onClick={() => {
+                  setCreatedProjectSelection(null);
+                  navigateAuthenticated(
+                    '/orgs/[orgId]/projects/[projectId]',
+                    {
+                      orgId: organizationId,
+                      projectId: activeCreatedProjectSelection.id,
+                    },
+                  );
+                }}
+              >
+                Open project
+              </Button>
+              <Button
+                variant="ghost"
+                iconOnly
+                controlSize="sm"
+                aria-label="Dismiss created Project notice"
+                onClick={() => {
+                  setCreatedProjectSelection(null);
+                }}
+              >
+                <X aria-hidden />
+              </Button>
+            </div>
           ) : null}
           {content}
         </div>

@@ -35,7 +35,7 @@ import {
 import { X } from '@docket/ui/icons';
 import { type Edge, type Node, Panel } from '@xyflow/react';
 import { useQueryClient } from '@tanstack/react-query';
-import { type JSX, useCallback, useMemo, useState } from 'react';
+import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
 import Canvas from '@/components/canvas/canvas';
 import { useProjectGraphLayout } from '@/components/canvas/project-graph-layout';
@@ -61,6 +61,14 @@ export interface ProjectGraphPanelProps {
   rows: readonly ProjectOverviewItem[];
   /** The owning org id, used to build project navigation hrefs and scope dependency writes. */
   orgId: string;
+  /** A newly created Project to select once the refreshed overview includes it. */
+  requestedSelectionId?: string | null | undefined;
+  /** Clear the host's pending selection after the Project row becomes selectable. */
+  onRequestedSelectionResolved?: ((id: string) => void) | undefined;
+  /** Whether a post-create overview refresh has settled for the requested selection. */
+  requestedSelectionSettled?: boolean | undefined;
+  /** Preserve the created id in host-owned missing-row state when refresh excludes it. */
+  onRequestedSelectionMissing?: ((id: string) => void) | undefined;
 }
 
 /**
@@ -68,11 +76,34 @@ export interface ProjectGraphPanelProps {
  *
  * @param props - See {@link ProjectGraphPanelProps}.
  */
-export function ProjectGraphPanel({ rows, orgId }: ProjectGraphPanelProps): JSX.Element {
+export function ProjectGraphPanel({
+  rows,
+  orgId,
+  requestedSelectionId = null,
+  onRequestedSelectionResolved,
+  requestedSelectionSettled = false,
+  onRequestedSelectionMissing,
+}: ProjectGraphPanelProps): JSX.Element {
   const queryClient = useQueryClient();
   const { containerRef, aspectRatio, ready: aspectReady } = useCanvasAspectRatio();
   const overviewKey = useMemo(() => [...queryKeys.projects(orgId), 'overview'] as const, [orgId]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (requestedSelectionId === null) return;
+    if (rows.some((project) => project.id === requestedSelectionId)) {
+      setSelectedId(requestedSelectionId);
+      onRequestedSelectionResolved?.(requestedSelectionId);
+      return;
+    }
+    if (requestedSelectionSettled) onRequestedSelectionMissing?.(requestedSelectionId);
+  }, [
+    onRequestedSelectionMissing,
+    onRequestedSelectionResolved,
+    requestedSelectionId,
+    requestedSelectionSettled,
+    rows,
+  ]);
 
   // The edit gate mirrors the task graph: only a `contribute`-capable viewer gets connectable
   // handles. Both lists are almost always already cached from the surrounding portfolio surfaces.

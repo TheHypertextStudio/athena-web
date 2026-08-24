@@ -24,7 +24,10 @@ import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useRef, useS
 
 import AccountMenu, { type AccountMenuIdentity } from '@/components/account-menu';
 import { ActiveOrgContext, useActiveOrg } from '@/components/active-org';
-import { CreateObjectProvider } from '@/components/create-object/create-object-provider';
+import {
+  CreateObjectProvider,
+  CreationDestinationProvider,
+} from '@/components/create-object/create-object-provider';
 import { GlobalInitiativeComposer } from '@/components/initiatives/create-initiative';
 import { GlobalProgramComposer } from '@/components/programs/create-program';
 import { GlobalProjectComposer } from '@/components/projects/create-project';
@@ -877,11 +880,13 @@ function AthenaShellChrome({
       ) : sessionRejected ? null : (
         <SettingsShell active={settingsSurface}>{children}</SettingsShell>
       )}
-      <GlobalTaskComposer />
-      <GlobalProjectComposer />
-      <GlobalInitiativeComposer />
-      <GlobalProgramComposer />
-      <GlobalTeamComposer />
+      <CreationDestinationProvider>
+        <GlobalTaskComposer />
+        <GlobalProjectComposer />
+        <GlobalInitiativeComposer />
+        <GlobalProgramComposer />
+        <GlobalTeamComposer />
+      </CreationDestinationProvider>
     </AppShell>
   );
 }

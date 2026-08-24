@@ -66,7 +66,7 @@ export interface CreationContextProviderProps {
   readonly targetWorkspaceId: string | null;
   /** Update the selected destination. */
   readonly onTargetWorkspaceChange: (workspaceId: string) => void;
-  /** The shell-persistent subtree. */
+  /** The global composer subtree. */
   readonly children: ReactNode;
 }
 
@@ -209,8 +209,8 @@ function ResolvedCreationContext({
  * @remarks
  * Four independently keyed TanStack queries resolve the workspace detail (including vocabulary),
  * teams, members, and roles. Permission and default-team facts are derived from those typed
- * results. Keeping the closed state query-free lets the provider remain mounted in the shell
- * without adding background traffic to every page.
+ * results. Keeping the closed state query-free lets the provider remain mounted around the global
+ * composers without adding background traffic to every page.
  */
 export function CreationContextProvider({
   workspaces,

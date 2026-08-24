@@ -24,6 +24,8 @@ interface PriorityPickerProps {
   onSelect: (priority: Priority) => void;
   /** Whether a priority update is in flight (disables the trigger). */
   pending: boolean;
+  /** Whether the viewer lacks permission to change this Task. */
+  disabled?: boolean;
 }
 
 /**
@@ -35,11 +37,16 @@ interface PriorityPickerProps {
  * check on the active level. Selecting the current priority is a no-op. Keyboard-
  * navigable through the Radix menu; all colors are token-backed.
  */
-export function PriorityPicker({ current, onSelect, pending }: PriorityPickerProps): JSX.Element {
+export function PriorityPicker({
+  current,
+  onSelect,
+  pending,
+  disabled = false,
+}: PriorityPickerProps): JSX.Element {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" disabled={pending} className="gap-2">
+        <Button variant="outline" size="sm" disabled={pending || disabled} className="gap-2">
           <PriorityGlyph priority={current} />
           {PRIORITY_LABEL[current]}
         </Button>

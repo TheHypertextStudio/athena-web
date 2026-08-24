@@ -53,6 +53,7 @@ export function toOut(t: TaskRow, labels: readonly LabelRefRow[]): z.input<typeo
       syncMode: t.sourceSyncMode,
     },
     createdAt: t.createdAt.toISOString(),
+    updatedAt: t.updatedAt.toISOString(),
   };
 }
 

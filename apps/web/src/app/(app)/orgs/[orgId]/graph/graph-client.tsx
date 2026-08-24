@@ -3,7 +3,7 @@
 import type { JSX } from 'react';
 
 import { resolveTaskGraphScope } from '@/components/canvas/scope';
-import { useAppLocation } from '@/lib/app-location';
+import { useAppSearchParams, useTypedRoute } from '@/lib/app-location';
 
 import GraphCanvas from './graph-canvas';
 
@@ -23,8 +23,10 @@ import GraphCanvas from './graph-canvas';
  * @returns The focused graph canvas for the current URL.
  */
 export default function GraphClient(): JSX.Element {
-  const { params, searchParams } = useAppLocation();
-  const orgId = typeof params['orgId'] === 'string' ? params['orgId'] : '';
+  const {
+    params: { orgId },
+  } = useTypedRoute('/orgs/[orgId]/graph');
+  const searchParams = useAppSearchParams();
   const scope = resolveTaskGraphScope(orgId, {
     projectId: searchParams.get('projectId') ?? undefined,
     rootTaskId: searchParams.get('rootTaskId') ?? undefined,

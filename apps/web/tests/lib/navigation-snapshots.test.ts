@@ -68,6 +68,17 @@ describe('navigation snapshot memory', () => {
     expect(refreshed?.target === 'task' ? refreshed.title : null).toBe('refreshed');
     expect(store.get('task', IDS[1])).toBeNull();
   });
+
+  it('removes one tombstoned entity without evicting recent unrelated snapshots', () => {
+    const store = createNavigationSnapshotStore(3);
+    store.seed(task(IDS[0]));
+    store.seed(task(IDS[1]));
+
+    store.remove('task', IDS[0]);
+
+    expect(store.get('task', IDS[0])).toBeNull();
+    expect(store.get('task', IDS[1])?.id).toBe(IDS[1]);
+  });
 });
 
 describe('navigation snapshot persistence', () => {
@@ -144,6 +155,18 @@ describe('navigation snapshot persistence', () => {
 
     expect(storage.records.size).toBe(0);
   });
+
+  it('deletes one inaccessible entity from its account bucket', async () => {
+    const storage = memoryStorage();
+    const repository = createNavigationSnapshotRepository({ storage, now: () => NOW });
+    await repository.write('user-a', task(IDS[0]));
+    await repository.write('user-a', task(IDS[1]));
+
+    await repository.remove('user-a', 'task', IDS[0]);
+
+    expect(await repository.read('user-a', 'task', IDS[0])).toBeNull();
+    expect((await repository.read('user-a', 'task', IDS[1]))?.id).toBe(IDS[1]);
+  });
 });
 
 describe('navigation snapshot runtime', () => {
@@ -177,6 +200,23 @@ describe('navigation snapshot runtime', () => {
     expect(storage.records.size).toBe(0);
   });
 
+  it('purges a revoked entity from memory and durable storage', async () => {
+    const storage = memoryStorage();
+    const store = createNavigationSnapshotStore();
+    const repository = createNavigationSnapshotRepository({ storage, now: () => NOW });
+    const runtime = createNavigationSnapshotRuntime({ store, repository });
+    runtime.setUser('user-a');
+    runtime.seed(task(IDS[0]));
+    runtime.seed(task(IDS[1]));
+    await Promise.resolve();
+
+    await runtime.remove('task', IDS[0]);
+
+    expect(store.get('task', IDS[0])).toBeNull();
+    expect(await repository.read('user-a', 'task', IDS[0])).toBeNull();
+    expect(store.get('task', IDS[1])?.id).toBe(IDS[1]);
+  });
+
   it('discards a durable read when the active account changes before it resolves', async () => {
     const store = createNavigationSnapshotStore();
     let resolveRead: ((value: EntityNavigationSnapshot) => void) | undefined;
@@ -186,6 +226,7 @@ describe('navigation snapshot runtime', () => {
         new Promise<EntityNavigationSnapshot>((resolve) => {
           resolveRead = resolve;
         }),
+      remove: async () => undefined,
       purgeAll: async () => undefined,
     };
     const runtime = createNavigationSnapshotRuntime({ store, repository });

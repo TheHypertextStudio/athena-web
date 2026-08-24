@@ -29,6 +29,8 @@ interface StatusPickerProps {
   onSelect: (stateKey: string) => void;
   /** Whether a transition is in flight (disables the trigger and shows it busy). */
   pending: boolean;
+  /** Whether the viewer lacks permission to change this Task. */
+  disabled?: boolean;
 }
 
 /**
@@ -48,6 +50,7 @@ export function StatusPicker({
   currentType,
   onSelect,
   pending,
+  disabled = false,
 }: StatusPickerProps): JSX.Element {
   const activeState = states?.find((s) => s.key === current);
   const label = activeState?.name ?? humanizeKey(current);
@@ -65,7 +68,7 @@ export function StatusPicker({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" disabled={pending} className="gap-2">
+        <Button variant="outline" size="sm" disabled={pending || disabled} className="gap-2">
           <StatusIcon type={type} />
           {label}
           <ChevronDown className="text-on-surface-variant" />

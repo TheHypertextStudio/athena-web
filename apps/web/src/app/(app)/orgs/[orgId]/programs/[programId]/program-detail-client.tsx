@@ -4,6 +4,7 @@ import type { UpdateOut } from '@docket/types';
 import { ActorAvatar, type PickerOption } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Ellipsis, Trash2 } from '@docket/ui/icons';
+import { useQueryClient } from '@tanstack/react-query';
 import {
   Button,
   ControlGroup,
@@ -24,7 +25,10 @@ import { EditableTitle } from '@/components/editor/editable-title';
 import { EditableSubtitle } from '@/components/editor/editable-subtitle';
 import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
 import { PageContainer } from '@/components/views/page-layout';
-import { EntityDetailSkeleton } from '@/components/views/entity-detail-skeleton';
+import {
+  EntityDetailSkeleton,
+  EntityDetailSnapshot,
+} from '@/components/views/entity-detail-skeleton';
 import { EntityDetailLayout, EntityMetadataRow } from '@/components/views/entity-detail-layout';
 import { ProgramProjectsPanel } from '@/components/programs/program-projects-panel';
 import { ProgramPropertiesPanel } from '@/components/programs/properties-panel';
@@ -36,19 +40,29 @@ import { useDocumentTitle } from '@/components/tabs/use-document-title';
 import { useRegisterTabTitle } from '@/components/tabs/use-register-tab-title';
 import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
-import { aggregateLoadState, programDetailAggregateDef } from '@/lib/detail-aggregate';
+import {
+  aggregateLoadState,
+  programDetailAggregateDef,
+  terminalDetailFailure,
+} from '@/lib/detail-aggregate';
 import { orgMembersDef } from '@/lib/use-org-membership';
 import { useProgramMutations } from '@/lib/use-program-mutations';
 import { userErrorMessage } from '@/lib/problem';
 import { useNavigationSnapshot } from '@/lib/use-navigation-snapshot';
-import { seedNavigationSnapshot } from '@/lib/navigation-snapshot-runtime';
+import {
+  removeNavigationSnapshot,
+  seedNavigationSnapshot,
+} from '@/lib/navigation-snapshot-runtime';
 import { useAppRouter } from '@/lib/interactions/navigation';
+import { openProjectRecord } from '@/lib/local-first-navigation';
+import { useDelayedBoolean } from '@/lib/use-delayed-boolean';
 
 type TabId = 'overview' | 'projects' | 'work' | 'updates';
 
 /** ProgramDetailPage renders the authenticated program page. */
 export default function ProgramDetailPage(): JSX.Element {
   const router = useAppRouter();
+  const queryClient = useQueryClient();
   const { params } = useTypedRoute('/orgs/[orgId]/programs/[programId]');
   const { orgId, programId } = params;
   const navigationSnapshot = useNavigationSnapshot('program', programId);
@@ -63,7 +77,10 @@ export default function ProgramDetailPage(): JSX.Element {
   const [tab, setTab] = useState<TabId>('overview');
   const [ownerPickerOpen, setOwnerPickerOpen] = useState(false);
 
-  const aggregateQ = useApiQuery(aggregateDef);
+  const [aggregateEnabled, setAggregateEnabled] = useState(true);
+  const [terminalState, setTerminalState] = useState<'forbidden' | 'not-found' | null>(null);
+  const aggregateQ = useApiQuery({ ...aggregateDef, enabled: aggregateEnabled });
+  const terminalFailure = terminalDetailFailure(aggregateQ.error);
   const aggregate = aggregateQ.data ?? null;
   const program = aggregate?.defaultView.program ?? null;
   const aggregateState = aggregateLoadState(
@@ -72,10 +89,23 @@ export default function ProgramDetailPage(): JSX.Element {
     aggregateQ.isPending,
     aggregateQ.isError,
   );
+  const snapshotSyncing = useDelayedBoolean(aggregateState === 'snapshot', 300);
+
+  useEffect(() => {
+    setTerminalState(null);
+  }, [programId]);
 
   useEffect(() => {
     if (aggregate) seedNavigationSnapshot(aggregate.snapshot);
   }, [aggregate]);
+
+  useEffect(() => {
+    if (terminalFailure === null) return;
+    setTerminalState(terminalFailure);
+    setAggregateEnabled(false);
+    void removeNavigationSnapshot('program', programId);
+    queryClient.removeQueries({ queryKey: detailKey, exact: true });
+  }, [detailKey, programId, queryClient, terminalFailure]);
 
   // The tab bar and the browser tab both follow the name on screen, including through a rename.
   useRegisterTabTitle('program', orgId, programId, program?.name);
@@ -158,7 +188,38 @@ export default function ProgramDetailPage(): JSX.Element {
     { value: 'updates', label: 'Updates' },
   ];
 
-  if (aggregateState === 'loading' || aggregateState === 'snapshot') {
+  if (terminalState !== null) {
+    return (
+      <p role="alert" className="text-on-surface-variant mx-auto max-w-7xl p-6">
+        {terminalState === 'forbidden'
+          ? `You no longer have access to this ${programLabel.toLowerCase()}.`
+          : `This ${programLabel.toLowerCase()} no longer exists.`}
+      </p>
+    );
+  }
+  if (aggregateState === 'snapshot' && navigationSnapshot !== null) {
+    return (
+      <>
+        <EntityDetailSnapshot
+          label={programLabel}
+          title={navigationSnapshot.name}
+          metadata={
+            <span className="text-on-surface-variant text-body-small">
+              {navigationSnapshot.status}
+              {navigationSnapshot.health ? ` · ${navigationSnapshot.health}` : ''}
+            </span>
+          }
+          syncing={snapshotSyncing}
+        />
+        {aggregateQ.isError ? (
+          <p role="alert" className="text-error text-body-medium px-6 pb-6">
+            Could not refresh this {programLabel.toLowerCase()}.
+          </p>
+        ) : null}
+      </>
+    );
+  }
+  if (aggregateState === 'loading') {
     // placeholder: the program's own record — name, summary, the metric strip, detail tabs,
     // and the projects under it. The route carries only a program
     // id; even the tab row's counts come from the same read.
@@ -356,8 +417,8 @@ export default function ProgramDetailPage(): JSX.Element {
             programDetailKey={detailKey}
             projectNoun={projectNounCased}
             canEdit={canEdit}
-            onOpenProject={(projectId) => {
-              router.push(`/orgs/${orgId}/projects/${projectId}`);
+            onOpenProject={(project) => {
+              openProjectRecord(project);
             }}
           />
         </div>

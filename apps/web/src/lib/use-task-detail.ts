@@ -3,9 +3,9 @@
  *
  * @remarks
  * Returns a stable snapshot of every data slice the task detail surface needs:
- * the rich task + its team's workflow states, the org rosters (projects, programs,
- * members, agents, milestones, cycles, roles), the task's comment stream, and the
- * activity from the most-recent agent session bound to the task.
+ * the rich task + its team's workflow states, picker rosters loaded only when their
+ * own editor opens, the task's comment stream, and the activity from the most-recent
+ * agent session bound to the task.
  *
  * All queries run through {@link useApiQuery} so they auto-refetch on window focus
  * and after any mutation without manual refresh.
@@ -19,9 +19,9 @@ import {
   type MilestoneOut,
   type ProgramOut,
   type ProjectOut,
-  type RoleOut,
   type SessionActivityOut,
   type TaskDetail,
+  type TaskNavigationSnapshot,
   TaskSubjectRef,
   type WorkflowState,
 } from '@docket/types';
@@ -29,7 +29,11 @@ import type { QueryKey } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
 import { api } from './api';
-import { taskDetailAggregateDef } from './detail-aggregate';
+import {
+  taskDetailAggregateDef,
+  terminalDetailFailure,
+  type TerminalDetailFailure,
+} from './detail-aggregate';
 import { userErrorMessage } from './problem';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery, useLiveApiQuery } from './query';
 
@@ -59,10 +63,17 @@ export interface TaskDetailData {
   agents: readonly AgentOut[];
   milestones: readonly MilestoneOut[];
   cycles: readonly CycleOut[];
-  roles: readonly RoleOut[];
   comments: readonly CommentOut[];
   activities: readonly SessionActivityOut[];
   taskSession: AgentSessionOut | null;
+  /** Permissions resolved by the aggregate, without an organization-role roster. */
+  capabilities: { comment: boolean; contribute: boolean; assign: boolean; manage: boolean } | null;
+  /** The authenticated actor who edits this Task's document. */
+  currentActorId: string | null;
+  /** The bounded snapshot that replaces the local navigation snapshot after reconciliation. */
+  snapshot: TaskNavigationSnapshot | null;
+  /** A deletion or access-revocation result that must evict cached Task data. */
+  terminalFailure: TerminalDetailFailure | null;
   /** The stable React Query key for the task detail — mutations invalidate against this. */
   detailKey: QueryKey;
   /** The stable React Query key for the comment stream. */
@@ -82,7 +93,15 @@ export interface TaskDetailData {
 export function useTaskDetail(
   orgId: string,
   taskId: string,
-  options: { activityOpen?: boolean; propertiesOpen?: boolean } = {},
+  options: {
+    aggregateEnabled?: boolean;
+    activityOpen?: boolean;
+    membersOpen?: boolean;
+    projectsOpen?: boolean;
+    programsOpen?: boolean;
+    milestonesOpen?: boolean;
+    cyclesOpen?: boolean;
+  } = {},
 ): TaskDetailData {
   const subject = TaskSubjectRef.parse({ subjectType: 'task', subjectId: taskId });
   const detailKey = useMemo<QueryKey>(
@@ -91,16 +110,19 @@ export function useTaskDetail(
   );
   const commentsKey = useMemo<QueryKey>(() => [...detailKey, 'comments'], [detailKey]);
 
-  const taskQ = useApiQuery(taskDetailAggregateDef(orgId, taskId));
+  const taskQ = useApiQuery({
+    ...taskDetailAggregateDef(orgId, taskId),
+    enabled: options.aggregateEnabled ?? true,
+  });
   const task = taskQ.data?.defaultView.task ?? null;
-  // Org rosters change rarely within a session — tier them `static` so reopening tasks doesn't
-  // refetch the same projects/programs/members/agents/milestones/cycles/roles every 30s.
+  // Picker rosters change rarely within a session, so an opened editor keeps its own static
+  // result. The first detail paint never opens an organization roster by accident.
   const projectsQ = useApiQuery(
     apiQueryOptions(
       queryKeys.projects(orgId),
       () => api.v1.orgs[':orgId'].projects.$get({ param: { orgId }, query: {} }),
       'Could not load projects.',
-      { enabled: options.propertiesOpen ?? false, staleTime: STALE.static },
+      { enabled: options.projectsOpen ?? false, staleTime: STALE.static },
     ),
   );
   const programsQ = useApiQuery(
@@ -108,7 +130,7 @@ export function useTaskDetail(
       queryKeys.programs(orgId),
       () => api.v1.orgs[':orgId'].programs.$get({ param: { orgId }, query: {} }),
       'Could not load programs.',
-      { enabled: options.propertiesOpen ?? false, staleTime: STALE.static },
+      { enabled: options.programsOpen ?? false, staleTime: STALE.static },
     ),
   );
   const membersQ = useApiQuery(
@@ -116,7 +138,7 @@ export function useTaskDetail(
       queryKeys.members(orgId),
       () => api.v1.orgs[':orgId'].members.$get({ param: { orgId } }),
       'Could not load members.',
-      { enabled: options.propertiesOpen ?? false, staleTime: STALE.static },
+      { enabled: options.membersOpen ?? false, staleTime: STALE.static },
     ),
   );
   const agentsQ = useApiQuery(
@@ -124,7 +146,7 @@ export function useTaskDetail(
       ['org', orgId, 'agents'],
       () => api.v1.orgs[':orgId'].agents.$get({ param: { orgId } }),
       'Could not load agents.',
-      { enabled: options.propertiesOpen ?? false, staleTime: STALE.static },
+      { enabled: options.activityOpen ?? false, staleTime: STALE.static },
     ),
   );
   const milestonesQ = useApiQuery(
@@ -132,7 +154,7 @@ export function useTaskDetail(
       ['org', orgId, 'milestones'],
       () => api.v1.orgs[':orgId'].milestones.$get({ param: { orgId }, query: {} }),
       'Could not load milestones.',
-      { enabled: options.propertiesOpen ?? false, staleTime: STALE.static },
+      { enabled: options.milestonesOpen ?? false, staleTime: STALE.static },
     ),
   );
   const cyclesQ = useApiQuery(
@@ -140,18 +162,9 @@ export function useTaskDetail(
       queryKeys.cycles(orgId),
       () => api.v1.orgs[':orgId'].cycles.$get({ param: { orgId }, query: {} }),
       'Could not load cycles.',
-      { enabled: options.propertiesOpen ?? false, staleTime: STALE.static },
+      { enabled: options.cyclesOpen ?? false, staleTime: STALE.static },
     ),
   );
-  const rolesQ = useApiQuery(
-    apiQueryOptions(
-      queryKeys.roles(orgId),
-      () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
-      'Could not load roles.',
-      { enabled: options.propertiesOpen ?? false, staleTime: STALE.static },
-    ),
-  );
-
   const commentsQ = useApiQuery(
     apiQueryOptions(
       commentsKey,
@@ -199,10 +212,13 @@ export function useTaskDetail(
     agents: agentsQ.data?.items ?? [],
     milestones: milestonesQ.data?.items ?? [],
     cycles: cyclesQ.data?.items ?? [],
-    roles: rolesQ.data?.items ?? [],
     comments: commentsQ.data?.items ?? [],
     activities: activityQ.data?.items ?? [],
     taskSession,
+    capabilities: taskQ.data?.capabilities ?? null,
+    currentActorId: taskQ.data?.viewer.actorId ?? null,
+    snapshot: taskQ.data?.snapshot ?? null,
+    terminalFailure: terminalDetailFailure(taskQ.error),
     detailKey,
     commentsKey,
     isPending: taskQ.isPending,

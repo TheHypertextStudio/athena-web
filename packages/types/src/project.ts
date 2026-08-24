@@ -269,6 +269,7 @@ export const ProjectOut = z
       .nullable()
       .describe('Read-only saved zero-based fiscal basis for a broad target value.'),
     createdAt: z.string().describe('When the project was created (ISO-8601 timestamp).'),
+    updatedAt: z.string().describe('Most-recent project update timestamp (ISO-8601 timestamp).'),
   })
   .meta({ id: 'ProjectOut', description: 'A project.' });
 /** Project representation value. */

@@ -47,7 +47,10 @@ import {
 import { memberActorOptions } from '@/components/pickers/options';
 import { usePickerOverlay } from '@/components/pickers/picker-overlay';
 import { PublishAction } from '@/components/publishing/publish-action';
-import { EntityDetailSkeleton } from '@/components/views/entity-detail-skeleton';
+import {
+  EntityDetailSkeleton,
+  EntityDetailSnapshot,
+} from '@/components/views/entity-detail-skeleton';
 import {
   ENTITY_METADATA_CHIP_CLASS,
   EntityDetailLayout,
@@ -57,7 +60,11 @@ import {
 import { useDocumentTitle } from '@/components/tabs/use-document-title';
 import { useRegisterTabTitle } from '@/components/tabs/use-register-tab-title';
 import { api } from '@/lib/api';
-import { aggregateLoadState, initiativeDetailAggregateDef } from '@/lib/detail-aggregate';
+import {
+  aggregateLoadState,
+  initiativeDetailAggregateDef,
+  terminalDetailFailure,
+} from '@/lib/detail-aggregate';
 import { initiativeRelationshipSectionsDef } from '@/lib/fetch-initiative-sections';
 import {
   apiQueryOptions,
@@ -74,7 +81,11 @@ import { formatPlanningTimeframe, toPlanningTimeframe } from '@/lib/planning-tim
 import { useFiscalYearStartMonth } from '@/lib/use-fiscal-year-start-month';
 import { useNavigationSnapshot } from '@/lib/use-navigation-snapshot';
 import { useAppRouter } from '@/lib/interactions/navigation';
-import { seedNavigationSnapshot } from '@/lib/navigation-snapshot-runtime';
+import { useDelayedBoolean } from '@/lib/use-delayed-boolean';
+import {
+  removeNavigationSnapshot,
+  seedNavigationSnapshot,
+} from '@/lib/navigation-snapshot-runtime';
 import { orgMembersDef } from '@/lib/use-org-membership';
 
 type TabId = 'overview' | 'subinitiatives' | 'work' | 'updates' | 'resources';
@@ -112,7 +123,10 @@ export default function InitiativeDetailPage(): JSX.Element {
   const projectNoun = useVocabulary('project');
   const aggregateDef = initiativeDetailAggregateDef(orgId, initiativeId);
   const aggregateKey = aggregateDef.queryKey;
-  const aggregateQ = useApiQuery(aggregateDef);
+  const [aggregateEnabled, setAggregateEnabled] = useState(true);
+  const [terminalState, setTerminalState] = useState<'forbidden' | 'not-found' | null>(null);
+  const aggregateQ = useApiQuery({ ...aggregateDef, enabled: aggregateEnabled });
+  const terminalFailure = terminalDetailFailure(aggregateQ.error);
   const aggregate = aggregateQ.data ?? null;
   const detail = aggregate?.defaultView.initiative ?? null;
   const aggregateState = aggregateLoadState(
@@ -121,6 +135,7 @@ export default function InitiativeDetailPage(): JSX.Element {
     aggregateQ.isPending,
     aggregateQ.isError,
   );
+  const snapshotSyncing = useDelayedBoolean(aggregateState === 'snapshot', 300);
   const relationshipsQ = useApiQuery({
     ...initiativeRelationshipSectionsDef(orgId, initiativeId),
     enabled: aggregate !== null && (tab === 'subinitiatives' || tab === 'work'),
@@ -205,8 +220,20 @@ export default function InitiativeDetailPage(): JSX.Element {
   const status = useWorkStatus('initiative', detail?.status ?? '');
 
   useEffect(() => {
+    setTerminalState(null);
+  }, [initiativeId]);
+
+  useEffect(() => {
     if (aggregate) seedNavigationSnapshot(aggregate.snapshot);
   }, [aggregate]);
+
+  useEffect(() => {
+    if (terminalFailure === null) return;
+    setTerminalState(terminalFailure);
+    setAggregateEnabled(false);
+    void removeNavigationSnapshot('initiative', initiativeId);
+    queryClient.removeQueries({ queryKey: aggregateKey, exact: true });
+  }, [aggregateKey, initiativeId, queryClient, terminalFailure]);
 
   useRegisterTabTitle('initiative', orgId, initiativeId, detail?.name ?? navigationSnapshot?.name);
   useDocumentTitle(detail?.name ?? navigationSnapshot?.name);
@@ -311,7 +338,37 @@ export default function InitiativeDetailPage(): JSX.Element {
     },
   });
 
-  if (aggregateState === 'loading' || aggregateState === 'snapshot')
+  if (terminalState !== null) {
+    return (
+      <p role="alert" className="text-on-surface-variant mx-auto max-w-7xl p-6">
+        {terminalState === 'forbidden'
+          ? `You no longer have access to this ${initiativeNoun.toLowerCase()}.`
+          : `This ${initiativeNoun.toLowerCase()} no longer exists.`}
+      </p>
+    );
+  }
+  if (aggregateState === 'snapshot' && navigationSnapshot !== null)
+    return (
+      <>
+        <EntityDetailSnapshot
+          label={initiativeNoun}
+          title={navigationSnapshot.name}
+          metadata={
+            <span className="text-on-surface-variant text-body-small">
+              {navigationSnapshot.status} · {navigationSnapshot.priority}
+              {navigationSnapshot.health ? ` · ${navigationSnapshot.health}` : ''}
+            </span>
+          }
+          syncing={snapshotSyncing}
+        />
+        {aggregateQ.isError ? (
+          <p role="alert" className="text-error text-body-medium px-6 pb-6">
+            Could not refresh this {initiativeNoun.toLowerCase()}.
+          </p>
+        ) : null}
+      </>
+    );
+  if (aggregateState === 'loading')
     return (
       <>
         <EntityDetailSkeleton

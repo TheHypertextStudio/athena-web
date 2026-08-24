@@ -56,7 +56,7 @@ export interface MilestoneTasksProps {
   /** The (vocabulary-resolved) singular task noun, lowercased for inline copy. */
   taskNoun: string;
   /** Open a task's detail. */
-  onOpenTask: (taskId: string) => void;
+  onOpenTask: (task: TaskOut) => void;
   /** Open the full task composer scoped to this Project. */
   onCreate: () => void;
   /** Inline quick-add: create a task in this Project from a typed title. */
@@ -134,7 +134,7 @@ export function MilestoneTasks({
       canEdit,
       onRename,
       onOpen: (task) => {
-        onOpenTask(task.id);
+        onOpenTask(task);
       },
     });
   }, [statuses, resolveActor, canEdit, onRename, onOpenTask]);
@@ -195,7 +195,7 @@ export function MilestoneTasks({
             prefetch(taskDetailDef(orgId, task.id));
           }}
           onOpenTask={(task) => {
-            onOpenTask(task.id);
+            onOpenTask(task);
           }}
         />
       )}

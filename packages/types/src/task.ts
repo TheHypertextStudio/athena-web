@@ -361,6 +361,7 @@ export const TaskOut = z
         'Labels attached to the task, sorted by name. Embedded rather than referenced by id so a list row can render its chips without a second read.',
       ),
     createdAt: z.string().describe('Creation timestamp (ISO 8601).'),
+    updatedAt: z.string().describe('Most-recent task update timestamp (ISO 8601).'),
   })
   .meta({ id: 'TaskOut', description: 'A task.' });
 /** Task representation value. */

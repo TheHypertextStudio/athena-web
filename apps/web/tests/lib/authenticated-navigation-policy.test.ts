@@ -104,6 +104,19 @@ describe('authenticated navigation source policy', () => {
     expect(violations).toEqual([]);
   });
 
+  it('does not read dynamic search and graph parameters from an unchecked location bag', () => {
+    const files = [
+      'src/app/(app)/orgs/[orgId]/search/org-search-client.tsx',
+      'src/app/(app)/orgs/[orgId]/graph/graph-client.tsx',
+    ];
+    const violations = files.filter((file) => {
+      const source = readFileSync(join(webRoot, file), 'utf8');
+      return !source.includes('useTypedRoute') || source.includes('useAppLocation');
+    });
+
+    expect(violations).toEqual([]);
+  });
+
   it('keeps authenticated links behind DocketLink', () => {
     const violations = roots
       .flatMap(sourceFiles)

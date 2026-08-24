@@ -81,6 +81,7 @@ function toOut(p: ProjectRow): z.input<typeof ProjectOut> {
     targetDateResolution: p.targetDateResolution,
     targetDateFiscalYearStartMonth: p.targetDateFiscalYearStartMonth,
     createdAt: p.createdAt.toISOString(),
+    updatedAt: p.updatedAt.toISOString(),
   };
 }
 

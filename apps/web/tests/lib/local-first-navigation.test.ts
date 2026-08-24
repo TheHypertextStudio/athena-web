@@ -1,4 +1,10 @@
-import { OrganizationId, TaskId, TaskNavigationSnapshot } from '@docket/types';
+import {
+  OrganizationId,
+  TaskId,
+  TaskNavigationSnapshot,
+  TeamId,
+  type TaskOut,
+} from '@docket/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { seedNavigationSnapshot } = vi.hoisted(() => ({
@@ -7,7 +13,7 @@ const { seedNavigationSnapshot } = vi.hoisted(() => ({
 
 vi.mock('@/lib/navigation-snapshot-runtime', () => ({ seedNavigationSnapshot }));
 
-const { openEntity } = await import('@/lib/local-first-navigation');
+const { openEntity, openTaskRecord } = await import('@/lib/local-first-navigation');
 
 const snapshot = TaskNavigationSnapshot.parse({
   target: 'task',
@@ -50,5 +56,25 @@ describe('openEntity', () => {
 
     expect(seedNavigationSnapshot).not.toHaveBeenCalled();
     expect(window.location.pathname).toBe('/today');
+  });
+
+  it('derives the Task snapshot from a typed detail row when its recency field is present', () => {
+    const task: TaskOut = {
+      id: snapshot.id,
+      organizationId: snapshot.organizationId,
+      title: snapshot.title,
+      teamId: TeamId.parse('01ARZ3NDEKTSV4RRFFQ69G5FAT'),
+      state: snapshot.status,
+      priority: snapshot.priority,
+      provenance: { source: 'native' },
+      labels: [],
+      createdAt: '2026-08-23T10:00:00.000Z',
+      updatedAt: snapshot.updatedAt,
+    };
+
+    openTaskRecord(task);
+
+    expect(seedNavigationSnapshot).toHaveBeenCalledWith(snapshot);
+    expect(window.location.pathname).toBe(`/orgs/${snapshot.organizationId}/tasks/${snapshot.id}`);
   });
 });

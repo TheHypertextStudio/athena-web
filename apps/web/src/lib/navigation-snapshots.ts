@@ -24,6 +24,8 @@ export interface NavigationSnapshotStore {
     target: EntityNavigationSnapshotValue['target'],
     id: string,
   ): EntityNavigationSnapshotValue | null;
+  /** Remove one entity after deletion or access revocation. */
+  remove(target: EntityNavigationSnapshotValue['target'], id: string): void;
   /** Return the retained snapshots from oldest to newest. */
   values(): readonly EntityNavigationSnapshotValue[];
   /** Remove all live snapshots. */
@@ -58,6 +60,9 @@ export function createNavigationSnapshotStore(
     get(target, id) {
       return snapshots.get(snapshotIdentity(target, id)) ?? null;
     },
+    remove(target, id) {
+      snapshots.delete(snapshotIdentity(target, id));
+    },
     values() {
       return [...snapshots.values()];
     },
@@ -89,6 +94,12 @@ export interface NavigationSnapshotRepository {
     target: EntityNavigationSnapshotValue['target'],
     id: string,
   ): Promise<EntityNavigationSnapshotValue | null>;
+  /** Remove one entity after deletion or access revocation. */
+  remove(
+    userId: string,
+    target: EntityNavigationSnapshotValue['target'],
+    id: string,
+  ): Promise<void>;
   /** Delete every Docket navigation snapshot bucket. */
   purgeAll(): Promise<void>;
 }
@@ -275,6 +286,9 @@ export function createNavigationSnapshotRepository(
         await options.storage.set(keyForIndex, index);
         return record.snapshot;
       });
+    },
+    remove(userId, target, id) {
+      return serialize(() => removeRecord(userId, recordKey(userId, target, id)));
     },
     purgeAll() {
       return serialize(async () => {

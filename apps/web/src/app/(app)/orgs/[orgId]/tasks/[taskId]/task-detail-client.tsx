@@ -5,7 +5,8 @@ import { ActorAvatar, ActorPicker, type ActorKind, type PickerOption } from '@do
 import { useVocabulary } from '@docket/ui/hooks';
 import { Button, Skeleton, SkeletonChip, SkeletonText } from '@docket/ui/primitives';
 import { useTypedRoute } from '@/lib/app-location';
-import { type JSX, useCallback, useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useDocumentTitle } from '@/components/tabs/use-document-title';
 import { useRegisterTabTitle } from '@/components/tabs/use-register-tab-title';
@@ -29,6 +30,7 @@ import {
 } from '@/components/task-detail/task-header-controls';
 import { TaskTimerButton } from '@/components/time-tracking';
 import { TaskPropertiesRail } from '@/components/task-detail/task-properties-rail';
+import { EntityDetailSnapshot } from '@/components/views/entity-detail-skeleton';
 import {
   cycleOptions as toCycleOptions,
   labelOptions as toLabelOptions,
@@ -42,13 +44,16 @@ import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
 import { useEstimationScale } from '@/lib/use-estimation-scale';
 import { useTaskDetail } from '@/lib/use-task-detail';
 import { useTaskMutations } from '@/lib/use-task-mutations';
-import { useOrgCapability } from '@/lib/use-org-capability';
+import { useDelayedBoolean } from '@/lib/use-delayed-boolean';
 import { useRenameTask } from '@/lib/use-rename-task';
 import { useCategoryOf } from '@/components/entity-display/use-work-status';
 import { TaskRepeatingWorkBacklink } from '@/components/recurrence/repeating-work-backlink';
-import { useSession } from '@/lib/auth-client';
 import { useNavigationSnapshot } from '@/lib/use-navigation-snapshot';
 import { useAppRouter } from '@/lib/interactions/navigation';
+import {
+  removeNavigationSnapshot,
+  seedNavigationSnapshot,
+} from '@/lib/navigation-snapshot-runtime';
 
 interface TaskFeedActor {
   name: string;
@@ -59,6 +64,7 @@ interface TaskFeedActor {
 /** TaskDetailPage renders the authenticated task page. */
 export default function TaskDetailPage(): JSX.Element {
   const router = useAppRouter();
+  const queryClient = useQueryClient();
   const { params } = useTypedRoute('/orgs/[orgId]/tasks/[taskId]');
   const { orgId, taskId } = params;
   const navigationSnapshot = useNavigationSnapshot('task', taskId);
@@ -69,7 +75,15 @@ export default function TaskDetailPage(): JSX.Element {
   const categoryOf = useCategoryOf('task');
 
   const [activityOpen, setActivityOpen] = useState(false);
-  const [propertiesOpen, setPropertiesOpen] = useState(false);
+  const [aggregateEnabled, setAggregateEnabled] = useState(true);
+  const [terminalState, setTerminalState] = useState<'forbidden' | 'not-found' | null>(null);
+  const [membersOpen, setMembersOpen] = useState(false);
+  const [projectsOpen, setProjectsOpen] = useState(false);
+  const [programsOpen, setProgramsOpen] = useState(false);
+  const [milestonesOpen, setMilestonesOpen] = useState(false);
+  const [cyclesOpen, setCyclesOpen] = useState(false);
+  const [labelsOpen, setLabelsOpen] = useState(false);
+  const [propertiesTouched, setPropertiesTouched] = useState(false);
   const [linkedContentOpen, setLinkedContentOpen] = useState(false);
   const {
     task,
@@ -80,7 +94,6 @@ export default function TaskDetailPage(): JSX.Element {
     agents,
     milestones,
     cycles,
-    roles,
     comments,
     activities,
     detailKey,
@@ -88,11 +101,39 @@ export default function TaskDetailPage(): JSX.Element {
     isPending,
     isError,
     error,
-  } = useTaskDetail(orgId, taskId, { activityOpen, propertiesOpen });
+    capabilities,
+    currentActorId,
+    snapshot,
+    terminalFailure,
+  } = useTaskDetail(orgId, taskId, {
+    aggregateEnabled,
+    activityOpen,
+    membersOpen,
+    projectsOpen,
+    programsOpen,
+    milestonesOpen,
+    cyclesOpen,
+  });
+  const snapshotSyncing = useDelayedBoolean(
+    navigationSnapshot !== null && (isPending || isError),
+    300,
+  );
 
-  const { data: session } = useSession();
-  const currentActorId =
-    members.find((member) => member.userId === session?.user.id)?.actorId ?? null;
+  useEffect(() => {
+    setTerminalState(null);
+  }, [taskId]);
+
+  useEffect(() => {
+    if (snapshot) seedNavigationSnapshot(snapshot);
+  }, [snapshot]);
+
+  useEffect(() => {
+    if (terminalFailure === null) return;
+    setTerminalState(terminalFailure);
+    setAggregateEnabled(false);
+    void removeNavigationSnapshot('task', taskId);
+    queryClient.removeQueries({ queryKey: detailKey, exact: true });
+  }, [detailKey, queryClient, taskId, terminalFailure]);
 
   // The tab bar and the browser tab both follow the name on screen, including through a rename.
   useRegisterTabTitle('task', orgId, taskId, task?.title);
@@ -114,7 +155,7 @@ export default function TaskDetailPage(): JSX.Element {
     deleteError,
   } = useTaskMutations(orgId, taskId, detailKey, commentsKey);
 
-  const { scale: estimationScale } = useEstimationScale(orgId, propertiesOpen);
+  const { scale: estimationScale } = useEstimationScale(orgId, propertiesTouched);
 
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
@@ -139,9 +180,9 @@ export default function TaskDetailPage(): JSX.Element {
     [task, resolveActor],
   );
 
-  const canEdit = useOrgCapability(members, roles, 'contribute');
-  const canComment = useOrgCapability(members, roles, 'comment');
-  const canManage = useOrgCapability(members, roles, 'manage');
+  const canEdit = capabilities?.contribute ?? false;
+  const canComment = capabilities?.comment ?? false;
+  const canManage = capabilities?.manage ?? false;
   // Rename any subtask in place (an arbitrary task by id), then re-read this task's detail so the
   // refreshed subtask titles flow back in.
   const renameSubtask = useRenameTask(orgId, [detailKey]);
@@ -157,7 +198,7 @@ export default function TaskDetailPage(): JSX.Element {
           param: { orgId, subjectType: 'project' },
         }),
       'Could not load project icons.',
-      { enabled: propertiesOpen },
+      { enabled: projectsOpen },
     ),
   );
   const projectDisplays = projectDisplaysQ.data?.items ?? [];
@@ -173,7 +214,7 @@ export default function TaskDetailPage(): JSX.Element {
     () => toCycleOptions(cycles, formatWindow),
     [cycles],
   );
-  const labelsQ = useApiListQuery({ ...labelsDef(orgId), enabled: propertiesOpen });
+  const labelsQ = useApiListQuery({ ...labelsDef(orgId), enabled: labelsOpen });
   const labelOptions = useMemo<readonly PickerOption[]>(
     () => toLabelOptions(labelsQ.data?.items ?? []),
     [labelsQ.data],
@@ -218,6 +259,42 @@ export default function TaskDetailPage(): JSX.Element {
     [resetDelete],
   );
 
+  if (terminalState !== null) {
+    return (
+      <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
+        <p
+          role="alert"
+          className="border-outline-variant text-on-surface-variant rounded-lg border p-4"
+        >
+          {terminalState === 'forbidden'
+            ? 'You no longer have access to this task.'
+            : 'This task no longer exists.'}
+        </p>
+      </div>
+    );
+  }
+  if (navigationSnapshot !== null && (isPending || isError)) {
+    return (
+      <>
+        <EntityDetailSnapshot
+          label="Task"
+          title={navigationSnapshot.title}
+          metadata={
+            <span className="text-on-surface-variant text-body-small">
+              Status: {navigationSnapshot.status.replaceAll('_', ' ')} · Priority:{' '}
+              {PRIORITY_LABEL[navigationSnapshot.priority]}
+            </span>
+          }
+          syncing={snapshotSyncing}
+        />
+        {isError ? (
+          <p role="alert" className="text-error text-body-medium mx-auto max-w-6xl px-6 pb-6">
+            Could not refresh this task.
+          </p>
+        ) : null}
+      </>
+    );
+  }
   if (isPending) {
     // placeholder: the task's own record — its title, the state/priority/assignee controls whose
     // current values are the whole point of rendering them, its description, and its subtasks,
@@ -288,12 +365,7 @@ export default function TaskDetailPage(): JSX.Element {
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
-      <header
-        className="flex flex-col gap-4"
-        onFocusCapture={() => {
-          setPropertiesOpen(true);
-        }}
-      >
+      <header className="flex flex-col gap-4">
         <h1 className="leading-tight">
           <EditableTitle
             value={task.title}
@@ -316,6 +388,7 @@ export default function TaskDetailPage(): JSX.Element {
                 void setState(stateKey);
               }}
               pending={statusPending}
+              disabled={!canEdit}
             />
           }
           priority={
@@ -325,6 +398,7 @@ export default function TaskDetailPage(): JSX.Element {
                 void setPriority(priority);
               }}
               pending={priorityPending}
+              disabled={!canEdit}
             />
           }
           assignee={
@@ -340,6 +414,8 @@ export default function TaskDetailPage(): JSX.Element {
               triggerVariant="outline"
               triggerClassName="min-w-0 shrink"
               readOnly={!canEdit}
+              loading={membersOpen && members.length === 0}
+              onOpenChange={setMembersOpen}
             />
           }
           delegate={
@@ -376,6 +452,7 @@ export default function TaskDetailPage(): JSX.Element {
               assigneeId={task.assigneeId ?? null}
               canEdit={canEdit}
               canManage={canManage}
+              onAssigneeOpenChange={setMembersOpen}
               onPriorityChange={(priority) => {
                 void setPriority(priority);
               }}
@@ -507,7 +584,7 @@ export default function TaskDetailPage(): JSX.Element {
 
         <div
           onFocusCapture={() => {
-            setPropertiesOpen(true);
+            setPropertiesTouched(true);
           }}
         >
           <TaskPropertiesRail
@@ -520,6 +597,16 @@ export default function TaskDetailPage(): JSX.Element {
             milestoneOptions={milestoneOptions}
             cycleOptions={cycleOptions}
             labelOptions={labelOptions}
+            projectLoading={projectsOpen && projects.length === 0}
+            programLoading={programsOpen && programs.length === 0}
+            milestoneLoading={milestonesOpen && milestones.length === 0}
+            cycleLoading={cyclesOpen && cycles.length === 0}
+            labelsLoading={labelsOpen && labelsQ.data === undefined}
+            onProjectOpenChange={setProjectsOpen}
+            onProgramOpenChange={setProgramsOpen}
+            onMilestoneOpenChange={setMilestonesOpen}
+            onCycleOpenChange={setCyclesOpen}
+            onLabelsOpenChange={setLabelsOpen}
             onCreateLabel={onCreateLabel}
             estimationScale={estimationScale}
             canEdit={canEdit}

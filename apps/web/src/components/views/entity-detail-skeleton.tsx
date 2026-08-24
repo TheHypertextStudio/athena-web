@@ -112,6 +112,44 @@ export function EntityDetailSkeleton({
   );
 }
 
+/** Props for {@link EntityDetailSnapshot}. */
+export interface EntityDetailSnapshotProps {
+  /** Accessible name for the local document. */
+  label: string;
+  /** Identity carried from the source row. */
+  title: string;
+  /** Core state carried from the source row. */
+  metadata: ReactNode;
+  /** Whether the aggregate has exceeded the quiet reconciliation window. */
+  syncing: boolean;
+}
+
+/** Render a local entity identity without pretending its deferred content has loaded. */
+export function EntityDetailSnapshot({
+  label,
+  title,
+  metadata,
+  syncing,
+}: EntityDetailSnapshotProps): JSX.Element {
+  return (
+    <EntityDetailLayout
+      eyebrow={<span className="sr-only">{label}</span>}
+      icon={<span aria-hidden className="size-10" />}
+      title={title}
+      metadata={<EntityMetadataRow ariaLabel={label}>{metadata}</EntityMetadataRow>}
+      tabs={<div className="h-10" />}
+    >
+      <div className="min-h-96 pt-6">
+        {syncing ? (
+          <p role="status" className="text-on-surface-variant text-body-small">
+            Syncing…
+          </p>
+        ) : null}
+      </div>
+    </EntityDetailLayout>
+  );
+}
+
 /** Props for {@link EntityDetailBodySkeleton}. */
 export interface EntityDetailBodySkeletonProps {
   /** Accessible label naming what is loading (e.g. "Loading project tasks"). */

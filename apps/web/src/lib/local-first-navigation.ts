@@ -2,7 +2,11 @@
 
 import {
   EntityNavigationSnapshot,
+  ProjectNavigationSnapshot,
+  TaskNavigationSnapshot,
   type EntityNavigationSnapshot as EntityNavigationSnapshotValue,
+  type ProjectOut,
+  type TaskOut,
 } from '@docket/types';
 
 import { navigateAuthenticated, type AuthenticatedNavigationOptions } from '@/lib/app-location';
@@ -49,4 +53,40 @@ export function openEntity(
         options,
       );
   }
+}
+
+/** Seed and open a Task record when its source includes the required snapshot recency field. */
+export function openTaskRecord(task: TaskOut, options: AuthenticatedNavigationOptions = {}): void {
+  openEntity(
+    TaskNavigationSnapshot.parse({
+      target: 'task',
+      organizationId: task.organizationId,
+      id: task.id,
+      title: task.title,
+      status: task.state,
+      priority: task.priority,
+      updatedAt: task.updatedAt,
+    }),
+    options,
+  );
+}
+
+/** Seed and open a Project record when its source includes the required snapshot recency field. */
+export function openProjectRecord(
+  project: ProjectOut,
+  options: AuthenticatedNavigationOptions = {},
+): void {
+  openEntity(
+    ProjectNavigationSnapshot.parse({
+      target: 'project',
+      organizationId: project.organizationId,
+      id: project.id,
+      name: project.name,
+      status: project.status,
+      priority: project.priority,
+      health: project.health ?? null,
+      updatedAt: project.updatedAt,
+    }),
+    options,
+  );
 }

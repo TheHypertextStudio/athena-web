@@ -34,7 +34,7 @@ export interface ProgramProjectsPanelProps {
   projectNoun: string;
   canEdit: boolean;
   /** Navigate to a project's own detail view. */
-  onOpenProject: (projectId: string) => void;
+  onOpenProject: (project: ProjectOut) => void;
 }
 
 /** The Program's own Projects tab: list, file-existing, and create-into-this-program. */
@@ -102,7 +102,7 @@ export function ProgramProjectsPanel({
                   defaultProgramId: programId,
                   sameWorkspaceCompletion: 'stay',
                   onCreated: (created) => {
-                    onOpenProject(created.id);
+                    onOpenProject(created);
                   },
                 });
               }}
@@ -135,6 +135,19 @@ export function ProgramProjectsPanel({
                 <Link
                   href={`/orgs/${orgId}/projects/${project.id}`}
                   className="text-on-surface text-body-medium min-w-0 flex-1 truncate"
+                  onClick={(event) => {
+                    if (
+                      event.button !== 0 ||
+                      event.metaKey ||
+                      event.ctrlKey ||
+                      event.shiftKey ||
+                      event.altKey ||
+                      event.currentTarget.target === '_blank'
+                    )
+                      return;
+                    event.preventDefault();
+                    onOpenProject(project);
+                  }}
                 >
                   {project.name}
                 </Link>

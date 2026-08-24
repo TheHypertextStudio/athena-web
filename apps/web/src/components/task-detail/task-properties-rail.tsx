@@ -121,6 +121,16 @@ export interface TaskPropertiesRailProps {
   cycleOptions: readonly PickerOption[];
   /** Every label offerable to this task, each carrying its colour swatch as its `icon`. */
   labelOptions: readonly PickerOption[];
+  projectLoading?: boolean | undefined;
+  programLoading?: boolean | undefined;
+  milestoneLoading?: boolean | undefined;
+  cycleLoading?: boolean | undefined;
+  labelsLoading?: boolean | undefined;
+  onProjectOpenChange?: ((open: boolean) => void) | undefined;
+  onProgramOpenChange?: ((open: boolean) => void) | undefined;
+  onMilestoneOpenChange?: ((open: boolean) => void) | undefined;
+  onCycleOpenChange?: ((open: boolean) => void) | undefined;
+  onLabelsOpenChange?: ((open: boolean) => void) | undefined;
   /** Create a label from a name typed into the picker, and attach it. */
   onCreateLabel: (name: string) => void;
   /**
@@ -151,6 +161,16 @@ export function TaskPropertiesRail({
   milestoneOptions,
   cycleOptions,
   labelOptions,
+  projectLoading = false,
+  programLoading = false,
+  milestoneLoading = false,
+  cycleLoading = false,
+  labelsLoading = false,
+  onProjectOpenChange,
+  onProgramOpenChange,
+  onMilestoneOpenChange,
+  onCycleOpenChange,
+  onLabelsOpenChange,
   onCreateLabel,
   estimationScale,
   canEdit,
@@ -179,6 +199,8 @@ export function TaskPropertiesRail({
             searchPlaceholder={`Search ${projectLabel.toLowerCase()}s…`}
             ariaLabel={projectLabel}
             readOnly={!canEdit}
+            loading={projectLoading}
+            {...(onProjectOpenChange ? { onOpenChange: onProjectOpenChange } : {})}
             triggerClassName={PROPERTY_CONTROL_CLASS}
           />
         </PropertyRow>
@@ -196,6 +218,8 @@ export function TaskPropertiesRail({
             searchPlaceholder={`Search ${programLabel.toLowerCase()}s…`}
             ariaLabel={programLabel}
             readOnly={!canEdit}
+            loading={programLoading}
+            {...(onProgramOpenChange ? { onOpenChange: onProgramOpenChange } : {})}
             triggerClassName={PROPERTY_CONTROL_CLASS}
           />
         </PropertyRow>
@@ -220,6 +244,8 @@ export function TaskPropertiesRail({
             }
             ariaLabel="Milestone"
             readOnly={!canEdit || !task.projectId}
+            loading={milestoneLoading}
+            {...(onMilestoneOpenChange ? { onOpenChange: onMilestoneOpenChange } : {})}
             triggerClassName={PROPERTY_CONTROL_CLASS}
           />
         </PropertyRow>
@@ -237,6 +263,8 @@ export function TaskPropertiesRail({
             searchPlaceholder={`Search ${cycleLabel.toLowerCase()}s…`}
             ariaLabel={cycleLabel}
             readOnly={!canEdit}
+            loading={cycleLoading}
+            {...(onCycleOpenChange ? { onOpenChange: onCycleOpenChange } : {})}
             triggerClassName={PROPERTY_CONTROL_CLASS}
           />
         </PropertyRow>
@@ -259,6 +287,8 @@ export function TaskPropertiesRail({
             triggerIcon={<Tag className="text-on-surface-variant size-4" />}
             ariaLabel="Labels"
             readOnly={!canEdit}
+            loading={labelsLoading}
+            {...(onLabelsOpenChange ? { onOpenChange: onLabelsOpenChange } : {})}
             triggerClassName={PROPERTY_CONTROL_CLASS}
           />
         </PropertyRow>

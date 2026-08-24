@@ -45,24 +45,36 @@ import { ProjectPeopleRow } from '@/components/project-detail/project-people-row
 import { PropertiesPanel } from '@/components/project-detail/properties-panel';
 import { PublishAction } from '@/components/publishing/publish-action';
 import { RepeatProjectDialog } from '@/components/recurrence/repeat-project-dialog';
-import { EntityDetailSkeleton } from '@/components/views/entity-detail-skeleton';
+import {
+  EntityDetailSkeleton,
+  EntityDetailSnapshot,
+} from '@/components/views/entity-detail-skeleton';
 import { EntityDetailLayout, EntityMetadataRow } from '@/components/views/entity-detail-layout';
 import { useDocumentTitle } from '@/components/tabs/use-document-title';
 import { useRegisterTabTitle } from '@/components/tabs/use-register-tab-title';
 import { api } from '@/lib/api';
 import { useTypedRoute } from '@/lib/app-location';
-import { aggregateLoadState, projectDetailAggregateDef } from '@/lib/detail-aggregate';
+import {
+  aggregateLoadState,
+  projectDetailAggregateDef,
+  terminalDetailFailure,
+} from '@/lib/detail-aggregate';
 import { useEntityMentions } from '@/lib/use-entity-mentions';
 import { projectWorkSectionsDef } from '@/lib/fetch-project-sections';
 import { useFiscalYearStartMonth } from '@/lib/use-fiscal-year-start-month';
 import { useAppRouter } from '@/lib/interactions/navigation';
+import { openTaskRecord } from '@/lib/local-first-navigation';
 import { labelsDef } from '@/components/labels/queries';
-import { seedNavigationSnapshot } from '@/lib/navigation-snapshot-runtime';
+import {
+  removeNavigationSnapshot,
+  seedNavigationSnapshot,
+} from '@/lib/navigation-snapshot-runtime';
 import { useNavigationSnapshot } from '@/lib/use-navigation-snapshot';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 import { orgMembersDef } from '@/lib/use-org-membership';
 import { useProjectMutations } from '@/lib/use-project-mutations';
+import { useDelayedBoolean } from '@/lib/use-delayed-boolean';
 
 type TabId = 'overview' | 'tasks' | 'updates' | 'resources';
 
@@ -77,7 +89,10 @@ export default function ProjectDetailPage(): JSX.Element {
   const navigationSnapshot = useNavigationSnapshot('project', projectId);
   const aggregateDef = projectDetailAggregateDef(orgId, projectId);
   const aggregateKey = aggregateDef.queryKey;
-  const aggregateQ = useApiQuery(aggregateDef);
+  const [aggregateEnabled, setAggregateEnabled] = useState(true);
+  const [terminalState, setTerminalState] = useState<'forbidden' | 'not-found' | null>(null);
+  const aggregateQ = useApiQuery({ ...aggregateDef, enabled: aggregateEnabled });
+  const terminalFailure = terminalDetailFailure(aggregateQ.error);
   const aggregate = aggregateQ.data ?? null;
   const project = aggregate?.defaultView.project ?? null;
   const aggregateState = aggregateLoadState(
@@ -86,6 +101,7 @@ export default function ProjectDetailPage(): JSX.Element {
     aggregateQ.isPending,
     aggregateQ.isError,
   );
+  const snapshotSyncing = useDelayedBoolean(aggregateState === 'snapshot', 300);
   const [tab, setTab] = useState<TabId>('overview');
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [repeatProjectOpen, setRepeatProjectOpen] = useState(false);
@@ -95,6 +111,18 @@ export default function ProjectDetailPage(): JSX.Element {
   const [initiativesPickerOpen, setInitiativesPickerOpen] = useState(false);
   const [labelsPickerOpen, setLabelsPickerOpen] = useState(false);
   const [displayPickerOpen, setDisplayPickerOpen] = useState(false);
+
+  useEffect(() => {
+    setTerminalState(null);
+  }, [projectId]);
+
+  useEffect(() => {
+    if (terminalFailure === null) return;
+    setTerminalState(terminalFailure);
+    setAggregateEnabled(false);
+    void removeNavigationSnapshot('project', projectId);
+    queryClient.removeQueries({ queryKey: aggregateKey, exact: true });
+  }, [aggregateKey, projectId, queryClient, terminalFailure]);
 
   const membersQ = useApiQuery({ ...orgMembersDef(orgId), enabled: ownerPickerOpen });
   const programsQ = useApiQuery(
@@ -294,20 +322,58 @@ export default function ProjectDetailPage(): JSX.Element {
     },
   });
 
-  if (aggregateState === 'loading' || aggregateState === 'snapshot') {
+  if (terminalState !== null) {
     return (
-      <EntityDetailSkeleton
-        label={`Loading ${projectNoun.toLowerCase()}`}
-        title={navigationSnapshot?.name}
-        snapshotMetadata={
-          navigationSnapshot ? (
+      <p role="alert" className="text-on-surface-variant mx-auto max-w-7xl p-6">
+        {terminalState === 'forbidden'
+          ? `You no longer have access to this ${projectNoun.toLowerCase()}.`
+          : `This ${projectNoun.toLowerCase()} no longer exists.`}
+      </p>
+    );
+  }
+  if (aggregateState === 'snapshot' && navigationSnapshot !== null) {
+    return (
+      <>
+        <EntityDetailSnapshot
+          label={projectNoun}
+          title={navigationSnapshot.name}
+          metadata={
             <span className="text-on-surface-variant text-body-small">
               {navigationSnapshot.status} · {navigationSnapshot.priority}
               {navigationSnapshot.health ? ` · ${navigationSnapshot.health}` : ''}
             </span>
-          ) : undefined
-        }
-      />
+          }
+          syncing={snapshotSyncing}
+        />
+        {aggregateQ.isError ? (
+          <p role="alert" className="text-error text-body-medium mx-auto max-w-7xl px-6 pb-6">
+            Could not refresh this {projectNoun.toLowerCase()}.
+          </p>
+        ) : null}
+      </>
+    );
+  }
+  if (aggregateState === 'loading') {
+    return (
+      <>
+        <EntityDetailSkeleton
+          label={`Loading ${projectNoun.toLowerCase()}`}
+          title={navigationSnapshot?.name}
+          snapshotMetadata={
+            navigationSnapshot ? (
+              <span className="text-on-surface-variant text-body-small">
+                {navigationSnapshot.status} · {navigationSnapshot.priority}
+                {navigationSnapshot.health ? ` · ${navigationSnapshot.health}` : ''}
+              </span>
+            ) : undefined
+          }
+        />
+        {aggregateQ.isError ? (
+          <p role="alert" className="text-error text-body-medium mx-auto max-w-7xl px-6 pb-6">
+            Could not refresh this {projectNoun.toLowerCase()}.
+          </p>
+        ) : null}
+      </>
     );
   }
   if (aggregateState === 'error') {
@@ -546,8 +612,8 @@ export default function ProjectDetailPage(): JSX.Element {
             }))}
             resolveActor={() => ({ name: 'Unknown', kind: 'human' as const })}
             taskNoun="task"
-            onOpenTask={(taskId) => {
-              router.push(`/orgs/${orgId}/tasks/${taskId}`);
+            onOpenTask={(task) => {
+              openTaskRecord(task);
             }}
             onCreate={() => {
               router.push(`/orgs/${orgId}/tasks?projectId=${projectId}`);

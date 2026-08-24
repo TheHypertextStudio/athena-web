@@ -20,19 +20,32 @@
   Keep Program's named owner on its root Program read, then retain the two existing rollup reads and
   the visibility read. Render Task status and priority from its validated navigation snapshot until
   its one aggregate response arrives. Migrate stale test doubles from the removed arbitrary route
-  parameter hook to exact typed route descriptors.
+  parameter hook to exact typed route descriptors. Treat aggregate `403` and `404` responses as
+  terminal, so the client deletes that entity's memory, IndexedDB, and Query cache records before
+  it reports an access-unavailable result. Keep Task capabilities and viewer identity in the
+  aggregate, then open each member, project, program, milestone, cycle, or label picker on demand.
 - **Subtasks**:
   - [x] Reproduce the five-read Program aggregate with a route-level query counter.
   - [x] Join the Program owner into the aggregate's root read.
   - [x] Enforce the four-round-trip cap for Task, Project, Program, and Initiative aggregates.
   - [x] Keep Task snapshot status and priority visible during reconciliation.
   - [x] Update the affected route-hook test doubles and run their six suites.
+  - [x] Purge deleted and revoked entities instead of retaining a stale snapshot.
+  - [x] Gate Task picker rosters behind their individual editor controls.
+  - [x] Add the production-build browser contract for local snapshot paint and one aggregate read.
+  - [x] Reconcile the correction review's terminal-state, picker, and relation-navigation findings.
+  - [x] Require a fresh typed row snapshot for all corrected Task and Project detail opens.
+  - [x] Hold the local identity document without a progress indicator for 300ms.
   - [ ] Run production-build navigation acceptance coverage and production rollout verification.
 - **Blockers**: No development blocker. The production-build browser gate and production rollout
   remain before this task can move to completed.
 - **Validation**: The aggregate route suite passes all eight cases, including the new database
   round-trip cap. The detail-route policy passes all eleven cases. The six route-hook consumer
-  suites pass all 37 cases. `pnpm --filter @docket/web typecheck` passes after the API build.
+  suites pass all 37 cases. The local eviction, typed-route policy, Task picker, and snapshot
+  suites pass 82 cases. The aggregate route suite passes all eight cases. `pnpm --filter
+@docket/web typecheck` passes after the API build. The
+  standalone E2E TypeScript project still has unrelated calendar, scheduler, MCP evidence, and JSX
+  compiler errors, so CI must execute the new production-build browser test before rollout.
 
 ---
 

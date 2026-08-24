@@ -73,6 +73,7 @@ export function taskToOut(t: TaskRow, labels: readonly LabelRefRow[]): z.input<t
       syncMode: t.sourceSyncMode,
     },
     createdAt: t.createdAt.toISOString(),
+    updatedAt: t.updatedAt.toISOString(),
   };
 }
 

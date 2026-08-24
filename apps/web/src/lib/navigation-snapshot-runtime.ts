@@ -31,6 +31,8 @@ export interface NavigationSnapshotRuntime {
     target: EntityNavigationSnapshot['target'],
     id: string,
   ): Promise<EntityNavigationSnapshot | null>;
+  /** Remove one entity after deletion or access revocation. */
+  remove(target: EntityNavigationSnapshot['target'], id: string): Promise<void>;
   /** Remove every live and durable snapshot. */
   purgeAll(): Promise<void>;
 }
@@ -67,6 +69,11 @@ export function createNavigationSnapshotRuntime(
       if (persisted !== null) options.store.seed(persisted);
       return persisted;
     },
+    async remove(target, id) {
+      options.store.remove(target, id);
+      if (userId !== null)
+        await options.repository.remove(userId, target, id).catch(() => undefined);
+    },
     async purgeAll() {
       options.store.clear();
       await options.repository.purgeAll().catch(() => undefined);
@@ -88,14 +95,30 @@ const runtime = createNavigationSnapshotRuntime({
   repository: createNavigationSnapshotRepository({ storage: browserStorage }),
 });
 
+const snapshotSubscribers = new Set<() => void>();
+
+function notifyNavigationSnapshotSubscribers(): void {
+  for (const subscriber of snapshotSubscribers) subscriber();
+}
+
+/** Subscribe to synchronous changes in the browser snapshot tier. */
+export function subscribeNavigationSnapshots(subscriber: () => void): () => void {
+  snapshotSubscribers.add(subscriber);
+  return () => {
+    snapshotSubscribers.delete(subscriber);
+  };
+}
+
 /** Bind browser snapshot persistence to the authenticated account. */
 export function setNavigationSnapshotUser(userId: string | null): void {
   runtime.setUser(userId);
+  notifyNavigationSnapshotSubscribers();
 }
 
 /** Seed the current entity before browser history changes. */
 export function seedNavigationSnapshot(snapshot: EntityNavigationSnapshot): void {
   runtime.seed(snapshot);
+  notifyNavigationSnapshotSubscribers();
 }
 
 /** Read the memory tier synchronously during destination mount. */
@@ -114,7 +137,19 @@ export function readNavigationSnapshot(
   return runtime.read(target, id);
 }
 
+/** Remove one snapshot after the API confirms deletion or access revocation. */
+export function removeNavigationSnapshot(
+  target: EntityNavigationSnapshot['target'],
+  id: string,
+): Promise<void> {
+  const removal = runtime.remove(target, id);
+  notifyNavigationSnapshotSubscribers();
+  return removal;
+}
+
 /** Delete every navigation snapshot for every account on this browser. */
 export function purgeAllNavigationSnapshots(): Promise<void> {
-  return runtime.purgeAll();
+  const purge = runtime.purgeAll();
+  notifyNavigationSnapshotSubscribers();
+  return purge;
 }

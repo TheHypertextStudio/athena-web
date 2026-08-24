@@ -54,6 +54,7 @@ function toOut(t: TaskRow): z.input<typeof TaskOut> {
       syncMode: t.sourceSyncMode,
     },
     createdAt: t.createdAt.toISOString(),
+    updatedAt: t.updatedAt.toISOString(),
   };
 }
 

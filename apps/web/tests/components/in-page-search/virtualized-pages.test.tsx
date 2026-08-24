@@ -153,6 +153,7 @@ function task(index: number, needle = false): TaskOut {
       ? { source: 'linked', sourceIntegrationId: 'integration-1' }
       : { source: 'native' },
     createdAt: `2026-01-01T00:${String(index % 60).padStart(2, '0')}:00.000Z`,
+    updatedAt: `2026-01-01T00:${String(index % 60).padStart(2, '0')}:00.000Z`,
   };
 }
 

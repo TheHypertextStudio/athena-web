@@ -114,6 +114,7 @@ function task(id: string, title: string, withProject: boolean): TaskOut {
     ...(withProject ? { projectId: ProjectId.parse(PROJECT_ID) } : {}),
     provenance: { source: 'native' },
     createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
   };
 }
 

@@ -3,7 +3,11 @@
 import type { EntityNavigationSnapshot } from '@docket/types';
 import { useEffect, useState } from 'react';
 
-import { peekNavigationSnapshot, readNavigationSnapshot } from '@/lib/navigation-snapshot-runtime';
+import {
+  peekNavigationSnapshot,
+  readNavigationSnapshot,
+  subscribeNavigationSnapshots,
+} from '@/lib/navigation-snapshot-runtime';
 
 /** Return a target-correlated snapshot from memory immediately or IndexedDB after mount. */
 export function useNavigationSnapshot<TTarget extends EntityNavigationSnapshot['target']>(
@@ -19,11 +23,18 @@ export function useNavigationSnapshot<TTarget extends EntityNavigationSnapshot['
     const live = peekNavigationSnapshot(target, id);
     setSnapshot(live?.target === target ? (live as Snapshot) : null);
     let active = true;
+    let changed = false;
+    const unsubscribe = subscribeNavigationSnapshots(() => {
+      changed = true;
+      const next = peekNavigationSnapshot(target, id);
+      setSnapshot(next?.target === target ? (next as Snapshot) : null);
+    });
     void readNavigationSnapshot(target, id).then((persisted) => {
-      if (active && persisted?.target === target) setSnapshot(persisted as Snapshot);
+      if (active && !changed && persisted?.target === target) setSnapshot(persisted as Snapshot);
     });
     return () => {
       active = false;
+      unsubscribe();
     };
   }, [id, target]);
   return snapshot;

@@ -91,6 +91,7 @@ function taskToOut(
       syncMode: t.sourceSyncMode,
     },
     createdAt: t.createdAt.toISOString(),
+    updatedAt: t.updatedAt.toISOString(),
   };
 }
 

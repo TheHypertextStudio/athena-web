@@ -156,6 +156,7 @@ const TASK: TaskOut = {
   dueDate: null,
   provenance: { source: 'native' },
   createdAt: '2026-07-28T09:00:00.000Z',
+  updatedAt: '2026-07-28T09:00:00.000Z',
 };
 
 /** The resolved shape `cycleDetailDef` produces, with no tasks committed. */

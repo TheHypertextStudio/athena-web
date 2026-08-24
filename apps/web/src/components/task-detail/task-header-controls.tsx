@@ -75,6 +75,8 @@ export interface TaskHeaderOverflowMenuProps {
   readonly assigneeId: string | null;
   readonly canEdit: boolean;
   readonly canManage: boolean;
+  /** Start the member read only after the collapsed assignee picker opens. */
+  readonly onAssigneeOpenChange?: ((open: boolean) => void) | undefined;
   readonly onPriorityChange: (priority: Priority) => void;
   readonly onAssigneeChange: (assigneeId: string | null) => void;
   readonly onDelete: () => void;
@@ -93,6 +95,7 @@ export function TaskHeaderOverflowMenu({
   assigneeId,
   canEdit,
   canManage,
+  onAssigneeOpenChange,
   onPriorityChange,
   onAssigneeChange,
   onDelete,
@@ -131,7 +134,7 @@ export function TaskHeaderOverflowMenu({
           </DropdownMenuSubContent>
         </DropdownMenuSub>
 
-        <DropdownMenuSub>
+        <DropdownMenuSub {...(onAssigneeOpenChange ? { onOpenChange: onAssigneeOpenChange } : {})}>
           <DropdownMenuSubTrigger disabled={!canEdit}>Assignee</DropdownMenuSubTrigger>
           <DropdownMenuSubContent>
             <DropdownMenuRadioGroup

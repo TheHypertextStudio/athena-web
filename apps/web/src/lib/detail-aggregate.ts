@@ -15,12 +15,29 @@ import type {
 
 import { api } from './api';
 import { apiQueryOptions, queryKeys } from './query';
+import { ApiRequestError } from './query-core';
 
 /** Aggregate content stays fresh for two minutes without retaining an inactive page indefinitely. */
 const DETAIL_AGGREGATE_STALE_MS = 120_000;
 
 /** The render source that may safely replace a detail route's primary document. */
 export type AggregateLoadState = 'data' | 'snapshot' | 'loading' | 'error' | 'missing';
+
+/** A server-confirmed detail failure that must evict cached entity data. */
+export type TerminalDetailFailure = 'forbidden' | 'not-found';
+
+/**
+ * Classify server responses that prove a locally cached detail can no longer be shown.
+ *
+ * @param error - The failed aggregate request.
+ * @returns The terminal failure, or null when a stale snapshot may remain visible.
+ */
+export function terminalDetailFailure(error: unknown): TerminalDetailFailure | null {
+  if (!(error instanceof ApiRequestError)) return null;
+  if (error.status === 403) return 'forbidden';
+  if (error.status === 404) return 'not-found';
+  return null;
+}
 
 /**
  * Decide which detail source stays visible while one aggregate request reconciles.

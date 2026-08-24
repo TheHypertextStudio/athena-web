@@ -127,6 +127,24 @@ describe('TaskHeaderOverflowMenu', () => {
     });
   });
 
+  it('opens the member roster only from the assignee submenu', async () => {
+    const onAssigneeOpenChange = vi.fn();
+    render(
+      <TaskHeaderOverflowMenu
+        {...commonProps}
+        canManage={false}
+        onAssigneeOpenChange={onAssigneeOpenChange}
+      />,
+    );
+
+    openMenu();
+    openSubmenu('Priority');
+    expect(onAssigneeOpenChange).not.toHaveBeenCalled();
+    await screen.findByRole('menuitemradio', { name: 'High' });
+    openSubmenu('Assignee');
+    expect(onAssigneeOpenChange).toHaveBeenCalledWith(true);
+  });
+
   it('keeps delete management-only and invokes the existing confirmation callback', async () => {
     const onDelete = vi.fn();
     render(<TaskHeaderOverflowMenu {...commonProps} canManage onDelete={onDelete} />);

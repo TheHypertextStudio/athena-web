@@ -51,6 +51,8 @@ export interface EntityDocumentProps {
   canEdit: boolean;
   /** Persist a non-empty Markdown value, or null to clear the body. */
   onSave: (value: string | null) => void;
+  /** Notify the host when the reader activates the editable document. */
+  onEditStart?: () => void;
   /** The quiet prompt shown before anything is written. */
   placeholder?: string;
   /**
@@ -70,6 +72,7 @@ export function EntityDocument({
   value,
   canEdit,
   onSave,
+  onEditStart,
   placeholder = 'Add a description…',
   contents = true,
   contributions = [],
@@ -199,6 +202,7 @@ export function EntityDocument({
             placeholder={placeholder}
             canEdit={canEdit}
             onSave={onSave}
+            {...(onEditStart ? { onEditStart } : {})}
             className="flex min-h-0 max-w-none flex-1 flex-col"
             contributions={contributions}
           />

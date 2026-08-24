@@ -45,6 +45,7 @@ describe('detail aggregate routes', () => {
         organizationId: orgId,
         title: 'Publish rider guide',
       },
+      viewer: { actorId: humanActorId },
       capabilities: { comment: true, contribute: true, assign: false, manage: false },
       defaultView: { task: { id: task.id } },
     });
@@ -81,6 +82,7 @@ describe('detail aggregate routes', () => {
     expect(await response.json()).toMatchObject({
       target: 'project',
       snapshot: { target: 'project', id: project.id, organizationId: orgId },
+      viewer: { actorId: humanActorId },
       capabilities: { comment: true, contribute: true, assign: false, manage: false },
       references: { team: { id: teamId }, lead: { actorId: humanActorId } },
       defaultView: { project: { id: project.id }, progress: { taskCount: 0 } },
@@ -103,6 +105,7 @@ describe('detail aggregate routes', () => {
     expect(await response.json()).toMatchObject({
       target: 'program',
       snapshot: { target: 'program', id: program.id, organizationId: orgId },
+      viewer: { actorId: humanActorId },
       capabilities: { comment: true, contribute: true, assign: true, manage: true },
       references: { owner: { actorId: humanActorId } },
       defaultView: { program: { id: program.id, rollup: { projects: 0, tasks: 0 } } },
@@ -125,6 +128,7 @@ describe('detail aggregate routes', () => {
     expect(await response.json()).toMatchObject({
       target: 'initiative',
       snapshot: { target: 'initiative', id: initiative.id, organizationId: orgId },
+      viewer: { actorId: humanActorId },
       capabilities: { comment: true, contribute: true, assign: false, manage: false },
       references: { owner: { actorId: humanActorId } },
       defaultView: {

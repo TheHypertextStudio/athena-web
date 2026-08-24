@@ -16,7 +16,7 @@ import {
   type TabsItem,
 } from '@docket/ui/primitives';
 import { useTypedRoute } from '@/lib/app-location';
-import { type JSX, useMemo, useState } from 'react';
+import { type JSX, useEffect, useMemo, useState } from 'react';
 
 import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
 import { TemplateAwareEntityDocument } from '@/components/editor/apply-description-template';
@@ -36,11 +36,12 @@ import { useDocumentTitle } from '@/components/tabs/use-document-title';
 import { useRegisterTabTitle } from '@/components/tabs/use-register-tab-title';
 import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
-import { programDetailAggregateDef } from '@/lib/detail-aggregate';
+import { aggregateLoadState, programDetailAggregateDef } from '@/lib/detail-aggregate';
 import { orgMembersDef } from '@/lib/use-org-membership';
 import { useProgramMutations } from '@/lib/use-program-mutations';
 import { userErrorMessage } from '@/lib/problem';
 import { useNavigationSnapshot } from '@/lib/use-navigation-snapshot';
+import { seedNavigationSnapshot } from '@/lib/navigation-snapshot-runtime';
 import { useAppRouter } from '@/lib/interactions/navigation';
 
 type TabId = 'overview' | 'projects' | 'work' | 'updates';
@@ -65,13 +66,23 @@ export default function ProgramDetailPage(): JSX.Element {
   const aggregateQ = useApiQuery(aggregateDef);
   const aggregate = aggregateQ.data ?? null;
   const program = aggregate?.defaultView.program ?? null;
+  const aggregateState = aggregateLoadState(
+    aggregateQ.data,
+    navigationSnapshot !== null,
+    aggregateQ.isPending,
+    aggregateQ.isError,
+  );
+
+  useEffect(() => {
+    if (aggregate) seedNavigationSnapshot(aggregate.snapshot);
+  }, [aggregate]);
 
   // The tab bar and the browser tab both follow the name on screen, including through a rename.
   useRegisterTabTitle('program', orgId, programId, program?.name);
   useDocumentTitle(program?.name);
   const membersQ = useApiQuery({
     ...orgMembersDef(orgId),
-    enabled: ownerPickerOpen || tab === 'updates',
+    enabled: ownerPickerOpen,
   });
   const members = membersQ.data?.items ?? [];
   const currentActorId = aggregate?.viewer.actorId;
@@ -88,6 +99,9 @@ export default function ProgramDetailPage(): JSX.Element {
 
   const resolveActor = useMemo<ResolveActor>(() => {
     const byId = new Map<string, { name: string; kind: 'human' | 'agent' | 'team' }>();
+    for (const author of updatesQ.data?.authors ?? []) {
+      byId.set(author.actorId, { name: author.displayName, kind: author.kind });
+    }
     const owner = aggregate?.references.owner;
     if (owner) byId.set(owner.actorId, { name: owner.displayName, kind: 'human' });
     for (const member of members)
@@ -96,7 +110,7 @@ export default function ProgramDetailPage(): JSX.Element {
       actorId
         ? (byId.get(actorId) ?? { name: 'System', kind: 'human' })
         : { name: 'System', kind: 'human' };
-  }, [aggregate?.references.owner, members]);
+  }, [aggregate?.references.owner, members, updatesQ.data?.authors]);
 
   const { patchProgram, postUpdate, propsError, updatePosting, updateError } = useProgramMutations(
     orgId,
@@ -144,7 +158,7 @@ export default function ProgramDetailPage(): JSX.Element {
     { value: 'updates', label: 'Updates' },
   ];
 
-  if (program === null && aggregateQ.isPending) {
+  if (aggregateState === 'loading' || aggregateState === 'snapshot') {
     // placeholder: the program's own record — name, summary, the metric strip, detail tabs,
     // and the projects under it. The route carries only a program
     // id; even the tab row's counts come from the same read.
@@ -152,29 +166,22 @@ export default function ProgramDetailPage(): JSX.Element {
     // Reached only on a cold open; arriving from a list or from the composer that just
     // created it, the record is cached and the real masthead renders straight away.
     return (
-      <EntityDetailSkeleton
-        tabCount={3}
-        label={`Loading ${programLabel.toLowerCase()}`}
-        title={navigationSnapshot?.name}
-      />
-    );
-  }
-
-  if (aggregateQ.isError) {
-    if (navigationSnapshot) {
-      return (
-        <>
-          <EntityDetailSkeleton
-            tabCount={3}
-            label={`Loading ${programLabel.toLowerCase()}`}
-            title={navigationSnapshot.name}
-          />
+      <>
+        <EntityDetailSkeleton
+          tabCount={3}
+          label={`Loading ${programLabel.toLowerCase()}`}
+          title={navigationSnapshot?.name}
+        />
+        {aggregateQ.isError ? (
           <p role="alert" className="text-error text-body-medium px-6 pb-6">
             Could not refresh this {programLabel.toLowerCase()}.
           </p>
-        </>
-      );
-    }
+        ) : null}
+      </>
+    );
+  }
+
+  if (aggregateState === 'error') {
     return (
       <PageContainer>
         <p role="alert" className="text-error text-sm">
@@ -312,6 +319,11 @@ export default function ProgramDetailPage(): JSX.Element {
         />
       }
     >
+      {aggregateQ.isError ? (
+        <p role="alert" className="text-error text-body-medium">
+          Could not refresh this {programLabel.toLowerCase()}.
+        </p>
+      ) : null}
       {tab === 'overview' ? (
         <div role="tabpanel" id="tabpanel-overview" aria-labelledby="tab-overview">
           <TemplateAwareEntityDocument

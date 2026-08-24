@@ -84,7 +84,7 @@ export function PublishAction({
   canPublish,
 }: PublishActionProps): JSX.Element | null {
   const [open, setOpen] = useState(false);
-  const { publication } = usePublicationState(orgId, subjectKind, subjectId);
+  const { publication } = usePublicationState(orgId, subjectKind, subjectId, open);
   // Gated on `open` — nobody needs the workspace's address until they open this dialog.
   const orgQ = useApiQuery(
     apiQueryOptions(

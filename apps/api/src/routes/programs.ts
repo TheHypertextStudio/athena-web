@@ -16,7 +16,7 @@ import {
   ProgramUpdate,
   ProgramWorkOut,
   ProgramWorkQuery,
-  UpdateOut,
+  UpdateFeed,
 } from '@docket/types';
 import { and, desc, eq, inArray, isNull, or } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -553,8 +553,8 @@ const programs = new Hono<AppEnv>()
     apiDoc({
       tag: 'Programs',
       summary: 'List program updates',
-      response: pageOf(UpdateOut),
-      description: `List the status Updates posted about this program — the narrative health log (each Update carries a \`health\` verdict and a free-text \`body\`, distinct from threaded Comments). Returns only Updates whose subject is THIS program (\`subjectType = 'program'\`, \`subjectId = :id\`), org-scoped, newest first. The program is confirmed to exist in the caller's org first (404 \`Program not found\`). This endpoint returns the full set (it does not key-paginate). Read-only; org membership suffices. Returns a page of {@link UpdateOut}. Updates are authored via the \`updates\` resource; this is the program-scoped read view of them.`,
+      response: UpdateFeed,
+      description: `List the status Updates posted about this program — the narrative health log (each Update carries a \`health\` verdict and a free-text \`body\`, distinct from threaded Comments). Returns only Updates whose subject is THIS program (\`subjectType = 'program'\`, \`subjectId = :id\`), org-scoped, newest first. The program is confirmed to exist in the caller's org first (404 \`Program not found\`). The response includes only the actors referenced by those rows, so the detail route can name human and agent authors without loading the organization roster.`,
     }),
     zParam(idParam),
     async (c) => {
@@ -576,7 +576,21 @@ const programs = new Hono<AppEnv>()
         )
         .orderBy(desc(update.createdAt));
 
-      return ok(c, pageOf(UpdateOut), {
+      const authorIds = [...new Set(rows.flatMap((row) => (row.authorId ? [row.authorId] : [])))];
+      const authors =
+        authorIds.length === 0
+          ? []
+          : await db
+              .select({
+                actorId: actor.id,
+                displayName: actor.displayName,
+                avatar: actor.avatar,
+                kind: actor.kind,
+              })
+              .from(actor)
+              .where(and(eq(actor.organizationId, orgId), inArray(actor.id, authorIds)));
+
+      return ok(c, UpdateFeed, {
         items: rows.map((u) => ({
           id: u.id,
           organizationId: u.organizationId,
@@ -587,6 +601,7 @@ const programs = new Hono<AppEnv>()
           body: u.body,
           createdAt: u.createdAt.toISOString(),
         })),
+        authors,
       });
     },
   );

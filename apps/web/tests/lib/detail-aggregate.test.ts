@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  aggregateLoadState,
   initiativeDetailAggregateDef,
   programDetailAggregateDef,
   projectDetailAggregateDef,
@@ -40,5 +41,12 @@ describe('detail aggregate query definitions', () => {
       ENTITY_ID,
       'aggregate-detail',
     ]);
+  });
+
+  it('keeps a cached aggregate visible when its background reconciliation fails', () => {
+    expect(aggregateLoadState({ target: 'program' }, true, false, true)).toBe('data');
+    expect(aggregateLoadState(undefined, true, false, true)).toBe('snapshot');
+    expect(aggregateLoadState(undefined, false, true, false)).toBe('loading');
+    expect(aggregateLoadState(undefined, false, false, true)).toBe('error');
   });
 });

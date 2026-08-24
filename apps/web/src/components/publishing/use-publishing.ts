@@ -42,12 +42,14 @@ export interface PublicationState {
  * @param orgId - The active workspace.
  * @param subjectKind - Which kind of record.
  * @param subjectId - The record id.
+ * @param enabled - Whether the publishing surface is open and needs this optional state.
  * @returns The resolved {@link PublicationState}.
  */
 export function usePublicationState(
   orgId: string,
   subjectKind: PublicationSubjectKind,
   subjectId: string,
+  enabled = true,
 ): PublicationState {
   const query = useApiQuery(
     apiQueryOptions(
@@ -57,6 +59,7 @@ export function usePublicationState(
           param: { orgId, subjectKind, subjectId },
         }),
       'Could not load publishing status.',
+      { enabled },
     ),
   );
   return { publication: query.data?.publication ?? null, loading: query.isPending };

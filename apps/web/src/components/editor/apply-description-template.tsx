@@ -11,7 +11,7 @@
 import type { TemplateOut, TemplateTargetType } from '@docket/types';
 import { LayoutTemplate } from '@docket/ui/icons';
 import type { Editor } from '@tiptap/react';
-import { type JSX, useMemo } from 'react';
+import { type JSX, useMemo, useState } from 'react';
 
 import { TemplateMenu } from '@/components/composer/template-menu';
 import { sectionHref } from '@/components/settings/settings-registry';
@@ -127,9 +127,10 @@ export function TemplateAwareEntityDocument({
   teamId,
   ...documentProps
 }: TemplateAwareEntityDocumentProps): JSX.Element {
+  const [templateEditing, setTemplateEditing] = useState(false);
   const query = useApiQuery({
     ...templatesOfKindDef(orgId, kind),
-    enabled: documentProps.canEdit,
+    enabled: documentProps.canEdit && templateEditing,
   });
 
   const templates = useMemo(() => {
@@ -158,6 +159,10 @@ export function TemplateAwareEntityDocument({
   return (
     <EntityDocument
       {...documentProps}
+      onEditStart={() => {
+        setTemplateEditing(true);
+        documentProps.onEditStart?.();
+      }}
       contributions={contribution === null ? [] : [contribution]}
     />
   );

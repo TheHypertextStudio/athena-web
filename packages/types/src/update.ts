@@ -68,6 +68,27 @@ export const UpdateOut = z
 /** Update representation value. */
 export type UpdateOut = z.infer<typeof UpdateOut>;
 
+/** A named author shown beside one deferred update without shipping an organization roster. */
+export const UpdateAuthorReference = z
+  .object({
+    actorId: ActorId,
+    displayName: z.string(),
+    avatar: z.string().nullable(),
+    kind: z.enum(['human', 'agent', 'team']),
+  })
+  .strict()
+  .meta({ id: 'UpdateAuthorReference', description: 'Named author for a deferred update feed.' });
+/** A named author for a deferred update feed. */
+export type UpdateAuthorReference = z.infer<typeof UpdateAuthorReference>;
+
+/** A bounded update section with only the actors referenced by its update rows. */
+export const UpdateFeed = z
+  .object({ items: z.array(UpdateOut), authors: z.array(UpdateAuthorReference) })
+  .strict()
+  .meta({ id: 'UpdateFeed', description: 'Deferred update rows and their referenced authors.' });
+/** A bounded update section and its named authors. */
+export type UpdateFeed = z.infer<typeof UpdateFeed>;
+
 /** Acknowledgement returned when an Update is deleted (the subject health is recomputed). */
 export const UpdateRemoved = z
   .object({

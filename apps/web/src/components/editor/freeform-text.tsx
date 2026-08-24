@@ -444,6 +444,8 @@ export interface EditableFreeformTextProps {
   canEdit: boolean;
   /** Persist a non-empty Markdown value or null to clear the description. Called on autosave. */
   onSave: (value: string | null) => void;
+  /** Notify the host when the editor becomes active. */
+  onEditStart?: () => void;
   /** Additional wrapper styling. */
   className?: string;
   /** Feature behavior supplied through the editor's generic contribution boundary. */
@@ -463,6 +465,7 @@ export function EditableFreeformText({
   placeholder,
   canEdit,
   onSave,
+  onEditStart,
   className,
   contributions = [],
 }: EditableFreeformTextProps): JSX.Element {
@@ -509,6 +512,7 @@ export function EditableFreeformText({
       className={cn('flex min-h-0 flex-col', className)}
       onFocus={() => {
         setFocused(true);
+        onEditStart?.();
       }}
       onBlur={(event) => {
         if (

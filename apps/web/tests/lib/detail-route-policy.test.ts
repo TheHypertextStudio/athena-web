@@ -26,7 +26,8 @@ describe('detail route ownership', () => {
     expect(source).not.toContain('fetchProgramDetail');
     expect(source).not.toContain('programRecordDef');
     expect(source).not.toContain('useOrgMembership');
-    expect(source).toContain("enabled: ownerPickerOpen || tab === 'updates'");
+    expect(source).toContain('enabled: ownerPickerOpen');
     expect(source).toContain("enabled: tab === 'updates'");
+    expect(source).toContain('seedNavigationSnapshot(aggregate.snapshot)');
   });
 });

@@ -19,6 +19,34 @@ import { apiQueryOptions, queryKeys } from './query';
 /** Aggregate content stays fresh for two minutes without retaining an inactive page indefinitely. */
 const DETAIL_AGGREGATE_STALE_MS = 120_000;
 
+/** The render source that may safely replace a detail route's primary document. */
+export type AggregateLoadState = 'data' | 'snapshot' | 'loading' | 'error' | 'missing';
+
+/**
+ * Decide which detail source stays visible while one aggregate request reconciles.
+ *
+ * Cached aggregate data always wins over a failed background refresh. A local navigation
+ * snapshot is the next truthful fallback. Only a route with neither can enter a load or error
+ * state that replaces the document.
+ *
+ * @param data - Cached aggregate data, if a successful read has occurred.
+ * @param hasSnapshot - Whether the local navigation store has a matching entity snapshot.
+ * @param pending - Whether the first aggregate request is pending.
+ * @param failed - Whether the most recent aggregate request failed.
+ * @returns The only source the route may use for its primary content.
+ */
+export function aggregateLoadState(
+  data: unknown,
+  hasSnapshot: boolean,
+  pending: boolean,
+  failed: boolean,
+): AggregateLoadState {
+  if (data !== undefined) return 'data';
+  if (hasSnapshot) return 'snapshot';
+  if (pending) return 'loading';
+  return failed ? 'error' : 'missing';
+}
+
 /** Read a Task's bounded initial detail content. */
 export function taskDetailAggregateDef(orgId: string, taskId: string) {
   return apiQueryOptions<TaskDetailAggregate>(

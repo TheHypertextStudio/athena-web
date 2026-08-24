@@ -400,6 +400,9 @@ describe('programs updates (GET /:id/updates)', () => {
       true,
     );
     expect(assertDefined(body.items[0]).health).toBe('at_risk');
+    expect(body).toMatchObject({
+      authors: [{ actorId: humanActorId, kind: 'human' }],
+    });
   });
 
   it('returns an empty page for a program with no updates', async () => {
@@ -410,6 +413,7 @@ describe('programs updates (GET /:id/updates)', () => {
       await reader.request(`/${programId}/updates`, { method: 'GET' }),
     );
     expect(body.items).toEqual([]);
+    expect(body).toMatchObject({ authors: [] });
   });
 
   it('404s on /updates for a missing program id', async () => {

@@ -5,6 +5,7 @@ import {
   type ProgramDetail,
   type ProgramOut,
   type ProgramStatus,
+  ProgramStatusKey,
   ProgramSubjectRef,
   type ProgramUpdate,
   type Visibility,
@@ -58,6 +59,32 @@ export interface ProgramMutations {
   updateError: string | null;
 }
 
+/**
+ * Apply one Program change to the aggregate cache without letting the local navigation identity
+ * diverge from the default document.
+ *
+ * @param current - The aggregate currently cached for the Program, if any.
+ * @param apply - The Program document update to apply.
+ * @returns The aligned aggregate, or `undefined` when no aggregate has been cached.
+ */
+export function patchProgramAggregate(
+  current: ProgramDetailAggregate | undefined,
+  apply: (program: ProgramDetail) => ProgramDetail,
+): ProgramDetailAggregate | undefined {
+  if (!current) return undefined;
+  const program = apply(current.defaultView.program);
+  return {
+    ...current,
+    snapshot: {
+      ...current.snapshot,
+      name: program.name,
+      status: ProgramStatusKey.parse(program.status),
+      health: program.health ?? null,
+    },
+    defaultView: { program },
+  };
+}
+
 /** useProgramMutations coordinates use program mutations state, loading, and mutations for its screen. */
 export function useProgramMutations(
   orgId: string,
@@ -73,18 +100,9 @@ export function useProgramMutations(
   const patchCachedProgram = useCallback(
     (apply: (program: ProgramDetail) => ProgramDetail): ProgramDetailAggregate | undefined => {
       const previous = queryClient.getQueryData<ProgramDetailAggregate>(aggregateKey);
-      queryClient.setQueryData<ProgramDetailAggregate>(aggregateKey, (current) => {
-        if (!current) return current;
-        const program = apply(current.defaultView.program);
-        return {
-          ...current,
-          snapshot: {
-            ...current.snapshot,
-            name: program.name,
-          },
-          defaultView: { program },
-        };
-      });
+      queryClient.setQueryData<ProgramDetailAggregate>(aggregateKey, (current) =>
+        patchProgramAggregate(current, apply),
+      );
       return previous;
     },
     [queryClient, aggregateKey],

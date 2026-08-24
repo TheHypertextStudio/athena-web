@@ -7,6 +7,13 @@ import type projectRollupRouter from '../../src/routes/project-rollup';
 import type programsRouter from '../../src/routes/programs';
 import type initiativesRouter from '../../src/routes/initiatives';
 import { detailCapabilities } from '../../src/lib/detail-capabilities';
+import {
+  buildInitiativeDetail,
+  buildInitiativeDetailFromSummary,
+  type InitiativeRow,
+  projectOverlapsWindow,
+  type ProjectRow,
+} from '../../src/routes/initiative-helpers';
 import { appWithActor, getDb, seedBaseOrg, seedStatuses } from '../support/routes-harness';
 
 let schema!: typeof DbModule;
@@ -16,6 +23,60 @@ let projects!: typeof projectsRouter;
 let projectRollup!: typeof projectRollupRouter;
 let programs!: typeof programsRouter;
 let initiatives!: typeof initiativesRouter;
+
+const initiativeRow: InitiativeRow = {
+  id: 'initiative-row',
+  organizationId: 'organization-row',
+  createdBy: null,
+  createdAt: new Date('2026-08-24T00:00:00.000Z'),
+  updatedAt: new Date('2026-08-24T00:00:00.000Z'),
+  archivedAt: null,
+  name: 'Complete street access',
+  summary: null,
+  description: null,
+  ownerId: null,
+  leadTeamId: null,
+  status: 'active',
+  statusId: 'initiative-active',
+  priority: 'none',
+  updateCadence: 'monthly',
+  targetDate: null,
+  targetDateResolution: null,
+  targetDateFiscalYearStartMonth: null,
+  health: null,
+};
+
+const projectRow: ProjectRow = {
+  id: 'project-row',
+  organizationId: 'organization-row',
+  createdBy: null,
+  createdAt: new Date('2026-08-24T00:00:00.000Z'),
+  updatedAt: new Date('2026-08-24T00:00:00.000Z'),
+  archivedAt: null,
+  name: 'Protected bike lanes',
+  summary: null,
+  description: null,
+  leadId: null,
+  programId: null,
+  teamId: null,
+  status: 'planned',
+  statusId: 'project-planned',
+  priority: 'none',
+  health: null,
+  startDate: null,
+  startDateResolution: null,
+  startDateFiscalYearStartMonth: null,
+  targetDate: null,
+  targetDateResolution: null,
+  targetDateFiscalYearStartMonth: null,
+  visibility: 'public',
+  ancestorPath: [],
+  source: 'native',
+  sourceIntegrationId: null,
+  externalId: null,
+  externalUrl: null,
+  externalUpdatedAt: null,
+};
 
 /** Count database round trips for one aggregate request without counting its fixture setup. */
 function observeDatabaseQueries(): { readonly count: () => number; readonly restore: () => void } {
@@ -57,7 +118,91 @@ describe('detail aggregate routes', () => {
       assign: true,
       manage: true,
     });
+    expect(detailCapabilities(['assign'])).toEqual({
+      comment: true,
+      contribute: true,
+      assign: true,
+      manage: false,
+    });
+    expect(detailCapabilities(['contribute'])).toEqual({
+      comment: true,
+      contribute: true,
+      assign: false,
+      manage: false,
+    });
+    expect(detailCapabilities(['comment'])).toEqual({
+      comment: true,
+      contribute: false,
+      assign: false,
+      manage: false,
+    });
   });
+
+  it.each([
+    [{ offTrack: 1, atRisk: 1, onTrack: 1, unknown: 0 }, 'off_track'],
+    [{ offTrack: 0, atRisk: 1, onTrack: 1, unknown: 0 }, 'at_risk'],
+    [{ offTrack: 0, atRisk: 0, onTrack: 1, unknown: 0 }, 'on_track'],
+    [{ offTrack: 0, atRisk: 0, onTrack: 0, unknown: 1 }, null],
+  ] as const)(
+    'derives the Initiative rollup health from every SQL summary state',
+    (health, expected) => {
+      expect(
+        buildInitiativeDetailFromSummary(initiativeRow, {
+          projects: 2,
+          programs: 3,
+          ...health,
+        }),
+      ).toMatchObject({
+        childMix: { projects: 2, programs: 3 },
+        distribution: health,
+        rolledUpHealth: expected,
+      });
+    },
+  );
+
+  it.each([
+    [[{ health: 'off_track' }], [{ health: 'on_track' }], 'off_track'],
+    [[{ health: 'on_track' }, { health: null }], [{ health: 'at_risk' }], 'at_risk'],
+    [[{ health: 'on_track' }], [], 'on_track'],
+    [[], [{ health: null }], null],
+  ] as const)(
+    'derives each Initiative rollup-health outcome from child work',
+    (projects, programs, rolledUpHealth) => {
+      expect(buildInitiativeDetail(initiativeRow, projects, programs)).toMatchObject({
+        childMix: { projects: projects.length, programs: programs.length },
+        rolledUpHealth,
+      });
+    },
+  );
+
+  it.each([
+    [{ startDate: null, targetDate: null }, undefined, undefined, true],
+    [
+      { startDate: new Date('2026-01-01'), targetDate: new Date('2026-01-31') },
+      '2026-02-01',
+      undefined,
+      false,
+    ],
+    [
+      { startDate: new Date('2026-03-01'), targetDate: new Date('2026-03-31') },
+      undefined,
+      '2026-02-28',
+      false,
+    ],
+    [{ startDate: null, targetDate: new Date('2026-03-31') }, '2026-02-01', '2026-02-28', false],
+    [{ startDate: new Date('2026-02-01'), targetDate: null }, '2026-02-01', '2026-02-28', true],
+    [
+      { startDate: new Date('2026-02-01'), targetDate: new Date('2026-02-28') },
+      '2026-02-01',
+      '2026-02-28',
+      true,
+    ],
+  ] as const)(
+    'keeps only Initiative Projects that overlap the requested window',
+    (dates, from, to, expected) => {
+      expect(projectOverlapsWindow({ ...projectRow, ...dates }, from, to)).toBe(expected);
+    },
+  );
 
   it('returns one bounded Task detail aggregate with its local snapshot and no org roster', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);

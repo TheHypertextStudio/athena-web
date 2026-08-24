@@ -1886,5 +1886,5 @@ describe('domain import policy', () => {
         formatDomainImportViolations(violations),
       ].join('\n'),
     ).toEqual([]);
-  });
+  }, 60_000);
 });

@@ -24,6 +24,7 @@
   - [x] Restore the affected calendar, task mutation, picker, and visual-contract tests.
   - [x] Reconcile the route-policy, offline-route, and timeline fixtures with current code.
   - [x] Run the E2E stack through parsed environment configuration so public config keeps its boolean contract.
+  - [x] Give the full workspace import scan enough time on shared CI runners.
   - [ ] Push the repair and verify the production rollout.
 - **Blockers**: The CI run for the repair must complete before deployment can start.
 

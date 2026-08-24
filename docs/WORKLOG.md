@@ -7,6 +7,26 @@
 
 ## Active Tasks
 
+### [COMPOSER-SIZE-001] Stabilize create-composer expansion
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-08-23
+- **Priority**: P0
+- **Description**: The shared create composer opens with a 112px description editor, then expands
+  from `max-w-2xl` to `max-w-5xl` while snapping to its new height. The width change adds no useful
+  editing space, and the default height leaves the body editor too small for ordinary work.
+- **Approach**: Keep one reading width across both states. Give the default and expanded states
+  bounded viewport-aware heights, let the editor flex into each state, and transition only height
+  with the shared MD3 duration and easing tokens while respecting reduced-motion preferences.
+- **Subtasks**:
+  - [ ] Add a failing shared-shell geometry regression.
+  - [ ] Keep composer width stable and increase default height.
+  - [ ] Animate the height-only state change and preserve reduced-motion behavior.
+  - [ ] Run focused composer validation and record the result.
+- **Blockers**: None.
+
+---
+
 ### [WORK-VIEW-REVIEW-001] Close production review regressions
 
 - **Status**: REVIEW

@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { eq } from 'drizzle-orm';
 
 import type * as DbModule from '@docket/db';
 import type tasksRouter from '../../src/routes/tasks';
@@ -7,17 +8,22 @@ import type projectRollupRouter from '../../src/routes/project-rollup';
 import type programsRouter from '../../src/routes/programs';
 import type initiativesRouter from '../../src/routes/initiatives';
 import { detailCapabilities } from '../../src/lib/detail-capabilities';
+import { NotFoundError } from '../../src/error';
 import {
+  associatedWorkSummary,
   assertInitiativeLabels,
   assertOwnerInOrg,
   buildInitiativeDetail,
   buildInitiativeDetailFromSummary,
   type InitiativeRow,
+  loadInitiative,
   projectOverlapsWindow,
   type ProjectRow,
+  toOut,
 } from '../../src/routes/initiative-helpers';
 import {
   appWithActor,
+  fakeSession,
   getDb,
   seedBaseOrg,
   seedInitiative,
@@ -115,6 +121,85 @@ beforeAll(async () => {
 });
 
 describe('detail aggregate routes', () => {
+  it('returns zero work when both bounded aggregate queries have no row', async () => {
+    const client = Reflect.get(db, '$client') as {
+      query: (...args: unknown[]) => Promise<unknown>;
+    };
+    const query = client.query;
+    client.query = vi.fn().mockResolvedValue({ rows: [] });
+
+    try {
+      await expect(associatedWorkSummary('organization-row', 'initiative-row')).resolves.toEqual({
+        projects: 0,
+        programs: 0,
+        onTrack: 0,
+        atRisk: 0,
+        offTrack: 0,
+        unknown: 0,
+      });
+    } finally {
+      client.query = query;
+    }
+  });
+
+  it('serializes Initiative dates for the aggregate contract', () => {
+    expect(
+      toOut({ ...initiativeRow, targetDate: new Date('2026-12-31T00:00:00.000Z') }),
+    ).toMatchObject({
+      id: initiativeRow.id,
+      targetDate: '2026-12-31T00:00:00.000Z',
+    });
+  });
+
+  it('loads only an Initiative owned by the requested organization', async () => {
+    const local = await seedBaseOrg(db, schema);
+    const foreign = await seedBaseOrg(db, schema);
+    const writer = appWithActor(initiatives, local.orgId, ['contribute'], local.humanActorId);
+    const created = await writer.request('/', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Crosswalk safety' }),
+    });
+    const item = (await created.json()) as { id: string };
+
+    await expect(loadInitiative(local.orgId, item.id)).resolves.toMatchObject({ id: item.id });
+    await expect(loadInitiative(foreign.orgId, item.id)).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  it('accepts only Initiative owners inside the current organization', async () => {
+    const local = await seedBaseOrg(db, schema);
+    const foreign = await seedBaseOrg(db, schema);
+
+    await expect(assertOwnerInOrg(local.orgId, null)).resolves.toBeUndefined();
+    await expect(assertOwnerInOrg(local.orgId, undefined)).resolves.toBeUndefined();
+    await expect(assertOwnerInOrg(local.orgId, local.humanActorId)).resolves.toBeUndefined();
+    await expect(assertOwnerInOrg(local.orgId, foreign.humanActorId)).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
+  });
+
+  it('accepts only global labels owned by the current organization', async () => {
+    const local = await seedBaseOrg(db, schema);
+    const foreign = await seedBaseOrg(db, schema);
+    const [localLabel] = await db
+      .insert(schema.label)
+      .values({ organizationId: local.orgId, name: 'Safety first', color: '#7c3aed' })
+      .returning({ id: schema.label.id });
+    const [foreignLabel] = await db
+      .insert(schema.label)
+      .values({ organizationId: foreign.orgId, name: 'Foreign label', color: '#16a34a' })
+      .returning({ id: schema.label.id });
+    if (!localLabel || !foreignLabel) throw new Error('labels were not seeded');
+
+    await expect(assertInitiativeLabels(local.orgId, undefined)).resolves.toEqual([]);
+    await expect(
+      assertInitiativeLabels(local.orgId, [localLabel.id, localLabel.id]),
+    ).resolves.toEqual([localLabel.id]);
+    await expect(assertInitiativeLabels(local.orgId, [foreignLabel.id])).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
+  });
+
   it('projects the control bundle from the viewer capability lattice', () => {
     expect(detailCapabilities([])).toEqual({
       comment: false,
@@ -402,6 +487,21 @@ describe('detail aggregate routes', () => {
     expect(relationshipBody).not.toHaveProperty('latestUpdate');
   });
 
+  it('keeps an Initiative aggregate usable when it has no owner', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId);
+    const created = await writer.request('/', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Ownerless Initiative' }),
+    });
+    const item = (await created.json()) as { id: string };
+
+    const aggregate = await writer.request(`/${item.id}/aggregate-detail`);
+    expect(aggregate.status).toBe(200);
+    expect(await aggregate.json()).toMatchObject({ references: { owner: null } });
+  });
+
   it('does not expose a foreign label through a corrupt Initiative-label association', async () => {
     const local = await seedBaseOrg(db, schema);
     const foreign = await seedBaseOrg(db, schema);
@@ -529,6 +629,249 @@ describe('detail aggregate routes', () => {
       children: [],
       connectedWork: [{ id: program.id, kind: 'program', direct: true }],
       truncated: false,
+    });
+  });
+
+  it('deduplicates inherited Program and Project work shared by sibling Initiatives', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const initiativeWriter = appWithActor(initiatives, orgId, ['contribute'], humanActorId);
+    const programWriter = appWithActor(programs, orgId, ['manage'], humanActorId);
+    const projectWriter = appWithActor(projects, orgId, ['contribute'], humanActorId);
+    const [rootResponse, firstResponse, secondResponse, programResponse, projectResponse] =
+      await Promise.all([
+        initiativeWriter.request('/', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ name: 'Root Initiative' }),
+        }),
+        initiativeWriter.request('/', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ name: 'First child Initiative' }),
+        }),
+        initiativeWriter.request('/', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ name: 'Second child Initiative' }),
+        }),
+        programWriter.request('/', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ name: 'Shared Program', ownerId: humanActorId }),
+        }),
+        projectWriter.request('/', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ name: 'Shared Project', teamId }),
+        }),
+      ]);
+    const [root, first, second, program, project] = (await Promise.all([
+      rootResponse.json(),
+      firstResponse.json(),
+      secondResponse.json(),
+      programResponse.json(),
+      projectResponse.json(),
+    ])) as { id: string }[];
+    if (!root || !first || !second || !program || !project) {
+      throw new Error('shared-work fixture was not created');
+    }
+
+    for (const child of [first, second]) {
+      expect(
+        (
+          await initiativeWriter.request('/hierarchy-links', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ parentInitiativeId: root.id, childInitiativeId: child.id }),
+          })
+        ).status,
+      ).toBe(201);
+      expect(
+        (
+          await initiativeWriter.request(`/${child.id}/programs`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ programId: program.id }),
+          })
+        ).status,
+      ).toBe(201);
+      expect(
+        (
+          await initiativeWriter.request(`/${child.id}/projects`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ projectId: project.id }),
+          })
+        ).status,
+      ).toBe(201);
+    }
+
+    const relationships = await initiativeWriter.request(`/${root.id}/relationships`);
+    expect(relationships.status).toBe(200);
+    const body = (await relationships.json()) as {
+      connectedWork: { id: string; kind: string; direct: boolean }[];
+    };
+    expect(body.connectedWork.filter((item) => item.id === program.id)).toEqual([
+      expect.objectContaining({ kind: 'program', direct: false }),
+    ]);
+    expect(body.connectedWork.filter((item) => item.id === project.id)).toEqual([
+      expect.objectContaining({ kind: 'project', direct: false }),
+    ]);
+  });
+
+  it('walks nested Initiative work while suppressing corrupt foreign associations', async () => {
+    const local = await seedBaseOrg(db, schema);
+    const foreign = await seedBaseOrg(db, schema);
+    const initiativeWriter = appWithActor(
+      initiatives,
+      local.orgId,
+      ['contribute'],
+      local.humanActorId,
+    );
+    const foreignProgramWriter = appWithActor(
+      programs,
+      foreign.orgId,
+      ['manage'],
+      foreign.humanActorId,
+    );
+    const foreignProjectWriter = appWithActor(
+      projects,
+      foreign.orgId,
+      ['contribute'],
+      foreign.humanActorId,
+    );
+    const [rootResponse, middleResponse, leafResponse, programResponse, projectResponse] =
+      await Promise.all([
+        initiativeWriter.request('/', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ name: 'Hierarchy root' }),
+        }),
+        initiativeWriter.request('/', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ name: 'Hierarchy middle' }),
+        }),
+        initiativeWriter.request('/', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ name: 'Hierarchy leaf' }),
+        }),
+        foreignProgramWriter.request('/', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ name: 'Foreign Program', ownerId: foreign.humanActorId }),
+        }),
+        foreignProjectWriter.request('/', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ name: 'Foreign Project', teamId: foreign.teamId }),
+        }),
+      ]);
+    const [root, middle, leaf, foreignProgram, foreignProject] = (await Promise.all([
+      rootResponse.json(),
+      middleResponse.json(),
+      leafResponse.json(),
+      programResponse.json(),
+      projectResponse.json(),
+    ])) as { id: string }[];
+    if (!root || !middle || !leaf || !foreignProgram || !foreignProject) {
+      throw new Error('nested hierarchy fixture was not created');
+    }
+
+    await db.insert(schema.initiativeHierarchyLink).values([
+      {
+        contextOrganizationId: local.orgId,
+        parentInitiativeId: root.id,
+        childInitiativeId: middle.id,
+        createdBy: local.humanActorId,
+      },
+      {
+        contextOrganizationId: local.orgId,
+        parentInitiativeId: middle.id,
+        childInitiativeId: leaf.id,
+        createdBy: local.humanActorId,
+      },
+    ]);
+    await db.insert(schema.initiativeProgram).values({
+      initiativeId: root.id,
+      programId: foreignProgram.id,
+      organizationId: local.orgId,
+    });
+    await db.insert(schema.initiativeProject).values({
+      initiativeId: root.id,
+      projectId: foreignProject.id,
+      organizationId: local.orgId,
+    });
+
+    const relationships = await initiativeWriter.request(`/${root.id}/relationships`);
+    expect(relationships.status).toBe(200);
+    expect(await relationships.json()).toMatchObject({
+      children: [{ id: middle.id }],
+      connectedWork: [],
+      truncated: false,
+    });
+  });
+
+  it('shows a cross-workspace Initiative only to a viewer who belongs to both workspaces', async () => {
+    const local = await seedBaseOrg(db, schema);
+    const foreign = await seedBaseOrg(db, schema);
+    const localWriter = appWithActor(initiatives, local.orgId, ['contribute'], local.humanActorId);
+    const foreignWriter = appWithActor(
+      initiatives,
+      foreign.orgId,
+      ['contribute'],
+      foreign.humanActorId,
+    );
+    const [rootResponse, childResponse] = await Promise.all([
+      localWriter.request('/', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'Local Initiative' }),
+      }),
+      foreignWriter.request('/', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'Foreign Initiative' }),
+      }),
+    ]);
+    const [root, child] = (await Promise.all([rootResponse.json(), childResponse.json()])) as {
+      id: string;
+    }[];
+    if (!root || !child) throw new Error('cross-workspace hierarchy fixture was not created');
+    const [viewerUser] = await db
+      .insert(schema.user)
+      .values({ name: 'Cross-workspace viewer', email: 'cross-workspace-viewer@example.com' })
+      .returning({ id: schema.user.id });
+    if (!viewerUser) throw new Error('cross-workspace viewer was not created');
+    await db
+      .update(schema.actor)
+      .set({ userId: viewerUser.id })
+      .where(eq(schema.actor.id, local.humanActorId));
+    await db
+      .update(schema.actor)
+      .set({ userId: viewerUser.id })
+      .where(eq(schema.actor.id, foreign.humanActorId));
+    await db.insert(schema.initiativeHierarchyLink).values({
+      contextOrganizationId: local.orgId,
+      parentInitiativeId: root.id,
+      childInitiativeId: child.id,
+      createdBy: local.humanActorId,
+    });
+
+    const viewer = appWithActor(
+      initiatives,
+      local.orgId,
+      ['view'],
+      local.humanActorId,
+      fakeSession(viewerUser.id),
+    );
+    const relationships = await viewer.request(`/${child.id}/relationships`);
+    expect(relationships.status).toBe(200);
+    expect(await relationships.json()).toMatchObject({
+      contextOrganizationId: local.orgId,
+      parent: { id: root.id, crossWorkspace: false },
+      children: [],
     });
   });
 

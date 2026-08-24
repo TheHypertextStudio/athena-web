@@ -234,10 +234,9 @@ export async function associatedWorkSummary(
 export function projectOverlapsWindow(proj: ProjectRow, from?: string, to?: string): boolean {
   if (from === undefined && to === undefined) return true;
   const startEdge = proj.startDate ?? proj.targetDate;
-  const endEdge = proj.targetDate ?? proj.startDate;
-  if (startEdge === null || endEdge === null) return true;
+  if (startEdge === null) return true;
   const start = startEdge.getTime();
-  const end = endEdge.getTime();
+  const end = (proj.targetDate ?? startEdge).getTime();
   if (from !== undefined && end < new Date(from).getTime()) return false;
   if (to !== undefined && start > new Date(`${to}T23:59:59.999Z`).getTime()) return false;
   return true;

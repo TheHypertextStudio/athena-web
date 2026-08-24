@@ -28,9 +28,8 @@
 
 ### [RELEASE-COVERAGE-001] Restore entity navigation coverage
 
-- **Status**: COMPLETED
+- **Status**: REVIEW
 - **Started**: 2026-08-24
-- **Completed**: 2026-08-24
 - **Priority**: P0
 - **Description**: The required non-web/API coverage shard stopped production because the entity
   navigation projector had untested Task, Program, and Initiative branches. The same CI pass
@@ -47,14 +46,18 @@
   - [x] Give the full workspace import scan enough time on shared CI runners.
   - [x] Cover the deferred Initiative relationship, missing-target, and bounded-hierarchy branches.
   - [x] Cover Initiative owner and label tenant-isolation branches that remained below the API coverage gate.
-  - [x] Push the repair and verify the production rollout.
-- **Blockers**: None.
-- **Validation**: The focused aggregate suite passes 12 cases. The relationship coverage checks an
-  empty and manager capability bundle, parent and child references, direct and inherited Program
-  and Project rows, a missing Initiative, and a 101-child hierarchy bounded to 100 visible rows.
-  CI run 32714355581 passed all build, lint, type, test, freshness, image, migration, deployment,
-  and Scheduler jobs for executable revision `7d0a0421`. Its API shard passed 384 test files at
-  89.13 percent branch coverage without lowering the 89 percent threshold. All five production
+  - [x] Cover empty aggregate rows, ownerless records, cross-workspace hierarchy visibility,
+        duplicate inherited work, corrupt relationship suppression, and project-window boundaries.
+  - [ ] Push the repair and verify the production rollout.
+- **Blockers**: The CI run for the latest repair must complete before deployment can start.
+- **Validation**: The focused aggregate suite passes 39 cases. The full API suite passes 384 files
+  and 4,662 tests with 89.22 percent branch coverage (16,053 of 17,992 branches), above the 89
+  percent release gate. The relationship coverage checks an empty and manager capability bundle,
+  parent and child references, direct and inherited Program and Project rows, a missing Initiative,
+  an ownerless Initiative, cross-workspace visibility, corrupt foreign links, duplicate inherited
+  work, project-window boundaries, and a 101-child hierarchy bounded to 100 visible rows. CI run
+  32714355581 passed all build, lint, type, test, freshness, image, migration, deployment, and
+  Scheduler jobs for the preceding executable revision `7d0a0421`. All five production
   deployment records report success, and the live web, admin, and API health routes return HTTP 200.
 - **Retrospective**: Focused Initiative tests proved the changed behavior but did not protect the
   repository-wide API coverage ratchet after concurrent detail-route work reached `main`. Release

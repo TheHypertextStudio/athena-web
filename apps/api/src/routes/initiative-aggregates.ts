@@ -60,6 +60,13 @@ function toReference(
   };
 }
 
+/** Return a value proven by the relationship filter, or fail loudly if stored data breaks it. */
+function requiredRelationshipValue<T>(value: T | undefined, message: string): T {
+  /* v8 ignore next -- @preserve visibleLinks and rollupIds establish these lookups before use. */
+  if (value === undefined) throw new Error(message);
+  return value;
+}
+
 const MAX_RELATIONSHIP_LINKS = 200;
 const MAX_RELATIONSHIP_NODES = 100;
 const MAX_CONNECTED_WORK = 100;
@@ -156,8 +163,14 @@ async function loadRelationshipSections(
     string,
     z.input<typeof InitiativeRelationshipSections>['connectedWork'][number]
   >();
-  const inheritedThroughInitiativeId = (initiativeId: string): string | null =>
-    initiativeId === id ? null : (inheritedThrough.get(initiativeId) ?? null);
+  const inheritedThroughInitiativeId = (initiativeId: string): string | null => {
+    if (initiativeId === id) return null;
+    // Every non-root rollup id enters inheritedThrough before the connected-work queries run.
+    return requiredRelationshipValue(
+      inheritedThrough.get(initiativeId),
+      'Initiative rollup child is missing its inheritance path',
+    );
+  };
   for (const item of programLinks) {
     if (!accessibleIds.has(item.row.organizationId)) continue;
     const key = `program:${item.row.id}`;
@@ -193,9 +206,13 @@ async function loadRelationshipSections(
     });
   }
   const parentRow = parentLink ? rowsById.get(parentLink.parentInitiativeId) : null;
-  const children = childLinks.flatMap((link) => {
-    const child = rowsById.get(link.childInitiativeId);
-    return child ? [{ child, link }] : [];
+  const children = childLinks.map((link) => {
+    // `childLinks` comes from `visibleLinks`, whose predicate requires this key in rowsById.
+    const child = requiredRelationshipValue(
+      rowsById.get(link.childInitiativeId),
+      'Visible Initiative child is missing from the relationship index',
+    );
+    return { child, link };
   });
   if (children.length > MAX_RELATIONSHIP_NODES) truncated = true;
   const visibleChildren = children.slice(0, MAX_RELATIONSHIP_NODES);

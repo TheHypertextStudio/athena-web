@@ -7,6 +7,25 @@
 
 ## Active Tasks
 
+### [ATHENA-RAIL-001] Make Athena the shared utility-rail workspace
+
+- **Status**: COMPLETED
+- **Started**: 2026-08-24
+- **Completed**: 2026-08-24
+- **Priority**: P0
+- **Decision**: Athena remains the personal, cross-workspace product at `/athena`. The shell no
+  longer owns a fixed launcher or independent right-side sheet. Its compact queue and selected
+  session render as the Athena utility-rail panel after Agenda and Focus, while Calendar opens
+  contextual Athena work at the full page because it has no rail.
+- **Affected routes**: Retained `/athena`, including session and contextual URLs. Added Home
+  navigation and command-palette access. Removed `/orgs/:orgId/athena` and
+  `/orgs/:orgId/agents` without compatibility redirects.
+- **Validation**: The focused Athena contracts passed 22 cases covering entry points, the rail
+  panel, context actions, retired routes, and the full page. CI run 32714355581 passed build,
+  lint, types, all test shards, the freshness gate, and production deployment. The public health
+  endpoint returned `{"status":"ok"}`. An unauthenticated production visit to `/athena` redirected
+  to sign-in, so the authenticated rail state still requires a signed-in browser session to inspect.
+
 ### [RELEASE-COVERAGE-001] Restore entity navigation coverage
 
 - **Status**: REVIEW

@@ -190,7 +190,7 @@ Repository enforcement:
 
 - GitHub branch protection for `main` requires linear history
 - `pnpm install` runs `scripts/install-git-guardrails.sh` via `prepare`, which sets local Git config: `pull.ff=only`, `pull.rebase=true`, `branch.main.rebase=true`, and `branch.main.mergeOptions=--ff-only`
-- The installer uses native Git hooks only: it sets `core.hooksPath` to generated hooks under the repo Git directory, validates the prepared message before running staged formatting plus one repository-wide lint worker with a 3GB heap, and rejects merge commits via `pre-merge-commit` and `prepare-commit-msg`
+- The installer uses native Git hooks only: it sets `core.hooksPath` to generated hooks under the repo Git directory, validates the prepared message before running staged formatting, the design-token policy, and one repository-wide lint worker with a 3GB heap, and rejects merge commits via `pre-merge-commit` and `prepare-commit-msg`
 
 ### Commit Policy
 

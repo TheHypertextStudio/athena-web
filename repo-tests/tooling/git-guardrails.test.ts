@@ -11,13 +11,17 @@ describe('generated Git guardrails', () => {
     const source = readFileSync(installer, 'utf8');
     const validator = source.indexOf('node scripts/validate-commit-message.mjs "$1"');
     const formatter = source.indexOf('pnpm lint-staged');
+    const designPolicy = source.indexOf(
+      'pnpm --filter @docket/test-utils exec vitest run tests/design-policies/design-token-policy.test.ts --maxWorkers=1',
+    );
     const lint = source.indexOf(
       'NODE_OPTIONS=--max-old-space-size=3072 pnpm turbo run lint --concurrency=1',
     );
 
     expect(validator).toBeGreaterThan(-1);
     expect(formatter).toBeGreaterThan(validator);
-    expect(lint).toBeGreaterThan(formatter);
+    expect(designPolicy).toBeGreaterThan(formatter);
+    expect(lint).toBeGreaterThan(designPolicy);
   });
 
   it('does not run a duplicate staged ESLint pass', () => {

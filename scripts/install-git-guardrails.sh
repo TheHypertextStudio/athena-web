@@ -71,6 +71,11 @@ fi
 # wait for the whole repository lint before commit-msg could reject it.
 pnpm lint-staged
 
+# ESLint cannot detect raw visual utilities. Run the focused design-policy gate before the slower
+# workspace lint so a typography, spacing, color, or shadow regression fails at the commit that
+# introduced it instead of reaching CI.
+pnpm --filter @docket/test-utils exec vitest run tests/design-policies/design-token-policy.test.ts --maxWorkers=1
+
 # lint-staged only formats indexed files. The full lint below is the one authoritative check: a
 # prior commit can otherwise leave a package lint failure behind when a later commit changes
 # unrelated files. CI lints the complete workspace, so commits must do the same before they create

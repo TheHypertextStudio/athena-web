@@ -7,6 +7,36 @@
 
 ## Active Tasks
 
+### [WORK-CANVAS-FIND-001] Add native find to Work Canvas
+
+- **Status**: REVIEW
+- **Started**: 2026-08-24
+- **Priority**: P1
+- **Description**: Cmd+F currently falls through to browser Find on Project Dependencies and the
+  Task graph. React Flow mounts only visible nodes, so browser Find cannot locate off-screen work,
+  select a result, or move the viewport. The Task graph's separate Search field removes nonmatches
+  and destroys the relationship context that Work Canvas exists to preserve.
+- **Approach**: Add a shared, transient Work Canvas find controller. It will index every Task or
+  Project in the current filtered canvas from graph projections and cached reference catalogs,
+  rank title matches before metadata, decorate matches without replacing selection state, and pan
+  through results while preserving layout and readable zoom. Both graph types will register the
+  same controller with the existing in-page Cmd/Ctrl+F router.
+- **Subtasks**:
+  - [x] Confirm the interaction contract, metadata scope, ranking, focus, and responsive behavior.
+  - [x] Write and self-review the implementation plan before changing product code.
+  - [ ] Implement the pure index, controller, find bar, and node decorations through failing tests.
+  - [ ] Integrate Task graph find and migrate the legacy `q` parameter.
+  - [ ] Integrate Project Dependencies find with the same interaction and metadata contract.
+  - [ ] Pass focused, performance, accessibility, browser, full repository, and visual gates.
+- **Decisions**: Find preserves every node and does not change graph layout, URL state, active
+  filters, or multi-selection. Search covers the current scope after active filters and includes
+  off-screen nodes. Every query term must match. Title matches rank before structured metadata.
+  Fuzzy search, saved queries, archived objects, and workspace-global results remain outside this
+  slice.
+- **Blockers**: None.
+
+---
+
 ### [AGENDA-RAIL-003] Separate work-location context from Agenda events
 
 - **Status**: REVIEW
@@ -6174,6 +6204,58 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 ---
 
 ## Completed Tasks
+
+### [CANVAS-MOBILE-MINIMAP-001] Remove the persistent mobile minimap
+
+- **Completed**: 2026-08-24
+- **Priority**: P1
+- **Summary**: Project Dependencies and Task graph no longer render a minimap below 640px. Mobile
+  keeps zoom, Fit selection, and Re-layout. Wider screens retain the existing pannable minimap.
+- **Decision**: Mobile has no replacement overview control. The minimap reduced the 363-Task graph
+  to unreadable marks and consumed space that direct commands need. Native Find remains a separate
+  Work Canvas feature.
+- **Validation**: Focused type-aware ESLint and Prettier pass. Nine Canvas layout tests pass across
+  the shared layout lifecycle and Project graph layout suites. Hidden-browser captures verify both
+  graph hosts at 320×720 in dark mode and 390×844 in light and dark modes. Two 1024×768 captures
+  verify that desktop retains the minimap.
+- **Files changed**: The shared Canvas now uses the application media-query hook to omit the
+  minimap on mobile. The Canvas design audit and eight screenshots record the final behavior.
+- **Learnings**: CSS visibility could not override React Flow's inline display value reliably in
+  the live bundle. The shared media-query hook removes the minimap from the rendered tree and keeps
+  the responsive behavior explicit.
+- **Retrospective**: Static dock geometry proved that the controls could fit. The live product
+  review showed that fitting the minimap did not make it useful. Removing low-information chrome
+  produced a better mobile result than arranging it more carefully.
+
+---
+
+### [DX-LINT-PIPELINE-001] Bound local lint feedback
+
+- **Completed**: 2026-08-24
+- **Priority**: P0
+- **Summary**: Pre-commit now formats staged files and lints only changed workspace packages and
+  their dependents. Documentation-only commits do not start ESLint. Root lint and TypeScript
+  configuration changes select a bounded full-workspace run. Every local and CI shard has a hard
+  wall-clock limit. API lint builds its typed program once instead of rebuilding it in batches.
+- **Decisions**: Turbo remains the package-level cache, and ESLint's unsafe content-only file cache
+  remains disabled. The API command alone receives a 4 GiB heap. Full lint runs API beside the
+  small-package group, then runs Web and Admin serially.
+- **Files changed**: Added the staged selector, bounded scheduler, process-group timeout, cache
+  status and retention commands, and maintainer documentation. Updated API lint, native Git hooks,
+  repository commands, and CI timeouts.
+- **Validation**: A cold full lint completed in 157.2 seconds during implementation. API used one
+  process and finished in 80.4 seconds at 3.74 GB RSS. Web finished cold in 76.7 seconds at 2.80 GB
+  RSS. A warm full run completed in 1.4 seconds with every package cached. A documentation-only
+  staged run exited in 0.48 seconds without starting ESLint. Cache pruning reclaimed 75.2 GiB and
+  left 18.8 GiB under the 20 GiB limit.
+- **Learnings**: Type-aware lint time came from rebuilding one large TypeScript program for every
+  100-file batch, not from Turbo concurrency. Generated hooks also need worktree-local storage so
+  another checkout cannot replace the current checkout's policy.
+- **Retrospective**: The implementation replaced repeated typed-program construction with one
+  bounded process. The installer now writes hooks below each worktree's own Git directory and uses
+  worktree config.
+
+---
 
 ### [INITIATIVE-ROSTER-FIT-001] Correct Initiative roster columns and hierarchy rails
 

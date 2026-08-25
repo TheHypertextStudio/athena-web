@@ -18,7 +18,14 @@ import {
 import type { WorkLocationCalendarRegion } from './work-location-calendar-model';
 
 /** Width reserved for a partial-day work-location rail and its interaction targets. */
-export const WORK_LOCATION_TIMED_TRACK_WIDTH_PX = 40;
+export const WORK_LOCATION_TIMED_TRACK_WIDTH_PX = 32;
+
+/** Minimum pointer target retained while the visible track stays narrower than the target. */
+const WORK_LOCATION_TIMED_TARGET_SIZE_PX = 40;
+
+/** Offset targets into the time gutter so their right edge stops at event content. */
+const WORK_LOCATION_TIMED_TARGET_LEFT_PX =
+  WORK_LOCATION_TIMED_TRACK_WIDTH_PX - WORK_LOCATION_TIMED_TARGET_SIZE_PX;
 
 interface WorkLocationAllDayContextProps {
   readonly regions: readonly WorkLocationCalendarRegion[];
@@ -515,9 +522,18 @@ export function WorkLocationTimedLaneContext({
                 : `translateX(${String((preview.targetIndex - context.geometry.laneIndex) * context.geometry.laneWidth)}px)`,
           }}
         >
-          <span className="bg-tertiary-container/35 absolute top-0 left-1.5 h-full w-7 rounded-full" />
-          <span className="bg-tertiary absolute top-0 left-[19px] h-full w-0.5 rounded-full" />
-          <span className="bg-tertiary-container text-on-tertiary-container absolute -top-3 left-2 flex size-6 items-center justify-center rounded-full">
+          <span
+            data-work-location-preview-band=""
+            className="bg-tertiary-container/35 absolute top-0 left-1.5 h-full w-3 rounded-full"
+          />
+          <span
+            data-work-location-preview-rail=""
+            className="bg-tertiary absolute top-0 left-[11px] h-full w-0.5 rounded-full"
+          />
+          <span
+            data-work-location-preview-marker=""
+            className="bg-tertiary-container text-on-tertiary-container absolute -top-3 left-0 flex size-6 items-center justify-center rounded-full"
+          >
             <PreviewMarkerIcon aria-hidden="true" className="size-3.5!" />
           </span>
         </div>
@@ -532,12 +548,12 @@ export function WorkLocationTimedLaneContext({
               data-testid="work-location-band"
               data-work-location-band={region.id}
               aria-hidden="true"
-              className="bg-tertiary-container/35 pointer-events-none absolute top-0 left-1.5 h-full w-7 rounded-full"
+              className="bg-tertiary-container/35 pointer-events-none absolute top-0 left-1.5 h-full w-3 rounded-full"
             />
             <span
               data-testid="work-location-rail"
               aria-hidden="true"
-              className="bg-tertiary pointer-events-none absolute top-0 left-[19px] h-full w-0.5 rounded-full"
+              className="bg-tertiary pointer-events-none absolute top-0 left-[11px] h-full w-0.5 rounded-full"
             />
           </>
         );
@@ -559,7 +575,7 @@ export function WorkLocationTimedLaneContext({
                     tabIndex={0}
                     aria-label={`${region.label} work location`}
                     aria-describedby={descriptionId}
-                    className="focus-visible:outline-primary pointer-events-auto absolute -top-5 left-0 flex size-10 items-center justify-center rounded-full outline-none focus-visible:outline-2 focus-visible:outline-offset-2"
+                    className="focus-visible:outline-primary pointer-events-auto absolute -top-5 -left-2 flex size-10 items-center justify-center rounded-full outline-none focus-visible:outline-2 focus-visible:outline-offset-2"
                   >
                     <span
                       data-work-location-marker-kind={region.isHome ? 'home' : 'place'}
@@ -710,7 +726,7 @@ export function WorkLocationTimedLaneContext({
                   aria-label={`Move ${region.label} work location`}
                   aria-describedby={descriptionId}
                   data-work-location-hit-slot="move"
-                  className="group focus-visible:outline-primary pointer-events-auto absolute -top-5 left-0 z-30 flex size-10 min-h-10 min-w-10 items-center justify-center rounded-full outline-none focus-visible:outline-2 focus-visible:outline-offset-2"
+                  className="group focus-visible:outline-primary pointer-events-auto absolute -top-5 -left-2 z-30 flex size-10 min-h-10 min-w-10 items-center justify-center rounded-full outline-none focus-visible:outline-2 focus-visible:outline-offset-2"
                   onClick={(event) => {
                     if (suppressedClick.current !== null) {
                       suppressedClick.current = null;
@@ -748,7 +764,12 @@ export function WorkLocationTimedLaneContext({
                 aria-label={`Resize start of ${region.label}`}
                 data-work-location-hit-slot="start"
                 className="hover:bg-tertiary-container/30 active:bg-tertiary-container/50 focus-visible:bg-tertiary-container/30 focus-visible:outline-primary pointer-events-auto absolute z-20 size-10 min-h-10 min-w-10 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 motion-safe:transition-colors motion-reduce:transition-none"
-                style={{ left: 0, top: 20, width: 40, height: 40 }}
+                style={{
+                  left: WORK_LOCATION_TIMED_TARGET_LEFT_PX,
+                  top: 20,
+                  width: WORK_LOCATION_TIMED_TARGET_SIZE_PX,
+                  height: WORK_LOCATION_TIMED_TARGET_SIZE_PX,
+                }}
                 onPointerDown={(event) => {
                   startSession(event, 'resize-start');
                 }}
@@ -764,10 +785,10 @@ export function WorkLocationTimedLaneContext({
                 data-work-location-hit-slot="end"
                 className="hover:bg-tertiary-container/30 active:bg-tertiary-container/50 focus-visible:bg-tertiary-container/30 focus-visible:outline-primary pointer-events-auto absolute z-20 size-10 min-h-10 min-w-10 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 motion-safe:transition-colors motion-reduce:transition-none"
                 style={{
-                  left: 0,
+                  left: WORK_LOCATION_TIMED_TARGET_LEFT_PX,
                   top: height - 20,
-                  width: 40,
-                  height: 40,
+                  width: WORK_LOCATION_TIMED_TARGET_SIZE_PX,
+                  height: WORK_LOCATION_TIMED_TARGET_SIZE_PX,
                 }}
                 onPointerDown={(event) => {
                   startSession(event, 'resize-end');

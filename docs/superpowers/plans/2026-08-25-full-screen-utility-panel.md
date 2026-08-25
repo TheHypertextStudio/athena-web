@@ -40,7 +40,7 @@ content continue through the existing controlled Sheet state.
 - Produces: assertions for the full-window dialog, compact pane app bar, close action, focus return,
   and unchanged hidden desktop host.
 
-- [ ] **Step 1: Replace the old partial-sheet assertion with the full-window contract**
+- [x] **Step 1: Replace the old partial-sheet assertion with the full-window contract**
 
 Add these assertions after opening Tasks:
 
@@ -63,7 +63,7 @@ expect(within(overlay).getByTestId('shell-utility-pane-bar')).toHaveClass(
 expect(within(overlay).getByRole('button', { name: 'Close Tasks' })).toHaveClass('size-10');
 ```
 
-- [ ] **Step 2: Add close and focus-restoration coverage**
+- [x] **Step 2: Add close and focus-restoration coverage**
 
 Capture the `Show Tasks` trigger, open the pane, click `Close Tasks`, and wait for the dialog to
 leave the tree. Assert that the original trigger has focus:
@@ -77,7 +77,7 @@ await waitFor(() => expect(overlay).not.toBeInTheDocument());
 expect(trigger).toHaveFocus();
 ```
 
-- [ ] **Step 3: Run the shell test and verify red state**
+- [x] **Step 3: Run the shell test and verify red state**
 
 Run:
 
@@ -103,7 +103,7 @@ Expected: the new geometry and close-action assertions fail against `w-[22rem] m
 - Produces: one compact full-window modal pane below `DESKTOP_MEDIA_QUERY`, with no change to
   `SheetContent`, `ShellAside`, or `ShellActivityBar` public APIs.
 
-- [ ] **Step 1: Add the explicit close action dependencies**
+- [x] **Step 1: Add the explicit close action dependencies**
 
 Import `X` from `../../icons` and `SheetClose` from `../../primitives`:
 
@@ -112,7 +112,7 @@ import { Menu, X } from '../../icons';
 import { Sheet, SheetClose, SheetContent, SheetTitle } from '../../primitives';
 ```
 
-- [ ] **Step 2: Replace the side-sheet geometry**
+- [x] **Step 2: Replace the side-sheet geometry**
 
 Use full dynamic-viewport geometry only on the shell's compact panel instance:
 
@@ -123,7 +123,7 @@ className =
 
 The generic navigation drawer and `SheetContent` primitive keep their existing widths.
 
-- [ ] **Step 3: Build one safe-area app bar**
+- [x] **Step 3: Build one safe-area app bar**
 
 Wrap the panel selector and close action in this bar:
 
@@ -147,7 +147,7 @@ Wrap the panel selector and close action in this bar:
 </div>
 ```
 
-- [ ] **Step 4: Run focused tests and verify green state**
+- [x] **Step 4: Run focused tests and verify green state**
 
 Run:
 

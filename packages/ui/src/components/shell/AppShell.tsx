@@ -79,9 +79,9 @@ import * as React from 'react';
 
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { readStoredBoolean, readStoredString, writeStoredValue } from '../../lib/browser-storage';
-import { Menu } from '../../icons';
+import { Menu, X } from '../../icons';
 import { cn } from '../../lib/utils';
-import { Sheet, SheetContent, SheetTitle } from '../../primitives';
+import { Sheet, SheetClose, SheetContent, SheetTitle } from '../../primitives';
 import { MobilePanelSwitcher } from './MobilePanelSwitcher';
 import { ShellActivityBar } from './ShellActivityBar';
 import { useContextState } from './ContextProvider';
@@ -685,13 +685,14 @@ export function AppShell({
           </>
         ) : null}
 
-        {/* The same panels as a right-anchored modal Sheet below `lg`, opened from the mobile top-bar
-          trigger — the only presentation there, since the docked columns are CSS-hidden at those
-          widths. Mounted only when the desktop query does *not* match, so Radix's focus trap and
-          scroll-lock never activate over a docked rail; it carries its own id
-          ({@link SHELL_ASIDE_SHEET_ID}) because the docked host is now in the DOM at every width and
-          the two can no longer share one. A single active-panel menu replaces the desktop activity
-          bar. Escape/backdrop dismiss closes it. */}
+        {/* The same panels as one full-window pane below `lg`, opened from the mobile top-bar
+          trigger. Material's adaptive supporting-pane model shows only the current pane at compact
+          and medium widths, so no strip of the unusable page remains visible underneath. Mounted
+          only when the desktop query does *not* match, so Radix's focus trap and scroll-lock never
+          activate over a docked rail; it carries its own id ({@link SHELL_ASIDE_SHEET_ID}) because
+          the docked host is now in the DOM at every width and the two can no longer share one. A
+          single active-panel menu replaces the desktop activity bar. The explicit close action,
+          Escape, and browser dismissal all return to the invoking page. */}
         <Sheet
           open={activePanel != null && !isDesktop && overlayPanelOpen}
           onOpenChange={(next) => {
@@ -703,19 +704,33 @@ export function AppShell({
             id={SHELL_ASIDE_SHEET_ID}
             aria-label={activePanel?.label}
             aria-describedby={undefined}
-            className="@container flex w-[22rem] max-w-[90vw] flex-col overflow-hidden"
+            className="@container inset-0 flex h-dvh w-screen max-w-none flex-col overflow-hidden border-0 shadow-none"
           >
             <SheetTitle className="sr-only">{activePanel?.label}</SheetTitle>
             {!isDesktop && activePanel ? (
-              <div className="flex shrink-0 px-2 pr-12 pb-2">
-                <MobilePanelSwitcher
-                  panels={panels}
-                  activePanel={activePanel}
-                  onSelect={(panelId) => {
-                    setRail((current) => ({ ...current, activeId: panelId }));
-                    writeRailState(RAIL_ACTIVE_KEY, panelId);
-                  }}
-                />
+              <div
+                data-testid="shell-utility-pane-bar"
+                className="border-outline-variant flex min-h-12 shrink-0 items-center border-b px-2 pt-[env(safe-area-inset-top)]"
+              >
+                <div className="min-w-0 flex-1">
+                  <MobilePanelSwitcher
+                    panels={panels}
+                    activePanel={activePanel}
+                    onSelect={(panelId) => {
+                      setRail((current) => ({ ...current, activeId: panelId }));
+                      writeRailState(RAIL_ACTIVE_KEY, panelId);
+                    }}
+                  />
+                </div>
+                <SheetClose asChild>
+                  <button
+                    type="button"
+                    aria-label={`Close ${activePanel.label}`}
+                    className="text-on-surface-variant hover:bg-surface-container-high focus-visible:ring-ring flex size-10 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                  >
+                    <X aria-hidden="true" className="size-5" />
+                  </button>
+                </SheetClose>
               </div>
             ) : null}
             <div className="min-h-0 flex-1 overflow-auto">{activePanel?.node}</div>

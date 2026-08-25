@@ -7,6 +7,40 @@
 
 ## Active Tasks
 
+### [AGENDA-RAIL-003] Separate work-location context from Agenda events
+
+- **Status**: REVIEW
+- **Started**: 2026-08-24
+- **Priority**: P1
+- **Description**: Replace the Agenda panel's stacked day and zoom chrome with one clear navigation
+  row. Make its existing date picker read as an interactive control. Reserve a leading timeline
+  track for partial-day work location so its marker and rail no longer cross event cards.
+- **Approach**: Keep the shared date picker, three discrete zoom levels, scheduling collision engine,
+  and exact work-location gestures. Add one generic timed-item inset seam to the shared canvas. Let
+  the work-location composition request that inset for intersecting collision clusters, then render
+  the rail and semantic place marker inside the resulting track in both Calendar and Agenda.
+- **Subtasks**:
+  - [x] Collapse Agenda navigation and display settings into one non-wrapping row.
+  - [x] Add cluster-safe timed-item leading insets to the shared scheduling canvas.
+  - [x] Move partial-day work-location controls into the reserved track and identify Home.
+  - [x] Remove empty work-location rows and obsolete connectors.
+  - [x] Pass focused and repository validation.
+  - [x] Rebase onto current `origin/main` and push the verified branch.
+  - [ ] Fast-forward `main` and pass the deployment gates.
+  - [ ] Capture authenticated visual evidence and deploy the verified revision.
+- **Validation**: Before the rebase, the complete Web suite passed 415 files and 3,116 tests. API
+  passed 391 files and 4,744 tests. DB passed 31 files and 203 tests. After the rebase, the focused
+  Agenda, scheduling, and work-location run passes 88 tests across eight files with one worker.
+  Repository tooling passes 165 tests, typecheck passes 26 tasks, lint passes 25 tasks, and the
+  production build passes all four executable tasks with a process-local 3 GB heap and two Turbo
+  workers. The branch contains no merge commits and is verified at revision `4da13664`.
+- **Blockers**: Authenticated screenshot review at 1440×900, 390×844, and 320px remains pending.
+  The user told this task to stop opening or controlling browsers after earlier audit instances
+  disrupted their desktop. The user directed this branch onto `main` without a pull request, so the
+  release still needs browser permission for its required visual evidence.
+
+---
+
 ### [CORE-SCREEN-STABILITY-001] Keep the release screen gate strict without incidental flakes
 
 - **Status**: REVIEW

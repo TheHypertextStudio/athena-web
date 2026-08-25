@@ -66,6 +66,34 @@ describe('SchedulingCanvas composition seams', () => {
     );
   });
 
+  it('uses the cluster inset when choosing readable collision columns', () => {
+    const collisions = ['a', 'b', 'c'].map(
+      (id): ScheduleItem => ({
+        id,
+        title: id,
+        startsAt: '2026-07-01T09:00:00.000Z',
+        endsAt: '2026-07-01T10:00:00.000Z',
+      }),
+    );
+    render(
+      <SchedulingCanvas
+        presentation="agenda"
+        displayTimezone="UTC"
+        lanes={[lane(collisions)]}
+        pixelsPerHour={60}
+        viewportWidth={344}
+        minimumReadableTimedItemWidth={96}
+        resolveTimedItemLeadingInset={() => 40}
+      />,
+    );
+
+    expect(document.querySelectorAll('[data-schedule-item]')).toHaveLength(1);
+    expect(document.querySelector('[data-schedule-overflow-cluster]')).toHaveAttribute(
+      'data-schedule-leading-inset',
+      '40',
+    );
+  });
+
   it('places neutral timed underlay and all-day context content in their lane areas', () => {
     const allDayContextClick = vi.fn();
     render(

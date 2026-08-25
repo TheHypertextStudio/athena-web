@@ -27,6 +27,8 @@ interface SchedulingItemBodyProps {
   readonly density: ScheduleItemDensity;
   /** Rendered card height in pixels, which sets how many title lines fit. */
   readonly height: number;
+  /** Rendered card width after collision placement and consumer-owned leading context. */
+  readonly width: number;
   readonly timeRange: string;
   readonly content: ReactNode;
   readonly readOnlyDescriptionId: string;
@@ -38,17 +40,17 @@ interface SchedulingItemBodyProps {
 }
 
 /**
- * How many lines of title a card of this height can show without spilling past its own bounds.
+ * How many lines of title a card can show without spilling past its measured bounds.
  *
  * @remarks
  * The old rule was `truncate` at every height, so a two-hour meeting rendered one clipped line
- * followed by 180px of empty fill. Line height is ~20px and the time line below the title takes one
- * of them, so the budget is `(height - padding - timeLine) / lineHeight`, capped at 3 because a
- * fourth line is a description, not a title, and a card is not a reading surface.
+ * followed by 180px of empty fill. Height supplies a line budget, while width prevents narrow
+ * collision columns from turning each word into its own line. The result stays capped at three
+ * because a fourth line is a description, not a title, and a card is not a reading surface.
  */
-function titleLineClamp(height: number): 1 | 2 | 3 {
-  if (height < 64) return 1;
-  if (height < 96) return 2;
+function titleLineClamp(height: number, width: number): 1 | 2 | 3 {
+  if (width < 136 || height < 64) return 1;
+  if (width < 180 || height < 96) return 2;
   return 3;
 }
 
@@ -62,9 +64,13 @@ const TITLE_CLAMP_CLASS = {
 function ItemBodyContent({
   density,
   height,
+  width,
   timeRange,
   content,
-}: Pick<SchedulingItemBodyProps, 'density' | 'height' | 'timeRange' | 'content'>): JSX.Element {
+}: Pick<
+  SchedulingItemBodyProps,
+  'density' | 'height' | 'width' | 'timeRange' | 'content'
+>): JSX.Element {
   // A block too short for a time line still gets its title. It used to render as a featureless
   // coloured bar with the title only in the accessibility tree — a dead element on the one surface
   // whose entire job is saying what is happening. Solid leading (line-height = the token's own
@@ -105,7 +111,9 @@ function ItemBodyContent({
           emits later wins regardless of the order they appear in this attribute. `block` won, the
           clamp silently did nothing, and a long title ran straight out of the bottom of its own
           card. `line-clamp-*` already supplies the `-webkit-box` display it needs. */}
-      <span className={`text-title-small w-full ${TITLE_CLAMP_CLASS[titleLineClamp(height)]}`}>
+      <span
+        className={`text-title-small w-full ${TITLE_CLAMP_CLASS[titleLineClamp(height, width)]}`}
+      >
         {content}
       </span>
       <span className="text-body-medium block w-full truncate text-(--schedule-item-foreground) tabular-nums">

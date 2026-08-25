@@ -275,6 +275,7 @@ describe('Agenda scheduling interactions', () => {
     expect(frame).toHaveClass('h-full', 'min-h-0', 'overflow-hidden', 'px-3');
     expect(frame).not.toHaveClass('overflow-auto');
     expect(screen.getByRole('region', { name: 'Schedule' })).toBe(frame.firstElementChild);
+    expect(canvasProps().minimumReadableTimedItemWidth).toBe(96);
   });
 
   it('mounts the same work-location composition slots and editor overlays as Calendar', () => {

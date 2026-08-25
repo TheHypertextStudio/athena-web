@@ -27,6 +27,32 @@ function positioned(items: readonly ScheduleItem[]) {
 }
 
 describe('arrangeDenseScheduleItems', () => {
+  it('derives collision capacity from the width left after a cluster inset', () => {
+    const collisions = positioned([
+      item('a', '09:00', '10:00'),
+      item('b', '09:00', '10:00'),
+      item('c', '09:00', '10:00'),
+    ]);
+    const clusterId = assertDefined(collisions[0]).clusterId;
+    const withoutInset = arrangeDenseScheduleItems(collisions, 300, {
+      minimumReadableItemWidth: 96,
+    });
+    const withInset = arrangeDenseScheduleItems(collisions, 300, {
+      leadingInsetByCluster: new Map([[clusterId, 40]]),
+      minimumReadableItemWidth: 96,
+    });
+
+    expect(withoutInset.directItems).toHaveLength(3);
+    expect(withoutInset.overflowGroups).toEqual([]);
+    expect(withInset.directItems).toHaveLength(1);
+    expect(withInset.overflowGroups).toHaveLength(1);
+    expect(withInset.overflowGroups[0]?.items).toHaveLength(2);
+    expect(withInset.overflowGroups[0]?.placement).toMatchObject({
+      columnIndex: 1,
+      columnCount: 2,
+    });
+  });
+
   it('keeps ordinary collisions directly visible when their cards remain readable', () => {
     const result = arrangeDenseScheduleItems(
       positioned([
@@ -124,6 +150,17 @@ describe('arrangeDenseScheduleItems', () => {
     ).toBeLessThanOrEqual(
       assertDefined(result.directItems.find(({ item: direct }) => direct.id === 'next')).top,
     );
+  });
+
+  it('caps an ordinary overflow disclosure at forty pixels', () => {
+    const result = arrangeDenseScheduleItems(
+      positioned(
+        Array.from({ length: 5 }, (_, index) => item(`dense-${String(index)}`, '09:00', '10:00')),
+      ),
+      240,
+    );
+
+    expect(result.overflowGroups[0]?.height).toBe(40);
   });
 
   it('places local disclosures along a long transitive collision chain', () => {

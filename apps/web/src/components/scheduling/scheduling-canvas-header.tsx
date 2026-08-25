@@ -202,6 +202,7 @@ export function SchedulingCanvasHeader({
               />
             ) : null}
             <SchedulingAllDayLane
+              presentation={presentation}
               lane={lane}
               laneIndex={laneIndex}
               lanes={lanes}

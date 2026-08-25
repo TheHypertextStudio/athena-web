@@ -319,7 +319,7 @@ export function WorkLocationAllDayContext({
   if (visible.length === 0) return null;
   return (
     <div
-      className="flex h-11 min-w-0 flex-nowrap items-center gap-1 overflow-hidden"
+      className="flex h-10 min-w-0 flex-nowrap items-center gap-1 overflow-hidden"
       aria-label="Expected work location"
     >
       {visible.map((region) =>
@@ -328,7 +328,7 @@ export function WorkLocationAllDayContext({
             key={region.id}
             type="button"
             aria-label={`${region.label} work location`}
-            className="group focus-visible:outline-primary inline-flex min-h-11 max-w-full min-w-11 items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
+            className="group focus-visible:outline-primary inline-flex min-h-10 max-w-full min-w-10 items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
             onClick={() => {
               if (suppressedClick.current === region.id) {
                 suppressedClick.current = null;

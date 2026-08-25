@@ -7,6 +7,24 @@
 
 ## Active Tasks
 
+### [UTILITY-PANEL-SCALE-001] Make utility panels scale beyond three choices
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-08-25
+- **Priority**: P1
+- **Description**: Replace the mobile utility sheet's horizontal Agenda, Focus, and Athena tabs
+  with one active-panel menu that can hold more panel types without wrapping. Reduce the partial-day
+  work-location track so it no longer consumes a large share of the narrow Agenda panel.
+- **Approach**: Keep the desktop activity bar because its vertical icon list already scales within
+  the shell. In the mobile sheet, name the active panel in one 40px menu trigger and put every panel
+  choice in a vertical menu. Reserve 32px for an intersecting work-location interval, render a 12px
+  tinted band, and offset the existing 40px gesture targets into the time gutter so they never
+  cover event cards.
+- **Plan**: Write and review the design before creating the implementation plan.
+- **Blockers**: None.
+
+---
+
 ### [CONNECTOR-POST-001] Keep connector actions and retries running
 
 - **Status**: IN_PROGRESS

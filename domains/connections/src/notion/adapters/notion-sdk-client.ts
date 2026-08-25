@@ -24,6 +24,7 @@ import type {
   MirrorChange,
   MirrorCreatedRow,
   MirrorDatabaseSpec,
+  MirrorDatabaseRecovery,
   MirrorDatabaseBindings,
   MirrorExternalPerson,
   MirrorParentPage,
@@ -41,10 +42,13 @@ import { fullPages, toMirrorChange, toParentPage } from './notion-sdk-pages';
 /** Notion's documented page-size ceiling for list endpoints. */
 const NOTION_PAGE_SIZE = 100;
 
-/** The exact description text used to prove Docket ownership. */
-function ownershipDescription(ownershipKey: string): string {
-  return `Docket ownership: ${ownershipKey}`;
+/** Human-readable ownership text. It contains no Docket record identifier. */
+function ownershipDescription(entityType: MirrorDatabaseSpec['entityType']): string {
+  return `Managed by Docket · ${entityType}`;
 }
+
+/** Allow for small clock differences between Docket and Notion during create recovery. */
+const CREATE_RECOVERY_CLOCK_SKEW_MS = 60_000;
 
 /** Translate an SDK error into the connection domain's stable provider-error contract. */
 function asProviderError(err: unknown, context: string): ProviderError<'notion'> {
@@ -186,7 +190,7 @@ export class NotionMirrorClient implements NotionMirrorPort {
       const parameters: CreateDatabaseParameters = {
         parent: { type: 'page_id', page_id: spec.parentPageId },
         title: [{ type: 'text', text: { content: spec.title } }],
-        description: [{ type: 'text', text: { content: ownershipDescription(spec.ownershipKey) } }],
+        description: [{ type: 'text', text: { content: ownershipDescription(spec.entityType) } }],
         initial_data_source: { properties: databaseSchema(spec.columns) },
       };
       created = await this.notion.databases.create(parameters);
@@ -214,28 +218,38 @@ export class NotionMirrorClient implements NotionMirrorPort {
     };
   }
 
-  /** Find databases under the selected parent carrying the exact Docket ownership marker. */
-  async findDatabasesByOwnershipKey(
+  /** Find databases under the selected parent created for one durable provisioning intent. */
+  async findProvisionedDatabases(
     spec: MirrorDatabaseSpec,
+    recovery: MirrorDatabaseRecovery,
   ): Promise<ProvisionedMirrorDatabase[]> {
     try {
       const children = await collectPaginatedAPI(this.notion.blocks.children.list, {
         block_id: spec.parentPageId,
         page_size: NOTION_PAGE_SIZE,
       });
-      const databaseIds = children.flatMap((child) =>
-        isFullBlock(child) && child.type === 'child_database' ? [child.id] : [],
+      const databaseChildren = children.flatMap((child) =>
+        isFullBlock(child) && child.type === 'child_database' ? [child] : [],
       );
       const databases = await Promise.all(
-        databaseIds.map((databaseId) =>
-          this.notion.databases.retrieve({ database_id: databaseId }),
-        ),
+        databaseChildren.map((child) => this.notion.databases.retrieve({ database_id: child.id })),
+      );
+      const creationByDatabaseId = new Map(
+        databaseChildren.map((child) => [
+          child.id,
+          { createdAt: child.created_time, createdBy: child.created_by.id },
+        ]),
       );
       const matches: ProvisionedMirrorDatabase[] = [];
+      const earliestCreatedAt =
+        Date.parse(recovery.createdAtOrAfter) - CREATE_RECOVERY_CLOCK_SKEW_MS;
       for (const database of databases) {
         if (!isFullDatabase(database)) continue;
         const description = database.description.map((item) => item.plain_text).join('');
-        if (description !== ownershipDescription(spec.ownershipKey)) continue;
+        if (description !== ownershipDescription(spec.entityType)) continue;
+        const creation = creationByDatabaseId.get(database.id);
+        if (creation?.createdBy !== recovery.createdBy) continue;
+        if (Date.parse(creation.createdAt) < earliestCreatedAt) continue;
         const dataSourceId = database.data_sources[0]?.id;
         if (dataSourceId === undefined) {
           throw new ProviderError('Docket-owned Notion database has no data source', {

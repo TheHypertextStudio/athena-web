@@ -209,7 +209,7 @@ describe('provisioning a database', () => {
   const spec = {
     title: 'Tasks',
     parentPageId: 'parent-1',
-    ownershipKey: 'owner:tasks',
+    entityType: 'task' as const,
     columns: [{ field: 'title', title: 'Name', kind: 'title' as const }],
   };
 
@@ -266,7 +266,7 @@ describe('updating a schema', () => {
   const spec = {
     title: 'Tasks',
     parentPageId: 'parent-1',
-    ownershipKey: 'owner:tasks',
+    entityType: 'task' as const,
     columns: [{ field: 'title', title: 'Name', kind: 'title' as const }],
   };
 

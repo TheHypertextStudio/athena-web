@@ -5,7 +5,7 @@ import { MockNotionMirror } from '../src/notion/adapters/in-memory';
 const spec = {
   title: 'Tasks',
   parentPageId: 'mock_page_workspace',
-  ownershipKey: 'owner:tasks',
+  entityType: 'task' as const,
   columns: [
     { field: 'title', title: 'Name', kind: 'title' as const },
     { field: 'state', title: 'Status', kind: 'select' as const },

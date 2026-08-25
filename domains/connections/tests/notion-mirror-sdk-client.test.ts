@@ -179,13 +179,13 @@ describe('NotionMirrorClient.provisionDatabase', () => {
     const provisioned = await new NotionMirrorClient('t', fetchImpl).provisionDatabase({
       parentPageId: 'page_1',
       title: 'Docket tasks',
-      ownershipKey: 'owner:tasks',
+      entityType: 'task',
       columns: [titleColumn],
     });
 
     expect(calls[0]?.body).toMatchObject({
       parent: { type: 'page_id', page_id: 'page_1' },
-      description: [{ type: 'text', text: { content: 'Docket ownership: owner:tasks' } }],
+      description: [{ type: 'text', text: { content: 'Managed by Docket · task' } }],
     });
     expect(provisioned).toEqual({
       externalDatabaseId: 'db_1',
@@ -205,7 +205,7 @@ describe('NotionMirrorClient.provisionDatabase', () => {
     const rejected = new NotionMirrorClient('t', fetchImpl).provisionDatabase({
       parentPageId: 'page_1',
       title: 'Docket tasks',
-      ownershipKey: 'owner:tasks',
+      entityType: 'task',
       columns: [titleColumn],
     });
     await expect(rejected).rejects.toBeInstanceOf(ProviderError);
@@ -222,7 +222,7 @@ describe('NotionMirrorClient.provisionDatabase', () => {
     const rejected = new NotionMirrorClient('t', fetchImpl).provisionDatabase({
       parentPageId: 'page_1',
       title: 'Docket tasks',
-      ownershipKey: 'owner:tasks',
+      entityType: 'task',
       columns: [titleColumn],
     });
     await expect(rejected).rejects.toMatchObject({ provider: 'notion', kind: 'provider' });
@@ -235,15 +235,15 @@ describe('NotionMirrorClient.provisionDatabase', () => {
     ).provisionDatabase({
       parentPageId: 'page_1',
       title: 'Docket tasks',
-      ownershipKey: 'owner:tasks',
+      entityType: 'task',
       columns: [titleColumn],
     });
     await expect(rejected).rejects.toMatchObject({ provider: 'notion', kind: 'provider' });
   });
 });
 
-describe('NotionMirrorClient.findDatabasesByOwnershipKey', () => {
-  it('adopts only a child database carrying the exact ownership description', async () => {
+describe('NotionMirrorClient.findProvisionedDatabases', () => {
+  it('adopts only a matching database created by the bot after the durable intent', async () => {
     const { fetchImpl } = router({
       'GET /v1/blocks': {
         object: 'list',
@@ -257,6 +257,8 @@ describe('NotionMirrorClient.findDatabasesByOwnershipKey', () => {
             id: 'db_1',
             type: 'child_database',
             child_database: { title: 'Docket tasks' },
+            created_by: { id: 'bot_1' },
+            created_time: '2026-08-24T12:00:01.000Z',
           },
         ],
       },
@@ -264,7 +266,8 @@ describe('NotionMirrorClient.findDatabasesByOwnershipKey', () => {
         object: 'database',
         id: 'db_1',
         title: [],
-        description: [{ plain_text: 'Docket ownership: owner:tasks' }],
+        description: [{ plain_text: 'Managed by Docket · task' }],
+        created_time: '2026-08-24T12:00:01.000Z',
         data_sources: [{ id: 'ds_1', name: 'Tasks' }],
         url: 'https://www.notion.so/db-1',
       },
@@ -275,12 +278,15 @@ describe('NotionMirrorClient.findDatabasesByOwnershipKey', () => {
       },
     });
 
-    const found = await new NotionMirrorClient('t', fetchImpl).findDatabasesByOwnershipKey({
-      parentPageId: 'page_1',
-      title: 'Docket tasks',
-      ownershipKey: 'owner:tasks',
-      columns: [titleColumn],
-    });
+    const found = await new NotionMirrorClient('t', fetchImpl).findProvisionedDatabases(
+      {
+        parentPageId: 'page_1',
+        title: 'Docket tasks',
+        entityType: 'task',
+        columns: [titleColumn],
+      },
+      { createdAtOrAfter: '2026-08-24T12:00:00.000Z', createdBy: 'bot_1' },
+    );
 
     expect(found).toEqual([
       {
@@ -292,7 +298,7 @@ describe('NotionMirrorClient.findDatabasesByOwnershipKey', () => {
     ]);
   });
 
-  it('ignores non-database children and databases owned by another mirror', async () => {
+  it('ignores non-database children and databases for another entity', async () => {
     const { fetchImpl } = router({
       'GET /v1/blocks': {
         object: 'list',
@@ -307,6 +313,8 @@ describe('NotionMirrorClient.findDatabasesByOwnershipKey', () => {
             id: 'db_1',
             type: 'child_database',
             child_database: { title: 'Another mirror' },
+            created_by: { id: 'bot_1' },
+            created_time: '2026-08-24T12:00:01.000Z',
           },
         ],
       },
@@ -314,18 +322,108 @@ describe('NotionMirrorClient.findDatabasesByOwnershipKey', () => {
         object: 'database',
         id: 'db_1',
         title: [],
-        description: [{ plain_text: 'Docket ownership: somebody-else:tasks' }],
+        description: [{ plain_text: 'Managed by Docket · project' }],
+        created_time: '2026-08-24T12:00:01.000Z',
         data_sources: [{ id: 'ds_1', name: 'Tasks' }],
         url: 'https://www.notion.so/db-1',
       },
     });
 
-    const found = await new NotionMirrorClient('t', fetchImpl).findDatabasesByOwnershipKey({
-      parentPageId: 'page_1',
-      title: 'Docket tasks',
-      ownershipKey: 'owner:tasks',
-      columns: [titleColumn],
+    const found = await new NotionMirrorClient('t', fetchImpl).findProvisionedDatabases(
+      {
+        parentPageId: 'page_1',
+        title: 'Docket tasks',
+        entityType: 'task',
+        columns: [titleColumn],
+      },
+      { createdAtOrAfter: '2026-08-24T12:00:00.000Z', createdBy: 'bot_1' },
+    );
+
+    expect(found).toEqual([]);
+  });
+
+  it('ignores a matching database from the wrong creator', async () => {
+    const { fetchImpl } = router({
+      'GET /v1/blocks': {
+        object: 'list',
+        type: 'block',
+        block: {},
+        next_cursor: null,
+        has_more: false,
+        results: [
+          {
+            object: 'block',
+            id: 'db_1',
+            type: 'child_database',
+            child_database: { title: 'Docket tasks' },
+            created_by: { id: 'somebody_else' },
+            created_time: '2026-08-24T12:00:01.000Z',
+          },
+        ],
+      },
+      'GET /v1/databases': {
+        object: 'database',
+        id: 'db_1',
+        title: [],
+        description: [{ plain_text: 'Managed by Docket · task' }],
+        created_time: '2026-08-24T12:00:01.000Z',
+        data_sources: [{ id: 'ds_1', name: 'Tasks' }],
+        url: 'https://www.notion.so/db-1',
+      },
     });
+
+    const found = await new NotionMirrorClient('t', fetchImpl).findProvisionedDatabases(
+      {
+        parentPageId: 'page_1',
+        title: 'Docket tasks',
+        entityType: 'task',
+        columns: [titleColumn],
+      },
+      { createdAtOrAfter: '2026-08-24T12:00:00.000Z', createdBy: 'bot_1' },
+    );
+
+    expect(found).toEqual([]);
+  });
+
+  it('ignores a matching database older than the provisioning intent', async () => {
+    const { fetchImpl } = router({
+      'GET /v1/blocks': {
+        object: 'list',
+        type: 'block',
+        block: {},
+        next_cursor: null,
+        has_more: false,
+        results: [
+          {
+            object: 'block',
+            id: 'db_1',
+            type: 'child_database',
+            child_database: { title: 'Docket tasks' },
+            created_by: { id: 'bot_1' },
+            created_time: '2026-08-24T11:58:00.000Z',
+          },
+        ],
+      },
+      'GET /v1/databases': {
+        object: 'database',
+        id: 'db_1',
+        title: [],
+        description: [{ plain_text: 'Managed by Docket · task' }],
+        created_time: '2026-08-24T11:58:00.000Z',
+        data_sources: [{ id: 'ds_1', name: 'Tasks' }],
+        url: 'https://www.notion.so/db-1',
+      },
+    });
+
+    const found = await new NotionMirrorClient('t', fetchImpl).findProvisionedDatabases(
+      {
+        parentPageId: 'page_1',
+        title: 'Docket tasks',
+        entityType: 'task',
+        columns: [titleColumn],
+      },
+      { createdAtOrAfter: '2026-08-24T12:00:00.000Z', createdBy: 'bot_1' },
+    );
 
     expect(found).toEqual([]);
   });
@@ -344,6 +442,8 @@ describe('NotionMirrorClient.findDatabasesByOwnershipKey', () => {
             id: 'db_1',
             type: 'child_database',
             child_database: { title: 'Docket tasks' },
+            created_by: { id: 'bot_1' },
+            created_time: '2026-08-24T12:00:01.000Z',
           },
         ],
       },
@@ -351,18 +451,22 @@ describe('NotionMirrorClient.findDatabasesByOwnershipKey', () => {
         object: 'database',
         id: 'db_1',
         title: [],
-        description: [{ plain_text: 'Docket ownership: owner:tasks' }],
+        description: [{ plain_text: 'Managed by Docket · task' }],
+        created_time: '2026-08-24T12:00:01.000Z',
         data_sources: [],
         url: 'https://www.notion.so/db-1',
       },
     });
 
-    const rejected = new NotionMirrorClient('t', fetchImpl).findDatabasesByOwnershipKey({
-      parentPageId: 'page_1',
-      title: 'Docket tasks',
-      ownershipKey: 'owner:tasks',
-      columns: [titleColumn],
-    });
+    const rejected = new NotionMirrorClient('t', fetchImpl).findProvisionedDatabases(
+      {
+        parentPageId: 'page_1',
+        title: 'Docket tasks',
+        entityType: 'task',
+        columns: [titleColumn],
+      },
+      { createdAtOrAfter: '2026-08-24T12:00:00.000Z', createdBy: 'bot_1' },
+    );
 
     await expect(rejected).rejects.toMatchObject({ provider: 'notion', kind: 'provider' });
   });
@@ -381,7 +485,7 @@ describe('NotionMirrorClient.updateDatabaseSchema', () => {
     const ids = await new NotionMirrorClient('t', fetchImpl).updateDatabaseSchema('ds_1', {
       parentPageId: 'page_1',
       title: 'Docket tasks',
-      ownershipKey: 'owner:tasks',
+      entityType: 'task',
       columns: [titleColumn],
     });
 
@@ -398,7 +502,7 @@ describe('NotionMirrorClient.updateDatabaseSchema', () => {
     ).updateDatabaseSchema('ds_1', {
       parentPageId: 'page_1',
       title: 'Docket tasks',
-      ownershipKey: 'owner:tasks',
+      entityType: 'task',
       columns: [titleColumn],
     });
     await expect(rejected).rejects.toBeInstanceOf(ProviderError);

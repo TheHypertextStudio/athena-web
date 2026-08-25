@@ -6,7 +6,7 @@
  * or response shape. Browser, API, desktop, and in-memory implementations can therefore share
  * the same workflow contract while each provider adapter keeps its transport details local.
  */
-import type { NotionPropertyKind } from './mirror-contract';
+import type { NotionMirrorEntity, NotionPropertyKind } from './mirror-contract';
 
 /** Where a page sits in the Notion workspace, as far as the picker needs to know. */
 export type MirrorPageParentKind = 'workspace' | 'page' | 'database';
@@ -66,9 +66,15 @@ export interface MirrorColumnSpec {
 export interface MirrorDatabaseSpec {
   readonly title: string;
   readonly parentPageId: string;
-  /** Exact Docket ownership marker stored in the database description. */
-  readonly ownershipKey: string;
+  /** Human-readable mirror kind stored in Notion. A Docket record id cannot enter this field. */
+  readonly entityType: NotionMirrorEntity;
   readonly columns: readonly MirrorColumnSpec[];
+}
+
+/** Provider-owned facts that identify a database after an ambiguous create response. */
+export interface MirrorDatabaseRecovery {
+  readonly createdAtOrAfter: string;
+  readonly createdBy: string;
 }
 
 /** What provisioning produced, including the property ids every later call addresses. */
@@ -138,8 +144,11 @@ export interface NotionMirrorPort {
   listWorkspaceUsers(): Promise<MirrorExternalPerson[]>;
   /** Create a database and its initial data source. */
   provisionDatabase(spec: MirrorDatabaseSpec): Promise<ProvisionedMirrorDatabase>;
-  /** Find databases carrying this exact Docket ownership marker. */
-  findDatabasesByOwnershipKey(spec: MirrorDatabaseSpec): Promise<ProvisionedMirrorDatabase[]>;
+  /** Find databases created for a durable provisioning intent. */
+  findProvisionedDatabases(
+    spec: MirrorDatabaseSpec,
+    recovery: MirrorDatabaseRecovery,
+  ): Promise<ProvisionedMirrorDatabase[]>;
   /** Bring a provisioned data source's schema up to the current design. */
   updateDatabaseSchema(
     dataSourceId: string,

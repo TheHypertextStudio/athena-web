@@ -94,6 +94,9 @@ const WRITE_BUDGET = 400;
 /** How many times one pass may rebuild databases Notion reports as gone. */
 const MAX_REBUILD_PASSES = 1;
 
+/** Wait for Notion's create to become readable before issuing a replacement request. */
+const DATABASE_CREATE_RECOVERY_WINDOW_MS = 30 * 60 * 1_000;
+
 /** Milliseconds between Notion writes — three per second, with headroom. */
 const WRITE_INTERVAL_MS = 350;
 
@@ -316,11 +319,6 @@ function toColumnSpecs(
   return specs;
 }
 
-/** Exact marker that lets a retry adopt only a database this integration created. */
-function mirrorOwnershipKey(integrationId: string, entityType: NotionMirrorEntity): string {
-  return `docket:notion-mirror:${integrationId}:${entityType}`;
-}
-
 /**
  * Create every designed-but-missing database in Notion.
  *
@@ -372,18 +370,37 @@ export async function provisionMirror(
     const spec: MirrorDatabaseSpec = {
       title: design.title,
       parentPageId,
-      ownershipKey: mirrorOwnershipKey(ctx.integrationId, design.entityType),
+      entityType: design.entityType,
       columns: toColumnSpecs(design.entityType, scalars, dataSourceByEntity),
     };
     let provisioned: ProvisionedMirrorDatabase | undefined;
     if (design.provisioningStartedAt !== null) {
-      const owned = await ctx.mirror.findDatabasesByOwnershipKey(spec);
+      const owned = await ctx.mirror.findProvisionedDatabases(spec, {
+        createdAtOrAfter: design.provisioningStartedAt.toISOString(),
+        createdBy: await ctx.mirror.botId(),
+      });
       if (owned.length > 1) {
         throw new Error(
-          `Notion contains more than one database owned by ${spec.ownershipKey}; Docket will not guess which one to use.`,
+          `Notion contains more than one candidate for the ${spec.title} database; Docket will not guess which one to use.`,
         );
       }
       provisioned = owned[0];
+      if (
+        provisioned === undefined &&
+        ctx.now.getTime() - design.provisioningStartedAt.getTime() <
+          DATABASE_CREATE_RECOVERY_WINDOW_MS
+      ) {
+        throw new ProviderError('Notion database creation is still being confirmed', {
+          provider: 'notion',
+          kind: 'ambiguous',
+        });
+      }
+      if (provisioned === undefined) {
+        await db
+          .update(notionMirrorDatabase)
+          .set({ provisioningStartedAt: ctx.now })
+          .where(eq(notionMirrorDatabase.id, design.id));
+      }
     } else {
       await db
         .update(notionMirrorDatabase)
@@ -432,7 +449,7 @@ export async function provisionMirror(
       const bindings = await ctx.mirror.updateDatabaseSchema(row.externalDataSourceId, {
         title: row.title,
         parentPageId,
-        ownershipKey: mirrorOwnershipKey(ctx.integrationId, row.entityType),
+        entityType: row.entityType,
         columns: toColumnSpecs(row.entityType, columns, dataSourceByEntity),
       });
       await db

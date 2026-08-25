@@ -183,13 +183,13 @@ export class MockNotionMirror implements NotionMirrorPort {
       url: `https://notion.example/mock_db_${suffix}`,
       propertyIds,
     };
-    this.databasesByOwnership.set(spec.ownershipKey, [provisioned]);
+    this.databasesByOwnership.set(spec.entityType, [provisioned]);
     return Promise.resolve(provisioned);
   }
 
-  /** {@inheritDoc NotionMirrorPort.findDatabasesByOwnershipKey} */
-  findDatabasesByOwnershipKey(spec: MirrorDatabaseSpec): Promise<ProvisionedMirrorDatabase[]> {
-    return Promise.resolve(this.databasesByOwnership.get(spec.ownershipKey) ?? []);
+  /** {@inheritDoc NotionMirrorPort.findProvisionedDatabases} */
+  findProvisionedDatabases(spec: MirrorDatabaseSpec): Promise<ProvisionedMirrorDatabase[]> {
+    return Promise.resolve(this.databasesByOwnership.get(spec.entityType) ?? []);
   }
 
   /**

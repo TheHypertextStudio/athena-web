@@ -122,15 +122,15 @@ class RecordingMirror implements NotionMirrorPort {
         spec.columns.map((column) => [column.field, `property-${suffix}-${column.field}`]),
       ),
     };
-    this.ownedDatabases.set(spec.ownershipKey, [provisioned]);
+    this.ownedDatabases.set(spec.entityType, [provisioned]);
     if (this.failProvisionAfterCreate) {
       return Promise.reject(new Error('connection lost after Notion created the database'));
     }
     return Promise.resolve(provisioned);
   }
 
-  findDatabasesByOwnershipKey(spec: MirrorDatabaseSpec): Promise<ProvisionedMirrorDatabase[]> {
-    return Promise.resolve(this.ownedDatabases.get(spec.ownershipKey) ?? []);
+  findProvisionedDatabases(spec: MirrorDatabaseSpec): Promise<ProvisionedMirrorDatabase[]> {
+    return Promise.resolve(this.ownedDatabases.get(spec.entityType) ?? []);
   }
 
   /** Data sources deleted at the provider, which answer `object_not_found` from then on. */
@@ -255,6 +255,8 @@ describe('Notion mirror reconciliation', () => {
     await provisionMirror(ctx, 'parent-1');
 
     expect(mirror.provisions).toHaveLength(1);
+    expect(mirror.provisions[0]).toMatchObject({ entityType: 'task' });
+    expect(mirror.provisions[0]).not.toHaveProperty('ownershipKey');
     const [design] = await db
       .select()
       .from(schema.notionMirrorDatabase)
@@ -268,6 +270,26 @@ describe('Notion mirror reconciliation', () => {
       externalDatabaseId: 'db-1',
       externalDataSourceId: 'ds-1',
     });
+  });
+
+  it('waits for an ambiguous database create instead of issuing a duplicate request', async () => {
+    const { integration, mirror, ctx } = await seedMirror();
+    await db
+      .update(schema.notionMirrorDatabase)
+      .set({ enabled: false })
+      .where(eq(schema.notionMirrorDatabase.integrationId, integration.id));
+    await db
+      .update(schema.notionMirrorDatabase)
+      .set({ enabled: true, provisioningStartedAt: ctx.now })
+      .where(
+        and(
+          eq(schema.notionMirrorDatabase.integrationId, integration.id),
+          eq(schema.notionMirrorDatabase.entityType, 'task'),
+        ),
+      );
+
+    await expect(provisionMirror(ctx, 'parent-1')).rejects.toMatchObject({ kind: 'ambiguous' });
+    expect(mirror.provisions).toHaveLength(0);
   });
 
   it('provisions scalar columns first, resolves relations second, and is idempotent', async () => {

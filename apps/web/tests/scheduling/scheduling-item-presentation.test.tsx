@@ -75,6 +75,30 @@ describe('SchedulingCanvas item presentation', () => {
     }
   });
 
+  it('limits a tall narrow card to the title lines its width can hold', () => {
+    const tallItem = (id: string, title: string): ScheduleItem => ({
+      ...item(id, title),
+      endsAt: '2026-07-01T12:00:00.000Z',
+    });
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[
+          lane([
+            tallItem('a', 'A long title that must not consume the whole narrow card'),
+            tallItem('b', 'Another overlapping event'),
+          ]),
+        ]}
+        pixelsPerHour={60}
+        viewportWidth={320}
+      />,
+    );
+
+    const card = assertDefined(document.querySelector<HTMLElement>('[data-schedule-item="a"]'));
+    expect(card).toHaveAttribute('data-item-density', 'full');
+    expect(card.querySelector('.text-title-small')).toHaveClass('line-clamp-2');
+  });
+
   it('keeps exact item details discoverable on every visual density', () => {
     render(
       <SchedulingCanvas

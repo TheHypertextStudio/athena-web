@@ -47,7 +47,7 @@ describe('SchedulingDenseOverflow', () => {
     const overflow = trigger.closest('[data-schedule-overflow-cluster]');
     expect(overflow).toHaveAttribute('data-schedule-leading-inset', '40');
     expect(overflow).toHaveStyle({ left: '174.33333333333334px', width: '64.666667px' });
-    expect(trigger).toHaveTextContent('+3 more');
+    expect(trigger).toHaveTextContent(/^\+3$/);
     trigger.focus();
     await user.keyboard('{Enter}');
 

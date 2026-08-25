@@ -305,6 +305,7 @@ export function SchedulingItemCard({
           item={item}
           density={density}
           height={visibleHeight}
+          width={estimatedWidth}
           timeRange={timeRange}
           content={content}
           readOnlyDescriptionId={readOnlyDescriptionId}

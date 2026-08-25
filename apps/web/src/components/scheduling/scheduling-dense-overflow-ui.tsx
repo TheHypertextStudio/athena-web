@@ -50,6 +50,11 @@ export function SchedulingDenseOverflow({
   const count = group.items.length;
   const label = `${String(count)} more events in ${lane.label}`;
   const horizontalStyle = scheduleOverlapHorizontalStyle(group.placement, laneWidth, leadingInset);
+  const estimatedWidth =
+    laneWidth === undefined
+      ? Number.POSITIVE_INFINITY
+      : Math.max(0, (laneWidth - leadingInset) / group.placement.columnCount - 2);
+  const compactLabel = estimatedWidth < 96;
 
   return (
     <div
@@ -69,7 +74,8 @@ export function SchedulingDenseOverflow({
             aria-label={`Show ${label}`}
             className="bg-surface-container-high text-primary text-label-medium hover:bg-primary-container focus-visible:ring-ring size-full rounded-md px-1 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-inset motion-reduce:transition-none"
           >
-            +{String(count)} more
+            +{String(count)}
+            {compactLabel ? '' : ' more'}
           </button>
         </PopoverTrigger>
         <PopoverContent

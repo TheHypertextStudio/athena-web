@@ -21,12 +21,22 @@ export interface DenseScheduleArrangement {
 /** Optional user choice that replaces one default visible collision column. */
 export interface DenseScheduleArrangementOptions {
   readonly promotedItemId?: string | undefined;
+  /** Leading width reserved by consumer context, keyed by overlap cluster. */
+  readonly leadingInsetByCluster?: ReadonlyMap<string, number> | undefined;
+  /** Smallest useful card or disclosure column on this surface. */
+  readonly minimumReadableItemWidth?: number | undefined;
 }
 
 /** Derive the number of collision columns that remain readable at the measured lane width. */
-function readableColumnCount(laneWidth: number): number {
-  const usableWidth = Math.max(0, laneWidth - OUTER_GUTTER_PIXELS);
-  return Math.max(2, Math.floor(usableWidth / MINIMUM_READABLE_ITEM_WIDTH));
+function readableColumnCount(
+  laneWidth: number,
+  leadingInset: number,
+  minimumReadableItemWidth: number,
+): number {
+  const usableWidth = Math.max(0, laneWidth - Math.max(0, leadingInset) - OUTER_GUTTER_PIXELS);
+  const minimumWidth =
+    minimumReadableItemWidth > 0 ? minimumReadableItemWidth : MINIMUM_READABLE_ITEM_WIDTH;
+  return Math.max(2, Math.floor(usableWidth / minimumWidth));
 }
 
 /** Group hidden items by a fixed local cue window without transitive time-chain expansion. */
@@ -64,7 +74,6 @@ export function arrangeDenseScheduleItems(
   laneWidth: number,
   options: DenseScheduleArrangementOptions = {},
 ): DenseScheduleArrangement {
-  const capacity = readableColumnCount(laneWidth);
   const clusters = new Map<string, PositionedScheduleItem[]>();
   for (const positioned of positionedItems) {
     const cluster = clusters.get(positioned.clusterId) ?? [];
@@ -75,6 +84,11 @@ export function arrangeDenseScheduleItems(
   const directItems: PositionedScheduleItem[] = [];
   const overflowGroups: DenseScheduleOverflowGroup[] = [];
   for (const [clusterId, cluster] of clusters) {
+    const capacity = readableColumnCount(
+      laneWidth,
+      options.leadingInsetByCluster?.get(clusterId) ?? 0,
+      options.minimumReadableItemWidth ?? MINIMUM_READABLE_ITEM_WIDTH,
+    );
     const requiredColumns = Math.max(1, ...cluster.map(({ placement }) => placement.columnCount));
     if (requiredColumns <= capacity) {
       directItems.push(...cluster);
@@ -115,7 +129,7 @@ export function arrangeDenseScheduleItems(
         clusterId: overflowId,
         items,
         top: first.top,
-        height: Math.min(64, first.height),
+        height: Math.min(40, first.height),
         placement: {
           id: overflowId,
           columnIndex: directColumnCount,

@@ -53,6 +53,7 @@ export default function SchedulingCanvas({
   viewportWidth,
   viewportHeight,
   minimumLaneWidth = MINIMUM_LANE_WIDTH,
+  minimumReadableTimedItemWidth,
   maximumVisibleLaneCount,
   gutterSlot,
   initialLaneIndex = 0,
@@ -222,6 +223,8 @@ export default function SchedulingCanvas({
               densePromotion.promotion?.laneId === lane.id
                 ? densePromotion.promotion.itemId
                 : undefined,
+            leadingInsetByCluster,
+            minimumReadableItemWidth: minimumReadableTimedItemWidth,
           }),
           leadingInsetByCluster,
         };
@@ -233,6 +236,7 @@ export default function SchedulingCanvas({
       geometry.laneWidth,
       lanes,
       minimumInteractivePixels,
+      minimumReadableTimedItemWidth,
       resolveTimedItemLeadingInset,
     ],
   );

@@ -290,6 +290,7 @@ function TimelineArrangement({
             now={now}
             viewportHeight="100%"
             minimumLaneWidth={180}
+            minimumReadableTimedItemWidth={96}
             {...workLocationComposition?.canvasProps}
             selectedRegion={draftSelection?.canvasRegion}
             selectedRegionAnchorRef={draftAnchorRef}

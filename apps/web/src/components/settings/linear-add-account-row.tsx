@@ -46,7 +46,7 @@ export function LinearAddAccountRow({ model }: LinearAddAccountRowProps): JSX.El
         <span className="text-on-surface-variant text-body-small">{description}</span>
       </div>
       {model.available.length > 0 ? (
-        <div className="col-start-2 grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+        <div className="col-span-2 grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:col-span-1 sm:col-start-2">
           <Select
             id="linear-identity"
             value={model.selectedId}

@@ -39,7 +39,7 @@ export function GtasksAccountRow({
   const description = connectionCardCopy('gtasks').effect;
   return (
     <li className="bg-surface-container-low overflow-hidden rounded-xl">
-      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-4">
+      <div className="grid grid-cols-1 items-start gap-2 p-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-3">
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <DecorativeIcon icon={TaskAlt} className="bg-surface-container shrink-0" />
           <div className="flex min-w-0 flex-col gap-0.5">
@@ -47,26 +47,30 @@ export function GtasksAccountRow({
             <span className="text-on-surface-variant text-body-small">{description}</span>
           </div>
         </div>
-        <IntegrationRowActions
-          provider="gtasks"
-          providerName={row.label}
-          status={account.status}
-          canManage={canManage}
-          syncable
-          isMigration={false}
-          configurable
-          configOpen={state.configOpen}
-          manageHref={null}
-          busyReconnect={state.busyReconnect}
-          busySync={state.busySync}
-          busyDisconnect={state.busyDisconnect}
-          // Serialize per row: any in-flight action blocks the others (Configure stays available).
-          disabled={state.busyReconnect || state.busySync || state.busyDisconnect}
-          onReconnect={row.actions.reconnect}
-          onSync={row.actions.sync}
-          onDisconnect={row.actions.requestDisconnect}
-          onToggleConfig={row.actions.toggleConfig}
-        />
+        {canManage ? (
+          <div className="justify-self-end sm:col-start-2 sm:row-start-1">
+            <IntegrationRowActions
+              provider="gtasks"
+              providerName={row.label}
+              status={account.status}
+              canManage={canManage}
+              syncable
+              isMigration={false}
+              configurable
+              configOpen={state.configOpen}
+              manageHref={null}
+              busyReconnect={state.busyReconnect}
+              busySync={state.busySync}
+              busyDisconnect={state.busyDisconnect}
+              // Serialize per row: any in-flight action blocks the others (Configure stays available).
+              disabled={state.busyReconnect || state.busySync || state.busyDisconnect}
+              onReconnect={row.actions.reconnect}
+              onSync={row.actions.sync}
+              onDisconnect={row.actions.requestDisconnect}
+              onToggleConfig={row.actions.toggleConfig}
+            />
+          </div>
+        ) : null}
       </div>
 
       {state.feedback ? <CardNote tone="muted">{state.feedback}</CardNote> : null}

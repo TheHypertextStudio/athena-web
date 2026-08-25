@@ -5,7 +5,7 @@
  * view at a time below it.
  *
  * @remarks
- * The rail is a fixed `w-52`. Beside the shell's `gap-8` and `p-5` that costs 280px, so on a 390px
+ * The rail is a fixed `w-52`. Beside the desktop shell's `gap-8` and `p-5` that costs 280px, so on a 390px
  * phone the content pane was left roughly 110px: headings clipped mid-word, `Add domain` off-screen,
  * body copy wrapped to one word per line — on every settings section, since the rail belongs to the
  * shell (`docs/design/audits/2026-08-14-publishing-addresses.md`, finding 1).
@@ -63,11 +63,11 @@ export function SettingsPane({ renderNav, children }: SettingsPaneProps): JSX.El
   }, [browsing]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-5 sm:flex-row sm:gap-8">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden sm:flex-row sm:gap-8 sm:p-5">
       <div
         ref={listRef}
         className={cn(
-          'overflow-y-auto sm:block sm:w-52 sm:flex-none',
+          'overflow-y-auto p-4 sm:block sm:w-52 sm:flex-none sm:p-0',
           // Below `sm` the list is the whole pane while browsing, and absent otherwise; from `sm`
           // up the same element is always the rail.
           browsing ? 'min-w-0 flex-1' : 'hidden',
@@ -80,7 +80,7 @@ export function SettingsPane({ renderNav, children }: SettingsPaneProps): JSX.El
 
       <div
         className={cn(
-          'flex min-h-0 min-w-0 flex-1 flex-col gap-3 sm:flex',
+          'bg-surface flex min-h-0 min-w-0 flex-1 flex-col gap-3 sm:flex sm:bg-transparent',
           browsing ? 'hidden' : '',
         )}
       >
@@ -95,7 +95,7 @@ export function SettingsPane({ renderNav, children }: SettingsPaneProps): JSX.El
             // Shares its appearance with a nested page's back link, which can sit directly
             // above it on a narrow viewport. `sm:hidden` is this one's alone: the section list is
             // already beside the pane at wider widths, so there is nothing to go back to.
-            className={cn(SETTINGS_BACK_CLASS, 'sm:hidden')}
+            className={cn(SETTINGS_BACK_CLASS, 'mx-4 mt-4 sm:hidden')}
           >
             <ChevronLeft aria-hidden="true" className="size-5 shrink-0" />
             All settings
@@ -107,7 +107,12 @@ export function SettingsPane({ renderNav, children }: SettingsPaneProps): JSX.El
             Dropping the pane to `surface` puts every group one step above it, so the ramp runs the
             way `docs/design/design-system.md` §8 describes and the lines are simply gone. */}
         <div ref={setContent} className="min-h-0 flex-1 overflow-y-auto">
-          <Surface tone="page" shape="medium" pad="roomy" className="min-h-full">
+          <Surface
+            tone="page"
+            shape="none"
+            pad="none"
+            className="min-h-full px-4 pb-4 sm:rounded-xl sm:p-4"
+          >
             {children}
           </Surface>
         </div>

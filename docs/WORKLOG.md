@@ -7,6 +7,25 @@
 
 ## Active Tasks
 
+### [SETTINGS-MOBILE-001] Use one mobile settings gutter
+
+- **Status**: REVIEW
+- **Started**: 2026-08-25
+- **Priority**: P1
+- **Description**: The settings shell applies a 20 px mobile inset and its page surface applies
+  another 16 px inset. Connection cards then keep their text and actions in one row. The combined
+  layout wastes the narrow viewport and forces descriptions into tall, broken-looking columns.
+- **Approach**: Let the shared settings shell own one 16 px mobile gutter. Keep the desktop rail,
+  spacing, rounded page surface, and page padding unchanged. Move connection actions below their
+  descriptions on phones, keep every action row on one line, and let the Linear account picker use
+  the full card width.
+- **Validation**: The five focused settings component files pass all 18 tests. Authenticated
+  screenshots of Connections and an unrelated settings page at phone and desktop widths remain
+  before release.
+- **Blockers**: None.
+
+---
+
 ### [RELEASE-GATE-002] Measure release behavior at the right boundary
 
 - **Status**: COMPLETED

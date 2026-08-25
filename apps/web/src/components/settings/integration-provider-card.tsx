@@ -105,38 +105,42 @@ export function IntegrationProviderCard({
 
   return (
     <li className="bg-surface-container-low overflow-hidden rounded-xl">
-      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 p-4">
+      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-2 p-4 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center">
         <DecorativeIcon icon={ProviderIcon} className="bg-surface-container shrink-0" />
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="text-on-surface text-label-large">{provider.name}</span>
           <span className="text-on-surface-variant text-body-small">{summary}</span>
         </div>
-        {existing ? (
-          <IntegrationRowActions
-            provider={provider.provider}
-            providerName={provider.name}
-            status={existing.status}
-            canManage={canManage}
-            syncable={provider.syncable}
-            isMigration={existing.pattern === 'migration'}
-            configurable={configurable}
-            configOpen={configOpen}
-            manageHref={manageHref ?? null}
-            busyReconnect={busy}
-            busySync={syncing}
-            busyDisconnect={disconnecting}
-            onReconnect={onReconnect}
-            onSync={onSync}
-            onDisconnect={onDisconnect}
-            onToggleConfig={onToggleConfig}
-          />
-        ) : (
-          <ConnectAffordance
-            canManage={canManage}
-            actionLabel={actionLabel}
-            busy={busy}
-            onConnect={onConnect}
-          />
+        {existing && !canManage ? null : (
+          <div className="col-start-2 justify-self-end sm:col-start-3 sm:row-start-1">
+            {existing ? (
+              <IntegrationRowActions
+                provider={provider.provider}
+                providerName={provider.name}
+                status={existing.status}
+                canManage={canManage}
+                syncable={provider.syncable}
+                isMigration={existing.pattern === 'migration'}
+                configurable={configurable}
+                configOpen={configOpen}
+                manageHref={manageHref ?? null}
+                busyReconnect={busy}
+                busySync={syncing}
+                busyDisconnect={disconnecting}
+                onReconnect={onReconnect}
+                onSync={onSync}
+                onDisconnect={onDisconnect}
+                onToggleConfig={onToggleConfig}
+              />
+            ) : (
+              <ConnectAffordance
+                canManage={canManage}
+                actionLabel={actionLabel}
+                busy={busy}
+                onConnect={onConnect}
+              />
+            )}
+          </div>
         )}
       </div>
 

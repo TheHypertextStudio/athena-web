@@ -7,24 +7,6 @@
 
 ## Active Tasks
 
-### [UTILITY-PANEL-SCALE-001] Make utility panels scale beyond three choices
-
-- **Status**: IN_PROGRESS
-- **Started**: 2026-08-25
-- **Priority**: P1
-- **Description**: Replace the mobile utility sheet's horizontal Agenda, Focus, and Athena tabs
-  with one active-panel menu that can hold more panel types without wrapping. Reduce the partial-day
-  work-location track so it no longer consumes a large share of the narrow Agenda panel.
-- **Approach**: Keep the desktop activity bar because its vertical icon list already scales within
-  the shell. In the mobile sheet, name the active panel in one 40px menu trigger and put every panel
-  choice in a vertical menu. Reserve 32px for an intersecting work-location interval, render a 12px
-  tinted band, and offset the existing 40px gesture targets into the time gutter so they never
-  cover event cards.
-- **Plan**: Write and review the design before creating the implementation plan.
-- **Blockers**: None.
-
----
-
 ### [CONNECTOR-POST-001] Keep connector actions and retries running
 
 - **Status**: IN_PROGRESS
@@ -6253,6 +6235,38 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 ---
 
 ## Completed Tasks
+
+### [UTILITY-PANEL-SCALE-001] Make utility panels scale beyond three choices
+
+- **Completed**: 2026-08-25
+- **Priority**: P1
+- **Summary**: The mobile utility Sheet now uses one 40px active-panel menu instead of a horizontal
+  Agenda, Focus, and Athena button row. The menu can hold more panel types without wrapping. The
+  partial-day work-location track now reserves 32px instead of 40px, while its tint, marker, and
+  gesture targets retain their own measured sizes.
+- **Decisions**: The desktop activity bar remains unchanged because its vertical icon list already
+  scales. The mobile trigger owns only panel selection, so future panels do not consume another
+  horizontal control. The 40px work-location targets extend eight pixels into the time gutter
+  rather than event cards. Every intersecting collision cluster still shares one resolved inset.
+- **Files changed**: Added the shared mobile panel switcher, replaced mobile rail tabs, narrowed the
+  work-location geometry, restored a solid keyboard focus outline, expanded focused component
+  coverage, and recorded the design, implementation plan, scorecard, and authenticated screenshots.
+- **Validation**: Shell coverage passes 83 tests. The focused Agenda, scheduling, and work-location
+  run passes 432 tests. The complete UI and Web suites pass 653 and 3,162 tests. The isolated API
+  suite passes 4,784 tests. Tooling passes 167 tests. Repository lint, bounded typecheck with the
+  API package checked under a command-scoped 4 GB heap, and the production build pass. Authenticated
+  Chrome captures cover 1440x900, 390x844, and 320x844 in both themes. A temporary five-choice
+  fixture proves menu scaling at 320px and leaves no product-code diff.
+- **Evidence**: `docs/design/audits/2026-08-25-scalable-utility-panel-switcher.md`
+- **Learnings**: A panel switcher must scale by adding menu rows instead of shell buttons. Tailwind's
+  outline width utility inherits the base `outline-none` style, so a keyboard outline also needs an
+  explicit solid style when the resting control suppresses outlines.
+- **Retrospective**: The visual pass found the missing computed outline even though class-level tests
+  covered its color and width. The final audit used an isolated API-backed database, preserved the
+  existing local database, and removed the temporary five-panel source patch, audit records,
+  isolated database, dev processes, and localhost authentication state during closeout.
+
+---
 
 ### [AGENDA-POLISH-004] Replace cramped Agenda chrome and edge geometry
 

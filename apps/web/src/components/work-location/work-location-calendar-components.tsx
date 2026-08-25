@@ -334,7 +334,7 @@ export function WorkLocationAllDayContext({
             key={region.id}
             type="button"
             aria-label={`${region.label} work location`}
-            className="group focus-visible:outline-primary inline-flex min-h-10 max-w-full min-w-10 items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
+            className="group focus-visible:outline-primary inline-flex min-h-10 max-w-full min-w-10 items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid"
             onClick={() => {
               if (suppressedClick.current === region.id) {
                 suppressedClick.current = null;
@@ -575,7 +575,7 @@ export function WorkLocationTimedLaneContext({
                     tabIndex={0}
                     aria-label={`${region.label} work location`}
                     aria-describedby={descriptionId}
-                    className="focus-visible:outline-primary pointer-events-auto absolute -top-5 -left-2 flex size-10 items-center justify-center rounded-full outline-none focus-visible:outline-2 focus-visible:outline-offset-2"
+                    className="focus-visible:outline-primary pointer-events-auto absolute -top-5 -left-2 flex size-10 items-center justify-center rounded-full outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid"
                   >
                     <span
                       data-work-location-marker-kind={region.isHome ? 'home' : 'place'}
@@ -726,7 +726,7 @@ export function WorkLocationTimedLaneContext({
                   aria-label={`Move ${region.label} work location`}
                   aria-describedby={descriptionId}
                   data-work-location-hit-slot="move"
-                  className="group focus-visible:outline-primary pointer-events-auto absolute -top-5 -left-2 z-30 flex size-10 min-h-10 min-w-10 items-center justify-center rounded-full outline-none focus-visible:outline-2 focus-visible:outline-offset-2"
+                  className="group focus-visible:outline-primary pointer-events-auto absolute -top-5 -left-2 z-30 flex size-10 min-h-10 min-w-10 items-center justify-center rounded-full outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid"
                   onClick={(event) => {
                     if (suppressedClick.current !== null) {
                       suppressedClick.current = null;
@@ -763,7 +763,7 @@ export function WorkLocationTimedLaneContext({
                 type="button"
                 aria-label={`Resize start of ${region.label}`}
                 data-work-location-hit-slot="start"
-                className="hover:bg-tertiary-container/30 active:bg-tertiary-container/50 focus-visible:bg-tertiary-container/30 focus-visible:outline-primary pointer-events-auto absolute z-20 size-10 min-h-10 min-w-10 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 motion-safe:transition-colors motion-reduce:transition-none"
+                className="hover:bg-tertiary-container/30 active:bg-tertiary-container/50 focus-visible:bg-tertiary-container/30 focus-visible:outline-primary pointer-events-auto absolute z-20 size-10 min-h-10 min-w-10 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid motion-safe:transition-colors motion-reduce:transition-none"
                 style={{
                   left: WORK_LOCATION_TIMED_TARGET_LEFT_PX,
                   top: 20,
@@ -783,7 +783,7 @@ export function WorkLocationTimedLaneContext({
                 type="button"
                 aria-label={`Resize end of ${region.label}`}
                 data-work-location-hit-slot="end"
-                className="hover:bg-tertiary-container/30 active:bg-tertiary-container/50 focus-visible:bg-tertiary-container/30 focus-visible:outline-primary pointer-events-auto absolute z-20 size-10 min-h-10 min-w-10 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 motion-safe:transition-colors motion-reduce:transition-none"
+                className="hover:bg-tertiary-container/30 active:bg-tertiary-container/50 focus-visible:bg-tertiary-container/30 focus-visible:outline-primary pointer-events-auto absolute z-20 size-10 min-h-10 min-w-10 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-solid motion-safe:transition-colors motion-reduce:transition-none"
                 style={{
                   left: WORK_LOCATION_TIMED_TARGET_LEFT_PX,
                   top: height - 20,

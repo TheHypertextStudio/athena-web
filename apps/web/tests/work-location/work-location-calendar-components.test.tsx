@@ -158,6 +158,7 @@ describe('work-location calendar components', () => {
     expect(homeMarker.querySelector('[data-work-location-marker-kind="home"]')).toHaveClass(
       'size-6',
     );
+    expect(homeMarker).toHaveClass('focus-visible:outline-solid');
     homeMarker.focus();
     expect(homeMarker).toHaveFocus();
     expect(await screen.findByText('Main library, 9:00 AM to 12:00 PM')).toBeVisible();

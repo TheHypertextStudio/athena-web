@@ -182,6 +182,7 @@ async function bootstrapAuthzSchema(client: PGlite): Promise<void> {
       agent_guidance text,
       approval_routing jsonb,
       initiative_max_depth integer not null default 2,
+      auto_complete_parent_tasks boolean not null default true,
       estimation_scale estimation_scale not null default 'fibonacci',
       fiscal_year_start_month integer not null default 0,
       lifecycle_state org_lifecycle_state not null default 'trialing',
@@ -332,6 +333,7 @@ async function bootstrapAuthzSchema(client: PGlite): Promise<void> {
       program_id text,
       milestone_id text,
       cycle_id text,
+      template_id text,
       parent_task_id text,
       estimate integer,
       estimate_minutes integer,
@@ -348,6 +350,7 @@ async function bootstrapAuthzSchema(client: PGlite): Promise<void> {
       last_pushed_at timestamp,
       completed_at timestamp,
       canceled_at timestamp,
+      auto_completed_by_subtasks boolean not null default false,
       visibility visibility not null default 'public',
       ancestor_path text[] not null default '{}'::text[]
     );

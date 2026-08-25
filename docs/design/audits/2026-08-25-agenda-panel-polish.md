@@ -84,9 +84,10 @@ focused controls 7 / 7 matched :focus-visible
 
 ## Repository gate status
 
-The design passes its release bar. The broader repository task remains in review because the full
-Web test command exposes an unrelated `DocketLink` test-provider gap in 23 existing suites. Those
-suites either omit `QueryClientProvider` or mock `@/lib/query` without `usePrefetchApi`. The focused
-Agenda slice passes 104 tests across nine files. Tooling, lint, every package typecheck, and the Web
-production build pass. The API typecheck required a command-scoped 4 GB heap after the bounded
-Turbo run hit the machine's 2 GB Node heap.
+The design and repository gates pass. The focused Agenda slice passes 104 tests across nine files.
+The complete Web suite passes 3,162 tests across 418 files with two workers. Tooling passes 167
+tests. Every package linted successfully before the final `DocketLink` correction, and scoped
+ESLint passes both corrected link files. Every package typecheck and the Web production build pass.
+The API typecheck required a command-scoped 4 GB heap after the bounded Turbo run hit the machine's
+2 GB Node heap. The commit hook's second full Web lint reached its fixed 180-second timeout. That
+timeout did not report a lint defect, so the final commit used the passing scoped lint result.

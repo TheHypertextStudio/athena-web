@@ -7,48 +7,6 @@
 
 ## Active Tasks
 
-### [AGENDA-POLISH-004] Replace cramped Agenda chrome and edge geometry
-
-- **Status**: REVIEW
-- **Started**: 2026-08-25
-- **Priority**: P1
-- **Description**: Replace the Agenda panel's boxed arrow, date, and display toolbar with a
-  scan-first day switcher. Remove visible scrollbar chrome. Keep time labels, work-location
-  context, event cards, and dense overflow clear of the narrow panel's edges.
-- **Approach**: Follow Google Calendar's separation between direct date navigation, arbitrary-date
-  picking, and view choice. Use a Fantastical-style synchronized seven-day strip for the narrow
-  panel. Keep the existing month picker, guarded navigation, scheduling gestures, and persistence.
-  Add Agenda-only outer gutters and hidden scrollbar chrome. Compact the all-day lane and make dense
-  collision capacity use the width left after work-location composition.
-- **Subtasks**:
-  - [x] Audit the user-provided 390px failure and benchmark current calendar interaction patterns.
-  - [x] Write and self-review the implementation plan.
-  - [x] Replace the four-control toolbar with the month trigger, day strip, and labeled view menu.
-  - [x] Add panel gutters and hide scrollbar chrome without disabling scrolling.
-  - [x] Compact all-day context and clarify partial-day work-location intervals.
-  - [x] Make narrow collision cards and dense disclosures use effective cluster width.
-  - [x] Pass focused, accessibility, responsive, theme, and authenticated screenshot gates.
-  - [ ] Restore the unrelated `DocketLink` test-provider contract that blocks the repository test gate.
-- **Decisions**: The implementation will remove visible previous and next buttons. The existing mini
-  calendar will remain the arbitrary-date jump. The seven-day strip will own nearby-day selection
-  and week paging. Agenda will retain Timeline, List, and three density choices behind one labeled
-  view trigger. The browser scrollbar will remain operational but will not render chrome.
-- **Plan**: `docs/superpowers/plans/2026-08-25-agenda-panel-polish.md`
-- **Validation**: The focused Agenda, scheduling, and work-location slice passes 104 tests across
-  nine files with one worker. Tooling passes 167 tests. Lint passes every package. The bounded
-  typecheck passes 25 packages, and the API passes separately with a command-scoped 4 GB heap after
-  the 2 GB Turbo process exhausted its heap. The Web production build passes and emits 75 pages.
-  Authenticated Chrome captures cover 1440x900 and 390x844 in both themes plus 320x844 dark. At
-  320px the document reports no horizontal overflow. The schedule keeps native Page Down scrolling
-  with `scrollbar-width: none`. The measured time-label and event insets are 19px and 13px.
-- **Evidence**: `docs/design/audits/2026-08-25-agenda-panel-polish.md`
-- **Blockers**: The full Web test command exposes a pre-existing `DocketLink` provider failure in
-  23 suites. Those suites either omit `QueryClientProvider` or mock `@/lib/query` without the new
-  `usePrefetchApi` export. The changed Agenda, scheduling, and work-location suites pass in both the
-  focused run and the broader run.
-
----
-
 ### [CONNECTOR-POST-001] Keep connector actions and retries running
 
 - **Status**: IN_PROGRESS
@@ -6277,6 +6235,39 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 ---
 
 ## Completed Tasks
+
+### [AGENDA-POLISH-004] Replace cramped Agenda chrome and edge geometry
+
+- **Completed**: 2026-08-25
+- **Priority**: P1
+- **Summary**: Agenda now uses a synchronized seven-day switcher for nearby dates, an explicit
+  month trigger for arbitrary dates, and one named Timeline or List menu. The timeline keeps a
+  12px outer frame, hides scrollbar chrome without disabling native scrolling, compacts all-day
+  context, and reserves a narrow in-grid rail for each partial-day work location.
+- **Decisions**: The design removes previous and next arrow buttons because the visible day strip
+  already performs that navigation. It keeps the shared mini calendar for non-local date jumps.
+  It computes collision capacity after the work-location inset so cards and dense overflow controls
+  share the same usable width. It keeps the location rail inside the scheduling grid instead of
+  adding another panel beside it.
+- **Validation**: The focused Agenda, scheduling, and work-location slice passes 104 tests across
+  nine files. The complete Web suite passes 3,162 tests across 418 files with two workers. Tooling
+  passes 167 tests. Every package linted successfully before the final link correction, and scoped
+  ESLint passes the two corrected link files. The bounded typecheck passes 25 packages, and API
+  typecheck passes with a command-scoped 4 GB heap. The Web production build emits 75 pages.
+  Authenticated Chrome captures cover 1440x900 and 390x844 in both themes plus the 320x844 boundary.
+- **Files changed**: Agenda header, all-day context, scheduling collision geometry, work-location
+  composition, dense overflow behavior, focused tests, design evidence, implementation plan, and
+  the shell-safe detail-link prefetch boundary.
+- **Evidence**: `docs/design/audits/2026-08-25-agenda-panel-polish.md`
+- **Learnings**: A side-panel calendar needs direct date choices more than duplicated arrow chrome.
+  Work-location context remains legible when it owns a measured interaction track and every member
+  of an intersecting collision cluster uses the same inset. Data prefetch must remain optional in a
+  link primitive that also renders outside the authenticated query-provider tree.
+- **Retrospective**: The first audit missed the location collision because it lacked a populated
+  partial-day overlap state. The final capture used real API-backed records with boundary-crossing
+  and simultaneous events, then removed those records and the temporary localhost session cookie.
+
+---
 
 ### [CANVAS-MOBILE-MINIMAP-001] Remove the persistent mobile minimap
 

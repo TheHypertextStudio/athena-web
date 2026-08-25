@@ -25,9 +25,9 @@ sheet is the wrong compact presentation.
 
 The full-screen pane will use the full dynamic viewport height and width, including the existing
 safe-area treatment. Its top app bar will remain 48px tall before safe-area inset. The active-panel
-menu stays at the leading edge, and the existing Sheet close action stays at the trailing edge.
-The app bar will use the panel surface with a bottom outline-variant divider. Panel content will
-own the remaining height and keep its current scroll behavior.
+menu stays at the leading edge, and a new explicit 40px close action sits at the trailing edge. The
+app bar will use the panel surface with a bottom outline-variant divider. Panel content will own the
+remaining height and keep its current scroll behavior.
 
 The component-state sequence is:
 

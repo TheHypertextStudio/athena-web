@@ -532,7 +532,7 @@ describe('Notion mirror reconciliation', () => {
     expect(mapping?.externalPageId).toMatch(/^page-/);
   });
 
-  it('paces sequential Notion creates by 350ms before issuing the next one', async () => {
+  it('continues immediately after successful sequential Notion creates', async () => {
     const { orgId, teamId, statusId, designs, mirror, ctx } = await seedMirror();
     const seeded = findDesign(designs, 'task');
     await db
@@ -562,53 +562,16 @@ describe('Notion mirror reconciliation', () => {
       },
     ]);
 
-    const deferred = (): { readonly promise: Promise<void>; readonly resolve: () => void } => {
-      let resolve: () => void = () => {
-        throw new Error('deferred resolver was not initialized');
-      };
-      const promise = new Promise<void>((complete) => {
-        resolve = complete;
-      });
-      return { promise, resolve };
-    };
-    const firstWrite = deferred();
-    const secondWrite = deferred();
-    const firstPace = deferred();
-    const originalWrite = mirror.writeRow.bind(mirror);
-    const writeRow = vi.spyOn(mirror, 'writeRow').mockImplementation((op) => {
-      const result = originalWrite(op);
-      if (mirror.writes.length === 1) firstWrite.resolve();
-      if (mirror.writes.length === 2) secondWrite.resolve();
-      return result;
-    });
-
-    vi.useFakeTimers();
-    const originalSetTimeout = globalThis.setTimeout;
-    const recordTimer = (...args: Parameters<typeof setTimeout>): ReturnType<typeof setTimeout> => {
-      const [, delay] = args;
-      if (delay === 350 && mirror.writes.length === 1) firstPace.resolve();
-      return Reflect.apply(originalSetTimeout, globalThis, args);
-    };
-    const timer = vi.spyOn(globalThis, 'setTimeout').mockImplementation(recordTimer);
+    const timer = vi.spyOn(globalThis, 'setTimeout');
     try {
-      const pass = projectEntity(ctx, design, 2, NO_PAGES);
-      await firstWrite.promise;
-      await firstPace.promise;
-      expect(timer).toHaveBeenCalledWith(expect.any(Function), 350);
-
-      await vi.advanceTimersByTimeAsync(349);
-      expect(mirror.writes).toHaveLength(1);
-
-      await vi.advanceTimersByTimeAsync(1);
-      await secondWrite.promise;
+      await expect(projectEntity(ctx, design, 2, NO_PAGES)).resolves.toMatchObject({
+        written: 2,
+        complete: true,
+      });
       expect(mirror.writes).toHaveLength(2);
-
-      await vi.advanceTimersByTimeAsync(350);
-      await expect(pass).resolves.toMatchObject({ written: 2, complete: true });
+      expect(timer.mock.calls.map(([, delay]) => delay)).not.toContain(350);
     } finally {
       timer.mockRestore();
-      writeRow.mockRestore();
-      vi.useRealTimers();
     }
   });
 

@@ -115,6 +115,7 @@ export class NotionMirrorClient implements NotionMirrorPort {
     this.notion = new Client({
       auth,
       notionVersion: NOTION_API_VERSION,
+      retry: { maxRetries: 5 },
       ...(fetchImpl ? { fetch: fetchImpl } : {}),
     });
   }

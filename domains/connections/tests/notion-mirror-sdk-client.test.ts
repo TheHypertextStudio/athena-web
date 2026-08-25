@@ -722,6 +722,33 @@ describe('NotionMirrorClient.queryChanges', () => {
 });
 
 describe('NotionMirrorClient error translation', () => {
+  it('lets the SDK honor five rate-limit retries before surfacing the failure', async () => {
+    let attempts = 0;
+    const fetchImpl = (() => {
+      attempts += 1;
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            object: 'error',
+            status: 429,
+            code: 'rate_limited',
+            message: 'slow down',
+          }),
+          {
+            status: 429,
+            headers: { 'content-type': 'application/json', 'retry-after': '0' },
+          },
+        ),
+      );
+    }) as unknown as typeof fetch;
+
+    await expect(new NotionMirrorClient('t', fetchImpl).botId()).rejects.toMatchObject({
+      provider: 'notion',
+      kind: 'rate_limit',
+    });
+    expect(attempts).toBe(6);
+  });
+
   it('treats a restricted resource as an auth problem, like a revoked token', async () => {
     // Both mean "this grant can no longer do this", and both are fixed by reconnecting.
     const rejected = new NotionMirrorClient('t', failing(403, 'restricted_resource')).botId();

@@ -19,15 +19,20 @@
   after the failed run had already been recorded, which turned the scheduler's whole response into
   HTTP 500. The scheduler also targeted the public API proxy. A 400-write Notion pass needs at
   least 140 seconds at the required 350 ms provider pacing, so the proxy returned HTTP 524 before
-  Cloud Scheduler's 600-second deadline.
+  Cloud Scheduler's 600-second deadline. That fixed delay also slowed every successful request even
+  though the official Notion SDK already handles rate limits and transient provider overloads.
 - **Approach**: Read a cloned request only when a body stream has no supported media type. Accept
   the request when that stream contains zero bytes. Keep rejecting every non-empty undeclared or
   unsupported body. Serialize the retry clock before it enters the raw SQL expression so one
   connector's recorded failure schedules its next attempt instead of failing the scheduler. Send
-  scheduled work directly to Cloud Run while browsers continue to use the public API origin.
+  scheduled work directly to Cloud Run while browsers continue to use the public API origin. Keep
+  Notion writes sequential, but let the official SDK honor `Retry-After` and retry rate limits up to
+  five times instead of sleeping after every success.
 - **Validation**: The media-type suite passes 38 cases. The Notion mirror route suite passes 11
   cases. The Notion retry-state suite passes 3 cases. The exact retry update now succeeds through
-  the production Postgres driver. API type checking passes with a process-local 4 GB heap.
+  the production Postgres driver. The adaptive pacing checks prove that successful writes schedule
+  no fixed 350 ms delay and that the SDK makes six attempts across five rate-limit retries. API type
+  checking passes with a process-local 4 GB heap.
   Production rollout and the live LVBT two-way sync check remain pending.
 - **Blockers**: None.
 

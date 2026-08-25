@@ -80,10 +80,10 @@ import {
  * How many Notion writes one sync pass will spend.
  *
  * @remarks
- * Notion allows roughly three requests a second, and a sweep runs every fifteen minutes. This
- * budget keeps one pass to a few minutes of wall clock, so a first projection of a large workspace
- * completes over several sweeps instead of holding the integration's lease for an hour and
- * starving every other purpose behind it.
+ * A sweep runs every fifteen minutes. This budget prevents a first projection of a large workspace
+ * from holding the integration's lease for an unbounded pass and starving every other purpose
+ * behind it. Provider pacing belongs to the official SDK, which honors Notion's `Retry-After`
+ * response instead of delaying every successful request.
  *
  * Reaching it is not an error and not a success: the pass reports what it wrote and leaves the
  * rest for the next sweep, which is why `stampFullSync` is only set on a pass that ran to
@@ -96,9 +96,6 @@ const MAX_REBUILD_PASSES = 1;
 
 /** Wait for Notion's create to become readable before issuing a replacement request. */
 const DATABASE_CREATE_RECOVERY_WINDOW_MS = 30 * 60 * 1_000;
-
-/** Milliseconds between Notion writes — three per second, with headroom. */
-const WRITE_INTERVAL_MS = 350;
 
 /** What one pass did. */
 export interface MirrorPassResult {
@@ -171,11 +168,6 @@ const EMPTY_PASS: MirrorPassResult = {
   unresolvedPermanent: 0,
   pageByEntityId: new Map(),
 };
-
-/** Sleep between writes so a burst does not trip Notion's limiter. */
-function pace(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, WRITE_INTERVAL_MS));
-}
 
 /**
  * The content hash of a record as it would be projected right now.
@@ -421,7 +413,6 @@ export async function provisionMirror(
       })
       .where(eq(notionMirrorDatabase.id, design.id));
     created += 1;
-    await pace();
   }
 
   // Wave two: relations, now that every target data source exists — plus any column that is still
@@ -463,7 +454,6 @@ export async function provisionMirror(
       await forgetProvisionedDatabase(row.id);
       forgotten += 1;
     }
-    await pace();
   }
 
   if (forgotten > 0) {
@@ -650,7 +640,6 @@ export async function projectEntity(
       pageByEntityId.set(record.entityId, result.externalPageId);
       creationIntents.delete(record.entityId);
       written += 1;
-      await pace();
       continue;
     }
 
@@ -680,7 +669,6 @@ export async function projectEntity(
         );
     }
     written += 1;
-    await pace();
   }
 
   const rowCount = records.length;
@@ -906,7 +894,6 @@ export async function pullBackEntity(
         adoptedPages.set(local.entityId, result.externalPageId);
       }
       written += 1;
-      await pace();
       continue;
     }
 
@@ -921,7 +908,6 @@ export async function pullBackEntity(
         .set({ deletedAt: ctx.now })
         .where(eq(notionMirrorRow.id, local.mirrorRowId));
       written += 1;
-      await pace();
     }
   }
 
@@ -1047,7 +1033,6 @@ export async function recoverCreationIntents(
       .where(eq(notionMirrorRow.id, intent.id));
     linkedPageIds.add(page.externalPageId);
     recovered += 1;
-    await pace();
   }
   return recovered;
 }

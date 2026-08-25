@@ -40,6 +40,9 @@ history, minimap retention, and creation continuity. The database-backed review 
 across 13 API files for atomic commands, permissions, replay conflicts, archived reads, and
 relationship restoration. The object-command contract passes 17 tests. Web type checking, the
 139.6-second bounded repository lint, formatting, and the direct Web production build all pass.
+The production CSS also proves the corrected narrow-width geometry: a 320px canvas leaves 290px
+inside the dock insets, while zoom, mobile viewport actions, minimap, and gaps consume 266px. The
+row therefore keeps 24px of free space at 320px and 94px at 390px.
 
 ## Findings
 

@@ -31,7 +31,6 @@ import {
   labelsForSubjects,
   resolveAttachedLabels,
   resolveLabelSet,
-  type LabelRefRow,
 } from '../lib/labels';
 import { detailCapabilities } from '../lib/detail-capabilities';
 import { deferAfterResponse } from '../lib/after-response';

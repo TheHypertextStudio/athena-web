@@ -183,6 +183,13 @@ export {
   useShellDrawer,
 } from './shell/ShellDrawerContext';
 export { Sidebar, type SidebarProps } from './shell/Sidebar';
+export {
+  HOME_NAVIGATION_DESCRIPTORS,
+  type HomeNavigationDescriptor,
+  type NavigationVocabularyKey,
+  WORKSPACE_NAVIGATION_DESCRIPTORS,
+  type WorkspaceNavigationDescriptor,
+} from './shell/navigationDescriptors';
 export { SidebarNavItem, type SidebarNavItemProps } from './shell/SidebarNavItem';
 export { WorkspaceSwitcher, type WorkspaceSwitcherProps } from './shell/WorkspaceSwitcher';
 export {

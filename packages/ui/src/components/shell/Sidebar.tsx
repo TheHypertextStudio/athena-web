@@ -43,31 +43,7 @@
  */
 import * as React from 'react';
 
-import {
-  Activity,
-  Building,
-  Calendar,
-  ChevronLeft,
-  ChevronRight,
-  FolderKanban,
-  GanttChart,
-  Home,
-  Inbox,
-  Layers,
-  LayoutGrid,
-  Library,
-  ListChecks,
-  type LucideIcon,
-  RefreshCw,
-  Search,
-  Settings,
-  Sparkles,
-  Target,
-  Timer,
-  User,
-  Users,
-  Workflow,
-} from '../../icons';
+import { Building, ChevronLeft, ChevronRight, type LucideIcon, Search } from '../../icons';
 import { cn } from '../../lib/utils';
 import { Button, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../primitives';
 import { useVocabulary } from '../../hooks/useVocabulary';
@@ -75,6 +51,10 @@ import { useContextState } from './ContextProvider';
 import { useShellDrawer } from './ShellDrawerContext';
 import { useShellSidebar } from './ShellSidebarContext';
 import { SidebarNavItem } from './SidebarNavItem';
+import {
+  HOME_NAVIGATION_DESCRIPTORS,
+  WORKSPACE_NAVIGATION_DESCRIPTORS,
+} from './navigationDescriptors';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 import type { HomeNavKey, Workspace, WorkspaceNavKey } from './workspaces';
 
@@ -221,14 +201,7 @@ export function Sidebar({
 
   /** The cross-org Home rows that route to a real page (Search is rendered separately). */
   const homeRows: readonly NavRow<Exclude<HomeNavKey, 'search'>>[] = [
-    { key: 'today', label: 'Today', icon: Home },
-    { key: 'tasks', label: 'Tasks', icon: ListChecks },
-    { key: 'calendar', label: 'Calendar', icon: Calendar },
-    { key: 'time', label: 'Time', icon: Timer },
-    { key: 'inbox', label: 'Inbox', icon: Inbox },
-    { key: 'athena', label: 'Athena', icon: Sparkles },
-    { key: 'stream', label: 'Stream', icon: Activity },
-    { key: 'portfolio', label: 'Portfolio', icon: GanttChart },
+    ...HOME_NAVIGATION_DESCRIPTORS.map(({ key, label, icon }) => ({ key, label, icon })),
   ];
 
   /**
@@ -247,29 +220,22 @@ export function Sidebar({
    * name-ordered list — the volunteer who never signs in beside the staffer who does — which is
    * why it sits with the work rows and not behind an admin gate.
    */
-  const workspaceRows: readonly NavRow<WorkspaceNavKey>[] = [
-    { key: 'my-work', label: 'My Work', icon: Home },
-    { key: 'triage', label: 'Triage', icon: Inbox },
-    { key: 'tasks', label: 'Tasks', icon: ListChecks },
-    { key: 'stream', label: 'Stream', icon: Activity },
-    // Above the work hierarchy, not inside it. The run below — initiatives through cycles — is
-    // ordered by altitude of work, and slotting the Library into it would read as another rung of
-    // that hierarchy rather than the material the whole hierarchy refers to.
-    { key: 'library', label: 'Library', icon: Library },
-    { key: 'initiatives', label: initiatives, icon: Target },
-    { key: 'programs', label: programs, icon: Layers },
-    { key: 'projects', label: projects, icon: FolderKanban },
-    { key: 'cycles', label: cycles, icon: RefreshCw },
-    ...(personalWorkspace
-      ? []
-      : [
-          { key: 'teams' as const, label: teams, icon: Users },
-          { key: 'people' as const, label: 'People', icon: User },
-        ]),
-    { key: 'views', label: 'Views', icon: LayoutGrid },
-    { key: 'graph', label: 'Graph', icon: Workflow },
-    { key: 'settings', label: 'Settings', icon: Settings },
-  ];
+  const vocabularyLabels = {
+    initiative: initiatives,
+    program: programs,
+    project: projects,
+    cycle: cycles,
+    team: teams,
+  };
+  const workspaceRows: readonly NavRow<WorkspaceNavKey>[] =
+    WORKSPACE_NAVIGATION_DESCRIPTORS.flatMap((descriptor) => {
+      if (personalWorkspace && descriptor.sharedOnly) return [];
+      const label =
+        typeof descriptor.label === 'string'
+          ? descriptor.label
+          : vocabularyLabels[descriptor.label.vocabulary];
+      return [{ key: descriptor.key, label, icon: descriptor.icon }];
+    });
 
   return (
     // Its own provider, because collapsing moves every row's label into a tooltip — a component

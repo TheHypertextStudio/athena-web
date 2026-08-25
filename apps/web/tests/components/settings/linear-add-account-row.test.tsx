@@ -28,6 +28,7 @@ describe('LinearAddAccountRow', () => {
     renderRow(0);
 
     expect(screen.getByText('Connect Linear')).toBeInTheDocument();
+    expect(screen.getByText('Sync issues, projects, and cycles with Docket.')).toBeInTheDocument();
     expect(screen.queryByText('Connect another Linear account')).not.toBeInTheDocument();
     expect(screen.getByTestId('LayersIcon')).toBeInTheDocument();
   });

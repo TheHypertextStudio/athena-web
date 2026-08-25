@@ -58,18 +58,19 @@ function renderAccount(status: 'connected' | 'error', error = ''): void {
 }
 
 describe('GtasksAccountRow', () => {
-  it('shows only the connected account on a healthy card', () => {
+  it('shows the account and what Google Tasks syncs on a healthy card', () => {
     renderAccount('connected');
 
     expect(screen.getByText('hello@example.com')).toBeInTheDocument();
+    expect(screen.getByText('Sync tasks and lists with Google Tasks.')).toBeInTheDocument();
     expect(screen.queryByText('Two-way · all lists')).not.toBeInTheDocument();
   });
 
-  it('replaces the account with one current failure sentence', () => {
+  it('keeps the account and purpose visible when an action fails', () => {
     renderAccount('error', 'Could not reconnect this account.');
 
     expect(screen.getByRole('alert')).toHaveTextContent('Could not reconnect this account.');
-    expect(screen.queryByText('hello@example.com')).not.toBeInTheDocument();
-    expect(screen.queryByText('This connection needs attention.')).not.toBeInTheDocument();
+    expect(screen.getByText('hello@example.com')).toBeInTheDocument();
+    expect(screen.getByText('Sync tasks and lists with Google Tasks.')).toBeInTheDocument();
   });
 });

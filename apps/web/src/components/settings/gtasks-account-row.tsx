@@ -6,6 +6,7 @@ import type { JSX } from 'react';
 import { CardNote } from './card-note';
 import { IntegrationConfigPanel } from './integration-config-panel';
 import { IntegrationRowActions } from './integration-row-actions';
+import { connectionCardCopy } from './integrations-config';
 import type { GtasksRowModel } from './use-gtasks-controller';
 
 /** Props for {@link GtasksAccountRow}. */
@@ -35,25 +36,16 @@ export function GtasksAccountRow({
   canManage,
 }: GtasksAccountRowProps): JSX.Element {
   const { account, state } = row;
-  const problem =
-    state.error ||
-    (account.status === 'error'
-      ? 'This connection needs attention.'
-      : account.status === 'disconnected'
-        ? 'This account is disconnected.'
-        : '');
+  const description = connectionCardCopy('gtasks').effect;
   return (
     <li className="bg-surface-container-low overflow-hidden rounded-xl">
       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-4">
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <DecorativeIcon icon={TaskAlt} className="bg-surface-container shrink-0" />
-          {problem ? (
-            <span role="alert" className="text-error text-body-small truncate">
-              {problem}
-            </span>
-          ) : (
+          <div className="flex min-w-0 flex-col gap-0.5">
             <span className="text-on-surface text-label-large truncate">{row.label}</span>
-          )}
+            <span className="text-on-surface-variant text-body-small truncate">{description}</span>
+          </div>
         </div>
         <IntegrationRowActions
           provider="gtasks"
@@ -78,6 +70,7 @@ export function GtasksAccountRow({
       </div>
 
       {state.feedback ? <CardNote tone="muted">{state.feedback}</CardNote> : null}
+      {state.error ? <CardNote tone="error">{state.error}</CardNote> : null}
 
       {state.configOpen ? (
         <IntegrationConfigPanel orgId={orgId} integration={account} teams={teams} />

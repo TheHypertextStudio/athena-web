@@ -57,29 +57,6 @@ interface IntegrationProviderCardProps {
   onToggleConfig: () => void;
 }
 
-/** Human-readable account/workspace identity for one concrete provider connection. */
-function connectionLabel(existing: IntegrationOut | undefined): string | null {
-  if (!existing) return null;
-  const values = [existing.connection.account, existing.connection.externalWorkspaceName].filter(
-    (value): value is string => Boolean(value),
-  );
-  return [...new Set(values)].join(' · ') || null;
-}
-
-/** The one line beneath a provider name, selected from the connection's current state. */
-function connectionSummary(
-  existing: IntegrationOut | undefined,
-  unconnectedSummary: string,
-  actionError: string | null,
-): string | null {
-  if (!existing) return unconnectedSummary;
-  if (actionError) return actionError;
-  if (existing.status === 'pending') return 'Finish connecting this account.';
-  if (existing.status === 'error') return 'This connection needs attention.';
-  if (existing.status === 'disconnected') return 'This account is disconnected.';
-  return connectionLabel(existing);
-}
-
 /** Right-side affordance for a provider with no integration yet (connect directly — no inline choice). */
 function ConnectAffordance(props: {
   canManage: boolean;
@@ -124,7 +101,7 @@ export function IntegrationProviderCard({
 }: IntegrationProviderCardProps): JSX.Element {
   const ProviderIcon = providerIcon(provider.provider);
   const showSyncFeedback = existing?.status === 'connected' && Boolean(syncFeedback);
-  const summary = connectionSummary(existing, effect ?? connectHint, actionError);
+  const summary = effect ?? connectHint;
 
   return (
     <li className="bg-surface-container-low overflow-hidden rounded-xl">
@@ -132,14 +109,7 @@ export function IntegrationProviderCard({
         <DecorativeIcon icon={ProviderIcon} className="bg-surface-container shrink-0" />
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="text-on-surface text-label-large">{provider.name}</span>
-          {summary ? (
-            <span
-              {...(actionError ? { role: 'alert' } : {})}
-              className={`${actionError ? 'text-error' : 'text-on-surface-variant'} text-body-small truncate`}
-            >
-              {summary}
-            </span>
-          ) : null}
+          <span className="text-on-surface-variant text-body-small truncate">{summary}</span>
         </div>
         {existing ? (
           <IntegrationRowActions
@@ -171,6 +141,7 @@ export function IntegrationProviderCard({
       </div>
 
       {showSyncFeedback && syncFeedback ? <CardNote tone="muted">{syncFeedback}</CardNote> : null}
+      {actionError ? <CardNote tone="error">{actionError}</CardNote> : null}
 
       {configOpen ? configPanel : null}
     </li>

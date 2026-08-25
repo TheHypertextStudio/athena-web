@@ -84,24 +84,26 @@ function renderNotion(existing: IntegrationOut | undefined): void {
 }
 
 describe('IntegrationProviderCard', () => {
-  it('shows only the connected account and management controls for a healthy connection', () => {
+  it('keeps the provider purpose visible for a healthy connection', () => {
     renderNotion(CONNECTED_NOTION);
 
-    expect(screen.getByText('Las Vegans for Better Transit')).toBeInTheDocument();
+    expect(
+      screen.getByText('Keep your Notion databases and Docket tasks in sync.'),
+    ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Manage' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Actions for Notion' })).toBeInTheDocument();
     expect(screen.queryByText('Connected')).not.toBeInTheDocument();
     expect(screen.queryByText(/Last synced/)).not.toBeInTheDocument();
     expect(screen.queryByText(/Syncs hourly/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Keep your Notion databases/)).not.toBeInTheDocument();
   });
 
-  it('replaces account details and repeated diagnostics with one repair sentence', () => {
+  it('keeps the provider purpose visible while repair is required', () => {
     renderNotion(FAILED_NOTION);
 
-    expect(screen.getByText('This connection needs attention.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Keep your Notion databases and Docket tasks in sync.'),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Reconnect' })).toBeInTheDocument();
-    expect(screen.queryByText('Las Vegans for Better Transit')).not.toBeInTheDocument();
     expect(screen.queryByText(/Never synced/)).not.toBeInTheDocument();
     expect(
       screen.queryByText(/Problem detected|Last synced|restore syncing/i),
@@ -141,7 +143,7 @@ describe('IntegrationProviderCard', () => {
       />,
     );
 
-    expect(screen.queryByText('Finish connecting this account.')).not.toBeInTheDocument();
+    expect(screen.getByText('Keep it in sync')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Finish setup' })).toBeInTheDocument();
     expect(screen.getByText('Could not validate this connection.')).toBeInTheDocument();
     expect(screen.getAllByRole('alert')).toHaveLength(1);

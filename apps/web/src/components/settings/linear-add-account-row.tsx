@@ -4,6 +4,8 @@ import NextLink from '@/components/docket-link';
 import { Layers } from '@docket/ui/icons';
 import type { JSX } from 'react';
 
+import { connectionCardCopy } from './integrations-config';
+
 /** The "connect another Linear account" affordance, shown once under the Linear category. */
 export interface LinearAddModel {
   available: readonly IdentityOut[];
@@ -33,12 +35,16 @@ export interface LinearAddAccountRowProps {
  */
 export function LinearAddAccountRow({ model }: LinearAddAccountRowProps): JSX.Element {
   const title = model.connectedCount === 0 ? 'Connect Linear' : 'Connect another Linear account';
+  const description = connectionCardCopy('linear').effect;
   return (
     <li className="bg-surface-container-low grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 rounded-xl p-4">
       <DecorativeIcon icon={Layers} className="bg-surface-container shrink-0" />
-      <label className="text-on-surface text-label-large" htmlFor="linear-identity">
-        {title}
-      </label>
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <label className="text-on-surface text-label-large" htmlFor="linear-identity">
+          {title}
+        </label>
+        <span className="text-on-surface-variant text-body-small truncate">{description}</span>
+      </div>
       {model.available.length > 0 ? (
         <div className="col-start-2 grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
           <Select

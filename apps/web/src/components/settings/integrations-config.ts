@@ -206,28 +206,31 @@ export interface ConnectionCardCopy {
 /** Per-provider card copy for the Connections surface. Falls back to generic wording. */
 const CONNECTION_CARD_COPY: Record<string, ConnectionCardCopy> = {
   gtasks: {
-    effect: 'Athena keeps your Google Tasks and Docket tasks in step.',
+    effect: 'Sync tasks and lists with Google Tasks.',
   },
   calendar: {
-    effect: 'Athena sees your events to plan around them.',
+    effect: 'Plan around events from Google Calendar.',
   },
   gmail: {
-    effect: 'Athena reads new mail so it can suggest tasks in triage.',
+    effect: 'Turn Gmail messages into suggested tasks.',
   },
   linear: {
-    effect: 'Athena mirrors Linear issues, projects, and cycles as tasks.',
+    effect: 'Sync issues, projects, and cycles with Docket.',
   },
   github: {
-    effect: 'Athena links pull requests and issues to your work.',
+    effect: 'Link GitHub pull requests and issues to Docket work.',
   },
   notion: {
-    effect: 'Athena keeps your Notion databases and Docket tasks in step.',
+    effect: 'Sync initiatives, projects, tasks, and other data to Notion databases.',
+  },
+  drive: {
+    effect: 'Use Google Drive files as planning context.',
   },
 };
 
 /** The generic fallback shown for a provider with no dedicated card copy above. */
 const DEFAULT_CONNECTION_CARD_COPY: ConnectionCardCopy = {
-  effect: 'Athena mirrors this tool into Docket.',
+  effect: 'Sync data from this tool with Docket.',
 };
 
 /** connectionCardCopy returns the Connections-card wording for a provider. */

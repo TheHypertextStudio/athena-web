@@ -13,7 +13,6 @@
  * real `verify` validated the credential.
  */
 import type {
-  ConnectorConfig,
   IdentityOut,
   IntegrationDirectoryProvider,
   IntegrationOut,
@@ -40,14 +39,6 @@ function accountLabel(account: IntegrationOut): string {
   return account.connection.account ?? account.externalAccountId ?? 'Google account';
 }
 
-/** A short summary of the resources a connection syncs (direction + task-list scope). */
-function resourceSummary(account: IntegrationOut): string {
-  const direction = account.writeBack ? 'Two-way' : 'Import only';
-  const cfg = account.config as ConnectorConfig;
-  const n = cfg.listIds?.length ?? 0;
-  return `${direction} · ${n > 0 ? `${n} list${n === 1 ? '' : 's'}` : 'all lists'}`;
-}
-
 /** Per-row interaction state. */
 export interface GtasksRowState {
   busyReconnect: boolean;
@@ -64,7 +55,6 @@ export interface GtasksRowState {
 export interface GtasksRowModel {
   account: IntegrationOut;
   label: string;
-  summary: string;
   state: GtasksRowState;
   actions: {
     reconnect: () => void;
@@ -275,7 +265,6 @@ export function useGtasksController({
       visibleAccounts.map((account) => ({
         account,
         label: accountLabel(account),
-        summary: resourceSummary(account),
         state: {
           busyReconnect: busy?.id === account.id && busy.action === 'reconnect',
           busySync: busy?.id === account.id && busy.action === 'sync',

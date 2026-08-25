@@ -20,8 +20,6 @@ export interface ProviderRowModel {
   connectHint: string;
   /** What connecting unlocks, in user terms (Connections only). */
   effect?: string;
-  /** Short data-flow phrase (Connections only). */
-  mechanics?: string;
   configurable: boolean;
   state: ProviderRowState;
   actions: ProviderRowActions;
@@ -69,7 +67,6 @@ function ProviderRow({
       actionLabel={row.actionLabel}
       connectHint={row.connectHint}
       effect={row.effect}
-      mechanics={row.mechanics}
       busy={row.state.busy}
       syncing={row.state.syncing}
       disconnecting={row.state.disconnecting}

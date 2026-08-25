@@ -3,7 +3,7 @@ import { TaskAlt } from '@docket/ui/icons';
 import { DecorativeIcon } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
-import { CardAlert, CardNote } from './card-note';
+import { CardNote } from './card-note';
 import { IntegrationConfigPanel } from './integration-config-panel';
 import { IntegrationRowActions } from './integration-row-actions';
 import type { GtasksRowModel } from './use-gtasks-controller';
@@ -35,24 +35,36 @@ export function GtasksAccountRow({
   canManage,
 }: GtasksAccountRowProps): JSX.Element {
   const { account, state } = row;
+  const problem =
+    state.error ||
+    (account.status === 'error'
+      ? 'This connection needs attention.'
+      : account.status === 'disconnected'
+        ? 'This account is disconnected.'
+        : '');
   return (
     <li className="bg-surface-container-low overflow-hidden rounded-xl">
-      <div className="flex flex-wrap items-center gap-3 p-4 sm:flex-nowrap">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 p-4">
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <DecorativeIcon icon={TaskAlt} className="bg-surface-container shrink-0" />
-          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          {problem ? (
+            <span role="alert" className="text-error text-body-small truncate">
+              {problem}
+            </span>
+          ) : (
             <span className="text-on-surface text-label-large truncate">{row.label}</span>
-            <span className="text-on-surface-variant text-body-small truncate">{row.summary}</span>
-          </div>
+          )}
         </div>
         <IntegrationRowActions
           provider="gtasks"
+          providerName={row.label}
           status={account.status}
           canManage={canManage}
           syncable
           isMigration={false}
           configurable
           configOpen={state.configOpen}
+          manageHref={null}
           busyReconnect={state.busyReconnect}
           busySync={state.busySync}
           busyDisconnect={state.busyDisconnect}
@@ -65,20 +77,6 @@ export function GtasksAccountRow({
         />
       </div>
 
-      {/* Persistent connection error from the server (survives reload). */}
-      {account.status === 'error' ? (
-        <CardAlert
-          message="This account could not be synced."
-          detail={
-            <>
-              Use <span className="text-label-large">Reconnect</span>, or re-link this account under
-              Connected accounts.
-            </>
-          }
-        />
-      ) : null}
-
-      {state.error ? <CardNote tone="error">{state.error}</CardNote> : null}
       {state.feedback ? <CardNote tone="muted">{state.feedback}</CardNote> : null}
 
       {state.configOpen ? (

@@ -2,11 +2,9 @@
 
 import type { IntegrationDirectoryProvider, IntegrationOut } from '@docket/types';
 import { Button, DecorativeIcon } from '@docket/ui/primitives';
-import NextLink from '@/components/docket-link';
 import type { JSX } from 'react';
 
-import { CardAlert, CardNote } from './card-note';
-import { CONNECTION_ERROR_MESSAGE, integrationStatusLabel } from './integration-status';
+import { CardNote } from './card-note';
 import { IntegrationRowActions } from './integration-row-actions';
 import { providerIcon } from './integrations-config';
 
@@ -24,11 +22,6 @@ interface IntegrationProviderCardProps {
    * their own terser {@link connectHint} wording.
    */
   effect?: string | undefined;
-  /**
-   * Short data-flow direction phrase (Connections surface only), shown as the secondary line while
-   * the provider is not yet connected. Once connected, the status/last-synced line replaces it.
-   */
-  mechanics?: string | undefined;
   /** A connect/verify ceremony is in flight for this provider. */
   busy: boolean;
   /** A manual sync is in flight for this integration. */
@@ -73,6 +66,20 @@ function connectionLabel(existing: IntegrationOut | undefined): string | null {
   return [...new Set(values)].join(' · ') || null;
 }
 
+/** The one line beneath a provider name, selected from the connection's current state. */
+function connectionSummary(
+  existing: IntegrationOut | undefined,
+  unconnectedSummary: string,
+  actionError: string | null,
+): string | null {
+  if (!existing) return unconnectedSummary;
+  if (actionError) return actionError;
+  if (existing.status === 'pending') return 'Finish connecting this account.';
+  if (existing.status === 'error') return 'This connection needs attention.';
+  if (existing.status === 'disconnected') return 'This account is disconnected.';
+  return connectionLabel(existing);
+}
+
 /** Right-side affordance for a provider with no integration yet (connect directly — no inline choice). */
 function ConnectAffordance(props: {
   canManage: boolean;
@@ -100,7 +107,6 @@ export function IntegrationProviderCard({
   actionLabel,
   connectHint,
   effect,
-  mechanics,
   busy,
   syncing,
   disconnecting,
@@ -118,43 +124,34 @@ export function IntegrationProviderCard({
 }: IntegrationProviderCardProps): JSX.Element {
   const ProviderIcon = providerIcon(provider.provider);
   const showSyncFeedback = existing?.status === 'connected' && Boolean(syncFeedback);
-  const identityLabel = connectionLabel(existing);
+  const summary = connectionSummary(existing, effect ?? connectHint, actionError);
 
   return (
     <li className="bg-surface-container-low overflow-hidden rounded-xl">
-      <div className="flex flex-wrap items-center gap-3 p-4 sm:flex-nowrap">
+      <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 p-4">
         <DecorativeIcon icon={ProviderIcon} className="bg-surface-container shrink-0" />
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="text-on-surface text-label-large">{provider.name}</span>
-          {effect ? (
-            <span className="text-on-surface-variant text-body-small">{effect}</span>
-          ) : null}
-          {identityLabel ? (
-            <span className="text-on-surface-variant text-body-small truncate">
-              {identityLabel}
+          {summary ? (
+            <span
+              {...(actionError ? { role: 'alert' } : {})}
+              className={`${actionError ? 'text-error' : 'text-on-surface-variant'} text-body-small truncate`}
+            >
+              {summary}
             </span>
           ) : null}
-          <span className="text-on-surface-variant text-body-small">
-            {existing ? integrationStatusLabel(existing) : (mechanics ?? connectHint)}
-          </span>
         </div>
-        {existing && manageHref ? (
-          <NextLink
-            href={manageHref}
-            className="text-primary text-label-large shrink-0 hover:underline"
-          >
-            {existing.status === 'connected' ? 'Manage' : 'Set up'}
-          </NextLink>
-        ) : null}
         {existing ? (
           <IntegrationRowActions
             provider={provider.provider}
+            providerName={provider.name}
             status={existing.status}
             canManage={canManage}
             syncable={provider.syncable}
             isMigration={existing.pattern === 'migration'}
             configurable={configurable}
             configOpen={configOpen}
+            manageHref={manageHref ?? null}
             busyReconnect={busy}
             busySync={syncing}
             busyDisconnect={disconnecting}
@@ -172,21 +169,6 @@ export function IntegrationProviderCard({
           />
         )}
       </div>
-
-      {/* Persistent connection error from the server (survives reload), never ephemeral state. */}
-      {existing?.status === 'error' ? (
-        <CardAlert
-          message={CONNECTION_ERROR_MESSAGE}
-          detail={
-            <>
-              Use <span className="text-label-large">Reconnect</span> to re-authorize and resume
-              syncing.
-            </>
-          }
-        />
-      ) : null}
-
-      {existing && actionError ? <CardNote tone="error">{actionError}</CardNote> : null}
 
       {showSyncFeedback && syncFeedback ? <CardNote tone="muted">{syncFeedback}</CardNote> : null}
 

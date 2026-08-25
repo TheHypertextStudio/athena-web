@@ -1,8 +1,19 @@
+'use client';
+
 import type { IntegrationOut } from '@docket/types';
-import { Badge, Button } from '@docket/ui/primitives';
+import { Ellipsis } from '@docket/ui/icons';
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  menuDestructiveItem,
+} from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
-import { STATUS_LABEL } from './integrations-config';
+import NextLink from '@/components/docket-link';
 
 /** The repair/install button label for a not-yet-healthy integration. */
 function reconnectLabel(provider: string, status: IntegrationOut['status'], busy: boolean): string {
@@ -15,29 +26,29 @@ function reconnectLabel(provider: string, status: IntegrationOut['status'], busy
 export interface IntegrationRowActionsProps {
   /** Provider id, used where a provider owns a distinct authorization ceremony. */
   provider: string;
-  /** The connection's server status (drives the badge and which actions apply). */
+  /** Provider name, used to give the overflow trigger a precise accessible name. */
+  providerName: string;
+  /** The connection's server status, which decides whether repair replaces management. */
   status: IntegrationOut['status'];
   /** Whether the viewer may manage this connection at all. */
   canManage: boolean;
-  /** Whether this provider supports manual sync (observe-only signal sources don't). */
+  /** Whether this provider supports manual sync. */
   syncable: boolean;
   /** One-time migrations have no ongoing sync. */
   isMigration: boolean;
-  /** Whether this row exposes an inline config panel (adds the Configure toggle). */
+  /** Whether this row exposes an inline config panel. */
   configurable: boolean;
   /** Whether that config panel is currently expanded. */
   configOpen: boolean;
+  /** Route to the provider's dedicated management page, when it has one. */
+  manageHref: string | null;
   /** A reconnect/verify ceremony is in flight. */
   busyReconnect: boolean;
   /** A manual sync is in flight. */
   busySync: boolean;
   /** A disconnect is in flight. */
   busyDisconnect: boolean;
-  /**
-   * Disable every action regardless of the per-action flags — for callers that serialize actions
-   * per row (any in-flight action blocks the others). The per-action `busy*` flags still choose
-   * which button shows its progress label. Omit to gate each button only on its own flag.
-   */
+  /** Disable every action regardless of the per-action flags. */
   disabled?: boolean;
   onReconnect: () => void;
   onSync: () => void;
@@ -45,23 +56,17 @@ export interface IntegrationRowActionsProps {
   onToggleConfig: () => void;
 }
 
-/**
- * The right-side manage controls for an existing integration: a status badge plus the
- * reconnect / sync / configure / disconnect actions that apply to its current state.
- *
- * @remarks
- * Shared by the generic provider card and the Google Tasks rows — the two previously duplicated
- * this cluster with subtly different markup. Which buttons appear is a pure function of
- * `status` + the capability flags, so both callers get one consistent control set.
- */
+/** Render one contextual action and a menu for secondary commands. */
 export function IntegrationRowActions({
   provider,
+  providerName,
   status,
   canManage,
   syncable,
   isMigration,
   configurable,
   configOpen,
+  manageHref,
   busyReconnect,
   busySync,
   busyDisconnect,
@@ -70,14 +75,16 @@ export function IntegrationRowActions({
   onSync,
   onDisconnect,
   onToggleConfig,
-}: IntegrationRowActionsProps): JSX.Element {
+}: IntegrationRowActionsProps): JSX.Element | null {
+  if (!canManage) return null;
+
   const isConnected = status === 'connected';
   const needsConnect = status === 'pending' || status === 'error' || status === 'disconnected';
-  const canChangeGithubInstallation = canManage && isConnected && provider === 'github';
+  const canSync = isConnected && !isMigration && syncable;
+
   return (
-    <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-2 sm:w-auto">
-      <Badge variant={STATUS_LABEL[status].variant}>{STATUS_LABEL[status].label}</Badge>
-      {canManage && needsConnect ? (
+    <div className="flex shrink-0 flex-nowrap items-center justify-end gap-1">
+      {needsConnect ? (
         <Button
           controlSize="md"
           variant="ghost"
@@ -86,42 +93,65 @@ export function IntegrationRowActions({
         >
           {reconnectLabel(provider, status, busyReconnect)}
         </Button>
-      ) : null}
-      {canChangeGithubInstallation ? (
-        <Button
-          controlSize="md"
-          variant="ghost"
-          disabled={disabled || busyReconnect}
-          onClick={onReconnect}
-        >
-          {busyReconnect ? 'Opening GitHub…' : 'Change GitHub installation'}
+      ) : manageHref ? (
+        <Button controlSize="md" variant="ghost" asChild>
+          <NextLink href={manageHref}>Manage</NextLink>
         </Button>
-      ) : null}
-      {canManage && isConnected && !isMigration && syncable ? (
-        <Button controlSize="md" variant="ghost" disabled={disabled || busySync} onClick={onSync}>
-          {busySync ? 'Syncing…' : 'Sync'}
-        </Button>
-      ) : null}
-      {canManage && configurable ? (
+      ) : configurable ? (
         <Button
           controlSize="md"
           variant="ghost"
           aria-expanded={configOpen}
           onClick={onToggleConfig}
         >
-          {configOpen ? 'Close' : 'Configure'}
+          {configOpen ? 'Close' : 'Manage'}
         </Button>
-      ) : null}
-      {canManage ? (
+      ) : provider === 'github' ? (
         <Button
           controlSize="md"
-          variant="ghost-destructive"
-          disabled={disabled || busyDisconnect}
-          onClick={onDisconnect}
+          variant="ghost"
+          disabled={disabled || busyReconnect}
+          onClick={onReconnect}
         >
-          {busyDisconnect ? 'Disconnecting…' : 'Disconnect'}
+          {busyReconnect ? 'Opening GitHub…' : 'Manage'}
         </Button>
       ) : null}
+
+      {busySync || busyDisconnect ? (
+        <span role="status" className="text-on-surface-variant text-body-small shrink-0">
+          {busySync ? 'Syncing…' : 'Disconnecting…'}
+        </span>
+      ) : null}
+
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            controlSize="md"
+            variant="ghost"
+            iconOnly
+            aria-label={`Actions for ${providerName}`}
+            disabled={disabled || busyDisconnect}
+          >
+            <Ellipsis />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {canSync ? (
+            <DropdownMenuItem disabled={disabled || busySync} onSelect={onSync}>
+              {busySync ? 'Syncing…' : 'Sync now'}
+            </DropdownMenuItem>
+          ) : null}
+          {canSync ? <DropdownMenuSeparator /> : null}
+          <DropdownMenuItem
+            className={menuDestructiveItem()}
+            disabled={disabled || busyDisconnect}
+            onSelect={onDisconnect}
+          >
+            {busyDisconnect ? 'Disconnecting…' : 'Disconnect'}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }

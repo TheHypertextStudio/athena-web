@@ -1,6 +1,7 @@
-import { Button, Select } from '@docket/ui/primitives';
+import { Button, DecorativeIcon, Select } from '@docket/ui/primitives';
 import type { IdentityOut } from '@docket/types';
 import NextLink from '@/components/docket-link';
+import { Layers } from '@docket/ui/icons';
 import type { JSX } from 'react';
 
 /** The "connect another Linear account" affordance, shown once under the Linear category. */
@@ -11,6 +12,8 @@ export interface LinearAddModel {
   busy: boolean;
   connect: () => void;
   addAccountsHref: string;
+  /** Existing Linear connections, used to distinguish the first account from another one. */
+  connectedCount: number;
 }
 
 /** Props for {@link LinearAddAccountRow}. */
@@ -29,22 +32,22 @@ export interface LinearAddAccountRowProps {
  * only when the viewer can manage connections).
  */
 export function LinearAddAccountRow({ model }: LinearAddAccountRowProps): JSX.Element {
+  const title = model.connectedCount === 0 ? 'Connect Linear' : 'Connect another Linear account';
   return (
-    // An "add another" slot is a well, not a card: `sunken` reads as an empty place waiting to be
-    // filled, which is what the dashed outline here was reaching for.
-    <li className="bg-surface-container-lowest flex flex-wrap items-center gap-3 rounded-xl p-4">
+    <li className="bg-surface-container-low grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 rounded-xl p-4">
+      <DecorativeIcon icon={Layers} className="bg-surface-container shrink-0" />
       <label className="text-on-surface text-label-large" htmlFor="linear-identity">
-        Connect another Linear account
+        {title}
       </label>
       {model.available.length > 0 ? (
-        <>
+        <div className="col-start-2 grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
           <Select
             id="linear-identity"
             value={model.selectedId}
             onChange={(event) => {
               model.setSelectedId(event.target.value);
             }}
-            className="min-w-56"
+            className="min-w-0"
           >
             <option value="">Choose an account</option>
             {model.available.map((identity) => (
@@ -57,19 +60,21 @@ export function LinearAddAccountRow({ model }: LinearAddAccountRowProps): JSX.El
           </Select>
           <Button
             controlSize="md"
-            variant="ghost"
+            variant="secondary"
             disabled={model.selectedId.length === 0 || model.busy}
             onClick={model.connect}
           >
             {model.busy ? 'Connecting…' : 'Connect'}
           </Button>
-        </>
+        </div>
       ) : (
         <NextLink
           href={model.addAccountsHref}
-          className="text-primary text-label-large hover:underline"
+          className="text-primary text-body-small col-start-2 hover:underline"
         >
-          Link another Linear account first
+          {model.connectedCount === 0
+            ? 'Link a Linear account first'
+            : 'Link another Linear account first'}
         </NextLink>
       )}
     </li>

@@ -8,7 +8,7 @@
  * This is deliberately separate from Import — a different product with different copy, scope, and
  * layout — even though both drive the shared {@link useIntegrationsData}. Connections adds the
  * "This workspace" scope framing, the Google Tasks multi-account section, the Calendar link-out,
- * and per-card effect/mechanics copy. It creates `connector` integrations (`mirror` sync).
+ * and per-card connection copy. It creates `connector` integrations (`mirror` sync).
  */
 import type { IntegrationDirectoryProvider, IntegrationOut, TeamOut } from '@docket/types';
 import { useMemo, useState } from 'react';
@@ -141,6 +141,7 @@ export function useConnectionsController({
         });
       },
       addAccountsHref: `/orgs/${orgId}/settings/connected-accounts`,
+      connectedCount: byProvider.get('linear')?.length ?? 0,
     };
     // Deliberately the two members rather than `data`: the hook returns a fresh object literal
     // every render, so naming it here made this memo — and `categories` downstream of it —
@@ -153,6 +154,7 @@ export function useConnectionsController({
     data.isBusy,
     data.connectAccount,
     orgId,
+    byProvider,
   ]);
 
   const categories = useMemo<readonly CategorySectionModel[]>(
@@ -178,7 +180,6 @@ export function useConnectionsController({
                     ? 'Choose the GitHub account and repositories Docket can access'
                     : 'Keep it in sync',
                 effect: copy.effect,
-                mechanics: copy.mechanics,
                 configurable: hasInlineConfigPanel(provider.provider),
                 state: rowState(provider.provider, existing),
                 actions: rowActions(provider, existing, CONNECTOR_PATTERN),

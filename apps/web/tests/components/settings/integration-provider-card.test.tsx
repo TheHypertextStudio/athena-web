@@ -36,7 +36,87 @@ const PENDING_NOTION = IntegrationOut.parse({
   createdAt: '2026-08-24T00:00:00.000Z',
 });
 
+const CONNECTED_NOTION = IntegrationOut.parse({
+  ...PENDING_NOTION,
+  status: 'connected',
+  connection: {
+    account: 'Las Vegans for Better Transit',
+    externalWorkspaceName: 'Las Vegans for Better Transit',
+  },
+  lastSyncStatus: 'succeeded',
+  lastSyncedAt: '2026-08-24T01:00:00.000Z',
+  syncCadenceMinutes: 60,
+});
+
+const FAILED_NOTION = IntegrationOut.parse({
+  ...PENDING_NOTION,
+  status: 'error',
+  connection: { account: 'Las Vegans for Better Transit' },
+  lastError: 'oauth token expired',
+  lastErrorAt: '2026-08-24T01:00:00.000Z',
+});
+
+function renderNotion(existing: IntegrationOut | undefined): void {
+  render(
+    <IntegrationProviderCard
+      provider={NOTION}
+      existing={existing}
+      canManage
+      actionLabel="Connect"
+      connectHint="Keep it in sync"
+      effect="Keep your Notion databases and Docket tasks in sync."
+      busy={false}
+      syncing={false}
+      disconnecting={false}
+      syncFeedback={null}
+      actionError={null}
+      configurable={false}
+      configOpen={false}
+      configPanel={null}
+      manageHref="/orgs/org-1/settings/connections/notion"
+      onConnect={vi.fn()}
+      onReconnect={vi.fn()}
+      onSync={vi.fn()}
+      onDisconnect={vi.fn()}
+      onToggleConfig={vi.fn()}
+    />,
+  );
+}
+
 describe('IntegrationProviderCard', () => {
+  it('shows only the connected account and management controls for a healthy connection', () => {
+    renderNotion(CONNECTED_NOTION);
+
+    expect(screen.getByText('Las Vegans for Better Transit')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Manage' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Actions for Notion' })).toBeInTheDocument();
+    expect(screen.queryByText('Connected')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Last synced/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Syncs hourly/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Keep your Notion databases/)).not.toBeInTheDocument();
+  });
+
+  it('replaces account details and repeated diagnostics with one repair sentence', () => {
+    renderNotion(FAILED_NOTION);
+
+    expect(screen.getByText('This connection needs attention.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reconnect' })).toBeInTheDocument();
+    expect(screen.queryByText('Las Vegans for Better Transit')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Never synced/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Problem detected|Last synced|restore syncing/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows one sentence and one action before a provider is connected', () => {
+    renderNotion(undefined);
+
+    expect(
+      screen.getByText('Keep your Notion databases and Docket tasks in sync.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Connect' })).toBeInTheDocument();
+  });
+
   it('shows an interrupted setup as repairable instead of pretending no connection exists', () => {
     render(
       <IntegrationProviderCard
@@ -61,9 +141,10 @@ describe('IntegrationProviderCard', () => {
       />,
     );
 
-    expect(screen.getByText('Finishing setup')).toBeInTheDocument();
+    expect(screen.queryByText('Finish connecting this account.')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Finish setup' })).toBeInTheDocument();
     expect(screen.getByText('Could not validate this connection.')).toBeInTheDocument();
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
     expect(screen.queryByRole('button', { name: 'Connect' })).not.toBeInTheDocument();
   });
 });

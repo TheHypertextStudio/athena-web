@@ -256,15 +256,6 @@ export const ExtendTrialBody = z.object({
 /** Validated extend-trial body. */
 export type ExtendTrialBody = z.infer<typeof ExtendTrialBody>;
 
-/** Body for forcing an org's lifecycle state directly. */
-export const SetLifecycleBody = z.object({
-  lifecycleState: LifecycleState.describe(
-    'The target state to force the org into; routed through the real transition logic so export/delete timers stay consistent.',
-  ),
-});
-/** Validated set-lifecycle body. */
-export type SetLifecycleBody = z.infer<typeof SetLifecycleBody>;
-
 /** Body for starting a time-boxed impersonation (target + reason + optional TTL). */
 export const StartImpersonationBody = z.object({
   targetUserId: z.string().min(1).describe('The end-user account the operator wants to act as.'),

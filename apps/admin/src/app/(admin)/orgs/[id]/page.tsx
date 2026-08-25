@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { type JSX } from 'react';
 
-import { LifecycleStateMenu } from '@/components/lifecycle-filter';
 import { ErrorBanner, LifecycleBadge, PageHeader, SignInAction } from '@/components/ui-bits';
 import { formatTimestamp } from '@/lib/lifecycle';
 import { DetailSkeleton, Field } from './org-detail-ui';
@@ -16,8 +15,9 @@ import { useOrgDetail } from './use-org-detail';
  *
  * @remarks
  * A Client Component. Reads `GET /admin/orgs/:id` at runtime. Billing actions (finance+
- * on the API) post to `extend-trial`, `reactivate`, and `lifecycle`; each refreshes the org
- * from the response. Holds are placed via `POST .../holds` and released via
+ * on the API) may extend an eligible Stripe trial. Superadmins may grant or revoke the
+ * complimentary Docket Pro entitlement with an audit reason. Holds are placed via
+ * `POST .../holds` and released via
  * `DELETE .../holds/:holdId`. The admin API exposes no holds-list endpoint, so the holds
  * panel reflects holds placed during this session (and releases them); a placed hold is
  * surfaced immediately from the create response. A 403 (insufficient tier or non-staff)
@@ -34,14 +34,14 @@ export default function OrgDetailPage(): JSX.Element {
     pending,
     trialDays,
     setTrialDays,
-    targetState,
-    setTargetState,
+    complimentaryReason,
+    setComplimentaryReason,
     holds,
     holdReason,
     setHoldReason,
     extendTrial,
-    reactivate,
-    setLifecycle,
+    grantComplimentary,
+    revokeComplimentary,
     placeHold,
     releaseHold,
   } = useOrgDetail(params.id);
@@ -109,29 +109,38 @@ export default function OrgDetailPage(): JSX.Element {
               </div>
 
               <div className="flex flex-col gap-2">
-                <span className="text-on-surface-variant text-xs font-medium">Reactivate</span>
-                <div>
-                  <Button variant="outline" disabled={pending !== null} onClick={reactivate}>
-                    {pending === 'reactivate' ? 'Reactivating…' : 'Reactivate'}
-                  </Button>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-2">
                 <label
-                  htmlFor="target-state"
+                  htmlFor="complimentary-reason"
                   className="text-on-surface-variant text-xs font-medium"
                 >
-                  Set lifecycle state
+                  Complimentary Docket Pro
                 </label>
-                <div className="flex gap-2">
-                  <LifecycleStateMenu
-                    id="target-state"
-                    value={targetState}
-                    onChange={setTargetState}
+                <p className="text-on-surface-variant text-xs">
+                  This grants every current and future Pro capability without Stripe. The API
+                  rejects a grant while a paid subscription is current.
+                </p>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    id="complimentary-reason"
+                    value={complimentaryReason}
+                    onChange={(event) => {
+                      setComplimentaryReason(event.target.value);
+                    }}
+                    placeholder="Reason for the complimentary grant"
+                    className="flex-1"
                   />
-                  <Button variant="outline" disabled={pending !== null} onClick={setLifecycle}>
-                    {pending === 'lifecycle' ? 'Setting…' : 'Set state'}
+                  <Button
+                    variant="outline"
+                    disabled={pending !== null || complimentaryReason.trim().length === 0}
+                    onClick={org.isBillingExempt ? revokeComplimentary : grantComplimentary}
+                  >
+                    {org.isBillingExempt
+                      ? pending === 'revoke-complimentary'
+                        ? 'Revoking…'
+                        : 'Revoke complimentary Pro'
+                      : pending === 'grant-complimentary'
+                        ? 'Granting…'
+                        : 'Grant complimentary Pro'}
                   </Button>
                 </div>
               </div>

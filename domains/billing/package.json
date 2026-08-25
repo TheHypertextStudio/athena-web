@@ -11,6 +11,8 @@
     "./adapters/stripe": "./src/adapters/stripe.ts",
     "./application/lifecycle": "./src/application/lifecycle.ts",
     "./application/entitlement": "./src/application/entitlement.ts",
+    "./application/discounts": "./src/application/discounts.ts",
+    "./application/provider-state": "./src/application/provider-state.ts",
     "./provision": "./src/provision.ts"
   },
   "scripts": {

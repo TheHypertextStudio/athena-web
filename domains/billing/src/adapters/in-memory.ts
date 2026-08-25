@@ -9,13 +9,24 @@
  * derives all ids from inputs + a per-gateway counter, so tests are stable.
  */
 import type {
+  AppliedSubscriptionDiscount,
+  BillingCustomer,
   BillingEventType,
   BillingEvent,
   BillingGateway,
+  BillingPortalSessionInput,
   BillingPortalSessionResult,
   CheckoutSessionInput,
   CheckoutSessionResult,
+  CreditNoteIssueInput,
+  CreditNotePreview,
+  CreditNotePreviewInput,
+  DiscountCoupon,
+  DiscountCouponInput,
+  IssuedCreditNote,
+  RecurringInvoiceLine,
   Subscription,
+  SubscriptionDiscountInput,
   SubscriptionStatus,
 } from '../contracts';
 
@@ -60,6 +71,8 @@ export class InMemoryBillingGateway implements BillingGateway {
   private readonly baseUrl: string;
   private readonly subscriptions = new Map<string, Subscription>();
   private readonly lifecycleStep = new Map<string, number>();
+  private readonly coupons = new Map<string, DiscountCouponInput>();
+  private readonly discounts = new Map<string, string>();
   private counter = 0;
   /** The synthetic webhook events emitted so far, in order. */
   readonly events: BillingEvent[] = [];
@@ -75,6 +88,16 @@ export class InMemoryBillingGateway implements BillingGateway {
   private nextId(prefix: string): string {
     this.counter += 1;
     return `${prefix}_${this.counter.toString().padStart(6, '0')}`;
+  }
+
+  /** {@inheritDoc BillingGateway.createCustomer} */
+  async createCustomer(referenceId: string): Promise<BillingCustomer> {
+    return { id: `cus_${referenceId}`, referenceId };
+  }
+
+  /** {@inheritDoc BillingGateway.getCustomerBillingCountry} */
+  async getCustomerBillingCountry(_customerId: string): Promise<string | null> {
+    return 'US';
   }
 
   /** {@inheritDoc BillingGateway.createCheckoutSession} */
@@ -127,9 +150,95 @@ export class InMemoryBillingGateway implements BillingGateway {
     });
   }
 
+  /** {@inheritDoc BillingGateway.extendTrial} */
+  async extendTrial(
+    referenceId: string,
+    days: number,
+    _idempotencyKey: string,
+  ): Promise<Subscription> {
+    const sub = this.subscriptions.get(referenceId);
+    if (sub?.status !== 'trialing' || !sub.trialEnd) {
+      throw new Error('InMemoryBillingGateway: no eligible trialing subscription.');
+    }
+    const trialEnd = addHours(sub.trialEnd, days * 24);
+    const extended: Subscription = { ...sub, currentPeriodEnd: trialEnd, trialEnd };
+    this.subscriptions.set(referenceId, extended);
+    this.events.push({
+      id: this.nextId('evt'),
+      type: 'subscription.updated',
+      referenceId,
+      subscription: extended,
+      createdAt: this.now,
+    });
+    return extended;
+  }
+
   /** {@inheritDoc BillingGateway.createBillingPortalSession} */
-  async createBillingPortalSession(referenceId: string): Promise<BillingPortalSessionResult> {
-    return { url: `${this.baseUrl}/portal/${referenceId}` };
+  async createBillingPortalSession(
+    input: BillingPortalSessionInput,
+  ): Promise<BillingPortalSessionResult> {
+    return { url: `${this.baseUrl}/portal/${input.customerId}` };
+  }
+
+  /** {@inheritDoc BillingGateway.createDiscountCoupon} */
+  async createDiscountCoupon(input: DiscountCouponInput): Promise<DiscountCoupon> {
+    const id = `coupon_${input.awardId}`;
+    this.coupons.set(id, input);
+    return { id };
+  }
+
+  /** {@inheritDoc BillingGateway.applySubscriptionDiscount} */
+  async applySubscriptionDiscount(
+    input: SubscriptionDiscountInput,
+  ): Promise<AppliedSubscriptionDiscount> {
+    if (!this.subscriptions.has(input.referenceId)) {
+      throw new Error('InMemoryBillingGateway: no subscription for discount.');
+    }
+    if (!this.coupons.has(input.couponId)) {
+      throw new Error('InMemoryBillingGateway: unknown coupon.');
+    }
+    const discountId = this.nextId('di');
+    this.discounts.set(input.referenceId, discountId);
+    return { discountId };
+  }
+
+  /** {@inheritDoc BillingGateway.removeSubscriptionDiscount} */
+  async removeSubscriptionDiscount(referenceId: string, _idempotencyKey: string): Promise<void> {
+    this.discounts.delete(referenceId);
+  }
+
+  /** {@inheritDoc BillingGateway.getLatestRecurringInvoice} */
+  async getLatestRecurringInvoice(referenceId: string): Promise<RecurringInvoiceLine | null> {
+    const subscription = this.subscriptions.get(referenceId);
+    if (!subscription || subscription.status === 'trialing') return null;
+    const periodEnd = new Date(subscription.currentPeriodEnd);
+    const periodStart = new Date(periodEnd.getTime() - 30 * 24 * 60 * 60 * 1000);
+    return {
+      invoiceId: `in_${referenceId}`,
+      lineId: `il_${referenceId}`,
+      invoiceStatus: 'paid',
+      currency: 'usd',
+      recurringAmount: 800,
+      periodStartsAt: periodStart.toISOString(),
+      periodEndsAt: periodEnd.toISOString(),
+    };
+  }
+
+  /** {@inheritDoc BillingGateway.previewCreditNote} */
+  async previewCreditNote(input: CreditNotePreviewInput): Promise<CreditNotePreview> {
+    return {
+      baseAmount: input.baseAmount,
+      taxAmount: 0,
+      totalAmount: input.baseAmount,
+      prePaymentAmount: 0,
+      postPaymentAmount: input.baseAmount,
+    };
+  }
+
+  /** {@inheritDoc BillingGateway.issueCreditNote} */
+  async issueCreditNote(input: CreditNoteIssueInput): Promise<IssuedCreditNote> {
+    const preview = await this.previewCreditNote(input);
+    return { id: this.nextId('cn'), ...preview };
   }
 
   /**

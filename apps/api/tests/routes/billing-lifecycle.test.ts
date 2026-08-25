@@ -87,7 +87,12 @@ describe('billing: GET /', () => {
     expect(res.status).toBe(200);
     expect(await json(res)).toEqual({
       organizationId: orgId,
+      listPrice: { amount: 800, currency: 'usd', interval: 'month' },
+      accessMode: 'writable',
       canManageBilling: false,
+      effectiveDiscount: null,
+      applicationStatus: null,
+      issuedCredit: null,
       products: [
         {
           productKey: 'docket_pro',
@@ -96,6 +101,10 @@ describe('billing: GET /', () => {
           source: 'stripe',
           trialEndsAt: '2026-08-25T00:00:00.000Z',
           renewalDate: '2026-08-25T00:00:00.000Z',
+          cancelAtPeriodEnd: false,
+          cancellationDate: null,
+          graceEndsAt: null,
+          providerObservedAt: null,
         },
       ],
     });
@@ -107,117 +116,32 @@ describe('billing: GET /', () => {
     const res = await app.request('/', { method: 'GET' });
     expect(await json(res)).toEqual({
       organizationId: orgId,
+      listPrice: { amount: 800, currency: 'usd', interval: 'month' },
+      accessMode: 'read_only',
       canManageBilling: true,
+      effectiveDiscount: null,
+      applicationStatus: null,
+      issuedCredit: null,
       products: [],
     });
   });
 });
 
-describe('billing lifecycle: POST /lifecycle/start-export-window', () => {
-  it('opens the export window with both lifecycle timestamps stamped', async () => {
-    const { orgId } = await seedBaseOrg(db, schema);
-    const app = appWithActor(billing, orgId, ['manage']);
-    const res = await app.request('/lifecycle/start-export-window', { method: 'POST' });
-    expect(res.status).toBe(200);
-    const body = await json<{
-      lifecycleState: string;
-      exportReadyAt: string | null;
-      deleteAfterAt: string | null;
-    }>(res);
-    expect(body.lifecycleState).toBe('export_window');
-    expect(body.exportReadyAt).not.toBeNull();
-    expect(body.deleteAfterAt).not.toBeNull();
-    // deleteAfterAt is ~14 days after exportReadyAt.
-    const delta =
-      new Date(assertDefined(body.deleteAfterAt)).getTime() -
-      new Date(assertDefined(body.exportReadyAt)).getTime();
-    expect(delta).toBe(14 * 24 * 60 * 60 * 1000);
+describe('billing lifecycle mutations', () => {
+  it.each(['/lifecycle/start-export-window', '/lifecycle/reactivate'])(
+    'removes the billing-driven data lifecycle endpoint %s',
+    async (path) => {
+      const { orgId } = await seedBaseOrg(db, schema);
+      const app = appWithActor(billing, orgId, ['manage']);
 
-    const persisted = await lifecycleOf(orgId);
-    expect(persisted.state).toBe('export_window');
-    expect(persisted.deleteAfterAt).not.toBeNull();
-  });
-
-  it('is denied (403) for a member without manage', async () => {
-    const { orgId } = await seedBaseOrg(db, schema);
-    const app = appWithActor(billing, orgId, ['contribute']);
-    const res = await app.request('/lifecycle/start-export-window', { method: 'POST' });
-    expect(res.status).toBe(403);
-    // The org must remain untouched.
-    expect((await lifecycleOf(orgId)).state).toBe('active');
-  });
-
-  it('404s when the org does not exist', async () => {
-    const app = appWithActor(billing, MISSING_ULID, ['manage']);
-    const res = await app.request('/lifecycle/start-export-window', { method: 'POST' });
-    expect(res.status).toBe(404);
-  });
-
-  it('cancels Docket Pro on a personal organization without starting deletion', async () => {
-    const { orgId } = await seedBaseOrg(db, schema, false);
-    await db
-      .update(schema.organization)
-      .set({ isPersonal: true })
-      .where(eq(schema.organization.id, orgId));
-    await db.insert(schema.organizationProductEntitlement).values({
-      organizationId: orgId,
-      productKey: 'docket_pro',
-      status: 'active',
-      source: 'stripe',
-    });
-
-    const app = appWithActor(billing, orgId, ['manage']);
-    const res = await app.request('/lifecycle/start-export-window', { method: 'POST' });
-    expect(res.status).toBe(200);
-    expect(await json(res)).toMatchObject({
-      lifecycleState: 'active',
-      exportReadyAt: null,
-      deleteAfterAt: null,
-    });
-    const [product] = await db
-      .select({ status: schema.organizationProductEntitlement.status })
-      .from(schema.organizationProductEntitlement)
-      .where(eq(schema.organizationProductEntitlement.organizationId, orgId));
-    expect(product?.status).toBe('canceled');
-  });
-});
-
-describe('billing lifecycle: POST /lifecycle/reactivate', () => {
-  it('rescues an org out of the export window back to active and clears timestamps', async () => {
-    const { orgId } = await seedBaseOrg(db, schema);
-    // Put the org into the export window directly.
-    await db
-      .update(schema.organization)
-      .set({
-        lifecycleState: 'export_window',
-        exportReadyAt: new Date(),
-        deleteAfterAt: new Date(Date.now() + 1000),
-      })
-      .where(eq(schema.organization.id, orgId));
-
-    const app = appWithActor(billing, orgId, ['manage']);
-    const res = await app.request('/lifecycle/reactivate', { method: 'POST' });
-    expect(res.status).toBe(200);
-    const body = await json<{
-      lifecycleState: string;
-      exportReadyAt: string | null;
-      deleteAfterAt: string | null;
-    }>(res);
-    expect(body.lifecycleState).toBe('active');
-    expect(body.exportReadyAt).toBeNull();
-    expect(body.deleteAfterAt).toBeNull();
-
-    const persisted = await lifecycleOf(orgId);
-    expect(persisted.state).toBe('active');
-    expect(persisted.exportReadyAt).toBeNull();
-  });
-
-  it('is denied (403) for a member without manage', async () => {
-    const { orgId } = await seedBaseOrg(db, schema);
-    const app = appWithActor(billing, orgId, ['view']);
-    const res = await app.request('/lifecycle/reactivate', { method: 'POST' });
-    expect(res.status).toBe(403);
-  });
+      expect((await app.request(path, { method: 'POST' })).status).toBe(404);
+      expect(await lifecycleOf(orgId)).toMatchObject({
+        state: 'active',
+        exportReadyAt: null,
+        deleteAfterAt: null,
+      });
+    },
+  );
 });
 
 describe('billing: POST /export', () => {

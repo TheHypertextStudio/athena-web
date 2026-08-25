@@ -1,41 +1,40 @@
-import { InMemoryBillingGateway } from '@docket/billing/adapters/in-memory';
-import {
-  applyBillingEvent,
-  EXPORT_WINDOW_DAYS,
-  onPastDue,
-  onReactivated,
-  onTrialOrPaymentTerminal,
-  sweepLifecycle,
-} from '@docket/billing/application/lifecycle';
+import { applyBillingEvent, PAYMENT_GRACE_DAYS } from '@docket/billing/application/lifecycle';
+import type { BillingEvent } from '@docket/billing/contracts';
 import { type Database, organization, organizationProductEntitlement } from '@docket/db';
 import type { PGlite } from '@electric-sql/pglite';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
-import { createBillingLifecycleDb } from './test-db';
 import { assertDefined } from '@docket/test-utils';
+import { createBillingLifecycleDb } from './test-db';
 
 const NOW = '2026-01-01T00:00:00.000Z';
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 let db!: Database;
 let client: PGlite | undefined;
 
-/** Insert an org in a given lifecycle state and return its id. */
-async function makeOrg(
-  state: (typeof organization.$inferSelect)['lifecycleState'],
-  extra: Partial<typeof organization.$inferInsert> = {},
-): Promise<string> {
+/** Insert an organization without any billing retention side effects. */
+async function makeOrg(isPersonal = false): Promise<string> {
   const slug = `org-${Math.random().toString(36).slice(2, 10)}`;
   const rows = await db
     .insert(organization)
-    .values({ name: slug, slug, lifecycleState: state, ...extra })
+    .values({ name: slug, slug, lifecycleState: 'active', isPersonal })
     .returning({ id: organization.id });
   return assertDefined(rows[0]).id;
 }
 
-/** Read an org's full lifecycle columns. */
-async function readOrg(id: string) {
+/** Read the billing access fields that the provider snapshot owns. */
+async function readAccess(id: string) {
+  const rows = await db
+    .select()
+    .from(organizationProductEntitlement)
+    .where(eq(organizationProductEntitlement.organizationId, id))
+    .limit(1);
+  return assertDefined(rows[0]);
+}
+
+/** Read the independent account lifecycle fields. */
+async function readRetention(id: string) {
   const rows = await db
     .select({
       lifecycleState: organization.lifecycleState,
@@ -48,14 +47,24 @@ async function readOrg(id: string) {
   return assertDefined(rows[0]);
 }
 
-/** Read the organization's Docket Pro entitlement. */
-async function readDocketPro(id: string) {
-  const rows = await db
-    .select()
-    .from(organizationProductEntitlement)
-    .where(eq(organizationProductEntitlement.organizationId, id))
-    .limit(1);
-  return rows[0];
+/** Build an authoritative subscription event for the organization. */
+function subscriptionEvent(
+  referenceId: string,
+  status: 'trialing' | 'active' | 'past_due' | 'canceled',
+  createdAt = NOW,
+): BillingEvent {
+  return {
+    id: `evt-${referenceId}-${status}-${createdAt}`,
+    type: 'subscription.updated',
+    referenceId,
+    createdAt,
+    subscription: {
+      id: `sub-${referenceId}`,
+      referenceId,
+      status,
+      currentPeriodEnd: '2026-02-01T00:00:00.000Z',
+    },
+  };
 }
 
 beforeAll(async () => {
@@ -68,232 +77,63 @@ afterAll(async () => {
   await client?.close();
 });
 
-describe('onTrialOrPaymentTerminal', () => {
-  it('moves a trialing org into the export window with a +14d delete deadline', async () => {
-    const id = await makeOrg('trialing');
-    const updated = await onTrialOrPaymentTerminal(db, id, NOW);
-    expect(updated).toBe(1);
-
-    const org = await readOrg(id);
-    expect(org.lifecycleState).toBe('export_window');
-    expect(org.exportReadyAt?.toISOString()).toBe(NOW);
-    expect(org.deleteAfterAt?.getTime()).toBe(
-      new Date(NOW).getTime() + EXPORT_WINDOW_DAYS * DAY_MS,
-    );
-  });
-
-  it('is idempotent: re-running re-stamps the same window (no further advance)', async () => {
-    const id = await makeOrg('active');
-    await onTrialOrPaymentTerminal(db, id, NOW);
-    const second = await onTrialOrPaymentTerminal(db, id, NOW);
-    expect(second).toBe(1); // still in export_window, re-stamped to the same instant
-    const org = await readOrg(id);
-    expect(org.lifecycleState).toBe('export_window');
-    expect(org.deleteAfterAt?.getTime()).toBe(
-      new Date(NOW).getTime() + EXPORT_WINDOW_DAYS * DAY_MS,
-    );
-  });
-
-  it('does not pull a pending_deletion org back into the window', async () => {
-    const id = await makeOrg('pending_deletion');
-    const updated = await onTrialOrPaymentTerminal(db, id, NOW);
-    expect(updated).toBe(0);
-    expect((await readOrg(id)).lifecycleState).toBe('pending_deletion');
-  });
-});
-
-describe('onReactivated', () => {
-  it('rescues an export_window org back to active and clears the timers', async () => {
-    const id = await makeOrg('export_window', {
-      exportReadyAt: new Date(NOW),
-      deleteAfterAt: new Date(new Date(NOW).getTime() + EXPORT_WINDOW_DAYS * DAY_MS),
-    });
-    const updated = await onReactivated(db, id);
-    expect(updated).toBe(1);
-    const org = await readOrg(id);
-    expect(org.lifecycleState).toBe('active');
-    expect(org.exportReadyAt).toBeNull();
-    expect(org.deleteAfterAt).toBeNull();
-  });
-
-  it('cannot reactivate a deleted org', async () => {
-    const id = await makeOrg('deleted');
-    expect(await onReactivated(db, id)).toBe(0);
-    expect((await readOrg(id)).lifecycleState).toBe('deleted');
-  });
-});
-
-describe('onPastDue', () => {
-  it('marks an active org past_due without entering the window', async () => {
-    const id = await makeOrg('active');
-    expect(await onPastDue(db, id)).toBe(1);
-    const org = await readOrg(id);
-    expect(org.lifecycleState).toBe('past_due');
-    expect(org.deleteAfterAt).toBeNull();
-  });
-});
-
-describe('sweepLifecycle', () => {
-  it('advances export_window → pending_deletion → deleted across two sweeps once the deadline passes', async () => {
-    const past = new Date(new Date(NOW).getTime() - DAY_MS);
-    const id = await makeOrg('export_window', {
-      exportReadyAt: new Date(NOW),
-      deleteAfterAt: past,
-    });
-
-    const first = await sweepLifecycle(db, NOW);
-    expect(first.toPendingDeletion).toBeGreaterThanOrEqual(1);
-    expect((await readOrg(id)).lifecycleState).toBe('pending_deletion');
-
-    const second = await sweepLifecycle(db, NOW);
-    expect(second.toDeleted).toBeGreaterThanOrEqual(1);
-    const org = await readOrg(id);
-    expect(org.lifecycleState).toBe('deleted');
-    expect(org.exportReadyAt).toBeNull();
-  });
-
-  it('does not advance an org whose deadline has not yet passed', async () => {
-    const future = new Date(new Date(NOW).getTime() + DAY_MS);
-    const id = await makeOrg('export_window', {
-      exportReadyAt: new Date(NOW),
-      deleteAfterAt: future,
-    });
-    await sweepLifecycle(db, NOW);
-    expect((await readOrg(id)).lifecycleState).toBe('export_window');
-  });
-
-  it('keeps pending_deletion observable for one cycle, then deletes on the next sweep', async () => {
-    const past = new Date(new Date(NOW).getTime() - DAY_MS);
-    const id = await makeOrg('export_window', {
-      exportReadyAt: new Date(NOW),
-      deleteAfterAt: past,
-    });
-
-    const first = await sweepLifecycle(db, NOW);
-    // Promoted to pending_deletion this sweep — NOT deleted in the same pass.
-    expect(first.toPendingDeletion).toBeGreaterThanOrEqual(1);
-    expect((await readOrg(id)).lifecycleState).toBe('pending_deletion');
-
-    const second = await sweepLifecycle(db, NOW);
-    expect(second.toDeleted).toBeGreaterThanOrEqual(1);
-    expect((await readOrg(id)).lifecycleState).toBe('deleted');
-
-    // A fully-deleted org is untouched by any further sweeps.
-    await sweepLifecycle(db, NOW);
-    expect((await readOrg(id)).lifecycleState).toBe('deleted');
-  });
-});
-
-describe('applyBillingEvent (BillingEvent → lifecycle)', () => {
-  it('a checkout.completed (trialing) keeps/returns the org active', async () => {
-    const id = await makeOrg('export_window', {
-      exportReadyAt: new Date(NOW),
-      deleteAfterAt: new Date(new Date(NOW).getTime() + EXPORT_WINDOW_DAYS * DAY_MS),
-    });
-    const gateway = new InMemoryBillingGateway({ now: NOW });
-    await gateway.createCheckoutSession({
+describe('applyBillingEvent', () => {
+  it('does not grant access from Checkout completion without an authoritative subscription', async () => {
+    const id = await makeOrg();
+    const event: BillingEvent = {
+      id: 'evt-checkout-only',
+      type: 'checkout.completed',
       referenceId: id,
-      priceKey: 'docket_team',
-      successUrl: 'https://x/ok',
-      cancelUrl: 'https://x/no',
-    });
-    const checkout = assertDefined(
-      gateway.events.find((e) => e.type === 'checkout.completed' && e.referenceId === id),
-    );
+      createdAt: NOW,
+    };
 
-    const effect = await applyBillingEvent(db, checkout, NOW);
-    expect(effect).toBe('active');
-    expect((await readOrg(id)).lifecycleState).toBe('active');
-    expect(await readDocketPro(id)).toMatchObject({
-      productKey: 'docket_pro',
-      status: 'trialing',
-      source: 'stripe',
-      stripeSubscriptionId: checkout.subscription?.id,
-    });
+    expect(await applyBillingEvent(db, event, NOW)).toBe('none');
+    expect(
+      await db
+        .select()
+        .from(organizationProductEntitlement)
+        .where(eq(organizationProductEntitlement.organizationId, id)),
+    ).toHaveLength(0);
   });
 
-  it('a past_due event marks the org past_due', async () => {
-    const id = await makeOrg('active');
-    const gateway = new InMemoryBillingGateway({ now: NOW });
-    await gateway.createCheckoutSession({
-      referenceId: id,
-      priceKey: 'p',
-      successUrl: 'a',
-      cancelUrl: 'b',
-    });
-    let evt = gateway.advance(id); // created/trialing
-    while (evt && evt.subscription?.status !== 'past_due') evt = gateway.advance(id);
-    expect(evt?.subscription?.status).toBe('past_due');
+  it('starts one seven-day grace period on the first failed payment', async () => {
+    const id = await makeOrg();
+    expect(await applyBillingEvent(db, subscriptionEvent(id, 'past_due'), NOW)).toBe('past_due');
 
-    const effect = await applyBillingEvent(db, assertDefined(evt), NOW);
-    expect(effect).toBe('past_due');
-    expect((await readOrg(id)).lifecycleState).toBe('past_due');
+    const first = await readAccess(id);
+    expect(first.graceEndsAt?.getTime()).toBe(
+      new Date(NOW).getTime() + PAYMENT_GRACE_DAYS * 24 * 60 * 60 * 1000,
+    );
+
+    const later = '2026-01-03T00:00:00.000Z';
+    await applyBillingEvent(db, subscriptionEvent(id, 'past_due', later), later);
+    expect((await readAccess(id)).graceEndsAt?.getTime()).toBe(first.graceEndsAt?.getTime());
   });
 
-  it('a canceled event drives the org into the export window (terminal)', async () => {
-    const id = await makeOrg('active');
-    const gateway = new InMemoryBillingGateway({ now: NOW });
-    await gateway.createCheckoutSession({
-      referenceId: id,
-      priceKey: 'p',
-      successUrl: 'a',
-      cancelUrl: 'b',
-    });
-    await gateway.cancelSubscription(id);
-    const canceled = assertDefined(
-      gateway.events.find((e) => e.type === 'subscription.canceled' && e.referenceId === id),
+  it.each([false, true])(
+    'cancels Pro without scheduling deletion for personal=%s',
+    async (isPersonal) => {
+      const id = await makeOrg(isPersonal);
+      expect(await applyBillingEvent(db, subscriptionEvent(id, 'canceled'), NOW)).toBe('canceled');
+
+      expect(await readAccess(id)).toMatchObject({ status: 'canceled', source: 'stripe' });
+      expect(await readRetention(id)).toEqual({
+        lifecycleState: 'active',
+        exportReadyAt: null,
+        deleteAfterAt: null,
+      });
+    },
+  );
+
+  it('ignores a stale provider snapshot that would restore canceled access', async () => {
+    const id = await makeOrg();
+    await applyBillingEvent(
+      db,
+      subscriptionEvent(id, 'canceled', '2026-01-02T00:00:00.000Z'),
+      '2026-01-02T00:00:00.000Z',
     );
 
-    const effect = await applyBillingEvent(db, canceled, NOW);
-    expect(effect).toBe('export_window');
-    const org = await readOrg(id);
-    expect(org.lifecycleState).toBe('export_window');
-    expect(org.deleteAfterAt?.getTime()).toBe(
-      new Date(NOW).getTime() + EXPORT_WINDOW_DAYS * DAY_MS,
-    );
-    expect((await readDocketPro(id))?.status).toBe('canceled');
-  });
-
-  it('removes Pro without deleting a personal organization or its data', async () => {
-    const id = await makeOrg('active', { isPersonal: true });
-    const gateway = new InMemoryBillingGateway({ now: NOW });
-    await gateway.createCheckoutSession({
-      referenceId: id,
-      priceKey: 'docket_pro_monthly',
-      successUrl: 'a',
-      cancelUrl: 'b',
-    });
-    await gateway.cancelSubscription(id);
-    const canceled = assertDefined(
-      gateway.events.find((event) => event.type === 'subscription.canceled'),
-    );
-
-    expect(await applyBillingEvent(db, canceled, NOW)).toBe('personal_fallback');
-    const org = await readOrg(id);
-    expect(org.lifecycleState).toBe('active');
-    expect(org.exportReadyAt).toBeNull();
-    expect(org.deleteAfterAt).toBeNull();
-    expect((await readDocketPro(id))?.status).toBe('canceled');
-  });
-
-  it('replaying the same canceled event is idempotent (same terminal state)', async () => {
-    const id = await makeOrg('active');
-    const gateway = new InMemoryBillingGateway({ now: NOW });
-    await gateway.createCheckoutSession({
-      referenceId: id,
-      priceKey: 'p',
-      successUrl: 'a',
-      cancelUrl: 'b',
-    });
-    await gateway.cancelSubscription(id);
-    const canceled = assertDefined(
-      gateway.events.find((e) => e.type === 'subscription.canceled' && e.referenceId === id),
-    );
-    await applyBillingEvent(db, canceled, NOW);
-    const first = await readOrg(id);
-    await applyBillingEvent(db, canceled, NOW);
-    const second = await readOrg(id);
-    expect(second.lifecycleState).toBe(first.lifecycleState);
-    expect(second.deleteAfterAt?.getTime()).toBe(first.deleteAfterAt?.getTime());
+    expect(await applyBillingEvent(db, subscriptionEvent(id, 'active'), NOW)).toBe('stale');
+    expect((await readAccess(id)).status).toBe('canceled');
   });
 });

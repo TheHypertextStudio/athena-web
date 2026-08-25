@@ -80,12 +80,16 @@ export interface Subscription {
   readonly currentPeriodEnd: string;
   /** ISO-8601 timestamp the free trial ends, when `status` is `trialing`. */
   readonly trialEnd?: string;
+  /** Whether Stripe will cancel the subscription when the current paid period ends. */
+  readonly cancelAtPeriodEnd?: boolean;
 }
 
 /** Input to open a hosted checkout session for a Docket scope. */
 export interface CheckoutSessionInput {
   /** Docket scope to bill (usually the organization id). */
   readonly referenceId: string;
+  /** Existing provider customer id owned by this Docket organization. */
+  readonly customerId?: string;
   /** Stripe price lookup key or price id to subscribe to. */
   readonly priceKey: string;
   /** URL the provider redirects to on success. */
@@ -96,6 +100,10 @@ export interface CheckoutSessionInput {
   readonly customerEmail?: string;
   /** Optional number of trial days to grant (defaults to the gateway's policy). */
   readonly trialDays?: number;
+  /** Provider coupon to apply when an approved award predates the subscription. */
+  readonly couponId?: string;
+  /** Stable provider idempotency key for this durable Checkout attempt. */
+  readonly idempotencyKey?: string;
 }
 
 /** Result of opening a checkout session. */
@@ -112,12 +120,124 @@ export interface BillingPortalSessionResult {
   readonly url: string;
 }
 
+/** A provider customer durably associated with one Docket organization. */
+export interface BillingCustomer {
+  /** Provider customer id. */
+  readonly id: string;
+  /** Docket organization that owns the provider customer. */
+  readonly referenceId: string;
+}
+
+/** Input for a hosted customer-portal session. */
+export interface BillingPortalSessionInput {
+  /** Existing provider customer id. */
+  readonly customerId: string;
+  /** Absolute Docket URL Stripe returns to after portal work. */
+  readonly returnUrl: string;
+}
+
+/** Input for a product-scoped percentage coupon owned by one Docket award. */
+export interface DiscountCouponInput {
+  /** Durable Docket award id used in provider metadata. */
+  readonly awardId: string;
+  /** Human-readable provider name. */
+  readonly name: string;
+  /** Integer discount percentage from 1 through 90. */
+  readonly percentOff: number;
+  /** Docket Pro price id or lookup key used to resolve the scoped Stripe product. */
+  readonly priceKey: string;
+  /** Stable provider idempotency key. */
+  readonly idempotencyKey: string;
+}
+
+/** Provider coupon created for one approved Docket award. */
+export interface DiscountCoupon {
+  /** Provider coupon id. */
+  readonly id: string;
+}
+
+/** Input for applying one coupon to an existing organization subscription. */
+export interface SubscriptionDiscountInput {
+  /** Docket organization whose subscription receives the coupon. */
+  readonly referenceId: string;
+  /** Provider coupon id. */
+  readonly couponId: string;
+  /** Stable provider idempotency key. */
+  readonly idempotencyKey: string;
+}
+
+/** Result of applying a coupon to an existing subscription. */
+export interface AppliedSubscriptionDiscount {
+  /** Provider discount id when Stripe exposes one on the updated subscription. */
+  readonly discountId: string | null;
+}
+
+/** The latest Docket Pro invoice line eligible for a mid-period credit. */
+export interface RecurringInvoiceLine {
+  /** Provider invoice id. */
+  readonly invoiceId: string;
+  /** Provider invoice-line id. */
+  readonly lineId: string;
+  /** Invoice state used to choose open-invoice reduction or customer-balance credit. */
+  readonly invoiceStatus: 'open' | 'paid';
+  /** Lowercase ISO currency. */
+  readonly currency: string;
+  /** Recurring line amount before tax and the newly approved discount. */
+  readonly recurringAmount: number;
+  /** Inclusive service-period start. */
+  readonly periodStartsAt: string;
+  /** Exclusive service-period end. */
+  readonly periodEndsAt: string;
+}
+
+/** Input for previewing a tax-aware credit against one recurring invoice line. */
+export interface CreditNotePreviewInput {
+  /** Provider invoice id. */
+  readonly invoiceId: string;
+  /** Provider invoice-line id. */
+  readonly invoiceLineId: string;
+  /** Base unused-service credit in currency minor units. */
+  readonly baseAmount: number;
+}
+
+/** Tax-aware values returned by the provider credit-note preview. */
+export interface CreditNotePreview {
+  /** Base service credit requested by Docket. */
+  readonly baseAmount: number;
+  /** Tax adjustment calculated by Stripe. */
+  readonly taxAmount: number;
+  /** Total customer credit including tax adjustment. */
+  readonly totalAmount: number;
+  /** Portion that reduces the currently open invoice. */
+  readonly prePaymentAmount: number;
+  /** Portion that must become customer balance for a paid invoice. */
+  readonly postPaymentAmount: number;
+}
+
+/** Input for issuing a previously previewed credit note. */
+export interface CreditNoteIssueInput extends CreditNotePreviewInput {
+  /** Customer-balance credit from the Stripe preview. */
+  readonly creditAmount: number;
+  /** Stable provider idempotency key. */
+  readonly idempotencyKey: string;
+  /** Audit memo shown on the Stripe credit note. */
+  readonly memo: string;
+}
+
+/** Issued provider credit note. */
+export interface IssuedCreditNote extends CreditNotePreview {
+  /** Provider credit-note id. */
+  readonly id: string;
+}
+
 /** The kinds of synthetic webhook events the gateway can emit. */
 export type BillingEventType =
   | 'checkout.completed'
   | 'subscription.created'
   | 'subscription.updated'
   | 'subscription.trial_will_end'
+  | 'subscription.paid'
+  | 'subscription.payment_action_required'
   | 'subscription.past_due'
   | 'subscription.canceled';
 
@@ -136,6 +256,10 @@ export interface BillingEvent {
   readonly type: BillingEventType;
   /** Docket scope the event concerns (usually the organization id). */
   readonly referenceId: string;
+  /** Provider customer id carried by Checkout or invoice events. */
+  readonly customerId?: string;
+  /** Provider subscription id carried by Checkout or invoice events. */
+  readonly subscriptionId?: string;
   /** The subscription snapshot at the time of the event, when applicable. */
   readonly subscription?: Subscription;
   /** ISO-8601 timestamp the event was created. */
@@ -147,6 +271,12 @@ export interface BillingEvent {
  * cancellation. Implemented by `RealStripeGateway` and `InMemoryBillingGateway`.
  */
 export interface BillingGateway {
+  /** Create the provider customer owned by one Docket organization. */
+  createCustomer(referenceId: string, email?: string): Promise<BillingCustomer>;
+
+  /** Read the ISO billing country saved on a provider customer after hosted Checkout. */
+  getCustomerBillingCountry(customerId: string): Promise<string | null>;
+
   /**
    * Open a hosted checkout session to start (or change) a subscription.
    *
@@ -171,10 +301,37 @@ export interface BillingGateway {
   cancelSubscription(referenceId: string): Promise<void>;
 
   /**
+   * Extend an existing provider trial without changing local access directly.
+   *
+   * @param referenceId - The Docket organization that owns the trialing subscription.
+   * @param days - Additional whole days to add to the current trial boundary.
+   * @returns the provider's updated subscription snapshot.
+   */
+  extendTrial(referenceId: string, days: number, idempotencyKey: string): Promise<Subscription>;
+
+  /**
    * Open a self-service billing portal session for a Docket scope.
    *
    * @param referenceId - The Docket scope key (usually the organization id).
    * @returns the hosted billing-portal URL.
    */
-  createBillingPortalSession(referenceId: string): Promise<BillingPortalSessionResult>;
+  createBillingPortalSession(input: BillingPortalSessionInput): Promise<BillingPortalSessionResult>;
+
+  /** Create a product-scoped repeating percentage coupon for an approved award. */
+  createDiscountCoupon(input: DiscountCouponInput): Promise<DiscountCoupon>;
+
+  /** Apply a confirmed coupon to an existing subscription without proration. */
+  applySubscriptionDiscount(input: SubscriptionDiscountInput): Promise<AppliedSubscriptionDiscount>;
+
+  /** Remove the current subscription discount at an approved renewal boundary. */
+  removeSubscriptionDiscount(referenceId: string, idempotencyKey: string): Promise<void>;
+
+  /** Read the latest open or paid Docket Pro invoice line for mid-period credit calculation. */
+  getLatestRecurringInvoice(referenceId: string): Promise<RecurringInvoiceLine | null>;
+
+  /** Preview a tax-aware credit against one recurring invoice line. */
+  previewCreditNote(input: CreditNotePreviewInput): Promise<CreditNotePreview>;
+
+  /** Issue a credit note from values finance already previewed. */
+  issueCreditNote(input: CreditNoteIssueInput): Promise<IssuedCreditNote>;
 }

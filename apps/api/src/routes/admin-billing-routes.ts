@@ -1,12 +1,18 @@
 import {
+  billingCredit,
+  billingDiscountAward,
   billingExemption,
+  billingProviderSync,
   db,
   lifecycleHold,
-  organization,
   organizationProductEntitlement,
 } from '@docket/db';
-import { and, eq, isNull } from 'drizzle-orm';
+import { calculateUnusedPeriodCredit } from '@docket/billing/application/discounts';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
+import { z } from 'zod';
+
+import { applyBillingEvent } from '@docket/billing/application/lifecycle';
 
 import {
   AdminBillingExemptionOut,
@@ -15,10 +21,10 @@ import {
   ExtendTrialBody,
   GrantExemptionBody,
   PlaceHoldBody,
-  SetLifecycleBody,
 } from '../admin-dto';
 import type { AppEnv } from '../context';
-import { onReactivated, onTrialOrPaymentTerminal } from '@docket/billing/application/lifecycle';
+import { getContainer } from '../container';
+import { env } from '../env';
 import { ConflictError, NotFoundError } from '../error';
 import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
@@ -36,6 +42,7 @@ import {
   toHoldOut,
   toOrgOut,
 } from './admin-serializers';
+import { AdminDiscountAwardOut } from './admin-discount-routes';
 
 /** The Postgres SQLSTATE for a unique-constraint (including unique-index) violation. */
 const UNIQUE_VIOLATION_CODE = '23505';
@@ -45,11 +52,235 @@ function isUniqueViolation(err: unknown): boolean {
   return hasSqlState(err, UNIQUE_VIOLATION_CODE);
 }
 
+/** Private partner award request. A free or permanent grant must use complimentary Pro instead. */
+export const PartnerDiscountAwardBody = z
+  .object({
+    percentOff: z.number().int().min(1).max(90),
+    endsAt: z.iso.datetime(),
+    reason: z.string().trim().min(1).max(2_000),
+  })
+  .superRefine((value, ctx) => {
+    const now = new Date();
+    const endsAt = new Date(value.endsAt);
+    const latest = new Date(now);
+    latest.setUTCMonth(latest.getUTCMonth() + 24);
+    if (endsAt <= now || endsAt > latest) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['endsAt'],
+        message: 'Partner awards must end within 24 months.',
+      });
+    }
+  });
+/** Private partner award request value. */
+export type PartnerDiscountAwardBody = z.infer<typeof PartnerDiscountAwardBody>;
+
+/** Resolve the configured Docket Pro price id or lookup key. */
+function docketProPriceKey(): string {
+  return (
+    env.STRIPE_PRICE_DOCKET_PRO ??
+    env.DOCKET_PRICE_LOOKUP_DOCKET_PRO ??
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- Compatibility for the former Docket Team configuration.
+    env.STRIPE_PRICE_TEAM ??
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- Compatibility for the former Docket Team configuration.
+    env.DOCKET_PRICE_LOOKUP_TEAM ??
+    'docket_pro_monthly'
+  );
+}
+
+/** Convert a partner award into the finance response. */
+function partnerAwardOut(
+  award: typeof billingDiscountAward.$inferSelect,
+): z.input<typeof AdminDiscountAwardOut> {
+  return {
+    id: award.id,
+    organizationId: award.organizationId,
+    applicationId: award.applicationId,
+    programKey: award.programKey,
+    percentOff: award.percentOff,
+    status: award.status,
+    startsAt: award.startsAt.toISOString(),
+    endsAt: award.endsAt.toISOString(),
+    reviewAt: award.reviewAt.toISOString(),
+    reason: award.reason,
+    providerCouponId: award.providerCouponId,
+    providerDiscountId: award.providerDiscountId,
+  };
+}
+
 /**
  * Sub-router for lifecycle-hold and billing-action routes (mounted at `/orgs`).
  * All routes require staff auth (enforced by the parent admin router's middleware).
  */
 export const adminBillingRoutes = new Hono<AppEnv>()
+  .post(
+    '/:id/discount-awards',
+    requireStaffRole('finance'),
+    apiDoc({
+      tag: 'Admin',
+      summary: 'Grant a private partner discount',
+      response: AdminDiscountAwardOut,
+      description:
+        'Grants a private 1–90% partner award that ends within 24 months. The operation uses a product-scoped Stripe coupon, applies it to an existing subscription without proration, issues a tax-aware unused-period credit when needed, and refuses all stacking. A 100% or permanent grant must use the superadmin complimentary entitlement.',
+    }),
+    zParam(idParam),
+    zJson(PartnerDiscountAwardBody),
+    async (c) => {
+      const { id } = c.req.valid('param');
+      const input = c.req.valid('json');
+      const { staffUserId } = c.get('staffCtx');
+      await loadOrg(id);
+      const [current] = await db
+        .select({ id: billingDiscountAward.id })
+        .from(billingDiscountAward)
+        .where(
+          and(
+            eq(billingDiscountAward.organizationId, id),
+            inArray(billingDiscountAward.status, ['scheduled', 'applying', 'active', 'ending']),
+          ),
+        )
+        .limit(1);
+      if (current) {
+        throw new ConflictError(
+          'This workspace already has a discount award',
+          'discount_award_conflict',
+        );
+      }
+
+      const now = new Date();
+      let award: typeof billingDiscountAward.$inferSelect | undefined;
+      try {
+        const inserted = await db
+          .insert(billingDiscountAward)
+          .values({
+            organizationId: id,
+            percentOff: input.percentOff,
+            status: 'applying',
+            startsAt: now,
+            endsAt: new Date(input.endsAt),
+            reviewAt: new Date(input.endsAt),
+            reason: input.reason,
+            approvedByStaffId: staffUserId,
+          })
+          .returning();
+        award = inserted[0];
+      } catch (error) {
+        if (isUniqueViolation(error)) {
+          throw new ConflictError(
+            'This workspace already has a discount award',
+            'discount_award_conflict',
+          );
+        }
+        throw error;
+      }
+      if (!award) throw new Error('Partner award insert returned no row');
+
+      const syncKey = `discount-award:${award.id}:apply`;
+      await db.insert(billingProviderSync).values({
+        organizationId: id,
+        awardId: award.id,
+        operation: 'apply_partner_award',
+        status: 'running',
+        idempotencyKey: syncKey,
+        attempts: 1,
+      });
+      const gateway = getContainer().billing;
+      try {
+        const coupon = await gateway.createDiscountCoupon({
+          awardId: award.id,
+          name: 'Partner discount',
+          percentOff: award.percentOff,
+          priceKey: docketProPriceKey(),
+          idempotencyKey: `${syncKey}:coupon`,
+        });
+        const subscription = await gateway.getSubscription(id);
+        const applied = subscription
+          ? await gateway.applySubscriptionDiscount({
+              referenceId: id,
+              couponId: coupon.id,
+              idempotencyKey: `${syncKey}:subscription`,
+            })
+          : null;
+        const invoice = await gateway.getLatestRecurringInvoice(id);
+        if (invoice) {
+          const baseAmount = calculateUnusedPeriodCredit({
+            recurringAmount: invoice.recurringAmount,
+            percentOff: award.percentOff,
+            periodStartsAt: new Date(invoice.periodStartsAt),
+            periodEndsAt: new Date(invoice.periodEndsAt),
+            approvedAt: now,
+          });
+          if (baseAmount > 0) {
+            const preview = await gateway.previewCreditNote({
+              invoiceId: invoice.invoiceId,
+              invoiceLineId: invoice.lineId,
+              baseAmount,
+            });
+            const issued = await gateway.issueCreditNote({
+              invoiceId: invoice.invoiceId,
+              invoiceLineId: invoice.lineId,
+              baseAmount,
+              creditAmount: preview.postPaymentAmount,
+              idempotencyKey: `${syncKey}:credit`,
+              memo: `Partner discount effective ${now.toISOString().slice(0, 10)}`,
+            });
+            await db.insert(billingCredit).values({
+              organizationId: id,
+              awardId: award.id,
+              status: 'issued',
+              currency: invoice.currency,
+              baseAmount: issued.baseAmount,
+              taxAmount: issued.taxAmount,
+              totalAmount: issued.totalAmount,
+              servicePeriodStartsAt: new Date(invoice.periodStartsAt),
+              servicePeriodEndsAt: new Date(invoice.periodEndsAt),
+              providerInvoiceId: invoice.invoiceId,
+              providerCreditNoteId: issued.id,
+              providerPreview: { ...preview },
+              issuedAt: now,
+            });
+          }
+        }
+        const [updated] = await db
+          .update(billingDiscountAward)
+          .set({
+            status: subscription ? 'active' : 'scheduled',
+            providerCouponId: coupon.id,
+            providerDiscountId: applied?.discountId ?? null,
+          })
+          .where(eq(billingDiscountAward.id, award.id))
+          .returning();
+        if (!updated) throw new Error('Partner award update returned no row');
+        await db
+          .update(billingProviderSync)
+          .set({ status: 'succeeded', completedAt: now })
+          .where(eq(billingProviderSync.idempotencyKey, syncKey));
+        await audit(db, staffUserId, 'billing.partner_discount_granted', 'organization', id, {
+          awardId: updated.id,
+          percentOff: updated.percentOff,
+          endsAt: updated.endsAt.toISOString(),
+          reason: input.reason,
+        });
+        return ok(c, AdminDiscountAwardOut, partnerAwardOut(updated));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Provider synchronization failed';
+        await Promise.all([
+          db
+            .update(billingDiscountAward)
+            .set({ status: 'provider_failed', providerSyncError: message })
+            .where(eq(billingDiscountAward.id, award.id)),
+          db
+            .update(billingProviderSync)
+            .set({ status: 'failed', lastError: message })
+            .where(eq(billingProviderSync.idempotencyKey, syncKey)),
+        ]);
+        throw new ConflictError(
+          'Stripe did not confirm the partner discount. Finance can retry.',
+          'billing_provider_sync_failed',
+        );
+      }
+    },
+  )
   .post(
     '/:id/holds',
     apiDoc({
@@ -149,6 +380,27 @@ export const adminBillingRoutes = new Hono<AppEnv>()
       const { reason } = c.req.valid('json');
       const { staffUserId } = c.get('staffCtx');
       await loadOrg(id);
+      const [paidProduct] = await db
+        .select({
+          status: organizationProductEntitlement.status,
+          source: organizationProductEntitlement.source,
+        })
+        .from(organizationProductEntitlement)
+        .where(
+          and(
+            eq(organizationProductEntitlement.organizationId, id),
+            eq(organizationProductEntitlement.productKey, 'docket_pro'),
+          ),
+        )
+        .limit(1);
+      if (
+        paidProduct?.source === 'stripe' &&
+        ['trialing', 'active', 'past_due'].includes(paidProduct.status)
+      ) {
+        throw new ConflictError(
+          'Resolve the active Stripe subscription before granting complimentary Docket Pro',
+        );
+      }
       let inserted;
       try {
         inserted = await db
@@ -211,8 +463,10 @@ export const adminBillingRoutes = new Hono<AppEnv>()
 **Related.** \`POST /admin/orgs/{id}/billing-exemption\` to grant.`,
     }),
     zParam(idParam),
+    zJson(GrantExemptionBody),
     async (c) => {
       const { id } = c.req.valid('param');
+      const { reason } = c.req.valid('json');
       const { staffUserId } = c.get('staffCtx');
       const revoked = await db
         .update(billingExemption)
@@ -233,6 +487,7 @@ export const adminBillingRoutes = new Hono<AppEnv>()
         );
       await audit(db, staffUserId, 'billing.exemption_revoked', 'organization', id, {
         exemptionId: exemption.id,
+        reason,
       });
       return ok(c, AdminBillingExemptionOut, toExemptionOut(exemption));
     },
@@ -261,89 +516,39 @@ export const adminBillingRoutes = new Hono<AppEnv>()
       const { days } = c.req.valid('json');
       const { staffUserId } = c.get('staffCtx');
       const org = await loadOrg(id);
-      const updated = await db
-        .update(organization)
-        .set({ lifecycleState: 'trialing', exportReadyAt: null, deleteAfterAt: null })
-        .where(eq(organization.id, id))
-        .returning();
-      const next = updated[0];
-      /* v8 ignore next -- @preserve defensive: the org was just loaded, so the update returns it */
-      if (!next) throw new NotFoundError('Organization not found');
+      const gateway = getContainer().billing;
+      const current = await gateway.getSubscription(id);
+      if (current?.status !== 'trialing' || !current.trialEnd) {
+        throw new ConflictError('Only an existing Stripe trial can be extended');
+      }
+      const operationKey = [
+        'docket',
+        'trial-extension',
+        id,
+        current.id,
+        current.trialEnd,
+        String(days),
+      ].join(':');
+      const updated = await gateway.extendTrial(id, days, operationKey);
+      const observedAt = new Date().toISOString();
+      await applyBillingEvent(
+        db,
+        {
+          id: operationKey,
+          type: 'subscription.updated',
+          referenceId: id,
+          subscription: updated,
+          createdAt: observedAt,
+        },
+        observedAt,
+      );
       await audit(db, staffUserId, 'billing.trial_extended', 'organization', id, {
         days,
-        previousState: org.lifecycleState,
+        stripeSubscriptionId: current.id,
+        previousTrialEnd: current.trialEnd,
+        nextTrialEnd: updated.trialEnd,
       });
       const exemptIds = await loadActiveExemptOrgIds(db, [id]);
-      return ok(c, AdminOrgOut, toOrgOut(next, exemptIds));
-    },
-  )
-  .post(
-    '/:id/reactivate',
-    requireStaffRole('finance'),
-    apiDoc({
-      tag: 'Admin',
-      summary: 'Reactivate an org',
-      response: AdminOrgOut,
-      description: `Rescues an organization out of the export window back to \`active\` — the operator equivalent of a recovered subscription.
-
-**Behavior.** Loads the org (else \`404 not_found\`), then runs the shared \`onReactivated\` lifecycle transition: sets \`lifecycleState = 'active'\` and clears \`exportReadyAt\`/\`deleteAfterAt\`. The transition only applies to orgs not already \`deleted\` (a deleted org cannot be revived by reactivation) and is idempotent for an org already \`active\`. Returns the freshly re-loaded org so the response reflects the committed state.
-
-**Access — finance+.** Gated by \`requireStaffRole('finance')\`: this manually undoes a payment-driven downgrade, a billing-sensitive action restricted to \`finance\` (and \`superadmin\`). \`support\` → \`403 forbidden\`; non-operators \`403\`; anonymous \`401\`.
-
-**Side effects.** Writes a \`billing.reactivated\` operator audit event (subject = the org) recording the previous lifecycle state.
-
-**Related.** \`POST /admin/orgs/{id}/extend-trial\` (return to trial instead); \`POST /admin/orgs/{id}/lifecycle\` (set any state).`,
-    }),
-    zParam(idParam),
-    async (c) => {
-      const { id } = c.req.valid('param');
-      const { staffUserId } = c.get('staffCtx');
-      const org = await loadOrg(id);
-      await onReactivated(db, id);
-      await audit(db, staffUserId, 'billing.reactivated', 'organization', id, {
-        previousState: org.lifecycleState,
-      });
-      const exemptIds = await loadActiveExemptOrgIds(db, [id]);
-      return ok(c, AdminOrgOut, toOrgOut(await loadOrg(id), exemptIds));
-    },
-  )
-  .post(
-    '/:id/lifecycle',
-    requireStaffRole('finance'),
-    apiDoc({
-      tag: 'Admin',
-      summary: 'Set an org lifecycle state',
-      response: AdminOrgOut,
-      description: `Forces an organization into an explicit data-lifecycle state — the operator's manual override over the billing-driven state machine, used to correct drift or stage a state for testing/support.
-
-**Behavior.** Loads the org (else \`404 not_found\`), then routes the requested \`lifecycleState\` through the real transition logic rather than a blind column write, so invariants stay consistent: \`active\`/\`trialing\` run \`onReactivated\` (clearing the export/delete timestamps); \`export_window\` runs \`onTrialOrPaymentTerminal\` (stamping \`exportReadyAt = now\` and scheduling \`deleteAfterAt = now + 14 days\`); any other target (\`past_due\`, \`pending_deletion\`, \`deleted\`) is written directly. Returns the re-loaded org reflecting the committed state and timestamps.
-
-**Access — finance+.** Gated by \`requireStaffRole('finance')\`: directly setting lifecycle state can trigger or cancel data deletion and override billing outcomes, so it is restricted to \`finance\` (and \`superadmin\`). \`support\` → \`403 forbidden\`; non-operators \`403\`; anonymous \`401\`.
-
-**Side effects.** May schedule or cancel the export window / deletion timers (per above) **and** writes a \`lifecycle.state_set\` operator audit event (subject = the org) recording the \`from\` and \`to\` states.
-
-**Related.** \`POST /admin/orgs/{id}/extend-trial\` and \`/reactivate\` are the safer, intent-specific shortcuts; \`GET /admin/lifecycle\` shows the resulting board.`,
-    }),
-    zParam(idParam),
-    zJson(SetLifecycleBody),
-    async (c) => {
-      const { id } = c.req.valid('param');
-      const { lifecycleState } = c.req.valid('json');
-      const { staffUserId } = c.get('staffCtx');
-      const org = await loadOrg(id);
-      const now = new Date().toISOString();
-      if (lifecycleState === 'active' || lifecycleState === 'trialing') {
-        await onReactivated(db, id);
-      } else if (lifecycleState === 'export_window') {
-        await onTrialOrPaymentTerminal(db, id, now);
-      } else {
-        await db.update(organization).set({ lifecycleState }).where(eq(organization.id, id));
-      }
-      await audit(db, staffUserId, 'lifecycle.state_set', 'organization', id, {
-        from: org.lifecycleState,
-        to: lifecycleState,
-      });
-      const exemptIds = await loadActiveExemptOrgIds(db, [id]);
-      return ok(c, AdminOrgOut, toOrgOut(await loadOrg(id), exemptIds));
+      return ok(c, AdminOrgOut, toOrgOut(org, exemptIds));
     },
   );

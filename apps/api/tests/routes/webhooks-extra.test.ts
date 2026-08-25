@@ -71,10 +71,19 @@ function fakeVerifyingGateway(
   verifyWebhook(rawBody: string | Buffer, signature: string): Promise<BillingEvent | null>;
 } {
   return {
+    createCustomer: vi.fn(),
+    getCustomerBillingCountry: vi.fn(),
     createCheckoutSession: vi.fn(),
     getSubscription: vi.fn(),
     cancelSubscription: vi.fn(),
+    extendTrial: vi.fn(),
     createBillingPortalSession: vi.fn(),
+    createDiscountCoupon: vi.fn(),
+    applySubscriptionDiscount: vi.fn(),
+    removeSubscriptionDiscount: vi.fn(),
+    getLatestRecurringInvoice: vi.fn(),
+    previewCreditNote: vi.fn(),
+    issueCreditNote: vi.fn(),
     verifyWebhook: (rawBody: string | Buffer, signature: string) =>
       Promise.resolve(
         verify(typeof rawBody === 'string' ? rawBody : rawBody.toString(), signature),
@@ -140,8 +149,8 @@ describe('webhooks signature verification (real Stripe gateway path)', () => {
     expect(await res.json()).toEqual({ received: true, effect: null });
   });
 
-  it('folds a verified event into the org lifecycle (raw body is passed through, not re-parsed)', async () => {
-    const { orgId } = await seedBaseOrg(db, schema);
+  it('folds a verified event into billing access without changing retention', async () => {
+    const { orgId } = await seedBaseOrg(db, schema, false);
     const rawPayload = 'opaque-stripe-bytes-{not-the-normalized-event}';
     const normalized: BillingEvent = {
       id: 'evt_real',
@@ -163,12 +172,102 @@ describe('webhooks signature verification (real Stripe gateway path)', () => {
       body: rawPayload,
     });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ received: true, effect: 'export_window' });
-    // The terminal event moved the org into the 14-day export window.
+    expect(await res.json()).toEqual({ received: true, effect: 'canceled' });
     const [org] = await db
       .select({ lifecycleState: schema.organization.lifecycleState })
       .from(schema.organization)
       .where(eq(schema.organization.id, orgId));
-    expect(org?.lifecycleState).toBe('export_window');
+    expect(org?.lifecycleState).toBe('active');
+  });
+
+  it('verifies a US Checkout customer before reconciling the retrieved subscription', async () => {
+    const { orgId } = await seedBaseOrg(db, schema, false);
+    await db.insert(schema.organizationBillingAccount).values({
+      organizationId: orgId,
+      stripeCustomerId: 'cus_us',
+    });
+    const getCustomerBillingCountry = vi.fn().mockResolvedValue('US');
+    const getSubscription = vi.fn().mockResolvedValue({
+      id: 'sub_us',
+      referenceId: orgId,
+      status: 'trialing',
+      currentPeriodEnd: '2026-09-08T00:00:00.000Z',
+      trialEnd: '2026-09-08T00:00:00.000Z',
+    });
+    const gateway = {
+      ...fakeVerifyingGateway(() => ({
+        id: 'evt_checkout_us',
+        type: 'checkout.completed',
+        referenceId: orgId,
+        customerId: 'cus_us',
+        createdAt: '2026-08-25T00:00:00.000Z',
+      })),
+      getCustomerBillingCountry,
+      getSubscription,
+    };
+    useGateway(gateway);
+
+    const response = await webhooks.request('/webhook', {
+      method: 'POST',
+      headers: { ...J, 'stripe-signature': 't=1,v1=ok' },
+      body: 'verified-checkout',
+    });
+
+    expect(await response.json()).toEqual({ received: true, effect: 'trialing' });
+    const [account] = await db
+      .select()
+      .from(schema.organizationBillingAccount)
+      .where(eq(schema.organizationBillingAccount.organizationId, orgId));
+    expect(account).toMatchObject({ billingCountry: 'US' });
+    expect(account?.countryVerifiedAt).not.toBeNull();
+    const [entitlement] = await db
+      .select()
+      .from(schema.organizationProductEntitlement)
+      .where(eq(schema.organizationProductEntitlement.organizationId, orgId));
+    expect(entitlement).toMatchObject({ status: 'trialing', stripeSubscriptionId: 'sub_us' });
+  });
+
+  it('cancels a non-US trial before Docket grants product access', async () => {
+    const { orgId } = await seedBaseOrg(db, schema, false);
+    await db.insert(schema.organizationBillingAccount).values({
+      organizationId: orgId,
+      stripeCustomerId: 'cus_gb',
+    });
+    const getCustomerBillingCountry = vi.fn().mockResolvedValue('GB');
+    const getSubscription = vi.fn().mockResolvedValue({
+      id: 'sub_gb',
+      referenceId: orgId,
+      status: 'trialing',
+      currentPeriodEnd: '2026-09-08T00:00:00.000Z',
+      trialEnd: '2026-09-08T00:00:00.000Z',
+    });
+    const cancelSubscription = vi.fn();
+    const gateway = {
+      ...fakeVerifyingGateway(() => ({
+        id: 'evt_subscription_gb',
+        type: 'subscription.created',
+        referenceId: orgId,
+        customerId: 'cus_gb',
+        createdAt: '2026-08-25T00:00:00.000Z',
+      })),
+      getCustomerBillingCountry,
+      getSubscription,
+      cancelSubscription,
+    };
+    useGateway(gateway);
+
+    const response = await webhooks.request('/webhook', {
+      method: 'POST',
+      headers: { ...J, 'stripe-signature': 't=1,v1=ok' },
+      body: 'verified-subscription',
+    });
+
+    expect(await response.json()).toEqual({ received: true, effect: 'unsupported_country' });
+    expect(cancelSubscription).toHaveBeenCalledWith(orgId);
+    const entitlements = await db
+      .select()
+      .from(schema.organizationProductEntitlement)
+      .where(eq(schema.organizationProductEntitlement.organizationId, orgId));
+    expect(entitlements).toHaveLength(0);
   });
 });

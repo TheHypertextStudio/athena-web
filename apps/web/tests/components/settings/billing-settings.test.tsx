@@ -38,6 +38,40 @@ function wrapper(): ({ children }: { children: ReactNode }) => JSX.Element {
   return ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 
+/** Build a current billing response with one optional product override. */
+function summary(
+  product?: Record<string, unknown>,
+  extra: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    organizationId: 'org-1',
+    listPrice: { amount: 800, currency: 'usd', interval: 'month' },
+    accessMode: product ? 'writable' : 'read_only',
+    canManageBilling: true,
+    effectiveDiscount: null,
+    applicationStatus: null,
+    issuedCredit: null,
+    products: product
+      ? [
+          {
+            productKey: 'docket_pro',
+            name: 'Docket Pro',
+            status: 'active',
+            source: 'stripe',
+            trialEndsAt: null,
+            renewalDate: null,
+            cancelAtPeriodEnd: false,
+            cancellationDate: null,
+            graceEndsAt: null,
+            providerObservedAt: null,
+            ...product,
+          },
+        ]
+      : [],
+    ...extra,
+  };
+}
+
 beforeEach(() => {
   billingGet.mockReset();
   checkoutPost.mockReset();
@@ -47,143 +81,91 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('BillingSettings', () => {
-  it('offers Docket Pro while preserving free personal Docket', async () => {
-    billingGet.mockResolvedValue(
-      okResponse({ organizationId: 'org-1', products: [], canManageBilling: true }),
-    );
+  it('shows free personal access and the US launch price before Checkout', async () => {
+    billingGet.mockResolvedValue(okResponse(summary(undefined, { accessMode: 'writable' })));
 
     render(<BillingSettings orgId="org-1" isPersonal />, { wrapper: wrapper() });
 
-    expect(await screen.findByRole('button', { name: 'Add Docket Pro' })).toBeInTheDocument();
-    expect(screen.getByText('Free')).toBeInTheDocument();
     expect(
-      screen.getByText(/returns this workspace to free Docket without deleting its data/),
+      await screen.findByRole('button', { name: 'Start Docket Pro trial' }),
     ).toBeInTheDocument();
+    expect(screen.getAllByText('Free')).toHaveLength(2);
+    expect(screen.getByText(/Personal planning.*remain writable/)).toBeInTheDocument();
+    expect(screen.getByText(/50% off Docket Pro/)).toBeInTheDocument();
   });
 
   it('shows renewal and management for an active Stripe product', async () => {
+    billingGet.mockResolvedValue(okResponse(summary({ renewalDate: '2026-09-11T00:00:00.000Z' })));
+
+    render(<BillingSettings orgId="org-1" isPersonal={false} />, { wrapper: wrapper() });
+
+    expect(await screen.findByRole('button', { name: 'Manage billing' })).toBeInTheDocument();
+    expect(screen.getByText(/next renewal/)).toBeInTheDocument();
+    expect(screen.getByText(/\$8 USD per organization each month, plus tax/)).toBeInTheDocument();
+    expect(screen.queryByText(/delet/i)).not.toBeInTheDocument();
+  });
+
+  it('uses the no-deletion cancellation contract', async () => {
     billingGet.mockResolvedValue(
-      okResponse({
-        organizationId: 'org-1',
-        canManageBilling: true,
-        products: [
-          {
-            productKey: 'docket_pro',
-            name: 'Docket Pro',
-            status: 'active',
-            source: 'stripe',
-            trialEndsAt: null,
-            renewalDate: '2026-09-11T00:00:00.000Z',
-          },
-        ],
-      }),
+      okResponse(
+        summary({
+          cancelAtPeriodEnd: true,
+          cancellationDate: '2026-09-11T00:00:00.000Z',
+          renewalDate: '2026-09-11T00:00:00.000Z',
+        }),
+      ),
     );
 
     render(<BillingSettings orgId="org-1" isPersonal={false} />, { wrapper: wrapper() });
 
-    expect(await screen.findByRole('button', { name: 'Manage Docket Pro' })).toBeInTheDocument();
-    expect(screen.getByText(/Renews/)).toBeInTheDocument();
-    expect(screen.getByText(/14-day period to export this shared workspace/)).toBeInTheDocument();
+    expect(await screen.findByText('Cancellation scheduled')).toBeInTheDocument();
+    expect(screen.getByText(/shared work becomes read-only/)).toBeInTheDocument();
+    expect(screen.getByText(/Docket does not delete workspace data/)).toBeInTheDocument();
   });
 
-  it('identifies a complimentary product without offering provider billing', async () => {
+  it('shows the recovery deadline and direct payment action while past due', async () => {
     billingGet.mockResolvedValue(
-      okResponse({
-        organizationId: 'org-1',
-        canManageBilling: true,
-        products: [
-          {
-            productKey: 'docket_pro',
-            name: 'Docket Pro',
-            status: 'active',
-            source: 'complimentary',
-            trialEndsAt: null,
-            renewalDate: null,
-          },
-        ],
-      }),
+      okResponse(summary({ status: 'past_due', graceEndsAt: '2026-09-01T12:00:00.000Z' })),
+    );
+
+    render(<BillingSettings orgId="org-1" isPersonal={false} />, { wrapper: wrapper() });
+
+    expect(await screen.findByText(/We could not collect this payment/)).toHaveTextContent(
+      /by Sep 1, 2026/,
+    );
+    expect(screen.getByRole('button', { name: 'Update payment method' })).toBeInTheDocument();
+  });
+
+  it('identifies complimentary Pro without price, renewal, payment, or discount controls', async () => {
+    billingGet.mockResolvedValue(
+      okResponse(summary({ source: 'complimentary', renewalDate: null })),
     );
 
     render(<BillingSettings orgId="org-1" isPersonal />, { wrapper: wrapper() });
 
-    expect(await screen.findByText('Docket Pro is complimentary.')).toBeInTheDocument();
+    expect(await screen.findByText('Complimentary Docket Pro')).toBeInTheDocument();
+    expect(screen.getByText(/All current and future Docket Pro features/)).toBeInTheDocument();
+    expect(screen.queryByText(/\$8/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Discounts')).not.toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.queryByRole('button', { name: /Docket Pro/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button')).not.toBeInTheDocument();
     });
   });
 
-  it('shows the first trial end and the management action', async () => {
+  it('tells non-managers who can act without hiding status or dates', async () => {
     billingGet.mockResolvedValue(
-      okResponse({
-        organizationId: 'org-1',
-        canManageBilling: true,
-        products: [
-          {
-            productKey: 'docket_pro',
-            name: 'Docket Pro',
-            status: 'trialing',
-            source: 'stripe',
-            trialEndsAt: '2026-08-29T00:00:00.000Z',
-            renewalDate: '2026-08-29T00:00:00.000Z',
-          },
-        ],
-      }),
+      okResponse(
+        summary(
+          { status: 'trialing', trialEndsAt: '2026-08-29T12:00:00.000Z' },
+          { canManageBilling: false },
+        ),
+      ),
     );
 
     render(<BillingSettings orgId="org-1" isPersonal />, { wrapper: wrapper() });
 
-    expect(await screen.findByText(/Trial ends/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Manage Docket Pro' })).toBeInTheDocument();
-  });
-
-  it('directs a past-due organization to billing management', async () => {
-    billingGet.mockResolvedValue(
-      okResponse({
-        organizationId: 'org-1',
-        canManageBilling: true,
-        products: [
-          {
-            productKey: 'docket_pro',
-            name: 'Docket Pro',
-            status: 'past_due',
-            source: 'stripe',
-            trialEndsAt: null,
-            renewalDate: null,
-          },
-        ],
-      }),
-    );
-
-    render(<BillingSettings orgId="org-1" isPersonal />, { wrapper: wrapper() });
-
-    expect(await screen.findByText(/Payment is past due/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Manage Docket Pro' })).toBeInTheDocument();
-  });
-
-  it('offers Docket Pro again after cancellation without promising another trial', async () => {
-    billingGet.mockResolvedValue(
-      okResponse({
-        organizationId: 'org-1',
-        canManageBilling: true,
-        products: [
-          {
-            productKey: 'docket_pro',
-            name: 'Docket Pro',
-            status: 'canceled',
-            source: 'stripe',
-            trialEndsAt: '2026-08-10T00:00:00.000Z',
-            renewalDate: null,
-          },
-        ],
-      }),
-    );
-
-    render(<BillingSettings orgId="org-1" isPersonal />, { wrapper: wrapper() });
-
-    expect(await screen.findByText('Canceled')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Add Docket Pro' })).toBeInTheDocument();
-    expect(
-      screen.getByText(/Returning organizations do not receive another trial/),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(/trial ends Aug 29, 2026/i)).toBeInTheDocument();
+    expect(screen.getByText(/workspace administrator can change billing/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 });

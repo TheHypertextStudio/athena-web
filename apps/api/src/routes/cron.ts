@@ -2,9 +2,8 @@
  * `@docket/api` — the lifecycle-sweep cron handler (mounted OUTSIDE the RPC `AppType`).
  *
  * @remarks
- * `POST /internal/cron/lifecycle-sweep` runs the idempotent org data-lifecycle sweep
- * ({@link sweepLifecycle}): orgs past their export-window deadline advance
- * `export_window → pending_deletion → deleted`. It is guarded by a shared
+ * `POST /internal/cron/lifecycle-sweep` retains its authenticated compatibility path while billing
+ * deletion is disabled. Account deletion has a separate confirmed sweep. It is guarded by a shared
  * `CRON_SECRET` bearer (matching the platform scheduler's `Authorization: Bearer …`
  * or an `x-cron-secret` header); a missing/incorrect secret 401s. Non-RPC, so it
  * lives in `server.ts` alongside `/api/auth` rather than the typed app. `now` is read
@@ -16,7 +15,6 @@ import { Hono } from 'hono';
 import { sweepAccountDeletions } from '../account/lifecycle';
 import { sweepAccountExports } from '../account/export';
 import { env } from '../env';
-import { sweepLifecycle } from '@docket/billing/application/lifecycle';
 import { sweepEmailSuggestions } from '../lib/email-to-task/sweep';
 import { sweepNotionMirror } from './notion-mirror-reconcile';
 import { sweepEmailSuggestionLifecycle } from '../lib/email-to-task/lifecycle';
@@ -62,10 +60,15 @@ const cron = new Hono()
   .post('/lifecycle-sweep', async (c) => {
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
     const now = new Date();
-    const result = await sweepLifecycle(db, now.toISOString());
     // Suggestion expiry/retention rides the same daily tick (transient proposals, not records).
     const suggestions = await sweepEmailSuggestionLifecycle(now);
-    return c.json({ swept: true, ...result, suggestions });
+    return c.json({
+      swept: false,
+      reason: 'billing_data_deletion_disabled',
+      toPendingDeletion: 0,
+      toDeleted: 0,
+      suggestions,
+    });
   })
   // Background connector mirroring: re-syncs every due `mirror` integration so connectors
   // stay current without a manual click. Idempotent + lease-guarded (see {@link runSync}), so

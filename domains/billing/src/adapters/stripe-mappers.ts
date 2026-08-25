@@ -14,6 +14,8 @@ export interface StripeSubscriptionView {
   readonly object: 'subscription';
   /** Stripe subscription id. */
   readonly id: string;
+  /** Stripe customer id or expanded customer. */
+  readonly customer?: string | { readonly id?: string } | null;
   /** Raw Stripe subscription status. */
   readonly status: string;
   /** Docket reference metadata, when present. */
@@ -27,6 +29,8 @@ export interface StripeSubscriptionView {
   };
   /** Trial end unix timestamp, or null when absent. */
   readonly trial_end?: number | null;
+  /** Whether cancellation is scheduled for the end of the current period. */
+  readonly cancel_at_period_end?: boolean;
 }
 
 /** Non-subscription Stripe event object fields Docket reads. */
@@ -39,6 +43,17 @@ export interface StripeEventObjectView {
   readonly metadata?: Record<string, string> | null;
   /** Checkout session client reference id. */
   readonly client_reference_id?: string | null;
+  /** Stripe customer id or expanded customer. */
+  readonly customer?: string | { readonly id?: string } | null;
+  /** Stripe subscription id or expanded subscription. */
+  readonly subscription?: string | { readonly id?: string } | null;
+  /** Dahlia invoice parent details that carry subscription metadata. */
+  readonly parent?: {
+    readonly subscription_details?: {
+      readonly subscription?: string | { readonly id?: string } | null;
+      readonly metadata?: Record<string, string> | null;
+    } | null;
+  } | null;
 }
 
 /** The Stripe event fields Docket maps into billing events. */
@@ -106,6 +121,10 @@ export function mapEventType(
       return 'subscription.canceled';
     case 'invoice.payment_failed':
       return 'subscription.past_due';
+    case 'invoice.paid':
+      return 'subscription.paid';
+    case 'invoice.payment_action_required':
+      return 'subscription.payment_action_required';
     case 'customer.subscription.updated':
       return mappedStatus === 'past_due' ? 'subscription.past_due' : 'subscription.updated';
     default:
@@ -134,6 +153,7 @@ export function toSubscription(
     referenceId,
     status: toStatus(sub.status),
     currentPeriodEnd: new Date(periodEndUnix * 1000).toISOString(),
+    cancelAtPeriodEnd: sub.cancel_at_period_end ?? false,
     ...(sub.trial_end ? { trialEnd: new Date(sub.trial_end * 1000).toISOString() } : {}),
   };
 }
@@ -184,9 +204,23 @@ export function buildBaseCheckoutParams(
     mode: 'subscription',
     line_items: [{ price, quantity: 1 }],
     client_reference_id: input.referenceId,
-    ...(input.customerEmail ? { customer_email: input.customerEmail } : {}),
+    ...(input.customerId
+      ? {
+          customer: input.customerId,
+          customer_update: { address: 'auto', name: 'auto' },
+        }
+      : input.customerEmail
+        ? { customer_email: input.customerEmail }
+        : {}),
+    automatic_tax: { enabled: true },
+    billing_address_collection: 'required',
+    tax_id_collection: { enabled: true },
+    payment_method_collection: 'always',
+    ...(input.couponId ? { discounts: [{ coupon: input.couponId }] } : {}),
     subscription_data: {
-      trial_period_days: input.trialDays ?? trialDays,
+      ...((input.trialDays ?? trialDays) > 0
+        ? { trial_period_days: input.trialDays ?? trialDays }
+        : {}),
       metadata: { referenceId: input.referenceId },
     },
     metadata: { referenceId: input.referenceId },
@@ -209,15 +243,33 @@ export function mapStripeEvent(event: StripeEventView): BillingEvent | null {
     subscription = toSubscription(object);
     referenceId = subscription.referenceId;
   } else {
-    referenceId = object.metadata?.['referenceId'] ?? object.client_reference_id ?? '';
+    referenceId =
+      object.parent?.subscription_details?.metadata?.['referenceId'] ??
+      object.metadata?.['referenceId'] ??
+      object.client_reference_id ??
+      '';
   }
   const type = mapEventType(event.type, subscription?.status);
   if (!type) return null;
+  const customerId = providerId(object.customer);
+  const subscriptionId = !isSubscriptionObject(object)
+    ? providerId(object.parent?.subscription_details?.subscription ?? object.subscription)
+    : undefined;
   return {
     id: event.id,
     type,
     referenceId,
+    ...(customerId ? { customerId } : {}),
+    ...(subscriptionId ? { subscriptionId } : {}),
     ...(subscription ? { subscription } : {}),
     createdAt: new Date(event.created * 1000).toISOString(),
   };
+}
+
+/** Read an id from a Stripe expandable field. */
+function providerId(
+  value: string | { readonly id?: string } | null | undefined,
+): string | undefined {
+  if (typeof value === 'string') return value;
+  return value?.id;
 }

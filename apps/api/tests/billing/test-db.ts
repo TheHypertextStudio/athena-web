@@ -65,10 +65,21 @@ export async function createBillingLifecycleDb(): Promise<BillingLifecycleDbFixt
       stripe_subscription_id text,
       trial_ends_at timestamp,
       current_period_end timestamp,
+      cancel_at_period_end boolean not null default false,
+      grace_ends_at timestamp,
+      provider_observed_at timestamp,
       canceled_at timestamp,
       created_at timestamp not null default now(),
       updated_at timestamp not null default now(),
       primary key (organization_id, product_key)
+    );
+
+    create table "organization_billing_account" (
+      organization_id text primary key references organization(id) on delete cascade,
+      stripe_customer_id text not null unique,
+      trial_consumed_at timestamp,
+      created_at timestamp not null default now(),
+      updated_at timestamp not null default now()
     );
   `);
 

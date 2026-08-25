@@ -22,26 +22,48 @@
  * `/portal`, `/export`, the lifecycle transitions) requires the `manage` capability via
  * {@link capabilityGuard}.
  */
-import { db, genId, organization, organizationProductEntitlement } from '@docket/db';
+import {
+  BILLING_DISCOUNT_APPLICATION_STATUSES,
+  BILLING_DISCOUNT_AWARD_STATUSES,
+  billingCredit,
+  billingDiscountApplication,
+  billingDiscountAward,
+  db,
+  genId,
+  organization,
+  organizationProductEntitlement,
+} from '@docket/db';
 import {
   PRODUCT_ENTITLEMENT_SOURCES,
   PRODUCT_ENTITLEMENT_STATUSES,
   PRODUCT_KEYS,
 } from '@docket/billing/contracts';
-import { eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
-import { onReactivated, onTrialOrPaymentTerminal } from '@docket/billing/application/lifecycle';
+import {
+  acquireCheckoutAttempt,
+  completeCheckoutAttempt,
+  ensureBillingCustomer,
+  failCheckoutAttempt,
+  getBillingCustomer,
+} from '@docket/billing/application/provider-state';
 import type { AppEnv } from '../context';
 import { getContainer } from '../container';
 import { env } from '../env';
-import { NotFoundError } from '../error';
+import {
+  BillingCustomerMissingError,
+  CheckoutPendingError,
+  NotFoundError,
+  SubscriptionExistsError,
+} from '../error';
 import { collectWorkLayer } from '../lib/export-collect';
 import { ok } from '../lib/ok';
 import { apiDoc, describeRoute } from '../lib/openapi-route';
 import { zJson } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
+import billingDiscounts from './billing-discounts';
 
 /** Subscription status returned by `GET /` — `null` when the org has no subscription. */
 export const SubscriptionOut = z
@@ -81,6 +103,10 @@ export const BillingProductOut = z.object({
   source: z.enum(PRODUCT_ENTITLEMENT_SOURCES),
   trialEndsAt: z.string().nullable(),
   renewalDate: z.string().nullable(),
+  cancelAtPeriodEnd: z.boolean(),
+  cancellationDate: z.string().nullable(),
+  graceEndsAt: z.string().nullable(),
+  providerObservedAt: z.string().nullable(),
 });
 /** Organization product response value. */
 export type BillingProductOut = z.infer<typeof BillingProductOut>;
@@ -88,8 +114,31 @@ export type BillingProductOut = z.infer<typeof BillingProductOut>;
 /** Organization billing summary. Baseline Docket is represented by an empty products array. */
 export const BillingSummaryOut = z.object({
   organizationId: z.string(),
+  listPrice: z.object({
+    amount: z.literal(800),
+    currency: z.literal('usd'),
+    interval: z.literal('month'),
+  }),
+  accessMode: z.enum(['writable', 'read_only']),
   products: z.array(BillingProductOut),
   canManageBilling: z.boolean(),
+  effectiveDiscount: z
+    .object({
+      percentOff: z.number().int(),
+      status: z.enum(BILLING_DISCOUNT_AWARD_STATUSES),
+      startsAt: z.string(),
+      endsAt: z.string(),
+      reviewAt: z.string(),
+    })
+    .nullable(),
+  applicationStatus: z.enum(BILLING_DISCOUNT_APPLICATION_STATUSES).nullable(),
+  issuedCredit: z
+    .object({
+      amount: z.number().int(),
+      currency: z.string(),
+      issuedAt: z.string(),
+    })
+    .nullable(),
 });
 /** Organization billing summary response value. */
 export type BillingSummaryOut = z.infer<typeof BillingSummaryOut>;
@@ -237,13 +286,65 @@ const billing = new Hono<AppEnv>()
     }),
     async (c) => {
       const actorCtx = c.get('actorCtx');
-      const products = await db
-        .select()
-        .from(organizationProductEntitlement)
-        .where(eq(organizationProductEntitlement.organizationId, actorCtx.orgId));
+      const org = await loadOrg(actorCtx.orgId);
+      const [products, applications, awards, credits] = await Promise.all([
+        db
+          .select()
+          .from(organizationProductEntitlement)
+          .where(eq(organizationProductEntitlement.organizationId, actorCtx.orgId)),
+        db
+          .select({ status: billingDiscountApplication.status })
+          .from(billingDiscountApplication)
+          .where(eq(billingDiscountApplication.organizationId, actorCtx.orgId))
+          .orderBy(desc(billingDiscountApplication.createdAt))
+          .limit(1),
+        db
+          .select()
+          .from(billingDiscountAward)
+          .where(eq(billingDiscountAward.organizationId, actorCtx.orgId))
+          .orderBy(desc(billingDiscountAward.createdAt))
+          .limit(1),
+        db
+          .select()
+          .from(billingCredit)
+          .where(
+            and(
+              eq(billingCredit.organizationId, actorCtx.orgId),
+              eq(billingCredit.status, 'issued'),
+            ),
+          )
+          .orderBy(desc(billingCredit.createdAt))
+          .limit(1),
+      ]);
+      const now = Date.now();
+      const pro = products.find((product) => product.productKey === 'docket_pro');
+      const hasWritablePro =
+        pro?.source === 'complimentary' ||
+        pro?.status === 'trialing' ||
+        pro?.status === 'active' ||
+        (pro?.status === 'past_due' && pro.graceEndsAt !== null && pro.graceEndsAt.getTime() > now);
       return ok(c, BillingSummaryOut, {
         organizationId: actorCtx.orgId,
+        listPrice: { amount: 800, currency: 'usd', interval: 'month' },
+        accessMode: org.isPersonal || hasWritablePro ? 'writable' : 'read_only',
         canManageBilling: actorCtx.capabilities.includes('manage'),
+        effectiveDiscount: awards[0]
+          ? {
+              percentOff: awards[0].percentOff,
+              status: awards[0].status,
+              startsAt: awards[0].startsAt.toISOString(),
+              endsAt: awards[0].endsAt.toISOString(),
+              reviewAt: awards[0].reviewAt.toISOString(),
+            }
+          : null,
+        applicationStatus: applications[0]?.status ?? null,
+        issuedCredit: credits[0]?.issuedAt
+          ? {
+              amount: credits[0].totalAmount,
+              currency: credits[0].currency,
+              issuedAt: credits[0].issuedAt.toISOString(),
+            }
+          : null,
         products: products.map((product) => ({
           productKey: BillingProductOut.shape.productKey.parse(product.productKey),
           name: 'Docket Pro' as const,
@@ -251,6 +352,12 @@ const billing = new Hono<AppEnv>()
           source: product.source,
           trialEndsAt: product.trialEndsAt?.toISOString() ?? null,
           renewalDate: product.currentPeriodEnd?.toISOString() ?? null,
+          cancelAtPeriodEnd: product.cancelAtPeriodEnd,
+          cancellationDate: product.cancelAtPeriodEnd
+            ? (product.currentPeriodEnd?.toISOString() ?? null)
+            : null,
+          graceEndsAt: product.graceEndsAt?.toISOString() ?? null,
+          providerObservedAt: product.providerObservedAt?.toISOString() ?? null,
         })),
       });
     },
@@ -271,20 +378,65 @@ Side effect: creates a checkout session. Docket Pro ownership changes only after
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const input = c.req.valid('json');
+      await loadOrg(orgId);
       const existing = await db
-        .select({ productKey: organizationProductEntitlement.productKey })
+        .select({
+          productKey: organizationProductEntitlement.productKey,
+          status: organizationProductEntitlement.status,
+        })
         .from(organizationProductEntitlement)
         .where(eq(organizationProductEntitlement.organizationId, orgId))
         .limit(1);
-      const result = await getContainer().billing.createCheckoutSession({
-        referenceId: orgId,
-        priceKey: defaultPriceKey(),
-        successUrl: appUrl(`/billing/return?org=${orgId}&status=success`),
-        cancelUrl: appUrl(`/billing/return?org=${orgId}&status=cancel`),
-        trialDays: existing.length === 0 ? 14 : 0,
-        ...(input.customerEmail ? { customerEmail: input.customerEmail } : {}),
-      });
-      return ok(c, RedirectOut, { url: result.url });
+      const entitlement = existing[0];
+      if (
+        entitlement &&
+        (entitlement.status === 'trialing' ||
+          entitlement.status === 'active' ||
+          entitlement.status === 'past_due')
+      ) {
+        throw new SubscriptionExistsError();
+      }
+
+      const now = new Date();
+      const lease = await acquireCheckoutAttempt(
+        db,
+        orgId,
+        'docket_pro',
+        now,
+        new Date(now.getTime() + 24 * 60 * 60 * 1000),
+      );
+      if (lease.kind === 'reusable') return ok(c, RedirectOut, { url: lease.url });
+      if (lease.kind === 'pending') throw new CheckoutPendingError();
+
+      const gateway = getContainer().billing;
+      try {
+        const account = await ensureBillingCustomer(db, gateway, orgId, input.customerEmail);
+        const [award] = await db
+          .select({ providerCouponId: billingDiscountAward.providerCouponId })
+          .from(billingDiscountAward)
+          .where(
+            and(
+              eq(billingDiscountAward.organizationId, orgId),
+              inArray(billingDiscountAward.status, ['scheduled', 'active']),
+            ),
+          )
+          .limit(1);
+        const result = await gateway.createCheckoutSession({
+          referenceId: orgId,
+          customerId: account.stripeCustomerId,
+          priceKey: defaultPriceKey(),
+          successUrl: appUrl(`/billing/return?org=${orgId}&status=success`),
+          cancelUrl: appUrl(`/billing/return?org=${orgId}&status=cancel`),
+          trialDays: existing.length === 0 && account.trialConsumedAt === null ? 14 : 0,
+          ...(award?.providerCouponId ? { couponId: award.providerCouponId } : {}),
+          idempotencyKey: `docket:checkout:${lease.id}`,
+        });
+        await completeCheckoutAttempt(db, lease.id, result.sessionId, result.url, now);
+        return ok(c, RedirectOut, { url: result.url });
+      } catch (cause) {
+        await failCheckoutAttempt(db, lease.id, now);
+        throw cause;
+      }
     },
   )
   .post(
@@ -299,7 +451,12 @@ Side effect: creates a checkout session. Docket Pro ownership changes only after
     }),
     async (c) => {
       const { orgId } = c.get('actorCtx');
-      const result = await getContainer().billing.createBillingPortalSession(orgId);
+      const account = await getBillingCustomer(db, orgId);
+      if (!account) throw new BillingCustomerMissingError();
+      const result = await getContainer().billing.createBillingPortalSession({
+        customerId: account.stripeCustomerId,
+        returnUrl: appUrl(`/orgs/${orgId}/settings/billing`),
+      });
       return ok(c, RedirectOut, { url: result.url });
     },
   )
@@ -313,61 +470,6 @@ Side effect: creates a checkout session. Docket Pro ownership changes only after
     }),
     async (c) => {
       const { orgId } = c.get('actorCtx');
-      const org = await loadOrg(orgId);
-      return ok(c, LifecycleOut, toLifecycleOut(org));
-    },
-  )
-  .post(
-    '/lifecycle/start-export-window',
-    capabilityGuard('manage'),
-    apiDoc({
-      tag: 'Billing',
-      summary: 'Start the data export window',
-      capability: 'manage',
-      response: LifecycleOut,
-      description: `Voluntarily wind the org down: cancel the provider subscription and open the **14-day data-export window**, returning the updated {@link LifecycleOut} (now \`export_window\`, with \`exportReadyAt\`/\`deleteAfterAt\` stamped). This is the org-facing entry into the deletion pipeline (data-model §3) — the grace period during which an admin can still generate and download a full export via \`POST /export\` before the cron sweep advances the org toward \`pending_deletion\` and eventual deletion.
-
-Side effects: the subscription cancel is best-effort against the gateway (a never-subscribed org simply has nothing to cancel), then the lifecycle transition (\`onTrialOrPaymentTerminal\`) is written — the lifecycle state, not the provider, is the source of truth Docket acts on. A missing org 404s first (so this never silently no-ops). Requires \`manage\`. Reversible while still healthy via \`POST /lifecycle/reactivate\`. Note the admin-only holds (place/release \`lifecycleHold\`) live in the \`/admin/*\` surface, not here. Related: \`POST /export\`, \`POST /lifecycle/reactivate\`.`,
-    }),
-    async (c) => {
-      const { orgId } = c.get('actorCtx');
-      // Existence-check first so a missing org 404s instead of silently no-op'ing.
-      const currentOrg = await loadOrg(orgId);
-      // Cancel the provider subscription, then open the org's export window. The cancel
-      // is best-effort against the gateway (a never-subscribed org has nothing to cancel);
-      // the lifecycle transition is the source of truth Docket acts on.
-      await getContainer().billing.cancelSubscription(orgId);
-      const now = new Date().toISOString();
-      await db
-        .update(organizationProductEntitlement)
-        .set({ status: 'canceled', canceledAt: new Date(now) })
-        .where(eq(organizationProductEntitlement.organizationId, orgId));
-      if (currentOrg.isPersonal) {
-        await db
-          .update(organization)
-          .set({ lifecycleState: 'active', exportReadyAt: null, deleteAfterAt: null })
-          .where(eq(organization.id, orgId));
-      } else {
-        await onTrialOrPaymentTerminal(db, orgId, now);
-      }
-      const org = await loadOrg(orgId);
-      return ok(c, LifecycleOut, toLifecycleOut(org));
-    },
-  )
-  .post(
-    '/lifecycle/reactivate',
-    capabilityGuard('manage'),
-    apiDoc({
-      tag: 'Billing',
-      summary: 'Reactivate the org subscription',
-      capability: 'manage',
-      response: LifecycleOut,
-      description: `Rescue an org back out of the data-export window and return the updated {@link LifecycleOut}. When an org's subscription is healthy again, \`onReactivated\` clears the \`export_window\`/terminal lifecycle state (and its \`exportReadyAt\`/\`deleteAfterAt\` stamps), restoring normal read/write operation and lifting the frozen-org 402 write-gate. This is the inverse of \`POST /lifecycle/start-export-window\`. A missing org 404s. Requires \`manage\`. Note this drives the *lifecycle* state; re-establishing the actual paid subscription is done through \`POST /checkout\` / \`POST /portal\`. Related: \`GET /lifecycle\`.`,
-    }),
-    async (c) => {
-      const { orgId } = c.get('actorCtx');
-      await loadOrg(orgId);
-      await onReactivated(db, orgId);
       const org = await loadOrg(orgId);
       return ok(c, LifecycleOut, toLifecycleOut(org));
     },
@@ -420,7 +522,8 @@ Side effect: stamps \`exportReadyAt\` on the org so both the org's \`GET /lifecy
       const expiresAt = new Date(now.getTime() + EXPORT_TTL_MS).toISOString();
       return ok(c, ExportOut, { downloadUrl: exportDownloadPath(orgId), expiresAt });
     },
-  );
+  )
+  .route('/discounts', billingDiscounts);
 
 /**
  * Stream the generated work-layer export.

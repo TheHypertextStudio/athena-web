@@ -28,6 +28,7 @@ import {
   ReactFlowProvider,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
+import { useMediaQuery } from '@docket/ui/hooks';
 import { Maximize } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import {
@@ -56,6 +57,7 @@ import { isCanvasEditableTarget } from './canvas-keyboard';
 
 const READABLE_INITIAL_ZOOM = 0.5;
 const WORKING_AREA_PADDING = 24;
+const MOBILE_CANVAS_QUERY = '(max-width: 39.999rem)';
 
 /** Props for {@link Canvas}. */
 export interface CanvasProps extends GraphInteractionHandlers {
@@ -113,8 +115,9 @@ export interface CanvasProps extends GraphInteractionHandlers {
    * Whether to render the minimap. Defaults to `density === 'full'`.
    *
    * @remarks
-   * The focused Task and Project graph hosts keep it visible so navigation remains available when
-   * component-aware layout places work beyond the first readable frame.
+   * The focused Task and Project graph hosts keep it visible on wider screens so navigation remains
+   * available when component-aware layout places work beyond the first readable frame. Mobile
+   * canvases omit it because the reduced graph is not legible at that size.
    */
   minimap?: boolean | undefined;
   /** When provided, renders an expand affordance that calls this. */
@@ -173,6 +176,7 @@ function CanvasInner({
   const [flowInstance, setFlowInstance] = useState<Parameters<OnInit>[0] | null>(null);
   const [shiftSelecting, setShiftSelecting] = useState(false);
   const [oneShotSelecting, setOneShotSelecting] = useState(false);
+  const isMobileCanvas = useMediaQuery(MOBILE_CANVAS_QUERY);
   const framed = useRef(false);
   // Grouped/swimlane layouts arrive pre-positioned; otherwise dagre lays the flat graph out.
   const dagreLaidOut = useDagreLayout(rawNodes, rawEdges, density, layoutDirection);
@@ -414,9 +418,8 @@ function CanvasInner({
           */}
           <Background variant={BackgroundVariant.Dots} gap={20} className="!bg-surface" />
           {/*
-            Controls and minimap: tonal, no strokes. The overrides used to force a 1px outline on
-            every control and a divider between them, which is the wireframe look this canvas was
-            called out for.
+            Canvas navigation stays tonal and stroke-free. The minimap disappears on mobile,
+            where its reduced graph is unreadable and takes space from direct commands.
           */}
           <Panel
             position="bottom-left"
@@ -432,14 +435,14 @@ function CanvasInner({
                 onRelayout?.();
               }}
             />
-            {(minimap ?? density === 'full') ? (
+            {(minimap ?? density === 'full') && !isMobileCanvas ? (
               <MiniMap
                 pannable
                 zoomable
                 {...(nodeColor !== undefined ? { nodeColor } : {})}
                 maskColor="color-mix(in srgb, var(--color-surface) 70%, transparent)"
                 bgColor="var(--color-surface-container-low)"
-                className="pointer-events-auto !static !m-0 !h-20 !w-32 shrink-0 !rounded-lg sm:!h-[150px] sm:!w-[200px]"
+                className="pointer-events-auto !static !m-0 !h-[150px] !w-[200px] shrink-0 !rounded-lg"
               />
             ) : null}
           </Panel>

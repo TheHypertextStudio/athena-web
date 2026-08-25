@@ -111,7 +111,6 @@ const LEGACY_ACTION_PATHS: readonly string[] = [
   'POST /v1/notifications/:id/test',
   'POST /v1/me/notifications/:id/act',
   'POST /v1/me/calendar/sync',
-  'POST /v1/orgs/:orgId/billing/lifecycle/reactivate',
   'POST /v1/orgs/:orgId/cycles/:id/backfill',
   'POST /v1/orgs/:orgId/cycles/:id/close',
   'POST /v1/orgs/:orgId/integrations/:id/import',
@@ -139,7 +138,6 @@ const LEGACY_ACTION_PATHS: readonly string[] = [
   'GET /v1/orgs/:orgId/integrations/linear-agent/install',
   'POST /admin/impersonations/:id/end',
   'POST /admin/orgs/:id/extend-trial',
-  'POST /admin/orgs/:id/reactivate',
 ];
 
 /**

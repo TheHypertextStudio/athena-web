@@ -5,6 +5,7 @@ import type * as DbModule from '@docket/db';
 
 import { appWithSession, fakeSession, getDb } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
+import { getContainer } from '../../src/container';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -72,6 +73,18 @@ async function makeOrg(
   return assertDefined(rows[0]).id;
 }
 
+/** Create the provider trial required by the finance trial-extension action. */
+async function startProviderTrial(orgId: string): Promise<void> {
+  await getContainer().billing.createCheckoutSession({
+    referenceId: orgId,
+    customerId: `cus_${orgId}`,
+    priceKey: 'docket_pro_monthly',
+    successUrl: 'https://app.example/ok',
+    cancelUrl: 'https://app.example/cancel',
+    trialDays: 14,
+  });
+}
+
 /** Read an org's lifecycle state. */
 async function stateOf(id: string): Promise<string> {
   const rows = await db
@@ -112,30 +125,208 @@ describe('staff guard', () => {
   it('403s a support user on a finance-only billing action', async () => {
     const { userId } = await makeStaff('support');
     const orgId = await makeOrg('export_window');
+    await startProviderTrial(orgId);
     const app = appWithSession(admin, fakeSession(userId));
-    const res = await app.request(`/orgs/${orgId}/reactivate`, { method: 'POST' });
+    const res = await app.request(`/orgs/${orgId}/extend-trial`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ days: 7 }),
+    });
     expect(res.status).toBe(403);
   });
 
   it('admits a finance user on a finance-only action, and superadmin too', async () => {
     const orgA = await makeOrg('export_window');
     const orgB = await makeOrg('export_window');
+    await startProviderTrial(orgA);
+    await startProviderTrial(orgB);
     const fin = await makeStaff('finance');
     const sup = await makeStaff('superadmin');
     expect(
       (
-        await appWithSession(admin, fakeSession(fin.userId)).request(`/orgs/${orgA}/reactivate`, {
+        await appWithSession(admin, fakeSession(fin.userId)).request(`/orgs/${orgA}/extend-trial`, {
           method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ days: 7 }),
         })
       ).status,
     ).toBe(200);
     expect(
       (
-        await appWithSession(admin, fakeSession(sup.userId)).request(`/orgs/${orgB}/reactivate`, {
+        await appWithSession(admin, fakeSession(sup.userId)).request(`/orgs/${orgB}/extend-trial`, {
           method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ days: 7 }),
         })
       ).status,
     ).toBe(200);
+  });
+});
+
+describe('discount application review', () => {
+  async function makeApplication(programKey: 'student' | 'nonprofit' = 'student') {
+    const applicantUserId = await makeUser('Applicant');
+    const organizationId = await makeOrg('active', { isPersonal: programKey === 'student' });
+    const [application] = await db
+      .insert(schema.billingDiscountApplication)
+      .values({
+        organizationId,
+        programKey,
+        applicantUserId,
+        status: 'submitted',
+        evidenceType: programKey === 'student' ? 'institutional_email' : 'irs_registry',
+        institutionalEmail: programKey === 'student' ? 'applicant@unlv.edu' : null,
+        ein: programKey === 'nonprofit' ? '12-3456789' : null,
+      })
+      .returning();
+    const row = assertDefined(application);
+    await db.insert(schema.billingDiscountApplicationEvent).values({
+      applicationId: row.id,
+      type: 'submitted',
+      actorUserId: applicantUserId,
+    });
+    return { applicationId: row.id, organizationId };
+  }
+
+  it('lets support inspect the queue but reserves decisions for finance', async () => {
+    const { applicationId } = await makeApplication();
+    const support = await makeStaff('support');
+    const app = appWithSession(admin, fakeSession(support.userId));
+
+    const queue = await app.request('/discount-applications');
+    expect(queue.status).toBe(200);
+    await expect(queue.json()).resolves.toMatchObject({
+      items: expect.arrayContaining([expect.objectContaining({ id: applicationId })]),
+    });
+
+    const decision = await app.request(
+      `/discount-applications/${applicationId}/request-information`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ reason: 'Upload a current enrollment record.' }),
+      },
+    );
+    expect(decision.status).toBe(403);
+  });
+
+  it('records an information request and its required audit reason', async () => {
+    const { applicationId } = await makeApplication();
+    const finance = await makeStaff('finance');
+    const app = appWithSession(admin, fakeSession(finance.userId));
+
+    const response = await app.request(
+      `/discount-applications/${applicationId}/request-information`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ reason: 'Upload a current enrollment record.' }),
+      },
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      status: 'needs_information',
+      informationRequest: 'Upload a current enrollment record.',
+    });
+    expect(await auditCount('billing.discount_information_requested', applicationId)).toBe(1);
+  });
+
+  it('previews then confirms a scheduled award without claiming provider success early', async () => {
+    const { applicationId, organizationId } = await makeApplication();
+    const finance = await makeStaff('finance');
+    const app = appWithSession(admin, fakeSession(finance.userId));
+
+    const preview = await app.request(`/discount-applications/${applicationId}/preview-approval`, {
+      method: 'POST',
+    });
+    expect(preview.status).toBe(200);
+    await expect(preview.json()).resolves.toMatchObject({
+      percentOff: 50,
+      reviewMonths: 12,
+      credit: null,
+    });
+
+    const approved = await app.request(`/discount-applications/${applicationId}/approve`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reason: 'Institutional email is current.' }),
+    });
+    expect(approved.status).toBe(200);
+    await expect(approved.json()).resolves.toMatchObject({
+      application: { status: 'approved' },
+      award: { organizationId, percentOff: 50, status: 'scheduled' },
+    });
+    const [award] = await db
+      .select()
+      .from(schema.billingDiscountAward)
+      .where(eq(schema.billingDiscountAward.applicationId, applicationId));
+    expect(award?.providerCouponId).toMatch(/^coupon_/);
+    expect(await auditCount('billing.discount_approved', applicationId)).toBe(1);
+  });
+});
+
+describe('private partner awards', () => {
+  it('lets finance grant a time-bounded non-stacking partner discount', async () => {
+    const organizationId = await makeOrg();
+    await startProviderTrial(organizationId);
+    const finance = await makeStaff('finance');
+    const app = appWithSession(admin, fakeSession(finance.userId));
+    const endsAt = new Date();
+    endsAt.setUTCMonth(endsAt.getUTCMonth() + 12);
+
+    const response = await app.request(`/orgs/${organizationId}/discount-awards`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        percentOff: 25,
+        endsAt: endsAt.toISOString(),
+        reason: 'Launch partner agreement.',
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      organizationId,
+      programKey: null,
+      percentOff: 25,
+      status: 'active',
+    });
+    expect(await auditCount('billing.partner_discount_granted', organizationId)).toBe(1);
+
+    const stacked = await app.request(`/orgs/${organizationId}/discount-awards`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        percentOff: 10,
+        endsAt: endsAt.toISOString(),
+        reason: 'Second partner agreement.',
+      }),
+    });
+    expect(stacked.status).toBe(409);
+    await expect(stacked.json()).resolves.toMatchObject({ code: 'discount_award_conflict' });
+  });
+
+  it('rejects free or longer-than-24-month partner grants', async () => {
+    const organizationId = await makeOrg();
+    const finance = await makeStaff('finance');
+    const app = appWithSession(admin, fakeSession(finance.userId));
+    const tooLate = new Date();
+    tooLate.setUTCMonth(tooLate.getUTCMonth() + 25);
+
+    const free = await app.request(`/orgs/${organizationId}/discount-awards`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ percentOff: 100, endsAt: tooLate.toISOString(), reason: 'No.' }),
+    });
+    expect(free.status).toBe(422);
+
+    const long = await app.request(`/orgs/${organizationId}/discount-awards`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ percentOff: 50, endsAt: tooLate.toISOString(), reason: 'Too long.' }),
+    });
+    expect(long.status).toBe(422);
   });
 });
 
@@ -361,7 +552,11 @@ describe('billing exemptions', () => {
     ).items.find((o) => o.id === orgId);
     expect(listItem?.isBillingExempt).toBe(true);
 
-    const revoked = await app.request(`/orgs/${orgId}/billing-exemption`, { method: 'DELETE' });
+    const revoked = await app.request(`/orgs/${orgId}/billing-exemption`, {
+      method: 'DELETE',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reason: 'Founder access no longer needed' }),
+    });
     expect(revoked.status).toBe(200);
     expect((await json<{ revokedAt: string | null }>(revoked)).revokedAt).not.toBeNull();
     expect(await auditCount('billing.exemption_revoked', orgId)).toBe(1);
@@ -376,7 +571,13 @@ describe('billing exemptions', () => {
 
     // Revoking again 404s (no active grant).
     expect(
-      (await app.request(`/orgs/${orgId}/billing-exemption`, { method: 'DELETE' })).status,
+      (
+        await app.request(`/orgs/${orgId}/billing-exemption`, {
+          method: 'DELETE',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ reason: 'Repeated revoke' }),
+        })
+      ).status,
     ).toBe(404);
   });
 
@@ -433,22 +634,57 @@ describe('billing exemptions', () => {
     expect(second.status).toBe(409);
   });
 
+  it('409s a complimentary grant while a paid Stripe subscription is current', async () => {
+    const { userId } = await makeStaff('superadmin');
+    const orgId = await makeOrg('active');
+    await db
+      .insert(schema.organizationProductEntitlement)
+      .values({
+        organizationId: orgId,
+        productKey: 'docket_pro',
+        status: 'active',
+        source: 'stripe',
+        stripeSubscriptionId: `sub_${orgId}`,
+      })
+      .onConflictDoUpdate({
+        target: [
+          schema.organizationProductEntitlement.organizationId,
+          schema.organizationProductEntitlement.productKey,
+        ],
+        set: { status: 'active', source: 'stripe', stripeSubscriptionId: `sub_${orgId}` },
+      });
+    const app = appWithSession(admin, fakeSession(userId));
+
+    const response = await app.request(`/orgs/${orgId}/billing-exemption`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reason: 'Founder production access' }),
+    });
+
+    expect(response.status).toBe(409);
+  });
+
   it('404s revoking on an unknown org', async () => {
     const { userId } = await makeStaff('superadmin');
     const app = appWithSession(admin, fakeSession(userId));
     expect(
-      (await app.request('/orgs/missing/billing-exemption', { method: 'DELETE' })).status,
+      (
+        await app.request('/orgs/missing/billing-exemption', {
+          method: 'DELETE',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ reason: 'No longer eligible' }),
+        })
+      ).status,
     ).toBe(404);
   });
 });
 
 describe('billing actions', () => {
-  it('extends a trial (resets to trialing + clears window, audited)', async () => {
+  it('extends an eligible Stripe trial and reconciles the provider snapshot', async () => {
     const { userId } = await makeStaff('finance');
-    const orgId = await makeOrg('export_window', {
-      exportReadyAt: new Date('2026-01-01T00:00:00.000Z'),
-      deleteAfterAt: new Date('2026-01-15T00:00:00.000Z'),
-    });
+    const orgId = await makeOrg('active');
+    await startProviderTrial(orgId);
+    const before = await getContainer().billing.getSubscription(orgId);
     const app = appWithSession(admin, fakeSession(userId));
     const res = await app.request(`/orgs/${orgId}/extend-trial`, {
       method: 'POST',
@@ -456,14 +692,16 @@ describe('billing actions', () => {
       body: JSON.stringify({ days: 14 }),
     });
     expect(res.status).toBe(200);
-    const body = await json<{
-      lifecycleState: string;
-      exportReadyAt: string | null;
-      deleteAfterAt: string | null;
-    }>(res);
-    expect(body.lifecycleState).toBe('trialing');
-    expect(body.exportReadyAt).toBeNull();
-    expect(body.deleteAfterAt).toBeNull();
+    const after = await getContainer().billing.getSubscription(orgId);
+    expect(new Date(assertDefined(after?.trialEnd)).getTime()).toBe(
+      new Date(assertDefined(before?.trialEnd)).getTime() + 14 * 24 * 60 * 60 * 1000,
+    );
+    const [entitlement] = await db
+      .select()
+      .from(schema.organizationProductEntitlement)
+      .where(eq(schema.organizationProductEntitlement.organizationId, orgId));
+    expect(entitlement).toMatchObject({ status: 'trialing', source: 'stripe' });
+    expect(await stateOf(orgId)).toBe('active');
     expect(await auditCount('billing.trial_extended', orgId)).toBe(1);
   });
 
@@ -491,101 +729,22 @@ describe('billing actions', () => {
     ).toBe(422);
   });
 
-  it('reactivates an org out of the export window (audited)', async () => {
-    const { userId } = await makeStaff('finance');
-    const orgId = await makeOrg('export_window', {
-      deleteAfterAt: new Date('2030-01-01T00:00:00.000Z'),
-    });
-    const app = appWithSession(admin, fakeSession(userId));
-    const res = await app.request(`/orgs/${orgId}/reactivate`, { method: 'POST' });
-    expect(res.status).toBe(200);
-    expect((await json<{ lifecycleState: string }>(res)).lifecycleState).toBe('active');
-    expect(await stateOf(orgId)).toBe('active');
-    expect(await auditCount('billing.reactivated', orgId)).toBe(1);
-  });
-
-  it('404s reactivate on an unknown org', async () => {
-    const { userId } = await makeStaff('finance');
-    const app = appWithSession(admin, fakeSession(userId));
-    expect((await app.request('/orgs/missing/reactivate', { method: 'POST' })).status).toBe(404);
-  });
-
-  it('sets lifecycle to active/trialing via the reactivate path', async () => {
-    const { userId } = await makeStaff('superadmin');
-    const app = appWithSession(admin, fakeSession(userId));
-
-    const orgA = await makeOrg('export_window', {
-      deleteAfterAt: new Date('2030-01-01T00:00:00.000Z'),
-    });
-    const toActive = await app.request(`/orgs/${orgA}/lifecycle`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ lifecycleState: 'active' }),
-    });
-    expect(toActive.status).toBe(200);
-    expect(await stateOf(orgA)).toBe('active');
-
-    const orgB = await makeOrg('export_window', {
-      deleteAfterAt: new Date('2030-01-01T00:00:00.000Z'),
-    });
-    const toTrialing = await app.request(`/orgs/${orgB}/lifecycle`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ lifecycleState: 'trialing' }),
-    });
-    expect(toTrialing.status).toBe(200);
-    expect(await stateOf(orgB)).toBe('active'); // onReactivated normalizes to active
-    expect(await auditCount('lifecycle.state_set', orgB)).toBe(1);
-  });
-
-  it('sets lifecycle to export_window via the terminal path', async () => {
+  it('removes finance actions that could forge paid access or schedule deletion', async () => {
     const { userId } = await makeStaff('superadmin');
     const orgId = await makeOrg('active');
     const app = appWithSession(admin, fakeSession(userId));
-    const res = await app.request(`/orgs/${orgId}/lifecycle`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ lifecycleState: 'export_window' }),
-    });
-    expect(res.status).toBe(200);
-    expect(await stateOf(orgId)).toBe('export_window');
-  });
 
-  it('sets lifecycle to a raw state (pending_deletion) via the direct override', async () => {
-    const { userId } = await makeStaff('superadmin');
-    const orgId = await makeOrg('export_window');
-    const app = appWithSession(admin, fakeSession(userId));
-    const res = await app.request(`/orgs/${orgId}/lifecycle`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ lifecycleState: 'pending_deletion' }),
-    });
-    expect(res.status).toBe(200);
-    expect(await stateOf(orgId)).toBe('pending_deletion');
-  });
-
-  it('404s set-lifecycle on an unknown org and 422s a bad state', async () => {
-    const { userId } = await makeStaff('superadmin');
-    const orgId = await makeOrg('active');
-    const app = appWithSession(admin, fakeSession(userId));
-    expect(
-      (
-        await app.request('/orgs/missing/lifecycle', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ lifecycleState: 'active' }),
-        })
-      ).status,
-    ).toBe(404);
+    expect((await app.request(`/orgs/${orgId}/reactivate`, { method: 'POST' })).status).toBe(404);
     expect(
       (
         await app.request(`/orgs/${orgId}/lifecycle`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ lifecycleState: 'nonsense' }),
+          body: JSON.stringify({ lifecycleState: 'pending_deletion' }),
         })
       ).status,
-    ).toBe(422);
+    ).toBe(404);
+    expect(await stateOf(orgId)).toBe('active');
   });
 });
 

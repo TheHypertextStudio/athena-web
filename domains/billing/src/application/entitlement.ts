@@ -40,6 +40,7 @@ export async function resolveProductCapability(
   db: Database,
   organizationId: string,
   capability: ProductCapability,
+  now: Date = new Date(),
 ): Promise<ProductCapabilityEntitlement> {
   const rows = await db
     .select({
@@ -47,6 +48,7 @@ export async function resolveProductCapability(
       productKey: organizationProductEntitlement.productKey,
       status: organizationProductEntitlement.status,
       source: organizationProductEntitlement.source,
+      graceEndsAt: organizationProductEntitlement.graceEndsAt,
     })
     .from(organization)
     .leftJoin(
@@ -62,7 +64,8 @@ export async function resolveProductCapability(
       isProductKey(row.productKey) &&
       row.status &&
       row.source &&
-      ACCESS_STATUSES.has(row.status) &&
+      (ACCESS_STATUSES.has(row.status) ||
+        (row.status === 'past_due' && row.graceEndsAt !== null && row.graceEndsAt > now)) &&
       productGrantsCapability(row.productKey, capability)
     ) {
       return {

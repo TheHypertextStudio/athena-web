@@ -108,6 +108,27 @@ export class ConflictError extends ApiError {
   }
 }
 
+/** 409 — billing cannot continue until the organization has a reconciled provider customer. */
+export class BillingCustomerMissingError extends ApiError {
+  constructor(message = 'Billing customer is not available') {
+    super(409, 'billing_customer_missing', message);
+  }
+}
+
+/** 409 — another Checkout request is still creating the organization session. */
+export class CheckoutPendingError extends ApiError {
+  constructor(message = 'Checkout is already being prepared') {
+    super(409, 'checkout_pending', message);
+  }
+}
+
+/** 409 — the organization already has a current Docket Pro subscription. */
+export class SubscriptionExistsError extends ApiError {
+  constructor(message = 'Docket Pro is already active for this organization') {
+    super(409, 'subscription_exists', message);
+  }
+}
+
 /**
  * 405 — the path exists but not for this method.
  *

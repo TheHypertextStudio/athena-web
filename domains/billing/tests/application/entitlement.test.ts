@@ -39,12 +39,14 @@ async function seedDocketPro(
   organizationId: string,
   status: ProductEntitlementStatus,
   source: ProductEntitlementSource = 'stripe',
+  graceEndsAt?: Date,
 ): Promise<void> {
   await db.insert(schema.organizationProductEntitlement).values({
     organizationId,
     productKey: 'docket_pro',
     status,
     source,
+    graceEndsAt,
   });
 }
 
@@ -70,17 +72,26 @@ describe('Docket Pro capabilities', () => {
     });
   });
 
-  it.each(['past_due', 'canceled'] as const)(
-    'does not grant capabilities while %s',
-    async (status) => {
-      const orgId = await seedOrg();
-      await seedDocketPro(orgId, status);
+  it('keeps capabilities during the seven-day payment grace period', async () => {
+    const orgId = await seedOrg();
+    await seedDocketPro(orgId, 'past_due', 'stripe', new Date('2026-09-01T00:00:00.000Z'));
 
-      await expect(resolveProductCapability(db, orgId, 'athena')).resolves.toEqual({
-        kind: 'product-required',
-      });
-    },
-  );
+    await expect(
+      resolveProductCapability(db, orgId, 'athena', new Date('2026-08-31T23:59:59.000Z')),
+    ).resolves.toMatchObject({ kind: 'entitled' });
+  });
+
+  it.each([
+    ['past_due', new Date('2026-08-30T00:00:00.000Z')],
+    ['canceled', undefined],
+  ] as const)('does not grant capabilities after %s access ends', async (status, graceEndsAt) => {
+    const orgId = await seedOrg();
+    await seedDocketPro(orgId, status, 'stripe', graceEndsAt);
+
+    await expect(
+      resolveProductCapability(db, orgId, 'athena', new Date('2026-08-31T00:00:00.000Z')),
+    ).resolves.toEqual({ kind: 'product-required' });
+  });
 
   it('keeps organization lifecycle separate from product ownership', async () => {
     const orgId = await seedOrg('export_window');

@@ -1816,11 +1816,22 @@ describe('integrations router (CRUD; import covered elsewhere)', () => {
 describe('billing router (GET status only; checkout/portal covered elsewhere)', () => {
   it('returns baseline Docket before any paid product', async () => {
     const { orgId } = await seedBaseOrg(db, schema);
-    const organizationId = `${orgId}_none`;
-    const w = appWithActor(r['billing'], organizationId, ['view']);
+    await db
+      .delete(schema.organizationProductEntitlement)
+      .where(eq(schema.organizationProductEntitlement.organizationId, orgId));
+    const w = appWithActor(r['billing'], orgId, ['view']);
     const res = await w.request('/', { method: 'GET' });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ organizationId, products: [], canManageBilling: false });
+    expect(await res.json()).toEqual({
+      organizationId: orgId,
+      listPrice: { amount: 800, currency: 'usd', interval: 'month' },
+      accessMode: 'read_only',
+      products: [],
+      canManageBilling: false,
+      effectiveDiscount: null,
+      applicationStatus: null,
+      issuedCredit: null,
+    });
   });
 });
 

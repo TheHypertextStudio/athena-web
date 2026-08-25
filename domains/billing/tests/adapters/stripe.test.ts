@@ -30,6 +30,7 @@ interface RecordedReq {
   readonly url: string;
   readonly method: string;
   readonly body: string;
+  readonly headers: Headers;
 }
 
 /**
@@ -46,6 +47,7 @@ function scriptedHttp(payloads: unknown[]): { http: HttpClient; reqs: RecordedRe
       url,
       method: init?.method ?? 'GET',
       body: typeof init?.body === 'string' ? init.body : '',
+      headers: new Headers(init?.headers),
     });
     const payload = payloads[i] ?? {};
     i += 1;
@@ -82,6 +84,7 @@ function stripeSub(over: {
   referenceId?: string | null;
   periodEnd?: number;
   trialEnd?: number | null;
+  cancelAtPeriodEnd?: boolean;
 }): StripeSubscriptionView {
   const metadata: Record<string, string> =
     over.referenceId === null ? {} : { referenceId: over.referenceId ?? 'org_1' };
@@ -91,6 +94,7 @@ function stripeSub(over: {
     status: over.status ?? 'active',
     metadata,
     trial_end: over.trialEnd === undefined ? null : over.trialEnd,
+    cancel_at_period_end: over.cancelAtPeriodEnd ?? false,
     items: {
       data: [{ current_period_end: over.periodEnd ?? 1_700_000_000 }],
     },
@@ -136,6 +140,10 @@ describe('mapEventType', () => {
     );
     expect(mapEventType('customer.subscription.deleted')).toBe('subscription.canceled');
     expect(mapEventType('invoice.payment_failed')).toBe('subscription.past_due');
+    expect(mapEventType('invoice.paid')).toBe('subscription.paid');
+    expect(mapEventType('invoice.payment_action_required')).toBe(
+      'subscription.payment_action_required',
+    );
   });
 
   it('disambiguates subscription.updated by mapped status', () => {
@@ -165,6 +173,7 @@ describe('toSubscription', () => {
       referenceId: 'org_1',
       status: 'trialing',
       currentPeriodEnd: new Date(1_700_000_000 * 1000).toISOString(),
+      cancelAtPeriodEnd: false,
       trialEnd: new Date(1_701_000_000 * 1000).toISOString(),
     });
   });
@@ -238,6 +247,7 @@ describe('RealStripeGateway.mapStripeEvent', () => {
     const event = stripeEvent('customer.subscription.updated', {
       object: 'subscription',
       id: 'sub_42',
+      customer: 'cus_42',
       status: 'past_due',
       metadata: { referenceId: 'org_9' },
       trial_end: null,
@@ -253,11 +263,13 @@ describe('RealStripeGateway.mapStripeEvent', () => {
       id: 'evt_1',
       type: 'subscription.past_due',
       referenceId: 'org_9',
+      customerId: 'cus_42',
       subscription: {
         id: 'sub_42',
         referenceId: 'org_9',
         status: 'past_due',
         currentPeriodEnd: new Date(1_700_000_000 * 1000).toISOString(),
+        cancelAtPeriodEnd: false,
       },
       createdAt: new Date(1_700_000_000 * 1000).toISOString(),
     });
@@ -285,6 +297,26 @@ describe('RealStripeGateway.mapStripeEvent', () => {
     const mapped = gw.mapStripeEvent(event);
     expect(mapped?.type).toBe('subscription.past_due');
     expect(mapped?.referenceId).toBe('org_meta');
+  });
+
+  it('reads invoice ownership from subscription details instead of invoice metadata', () => {
+    const event = stripeEvent('invoice.payment_failed', {
+      object: 'invoice',
+      id: 'in_2',
+      customer: 'cus_2',
+      parent: {
+        subscription_details: {
+          subscription: 'sub_2',
+          metadata: { referenceId: 'org_subscription' },
+        },
+      },
+    });
+    expect(gw.mapStripeEvent(event)).toMatchObject({
+      type: 'subscription.past_due',
+      referenceId: 'org_subscription',
+      customerId: 'cus_2',
+      subscriptionId: 'sub_2',
+    });
   });
 
   it('returns null for an event type Docket does not model', () => {
@@ -330,6 +362,31 @@ describe('RealStripeGateway checkout guards (pure)', () => {
 });
 
 describe('RealStripeGateway methods (driven through the SDK over a scripted http)', () => {
+  it('creates one organization customer with an idempotent provider request', async () => {
+    const { http, reqs } = scriptedHttp([{ id: 'cus_1', object: 'customer' }]);
+    const gw = new RealStripeGateway({ secretKey: 'sk_test_x' }, http);
+
+    await expect(gw.createCustomer('org_1', 'owner@example.com')).resolves.toEqual({
+      id: 'cus_1',
+      referenceId: 'org_1',
+    });
+
+    const req = requestAt(reqs, 0);
+    expect(req.url).toContain('/v1/customers');
+    expect(decodeURIComponent(req.body)).toContain('metadata[referenceId]=org_1');
+    expect(decodeURIComponent(req.body)).toContain('email=owner@example.com');
+    expect(req.headers.get('idempotency-key')).toBe('docket:customer:org_1');
+  });
+
+  it('reads the hosted Checkout billing country from the durable customer', async () => {
+    const { http } = scriptedHttp([
+      { id: 'cus_1', object: 'customer', address: { country: 'US' } },
+    ]);
+    const gw = new RealStripeGateway({ secretKey: 'sk_test_x' }, http);
+
+    await expect(gw.getCustomerBillingCountry('cus_1')).resolves.toBe('US');
+  });
+
   it('creates a hosted checkout, mapping price + redirect URLs', async () => {
     const { http, reqs } = scriptedHttp([{ id: 'cs_h', url: 'https://stripe/checkout' }]);
     const gw = new RealStripeGateway({ secretKey: 'sk_test_x', priceKey: 'price_default' }, http);
@@ -339,6 +396,9 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
       successUrl: 'https://app/ok',
       cancelUrl: 'https://app/no',
       customerEmail: 'a@b.com',
+      customerId: 'cus_1',
+      couponId: 'coupon_student',
+      idempotencyKey: 'checkout-attempt-1',
     });
     expect(result).toEqual({ url: 'https://stripe/checkout', sessionId: 'cs_h' });
     const req = requestAt(reqs, 0);
@@ -348,7 +408,15 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
     expect(decodeURIComponent(req.body)).toContain('price_override');
     expect(decodeURIComponent(req.body)).toContain('trial_period_days]=14');
     expect(decodeURIComponent(req.body)).toContain('referenceId]=org_1');
-    expect(decodeURIComponent(req.body)).toContain('a@b.com');
+    expect(decodeURIComponent(req.body)).toContain('customer=cus_1');
+    expect(decodeURIComponent(req.body)).toContain('automatic_tax[enabled]=true');
+    expect(decodeURIComponent(req.body)).toContain('billing_address_collection=required');
+    expect(decodeURIComponent(req.body)).toContain('tax_id_collection[enabled]=true');
+    expect(decodeURIComponent(req.body)).toContain('payment_method_collection=always');
+    expect(decodeURIComponent(req.body)).toContain('customer_update[address]=auto');
+    expect(decodeURIComponent(req.body)).toContain('discounts[0][coupon]=coupon_student');
+    expect(decodeURIComponent(req.body)).not.toContain('allow_promotion_codes');
+    expect(req.headers.get('idempotency-key')).toBe('checkout-attempt-1');
   });
 
   it('falls back to the configured price and a custom trial-days override', async () => {
@@ -365,6 +433,19 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
     });
     expect(decodeURIComponent(requestAt(reqs, 0).body)).toContain('price_default');
     expect(decodeURIComponent(requestAt(reqs, 0).body)).toContain('trial_period_days]=30');
+  });
+
+  it('omits Stripe trial parameters when the organization already consumed its trial', async () => {
+    const { http, reqs } = scriptedHttp([{ id: 'cs_paid', url: 'u' }]);
+    const gw = new RealStripeGateway({ secretKey: 'sk', priceKey: 'price_default' }, http);
+    await gw.createCheckoutSession({
+      referenceId: 'returning',
+      priceKey: 'price_default',
+      successUrl: 's',
+      cancelUrl: 'c',
+      trialDays: 0,
+    });
+    expect(decodeURIComponent(requestAt(reqs, 0).body)).not.toContain('trial_period_days');
   });
 
   it('resolves a lookup key to a price id before creating checkout', async () => {
@@ -431,6 +512,7 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
       referenceId: 'org_5',
       status: 'active',
       currentPeriodEnd: new Date(1_700_000_000 * 1000).toISOString(),
+      cancelAtPeriodEnd: false,
     });
     expect(requestAt(reqs, 0).url).toContain('/v1/subscriptions/search');
   });
@@ -461,21 +543,223 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
     expect(reqs).toHaveLength(1);
   });
 
+  it('extends a provider trial with an idempotent subscription update', async () => {
+    const trialEnd = 1_700_000_000;
+    const extendedEnd = trialEnd + 7 * 24 * 60 * 60;
+    const { http, reqs } = scriptedHttp([
+      searchResult([
+        {
+          id: 'sub_trial',
+          object: 'subscription',
+          status: 'trialing',
+          metadata: { referenceId: 'org_trial' },
+          trial_end: trialEnd,
+          items: list([{ current_period_end: trialEnd }]),
+        },
+      ]),
+      {
+        id: 'sub_trial',
+        object: 'subscription',
+        status: 'trialing',
+        metadata: { referenceId: 'org_trial' },
+        trial_end: extendedEnd,
+        items: list([{ current_period_end: extendedEnd }]),
+      },
+    ]);
+    const gw = new RealStripeGateway({ secretKey: 'sk' }, http);
+
+    const result = await gw.extendTrial('org_trial', 7, 'trial-extension-op');
+
+    expect(result.trialEnd).toBe(new Date(extendedEnd * 1000).toISOString());
+    const update = requestAt(reqs, 1);
+    expect(update.url).toContain('/v1/subscriptions/sub_trial');
+    expect(decodeURIComponent(update.body)).toContain(`trial_end=${String(extendedEnd)}`);
+    expect(decodeURIComponent(update.body)).toContain('proration_behavior=none');
+    expect(update.headers.get('idempotency-key')).toBe('trial-extension-op');
+  });
+
   it('opens a billing portal session with the configured config id', async () => {
     const { http, reqs } = scriptedHttp([{ id: 'bps_1', url: 'https://portal' }]);
     const gw = new RealStripeGateway({ secretKey: 'sk', portalConfigId: 'bpc_1' }, http);
-    const result = await gw.createBillingPortalSession('cus_1');
+    const result = await gw.createBillingPortalSession({
+      customerId: 'cus_1',
+      returnUrl: 'https://app.example/orgs/org_1/settings/billing',
+    });
     expect(result).toEqual({ url: 'https://portal' });
     const req = requestAt(reqs, 0);
     expect(req.url).toContain('/v1/billing_portal/sessions');
     expect(decodeURIComponent(req.body)).toContain('customer=cus_1');
     expect(decodeURIComponent(req.body)).toContain('configuration=bpc_1');
+    expect(decodeURIComponent(req.body)).toContain(
+      'return_url=https://app.example/orgs/org_1/settings/billing',
+    );
+  });
+
+  it('creates a product-scoped repeating coupon with provider idempotency', async () => {
+    const { http, reqs } = scriptedHttp([
+      { id: 'price_pro', object: 'price', product: 'prod_pro' },
+      { id: 'coupon_student', object: 'coupon' },
+    ]);
+    const gw = new RealStripeGateway({ secretKey: 'sk' }, http);
+
+    await expect(
+      gw.createDiscountCoupon({
+        awardId: 'award_1',
+        name: 'Student discount',
+        percentOff: 50,
+        priceKey: 'price_pro',
+        idempotencyKey: 'award-1-coupon',
+      }),
+    ).resolves.toEqual({ id: 'coupon_student' });
+
+    const create = requestAt(reqs, 1);
+    expect(create.url).toContain('/v1/coupons');
+    expect(decodeURIComponent(create.body)).toContain('percent_off=50');
+    expect(decodeURIComponent(create.body)).toContain('duration=forever');
+    expect(decodeURIComponent(create.body)).not.toContain('duration_in_months');
+    expect(decodeURIComponent(create.body)).toContain('applies_to[products][0]=prod_pro');
+    expect(decodeURIComponent(create.body)).toContain('metadata[awardId]=award_1');
+    expect(create.headers.get('idempotency-key')).toBe('award-1-coupon');
+  });
+
+  it('applies a coupon to an existing subscription without proration', async () => {
+    const { http, reqs } = scriptedHttp([
+      searchResult([
+        { id: 'sub_discount', object: 'subscription', status: 'active', items: list([]) },
+      ]),
+      {
+        id: 'sub_discount',
+        object: 'subscription',
+        status: 'active',
+        discounts: [{ id: 'di_1' }],
+        items: list([]),
+      },
+    ]);
+    const gw = new RealStripeGateway({ secretKey: 'sk' }, http);
+
+    await expect(
+      gw.applySubscriptionDiscount({
+        referenceId: 'org_1',
+        couponId: 'coupon_student',
+        idempotencyKey: 'award-1-apply',
+      }),
+    ).resolves.toEqual({ discountId: 'di_1' });
+
+    const update = requestAt(reqs, 1);
+    expect(decodeURIComponent(update.body)).toContain('discounts[0][coupon]=coupon_student');
+    expect(decodeURIComponent(update.body)).toContain('proration_behavior=none');
+    expect(update.headers.get('idempotency-key')).toBe('award-1-apply');
+  });
+
+  it('removes a subscription discount with provider idempotency', async () => {
+    const { http, reqs } = scriptedHttp([
+      searchResult([
+        { id: 'sub_discount', object: 'subscription', status: 'active', items: list([]) },
+      ]),
+      { id: 'di_1', object: 'discount', deleted: true },
+    ]);
+    const gw = new RealStripeGateway({ secretKey: 'sk' }, http);
+
+    await gw.removeSubscriptionDiscount('org_1', 'award-1-remove');
+
+    const remove = requestAt(reqs, 1);
+    expect(remove.url).toContain('/v1/subscriptions/sub_discount/discount');
+    expect(remove.method).toBe('DELETE');
+    expect(remove.headers.get('idempotency-key')).toBe('award-1-remove');
+  });
+
+  it('previews and issues a tax-aware invoice-line credit', async () => {
+    const { http, reqs } = scriptedHttp([
+      {
+        object: 'credit_note',
+        amount: 218,
+        total: 218,
+        subtotal: 200,
+        pre_payment_amount: 0,
+        post_payment_amount: 218,
+        tax_amounts: [{ amount: 18 }],
+      },
+      {
+        id: 'cn_1',
+        object: 'credit_note',
+        amount: 218,
+        total: 218,
+        subtotal: 200,
+        pre_payment_amount: 0,
+        post_payment_amount: 218,
+        tax_amounts: [{ amount: 18 }],
+      },
+    ]);
+    const gw = new RealStripeGateway({ secretKey: 'sk' }, http);
+
+    await expect(
+      gw.previewCreditNote({ invoiceId: 'in_1', invoiceLineId: 'il_1', baseAmount: 200 }),
+    ).resolves.toEqual({
+      baseAmount: 200,
+      taxAmount: 18,
+      totalAmount: 218,
+      prePaymentAmount: 0,
+      postPaymentAmount: 218,
+    });
+    await expect(
+      gw.issueCreditNote({
+        invoiceId: 'in_1',
+        invoiceLineId: 'il_1',
+        baseAmount: 200,
+        creditAmount: 218,
+        idempotencyKey: 'credit-1',
+        memo: 'Student discount effective 2026-08-16',
+      }),
+    ).resolves.toMatchObject({ id: 'cn_1', totalAmount: 218 });
+
+    expect(requestAt(reqs, 0).url).toContain('/v1/credit_notes/preview');
+    const issue = requestAt(reqs, 1);
+    expect(issue.url).toContain('/v1/credit_notes');
+    expect(decodeURIComponent(issue.body)).toContain('lines[0][invoice_line_item]=il_1');
+    expect(decodeURIComponent(issue.body)).toContain('lines[0][amount]=200');
+    expect(decodeURIComponent(issue.body)).toContain('credit_amount=218');
+    expect(issue.headers.get('idempotency-key')).toBe('credit-1');
+  });
+
+  it('reads the latest paid recurring invoice line for credit calculation', async () => {
+    const { http } = scriptedHttp([
+      searchResult([
+        { id: 'sub_invoice', object: 'subscription', status: 'active', items: list([]) },
+      ]),
+      list([
+        {
+          id: 'in_1',
+          object: 'invoice',
+          status: 'paid',
+          currency: 'usd',
+          lines: list([
+            {
+              id: 'il_1',
+              object: 'line_item',
+              amount: 800,
+              period: { start: 1_700_000_000, end: 1_702_678_400 },
+            },
+          ]),
+        },
+      ]),
+    ]);
+    const gw = new RealStripeGateway({ secretKey: 'sk' }, http);
+
+    await expect(gw.getLatestRecurringInvoice('org_1')).resolves.toEqual({
+      invoiceId: 'in_1',
+      lineId: 'il_1',
+      invoiceStatus: 'paid',
+      currency: 'usd',
+      recurringAmount: 800,
+      periodStartsAt: new Date(1_700_000_000 * 1000).toISOString(),
+      periodEndsAt: new Date(1_702_678_400 * 1000).toISOString(),
+    });
   });
 
   it('honors a custom apiBase override (stripe-mock)', async () => {
     const { http, reqs } = scriptedHttp([{ id: 'bps_2', url: 'https://portal' }]);
     const gw = new RealStripeGateway({ secretKey: 'sk', apiBase: 'http://localhost:12111' }, http);
-    await gw.createBillingPortalSession('cus_2');
+    await gw.createBillingPortalSession({ customerId: 'cus_2', returnUrl: 'https://app/return' });
     expect(requestAt(reqs, 0).url).toContain('http://localhost:12111/v1/billing_portal/sessions');
   });
 });

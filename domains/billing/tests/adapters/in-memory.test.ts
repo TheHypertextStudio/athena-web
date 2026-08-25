@@ -114,11 +114,89 @@ describe('InMemoryBillingGateway', () => {
     });
   });
 
+  describe('extendTrial', () => {
+    it('extends only an existing provider trial', async () => {
+      const gw = new InMemoryBillingGateway({ now: '2026-01-01T00:00:00.000Z' });
+      await gw.createCheckoutSession({
+        referenceId: 'org_trial',
+        priceKey: 'price_team',
+        successUrl: 's',
+        cancelUrl: 'c',
+      });
+
+      const extended = await gw.extendTrial('org_trial', 7, 'trial-extension-1');
+      expect(extended.trialEnd).toBe('2026-01-22T00:00:00.000Z');
+      expect(gw.events.at(-1)).toMatchObject({
+        type: 'subscription.updated',
+        subscription: { status: 'trialing' },
+      });
+    });
+
+    it('rejects a missing or paid subscription', async () => {
+      const gw = new InMemoryBillingGateway();
+      await expect(gw.extendTrial('missing', 7, 'trial-extension-2')).rejects.toThrow(
+        'no eligible trialing subscription',
+      );
+    });
+  });
+
   describe('createBillingPortalSession', () => {
-    it('returns a synthetic portal URL addressed by the reference id', async () => {
+    it('returns a synthetic portal URL addressed by the provider customer id', async () => {
       const gw = new InMemoryBillingGateway({ baseUrl: 'https://mock.example.com' });
-      const result = await gw.createBillingPortalSession('org_6');
-      expect(result).toEqual({ url: 'https://mock.example.com/portal/org_6' });
+      const result = await gw.createBillingPortalSession({
+        customerId: 'cus_6',
+        returnUrl: 'https://app/return',
+      });
+      expect(result).toEqual({ url: 'https://mock.example.com/portal/cus_6' });
+    });
+  });
+
+  describe('discounts and credits', () => {
+    it('creates and applies a confirmed award without provider ambiguity', async () => {
+      const gw = new InMemoryBillingGateway();
+      const coupon = await gw.createDiscountCoupon({
+        awardId: 'award_1',
+        name: 'Student discount',
+        percentOff: 50,
+        priceKey: 'docket_pro_monthly',
+        idempotencyKey: 'coupon-1',
+      });
+      await gw.createCheckoutSession({
+        referenceId: 'org_discount',
+        priceKey: 'docket_pro_monthly',
+        successUrl: 's',
+        cancelUrl: 'c',
+      });
+      await expect(
+        gw.applySubscriptionDiscount({
+          referenceId: 'org_discount',
+          couponId: coupon.id,
+          idempotencyKey: 'apply-1',
+        }),
+      ).resolves.toMatchObject({ discountId: expect.stringMatching(/^di_/) });
+    });
+
+    it('previews and issues a deterministic customer-balance credit', async () => {
+      const gw = new InMemoryBillingGateway();
+      await expect(
+        gw.previewCreditNote({ invoiceId: 'in_1', invoiceLineId: 'il_1', baseAmount: 200 }),
+      ).resolves.toEqual({
+        baseAmount: 200,
+        taxAmount: 0,
+        totalAmount: 200,
+        prePaymentAmount: 0,
+        postPaymentAmount: 200,
+      });
+      await expect(
+        gw.issueCreditNote({
+          invoiceId: 'in_1',
+          invoiceLineId: 'il_1',
+          baseAmount: 200,
+          creditAmount: 200,
+          idempotencyKey: 'credit-1',
+          memo: 'Approved discount',
+        }),
+      ).resolves.toMatchObject({ id: expect.stringMatching(/^cn_/), totalAmount: 200 });
     });
   });
 

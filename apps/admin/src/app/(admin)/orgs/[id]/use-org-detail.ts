@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { api } from '@/lib/api';
-import type { LifecycleState } from '@/lib/lifecycle';
 import { isAuthError, userErrorMessage, userProblemMessage } from '@/lib/problem';
 import type { AdminHold, AdminOrg } from '@/lib/types';
 
@@ -17,15 +16,15 @@ export interface OrgDetailData {
   pending: string | null;
   trialDays: string;
   setTrialDays: (v: string) => void;
-  targetState: LifecycleState;
-  setTargetState: (v: LifecycleState) => void;
+  complimentaryReason: string;
+  setComplimentaryReason: (v: string) => void;
   holds: readonly AdminHold[];
   holdReason: string;
   setHoldReason: (v: string) => void;
   load: () => Promise<void>;
   extendTrial: () => void;
-  reactivate: () => void;
-  setLifecycle: () => void;
+  grantComplimentary: () => void;
+  revokeComplimentary: () => void;
   placeHold: () => Promise<void>;
   releaseHold: (holdId: string) => Promise<void>;
 }
@@ -39,7 +38,7 @@ export function useOrgDetail(orgId: string): OrgDetailData {
   const [actionError, setActionError] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [trialDays, setTrialDays] = useState('14');
-  const [targetState, setTargetState] = useState<LifecycleState>('active');
+  const [complimentaryReason, setComplimentaryReason] = useState('Founder production access');
   const [holds, setHolds] = useState<readonly AdminHold[]>([]);
   const [holdReason, setHoldReason] = useState('');
 
@@ -98,25 +97,53 @@ export function useOrgDetail(orgId: string): OrgDetailData {
     );
   }, [orgId, runOrgAction, trialDays]);
 
-  const reactivate = useCallback((): void => {
-    void runOrgAction(
-      'reactivate',
-      () => api.admin.orgs[':id'].reactivate.$post({ param: { id: orgId } }),
-      'Could not reactivate the organization.',
-    );
-  }, [orgId, runOrgAction]);
-
-  const setLifecycle = useCallback((): void => {
-    void runOrgAction(
-      'lifecycle',
-      () =>
-        api.admin.orgs[':id'].lifecycle.$post({
+  const changeComplimentary = useCallback(
+    async (grant: boolean): Promise<void> => {
+      setActionError(null);
+      setPending(grant ? 'grant-complimentary' : 'revoke-complimentary');
+      try {
+        const request = {
           param: { id: orgId },
-          json: { lifecycleState: targetState },
-        }),
-      'Could not set the lifecycle state.',
-    );
-  }, [orgId, runOrgAction, targetState]);
+          json: { reason: complimentaryReason },
+        };
+        const res = grant
+          ? await api.admin.orgs[':id']['billing-exemption'].$post(request)
+          : await api.admin.orgs[':id']['billing-exemption'].$delete(request);
+        if (!res.ok) {
+          setActionError(
+            await userProblemMessage(
+              res,
+              grant
+                ? 'Could not grant complimentary Docket Pro.'
+                : 'Could not revoke complimentary Docket Pro.',
+            ),
+          );
+          return;
+        }
+        await load();
+      } catch (caught) {
+        setActionError(
+          userErrorMessage(
+            caught,
+            grant
+              ? 'Something went wrong granting complimentary Docket Pro.'
+              : 'Something went wrong revoking complimentary Docket Pro.',
+          ),
+        );
+      } finally {
+        setPending(null);
+      }
+    },
+    [complimentaryReason, load, orgId],
+  );
+
+  const grantComplimentary = useCallback((): void => {
+    void changeComplimentary(true);
+  }, [changeComplimentary]);
+
+  const revokeComplimentary = useCallback((): void => {
+    void changeComplimentary(false);
+  }, [changeComplimentary]);
 
   const placeHold = useCallback(async (): Promise<void> => {
     setActionError(null);
@@ -171,15 +198,15 @@ export function useOrgDetail(orgId: string): OrgDetailData {
     pending,
     trialDays,
     setTrialDays,
-    targetState,
-    setTargetState,
+    complimentaryReason,
+    setComplimentaryReason,
     holds,
     holdReason,
     setHoldReason,
     load,
     extendTrial,
-    reactivate,
-    setLifecycle,
+    grantComplimentary,
+    revokeComplimentary,
     placeHold,
     releaseHold,
   };

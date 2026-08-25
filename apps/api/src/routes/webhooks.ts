@@ -18,8 +18,19 @@
  * read at request time (never at module scope).
  */
 import { applyBillingEvent } from '@docket/billing/application/lifecycle';
+import {
+  claimProviderEvent,
+  completeProviderEvent,
+  getBillingCustomer,
+} from '@docket/billing/application/provider-state';
 import type { BillingEvent, BillingGateway } from '@docket/billing/contracts';
-import { db } from '@docket/db';
+import {
+  billingDiscountAward,
+  billingDiscountProgram,
+  db,
+  organizationBillingAccount,
+} from '@docket/db';
+import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 
 import { getContainer } from '../container';
@@ -67,6 +78,16 @@ const webhooks = new Hono().post('/webhook', async (c) => {
     }
     // Verified, but Docket does not model this event type: acknowledge without effect.
     if (!event) return c.json({ received: true, effect: null });
+    if (event.referenceId && event.type !== 'subscription.trial_will_end') {
+      const subscription = await gateway.getSubscription(event.referenceId);
+      if (subscription) {
+        event = {
+          ...event,
+          type: event.type === 'checkout.completed' ? 'subscription.updated' : event.type,
+          subscription,
+        };
+      }
+    }
   } else {
     // Mock path (local/test): the gateway emits already-normalized events; shape-check only.
     let parsed: unknown;
@@ -80,7 +101,62 @@ const webhooks = new Hono().post('/webhook', async (c) => {
   }
 
   const now = new Date().toISOString();
-  const effect = await applyBillingEvent(db, event, now);
+  const account = event.referenceId ? await getBillingCustomer(db, event.referenceId) : null;
+  let countryEffect: 'verified' | 'awaiting_billing_country' | 'unsupported_country' | null = null;
+  if (account?.countryVerificationRequired && account.countryVerifiedAt === null) {
+    if (!event.customerId || event.customerId !== account.stripeCustomerId) {
+      countryEffect = 'awaiting_billing_country';
+    } else {
+      const country = await gateway.getCustomerBillingCountry(event.customerId);
+      if (!country) {
+        countryEffect = 'awaiting_billing_country';
+      } else if (country !== 'US') {
+        await gateway.cancelSubscription(event.referenceId);
+        countryEffect = 'unsupported_country';
+      } else {
+        await db
+          .update(organizationBillingAccount)
+          .set({ billingCountry: country, countryVerifiedAt: new Date(now) })
+          .where(eq(organizationBillingAccount.organizationId, event.referenceId));
+        countryEffect = 'verified';
+      }
+    }
+  }
+  const effect = await db.transaction(async (tx) => {
+    if (!(await claimProviderEvent(tx, event))) return 'duplicate' as const;
+    if (countryEffect === 'awaiting_billing_country' || countryEffect === 'unsupported_country') {
+      await completeProviderEvent(tx, event.id, new Date(now));
+      return countryEffect;
+    }
+    const applied = await applyBillingEvent(tx, event, now);
+    if (event.type === 'subscription.paid') {
+      const [scheduled] = await tx
+        .select({ award: billingDiscountAward, program: billingDiscountProgram })
+        .from(billingDiscountAward)
+        .leftJoin(
+          billingDiscountProgram,
+          eq(billingDiscountProgram.key, billingDiscountAward.programKey),
+        )
+        .where(
+          and(
+            eq(billingDiscountAward.organizationId, event.referenceId),
+            eq(billingDiscountAward.status, 'scheduled'),
+          ),
+        )
+        .limit(1);
+      if (scheduled) {
+        const startsAt = new Date(event.createdAt);
+        const endsAt = new Date(startsAt);
+        endsAt.setUTCMonth(endsAt.getUTCMonth() + (scheduled.program?.reviewMonths ?? 12));
+        await tx
+          .update(billingDiscountAward)
+          .set({ status: 'active', startsAt, endsAt, reviewAt: endsAt })
+          .where(eq(billingDiscountAward.id, scheduled.award.id));
+      }
+    }
+    await completeProviderEvent(tx, event.id, new Date(now));
+    return applied;
+  });
   return c.json({ received: true, effect });
 });
 

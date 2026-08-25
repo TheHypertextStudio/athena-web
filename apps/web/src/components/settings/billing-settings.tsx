@@ -16,40 +16,68 @@ interface BillingProduct {
   readonly source: 'stripe' | 'complimentary';
   readonly trialEndsAt: string | null;
   readonly renewalDate: string | null;
+  readonly cancelAtPeriodEnd: boolean;
+  readonly cancellationDate: string | null;
+  readonly graceEndsAt: string | null;
+  readonly providerObservedAt: string | null;
 }
 
 /** Organization billing state used by this settings surface. */
 interface BillingSummary {
   readonly organizationId: string;
+  readonly listPrice: {
+    readonly amount: 800;
+    readonly currency: 'usd';
+    readonly interval: 'month';
+  };
+  readonly accessMode: 'writable' | 'read_only';
   readonly products: BillingProduct[];
   readonly canManageBilling: boolean;
+  readonly effectiveDiscount: null;
+  readonly applicationStatus: null;
+  readonly issuedCredit: null;
 }
 
 /** Props for {@link BillingSettings}. */
 export interface BillingSettingsProps {
   /** The organization whose products are shown and managed. */
   readonly orgId: string;
-  /** Whether cancellation returns to free Docket or begins the shared-workspace export window. */
+  /** Whether baseline Docket remains writable after Pro ends. */
   readonly isPersonal: boolean;
 }
 
-/** Format an ISO date for compact customer-facing billing copy. */
+/** Format an ISO date for customer-facing billing copy. */
 function formatDate(value: string | null): string | null {
   if (!value) return null;
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(value));
 }
 
-/** Literal label for each provider subscription state. */
-function statusLabel(status: BillingProduct['status']): string {
-  switch (status) {
+/** Format a currency-minor-unit price without exposing provider formatting. */
+function formatPrice(amount: number, currency: string): string {
+  return new Intl.NumberFormat(undefined, {
+    style: 'currency',
+    currency: currency.toUpperCase(),
+    maximumFractionDigits: 0,
+  }).format(amount / 100);
+}
+
+/** Literal label for the customer's current billing state. */
+function statusLabel(
+  product: BillingProduct | undefined,
+  accessMode: BillingSummary['accessMode'],
+) {
+  if (!product) return accessMode === 'read_only' ? 'Read-only' : 'Free';
+  if (product.source === 'complimentary') return 'Complimentary';
+  if (product.cancelAtPeriodEnd) return 'Cancellation scheduled';
+  switch (product.status) {
     case 'trialing':
       return 'Trialing';
     case 'active':
       return 'Active';
     case 'past_due':
-      return 'Payment past due';
+      return accessMode === 'read_only' ? 'Read-only' : 'Payment past due';
     case 'canceled':
-      return 'Canceled';
+      return 'Read-only';
   }
 }
 
@@ -83,9 +111,7 @@ export function BillingSettings({ orgId, isPersonal }: BillingSettingsProps): JS
     },
   });
 
-  if (billingQ.isPending) {
-    return <Skeleton className="h-72 max-w-2xl rounded-lg" />;
-  }
+  if (billingQ.isPending) return <Skeleton className="h-72 max-w-2xl rounded-lg" />;
   if (billingQ.isError) {
     return (
       <p role="alert" className="text-error text-body-medium">
@@ -96,71 +122,84 @@ export function BillingSettings({ orgId, isPersonal }: BillingSettingsProps): JS
 
   const summary = billingQ.data;
   const [product] = summary.products;
-  const ownsPro = product?.status === 'trialing' || product?.status === 'active';
+  const complimentary = product?.source === 'complimentary';
   const canOpenPortal = product?.source === 'stripe' && product.status !== 'canceled';
   const mutation = canOpenPortal ? portal : checkout;
   const mutationError = checkout.error ?? portal.error;
+  const displayedPrice = `${formatPrice(summary.listPrice.amount, summary.listPrice.currency)} USD per organization each month, plus tax where required`;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-8">
       <SectionHeader
         title="Billing"
-        description="Docket is free. Docket Pro is $8 per organization each month."
+        description="See your current access, upcoming billing dates, and the action that Docket needs next."
       />
 
-      <section className="border-outline-variant flex max-w-2xl flex-col gap-4 rounded-lg border p-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h3 className="text-on-surface text-title-small">Docket</h3>
-            <p className="text-on-surface-variant text-body-medium mt-1">Free</p>
+      <section className="border-outline-variant flex max-w-2xl flex-col gap-5 rounded-lg border p-5">
+        <div className="flex flex-nowrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <h3 className="text-on-surface text-title-medium">
+              {complimentary ? 'Complimentary Docket Pro' : product ? 'Docket Pro' : 'Docket'}
+            </h3>
+            {!complimentary ? (
+              <p className="text-on-surface-variant text-body-medium mt-1">
+                {product ? displayedPrice : 'Free'}
+              </p>
+            ) : null}
           </div>
-          <span className="text-on-surface-variant text-label-large">Available</span>
-        </div>
-        <p className="text-on-surface-variant text-body-medium">
-          Personal planning, scheduling, and time tracking remain available without Docket Pro.
-        </p>
-      </section>
-
-      <section className="border-outline-variant flex max-w-2xl flex-col gap-4 rounded-lg border p-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h3 className="text-on-surface text-title-small">Docket Pro</h3>
-            <p className="text-on-surface-variant text-body-medium mt-1">
-              $8 per organization each month
-            </p>
-          </div>
-          <span className="text-on-surface text-label-large">
-            {product ? statusLabel(product.status) : 'Not added'}
+          <span className="text-on-surface text-label-large shrink-0">
+            {statusLabel(product, summary.accessMode)}
           </span>
         </div>
+
         <p className="text-on-surface-variant text-body-medium">
-          Shared work, integrations, MCP, and current Athena functionality.
+          {product
+            ? 'Docket Pro includes shared work, integrations, MCP, Athena, and voice.'
+            : isPersonal
+              ? 'Personal planning, scheduling, and time tracking remain writable on free Docket.'
+              : 'Shared work is read-only until an administrator adds Docket Pro.'}
         </p>
+
         {product?.source === 'complimentary' ? (
-          <p className="text-on-surface-variant text-body-medium">Docket Pro is complimentary.</p>
+          <p className="text-on-surface-variant text-body-medium">
+            All current and future Docket Pro features are included. No payment method or renewal is
+            required.
+          </p>
         ) : null}
         {product?.status === 'trialing' && product.trialEndsAt ? (
           <p className="text-on-surface-variant text-body-medium">
-            Trial ends {formatDate(product.trialEndsAt)}. Monthly billing begins after the trial.
+            Your trial ends {formatDate(product.trialEndsAt)}. Your first monthly charge follows on
+            that date.
           </p>
         ) : null}
-        {product?.status === 'active' && product.renewalDate ? (
+        {product?.status === 'active' && !product.cancelAtPeriodEnd && product.renewalDate ? (
           <p className="text-on-surface-variant text-body-medium">
-            Renews {formatDate(product.renewalDate)}.
+            Your next renewal is {formatDate(product.renewalDate)}.
+          </p>
+        ) : null}
+        {product?.cancelAtPeriodEnd && product.cancellationDate ? (
+          <p className="text-on-surface-variant text-body-medium">
+            Your Pro features remain available through {formatDate(product.cancellationDate)}. After
+            that, shared work becomes read-only. You can export or reactivate at any time. Docket
+            does not delete workspace data when Pro ends.
           </p>
         ) : null}
         {product?.status === 'past_due' ? (
-          <p className="text-error text-body-medium">
-            Payment is past due. Open billing management to update the payment method.
+          <p className="text-error text-body-medium" role="status">
+            We could not collect this payment. Update the payment method
+            {product.graceEndsAt ? ` by ${formatDate(product.graceEndsAt)}` : ''} to keep editing
+            shared work.
           </p>
         ) : null}
-        <p className="text-on-surface-variant text-body-medium">
-          {isPersonal
-            ? 'Canceling Docket Pro returns this workspace to free Docket without deleting its data.'
-            : 'Canceling Docket Pro starts a 14-day period to export this shared workspace before deletion.'}
-        </p>
-        {summary.canManageBilling && product?.source !== 'complimentary' ? (
-          <div>
+        {product?.status === 'canceled' ? (
+          <p className="text-on-surface-variant text-body-medium">
+            Shared work is read-only. Docket keeps it available for viewing and export, and an
+            administrator can reactivate Pro at any time.
+          </p>
+        ) : null}
+
+        {summary.canManageBilling && !complimentary ? (
+          <div className="flex flex-nowrap items-center gap-2 overflow-hidden">
             <Button
               type="button"
               onClick={() => {
@@ -168,12 +207,18 @@ export function BillingSettings({ orgId, isPersonal }: BillingSettingsProps): JS
               }}
               disabled={mutation.isPending}
             >
-              {canOpenPortal ? 'Manage Docket Pro' : 'Add Docket Pro'}
+              {canOpenPortal
+                ? product.status === 'past_due'
+                  ? 'Update payment method'
+                  : 'Manage billing'
+                : product
+                  ? 'Reactivate Docket Pro'
+                  : 'Start Docket Pro trial'}
             </Button>
           </div>
         ) : summary.canManageBilling ? null : (
           <p className="text-on-surface-variant text-body-medium">
-            A workspace administrator can manage Docket Pro.
+            A workspace administrator can change billing. You can still see the plan and dates.
           </p>
         )}
         {mutationError ? (
@@ -181,13 +226,22 @@ export function BillingSettings({ orgId, isPersonal }: BillingSettingsProps): JS
             {userErrorMessage(mutationError, 'Could not open billing management.')}
           </p>
         ) : null}
-        {ownsPro ? null : (
-          <p className="text-on-surface-variant text-body-small">
-            A new organization receives one 14-day Docket Pro trial. Returning organizations do not
-            receive another trial.
-          </p>
-        )}
       </section>
+
+      {!complimentary ? (
+        <section className="border-outline-variant flex max-w-2xl flex-col gap-4 rounded-lg border p-5">
+          <div>
+            <h3 className="text-on-surface text-title-medium">Discounts</h3>
+            <p className="text-on-surface-variant text-body-medium mt-1">
+              Eligible students and nonprofit organizations can apply for 50% off Docket Pro.
+            </p>
+          </div>
+          <p className="text-on-surface-variant text-body-small">
+            Docket reviews student and nonprofit eligibility every 12 months. Discounts do not
+            stack, and Docket never publishes promotion codes.
+          </p>
+        </section>
+      ) : null}
     </div>
   );
 }

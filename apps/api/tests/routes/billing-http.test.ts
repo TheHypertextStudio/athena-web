@@ -7,8 +7,9 @@ import type {
   organization as OrgTable,
   organizationProductEntitlement as ProductTable,
 } from '@docket/db';
+import { billingDiscountAward, organizationBillingAccount, user } from '@docket/db';
 
-import type { ActorCtx, AppEnv } from '../../src/context';
+import type { ActorCtx, AppEnv, AuthSession } from '../../src/context';
 import { getContainer } from '../../src/container';
 import { onError } from '../../src/error';
 import type billingRouter from '../../src/routes/billing';
@@ -16,7 +17,7 @@ import type cronRouter from '../../src/routes/cron';
 import type webhooksRouter from '../../src/routes/webhooks';
 import '../support/auth-mock';
 import { getMigratedDb } from '../support/db';
-import { clearDocketPro } from '../support/routes-harness';
+import { clearDocketPro, fakeSession } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 let db!: typeof DbType;
@@ -27,10 +28,11 @@ let cron!: typeof cronRouter;
 let billing!: typeof billingRouter;
 
 /** Mount the billing router behind an injected actor context with the given capabilities. */
-function billingApp(orgId: string, capabilities: readonly string[]) {
+function billingApp(orgId: string, capabilities: readonly string[], session: AuthSession = null) {
   const app = new Hono<AppEnv>();
   app.use('*', async (c, next) => {
     const ctx: ActorCtx = { orgId, actorId: 'actor_test', roleId: 'role_test', capabilities };
+    c.set('session', session);
     c.set('actorCtx', ctx);
     await next();
   });
@@ -89,7 +91,7 @@ describe('POST /billing/webhook', () => {
     expect(res.status).toBe(400);
   });
 
-  it('folds a canceled event into the export window', async () => {
+  it('records a canceled product without putting workspace data on a deletion path', async () => {
     const id = await makeOrg('active');
     const res = await webhooks.request('/webhook', {
       method: 'POST',
@@ -110,12 +112,41 @@ describe('POST /billing/webhook', () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { received: boolean; effect: string };
     expect(body.received).toBe(true);
-    expect(body.effect).toBe('export_window');
-    expect(await stateOf(id)).toBe('export_window');
+    expect(body.effect).toBe('canceled');
+    expect(await stateOf(id)).toBe('active');
   });
 
-  it('folds an active event back to active', async () => {
-    const id = await makeOrg('export_window', new Date('2030-01-01T00:00:00.000Z'));
+  it('acknowledges a duplicate event without applying it twice', async () => {
+    const id = await makeOrg('active');
+    const payload = JSON.stringify({
+      id: `evt_duplicate_${id}`,
+      type: 'subscription.updated',
+      referenceId: id,
+      subscription: {
+        id: `sub_${id}`,
+        referenceId: id,
+        status: 'active',
+        currentPeriodEnd: '2026-09-01T00:00:00.000Z',
+      },
+      createdAt: '2026-08-25T00:00:00.000Z',
+    });
+    const first = await webhooks.request('/webhook', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: payload,
+    });
+    expect(first.status).toBe(200);
+
+    const duplicate = await webhooks.request('/webhook', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: payload,
+    });
+    await expect(duplicate.json()).resolves.toMatchObject({ received: true, effect: 'duplicate' });
+  });
+
+  it('records an active product without changing organization data retention', async () => {
+    const id = await makeOrg('active');
     const res = await webhooks.request('/webhook', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -135,6 +166,42 @@ describe('POST /billing/webhook', () => {
     expect(res.status).toBe(200);
     expect(await stateOf(id)).toBe('active');
   });
+
+  it('starts a scheduled award with the first paid period after trial', async () => {
+    const id = await makeOrg('active');
+    const provisionalStart = new Date('2026-08-25T00:00:00.000Z');
+    await db.insert(billingDiscountAward).values({
+      organizationId: id,
+      programKey: 'student',
+      percentOff: 50,
+      status: 'scheduled',
+      startsAt: provisionalStart,
+      endsAt: new Date('2027-08-25T00:00:00.000Z'),
+      reviewAt: new Date('2027-08-25T00:00:00.000Z'),
+      reason: 'Verified student',
+      providerCouponId: `coupon_${id}`,
+    });
+
+    const paidAt = '2026-09-08T00:00:00.000Z';
+    const response = await webhooks.request('/webhook', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        id: `evt_discount_paid_${id}`,
+        type: 'subscription.paid',
+        referenceId: id,
+        createdAt: paidAt,
+      }),
+    });
+    expect(response.status).toBe(200);
+    const [award] = await db
+      .select()
+      .from(billingDiscountAward)
+      .where(eq(billingDiscountAward.organizationId, id));
+    expect(award).toMatchObject({ status: 'active' });
+    expect(award?.startsAt.toISOString()).toBe(paidAt);
+    expect(award?.endsAt.toISOString()).toBe('2027-09-08T00:00:00.000Z');
+  });
 });
 
 describe('POST /cron/lifecycle-sweep', () => {
@@ -151,7 +218,7 @@ describe('POST /cron/lifecycle-sweep', () => {
     expect(res.status).toBe(401);
   });
 
-  it('sweeps overdue orgs when authorized via Bearer', async () => {
+  it('does not advance billing-created organization deletion states', async () => {
     const past = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const id = await makeOrg('export_window', past);
     const res = await cron.request('/lifecycle-sweep', {
@@ -164,9 +231,10 @@ describe('POST /cron/lifecycle-sweep', () => {
       toPendingDeletion: number;
       toDeleted: number;
     };
-    expect(body.swept).toBe(true);
-    expect(body.toPendingDeletion).toBeGreaterThanOrEqual(1);
-    expect(await stateOf(id)).toBe('pending_deletion');
+    expect(body.swept).toBe(false);
+    expect(body.toPendingDeletion).toBe(0);
+    expect(body.toDeleted).toBe(0);
+    expect(await stateOf(id)).toBe('export_window');
   });
 
   it('accepts the x-cron-secret header too', async () => {
@@ -182,13 +250,19 @@ describe('billing router (org-scoped, via the BillingGateway port)', () => {
   const ORG = 'org_billing_router';
 
   it('GET / returns baseline Docket before any paid product exists', async () => {
-    const app = billingApp(`${ORG}_none`, ['view']);
+    const orgId = await makeOrg('active');
+    const app = billingApp(orgId, ['view']);
     const res = await app.request('/', { method: 'GET' });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
-      organizationId: `${ORG}_none`,
+      organizationId: orgId,
+      listPrice: { amount: 800, currency: 'usd', interval: 'month' },
+      accessMode: 'read_only',
       products: [],
       canManageBilling: false,
+      effectiveDiscount: null,
+      applicationStatus: null,
+      issuedCredit: null,
     });
   });
 
@@ -203,7 +277,8 @@ describe('billing router (org-scoped, via the BillingGateway port)', () => {
   });
 
   it('POST /checkout returns a hosted URL without treating the redirect as activation', async () => {
-    const app = billingApp(ORG, ['manage']);
+    const orgId = await makeOrg('active');
+    const app = billingApp(orgId, ['manage']);
     const checkout = await app.request('/checkout', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -213,12 +288,30 @@ describe('billing router (org-scoped, via the BillingGateway port)', () => {
     const created = (await checkout.json()) as { url: string };
     expect(created.url).toMatch(/^https?:\/\//);
 
+    const account = await db
+      .select({ customerId: organizationBillingAccount.stripeCustomerId })
+      .from(organizationBillingAccount)
+      .where(eq(organizationBillingAccount.organizationId, orgId));
+    expect(account[0]?.customerId).toBe(`cus_${orgId}`);
+
+    const repeated = await app.request('/checkout', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    expect(await repeated.json()).toEqual(created);
+
     // Product access is webhook-driven. A checkout redirect alone does not write an entitlement.
     const status = await app.request('/', { method: 'GET' });
     expect(await status.json()).toEqual({
-      organizationId: ORG,
+      organizationId: orgId,
+      listPrice: { amount: 800, currency: 'usd', interval: 'month' },
+      accessMode: 'read_only',
       products: [],
       canManageBilling: true,
+      effectiveDiscount: null,
+      applicationStatus: null,
+      issuedCredit: null,
     });
   });
 
@@ -253,10 +346,104 @@ describe('billing router (org-scoped, via the BillingGateway port)', () => {
   });
 
   it('POST /portal returns a hosted portal url for a manager', async () => {
-    const app = billingApp(ORG, ['manage']);
+    const orgId = await makeOrg('active');
+    const app = billingApp(orgId, ['manage']);
+    await app.request('/checkout', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    });
     const res = await app.request('/portal', { method: 'POST' });
     expect(res.status).toBe(200);
     const body = (await res.json()) as { url: string };
     expect(body.url).toMatch(/^https?:\/\//);
+    expect(body.url).toContain(`cus_${orgId}`);
+  });
+
+  it('POST /portal refuses to invent a replacement customer identity', async () => {
+    const orgId = await makeOrg('active');
+    const app = billingApp(orgId, ['manage']);
+    const res = await app.request('/portal', { method: 'POST' });
+    expect(res.status).toBe(409);
+    await expect(res.json()).resolves.toMatchObject({ code: 'billing_customer_missing' });
+  });
+
+  it('submits a student application from the Better Auth verified email for a personal workspace', async () => {
+    const userId = `student-${Date.now()}`;
+    await db.insert(user).values({
+      id: userId,
+      name: 'Verified Student',
+      email: `${userId}@unlv.edu`,
+      emailVerified: true,
+    });
+    const orgId = await makeOrg('active');
+    await db.update(organization).set({ isPersonal: true }).where(eq(organization.id, orgId));
+    const app = billingApp(
+      orgId,
+      ['manage'],
+      fakeSession(userId, 'Verified Student', `${userId}@unlv.edu`),
+    );
+
+    const submitted = await app.request('/discounts/applications', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        programKey: 'student',
+        evidenceType: 'institutional_email',
+        institutionalEmail: `${userId}@unlv.edu`,
+      }),
+    });
+
+    expect(submitted.status).toBe(201);
+    await expect(submitted.json()).resolves.toMatchObject({
+      programKey: 'student',
+      status: 'submitted',
+      institutionalEmail: `${userId}@unlv.edu`,
+    });
+    const summary = await app.request('/discounts');
+    await expect(summary.json()).resolves.toMatchObject({
+      programs: expect.arrayContaining([
+        expect.objectContaining({ key: 'student', percentOff: 50, reviewMonths: 12 }),
+      ]),
+      application: expect.objectContaining({ status: 'submitted' }),
+    });
+
+    const duplicate = await app.request('/discounts/applications', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        programKey: 'student',
+        evidenceType: 'institutional_email',
+        institutionalEmail: `${userId}@unlv.edu`,
+      }),
+    });
+    expect(duplicate.status).toBe(409);
+    await expect(duplicate.json()).resolves.toMatchObject({ code: 'discount_application_pending' });
+  });
+
+  it('uses Better Auth verification instead of trusting a submitted institutional email', async () => {
+    const userId = `unverified-${Date.now()}`;
+    await db.insert(user).values({
+      id: userId,
+      name: 'Unverified Student',
+      email: `${userId}@unlv.edu`,
+      emailVerified: false,
+    });
+    const orgId = await makeOrg('active');
+    await db.update(organization).set({ isPersonal: true }).where(eq(organization.id, orgId));
+    const session = fakeSession(userId, 'Unverified Student', `${userId}@unlv.edu`);
+    if (session) session.user.emailVerified = false;
+    const app = billingApp(orgId, ['manage'], session);
+
+    const response = await app.request('/discounts/applications', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        programKey: 'student',
+        evidenceType: 'institutional_email',
+        institutionalEmail: `${userId}@unlv.edu`,
+      }),
+    });
+    expect(response.status).toBe(409);
   });
 });

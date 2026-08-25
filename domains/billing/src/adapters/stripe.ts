@@ -17,12 +17,23 @@
 import Stripe from 'stripe';
 
 import type {
+  AppliedSubscriptionDiscount,
   BillingEvent,
+  BillingCustomer,
   BillingGateway,
+  BillingPortalSessionInput,
   BillingPortalSessionResult,
   CheckoutSessionInput,
   CheckoutSessionResult,
+  CreditNoteIssueInput,
+  CreditNotePreview,
+  CreditNotePreviewInput,
+  DiscountCoupon,
+  DiscountCouponInput,
+  IssuedCreditNote,
+  RecurringInvoiceLine,
   Subscription,
+  SubscriptionDiscountInput,
 } from '../contracts';
 import { defaultHttpClient, type HttpClient } from './http';
 import {
@@ -131,6 +142,38 @@ export class RealStripeGateway implements BillingGateway {
     return this.config.trialDays ?? DEFAULT_TRIAL_DAYS;
   }
 
+  /** {@inheritDoc BillingGateway.createCustomer} */
+  async createCustomer(referenceId: string, email?: string): Promise<BillingCustomer> {
+    /* v8 ignore start */
+    let customer: Stripe.Customer;
+    try {
+      customer = await this.stripe.customers.create(
+        {
+          ...(email ? { email } : {}),
+          metadata: { referenceId },
+        },
+        { idempotencyKey: `docket:customer:${referenceId}` },
+      );
+    } catch (cause) {
+      throw new Error('RealStripeGateway: failed to create customer.', { cause });
+    }
+    return { id: customer.id, referenceId };
+    /* v8 ignore stop */
+  }
+
+  /** {@inheritDoc BillingGateway.getCustomerBillingCountry} */
+  async getCustomerBillingCountry(customerId: string): Promise<string | null> {
+    /* v8 ignore start */
+    let customer: Stripe.Customer | Stripe.DeletedCustomer;
+    try {
+      customer = await this.stripe.customers.retrieve(customerId);
+    } catch (cause) {
+      throw new Error('RealStripeGateway: failed to read customer billing country.', { cause });
+    }
+    return 'deleted' in customer ? null : (customer.address?.country ?? null);
+    /* v8 ignore stop */
+  }
+
   private async resolvePrice(priceRef: string): Promise<string> {
     if (priceRef.startsWith('price_')) return priceRef;
     /* v8 ignore start */
@@ -162,7 +205,10 @@ export class RealStripeGateway implements BillingGateway {
     /* v8 ignore start */
     let session: Stripe.Checkout.Session;
     try {
-      session = await this.stripe.checkout.sessions.create(params);
+      session = await this.stripe.checkout.sessions.create(
+        params,
+        input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : undefined,
+      );
     } catch (cause) {
       throw new Error('RealStripeGateway: failed to create checkout session.', { cause });
     }
@@ -188,7 +234,10 @@ export class RealStripeGateway implements BillingGateway {
     /* v8 ignore start */
     let session: Stripe.Checkout.Session;
     try {
-      session = await this.stripe.checkout.sessions.create(params);
+      session = await this.stripe.checkout.sessions.create(
+        params,
+        input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : undefined,
+      );
     } catch (cause) {
       throw new Error('RealStripeGateway: failed to create embedded checkout session.', { cause });
     }
@@ -235,19 +284,230 @@ export class RealStripeGateway implements BillingGateway {
     /* v8 ignore stop */
   }
 
+  /** {@inheritDoc BillingGateway.extendTrial} */
+  async extendTrial(
+    referenceId: string,
+    days: number,
+    idempotencyKey: string,
+  ): Promise<Subscription> {
+    const sub = await this.findSubscription(referenceId);
+    if (sub?.status !== 'trialing' || sub.trial_end === null) {
+      throw new Error('RealStripeGateway: no eligible trialing subscription.');
+    }
+    const nextTrialEnd = sub.trial_end + days * 24 * 60 * 60;
+    /* v8 ignore start */
+    let updated: Stripe.Subscription;
+    try {
+      updated = await this.stripe.subscriptions.update(
+        sub.id,
+        { trial_end: nextTrialEnd, proration_behavior: 'none' },
+        { idempotencyKey },
+      );
+    } catch (cause) {
+      throw new Error('RealStripeGateway: failed to extend trial.', { cause });
+    }
+    return toSubscription(updated, referenceId);
+    /* v8 ignore stop */
+  }
+
   /** {@inheritDoc BillingGateway.createBillingPortalSession} */
-  async createBillingPortalSession(referenceId: string): Promise<BillingPortalSessionResult> {
+  async createBillingPortalSession(
+    input: BillingPortalSessionInput,
+  ): Promise<BillingPortalSessionResult> {
     /* v8 ignore start */
     let session: Stripe.BillingPortal.Session;
     try {
       session = await this.stripe.billingPortal.sessions.create({
-        customer: referenceId,
+        customer: input.customerId,
+        return_url: input.returnUrl,
         ...(this.config.portalConfigId ? { configuration: this.config.portalConfigId } : {}),
       });
     } catch (cause) {
       throw new Error('RealStripeGateway: failed to open billing portal session.', { cause });
     }
     return { url: session.url };
+    /* v8 ignore stop */
+  }
+
+  /** Resolve the Stripe product attached to one configured Docket Pro price. */
+  private async resolveProduct(priceRef: string): Promise<string> {
+    /* v8 ignore start */
+    let price: Stripe.Price;
+    try {
+      if (priceRef.startsWith('price_')) {
+        price = await this.stripe.prices.retrieve(priceRef);
+      } else {
+        const prices = await this.stripe.prices.list({
+          lookup_keys: [priceRef],
+          active: true,
+          limit: 1,
+        });
+        const matched = prices.data[0];
+        if (!matched) {
+          throw new Error('No active price matched the configured lookup key.');
+        }
+        price = matched;
+      }
+    } catch (cause) {
+      throw new Error('RealStripeGateway: failed to resolve the Docket Pro product.', { cause });
+    }
+    return typeof price.product === 'string' ? price.product : price.product.id;
+    /* v8 ignore stop */
+  }
+
+  /** {@inheritDoc BillingGateway.createDiscountCoupon} */
+  async createDiscountCoupon(input: DiscountCouponInput): Promise<DiscountCoupon> {
+    const productId = await this.resolveProduct(input.priceKey);
+    /* v8 ignore start */
+    let coupon: Stripe.Coupon;
+    try {
+      coupon = await this.stripe.coupons.create(
+        {
+          name: input.name,
+          percent_off: input.percentOff,
+          // Docket owns the exact award boundary. A repeating Stripe coupon starts its clock when
+          // attached and can consume part of its term during a trial, which would shortchange the
+          // customer. Reconciliation removes this forever coupon at the first renewal after the
+          // local award end.
+          duration: 'forever',
+          applies_to: { products: [productId] },
+          metadata: { awardId: input.awardId },
+        },
+        { idempotencyKey: input.idempotencyKey },
+      );
+    } catch (cause) {
+      throw new Error('RealStripeGateway: failed to create discount coupon.', { cause });
+    }
+    return { id: coupon.id };
+    /* v8 ignore stop */
+  }
+
+  /** {@inheritDoc BillingGateway.applySubscriptionDiscount} */
+  async applySubscriptionDiscount(
+    input: SubscriptionDiscountInput,
+  ): Promise<AppliedSubscriptionDiscount> {
+    const subscription = await this.findSubscription(input.referenceId);
+    if (!subscription) throw new Error('RealStripeGateway: no subscription for discount.');
+    /* v8 ignore start */
+    let updated: Stripe.Subscription;
+    try {
+      updated = await this.stripe.subscriptions.update(
+        subscription.id,
+        { discounts: [{ coupon: input.couponId }], proration_behavior: 'none' },
+        { idempotencyKey: input.idempotencyKey },
+      );
+    } catch (cause) {
+      throw new Error('RealStripeGateway: failed to apply subscription discount.', { cause });
+    }
+    const discount = updated.discounts[0];
+    return {
+      discountId: typeof discount === 'string' ? discount : (discount?.id ?? null),
+    };
+    /* v8 ignore stop */
+  }
+
+  /** {@inheritDoc BillingGateway.removeSubscriptionDiscount} */
+  async removeSubscriptionDiscount(referenceId: string, idempotencyKey: string): Promise<void> {
+    const subscription = await this.findSubscription(referenceId);
+    if (!subscription) return;
+    /* v8 ignore start */
+    try {
+      await this.stripe.subscriptions.deleteDiscount(subscription.id, {}, { idempotencyKey });
+    } catch (cause) {
+      throw new Error('RealStripeGateway: failed to remove subscription discount.', { cause });
+    }
+    /* v8 ignore stop */
+  }
+
+  /** {@inheritDoc BillingGateway.getLatestRecurringInvoice} */
+  async getLatestRecurringInvoice(referenceId: string): Promise<RecurringInvoiceLine | null> {
+    const subscription = await this.findSubscription(referenceId);
+    if (!subscription) return null;
+    /* v8 ignore start */
+    let invoices: Stripe.ApiList<Stripe.Invoice>;
+    try {
+      invoices = await this.stripe.invoices.list({
+        subscription: subscription.id,
+        limit: 10,
+        expand: ['data.lines'],
+      });
+    } catch (cause) {
+      throw new Error('RealStripeGateway: failed to read subscription invoices.', { cause });
+    }
+    for (const invoice of invoices.data) {
+      if (invoice.status !== 'open' && invoice.status !== 'paid') continue;
+      const line = invoice.lines.data.find((candidate) => candidate.amount > 0);
+      if (!line) continue;
+      return {
+        invoiceId: invoice.id,
+        lineId: line.id,
+        invoiceStatus: invoice.status,
+        currency: invoice.currency,
+        recurringAmount: line.amount,
+        periodStartsAt: new Date(line.period.start * 1000).toISOString(),
+        periodEndsAt: new Date(line.period.end * 1000).toISOString(),
+      };
+    }
+    return null;
+    /* v8 ignore stop */
+  }
+
+  /** Map a Stripe credit note into the provider-neutral audited values. */
+  private creditNoteValues(creditNote: Stripe.CreditNote, baseAmount: number): CreditNotePreview {
+    return {
+      baseAmount,
+      taxAmount: creditNote.total - creditNote.subtotal,
+      totalAmount: creditNote.total,
+      prePaymentAmount: creditNote.pre_payment_amount,
+      postPaymentAmount: creditNote.post_payment_amount,
+    };
+  }
+
+  /** Build the line-specific params shared by preview and issuance. */
+  private creditNoteParams(input: CreditNotePreviewInput): Stripe.CreditNotePreviewParams {
+    return {
+      invoice: input.invoiceId,
+      lines: [
+        {
+          type: 'invoice_line_item',
+          invoice_line_item: input.invoiceLineId,
+          amount: input.baseAmount,
+        },
+      ],
+    };
+  }
+
+  /** {@inheritDoc BillingGateway.previewCreditNote} */
+  async previewCreditNote(input: CreditNotePreviewInput): Promise<CreditNotePreview> {
+    /* v8 ignore start */
+    let preview: Stripe.CreditNote;
+    try {
+      preview = await this.stripe.creditNotes.preview(this.creditNoteParams(input));
+    } catch (cause) {
+      throw new Error('RealStripeGateway: failed to preview credit note.', { cause });
+    }
+    return this.creditNoteValues(preview, input.baseAmount);
+    /* v8 ignore stop */
+  }
+
+  /** {@inheritDoc BillingGateway.issueCreditNote} */
+  async issueCreditNote(input: CreditNoteIssueInput): Promise<IssuedCreditNote> {
+    /* v8 ignore start */
+    let creditNote: Stripe.CreditNote;
+    try {
+      creditNote = await this.stripe.creditNotes.create(
+        {
+          ...this.creditNoteParams(input),
+          memo: input.memo,
+          reason: 'order_change',
+          ...(input.creditAmount > 0 ? { credit_amount: input.creditAmount } : {}),
+        },
+        { idempotencyKey: input.idempotencyKey },
+      );
+    } catch (cause) {
+      throw new Error('RealStripeGateway: failed to issue credit note.', { cause });
+    }
+    return { id: creditNote.id, ...this.creditNoteValues(creditNote, input.baseAmount) };
     /* v8 ignore stop */
   }
 

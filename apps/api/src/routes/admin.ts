@@ -54,6 +54,7 @@ import {
   toUserOut,
 } from './admin-serializers';
 import { adminBillingRoutes } from './admin-billing-routes';
+import { adminDiscountRoutes } from './admin-discount-routes';
 import { adminStaffRoutes } from './admin-staff-routes';
 
 /** The staff-gated operator back-office router. */
@@ -366,6 +367,7 @@ export function createAdminRoutes<
       )
       // ---- Staff management (sub-router) ------------------------------------
       .route('/staff', adminStaffRoutes)
+      .route('/discount-applications', adminDiscountRoutes)
       // ---- Notification announcements + monitoring --------------------------
       .route('/notifications', notificationRoutes)
       // ---- Metrics -----------------------------------------------------------

@@ -4,9 +4,11 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_SYNTHESIS_MODEL,
   RealTaskSynthesizer,
+  buildExpansionRequest,
   buildRequest,
   extractText,
   fallbackDraft,
+  parseExpansion,
   parseDraft,
 } from '../src/task-drafting/adapters/anthropic';
 import { MockTaskSynthesizer } from '../src/task-drafting/adapters/deterministic';
@@ -67,6 +69,24 @@ describe('Athena Anthropic task drafting', () => {
     expect(typeof content === 'string' ? content : '').toContain(input.sender);
   });
 
+  it('builds an expansion request from closed task context', () => {
+    const request = buildExpansionRequest(
+      {
+        taskId: 'task_1',
+        title: 'Resolve payment request',
+        description: 'Resolve payment request waits for gateway logs.',
+        explicit: {},
+        availableTasks: [{ id: 'task_2', title: 'Review gateway logs' }],
+      },
+      { ...config, model: 'claude-test-model' },
+    );
+
+    expect(request.model).toBe('claude-test-model');
+    expect(request.max_tokens).toBe(1_000);
+    expect(request.system).toContain('Preserve every authored statement');
+    expect(request.messages[0]?.content).toContain('Review gateway logs');
+  });
+
   it('parses valid provider JSON and normalizes malformed values', () => {
     expect(
       parseDraft(
@@ -104,6 +124,52 @@ describe('Athena Anthropic task drafting', () => {
     expect(parseDraft(JSON.stringify({ title: '  ' }))).toBeNull();
   });
 
+  it('parses the complete task-expansion response while dropping malformed nested values', () => {
+    expect(
+      parseExpansion(
+        `Before {"description":"Expand the checkout task.","patch":{"priority":"high","assigneeId":"person_1","projectId":"project_1","dueDate":"2026-08-26","startDate":"2026-08-25","estimateMinutes":30,"labelIds":["label_1",4]},"subtasks":[{"title":"Check logs","description":"Read the gateway errors.","evidence":"Check logs"},{"title":4,"evidence":"bad"}],"dependencies":[{"blockingTaskId":"task_2","blockedTaskId":"task_1","evidence":"Wait for task_2"},{"blockingTaskId":"task_2"}],"relatedTaskIds":["task_2",3],"resourceUrls":["https://docs.example/runbook",false]} After`,
+      ),
+    ).toEqual({
+      description: 'Expand the checkout task.',
+      patch: {
+        priority: 'high',
+        assigneeId: 'person_1',
+        projectId: 'project_1',
+        dueDate: '2026-08-26',
+        startDate: '2026-08-25',
+        estimateMinutes: 30,
+        labelIds: ['label_1'],
+      },
+      subtasks: [
+        {
+          title: 'Check logs',
+          description: 'Read the gateway errors.',
+          evidence: 'Check logs',
+        },
+      ],
+      dependencies: [
+        {
+          blockingTaskId: 'task_2',
+          blockedTaskId: 'task_1',
+          evidence: 'Wait for task_2',
+        },
+      ],
+      relatedTaskIds: ['task_2'],
+      resourceUrls: ['https://docs.example/runbook'],
+    });
+  });
+
+  it('rejects malformed task-expansion JSON and missing descriptions', () => {
+    expect(parseExpansion('no object')).toBeNull();
+    expect(parseExpansion('{not JSON}')).toBeNull();
+    expect(parseExpansion('[]')).toBeNull();
+    expect(parseExpansion('{"description": 4}')).toBeNull();
+    expect(parseExpansion('{"description":"ok","patch":[]}')).toMatchObject({
+      description: 'ok',
+      patch: {},
+    });
+  });
+
   it('joins only text blocks from a provider response', () => {
     expect(
       extractText({
@@ -132,6 +198,65 @@ describe('Athena Anthropic task drafting', () => {
     await expect(synthesizer.synthesize(input)).rejects.toThrow(
       'Anthropic task synthesis failed: network unavailable',
     );
+  });
+
+  it('constrains provider expansions and preserves the description when the provider reply is unusable', async () => {
+    const expansionInput = {
+      taskId: 'task_1',
+      title: 'Resolve payment request',
+      description: 'Resolve payment request cannot start until Review gateway logs is complete.',
+      explicit: {},
+      availableTasks: [{ id: 'task_2', title: 'Review gateway logs' }],
+    } as const;
+    const synthesizer = new RealTaskSynthesizer(config, async () =>
+      fakeMessage(
+        JSON.stringify({
+          description: expansionInput.description,
+          dependencies: [
+            {
+              blockingTaskId: 'task_2',
+              blockedTaskId: 'task_1',
+              evidence: expansionInput.description,
+            },
+          ],
+          relatedTaskIds: ['task_2'],
+        }),
+      ),
+    );
+
+    await expect(synthesizer.expandTask(expansionInput)).resolves.toMatchObject({
+      description: expansionInput.description,
+      relatedTaskIds: ['task_2'],
+      dependencies: [
+        {
+          blockingTaskId: 'task_2',
+          blockedTaskId: 'task_1',
+          evidence: expansionInput.description,
+        },
+      ],
+    });
+
+    const fallback = new RealTaskSynthesizer(config, async () => fakeMessage('not JSON'));
+    await expect(fallback.expandTask(expansionInput)).resolves.toMatchObject({
+      description: expansionInput.description,
+      dependencies: [],
+    });
+  });
+
+  it('wraps expansion provider failures without exposing configuration', async () => {
+    const synthesizer = new RealTaskSynthesizer(config, async () => {
+      throw new Error('network unavailable');
+    });
+
+    await expect(
+      synthesizer.expandTask({
+        taskId: 'task_1',
+        title: 'Resolve payment request',
+        description: 'Resolve payment request.',
+        explicit: {},
+        availableTasks: [],
+      }),
+    ).rejects.toThrow('Anthropic task expansion failed: network unavailable');
   });
 });
 

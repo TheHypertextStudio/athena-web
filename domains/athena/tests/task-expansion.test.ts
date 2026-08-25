@@ -250,4 +250,161 @@ describe('task expansion synthesis', () => {
 
     expect(result.patch.labelIds).toEqual(['template_label']);
   });
+
+  it('keeps only URLs that the task already cites and adds selected resources to the description', () => {
+    const result = constrainTaskExpansion(
+      {
+        taskId: 'task_1',
+        title: 'Investigate checkout errors',
+        description: 'Read https://docs.example/checkout and compare the logs.',
+        explicit: {},
+        availableTasks: [],
+        resources: [
+          { title: 'Runbook', url: 'https://docs.example/runbook' },
+          { title: 'Local note', url: null },
+        ],
+      },
+      {
+        description: 'Use https://docs.example/runbook and https://new.example/invented.',
+        resourceUrls: [
+          'https://docs.example/checkout',
+          'https://docs.example/runbook',
+          'https://new.example/invented',
+          'mailto:person@example.com',
+        ],
+      },
+    );
+
+    expect(result.resourceUrls).toEqual([
+      'https://docs.example/checkout',
+      'https://docs.example/runbook',
+    ]);
+    expect(result.description).toContain('https://docs.example/checkout');
+    expect(result.description).toContain('https://docs.example/runbook');
+    expect(result.description).not.toContain('https://new.example/invented');
+  });
+
+  it('uses template defaults and inferred values only for fields a person has not chosen', () => {
+    const result = constrainTaskExpansion(
+      {
+        taskId: 'task_1',
+        title: 'Investigate checkout errors',
+        description: null,
+        templateDescription: '## Done when\n\nThe checkout works.',
+        templateDefaults: { priority: 'low', labelIds: ['template_label'] },
+        explicit: {
+          priority: 'high',
+          assigneeId: null,
+          projectId: 'project_1',
+          dueDate: null,
+          startDate: '2026-08-26',
+          estimateMinutes: null,
+          labelIds: ['person_label'],
+        },
+        availableTasks: [],
+      },
+      {
+        description: '',
+        patch: {
+          priority: 'medium',
+          assigneeId: 'person_1',
+          projectId: 'project_2',
+          dueDate: '2026-08-27',
+          startDate: '2026-08-28',
+          estimateMinutes: 45,
+          labelIds: ['inferred_label'],
+        },
+      },
+    );
+
+    expect(result.description).toBe('## Done when\n\nThe checkout works.');
+    expect(result.patch).toEqual({
+      assigneeId: 'person_1',
+      dueDate: '2026-08-27',
+      estimateMinutes: 45,
+    });
+  });
+
+  it('keeps a supported child once and drops blank, duplicate, and unsupported candidates', () => {
+    const result = constrainTaskExpansion(
+      {
+        taskId: 'task_1',
+        title: 'Prepare release',
+        description: 'Update the deployment checklist before the release.',
+        explicit: {},
+        availableTasks: [],
+      },
+      {
+        description: 'Update the deployment checklist before the release.',
+        subtasks: [
+          {
+            title: 'Update the deployment checklist',
+            description: 'Check the required production settings.',
+            evidence: 'Update the deployment checklist before the release.',
+          },
+          {
+            title: 'Update the deployment checklist',
+            evidence: 'Update the deployment checklist before the release.',
+          },
+          { title: '   ', evidence: 'Update the deployment checklist before the release.' },
+          { title: 'Update the deployment checklist', evidence: 4 as never },
+        ],
+      },
+    );
+
+    expect(result.subtasks).toEqual([
+      {
+        title: 'Update the deployment checklist',
+        description: 'Check the required production settings.',
+        evidence: 'Update the deployment checklist before the release.',
+      },
+    ]);
+  });
+
+  it('keeps only valid task links and ignores repeated or unknown related tasks', () => {
+    const result = constrainTaskExpansion(
+      {
+        taskId: 'task_1',
+        title: 'Resolve payment request',
+        description: 'Resolve payment request cannot start until Review gateway logs is complete.',
+        explicit: {},
+        availableTasks: [{ id: 'task_2', title: 'Review gateway logs' }],
+      },
+      {
+        description: 'Resolve payment request cannot start until Review gateway logs is complete.',
+        dependencies: [
+          {
+            blockingTaskId: 'task_2',
+            blockedTaskId: 'task_1',
+            evidence: 'Resolve payment request cannot start until Review gateway logs is complete.',
+          },
+          {
+            blockingTaskId: 'task_2',
+            blockedTaskId: 'task_1',
+            evidence: 'Resolve payment request cannot start until Review gateway logs is complete.',
+          },
+          {
+            blockingTaskId: 'unknown',
+            blockedTaskId: 'task_1',
+            evidence: 'Resolve payment request cannot start until Review gateway logs is complete.',
+          },
+          {
+            blockingTaskId: 'task_2',
+            blockedTaskId: 'task_2',
+            evidence: 'Resolve payment request cannot start until Review gateway logs is complete.',
+          },
+        ],
+        relatedTaskIds: ['task_1', 'task_2', 'task_2', 'unknown'],
+      },
+    );
+
+    expect(result.dependencies).toEqual([
+      {
+        blockingTaskId: 'task_2',
+        blockedTaskId: 'task_1',
+        evidence: 'Resolve payment request cannot start until Review gateway logs is complete.',
+      },
+    ]);
+    expect(result.relatedTaskIds).toEqual(['task_2']);
+  });
 });

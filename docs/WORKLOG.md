@@ -7,6 +7,21 @@
 
 ## Active Tasks
 
+### [SETTINGS-APPBAR-SEAM-001] Remove the gap below the settings app bar
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-08-25
+- **Priority**: P1
+- **Description**: The desktop settings shell leaves a 20 px empty strip between the app bar and
+  both scroll containers. That strip acts like an invisible border and prevents the scrolled app
+  bar tone from separating the fixed header from the moving page surface.
+- **Approach**: Remove the shell-level top inset so the page surface meets the app bar. Keep the
+  navigation labels' breathing room as padding inside the navigation scroll content.
+- **Validation**: Pending authenticated desktop and phone geometry checks and screenshots.
+- **Blockers**: None.
+
+---
+
 ### [SETTINGS-SCROLL-STATE-001] Show settings scroll state in the header
 
 - **Status**: COMPLETED

@@ -126,12 +126,12 @@ export function SettingsPane({
   }, [children, content]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden sm:flex-row sm:gap-8 sm:px-5 sm:pt-5">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden sm:flex-row sm:gap-8 sm:px-5">
       <div
         ref={listRef}
         onScroll={reportScrollState}
         className={cn(
-          'overflow-y-auto p-4 sm:block sm:w-52 sm:flex-none sm:p-0',
+          'overflow-y-auto p-4 sm:block sm:w-52 sm:flex-none sm:px-0 sm:pt-5 sm:pb-0',
           // Below `sm` the list is the whole pane while browsing, and absent otherwise; from `sm`
           // up the same element is always the rail.
           browsing ? 'min-w-0 flex-1' : 'hidden',

@@ -254,15 +254,25 @@ export function ResourcesTab({
                 </span>
                 <span className="min-w-0 flex-1">
                   {href ? (
-                    <a
-                      href={href}
-                      {...(resource.kind === 'file'
-                        ? { download: true, 'aria-label': title }
-                        : { target: '_blank', rel: 'noreferrer' })}
-                      className="text-on-surface text-body-small block truncate hover:underline"
-                    >
-                      {resource.title}
-                    </a>
+                    resource.kind === 'file' ? (
+                      <a
+                        href={href}
+                        download
+                        aria-label={title}
+                        className="text-on-surface text-body-small block truncate hover:underline"
+                      >
+                        {resource.title}
+                      </a>
+                    ) : (
+                      <a
+                        href={href}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-on-surface text-body-small block truncate hover:underline"
+                      >
+                        {resource.title}
+                      </a>
+                    )
                   ) : (
                     <span className="text-on-surface text-body-small block truncate">
                       {resource.title}

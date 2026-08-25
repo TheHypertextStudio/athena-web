@@ -17,14 +17,13 @@ describe('ambient Athena entry points', () => {
     expect(read(path)).not.toContain('AthenaContextAction');
   });
 
-  it('keeps Athena available as a contextual task-menu action instead of a page button', () => {
+  it('keeps task controls free of anthropomorphic agent actions', () => {
     const controls = read('apps/web/src/components/task-detail/task-header-controls.tsx');
     const detail = read(
       'apps/web/src/app/(app)/orgs/[orgId]/tasks/[taskId]/task-detail-client.tsx',
     );
-    expect(controls).toContain('AthenaContextMenuItem');
-    expect(controls).toContain('Have Athena handle this');
-    expect(detail).toContain("source: { type: 'task'");
+    expect(controls).not.toContain('Athena');
+    expect(detail).not.toContain('Have Athena handle this');
   });
 
   it('keeps Calendar rail-free while its selected-item action carries calendar context to Athena', () => {

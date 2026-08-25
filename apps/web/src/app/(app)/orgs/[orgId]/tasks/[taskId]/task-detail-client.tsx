@@ -3,10 +3,11 @@
 import type { Priority } from '@docket/work/task-contract';
 import { ActorAvatar, ActorPicker, type ActorKind, type PickerOption } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Skeleton, SkeletonChip, SkeletonText } from '@docket/ui/primitives';
+import { Button, Skeleton, SkeletonChip, SkeletonText } from '@docket/ui/primitives';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTypedRoute } from '@/lib/app-location';
 import { useAppRouter } from '@/lib/interactions/navigation';
-import { type JSX, useCallback, useMemo, useState } from 'react';
+import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useDocumentTitle } from '@/components/tabs/use-document-title';
 import { useRegisterTabTitle } from '@/components/tabs/use-register-tab-title';
@@ -46,6 +47,7 @@ import { useRenameTask } from '@/lib/use-rename-task';
 import { useCategoryOf } from '@/components/entity-display/use-work-status';
 import { TaskRepeatingWorkBacklink } from '@/components/recurrence/repeating-work-backlink';
 import { useSession } from '@/lib/auth-client';
+import { removeNavigationSnapshot } from '@/lib/navigation-snapshot-runtime';
 
 interface TaskFeedActor {
   name: string;
@@ -58,11 +60,15 @@ export default function TaskDetailPage(): JSX.Element {
   const router = useAppRouter();
   const { params } = useTypedRoute('/orgs/[orgId]/tasks/[taskId]');
   const { orgId, taskId } = params;
+  const queryClient = useQueryClient();
 
   const projectLabel = useVocabulary('project');
   const programLabel = useVocabulary('program');
   const cycleLabel = useVocabulary('cycle');
   const categoryOf = useCategoryOf('task');
+  const [aggregateEnabled, setAggregateEnabled] = useState(true);
+  const [terminalState, setTerminalState] = useState<'forbidden' | 'not-found' | null>(null);
+  const [linkedContentOpen, setLinkedContentOpen] = useState(false);
 
   const {
     task,
@@ -77,10 +83,11 @@ export default function TaskDetailPage(): JSX.Element {
     entityMentions,
     detailKey,
     activityKey,
+    terminalFailure,
     isPending,
     isError,
     error,
-  } = useTaskDetail(orgId, taskId);
+  } = useTaskDetail(orgId, taskId, { aggregateEnabled });
 
   const {
     attachments,
@@ -119,6 +126,20 @@ export default function TaskDetailPage(): JSX.Element {
   const { scale: estimationScale } = useEstimationScale(orgId);
 
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+
+  useEffect(() => {
+    setAggregateEnabled(true);
+    setTerminalState(null);
+    setLinkedContentOpen(false);
+  }, [taskId]);
+
+  useEffect(() => {
+    if (terminalFailure === null) return;
+    setTerminalState(terminalFailure);
+    setAggregateEnabled(false);
+    void removeNavigationSnapshot('task', taskId);
+    queryClient.removeQueries({ queryKey: detailKey, exact: true });
+  }, [detailKey, queryClient, taskId, terminalFailure]);
 
   const resolveActor = useCallback(
     (actorId: string | null | undefined): TaskFeedActor => {
@@ -235,6 +256,18 @@ export default function TaskDetailPage(): JSX.Element {
         </header>
         <Skeleton className="h-48 w-full rounded-lg" />
         <Skeleton className="h-48 w-full rounded-lg" />
+      </div>
+    );
+  }
+
+  if (terminalState !== null) {
+    return (
+      <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
+        <p role="alert" className="text-on-surface-variant text-body-medium">
+          {terminalState === 'forbidden'
+            ? 'You no longer have access to this task.'
+            : 'This task no longer exists.'}
+        </p>
       </div>
     );
   }
@@ -363,7 +396,7 @@ export default function TaskDetailPage(): JSX.Element {
         ) : null}
       </header>
 
-      <TaskRepeatingWorkBacklink orgId={orgId} entityId={taskId} />
+      {linkedContentOpen ? <TaskRepeatingWorkBacklink orgId={orgId} entityId={taskId} /> : null}
 
       <div className="flex min-w-0 flex-col gap-6">
         <TaskDetails
@@ -437,18 +470,32 @@ export default function TaskDetailPage(): JSX.Element {
           onRename={renameSubtask}
         />
 
-        <section className="flex flex-col gap-2">
-          <h2 className="text-on-surface text-title-small font-medium">Dependency map</h2>
-          <div className="bg-surface-container h-80 overflow-hidden rounded-xl">
-            <TaskGraphPanel
-              scope={{ orgId, rootTaskId: taskId, depth: 2 }}
-              density="compact"
-              onExpand={() => {
-                router.push(`/orgs/${orgId}/graph?rootTaskId=${taskId}`);
+        {linkedContentOpen ? (
+          <section className="flex flex-col gap-2">
+            <h2 className="text-on-surface text-title-small font-medium">Dependency map</h2>
+            <div className="bg-surface-container h-80 overflow-hidden rounded-xl">
+              <TaskGraphPanel
+                scope={{ orgId, rootTaskId: taskId, depth: 2 }}
+                density="compact"
+                onExpand={() => {
+                  router.push(`/orgs/${orgId}/graph?rootTaskId=${taskId}`);
+                }}
+              />
+            </div>
+          </section>
+        ) : (
+          <section aria-label="Linked task content">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setLinkedContentOpen(true);
               }}
-            />
-          </div>
-        </section>
+            >
+              Load attachments and dependency map
+            </Button>
+          </section>
+        )}
 
         <TaskActivityFeed
           orgId={orgId}

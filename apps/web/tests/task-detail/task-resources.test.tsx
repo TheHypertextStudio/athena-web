@@ -9,12 +9,16 @@ import { ResourcesTab } from '../../src/components/entity-detail/resources-tab';
 
 afterEach(cleanup);
 
+const ORG_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
+const TASK_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAW';
+const FILE_ATTACHMENT_ID = '01ARZ3NDEKTSV4RRFFQ69G5FB1';
+
 const attachments: readonly AttachmentOut[] = [
   {
-    id: 'url-first',
-    organizationId: 'org_1',
+    id: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
+    organizationId: ORG_ID,
     subjectType: 'task',
-    subjectId: 'task_1',
+    subjectId: TASK_ID,
     kind: 'url',
     title: 'Release plan',
     url: 'https://example.test/release?utm_source=mail',
@@ -27,10 +31,10 @@ const attachments: readonly AttachmentOut[] = [
     createdAt: '2026-08-24T12:00:00.000Z',
   },
   {
-    id: 'url-duplicate',
-    organizationId: 'org_1',
+    id: '01ARZ3NDEKTSV4RRFFQ69G5FAY',
+    organizationId: ORG_ID,
     subjectType: 'task',
-    subjectId: 'task_1',
+    subjectId: TASK_ID,
     kind: 'url',
     title: 'Release plan duplicate',
     url: 'https://example.test/release',
@@ -43,10 +47,10 @@ const attachments: readonly AttachmentOut[] = [
     createdAt: '2026-08-24T12:01:00.000Z',
   },
   {
-    id: 'mail',
-    organizationId: 'org_1',
+    id: '01ARZ3NDEKTSV4RRFFQ69G5FAZ',
+    organizationId: ORG_ID,
     subjectType: 'task',
-    subjectId: 'task_1',
+    subjectId: TASK_ID,
     kind: 'email',
     title: 'Vendor approval',
     url: 'https://mail.example.test/thread/1',
@@ -59,10 +63,10 @@ const attachments: readonly AttachmentOut[] = [
     createdAt: '2026-08-24T12:02:00.000Z',
   },
   {
-    id: 'calendar',
-    organizationId: 'org_1',
+    id: '01ARZ3NDEKTSV4RRFFQ69G5FB0',
+    organizationId: ORG_ID,
     subjectType: 'task',
-    subjectId: 'task_1',
+    subjectId: TASK_ID,
     kind: 'calendar_event',
     title: 'Launch review',
     url: 'https://calendar.example.test/event/1',
@@ -75,10 +79,10 @@ const attachments: readonly AttachmentOut[] = [
     createdAt: '2026-08-24T12:03:00.000Z',
   },
   {
-    id: 'file',
-    organizationId: 'org_1',
+    id: FILE_ATTACHMENT_ID,
+    organizationId: ORG_ID,
     subjectType: 'task',
-    subjectId: 'task_1',
+    subjectId: TASK_ID,
     kind: 'file',
     title: 'Budget workbook',
     url: null,
@@ -101,8 +105,8 @@ const mentionedExternal: readonly EntityMention[] = [
     occurrences: 1,
     ref: { kind: 'external', url: 'https://example.test/release' },
     resource: {
-      id: 'resource_1',
-      organizationId: 'org_1',
+      id: '01ARZ3NDEKTSV4RRFFQ69G5FB2',
+      organizationId: ORG_ID,
       provider: 'web',
       canonicalUrl: 'https://example.test/release',
       canonicalKey: 'web:https://example.test/release',
@@ -148,7 +152,7 @@ describe('task Resources', () => {
     expect(screen.getByText(/^File/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Download Budget workbook' })).toHaveAttribute(
       'href',
-      '/download/file',
+      `/download/${FILE_ATTACHMENT_ID}`,
     );
     expect(within(resources as HTMLElement).queryByText('Mentioned in this record')).toBeNull();
   });

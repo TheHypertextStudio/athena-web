@@ -7,6 +7,38 @@
 
 ## Active Tasks
 
+### [RELEASE-GATE-002] Measure release behavior at the right boundary
+
+- **Status**: COMPLETED
+- **Started**: 2026-08-25
+- **Completed**: 2026-08-25
+- **Priority**: P0
+- **Description**: The exact Canvas release passed its build and type gates, but Web coverage
+  measured a 100 ms layout budget while V8 coverage instrumentation and 416 other test files were
+  running. The core-screen gate also rejected a fully rendered Task detail because server
+  hydration removed the duplicate browser aggregate request that the gate expected.
+- **Approach**: Keep Canvas layout behavior in the coverage suite and run its two wall-clock
+  budgets alone without instrumentation. Keep the core-screen gate focused on a settled editable
+  detail, no application failure, no failed API response, and no more than one client-side
+  reconciliation request. Use the same separate performance boundary that the API release suite
+  already uses.
+- **Files changed**: Updated the Web test commands, the CI Web test shard, the two Canvas layout
+  suites, the isolated Canvas performance suite, the core-screen acceptance journey, and this work
+  record.
+- **Validation**: The isolated 36-Project and 363-Task layouts both pass the 100 ms limit and take
+  20 ms together on the development machine. The two functional Canvas layout files pass all nine
+  tests. The exact headless core-screen gate passes all primary authenticated screens and the four
+  aggregate-backed detail surfaces in 23 seconds against a production build and a temporary
+  PostgreSQL database. Focused ESLint, Web type checking, repository tooling tests, formatting,
+  diff checks, and the production build pass.
+- **Learnings**: A wall-clock budget cannot run inside an instrumented coverage forest because the
+  result measures shared runner contention. A server-hydrated detail can render reconciled data
+  without a browser-visible aggregate request, so the release gate must test the settled editable
+  surface and cap duplicate client requests instead of requiring one transport path.
+- **Blockers**: None.
+
+---
+
 ### [DETAIL-RELEASE-001] Restore detail routes and link isolation
 
 - **Status**: COMPLETED

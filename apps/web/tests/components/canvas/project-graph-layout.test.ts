@@ -54,7 +54,6 @@ describe('layoutProjectGraph', () => {
     }));
 
     expect(result.layout.diagnostics).toMatchObject({ nodeCount: 36, componentCount: 25 });
-    expect(result.layout.diagnostics.durationMs).toBeLessThanOrEqual(100);
     expect(new Set(rectangles.map(({ x }) => x)).size).toBeGreaterThan(1);
     expect(new Set(rectangles.map(({ y }) => y)).size).toBeGreaterThan(1);
     for (const [index, left] of rectangles.entries()) {

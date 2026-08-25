@@ -119,13 +119,15 @@ async function expectAcceptableScreen(context: BrowserContext, screen: ScreenCas
     expect(failedResponses, `${screen.name} should not receive a failed API response`).toEqual([]);
     if ('aggregatePath' in screen) {
       expect(
-        aggregateResponses,
-        `${screen.name} should reconcile through one aggregate response`,
-      ).toHaveLength(1);
-      expect(
-        aggregateResponses[0]?.status(),
-        `${screen.name} aggregate should pass its response contract`,
-      ).toBe(200);
+        aggregateResponses.length,
+        `${screen.name} should not duplicate its server-hydrated aggregate`,
+      ).toBeLessThanOrEqual(1);
+      if (aggregateResponses[0] !== undefined) {
+        expect(
+          aggregateResponses[0].status(),
+          `${screen.name} client reconciliation should pass its response contract`,
+        ).toBe(200);
+      }
     }
   } finally {
     page.off('response', onResponse);

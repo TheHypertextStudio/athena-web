@@ -22,7 +22,8 @@
     "lint": "eslint .",
     "test": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--no-experimental-webstorage\" vitest run",
     "test:watch": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--no-experimental-webstorage\" vitest",
-    "test:coverage": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--no-experimental-webstorage\" vitest run --coverage",
+    "test:coverage": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--no-experimental-webstorage\" vitest run --coverage --exclude tests/components/canvas/graph-layout-performance.test.ts",
+    "test:performance": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--no-experimental-webstorage\" vitest run tests/components/canvas/graph-layout-performance.test.ts --maxWorkers=1",
     "test:e2e": "playwright test",
     "clean": "rm -rf .next .turbo *.tsbuildinfo",
     "test:e2e:evidence": "E2E_EVIDENCE=1 playwright test"

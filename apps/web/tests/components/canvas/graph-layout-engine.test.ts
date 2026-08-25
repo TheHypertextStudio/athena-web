@@ -98,7 +98,7 @@ describe('layoutMeasuredGraph', () => {
     ]);
   });
 
-  it('keeps the 363-task regression readable within the pure-layout budget', () => {
+  it('keeps the 363-task regression readable', () => {
     const tasks = Array.from({ length: 363 }, (_, index) => ({
       id: `task-${index}`,
       width: 240,
@@ -117,7 +117,6 @@ describe('layoutMeasuredGraph', () => {
     expect(new Set([...result.positions.values()].map(({ x }) => x)).size).toBeGreaterThan(1);
     expect(new Set([...result.positions.values()].map(({ y }) => y)).size).toBeGreaterThan(1);
     expect(result.primary.anchorNodeId).toBe('task-1');
-    expect(result.diagnostics.durationMs).toBeLessThanOrEqual(100);
   });
 
   it('frames the largest top-level component and its highest-degree root', () => {

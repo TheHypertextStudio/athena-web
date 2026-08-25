@@ -235,6 +235,12 @@ jobs:
       - run: pnpm --filter @docket/api test:performance
         if: matrix.group == 'api'
 
+      # Coverage instrumentation and the other 416 Web files distort wall-clock layout timings.
+      # The functional layout assertions stay in coverage, and this runs the two 100ms budgets
+      # alone against the same production layout code.
+      - run: pnpm --filter @docket/web test:performance
+        if: matrix.group == 'web'
+
       # `turbo run test:coverage` only runs *package* suites. The repository-level suites under
       # `repo-tests/` — the CI gate policy (repo-tests/ci) and the launch-record reconciler
       # (repo-tests/launch) — belong to no workspace package, so turbo never sees them. Without

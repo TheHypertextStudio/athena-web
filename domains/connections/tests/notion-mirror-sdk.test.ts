@@ -73,7 +73,7 @@ describe('databaseSchema', () => {
       col({ field: 'title', title: 'Task name', kind: 'title' }),
       col({ field: 'dueDate', title: 'Due', kind: 'date' }),
     ]);
-    expect(Object.keys(schema)).toEqual(['Task name', 'Due']);
+    expect(Object.keys(schema)).toEqual(['Docket ID', 'Task name', 'Due']);
   });
 
   it('uses the user-chosen title, not the Docket field key', () => {

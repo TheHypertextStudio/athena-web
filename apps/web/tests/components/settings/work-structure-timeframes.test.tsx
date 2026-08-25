@@ -52,17 +52,19 @@ beforeEach(() => {
       fiscalYearStartMonth: 0,
     }),
   );
-  settingsPatch.mockReset().mockImplementation(async ({ json }: { json: Record<string, unknown> }) =>
-    jsonResponse(true, {
-      initiativeMaxDepth: 2,
-      autoCompleteParentTasks:
-        typeof json['autoCompleteParentTasks'] === 'boolean'
-          ? json['autoCompleteParentTasks']
-          : true,
-      estimationScale: 'fibonacci',
-      fiscalYearStartMonth: 'fiscalYearStartMonth' in json ? json['fiscalYearStartMonth'] : 0,
-    }),
-  );
+  settingsPatch
+    .mockReset()
+    .mockImplementation(async ({ json }: { json: Record<string, unknown> }) =>
+      jsonResponse(true, {
+        initiativeMaxDepth: 2,
+        autoCompleteParentTasks:
+          typeof json['autoCompleteParentTasks'] === 'boolean'
+            ? json['autoCompleteParentTasks']
+            : true,
+        estimationScale: 'fibonacci',
+        fiscalYearStartMonth: 'fiscalYearStartMonth' in json ? json['fiscalYearStartMonth'] : 0,
+      }),
+    );
 });
 
 afterEach(cleanup);

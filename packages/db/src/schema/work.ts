@@ -16,6 +16,7 @@
  */
 import { sql, type SQLWrapper } from 'drizzle-orm';
 import {
+  boolean,
   check,
   foreignKey,
   index,
@@ -43,7 +44,7 @@ import {
 } from '../enums';
 import { notBlank } from './constraints';
 import { actor, auditColumns, organization, team } from './identity';
-import { integration } from './crosscutting';
+import { integration, template } from './crosscutting';
 import { workStatus } from './work-status';
 
 /**
@@ -431,6 +432,7 @@ export const task = pgTable(
     programId: text('program_id').references(() => program.id, { onDelete: 'set null' }),
     milestoneId: text('milestone_id').references(() => milestone.id, { onDelete: 'set null' }),
     cycleId: text('cycle_id').references(() => cycle.id, { onDelete: 'set null' }),
+    templateId: text('template_id').references(() => template.id, { onDelete: 'set null' }),
     parentTaskId: text('parent_task_id'),
     estimate: integer('estimate'),
     estimateMinutes: integer('estimate_minutes'),
@@ -454,6 +456,7 @@ export const task = pgTable(
     lastPushedAt: timestamp('last_pushed_at'),
     completedAt: timestamp('completed_at'),
     canceledAt: timestamp('canceled_at'),
+    autoCompletedBySubtasks: boolean('auto_completed_by_subtasks').notNull().default(false),
     visibility: visibility('visibility').notNull().default('public'),
     ancestorPath: text('ancestor_path')
       .array()
@@ -466,6 +469,7 @@ export const task = pgTable(
     index('task_status_idx').on(t.statusId),
     index('task_project_idx').on(t.projectId),
     index('task_program_idx').on(t.programId),
+    index('task_template_idx').on(t.templateId),
     index('task_ancestor_path_gin').using('gin', t.ancestorPath),
     uniqueIndex('task_source_uq')
       .on(t.sourceIntegrationId, t.externalId)

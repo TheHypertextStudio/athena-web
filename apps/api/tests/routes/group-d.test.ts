@@ -222,6 +222,7 @@ describe('orgs router', () => {
     expect(initial.status).toBe(200);
     expect(await body(initial)).toEqual({
       initiativeMaxDepth: 2,
+      autoCompleteParentTasks: true,
       estimationScale: 'fibonacci',
       fiscalYearStartMonth: 0,
     });
@@ -234,6 +235,7 @@ describe('orgs router', () => {
     expect(raised.status).toBe(200);
     expect(await body(raised)).toEqual({
       initiativeMaxDepth: 3,
+      autoCompleteParentTasks: true,
       estimationScale: 'fibonacci',
       fiscalYearStartMonth: 0,
     });
@@ -246,6 +248,7 @@ describe('orgs router', () => {
     expect(rescaled.status).toBe(200);
     expect(await body(rescaled)).toEqual({
       initiativeMaxDepth: 3,
+      autoCompleteParentTasks: true,
       estimationScale: 't_shirt',
       fiscalYearStartMonth: 0,
     });
@@ -258,6 +261,7 @@ describe('orgs router', () => {
     expect(fiscal.status).toBe(200);
     expect(await body(fiscal)).toEqual({
       initiativeMaxDepth: 3,
+      autoCompleteParentTasks: true,
       estimationScale: 't_shirt',
       fiscalYearStartMonth: 6,
     });
@@ -299,6 +303,7 @@ describe('orgs router', () => {
     const unchanged = await app.request(`/${orgId}/settings/work-structure`);
     expect(await body(unchanged)).toEqual({
       initiativeMaxDepth: 3,
+      autoCompleteParentTasks: true,
       estimationScale: 't_shirt',
       fiscalYearStartMonth: 6,
     });

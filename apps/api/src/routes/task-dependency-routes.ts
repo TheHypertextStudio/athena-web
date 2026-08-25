@@ -1,4 +1,4 @@
-import { actor, cycle, db, project, task, taskDependency } from '@docket/db';
+import { actor, auditEvent, cycle, db, project, task, taskDependency } from '@docket/db';
 import {
   SubtaskCreate,
   TaskDependencyCreate,
@@ -15,9 +15,14 @@ import { z } from 'zod';
 import type { AppEnv } from '../context';
 import { ConflictError, CycleError, NotFoundError, ValidationError } from '../error';
 import { serializableTx } from '../lib/serializable-tx';
+import { taskActivityRows } from '../lib/task-audit';
 import { labelsForSubjects, replaceLabels, resolveLabelSet } from '../lib/labels';
 import { created, ok, resourceUrl } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
+import {
+  applySubtaskCompletionPolicyForParents,
+  finishTaskStateTransition,
+} from '../lib/task-state';
 import { zJson, zParam } from '../lib/validate';
 import { enqueueSearchUpsert } from '../search/write-through';
 
@@ -97,43 +102,52 @@ The child inherits sensible defaults but can override them: \`state\` defaults t
       await assertRefInOrg(cycle, orgId, body.cycleId, 'Cycle not found');
       await assertMilestoneInOrg(orgId, body.milestoneId, body.projectId ?? parent.projectId);
 
-      const inherited =
-        body.state === undefined
-          ? { statusId: parent.statusId, state: parent.state }
-          : await resolveTaskStatus(orgId, parent.teamId, body.state);
+      const inherited = await resolveTaskStatus(orgId, parent.teamId, body.state ?? parent.state);
       // `SubtaskCreate.labels` was accepted and discarded here for the same reason
       // `TaskCreate.labels` was: nothing ever wrote the join. Resolve against the parent's team,
       // which the subtask inherits.
       const resolvedLabels = await resolveLabelSet(orgId, body.labels, { teamId: parent.teamId });
 
-      const inserted = await db
-        .insert(task)
-        .values({
-          organizationId: orgId,
-          title: body.title,
-          description: body.description,
-          teamId: parent.teamId,
-          statusId: inherited.statusId,
-          state: inherited.state,
-          priority: body.priority ?? 'none',
-          assigneeId: body.assigneeId,
-          projectId: body.projectId ?? parent.projectId,
-          milestoneId: body.milestoneId,
-          cycleId: body.cycleId,
-          parentTaskId: parent.id,
-          estimate: body.estimate,
-          estimateMinutes: body.estimateMinutes,
-          startDate: body.startDate ? new Date(body.startDate) : undefined,
-          dueDate: body.dueDate ? new Date(body.dueDate) : undefined,
-          source: 'native',
-          createdBy: actorId,
-        })
-        .returning();
-      const row = inserted[0];
-      /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
-      if (!row) throw new Error('subtask insert returned no row');
-      if (resolvedLabels.length > 0) {
-        await db.transaction((tx) => replaceLabels(tx, 'task', row.id, orgId, resolvedLabels));
+      const result = await db.transaction(async (tx) => {
+        const inserted = await tx
+          .insert(task)
+          .values({
+            organizationId: orgId,
+            title: body.title,
+            description: body.description,
+            teamId: parent.teamId,
+            statusId: inherited.statusId,
+            state: inherited.state,
+            completedAt: inherited.completedAt,
+            canceledAt: inherited.canceledAt,
+            priority: body.priority ?? 'none',
+            assigneeId: body.assigneeId,
+            projectId: body.projectId ?? parent.projectId,
+            milestoneId: body.milestoneId,
+            cycleId: body.cycleId,
+            parentTaskId: parent.id,
+            estimate: body.estimate,
+            estimateMinutes: body.estimateMinutes,
+            startDate: body.startDate ? new Date(body.startDate) : undefined,
+            dueDate: body.dueDate ? new Date(body.dueDate) : undefined,
+            source: 'native',
+            createdBy: actorId,
+          })
+          .returning();
+        const row = inserted[0];
+        /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
+        if (!row) throw new Error('subtask insert returned no row');
+        if (resolvedLabels.length > 0) {
+          await replaceLabels(tx, 'task', row.id, orgId, resolvedLabels);
+        }
+        return {
+          row,
+          cascades: await applySubtaskCompletionPolicyForParents(tx, orgId, [parent.id]),
+        };
+      });
+      const { row, cascades } = result;
+      for (const cascade of cascades) {
+        await finishTaskStateTransition({ actorId: null }, cascade);
       }
       await enqueueSearchUpsert(orgId, 'task', row.id);
       return created(
@@ -255,6 +269,28 @@ Two invariants are enforced. A task cannot depend on itself (self-edge → 422 v
 
       const otherTask = await loadTask(orgId, otherId);
       await assertTaskCapability(orgId, actorId, otherTask, 'contribute');
+      const dependencyActivity = [
+        {
+          taskId: blockingTaskId,
+          title: pathTask.id === blockingTaskId ? pathTask.title : otherTask.title,
+          change: {
+            field: 'dependency',
+            label: 'Dependency',
+            from: null,
+            to: `Blocks ${blockedTaskId === pathTask.id ? pathTask.title : otherTask.title}`,
+          },
+        },
+        {
+          taskId: blockedTaskId,
+          title: pathTask.id === blockedTaskId ? pathTask.title : otherTask.title,
+          change: {
+            field: 'dependency',
+            label: 'Dependency',
+            from: null,
+            to: `Blocked by ${blockingTaskId === pathTask.id ? pathTask.title : otherTask.title}`,
+          },
+        },
+      ];
 
       // The duplicate-check, acyclic reachability check, and the insert run in one
       // SERIALIZABLE transaction (data-model §7.4): READ COMMITTED lets two concurrent
@@ -280,6 +316,17 @@ Two invariants are enforced. A task cannot depend on itself (self-edge → 422 v
         await tx
           .insert(taskDependency)
           .values({ blockingTaskId, blockedTaskId, organizationId: orgId });
+        await tx.insert(auditEvent).values(
+          dependencyActivity.flatMap((activity) =>
+            taskActivityRows({
+              organizationId: orgId,
+              taskId: activity.taskId,
+              title: activity.title,
+              actorId,
+              changes: [activity.change],
+            }),
+          ),
+        );
       });
 
       return created(c, TaskDependencyCreated, { created: true, blockingTaskId, blockedTaskId });
@@ -304,19 +351,55 @@ Two invariants are enforced. A task cannot depend on itself (self-edge → 422 v
       await assertTaskCapability(orgId, actorId, otherTask, 'contribute');
 
       // The edge is removable from either endpoint: (id→depId) or (depId→id).
-      const deleted = await db
-        .delete(taskDependency)
-        .where(
-          and(
-            eq(taskDependency.organizationId, orgId),
-            or(
-              and(eq(taskDependency.blockingTaskId, id), eq(taskDependency.blockedTaskId, depId)),
-              and(eq(taskDependency.blockingTaskId, depId), eq(taskDependency.blockedTaskId, id)),
+      await db.transaction(async (tx) => {
+        const deleted = await tx
+          .delete(taskDependency)
+          .where(
+            and(
+              eq(taskDependency.organizationId, orgId),
+              or(
+                and(eq(taskDependency.blockingTaskId, id), eq(taskDependency.blockedTaskId, depId)),
+                and(eq(taskDependency.blockingTaskId, depId), eq(taskDependency.blockedTaskId, id)),
+              ),
             ),
+          )
+          .returning();
+        const edge = deleted[0];
+        if (!edge) throw new NotFoundError('Dependency edge not found');
+        const dependencyActivity = [
+          {
+            taskId: edge.blockingTaskId,
+            title: edge.blockingTaskId === pathTask.id ? pathTask.title : otherTask.title,
+            change: {
+              field: 'dependency',
+              label: 'Dependency',
+              from: `Blocks ${edge.blockedTaskId === pathTask.id ? pathTask.title : otherTask.title}`,
+              to: null,
+            },
+          },
+          {
+            taskId: edge.blockedTaskId,
+            title: edge.blockedTaskId === pathTask.id ? pathTask.title : otherTask.title,
+            change: {
+              field: 'dependency',
+              label: 'Dependency',
+              from: `Blocked by ${edge.blockingTaskId === pathTask.id ? pathTask.title : otherTask.title}`,
+              to: null,
+            },
+          },
+        ];
+        await tx.insert(auditEvent).values(
+          dependencyActivity.flatMap((activity) =>
+            taskActivityRows({
+              organizationId: orgId,
+              taskId: activity.taskId,
+              title: activity.title,
+              actorId,
+              changes: [activity.change],
+            }),
           ),
-        )
-        .returning();
-      if (!deleted[0]) throw new NotFoundError('Dependency edge not found');
+        );
+      });
       return ok(c, TaskRemoved, { removed: true });
     },
   );

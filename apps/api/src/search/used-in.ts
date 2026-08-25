@@ -132,18 +132,24 @@ export async function resolveUsedIn(
           .from(schema.mention)
           .where(and(eq(schema.mention.organizationId, organizationId), or(...arms)))
       : Promise.resolve([]),
-    attachmentIds.length > 0
+    attachmentIds.length > 0 || externalIds.length > 0
       ? schema.db
           .select({
             id: schema.attachment.id,
             subjectType: schema.attachment.subjectType,
             subjectId: schema.attachment.subjectId,
+            externalResourceId: schema.attachment.externalResourceId,
           })
           .from(schema.attachment)
           .where(
             and(
               eq(schema.attachment.organizationId, organizationId),
-              inArray(schema.attachment.id, attachmentIds),
+              or(
+                ...(attachmentIds.length > 0 ? [inArray(schema.attachment.id, attachmentIds)] : []),
+                ...(externalIds.length > 0
+                  ? [inArray(schema.attachment.externalResourceId, externalIds)]
+                  : []),
+              ),
             ),
           )
       : Promise.resolve([]),
@@ -174,6 +180,14 @@ export async function resolveUsedIn(
       entityId: attachment.id,
       targetKind: 'attachment',
     });
+    if (attachment.externalResourceId) {
+      references.push({
+        subjectType: attachment.subjectType,
+        subjectId: attachment.subjectId,
+        entityId: attachment.externalResourceId,
+        targetKind: 'external_resource',
+      });
+    }
   }
   if (references.length === 0) return empty;
 

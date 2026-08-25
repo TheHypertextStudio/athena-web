@@ -23,6 +23,70 @@ const allVisible = (_orgId: string, ids: readonly string[]): Promise<ReadonlySet
   Promise.resolve(new Set(ids));
 
 describe('used-in resolution', () => {
+  it('derives a Library resource context from a direct task link', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'UsedInDirectTaskLinkUser');
+    const orgId = await seedOrg(db, schema);
+    const statusId = await seedStatuses(db, schema, orgId);
+    const actorId = await addMember(db, schema, orgId, userId);
+    const teamId = one(
+      await db
+        .insert(schema.team)
+        .values({
+          organizationId: orgId,
+          name: 'Direct resource team',
+          key: `D${Math.random().toString(36).slice(2, 8)}`,
+        })
+        .returning({ id: schema.team.id }),
+    ).id;
+    const taskId = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          title: 'Task with a direct Library link',
+          teamId,
+          state: 'todo',
+          statusId: statusId('task', 'todo'),
+        })
+        .returning({ id: schema.task.id }),
+    ).id;
+    const resourceId = one(
+      await db
+        .insert(schema.externalResource)
+        .values({
+          organizationId: orgId,
+          createdBy: actorId,
+          provider: 'web',
+          canonicalKey: 'web:https://example.test/direct-resource',
+          canonicalUrl: 'https://example.test/direct-resource',
+          resourceType: 'page',
+        })
+        .returning({ id: schema.externalResource.id }),
+    ).id;
+    await db.insert(schema.attachment).values({
+      organizationId: orgId,
+      createdBy: actorId,
+      subjectType: 'task',
+      subjectId: taskId,
+      kind: 'url',
+      title: 'Direct resource',
+      url: 'https://example.test/direct-resource',
+      externalResourceId: resourceId,
+    });
+
+    const resolved = await resolveUsedIn(
+      orgId,
+      [{ documentId: 'resource-doc', kind: 'external_resource', entityId: resourceId }],
+      allVisible,
+    );
+
+    expect(resolved.get('resource-doc')).toEqual([
+      { kind: 'team', id: teamId, title: 'Direct resource team' },
+    ]);
+  });
+
   it('derives an attachment context from its host task hierarchy', async () => {
     const schema = await getDb();
     const { db } = schema;

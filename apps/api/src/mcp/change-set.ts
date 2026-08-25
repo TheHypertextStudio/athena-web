@@ -27,18 +27,34 @@ import {
   task,
   taskDependency,
   taskLabel,
+  taskRelatedTask,
 } from '@docket/db';
 import { createHash } from 'node:crypto';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import type { AnyPgColumn, PgTable } from 'drizzle-orm/pg-core';
 
-import { NotFoundError } from '../error';
+import { ConflictError, NotFoundError } from '../error';
+import { serializableTx } from '../lib/serializable-tx';
+import {
+  applySubtaskCompletionPolicyForParents,
+  finishTaskStateTransition,
+  writeTaskStateTransition,
+  type TaskStateMutation,
+} from '../lib/task-state';
+import { planTaskReparents } from '../services/task-hierarchy';
 
 /** The entity kinds a change set can record, mapped to the table they live in. */
 const RECORDABLE = { task, project, program, initiative } as const;
 
 /** One recordable entity kind. */
 export type RecordableKind = keyof typeof RECORDABLE;
+
+/** The columns every recordable row exposes to change-set reads and reversals. */
+type RecordableTable = PgTable & {
+  id: AnyPgColumn;
+  organizationId: AnyPgColumn;
+  archivedAt: AnyPgColumn;
+};
 
 /**
  * The relations a change set can record, mapped to the join table and endpoint columns.
@@ -69,6 +85,11 @@ const RELATIONS = {
     table: projectLabel,
     from: projectLabel.projectId,
     to: projectLabel.labelId,
+  },
+  related_task: {
+    table: taskRelatedTask,
+    from: taskRelatedTask.taskId,
+    to: taskRelatedTask.relatedTaskId,
   },
   project_contributes_to: {
     table: initiativeProject,
@@ -119,11 +140,15 @@ const TRACKED: Record<RecordableKind, readonly string[]> = {
     'cycleId',
     'parentTaskId',
     'teamId',
+    'templateId',
+    'estimate',
+    'estimateMinutes',
     'startDate',
     'dueDate',
     'estimate',
     'completedAt',
     'canceledAt',
+    'autoCompletedBySubtasks',
     'archivedAt',
   ],
   project: [
@@ -198,12 +223,27 @@ export interface LinkRecord {
   readonly linked: boolean;
 }
 
+/** A complete task-label snapshot for one mutation that replaces the label set. */
+export interface TaskLabelsRecord {
+  readonly kind: 'task_labels';
+  readonly taskId: string;
+  /** Exact sorted label ids before the replacement. */
+  readonly before: readonly string[];
+  /** Exact sorted label ids after the replacement. */
+  readonly after: readonly string[];
+}
+
 /** Anything a tool can record. */
-export type RecordedChange = ChangeRecord | LinkRecord;
+export type RecordedChange = ChangeRecord | LinkRecord | TaskLabelsRecord;
 
 /** Whether a recorded change describes a relation rather than an entity. */
 function isLinkRecord(change: RecordedChange): change is LinkRecord {
   return 'linked' in change;
+}
+
+/** Whether this entry is the explicit complete snapshot of a task's labels. */
+function isTaskLabelsRecord(change: RecordedChange): change is TaskLabelsRecord {
+  return change.kind === 'task_labels';
 }
 
 /** What an undo did, per entity. */
@@ -221,21 +261,122 @@ export interface RecordChangeSetInput {
   id?: string;
   /** Persist the command header even when the normalized change list is empty. */
   recordEmpty?: boolean;
+  readonly orgId: string;
+  readonly actorId: string;
+  readonly origin: ChangeOrigin;
+  readonly summary: string;
+  readonly changes: readonly RecordedChange[];
+}
+
+/** The database transaction handle used by reversible operations. */
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/** Insert a change-set record and entries through an active transaction. */
+async function insertChangeSet(
+  tx: Tx,
+  id: string,
+  input: {
+    orgId: string;
+    actorId: string;
+    origin: ChangeOrigin;
+    summary: string;
+    changes: readonly RecordedChange[];
+  },
+): Promise<void> {
+  await tx.insert(changeSet).values({
+    id,
+    organizationId: input.orgId,
+    actorId: input.actorId,
+    origin: input.origin,
+    summary: input.summary,
+  });
+  if (input.changes.length === 0) return;
+  await tx
+    .insert(changeSetEntry)
+    .values(
+      input.changes.map((change) =>
+        isTaskLabelsRecord(change)
+          ? {
+              changeSetId: id,
+              entityKind: change.kind,
+              entityId: change.taskId,
+              op: 'update' as const,
+              before: { labelIds: [...change.before].sort() },
+              after: { labelIds: [...change.after].sort() },
+            }
+          : isLinkRecord(change)
+            ? {
+                changeSetId: id,
+                entityKind: change.kind,
+                entityId: edgeKey(change.from, change.to),
+                op: 'link' as const,
+                before: change.linked ? null : { from: change.from, to: change.to },
+                after: change.linked ? { from: change.from, to: change.to } : null,
+              }
+            : {
+                changeSetId: id,
+                entityKind: change.kind,
+                entityId: change.id,
+                op: change.op,
+                before: change.before ?? null,
+                after: change.after ?? null,
+              },
+      ),
+    )
+    .onConflictDoNothing();
+}
+
+/** Record a whole reversible operation in the same transaction as its writes. */
+export async function recordChangeSetInTransaction(
+  tx: Tx,
+  input: {
+    orgId: string;
+    actorId: string;
+    origin: ChangeOrigin;
+    summary: string;
+    changes: readonly RecordedChange[];
+  },
+): Promise<string | null> {
+  if (input.changes.length === 0) return null;
+  const id = genId();
+  await insertChangeSet(tx, id, input);
+  return id;
+}
+
+/**
+ * Record a completed tool call as an undoable change set.
+ *
+ * @remarks
+ * Called after the writes commit, not inside them: a change set that rolled back with its own
+ * transaction would leave a caller unable to undo a change that did happen, which is the wrong way
+ * round. A failure to record is therefore a real failure — unlike a missed notification, losing
+ * the record means losing the undo.
+ *
+ * @param input - The org, acting actor, origin, summary, and the entities touched.
+ * @returns the new change-set id, or null when nothing was touched.
+ */
+export async function recordChangeSet(input: {
   orgId: string;
   actorId: string;
   origin: ChangeOrigin;
   summary: string;
   changes: readonly RecordedChange[];
+}): Promise<string | null> {
+  if (input.changes.length === 0) return null;
+  const id = genId();
+  await db.transaction(async (tx) => {
+    await insertChangeSet(tx, id, input);
+  });
+  return id;
 }
 
 /**
- * Derive a globally collision-safe durable id from one actor-scoped canvas command id.
+ * Record a completed tool call as an undoable change set in its own transaction.
  *
- * @param orgId - The workspace that owns the command.
- * @param actorId - The actor whose local history owns the command.
- * @param commandId - The client idempotency key.
- * @returns A deterministic change-set primary key that cannot collide across actors or workspaces.
+ * @param input - The org, acting actor, origin, summary, and entities touched.
+ * @returns the new change-set id, or null when nothing was touched.
  */
+/** Build a durable change-set id from one actor-scoped canvas command id. */
 export function objectCommandChangeSetId(
   orgId: string,
   actorId: string,
@@ -251,63 +392,15 @@ export function objectCommandChangeSetId(
   return `canvas_${digest}`;
 }
 
-/**
- * Record a change set through an existing transaction.
- *
- * @param tx - The transaction that owns both the domain write and its audit record.
- * @param input - The actor, origin, summary, and normalized changes.
- * @returns the new change-set id, or null when nothing changed and `recordEmpty` is false.
- */
+/** Record a change set inside a caller-owned transaction. */
 export async function recordChangeSetInTx(
-  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  tx: Tx,
   input: RecordChangeSetInput,
 ): Promise<string | null> {
   if (input.changes.length === 0 && input.recordEmpty !== true) return null;
   const id = input.id ?? genId();
-  await tx.insert(changeSet).values({
-    id,
-    organizationId: input.orgId,
-    actorId: input.actorId,
-    origin: input.origin,
-    summary: input.summary,
-  });
-  const entries = input.changes.map((change) =>
-    isLinkRecord(change)
-      ? {
-          changeSetId: id,
-          entityKind: change.kind,
-          entityId: edgeKey(change.from, change.to),
-          op: 'link' as const,
-          before: change.linked ? null : { from: change.from, to: change.to },
-          after: change.linked ? { from: change.from, to: change.to } : null,
-        }
-      : {
-          changeSetId: id,
-          entityKind: change.kind,
-          entityId: change.id,
-          op: change.op,
-          before: change.before ?? null,
-          after: change.after ?? null,
-        },
-  );
-  const batchSize = 500;
-  for (let offset = 0; offset < entries.length; offset += batchSize) {
-    await tx
-      .insert(changeSetEntry)
-      .values(entries.slice(offset, offset + batchSize))
-      .onConflictDoNothing();
-  }
+  await insertChangeSet(tx, id, input);
   return id;
-}
-
-/**
- * Record a completed tool call as an undoable change set in its own transaction.
- *
- * @param input - The org, acting actor, origin, summary, and entities touched.
- * @returns the new change-set id, or null when nothing was touched.
- */
-export async function recordChangeSet(input: RecordChangeSetInput): Promise<string | null> {
-  return db.transaction((tx) => recordChangeSetInTx(tx, input));
 }
 
 /**
@@ -337,10 +430,7 @@ async function loadRow(
   orgId: string,
   id: string,
 ): Promise<Record<string, unknown> | null> {
-  const table = RECORDABLE[kind] as PgTable & {
-    id: typeof task.id;
-    organizationId: typeof task.organizationId;
-  };
+  const table = RECORDABLE[kind] as RecordableTable;
   const rows = await db
     .select()
     .from(table)
@@ -403,11 +493,167 @@ function endpointValues(kind: RelationKind, from: string, to: string): Record<st
       return { taskId: from, labelId: to };
     case 'project_has_label':
       return { projectId: from, labelId: to };
+    case 'related_task':
+      return { taskId: from, relatedTaskId: to };
     case 'project_contributes_to':
       return { projectId: from, initiativeId: to };
     case 'program_contributes_to':
       return { programId: from, initiativeId: to };
   }
+}
+
+/** Parse a JSON round-tripped nullable date from a recorded row. */
+function restoredDate(value: unknown): Date | null {
+  if (value === null || value === undefined) return null;
+  if (value instanceof Date) return value;
+  if (typeof value !== 'string') throw new Error('Recorded task timestamp is invalid');
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) throw new Error('Recorded task timestamp is invalid');
+  return date;
+}
+
+/** Turn a tracked task snapshot back into a Drizzle task patch. */
+function taskPatchFromSnapshot(snapshot: Record<string, unknown>): Record<string, unknown> {
+  return {
+    title: snapshot['title'],
+    description: snapshot['description'],
+    state: snapshot['state'],
+    statusId: snapshot['statusId'],
+    priority: snapshot['priority'],
+    assigneeId: snapshot['assigneeId'],
+    delegateId: snapshot['delegateId'],
+    projectId: snapshot['projectId'],
+    programId: snapshot['programId'],
+    milestoneId: snapshot['milestoneId'],
+    cycleId: snapshot['cycleId'],
+    parentTaskId: snapshot['parentTaskId'],
+    teamId: snapshot['teamId'],
+    templateId: snapshot['templateId'],
+    estimate: snapshot['estimate'],
+    estimateMinutes: snapshot['estimateMinutes'],
+    startDate: restoredDate(snapshot['startDate']),
+    dueDate: restoredDate(snapshot['dueDate']),
+    completedAt: restoredDate(snapshot['completedAt']),
+    canceledAt: restoredDate(snapshot['canceledAt']),
+    autoCompletedBySubtasks: snapshot['autoCompletedBySubtasks'] === true,
+    archivedAt: restoredDate(snapshot['archivedAt']),
+  };
+}
+
+/** Restore a task through the state and hierarchy boundaries rather than a raw row update. */
+async function revertTask(
+  entry: {
+    entityId: string;
+    op: string;
+    before: Record<string, unknown> | null;
+    after: Record<string, unknown> | null;
+  },
+  orgId: string,
+): Promise<UndoOutcome> {
+  const ref = { kind: 'task', id: entry.entityId };
+  const current = await loadRow('task', orgId, entry.entityId);
+  if (!current) return { ...ref, reverted: false, reason: 'gone' };
+  if (entry.after && !unchangedSince(current, entry.after)) {
+    return { ...ref, reverted: false, reason: 'changed_since' };
+  }
+
+  if (entry.op === 'create') {
+    const cascades = await serializableTx(async (tx) => {
+      const [row] = await tx
+        .select()
+        .from(task)
+        .where(and(eq(task.id, entry.entityId), eq(task.organizationId, orgId)))
+        .for('update')
+        .limit(1);
+      if (!row) return [];
+      await tx
+        .update(task)
+        .set({ archivedAt: new Date() })
+        .where(and(eq(task.id, entry.entityId), eq(task.organizationId, orgId)));
+      return applySubtaskCompletionPolicyForParents(tx, orgId, [row.parentTaskId]);
+    });
+    for (const cascade of cascades) await finishTaskStateTransition({ actorId: null }, cascade);
+    return { ...ref, reverted: true };
+  }
+  if (entry.op !== 'update' || !entry.before) {
+    return { ...ref, reverted: false, reason: 'no_prior_state' };
+  }
+
+  const prior = entry.before;
+  const statusId = prior['statusId'];
+  const state = prior['state'];
+  const parentTaskId = prior['parentTaskId'];
+  if (typeof statusId !== 'string' || typeof state !== 'string') {
+    return { ...ref, reverted: false, reason: 'no_prior_state' };
+  }
+  if (parentTaskId !== null && typeof parentTaskId !== 'string') {
+    return { ...ref, reverted: false, reason: 'no_prior_state' };
+  }
+
+  const result = await serializableTx(async (tx) => {
+    // Lock every task in a stable order. Restoring an archived child can otherwise race a
+    // reparent and reintroduce a cycle after either side completed its own reachability check.
+    const rows = await tx
+      .select()
+      .from(task)
+      .where(eq(task.organizationId, orgId))
+      .orderBy(task.id)
+      .for('update');
+    const row = rows.find((candidate) => candidate.id === entry.entityId);
+    if (!row) return null;
+    const archivedAt = restoredDate(prior['archivedAt']);
+    const activeRows = rows.filter(
+      (candidate) => candidate.archivedAt === null || candidate.id === row.id,
+    );
+    if (archivedAt === null) {
+      planTaskReparents(activeRows, [{ taskId: row.id, parentTaskId }], false);
+    }
+
+    const metadata = Object.fromEntries(
+      TRACKED.task
+        .filter(
+          (key) =>
+            !['state', 'statusId', 'completedAt', 'canceledAt', 'autoCompletedBySubtasks'].includes(
+              key,
+            ),
+        )
+        .map((key) => [key, prior[key]]),
+    );
+    await tx
+      .update(task)
+      .set({ ...metadata, archivedAt })
+      .where(and(eq(task.id, row.id), eq(task.organizationId, orgId)));
+    if (archivedAt !== null) {
+      return {
+        mutation: null,
+        cascades: await applySubtaskCompletionPolicyForParents(tx, orgId, [
+          row.parentTaskId,
+          parentTaskId,
+        ]),
+      };
+    }
+    const mutation = await writeTaskStateTransition(tx, {
+      before: row,
+      statusId,
+      state,
+      completedAt: restoredDate(prior['completedAt']),
+      canceledAt: restoredDate(prior['canceledAt']),
+      autoCompletedBySubtasks: prior['autoCompletedBySubtasks'] === true,
+    });
+    if (!mutation) return null;
+    return {
+      mutation,
+      cascades: await applySubtaskCompletionPolicyForParents(tx, orgId, [
+        row.parentTaskId,
+        parentTaskId,
+      ]),
+    };
+  });
+  if (!result) return { ...ref, reverted: false, reason: 'gone' };
+  if (result.mutation) await finishTaskStateTransition({ actorId: null }, result.mutation);
+  for (const cascade of result.cascades)
+    await finishTaskStateTransition({ actorId: null }, cascade);
+  return { ...ref, reverted: true };
 }
 
 /**
@@ -432,12 +678,9 @@ async function revertEntry(
   const kind = entry.entityKind as RecordableKind;
   const ref = { kind: entry.entityKind, id: entry.entityId };
   if (!(kind in RECORDABLE)) return { ...ref, reverted: false, reason: 'unsupported_kind' };
+  if (kind === 'task') return revertTask(entry, orgId);
 
-  const table = RECORDABLE[kind] as PgTable & {
-    id: typeof task.id;
-    organizationId: typeof task.organizationId;
-    archivedAt: typeof task.archivedAt;
-  };
+  const table = RECORDABLE[kind] as RecordableTable;
   const current = await loadRow(kind, orgId, entry.entityId);
   if (!current) return { ...ref, reverted: false, reason: 'gone' };
   if (entry.after && !unchangedSince(current, entry.after)) {
@@ -505,6 +748,162 @@ export async function undoChangeSet(
   }
   await db.update(changeSet).set({ undoneAt: new Date() }).where(eq(changeSet.id, changeSetId));
   return { summary: set.summary, outcomes };
+}
+
+/** Reverse one change set only when every tracked task still matches its recorded after-state. */
+export async function undoChangeSetAtomically(
+  orgId: string,
+  changeSetId: string,
+  onReverted?: (input: {
+    readonly tx: Parameters<Parameters<typeof db.transaction>[0]>[0];
+    readonly entries: readonly (typeof changeSetEntry.$inferSelect)[];
+    readonly outcomes: readonly UndoOutcome[];
+  }) => Promise<void>,
+): Promise<{ summary: string; outcomes: UndoOutcome[] }> {
+  const result = await serializableTx(async (tx) => {
+    const [set] = await tx
+      .select({ id: changeSet.id, summary: changeSet.summary })
+      .from(changeSet)
+      .where(
+        and(
+          eq(changeSet.id, changeSetId),
+          eq(changeSet.organizationId, orgId),
+          isNull(changeSet.undoneAt),
+        ),
+      )
+      .for('update')
+      .limit(1);
+    if (!set) throw new NotFoundError('Change set not found');
+    const entries = await tx
+      .select()
+      .from(changeSetEntry)
+      .where(eq(changeSetEntry.changeSetId, changeSetId));
+    const taskEntries = entries.filter((entry) => entry.entityKind === 'task');
+    const taskIds = [...new Set(taskEntries.map((entry) => entry.entityId))].sort();
+    const rows =
+      taskIds.length === 0
+        ? []
+        : await tx
+            .select()
+            .from(task)
+            .where(and(eq(task.organizationId, orgId), inArray(task.id, taskIds)))
+            .orderBy(task.id)
+            .for('update');
+    const rowById = new Map(rows.map((row) => [row.id, row]));
+    for (const entry of taskEntries) {
+      const row = rowById.get(entry.entityId);
+      if (!row) throw new ConflictError('Expansion can no longer be undone');
+      if (entry.after && !unchangedSince(row, entry.after)) {
+        throw new ConflictError('Expansion can no longer be undone');
+      }
+    }
+    const labelEntries = entries.filter((entry) => entry.entityKind === 'task_labels');
+    const labelTaskIds = [...new Set(labelEntries.map((entry) => entry.entityId))].sort();
+    const labelRows =
+      labelTaskIds.length === 0
+        ? []
+        : await tx
+            .select({ taskId: taskLabel.taskId, labelId: taskLabel.labelId })
+            .from(taskLabel)
+            .where(
+              and(eq(taskLabel.organizationId, orgId), inArray(taskLabel.taskId, labelTaskIds)),
+            )
+            .orderBy(taskLabel.taskId, taskLabel.labelId)
+            .for('update');
+    const labelsByTaskId = new Map<string, string[]>();
+    for (const row of labelRows) {
+      const ids = labelsByTaskId.get(row.taskId) ?? [];
+      ids.push(row.labelId);
+      labelsByTaskId.set(row.taskId, ids);
+    }
+    for (const entry of labelEntries) {
+      const expected = entry.after?.['labelIds'];
+      if (!Array.isArray(expected) || !expected.every((id) => typeof id === 'string')) {
+        throw new ConflictError('Expansion can no longer be undone');
+      }
+      const current = [...(labelsByTaskId.get(entry.entityId) ?? [])].sort();
+      if (
+        current.length !== expected.length ||
+        current.some((id, index) => id !== expected[index])
+      ) {
+        throw new ConflictError('Expansion can no longer be undone');
+      }
+    }
+
+    const outcomes: UndoOutcome[] = [];
+    const cascades: TaskStateMutation[] = [];
+    for (const entry of [...entries].reverse()) {
+      if (entry.entityKind === 'task') {
+        const row = rowById.get(entry.entityId);
+        if (!row) throw new ConflictError('Expansion can no longer be undone');
+        if (entry.op === 'create') {
+          await tx
+            .update(task)
+            .set({ archivedAt: new Date() })
+            .where(and(eq(task.id, row.id), eq(task.organizationId, orgId)));
+          cascades.push(
+            ...(await applySubtaskCompletionPolicyForParents(tx, orgId, [row.parentTaskId])),
+          );
+        } else if (entry.op === 'update' && entry.before) {
+          await tx
+            .update(task)
+            .set(taskPatchFromSnapshot(entry.before))
+            .where(and(eq(task.id, row.id), eq(task.organizationId, orgId)));
+        } else {
+          throw new ConflictError('Expansion can no longer be undone');
+        }
+        outcomes.push({ kind: entry.entityKind, id: entry.entityId, reverted: true });
+        continue;
+      }
+      if (entry.entityKind === 'task_labels') {
+        const labelIds = entry.before?.['labelIds'];
+        if (!Array.isArray(labelIds) || !labelIds.every((id) => typeof id === 'string')) {
+          throw new ConflictError('Expansion can no longer be undone');
+        }
+        await tx
+          .delete(taskLabel)
+          .where(and(eq(taskLabel.organizationId, orgId), eq(taskLabel.taskId, entry.entityId)));
+        if (labelIds.length > 0) {
+          await tx.insert(taskLabel).values(
+            labelIds.map((labelId) => ({
+              organizationId: orgId,
+              taskId: entry.entityId,
+              labelId,
+            })),
+          );
+        }
+        outcomes.push({ kind: entry.entityKind, id: entry.entityId, reverted: true });
+        continue;
+      }
+      if (!isRelation(entry.entityKind))
+        throw new ConflictError('Expansion can no longer be undone');
+      const edge = entry.after ?? entry.before;
+      const from = edge?.['from'];
+      const to = edge?.['to'];
+      if (typeof from !== 'string' || typeof to !== 'string' || !entry.after) {
+        throw new ConflictError('Expansion can no longer be undone');
+      }
+      const relation = RELATIONS[entry.entityKind];
+      const table = relation.table as PgTable & { organizationId: AnyPgColumn };
+      const current = await tx
+        .select({ from: relation.from, to: relation.to })
+        .from(table)
+        .where(and(eq(relation.from, from), eq(relation.to, to), eq(table.organizationId, orgId)))
+        .for('update');
+      if (current.length !== 1) throw new ConflictError('Expansion can no longer be undone');
+      await tx
+        .delete(table)
+        .where(and(eq(relation.from, from), eq(relation.to, to), eq(table.organizationId, orgId)));
+      outcomes.push({ kind: entry.entityKind, id: entry.entityId, reverted: true });
+    }
+    if (onReverted) await onReverted({ tx, entries, outcomes });
+    await tx.update(changeSet).set({ undoneAt: new Date() }).where(eq(changeSet.id, changeSetId));
+    return { summary: set.summary, outcomes, cascades };
+  });
+  for (const cascade of result.cascades) {
+    await finishTaskStateTransition({ actorId: null }, cascade);
+  }
+  return { summary: result.summary, outcomes: result.outcomes };
 }
 
 /**

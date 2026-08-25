@@ -276,6 +276,92 @@ describe('changing a status', () => {
     expect(after.completedAt).not.toBeNull();
   });
 
+  it('applies the subtask policy when a child status becomes completed', async () => {
+    const { w, orgId, teamId, statusId } = await seed();
+    const parent = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          teamId,
+          title: 'Parent',
+          state: 'backlog',
+          statusId: statusId('task', 'backlog'),
+        })
+        .returning({ id: schema.task.id }),
+    );
+    await db.insert(schema.task).values({
+      organizationId: orgId,
+      teamId,
+      parentTaskId: parent.id,
+      title: 'Child',
+      state: 'todo',
+      statusId: statusId('task', 'todo'),
+    });
+
+    const res = await w.request(`/${statusId('task', 'todo')}`, {
+      method: 'PATCH',
+      headers: J,
+      body: JSON.stringify({ category: 'completed' }),
+    });
+    expect(res.status).toBe(200);
+
+    const parentAfter = one(
+      await db
+        .select({ state: schema.task.state, completedAt: schema.task.completedAt })
+        .from(schema.task)
+        .where(eq(schema.task.id, parent.id)),
+    );
+    expect(parentAfter.completedAt).not.toBeNull();
+  });
+
+  it('clears an automatic-completion marker when a status category changes directly', async () => {
+    const { w, orgId, teamId, humanActorId, statusId } = await seed();
+    const taskRow = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          teamId,
+          title: 'Directly completed',
+          state: 'todo',
+          statusId: statusId('task', 'todo'),
+          autoCompletedBySubtasks: true,
+        })
+        .returning({ id: schema.task.id }),
+    );
+
+    const res = await w.request(`/${statusId('task', 'todo')}`, {
+      method: 'PATCH',
+      headers: J,
+      body: JSON.stringify({ category: 'completed' }),
+    });
+    expect(res.status).toBe(200);
+
+    const after = one(
+      await db
+        .select({
+          completedAt: schema.task.completedAt,
+          autoCompletedBySubtasks: schema.task.autoCompletedBySubtasks,
+        })
+        .from(schema.task)
+        .where(eq(schema.task.id, taskRow.id)),
+    );
+    expect(after.completedAt).not.toBeNull();
+    expect(after.autoCompletedBySubtasks).toBe(false);
+
+    const stream = one(
+      await db
+        .select({ kind: schema.event.kind, actor: schema.event.actor })
+        .from(schema.event)
+        .where(
+          and(eq(schema.event.organizationId, orgId), eq(schema.event.docketEntityId, taskRow.id)),
+        ),
+    );
+    expect(stream.kind).toBe('completed');
+    expect(stream.actor).toMatchObject({ docketActorId: humanActorId });
+  });
+
   it('moves the default rather than allowing two', async () => {
     const { w, statusId } = await seed();
     const res = await w.request(`/${statusId('task', 'done')}`, {
@@ -516,6 +602,108 @@ describe('deleting a status', () => {
     );
     expect(after.state).toBe('backlog');
     expect(after.statusId).toBe(statusId('task', 'backlog'));
+  });
+
+  it('applies the subtask policy when remapping a child to a completed status', async () => {
+    const { w, orgId, teamId, statusId } = await seed();
+    const parent = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          teamId,
+          title: 'Parent',
+          state: 'backlog',
+          statusId: statusId('task', 'backlog'),
+        })
+        .returning({ id: schema.task.id }),
+    );
+    await db.insert(schema.task).values({
+      organizationId: orgId,
+      teamId,
+      parentTaskId: parent.id,
+      title: 'Child',
+      state: 'todo',
+      statusId: statusId('task', 'todo'),
+    });
+
+    const res = await w.request(
+      `/${statusId('task', 'todo')}?remapTo=${statusId('task', 'done')}`,
+      { method: 'DELETE' },
+    );
+    expect(res.status).toBe(200);
+
+    const parentAfter = one(
+      await db
+        .select({ state: schema.task.state, completedAt: schema.task.completedAt })
+        .from(schema.task)
+        .where(eq(schema.task.id, parent.id)),
+    );
+    expect(parentAfter.state).toBe('done');
+    expect(parentAfter.completedAt).not.toBeNull();
+  });
+
+  it('records a direct task status remap and clears its automatic-completion marker', async () => {
+    const { w, orgId, teamId, humanActorId, statusId } = await seed();
+    const taskRow = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          teamId,
+          title: 'Needs a direct remap',
+          state: 'todo',
+          statusId: statusId('task', 'todo'),
+          autoCompletedBySubtasks: true,
+        })
+        .returning({ id: schema.task.id }),
+    );
+
+    const res = await w.request(
+      `/${statusId('task', 'todo')}?remapTo=${statusId('task', 'done')}`,
+      { method: 'DELETE' },
+    );
+    expect(res.status).toBe(200);
+
+    const after = one(
+      await db
+        .select({
+          state: schema.task.state,
+          autoCompletedBySubtasks: schema.task.autoCompletedBySubtasks,
+        })
+        .from(schema.task)
+        .where(eq(schema.task.id, taskRow.id)),
+    );
+    expect(after).toEqual({ state: 'done', autoCompletedBySubtasks: false });
+
+    const activity = one(
+      await db
+        .select({ actorId: schema.auditEvent.actorId, metadata: schema.auditEvent.metadata })
+        .from(schema.auditEvent)
+        .where(
+          and(
+            eq(schema.auditEvent.organizationId, orgId),
+            eq(schema.auditEvent.subjectType, 'task'),
+            eq(schema.auditEvent.subjectId, taskRow.id),
+            eq(schema.auditEvent.type, 'updated'),
+          ),
+        ),
+    );
+    expect(activity.actorId).toBe(humanActorId);
+    expect(activity.metadata).toMatchObject({ field: 'state', from: 'Todo', to: 'Done' });
+
+    const stream = one(
+      await db
+        .select({ kind: schema.event.kind, detail: schema.event.detail })
+        .from(schema.event)
+        .where(
+          and(eq(schema.event.organizationId, orgId), eq(schema.event.docketEntityId, taskRow.id)),
+        ),
+    );
+    expect(stream).toEqual({
+      kind: 'completed',
+      detail: { schema: 'docket.state_change', fromState: 'todo', toState: 'done' },
+    });
   });
 
   it('refuses to remove the only way to finish work', async () => {

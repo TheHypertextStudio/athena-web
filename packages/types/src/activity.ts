@@ -126,6 +126,50 @@ export const TaskActivityChange = z
 /** Task-activity change value. */
 export type TaskActivityChange = z.infer<typeof TaskActivityChange>;
 
+/** The user-facing category that narrows one task Activity history. */
+export const TaskActivityCategory = z
+  .enum(['task', 'comment', 'time', 'resource', 'relationship', 'subtask', 'automation'])
+  .meta({
+    id: 'TaskActivityCategory',
+    description:
+      'A filter category within one task Activity history. Categories narrow one chronological list and never select a separate feed.',
+  });
+/** Task Activity category value. */
+export type TaskActivityCategory = z.infer<typeof TaskActivityCategory>;
+
+/** Kinds of entries projected into a task's one Activity history. */
+export const TaskActivityType = z
+  .enum(['created', 'updated', 'comment', 'timer', 'session', 'child', 'dependency'])
+  .meta({
+    id: 'TaskActivityType',
+    description:
+      'The durable source shape for a task Activity entry. It lets a client render content without splitting the record into comment, history, timer, or session surfaces.',
+  });
+/** Task Activity entry type. */
+export type TaskActivityType = z.infer<typeof TaskActivityType>;
+
+/** Query parameters for one cursor-paginated task Activity history. */
+export const TaskActivityQuery = z
+  .object({
+    cursor: z
+      .string()
+      .optional()
+      .describe('Opaque position from `nextCursor`; omit it for the first Activity page.'),
+    limit: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(100)
+      .default(50)
+      .describe('Maximum number of Activity entries to return, from 1 through 100.'),
+    category: TaskActivityCategory.optional().describe(
+      'Optional filter for one category inside the same chronological Activity history.',
+    ),
+  })
+  .meta({ id: 'TaskActivityQuery', description: 'Read one filtered page of task Activity.' });
+/** Task Activity query value. */
+export type TaskActivityQuery = z.infer<typeof TaskActivityQuery>;
+
 /**
  * One entry in a task's activity log — its creation, or one metadata field changing.
  *
@@ -156,12 +200,28 @@ export const TaskActivityOut = z
       .describe(
         "The acting actor's display name, resolved server-side so the client never resolves an id; null for system/automation entries.",
       ),
-    type: z
-      .enum(['created', 'updated'])
-      .describe("`created` for the task's creation entry, `updated` for a metadata field change."),
-    change: TaskActivityChange.nullable().describe(
-      'The field that changed; null on the `created` entry, which records the task coming into existence rather than a field moving.',
+    type: TaskActivityType.describe(
+      'Whether this entry is task creation, a task field change, a comment, timer transition, session update, meaningful child change, or dependency readiness change.',
     ),
+    category: TaskActivityCategory.describe(
+      'The filter category that this entry belongs to inside the single Activity history.',
+    ),
+    change: TaskActivityChange.nullable().describe(
+      'The field that changed; null when the entry is a comment, timer, session update, or creation.',
+    ),
+    body: z
+      .string()
+      .nullable()
+      .describe(
+        'Display-safe comment text or application-owned event text; null for field changes.',
+      ),
+    subjectTaskId: TaskId.nullable().describe(
+      'The child or dependency task responsible for a propagated entry; null for a direct task entry.',
+    ),
+    subjectTaskTitle: z
+      .string()
+      .nullable()
+      .describe('The title of `subjectTaskId` at read time; null for direct task entries.'),
     createdAt: z
       .string()
       .describe('Exact ISO-8601 timestamp the change was recorded — the ascending sort key.'),

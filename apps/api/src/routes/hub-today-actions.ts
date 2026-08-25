@@ -5,7 +5,11 @@ import { and, eq, isNull } from 'drizzle-orm';
 import type { z } from 'zod';
 
 import { CapabilityError, ConflictError, NotFoundError } from '../error';
-import { finishTaskStateTransition, writeTaskStateTransition } from '../lib/task-state';
+import {
+  applySubtaskCompletionPolicy,
+  finishTaskStateTransition,
+  writeTaskStateTransition,
+} from '../lib/task-state';
 import { resolveResourceAccess, resourceAccessKey } from '../permissions/resource-access';
 import { toTaskItem } from './hub-helpers';
 import { loadStatusSets } from '../lib/work-status';
@@ -106,13 +110,20 @@ export async function completeTodayItem(
       .update(dailyPlanItem)
       .set({ status: 'done' })
       .where(and(eq(dailyPlanItem.id, row.plan.id), eq(dailyPlanItem.hubId, owned.hubId)));
-    return { ...mutation, completedCategory: completedState.category };
+    return {
+      mutation,
+      cascades: await applySubtaskCompletionPolicy(tx, mutation),
+      completedCategory: completedState.category,
+    };
   });
 
-  await finishTaskStateTransition({ actorId: membership.actor.id }, result);
+  await finishTaskStateTransition({ actorId: membership.actor.id }, result.mutation);
+  for (const cascade of result.cascades) {
+    await finishTaskStateTransition({ actorId: null }, cascade);
+  }
 
   return {
-    task: toTaskItem(result.after, result.completedCategory),
+    task: toTaskItem(result.mutation.after, result.completedCategory),
     planItemId,
     planStatus: 'done',
   };

@@ -236,6 +236,9 @@ export const WorkspaceSettingsOut = z
       .min(1)
       .max(5)
       .describe('Maximum total levels in the workspace Initiative hierarchy.'),
+    autoCompleteParentTasks: z
+      .boolean()
+      .describe('Whether completing or canceling every direct child also completes its parent.'),
     estimationScale: EstimationScale.describe(
       "The workspace's task-estimation scale. Determines which point values the task " +
         'estimate picker offers; see {@link ESTIMATION_SCALES}.',

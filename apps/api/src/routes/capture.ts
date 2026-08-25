@@ -14,7 +14,6 @@
 import { db, task } from '@docket/db';
 import { CaptureBody, TaskOut } from '@docket/types';
 import { Hono } from 'hono';
-import type { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
@@ -26,37 +25,7 @@ import { zJson } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { enqueueSearchUpsert } from '../search/write-through';
 
-type TaskRow = typeof task.$inferSelect;
-
-/** Project an active task row into the {@link TaskOut} wire shape. */
-function toOut(t: TaskRow): z.input<typeof TaskOut> {
-  return {
-    // Quick capture creates a bare task; it has no labels yet by construction.
-    labels: [],
-    id: t.id,
-    organizationId: t.organizationId,
-    title: t.title,
-    description: t.description,
-    teamId: t.teamId,
-    state: t.state,
-    priority: t.priority,
-    assigneeId: t.assigneeId,
-    delegateId: t.delegateId,
-    projectId: t.projectId,
-    programId: t.programId,
-    estimateMinutes: t.estimateMinutes,
-    dueDate: t.dueDate?.toISOString() ?? null,
-    provenance: {
-      source: t.source,
-      sourceIntegrationId: t.sourceIntegrationId,
-      externalId: t.externalId,
-      externalUrl: t.externalUrl,
-      syncMode: t.sourceSyncMode,
-    },
-    createdAt: t.createdAt.toISOString(),
-    updatedAt: t.updatedAt.toISOString(),
-  };
-}
+import { toOut as taskToOut } from './task-helpers';
 
 /** Quick-capture router: turn freeform text into an assigned, cycle-attached task. */
 const capture = new Hono<AppEnv>().post(
@@ -103,7 +72,7 @@ Errors: 404 (\`No team to capture into\`) when the org has no team to land in. R
     /* v8 ignore next -- @preserve defensive: insert always returns a row */
     if (!row) throw new Error('capture task insert returned no row');
     await enqueueSearchUpsert(orgId, 'task', row.id);
-    return ok(c, TaskOut, toOut(row));
+    return ok(c, TaskOut, taskToOut(row, []));
   },
 );
 

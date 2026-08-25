@@ -31,6 +31,11 @@ import { z } from 'zod';
 import { ApiError, ValidationError } from '../error';
 import { clearableTextPatch } from '../lib/clearable-text';
 import { assertPlanningDateRange, planningDatePatch } from '../lib/planning-timeframe';
+import {
+  applySubtaskCompletionPolicy,
+  finishTaskStateTransition,
+  writeTaskStateTransition,
+} from '../lib/task-state';
 import { resolveContainerStatus } from '../lib/work-status';
 import { buildTaskViewFilter } from '../routes/task-helpers';
 import { enqueueSearchUpsert } from '../search/write-through';
@@ -658,12 +663,56 @@ export function registerUpdateTool(
             containerStatus,
           );
           const before = trackedFields(entity, row);
-          const updated = await db
-            .update(table)
-            .set(patch)
-            .where(and(eq(table.id, id), eq(table.organizationId, input.orgId)))
-            .returning();
-          const next = updated[0];
+          let next: Record<string, unknown> | undefined;
+          if (entity === 'task' && set.state !== undefined) {
+            const { statusId, state, completedAt, canceledAt, ...remainingPatch } = patch;
+            const result = await db.transaction(async (tx) => {
+              const locked = await tx
+                .select()
+                .from(task)
+                .where(and(eq(task.id, id), eq(task.organizationId, input.orgId)))
+                .for('update')
+                .limit(1);
+              const current = locked[0];
+              if (!current) return null;
+              const mutation = await writeTaskStateTransition(tx, {
+                before: current,
+                statusId: String(statusId),
+                state: String(state),
+                completedAt: completedAt as Date | null,
+                canceledAt: canceledAt as Date | null,
+              });
+              if (!mutation) return null;
+              const [after] =
+                Object.keys(remainingPatch).length === 0
+                  ? [mutation.after]
+                  : await tx
+                      .update(task)
+                      .set(remainingPatch)
+                      .where(and(eq(task.id, id), eq(task.organizationId, input.orgId)))
+                      .returning();
+              if (!after) return null;
+              const finalMutation = { before: current, after };
+              return {
+                after,
+                mutation: finalMutation,
+                cascades: await applySubtaskCompletionPolicy(tx, finalMutation),
+              };
+            });
+            if (!result) continue;
+            await finishTaskStateTransition({ actorId: actorCtx.actorId }, result.mutation);
+            for (const cascade of result.cascades) {
+              await finishTaskStateTransition({ actorId: null }, cascade);
+            }
+            next = result.after;
+          } else {
+            const updated = await db
+              .update(table)
+              .set(patch)
+              .where(and(eq(table.id, id), eq(table.organizationId, input.orgId)))
+              .returning();
+            next = updated[0];
+          }
           /* v8 ignore next -- @preserve defensive: the row was just read in this call */
           if (!next) continue;
           const after = trackedFields(entity, next);

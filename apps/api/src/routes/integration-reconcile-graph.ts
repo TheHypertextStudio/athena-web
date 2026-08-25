@@ -52,11 +52,19 @@ import type {
 
 import { ConflictError } from '../error';
 import { assertPlanningDateRange, planningDatePatch } from '../lib/planning-timeframe';
+import {
+  applySubtaskCompletionPolicyForParents,
+  finishTaskStateTransition,
+  type TaskStateMutation,
+  writeTaskStateTransition,
+} from '../lib/task-state';
+import { serializableTx } from '../lib/serializable-tx';
 import { loadStatusSets, type ResolvedStatus } from '../lib/work-status';
 
 import { externalActorReverseMap, syncExternalActors } from './integration-identity';
 import { resolveImportTeam } from './integration-import';
 import { type IntegrationRow } from './integration-provider';
+import { wouldCreateSubtaskCycle } from './task-helpers';
 
 /** Selected row shapes reconciliation reads. */
 type LabelRow = typeof label.$inferSelect;
@@ -617,7 +625,7 @@ export async function applyWorkItem(ctx: GraphApplyContext, item: ExternalWorkIt
     return;
   }
   if (action === 'archive' && existing) {
-    await archiveLinkedItem(existing.id, item, ctx.statesByTeam.get(teamId) ?? []);
+    await archiveLinkedItem(ctx.orgId, existing.id, item, ctx.statesByTeam.get(teamId) ?? []);
     ctx.result.tasks.removed += 1;
     return;
   }
@@ -706,6 +714,13 @@ async function insertLinkedItem(
   return row.id;
 }
 
+/** Publish task-state cascades only after the provider row write has committed. */
+async function finishHierarchyCascades(cascades: readonly TaskStateMutation[]): Promise<void> {
+  for (const cascade of cascades) {
+    await finishTaskStateTransition({ actorId: null }, cascade);
+  }
+}
+
 /** Apply a newer provider item's fields onto an existing linked task and restamp the anchors. */
 async function applyItemFields(
   ctx: GraphApplyContext,
@@ -713,10 +728,36 @@ async function applyItemFields(
   item: ExternalWorkItem,
   teamId: string,
 ): Promise<void> {
-  await db
-    .update(task)
-    .set(itemColumns(ctx, item, teamId))
-    .where(eq(task.id, taskId));
+  const { state, statusId, completedAt, canceledAt, ...patch } = itemColumns(ctx, item, teamId);
+  const cascades = await db.transaction(async (tx) => {
+    const before = await tx
+      .select()
+      .from(task)
+      .where(and(eq(task.id, taskId), eq(task.organizationId, ctx.orgId)))
+      .for('update')
+      .limit(1);
+    const current = before[0];
+    if (!current) return [];
+    await tx.update(task).set(patch).where(eq(task.id, taskId)).returning();
+    const mutation = await writeTaskStateTransition(tx, {
+      before: current,
+      statusId,
+      state,
+      completedAt,
+      canceledAt,
+    });
+    if (!mutation) return [];
+    return [
+      mutation,
+      ...(await applySubtaskCompletionPolicyForParents(tx, ctx.orgId, [
+        current.parentTaskId,
+        mutation.after.parentTaskId,
+      ])),
+    ];
+  });
+  const [mutation, ...hierarchyCascades] = cascades;
+  if (mutation) await finishTaskStateTransition({ actorId: null }, mutation);
+  await finishHierarchyCascades(hierarchyCascades);
 }
 
 /**
@@ -729,6 +770,7 @@ async function applyItemFields(
  * appliers can be driven with an unpreloaded `statesByTeam`.
  */
 async function archiveLinkedItem(
+  orgId: string,
   taskId: string,
   item: ExternalWorkItem,
   statuses: readonly ResolvedStatus[],
@@ -739,17 +781,41 @@ async function archiveLinkedItem(
   if (canceled === undefined) {
     throw new ConflictError('Team has no statuses to archive a tombstoned work item into');
   }
-  await db
-    .update(task)
-    .set({
-      state: canceled.key,
+  const cascades = await db.transaction(async (tx) => {
+    const before = await tx
+      .select()
+      .from(task)
+      .where(and(eq(task.id, taskId), eq(task.organizationId, orgId)))
+      .for('update')
+      .limit(1);
+    const current = before[0];
+    if (!current) return [];
+    const mutation = await writeTaskStateTransition(tx, {
+      before: current,
       statusId: canceled.id,
+      state: canceled.key,
+      completedAt: null,
       canceledAt: anchor,
-      archivedAt: anchor,
-      externalUpdatedAt: anchor,
-      updatedAt: anchor,
-    })
-    .where(eq(task.id, taskId));
+    });
+    if (!mutation) return [];
+    const hierarchyCascades = await applySubtaskCompletionPolicyForParents(tx, orgId, [
+      current.parentTaskId,
+      mutation.after.parentTaskId,
+    ]);
+    await tx
+      .update(task)
+      .set({
+        archivedAt: anchor,
+        externalUpdatedAt: anchor,
+        updatedAt: anchor,
+      })
+      .where(eq(task.id, taskId))
+      .returning();
+    return [mutation, ...hierarchyCascades];
+  });
+  const [mutation, ...hierarchyCascades] = cascades;
+  if (mutation) await finishTaskStateTransition({ actorId: null }, mutation);
+  await finishHierarchyCascades(hierarchyCascades);
 }
 
 /** The mapped Docket team of the first external team id that resolves, or `undefined`. */
@@ -1035,60 +1101,77 @@ async function linkParents(
   }
   if (wanted.size === 0 && clearCandidates.size === 0) return;
 
-  const affectedIds = new Set<string>([...wanted.keys(), ...clearCandidates]);
-  const current = await db
-    .select({
-      id: task.id,
-      parentTaskId: task.parentTaskId,
-      updatedAt: task.updatedAt,
-      externalUpdatedAt: task.externalUpdatedAt,
-    })
-    .from(task)
-    .where(inArray(task.id, [...affectedIds]));
-
-  // Only a parent that is one of THIS integration's linked tasks was set by sync and is ours to
-  // clear — resolve that set once (batched) so a native/cross-integration parent is left alone.
-  const parentIdsToCheck = new Set<string>();
-  for (const row of current) {
-    if (clearCandidates.has(row.id) && row.parentTaskId) parentIdsToCheck.add(row.parentTaskId);
-  }
-  const ownLinkedParents = new Set<string>();
-  if (parentIdsToCheck.size > 0) {
-    const parents = await db
-      .select({ id: task.id })
+  // Lock both ends of every requested edge in the same ID order. Two pulls that swap A and B
+  // otherwise lock their children first and deadlock before SERIALIZABLE can reject the loser.
+  const affectedIds = new Set<string>([...wanted.keys(), ...wanted.values(), ...clearCandidates]);
+  const cascades = await serializableTx(async (tx) => {
+    const current = await tx
+      .select({
+        id: task.id,
+        parentTaskId: task.parentTaskId,
+        updatedAt: task.updatedAt,
+        externalUpdatedAt: task.externalUpdatedAt,
+      })
       .from(task)
-      .where(
-        and(
-          inArray(task.id, [...parentIdsToCheck]),
-          eq(task.sourceIntegrationId, ctx.integrationId),
-          eq(task.source, 'linked'),
-        ),
-      );
-    for (const p of parents) ownLinkedParents.add(p.id);
-  }
+      .where(and(eq(task.organizationId, ctx.orgId), inArray(task.id, [...affectedIds])))
+      .orderBy(task.id)
+      .for('update');
 
-  for (const row of current) {
-    const parentId = wanted.get(row.id);
-    if (parentId !== undefined) {
-      if (row.parentTaskId !== parentId) {
-        await db
-          .update(task)
-          .set({ parentTaskId: parentId, updatedAt: row.updatedAt })
-          .where(eq(task.id, row.id));
+    // Only a parent that is one of THIS integration's linked tasks was set by sync and is ours to
+    // clear — resolve that set once (batched) so a native/cross-integration parent is left alone.
+    const parentIdsToCheck = new Set<string>();
+    for (const row of current) {
+      if (clearCandidates.has(row.id) && row.parentTaskId) parentIdsToCheck.add(row.parentTaskId);
+    }
+    const ownLinkedParents = new Set<string>();
+    if (parentIdsToCheck.size > 0) {
+      const parents = await tx
+        .select({ id: task.id })
+        .from(task)
+        .where(
+          and(
+            eq(task.organizationId, ctx.orgId),
+            inArray(task.id, [...parentIdsToCheck]),
+            eq(task.sourceIntegrationId, ctx.integrationId),
+            eq(task.source, 'linked'),
+          ),
+        )
+        .orderBy(task.id)
+        .for('update');
+      for (const p of parents) ownLinkedParents.add(p.id);
+    }
+
+    const parentTaskIds: (string | null)[] = [];
+    for (const row of current) {
+      const parentId = wanted.get(row.id);
+      if (parentId !== undefined) {
+        if (row.parentTaskId !== parentId) {
+          if (await wouldCreateSubtaskCycle(tx, ctx.orgId, row.id, parentId)) continue;
+          await tx
+            .update(task)
+            .set({ parentTaskId: parentId, updatedAt: row.updatedAt })
+            .where(eq(task.id, row.id));
+          parentTaskIds.push(row.parentTaskId, parentId);
+        }
+        continue;
       }
-      continue;
+      if (
+        clearCandidates.has(row.id) &&
+        row.parentTaskId !== null &&
+        ownLinkedParents.has(row.parentTaskId) &&
+        !isDirty(row.updatedAt, row.externalUpdatedAt)
+      ) {
+        await tx
+          .update(task)
+          .set({ parentTaskId: null, updatedAt: row.updatedAt })
+          .where(eq(task.id, row.id));
+        parentTaskIds.push(row.parentTaskId, null);
+      }
     }
-    if (
-      clearCandidates.has(row.id) &&
-      row.parentTaskId !== null &&
-      ownLinkedParents.has(row.parentTaskId) &&
-      !isDirty(row.updatedAt, row.externalUpdatedAt)
-    ) {
-      await db
-        .update(task)
-        .set({ parentTaskId: null, updatedAt: row.updatedAt })
-        .where(eq(task.id, row.id));
-    }
+    return applySubtaskCompletionPolicyForParents(tx, ctx.orgId, parentTaskIds);
+  });
+  for (const cascade of cascades) {
+    await finishTaskStateTransition({ actorId: null }, cascade);
   }
 }
 

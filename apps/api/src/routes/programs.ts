@@ -44,7 +44,7 @@ import { capabilityGuard } from '../permissions/capability-guard';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 
 import { emitEvent } from './event-emit';
-import { buildTaskViewCondition, buildTaskViewFilter } from './task-helpers';
+import { buildTaskViewCondition, buildTaskViewFilter, toOut as taskToOut } from './task-helpers';
 
 type ProgramRow = typeof program.$inferSelect;
 type TaskRow = typeof task.$inferSelect;
@@ -64,42 +64,10 @@ function toOut(p: ProgramRow): z.input<typeof ProgramOut> {
   };
 }
 
-/** Project a task row into its `TaskOut` wire shape (shared with the tasks router). */
-function taskToOut(
-  t: TaskRow,
-  labels: readonly LabelRefRow[],
-): z.input<typeof ProgramWorkOut>['groups'][number]['segments'][number]['tasks'][number] {
-  return {
-    labels: [...labels],
-    id: t.id,
-    organizationId: t.organizationId,
-    title: t.title,
-    description: t.description,
-    teamId: t.teamId,
-    state: t.state,
-    priority: t.priority,
-    assigneeId: t.assigneeId,
-    delegateId: t.delegateId,
-    projectId: t.projectId,
-    programId: t.programId,
-    dueDate: t.dueDate?.toISOString() ?? null,
-    provenance: {
-      source: t.source,
-      sourceIntegrationId: t.sourceIntegrationId,
-      externalId: t.externalId,
-      externalUrl: t.externalUrl,
-      syncMode: t.sourceSyncMode,
-    },
-    createdAt: t.createdAt.toISOString(),
-    updatedAt: t.updatedAt.toISOString(),
-  };
-}
-
 /** Project one named actor without fetching the organization member roster. */
 function actorReference(row: typeof actor.$inferSelect) {
   return { actorId: row.id, displayName: row.displayName, avatar: row.avatar };
 }
-
 const idParam = z.object({ id: z.string() });
 /** The aggregate route refuses malformed Program ids before it can start a data read. */
 const aggregateIdParam = z.object({ id: ProgramId });

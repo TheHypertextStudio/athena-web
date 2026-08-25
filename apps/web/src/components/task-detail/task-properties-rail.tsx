@@ -179,7 +179,7 @@ export function TaskPropertiesRail({
   const provenance = task.provenance;
 
   return (
-    <aside aria-labelledby="properties-heading" className="text-body-medium flex flex-col gap-6">
+    <div aria-labelledby="properties-heading" className="text-body-medium flex flex-col gap-6">
       <h2 id="properties-heading" className="sr-only">
         Properties
       </h2>
@@ -371,6 +371,6 @@ export function TaskPropertiesRail({
           </PropertyRow>
         </div>
       ) : null}
-    </aside>
+    </div>
   );
 }

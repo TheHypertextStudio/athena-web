@@ -152,6 +152,7 @@ export const organization = pgTable(
     agentGuidance: text('agent_guidance'),
     approvalRouting: jsonb('approval_routing').$type<ApprovalRouting>(),
     initiativeMaxDepth: integer('initiative_max_depth').notNull().default(2),
+    autoCompleteParentTasks: boolean('auto_complete_parent_tasks').notNull().default(true),
     estimationScale: estimationScale('estimation_scale').notNull().default('fibonacci'),
     fiscalYearStartMonth: integer('fiscal_year_start_month').notNull().default(0),
     lifecycleState: orgLifecycleState('lifecycle_state').notNull().default('trialing'),

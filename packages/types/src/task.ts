@@ -29,6 +29,7 @@ import {
   ProjectId,
   TaskId,
   TeamId,
+  TemplateId,
 } from './primitives';
 
 /** Query filters for listing tasks. */
@@ -116,6 +117,27 @@ export function checkTaskDates(value: TaskDateFields, ctx: z.RefinementCtx): voi
   });
 }
 
+/** Reject repeated related-task ids before the write route has to canonicalize them. */
+function checkRelatedTaskIds(
+  value: { readonly relatedTaskIds?: readonly string[] | undefined },
+  ctx: z.RefinementCtx,
+): void {
+  const relatedTaskIds = value.relatedTaskIds;
+  if (relatedTaskIds === undefined) return;
+  const seen = new Set<string>();
+  relatedTaskIds.forEach((relatedTaskId, index) => {
+    if (!seen.has(relatedTaskId)) {
+      seen.add(relatedTaskId);
+      return;
+    }
+    ctx.addIssue({
+      code: 'custom',
+      path: ['relatedTaskIds', index],
+      message: 'Each related task can appear only once',
+    });
+  });
+}
+
 /** Body for creating a Task; `state` defaults to the team's first workflow state. */
 export const TaskCreate = z
   .object({
@@ -154,6 +176,13 @@ export const TaskCreate = z
     parentTaskId: TaskId.optional().describe(
       'Parent task id to create this task as a subtask. Must be an active task in the caller’s org. Prefer `POST /tasks/:id/subtasks`, which inherits team/project from the parent.',
     ),
+    templateId: TemplateId.optional().describe(
+      'Task template this task was created from. Must be a caller-visible task template in the caller’s org.',
+    ),
+    relatedTaskIds: z
+      .array(TaskId)
+      .optional()
+      .describe('Tasks related to this task. Each must be active and in the caller’s org.'),
     estimate: z
       .number()
       .int()
@@ -184,7 +213,10 @@ export const TaskCreate = z
       .optional()
       .describe('Label ids to tag the task with for classification/filtering.'),
   })
-  .superRefine(checkTaskDates)
+  .superRefine((value, ctx) => {
+    checkTaskDates(value, ctx);
+    checkRelatedTaskIds(value, ctx);
+  })
   .meta({ id: 'TaskCreate', description: 'Create a task within an organization.' });
 /** Validated task-create body. */
 export type TaskCreate = z.infer<typeof TaskCreate>;
@@ -334,6 +366,12 @@ export const TaskOut = z
     parentTaskId: TaskId.nullable()
       .optional()
       .describe('Parent task when this is a subtask; null when it is top-level.'),
+    templateId: TemplateId.nullable()
+      .optional()
+      .describe('Task template this task was created from; null when none.'),
+    autoCompletedBySubtasks: z
+      .boolean()
+      .describe('Whether the system completed this task after every direct child ended.'),
     estimateMinutes: z
       .number()
       .int()
@@ -409,6 +447,15 @@ export const TaskUpdate = z
       .describe(
         'Reparent under this task (its subtask), or null to detach to top-level. Must be a task in the caller’s org; a task cannot become its own descendant (409 on a cycle) or its own parent (422). Omit to leave unchanged.',
       ),
+    templateId: TemplateId.nullable()
+      .optional()
+      .describe(
+        'Task template that originated this task, or null to clear. Must be a caller-visible task template in the caller’s org.',
+      ),
+    relatedTaskIds: z
+      .array(TaskId)
+      .optional()
+      .describe('Replacement set of related tasks. Use an empty array to remove every link.'),
     milestoneId: MilestoneId.nullable()
       .optional()
       .describe('Re-target this milestone, or null to clear. Must belong to the caller’s org.'),
@@ -448,7 +495,10 @@ export const TaskUpdate = z
       .optional()
       .describe('Replacement set of label ids. Omit to leave the task’s labels unchanged.'),
   })
-  .superRefine(checkTaskDates)
+  .superRefine((value, ctx) => {
+    checkTaskDates(value, ctx);
+    checkRelatedTaskIds(value, ctx);
+  })
   .meta({ id: 'TaskUpdate', description: 'Update a task.' });
 /** Validated task-update body. */
 export type TaskUpdate = z.infer<typeof TaskUpdate>;
@@ -645,6 +695,9 @@ export const TaskDetail = TaskOut.extend({
     .array(TaskRef)
     .describe('Tasks that block THIS task (this task is the blocked side of each edge).'),
   subtasks: z.array(TaskRef).describe('Active direct children of this task.'),
+  relatedTasks: z
+    .array(TaskRef)
+    .describe('Tasks linked to this task without dependency direction.'),
 }).meta({ id: 'TaskDetail', description: 'A task with its dependencies and subtasks.' });
 /** Detailed task representation value. */
 export type TaskDetail = z.infer<typeof TaskDetail>;

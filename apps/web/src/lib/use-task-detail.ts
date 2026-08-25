@@ -19,6 +19,7 @@ import {
   type MilestoneOut,
   type ProgramOut,
   type ProjectOut,
+  type RoleOut,
   type SessionActivityOut,
   type TaskDetail,
   type TaskNavigationSnapshot,
@@ -34,6 +35,7 @@ import {
   terminalDetailFailure,
   type TerminalDetailFailure,
 } from './detail-aggregate';
+import { useEntityMentions, type EntityMentionsData } from './use-entity-mentions';
 import { userErrorMessage } from './problem';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery, useLiveApiQuery } from './query';
 
@@ -63,6 +65,7 @@ export interface TaskDetailData {
   agents: readonly AgentOut[];
   milestones: readonly MilestoneOut[];
   cycles: readonly CycleOut[];
+  roles: readonly RoleOut[];
   comments: readonly CommentOut[];
   activities: readonly SessionActivityOut[];
   taskSession: AgentSessionOut | null;
@@ -74,10 +77,14 @@ export interface TaskDetailData {
   snapshot: TaskNavigationSnapshot | null;
   /** A deletion or access-revocation result that must evict cached Task data. */
   terminalFailure: TerminalDetailFailure | null;
+  /** Description references the current viewer can access. */
+  entityMentions: EntityMentionsData;
   /** The stable React Query key for the task detail — mutations invalidate against this. */
   detailKey: QueryKey;
   /** The stable React Query key for the comment stream. */
   commentsKey: QueryKey;
+  /** The stable React Query key for the unified Activity history. */
+  activityKey: QueryKey;
   isPending: boolean;
   isError: boolean;
   error: string | null;
@@ -109,6 +116,11 @@ export function useTaskDetail(
     [orgId, taskId],
   );
   const commentsKey = useMemo<QueryKey>(() => [...detailKey, 'comments'], [detailKey]);
+  const activityKey = useMemo<QueryKey>(
+    () => queryKeys.taskActivity(orgId, taskId),
+    [orgId, taskId],
+  );
+  const entityMentions = useEntityMentions(orgId, subject);
 
   const taskQ = useApiQuery({
     ...taskDetailAggregateDef(orgId, taskId),
@@ -165,6 +177,14 @@ export function useTaskDetail(
       { enabled: options.cyclesOpen ?? false, staleTime: STALE.static },
     ),
   );
+  const rolesQ = useApiQuery(
+    apiQueryOptions(
+      queryKeys.roles(orgId),
+      () => api.v1.orgs[':orgId'].roles.$get({ param: { orgId } }),
+      'Could not load roles.',
+      { staleTime: STALE.static },
+    ),
+  );
   const commentsQ = useApiQuery(
     apiQueryOptions(
       commentsKey,
@@ -212,6 +232,7 @@ export function useTaskDetail(
     agents: agentsQ.data?.items ?? [],
     milestones: milestonesQ.data?.items ?? [],
     cycles: cyclesQ.data?.items ?? [],
+    roles: rolesQ.data?.items ?? [],
     comments: commentsQ.data?.items ?? [],
     activities: activityQ.data?.items ?? [],
     taskSession,
@@ -219,8 +240,10 @@ export function useTaskDetail(
     currentActorId: taskQ.data?.viewer.actorId ?? null,
     snapshot: taskQ.data?.snapshot ?? null,
     terminalFailure: terminalDetailFailure(taskQ.error),
+    entityMentions,
     detailKey,
     commentsKey,
+    activityKey,
     isPending: taskQ.isPending,
     isError: taskQ.isError,
     error: taskQ.isError ? userErrorMessage(taskQ.error, 'Could not load this task.') : null,

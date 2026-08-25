@@ -213,7 +213,10 @@ interface WorkOut {
       displayName?: string | null;
       number?: number | null;
     };
-    segments: { project: { id: string | null; name?: string | null }; tasks: { id: string }[] }[];
+    segments: {
+      project: { id: string | null; name?: string | null };
+      tasks: { id: string; autoCompletedBySubtasks: boolean }[];
+    }[];
   }[];
 }
 
@@ -249,6 +252,7 @@ describe('programs work view (GET /:id/work)', () => {
     expect(assertDefined(realGroup).segments).toHaveLength(2);
     const noProjectSeg = assertDefined(realGroup).segments.find((s) => s.project.id === null);
     expect(assertDefined(noProjectSeg).tasks).toHaveLength(1);
+    expect(assertDefined(noProjectSeg).tasks[0]?.autoCompletedBySubtasks).toBe(false);
     const projASeg = assertDefined(realGroup).segments.find((s) => s.project.id === projA);
     expect(assertDefined(projASeg).project.name).toBe('A');
     expect(assertDefined(projASeg).tasks).toHaveLength(2);

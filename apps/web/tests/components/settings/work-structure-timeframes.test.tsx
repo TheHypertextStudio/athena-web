@@ -63,6 +63,66 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('work structure planning calendar', () => {
+  it('shows an explicit disabled parent completion policy as off', async () => {
+    settingsGet.mockResolvedValueOnce(
+      jsonResponse(true, {
+        initiativeMaxDepth: 2,
+        autoCompleteParentTasks: false,
+        estimationScale: 'fibonacci',
+        fiscalYearStartMonth: 0,
+      }),
+    );
+
+    render(<WorkStructureSettingsPage />, { wrapper: wrapper() });
+
+    const parentCompletion = await screen.findByRole('switch', {
+      name: 'Complete parent tasks automatically',
+    });
+    expect(parentCompletion).toHaveAttribute('aria-checked', 'false');
+    expect(parentCompletion).toHaveTextContent('Off');
+  });
+
+  it('restores the fetched parent completion policy when saving fails', async () => {
+    const user = userEvent.setup();
+    settingsPatch.mockResolvedValueOnce(jsonResponse(false, { detail: 'Server failure.' }));
+    render(<WorkStructureSettingsPage />, { wrapper: wrapper() });
+
+    const parentCompletion = await screen.findByRole('switch', {
+      name: 'Complete parent tasks automatically',
+    });
+    await user.click(parentCompletion);
+
+    await waitFor(() => {
+      expect(parentCompletion).toHaveAttribute('aria-checked', 'true');
+    });
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Could not save parent task completion.',
+    );
+  });
+
+  it('defaults parent completion to on and lets a manager turn it off', async () => {
+    const user = userEvent.setup();
+    render(<WorkStructureSettingsPage />, { wrapper: wrapper() });
+
+    const parentCompletion = await screen.findByRole('switch', {
+      name: 'Complete parent tasks automatically',
+    });
+    expect(parentCompletion).toHaveAttribute('aria-checked', 'true');
+    expect(
+      screen.getByText(
+        'When every subtask is complete or canceled, automatically complete its parent. Reopening a subtask reopens a parent that this setting completed.',
+      ),
+    ).toBeVisible();
+
+    await user.click(parentCompletion);
+    await waitFor(() => {
+      expect(settingsPatch).toHaveBeenCalledWith({
+        param: { orgId: 'org_1' },
+        json: { autoCompleteParentTasks: false },
+      });
+    });
+  });
+
   it('changes the fiscal basis for new Project and Initiative timeframes only', async () => {
     const user = userEvent.setup();
     render(<WorkStructureSettingsPage />, { wrapper: wrapper() });

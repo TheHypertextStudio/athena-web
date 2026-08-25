@@ -66,6 +66,7 @@ describe('openEntity', () => {
       teamId: TeamId.parse('01ARZ3NDEKTSV4RRFFQ69G5FAT'),
       state: snapshot.status,
       priority: snapshot.priority,
+      autoCompletedBySubtasks: false,
       provenance: { source: 'native' },
       labels: [],
       createdAt: '2026-08-23T10:00:00.000Z',

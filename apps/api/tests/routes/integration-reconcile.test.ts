@@ -399,6 +399,163 @@ describe('reconcileTasks — startDate, estimateMinutes, and parent linkage on t
     expect(parentRow.parentTaskId).toBeNull();
   });
 
+  it('reopens an auto-completed parent when the provider adds an active child', async () => {
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const integration = await seedIntegration(orgId, humanActorId);
+    const parent = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          teamId,
+          title: 'Finished parent',
+          state: 'done',
+          statusId: statusId('task', 'done'),
+          completedAt: new Date('2026-08-01T00:00:00.000Z'),
+          autoCompletedBySubtasks: true,
+          source: 'linked',
+          sourceIntegrationId: integration.id,
+          sourceSyncMode: 'mirror',
+          externalId: 'parent-1',
+          externalUpdatedAt: new Date('2026-08-01T00:00:00.000Z'),
+          updatedAt: new Date('2026-08-01T00:00:00.000Z'),
+          createdBy: humanActorId,
+        })
+        .returning(),
+    );
+
+    await reconcileTasks(
+      orgId,
+      humanActorId,
+      integration,
+      teamId,
+      [
+        remote({
+          id: 'child-1',
+          title: 'New active child',
+          parentExternalId: 'parent-1',
+          provenance: {
+            provider: 'gtasks',
+            externalId: 'child-1',
+            importedAt: '2026-08-02T00:00:00.000Z',
+          },
+        }),
+      ],
+      { assigneeId: null, writable: null },
+    );
+
+    const reopened = one(
+      await db
+        .select({
+          state: schema.task.state,
+          completedAt: schema.task.completedAt,
+          autoCompletedBySubtasks: schema.task.autoCompletedBySubtasks,
+        })
+        .from(schema.task)
+        .where(eq(schema.task.id, parent.id)),
+    );
+    expect(reopened).toEqual({
+      state: 'backlog',
+      completedAt: null,
+      autoCompletedBySubtasks: false,
+    });
+  });
+
+  it('reopens a canceled child and its automatic parent through the task transition boundary', async () => {
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const integration = await seedIntegration(orgId, humanActorId);
+    const parent = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          teamId,
+          title: 'Finished parent',
+          state: 'done',
+          statusId: statusId('task', 'done'),
+          completedAt: new Date('2026-08-01T00:00:00.000Z'),
+          autoCompletedBySubtasks: true,
+          source: 'linked',
+          sourceIntegrationId: integration.id,
+          sourceSyncMode: 'mirror',
+          externalId: 'parent-1',
+          externalUpdatedAt: new Date('2026-08-01T00:00:00.000Z'),
+          updatedAt: new Date('2026-08-01T00:00:00.000Z'),
+          createdBy: humanActorId,
+        })
+        .returning(),
+    );
+    const child = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          teamId,
+          title: 'Canceled child',
+          parentTaskId: parent.id,
+          state: 'canceled',
+          statusId: statusId('task', 'canceled'),
+          canceledAt: new Date('2026-08-01T00:00:00.000Z'),
+          autoCompletedBySubtasks: true,
+          source: 'linked',
+          sourceIntegrationId: integration.id,
+          sourceSyncMode: 'mirror',
+          externalId: 'child-1',
+          externalUpdatedAt: new Date('2026-08-01T00:00:00.000Z'),
+          updatedAt: new Date('2026-08-01T00:00:00.000Z'),
+          createdBy: humanActorId,
+        })
+        .returning(),
+    );
+
+    await reconcileTasks(
+      orgId,
+      humanActorId,
+      integration,
+      teamId,
+      [
+        remote({
+          id: 'child-1',
+          completed: false,
+          externalUpdatedAt: '2026-08-02T00:00:00.000Z',
+          provenance: {
+            provider: 'gtasks',
+            externalId: 'child-1',
+            externalUpdatedAt: '2026-08-02T00:00:00.000Z',
+            importedAt: '2026-08-02T00:00:00.000Z',
+          },
+        }),
+      ],
+      { assigneeId: null, writable: null },
+    );
+
+    const after = new Map(
+      (
+        await db
+          .select({
+            id: schema.task.id,
+            state: schema.task.state,
+            completedAt: schema.task.completedAt,
+            canceledAt: schema.task.canceledAt,
+            autoCompletedBySubtasks: schema.task.autoCompletedBySubtasks,
+          })
+          .from(schema.task)
+          .where(eq(schema.task.organizationId, orgId))
+      ).map((row) => [row.id, row]),
+    );
+    expect(after.get(child.id)).toMatchObject({
+      state: 'todo',
+      completedAt: null,
+      canceledAt: null,
+      autoCompletedBySubtasks: false,
+    });
+    expect(after.get(parent.id)).toMatchObject({
+      state: 'backlog',
+      completedAt: null,
+      autoCompletedBySubtasks: false,
+    });
+  });
+
   it('inserts a child whose parent id resolves to nothing as top-level rather than failing', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const integration = await seedIntegration(orgId, humanActorId);

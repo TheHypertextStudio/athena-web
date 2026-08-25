@@ -5,6 +5,7 @@ import { MockSummarizer, RealSummarizer } from '@docket/athena/digest';
 import type { Summarizer } from '@docket/athena/digest';
 import { MockTaskSynthesizer } from '@docket/athena/task-drafting/adapters/deterministic';
 import { RealTaskSynthesizer } from '@docket/athena/task-drafting/adapters/anthropic';
+import type { TaskExpansionSynthesizer } from '@docket/athena/task-expansion';
 import type { AgentTurnRuntime } from '@docket/athena/turn';
 import { resolveModelBackend } from '@docket/athena/turn/model-backend';
 import type { ModelBackendEnv } from '@docket/athena/turn/model-backend';
@@ -109,6 +110,8 @@ export interface AppContainer {
   readonly agentTurn: AgentTurnRuntime;
   readonly summarizer: Summarizer;
   readonly taskSynthesizer: TaskSynthesizer;
+  /** The task-description expansion boundary. */
+  readonly taskExpander: TaskExpansionSynthesizer;
   readonly mailer: Mailer;
   /** The receiving edge: authenticates and normalizes one inbound-mail webhook request. */
   readonly inboundMail: InboundMailReceiver;
@@ -443,6 +446,9 @@ export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv())
   const taskSynthesizer = lazyValue(() =>
     mock ? new MockTaskSynthesizer() : new RealTaskSynthesizer(anthropicConfigFromEnv(runtimeEnv)),
   );
+  const taskExpander = lazyValue(() =>
+    mock ? new MockTaskSynthesizer() : new RealTaskSynthesizer(anthropicConfigFromEnv(runtimeEnv)),
+  );
   const mailer = lazyValue(() => buildMailer(runtimeEnv));
   // The receiving edge is lazy for the same reason the sending one is: production refuses to
   // build it without a signing secret, and a deploy that never receives mail should not be
@@ -480,6 +486,9 @@ export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv())
     },
     get taskSynthesizer() {
       return taskSynthesizer();
+    },
+    get taskExpander() {
+      return taskExpander();
     },
     get mailer() {
       return mailer();

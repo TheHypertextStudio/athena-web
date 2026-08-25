@@ -42,6 +42,7 @@ import type { z } from 'zod';
 import { ConflictError, NotFoundError } from '../../error';
 import { compareCalendarDates } from './calendar-date';
 import { materializeOccurrence, type MaterializedOccurrence } from './materialize';
+import type { TaskStateMutation } from '../task-state';
 
 /** Database transaction surface shared by atomic recurrence authoring operations. */
 export type RecurrenceTransaction = Parameters<Parameters<Database['transaction']>[0]>[0];
@@ -813,13 +814,19 @@ async function appendFutureSeriesRevision(
       effectiveFrom: input.effectiveFrom,
     });
   });
-  await input.onRetired?.(retired);
+  await finishRetiredTaskCascades(retired.cascades);
+  await input.onRetired?.({ taskIds: retired.taskIds, projectIds: retired.projectIds });
 }
 
 /** Retired generated entities from superseded unfinished future occurrences. */
 interface RetiredFutureWork {
   readonly taskIds: string[];
   readonly projectIds: string[];
+}
+
+/** Retired work plus task-parent state transitions that commit with the retirement. */
+interface RetiredFutureWorkWithCascades extends RetiredFutureWork {
+  readonly cascades: TaskStateMutation[];
 }
 
 /** One occurrence and its optional generated instance selected for retirement. */
@@ -829,23 +836,25 @@ interface OccurrenceRetirementCandidate {
 }
 
 /** Internal retirement result including occurrences protected by completed work. */
-interface OccurrenceRetirementResult extends RetiredFutureWork {
+interface OccurrenceRetirementResult extends RetiredFutureWorkWithCascades {
   readonly completedOccurrenceIds: string[];
 }
 
 /** Archive generated work and cancel instances without deciding the occurrence's final outcome. */
 async function retireGeneratedOccurrenceWork(
   tx: Transaction,
+  organizationId: string,
   candidates: readonly OccurrenceRetirementCandidate[],
   now: Date,
 ): Promise<OccurrenceRetirementResult> {
   const taskIds: string[] = [];
   const projectIds: string[] = [];
+  const parentTaskIds: (string | null)[] = [];
   const completedOccurrenceIds: string[] = [];
   for (const candidate of candidates) {
     const mappedTasks = candidate.instanceId
       ? await tx
-          .select({ id: task.id, completedAt: task.completedAt })
+          .select({ id: task.id, completedAt: task.completedAt, parentTaskId: task.parentTaskId })
           .from(processInstanceTask)
           .innerJoin(task, eq(task.id, processInstanceTask.taskId))
           .where(eq(processInstanceTask.instanceId, candidate.instanceId))
@@ -865,6 +874,7 @@ async function retireGeneratedOccurrenceWork(
       const ids = mappedTasks.map((row) => row.id);
       await tx.update(task).set({ archivedAt: now }).where(inArray(task.id, ids));
       taskIds.push(...ids);
+      parentTaskIds.push(...mappedTasks.map((row) => row.parentTaskId));
     }
     if (mappedProjects.length > 0) {
       const ids = mappedProjects.map((row) => row.id);
@@ -878,7 +888,17 @@ async function retireGeneratedOccurrenceWork(
         .where(eq(processInstance.id, candidate.instanceId));
     }
   }
-  return { taskIds, projectIds, completedOccurrenceIds };
+  const { applySubtaskCompletionPolicyForParents } = await import('../task-state');
+  const cascades = await applySubtaskCompletionPolicyForParents(tx, organizationId, parentTaskIds);
+  return { taskIds, projectIds, completedOccurrenceIds, cascades };
+}
+
+/** Publish task-parent transitions after their recurrence retirement transaction commits. */
+async function finishRetiredTaskCascades(cascades: readonly TaskStateMutation[]): Promise<void> {
+  const { finishTaskStateTransition } = await import('../task-state');
+  for (const cascade of cascades) {
+    await finishTaskStateTransition({ actorId: null }, cascade);
+  }
 }
 
 /**
@@ -896,7 +916,7 @@ async function retireUnfinishedFutureOccurrences(
     readonly seriesId: string;
     readonly effectiveFrom: string;
   },
-): Promise<RetiredFutureWork> {
+): Promise<RetiredFutureWorkWithCascades> {
   const candidates = await tx
     .select({ occurrenceId: processOccurrence.id, instanceId: processInstance.id })
     .from(processOccurrence)
@@ -910,7 +930,7 @@ async function retireUnfinishedFutureOccurrences(
       ),
     );
   const now = new Date();
-  const retired = await retireGeneratedOccurrenceWork(tx, candidates, now);
+  const retired = await retireGeneratedOccurrenceWork(tx, input.organizationId, candidates, now);
   const supersededIds = candidates
     .map((candidate) => candidate.occurrenceId)
     .filter((id) => !retired.completedOccurrenceIds.includes(id));
@@ -920,7 +940,7 @@ async function retireUnfinishedFutureOccurrences(
       .set({ status: 'superseded', resolvedAt: now })
       .where(inArray(processOccurrence.id, supersededIds));
   }
-  return { taskIds: retired.taskIds, projectIds: retired.projectIds };
+  return { taskIds: retired.taskIds, projectIds: retired.projectIds, cascades: retired.cascades };
 }
 
 /** Apply a one-occurrence resolution or a this-and-future trigger edit. */
@@ -985,7 +1005,12 @@ export async function editRecurrenceSeries(
             inArray(processOccurrence.status, ['expected', 'materialized', 'needs_resolution']),
           ),
         );
-      const retirement = await retireGeneratedOccurrenceWork(tx, candidates, now);
+      const retirement = await retireGeneratedOccurrenceWork(
+        tx,
+        input.organizationId,
+        candidates,
+        now,
+      );
       if (retirement.completedOccurrenceIds.length > 0) {
         throw new ConflictError('Completed occurrence work cannot be skipped or moved');
       }
@@ -1031,9 +1056,14 @@ export async function editRecurrenceSeries(
             resolvedAt: now,
           },
         });
-      return { taskIds: retirement.taskIds, projectIds: retirement.projectIds };
+      return {
+        taskIds: retirement.taskIds,
+        projectIds: retirement.projectIds,
+        cascades: retirement.cascades,
+      };
     });
-    await input.onRetired?.(retired);
+    await finishRetiredTaskCascades(retired.cascades);
+    await input.onRetired?.({ taskIds: retired.taskIds, projectIds: retired.projectIds });
     if (edit.resolution.kind === 'reschedule') {
       await materializeOccurrence(database, {
         organizationId: input.organizationId,

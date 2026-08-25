@@ -466,6 +466,34 @@ export async function finishTaskChanges(
   });
 }
 
+/** Build durable ledger rows for callers that own the surrounding transaction. */
+export function taskActivityRows(input: RecordTaskChangesInput) {
+  const ids = input.changes.map(() => genId()).sort();
+  return input.changes.map((change, index) => ({
+    id: ids[index] ?? genId(),
+    organizationId: input.organizationId,
+    actorId: input.actorId,
+    subjectType: 'task' as const,
+    subjectId: input.taskId,
+    type: 'updated' as const,
+    metadata: { ...change },
+  }));
+}
+
+/** Announce one already-durable task mutation to the stream. */
+export async function announceTaskChanges(input: RecordTaskChangesInput): Promise<void> {
+  await finishTaskChanges(input);
+}
+
+/** Build the durable Activity entry for a parent completed by the subtask policy. */
+export function subtaskCompletionChange(): TaskActivityChange {
+  return {
+    field: 'completionPolicy',
+    label: 'Completion',
+    from: null,
+    to: 'Completed after all subtasks were complete',
+  };
+}
 /**
  * Append one ledger row per field change on a task, and announce the edit once on the stream.
  *

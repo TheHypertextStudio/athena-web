@@ -5,14 +5,12 @@ import { join, relative, resolve } from 'node:path';
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { CommentOut } from '@docket/types';
 import { useRef, useState, type ReactElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ComposerShell } from '@/components/composer/composer-shell';
 import { EntityDocument } from '@/components/editor/entity-document';
 import { FreeformTextEditor } from '@/components/editor/freeform-text';
-import { CommentActivityFeed } from '@/components/task-detail/CommentActivityFeed';
 
 import { makeQueryWrapper } from '../support/query';
 import { installProseMirrorLayoutShims } from './prosemirror-jsdom';
@@ -335,59 +333,6 @@ describe('clicking an editor-shaped surface starts editing', () => {
       shiftKey: true,
     });
     expect(onSubmitAndContinue).toHaveBeenCalledTimes(1);
-  });
-
-  it('focuses the comment composer from a click on its own tinted background/padding', async () => {
-    renderEditor(
-      <CommentActivityFeed
-        comments={[]}
-        activities={[]}
-        resolveActor={() => ({ name: 'Ada', kind: 'human' })}
-        onComment={vi.fn(async () => undefined)}
-        canComment
-      />,
-    );
-    const surface = await screen.findByRole('textbox', { name: 'Add a comment' });
-    const box = surface.closest('[data-editor-surface]');
-    expect(box).not.toBeNull();
-    fireEvent.mouseDown(box as HTMLElement, { bubbles: true });
-    await waitFor(() => {
-      expect(document.activeElement).toBe(surface);
-    });
-  });
-
-  it('renders persisted comment Markdown through the shared read-only surface', async () => {
-    const user = userEvent.setup();
-    const { container } = renderEditor(
-      <CommentActivityFeed
-        comments={[
-          CommentOut.parse({
-            id: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
-            organizationId: '01ARZ3NDEKTSV4RRFFQ69G5FAW',
-            authorId: '01ARZ3NDEKTSV4RRFFQ69G5FAX',
-            subjectType: 'task',
-            subjectId: 'task_1',
-            body: 'Run `pnpm test`.\n\n```typescript\nconst ready = true\n```',
-            parentCommentId: null,
-            editedAt: null,
-            createdAt: '2026-08-09T12:00:00.000Z',
-          }),
-        ]}
-        activities={[]}
-        resolveActor={() => ({ name: 'Ada', kind: 'human' })}
-        onComment={vi.fn(async () => undefined)}
-        canComment={false}
-      />,
-    );
-
-    await waitFor(() => {
-      expect(container.querySelector('[data-inline-code]')).toHaveTextContent('pnpm test');
-    });
-    expect(container.querySelector('[data-code-block]')).toHaveTextContent('const ready = true');
-    expect(container.querySelector('[data-static-markdown]')).not.toBeNull();
-    expect(container.querySelector('.ProseMirror')).toBeNull();
-    await user.click(screen.getByRole('button', { name: 'Copy code' }));
-    await expect(navigator.clipboard.readText()).resolves.toBe('const ready = true');
   });
 });
 

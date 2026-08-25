@@ -30,6 +30,7 @@ import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import type { z } from 'zod';
 
 import { ConflictError, NotFoundError, ValidationError } from '../error';
+import { finishTaskTimerStart, prepareTaskTimerStart } from '../lib/task-state';
 import { emitTimerEvent } from '../routes/event-emit';
 import {
   assertOwnedTimeCategory,
@@ -41,7 +42,6 @@ import {
 import { resolveAnchorSuggestion } from './anchor-suggestion';
 import { hydrateTimeRecords, toTimeCategoryOut } from './read-models';
 import {
-  assertTaskAnchorReadable,
   anchorExistingRecord,
   readTaskAnchor,
   requireTrackingName,
@@ -109,6 +109,9 @@ async function announceTimer(
 
 /** What a session with no subject is called in an event feed, until the person names it. */
 const UNNAMED_SESSION_LABEL = 'Untitled session';
+
+/** A joined segment disappeared after selection, so its surrounding transaction must roll back. */
+class JoinedSegmentUnavailableError extends Error {}
 
 /** The caller's most recent human segment, whatever task it was on. */
 async function latestHumanSegment(hubId: string, userId: string): Promise<JoinCandidate | null> {
@@ -359,12 +362,20 @@ export async function createTimeRecord(
   if (live) {
     const candidate = await latestHumanSegment(hubId, userId);
     if (candidate && shouldJoinSegment(candidate, anchor?.taskId ?? null, now)) {
-      const joined = await resumeJoinedSegment(userId, hubId, candidate, now);
+      const joined = await resumeJoinedSegment(userId, hubId, candidate, now, anchor);
       if (joined) return joined;
     }
   }
 
   const outcome = await db.transaction(async (tx) => {
+    const taskTimerStart =
+      live && anchor && !anchor.created && anchor.actorId
+        ? await prepareTaskTimerStart(tx, {
+            organizationId: anchor.organizationId,
+            taskId: anchor.taskId,
+            actorId: anchor.actorId,
+          })
+        : null;
     const switchedFrom = live ? await closeOpenHumanSegments(tx, hubId, userId, now) : [];
     const [inserted] = await tx
       .insert(timeRecord)
@@ -444,8 +455,11 @@ export async function createTimeRecord(
       startedAt: live ? now : (historicalStart ?? now),
       ...(live ? {} : { endedAt: historicalEnd ?? now, closedAt: now }),
     });
-    return { record: inserted, switchedFrom };
+    return { record: inserted, switchedFrom, taskTimerStart };
   });
+  if (outcome.taskTimerStart && anchor?.actorId) {
+    await finishTaskTimerStart({ actorId: anchor.actorId }, outcome.taskTimerStart);
+  }
   const hydrated = await toTimeRecordOut(outcome.record, userId, now);
   if (live) {
     const previous = outcome.switchedFrom[0] ?? null;
@@ -480,24 +494,46 @@ async function resumeJoinedSegment(
   hubId: string,
   candidate: JoinCandidate,
   now: Date,
+  anchor: Awaited<ReturnType<typeof resolveTaskAnchor>>,
 ): Promise<TimeRecordInput | null> {
-  const outcome = await db.transaction(async (tx) => {
-    const switchedFrom = await closeOpenHumanSegments(tx, hubId, userId, now);
-    const reopened = await tx
-      .update(timeInterval)
-      .set({ endedAt: null, closedAt: null })
-      .where(and(eq(timeInterval.id, candidate.id), isNull(timeInterval.supersededById)))
-      .returning({ recordId: timeInterval.timeRecordId });
-    const recordId = reopened[0]?.recordId;
-    if (!recordId) return null;
-    const [record] = await tx
-      .update(timeRecord)
-      .set({ status: 'open', endedAt: null, closedAt: null })
-      .where(eq(timeRecord.id, recordId))
-      .returning();
-    return record ? { record, switchedFrom } : null;
-  });
-  if (!outcome) return null;
+  let outcome: {
+    readonly record: TimeRecordRow;
+    readonly switchedFrom: string[];
+    readonly taskTimerStart: Awaited<ReturnType<typeof prepareTaskTimerStart>> | null;
+  } | null;
+  try {
+    outcome = await db.transaction(async (tx) => {
+      const taskTimerStart =
+        anchor && !anchor.created && anchor.actorId
+          ? await prepareTaskTimerStart(tx, {
+              organizationId: anchor.organizationId,
+              taskId: anchor.taskId,
+              actorId: anchor.actorId,
+            })
+          : null;
+      const switchedFrom = await closeOpenHumanSegments(tx, hubId, userId, now);
+      const reopened = await tx
+        .update(timeInterval)
+        .set({ endedAt: null, closedAt: null })
+        .where(and(eq(timeInterval.id, candidate.id), isNull(timeInterval.supersededById)))
+        .returning({ recordId: timeInterval.timeRecordId });
+      const recordId = reopened[0]?.recordId;
+      if (!recordId) throw new JoinedSegmentUnavailableError();
+      const [record] = await tx
+        .update(timeRecord)
+        .set({ status: 'open', endedAt: null, closedAt: null })
+        .where(eq(timeRecord.id, recordId))
+        .returning();
+      if (!record) throw new JoinedSegmentUnavailableError();
+      return { record, switchedFrom, taskTimerStart };
+    });
+  } catch (error) {
+    if (error instanceof JoinedSegmentUnavailableError) return null;
+    throw error;
+  }
+  if (outcome.taskTimerStart && anchor?.actorId) {
+    await finishTaskTimerStart({ actorId: anchor.actorId }, outcome.taskTimerStart);
+  }
   const hydrated = await toTimeRecordOut(outcome.record, userId, now);
   const previous = outcome.switchedFrom.find((id) => id !== hydrated.id) ?? null;
   await announceTimer(previous ? 'timer_switched' : 'timer_resumed', hydrated, {
@@ -525,7 +561,7 @@ export async function startTimeRecord(userId: string, id: string): Promise<TimeR
   }
   // A personal duration fact survives a revoked grant, but starting new work on the linked task
   // does not. Check before looking for a join candidate or closing another active timer.
-  if (record.taskId) await assertTaskAnchorReadable(userId, record.taskId);
+  const anchor = record.taskId ? await resolveTaskAnchor(userId, { taskId: record.taskId }) : null;
   const now = new Date();
   const alreadyActive = await db
     .select({ id: timeInterval.id })
@@ -546,7 +582,7 @@ export async function startTimeRecord(userId: string, id: string): Promise<TimeR
   // refusing it as "closed" would fragment exactly the history it was written to keep whole.
   const candidate = await latestSegmentForRecord(id);
   if (candidate && shouldJoinSegment(candidate, record.taskId, now)) {
-    const joined = await resumeJoinedSegment(userId, hubId, candidate, now);
+    const joined = await resumeJoinedSegment(userId, hubId, candidate, now, anchor);
     if (joined) return joined;
   }
   if (record.status === 'closed') {
@@ -554,6 +590,14 @@ export async function startTimeRecord(userId: string, id: string): Promise<TimeR
   }
 
   const outcome = await db.transaction(async (tx) => {
+    const taskTimerStart =
+      anchor && !anchor.created && anchor.actorId
+        ? await prepareTaskTimerStart(tx, {
+            organizationId: anchor.organizationId,
+            taskId: anchor.taskId,
+            actorId: anchor.actorId,
+          })
+        : null;
     const switchedFrom = await closeOpenHumanSegments(tx, hubId, userId, now);
     await tx.insert(timeInterval).values({
       timeRecordId: id,
@@ -582,8 +626,11 @@ export async function startTimeRecord(userId: string, id: string): Promise<TimeR
     // request, and no route deletes a time record.
     /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
     if (!resumed) throw new NotFoundError('Time record not found');
-    return { record: resumed, switchedFrom };
+    return { record: resumed, switchedFrom, taskTimerStart };
   });
+  if (outcome.taskTimerStart && anchor?.actorId) {
+    await finishTaskTimerStart({ actorId: anchor.actorId }, outcome.taskTimerStart);
+  }
   const hydrated = await toTimeRecordOut(outcome.record, userId, now);
   const previous = outcome.switchedFrom.find((entry) => entry !== id) ?? null;
   await announceTimer(previous ? 'timer_switched' : 'timer_resumed', hydrated, {

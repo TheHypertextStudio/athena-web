@@ -223,6 +223,42 @@ describe('DocketVoiceToolRunner', () => {
       expect(after?.completedAt).not.toBeNull();
     });
 
+    it('applies the subtask policy when voice closes the final active child', async () => {
+      const runner = new DocketVoiceToolRunner();
+      const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+      const userId = await seedUserWithHub(db, schema, 'VoiceCompletesChild');
+      const [parent] = await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          title: 'Parent task',
+          teamId,
+          state: 'backlog',
+          statusId: statusId('task', 'backlog'),
+        })
+        .returning({ id: schema.task.id });
+      const parentId = assertDefined(parent).id;
+      await db.insert(schema.task).values({
+        organizationId: orgId,
+        title: 'Child task',
+        teamId,
+        parentTaskId: parentId,
+        state: 'backlog',
+        statusId: statusId('task', 'backlog'),
+      });
+
+      const outcome = await runner.run(await ctxFor(orgId, userId, humanActorId), 'complete_task', {
+        title: 'child',
+      });
+      expect(outcome.ok).toBe(true);
+      const [parentAfter] = await db
+        .select({ state: schema.task.state, completedAt: schema.task.completedAt })
+        .from(schema.task)
+        .where(eq(schema.task.id, parentId));
+      expect(parentAfter?.state).toBe('done');
+      expect(parentAfter?.completedAt).not.toBeNull();
+    });
+
     it('refuses without naming a task', async () => {
       const runner = new DocketVoiceToolRunner();
       const { orgId, humanActorId } = await seedBaseOrg(db, schema);

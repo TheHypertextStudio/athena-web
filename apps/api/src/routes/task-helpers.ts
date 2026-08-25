@@ -1,6 +1,6 @@
 import { canActor, type Capability } from '@docket/authz';
 import type { cycle, program } from '@docket/db';
-import { actor, db, grant, milestone, project, role, task } from '@docket/db';
+import { actor, db, grant, milestone, project, role, task, type Database } from '@docket/db';
 import type { GrantResourceKind } from '@docket/identity-access/grants';
 import type { TaskOut, TaskRef } from '@docket/types';
 import { and, eq, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
@@ -42,6 +42,8 @@ export function toOut(t: TaskRow, labels: readonly LabelRefRow[]): z.input<typeo
     projectId: t.projectId,
     programId: t.programId,
     parentTaskId: t.parentTaskId,
+    templateId: t.templateId,
+    autoCompletedBySubtasks: t.autoCompletedBySubtasks,
     estimateMinutes: t.estimateMinutes,
     startDate: t.startDate?.toISOString() ?? null,
     dueDate: t.dueDate?.toISOString() ?? null,
@@ -373,8 +375,9 @@ export async function assertTaskCapability(
   actorId: string,
   target: ViewableTaskParts,
   required: Capability,
+  database: Database = db,
 ): Promise<void> {
-  const result = await canActor(actorId, required, { kind: 'task', id: target.id, orgId }, db);
+  const result = await canActor(actorId, required, { kind: 'task', id: target.id, orgId }, database);
   if (result.allow) return;
   if (result.effectiveCapability === null) {
     // `canActor` intentionally resolves explicit grants only, while task reads also include the

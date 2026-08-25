@@ -35,6 +35,7 @@ import { and, eq, inArray, isNull } from 'drizzle-orm';
 
 import { ConflictError, NotFoundError } from '../../error';
 import { addCalendarDays, parseCalendarDate } from './calendar-date';
+import type { TaskStateMutation } from '../task-state';
 import { loadStatusSets } from '../work-status';
 
 /** Transaction handle shared with completion advancement. */
@@ -96,6 +97,8 @@ export interface MaterializeInstanceStepsCommand {
   readonly scheduledFor: string;
   /** Exact completion dates observed during this transition, keyed by source step id. */
   readonly completionDatesByStepId?: ReadonlyMap<string, string> | undefined;
+  /** State changes that the caller must publish after its enclosing transaction commits. */
+  readonly postCommitStateTransitions?: TaskStateMutation[] | undefined;
 }
 
 /** Convert a validated calendar date to the timestamp convention used by work rows. */
@@ -307,6 +310,7 @@ export async function materializeInstanceSteps(
   const createdProjects = new Map<string, string>();
   const createdMilestones = new Map<string, string>();
   const createdTasks = new Map<string, string>();
+  const parentTaskIds: (string | null)[] = [];
 
   for (const step of steps.filter((value) => value.kind === 'project')) {
     if (projectIds.has(step.id) || (!allAtOnce && !timingReady(step, completionDates))) continue;
@@ -500,6 +504,7 @@ export async function materializeInstanceSteps(
       }
       taskIds.set(step.id, insertedId);
       createdTasks.set(step.key, insertedId);
+      parentTaskIds.push(parentTaskId ?? null);
       progress = true;
     }
   }
@@ -512,6 +517,16 @@ export async function materializeInstanceSteps(
       .insert(taskDependency)
       .values({ blockingTaskId, blockedTaskId, organizationId: command.organizationId })
       .onConflictDoNothing();
+  }
+
+  if (parentTaskIds.length > 0) {
+    const { applySubtaskCompletionPolicyForParents } = await import('../task-state');
+    const cascades = await applySubtaskCompletionPolicyForParents(
+      tx,
+      command.organizationId,
+      parentTaskIds,
+    );
+    command.postCommitStateTransitions?.push(...cascades);
   }
 
   return {
@@ -528,7 +543,8 @@ export async function materializeOccurrence(
 ): Promise<MaterializedOccurrence> {
   parseCalendarDate(command.scheduledFor);
   if (command.originalScheduledFor) parseCalendarDate(command.originalScheduledFor);
-  return database.transaction(async (tx) => {
+  const postCommitStateTransitions: TaskStateMutation[] = [];
+  const result = await database.transaction(async (tx) => {
     const seriesRows = await tx
       .select({
         definitionId: recurrenceSeries.definitionId,
@@ -610,6 +626,7 @@ export async function materializeOccurrence(
       instanceId: instance.id,
       revisionId: series.processRevisionId,
       scheduledFor: command.scheduledFor,
+      postCommitStateTransitions,
     });
     await tx
       .update(processOccurrence)
@@ -622,4 +639,11 @@ export async function materializeOccurrence(
       ...identities,
     };
   });
+  if (postCommitStateTransitions.length > 0) {
+    const { finishTaskStateTransition } = await import('../task-state');
+    for (const transition of postCommitStateTransitions) {
+      await finishTaskStateTransition({ actorId: null }, transition);
+    }
+  }
+  return result;
 }

@@ -130,13 +130,13 @@ export function patchTaskAggregate(
  * @param orgId - The active organization id.
  * @param taskId - The task being mutated.
  * @param detailKey - The React Query cache key for the task detail (for optimistic writes).
- * @param commentsKey - The React Query cache key for the comment stream.
+ * @param activityKey - The React Query cache key for the task's unified Activity history.
  */
 export function useTaskMutations(
   orgId: string,
   taskId: string,
   detailKey: QueryKey,
-  commentsKey: QueryKey,
+  activityKey: QueryKey,
 ): TaskMutations {
   const queryClient = useQueryClient();
   const statuses = useStatusRegistry();
@@ -369,7 +369,7 @@ export function useTaskMutations(
           }),
         'Could not post the comment.',
       ),
-    invalidateKeys: [commentsKey],
+    invalidateKeys: [activityKey],
   });
 
   const deleteMutation = useApiMutation<TaskArchived, undefined>({

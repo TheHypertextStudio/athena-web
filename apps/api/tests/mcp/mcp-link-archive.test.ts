@@ -400,6 +400,91 @@ describe('link', () => {
     expect(back?.parentTaskId).toBe(first);
   });
 
+  it('refuses a two-task subtask cycle', async () => {
+    const s = await seedOrg();
+    const first = await seedTask(s, { title: 'First' });
+    const second = await seedTask(s, { title: 'Second' });
+    await db.update(schema.task).set({ parentTaskId: first }).where(eq(schema.task.id, second));
+    const client = await connect(s.ctx);
+
+    const result = (await client.callTool({
+      name: 'link',
+      arguments: { orgId: s.orgId, relation: 'subtask_of', from: first, to: second },
+    })) as CallToolResult;
+
+    expect(result.isError).toBe(true);
+  });
+
+  it('refuses a three-task subtask cycle', async () => {
+    const s = await seedOrg();
+    const first = await seedTask(s, { title: 'First' });
+    const second = await seedTask(s, { title: 'Second', parentTaskId: first });
+    const third = await seedTask(s, { title: 'Third', parentTaskId: second });
+    const client = await connect(s.ctx);
+
+    const result = (await client.callTool({
+      name: 'link',
+      arguments: { orgId: s.orgId, relation: 'subtask_of', from: first, to: third },
+    })) as CallToolResult;
+
+    expect(result.isError).toBe(true);
+  });
+
+  it('allows a hierarchy link when task dependencies point the other way', async () => {
+    const s = await seedOrg();
+    const parent = await seedTask(s, { title: 'Parent' });
+    const child = await seedTask(s, { title: 'Child' });
+    await db.insert(schema.taskDependency).values({
+      organizationId: s.orgId,
+      blockingTaskId: parent,
+      blockedTaskId: child,
+    });
+    const client = await connect(s.ctx);
+
+    const result = (await client.callTool({
+      name: 'link',
+      arguments: { orgId: s.orgId, relation: 'subtask_of', from: child, to: parent },
+    })) as CallToolResult;
+
+    expect(result.isError).toBeFalsy();
+    expect(payload(result)).toMatchObject({ changed: true, linked: true });
+  });
+
+  it('evaluates the former parent when a subtask relation is removed', async () => {
+    const s = await seedOrg();
+    const parent = await seedTask(s, { title: 'Parent' });
+    await seedTask(s, {
+      title: 'Ended child',
+      parentTaskId: parent,
+      state: 'done',
+      completedAt: new Date(),
+    });
+    const activeChild = await seedTask(s, { title: 'Active child', parentTaskId: parent });
+    const client = await connect(s.ctx);
+
+    const result = (await client.callTool({
+      name: 'link',
+      arguments: {
+        orgId: s.orgId,
+        relation: 'subtask_of',
+        from: activeChild,
+        to: parent,
+        remove: true,
+      },
+    })) as CallToolResult;
+    expect(result.isError).toBeFalsy();
+
+    const [updatedParent] = await db
+      .select({
+        state: schema.task.state,
+        autoCompletedBySubtasks: schema.task.autoCompletedBySubtasks,
+      })
+      .from(schema.task)
+      .where(eq(schema.task.id, parent));
+    expect(updatedParent?.state).toBe('done');
+    expect(updatedParent?.autoCompletedBySubtasks).toBe(true);
+  });
+
   it('refuses to make a task its own parent', async () => {
     const s = await seedOrg();
     const id = await seedTask(s);
@@ -436,6 +521,32 @@ describe('archive', () => {
     const byId = new Map(rows.map((row) => [row.id, row.archivedAt]));
     expect(byId.get(filed)).not.toBeNull();
     expect(byId.get(loose)).toBeNull();
+  });
+
+  it('applies the subtask policy after archiving the final active child', async () => {
+    const s = await seedOrg();
+    const parentId = await seedTask(s, { title: 'Parent' });
+    await seedTask(s, {
+      title: 'Completed child',
+      parentTaskId: parentId,
+      state: 'done',
+      completedAt: new Date(),
+    });
+    const activeChildId = await seedTask(s, { title: 'Active child', parentTaskId: parentId });
+
+    const client = await connect(s.ctx);
+    const res = (await client.callTool({
+      name: 'archive',
+      arguments: { orgId: s.orgId, entity: 'task', scope: { ids: [activeChildId] } },
+    })) as CallToolResult;
+    expect(payload(res)).toMatchObject({ changed: 1 });
+
+    const [parent] = await db
+      .select({ state: schema.task.state, completedAt: schema.task.completedAt })
+      .from(schema.task)
+      .where(eq(schema.task.id, parentId));
+    expect(parent?.state).toBe('done');
+    expect(parent?.completedAt).not.toBeNull();
   });
 
   it('restores from the archived pool', async () => {

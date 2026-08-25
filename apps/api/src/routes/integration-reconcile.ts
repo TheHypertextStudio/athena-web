@@ -26,6 +26,12 @@ import type { ConnectorProvider, ImportedItem } from '@docket/integrations';
 import type { WritableConnector } from '@docket/integrations';
 
 import { ConflictError } from '../error';
+import {
+  applySubtaskCompletionPolicyForParents,
+  finishTaskStateTransition,
+  type TaskStateMutation,
+  writeTaskStateTransition,
+} from '../lib/task-state';
 import { loadStatusSets, type ResolvedStatus, type StatusSets } from '../lib/work-status';
 import { serializableTx } from '../lib/serializable-tx';
 import { enqueueSearchUpsert } from '../search/write-through';
@@ -385,7 +391,7 @@ export async function reconcileTasks(
       await enqueueSearchUpsert(orgId, 'task', local.id);
       tally.deleted += 1;
     } else if (action.kind === 'archive' && local && remote) {
-      await archiveLocal(local.id, remote, keys);
+      await archiveLocal(orgId, local.id, remote, keys);
       await enqueueSearchUpsert(orgId, 'task', local.id);
       tally.archived += 1;
     }
@@ -449,6 +455,13 @@ function resolveParentTaskId(
   return taskIdByExternalId.get(item.parentExternalId) ?? null;
 }
 
+/** Publish subtask-policy state changes only after their enclosing write commits. */
+async function finishHierarchyCascades(cascades: readonly TaskStateMutation[]): Promise<void> {
+  for (const cascade of cascades) {
+    await finishTaskStateTransition({ actorId: null }, cascade);
+  }
+}
+
 /** Insert a remote item as a new linked task, persisting the two-way anchors. */
 async function insertLinked(
   orgId: string,
@@ -464,39 +477,46 @@ async function insertLinked(
     ? new Date(item.provenance.externalUpdatedAt)
     : null;
   const status = item.completed ? keys.completed : keys.open;
-  const inserted = await db
-    .insert(task)
-    .values({
-      organizationId: orgId,
-      title: item.title,
-      description: item.body ?? null,
-      teamId,
-      state: status.key,
-      statusId: status.id,
-      ...(item.completed ? { completedAt: anchor ?? new Date() } : {}),
-      ...(assigneeId !== null ? { assigneeId } : {}),
-      ...(item.dueDate ? { dueDate: new Date(item.dueDate) } : {}),
-      ...(item.startDate ? { startDate: new Date(item.startDate) } : {}),
-      // Zero is a real estimate ("no work left"), so test for the type, not truthiness.
-      ...(typeof item.estimateMinutes === 'number'
-        ? { estimateMinutes: item.estimateMinutes }
-        : {}),
-      ...(parentTaskId !== null ? { parentTaskId } : {}),
-      source: 'linked',
-      sourceIntegrationId: integrationId,
-      externalId: item.provenance.externalId,
-      externalUrl: item.provenance.externalUrl ?? null,
-      sourceSyncMode: 'mirror',
-      externalListId: item.provenance.externalListId ?? null,
-      externalEtag: item.provenance.externalEtag ?? null,
-      // Echo guard: stamp updatedAt == externalUpdatedAt so the task is born clean.
-      ...(anchor ? { externalUpdatedAt: anchor, updatedAt: anchor } : {}),
-      createdBy: actorId,
-    })
-    .returning({ id: task.id });
-  const row = inserted[0];
-  /* v8 ignore next -- @preserve defensive: insert always returns a row */
-  if (!row) throw new Error('linked task insert returned no row');
+  const { row, cascades } = await serializableTx(async (tx) => {
+    const inserted = await tx
+      .insert(task)
+      .values({
+        organizationId: orgId,
+        title: item.title,
+        description: item.body ?? null,
+        teamId,
+        state: status.key,
+        statusId: status.id,
+        ...(item.completed ? { completedAt: anchor ?? new Date() } : {}),
+        ...(assigneeId !== null ? { assigneeId } : {}),
+        ...(item.dueDate ? { dueDate: new Date(item.dueDate) } : {}),
+        ...(item.startDate ? { startDate: new Date(item.startDate) } : {}),
+        // Zero is a real estimate ("no work left"), so test for the type, not truthiness.
+        ...(typeof item.estimateMinutes === 'number'
+          ? { estimateMinutes: item.estimateMinutes }
+          : {}),
+        ...(parentTaskId !== null ? { parentTaskId } : {}),
+        source: 'linked',
+        sourceIntegrationId: integrationId,
+        externalId: item.provenance.externalId,
+        externalUrl: item.provenance.externalUrl ?? null,
+        sourceSyncMode: 'mirror',
+        externalListId: item.provenance.externalListId ?? null,
+        externalEtag: item.provenance.externalEtag ?? null,
+        // Echo guard: stamp updatedAt == externalUpdatedAt so the task is born clean.
+        ...(anchor ? { externalUpdatedAt: anchor, updatedAt: anchor } : {}),
+        createdBy: actorId,
+      })
+      .returning();
+    const row = inserted[0];
+    /* v8 ignore next -- @preserve defensive: insert always returns a row */
+    if (!row) throw new Error('linked task insert returned no row');
+    return {
+      row,
+      cascades: await applySubtaskCompletionPolicyForParents(tx, orgId, [row.parentTaskId]),
+    };
+  });
+  await finishHierarchyCascades(cascades);
   await enqueueSearchUpsert(orgId, 'task', row.id);
   return row.id;
 }
@@ -524,9 +544,6 @@ async function applyPull(
   const patch = {
     title: item.title,
     description: item.body ?? null,
-    state: status.key,
-    statusId: status.id,
-    completedAt: item.completed ? anchor : null,
     dueDate: item.dueDate ? new Date(item.dueDate) : null,
     ...(item.startDate !== undefined
       ? { startDate: item.startDate ? new Date(item.startDate) : null }
@@ -552,16 +569,71 @@ async function applyPull(
     // parent link and keeps the rest of the update: hierarchy is metadata here (an unresolvable
     // parent already degrades the same way), and refusing the whole item over it would abort a
     // sync run because of one bad remote edge.
-    await serializableTx(async (tx) => {
+    const result = await serializableTx(async (tx) => {
+      const before = await tx
+        .select()
+        .from(task)
+        .where(and(eq(task.id, taskId), eq(task.organizationId, orgId)))
+        .for('update')
+        .limit(1);
+      const current = before[0];
+      if (!current) return null;
       const cyclic = await wouldCreateSubtaskCycle(tx, orgId, taskId, resolvedParent);
       await tx
         .update(task)
         .set({ ...patch, ...(cyclic ? {} : { parentTaskId: resolvedParent }) })
-        .where(eq(task.id, taskId));
+        .where(eq(task.id, taskId))
+        .returning();
+      const mutation = await writeTaskStateTransition(tx, {
+        before: current,
+        statusId: status.id,
+        state: status.key,
+        completedAt: item.completed ? anchor : null,
+        canceledAt: null,
+      });
+      if (!mutation) return null;
+      return {
+        mutation,
+        cascades: await applySubtaskCompletionPolicyForParents(tx, orgId, [
+          current.parentTaskId,
+          mutation.after.parentTaskId,
+        ]),
+      };
     });
+    if (!result) return;
+    await finishTaskStateTransition({ actorId: null }, result.mutation);
+    await finishHierarchyCascades(result.cascades);
     return;
   }
-  await db.update(task).set(patch).where(eq(task.id, taskId));
+  const result = await serializableTx(async (tx) => {
+    const before = await tx
+      .select()
+      .from(task)
+      .where(and(eq(task.id, taskId), eq(task.organizationId, orgId)))
+      .for('update')
+      .limit(1);
+    const current = before[0];
+    if (!current) return null;
+    await tx.update(task).set(patch).where(eq(task.id, taskId)).returning();
+    const mutation = await writeTaskStateTransition(tx, {
+      before: current,
+      statusId: status.id,
+      state: status.key,
+      completedAt: item.completed ? anchor : null,
+      canceledAt: null,
+    });
+    if (!mutation) return null;
+    return {
+      mutation,
+      cascades: await applySubtaskCompletionPolicyForParents(tx, orgId, [
+        current.parentTaskId,
+        mutation.after.parentTaskId,
+      ]),
+    };
+  });
+  if (!result) return;
+  await finishTaskStateTransition({ actorId: null }, result.mutation);
+  await finishHierarchyCascades(result.cascades);
 }
 
 /** Push a dirty local task's fields to the provider and restamp the anchors from the echo. */
@@ -622,6 +694,7 @@ async function pushDelete(
 
 /** Archive a local linked task whose remote was tombstoned. */
 async function archiveLocal(
+  orgId: string,
   taskId: string,
   item: ImportedItem,
   keys: ReconcileStatuses,
@@ -629,16 +702,42 @@ async function archiveLocal(
   const anchor = item.provenance.externalUpdatedAt
     ? new Date(item.provenance.externalUpdatedAt)
     : new Date();
-  await db
-    .update(task)
-    .set({
-      state: keys.canceled.key,
+  const result = await serializableTx(async (tx) => {
+    const before = await tx
+      .select()
+      .from(task)
+      .where(and(eq(task.id, taskId), eq(task.organizationId, orgId)))
+      .for('update')
+      .limit(1);
+    const current = before[0];
+    if (!current) return null;
+    await tx
+      .update(task)
+      .set({
+        externalUpdatedAt: anchor,
+        updatedAt: anchor,
+      })
+      .where(eq(task.id, taskId))
+      .returning();
+    const mutation = await writeTaskStateTransition(tx, {
+      before: current,
       statusId: keys.canceled.id,
+      state: keys.canceled.key,
+      completedAt: null,
       canceledAt: anchor,
-      externalUpdatedAt: anchor,
-      updatedAt: anchor,
-    })
-    .where(eq(task.id, taskId));
+    });
+    if (!mutation) return null;
+    return {
+      mutation,
+      cascades: await applySubtaskCompletionPolicyForParents(tx, orgId, [
+        current.parentTaskId,
+        mutation.after.parentTaskId,
+      ]),
+    };
+  });
+  if (!result) return;
+  await finishTaskStateTransition({ actorId: null }, result.mutation);
+  await finishHierarchyCascades(result.cascades);
 }
 
 /** Push every native task in the target team with no external id out as a new provider task. */

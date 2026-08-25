@@ -1,22 +1,31 @@
 /**
- * `@docket/api` — the task activity-log route, mounted on the tasks router at `/`.
+ * `@docket/api` — one chronological Activity projection for a task.
  *
  * @remarks
- * Reads back the metadata history written by `lib/task-audit.ts`. This is deliberately a
- * task-scoped read over the **compliance ledger** (`audit_event`), not over the Stream: the
- * Stream answers "what is happening across my org right now", while this answers "what has
- * happened to this one task, ever" — the GitHub-issue-log question.
- *
- * The log's first entry is **projected from the task row**, never stored. A task's own
- * `createdAt`/`createdBy` already are the record of its creation, so writing a second row saying
- * the same thing would be a duplicate that a dozen different insert sites (the REST create, the
- * subtask create, MCP capture, email-to-task, connector import, calendar promotion, …) would each
- * have to remember to write — and that every task predating this feature would be missing. One
- * derivation covers all of them, retroactively, and cannot drift from the task it describes.
+ * Task Activity reads the records that already own each fact. The audit ledger owns task
+ * mutations, `comment` owns discussion, `event` owns timers, and `session_activity` owns
+ * delegated execution updates. This route only combines them where a reader needs one answer:
+ * what has happened to this task?
  */
-import { actor, auditEvent, db } from '@docket/db';
-import { pageOf, taskCreationEntryId, TaskActivityChange, TaskActivityOut } from '@docket/types';
-import { and, asc, eq } from 'drizzle-orm';
+import {
+  actor,
+  agentSession,
+  auditEvent,
+  comment,
+  db,
+  event,
+  sessionActivity,
+  task,
+  taskDependency,
+} from '@docket/db';
+import {
+  pageOf,
+  taskCreationEntryId,
+  TaskActivityChange,
+  TaskActivityOut,
+  TaskActivityQuery,
+} from '@docket/types';
+import { and, asc, eq, inArray, isNull, or, sql, type SQLWrapper } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { z } from 'zod';
 
@@ -24,39 +33,130 @@ import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
-import { zParam } from '../lib/validate';
+import { zParam, zQuery } from '../lib/validate';
 
 import { buildTaskViewFilter, idParam, loadTask } from './task-helpers';
 
-/** Task activity-log route, mounted on the tasks router at `/`. */
+type ActivityEntry = z.input<typeof TaskActivityOut>;
+
+/** Fields from a child that alter a parent's understanding of its contained work. */
+const MEANINGFUL_CHILD_FIELDS = new Set(['description', 'state', 'assigneeId', 'dueDate']);
+
+/** Fields from a blocker that can alter whether the current task may proceed. */
+const DEPENDENCY_READINESS_FIELDS = new Set(['state', 'dueDate']);
+
+/** Encode one `(createdAt, id)` position without exposing a storage-table cursor. */
+function encodeActivityCursor(entry: ActivityEntry): string {
+  return Buffer.from(`${entry.createdAt}|${entry.id}`, 'utf8').toString('base64url');
+}
+
+/** Decode an Activity cursor. Invalid cursors restart at the first entry. */
+function decodeActivityCursor(cursor: string | undefined): { at: string; id: string } | null {
+  if (!cursor) return null;
+  try {
+    const [at, id] = Buffer.from(cursor, 'base64url').toString('utf8').split('|');
+    if (!at || !id || Number.isNaN(Date.parse(at))) return null;
+    return { at, id };
+  } catch {
+    return null;
+  }
+}
+
+/** Keep only entries strictly after an ascending `(createdAt, id)` cursor. */
+function afterCursor(
+  entries: readonly ActivityEntry[],
+  cursor: string | undefined,
+): ActivityEntry[] {
+  const position = decodeActivityCursor(cursor);
+  if (!position) return [...entries];
+  return entries.filter(
+    (entry) =>
+      entry.createdAt > position.at || (entry.createdAt === position.at && entry.id > position.id),
+  );
+}
+
+/** Build the source-local keyset predicate for one entry prefix. */
+function sourceAfter(
+  createdAt: SQLWrapper,
+  id: SQLWrapper,
+  entryPrefix: string,
+  cursor: string | undefined,
+) {
+  const position = decodeActivityCursor(cursor);
+  if (!position) return undefined;
+  const at = new Date(position.at);
+  if (position.id.startsWith(entryPrefix)) {
+    return sql`(${createdAt} > ${at} OR (${createdAt} = ${at} AND ${id} > ${position.id.slice(entryPrefix.length)}))`;
+  }
+  return entryPrefix.localeCompare(position.id) < 0
+    ? sql`${createdAt} > ${at}`
+    : sql`${createdAt} >= ${at}`;
+}
+
+/** Read safe application text from a session activity body. */
+function sessionBody(body: Record<string, unknown>, type: string): string | null {
+  if (type === 'error') return 'An automated task update could not be completed.';
+  const action = body['action'];
+  if (action && typeof action === 'object') {
+    const summary = (action as Record<string, unknown>)['summary'];
+    if (typeof summary === 'string' && summary.length > 0) return summary;
+  }
+  const text = body['text'];
+  return typeof text === 'string' && text.length > 0 ? text : null;
+}
+
+/** The canonical task Activity route, mounted on the tasks router at `/`. */
 export const taskActivityRoutes = new Hono<AppEnv>().get(
   '/:id/activity',
   apiDoc({
     tag: 'Tasks',
-    summary: "Get a task's activity log",
+    summary: "Get a task's Activity",
     response: pageOf(TaskActivityOut),
-    description: `Return the complete metadata history of one task — its creation, then one entry per field that has changed since — oldest first, the way a GitHub issue's event log reads. Requires org membership (\`view\`); no extra capability, because reading a task's own history is part of reading the task. A cross-org or unknown id 404s (existence-hiding: another tenant's task is indistinguishable from a non-existent one).
-
-Each entry carries the acting actor (\`actorId\` plus the resolved \`actorName\`, both null for system/automation changes), the exact \`createdAt\` timestamp, and — for an \`updated\` entry — a \`change\` describing one field: its stable machine \`field\` key, its application-owned \`label\`, and the display-ready \`from\`/\`to\` values (\`null\` meaning unset). The \`created\` entry carries \`change: null\`. Values are the display strings resolved when the change was recorded, so renaming a project later never rewrites what history says happened; and the reader never has to resolve an id it may no longer be able to see.
-
-The \`created\` entry is **derived from the task row itself** (\`createdAt\`/\`createdBy\`) rather than stored, so every task has one — however it came into existence (created here, created as a subtask, captured by Athena, imported from a connector) and however long ago, including tasks that predate this endpoint. Its \`id\` is the synthetic \`created:<taskId>\`; every other entry's \`id\` is a ULID.
-
-This is the audit ledger, not the activity Stream. The Stream (\`GET /v1/orgs/:orgId/stream\`) is the org-wide, cross-tool awareness feed and coalesces by design; this endpoint is per-task, complete, and never coalesced — every recorded change is its own entry. Ordering is ascending on \`(createdAt, id)\`, and ids are ULIDs, so entries written in the same millisecond still read back in the order they were applied. Returns a page of {@link TaskActivityOut}.`,
+    description:
+      'Return one cursor-paginated chronological record for a task. It combines creation, task changes, comments, timer transitions, delegated execution updates, meaningful direct-child changes, and dependency changes that alter readiness. `category` narrows this one history; it never switches to a separate comments, history, or execution feed.',
   }),
   zParam(idParam),
+  zQuery(TaskActivityQuery),
   async (c) => {
     const { orgId, actorId } = c.get('actorCtx');
     const { id } = c.req.valid('param');
-    // Existence-hiding: 404 before touching the ledger if the task isn't the caller's. The row is
-    // also what the creation entry is projected from, so this read is not spent only on the guard.
+    const query = c.req.valid('query');
+    const sourceLimit = query.limit + 1;
     const taskRow = await loadTask(orgId, id);
     const canView = await buildTaskViewFilter(orgId, actorId);
     if (!canView(taskRow)) throw new NotFoundError('Task not found');
+    const readVisibleSource = async <T extends { readonly id: string; readonly createdAt: Date }>(
+      entryPrefix: string,
+      read: (cursor: string | undefined) => Promise<readonly T[]>,
+      toViewable: (row: T) => Parameters<typeof canView>[0],
+    ): Promise<T[]> => {
+      const visible: T[] = [];
+      let cursor = query.cursor;
+      while (visible.length < sourceLimit) {
+        const batch = await read(cursor);
+        for (const row of batch) {
+          if (canView(toViewable(row))) visible.push(row);
+        }
+        if (batch.length < sourceLimit) break;
+        const last = batch.at(-1);
+        if (!last) break;
+        cursor = encodeActivityCursor({
+          id: `${entryPrefix}${last.id}`,
+          taskId: id,
+          actorId: null,
+          actorName: null,
+          type: 'updated',
+          category: 'task',
+          change: null,
+          body: null,
+          subjectTaskId: null,
+          subjectTaskTitle: null,
+          createdAt: last.createdAt.toISOString(),
+        });
+      }
+      return visible.slice(0, sourceLimit);
+    };
 
-    // The creator's display name, resolved server-side for the same reason every other value on
-    // this log is: a reader must never have to resolve an id, and `createdBy` is nulled out when
-    // the actor is deleted, which correctly degrades to an unattributed entry rather than a
-    // dangling id.
     const creatorRows = taskRow.createdBy
       ? await db
           .select({ name: actor.displayName })
@@ -64,25 +164,11 @@ This is the audit ledger, not the activity Stream. The Stream (\`GET /v1/orgs/:o
           .where(and(eq(actor.id, taskRow.createdBy), eq(actor.organizationId, orgId)))
           .limit(1)
       : [];
-
-    const items: z.input<typeof TaskActivityOut>[] = [
-      {
-        id: taskCreationEntryId(taskRow.id),
-        taskId: taskRow.id,
-        actorId: taskRow.createdBy,
-        actorName: creatorRows[0]?.name ?? null,
-        type: 'created',
-        change: null,
-        createdAt: taskRow.createdAt.toISOString(),
-      },
-    ];
-
-    const rows = await db
+    const directLedger = await db
       .select({
         id: auditEvent.id,
         actorId: auditEvent.actorId,
         actorName: actor.displayName,
-        type: auditEvent.type,
         metadata: auditEvent.metadata,
         createdAt: auditEvent.createdAt,
       })
@@ -93,31 +179,362 @@ This is the audit ledger, not the activity Stream. The Stream (\`GET /v1/orgs/:o
           eq(auditEvent.organizationId, orgId),
           eq(auditEvent.subjectType, 'task'),
           eq(auditEvent.subjectId, id),
-          // Only field changes come from the ledger. `created` rows are ignored on purpose: the
-          // creation entry above is derived from the task, so honouring a stored one too would
-          // show the same event twice for any task created while the ledger also wrote one.
           eq(auditEvent.type, 'updated'),
+          sourceAfter(auditEvent.createdAt, auditEvent.id, 'audit:', query.cursor),
         ),
       )
-      .orderBy(asc(auditEvent.createdAt), asc(auditEvent.id));
+      .orderBy(asc(auditEvent.createdAt), asc(auditEvent.id))
+      .limit(sourceLimit);
+    const comments = await db
+      .select({
+        id: comment.id,
+        authorId: comment.authorId,
+        actorName: actor.displayName,
+        body: comment.body,
+        createdAt: comment.createdAt,
+      })
+      .from(comment)
+      .leftJoin(actor, eq(comment.authorId, actor.id))
+      .where(
+        and(
+          eq(comment.organizationId, orgId),
+          eq(comment.subjectType, 'task'),
+          eq(comment.subjectId, id),
+          sourceAfter(comment.createdAt, comment.id, 'comment:', query.cursor),
+        ),
+      )
+      .orderBy(asc(comment.createdAt), asc(comment.id))
+      .limit(sourceLimit);
+    const timerEvents = await db
+      .select({
+        id: event.id,
+        actor: event.actor,
+        title: event.title,
+        occurredAt: event.occurredAt,
+      })
+      .from(event)
+      .where(
+        and(
+          eq(event.organizationId, orgId),
+          eq(event.docketEntityId, id),
+          inArray(event.kind, [
+            'timer_started',
+            'timer_paused',
+            'timer_resumed',
+            'timer_switched',
+            'timer_stopped',
+          ]),
+          sourceAfter(event.occurredAt, event.id, 'event:', query.cursor),
+        ),
+      )
+      .orderBy(asc(event.occurredAt), asc(event.id))
+      .limit(sourceLimit);
+    const taskSessions = await db
+      .select({
+        id: sessionActivity.id,
+        type: sessionActivity.type,
+        body: sessionActivity.body,
+        createdAt: sessionActivity.createdAt,
+      })
+      .from(sessionActivity)
+      .innerJoin(agentSession, eq(sessionActivity.sessionId, agentSession.id))
+      .where(
+        and(
+          eq(agentSession.taskId, id),
+          or(eq(agentSession.organizationId, orgId), eq(agentSession.contextOrganizationId, orgId)),
+          sourceAfter(sessionActivity.createdAt, sessionActivity.id, 'session:', query.cursor),
+        ),
+      )
+      .orderBy(asc(sessionActivity.createdAt), asc(sessionActivity.id))
+      .limit(sourceLimit);
 
-    for (const row of rows) {
-      // The ledger is shared: rows for a task subject may predate this writer or come from
-      // another one entirely. Anything that isn't a shape this log can render is skipped rather
-      // than allowed to fail the whole read — a task's history must always be viewable.
+    const childCreations = await readVisibleSource(
+      'child-created:',
+      (cursor) =>
+        db
+          .select({
+            id: task.id,
+            title: task.title,
+            createdBy: task.createdBy,
+            createdAt: task.createdAt,
+            teamId: task.teamId,
+            projectId: task.projectId,
+            programId: task.programId,
+            visibility: task.visibility,
+            actorName: actor.displayName,
+          })
+          .from(task)
+          .leftJoin(actor, eq(task.createdBy, actor.id))
+          .where(
+            and(
+              eq(task.organizationId, orgId),
+              eq(task.parentTaskId, id),
+              isNull(task.archivedAt),
+              sourceAfter(task.createdAt, task.id, 'child-created:', cursor),
+            ),
+          )
+          .orderBy(asc(task.createdAt), asc(task.id))
+          .limit(sourceLimit),
+      (row) => row,
+    );
+    const childLedger = await readVisibleSource(
+      'child:',
+      (cursor) =>
+        db
+          .select({
+            id: auditEvent.id,
+            actorId: auditEvent.actorId,
+            actorName: actor.displayName,
+            taskId: task.id,
+            taskTitle: task.title,
+            teamId: task.teamId,
+            projectId: task.projectId,
+            programId: task.programId,
+            visibility: task.visibility,
+            metadata: auditEvent.metadata,
+            createdAt: auditEvent.createdAt,
+          })
+          .from(auditEvent)
+          .innerJoin(
+            task,
+            and(
+              eq(auditEvent.subjectId, task.id),
+              eq(task.organizationId, orgId),
+              eq(task.parentTaskId, id),
+              isNull(task.archivedAt),
+            ),
+          )
+          .leftJoin(actor, eq(auditEvent.actorId, actor.id))
+          .where(
+            and(
+              eq(auditEvent.organizationId, orgId),
+              eq(auditEvent.subjectType, 'task'),
+              eq(auditEvent.type, 'updated'),
+              sourceAfter(auditEvent.createdAt, auditEvent.id, 'child:', cursor),
+            ),
+          )
+          .orderBy(asc(auditEvent.createdAt), asc(auditEvent.id))
+          .limit(sourceLimit),
+      (row) => ({
+        id: row.taskId,
+        teamId: row.teamId,
+        projectId: row.projectId,
+        programId: row.programId,
+        visibility: row.visibility,
+      }),
+    );
+    const blockerLedger = await readVisibleSource(
+      'dependency:',
+      (cursor) =>
+        db
+          .select({
+            id: auditEvent.id,
+            actorId: auditEvent.actorId,
+            actorName: actor.displayName,
+            taskId: task.id,
+            taskTitle: task.title,
+            teamId: task.teamId,
+            projectId: task.projectId,
+            programId: task.programId,
+            visibility: task.visibility,
+            metadata: auditEvent.metadata,
+            createdAt: auditEvent.createdAt,
+          })
+          .from(auditEvent)
+          .innerJoin(
+            taskDependency,
+            and(
+              eq(auditEvent.subjectId, taskDependency.blockingTaskId),
+              eq(taskDependency.organizationId, orgId),
+              eq(taskDependency.blockedTaskId, id),
+            ),
+          )
+          .innerJoin(
+            task,
+            and(
+              eq(auditEvent.subjectId, task.id),
+              eq(task.organizationId, orgId),
+              isNull(task.archivedAt),
+            ),
+          )
+          .leftJoin(actor, eq(auditEvent.actorId, actor.id))
+          .where(
+            and(
+              eq(auditEvent.organizationId, orgId),
+              eq(auditEvent.subjectType, 'task'),
+              eq(auditEvent.type, 'updated'),
+              sourceAfter(auditEvent.createdAt, auditEvent.id, 'dependency:', cursor),
+            ),
+          )
+          .orderBy(asc(auditEvent.createdAt), asc(auditEvent.id))
+          .limit(sourceLimit),
+      (row) => ({
+        id: row.taskId,
+        teamId: row.teamId,
+        projectId: row.projectId,
+        programId: row.programId,
+        visibility: row.visibility,
+      }),
+    );
+
+    const entries: ActivityEntry[] = [
+      {
+        id: taskCreationEntryId(taskRow.id),
+        taskId: taskRow.id,
+        actorId: taskRow.createdBy,
+        actorName: creatorRows[0]?.name ?? null,
+        type: 'created',
+        category: 'task',
+        change: null,
+        body: null,
+        subjectTaskId: null,
+        subjectTaskTitle: null,
+        createdAt: taskRow.createdAt.toISOString(),
+      },
+    ];
+    for (const child of childCreations) {
+      entries.push({
+        id: `child-created:${child.id}`,
+        taskId: id,
+        actorId: child.createdBy,
+        actorName: child.actorName,
+        type: 'child',
+        category: 'subtask',
+        change: null,
+        body: null,
+        subjectTaskId: child.id,
+        subjectTaskTitle: child.title,
+        createdAt: child.createdAt.toISOString(),
+      });
+    }
+    for (const row of directLedger) {
       const parsed = TaskActivityChange.safeParse(row.metadata);
       if (!parsed.success) continue;
-      items.push({
-        id: row.id,
+      entries.push({
+        id: `audit:${row.id}`,
         taskId: id,
         actorId: row.actorId,
         actorName: row.actorName,
         type: 'updated',
+        category:
+          parsed.data.field === 'resource'
+            ? 'resource'
+            : parsed.data.field === 'dependency' || parsed.data.field === 'relatedTask'
+              ? 'relationship'
+              : parsed.data.field === 'subtask'
+                ? 'subtask'
+                : 'task',
         change: parsed.data,
+        body: null,
+        subjectTaskId: null,
+        subjectTaskTitle: null,
+        createdAt: row.createdAt.toISOString(),
+      });
+    }
+    for (const row of comments) {
+      entries.push({
+        id: `comment:${row.id}`,
+        taskId: id,
+        actorId: row.authorId,
+        actorName: row.actorName,
+        type: 'comment',
+        category: 'comment',
+        change: null,
+        body: row.body,
+        subjectTaskId: null,
+        subjectTaskTitle: null,
+        createdAt: row.createdAt.toISOString(),
+      });
+    }
+    for (const row of timerEvents) {
+      entries.push({
+        id: `event:${row.id}`,
+        taskId: id,
+        actorId: row.actor?.docketActorId ?? null,
+        actorName: row.actor?.displayName ?? null,
+        type: 'timer',
+        category: 'time',
+        change: null,
+        body: row.title,
+        subjectTaskId: null,
+        subjectTaskTitle: null,
+        createdAt: row.occurredAt.toISOString(),
+      });
+    }
+    for (const row of taskSessions) {
+      entries.push({
+        id: `session:${row.id}`,
+        taskId: id,
+        actorId: null,
+        actorName: null,
+        type: 'session',
+        category: 'automation',
+        change: null,
+        body: sessionBody(row.body, row.type),
+        subjectTaskId: null,
+        subjectTaskTitle: null,
+        createdAt: row.createdAt.toISOString(),
+      });
+    }
+    for (const row of childLedger) {
+      const parsed = TaskActivityChange.safeParse(row.metadata);
+      if (!parsed.success || !MEANINGFUL_CHILD_FIELDS.has(parsed.data.field)) {
+        continue;
+      }
+      entries.push({
+        id: `child:${row.id}`,
+        taskId: id,
+        actorId: row.actorId,
+        actorName: row.actorName,
+        type: 'child',
+        category: 'subtask',
+        change: parsed.data,
+        body: null,
+        subjectTaskId: row.taskId,
+        subjectTaskTitle: row.taskTitle,
+        createdAt: row.createdAt.toISOString(),
+      });
+    }
+    for (const row of blockerLedger) {
+      const parsed = TaskActivityChange.safeParse(row.metadata);
+      if (!parsed.success || !DEPENDENCY_READINESS_FIELDS.has(parsed.data.field)) {
+        continue;
+      }
+      if (
+        parsed.data.field === 'state' &&
+        !/done|cancel|block/i.test(`${parsed.data.from ?? ''} ${parsed.data.to ?? ''}`)
+      ) {
+        continue;
+      }
+      entries.push({
+        id: `dependency:${row.id}`,
+        taskId: id,
+        actorId: row.actorId,
+        actorName: row.actorName,
+        type: 'dependency',
+        category: 'relationship',
+        change: parsed.data,
+        body: null,
+        subjectTaskId: row.taskId,
+        subjectTaskTitle: row.taskTitle,
         createdAt: row.createdAt.toISOString(),
       });
     }
 
-    return ok(c, pageOf(TaskActivityOut), { items });
+    const ordered = entries
+      .filter((entry) => query.category === undefined || entry.category === query.category)
+      .sort((a, b) =>
+        a.createdAt === b.createdAt
+          ? a.id.localeCompare(b.id)
+          : a.createdAt.localeCompare(b.createdAt),
+      );
+    const after = afterCursor(ordered, query.cursor);
+    const items = after.slice(0, query.limit);
+    const next = after[query.limit];
+    const lastItem = items.at(-1);
+    return ok(c, pageOf(TaskActivityOut), {
+      items,
+      ...(next && lastItem ? { nextCursor: encodeActivityCursor(lastItem) } : {}),
+    });
   },
 );

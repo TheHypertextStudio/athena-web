@@ -206,9 +206,6 @@
   "apps/web/src/components/entity-detail/mentioned-resources.tsx": {
     "raw-type-utility": 4
   },
-  "apps/web/src/components/entity-detail/resources-tab.tsx": {
-    "raw-type-utility": 8
-  },
   "apps/web/src/components/entity-detail/updates-panel.tsx": {
     "raw-type-utility": 5
   },
@@ -336,20 +333,11 @@
     "hardcoded-color": 6,
     "raw-type-utility": 1
   },
-  "apps/web/src/components/task-detail/CommentActivityFeed.tsx": {
-    "raw-type-utility": 7
-  },
   "apps/web/src/components/task-detail/Dependencies.tsx": {
     "raw-type-utility": 6
   },
   "apps/web/src/components/task-detail/Subtasks.tsx": {
     "raw-type-utility": 2
-  },
-  "apps/web/src/components/task-detail/TaskAttachments.tsx": {
-    "raw-type-utility": 15
-  },
-  "apps/web/src/components/task-detail/task-activity-section.tsx": {
-    "raw-type-utility": 1
   },
   "apps/web/src/components/teams/create-team.tsx": {
     "raw-type-utility": 4

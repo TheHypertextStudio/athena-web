@@ -7,6 +7,7 @@
  * resource cascade as production rather than the test harness's injected org capabilities.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
 
 import type * as DbModule from '@docket/db';
 
@@ -295,6 +296,41 @@ describe('task resource delivery', () => {
         })
       ).status,
     ).toBe(403);
+  });
+
+  it('files direct task links in the shared Library resource record', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const taskId = await seedPrivateTask(orgId, teamId, 'Library-backed task resource');
+    await grantTaskContribute(orgId, humanActorId, taskId);
+    const writer = appWithActor(tasks, orgId, [], humanActorId);
+
+    for (const [title, url] of [
+      ['Source plan', 'https://example.test/plans/q3?utm_source=mail'],
+      ['Same source', 'https://example.test/plans/q3'],
+    ] as const) {
+      const response = await writer.request(`/${taskId}/attachments`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ kind: 'url', title, url }),
+      });
+      expect(response.status).toBe(201);
+    }
+
+    const attached = await db
+      .select({ externalResourceId: schema.attachment.externalResourceId })
+      .from(schema.attachment)
+      .where(eq(schema.attachment.subjectId, taskId));
+    expect(attached).toHaveLength(2);
+    expect(attached.map((row) => row.externalResourceId)).toEqual([
+      expect.any(String),
+      attached[0]?.externalResourceId,
+    ]);
+
+    const libraryRows = await db
+      .select({ canonicalUrl: schema.externalResource.canonicalUrl })
+      .from(schema.externalResource)
+      .where(eq(schema.externalResource.organizationId, orgId));
+    expect(libraryRows).toEqual([{ canonicalUrl: 'https://example.test/plans/q3' }]);
   });
 
   it('requires canonical grants for every existing task context, not an injected org capability', async () => {

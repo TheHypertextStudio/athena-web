@@ -11,8 +11,14 @@
  * tenant boundary for the whole router. Reads require org membership; mutations require
  * `contribute`, matching the tasks router.
  */
-import { attachment, db, genId, integration } from '@docket/db';
-import { AttachmentCreate, AttachmentOut, AttachmentRemoved, pageOf } from '@docket/types';
+import { attachment, db, externalResource, genId, integration } from '@docket/db';
+import {
+  AttachmentCreate,
+  AttachmentOut,
+  AttachmentRemoved,
+  canonicalizeResourceUrl,
+  pageOf,
+} from '@docket/types';
 import { and, asc, eq, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -24,9 +30,51 @@ import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zForm, zJson, zParam } from '../lib/validate';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
+import { recordTaskChanges } from '../lib/task-audit';
 import { assertTaskCapability, buildTaskViewFilter, loadTask } from './task-helpers';
 
 type AttachmentRow = typeof attachment.$inferSelect;
+
+/**
+ * Find or create the shared Library row for a direct URL attachment.
+ *
+ * A direct link and a structured mention use the same canonical resource so the Library can show
+ * every task that uses the material. Provider metadata remains asynchronous, which keeps adding a
+ * link independent of network access.
+ */
+async function resolveAttachmentResource(
+  organizationId: string,
+  createdBy: string,
+  url: string,
+): Promise<string | null> {
+  const canonical = canonicalizeResourceUrl(url);
+  if (canonical === undefined) return null;
+  await db
+    .insert(externalResource)
+    .values({
+      organizationId,
+      createdBy,
+      provider: canonical.provider,
+      canonicalKey: canonical.canonicalKey,
+      canonicalUrl: canonical.canonicalUrl,
+      externalId: canonical.externalId ?? null,
+      resourceType: canonical.resourceType,
+    })
+    .onConflictDoNothing({
+      target: [externalResource.organizationId, externalResource.canonicalKey],
+    });
+  const rows = await db
+    .select({ id: externalResource.id })
+    .from(externalResource)
+    .where(
+      and(
+        eq(externalResource.organizationId, organizationId),
+        eq(externalResource.canonicalKey, canonical.canonicalKey),
+      ),
+    )
+    .limit(1);
+  return rows[0]?.id ?? null;
+}
 
 /** Project an attachment row into its wire {@link AttachmentOut} shape. */
 function toOut(a: AttachmentRow): z.input<typeof AttachmentOut> {
@@ -169,6 +217,11 @@ The \`kind\` determines the required fields, enforced at the schema edge: a \`ur
         if (!integrationRow) throw new NotFoundError('Integration not found');
       }
 
+      const externalResourceId =
+        inputBody.kind === 'url' && inputBody.url !== undefined
+          ? await resolveAttachmentResource(orgId, actorId, inputBody.url)
+          : null;
+
       const inserted = await db
         .insert(attachment)
         .values({
@@ -182,11 +235,19 @@ The \`kind\` determines the required fields, enforced at the schema edge: a \`ur
           sourceIntegrationId: inputBody.sourceIntegrationId ?? null,
           externalId: inputBody.externalId ?? null,
           metadata: inputBody.metadata ?? null,
+          externalResourceId,
         })
         .returning();
       const row = inserted[0];
       /* v8 ignore next -- @preserve defensive: insert always returns a row */
       if (!row) throw new Error('attachment insert returned no row');
+      await recordTaskChanges({
+        organizationId: orgId,
+        taskId: id,
+        title: target.title,
+        actorId,
+        changes: [{ field: 'resource', label: 'Resource', from: null, to: row.title }],
+      });
       await enqueueSearchUpsert(orgId, 'attachment', row.id);
       await enqueueSearchUpsert(orgId, 'task', id);
       return created(c, AttachmentOut, toOut(row));
@@ -245,6 +306,13 @@ The \`kind\` determines the required fields, enforced at the schema edge: a \`ur
       }
       /* v8 ignore next -- @preserve defensive: insert always returns a row */
       if (!row) throw new Error('attachment insert returned no row');
+      await recordTaskChanges({
+        organizationId: orgId,
+        taskId: id,
+        title: target.title,
+        actorId,
+        changes: [{ field: 'resource', label: 'Resource', from: null, to: row.title }],
+      });
       await enqueueSearchUpsert(orgId, 'attachment', row.id);
       await enqueueSearchUpsert(orgId, 'task', id);
       return ok(c, AttachmentOut, toOut(row));
@@ -327,6 +395,13 @@ The \`kind\` determines the required fields, enforced at the schema edge: a \`ur
         .returning();
       const row = removed[0];
       if (!row) throw new NotFoundError('Attachment not found');
+      await recordTaskChanges({
+        organizationId: orgId,
+        taskId: id,
+        title: target.title,
+        actorId,
+        changes: [{ field: 'resource', label: 'Resource', from: row.title, to: null }],
+      });
       // Best-effort blob cleanup for file attachments — an orphaned blob must never block the
       // user-facing delete, which already succeeded above.
       if (row.kind === 'file' && row.blobKey) {

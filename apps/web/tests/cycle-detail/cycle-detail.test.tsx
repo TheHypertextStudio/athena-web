@@ -147,6 +147,7 @@ const TASK: TaskOut = {
   teamId: TeamId.parse(TEAM_ID),
   state: 'in_progress',
   priority: 'high',
+  autoCompletedBySubtasks: false,
   assigneeId: null,
   delegateId: null,
   projectId: ProjectId.parse(PROJECT_ID),

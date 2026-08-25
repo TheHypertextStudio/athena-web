@@ -8,10 +8,6 @@ vi.mock('../../src/components/time-tracking/task-timer-button', () => ({
   TaskTimerMenuItem: () => <DropdownMenuItem>Track this task</DropdownMenuItem>,
 }));
 
-vi.mock('../../src/components/athena/athena-context-action', () => ({
-  AthenaContextMenuItem: () => <DropdownMenuItem>Have Athena handle this</DropdownMenuItem>,
-}));
-
 const { TaskHeaderControls, TaskHeaderOverflowMenu } =
   await import('../../src/components/task-detail/task-header-controls');
 
@@ -64,10 +60,6 @@ describe('TaskHeaderOverflowMenu', () => {
   const commonProps = {
     taskId: 'task_1',
     title: 'Ship it',
-    athenaContext: {
-      workspaceId: 'org_1',
-      source: { type: 'task' as const, id: 'task_1', label: 'Ship it' },
-    },
     priority: 'medium' as const,
     priorityPending: false,
     memberOptions: [
@@ -89,7 +81,7 @@ describe('TaskHeaderOverflowMenu', () => {
     expect(await screen.findByRole('menuitem', { name: 'Priority' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'Assignee' })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: 'Track this task' })).toBeInTheDocument();
-    expect(screen.getByRole('menuitem', { name: 'Have Athena handle this' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /Athena/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Delete task' })).not.toBeInTheDocument();
   });
 

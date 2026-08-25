@@ -329,6 +329,7 @@ Returns \`OrgCreateResult\` — the new org plus its seeded \`defaultTeam\` and 
       const rows = await db
         .select({
           initiativeMaxDepth: organization.initiativeMaxDepth,
+          autoCompleteParentTasks: organization.autoCompleteParentTasks,
           estimationScale: organization.estimationScale,
           fiscalYearStartMonth: organization.fiscalYearStartMonth,
         })
@@ -381,6 +382,7 @@ Returns \`OrgCreateResult\` — the new org plus its seeded \`defaultTeam\` and 
           .where(eq(organization.id, orgId))
           .returning({
             initiativeMaxDepth: organization.initiativeMaxDepth,
+            autoCompleteParentTasks: organization.autoCompleteParentTasks,
             estimationScale: organization.estimationScale,
             fiscalYearStartMonth: organization.fiscalYearStartMonth,
           });

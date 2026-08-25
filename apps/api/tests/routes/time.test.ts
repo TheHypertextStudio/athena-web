@@ -237,6 +237,208 @@ describe('Time Ledger routes', () => {
     ]);
   });
 
+  it('claims an unassigned task and moves unstarted work into progress when tracking begins', async () => {
+    const taskId = await seedTask('Start the task', { priority: 'high' });
+
+    await startTracking({ context: { label: 'Start the task', taskId } });
+
+    const schema = await getDb();
+    const started = one(
+      await schema.db
+        .select({
+          assigneeId: schema.task.assigneeId,
+          state: schema.task.state,
+          statusId: schema.task.statusId,
+          priority: schema.task.priority,
+        })
+        .from(schema.task)
+        .where(eq(schema.task.id, taskId)),
+    );
+    expect(started).toEqual({
+      assigneeId: actorId,
+      state: 'in_progress',
+      statusId: statusId('task', 'in_progress'),
+      priority: 'high',
+    });
+  });
+
+  it('keeps an existing assignee while moving unstarted work into progress', async () => {
+    const schema = await getDb();
+    const otherUserId = await seedUserWithHub(schema.db, schema, 'OtherTracker');
+    const otherActorId = await addMember(schema.db, schema, organizationId, otherUserId);
+    const taskId = await seedTask('Already assigned', {
+      assigneeId: otherActorId,
+      priority: 'urgent',
+    });
+
+    await startTracking({ context: { label: 'Already assigned', taskId } });
+
+    const started = one(
+      await schema.db
+        .select({
+          assigneeId: schema.task.assigneeId,
+          state: schema.task.state,
+          statusId: schema.task.statusId,
+          priority: schema.task.priority,
+        })
+        .from(schema.task)
+        .where(eq(schema.task.id, taskId)),
+    );
+    expect(started).toEqual({
+      assigneeId: otherActorId,
+      state: 'in_progress',
+      statusId: statusId('task', 'in_progress'),
+      priority: 'urgent',
+    });
+  });
+
+  it('tracks completed work without reopening or claiming it', async () => {
+    const taskId = await seedTask('Completed work', {
+      state: 'done',
+      statusId: statusId('task', 'done'),
+      completedAt: new Date(),
+    });
+    const schema = await getDb();
+
+    const record = await startTracking({ context: { label: 'Completed work', taskId } });
+
+    expect(record.taskId).toBe(taskId);
+    expect(
+      await schema.db
+        .select({ assigneeId: schema.task.assigneeId, state: schema.task.state })
+        .from(schema.task)
+        .where(eq(schema.task.id, taskId)),
+    ).toEqual([{ assigneeId: null, state: 'done' }]);
+  });
+
+  it('rolls back timer creation when the task cannot move from unstarted work into progress', async () => {
+    const taskId = await seedTask('No started status');
+    const schema = await getDb();
+    await schema.db
+      .delete(schema.workStatus)
+      .where(eq(schema.workStatus.id, statusId('task', 'in_progress')));
+
+    const response = await app.request('/records', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ context: { label: 'No started status', taskId } }),
+    });
+
+    expect(response.status).toBe(409);
+    expect(
+      await schema.db
+        .select({ id: schema.timeRecord.id })
+        .from(schema.timeRecord)
+        .where(eq(schema.timeRecord.taskId, taskId)),
+    ).toEqual([]);
+    expect(
+      one(
+        await schema.db
+          .select({ assigneeId: schema.task.assigneeId, state: schema.task.state })
+          .from(schema.task)
+          .where(eq(schema.task.id, taskId)),
+      ),
+    ).toEqual({ assigneeId: null, state: 'todo' });
+  });
+
+  it('rolls back the task start when a joined segment disappears before it can reopen', async () => {
+    const taskId = await seedTask('Joined resume race', { priority: 'high' });
+    const schema = await getDb();
+    const hubId = one(
+      await schema.db
+        .select({ id: schema.hub.id })
+        .from(schema.hub)
+        .where(eq(schema.hub.userId, userId)),
+    ).id;
+    const endedAt = new Date();
+    const recordId = one(
+      await schema.db
+        .insert(schema.timeRecord)
+        .values({
+          hubId,
+          createdByUserId: userId,
+          taskId,
+          title: 'Joined resume race',
+          status: 'closed',
+          startedAt: new Date(endedAt.getTime() - 30_000),
+          endedAt,
+          closedAt: endedAt,
+        })
+        .returning({ id: schema.timeRecord.id }),
+    ).id;
+    await schema.db.insert(schema.timeInterval).values({
+      timeRecordId: recordId,
+      hubId,
+      taskId,
+      actorKind: 'human',
+      userId,
+      mode: 'human_active',
+      source: 'user_timer',
+      startedAt: new Date(endedAt.getTime() - 30_000),
+      endedAt,
+      closedAt: endedAt,
+    });
+
+    const client = Reflect.get(schema.db, '$client') as { exec(sql: string): Promise<unknown> };
+    await client.exec(`
+      CREATE FUNCTION reject_joined_resume() RETURNS trigger
+      LANGUAGE plpgsql
+      AS $$
+      BEGIN
+        IF OLD.time_record_id = '${recordId}' AND OLD.ended_at IS NOT NULL AND NEW.ended_at IS NULL THEN
+          RETURN NULL;
+        END IF;
+        RETURN NEW;
+      END;
+      $$;
+      CREATE TRIGGER reject_joined_resume_trigger
+      BEFORE UPDATE ON time_interval
+      FOR EACH ROW EXECUTE FUNCTION reject_joined_resume();
+    `);
+    try {
+      const response = await app.request(`/records/${recordId}/status`, {
+        method: 'PUT',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ status: 'running' }),
+      });
+
+      expect(response.status).toBe(409);
+      expect(
+        one(
+          await schema.db
+            .select({
+              assigneeId: schema.task.assigneeId,
+              state: schema.task.state,
+              priority: schema.task.priority,
+            })
+            .from(schema.task)
+            .where(eq(schema.task.id, taskId)),
+        ),
+      ).toEqual({ assigneeId: null, state: 'todo', priority: 'high' });
+      expect(
+        one(
+          await schema.db
+            .select({ status: schema.timeRecord.status, endedAt: schema.timeRecord.endedAt })
+            .from(schema.timeRecord)
+            .where(eq(schema.timeRecord.id, recordId)),
+        ),
+      ).toMatchObject({ status: 'closed', endedAt });
+      expect(
+        one(
+          await schema.db
+            .select({ endedAt: schema.timeInterval.endedAt })
+            .from(schema.timeInterval)
+            .where(eq(schema.timeInterval.timeRecordId, recordId)),
+        ).endedAt,
+      ).toEqual(endedAt);
+    } finally {
+      await client.exec(`
+        DROP TRIGGER IF EXISTS reject_joined_resume_trigger ON time_interval;
+        DROP FUNCTION IF EXISTS reject_joined_resume();
+      `);
+    }
+  });
+
   it('refuses to track a task in a workspace the caller cannot see', async () => {
     const schema = await getDb();
     const foreignOrg = await seedOrg(schema.db, schema);

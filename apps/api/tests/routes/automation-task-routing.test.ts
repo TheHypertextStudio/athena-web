@@ -463,6 +463,8 @@ describe('a later event about the same item updates the linked task', () => {
     expect(afterClose).toHaveLength(1);
     expect(one(afterClose).id).toBe(openedTaskId); // the same task, moved
     expect(one(afterClose).state).toBe('done');
+    expect(one(afterClose).completedAt).not.toBeNull();
+    expect(one(afterClose).canceledAt).toBeNull();
     expect(await routesIn(w.personalOrgId)).toHaveLength(1);
   });
 

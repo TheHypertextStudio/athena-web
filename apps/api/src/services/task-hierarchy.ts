@@ -7,6 +7,10 @@ import type { z } from 'zod';
 import { CycleError, NotFoundError, ValidationError } from '../error';
 import { serializableTx } from '../lib/serializable-tx';
 import { diffTaskFields, recordTaskChanges, resolveTaskChangeLabels } from '../lib/task-audit';
+import {
+  applySubtaskCompletionPolicyForParents,
+  finishTaskStateTransition,
+} from '../lib/task-state';
 import { enqueueSearchUpsert } from '../search/write-through';
 
 type TaskRow = typeof task.$inferSelect;
@@ -118,7 +122,7 @@ export function planTaskReparents(
 export async function reparentTasks(
   input: ReparentTasksInput,
 ): Promise<z.input<typeof TaskReparentBatchOut>> {
-  const committed = await serializableTx(async (tx) => {
+  const result = await serializableTx(async (tx) => {
     const rows = await tx
       .select()
       .from(task)
@@ -157,8 +161,14 @@ export async function reparentTasks(
         },
       });
     }
-    return results;
+    const cascades = await applySubtaskCompletionPolicyForParents(
+      tx,
+      input.organizationId,
+      results.flatMap(({ before, after }) => [before.parentTaskId, after.parentTaskId]),
+    );
+    return { committed: results, cascades };
   });
+  const { committed, cascades } = result;
 
   for (const { before, after } of committed) {
     await recordTaskChanges({
@@ -169,6 +179,9 @@ export async function reparentTasks(
       changes: await resolveTaskChangeLabels(input.organizationId, diffTaskFields(before, after)),
     });
     await enqueueSearchUpsert(input.organizationId, 'task', after.id);
+  }
+  for (const cascade of cascades) {
+    await finishTaskStateTransition({ actorId: null }, cascade);
   }
 
   return { moves: committed.map(({ move }) => move) };

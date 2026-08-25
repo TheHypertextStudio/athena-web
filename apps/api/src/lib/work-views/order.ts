@@ -14,7 +14,11 @@ import { ApiError, CapabilityError, NotFoundError } from '../../error';
 import { labelsForSubject, replaceLabels, resolveLabelSet } from '../labels';
 import { rawResultRows } from '../raw-result';
 import { diffTaskFields, recordTaskChanges, resolveTaskChangeLabels } from '../task-audit';
-import { finishTaskStateTransition, writeTaskStateTransition } from '../task-state';
+import {
+  applySubtaskCompletionPolicy,
+  finishTaskStateTransition,
+  writeTaskStateTransition,
+} from '../task-state';
 import {
   landingStatus,
   resolveContainerStatus,
@@ -310,7 +314,13 @@ async function mutateGroup(
         canceledAt: transition.canceledAt,
       });
       if (!mutation) throw new NotFoundError('Work item not found');
-      return () => finishTaskStateTransition({ actorId }, mutation);
+      const cascades = await applySubtaskCompletionPolicy(tx, mutation);
+      return async () => {
+        await finishTaskStateTransition({ actorId }, mutation);
+        for (const cascade of cascades) {
+          await finishTaskStateTransition({ actorId: null }, cascade);
+        }
+      };
     }
     const status = await resolveContainerStatus(
       organizationId,
@@ -476,7 +486,13 @@ async function mutateGroup(
         ...stamps,
       });
       if (!mutation) throw new NotFoundError('Work item not found');
-      return () => finishTaskStateTransition({ actorId }, mutation);
+      const cascades = await applySubtaskCompletionPolicy(tx, mutation);
+      return async () => {
+        await finishTaskStateTransition({ actorId }, mutation);
+        for (const cascade of cascades) {
+          await finishTaskStateTransition({ actorId: null }, cascade);
+        }
+      };
     }
     const scalar = {
       priority: { column: 'priority', reference: null, message: '' },

@@ -21,6 +21,8 @@ import { and, desc, eq, ilike, isNull } from 'drizzle-orm';
 
 import { encodeListCursor, seekAfter } from '../lib/list-cursor';
 import { resolveLandingTarget } from '../lib/task-landing';
+import { setTaskState } from '../lib/task-state';
+import { loadStatusSets } from '../lib/work-status';
 
 import { buildTaskViewFilter } from './task-helpers';
 import type {
@@ -311,7 +313,21 @@ export class DocketVoiceToolRunner implements VoiceToolRunner {
         summary: 'I can see that task, but I don’t have permission to close it.',
       };
     }
-    await db.update(task).set({ completedAt: new Date() }).where(eq(task.id, match.id));
+    const statuses = await loadStatusSets(ctx.organizationId, {
+      entityTypes: ['task'],
+      teamIds: [match.teamId],
+    });
+    const completedStatus = statuses
+      .for('task', match.teamId)
+      .find((status) => status.category === 'completed');
+    if (!completedStatus) return { ok: false, summary: 'I cannot close tasks in this workspace.' };
+    const completed = await setTaskState({
+      organizationId: ctx.organizationId,
+      taskId: match.id,
+      state: completedStatus.key,
+      actorId,
+    });
+    if (!completed) return { ok: false, summary: 'I could not close that task.' };
     return { ok: true, summary: `Closed “${match.title}”.` };
   }
 }

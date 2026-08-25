@@ -59,11 +59,13 @@ export default function WorkStructureSettingsPage(): JSX.Element {
     15_000,
   );
   const [depth, setDepth] = useState(2);
+  const [autoCompleteParents, setAutoCompleteParents] = useState(true);
   const [scale, setScale] = useState<EstimationScale>('fibonacci');
   const [fiscalMonth, setFiscalMonth] = useState(0);
   useEffect(() => {
     if (settingsQ.data) {
       setDepth(settingsQ.data.initiativeMaxDepth);
+      setAutoCompleteParents(settingsQ.data.autoCompleteParentTasks);
       setScale(settingsQ.data.estimationScale);
       setFiscalMonth(settingsQ.data.fiscalYearStartMonth);
     }
@@ -95,6 +97,22 @@ export default function WorkStructureSettingsPage(): JSX.Element {
     invalidateKeys: [key],
   });
 
+  const saveParentCompletion = useApiMutation<WorkspaceSettingsOut, boolean>({
+    mutationFn: (autoCompleteParentTasks) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].settings['work-structure'].$patch({
+            param: { orgId },
+            json: { autoCompleteParentTasks },
+          }),
+        'Could not save parent task completion.',
+      ),
+    onError: () => {
+      setAutoCompleteParents(settingsQ.data?.autoCompleteParentTasks ?? true);
+    },
+    invalidateKeys: [key],
+  });
+
   const saveFiscalMonth = useApiMutation<WorkspaceSettingsOut, number>({
     mutationFn: (fiscalYearStartMonth) =>
       unwrap(
@@ -111,7 +129,7 @@ export default function WorkStructureSettingsPage(): JSX.Element {
   return (
     <SettingsSectionPage
       title="Work structure"
-      description="Set planning calendars, Initiative depth, and the task estimation scale."
+      description="Set planning calendars, Initiative depth, parent task completion, and task estimates."
     >
       {/* placeholder: the workspace's configured initiative-nesting depth and estimation scale,
           and whether the caller is permitted to change them. The headings and explanations above
@@ -175,6 +193,56 @@ export default function WorkStructureSettingsPage(): JSX.Element {
                 : null
             }
             idleLabel={`Current maximum: ${settingsQ.data.initiativeMaxDepth}`}
+          />
+
+          <div>
+            <h3 id="parent-completion" className="text-on-surface text-title-small">
+              Complete parent tasks automatically
+            </h3>
+            <p className="text-on-surface-variant text-body-medium mt-1">
+              When every subtask is complete or canceled, automatically complete its parent.
+              Reopening a subtask reopens a parent that this setting completed.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            role="switch"
+            aria-checked={autoCompleteParents}
+            aria-label="Complete parent tasks automatically"
+            disabled={permissionLoading || !canManage || saveParentCompletion.isPending}
+            onClick={() => {
+              const next = !autoCompleteParents;
+              setAutoCompleteParents(next);
+              if (next !== settingsQ.data.autoCompleteParentTasks) {
+                saveParentCompletion.mutate(next);
+              }
+            }}
+            className="text-on-surface hover:bg-surface-container-high text-body-medium focus-visible:ring-ring inline-flex w-fit items-center gap-2 rounded-md px-2 py-1.5 focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <span
+              aria-hidden="true"
+              className={`inline-flex h-4 w-7 shrink-0 items-center rounded-full p-0.5 transition-colors ${
+                autoCompleteParents ? 'bg-primary justify-end' : 'bg-outline-variant'
+              }`}
+            >
+              <span className="bg-surface h-3 w-3 rounded-full" />
+            </span>
+            {autoCompleteParents ? 'On' : 'Off'}
+          </button>
+
+          <SettingRowStatus
+            pending={saveParentCompletion.isPending}
+            saved={saveParentCompletion.isSuccess}
+            error={
+              saveParentCompletion.error
+                ? userErrorMessage(
+                    saveParentCompletion.error,
+                    'Could not save parent task completion.',
+                  )
+                : null
+            }
+            idleLabel={autoCompleteParents ? 'On' : 'Off'}
           />
 
           <div>

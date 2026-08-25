@@ -13,6 +13,17 @@ import type { TaskDraft, TaskDraftInput, TaskSynthesizer } from '@docket/work/ta
 import { truncateTitle } from '@docket/work/task-titles';
 
 import {
+  constrainTaskExpansion,
+  type ExpansionDependency,
+  type ExpansionPropertyPatch,
+  type ExpansionSubtask,
+  type TaskExpansionCandidate,
+  type TaskExpansionInput,
+  type TaskExpansionResult,
+  type TaskExpansionSynthesizer,
+} from '../../task-expansion';
+
+import {
   type AnthropicClientConfig,
   makeAnthropicClient,
   wrapAnthropicError,
@@ -38,6 +49,15 @@ const SYSTEM_PROMPT = [
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const PRIORITIES: readonly Priority[] = ['none', 'urgent', 'high', 'medium', 'low'];
 
+const EXPANSION_SYSTEM_PROMPT = [
+  'Expand one existing task description in place.',
+  'Preserve every authored statement and every selected-template section.',
+  'Do not invent facts, owners, deadlines, dependencies, or links.',
+  'Only use task ids listed in the input, and only emit a dependency when the source explicitly states the sequencing.',
+  'Every subtask and dependency requires evidence: quote an exact non-empty excerpt from the authored description. A child quote must name its outcome. A dependency quote must name both task titles and explicitly state a wait or block.',
+  'Reply with only JSON: {"description":string,"patch":object,"subtasks":[{"title":string,"description"?:string,"evidence":string}],"dependencies":[{"blockingTaskId":string,"blockedTaskId":string,"evidence":string}],"relatedTaskIds":[string],"resourceUrls":[string]}.',
+].join(' ');
+
 /** Injectable boundary around the Anthropic Messages API. */
 export type MessageCreator = (params: MessageCreateParamsNonStreaming) => Promise<Message>;
 
@@ -52,6 +72,19 @@ export function buildRequest(
     max_tokens: 400,
     system: SYSTEM_PROMPT,
     messages: [{ role: 'user', content: user }],
+  };
+}
+
+/** Build the provider request for a task-description expansion. */
+export function buildExpansionRequest(
+  input: TaskExpansionInput,
+  config: RealTaskSynthesizerConfig,
+): MessageCreateParamsNonStreaming {
+  return {
+    model: config.model ?? DEFAULT_SYNTHESIS_MODEL,
+    max_tokens: 1_000,
+    system: EXPANSION_SYSTEM_PROMPT,
+    messages: [{ role: 'user', content: JSON.stringify(input) }],
   };
 }
 
@@ -115,8 +148,102 @@ export function parseDraft(text: string): TaskDraft | null {
   }
 }
 
+/** Return a record only when a provider JSON value is an ordinary object. */
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+/** Parse an array of strings without accepting provider-shaped lookalikes. */
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : [];
+}
+
+/** Parse the deliberately small property vocabulary an expansion may infer. */
+function parseExpansionPatch(value: unknown): ExpansionPropertyPatch {
+  const record = asRecord(value);
+  if (!record) return {};
+  const priority = record['priority'];
+  return {
+    ...(PRIORITIES.includes(priority as Priority) ? { priority: priority as Priority } : {}),
+    ...(typeof record['assigneeId'] === 'string' ? { assigneeId: record['assigneeId'] } : {}),
+    ...(typeof record['projectId'] === 'string' ? { projectId: record['projectId'] } : {}),
+    ...(typeof record['dueDate'] === 'string' ? { dueDate: record['dueDate'] } : {}),
+    ...(typeof record['startDate'] === 'string' ? { startDate: record['startDate'] } : {}),
+    ...(typeof record['estimateMinutes'] === 'number' && Number.isInteger(record['estimateMinutes'])
+      ? { estimateMinutes: record['estimateMinutes'] }
+      : {}),
+    ...(Array.isArray(record['labelIds']) ? { labelIds: stringArray(record['labelIds']) } : {}),
+  };
+}
+
+/** Parse one provider child proposal. */
+function parseSubtasks(value: unknown): ExpansionSubtask[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    const record = asRecord(item);
+    if (!record || typeof record['title'] !== 'string' || typeof record['evidence'] !== 'string')
+      return [];
+    return [
+      {
+        title: record['title'],
+        ...(typeof record['description'] === 'string'
+          ? { description: record['description'] }
+          : {}),
+        evidence: record['evidence'],
+      },
+    ];
+  });
+}
+
+/** Parse one provider dependency proposal. */
+function parseDependencies(value: unknown): ExpansionDependency[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    const record = asRecord(item);
+    if (
+      !record ||
+      typeof record['blockingTaskId'] !== 'string' ||
+      typeof record['blockedTaskId'] !== 'string' ||
+      typeof record['evidence'] !== 'string'
+    )
+      return [];
+    return [
+      {
+        blockingTaskId: record['blockingTaskId'],
+        blockedTaskId: record['blockedTaskId'],
+        evidence: record['evidence'],
+      },
+    ];
+  });
+}
+
+/** Parse provider JSON into a candidate expansion, or reject it as unusable. */
+export function parseExpansion(text: string): TaskExpansionCandidate | null {
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start === -1 || end <= start) return null;
+  try {
+    const record = asRecord(JSON.parse(text.slice(start, end + 1)));
+    if (!record || typeof record['description'] !== 'string') return null;
+    return {
+      description: record['description'],
+      patch: parseExpansionPatch(record['patch']),
+      subtasks: parseSubtasks(record['subtasks']),
+      dependencies: parseDependencies(record['dependencies']),
+      relatedTaskIds: stringArray(record['relatedTaskIds']),
+      resourceUrls: stringArray(record['resourceUrls']),
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** Athena's live Anthropic task-drafting adapter. */
-export class RealTaskSynthesizer implements TaskSynthesizer {
+export class RealTaskSynthesizer implements TaskSynthesizer, TaskExpansionSynthesizer {
   private readonly config: RealTaskSynthesizerConfig;
   private readonly creator: MessageCreator;
 
@@ -140,5 +267,19 @@ export class RealTaskSynthesizer implements TaskSynthesizer {
       throw wrapAnthropicError(cause, 'task synthesis');
     }
     return parseDraft(text) ?? fallbackDraft(input);
+  }
+
+  /** Expand a task description while the domain service enforces the closed result shape. */
+  async expandTask(input: TaskExpansionInput): Promise<TaskExpansionResult> {
+    let text: string;
+    try {
+      text = extractText(await this.creator(buildExpansionRequest(input, this.config)));
+    } catch (cause) {
+      throw wrapAnthropicError(cause, 'task expansion');
+    }
+    return constrainTaskExpansion(
+      input,
+      parseExpansion(text) ?? { description: input.description ?? '' },
+    );
   }
 }

@@ -296,13 +296,17 @@ describe('cycle committed tasks (GET /:id/tasks)', () => {
     expect(res.status).toBe(200);
     const body = await json<{
       groupBy: string;
-      groups: { projectId: string | null; tasks: { id: string }[] }[];
+      groups: {
+        projectId: string | null;
+        tasks: { id: string; autoCompletedBySubtasks: boolean }[];
+      }[];
     }>(res);
     expect(body.groupBy).toBe('project');
 
     const projGroup = body.groups.find((g) => g.projectId === assertDefined(proj).id);
     const nullGroup = body.groups.find((g) => g.projectId === null);
     expect(projGroup?.tasks.map((t) => t.id).sort()).toEqual([inProj, inProj2].sort());
+    expect(projGroup?.tasks.every((t) => !t.autoCompletedBySubtasks)).toBe(true);
     expect(nullGroup?.tasks.map((t) => t.id)).toEqual([noProj]);
   });
 

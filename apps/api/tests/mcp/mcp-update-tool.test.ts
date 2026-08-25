@@ -306,6 +306,77 @@ describe('update by scope', () => {
     expect(row?.state).toBe('in_progress');
   });
 
+  it('uses task transition semantics when a bulk state update completes a child', async () => {
+    const s = await seedOrg(['contribute']);
+    const parent = await seedTask(s, { title: 'Parent' });
+    const child = await seedTask(s, { title: 'Child', parentTaskId: parent });
+    const client = await connect(s.ctx);
+
+    const result = (await client.callTool({
+      name: 'update',
+      arguments: {
+        orgId: s.orgId,
+        entity: 'task',
+        scope: { ids: [child] },
+        set: { state: 'Done' },
+      },
+    })) as CallToolResult;
+
+    expect(result.isError).toBeFalsy();
+    const changeSetId = String(payload(result)['changeSetId']);
+    const rows = await db
+      .select({
+        id: schema.task.id,
+        state: schema.task.state,
+        completedAt: schema.task.completedAt,
+        canceledAt: schema.task.canceledAt,
+        autoCompletedBySubtasks: schema.task.autoCompletedBySubtasks,
+      })
+      .from(schema.task)
+      .where(eq(schema.task.organizationId, s.orgId));
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    expect(byId.get(child)).toMatchObject({ state: 'done', canceledAt: null });
+    expect(byId.get(child)?.completedAt).not.toBeNull();
+    expect(byId.get(child)?.autoCompletedBySubtasks).toBe(false);
+    expect(byId.get(parent)).toMatchObject({
+      state: 'done',
+      autoCompletedBySubtasks: true,
+      canceledAt: null,
+    });
+    expect(byId.get(parent)?.completedAt).not.toBeNull();
+
+    const undo = (await client.callTool({
+      name: 'undo',
+      arguments: { orgId: s.orgId, changeSetId },
+    })) as CallToolResult;
+    expect(undo.isError).toBeFalsy();
+    const restored = new Map(
+      (
+        await db
+          .select({
+            id: schema.task.id,
+            state: schema.task.state,
+            completedAt: schema.task.completedAt,
+            canceledAt: schema.task.canceledAt,
+            autoCompletedBySubtasks: schema.task.autoCompletedBySubtasks,
+          })
+          .from(schema.task)
+          .where(eq(schema.task.organizationId, s.orgId))
+      ).map((row) => [row.id, row]),
+    );
+    expect(restored.get(child)).toMatchObject({
+      state: 'backlog',
+      completedAt: null,
+      canceledAt: null,
+      autoCompletedBySubtasks: false,
+    });
+    expect(restored.get(parent)).toMatchObject({
+      state: 'backlog',
+      completedAt: null,
+      autoCompletedBySubtasks: false,
+    });
+  });
+
   it('renames a project through the same `title` field a task uses', async () => {
     const s = await seedOrg(['contribute']);
     const client = await connect(s.ctx);

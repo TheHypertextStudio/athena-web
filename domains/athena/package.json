@@ -24,7 +24,8 @@
     "./turn/adapters/lattice": "./src/turn/adapters/lattice.ts",
     "./turn/model-backend": "./src/turn/model-backend.ts",
     "./task-drafting/adapters/anthropic": "./src/task-drafting/adapters/anthropic.ts",
-    "./task-drafting/adapters/deterministic": "./src/task-drafting/adapters/deterministic.ts"
+    "./task-drafting/adapters/deterministic": "./src/task-drafting/adapters/deterministic.ts",
+    "./task-expansion": "./src/task-expansion/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

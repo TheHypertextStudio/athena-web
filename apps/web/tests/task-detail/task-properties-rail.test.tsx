@@ -71,9 +71,9 @@ function renderRail(
       {...props}
     />,
   );
-  const aside = container.querySelector('aside');
-  if (!aside) throw new Error('the rail did not render an <aside>');
-  return aside;
+  const details = container.firstElementChild;
+  if (!details) throw new Error('the properties did not render');
+  return details as HTMLElement;
 }
 
 describe('TaskPropertiesRail — structure without rules', () => {

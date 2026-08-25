@@ -17,6 +17,10 @@ import { z } from 'zod';
 
 import { ApiError, ValidationError } from '../error';
 import { buildTaskViewFilter } from '../routes/task-helpers';
+import {
+  applySubtaskCompletionPolicyForParents,
+  finishTaskStateTransition,
+} from '../lib/task-state';
 import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
@@ -206,6 +210,18 @@ export function registerArchiveTool(
             after: trackedFields(entity, next),
           });
           await enqueueSearchUpsert(input.orgId, entity, id);
+          const parentTaskId =
+            entity === 'task' && typeof row['parentTaskId'] === 'string'
+              ? row['parentTaskId']
+              : null;
+          if (parentTaskId !== null) {
+            const cascades = await db.transaction((tx) =>
+              applySubtaskCompletionPolicyForParents(tx, input.orgId, [parentTaskId]),
+            );
+            for (const cascade of cascades) {
+              await finishTaskStateTransition({ actorId: null }, cascade);
+            }
+          }
         }
 
         const changeSetId = await recordChangeSet({

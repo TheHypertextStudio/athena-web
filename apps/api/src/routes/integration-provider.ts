@@ -22,6 +22,7 @@ import type { z } from 'zod';
 import { buildConnector } from '../container';
 import { env } from '../env';
 import { decodeIdTokenClaims } from '../lib/id-token';
+import { toOut as serializeTask } from './task-helpers';
 
 /** IntegrationRow is the selected database row shape consumed by these API route serializers. */
 export type IntegrationRow = typeof integration.$inferSelect;
@@ -467,30 +468,5 @@ export function toOut(i: IntegrationRow): z.input<typeof IntegrationOut> {
 
 /** Serialize a task row to its {@link TaskOut} representation. */
 export function toTaskOut(t: TaskRow): z.input<typeof TaskOut> {
-  return {
-    // Provider payloads carry no Docket labels: the reconciler mirrors provider-side
-    // labels through its own path, and echoing ours back would look like an instruction.
-    labels: [],
-    id: t.id,
-    organizationId: t.organizationId,
-    title: t.title,
-    description: t.description,
-    teamId: t.teamId,
-    state: t.state,
-    priority: t.priority,
-    assigneeId: t.assigneeId,
-    delegateId: t.delegateId,
-    projectId: t.projectId,
-    programId: t.programId,
-    dueDate: t.dueDate?.toISOString() ?? null,
-    provenance: {
-      source: t.source,
-      sourceIntegrationId: t.sourceIntegrationId,
-      externalId: t.externalId,
-      externalUrl: t.externalUrl,
-      syncMode: t.sourceSyncMode,
-    },
-    createdAt: t.createdAt.toISOString(),
-    updatedAt: t.updatedAt.toISOString(),
-  };
+  return serializeTask(t, []);
 }

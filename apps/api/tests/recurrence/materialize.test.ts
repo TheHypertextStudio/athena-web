@@ -792,8 +792,10 @@ describe('process materialization', () => {
             organizationId,
             teamId,
             title: 'Marathon plan',
-            state: 'backlog',
-            statusId: statusId('task', 'backlog'),
+            state: 'done',
+            statusId: statusId('task', 'done'),
+            completedAt: new Date('2026-09-01T00:00:00.000Z'),
+            autoCompletedBySubtasks: true,
           })
           .returning()
       )[0],
@@ -856,6 +858,19 @@ describe('process materialization', () => {
     });
     expect(created?.startDate?.toISOString()).toBe('2026-09-11T00:00:00.000Z');
     expect(created?.dueDate?.toISOString()).toBe('2026-09-12T00:00:00.000Z');
+    const [reopenedParent] = await db
+      .select({
+        state: task.state,
+        completedAt: task.completedAt,
+        autoCompletedBySubtasks: task.autoCompletedBySubtasks,
+      })
+      .from(task)
+      .where(eq(task.id, fixedParent.id));
+    expect(reopenedParent).toEqual({
+      state: 'backlog',
+      completedAt: null,
+      autoCompletedBySubtasks: false,
+    });
     expect(
       await db
         .select()

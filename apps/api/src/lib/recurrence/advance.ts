@@ -34,6 +34,7 @@ import {
   materializeOccurrence,
   type MaterializedStepDelta,
 } from './materialize';
+import type { TaskStateMutation } from '../task-state';
 
 /** Command emitted from an actual task transition into a completed workflow state. */
 export interface AdvanceCompletedProcessTaskCommand {
@@ -192,6 +193,7 @@ export async function advanceCompletedProcessTask(
   command: AdvanceCompletedProcessTaskCommand,
 ): Promise<ProcessAdvanceResult> {
   parseCalendarDate(command.completedOn);
+  const postCommitStateTransitions: TaskStateMutation[] = [];
   const transition = await database.transaction(async (tx) => {
     const mappedRows = await tx
       .select({
@@ -253,6 +255,7 @@ export async function advanceCompletedProcessTask(
       revisionId: mapped.revisionId,
       scheduledFor: mapped.scheduledFor,
       completionDatesByStepId: new Map([[mapped.completedStepId, command.completedOn]]),
+      postCommitStateTransitions,
     });
     const complete = await processTasksComplete(tx, mapped.revisionId, mapped.instanceId);
     if (!complete) return { delta, complete: false, next: null };
@@ -312,6 +315,13 @@ export async function advanceCompletedProcessTask(
         : null,
     };
   });
+
+  if (postCommitStateTransitions.length > 0) {
+    const { finishTaskStateTransition } = await import('../task-state');
+    for (const stateTransition of postCommitStateTransitions) {
+      await finishTaskStateTransition({ actorId: null }, stateTransition);
+    }
+  }
 
   let nextOccurrenceId: string | null = null;
   if (transition.next) {

@@ -147,12 +147,14 @@ describe('POST /capture', () => {
       teamId: string;
       assigneeId: string | null;
       state: string;
+      autoCompletedBySubtasks: boolean;
     };
     expect(body.title).toBe('plan outreach strategy');
     expect(body.teamId).toBe(s.teamId);
     expect(body.assigneeId).toBe(s.humanActorId);
     // The default team's first workflow state (the seeded `backlog`).
     expect(body.state).toBe('backlog');
+    expect(body.autoCompletedBySubtasks).toBe(false);
 
     const rows = await db.select().from(task).where(eq(task.id, body.id)).limit(1);
     expect(rows[0]?.description).toBe('plan outreach strategy');

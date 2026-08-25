@@ -145,6 +145,27 @@ describe('TaskTimerButton', () => {
     expect(anchor).toHaveAttribute('href', '/orgs/org_1/tasks/task_1');
   });
 
+  it('keeps the task anchor, explains a rejected start, and returns to an enabled retry state', async () => {
+    activeGet.mockResolvedValue(jsonResponse(NOTHING_TRACKED));
+    recordsPost.mockResolvedValue(jsonResponse({ code: 'conflict' }, 409));
+    const onRowActivate = vi.fn();
+    renderInsideActivatableRow({ taskId: 'task_1', title: 'Ship it', onRowActivate });
+
+    const button = await screen.findByTestId('task-timer-task_1');
+    fireEvent.click(button);
+
+    await waitFor(() => {
+      expect(recordsPost).toHaveBeenCalledWith({
+        json: { context: { label: 'Ship it', taskId: 'task_1' } },
+      });
+    });
+    await waitFor(() => expect(button).not.toBeDisabled());
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Could not start tracking this task. Try again.',
+    );
+    expect(onRowActivate).not.toHaveBeenCalled();
+  });
+
   it('switches cleanly when a different task is already being tracked', async () => {
     activeGet.mockResolvedValue(
       jsonResponse({

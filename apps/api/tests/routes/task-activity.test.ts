@@ -43,7 +43,8 @@ interface ActivityEntry {
   readonly taskId: string;
   readonly actorId: string | null;
   readonly actorName: string | null;
-  readonly type: 'created' | 'updated';
+  readonly type: string;
+  readonly category?: string;
   readonly change: {
     readonly field: string;
     readonly label: string;
@@ -51,6 +52,9 @@ interface ActivityEntry {
     readonly to: string | null;
   } | null;
   readonly createdAt: string;
+  readonly body?: string | null;
+  readonly subjectTaskId?: string | null;
+  readonly subjectTaskTitle?: string | null;
 }
 
 /** Create a task through the router and return its id. */
@@ -92,7 +96,392 @@ async function activity(
   return ((await res.json()) as { items: ActivityEntry[] }).items;
 }
 
+/** Read one Activity page, including its opaque continuation cursor when present. */
+async function activityPage(
+  app: ReturnType<typeof appWithActor>,
+  id: string,
+  query: string,
+): Promise<{ readonly items: readonly ActivityEntry[]; readonly nextCursor?: string }> {
+  const res = await app.request(`/${id}/activity?${query}`, { method: 'GET' });
+  expect(res.status).toBe(200);
+  return (await res.json()) as { items: ActivityEntry[]; nextCursor?: string };
+}
+
 describe('task activity log — what is written', () => {
+  it('interleaves a task comment with the task history instead of making a second feed', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const id = await createTask(app, teamId);
+
+    await db.insert(schema.comment).values({
+      organizationId: orgId,
+      authorId: humanActorId,
+      subjectType: 'task',
+      subjectId: id,
+      body: 'The customer confirmed the scope.',
+      createdBy: humanActorId,
+    });
+
+    const items = await activity(app, id);
+    expect(items).toContainEqual(
+      expect.objectContaining({
+        taskId: id,
+        type: 'comment',
+        actorId: humanActorId,
+        body: 'The customer confirmed the scope.',
+      }),
+    );
+  });
+
+  it('records a direct resource change in the same Activity history', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const id = await createTask(app, teamId);
+    const added = await app.request(`/${id}/attachments`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        kind: 'url',
+        title: 'Task design',
+        url: 'https://example.com/task-design',
+      }),
+    });
+    expect(added.status).toBe(201);
+
+    expect(await activity(app, id)).toContainEqual(
+      expect.objectContaining({
+        type: 'updated',
+        category: 'resource',
+        change: expect.objectContaining({ field: 'resource', to: 'Task design' }),
+      }),
+    );
+  });
+
+  it('records a related-task link in the same Activity history', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const id = await createTask(app, teamId, { title: 'Primary task' });
+    const relatedId = await createTask(app, teamId, { title: 'Related task' });
+
+    await patch(app, id, { relatedTaskIds: [relatedId] });
+
+    expect(await activity(app, id)).toContainEqual(
+      expect.objectContaining({
+        type: 'updated',
+        category: 'relationship',
+        change: expect.objectContaining({ field: 'relatedTask', to: 'Related task' }),
+      }),
+    );
+  });
+
+  it('projects child creation into the parent Activity history', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const parentId = await createTask(app, teamId, { title: 'Parent task' });
+    const created = await app.request(`/${parentId}/subtasks`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'Child task' }),
+    });
+    expect(created.status).toBe(201);
+    const childId = ((await created.json()) as { id: string }).id;
+
+    expect(await activity(app, parentId)).toContainEqual(
+      expect.objectContaining({
+        type: 'child',
+        category: 'subtask',
+        subjectTaskId: childId,
+        subjectTaskTitle: 'Child task',
+        change: null,
+      }),
+    );
+  });
+
+  it('continues past private child Activity candidates to fill a visible page', async () => {
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const authorApp = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const viewerActorId = one(
+      await db
+        .insert(schema.actor)
+        .values({ organizationId: orgId, kind: 'human', displayName: 'Public viewer' })
+        .returning({ id: schema.actor.id }),
+    ).id;
+    const viewerApp = appWithActor(tasks, orgId, [], viewerActorId);
+    const parentId = await createTask(authorApp, teamId, {
+      title: 'Public parent',
+      visibility: 'public',
+    });
+    await db
+      .update(schema.task)
+      .set({ createdAt: new Date('2026-08-24T00:00:00.000Z') })
+      .where(eq(schema.task.id, parentId));
+    await db.insert(schema.task).values([
+      {
+        organizationId: orgId,
+        teamId,
+        parentTaskId: parentId,
+        title: 'Private child one',
+        state: 'backlog',
+        statusId: statusId('task', 'backlog'),
+        visibility: 'private',
+        createdAt: new Date('2026-08-24T01:00:00.000Z'),
+      },
+      {
+        organizationId: orgId,
+        teamId,
+        parentTaskId: parentId,
+        title: 'Private child two',
+        state: 'backlog',
+        statusId: statusId('task', 'backlog'),
+        visibility: 'private',
+        createdAt: new Date('2026-08-24T01:01:00.000Z'),
+      },
+      {
+        organizationId: orgId,
+        teamId,
+        parentTaskId: parentId,
+        title: 'Visible child',
+        state: 'backlog',
+        statusId: statusId('task', 'backlog'),
+        visibility: 'public',
+        createdAt: new Date('2026-08-24T01:02:00.000Z'),
+      },
+    ]);
+
+    const first = await activityPage(viewerApp, parentId, 'limit=1');
+    expect(first.items).toHaveLength(1);
+    expect(first.nextCursor).toEqual(expect.any(String));
+    const second = await activityPage(viewerApp, parentId, `limit=1&cursor=${first.nextCursor}`);
+    expect(second.items).toContainEqual(
+      expect.objectContaining({ type: 'child', subjectTaskTitle: 'Visible child' }),
+    );
+  });
+
+  it('records dependency add and remove on both task histories', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const blockerId = await createTask(app, teamId, { title: 'Prepare copy' });
+    const blockedId = await createTask(app, teamId, { title: 'Publish page' });
+
+    const added = await app.request(`/${blockerId}/dependencies`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ blockedTaskId: blockedId }),
+    });
+    expect(added.status).toBe(201);
+    for (const id of [blockerId, blockedId]) {
+      expect(await activity(app, id)).toContainEqual(
+        expect.objectContaining({
+          type: 'updated',
+          category: 'relationship',
+          change: expect.objectContaining({ field: 'dependency', from: null }),
+        }),
+      );
+    }
+
+    const removed = await app.request(`/${blockerId}/dependencies/${blockedId}`, {
+      method: 'DELETE',
+    });
+    expect(removed.status).toBe(200);
+    for (const id of [blockerId, blockedId]) {
+      expect(await activity(app, id)).toContainEqual(
+        expect.objectContaining({
+          type: 'updated',
+          category: 'relationship',
+          change: expect.objectContaining({ field: 'dependency', to: null }),
+        }),
+      );
+    }
+  });
+
+  it('filters one ordered Activity history and resumes with its cursor', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const id = await createTask(app, teamId);
+    await db.insert(schema.comment).values([
+      {
+        organizationId: orgId,
+        authorId: humanActorId,
+        subjectType: 'task',
+        subjectId: id,
+        body: 'First comment.',
+        createdBy: humanActorId,
+        createdAt: new Date('2026-08-24T10:00:00.000Z'),
+      },
+      {
+        organizationId: orgId,
+        authorId: humanActorId,
+        subjectType: 'task',
+        subjectId: id,
+        body: 'Second comment.',
+        createdBy: humanActorId,
+        createdAt: new Date('2026-08-24T11:00:00.000Z'),
+      },
+    ]);
+
+    const first = await activityPage(app, id, 'category=comment&limit=1');
+    expect(first.items).toHaveLength(1);
+    expect(first.items[0]).toMatchObject({ type: 'comment', body: 'First comment.' });
+    expect(first.nextCursor).toEqual(expect.any(String));
+    const second = await activityPage(
+      app,
+      id,
+      `category=comment&limit=1&cursor=${first.nextCursor}`,
+    );
+    expect(second.items).toHaveLength(1);
+    expect(second.items[0]).toMatchObject({ type: 'comment', body: 'Second comment.' });
+  });
+
+  it('includes timer and delegated task updates without reading separate feeds', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const id = await createTask(app, teamId);
+    const agentActor = one(
+      await db
+        .insert(schema.actor)
+        .values({ organizationId: orgId, kind: 'agent', displayName: 'Task automation' })
+        .returning({ id: schema.actor.id }),
+    );
+    const agent = one(
+      await db
+        .insert(schema.agent)
+        .values({ organizationId: orgId, actorId: agentActor.id, createdBy: humanActorId })
+        .returning({ id: schema.agent.id }),
+    );
+    const [session] = await db
+      .insert(schema.agentSession)
+      .values({
+        organizationId: orgId,
+        agentId: agent.id,
+        taskId: id,
+        trigger: 'assignment',
+        status: 'completed',
+      })
+      .returning({ id: schema.agentSession.id });
+    if (!session) throw new Error('session insert failed');
+    await db.insert(schema.sessionActivity).values({
+      organizationId: orgId,
+      sessionId: session.id,
+      type: 'response',
+      body: { text: 'Checked the linked documents.' },
+    });
+    await db.insert(schema.event).values({
+      organizationId: orgId,
+      sourceSystem: 'docket',
+      kind: 'timer_started',
+      occurredAt: new Date(),
+      title: 'Started tracking T',
+      entityKind: 'work_item',
+      entityAssociation: 'matched',
+      docketEntityId: id,
+      participants: [],
+      externalId: id,
+      dedupeKey: `test:${id}:timer`,
+    });
+
+    const items = await activity(app, id);
+    expect(items).toContainEqual(
+      expect.objectContaining({ type: 'session', body: 'Checked the linked documents.' }),
+    );
+    expect(items).toContainEqual(
+      expect.objectContaining({ type: 'timer', body: 'Started tracking T' }),
+    );
+  });
+
+  it('includes only meaningful child changes and dependency changes that alter readiness', async () => {
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const id = await createTask(app, teamId, { title: 'Parent' });
+    const child = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          title: 'Child',
+          teamId,
+          state: 'backlog',
+          statusId: statusId('task', 'backlog'),
+          parentTaskId: id,
+        })
+        .returning({ id: schema.task.id }),
+    );
+    const blocker = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          title: 'Blocker',
+          teamId,
+          state: 'backlog',
+          statusId: statusId('task', 'backlog'),
+        })
+        .returning({ id: schema.task.id }),
+    );
+    await db.insert(schema.taskDependency).values({
+      organizationId: orgId,
+      blockingTaskId: blocker.id,
+      blockedTaskId: id,
+    });
+    await db.insert(schema.auditEvent).values([
+      {
+        organizationId: orgId,
+        actorId: humanActorId,
+        subjectType: 'task',
+        subjectId: child.id,
+        type: 'updated',
+        metadata: { field: 'description', label: 'Description', from: 'Old', to: 'New' },
+      },
+      {
+        organizationId: orgId,
+        actorId: humanActorId,
+        subjectType: 'task',
+        subjectId: child.id,
+        type: 'updated',
+        metadata: { field: 'priority', label: 'Priority', from: 'Low', to: 'High' },
+      },
+      {
+        organizationId: orgId,
+        actorId: humanActorId,
+        subjectType: 'task',
+        subjectId: blocker.id,
+        type: 'updated',
+        metadata: { field: 'state', label: 'Status', from: 'In progress', to: 'Done' },
+      },
+      {
+        organizationId: orgId,
+        actorId: humanActorId,
+        subjectType: 'task',
+        subjectId: blocker.id,
+        type: 'updated',
+        metadata: { field: 'priority', label: 'Priority', from: 'Low', to: 'High' },
+      },
+    ]);
+
+    const items = await activity(app, id);
+    expect(
+      items.some(
+        (entry) =>
+          entry.type === 'child' &&
+          entry.subjectTaskId === child.id &&
+          entry.change?.field === 'description',
+      ),
+    ).toBe(true);
+    expect(
+      items.some((entry) => entry.type === 'child' && entry.change?.field === 'priority'),
+    ).toBe(false);
+    expect(
+      items.some(
+        (entry) =>
+          entry.type === 'dependency' &&
+          entry.subjectTaskId === blocker.id &&
+          entry.change?.field === 'state',
+      ),
+    ).toBe(true);
+    expect(
+      items.some((entry) => entry.type === 'dependency' && entry.change?.field === 'priority'),
+    ).toBe(false);
+  });
+
   it('records a creation entry so a brand-new task already has a history', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);

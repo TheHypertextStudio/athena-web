@@ -249,6 +249,28 @@ export const taskDependency = pgTable(
   ],
 );
 
+/** An undirected task relationship stored once in lexicographic endpoint order. */
+export const taskRelatedTask = pgTable(
+  'task_related_task',
+  {
+    taskId: text('task_id')
+      .notNull()
+      .references(() => task.id, { onDelete: 'cascade' }),
+    relatedTaskId: text('related_task_id')
+      .notNull()
+      .references(() => task.id, { onDelete: 'cascade' }),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.taskId, t.relatedTaskId] }),
+    index('task_related_task_related_idx').on(t.relatedTaskId),
+    check('task_related_task_no_self', sql`${t.taskId} <> ${t.relatedTaskId}`),
+    check('task_related_task_canonical_order', sql`${t.taskId} < ${t.relatedTaskId}`),
+  ],
+);
+
 /** A directed Project `blocks` edge (blocking → blocked), scoped to one organization. */
 export const projectDependency = pgTable(
   'project_dependency',

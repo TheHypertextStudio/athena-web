@@ -19,9 +19,6 @@ import {
 } from '@docket/ui/primitives';
 import type { JSX, ReactNode } from 'react';
 
-import type { PersonalAthenaContext } from '@/lib/athena/presentation';
-
-import { AthenaContextMenuItem } from '../athena/athena-context-action';
 import { TaskTimerMenuItem } from '../time-tracking/task-timer-button';
 import { PriorityGlyph } from './PriorityGlyph';
 import { PRIORITY_LABEL, PRIORITY_ORDER } from './priority';
@@ -68,7 +65,6 @@ export function TaskHeaderControls({
 export interface TaskHeaderOverflowMenuProps {
   readonly taskId: string;
   readonly title: string;
-  readonly athenaContext: PersonalAthenaContext;
   readonly priority: Priority;
   readonly priorityPending: boolean;
   readonly memberOptions: readonly PickerOption[];
@@ -88,7 +84,6 @@ const UNASSIGNED_VALUE = '__unassigned__';
 export function TaskHeaderOverflowMenu({
   taskId,
   title,
-  athenaContext,
   priority,
   priorityPending,
   memberOptions,
@@ -161,7 +156,6 @@ export function TaskHeaderOverflowMenu({
 
         <DropdownMenuSeparator />
         <TaskTimerMenuItem taskId={taskId} title={title} />
-        <AthenaContextMenuItem label="Have Athena handle this" context={athenaContext} />
 
         {canManage ? (
           <>

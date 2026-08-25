@@ -146,6 +146,7 @@ function task(index: number, needle = false): TaskOut {
     title: needle ? 'Offscreen needle' : `Queue item ${String(index)}`,
     state: 'todo',
     priority: 'none',
+    autoCompletedBySubtasks: false,
     assigneeId: needle ? ('owner-needle' as NonNullable<TaskOut['assigneeId']>) : undefined,
     projectId: needle ? ('project-needle' as NonNullable<TaskOut['projectId']>) : undefined,
     labels: [],

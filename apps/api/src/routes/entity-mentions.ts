@@ -13,10 +13,11 @@ import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { loadEntityMentions } from '../content/entity-mentions';
-import { AuthError } from '../error';
+import { AuthError, NotFoundError } from '../error';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zParam } from '../lib/validate';
+import { buildTaskViewFilter, loadTask } from './task-helpers';
 
 const idParam = z.object({ id: z.string() });
 
@@ -41,8 +42,14 @@ export function entityMentionRoutes(subjectType: MentionSubjectType, tag: string
     async (c) => {
       const session = c.get('session');
       if (!session?.user) throw new AuthError();
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
+
+      if (subjectType === 'task') {
+        const task = await loadTask(orgId, id);
+        const canView = await buildTaskViewFilter(orgId, actorId);
+        if (!canView(task)) throw new NotFoundError('Task not found');
+      }
 
       const result = await loadEntityMentions({
         caller: { kind: 'user', userId: session.user.id },

@@ -6,6 +6,7 @@ import { z } from 'zod';
 
 import { NotFoundError } from '../error';
 import type { LabelRefRow } from '../lib/labels';
+import { toOut as serializeTask } from './task-helpers';
 import {
   type CycleWindowSlot,
   isWithinWindow,
@@ -51,30 +52,7 @@ export function toOut(cy: CycleRow, now?: Date): z.input<typeof CycleOut> {
 
 /** Project an active task row into the {@link TaskOut} wire shape. */
 export function taskToOut(t: TaskRow, labels: readonly LabelRefRow[]): z.input<typeof TaskOut> {
-  return {
-    labels: [...labels],
-    id: t.id,
-    organizationId: t.organizationId,
-    title: t.title,
-    description: t.description,
-    teamId: t.teamId,
-    state: t.state,
-    priority: t.priority,
-    assigneeId: t.assigneeId,
-    delegateId: t.delegateId,
-    projectId: t.projectId,
-    programId: t.programId,
-    dueDate: t.dueDate?.toISOString() ?? null,
-    provenance: {
-      source: t.source,
-      sourceIntegrationId: t.sourceIntegrationId,
-      externalId: t.externalId,
-      externalUrl: t.externalUrl,
-      syncMode: t.sourceSyncMode,
-    },
-    createdAt: t.createdAt.toISOString(),
-    updatedAt: t.updatedAt.toISOString(),
-  };
+  return serializeTask(t, labels);
 }
 
 /** idParam is the reusable OpenAPI parameter schema for this API route route. */

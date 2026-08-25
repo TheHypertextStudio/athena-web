@@ -13,16 +13,22 @@
  * "blocks".
  */
 import { db, initiativeProgram, initiativeProject, task, taskDependency } from '@docket/db';
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { CycleError, NotFoundError, ValidationError } from '../error';
+import {
+  applySubtaskCompletionPolicyForParents,
+  finishTaskStateTransition,
+} from '../lib/task-state';
+import { serializableTx } from '../lib/serializable-tx';
 import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
 import { recordChangeSet, trackedFields, type RecordedChange } from './change-set';
 import { DESCRIPTOR_HINT, resolveAcross, resolveDescriptor } from './descriptors';
 import { authorize, jsonResult, runTool, scopedActor } from './result';
+import { wouldCreateSubtaskCycle } from '../routes/task-helpers';
 import { loadTask, orgIdParam, wouldCreateCycle } from './tools-shared';
 
 /** The relations `link` understands. */
@@ -235,28 +241,67 @@ async function applySubtaskOf(
 ): Promise<RelationResult> {
   if (from === to) rejectEndpoint('to', to, 'A task cannot be its own parent.');
   await guard('task', from);
-  const child = await loadTask(orgId, from);
-  if (!remove) await loadTask(orgId, to);
+  const result = await serializableTx(async (tx) => {
+    // Lock both endpoints in stable id order. Reciprocal links otherwise lock A then B and B
+    // then A, which turns the cycle race into a database deadlock before SERIALIZABLE can retry.
+    const endpoints = await tx
+      .select()
+      .from(task)
+      .where(
+        and(
+          inArray(task.id, remove ? [from] : [from, to]),
+          eq(task.organizationId, orgId),
+          isNull(task.archivedAt),
+        ),
+      )
+      .orderBy(asc(task.id))
+      .for('update');
+    const child = endpoints.find((row) => row.id === from);
+    if (!child) throw new NotFoundError('Task not found');
+    if (!remove && !endpoints.some((row) => row.id === to))
+      throw new NotFoundError('Task not found');
 
-  const next = remove ? null : to;
-  if (child.parentTaskId === next) return { from, to, changed: false, changes: [], reindex: [] };
-  if (!remove && (await wouldCreateCycle(orgId, from, to))) throw new CycleError();
+    const next = remove ? null : to;
+    if (child.parentTaskId === next) return { child, row: child, cascades: [], changed: false };
+    if (!remove && (await wouldCreateSubtaskCycle(tx, orgId, from, to))) throw new CycleError();
 
-  const before = trackedFields('task', child);
-  const updated = await db
-    .update(task)
-    .set({ parentTaskId: next })
-    .where(and(eq(task.id, from), eq(task.organizationId, orgId)))
-    .returning();
-  const row = updated[0];
-  /* v8 ignore next -- @preserve defensive: loadTask above proved the row exists */
-  if (!row) throw new NotFoundError('Task not found');
+    const updated = await tx
+      .update(task)
+      .set({ parentTaskId: next })
+      .where(and(eq(task.id, from), eq(task.organizationId, orgId), isNull(task.archivedAt)))
+      .returning();
+    const row = updated[0];
+    /* v8 ignore next -- @preserve the locked active row above cannot disappear */
+    if (!row) throw new NotFoundError('Task not found');
+    return {
+      child,
+      row,
+      cascades: await applySubtaskCompletionPolicyForParents(tx, orgId, [
+        child.parentTaskId,
+        row.parentTaskId,
+      ]),
+      changed: true,
+    };
+  });
+  const { child, row, cascades } = result;
+  if (!result.changed) return { from, to, changed: false, changes: [], reindex: [] };
+  for (const cascade of cascades) {
+    await finishTaskStateTransition({ actorId: null }, cascade);
+  }
 
   return {
     from,
     to,
     changed: true,
-    changes: [{ kind: 'task', id: from, op: 'update', before, after: trackedFields('task', row) }],
+    changes: [
+      {
+        kind: 'task',
+        id: from,
+        op: 'update',
+        before: trackedFields('task', child),
+        after: trackedFields('task', row),
+      },
+    ],
     reindex: [from],
   };
 }

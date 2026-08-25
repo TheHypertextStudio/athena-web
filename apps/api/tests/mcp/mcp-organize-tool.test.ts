@@ -184,6 +184,50 @@ describe('organize', () => {
     expect(tasks.find((t) => t.title === 'Migrate refresh tokens')?.priority).toBe('high');
   });
 
+  it('reopens an auto-completed matched task when the plan adds active work under it', async () => {
+    const s = await seedOrg();
+    const [parent] = await db
+      .insert(schema.task)
+      .values({
+        organizationId: s.orgId,
+        teamId: s.teamId,
+        title: 'Finished parent',
+        state: 'done',
+        statusId: s.statusId('task', 'done'),
+        completedAt: new Date('2026-08-01T00:00:00.000Z'),
+        autoCompletedBySubtasks: true,
+        createdBy: s.actorId,
+      })
+      .returning({ id: schema.task.id });
+    const client = await connect(s.ctx);
+
+    const result = (await client.callTool({
+      name: 'organize',
+      arguments: {
+        orgId: s.orgId,
+        items: [
+          { ref: 'parent', kind: 'task', title: 'Finished parent' },
+          { ref: 'child', kind: 'task', title: 'New active child', parent: 'parent' },
+        ],
+      },
+    })) as CallToolResult;
+    expect(result.isError).toBeFalsy();
+
+    const [reopened] = await db
+      .select({
+        state: schema.task.state,
+        completedAt: schema.task.completedAt,
+        autoCompletedBySubtasks: schema.task.autoCompletedBySubtasks,
+      })
+      .from(schema.task)
+      .where(eq(schema.task.id, assertDefined(parent).id));
+    expect(reopened).toEqual({
+      state: 'backlog',
+      completedAt: null,
+      autoCompletedBySubtasks: false,
+    });
+  });
+
   it('places parents first even when the plan lists them last', async () => {
     const s = await seedOrg();
     const client = await connect(s.ctx);

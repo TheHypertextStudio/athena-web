@@ -546,6 +546,17 @@ describe('reconcileWorkGraph', () => {
       now: NOW,
     });
 
+    const [parent] = await db
+      .insert(schema.task)
+      .values({
+        organizationId: orgId,
+        title: 'Parent for tombstone',
+        teamId,
+        state: 'backlog',
+        statusId: statusId('task', 'backlog'),
+        createdBy: humanActorId,
+      })
+      .returning({ id: schema.task.id });
     // Seed a live local row for the tombstoned issue-7 so the tombstone has something to archive.
     await db.insert(schema.task).values({
       organizationId: orgId,
@@ -559,6 +570,7 @@ describe('reconcileWorkGraph', () => {
       sourceSyncMode: 'mirror',
       externalUpdatedAt: new Date('2020-01-01T00:00:00.000Z'),
       updatedAt: new Date('2020-01-01T00:00:00.000Z'),
+      parentTaskId: assertDefined(parent).id,
       createdBy: humanActorId,
     });
 
@@ -584,11 +596,55 @@ describe('reconcileWorkGraph', () => {
     const archived = await taskByExternal(row.id, 'lin-issue-7');
     expect(archived?.archivedAt).not.toBeNull();
     expect(archived?.state).toBe('canceled');
+    const [completedParent] = await db
+      .select({
+        state: schema.task.state,
+        autoCompletedBySubtasks: schema.task.autoCompletedBySubtasks,
+      })
+      .from(schema.task)
+      .where(eq(schema.task.id, assertDefined(parent).id));
+    expect(completedParent).toEqual({ state: 'done', autoCompletedBySubtasks: true });
 
     const canceledProject = one(await projectByExternal(row.id, 'lin-project-active'));
     expect(canceledProject.status).toBe('canceled');
     // Never deleted: the row still exists.
     expect(canceledProject.id).toBeTruthy();
+  });
+
+  it('skips a parent edge from an external snapshot when it closes a hierarchy cycle', async () => {
+    const { orgId, humanActorId, row } = await scaffold();
+    const first = await pull();
+    await reconcileWorkGraph({
+      orgId,
+      actorId: humanActorId,
+      row,
+      snapshot: first.snapshot,
+      connector: first.connector,
+      now: NOW,
+    });
+
+    const second = await pull();
+    const cyclicSnapshot: WorkGraphSnapshot = {
+      ...second.snapshot,
+      items: second.snapshot.items.map((item) =>
+        item.externalId === 'lin-issue-3'
+          ? { ...item, parentExternalId: 'lin-issue-4', updatedAt: '2026-04-01T00:00:00.000Z' }
+          : item,
+      ),
+    };
+    await reconcileWorkGraph({
+      orgId,
+      actorId: humanActorId,
+      row,
+      snapshot: cyclicSnapshot,
+      connector: second.connector,
+      now: NOW,
+    });
+
+    const parent = await taskByExternal(row.id, 'lin-issue-3');
+    const child = await taskByExternal(row.id, 'lin-issue-4');
+    expect(parent?.parentTaskId).toBeNull();
+    expect(child?.parentTaskId).toBe(parent?.id);
   });
 
   it('a second full sync after a tombstone was applied does not re-archive (removed tally 0)', async () => {

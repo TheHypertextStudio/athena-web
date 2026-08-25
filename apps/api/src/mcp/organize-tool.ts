@@ -32,6 +32,10 @@ import { z } from 'zod';
 import { NotFoundError, ValidationError } from '../error';
 import { resolveLandingTarget } from '../lib/task-landing';
 import { serializableTx } from '../lib/serializable-tx';
+import {
+  applySubtaskCompletionPolicyForParents,
+  finishTaskStateTransition,
+} from '../lib/task-state';
 import { enqueueSearchUpsert } from '../search/write-through';
 import type { McpContext } from './auth';
 import type { McpRegistrar } from './catalog';
@@ -315,7 +319,8 @@ export function registerOrganizeTool(
         const byRef = new Map<string, Placed>();
         const changes: ChangeRecord[] = [];
 
-        await serializableTx(async (tx) => {
+        const cascades = await serializableTx(async (tx) => {
+          const parentTaskIds: (string | null)[] = [];
           for (const { item, refs, state } of prepared) {
             /** The already-placed parent from this call, if the item named one. */
             const local = item.parent === undefined ? undefined : byRef.get(item.parent);
@@ -343,13 +348,20 @@ export function registerOrganizeTool(
             placed.push(result.placed);
             byRef.set(item.ref, result.placed);
             if (result.change) changes.push(result.change);
+            if (result.placed.kind === 'task' && result.placed.created) {
+              parentTaskIds.push(at.parentTaskId);
+            }
           }
+          return applySubtaskCompletionPolicyForParents(tx, input.orgId, parentTaskIds);
         });
 
         // Search indexing and change recording both happen after commit: a rolled-back plan must
         // not leave an index entry pointing at a row that never existed, or an undo for it.
         for (const row of placed) {
           if (row.created) await enqueueSearchUpsert(input.orgId, row.kind, row.id);
+        }
+        for (const cascade of cascades) {
+          await finishTaskStateTransition({ actorId: null }, cascade);
         }
         const created = placed.filter((row) => row.created).length;
         const changeSetId = await recordChangeSet({

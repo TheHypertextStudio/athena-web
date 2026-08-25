@@ -87,6 +87,7 @@ function milestoneTask(id: string, state: string, milestoneId: string | null): M
     title: 'T',
     state,
     priority: 'none',
+    autoCompletedBySubtasks: false,
     provenance: { source: 'native' },
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',

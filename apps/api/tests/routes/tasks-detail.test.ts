@@ -5,7 +5,7 @@
  * Mirrors `routes-harness` (pglite + injected actor context). Dependency-edge
  * coverage lives in `task-dependencies.test.ts`.
  */
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
@@ -48,6 +48,575 @@ async function createTask(
 }
 
 describe('tasks create (POST /)', () => {
+  it('persists the task template and reciprocal related-task links', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const relatedTaskId = await createTask(writer, teamId, { title: 'Related' });
+    const [taskTemplate] = await db
+      .insert(schema.template)
+      .values({
+        organizationId: orgId,
+        targetType: 'task',
+        name: 'Bug report',
+        scope: 'organization',
+        ownerActorId: humanActorId,
+        payload: { targetType: 'task', title: 'Bug' },
+        createdBy: humanActorId,
+      })
+      .returning({ id: schema.template.id });
+    const templateId = assertDefined(taskTemplate).id;
+
+    const created = await writer.request('/', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        title: 'Created from template',
+        teamId,
+        templateId,
+        relatedTaskIds: [relatedTaskId],
+      }),
+    });
+    expect(created.status).toBe(201);
+    const createdTaskId = (await json<{ id: string }>(created)).id;
+
+    const createdDetail = await json<{
+      templateId: string | null;
+      relatedTasks: { id: string }[];
+    }>(await writer.request(`/${createdTaskId}`));
+    expect(createdDetail.templateId).toBe(templateId);
+    expect(createdDetail.relatedTasks.map((candidate) => candidate.id)).toEqual([relatedTaskId]);
+
+    const relatedDetail = await json<{ relatedTasks: { id: string }[] }>(
+      await writer.request(`/${relatedTaskId}`),
+    );
+    expect(relatedDetail.relatedTasks.map((candidate) => candidate.id)).toEqual([createdTaskId]);
+  });
+
+  it('rejects a cross-org or non-task template id', async () => {
+    const own = await seedBaseOrg(db, schema);
+    const other = await seedBaseOrg(db, schema);
+    const writer = appWithActor(tasks, own.orgId, ['contribute'], own.humanActorId);
+    const [projectTemplate] = await db
+      .insert(schema.template)
+      .values({
+        organizationId: own.orgId,
+        targetType: 'project',
+        name: 'Project template',
+        scope: 'organization',
+        ownerActorId: own.humanActorId,
+        payload: { targetType: 'project', name: 'Project' },
+        createdBy: own.humanActorId,
+      })
+      .returning({ id: schema.template.id });
+    const [foreignTemplate] = await db
+      .insert(schema.template)
+      .values({
+        organizationId: other.orgId,
+        targetType: 'task',
+        name: 'Foreign task template',
+        scope: 'organization',
+        ownerActorId: other.humanActorId,
+        payload: { targetType: 'task', title: 'Foreign' },
+        createdBy: other.humanActorId,
+      })
+      .returning({ id: schema.template.id });
+
+    for (const [templateId, expectedStatus] of [
+      [assertDefined(projectTemplate).id, 422],
+      [assertDefined(foreignTemplate).id, 404],
+    ] as const) {
+      const response = await writer.request('/', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ title: 'T', teamId: own.teamId, templateId }),
+      });
+      expect(response.status).toBe(expectedStatus);
+    }
+  });
+
+  it('rejects task templates the caller cannot see', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const [otherActor] = await db
+      .insert(schema.actor)
+      .values({ organizationId: orgId, kind: 'human', displayName: 'Grace' })
+      .returning({ id: schema.actor.id });
+    const [otherTeam] = await db
+      .insert(schema.team)
+      .values({
+        organizationId: orgId,
+        name: 'Private',
+        key: `P${Math.random().toString(36).slice(2, 6)}`,
+      })
+      .returning({ id: schema.team.id });
+    const hiddenOwner = assertDefined(otherActor).id;
+    const hiddenTeam = assertDefined(otherTeam).id;
+    await db.insert(schema.teamMember).values({
+      organizationId: orgId,
+      teamId: hiddenTeam,
+      actorId: hiddenOwner,
+    });
+    const hiddenTemplates = await db
+      .insert(schema.template)
+      .values([
+        {
+          organizationId: orgId,
+          targetType: 'task',
+          name: "Someone else's template",
+          scope: 'personal',
+          ownerActorId: hiddenOwner,
+          payload: { targetType: 'task', title: 'Private' },
+          createdBy: hiddenOwner,
+        },
+        {
+          organizationId: orgId,
+          targetType: 'task',
+          name: 'Other team template',
+          scope: 'team',
+          teamId: hiddenTeam,
+          payload: { targetType: 'task', title: 'Team private' },
+          createdBy: hiddenOwner,
+        },
+      ])
+      .returning({ id: schema.template.id });
+    const writer = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+
+    for (const hiddenTemplate of hiddenTemplates) {
+      const response = await writer.request('/', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ title: 'T', teamId, templateId: hiddenTemplate.id }),
+      });
+      expect(response.status).toBe(404);
+    }
+  });
+
+  it('writes several related-task links in canonical endpoint order', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const firstTaskId = await createTask(writer, teamId, { title: 'First endpoint' });
+    const secondTaskId = await createTask(writer, teamId, { title: 'Second endpoint' });
+    const requestedTaskIds = [secondTaskId, firstTaskId];
+
+    await db.execute(sql`
+      create table task_related_task_order_probe (
+        sequence bigint generated always as identity primary key,
+        task_id text not null,
+        related_task_id text not null
+      );
+    `);
+    await db.execute(sql`
+      create function record_task_related_task_insert_order() returns trigger language plpgsql as $$
+      begin
+        insert into task_related_task_order_probe (task_id, related_task_id)
+        values (new.task_id, new.related_task_id);
+        return new;
+      end;
+      $$;
+    `);
+    await db.execute(sql`
+      create trigger record_task_related_task_insert_order
+      before insert on task_related_task
+      for each row execute function record_task_related_task_insert_order();
+    `);
+    try {
+      const created = await writer.request('/', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          title: 'Canonical links',
+          teamId,
+          relatedTaskIds: requestedTaskIds,
+        }),
+      });
+      expect(created.status).toBe(201);
+      const createdTaskId = (await json<{ id: string }>(created)).id;
+      const insertedPairs = await db.execute(sql<{
+        task_id: string;
+        related_task_id: string;
+      }>`
+        select task_id, related_task_id
+        from task_related_task_order_probe
+        order by sequence asc
+      `);
+
+      expect(
+        insertedPairs.rows.map((pair) =>
+          pair.task_id === createdTaskId ? pair.related_task_id : pair.task_id,
+        ),
+      ).toEqual([...requestedTaskIds].sort());
+    } finally {
+      await db.execute(
+        sql`drop trigger if exists record_task_related_task_insert_order on task_related_task`,
+      );
+      await db.execute(sql`drop function if exists record_task_related_task_insert_order()`);
+      await db.execute(sql`drop table if exists task_related_task_order_probe`);
+    }
+  });
+
+  it('writes replacement related-task links in canonical endpoint order', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const firstTaskId = await createTask(writer, teamId, { title: 'First endpoint' });
+    const secondTaskId = await createTask(writer, teamId, { title: 'Second endpoint' });
+    const subjectTaskId = await createTask(writer, teamId, { title: 'Subject endpoint' });
+    const requestedTaskIds = [secondTaskId, firstTaskId];
+
+    await db.execute(sql`
+      create table task_related_task_patch_order_probe (
+        sequence bigint generated always as identity primary key,
+        task_id text not null,
+        related_task_id text not null
+      );
+    `);
+    await db.execute(sql`
+      create function record_task_related_task_patch_insert_order() returns trigger language plpgsql as $$
+      begin
+        insert into task_related_task_patch_order_probe (task_id, related_task_id)
+        values (new.task_id, new.related_task_id);
+        return new;
+      end;
+      $$;
+    `);
+    await db.execute(sql`
+      create trigger record_task_related_task_patch_insert_order
+      before insert on task_related_task
+      for each row execute function record_task_related_task_patch_insert_order();
+    `);
+    try {
+      const patched = await writer.request(`/${subjectTaskId}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ relatedTaskIds: requestedTaskIds }),
+      });
+      expect(patched.status).toBe(200);
+      const insertedPairs = await db.execute(sql<{
+        task_id: string;
+        related_task_id: string;
+      }>`
+        select task_id, related_task_id
+        from task_related_task_patch_order_probe
+        order by sequence asc
+      `);
+
+      expect(
+        insertedPairs.rows.map((pair) =>
+          pair.task_id === subjectTaskId ? pair.related_task_id : pair.task_id,
+        ),
+      ).toEqual([...requestedTaskIds].sort());
+    } finally {
+      await db.execute(
+        sql`drop trigger if exists record_task_related_task_patch_insert_order on task_related_task`,
+      );
+      await db.execute(sql`drop function if exists record_task_related_task_patch_insert_order()`);
+      await db.execute(sql`drop table if exists task_related_task_patch_order_probe`);
+    }
+  });
+
+  it('rolls back task creation when its related-task write fails', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const relatedTaskId = await createTask(writer, teamId, { title: 'Endpoint' });
+    const [label] = await db
+      .insert(schema.label)
+      .values({ organizationId: orgId, name: 'Atomic create', color: 'blue' })
+      .returning({ id: schema.label.id });
+    const labelId = assertDefined(label).id;
+
+    await db.execute(sql`
+      create function fail_task_related_task_insert() returns trigger language plpgsql as $$
+      begin
+        raise exception 'forced related-task insert failure';
+      end;
+      $$;
+    `);
+    await db.execute(sql`
+      create trigger fail_task_related_task_insert
+      before insert on task_related_task
+      for each row execute function fail_task_related_task_insert();
+    `);
+    try {
+      const response = await writer.request('/', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          title: 'Must not persist',
+          teamId,
+          labels: [labelId],
+          relatedTaskIds: [relatedTaskId],
+        }),
+      });
+      expect(response.status).toBe(500);
+      expect(
+        await db
+          .select({ id: schema.task.id })
+          .from(schema.task)
+          .where(
+            and(eq(schema.task.organizationId, orgId), eq(schema.task.title, 'Must not persist')),
+          ),
+      ).toEqual([]);
+    } finally {
+      await db.execute(
+        sql`drop trigger if exists fail_task_related_task_insert on task_related_task`,
+      );
+      await db.execute(sql`drop function if exists fail_task_related_task_insert()`);
+    }
+  });
+
+  it('rolls back a task patch when its related-task write fails', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const subjectId = await createTask(writer, teamId, { title: 'Original' });
+    const relatedTaskId = await createTask(writer, teamId, { title: 'Endpoint' });
+    const [label] = await db
+      .insert(schema.label)
+      .values({ organizationId: orgId, name: 'Atomic patch', color: 'blue' })
+      .returning({ id: schema.label.id });
+    const labelId = assertDefined(label).id;
+
+    await db.execute(sql`
+      create function fail_task_related_task_patch() returns trigger language plpgsql as $$
+      begin
+        raise exception 'forced related-task insert failure';
+      end;
+      $$;
+    `);
+    await db.execute(sql`
+      create trigger fail_task_related_task_patch
+      before insert on task_related_task
+      for each row execute function fail_task_related_task_patch();
+    `);
+    try {
+      const response = await writer.request(`/${subjectId}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          title: 'Must not persist',
+          labels: [labelId],
+          relatedTaskIds: [relatedTaskId],
+        }),
+      });
+      expect(response.status).toBe(500);
+      const detail = await json<{
+        title: string;
+        labels: { id: string }[];
+        relatedTasks: { id: string }[];
+      }>(await writer.request(`/${subjectId}`));
+      expect(detail.title).toBe('Original');
+      expect(detail.labels).toEqual([]);
+      expect(detail.relatedTasks).toEqual([]);
+    } finally {
+      await db.execute(
+        sql`drop trigger if exists fail_task_related_task_patch on task_related_task`,
+      );
+      await db.execute(sql`drop function if exists fail_task_related_task_patch()`);
+    }
+  });
+
+  it('rejects duplicate, self, and cross-org related-task ids', async () => {
+    const own = await seedBaseOrg(db, schema);
+    const other = await seedBaseOrg(db, schema);
+    const writer = appWithActor(tasks, own.orgId, ['contribute'], own.humanActorId);
+    const relatedTaskId = await createTask(writer, own.teamId, { title: 'Related' });
+    const taskId = await createTask(writer, own.teamId, { title: 'Subject' });
+    const foreignWriter = appWithActor(tasks, other.orgId, ['contribute'], other.humanActorId);
+    const foreignTaskId = await createTask(foreignWriter, other.teamId, { title: 'Foreign' });
+
+    const duplicate = await writer.request('/', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        title: 'Duplicate',
+        teamId: own.teamId,
+        relatedTaskIds: [relatedTaskId, relatedTaskId],
+      }),
+    });
+    expect(duplicate.status).toBe(422);
+
+    const self = await writer.request(`/${taskId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ relatedTaskIds: [taskId] }),
+    });
+    expect(self.status).toBe(422);
+
+    const foreign = await writer.request(`/${taskId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ relatedTaskIds: [foreignTaskId] }),
+    });
+    expect(foreign.status).toBe(404);
+  });
+
+  it('replaces related-task links from either endpoint', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const subjectId = await createTask(writer, teamId, { title: 'Subject' });
+    const firstId = await createTask(writer, teamId, { title: 'First' });
+    const secondId = await createTask(writer, teamId, { title: 'Second' });
+
+    expect(
+      (
+        await writer.request(`/${subjectId}`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ relatedTaskIds: [firstId] }),
+        })
+      ).status,
+    ).toBe(200);
+    expect(
+      (
+        await writer.request(`/${subjectId}`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ relatedTaskIds: [secondId] }),
+        })
+      ).status,
+    ).toBe(200);
+
+    const firstDetail = await json<{ relatedTasks: { id: string }[] }>(
+      await writer.request(`/${firstId}`),
+    );
+    const subjectDetail = await json<{ relatedTasks: { id: string }[] }>(
+      await writer.request(`/${subjectId}`),
+    );
+    const secondDetail = await json<{ relatedTasks: { id: string }[] }>(
+      await writer.request(`/${secondId}`),
+    );
+    expect(firstDetail.relatedTasks).toEqual([]);
+    expect(subjectDetail.relatedTasks.map((candidate) => candidate.id)).toEqual([secondId]);
+    expect(secondDetail.relatedTasks.map((candidate) => candidate.id)).toEqual([subjectId]);
+  });
+
+  it('forbids removing a related task after access to that endpoint is revoked', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const subjectId = await createTask(writer, teamId, { title: 'Subject' });
+    const relatedTaskId = await createTask(writer, teamId, { title: 'Related' });
+
+    expect(
+      (
+        await writer.request(`/${subjectId}`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ relatedTaskIds: [relatedTaskId] }),
+        })
+      ).status,
+    ).toBe(200);
+
+    await db
+      .delete(schema.grant)
+      .where(
+        and(
+          eq(schema.grant.organizationId, orgId),
+          eq(schema.grant.subjectKind, 'actor'),
+          eq(schema.grant.subjectId, humanActorId),
+          eq(schema.grant.resourceKind, 'organization'),
+          eq(schema.grant.resourceId, orgId),
+        ),
+      );
+    await db.insert(schema.grant).values({
+      organizationId: orgId,
+      subjectKind: 'actor',
+      subjectId: humanActorId,
+      resourceKind: 'task',
+      resourceId: subjectId,
+      capabilities: ['contribute'],
+      effect: 'allow',
+      cascades: false,
+    });
+
+    const revoked = await writer.request(`/${subjectId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ relatedTaskIds: [] }),
+    });
+    expect(revoked.status).toBe(403);
+    expect(
+      (
+        await json<{ relatedTasks: { id: string }[] }>(
+          await writer.request(`/${subjectId}`, { method: 'GET' }),
+        )
+      ).relatedTasks.map((candidate) => candidate.id),
+    ).toEqual([relatedTaskId]);
+
+    await db.insert(schema.grant).values({
+      organizationId: orgId,
+      subjectKind: 'actor',
+      subjectId: humanActorId,
+      resourceKind: 'task',
+      resourceId: relatedTaskId,
+      capabilities: ['contribute'],
+      effect: 'allow',
+      cascades: false,
+    });
+    const removal = await writer.request(`/${subjectId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ relatedTaskIds: [] }),
+    });
+    expect(removal.status).toBe(200);
+    expect(
+      (
+        await json<{ relatedTasks: { id: string }[] }>(
+          await writer.request(`/${subjectId}`, { method: 'GET' }),
+        )
+      ).relatedTasks,
+    ).toEqual([]);
+  });
+
+  it('forbids removing a link when the subject is the second stored endpoint', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const relatedTaskId = await createTask(writer, teamId, { title: 'Earlier endpoint' });
+    const subjectId = await createTask(writer, teamId, { title: 'Later endpoint' });
+
+    expect(
+      (
+        await writer.request(`/${subjectId}`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ relatedTaskIds: [relatedTaskId] }),
+        })
+      ).status,
+    ).toBe(200);
+
+    await db
+      .delete(schema.grant)
+      .where(
+        and(
+          eq(schema.grant.organizationId, orgId),
+          eq(schema.grant.subjectKind, 'actor'),
+          eq(schema.grant.subjectId, humanActorId),
+          eq(schema.grant.resourceKind, 'organization'),
+          eq(schema.grant.resourceId, orgId),
+        ),
+      );
+    await db.insert(schema.grant).values({
+      organizationId: orgId,
+      subjectKind: 'actor',
+      subjectId: humanActorId,
+      resourceKind: 'task',
+      resourceId: subjectId,
+      capabilities: ['contribute'],
+      effect: 'allow',
+      cascades: false,
+    });
+
+    const response = await writer.request(`/${subjectId}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ relatedTaskIds: [] }),
+    });
+    expect(response.status).toBe(403);
+    expect(
+      (
+        await json<{ relatedTasks: { id: string }[] }>(
+          await writer.request(`/${subjectId}`, { method: 'GET' }),
+        )
+      ).relatedTasks.map((candidate) => candidate.id),
+    ).toEqual([relatedTaskId]);
+  });
+
   it('derives completedAt when CREATED directly in a terminal (completed) state', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const writer = appWithActor(tasks, orgId, ['contribute'], humanActorId);

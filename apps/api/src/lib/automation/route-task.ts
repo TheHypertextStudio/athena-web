@@ -55,6 +55,7 @@ import { z } from 'zod';
 import { emitEvent } from '../../routes/event-emit';
 import { enqueueSearchUpsert } from '../../search/write-through';
 import { resolveLandingTarget } from '../task-landing';
+import { setTaskState } from '../task-state';
 import type { AutomationEvent } from './event';
 import { resolveTaskStatus } from '../work-status';
 
@@ -251,26 +252,18 @@ async function actorInTargetOrg(
 async function applyParamsToTask(
   taskId: string,
   targetOrgId: string,
+  actorId: string | null,
   params: RouteTaskParams,
 ): Promise<void> {
-  // The status has to be resolved against the task's own team, and its key and id written
-  // together — the composite foreign key refuses a row where the two disagree.
-  let statusPatch: { statusId: string; state: string } | undefined;
   if (params.state !== undefined) {
-    const [owner] = await db
-      .select({ teamId: task.teamId })
-      .from(task)
-      .where(and(eq(task.id, taskId), eq(task.organizationId, targetOrgId)))
-      .limit(1);
-    if (owner) {
-      const resolved = await resolveTaskStatus(targetOrgId, owner.teamId, params.state);
-      statusPatch = { statusId: resolved.statusId, state: resolved.state };
-    }
+    await setTaskState({
+      organizationId: targetOrgId,
+      taskId,
+      state: params.state,
+      actorId,
+    });
   }
-  const patch = {
-    ...(statusPatch ?? {}),
-    ...(params.priority !== undefined ? { priority: params.priority } : {}),
-  };
+  const patch = params.priority === undefined ? {} : { priority: params.priority };
   if (Object.keys(patch).length > 0) {
     await db
       .update(task)
@@ -404,7 +397,7 @@ export async function routeInboundItemToTask(
   const existingTaskId = linked ?? routedTaskId;
 
   if (existingTaskId !== undefined) {
-    await applyParamsToTask(existingTaskId, targetOrgId, params);
+    await applyParamsToTask(existingTaskId, targetOrgId, writerActorId, params);
     // Keep the ledger pointing at the task this item actually lives on, so a later delivery
     // short-circuits on the route row instead of re-resolving through the ingestion layer.
     await upsertRoute(targetOrgId, event.organizationId, existingTaskId, writerActorId, item);
@@ -516,7 +509,7 @@ export async function routeInboundItemToTask(
     // Lost the race. The winner's task is the one task this item gets; adopt it.
     const winner = await existingRoute(targetOrgId, item);
     if (!winner) return { kind: 'skipped', reason: 'no_source_key' };
-    await applyParamsToTask(winner.taskId, targetOrgId, params);
+    await applyParamsToTask(winner.taskId, targetOrgId, writerActorId, params);
     // Against the WINNER's task, for the same reason the already-routed branch above does it:
     // this delivery's suggestion is no longer pending once a task for its mail exists. Leaving
     // it pending would leave the loser's row in the review queue, and `acceptSuggestion` decides

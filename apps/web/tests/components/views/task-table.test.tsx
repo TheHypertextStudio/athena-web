@@ -171,6 +171,7 @@ function task(fixture: TaskFixture): TaskOut {
     title: fixture.title,
     state: fixture.state ?? 'in_progress',
     priority: 'none',
+    autoCompletedBySubtasks: false,
     ...(fixture.assigneeId ? { assigneeId: ActorId.parse(fixture.assigneeId) } : {}),
     ...(fixture.estimateMinutes !== undefined ? { estimateMinutes: fixture.estimateMinutes } : {}),
     ...(fixture.dueDate ? { dueDate: fixture.dueDate } : {}),

@@ -47,6 +47,12 @@ import { zJson, zParam, zQuery } from '../lib/validate';
 import { loadStatusSets, terminalStampsFor, type ResolvedStatus } from '../lib/work-status';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { enqueueSearchUpsert } from '../search/write-through';
+import {
+  applySubtaskCompletionPolicyForParents,
+  finishTaskStateTransition,
+  type TaskStateMutation,
+  writeTaskStateTransition,
+} from '../lib/task-state';
 
 type WorkStatusRow = typeof workStatus.$inferSelect;
 
@@ -313,11 +319,11 @@ const workStatuses = new Hono<AppEnv>()
     zParam(statusIdParam),
     zJson(WorkStatusUpdate),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { statusId } = c.req.valid('param');
       const body = c.req.valid('json');
 
-      const { updated, restamped } = await db.transaction(async (tx) => {
+      const { updated, restamped, cascades } = await db.transaction(async (tx) => {
         const current = (
           await tx
             .select()
@@ -370,24 +376,45 @@ const workStatuses = new Hono<AppEnv>()
 
         // Moving a status across the terminal boundary changes what the work in it *is*, and
         // `completedAt`/`canceledAt` are what progress, capacity and throughput read.
-        let touched: string[] = [];
+        const restamped: TaskStateMutation[] = [];
+        let cascades: TaskStateMutation[] = [];
         if (body.category !== undefined && body.category !== current.category) {
           if (current.entityType === 'task') {
             const stamps = terminalStampsFor(body.category);
-            const rows = await tx
-              .update(task)
-              .set({ completedAt: stamps.completedAt, canceledAt: stamps.canceledAt })
+            const before = await tx
+              .select()
+              .from(task)
               .where(and(eq(task.organizationId, orgId), eq(task.statusId, statusId)))
-              .returning({ id: task.id });
-            touched = rows.map((entry) => entry.id);
+              .for('update');
+            for (const entry of before) {
+              const mutation = await writeTaskStateTransition(tx, {
+                before: entry,
+                statusId: entry.statusId,
+                state: entry.state,
+                completedAt: stamps.completedAt,
+                canceledAt: stamps.canceledAt,
+                includeArchived: true,
+              });
+              if (mutation) restamped.push(mutation);
+            }
+            cascades = await applySubtaskCompletionPolicyForParents(
+              tx,
+              orgId,
+              restamped.map((entry) => entry.after.parentTaskId),
+            );
           }
           // Containers carry no terminal timestamps of their own: their progress is computed from
           // the work inside them, so moving the status between categories is the whole change.
         }
-        return { updated: row, restamped: touched };
+        return { updated: row, restamped, cascades };
       });
 
-      for (const id of restamped) await enqueueSearchUpsert(orgId, 'task', id);
+      for (const transition of restamped) {
+        await finishTaskStateTransition({ actorId }, transition);
+      }
+      for (const cascade of cascades) {
+        await finishTaskStateTransition({ actorId: null }, cascade);
+      }
       return ok(c, WorkStatusOut, toOut(updated));
     },
   )
@@ -472,7 +499,7 @@ const workStatuses = new Hono<AppEnv>()
     zParam(statusIdParam),
     zQuery(deleteQuery),
     async (c) => {
-      const { orgId } = c.get('actorCtx');
+      const { orgId, actorId } = c.get('actorCtx');
       const { statusId } = c.req.valid('param');
       const { remapTo } = c.req.valid('query');
       if (remapTo === statusId) {
@@ -481,87 +508,112 @@ const workStatuses = new Hono<AppEnv>()
         ]);
       }
 
-      const { deleted, remappedCount, moved, movedKind } = await db.transaction(async (tx) => {
-        const current = (
-          await tx
-            .select()
-            .from(workStatus)
-            .where(and(eq(workStatus.id, statusId), eq(workStatus.organizationId, orgId)))
-            .for('update')
-        )[0];
-        if (!current) throw new NotFoundError('Status not found');
+      const { deleted, remappedCount, moved, movedKind, transitions, cascades } =
+        await db.transaction(async (tx) => {
+          const current = (
+            await tx
+              .select()
+              .from(workStatus)
+              .where(and(eq(workStatus.id, statusId), eq(workStatus.organizationId, orgId)))
+              .for('update')
+          )[0];
+          if (!current) throw new NotFoundError('Status not found');
 
-        const siblings = await lockSet(tx, orgId, current.entityType, current.teamId);
-        const replacement = siblings.find((status) => status.id === remapTo);
-        if (!replacement) {
-          throw new ValidationError([
-            { message: 'The replacement has to be a status in the same set', path: ['remapTo'] },
-          ]);
-        }
-        if (current.isDefault) {
-          throw new ConflictError(
-            'This is where new work starts. Make another status the default first.',
-          );
-        }
-        assertSetRemainsUsable(siblings.filter((status) => status.id !== statusId));
+          const siblings = await lockSet(tx, orgId, current.entityType, current.teamId);
+          const replacement = siblings.find((status) => status.id === remapTo);
+          if (!replacement) {
+            throw new ValidationError([
+              { message: 'The replacement has to be a status in the same set', path: ['remapTo'] },
+            ]);
+          }
+          if (current.isDefault) {
+            throw new ConflictError(
+              'This is where new work starts. Make another status the default first.',
+            );
+          }
+          assertSetRemainsUsable(siblings.filter((status) => status.id !== statusId));
 
-        // Each kind of work is remapped against its own table so the key column and `status_id`
-        // move together, which is exactly what the composite foreign key requires.
-        const moveTo = { statusId: replacement.id, key: replacement.key };
-        let movedIds: string[];
-        let remapped: number;
-        if (current.entityType === 'task') {
-          const stamps = terminalStampsFor(replacement.category);
-          const rows = await tx
-            .update(task)
-            .set({
-              statusId: moveTo.statusId,
-              state: moveTo.key,
-              completedAt: stamps.completedAt,
-              canceledAt: stamps.canceledAt,
-            })
-            .where(and(eq(task.organizationId, orgId), eq(task.statusId, statusId)))
-            .returning({ id: task.id });
-          movedIds = rows.map((row) => row.id);
-          remapped = rows.length;
-        } else if (current.entityType === 'project') {
-          const rows = await tx
-            .update(project)
-            .set({ statusId: moveTo.statusId, status: moveTo.key })
-            .where(and(eq(project.organizationId, orgId), eq(project.statusId, statusId)))
-            .returning({ id: project.id });
-          movedIds = rows.map((row) => row.id);
-          remapped = rows.length;
-        } else if (current.entityType === 'program') {
-          const rows = await tx
-            .update(program)
-            .set({ statusId: moveTo.statusId, status: moveTo.key })
-            .where(and(eq(program.organizationId, orgId), eq(program.statusId, statusId)))
-            .returning({ id: program.id });
-          movedIds = rows.map((row) => row.id);
-          remapped = rows.length;
-        } else {
-          const rows = await tx
-            .update(initiative)
-            .set({ statusId: moveTo.statusId, status: moveTo.key })
-            .where(and(eq(initiative.organizationId, orgId), eq(initiative.statusId, statusId)))
-            .returning({ id: initiative.id });
-          movedIds = rows.map((row) => row.id);
-          remapped = rows.length;
-        }
+          // Each kind of work is remapped against its own table so the key column and `status_id`
+          // move together, which is exactly what the composite foreign key requires.
+          const moveTo = { statusId: replacement.id, key: replacement.key };
+          let movedIds: string[];
+          const transitions: TaskStateMutation[] = [];
+          let cascades: TaskStateMutation[] = [];
+          let remapped: number;
+          if (current.entityType === 'task') {
+            const stamps = terminalStampsFor(replacement.category);
+            const before = await tx
+              .select()
+              .from(task)
+              .where(and(eq(task.organizationId, orgId), eq(task.statusId, statusId)))
+              .for('update');
+            for (const entry of before) {
+              const mutation = await writeTaskStateTransition(tx, {
+                before: entry,
+                statusId: moveTo.statusId,
+                state: moveTo.key,
+                completedAt: stamps.completedAt,
+                canceledAt: stamps.canceledAt,
+                includeArchived: true,
+              });
+              if (mutation) transitions.push(mutation);
+            }
+            movedIds = transitions.map((entry) => entry.after.id);
+            remapped = transitions.length;
+            cascades = await applySubtaskCompletionPolicyForParents(
+              tx,
+              orgId,
+              transitions.map((entry) => entry.after.parentTaskId),
+            );
+          } else if (current.entityType === 'project') {
+            const rows = await tx
+              .update(project)
+              .set({ statusId: moveTo.statusId, status: moveTo.key })
+              .where(and(eq(project.organizationId, orgId), eq(project.statusId, statusId)))
+              .returning({ id: project.id });
+            movedIds = rows.map((row) => row.id);
+            remapped = rows.length;
+          } else if (current.entityType === 'program') {
+            const rows = await tx
+              .update(program)
+              .set({ statusId: moveTo.statusId, status: moveTo.key })
+              .where(and(eq(program.organizationId, orgId), eq(program.statusId, statusId)))
+              .returning({ id: program.id });
+            movedIds = rows.map((row) => row.id);
+            remapped = rows.length;
+          } else {
+            const rows = await tx
+              .update(initiative)
+              .set({ statusId: moveTo.statusId, status: moveTo.key })
+              .where(and(eq(initiative.organizationId, orgId), eq(initiative.statusId, statusId)))
+              .returning({ id: initiative.id });
+            movedIds = rows.map((row) => row.id);
+            remapped = rows.length;
+          }
 
-        await tx.delete(workStatus).where(eq(workStatus.id, statusId));
-        return {
-          deleted: current,
-          remappedCount: remapped,
-          moved: movedIds,
-          movedKind: current.entityType,
-        };
-      });
+          await tx.delete(workStatus).where(eq(workStatus.id, statusId));
+          return {
+            deleted: current,
+            remappedCount: remapped,
+            moved: movedIds,
+            movedKind: current.entityType,
+            transitions,
+            cascades,
+          };
+        });
 
       // The status key travels into the search facet for every kind of work, so everything that
       // moved has to be reindexed rather than only the tasks.
-      for (const id of moved) await enqueueSearchUpsert(orgId, movedKind, id);
+      if (movedKind === 'task') {
+        for (const transition of transitions) {
+          await finishTaskStateTransition({ actorId }, transition);
+        }
+      } else {
+        for (const id of moved) await enqueueSearchUpsert(orgId, movedKind, id);
+      }
+      for (const cascade of cascades) {
+        await finishTaskStateTransition({ actorId: null }, cascade);
+      }
       return ok(c, WorkStatusDeleteResult, {
         deleted: toOut(deleted),
         remappedCount,

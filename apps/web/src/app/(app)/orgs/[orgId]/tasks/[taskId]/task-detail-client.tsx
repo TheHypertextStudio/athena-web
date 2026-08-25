@@ -3,32 +3,29 @@
 import type { Priority } from '@docket/work/task-contract';
 import { ActorAvatar, ActorPicker, type ActorKind, type PickerOption } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Button } from '@docket/ui/primitives';
+import { Skeleton, SkeletonChip, SkeletonText } from '@docket/ui/primitives';
 import { useTypedRoute } from '@/lib/app-location';
-import { useQueryClient } from '@tanstack/react-query';
-import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
+import { useAppRouter } from '@/lib/interactions/navigation';
+import { type JSX, useCallback, useMemo, useState } from 'react';
 
 import { useDocumentTitle } from '@/components/tabs/use-document-title';
 import { useRegisterTabTitle } from '@/components/tabs/use-register-tab-title';
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
 import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
-import { TemplateAwareEntityDocument } from '@/components/editor/apply-description-template';
+import { ResourcesTab } from '@/components/entity-detail/resources-tab';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { formatWindow } from '@/components/cycles/format-window';
 import { Dependencies } from '@/components/task-detail/Dependencies';
-import { CommentActivityFeed } from '@/components/task-detail/CommentActivityFeed';
+import { TaskActivityFeed } from '@/components/task-detail/task-activity-feed';
 import { PriorityPicker } from '@/components/task-detail/PriorityPicker';
 import { StatusPicker } from '@/components/task-detail/StatusPicker';
 import { Subtasks } from '@/components/task-detail/Subtasks';
-import { TaskDetailLoading } from '@/components/task-detail/task-detail-loading';
-import { MailAttachmentsPanel } from '@/components/athena/mail-attachments-panel';
-import TaskAttachments from '@/components/task-detail/TaskAttachments';
-import { TaskActivitySection } from '@/components/task-detail/task-activity-section';
 import {
   TaskHeaderControls,
   TaskHeaderOverflowMenu,
 } from '@/components/task-detail/task-header-controls';
 import { TaskTimerButton } from '@/components/time-tracking';
+import { TaskDetails } from '@/components/task-detail/task-details';
 import { TaskPropertiesRail } from '@/components/task-detail/task-properties-rail';
 import {
   cycleOptions as toCycleOptions,
@@ -42,16 +39,13 @@ import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
 import { useEstimationScale } from '@/lib/use-estimation-scale';
 import { useTaskDetail } from '@/lib/use-task-detail';
+import { useTaskAttachments } from '@/lib/use-attachments';
 import { useTaskMutations } from '@/lib/use-task-mutations';
+import { useOrgCapability } from '@/lib/use-org-capability';
 import { useRenameTask } from '@/lib/use-rename-task';
 import { useCategoryOf } from '@/components/entity-display/use-work-status';
 import { TaskRepeatingWorkBacklink } from '@/components/recurrence/repeating-work-backlink';
-import { useNavigationSnapshot } from '@/lib/use-navigation-snapshot';
-import { useAppRouter } from '@/lib/interactions/navigation';
-import {
-  removeNavigationSnapshot,
-  seedNavigationSnapshot,
-} from '@/lib/navigation-snapshot-runtime';
+import { useSession } from '@/lib/auth-client';
 
 interface TaskFeedActor {
   name: string;
@@ -62,27 +56,14 @@ interface TaskFeedActor {
 /** TaskDetailPage renders the authenticated task page. */
 export default function TaskDetailPage(): JSX.Element {
   const router = useAppRouter();
-  const queryClient = useQueryClient();
   const { params } = useTypedRoute('/orgs/[orgId]/tasks/[taskId]');
   const { orgId, taskId } = params;
-  const navigationSnapshot = useNavigationSnapshot('task', taskId);
 
   const projectLabel = useVocabulary('project');
   const programLabel = useVocabulary('program');
   const cycleLabel = useVocabulary('cycle');
   const categoryOf = useCategoryOf('task');
 
-  const [activityOpen, setActivityOpen] = useState(false);
-  const [aggregateEnabled, setAggregateEnabled] = useState(true);
-  const [terminalState, setTerminalState] = useState<'forbidden' | 'not-found' | null>(null);
-  const [membersOpen, setMembersOpen] = useState(false);
-  const [projectsOpen, setProjectsOpen] = useState(false);
-  const [programsOpen, setProgramsOpen] = useState(false);
-  const [milestonesOpen, setMilestonesOpen] = useState(false);
-  const [cyclesOpen, setCyclesOpen] = useState(false);
-  const [labelsOpen, setLabelsOpen] = useState(false);
-  const [propertiesTouched, setPropertiesTouched] = useState(false);
-  const [linkedContentOpen, setLinkedContentOpen] = useState(false);
   const {
     task,
     workflowStates,
@@ -92,41 +73,28 @@ export default function TaskDetailPage(): JSX.Element {
     agents,
     milestones,
     cycles,
-    comments,
-    activities,
+    roles,
+    entityMentions,
     detailKey,
-    commentsKey,
+    activityKey,
     isPending,
     isError,
     error,
-    capabilities,
-    currentActorId,
-    snapshot,
-    terminalFailure,
-  } = useTaskDetail(orgId, taskId, {
-    aggregateEnabled,
-    activityOpen,
-    membersOpen,
-    projectsOpen,
-    programsOpen,
-    milestonesOpen,
-    cyclesOpen,
-  });
-  useEffect(() => {
-    setTerminalState(null);
-  }, [taskId]);
+  } = useTaskDetail(orgId, taskId);
 
-  useEffect(() => {
-    if (snapshot) seedNavigationSnapshot(snapshot);
-  }, [snapshot]);
+  const {
+    attachments,
+    addUrl: addResourceUrl,
+    addFile: addResourceFile,
+    remove: removeResource,
+    downloadUrl,
+    isUploading: resourceUploadPending,
+    actionError: resourceActionError,
+  } = useTaskAttachments(orgId, taskId);
 
-  useEffect(() => {
-    if (terminalFailure === null) return;
-    setTerminalState(terminalFailure);
-    setAggregateEnabled(false);
-    void removeNavigationSnapshot('task', taskId);
-    queryClient.removeQueries({ queryKey: detailKey, exact: true });
-  }, [detailKey, queryClient, taskId, terminalFailure]);
+  const { data: session } = useSession();
+  const currentActorId =
+    members.find((member) => member.userId === session?.user.id)?.actorId ?? null;
 
   // The tab bar and the browser tab both follow the name on screen, including through a rename.
   useRegisterTabTitle('task', orgId, taskId, task?.title);
@@ -146,9 +114,9 @@ export default function TaskDetailPage(): JSX.Element {
     priorityPending,
     deletePending,
     deleteError,
-  } = useTaskMutations(orgId, taskId, detailKey, commentsKey);
+  } = useTaskMutations(orgId, taskId, detailKey, activityKey);
 
-  const { scale: estimationScale } = useEstimationScale(orgId, propertiesTouched);
+  const { scale: estimationScale } = useEstimationScale(orgId);
 
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
@@ -173,9 +141,9 @@ export default function TaskDetailPage(): JSX.Element {
     [task, resolveActor],
   );
 
-  const canEdit = capabilities?.contribute ?? false;
-  const canComment = capabilities?.comment ?? false;
-  const canManage = capabilities?.manage ?? false;
+  const canEdit = useOrgCapability(members, roles, 'contribute');
+  const canComment = useOrgCapability(members, roles, 'comment');
+  const canManage = useOrgCapability(members, roles, 'manage');
   // Rename any subtask in place (an arbitrary task by id), then re-read this task's detail so the
   // refreshed subtask titles flow back in.
   const renameSubtask = useRenameTask(orgId, [detailKey]);
@@ -191,7 +159,6 @@ export default function TaskDetailPage(): JSX.Element {
           param: { orgId, subjectType: 'project' },
         }),
       'Could not load project icons.',
-      { enabled: projectsOpen },
     ),
   );
   const projectDisplays = projectDisplaysQ.data?.items ?? [];
@@ -207,7 +174,7 @@ export default function TaskDetailPage(): JSX.Element {
     () => toCycleOptions(cycles, formatWindow),
     [cycles],
   );
-  const labelsQ = useApiListQuery({ ...labelsDef(orgId), enabled: labelsOpen });
+  const labelsQ = useApiListQuery(labelsDef(orgId));
   const labelOptions = useMemo<readonly PickerOption[]>(
     () => toLabelOptions(labelsQ.data?.items ?? []),
     [labelsQ.data],
@@ -252,22 +219,24 @@ export default function TaskDetailPage(): JSX.Element {
     [resetDelete],
   );
 
-  if (terminalState !== null) {
+  if (isPending) {
+    // placeholder: the task's own record — its title, the state/priority/assignee controls whose
+    // current values are the whole point of rendering them, its description, and its subtasks,
+    // comments and relations. The route carries only a task id.
     return (
-      <div className="mx-auto w-full max-w-6xl p-4 @2xl:p-6 @4xl:p-8">
-        <p
-          role="alert"
-          className="border-outline-variant text-on-surface-variant rounded-lg border p-4"
-        >
-          {terminalState === 'forbidden'
-            ? 'You no longer have access to this task.'
-            : 'This task no longer exists.'}
-        </p>
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
+        <header className="flex flex-col gap-4">
+          <SkeletonText scale="title" className="w-2/3 max-w-lg" />
+          <div className="flex flex-nowrap gap-2 overflow-hidden">
+            <SkeletonChip className="w-32" />
+            <SkeletonChip className="w-32" />
+            <SkeletonChip className="w-24" />
+          </div>
+        </header>
+        <Skeleton className="h-48 w-full rounded-lg" />
+        <Skeleton className="h-48 w-full rounded-lg" />
       </div>
     );
-  }
-  if (isPending) {
-    return <TaskDetailLoading snapshot={navigationSnapshot} />;
   }
 
   if (isError) {
@@ -318,7 +287,6 @@ export default function TaskDetailPage(): JSX.Element {
                 void setState(stateKey);
               }}
               pending={statusPending}
-              disabled={!canEdit}
             />
           }
           priority={
@@ -328,7 +296,6 @@ export default function TaskDetailPage(): JSX.Element {
                 void setPriority(priority);
               }}
               pending={priorityPending}
-              disabled={!canEdit}
             />
           }
           assignee={
@@ -344,8 +311,6 @@ export default function TaskDetailPage(): JSX.Element {
               triggerVariant="outline"
               triggerClassName="min-w-0 shrink"
               readOnly={!canEdit}
-              loading={membersOpen && members.length === 0}
-              onOpenChange={setMembersOpen}
             />
           }
           delegate={
@@ -372,17 +337,12 @@ export default function TaskDetailPage(): JSX.Element {
             <TaskHeaderOverflowMenu
               taskId={taskId}
               title={task.title}
-              athenaContext={{
-                workspaceId: orgId,
-                source: { type: 'task', id: taskId, label: task.title },
-              }}
               priority={task.priority}
               priorityPending={priorityPending}
               memberOptions={memberOptions}
               assigneeId={task.assigneeId ?? null}
               canEdit={canEdit}
               canManage={canManage}
-              onAssigneeOpenChange={setMembersOpen}
               onPriorityChange={(priority) => {
                 void setPriority(priority);
               }}
@@ -403,146 +363,99 @@ export default function TaskDetailPage(): JSX.Element {
         ) : null}
       </header>
 
-      {linkedContentOpen ? <TaskRepeatingWorkBacklink orgId={orgId} entityId={taskId} /> : null}
+      <TaskRepeatingWorkBacklink orgId={orgId} entityId={taskId} />
 
-      <div className="grid grid-cols-1 gap-6 @4xl:grid-cols-[minmax(0,1fr)_18rem]">
-        <div className="flex min-w-0 flex-col gap-6">
-          {/*
-           * A task's description is an editor, not a read-out. It used to render as an inert
-           * paragraph that said "No description." in placeholder grey next to an editable title —
-           * which taught people the region was editable and then did nothing when they clicked
-           * it, and left no way at all to add a description from here.
-           */}
-          <section aria-labelledby="description-heading" className="flex flex-col gap-2">
-            <h2 id="description-heading" className="sr-only">
-              Description
-            </h2>
-            <TemplateAwareEntityDocument
-              orgId={orgId}
-              kind="task"
-              currentActorId={currentActorId}
-              teamId={task.teamId}
-              value={task.description}
-              canEdit={canEdit}
-              onSave={(description) => {
-                patchTask({ description: description ?? '' });
-              }}
-              placeholder="Add a description"
-            />
-          </section>
-
-          <Subtasks
-            organizationId={orgId}
-            parentTaskId={taskId}
-            subtasks={task.subtasks}
-            onAdd={addSubtask}
-            onToggle={(subtask, done) => toggleSubtask(subtask.id, done)}
-            onOpen={openTask}
-            onRename={renameSubtask}
-            canEdit={canEdit}
-          />
-
-          {linkedContentOpen ? (
-            <>
-              <TaskAttachments orgId={orgId} taskId={taskId} canEdit={canEdit} />
-              <MailAttachmentsPanel subjectType="task" subjectId={taskId} organizationId={orgId} />
-            </>
-          ) : null}
-
-          <Dependencies
-            blocking={task.blocking}
-            blockedBy={task.blockedBy}
-            projectName={projectName}
-            projectLabel={projectLabel}
-            onOpen={openTask}
-            canEdit={canEdit}
-            onRename={renameSubtask}
-          />
-
-          {linkedContentOpen ? (
-            <section className="flex flex-col gap-2">
-              <h2 className="text-on-surface text-title-small">Dependency map</h2>
-              <div className="bg-surface-container h-80 overflow-hidden rounded-xl">
-                <TaskGraphPanel
-                  scope={{ orgId, rootTaskId: taskId, depth: 2 }}
-                  density="compact"
-                  onExpand={() => {
-                    router.push(`/orgs/${orgId}/graph?rootTaskId=${taskId}`);
-                  }}
-                />
-              </div>
-            </section>
-          ) : (
-            <section aria-label="Linked task content">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setLinkedContentOpen(true);
-                }}
-              >
-                Load attachments and dependency map
-              </Button>
-            </section>
-          )}
-
-          {activityOpen ? (
-            <>
-              <CommentActivityFeed
-                comments={comments}
-                activities={activities}
-                resolveActor={resolveActor}
-                onComment={addComment}
-                canComment={canComment}
-              />
-              <TaskActivitySection orgId={orgId} taskId={taskId} />
-            </>
-          ) : (
-            <section aria-label="Task activity">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setActivityOpen(true);
-                }}
-              >
-                Load activity and comments
-              </Button>
-            </section>
-          )}
-        </div>
-
-        <div
-          onFocusCapture={() => {
-            setPropertiesTouched(true);
+      <div className="flex min-w-0 flex-col gap-6">
+        <TaskDetails
+          orgId={orgId}
+          taskId={taskId}
+          task={task}
+          currentActorId={currentActorId}
+          canEdit={canEdit}
+          onSave={(description) => {
+            patchTask({ description: description ?? '' });
           }}
-        >
-          <TaskPropertiesRail
-            task={task}
-            projectLabel={projectLabel}
-            programLabel={programLabel}
-            cycleLabel={cycleLabel}
-            projectOptions={projectOptions}
-            programOptions={programOptions}
-            milestoneOptions={milestoneOptions}
-            cycleOptions={cycleOptions}
-            labelOptions={labelOptions}
-            projectLoading={projectsOpen && projects.length === 0}
-            programLoading={programsOpen && programs.length === 0}
-            milestoneLoading={milestonesOpen && milestones.length === 0}
-            cycleLoading={cyclesOpen && cycles.length === 0}
-            labelsLoading={labelsOpen && labelsQ.data === undefined}
-            onProjectOpenChange={setProjectsOpen}
-            onProgramOpenChange={setProgramsOpen}
-            onMilestoneOpenChange={setMilestonesOpen}
-            onCycleOpenChange={setCyclesOpen}
-            onLabelsOpenChange={setLabelsOpen}
-            onCreateLabel={onCreateLabel}
-            estimationScale={estimationScale}
-            canEdit={canEdit}
-            onPatch={patchTask}
-          />
-        </div>
+          details={
+            <TaskPropertiesRail
+              task={task}
+              projectLabel={projectLabel}
+              programLabel={programLabel}
+              cycleLabel={cycleLabel}
+              projectOptions={projectOptions}
+              programOptions={programOptions}
+              milestoneOptions={milestoneOptions}
+              cycleOptions={cycleOptions}
+              labelOptions={labelOptions}
+              onCreateLabel={onCreateLabel}
+              estimationScale={estimationScale}
+              canEdit={canEdit}
+              onPatch={patchTask}
+            />
+          }
+        />
+
+        <Subtasks
+          organizationId={orgId}
+          parentTaskId={taskId}
+          subtasks={task.subtasks}
+          onAdd={addSubtask}
+          onToggle={(subtask, done) => toggleSubtask(subtask.id, done)}
+          onOpen={openTask}
+          onRename={renameSubtask}
+          canEdit={canEdit}
+        />
+
+        <ResourcesTab
+          resources={attachments}
+          canEdit={canEdit}
+          pending={resourceUploadPending}
+          error={resourceActionError}
+          onAdd={(resource) => {
+            void addResourceUrl(resource);
+          }}
+          onRemove={(resourceId) => {
+            void removeResource(resourceId);
+          }}
+          onUpload={(file) => {
+            void addResourceFile({ file });
+          }}
+          uploading={resourceUploadPending}
+          downloadHref={downloadUrl}
+          mentionedExternal={entityMentions.external}
+          mentionedEntities={entityMentions.entities}
+          mentionsPending={entityMentions.isPending}
+          hasProse={(task.description ?? '').trim().length > 0}
+        />
+
+        <Dependencies
+          blocking={task.blocking}
+          blockedBy={task.blockedBy}
+          projectName={projectName}
+          projectLabel={projectLabel}
+          onOpen={openTask}
+          canEdit={canEdit}
+          onRename={renameSubtask}
+        />
+
+        <section className="flex flex-col gap-2">
+          <h2 className="text-on-surface text-title-small font-medium">Dependency map</h2>
+          <div className="bg-surface-container h-80 overflow-hidden rounded-xl">
+            <TaskGraphPanel
+              scope={{ orgId, rootTaskId: taskId, depth: 2 }}
+              density="compact"
+              onExpand={() => {
+                router.push(`/orgs/${orgId}/graph?rootTaskId=${taskId}`);
+              }}
+            />
+          </div>
+        </section>
+
+        <TaskActivityFeed
+          orgId={orgId}
+          taskId={taskId}
+          onComment={addComment}
+          canComment={canComment}
+        />
       </div>
 
       <ConfirmDestructiveDialog

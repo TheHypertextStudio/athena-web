@@ -690,7 +690,7 @@ export function AppShell({
           widths. Mounted only when the desktop query does *not* match, so Radix's focus trap and
           scroll-lock never activate over a docked rail; it carries its own id
           ({@link SHELL_ASIDE_SHEET_ID}) because the docked host is now in the DOM at every width and
-          the two can no longer share one. A compact horizontal switcher stands in for the activity
+          the two can no longer share one. A single active-panel menu replaces the desktop activity
           bar. Escape/backdrop dismiss closes it. */}
         <Sheet
           open={activePanel != null && !isDesktop && overlayPanelOpen}

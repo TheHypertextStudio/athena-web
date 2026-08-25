@@ -7,21 +7,18 @@ const installer = resolve(import.meta.dirname, '../../scripts/install-git-guardr
 const lintStagedConfig = resolve(import.meta.dirname, '../../lint-staged.config.js');
 
 describe('generated Git guardrails', () => {
-  it('validates the commit message before running the quality gate', () => {
+  it('keeps code checks in pre-commit and message checks in commit-msg', () => {
     const source = readFileSync(installer, 'utf8');
-    const validator = source.indexOf('node scripts/validate-commit-message.mjs "$1"');
-    const formatter = source.indexOf('pnpm lint-staged');
-    const designPolicy = source.indexOf(
-      'pnpm --filter @docket/test-utils exec vitest run tests/design-policies/design-token-policy.test.ts --maxWorkers=1',
-    );
-    const lint = source.indexOf(
-      'NODE_OPTIONS=--max-old-space-size=3072 pnpm turbo run lint --concurrency=1',
-    );
+    const preCommit = source.match(/cat > "\$hooks_dir\/pre-commit" <<'HOOK'([\s\S]*?)\nHOOK/);
+    const commitMessage = source.match(/cat > "\$hooks_dir\/commit-msg" <<'HOOK'([\s\S]*?)\nHOOK/);
 
-    expect(validator).toBeGreaterThan(-1);
-    expect(formatter).toBeGreaterThan(validator);
-    expect(designPolicy).toBeGreaterThan(formatter);
-    expect(lint).toBeGreaterThan(designPolicy);
+    expect(preCommit?.[1]).toContain('pnpm lint-staged');
+    expect(preCommit?.[1]).toContain('tests/design-policies/design-token-policy.test.ts');
+    expect(preCommit?.[1]).toContain('pnpm turbo run lint --concurrency=1');
+    expect(preCommit?.[1]).not.toContain('validate-commit-message');
+
+    expect(commitMessage?.[1]).toContain('node scripts/validate-commit-message.mjs "$1"');
+    expect(commitMessage?.[1]).not.toContain('pnpm');
   });
 
   it('does not run a duplicate staged ESLint pass', () => {

@@ -74,7 +74,12 @@ export function ProgramWorkCard({ row }: ProgramWorkCardProps): JSX.Element {
       <div className="mt-auto flex items-end justify-between gap-4">
         <div className="min-w-0">
           {row.health ? (
-            <Text as="span" token="label-small" tone="muted" className="inline-flex items-center gap-1.5">
+            <Text
+              as="span"
+              token="label-small"
+              tone="muted"
+              className="inline-flex items-center gap-1.5"
+            >
               <span
                 aria-hidden="true"
                 className={cn('size-1.5 shrink-0 rounded-full', HEALTH_DOT_CLASS[row.health])}

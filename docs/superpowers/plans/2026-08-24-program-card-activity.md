@@ -18,6 +18,7 @@ Vitest, Playwright visual review.
 ### Task 1: Define the Program activity-pulse contract
 
 **Files:**
+
 - Modify: `packages/types/src/work-view.ts:1308-1329`
 - Modify: `packages/types/tests/work-view.test.ts:39-265`
 
@@ -45,15 +46,21 @@ Run: `pnpm --filter @docket/types test packages/types/tests/work-view.test.ts`
 - [ ] **Step 3: Add the exact Zod contract.**
 
 ```ts
-export const ProgramActivitySummary = z.object({
-  weeks: z.tuple([
-    z.number().int().nonnegative(), z.number().int().nonnegative(),
-    z.number().int().nonnegative(), z.number().int().nonnegative(),
-    z.number().int().nonnegative(), z.number().int().nonnegative(),
-    z.number().int().nonnegative(), z.number().int().nonnegative(),
-  ]),
-  latestOccurredAt: TimestampString.nullable(),
-}).strict();
+export const ProgramActivitySummary = z
+  .object({
+    weeks: z.tuple([
+      z.number().int().nonnegative(),
+      z.number().int().nonnegative(),
+      z.number().int().nonnegative(),
+      z.number().int().nonnegative(),
+      z.number().int().nonnegative(),
+      z.number().int().nonnegative(),
+      z.number().int().nonnegative(),
+      z.number().int().nonnegative(),
+    ]),
+    latestOccurredAt: TimestampString.nullable(),
+  })
+  .strict();
 ```
 
 Add `activity: ProgramActivitySummary` to `ProgramViewRow`. The eight slots run oldest to newest.
@@ -65,6 +72,7 @@ Run: `pnpm --filter @docket/types test packages/types/tests/work-view.test.ts`
 ### Task 2: Aggregate real visible Program activity inside the work-view statement
 
 **Files:**
+
 - Create: `apps/api/src/lib/work-views/program-activity-sql.ts`
 - Modify: `apps/api/src/lib/work-views/projection-sql.ts:97-121`
 - Modify: `apps/api/src/lib/work-views/contracts.ts:1-40`
@@ -99,10 +107,9 @@ to `null`.
 Replace `projection(context, organizationId)` with
 `projection(context, { organizationId, actorId, userId, asOf })` in the contract registry and its
 one call in `queryWorkView`. Add
-`programActivitySummarySql(sql\`e.id\`, execution) as activity` to the Program projection. The
-helper applies `compileAuthorizationSql('project', ...)` and
-`compileAuthorizationSql('task', ...)` to the associated aliases before aggregating their events.
-Do not add a request per card or derive activity from `updatedAt`.
+`programActivitySummarySql(sql\`e.id\`, execution) as activity`to the Program projection. The
+helper applies`compileAuthorizationSql('project', ...)`and`compileAuthorizationSql('task', ...)`to the associated aliases before aggregating their events.
+Do not add a request per card or derive activity from`updatedAt`.
 
 - [ ] **Step 5: Re-run the focused API tests and query-plan test.**
 
@@ -111,6 +118,7 @@ Run: `pnpm --filter @docket/api test tests/work-views/query.test.ts tests/work-v
 ### Task 3: Render the Program-only Cards lens
 
 **Files:**
+
 - Create: `apps/web/src/components/work-views/program-work-card.tsx`
 - Modify: `apps/web/src/components/work-views/work-cards.tsx:1-178`
 - Create: `apps/web/src/components/work-views/program-work-card.test.tsx`
@@ -153,6 +161,7 @@ Run: `pnpm --filter @docket/web test src/components/work-views/program-work-card
 ### Task 4: Validate, document, and release
 
 **Files:**
+
 - Modify: `docs/WORKLOG.md:9-33`
 - Create: `docs/design/audits/2026-08-24-program-cards.md`
 

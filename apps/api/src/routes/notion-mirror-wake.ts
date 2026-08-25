@@ -132,7 +132,7 @@ export async function failNotionMirrorGeneration(input: {
     .update(notionMirrorState)
     .set({
       consecutiveFailures: sql`${notionMirrorState.consecutiveFailures} + 1`,
-      nextAttemptAt: sql`cast(${now} as timestamp) + (least(900, 5 * power(2, least(${notionMirrorState.consecutiveFailures}, 8))) * interval '1 second')`,
+      nextAttemptAt: sql`cast(${now.toISOString()} as timestamp) + (least(900, 5 * power(2, least(${notionMirrorState.consecutiveFailures}, 8))) * interval '1 second')`,
       lastErrorKind: input.kind,
       lastError: input.error,
       updatedAt: now,

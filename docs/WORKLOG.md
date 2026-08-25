@@ -7,20 +7,25 @@
 
 ## Active Tasks
 
-### [CONNECTOR-POST-001] Let bodyless connector actions reach their handlers
+### [CONNECTOR-POST-001] Keep connector actions and retries running
 
 - **Status**: IN_PROGRESS
 - **Started**: 2026-08-25
 - **Priority**: P0
 - **Description**: The Web proxy preserves a bodyless POST as a zero-byte stream. The API's shared
   media-type gate treated the stream itself as content and returned HTTP 415 before routes such as
-  the Notion mirror's Sync now handler could run.
+  the Notion mirror's Sync now handler could run. Failed Notion mirrors then tried to place a
+  JavaScript Date directly in raw SQL. The production Postgres driver rejected that retry update
+  after the failed run had already been recorded, which turned the scheduler's whole response into
+  HTTP 500.
 - **Approach**: Read a cloned request only when a body stream has no supported media type. Accept
   the request when that stream contains zero bytes. Keep rejecting every non-empty undeclared or
-  unsupported body.
+  unsupported body. Serialize the retry clock before it enters the raw SQL expression so one
+  connector's recorded failure schedules its next attempt instead of failing the scheduler.
 - **Validation**: The media-type suite passes 38 cases. The Notion mirror route suite passes 11
-  cases. API type checking passes with a process-local 4 GB heap. Production rollout and the live
-  LVBT two-way sync check remain pending.
+  cases. The Notion retry-state suite passes 3 cases. The exact retry update now succeeds through
+  the production Postgres driver. API type checking passes with a process-local 4 GB heap.
+  Production rollout and the live LVBT two-way sync check remain pending.
 - **Blockers**: None.
 
 ---

@@ -424,7 +424,7 @@ function CanvasInner({
           >
             <Controls
               showInteractive={false}
-              className="[&_button]:!bg-surface-container-high [&_button]:!fill-on-surface-variant [&_button:hover]:!bg-surface-container-highest pointer-events-auto !static shrink-0 overflow-hidden !rounded-lg !shadow-none [&_button]:!border-0"
+              className="[&_button]:!bg-surface-container-high [&_button]:!fill-on-surface-variant [&_button:hover]:!bg-surface-container-highest pointer-events-auto !static !m-0 shrink-0 overflow-hidden !rounded-lg !shadow-none [&_button]:!border-0"
             />
             <CanvasViewportToolbar
               onRelayout={() => {

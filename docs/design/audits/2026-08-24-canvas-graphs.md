@@ -18,7 +18,7 @@ undo and redo, and creation continuity. The screenshots are in
 | 8. Detail craft                     |     4 | The priority picker's first hover layer stays inside its rounded shell. Composer close restores canvas focus. The 320px Project tabs retain distinct hit targets, and both graph routes have zero page overflow.                             |
 
 Gates: A11y PASS · Responsive implementation PASS · Theme parity PASS · No placeholder PASS ·
-Post-correction screenshot PENDING
+Screenshot verification PASS
 
 The screenshot matrix covers 1440×900, 1024×768, and 390×844 in light and dark for both graph
 types. The 320×720 pass measured
@@ -26,6 +26,12 @@ types. The 320×720 pass measured
 224px wide and stayed inside the 390px viewport. Both composers measured 358px wide from x=16 to
 x=374 and kept the graph mounted behind them. The live 363-Task diagnostics completed layout in
 10.1–18.7ms, below the 100ms release budget.
+
+The post-correction dock captures are
+`project-dependencies-{390-light,390-dark,320-dark}-dock-after.jpg` and
+`task-graph-{390-light,390-dark,320-dark}-dock-after.jpg`. The hidden in-app browser rendered the
+current branch at 390×844 and 320×720 without taking application focus. The clean capture tabs
+reported no console warnings or errors.
 
 The live keyboard and interaction pass selected two Tasks and two Projects through the one-shot
 area tool. It applied a mixed-value bulk change, preserved the selection across query refresh, and
@@ -40,9 +46,15 @@ history, minimap retention, and creation continuity. The database-backed review 
 across 13 API files for atomic commands, permissions, replay conflicts, archived reads, and
 relationship restoration. The object-command contract passes 17 tests. Web type checking, the
 139.6-second bounded repository lint, formatting, and the direct Web production build all pass.
-The production CSS also proves the corrected narrow-width geometry: a 320px canvas leaves 290px
-inside the dock insets, while zoom, mobile viewport actions, minimap, and gaps consume 266px. The
-row therefore keeps 24px of free space at 320px and 94px at 390px.
+The live narrow-width geometry found one error that the compiled-CSS estimate missed. Project
+Dependencies keeps 12px of page padding on each side, so its 320px dock has 266px available after
+the dock's 15px insets. The zoom controls, two mobile viewport actions, minimap, and two 8px gaps
+also consume exactly 266px. React Flow still applied a default 15px margin to the zoom controls in
+the first correction, which would have overflowed that exact fit and raised the controls above the
+other items. The final implementation clears that margin. At 320px, Project controls occupy
+x=27–53, the viewport toolbar x=61–157, and the minimap x=165–293. All three end at y=689 with no
+pairwise overlap. The full-bleed Task graph retains 24px of free horizontal space at the same
+width. Both routes report `scrollWidth === 320`.
 
 ## Findings
 
@@ -64,13 +76,15 @@ row therefore keeps 24px of free space at 320px and 94px at 390px.
    used independent absolute positions. At 390px, the minimap sat under the toolbar and became a
    thin strip. The canvas now lays out those controls in one responsive bottom row. Mobile keeps
    both viewport actions as named icon buttons, while wider screens retain their visible labels.
-   Notices and the Ready panel sit above that row. The saved 390px images are the before-state
-   evidence for this correction, so the post-correction visual pass remains open.
+   Notices and the Ready panel sit above that row. The live correction pass then found and removed
+   React Flow's remaining 15px zoom-control margin, so every item now shares one baseline at 320px
+   and 390px. The original 390px images are the before state, and the six `dock-after` images are
+   the corrected light, dark, and 320px evidence.
 
 The browser automation layer did not preserve Shift during a low-level drag, so that attempt
 panned the canvas and cannot support a product conclusion. The component contract covers
 Shift-drag selection, while the same live marquee path passed through the keyboard-accessible
 one-shot Select area command.
 
-Verdict: HOLD for one post-correction visual pass. Every code and interaction gate passes, but the
-saved 390px screenshots predate the bottom navigation correction.
+Verdict: SHIP. Every dimension scores at least 3, every hard gate passes, and the post-correction
+mobile captures show one non-overlapping bottom dock in both graph hosts and both themes.

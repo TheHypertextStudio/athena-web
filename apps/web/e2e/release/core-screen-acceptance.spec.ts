@@ -15,7 +15,7 @@ interface DetailCase extends ScreenCase {
   readonly aggregatePath: string;
   readonly loadedControl: {
     readonly name: string;
-    readonly role: 'textbox';
+    readonly role: 'heading' | 'textbox';
   };
 }
 
@@ -212,7 +212,7 @@ test('every primary authenticated screen and local-first detail settles', async 
       name: 'Task detail',
       href: orgHref(orgId, `tasks/${ids.taskId}`),
       aggregatePath: `/v1/orgs/${orgId}/tasks/${ids.taskId}/aggregate-detail`,
-      loadedControl: { role: 'textbox', name: 'Task title' },
+      loadedControl: { role: 'heading', name: 'Screen acceptance task' },
     },
     {
       name: 'Project detail',

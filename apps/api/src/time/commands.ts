@@ -20,6 +20,7 @@ import type {
   TimeCategoryCreate,
   TimeContextCreate,
   TimeIntervalCreate,
+  TimeIntervalRepair,
   TimeRecordCreate,
   TimeRecordOut,
   TimeRecordStop,
@@ -778,6 +779,100 @@ export async function addHistoricalInterval(
     .where(eq(timeRecord.id, id))
     .returning();
   /* v8 ignore next -- @preserve defensive: insert/update always returns a row */
+  if (!updated) throw new NotFoundError('Time record not found');
+  return toTimeRecordOut(updated, userId, now);
+}
+
+/** Replace one closed manual interval while retaining the original timing fact for audit history. */
+export async function repairHistoricalInterval(
+  userId: string,
+  recordId: string,
+  intervalId: string,
+  input: TimeIntervalRepair,
+): Promise<TimeRecordInput> {
+  const hubId = await resolveTimeHubId(userId);
+  const record = await getOwnedRecord(recordId, hubId);
+  if (
+    record.status !== 'closed' ||
+    (record.captureSource !== 'manual' && record.captureSource !== 'reconstructed')
+  ) {
+    throw new ConflictError('Only closed manual time can be repaired');
+  }
+  const intervalRows = await db
+    .select()
+    .from(timeInterval)
+    .where(
+      and(
+        eq(timeInterval.id, intervalId),
+        eq(timeInterval.timeRecordId, recordId),
+        eq(timeInterval.hubId, hubId),
+        isNull(timeInterval.supersededById),
+      ),
+    )
+    .limit(1);
+  const interval = intervalRows[0];
+  if (!interval) throw new NotFoundError('Time interval not found');
+  if (
+    interval.actorKind !== 'human' ||
+    interval.endedAt === null ||
+    (interval.source !== 'manual_entry' && interval.source !== 'reconstructed_entry')
+  ) {
+    throw new ConflictError('Only completed manual time can be repaired');
+  }
+  const now = new Date();
+  const updated = await db.transaction(async (tx) => {
+    const [replacement] = await tx
+      .insert(timeInterval)
+      .values({
+        timeRecordId: recordId,
+        hubId,
+        taskId: interval.taskId,
+        actorKind: interval.actorKind,
+        userId: interval.userId,
+        agentExecutionId: interval.agentExecutionId,
+        mode: interval.mode,
+        source: interval.source,
+        startedAt: new Date(input.startsAt),
+        endedAt: new Date(input.endsAt),
+        closedAt: now,
+      })
+      .returning();
+    /* v8 ignore next -- @preserve interval insert always returns its row */
+    if (!replacement) throw new NotFoundError('Time interval not found');
+    await tx
+      .update(timeInterval)
+      .set({ supersededById: replacement.id })
+      .where(eq(timeInterval.id, intervalId));
+    await refreshRecordEnvelope(recordId, now, tx);
+    const [row] = await tx
+      .update(timeRecord)
+      .set({ status: 'closed', closedAt: now })
+      .where(and(eq(timeRecord.id, recordId), eq(timeRecord.hubId, hubId)))
+      .returning();
+    return row;
+  });
+  /* v8 ignore next -- @preserve update follows a successful owned-record read */
+  if (!updated) throw new NotFoundError('Time record not found');
+  return toTimeRecordOut(updated, userId, now);
+}
+
+/** Remove an unsubmitted manual record from personal reflection without erasing its audit row. */
+export async function removeTimeRecord(userId: string, id: string): Promise<TimeRecordInput> {
+  const hubId = await resolveTimeHubId(userId);
+  const record = await getOwnedRecord(id, hubId);
+  if (
+    record.status !== 'closed' ||
+    (record.captureSource !== 'manual' && record.captureSource !== 'reconstructed')
+  ) {
+    throw new ConflictError('Only closed manual time can be removed');
+  }
+  const now = new Date();
+  const [updated] = await db
+    .update(timeRecord)
+    .set({ status: 'superseded', closedAt: now })
+    .where(and(eq(timeRecord.id, id), eq(timeRecord.hubId, hubId)))
+    .returning();
+  /* v8 ignore next -- @preserve update follows a successful owned-record read */
   if (!updated) throw new NotFoundError('Time record not found');
   return toTimeRecordOut(updated, userId, now);
 }

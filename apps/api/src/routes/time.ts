@@ -15,8 +15,10 @@ import {
   TimeCategoryCreate,
   TimeCategoryListOut,
   TimeCategoryOut,
+  TimeCyclePeriodListOut,
   TimeContextCreate,
   TimeIntervalCreate,
+  TimeIntervalRepair,
   TimeMeasuresOut,
   TimeRecordCreate,
   TimeRecordStatusUpdate,
@@ -54,8 +56,11 @@ import {
   getTimeSubmission,
   getTimeTimeline,
   listTimeCategories,
+  listPersonalTimeCycles,
   listTimeShareTokens,
   pauseTimeRecord,
+  removeTimeRecord,
+  repairHistoricalInterval,
   removeTimeContext,
   replaceTimeAllocations,
   revokeTimeShareToken,
@@ -72,6 +77,7 @@ function requireSession(c: { get: (key: 'session') => AuthSession }): NonNullabl
 }
 
 const recordParam = z.object({ id: z.string() });
+const intervalParam = z.object({ id: z.string(), intervalId: z.string() });
 const contextParam = z.object({ id: z.string(), contextId: z.string() });
 const submissionParam = z.object({ id: z.string() });
 
@@ -135,6 +141,20 @@ const time = new Hono<AppEnv>()
     async (c) => {
       const { user } = requireSession(c);
       return ok(c, TimeBreakdownOut, await getTimeBreakdown(user.id, c.req.valid('query')));
+    },
+  )
+  .get(
+    '/cycles',
+    apiDoc({
+      tag: 'Time',
+      summary: 'List personal Time Ledger cycle periods',
+      response: TimeCyclePeriodListOut,
+      description:
+        'List cycle windows only from workspaces where the authenticated caller currently has an active membership. The periods are navigation aids for the caller’s private Time Ledger; this route never returns another person’s time.',
+    }),
+    async (c) => {
+      const { user } = requireSession(c);
+      return ok(c, TimeCyclePeriodListOut, { items: await listPersonalTimeCycles(user.id) });
     },
   )
   .get(
@@ -300,6 +320,42 @@ const time = new Hono<AppEnv>()
         TimeRecordOut,
         await addHistoricalInterval(user.id, c.req.valid('param').id, c.req.valid('json')),
       );
+    },
+  )
+  .patch(
+    '/records/:id/intervals/:intervalId',
+    apiDoc({
+      tag: 'Time',
+      summary: 'Repair exact past time',
+      response: TimeRecordOut,
+      description:
+        'Replace one completed manual or reconstructed interval while retaining the original as superseded evidence. Live, agent, and submitted time cannot be repaired through this route.',
+    }),
+    zParam(intervalParam),
+    zJson(TimeIntervalRepair),
+    async (c) => {
+      const { user } = requireSession(c);
+      const params = c.req.valid('param');
+      return ok(
+        c,
+        TimeRecordOut,
+        await repairHistoricalInterval(user.id, params.id, params.intervalId, c.req.valid('json')),
+      );
+    },
+  )
+  .delete(
+    '/records/:id',
+    apiDoc({
+      tag: 'Time',
+      summary: 'Remove manual time from personal history',
+      response: TimeRecordOut,
+      description:
+        'Hide an unsubmitted manual or reconstructed record from the caller’s ledger without hard-deleting its audit row. Live, agent, and submitted records remain immutable.',
+    }),
+    zParam(recordParam),
+    async (c) => {
+      const { user } = requireSession(c);
+      return ok(c, TimeRecordOut, await removeTimeRecord(user.id, c.req.valid('param').id));
     },
   )
   .post(

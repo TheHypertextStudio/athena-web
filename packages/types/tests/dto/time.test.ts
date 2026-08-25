@@ -5,7 +5,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   TimeAllocationReplace,
+  TimeBreakdownQuery,
   TimeIntervalCreate,
+  TimeIntervalRepair,
   TimeRecordCreate,
   TimeSubmissionCreate,
   TimeTimelineQuery,
@@ -71,6 +73,20 @@ describe('TimeIntervalCreate', () => {
   });
 });
 
+describe('TimeIntervalRepair', () => {
+  it('accepts replacement bounds without accepting a source rewrite', () => {
+    const result = TimeIntervalRepair.safeParse({
+      startsAt: START,
+      endsAt: END,
+      source: 'manual_entry',
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data).toEqual({ startsAt: START, endsAt: END });
+  });
+});
+
 describe('TimeAllocationReplace', () => {
   it('accepts an empty allocation set (nothing to sum)', () => {
     expect(TimeAllocationReplace.safeParse({ allocations: [] }).success).toBe(true);
@@ -103,6 +119,42 @@ describe('TimeTimelineQuery', () => {
 
   it('refuses a window whose end is not after its start', () => {
     expect(TimeTimelineQuery.safeParse({ start: END, end: START }).success).toBe(false);
+  });
+
+  it('preserves personal-ledger filters instead of silently stripping them', () => {
+    const query = {
+      start: START,
+      end: END,
+      workspaceId: ID,
+      projectId: 'project_123',
+      taskId: 'task_123',
+      categoryId: ID,
+      captureSource: 'manual',
+    };
+
+    const result = TimeTimelineQuery.safeParse(query);
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data).toMatchObject(query);
+  });
+
+  it('gives breakdown reads the same filter contract as the session timeline', () => {
+    const result = TimeBreakdownQuery.safeParse({
+      start: START,
+      end: END,
+      groupBy: 'capture_source',
+      workspaceId: ID,
+      projectId: 'project_123',
+    });
+
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data).toMatchObject({
+      groupBy: 'capture_source',
+      workspaceId: ID,
+      projectId: 'project_123',
+    });
   });
 });
 

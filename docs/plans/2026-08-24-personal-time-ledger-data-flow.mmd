@@ -1,0 +1,12 @@
+---
+title: Personal Time Ledger data-flow diagram
+---
+flowchart LR
+  selection["Period, measure, and filters"] --> state["URL-backed review state"]
+  state --> api["Personal Time API query"]
+  api --> records["Filtered Time Ledger records"]
+  records --> sessions["Sessions view"]
+  records --> breakdown["Breakdown view"]
+  breakdown --> state
+  sessions --> detail["Record detail and repair"]
+  detail --> api

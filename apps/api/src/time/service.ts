@@ -14,6 +14,8 @@ export {
   createTimeRecord,
   getTimeRecord,
   pauseTimeRecord,
+  removeTimeRecord,
+  repairHistoricalInterval,
   removeTimeContext,
   replaceTimeAllocations,
   startTimeRecord,
@@ -25,6 +27,7 @@ export {
   getTimeBreakdown,
   getTimeSummary,
   getTimeTimeline,
+  listPersonalTimeCycles,
   listTimeCategories,
 } from './read-models';
 export {

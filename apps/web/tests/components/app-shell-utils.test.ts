@@ -3,7 +3,11 @@ import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-import { isObjectDetailPath, signInReturnPath } from '../../src/components/app-shell-utils';
+import {
+  homeKeyFromPath,
+  isObjectDetailPath,
+  signInReturnPath,
+} from '../../src/components/app-shell-utils';
 
 const root = resolve(import.meta.dirname, '../../../..');
 const shellFrame = readFileSync(join(root, 'apps/web/src/components/app-shell-frame.tsx'), 'utf8');
@@ -61,6 +65,11 @@ describe('object detail shell treatment', () => {
 });
 
 describe('workspace navigation', () => {
+  it('highlights Time as a cross-workspace Home destination', () => {
+    expect(homeKeyFromPath('/time')).toBe('time');
+    expect(homeKeyFromPath('/time/review')).toBe('time');
+  });
+
   it('keeps personal Athena and Agents out of workspace-owned navigation', () => {
     expect(shellUtils).not.toContain("  'athena',");
     expect(shellUtils).not.toContain("  'agents',");

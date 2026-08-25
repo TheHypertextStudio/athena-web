@@ -6,7 +6,7 @@
  * exercise the happy paths end to end. This file drives the exported measure/read functions
  * directly so the fallback and grouping branches a normal timer session never exercises — an
  * empty interval set, a clipped-out-of-range interval, `agent_active`/`tool_wait` effort, the
- * `category`/`actor` breakdown groupings, a multi-initiative project — are each covered by a
+ * `category`/`actor`/`capture_source` breakdown groupings, a multi-initiative project — are each covered by a
  * real, targeted fixture.
  */
 import { eq } from 'drizzle-orm';
@@ -14,7 +14,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type { z } from 'zod';
 
 import type * as DbModule from '@docket/db';
-import type { TimeRecordOut } from '@docket/types';
+import { TimeTimelineQuery, type TimeRecordOut } from '@docket/types';
 
 import {
   getDb,
@@ -477,7 +477,15 @@ describe('getTimeSummary', () => {
         })
         .returning({ id: schema.task.id }),
     );
-    return { orgId, userId, hubId: assertDefined(hubRow).id, taskId: t.id };
+    return {
+      orgId,
+      teamId,
+      humanActorId,
+      statusId,
+      userId,
+      hubId: assertDefined(hubRow).id,
+      taskId: t.id,
+    };
   }
 
   /** Insert a time record with one interval, returning both ids. */
@@ -491,6 +499,7 @@ describe('getTimeSummary', () => {
       endedAt: Date | null;
       status?: 'open' | 'closed' | 'submitted';
       categoryId?: string | null;
+      captureSource?: 'live' | 'manual' | 'reconstructed' | 'agent';
     },
   ): Promise<{ recordId: string }> {
     const record = one(
@@ -505,6 +514,7 @@ describe('getTimeSummary', () => {
           startedAt: fields.startedAt,
           endedAt: fields.endedAt,
           categoryId: fields.categoryId ?? null,
+          captureSource: fields.captureSource ?? 'live',
         })
         .returning({ id: schema.timeRecord.id }),
     );
@@ -515,7 +525,7 @@ describe('getTimeSummary', () => {
       actorKind: fields.mode === 'agent_active' ? 'agent' : 'human',
       userId,
       mode: fields.mode ?? 'human_active',
-      source: 'user_timer',
+      source: fields.captureSource === 'manual' ? 'manual_entry' : 'user_timer',
       startedAt: fields.startedAt,
       endedAt: fields.endedAt,
     });
@@ -569,6 +579,80 @@ describe('getTimeSummary', () => {
       combinedEffortMs: 0,
       operationalWaitMs: 0,
     });
+  });
+
+  it('applies the same personal filters before sessions, totals, and breakdowns', async () => {
+    const { orgId, teamId, humanActorId, statusId, hubId, userId, taskId } =
+      await seedTrackable('FilteredLedger');
+    const [project] = await db
+      .insert(schema.project)
+      .values({
+        organizationId: orgId,
+        name: 'Ledger project',
+        createdBy: humanActorId,
+        status: 'planned',
+        statusId: statusId('project', 'planned'),
+      })
+      .returning({ id: schema.project.id });
+    const projectTask = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          teamId,
+          title: 'Project-only task',
+          state: 'todo',
+          statusId: statusId('task', 'todo'),
+          projectId: assertDefined(project).id,
+        })
+        .returning({ id: schema.task.id }),
+    ).id;
+    const category = one(
+      await db
+        .insert(schema.timeCategory)
+        .values({ hubId, name: 'Deep work' })
+        .returning({ id: schema.timeCategory.id }),
+    ).id;
+    await seedRecordWithInterval(hubId, userId, taskId, {
+      startedAt: new Date('2026-07-05T09:00:00Z'),
+      endedAt: new Date('2026-07-05T09:30:00Z'),
+      categoryId: category,
+      captureSource: 'manual',
+    });
+    await seedRecordWithInterval(hubId, userId, projectTask, {
+      startedAt: new Date('2026-07-05T10:00:00Z'),
+      endedAt: new Date('2026-07-05T10:20:00Z'),
+    });
+
+    const range = {
+      start: '2026-07-05T00:00:00.000Z',
+      end: '2026-07-06T00:00:00.000Z',
+    };
+    const filters = TimeTimelineQuery.parse({
+      ...range,
+      workspaceId: orgId,
+      taskId,
+      categoryId: category,
+      captureSource: 'manual',
+    });
+    const [timeline, summary, breakdown] = await Promise.all([
+      getTimeTimeline(userId, filters),
+      getTimeSummary(userId, filters),
+      getTimeBreakdown(userId, { ...filters, groupBy: 'task' }),
+    ]);
+
+    expect(timeline).toHaveLength(1);
+    expect(timeline[0]?.taskId).toBe(taskId);
+    expect(summary.humanEffortMs).toBe(30 * 60_000);
+    expect(breakdown.total.humanEffortMs).toBe(30 * 60_000);
+    expect(breakdown.buckets).toMatchObject([{ key: taskId }]);
+
+    const projectTimeline = await getTimeTimeline(userId, {
+      ...range,
+      projectId: assertDefined(project).id,
+    });
+    expect(projectTimeline).toHaveLength(1);
+    expect(projectTimeline[0]?.taskId).toBe(projectTask);
   });
 });
 
@@ -629,6 +713,7 @@ describe('getTimeBreakdown', () => {
       startedAt: Date;
       endedAt: Date;
       categoryId?: string | null;
+      captureSource?: 'live' | 'manual' | 'reconstructed' | 'agent';
     },
   ): Promise<void> {
     const record = one(
@@ -643,6 +728,7 @@ describe('getTimeBreakdown', () => {
           startedAt: fields.startedAt,
           endedAt: fields.endedAt,
           categoryId: fields.categoryId ?? null,
+          captureSource: fields.captureSource ?? 'live',
         })
         .returning({ id: schema.timeRecord.id }),
     );
@@ -653,7 +739,7 @@ describe('getTimeBreakdown', () => {
       actorKind: fields.mode === 'agent_active' ? 'agent' : 'human',
       userId,
       mode: fields.mode ?? 'human_active',
-      source: 'user_timer',
+      source: fields.captureSource === 'manual' ? 'manual_entry' : 'user_timer',
       startedAt: fields.startedAt,
       endedAt: fields.endedAt,
     });
@@ -713,6 +799,22 @@ describe('getTimeBreakdown', () => {
     const byKey = new Map(breakdown.buckets.map((b) => [b.key, b]));
     expect(byKey.get('human')?.measures.humanEffortMs).toBe(30 * 60_000);
     expect(byKey.get('agent')?.measures.operationalWaitMs).toBe(15 * 60_000);
+  });
+
+  it('groups the same selected records by capture source', async () => {
+    const { orgId, teamId, hubId, userId, statusId } = await seedTrackable('BreakdownSource');
+    const taskId = await seedTask(statusId, orgId, teamId);
+    await seedRecordWithInterval(hubId, userId, taskId, {
+      captureSource: 'manual',
+      startedAt: new Date('2026-08-01T09:00:00Z'),
+      endedAt: new Date('2026-08-01T09:30:00Z'),
+    });
+
+    const breakdown = await getTimeBreakdown(userId, { ...RANGE, groupBy: 'capture_source' });
+
+    expect(breakdown.buckets).toEqual(
+      expect.arrayContaining([expect.objectContaining({ key: 'manual', label: 'Manual entry' })]),
+    );
   });
 
   it('credits only the lowest-id initiative when a project belongs to more than one', async () => {

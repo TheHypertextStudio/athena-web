@@ -12,6 +12,7 @@ import { EntityRef } from './event';
 import {
   AgentExecutionId,
   AgentSessionId,
+  CycleId,
   HubId,
   OrganizationId,
   TimeAllocationId,
@@ -382,6 +383,23 @@ export const TimeIntervalCreate = z
 /** Time-interval-create value. */
 export type TimeIntervalCreate = z.infer<typeof TimeIntervalCreate>;
 
+/** Exact replacement bounds for a closed manual or reconstructed interval. */
+export const TimeIntervalRepair = z
+  .object({
+    startsAt: z.iso.datetime(),
+    endsAt: z.iso.datetime(),
+  })
+  .refine((value) => Date.parse(value.endsAt) > Date.parse(value.startsAt), {
+    message: 'The end must be after the start.',
+  })
+  .meta({
+    id: 'TimeIntervalRepair',
+    description:
+      'Replace one exact historical Time Ledger interval while retaining its predecessor.',
+  });
+/** Time-interval-repair value. */
+export type TimeIntervalRepair = z.infer<typeof TimeIntervalRepair>;
+
 /** One context link supplied by the record-detail editor. */
 export const TimeContextCreate = z
   .object({
@@ -424,6 +442,16 @@ export const TimeTimelineQuery = z
   .object({
     start: z.iso.datetime(),
     end: z.iso.datetime(),
+    /** Narrow the personal ledger to one workspace the caller can currently access. */
+    workspaceId: OrganizationId.optional(),
+    /** Narrow the personal ledger to records tracked against Tasks in one Project. */
+    projectId: z.string().min(1).optional(),
+    /** Narrow the personal ledger to one tracked Task. */
+    taskId: z.string().min(1).optional(),
+    /** Narrow the personal ledger to one caller-owned category. */
+    categoryId: TimeCategoryId.optional(),
+    /** Narrow the personal ledger to the source through which time was captured. */
+    captureSource: TimeCaptureSource.optional(),
   })
   .refine((value) => Date.parse(value.end) > Date.parse(value.start), {
     message: 'The end must be after the start.',
@@ -431,6 +459,31 @@ export const TimeTimelineQuery = z
   .meta({ id: 'TimeTimelineQuery', description: 'A bounded Time Ledger timeline query.' });
 /** Time-timeline-query value. */
 export type TimeTimelineQuery = z.infer<typeof TimeTimelineQuery>;
+
+/** One cycle period the caller may use as a personal Time Ledger range. */
+export const TimeCyclePeriodOut = z
+  .object({
+    id: CycleId,
+    workspaceId: OrganizationId,
+    workspaceName: z.string(),
+    name: z.string(),
+    startsAt: z.string(),
+    endsAt: z.string(),
+  })
+  .meta({
+    id: 'TimeCyclePeriodOut',
+    description: 'A caller-visible cross-workspace cycle period.',
+  });
+/** Time-cycle-period-out value. */
+export type TimeCyclePeriodOut = z.infer<typeof TimeCyclePeriodOut>;
+
+/** The caller-owned list of cycle periods available to Time review. */
+export const TimeCyclePeriodListOut = z.object({ items: z.array(TimeCyclePeriodOut) }).meta({
+  id: 'TimeCyclePeriodListOut',
+  description: 'Caller-visible personal Time Ledger cycles.',
+});
+/** Time-cycle-period-list-out value. */
+export type TimeCyclePeriodListOut = z.infer<typeof TimeCyclePeriodListOut>;
 
 /** The personal Time Timeline response. */
 export const TimeTimelineOut = z
@@ -459,6 +512,7 @@ export const TimeBreakdownDimension = z.enum([
   'initiative',
   'category',
   'actor',
+  'capture_source',
 ]);
 /** Time-breakdown-dimension value. */
 export type TimeBreakdownDimension = z.infer<typeof TimeBreakdownDimension>;

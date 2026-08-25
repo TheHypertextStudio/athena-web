@@ -32,9 +32,17 @@ export default function FocusToday({
         <h3 id="focus-today-heading" className="text-on-surface text-label-large">
           Today
         </h3>
-        <Text token="body-small" tone="muted" numeric>
-          {formatDuration(total)} tracked
-        </Text>
+        <div className="flex shrink-0 items-baseline gap-2">
+          <Text token="body-small" tone="muted" numeric>
+            {formatDuration(total)} tracked
+          </Text>
+          <Link
+            href="/time?period=day"
+            className="text-primary text-label-medium focus-visible:outline-primary rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-offset-2"
+          >
+            Review today’s time
+          </Link>
+        </div>
       </div>
       {recent.length > 0 ? (
         <ul className="bg-surface-container-low flex flex-col rounded-xl">

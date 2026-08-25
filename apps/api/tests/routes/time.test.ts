@@ -110,6 +110,50 @@ describe('Time Ledger routes', () => {
     expect((await anonymous.request('/active')).status).toBe(401);
   });
 
+  it('lists only cycle periods from workspaces where the caller is an active member', async () => {
+    const schema = await getDb();
+    const [ownCycle] = await schema.db
+      .insert(schema.cycle)
+      .values({
+        organizationId,
+        teamId,
+        number: 4,
+        name: 'August review',
+        startsAt: new Date('2026-08-03T07:00:00.000Z'),
+        endsAt: new Date('2026-08-17T07:00:00.000Z'),
+        createdBy: actorId,
+      })
+      .returning({ id: schema.cycle.id });
+    const otherOrgId = await seedOrg(schema.db, schema);
+    const otherTeam = one(
+      await schema.db
+        .insert(schema.team)
+        .values({
+          organizationId: otherOrgId,
+          name: 'Other',
+          key: `O${Math.random().toString(36).slice(2, 6)}`,
+        })
+        .returning({ id: schema.team.id }),
+    );
+    await schema.db.insert(schema.cycle).values({
+      organizationId: otherOrgId,
+      teamId: otherTeam.id,
+      number: 1,
+      name: 'Not mine',
+      startsAt: new Date('2026-08-17T07:00:00.000Z'),
+      endsAt: new Date('2026-08-31T07:00:00.000Z'),
+      createdBy: actorId,
+    });
+
+    const response = await app.request('/cycles');
+    expect(response.status).toBe(200);
+    expect(
+      await json<{ items: { id: string; workspaceId: string; name: string }[] }>(response),
+    ).toMatchObject({
+      items: [{ id: ownCycle?.id, workspaceId: organizationId, name: 'August review' }],
+    });
+  });
+
   it('starts a record from freeform context and publishes it as the active tracker', async () => {
     const record = await startTracking({ context: { label: 'Untangle deployment access' } });
     expect(record.status).toBe('open');
@@ -976,6 +1020,55 @@ describe('Time Ledger routes', () => {
         ]),
       }),
     );
+  });
+
+  it('repairs and removes a person’s unsubmitted manual time without leaving it in history', async () => {
+    const created = await app.request('/records', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        startNow: false,
+        captureSource: 'manual',
+        startsAt: '2026-07-12T09:00:00.000Z',
+        endsAt: '2026-07-12T10:00:00.000Z',
+        context: { label: 'Reconstruct the launch review', organizationId },
+      }),
+    });
+    expect(created.status).toBe(200);
+    const record = await json<TimeRecordOut>(created);
+    const intervalId = record.intervals[0]?.id;
+    expect(intervalId).toEqual(expect.any(String));
+
+    const repaired = await app.request(`/records/${record.id}/intervals/${intervalId}`, {
+      method: 'PATCH',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        startsAt: '2026-07-12T09:15:00.000Z',
+        endsAt: '2026-07-12T10:30:00.000Z',
+      }),
+    });
+    expect(repaired.status).toBe(200);
+    const repairedRecord = await json<TimeRecordOut>(repaired);
+    expect(repairedRecord.intervals).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: intervalId, supersededById: expect.any(String) }),
+        expect.objectContaining({
+          startedAt: '2026-07-12T09:15:00.000Z',
+          endedAt: '2026-07-12T10:30:00.000Z',
+          supersededById: null,
+        }),
+      ]),
+    );
+
+    const removed = await app.request(`/records/${record.id}`, { method: 'DELETE' });
+    expect(removed.status).toBe(200);
+    expect((await json<TimeRecordOut>(removed)).status).toBe('superseded');
+
+    const timeline = await app.request(
+      '/timeline?start=2026-07-12T00:00:00.000Z&end=2026-07-13T00:00:00.000Z',
+    );
+    expect(timeline.status).toBe(200);
+    expect((await json<{ items: TimeRecordOut[] }>(timeline)).items).toEqual([]);
   });
 });
 

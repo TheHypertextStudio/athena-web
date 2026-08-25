@@ -1,57 +1,60 @@
-/**
- * Behaviour tests for {@link import('../../src/components/time-tracking/time-analytics').TimeAnalytics}.
- *
- * @remarks
- * Pins the acceptance criteria directly: a period selector, a period total, a ranked breakdown, and
- * an explicit empty state when a period has no tracked time. The period selector and the six
- * breakdown-dimension chips are read straight from the component's own copy so a rename of either
- * fails this test rather than silently drifting from the acceptance criterion's wording.
- */
 import '@testing-library/jest-dom/vitest';
 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { summaryGet, breakdownGet } = vi.hoisted(() => ({
+const {
+  routerReplace,
+  summaryGet,
+  timelineGet,
+  breakdownGet,
+  cyclesGet,
+  categoriesGet,
+  preferencesGet,
+} = vi.hoisted(() => ({
+  routerReplace: vi.fn(),
   summaryGet: vi.fn(),
+  timelineGet: vi.fn(),
   breakdownGet: vi.fn(),
+  cyclesGet: vi.fn(),
+  categoriesGet: vi.fn(),
+  preferencesGet: vi.fn(),
 }));
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: routerReplace }),
+}));
+vi.mock('../../src/lib/app-location', () => ({
+  useAppSearchParams: () => new URLSearchParams(),
+}));
+vi.mock('../../src/components/active-org', () => ({
+  useActiveOrg: () => ({ orgs: [], activeOrgId: null }),
+}));
 vi.mock('../../src/lib/api', () => ({
   api: {
     v1: {
+      hub: { preferences: { $get: preferencesGet } },
       time: {
         summary: { $get: summaryGet },
+        timeline: { $get: timelineGet },
         breakdown: { $get: breakdownGet },
+        cycles: { $get: cyclesGet },
+        categories: { $get: categoriesGet },
+        records: { $post: vi.fn() },
       },
+      orgs: { ':orgId': { projects: { $get: vi.fn() }, tasks: { $get: vi.fn() } } },
     },
   },
 }));
 
-const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
 const { TimeAnalytics } = await import('@/components/time-tracking/time-analytics');
 
-/** A JSON response shaped like the RPC client's. */
 function jsonResponse(body: unknown, status = 200): Response {
-  return {
-    ok: status < 400,
-    status,
-    json: () => Promise.resolve(body),
-  } as unknown as Response;
+  return { ok: status < 400, status, json: () => Promise.resolve(body) } as unknown as Response;
 }
 
-function renderAnalytics(): void {
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-  });
-  render(
-    <QueryClientProvider client={client}>
-      <TimeAnalytics />
-    </QueryClientProvider>,
-  );
-}
-
-const ZERO_MEASURES = {
+const ZERO = {
   elapsedMs: 0,
   humanEffortMs: 0,
   agentEffortMs: 0,
@@ -59,98 +62,77 @@ const ZERO_MEASURES = {
   operationalWaitMs: 0,
 };
 
+function renderAnalytics(): void {
+  render(
+    <QueryClientProvider
+      client={
+        new QueryClient({
+          defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+        })
+      }
+    >
+      <TimeAnalytics />
+    </QueryClientProvider>,
+  );
+}
+
 beforeEach(() => {
-  summaryGet.mockReset();
-  breakdownGet.mockReset();
+  for (const mock of [
+    summaryGet,
+    timelineGet,
+    breakdownGet,
+    cyclesGet,
+    categoriesGet,
+    preferencesGet,
+    routerReplace,
+  ])
+    mock.mockReset();
+  preferencesGet.mockResolvedValue(jsonResponse({ timezone: 'America/Los_Angeles' }));
+  cyclesGet.mockResolvedValue(jsonResponse({ items: [] }));
+  categoriesGet.mockResolvedValue(jsonResponse({ items: [] }));
+  timelineGet.mockResolvedValue(jsonResponse({ items: [] }));
+  summaryGet.mockResolvedValue(
+    jsonResponse({ ...ZERO, humanEffortMs: 5_400_000, combinedEffortMs: 5_400_000 }),
+  );
+  breakdownGet.mockResolvedValue(jsonResponse({ groupBy: 'workspace', buckets: [], total: ZERO }));
 });
 
-afterEach(() => {
-  cleanup();
-});
+afterEach(cleanup);
 
 describe('TimeAnalytics', () => {
-  it('renders the period selector, a period total, and a ranked breakdown', async () => {
-    summaryGet.mockResolvedValue(
-      jsonResponse({ ...ZERO_MEASURES, combinedEffortMs: 5_400_000 }), // 1h30m
-    );
-    breakdownGet.mockResolvedValue(
-      jsonResponse({
-        groupBy: 'project',
-        // Deliberately a different duration than the period total (3600000ms = "1h") so the
-        // period-total span and the bucket row are each uniquely findable by their own text.
-        buckets: [
-          {
-            key: 'proj_1',
-            label: 'Launch Readiness',
-            measures: { ...ZERO_MEASURES, combinedEffortMs: 3_600_000 },
-          },
-        ],
-        total: { ...ZERO_MEASURES, combinedEffortMs: 3_600_000 },
-      }),
-    );
+  it('keeps the primary personal-review controls visible without a wrapping toolbar', async () => {
     renderAnalytics();
-
-    // Period selector: three periods, "This week" selected by default.
-    expect(screen.getByRole('button', { name: 'Today' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'This week' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Last 30 days' })).toBeInTheDocument();
-
-    // Period total, rendered as a compact duration rather than raw milliseconds.
-    expect(await screen.findByText('1h 30m')).toBeInTheDocument();
-    expect(screen.getByText(/tracked this week/)).toBeInTheDocument();
-
-    // The six breakdown dimensions named in the acceptance criteria's source quote, verbatim.
-    for (const label of ['Project', 'Program', 'Initiative', 'Workspace', 'Task', 'Category']) {
+    expect(screen.getByRole('button', { name: 'Add past time' })).toBeInTheDocument();
+    for (const label of ['Day', 'Week', 'Month', 'Cycle', 'Custom', 'Filters'])
       expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
-    }
-
-    // A ranked breakdown row for the one bucket returned, with its own (distinct) duration and
-    // its share of the period total (3,600,000ms of 5,400,000ms = 67%).
-    expect(await screen.findByText('Launch Readiness')).toBeInTheDocument();
-    expect(screen.getByText('1h')).toBeInTheDocument();
-    expect(screen.getByText('67%')).toBeInTheDocument();
-  });
-
-  it('renders an explicit empty state when the period has no tracked time', async () => {
-    summaryGet.mockResolvedValue(jsonResponse(ZERO_MEASURES));
-    breakdownGet.mockResolvedValue(
-      jsonResponse({ groupBy: 'project', buckets: [], total: ZERO_MEASURES }),
-    );
-    renderAnalytics();
-
-    expect(await screen.findByText('No time tracked in this period')).toBeInTheDocument();
-    expect(screen.getByText(/Start the timer from anywhere/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Go find something to work on/ })).toHaveAttribute(
-      'href',
-      '/today',
-    );
-  });
-
-  it('also treats a period whose only bucket is zero-effort as empty', async () => {
-    // The surface filters buckets with `combinedEffortMs > 0`, so a bucket that exists but
-    // carries no combined effort (e.g. purely agent time not yet counted) must still show the
-    // empty state rather than a misleading zero-width row.
-    summaryGet.mockResolvedValue(jsonResponse(ZERO_MEASURES));
-    breakdownGet.mockResolvedValue(
-      jsonResponse({
-        groupBy: 'project',
-        buckets: [{ key: 'proj_1', label: 'Ghost bucket', measures: ZERO_MEASURES }],
-        total: ZERO_MEASURES,
-      }),
-    );
-    renderAnalytics();
-
-    expect(await screen.findByText('No time tracked in this period')).toBeInTheDocument();
-    expect(screen.queryByText('Ghost bucket')).not.toBeInTheDocument();
-  });
-
-  it('surfaces an application-owned error message rather than a raw failure', async () => {
-    summaryGet.mockResolvedValue(jsonResponse({ code: 'internal' }, 500));
-    breakdownGet.mockResolvedValue(jsonResponse({ code: 'internal' }, 500));
-    renderAnalytics();
-
+    expect(screen.getByRole('button', { name: 'Previous week' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next week' })).toBeInTheDocument();
     await waitFor(() => {
-      expect(screen.getByRole('alert')).toBeInTheDocument();
+      expect(summaryGet).toHaveBeenCalled();
     });
+    expect(screen.getByLabelText('Time period').parentElement).toHaveClass('overflow-x-auto');
+  });
+
+  it('shows the selected period as a browsable empty session range', async () => {
+    renderAnalytics();
+    expect(await screen.findByText(/No time tracked for/)).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Add past time' })).toHaveLength(2);
+  });
+
+  it('changes an applied period through the shareable URL state', async () => {
+    const { userEvent } = await import('@testing-library/user-event');
+    renderAnalytics();
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Month' }));
+    expect(routerReplace).toHaveBeenCalledWith(expect.stringContaining('period=month'), {
+      scroll: false,
+    });
+  });
+
+  it('uses app-owned copy when the selected ledger data fails', async () => {
+    timelineGet.mockResolvedValue(jsonResponse({ code: 'internal' }, 500));
+    renderAnalytics();
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('Could not load your sessions.'),
+    );
   });
 });

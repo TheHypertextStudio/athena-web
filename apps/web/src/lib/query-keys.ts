@@ -260,6 +260,8 @@ export const queryKeys = {
   timeSummary: (params: string) => ['me', 'time', 'summary', params] as const,
   timeBreakdown: (params: string) => ['me', 'time', 'breakdown', params] as const,
   timeTimeline: (params: string) => ['me', 'time', 'timeline', params] as const,
+  timeCycles: () => ['me', 'time', 'cycles'] as const,
+  timeCategories: () => ['me', 'time', 'categories'] as const,
   timeShareTokens: () => ['me', 'time', 'share-tokens'] as const,
   // Weekly auto-scheduling and the daily loop. Everything nests under one `['me','plan']` prefix
   // so a single invalidation after a planning run, a check-in answer or a review step refreshes

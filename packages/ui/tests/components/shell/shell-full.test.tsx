@@ -62,7 +62,7 @@ function renderLink(href: string, content: React.ReactNode, className?: string):
 function sidebarHrefs() {
   return {
     hrefForHome: (
-      key: 'today' | 'tasks' | 'calendar' | 'inbox' | 'athena' | 'stream' | 'portfolio',
+      key: 'today' | 'tasks' | 'calendar' | 'time' | 'inbox' | 'athena' | 'stream' | 'portfolio',
     ) => `/${key}`,
     hrefForWorkspace: (orgId: string, key: string) => `/orgs/${orgId}/${key}`,
     renderLink,
@@ -690,6 +690,7 @@ describe('Sidebar', () => {
     // Home section (cross-org) is always present.
     expect(screen.getByRole('link', { name: 'Today' })).toHaveAttribute('href', '/today');
     expect(screen.getByRole('link', { name: 'Calendar' })).toHaveAttribute('href', '/calendar');
+    expect(screen.getByRole('link', { name: 'Time' })).toHaveAttribute('href', '/time');
     expect(screen.getByRole('link', { name: 'Portfolio' })).toHaveAttribute('href', '/portfolio');
     expect(screen.getByRole('button', { name: 'Search' })).toBeInTheDocument();
 

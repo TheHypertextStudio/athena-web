@@ -4,7 +4,7 @@
 > personal reflection, and recipient-scoped submissions are implemented. Estimate comparisons and
 > richer planning-variance views remain additive projections, not alternate time sources.
 > **Area:** Hub, work, calendar, agents, API, DB, web data layer
-> **Last Updated:** 2026-08-09
+> **Last Updated:** 2026-08-24
 > **Companions:** `data-model.md` (tenant and Hub ownership), `calendar-architecture.md`
 > (planned/contextual time), `calendar-ui.md` (agenda and item workspace), `athena-agent.md`
 > (agent sessions), `activity-feed.md` (typed entity references), and `data-layer.md` (web reads
@@ -87,6 +87,29 @@ Item, or Agent Session as a competing source of truth. Those surfaces consume le
    reporting uses explicit submissions and current permission checks.
 7. **Context is not attribution.** Linking a meeting or related Task makes it discoverable; only an
    explicit allocation makes its duration count toward a reportable target.
+
+### 2.1 Personal time review
+
+`/time` is the person's private, cross-workspace review surface. It defaults to **Sessions** for
+the current calendar week and human effort in the Hub timezone. The URL stores the period, anchor,
+custom range, view, effort measure, and applied workspace, project, task, category, and source
+filters. Timeline, summary, and breakdown reads receive the same exact filter set before the API
+hydrates or aggregates records.
+
+Sessions group actual records by local day. Breakdown is not a report dead end: choosing a bucket
+returns to Sessions with the bucket’s real entity filter. Cycle navigation shows only cycles in a
+workspace where the caller has an active membership. A cycle sets its exact window and workspace;
+someone who wants every workspace during that window chooses Custom instead.
+
+The main measure is always named. Human effort is the default. Agent and combined effort are
+alternatives. Elapsed time and operational wait remain record-detail facts, not an ambiguous
+headline number.
+
+People can create past manual time and correct a bounded manual or reconstructed interval. A
+correction inserts a replacement interval and supersedes the prior fact. Removing unsubmitted
+manual time changes the record lifecycle rather than hard-deleting it. Live, agent-created, and
+submitted intervals cannot be repaired or removed, and other callers’ records remain invisible.
+Split and merge editing are deferred because they need a distinct audit model.
 
 ---
 

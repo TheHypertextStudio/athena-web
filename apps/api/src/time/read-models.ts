@@ -8,6 +8,8 @@
  */
 import {
   agentExecution,
+  actor,
+  cycle,
   db,
   initiative,
   initiativeProject,
@@ -25,10 +27,11 @@ import type {
   EntityRef,
   TimeBreakdownQuery,
   TimeCategoryOut,
+  TimeCyclePeriodOut,
   TimeRecordOut,
   TimeTimelineQuery,
 } from '@docket/types';
-import { and, asc, desc, eq, gt, inArray, isNull, lt, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm';
 import type { z } from 'zod';
 
 import { canReadTimeContext, resolveTimeHubId } from './access';
@@ -39,10 +42,50 @@ type TimeRecordRow = typeof timeRecord.$inferSelect;
 type TimeIntervalRow = typeof timeInterval.$inferSelect;
 type TimeRecordInput = z.input<typeof TimeRecordOut>;
 type TimeCategoryInput = z.input<typeof TimeCategoryOut>;
+type TimeCyclePeriodInput = z.input<typeof TimeCyclePeriodOut>;
 type TimeMeasuresInput = TimeRecordInput['measures'];
 
 /** A neutral label that preserves the duration fact without preserving a revoked task's title. */
 const REDACTED_TASK_TITLE = 'Restricted work';
+
+/** List the cycles in workspaces where the caller still has an active human membership. */
+export async function listPersonalTimeCycles(userId: string): Promise<TimeCyclePeriodInput[]> {
+  const rows = await db
+    .select({
+      id: cycle.id,
+      workspaceId: cycle.organizationId,
+      workspaceName: organization.name,
+      name: cycle.name,
+      number: cycle.number,
+      startsAt: cycle.startsAt,
+      endsAt: cycle.endsAt,
+    })
+    .from(cycle)
+    .innerJoin(organization, eq(organization.id, cycle.organizationId))
+    .innerJoin(
+      actor,
+      and(
+        eq(actor.organizationId, cycle.organizationId),
+        eq(actor.userId, userId),
+        eq(actor.kind, 'human'),
+        eq(actor.status, 'active'),
+        isNull(actor.archivedAt),
+      ),
+    )
+    .where(and(isNull(cycle.archivedAt), isNull(organization.archivedAt)))
+    .orderBy(desc(cycle.startsAt), asc(cycle.id));
+  return rows.map((row) => {
+    const name = row.name?.trim() ?? '';
+    return {
+      id: row.id,
+      workspaceId: row.workspaceId,
+      workspaceName: row.workspaceName,
+      name: name === '' ? `Cycle ${row.number}` : name,
+      startsAt: row.startsAt.toISOString(),
+      endsAt: row.endsAt.toISOString(),
+    };
+  });
+}
 
 /** Convert a persisted typed context back into its shared entity-reference contract. */
 function toEntityRef(row: typeof timeContext.$inferSelect): EntityRef {
@@ -442,11 +485,8 @@ export async function getActiveTime(userId: string) {
   };
 }
 
-/** Return records with any interval overlapping the requested range. */
-export async function getTimeTimeline(
-  userId: string,
-  query: TimeTimelineQuery,
-): Promise<TimeRecordInput[]> {
+/** Resolve the Time Records in a range before every personal-ledger projection measures them. */
+async function selectFilteredTimeRecords(userId: string, query: TimeTimelineQuery) {
   const hubId = await resolveTimeHubId(userId);
   const start = new Date(query.start);
   const end = new Date(query.end);
@@ -463,12 +503,54 @@ export async function getTimeTimeline(
     )
     .orderBy(asc(timeInterval.startedAt));
   const ids = [...new Set(intervalRows.map((interval) => interval.recordId))];
-  if (ids.length === 0) return [];
+  if (ids.length === 0) return { hubId, records: [] };
+
+  let scopedTaskIds: string[] | null = null;
+  if (query.workspaceId || query.projectId) {
+    const scopedTasks = await db
+      .select({ id: task.id })
+      .from(task)
+      .where(
+        and(
+          query.workspaceId ? eq(task.organizationId, query.workspaceId) : undefined,
+          query.projectId ? eq(task.projectId, query.projectId) : undefined,
+        ),
+      );
+    scopedTaskIds = scopedTasks.map((row) => row.id);
+  }
+  if (query.taskId) {
+    scopedTaskIds = scopedTaskIds
+      ? scopedTaskIds.filter((taskId) => taskId === query.taskId)
+      : [query.taskId];
+  }
+  if (scopedTaskIds !== null && scopedTaskIds.length === 0) return { hubId, records: [] };
+
   const records = await db
     .select()
     .from(timeRecord)
-    .where(and(eq(timeRecord.hubId, hubId), inArray(timeRecord.id, ids)))
+    .where(
+      and(
+        eq(timeRecord.hubId, hubId),
+        inArray(timeRecord.id, ids),
+        ne(timeRecord.status, 'superseded'),
+        scopedTaskIds !== null ? inArray(timeRecord.taskId, scopedTaskIds) : undefined,
+        query.categoryId ? eq(timeRecord.categoryId, query.categoryId) : undefined,
+        query.captureSource ? eq(timeRecord.captureSource, query.captureSource) : undefined,
+      ),
+    )
     .orderBy(asc(timeRecord.startedAt));
+  return { hubId, records };
+}
+
+/** Return records with any interval overlapping the requested range. */
+export async function getTimeTimeline(
+  userId: string,
+  query: TimeTimelineQuery,
+): Promise<TimeRecordInput[]> {
+  const { records } = await selectFilteredTimeRecords(userId, query);
+  if (records.length === 0) return [];
+  const start = new Date(query.start);
+  const end = new Date(query.end);
   const now = new Date();
   const hydrated = await hydrateTimeRecords(records, userId, now);
   return hydrated.map((record) => ({
@@ -516,18 +598,28 @@ export async function getTimeSummary(
   userId: string,
   query: TimeTimelineQuery,
 ): Promise<TimeMeasuresInput> {
-  const hubId = await resolveTimeHubId(userId);
   const start = new Date(query.start);
   const end = new Date(query.end);
   const now = new Date();
+  const { records } = await selectFilteredTimeRecords(userId, query);
+  if (records.length === 0) {
+    return {
+      elapsedMs: 0,
+      humanEffortMs: 0,
+      agentEffortMs: 0,
+      combinedEffortMs: 0,
+      operationalWaitMs: 0,
+    };
+  }
   const intervals = await db
     .select()
     .from(timeInterval)
     .where(
       and(
-        eq(timeInterval.hubId, hubId),
-        lt(timeInterval.startedAt, end),
-        or(isNull(timeInterval.endedAt), gt(timeInterval.endedAt, start)),
+        inArray(
+          timeInterval.timeRecordId,
+          records.map((record) => record.id),
+        ),
         isNull(timeInterval.supersededById),
       ),
     );
@@ -789,6 +881,16 @@ export async function getTimeBreakdown(userId: string, query: TimeBreakdownQuery
           operationalWaitMs: measures.operationalWaitMs,
         });
       }
+      continue;
+    }
+    if (query.groupBy === 'capture_source') {
+      const labels = {
+        live: 'Live timer',
+        manual: 'Manual entry',
+        reconstructed: 'Reconstructed',
+        agent: 'Agent-created',
+      } as const;
+      add(record.captureSource, labels[record.captureSource], measures);
       continue;
     }
     const placement = record.taskId ? placements.get(record.taskId) : undefined;

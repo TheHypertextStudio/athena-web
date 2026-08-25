@@ -115,6 +115,67 @@ describe('Time Ledger command edge cases', () => {
     expect(res.status).toBe(200);
   });
 
+  it('rejects repair and removal for live, submitted, agent, and another caller’s records', async () => {
+    const live = await startRecord();
+    const liveRecord = await body<{ intervals: { id: string }[] }>(
+      await app.request(`/records/${live.id}`),
+    );
+    const repairBody = JSON.stringify({
+      startsAt: '2026-08-01T09:00:00.000Z',
+      endsAt: '2026-08-01T09:30:00.000Z',
+    });
+    expect(
+      (
+        await app.request(`/records/${live.id}/intervals/${liveRecord.intervals[0]?.id}`, {
+          method: 'PATCH',
+          headers: J,
+          body: repairBody,
+        })
+      ).status,
+    ).toBe(409);
+    expect((await app.request(`/records/${live.id}`, { method: 'DELETE' })).status).toBe(409);
+
+    const manual = await body<{ id: string; intervals: { id: string }[] }>(
+      await app.request('/records', {
+        method: 'POST',
+        headers: J,
+        body: JSON.stringify({
+          startNow: false,
+          captureSource: 'manual',
+          startsAt: '2026-08-01T09:00:00.000Z',
+          endsAt: '2026-08-01T09:30:00.000Z',
+          context: { label: 'Backfill notes', organizationId },
+        }),
+      }),
+    );
+    await db
+      .update(schema.timeRecord)
+      .set({ status: 'submitted' })
+      .where(eq(schema.timeRecord.id, manual.id));
+    expect(
+      (
+        await app.request(`/records/${manual.id}/intervals/${manual.intervals[0]?.id}`, {
+          method: 'PATCH',
+          headers: J,
+          body: repairBody,
+        })
+      ).status,
+    ).toBe(409);
+    expect((await app.request(`/records/${manual.id}`, { method: 'DELETE' })).status).toBe(409);
+
+    await db
+      .update(schema.timeRecord)
+      .set({ status: 'closed', captureSource: 'agent' })
+      .where(eq(schema.timeRecord.id, manual.id));
+    expect((await app.request(`/records/${manual.id}`, { method: 'DELETE' })).status).toBe(409);
+
+    const otherUserId = await seedUserWithHub(db, schema, 'OtherTimeEdge');
+    const otherApp = appWithSession(time, fakeSession(otherUserId));
+    expect((await otherApp.request(`/records/${manual.id}`, { method: 'DELETE' })).status).toBe(
+      404,
+    );
+  });
+
   it('removes a context from a record', async () => {
     const record = await startRecord();
     const [org] = await db

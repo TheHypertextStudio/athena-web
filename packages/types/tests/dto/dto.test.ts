@@ -445,6 +445,16 @@ describe('task DTOs', () => {
     expect(TaskCreate.parse({ title: 'T', teamId: ID }).description).toBeUndefined();
   });
 
+  it('rejects duplicate related tasks while allowing one reciprocal link', () => {
+    expect(
+      TaskCreate.parse({ title: 'T', teamId: ID, relatedTaskIds: [ID2] }).relatedTaskIds,
+    ).toEqual([ID2]);
+    expect(
+      TaskCreate.safeParse({ title: 'T', teamId: ID, relatedTaskIds: [ID2, ID2] }).success,
+    ).toBe(false);
+    expect(TaskUpdate.safeParse({ relatedTaskIds: [ID2, ID2] }).success).toBe(false);
+  });
+
   it('TaskCreate rejects empty title and missing teamId', () => {
     expect(TaskCreate.safeParse({ title: '', teamId: ID }).success).toBe(false);
     expect(TaskCreate.safeParse({ title: 'T' }).success).toBe(false);

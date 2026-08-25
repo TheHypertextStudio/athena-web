@@ -553,8 +553,10 @@ describe('AppShell rail', () => {
 
     openMenu(within(overlay).getByRole('button', { name: 'Panel: Tasks. Switch panel' }));
     expect(screen.getAllByRole('menuitem')).toHaveLength(5);
-    screen.getByRole('menuitem', { name: 'Tasks' }).focus();
-    await user.keyboard('{ArrowDown}{Enter}');
+    await act(async () => {
+      screen.getByRole('menuitem', { name: 'Tasks' }).focus();
+      await user.keyboard('{ArrowDown}{Enter}');
+    });
 
     expect(await screen.findByRole('dialog', { name: 'Agenda' })).toBeInTheDocument();
     expect(within(overlay).getByText('Agenda body')).toBeInTheDocument();

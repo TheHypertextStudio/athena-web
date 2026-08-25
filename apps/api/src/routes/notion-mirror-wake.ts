@@ -8,6 +8,7 @@ import { db, integration, notionMirrorState } from '@docket/db';
 import { ConnectorConfig } from '@docket/types';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 
+/** The persisted demand and retry state returned after a mirror wake. */
 export type NotionMirrorStateRow = typeof notionMirrorState.$inferSelect;
 
 /** Record one reason to reconcile a Notion mirror. */

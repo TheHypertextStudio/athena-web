@@ -7,25 +7,6 @@
 
 ## Active Tasks
 
-### [UTILITY-PANEL-FULL-001] Use one full-screen utility pane on compact layouts
-
-- **Status**: IN_PROGRESS
-- **Started**: 2026-08-25
-- **Priority**: P1
-- **Description**: The compact utility panel still inherits a generic side-sheet width cap and
-  exposes ten percent of the page underneath. That strip consumes scarce screen area without
-  providing usable page context.
-- **Approach**: Follow Material 3 adaptive supporting-pane guidance. Show one full-window utility
-  pane below the existing 1024px desktop breakpoint, and retain the docked page-plus-rail layout at
-  and above it. Preserve panel selection, focus trapping, dismissal, safe areas, panel-local state,
-  and native Agenda scrolling.
-- **Validation**: Add responsive shell geometry coverage, run the focused and repository gates, and
-  capture authenticated 320px, 390px, 768px, and 1024px states in both themes without opening a new
-  browser instance.
-- **Blockers**: None.
-
----
-
 ### [CONNECTOR-POST-001] Keep connector actions and retries running
 
 - **Status**: IN_PROGRESS
@@ -6254,6 +6235,39 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 ---
 
 ## Completed Tasks
+
+### [UTILITY-PANEL-FULL-001] Use one full-screen utility pane on compact layouts
+
+- **Completed**: 2026-08-25
+- **Priority**: P1
+- **Summary**: Agenda, Focus, and Athena now occupy the full compact or medium viewport instead of
+  exposing an unusable strip of the page. One safe-area app bar holds the scalable panel selector
+  and an explicit close action. The docked page-plus-rail layout remains unchanged at 1024px and
+  wider.
+- **Decisions**: The shell follows Material 3's supporting-pane model. It shows one pane below the
+  existing desktop breakpoint and two panes above it. The generic Sheet primitive, utility-panel
+  data model, panel-local state, and persistence contracts remain unchanged. The earlier Agenda
+  edge fix retains 12px around the clipped timeline frame, so hour labels and work-location markers
+  remain inside the panel even at 320px.
+- **Validation**: The shell suite passes 72 tests. The focused Agenda, work-location, and scheduling
+  run passes 104 tests. The complete UI suite passes 654 tests. UI and repository lint pass. The
+  repository typecheck passes after the API package uses the documented command-scoped 4 GB heap;
+  the first bounded run completed 25 other tasks before Node exhausted its default heap. The
+  production build passes four executable tasks and generates 75 Web pages. Authenticated captures
+  cover 320×844, 390×844, 768×1024, 1024×900, and 1440×900 in both themes. At 320px the pane is
+  exactly 320×844, the app bar is 48px, the close target is 40×40, the document has no horizontal
+  overflow, and the hidden-scrollbar Agenda still responds to native scrolling.
+- **Evidence**: `docs/design/audits/2026-08-25-full-screen-utility-panel.md`
+- **Learnings**: A side sheet is not a supporting-pane layout when its exposed page strip cannot
+  support an independent task. Visual verification also confirmed that edge clipping must be
+  checked against rendered label and marker bounds, not inferred from container classes.
+- **Retrospective**: The first audit screenshot hit a minute boundary between server rendering and
+  hydration, which made Next's development issue indicator visible. Reloading outside the boundary
+  produced a clean console and clean evidence. The audit reused the claimed Chrome tab and an
+  isolated PGlite database, and it did not touch `.data/docket`.
+- **Blockers**: None.
+
+---
 
 ### [UTILITY-PANEL-SCALE-001] Make utility panels scale beyond three choices
 

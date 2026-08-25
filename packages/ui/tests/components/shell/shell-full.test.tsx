@@ -496,18 +496,46 @@ describe('AppShell rail', () => {
     expect(screen.getByRole('complementary', { name: 'Tasks' })).toHaveClass('w-0');
   });
 
-  it('presents the panels as a modal sheet below lg, costing <main> nothing', async () => {
+  it('presents one full-window utility pane below lg', async () => {
     renderWithRail(() => false);
 
     fireEvent.click(screen.getByRole('button', { name: 'Show Tasks' }));
 
     const overlay = await screen.findByRole('dialog', { name: 'Tasks' });
     expect(within(overlay).getByText('Task list')).toBeInTheDocument();
+    expect(overlay).toHaveClass(
+      'inset-0',
+      'h-dvh',
+      'w-screen',
+      'max-w-none',
+      'border-0',
+      'shadow-none',
+    );
+    expect(overlay).not.toHaveClass('w-[22rem]', 'max-w-[90vw]');
+    expect(within(overlay).getByTestId('shell-utility-pane-bar')).toHaveClass(
+      'min-h-12',
+      'border-b',
+      'pt-[env(safe-area-inset-top)]',
+    );
+    expect(within(overlay).getByRole('button', { name: 'Close Tasks' })).toHaveClass('size-10');
     // The docked host is `display: none` at these widths, so it is not a column and takes no width
     // from `<main>` however wide its class says it would be. Queried by id rather than by role
     // because the open modal `aria-hidden`s the rest of the tree — which is also why the two
     // presentations can no longer share one id.
     expect(document.getElementById('shell-aside')).toHaveClass('hidden');
+  });
+
+  it('closes the compact utility pane explicitly and restores opener focus', async () => {
+    renderWithRail(() => false);
+    const trigger = screen.getByRole('button', { name: 'Show Tasks' });
+    trigger.focus();
+    fireEvent.click(trigger);
+
+    const overlay = await screen.findByRole('dialog', { name: 'Tasks' });
+    fireEvent.click(within(overlay).getByRole('button', { name: 'Close Tasks' }));
+
+    await waitFor(() => expect(overlay).not.toBeInTheDocument());
+    expect(trigger).toHaveFocus();
   });
 
   it('switches between panels from one mobile sheet menu', async () => {

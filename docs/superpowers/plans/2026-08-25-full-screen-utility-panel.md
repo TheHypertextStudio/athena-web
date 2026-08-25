@@ -158,7 +158,7 @@ pnpm --filter @docket/ui exec vitest run tests/components/shell/shell-full.test.
 Expected: every shell test passes, including menu switching, Escape dismissal, explicit close, and
 desktop activity-bar coverage.
 
-- [ ] **Step 5: Commit the behavior**
+- [x] **Step 5: Commit the behavior**
 
 Stage only the shell source, shell test, corrected spec, and plan. Commit with scope `web`, a
 substantive body, and the Codex co-author trailer.
@@ -179,31 +179,31 @@ substantive body, and the Codex co-author trailer.
 - Produces: a Craft Rubric scorecard and responsive evidence that supersede the partial-sheet
   screenshots for compact utility-panel geometry.
 
-- [ ] **Step 1: Run bounded verification**
+- [x] **Step 1: Run bounded verification**
 
 Run the focused shell suite, UI typecheck, UI lint, root lint, root typecheck, complete UI test
 suite, and production build with no more than two concurrent workers. If a default Node heap aborts
 without a lint or type error, rerun only that package with a command-scoped 4 GB heap and record it.
 
-- [ ] **Step 2: Capture authenticated adaptive evidence**
+- [x] **Step 2: Capture authenticated adaptive evidence**
 
 Reuse the existing Chrome tab. Capture Agenda at 320x844, 390x844, and 768x1024 in light and dark.
 Capture 1024x900 to prove that the docked rail returns at the desktop breakpoint. Measure document
 overflow, dialog and viewport rectangles, top-bar and close target height, visible underlying page
 pixels, scrollbar treatment, and focus visibility.
 
-- [ ] **Step 3: Clean temporary runtime state**
+- [x] **Step 3: Clean temporary runtime state**
 
 Stop every dev process created for the audit. Delete the localhost audit cookie. Remove the isolated
 audit database through Trash, and return the claimed Chrome tab to its original production route.
 Do not touch `.data/docket`.
 
-- [ ] **Step 4: Complete the scorecard and worklog**
+- [x] **Step 4: Complete the scorecard and worklog**
 
 Move `UTILITY-PANEL-FULL-001` to Completed only after the screenshots and gates pass. Record exact
 test counts, geometry, theme parity, cleanup, and any bounded-memory rerun.
 
-- [ ] **Step 5: Commit evidence and integrate locally**
+- [x] **Step 5: Commit evidence and integrate locally**
 
 Commit the scorecard, screenshots, and worklog. Fast-forward local `main` with `git merge --ff-only`.
 Stash and restore the pre-existing `ATHENA-RAIL-001` worklog diff exactly. Verify zero merge commits,

@@ -13,11 +13,10 @@
  * are managed. A row of chips does none of those things, and a wrapping row of nine chips is what
  * `packages/ui/src/primitives/chip.tsx` was written to stop.
  *
- * ## Why create composers use the top row and not the property strip
+ * ## Why the editor owns template actions
  *
- * Every pill in the strip sets one field. A template rewrites the draft. The old initiative
- * picker sat among the pills — and below the description it silently overwrote — which is exactly
- * how a control with that reach comes to look like one without it.
+ * A template rewrites the document, so the action belongs with the empty document prompt. The
+ * shared editor receives it through a generic contribution rather than importing template code.
  */
 import type { TemplateOut, TemplateTargetType } from '@docket/types';
 import {
@@ -31,23 +30,15 @@ import {
 } from '@docket/ui/primitives';
 import { ChevronDown, LayoutTemplate, Settings } from '@docket/ui/icons';
 import Link from '@/components/docket-link';
-import { type JSX, type ReactNode, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { type JSX, useEffect, useMemo, useRef } from 'react';
 
 import { sectionHref } from '@/components/settings/settings-registry';
-import {
-  EntityMetadataItem,
-  type EntityMetadataPriority,
-} from '@/components/views/entity-detail-layout';
 import {
   sortTemplates,
   templateMatchesContext,
   templatesOfKindDef,
 } from '@/components/templates/queries';
 import { useApiQuery } from '@/lib/query';
-
-// Keep the legacy shell's visibility state in sync before the browser paints on the client, while
-// retaining a server-safe passive hook for Next's server render.
-const usePrePaintEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
 /** How each scope is titled where templates are grouped. */
 const SCOPE_LABEL: Record<TemplateOut['scope'], string> = {
@@ -75,6 +66,8 @@ export interface TemplateMenuProps {
   triggerLabel?: string;
   /** Use the editor-inline control size instead of the composer's top-row size. */
   compact?: boolean;
+  /** Render a distinct inline action in an empty editor. */
+  inline?: boolean;
   /** Show visibility-scope group headings. Defaults to true. */
   showScopeLabels?: boolean;
 }
@@ -94,6 +87,7 @@ export function TemplateMenu({
   disabled,
   triggerLabel = 'Template',
   compact = false,
+  inline = false,
   showScopeLabels = true,
 }: TemplateMenuProps): JSX.Element | null {
   if (templates.length === 0) return null;
@@ -108,14 +102,18 @@ export function TemplateMenu({
       <DropdownMenuTrigger asChild>
         <Button
           type="button"
-          variant={compact ? 'outline' : 'ghost'}
-          size={compact ? undefined : 'sm'}
-          controlSize={compact ? 'sm' : undefined}
+          variant={inline || compact ? 'outline' : 'ghost'}
+          size={inline || !compact ? 'sm' : undefined}
+          controlSize={compact && !inline ? 'sm' : undefined}
           disabled={disabled}
-          className="text-on-surface-variant max-w-56"
+          className={
+            inline
+              ? 'border-outline-variant bg-surface-container-high text-on-surface-variant hover:bg-secondary-container hover:text-on-secondary-container h-8 rounded-full border px-3'
+              : 'text-on-surface-variant max-w-56'
+          }
         >
           <LayoutTemplate className="size-4 shrink-0" />
-          <span className="truncate">{triggerLabel}</span>
+          <span className={inline ? 'whitespace-nowrap' : 'truncate'}>{triggerLabel}</span>
           <ChevronDown className="size-4 shrink-0" />
         </Button>
       </DropdownMenuTrigger>
@@ -179,14 +177,6 @@ export interface ComposerTemplateControlProps {
    */
   teamId?: string | null | undefined;
   /**
-   * Decorative content to render only when this control itself is rendered.
-   *
-   * @remarks
-   * Global context rows use this for the separator before Template. Keeping it inside this
-   * data-connected control means pending and empty template lists cannot leave a dangling glyph.
-   */
-  leadingSeparator?: ReactNode | undefined;
-  /**
    * A template to apply as soon as the list loads, from a `?template=` compose request.
    *
    * @remarks
@@ -195,14 +185,12 @@ export interface ComposerTemplateControlProps {
    * read resolves.
    */
   autoApplyId?: string | null | undefined;
-  /** Report whether this data-connected control renders a visible template menu. */
-  onVisibilityChange?: ((visible: boolean) => void) | undefined;
   /** Close a shell-global composer before navigating to template settings. */
   onManage?: (() => void) | undefined;
   /** Whether the composer is submitting. */
   disabled: boolean;
-  /** Priority for a global composer context row. */
-  contextPriority?: EntityMetadataPriority | undefined;
+  /** Render as a distinct action within an empty editor. */
+  inline?: boolean | undefined;
 }
 
 /**
@@ -223,12 +211,10 @@ export function ComposerTemplateControl({
   onApply,
   currentActorId,
   teamId,
-  leadingSeparator,
   autoApplyId = null,
-  onVisibilityChange,
   onManage,
   disabled,
-  contextPriority,
+  inline = false,
 }: ComposerTemplateControlProps): JSX.Element | null {
   const query = useApiQuery({ ...templatesOfKindDef(orgId, kind), enabled: open });
   const items = query.data?.items;
@@ -254,37 +240,24 @@ export function ComposerTemplateControl({
     onApply(match);
   }, [autoApplyId, templates, onApply]);
 
-  // Legacy shell layout needs the result of this data-dependent render decision, not merely the
-  // ReactNode it was handed. Run before paint so cached templates reopening a dialog do not flash
-  // the no-context spacing, and include every scope input so a changed person or team clears it.
   const visible = open && templates.length > 0;
-  usePrePaintEffect(() => {
-    onVisibilityChange?.(visible);
-  }, [currentActorId, kind, onVisibilityChange, open, orgId, teamId, visible]);
 
   // A failed or pending read renders nothing rather than a disabled control. The composer's job
   // is creating the entity; a template is an accelerant, and a broken accelerant should get out
   // of the way instead of sitting there greyed out asking to be understood.
   if (!visible) return null;
 
-  const menu = (
-    <>
-      {leadingSeparator}
-      <TemplateMenu
-        templates={templates}
-        onApply={onApply}
-        manageHref={sectionHref(orgId, 'templates')}
-        onManage={onManage}
-        disabled={disabled}
-        triggerLabel="Start from template"
-        compact
-        showScopeLabels={false}
-      />
-    </>
-  );
-  return contextPriority === undefined ? (
-    menu
-  ) : (
-    <EntityMetadataItem priority={contextPriority}>{menu}</EntityMetadataItem>
+  return (
+    <TemplateMenu
+      templates={templates}
+      onApply={onApply}
+      manageHref={sectionHref(orgId, 'templates')}
+      onManage={onManage}
+      disabled={disabled}
+      triggerLabel="Start from template"
+      compact
+      inline={inline}
+      showScopeLabels={false}
+    />
   );
 }

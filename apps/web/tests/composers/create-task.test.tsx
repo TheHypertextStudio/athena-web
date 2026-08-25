@@ -103,8 +103,6 @@ vi.mock('next/navigation', () => ({
 }));
 
 import { CreateTaskDialog, GlobalTaskComposer } from '../../src/components/tasks/create-task';
-import { ComposerShell } from '../../src/components/composer/composer-shell';
-import { ComposerTemplateControl } from '../../src/components/composer/template-menu';
 import { UserFacingError } from '../../src/lib/problem';
 import { queryKeys } from '../../src/lib/query';
 import { firstJson, jsonResponse } from '../support/http';
@@ -273,66 +271,6 @@ function renderComposer(overrides: Partial<Parameters<typeof CreateTaskDialog>[0
     </QueryClientProvider>,
   );
   return { onCreated, onOpenChange };
-}
-
-/** Props for the mounted legacy-template lifecycle harness. */
-interface TemplateLifecycleHarnessProps {
-  /** The template query's workspace key. */
-  readonly orgId: string;
-  /** The template query's object kind. */
-  readonly kind: 'project' | 'task';
-  /** Whether the composer is currently open. */
-  readonly open: boolean;
-  /** The person whose personal templates remain eligible. */
-  readonly currentActorId: string | null;
-  /** The team whose team-scoped templates remain eligible. */
-  readonly teamId: string | null;
-}
-
-/** Exercise template visibility and the legacy shell layout without remounting the harness. */
-function TemplateLifecycleHarness({
-  orgId,
-  kind,
-  open,
-  currentActorId,
-  teamId,
-}: TemplateLifecycleHarnessProps): JSX.Element {
-  const [templateVisible, setTemplateVisible] = useState(false);
-
-  return (
-    <>
-      <output data-testid="legacy-template-visible" data-visible={String(templateVisible)} />
-      <ComposerShell
-        open={open}
-        onOpenChange={() => undefined}
-        heading="New task"
-        templateSlotVisible={templateVisible}
-        templateSlot={
-          <ComposerTemplateControl
-            orgId={orgId}
-            kind={kind}
-            open={open}
-            currentActorId={currentActorId}
-            teamId={teamId}
-            onApply={() => undefined}
-            onVisibilityChange={setTemplateVisible}
-            disabled={false}
-          />
-        }
-        title=""
-        onTitleChange={() => undefined}
-        titlePlaceholder="Task title"
-        body=""
-        onBodyChange={() => undefined}
-        creating={false}
-        canSubmit={false}
-        onSubmit={() => undefined}
-        submitLabel="Create task"
-      >
-        {null}
-      </ComposerShell>
-    </>
-  );
 }
 
 interface GlobalTaskHarnessProps {
@@ -566,7 +504,7 @@ function taskTemplate(
 }
 
 describe('CreateTaskDialog — robust composer', () => {
-  it('renders Workspace, Team, then Start from template above the task title for a global task', async () => {
+  it('renders Start from template inside the empty editor after the task title', async () => {
     templatesGet.mockResolvedValue(
       jsonResponse(true, {
         items: [taskTemplate('My template', 'personal', ADA_ID, null)],
@@ -580,10 +518,10 @@ describe('CreateTaskDialog — robust composer', () => {
     const title = screen.getByLabelText('Task title');
 
     expect(workspace.compareDocumentPosition(team) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(team.compareDocumentPosition(template) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(template.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(team.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(title.compareDocumentPosition(template) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getAllByRole('button', { name: /Team/ })).toHaveLength(1);
-    expect(document.querySelectorAll('[data-testid="ChevronRightIcon"]')).toHaveLength(2);
+    expect(document.querySelectorAll('[data-testid="ChevronRightIcon"]')).toHaveLength(1);
   });
 
   it('omits the team control from the global context row when one team is implied', async () => {
@@ -597,7 +535,7 @@ describe('CreateTaskDialog — robust composer', () => {
     expect(screen.getByRole('combobox', { name: 'Workspace' })).toBeVisible();
     expect(await screen.findByRole('button', { name: 'Start from template' })).toBeVisible();
     expect(screen.queryByRole('button', { name: /Team/ })).toBeNull();
-    expect(document.querySelectorAll('[data-testid="ChevronRightIcon"]')).toHaveLength(1);
+    expect(document.querySelectorAll('[data-testid="ChevronRightIcon"]')).toHaveLength(0);
   });
 
   it('does not leave a blank context row in the legacy single-team composer', async () => {
@@ -639,114 +577,8 @@ describe('CreateTaskDialog — robust composer', () => {
     const template = await screen.findByRole('button', { name: 'Start from template' });
     const title = screen.getByLabelText('Task title');
 
-    expect(template.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(title.closest('form')).toHaveClass('pt-3');
-  });
-
-  it('resets and restores cached legacy template layout across close, destination, and filter transitions', () => {
-    const client = new QueryClient({
-      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
-    });
-    client.setQueryData(queryKeys.templatesOfKind(ORG_ID, 'task'), {
-      items: [taskTemplate('My Alpha template', 'personal', ADA_ID, null)],
-    });
-    client.setQueryData(queryKeys.templatesOfKind(TARGET_ORG_ID, 'project'), {
-      items: [
-        {
-          ...taskTemplate('Delivery template', 'team', APOLLO_ID, TARGET_TEAM_ID),
-          organizationId: TARGET_ORG_ID,
-          payload: { targetType: 'project' },
-          targetType: 'project',
-        },
-      ],
-    });
-
-    const frame = (props: TemplateLifecycleHarnessProps): JSX.Element => (
-      <QueryClientProvider client={client}>
-        <TemplateLifecycleHarness {...props} />
-      </QueryClientProvider>
-    );
-    const rendered = render(
-      frame({
-        orgId: ORG_ID,
-        kind: 'task',
-        open: true,
-        currentActorId: ADA_ID,
-        teamId: TEAM_ID,
-      }),
-    );
-
-    expect(screen.getByTestId('legacy-template-visible')).toHaveAttribute('data-visible', 'true');
-    expect(screen.getByLabelText('Task title').closest('form')).toHaveClass('pt-3');
-
-    rendered.rerender(
-      frame({
-        orgId: ORG_ID,
-        kind: 'task',
-        open: false,
-        currentActorId: ADA_ID,
-        teamId: TEAM_ID,
-      }),
-    );
-    expect(screen.getByTestId('legacy-template-visible')).toHaveAttribute('data-visible', 'false');
-
-    rendered.rerender(
-      frame({
-        orgId: TARGET_ORG_ID,
-        kind: 'project',
-        open: false,
-        currentActorId: ADA_ID,
-        teamId: TARGET_TEAM_ID,
-      }),
-    );
-    expect(screen.getByTestId('legacy-template-visible')).toHaveAttribute('data-visible', 'false');
-
-    rendered.rerender(
-      frame({
-        orgId: TARGET_ORG_ID,
-        kind: 'project',
-        open: true,
-        currentActorId: ADA_ID,
-        teamId: TARGET_TEAM_ID,
-      }),
-    );
-    expect(screen.getByTestId('legacy-template-visible')).toHaveAttribute('data-visible', 'true');
-    expect(screen.getByLabelText('Task title').closest('form')).toHaveClass('pt-3');
-
-    rendered.rerender(
-      frame({
-        orgId: TARGET_ORG_ID,
-        kind: 'project',
-        open: true,
-        currentActorId: ADA_ID,
-        teamId: SECOND_TEAM_ID,
-      }),
-    );
-    expect(screen.getByTestId('legacy-template-visible')).toHaveAttribute('data-visible', 'false');
-    expect(screen.getByLabelText('Task title').closest('form')).toHaveClass('pt-5');
-
-    rendered.rerender(
-      frame({
-        orgId: ORG_ID,
-        kind: 'task',
-        open: true,
-        currentActorId: ADA_ID,
-        teamId: TEAM_ID,
-      }),
-    );
-    expect(screen.getByTestId('legacy-template-visible')).toHaveAttribute('data-visible', 'true');
-
-    rendered.rerender(
-      frame({
-        orgId: ORG_ID,
-        kind: 'task',
-        open: true,
-        currentActorId: APOLLO_ID,
-        teamId: TEAM_ID,
-      }),
-    );
-    expect(screen.getByTestId('legacy-template-visible')).toHaveAttribute('data-visible', 'false');
-    expect(screen.getByLabelText('Task title').closest('form')).toHaveClass('pt-5');
+    expect(title.compareDocumentPosition(template) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(title.closest('form')).toHaveClass('pt-5');
   });
 
   it.each(BLOCKED_DESTINATIONS)('disables submission when %s', async (_reason, destination) => {
@@ -894,7 +726,7 @@ describe('CreateTaskDialog — robust composer', () => {
     });
 
     fireEvent.change(screen.getByLabelText('Task title'), { target: { value: 'Portable task' } });
-    const description = screen.getByLabelText('Add a description…');
+    const description = screen.getByLabelText('Add a description');
     await act(async () => {
       description.innerHTML = '<p>Keep this draft text.</p>';
       fireEvent.input(description);
@@ -985,7 +817,7 @@ describe('CreateTaskDialog — robust composer', () => {
     });
 
     fireEvent.change(screen.getByLabelText('Task title'), { target: { value: '  Ship it  ' } });
-    const description = screen.getByLabelText('Add a description…');
+    const description = screen.getByLabelText('Add a description');
     // Tiptap observes the contenteditable DOM; act flushes that observer before form submission.
     await act(async () => {
       description.innerHTML = '<p>The whole thing.</p>';
@@ -1140,7 +972,7 @@ describe('CreateTaskDialog — robust composer', () => {
     fireEvent.change(screen.getByLabelText('Task title'), { target: { value: 'First task' } });
     fireEvent.click(screen.getByRole('button', { name: /Project/ }));
     fireEvent.click(await screen.findByText('Apollo'));
-    const description = screen.getByLabelText('Add a description…');
+    const description = screen.getByLabelText('Add a description');
     await act(async () => {
       description.innerHTML = '<p>Only this text resets.</p>';
       fireEvent.input(description);
@@ -1164,7 +996,7 @@ describe('CreateTaskDialog — robust composer', () => {
     expect(closeCreate).not.toHaveBeenCalled();
     await waitFor(() => {
       expect(screen.getByLabelText('Task title')).toHaveValue('');
-      expect(screen.getByLabelText('Add a description…').textContent).toBe('');
+      expect(screen.getByLabelText('Add a description').textContent).toBe('');
     });
     expect(screen.getByRole('status')).toHaveTextContent('Task created. Ready to create another.');
     expect(document.activeElement).toBe(screen.getByLabelText('Task title'));
@@ -1194,7 +1026,7 @@ describe('CreateTaskDialog — robust composer', () => {
     });
 
     fireEvent.change(screen.getByLabelText('Task title'), { target: { value: 'Shortcut' } });
-    const description = screen.getByLabelText('Add a description…');
+    const description = screen.getByLabelText('Add a description');
     expect(screen.getByRole('switch', { name: 'Create more' })).toHaveAttribute(
       'aria-checked',
       'false',
@@ -1346,7 +1178,7 @@ describe('CreateTaskDialog — robust composer', () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.tasks(TARGET_ORG_ID) });
     expect(screen.getByLabelText('Task title')).toBeDisabled();
     await waitFor(() => {
-      expect(screen.getByLabelText('Add a description…')).toHaveAttribute(
+      expect(screen.getByLabelText('Add a description')).toHaveAttribute(
         'contenteditable',
         'false',
       );

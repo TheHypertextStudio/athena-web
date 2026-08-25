@@ -72,6 +72,39 @@ function renderEditor(ui: ReactElement): void {
 }
 
 describe('composer body editor parity', () => {
+  it('renders a composer contribution in the shared inline empty state', async () => {
+    renderEditor(
+      <ComposerShell
+        open
+        onOpenChange={vi.fn()}
+        heading="New project"
+        title=""
+        onTitleChange={vi.fn()}
+        titlePlaceholder="Project name"
+        body=""
+        onBodyChange={vi.fn()}
+        bodyPlaceholder="Add a description"
+        bodyContributions={[
+          {
+            id: 'template-action',
+            renderEmptyAction: () => <button type="button">Start from template</button>,
+          },
+        ]}
+        creating={false}
+        canSubmit={false}
+        onSubmit={vi.fn()}
+        submitLabel="Create project"
+      >
+        <div />
+      </ComposerShell>,
+    );
+
+    const action = await screen.findByRole('button', { name: 'Start from template' });
+    const emptyState = action.closest('[data-editor-empty-actions]');
+    expect(emptyState).toHaveTextContent('Add a description');
+    expect(emptyState).toContainElement(action);
+  });
+
   it('keeps slash commands enabled inside the shared composer', async () => {
     const user = userEvent.setup();
     renderEditor(
@@ -84,7 +117,7 @@ describe('composer body editor parity', () => {
         titlePlaceholder="Project name"
         body=""
         onBodyChange={vi.fn()}
-        bodyPlaceholder="Add a description…"
+        bodyPlaceholder="Add a description"
         mentionOrgId="org_1"
         creating={false}
         canSubmit={false}
@@ -95,7 +128,7 @@ describe('composer body editor parity', () => {
       </ComposerShell>,
     );
 
-    const body = await screen.findByRole('textbox', { name: 'Add a description…' });
+    const body = await screen.findByRole('textbox', { name: 'Add a description' });
     await user.click(body);
     await user.keyboard('/quo');
 
@@ -119,7 +152,7 @@ describe('composer body editor parity', () => {
           titlePlaceholder="Project name"
           body={body}
           onBodyChange={setBody}
-          bodyPlaceholder="Add a description…"
+          bodyPlaceholder="Add a description"
           mentionOrgId={orgId}
           creating={false}
           canSubmit
@@ -139,7 +172,7 @@ describe('composer body editor parity', () => {
     }
 
     renderEditor(<Harness />);
-    const body = await screen.findByRole('textbox', { name: 'Add a description…' });
+    const body = await screen.findByRole('textbox', { name: 'Add a description' });
     await user.click(body);
     await user.keyboard('@road');
 
@@ -165,7 +198,7 @@ describe('composer body editor parity', () => {
         }),
       );
     });
-    expect(screen.getByRole('textbox', { name: 'Add a description…' })).toBe(sameBody);
+    expect(screen.getByRole('textbox', { name: 'Add a description' })).toBe(sameBody);
     expect(sameBody.textContent).toContain('Durable');
     expect(sameBody.textContent).toContain('@road');
     expect(sameBody.textContent).toContain('@next');

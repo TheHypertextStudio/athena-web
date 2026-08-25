@@ -281,10 +281,10 @@ describe('CreateProgramDialog — visibility picker', () => {
     expect(
       workspace.compareDocumentPosition(owner) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    expect(owner.compareDocumentPosition(template) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(template.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(owner.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(title.compareDocumentPosition(template) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getAllByRole('button', { name: /Owner/ })).toHaveLength(1);
-    expect(document.querySelectorAll('[data-testid="ChevronRightIcon"]')).toHaveLength(2);
+    expect(document.querySelectorAll('[data-testid="ChevronRightIcon"]')).toHaveLength(1);
 
     fireEvent.pointerDown(template, { button: 0, ctrlKey: false });
     expect(await screen.findByText('My program')).toBeVisible();
@@ -345,7 +345,7 @@ describe('CreateProgramDialog — visibility picker', () => {
     fireEvent.change(screen.getByLabelText('One-sentence summary'), {
       target: { value: 'Keep this summary.' },
     });
-    const description = screen.getByLabelText('Add a description…');
+    const description = screen.getByLabelText('Add a description');
     await act(async () => {
       description.innerHTML = '<p>Keep this body.</p>';
       fireEvent.input(description);

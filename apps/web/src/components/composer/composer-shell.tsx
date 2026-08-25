@@ -30,6 +30,7 @@ import { cn } from '@docket/ui/lib/utils';
 import { type JSX, type ReactNode, type RefObject, useId, useState } from 'react';
 
 import { FreeformTextEditor } from '@/components/editor/freeform-text';
+import type { EditorContribution } from '@/components/editor/editor-contribution';
 import MentionHydrationProvider from '@/components/mentions/mention-hydration';
 import { EntityMetadataRow } from '@/components/views/entity-detail-layout';
 
@@ -63,34 +64,13 @@ export interface ComposerShellProps {
    * The ordered destination context rendered above the title.
    *
    * @remarks
-   * New global composers supply their complete context in this row (for example Workspace,
-   * conditional Team, then Template). The older `icon`/`context`/`templateSlot` API remains as a
-   * compatibility seam for the page-owned composers that have not migrated yet.
+   * Global composers supply their complete destination context here, such as Workspace and Team.
    */
   contextRow?: ReactNode | undefined;
   /** Accessible label for the compact property controls. */
   propertyAriaLabel?: string | undefined;
   /** Keep a non-picker child form outside the compact metadata-row behavior. */
   propertyLayout?: 'compact' | 'freeform' | undefined;
-  /**
-   * The template control, pinned to the right of the top row.
-   *
-   * @remarks
-   * Deliberately not one of the {@link ComposerShellProps.children} property pills. Every pill in
-   * that strip sets one field; a template rewrites the whole draft. Putting a control with that
-   * reach among controls without it — and *below* the description it rewrites — is what made the
-   * old initiative picker read as a property and behave as a bulldozer.
-   */
-  templateSlot?: ReactNode | undefined;
-  /**
-   * Whether the legacy template slot currently renders a control.
-   *
-   * @remarks
-   * Page-owned composers can pass this data-derived flag when their template component returns
-   * `null` for an empty response. It lets the shell hide an otherwise blank legacy row and use
-   * the no-context title spacing without inferring visibility from a ReactNode.
-   */
-  templateSlotVisible?: boolean | undefined;
   /** Shared create-and-continue state and submission behavior. */
   continuation?: ComposerContinuation | undefined;
   /**
@@ -139,6 +119,8 @@ export interface ComposerShellProps {
   onBodyChange: (body: string) => void;
   /** Placeholder for the description field (omit to hide the description body entirely). */
   bodyPlaceholder?: string | undefined;
+  /** Feature behavior supplied to the shared description editor. */
+  bodyContributions?: readonly EditorContribution[] | undefined;
   /** The destination organization whose entities the body editor may mention. */
   mentionOrgId?: string | undefined;
   /** The inline row of compact property pickers. */
@@ -176,8 +158,6 @@ export function ComposerShell({
   contextRow,
   propertyAriaLabel = 'Composer properties',
   propertyLayout = 'compact',
-  templateSlot,
-  templateSlotVisible,
   continuation,
   leadingFields,
   title,
@@ -192,6 +172,7 @@ export function ComposerShell({
   bodyResetKey,
   onBodyChange,
   bodyPlaceholder,
+  bodyContributions = [],
   mentionOrgId,
   children,
   error,
@@ -213,7 +194,6 @@ export function ComposerShell({
   const isDirty =
     !draftCommitted &&
     (title.trim().length > 0 || (summary ?? '').trim().length > 0 || body.trim().length > 0);
-  const legacyTemplateSlotVisible = templateSlotVisible ?? Boolean(templateSlot);
   // The draft is locked while its own create is in flight, and that is the correct behavior for a
   // one-draft composer: this request is *about* these values, so a field edited after submitting
   // would show a change the created object does not have. What was missing was not the ability to
@@ -223,7 +203,7 @@ export function ComposerShell({
   const editDisabled = creating || contentDisabled;
   const hasLegacyIcon = icon !== undefined && icon !== null && icon !== false;
   const hasLegacyContext = context !== undefined && context !== null && context !== false;
-  const legacyContextVisible = hasLegacyIcon || hasLegacyContext || legacyTemplateSlotVisible;
+  const legacyContextVisible = hasLegacyIcon || hasLegacyContext;
 
   const bodyEditor =
     bodyPlaceholder === undefined ? null : (
@@ -235,6 +215,7 @@ export function ComposerShell({
         placeholder={bodyPlaceholder}
         ariaLabel={bodyPlaceholder}
         mentionOrgId={mentionOrgId}
+        contributions={bodyContributions}
         onSubmit={() => {
           if (canSubmit && !creating) onSubmit();
         }}
@@ -319,15 +300,14 @@ export function ComposerShell({
           </Button>
         ) : null}
 
-        {/* A migrated composer owns the order of its whole context row. Older page-owned composers
-            retain their breadcrumb + right-pinned template layout until their own migration lands. */}
+        {/* A composer owns its destination context. Template actions belong inside the editor. */}
         {contextRow !== undefined ? (
           <div data-composer-context-row="" className="min-w-0 px-6 pt-5">
             <EntityMetadataRow ariaLabel="Composer context" className="text-label-large min-w-0">
               {contextRow}
             </EntityMetadataRow>
           </div>
-        ) : icon || context || templateSlot ? (
+        ) : icon || context ? (
           <div
             className={cn(
               'flex items-center gap-2 px-6 pt-5 pr-16 text-sm has-[>div:only-child:empty]:hidden',
@@ -341,16 +321,6 @@ export function ComposerShell({
             ) : null}
             {context ? (
               <span className="text-on-surface-variant min-w-0 truncate">{context}</span>
-            ) : null}
-            {templateSlot ? (
-              <div
-                className={cn(
-                  'ml-auto shrink-0 empty:hidden',
-                  !legacyTemplateSlotVisible && 'hidden',
-                )}
-              >
-                {templateSlot}
-              </div>
             ) : null}
           </div>
         ) : null}

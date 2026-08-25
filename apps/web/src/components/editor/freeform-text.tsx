@@ -344,11 +344,7 @@ export function FreeformTextEditor({
         editor.commands.focus('end');
       }}
       className={cn(
-        // `.ProseMirror_.is-editor-empty` (a descendant space, not a compound class): the
-        // Placeholder extension decorates the empty *paragraph*, not the `.ProseMirror` root, so
-        // `is-editor-empty` and `data-placeholder` land on that child node. A compound selector
-        // here never matched anything — the placeholder text silently never rendered.
-        'placeholder:text-on-surface-variant [&_.ProseMirror_.is-editor-empty:first-child::before]:text-on-surface-variant relative flex min-h-0 max-w-[75ch] flex-1 flex-col [&_.ProseMirror]:min-h-10 [&_.ProseMirror]:flex-1 [&_.ProseMirror]:outline-none [&_.ProseMirror_.is-editor-empty:first-child::before]:pointer-events-none [&_.ProseMirror_.is-editor-empty:first-child::before]:float-left [&_.ProseMirror_.is-editor-empty:first-child::before]:h-0 [&_.ProseMirror_.is-editor-empty:first-child::before]:content-[attr(data-placeholder)]',
+        'relative flex min-h-0 max-w-[75ch] flex-1 flex-col [&_.ProseMirror]:min-h-10 [&_.ProseMirror]:flex-1 [&_.ProseMirror]:outline-none [&_.ProseMirror_.is-editor-empty:first-child::before]:hidden',
         editor.isEditable ? 'cursor-text' : '',
         disabled ? 'cursor-default opacity-60' : '',
         className,
@@ -358,11 +354,22 @@ export function FreeformTextEditor({
         editor={editor}
         className="flex min-h-0 flex-1 flex-col [&>.ProseMirror]:flex-1"
       />
-      {editor.isEditable && isEmpty && emptyContributions.length > 0 ? (
+      {editor.isEditable && isEmpty ? (
         <div
           data-editor-empty-actions=""
-          className="absolute top-8 left-0 z-10 flex flex-wrap items-center gap-1"
+          className="text-on-surface-variant text-body-medium absolute top-4 left-4 z-10 inline-flex flex-nowrap items-center gap-1.5 whitespace-nowrap"
+          onMouseDown={(event) => {
+            if (
+              event.target instanceof Element &&
+              event.target.closest('button, a, [role="menuitem"]')
+            ) {
+              return;
+            }
+            event.preventDefault();
+            editor.commands.focus('end');
+          }}
         >
+          <span>{placeholder}</span>
           {emptyContributions.map((contribution) => (
             <span key={contribution.id}>{contribution.renderEmptyAction?.(editor)}</span>
           ))}

@@ -53,6 +53,7 @@ import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
 import { useComposerContinuation } from '@/components/composer/use-composer-continuation';
 import { ComposerTemplateControl } from '@/components/composer/template-menu';
+import type { EditorContribution } from '@/components/editor/editor-contribution';
 import { useComposerDraft } from '@/components/composer/use-composer-draft';
 import { templateMerge } from '@/components/templates/merge';
 import { withComposerReset } from '@/components/composer/reset-on-open';
@@ -221,13 +222,57 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
   const [completionFailed, setCompletionFailed] = useState(false);
   const [completedTask, setCompletedTask] = useState<TaskOut | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [legacyTemplateSlotVisible, setLegacyTemplateSlotVisible] = useState(false);
   const continuation = useComposerContinuation({
     creating,
     successMessage: 'Task created. Ready to create another.',
   });
 
   const teamId = draft.teamOverride ?? defaultTeamId;
+  const templateContribution = useMemo<EditorContribution>(
+    () => ({
+      id: 'composer-description-templates-task',
+      renderEmptyAction: () => (
+        <ComposerTemplateControl
+          orgId={orgId}
+          kind="task"
+          open={open && destinationReady}
+          autoApplyId={contextualRequestDefaultsApply ? defaultTemplateId : null}
+          currentActorId={globalCreation?.currentActorId}
+          teamId={globalCreation === undefined ? undefined : teamId}
+          inline
+          onManage={
+            globalCreation === undefined
+              ? undefined
+              : () => {
+                  onOpenChange(false);
+                }
+          }
+          onApply={(chosen) => {
+            updateDraft((current) =>
+              templateMerge(current, templatePatch(chosen.payload, 'task'), {
+                document: 'description',
+                labels: ['title'],
+              }),
+            );
+          }}
+          disabled={creating || completedTask !== null || !destinationReady}
+        />
+      ),
+    }),
+    [
+      completedTask,
+      contextualRequestDefaultsApply,
+      creating,
+      defaultTemplateId,
+      destinationReady,
+      globalCreation,
+      onOpenChange,
+      open,
+      orgId,
+      teamId,
+      updateDraft,
+    ],
+  );
 
   // A destination change retains portable text and generic task values, but a reference to a
   // member, team, project, milestone, cycle, or label in the prior workspace is never valid in
@@ -453,57 +498,12 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
                 />
               </EntityMetadataItem>
             ) : null}
-            <ComposerTemplateControl
-              orgId={orgId}
-              kind="task"
-              open={open && destinationReady}
-              autoApplyId={contextualRequestDefaultsApply ? defaultTemplateId : null}
-              currentActorId={globalCreation.currentActorId}
-              teamId={teamId}
-              contextPriority={2}
-              leadingSeparator={
-                <ChevronRight aria-hidden className="text-on-surface-variant size-4 shrink-0" />
-              }
-              onManage={() => {
-                onOpenChange(false);
-              }}
-              onApply={(chosen) => {
-                updateDraft((current) =>
-                  templateMerge(current, templatePatch(chosen.payload, 'task'), {
-                    document: 'description',
-                    labels: ['title'],
-                  }),
-                );
-              }}
-              disabled={creating || completedTask !== null || !destinationReady}
-            />
           </>
         ) : undefined
       }
       context={
         globalCreation === undefined && teams.length > 1 ? (
           <TeamPicker teams={teams} value={teamId} onChange={changeTeam} disabled={creating} />
-        ) : undefined
-      }
-      templateSlotVisible={globalCreation === undefined ? legacyTemplateSlotVisible : undefined}
-      templateSlot={
-        globalCreation === undefined ? (
-          <ComposerTemplateControl
-            orgId={orgId}
-            kind="task"
-            open={open && destinationReady}
-            autoApplyId={defaultTemplateId}
-            onVisibilityChange={setLegacyTemplateSlotVisible}
-            onApply={(chosen) => {
-              updateDraft((current) =>
-                templateMerge(current, templatePatch(chosen.payload, 'task'), {
-                  document: 'description',
-                  labels: ['title'],
-                }),
-              );
-            }}
-            disabled={creating || !destinationReady}
-          />
         ) : undefined
       }
       continuation={
@@ -528,7 +528,8 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
       onBodyChange={(next) => {
         setField('description', next);
       }}
-      bodyPlaceholder="Add a description…"
+      bodyPlaceholder="Add a description"
+      bodyContributions={[templateContribution]}
       mentionOrgId={orgId}
       error={error ?? globalCreation?.loadError ?? null}
       statusMessage={continuation.statusMessage}

@@ -38,13 +38,14 @@ import { EntityPicker } from '@docket/ui/components';
 import { VocabularyProvider, useVocabulary } from '@docket/ui/hooks';
 import { ChevronRight, Layers } from '@docket/ui/icons';
 import { useQueryClient } from '@tanstack/react-query';
-import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
+import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAppRouter } from '@/lib/interactions/navigation';
 import { api } from '@/lib/api';
 import { ComposerShell } from '@/components/composer/composer-shell';
 import { useComposerContinuation } from '@/components/composer/use-composer-continuation';
 import { ComposerTemplateControl } from '@/components/composer/template-menu';
+import type { EditorContribution } from '@/components/editor/editor-contribution';
 import { useComposerDraft } from '@/components/composer/use-composer-draft';
 import { templateMerge } from '@/components/templates/merge';
 import { withComposerReset } from '@/components/composer/reset-on-open';
@@ -195,13 +196,56 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
 
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [legacyTemplateSlotVisible, setLegacyTemplateSlotVisible] = useState(false);
   const continuation = useComposerContinuation({
     creating,
     successMessage: `${projectNoun} created. Ready to create another.`,
   });
 
   const teamId = draft.teamOverride ?? defaultTeamId;
+  const templateContribution = useMemo<EditorContribution>(
+    () => ({
+      id: 'composer-description-templates-project',
+      renderEmptyAction: () => (
+        <ComposerTemplateControl
+          orgId={orgId}
+          kind="project"
+          open={open && destinationReady}
+          autoApplyId={contextualRequestDefaultsApply ? defaultTemplateId : null}
+          currentActorId={globalCreation?.currentActorId}
+          teamId={globalCreation === undefined ? undefined : teamId}
+          inline
+          onManage={
+            globalCreation === undefined
+              ? undefined
+              : () => {
+                  onOpenChange(false);
+                }
+          }
+          onApply={(chosen) => {
+            updateDraft((current) =>
+              templateMerge(current, templatePatch(chosen.payload, 'project'), {
+                document: 'description',
+                labels: ['name', 'summary'],
+              }),
+            );
+          }}
+          disabled={creating || !destinationReady}
+        />
+      ),
+    }),
+    [
+      contextualRequestDefaultsApply,
+      creating,
+      defaultTemplateId,
+      destinationReady,
+      globalCreation,
+      onOpenChange,
+      open,
+      orgId,
+      teamId,
+      updateDraft,
+    ],
+  );
 
   // Keep portable copy, dates, and generic enum choices when the destination changes, but never
   // carry a Team, person, Program, or Initiative id into a workspace that cannot own that row.
@@ -367,52 +411,7 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
                 disabled={creating || !destinationReady}
               />
             </EntityMetadataItem>
-            <ComposerTemplateControl
-              orgId={orgId}
-              kind="project"
-              open={open && destinationReady}
-              autoApplyId={contextualRequestDefaultsApply ? defaultTemplateId : null}
-              currentActorId={globalCreation.currentActorId}
-              teamId={teamId}
-              contextPriority={2}
-              leadingSeparator={
-                <ChevronRight aria-hidden className="text-on-surface-variant size-4 shrink-0" />
-              }
-              onManage={() => {
-                onOpenChange(false);
-              }}
-              onApply={(chosen) => {
-                updateDraft((current) =>
-                  templateMerge(current, templatePatch(chosen.payload, 'project'), {
-                    document: 'description',
-                    labels: ['name', 'summary'],
-                  }),
-                );
-              }}
-              disabled={creating || !destinationReady}
-            />
           </>
-        ) : undefined
-      }
-      templateSlotVisible={globalCreation === undefined ? legacyTemplateSlotVisible : undefined}
-      templateSlot={
-        globalCreation === undefined ? (
-          <ComposerTemplateControl
-            orgId={orgId}
-            kind="project"
-            open={open}
-            autoApplyId={defaultTemplateId}
-            onVisibilityChange={setLegacyTemplateSlotVisible}
-            onApply={(chosen) => {
-              updateDraft((current) =>
-                templateMerge(current, templatePatch(chosen.payload, 'project'), {
-                  document: 'description',
-                  labels: ['name', 'summary'],
-                }),
-              );
-            }}
-            disabled={creating}
-          />
         ) : undefined
       }
       continuation={{
@@ -439,7 +438,8 @@ export const CreateProjectDialog = withComposerReset(function CreateProjectCompo
       onBodyChange={(next) => {
         setField('description', next);
       }}
-      bodyPlaceholder="Add a description…"
+      bodyPlaceholder="Add a description"
+      bodyContributions={[templateContribution]}
       mentionOrgId={orgId}
       error={error ?? planningCalendar.error ?? globalCreation?.loadError ?? null}
       statusMessage={continuation.statusMessage}

@@ -505,8 +505,7 @@ function projectTemplate(
 }
 
 describe('CreateProjectDialog — robust composer', () => {
-  it('keeps the context and properties on one measured row and moves later controls into More', async () => {
-    let contextResize: ResizeObserverCallback | undefined;
+  it('keeps properties on one measured row and moves later controls into More', async () => {
     let propertiesResize: ResizeObserverCallback | undefined;
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
       this: HTMLElement,
@@ -531,9 +530,6 @@ describe('CreateProjectDialog — robust composer', () => {
         constructor(readonly callback: ResizeObserverCallback) {}
 
         observe(target: Element): void {
-          if (target.getAttribute('aria-label') === 'Composer context') {
-            contextResize = this.callback;
-          }
           if (target.getAttribute('aria-label') === 'Project properties') {
             propertiesResize = this.callback;
           }
@@ -561,15 +557,13 @@ describe('CreateProjectDialog — robust composer', () => {
     expect(
       workspace.compareDocumentPosition(program) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    expect(
-      program.compareDocumentPosition(template) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
-    expect(template.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(program.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(title.compareDocumentPosition(template) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getAllByRole('button', { name: /Program/ })).toHaveLength(1);
     expect(screen.getByRole('button', { name: /Team/ })).toBeVisible();
-    expect(document.querySelectorAll('[data-testid="ChevronRightIcon"]')).toHaveLength(2);
+    expect(document.querySelectorAll('[data-testid="ChevronRightIcon"]')).toHaveLength(1);
     expect(screen.getByRole('group', { name: 'Composer context' })).toHaveClass('flex-nowrap');
-    expect(template).toHaveClass('h-7', 'border', 'bg-transparent');
+    expect(template).toHaveClass('h-8', 'rounded-full', 'border');
 
     fireEvent.pointerDown(template);
     const menu = await screen.findByRole('menu');
@@ -580,38 +574,24 @@ describe('CreateProjectDialog — robust composer', () => {
 
     const properties = screen.getByRole('group', { name: 'Project properties' });
     expect(properties).toHaveClass('flex-nowrap');
-    expect(contextResize).toBeDefined();
     expect(propertiesResize).toBeDefined();
     act(() => {
-      contextResize?.(
-        [{ contentRect: { width: 180 } } as ResizeObserverEntry],
-        {} as ResizeObserver,
-      );
       propertiesResize?.(
         [{ contentRect: { width: 180 } } as ResizeObserverEntry],
         {} as ResizeObserver,
       );
     });
-    fireEvent.click(screen.getByRole('button', { name: 'More Composer context' }));
-    const moreContext = await screen.findByRole('group', { name: 'More Composer context' });
-    expect(within(moreContext).getByRole('button', { name: /Program/ })).toBeVisible();
-    expect(within(moreContext).getByRole('button', { name: 'Start from template' })).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'More Project properties' }));
     const overflow = await screen.findByRole('group', { name: 'More Project properties' });
     expect(within(overflow).getByRole('group', { name: 'Timeline' })).toBeVisible();
 
     act(() => {
-      contextResize?.(
-        [{ contentRect: { width: 1_000 } } as ResizeObserverEntry],
-        {} as ResizeObserver,
-      );
       propertiesResize?.(
         [{ contentRect: { width: 1_000 } } as ResizeObserverEntry],
         {} as ResizeObserver,
       );
     });
 
-    expect(screen.queryByRole('button', { name: 'More Composer context' })).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'More Project properties' }),
     ).not.toBeInTheDocument();
@@ -771,7 +751,7 @@ describe('CreateProjectDialog — robust composer', () => {
     fireEvent.change(screen.getByLabelText('One-sentence summary'), {
       target: { value: 'Keep the portable summary.' },
     });
-    const description = screen.getByLabelText('Add a description…');
+    const description = screen.getByLabelText('Add a description');
     await act(async () => {
       description.innerHTML = '<p>Keep the portable body.</p>';
       fireEvent.input(description);
@@ -824,7 +804,7 @@ describe('CreateProjectDialog — robust composer', () => {
     const { onCreated } = renderComposer();
 
     fireEvent.change(screen.getByLabelText('Project name'), { target: { value: 'Atlas' } });
-    const description = screen.getByLabelText('Add a description…');
+    const description = screen.getByLabelText('Add a description');
     // Tiptap observes the contenteditable DOM; act flushes that observer before form submission.
     await act(async () => {
       description.innerHTML = '<p>Re-platform.</p>';
@@ -928,7 +908,7 @@ describe('CreateProjectDialog — robust composer', () => {
     fireEvent.change(screen.getByLabelText('One-sentence summary'), {
       target: { value: 'Clear this summary.' },
     });
-    const description = screen.getByLabelText('Add a description…');
+    const description = screen.getByLabelText('Add a description');
     await act(async () => {
       description.innerHTML = '<p>Clear this description.</p>';
       fireEvent.input(description);
@@ -941,7 +921,7 @@ describe('CreateProjectDialog — robust composer', () => {
     await waitFor(() => {
       expect(screen.getByLabelText('Project name')).toHaveValue('');
       expect(screen.getByLabelText('One-sentence summary')).toHaveValue('');
-      expect(screen.getByLabelText('Add a description…')).toHaveTextContent('');
+      expect(screen.getByLabelText('Add a description')).toHaveTextContent('');
     });
     expect(screen.getByRole('button', { name: /Lead — Grace Hopper/ })).toBeVisible();
     expect(firstJson(projectPost.mock.calls)).toMatchObject({ teamId: TEAM_ID, leadId: GRACE_ID });

@@ -88,7 +88,7 @@ test.describe('create composers reopen pristine', () => {
 
     await title.fill('Ship the launch page');
     await dialog
-      .locator('[contenteditable="true"][aria-label="Add a description…"]')
+      .locator('[contenteditable="true"][aria-label="Add a description"]')
       .fill('Draft copy + hero, then hand to design.');
 
     await dialog.getByRole('button', { name: /^Create task$/i }).click();
@@ -105,7 +105,7 @@ test.describe('create composers reopen pristine', () => {
 
     await expect(reopened.getByPlaceholder('Task title')).toHaveValue('');
     await expect(
-      reopened.locator('[contenteditable="true"][aria-label="Add a description…"]'),
+      reopened.locator('[contenteditable="true"][aria-label="Add a description"]'),
     ).toHaveText('');
   });
 });

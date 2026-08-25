@@ -10,6 +10,10 @@ import { myWorkHref, TIMEOUTS } from '../helpers/constants';
 import { expect, test } from '../helpers/fixtures';
 import { attachShot, setColorScheme } from '../helpers/ui';
 
+// This evidence flow verifies a live composer. The PWA cache belongs to the offline suite and can
+// otherwise replace its newly created workspace with the offline interlock before the capture.
+test.use({ serviceWorkers: 'block' });
+
 test.describe('new-task composer', () => {
   test('opens and renders (light, dark, discard)', async ({ page }, testInfo) => {
     const { orgId } = await signUpAndOnboard(page, 'Composer');
@@ -31,8 +35,11 @@ test.describe('new-task composer', () => {
     }).toPass({ timeout: TIMEOUTS.pageReady });
     await page.waitForTimeout(400); // let the open animation settle
 
-    const editor = dialog.locator('[contenteditable="true"][aria-label="Add a description…"]');
+    const editor = dialog.locator('[contenteditable="true"][aria-label="Add a description"]');
     const editorSurface = dialog.locator('[data-editor-surface]').first();
+    const emptyState = dialog.locator('[data-editor-empty-actions]');
+    const templateButton = dialog.getByRole('button', { name: 'Start from template' });
+    const propertyStrip = dialog.getByRole('group', { name: 'Task properties' });
     const title = dialog.getByPlaceholder('Task title');
     const createButton = dialog.getByRole('button', { name: 'Create task' });
     await editor.evaluate((node) => {
@@ -51,6 +58,20 @@ test.describe('new-task composer', () => {
     expect(compact.maxWidth).toBeCloseTo(compact.rootSize * 42, 0);
     expect(compact.width).toBeLessThanOrEqual(compact.maxWidth + 1);
     expect(compact.overflowY).toBe('hidden');
+    await expect(templateButton).toBeVisible();
+    await expect(templateButton).not.toHaveCSS('text-decoration-line', 'underline');
+    await expect(templateButton).toHaveCSS('border-top-width', '1px');
+    await expect(emptyState).toHaveText('Add a description or Start from template');
+    const [editorBounds, emptyBounds] = await Promise.all([
+      editorSurface.evaluate((node) => node.getBoundingClientRect()),
+      emptyState.evaluate((node) => node.getBoundingClientRect()),
+    ]);
+    expect(emptyBounds.left).toBeGreaterThan(editorBounds.left);
+    await expect(propertyStrip).toHaveCSS('flex-wrap', 'nowrap');
+    await expect(propertyStrip).toHaveJSProperty(
+      'scrollWidth',
+      await propertyStrip.evaluate((node) => node.clientWidth),
+    );
 
     await dialog.getByRole('button', { name: 'Expand editor' }).click();
     await expect(dialog.getByRole('button', { name: 'Collapse editor' })).toBeVisible();
@@ -144,7 +165,7 @@ test.describe('new-task composer', () => {
 
     await dialog.getByPlaceholder('Task title').fill('Ship the launch page');
     await dialog
-      .locator('[contenteditable="true"][aria-label="Add a description…"]')
+      .locator('[contenteditable="true"][aria-label="Add a description"]')
       .fill('Draft copy + hero, then hand to design.');
     await page.keyboard.press('Escape');
     await page.waitForTimeout(250);

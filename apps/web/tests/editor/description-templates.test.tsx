@@ -133,7 +133,7 @@ function renderTemplateAwareTaskEditor({
           value={value}
           canEdit={canEdit}
           onSave={onSave}
-          placeholder="Add a description…"
+          placeholder="Add a description"
           contents={false}
         />
       </Wrapper>,
@@ -153,11 +153,12 @@ describe('description templates inside an existing entity editor', () => {
     expect(editorSurface).toContainElement(surface);
     expect(editorSurface).toHaveClass('flex-1');
     expect(surface).toHaveClass('flex-1');
-    expect(assertDefined(action.closest('[data-editor-empty-actions]'))).toHaveClass(
-      'absolute',
-      'top-8',
-    );
-    expect(action).toHaveClass('border-outline-variant', 'border');
+    const emptyState = assertDefined(action.closest('[data-editor-empty-actions]'));
+    expect(emptyState).toHaveTextContent('Add the Initiative brief…');
+    expect(emptyState).toHaveTextContent('Start from template');
+    expect(emptyState).toHaveClass('inline-flex', 'top-4', 'left-4', 'flex-nowrap');
+    expect(emptyState).not.toHaveClass('top-8');
+    expect(action).toHaveClass('border-outline-variant', 'border', 'rounded-full');
 
     await user.click(surface);
     await user.keyboard('A direction I wrote');
@@ -292,7 +293,7 @@ describe('description templates inside an existing entity editor', () => {
       templates: [taskTemplate('org', 'Organization template', 'organization')],
     });
 
-    expect(await screen.findByText('Add a description…')).toBeVisible();
+    expect(await screen.findByText('Add a description')).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Start from template' })).toBeNull();
     expect(screen.queryByRole('textbox', { name: 'Description' })).toBeNull();
   });

@@ -498,7 +498,7 @@ export default function TaskDetailPage(): JSX.Element {
               onSave={(description) => {
                 patchTask({ description: description ?? '' });
               }}
-              placeholder="Add a description…"
+              placeholder="Add a description"
             />
           </section>
 

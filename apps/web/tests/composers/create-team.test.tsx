@@ -162,7 +162,7 @@ describe('GlobalTeamComposer', () => {
       workspace.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
     expect(document.querySelectorAll('[data-testid="ChevronRightIcon"]')).toHaveLength(0);
-    expect(screen.queryByRole('button', { name: 'Template' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Start from template' })).toBeNull();
   });
 
   it.each(BLOCKED_TEAM_DESTINATIONS)('disables submission when %s', (_reason, destination) => {

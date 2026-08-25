@@ -81,7 +81,7 @@ export function createDescriptionTemplateContribution({
         manageHref={manageHref}
         disabled={false}
         triggerLabel="Start from template"
-        compact
+        inline
         showScopeLabels={false}
         onApply={(template) => {
           applyTemplate(editor, template, kind);

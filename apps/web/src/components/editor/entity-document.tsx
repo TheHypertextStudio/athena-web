@@ -73,7 +73,7 @@ export function EntityDocument({
   canEdit,
   onSave,
   onEditStart,
-  placeholder = 'Add a description…',
+  placeholder = 'Add a description',
   contents = true,
   contributions = [],
 }: EntityDocumentProps): JSX.Element {

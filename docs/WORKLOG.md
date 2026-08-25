@@ -7,6 +7,25 @@
 
 ## Active Tasks
 
+### [UTILITY-PANEL-FULL-001] Use one full-screen utility pane on compact layouts
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-08-25
+- **Priority**: P1
+- **Description**: The compact utility panel still inherits a generic side-sheet width cap and
+  exposes ten percent of the page underneath. That strip consumes scarce screen area without
+  providing usable page context.
+- **Approach**: Follow Material 3 adaptive supporting-pane guidance. Show one full-window utility
+  pane below the existing 1024px desktop breakpoint, and retain the docked page-plus-rail layout at
+  and above it. Preserve panel selection, focus trapping, dismissal, safe areas, panel-local state,
+  and native Agenda scrolling.
+- **Validation**: Add responsive shell geometry coverage, run the focused and repository gates, and
+  capture authenticated 320px, 390px, 768px, and 1024px states in both themes without opening a new
+  browser instance.
+- **Blockers**: None.
+
+---
+
 ### [CONNECTOR-POST-001] Keep connector actions and retries running
 
 - **Status**: IN_PROGRESS

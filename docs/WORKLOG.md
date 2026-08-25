@@ -9,15 +9,25 @@
 
 ### [SETTINGS-APPBAR-SEAM-001] Remove the gap below the settings app bar
 
-- **Status**: IN_PROGRESS
+- **Status**: COMPLETED
 - **Started**: 2026-08-25
+- **Completed**: 2026-08-25
 - **Priority**: P1
 - **Description**: The desktop settings shell leaves a 20 px empty strip between the app bar and
   both scroll containers. That strip acts like an invisible border and prevents the scrolled app
   bar tone from separating the fixed header from the moving page surface.
 - **Approach**: Remove the shell-level top inset so the page surface meets the app bar. Keep the
   navigation labels' breathing room as padding inside the navigation scroll content.
-- **Validation**: Pending authenticated desktop and phone geometry checks and screenshots.
+- **Validation**: The focused settings pane suite passes all 10 cases after rebasing onto the Cmd+K
+  capability search release. The commit hook passed formatting, repository tooling tests, the API
+  dependency build, and Web lint. Production deployment `dpl_4hA3mNJKzTVg6q4yXNmNfEmpnk9b` is
+  Ready and promoted to `docket.hypertext.studio`. Authenticated Hypertext Studio Chrome geometry
+  at 1280 by 900 reports a 0 px gap from the app bar to the navigation viewport, content viewport,
+  and page surface. At scroll position 240 the gap remains 0 px and the header uses
+  `surface-container-highest`.
+- **Learnings**: An app bar's scrolled tone can only separate moving content when the scroll
+  viewport meets the bar. Visual breathing room belongs inside the scroll content rather than
+  outside its viewport.
 - **Blockers**: None.
 
 ---

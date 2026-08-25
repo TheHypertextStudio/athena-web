@@ -7,6 +7,23 @@
 
 ## Active Tasks
 
+### [SETTINGS-SCROLL-STATE-001] Show settings scroll state in the header
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-08-25
+- **Priority**: P1
+- **Description**: The settings header keeps the dialog's resting surface color after section
+  content scrolls beneath it. MD3 top app bars use a distinct scrolled container color so the
+  fixed header remains visually separate from moving content.
+- **Approach**: Let the shared settings pane report whether its visible scroll region has moved.
+  Keep the header on the dialog surface at the top, raise it by one semantic surface step while
+  content is scrolled, and restore the resting tone when content returns to the top.
+- **Validation**: Pending focused component coverage and authenticated screenshots at phone and
+  desktop widths.
+- **Blockers**: None.
+
+---
+
 ### [SETTINGS-SCROLL-001] Let settings scroll to the dialog edge
 
 - **Status**: COMPLETED

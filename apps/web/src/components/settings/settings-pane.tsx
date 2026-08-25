@@ -26,11 +26,15 @@
  * list is not a navigation and leaves no history entry to trip over.
  */
 import { cn } from '@docket/ui';
+import { useMediaQuery } from '@docket/ui/hooks';
 import { ChevronLeft } from '@docket/ui/icons';
 import { Surface } from '@docket/ui/primitives';
-import { type JSX, type ReactNode, useEffect, useRef, useState } from 'react';
+import { type JSX, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 
 import { SETTINGS_BACK_CLASS } from './settings-back';
+
+/** The breakpoint where the settings list and section share the dialog. */
+const SETTINGS_SPLIT_VIEW_QUERY = '(min-width: 40rem)';
 
 /** Props for {@link SettingsPane}. */
 export interface SettingsPaneProps {
@@ -39,19 +43,41 @@ export interface SettingsPaneProps {
    * phone leaves the list for the section the choice just routed to.
    */
   readonly renderNav: (onNavigate: () => void, content: HTMLElement | null) => ReactNode;
+  /** Reports whether content currently sits behind the fixed settings header. */
+  readonly onScrolledChange?: (scrolled: boolean) => void;
   /** The routed section's content. */
   readonly children: ReactNode;
 }
 
 /** The settings modal's pane. See the module remarks for the two-level phone behaviour. */
-export function SettingsPane({ renderNav, children }: SettingsPaneProps): JSX.Element {
+export function SettingsPane({
+  renderNav,
+  onScrolledChange,
+  children,
+}: SettingsPaneProps): JSX.Element {
   // Opens on the section, not the list: the URL already names one, and landing on a list the
   // viewer did not ask for would make every deep link cost an extra tap.
   const [browsing, setBrowsing] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
+  const splitView = useMediaQuery(SETTINGS_SPLIT_VIEW_QUERY);
   // State rather than a ref: the rail derives its sub-navigation from what this element contains,
   // so it has to re-render when the element arrives. A ref would hand it null forever.
   const [content, setContent] = useState<HTMLElement | null>(null);
+
+  const reportScrollState = useCallback((): void => {
+    const listScrolled = (listRef.current?.scrollTop ?? 0) > 0;
+    const contentScrolled = (content?.scrollTop ?? 0) > 0;
+    const scrolled = splitView
+      ? listScrolled || contentScrolled
+      : browsing
+        ? listScrolled
+        : contentScrolled;
+    onScrolledChange?.(scrolled);
+  }, [browsing, content, onScrolledChange, splitView]);
+
+  useEffect(() => {
+    reportScrollState();
+  }, [reportScrollState]);
 
   // Open the list where the viewer already is. There are 19 sections and the current one is often
   // well below the fold — `Publishing` is last — so a list that always starts at the top makes you
@@ -66,6 +92,7 @@ export function SettingsPane({ renderNav, children }: SettingsPaneProps): JSX.El
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden sm:flex-row sm:gap-8 sm:px-5 sm:pt-5">
       <div
         ref={listRef}
+        onScroll={reportScrollState}
         className={cn(
           'overflow-y-auto p-4 sm:block sm:w-52 sm:flex-none sm:p-0',
           // Below `sm` the list is the whole pane while browsing, and absent otherwise; from `sm`
@@ -106,7 +133,13 @@ export function SettingsPane({ renderNav, children }: SettingsPaneProps): JSX.El
             own background, which is why 88 hairlines had been added to make those cards visible.
             Dropping the pane to `surface` puts every group one step above it, so the ramp runs the
             way `docs/design/design-system.md` §8 describes and the lines are simply gone. */}
-        <div ref={setContent} className="min-h-0 flex-1 overflow-y-auto">
+        <div
+          ref={setContent}
+          role="region"
+          aria-label="Settings content"
+          onScroll={reportScrollState}
+          className="min-h-0 flex-1 overflow-y-auto"
+        >
           <Surface
             tone="page"
             shape="none"

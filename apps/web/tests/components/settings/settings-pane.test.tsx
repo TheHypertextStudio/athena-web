@@ -60,6 +60,27 @@ function renderPane(): void {
 }
 
 describe('SettingsPane', () => {
+  it('reports whether the visible settings content has scrolled', () => {
+    const onScrolledChange = vi.fn();
+    render(
+      <SettingsPane
+        onScrolledChange={onScrolledChange}
+        renderNav={() => <nav aria-label="Settings sections" />}
+      >
+        <p>Section content</p>
+      </SettingsPane>,
+    );
+    const content = screen.getByRole('region', { name: 'Settings content' });
+
+    Object.defineProperty(content, 'scrollTop', { configurable: true, writable: true, value: 24 });
+    fireEvent.scroll(content);
+    expect(onScrolledChange).toHaveBeenLastCalledWith(true);
+
+    content.scrollTop = 0;
+    fireEvent.scroll(content);
+    expect(onScrolledChange).toHaveBeenLastCalledWith(false);
+  });
+
   it('opens on the section the URL names, with a way back to the list', () => {
     renderPane();
 

@@ -25,10 +25,11 @@ import {
   DialogDescription,
   DialogTitle,
   SettingsDialogContent,
+  Surface,
 } from '@docket/ui/primitives';
 import { type Workspace, WorkspaceSwitcher } from '@docket/ui/components';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
-import { type JSX, type ReactNode, useEffect, useMemo, useRef } from 'react';
+import { type JSX, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { useAppPathname } from '@/lib/app-location';
@@ -67,11 +68,16 @@ export function SettingsShell({ active, children }: SettingsShellProps): JSX.Ele
   const pathname = useAppPathname();
   const { orgs } = useActiveOrg();
   const { orgId: selectedOrgId, isPersonal: selectedOrgIsPersonal } = useSettingsShellWorkspace();
+  const [scrolled, setScrolled] = useState(false);
 
   const returnToRef = useRef(DEFAULT_CLOSE_TARGET);
   useEffect(() => {
     if (!active) returnToRef.current = pathname;
   }, [active, pathname]);
+
+  useEffect(() => {
+    if (!active) setScrolled(false);
+  }, [active]);
 
   const close = useMemo(
     () => (): void => {
@@ -114,7 +120,12 @@ export function SettingsShell({ active, children }: SettingsShellProps): JSX.Ele
           Choose a section to update your personal or workspace settings.
         </DialogDescription>
         {/* `pr-14` reserves the close button's absolute 48px so the switcher never runs under it. */}
-        <div className="flex shrink-0 items-center gap-3 py-3 pr-14 pl-5">
+        <Surface
+          as="header"
+          tone={scrolled ? 'prominent' : 'raised'}
+          shape="none"
+          className="flex shrink-0 items-center gap-3 py-3 pr-14 pl-5 transition-colors motion-reduce:transition-none"
+        >
           {/* The modal names itself, so it is the top of this outline — everything below is
               inside Settings. Radix defaults `Title` to an `h2`, which put it level with the open
               section's own title, the nav's group labels, and every subsection caption: four
@@ -139,8 +150,9 @@ export function SettingsShell({ active, children }: SettingsShellProps): JSX.Ele
               }}
             />
           </div>
-        </div>
+        </Surface>
         <SettingsPane
+          onScrolledChange={setScrolled}
           renderNav={(onNavigate, content) => (
             <SettingsShellNav
               selectedOrgId={selectedOrgId}

@@ -7,11 +7,32 @@ import { describe, expect, it } from 'vitest';
 
 const validator = resolve(import.meta.dirname, '../../scripts/validate-commit-message.mjs');
 
-function validate(message: string): { readonly status: number | null; readonly stderr: string } {
+const agentEnvironmentVariables = [
+  'DOCKET_COMMIT_AGENT',
+  'CODEX_THREAD_ID',
+  'CODEX_SESSION_ID',
+  'CLAUDECODE',
+  'CLAUDE_CODE_ENTRYPOINT',
+  'CURSOR_AGENT',
+  'GITHUB_COPILOT_AGENT',
+] as const;
+
+function humanEnvironment(): NodeJS.ProcessEnv {
+  const env = { ...process.env };
+  for (const name of agentEnvironmentVariables) delete env[name];
+  return env;
+}
+
+function validate(
+  message: string,
+  agentEnvironment: Readonly<Record<string, string>> = {},
+): { readonly status: number | null; readonly stderr: string } {
   const directory = mkdtempSync(join(tmpdir(), 'docket-commit-message-'));
   const messagePath = join(directory, 'COMMIT_EDITMSG');
   writeFileSync(messagePath, message);
-  const result = spawnSync(process.execPath, [validator, messagePath], { encoding: 'utf8' });
+  const env = humanEnvironment();
+  Object.assign(env, agentEnvironment);
+  const result = spawnSync(process.execPath, [validator, messagePath], { encoding: 'utf8', env });
   return { status: result.status, stderr: result.stderr };
 }
 
@@ -63,11 +84,40 @@ Normalize secret input before persistence so OAuth requests use the exact provid
     expect(result.status).toBe(0);
   });
 
+  it.each([
+    ['Codex', { CODEX_THREAD_ID: 'thread-1' }],
+    ['Claude Code', { CLAUDECODE: '1' }],
+    ['an explicitly marked agent', { DOCKET_COMMIT_AGENT: '1' }],
+  ])('rejects %s commits that omit agent attribution', (_agent, env) => {
+    const result = validate(
+      `fix(dx): Enforce repository commit policy
+
+${validBody}`,
+      env,
+    );
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('agent commits require a Co-authored-by trailer');
+  });
+
+  it('accepts an agent commit with a valid co-author trailer', () => {
+    const result = validate(
+      `fix(dx): Enforce repository commit policy
+
+${validBody}
+Co-authored-by: Codex <codex@openai.com>
+`,
+      { CODEX_THREAD_ID: 'thread-1' },
+    );
+
+    expect(result.status).toBe(0);
+  });
+
   it('formats the subject and wraps substantive body prose', () => {
     const directory = mkdtempSync(join(tmpdir(), 'docket-commit-format-'));
     const messagePath = join(directory, 'COMMIT_EDITMSG');
     writeFileSync(messagePath, `fix(dx): enforce repository commit policy\n\n${validBody}`);
-    execFileSync(process.execPath, [validator, messagePath]);
+    execFileSync(process.execPath, [validator, messagePath], { env: humanEnvironment() });
     const formatted = readFileSync(messagePath, 'utf8');
     expect(formatted).toMatch(/^fix\(dx\): Enforce repository commit policy/);
     expect(formatted.split('\n').every((line) => line.length <= 72)).toBe(true);

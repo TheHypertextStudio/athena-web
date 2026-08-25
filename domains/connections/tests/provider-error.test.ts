@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   isProviderAuthError,
+  isProviderMissingObjectError,
   ProviderError,
   providerErrorKindForStatus,
   type ProviderErrorKind,
@@ -31,6 +32,15 @@ describe('Connections provider-error vocabulary', () => {
     expect(isProviderAuthError({ kind: 'network' })).toBe(false);
     expect(isProviderAuthError(new Error('token rejected'))).toBe(false);
     expect(isProviderAuthError(undefined)).toBe(false);
+  });
+
+  it('distinguishes a missing provider object from other provider failures', () => {
+    expect(isProviderMissingObjectError({ kind: 'provider', status: 404 })).toBe(true);
+    expect(isProviderMissingObjectError({ kind: 'provider', status: 500 })).toBe(false);
+    expect(isProviderMissingObjectError({ kind: 'network', status: 404 })).toBe(false);
+    expect(isProviderMissingObjectError({ kind: 'provider' })).toBe(false);
+    expect(isProviderMissingObjectError(new Error('not found'))).toBe(false);
+    expect(isProviderMissingObjectError(undefined)).toBe(false);
   });
 
   it('carries provider failure metadata and retry semantics on the domain error', () => {

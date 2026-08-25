@@ -120,6 +120,10 @@ Every normal commit requires a substantive body with at least 100 non-comment ch
 must use plain language rather than a mandatory template. Explain what changed and why it belongs
 in the feature-oriented slice; use larger Markdown sections only when they improve readability.
 
+Every commit created from a recognized agent environment requires a `Co-authored-by` trailer. The
+validator detects Codex, Claude Code, Cursor Agent, GitHub Copilot Agent, or the explicit
+`DOCKET_COMMIT_AGENT` marker. Human terminal commits do not require an agent trailer.
+
 **Scopes:**
 
 The scope names the product or domain area a change lands in. There is no commitlint config; the
@@ -186,7 +190,7 @@ Repository enforcement:
 
 - GitHub branch protection for `main` requires linear history
 - `pnpm install` runs `scripts/install-git-guardrails.sh` via `prepare`, which sets local Git config: `pull.ff=only`, `pull.rebase=true`, `branch.main.rebase=true`, and `branch.main.mergeOptions=--ff-only`
-- The installer uses native Git hooks only: it sets `core.hooksPath` to generated hooks under the repo Git directory, runs staged formatting plus one repository-wide lint worker with a 3GB heap before every commit, preserves commit-message validation, and rejects merge commits via `pre-merge-commit` and `prepare-commit-msg`
+- The installer uses native Git hooks only: it sets `core.hooksPath` to generated hooks under the repo Git directory, validates the prepared message before running staged formatting plus one repository-wide lint worker with a 3GB heap, and rejects merge commits via `pre-merge-commit` and `prepare-commit-msg`
 
 ### Commit Policy
 

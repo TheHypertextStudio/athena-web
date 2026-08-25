@@ -16,6 +16,16 @@ const allowedScopes = new Set(
 
 const generatedMessages = [/^Merge /, /^Revert "/];
 
+const agentEnvironmentVariables = [
+  'DOCKET_COMMIT_AGENT',
+  'CODEX_THREAD_ID',
+  'CODEX_SESSION_ID',
+  'CLAUDECODE',
+  'CLAUDE_CODE_ENTRYPOINT',
+  'CURSOR_AGENT',
+  'GITHUB_COPILOT_AGENT',
+];
+
 const commitMessagePath = process.argv[2];
 
 if (!commitMessagePath) {
@@ -29,7 +39,7 @@ const subject = message
   .find((line) => line.trim() && !line.startsWith('#'))
   ?.trim();
 
-if (!subject || generatedMessages.some((pattern) => pattern.test(subject))) {
+if (!subject) {
   process.exit(0);
 }
 
@@ -75,6 +85,17 @@ function isCommitTrailer(line) {
   return /^(?:BREAKING CHANGE|Co-authored-by|Signed-off-by|Reviewed-by|Acked-by|Refs|Fixes|Closes)(?:!?):\s+\S/.test(
     line,
   );
+}
+
+function hasCoAuthorTrailer(raw) {
+  return raw.split('\n').some((line) => /^Co-authored-by:\s+.+\s+<[^<>\s]+>$/.test(line.trim()));
+}
+
+function isAgentCommitEnvironment(env) {
+  return agentEnvironmentVariables.some((name) => {
+    const value = env[name]?.trim().toLowerCase();
+    return value !== undefined && value !== '' && value !== '0' && value !== 'false';
+  });
 }
 
 function wrapText(prefix, text, subsequentPrefix = prefix) {
@@ -256,6 +277,14 @@ function validateBodyLineLength(raw) {
   if (violations.length > 0) {
     fail(`body lines must be ${bodyLineWidth} characters or fewer (${violations.join(', ')}).`);
   }
+}
+
+if (isAgentCommitEnvironment(process.env) && !hasCoAuthorTrailer(message)) {
+  fail('agent commits require a Co-authored-by trailer.');
+}
+
+if (generatedMessages.some((pattern) => pattern.test(subject))) {
+  process.exit(0);
 }
 
 if (!conventionalSubject?.groups) {

@@ -51,25 +51,7 @@ git config --local branch.main.rebase true
 git config --local branch.main.mergeOptions --ff-only
 git config --local core.hooksPath "$hooks_dir"
 
-cat > "$hooks_dir/pre-commit" <<'HOOK'
-#!/bin/sh
-set -eu
-
-. "$(dirname "$0")/use-repo-node.sh"
-
-if ! command -v pnpm >/dev/null 2>&1; then
-  echo "pnpm is required to run pre-commit checks." >&2
-  exit 1
-fi
-
-pnpm lint-staged
-
-# lint-staged only formats indexed files. The full lint below is the one authoritative check: a
-# prior commit can otherwise leave a package lint failure behind when a later commit changes
-# unrelated files. CI lints the complete workspace, so commits must do the same before they create
-# a revision that can later reach main.
-NODE_OPTIONS=--max-old-space-size=3072 pnpm turbo run lint --concurrency=1
-HOOK
+rm -f "$hooks_dir/pre-commit"
 
 cat > "$hooks_dir/commit-msg" <<'HOOK'
 #!/bin/sh
@@ -77,7 +59,23 @@ set -eu
 
 . "$(dirname "$0")/use-repo-node.sh"
 
-exec node scripts/validate-commit-message.mjs "$1"
+node scripts/validate-commit-message.mjs "$1"
+
+if ! command -v pnpm >/dev/null 2>&1; then
+  echo "pnpm is required to run commit checks." >&2
+  exit 1
+fi
+
+# Validate attribution and message policy before starting the expensive quality gate. Git runs
+# pre-commit before it prepares the message, so leaving lint there made an invalid agent commit
+# wait for the whole repository lint before commit-msg could reject it.
+pnpm lint-staged
+
+# lint-staged only formats indexed files. The full lint below is the one authoritative check: a
+# prior commit can otherwise leave a package lint failure behind when a later commit changes
+# unrelated files. CI lints the complete workspace, so commits must do the same before they create
+# a revision that can later reach main.
+NODE_OPTIONS=--max-old-space-size=3072 pnpm turbo run lint --concurrency=1
 HOOK
 
 cat > "$hooks_dir/pre-merge-commit" <<'HOOK'
@@ -103,7 +101,6 @@ HOOK
 
 chmod +x \
   "$hooks_dir/use-repo-node.sh" \
-  "$hooks_dir/pre-commit" \
   "$hooks_dir/commit-msg" \
   "$hooks_dir/pre-merge-commit" \
   "$hooks_dir/prepare-commit-msg"

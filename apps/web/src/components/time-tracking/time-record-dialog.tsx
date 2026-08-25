@@ -19,6 +19,13 @@ import {
 import { Trash2 } from '@docket/ui/icons';
 import { useEffect, useState, type JSX } from 'react';
 
+import { CalendarTimeField } from '@/components/calendar/calendar-time-field';
+import {
+  fromLocalInputValue,
+  localInputOccurrenceForInstant,
+  localInputResolutionError,
+  type LocalInputOccurrence,
+} from '@/components/calendar/datetime-input';
 import Link from '@/components/docket-link';
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
@@ -42,14 +49,6 @@ function wallTime(instant: string, timezone: string): string {
     .slice(0, 16);
 }
 
-function toInstant(value: string, timezone: string): string | null {
-  try {
-    return Temporal.PlainDateTime.from(value).toZonedDateTime(timezone).toInstant().toString();
-  } catch {
-    return null;
-  }
-}
-
 /** Show interval evidence and expose only the repair operations the record policy permits. */
 export function TimeRecordDialog({
   record,
@@ -60,6 +59,8 @@ export function TimeRecordDialog({
   const [editingIntervalId, setEditingIntervalId] = useState<string | null>(null);
   const [startsAt, setStartsAt] = useState('');
   const [endsAt, setEndsAt] = useState('');
+  const [startOccurrence, setStartOccurrence] = useState<LocalInputOccurrence | null>(null);
+  const [endOccurrence, setEndOccurrence] = useState<LocalInputOccurrence | null>(null);
   const [title, setTitle] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [confirmingRemoval, setConfirmingRemoval] = useState(false);
@@ -68,6 +69,8 @@ export function TimeRecordDialog({
     setEditingIntervalId(null);
     setTitle(record?.title ?? '');
     setCategoryId(record?.categoryId ?? '');
+    setStartOccurrence(null);
+    setEndOccurrence(null);
     setConfirmingRemoval(false);
     setError(null);
   }, [record?.id]);
@@ -124,13 +127,26 @@ export function TimeRecordDialog({
     setEditingIntervalId(interval.id);
     setStartsAt(wallTime(interval.startedAt, timezone));
     setEndsAt(wallTime(interval.endedAt ?? interval.startedAt, timezone));
+    setStartOccurrence(localInputOccurrenceForInstant(interval.startedAt, timezone));
+    setEndOccurrence(
+      interval.endedAt ? localInputOccurrenceForInstant(interval.endedAt, timezone) : null,
+    );
     setError(null);
   }
   function saveRepair(): void {
-    const start = toInstant(startsAt, timezone);
-    const end = toInstant(endsAt, timezone);
-    if (!editingIntervalId || !start || !end || Date.parse(end) <= Date.parse(start)) {
-      setError('Choose an end time after the start time.');
+    const startError = localInputResolutionError(startsAt, timezone, startOccurrence, 'start');
+    const endError = localInputResolutionError(endsAt, timezone, endOccurrence, 'end');
+    const start = fromLocalInputValue(startsAt, timezone, startOccurrence);
+    const end = fromLocalInputValue(endsAt, timezone, endOccurrence);
+    if (
+      !editingIntervalId ||
+      startError ||
+      endError ||
+      !start ||
+      !end ||
+      Temporal.Instant.compare(Temporal.Instant.from(end), Temporal.Instant.from(start)) <= 0
+    ) {
+      setError(startError ?? endError ?? 'Choose an end time after the start time.');
       return;
     }
     repair.mutate(
@@ -246,24 +262,28 @@ export function TimeRecordDialog({
                 </div>
                 {editingIntervalId === interval.id ? (
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <Field label="Started">
-                      <Input
-                        type="datetime-local"
-                        value={startsAt}
-                        onChange={(event) => {
-                          setStartsAt(event.target.value);
-                        }}
-                      />
-                    </Field>
-                    <Field label="Ended">
-                      <Input
-                        type="datetime-local"
-                        value={endsAt}
-                        onChange={(event) => {
-                          setEndsAt(event.target.value);
-                        }}
-                      />
-                    </Field>
+                    <CalendarTimeField
+                      label="Started"
+                      value={startsAt}
+                      displayTimezone={timezone}
+                      occurrence={startOccurrence}
+                      onValueChange={(value) => {
+                        setStartsAt(value);
+                        setStartOccurrence(null);
+                      }}
+                      onOccurrenceChange={setStartOccurrence}
+                    />
+                    <CalendarTimeField
+                      label="Ended"
+                      value={endsAt}
+                      displayTimezone={timezone}
+                      occurrence={endOccurrence}
+                      onValueChange={(value) => {
+                        setEndsAt(value);
+                        setEndOccurrence(null);
+                      }}
+                      onOccurrenceChange={setEndOccurrence}
+                    />
                   </div>
                 ) : (
                   <Text token="body-small" tone="muted">

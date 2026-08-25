@@ -87,8 +87,8 @@ calendar-day contract.
 | Settings → notification quiet hours | `apps/web/src/components/settings/notification-preferences-section.tsx` | Quiet hours start/end    | `time` (a clock, no date)                             |
 | Settings → work locations           | `apps/web/src/app/(app)/settings/work-locations/page.tsx`               | Planned start/end        | `time` + explicit Earlier/Later fold choice           |
 | Admin → notification console        | `apps/admin/src/app/(admin)/notifications/notification-console.tsx`     | Scheduled send           | `datetime-local`                                      |
-| Time → add past time                | `apps/web/src/components/time-tracking/time-add-past-dialog.tsx`        | Starts at, Ends at       | `datetime-local` in the selected timezone             |
-| Time → repair a manual interval     | `apps/web/src/components/time-tracking/time-record-dialog.tsx`          | Starts at, Ends at       | `datetime-local` in the selected timezone             |
+| Time → add past time                | `apps/web/src/components/time-tracking/time-add-past-dialog.tsx`        | Starts at, Ends at       | Shared `CalendarTimeField` + explicit DST fold choice |
+| Time → repair a manual interval     | `apps/web/src/components/time-tracking/time-record-dialog.tsx`          | Starts at, Ends at       | Shared `CalendarTimeField` + explicit DST fold choice |
 
 ## Formatting
 

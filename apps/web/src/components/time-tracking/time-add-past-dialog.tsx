@@ -18,6 +18,12 @@ import {
 } from '@docket/ui/primitives';
 import { useEffect, useMemo, useState, type JSX } from 'react';
 
+import { CalendarTimeField } from '@/components/calendar/calendar-time-field';
+import {
+  fromLocalInputValue,
+  localInputResolutionError,
+  type LocalInputOccurrence,
+} from '@/components/calendar/datetime-input';
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, useApiListQuery, useApiMutation } from '@/lib/query';
@@ -36,14 +42,6 @@ function nowWallTime(timezone: string): string {
   return date.toString().slice(0, 16);
 }
 
-function toInstant(value: string, timezone: string): string | null {
-  try {
-    return Temporal.PlainDateTime.from(value).toZonedDateTime(timezone).toInstant().toString();
-  } catch {
-    return null;
-  }
-}
-
 /** Create past time with explicit wall-clock bounds in the Hub timezone. */
 export function TimeAddPastDialog({
   open,
@@ -57,6 +55,8 @@ export function TimeAddPastDialog({
   const [title, setTitle] = useState('');
   const [startsAt, setStartsAt] = useState('');
   const [endsAt, setEndsAt] = useState('');
+  const [startOccurrence, setStartOccurrence] = useState<LocalInputOccurrence | null>(null);
+  const [endOccurrence, setEndOccurrence] = useState<LocalInputOccurrence | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     if (!open) return;
@@ -66,6 +66,8 @@ export function TimeAddPastDialog({
     setTitle('');
     setStartsAt(now);
     setEndsAt(now);
+    setStartOccurrence(null);
+    setEndOccurrence(null);
     setError(null);
   }, [open, timezone, workspaceId, workspaces]);
   const tasksQ = useApiListQuery(
@@ -99,9 +101,19 @@ export function TimeAddPastDialog({
 
   function save(): void {
     setError(null);
-    const start = toInstant(startsAt, timezone);
-    const end = toInstant(endsAt, timezone);
-    if (!start || !end || Date.parse(end) <= Date.parse(start)) {
+    const startError = localInputResolutionError(startsAt, timezone, startOccurrence, 'start');
+    const endError = localInputResolutionError(endsAt, timezone, endOccurrence, 'end');
+    if (startError || endError) {
+      setError(startError ?? endError);
+      return;
+    }
+    const start = fromLocalInputValue(startsAt, timezone, startOccurrence);
+    const end = fromLocalInputValue(endsAt, timezone, endOccurrence);
+    if (
+      !start ||
+      !end ||
+      Temporal.Instant.compare(Temporal.Instant.from(end), Temporal.Instant.from(start)) <= 0
+    ) {
       setError('Choose an end time after the start time.');
       return;
     }
@@ -173,24 +185,28 @@ export function TimeAddPastDialog({
             </Field>
           ) : null}
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="Started">
-              <Input
-                type="datetime-local"
-                value={startsAt}
-                onChange={(event) => {
-                  setStartsAt(event.target.value);
-                }}
-              />
-            </Field>
-            <Field label="Ended">
-              <Input
-                type="datetime-local"
-                value={endsAt}
-                onChange={(event) => {
-                  setEndsAt(event.target.value);
-                }}
-              />
-            </Field>
+            <CalendarTimeField
+              label="Started"
+              value={startsAt}
+              displayTimezone={timezone}
+              occurrence={startOccurrence}
+              onValueChange={(value) => {
+                setStartsAt(value);
+                setStartOccurrence(null);
+              }}
+              onOccurrenceChange={setStartOccurrence}
+            />
+            <CalendarTimeField
+              label="Ended"
+              value={endsAt}
+              displayTimezone={timezone}
+              occurrence={endOccurrence}
+              onValueChange={(value) => {
+                setEndsAt(value);
+                setEndOccurrence(null);
+              }}
+              onOccurrenceChange={setEndOccurrence}
+            />
           </div>
           {error ? (
             <Text role="alert" token="body-small" className="text-error">

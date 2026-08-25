@@ -53,7 +53,7 @@ function scripted(replies: readonly (Record<string, unknown> | number)[]): {
           }),
           {
             status: reply,
-            headers: { 'content-type': 'application/json' },
+            headers: { 'content-type': 'application/json', 'retry-after': '0' },
           },
         ),
       );

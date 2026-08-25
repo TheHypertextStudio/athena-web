@@ -474,12 +474,19 @@ The Cloud Run services are `--allow-unauthenticated`, so each job authenticates 
 ```bash
 # Preview the exact gcloud commands without touching GCP (secret redacted):
 DRY_RUN=1 GCP_PROJECT_ID=<PROJECT_ID> GCP_REGION=<REGION> \
-  API_URL="https://<docket-api-host>" pnpm scheduler:setup
+  API_URL="https://<docket-api-host>" \
+  SCHEDULER_API_URL="https://<cloud-run-service>.run.app" pnpm scheduler:setup
 
 # Provision/update for real (needs an authenticated gcloud):
 GCP_PROJECT_ID=<PROJECT_ID> GCP_REGION=<REGION> \
-  API_URL="https://<docket-api-host>" pnpm scheduler:setup
+  API_URL="https://<docket-api-host>" \
+  SCHEDULER_API_URL="https://<cloud-run-service>.run.app" pnpm scheduler:setup
 ```
+
+Production resolves `SCHEDULER_API_URL` from the deployed `docket-api` Cloud Run service. The
+public `API_URL` remains the browser-facing origin. Cloud Scheduler targets Cloud Run directly so a
+long connector pass can use the configured 600-second deadline instead of the public proxy's
+shorter request timeout.
 
 `pnpm bootstrap` enables `cloudscheduler.googleapis.com` and grants the deploy service account
 `roles/cloudscheduler.admin`, so CI may manage the jobs. (Re-run bootstrap on an existing

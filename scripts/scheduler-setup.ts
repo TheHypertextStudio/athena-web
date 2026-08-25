@@ -22,7 +22,10 @@
  * (bad flag, unreachable host) still exits non-zero. This keeps the deploy honest: a warning is
  * surfaced, never a fabricated success.
  *
- * Config comes from env (the same names CI passes): `GCP_PROJECT_ID`, `GCP_REGION`, `API_URL`.
+ * Config comes from env (the same names CI passes): `GCP_PROJECT_ID`, `GCP_REGION`,
+ * `SCHEDULER_API_URL`, and `API_URL`. The scheduler target defaults to `API_URL` for local and
+ * preview environments, while production supplies Cloud Run's service URL so background work does
+ * not inherit the public proxy's request timeout.
  * Pass `--dry-run` (or set `DRY_RUN=1`) to print the exact `gcloud` commands — with the secret
  * redacted — without calling GCP. Requires an authenticated `gcloud` for a real run.
  */
@@ -41,7 +44,7 @@ const SECRET_REDACTED = '***REDACTED***';
 export interface CronJob {
   /** Cloud Scheduler job id. */
   readonly name: string;
-  /** Path under the API host to POST (joined with `API_URL`). */
+  /** Path under the scheduler's API host to POST. */
   readonly path: string;
   /** Unix-cron schedule (interpreted in `Etc/UTC`). */
   readonly schedule: string;
@@ -425,8 +428,9 @@ function main(): void {
   const ctx: Ctx = {
     project: requireEnv('GCP_PROJECT_ID'),
     region: requireEnv('GCP_REGION'),
-    // Trim a trailing slash so `${apiUrl}${path}` never doubles up.
-    apiUrl: requireEnv('API_URL').replace(/\/+$/, ''),
+    // Production uses Cloud Run's service URL. API_URL remains the fallback for local and preview
+    // environments that have no distinct internal origin.
+    apiUrl: (process.env['SCHEDULER_API_URL']?.trim() || requireEnv('API_URL')).replace(/\/+$/, ''),
     dryRun,
   };
 

@@ -172,7 +172,15 @@ jobs:
           GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
           GCP_REGION: ${{ vars.GCP_REGION }}
           API_URL: ${{ vars.API_URL }}
-        run: pnpm exec tsx scripts/scheduler-setup.ts
+        shell: bash
+        run: |
+          set -euo pipefail
+          SCHEDULER_API_URL="$(gcloud run services describe docket-api \
+            --project="$GCP_PROJECT_ID" \
+            --region="$GCP_REGION" \
+            --format='value(status.url)')"
+          export SCHEDULER_API_URL
+          pnpm exec tsx scripts/scheduler-setup.ts
 
   # No `needs: deploy-api`. The admin image consumes nothing the API job produces — every build
   # arg comes from repo vars — so the two Docker builds ran back to back for no reason. Admin is

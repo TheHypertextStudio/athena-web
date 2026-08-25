@@ -17,11 +17,14 @@
   the Notion mirror's Sync now handler could run. Failed Notion mirrors then tried to place a
   JavaScript Date directly in raw SQL. The production Postgres driver rejected that retry update
   after the failed run had already been recorded, which turned the scheduler's whole response into
-  HTTP 500.
+  HTTP 500. The scheduler also targeted the public API proxy. A 400-write Notion pass needs at
+  least 140 seconds at the required 350 ms provider pacing, so the proxy returned HTTP 524 before
+  Cloud Scheduler's 600-second deadline.
 - **Approach**: Read a cloned request only when a body stream has no supported media type. Accept
   the request when that stream contains zero bytes. Keep rejecting every non-empty undeclared or
   unsupported body. Serialize the retry clock before it enters the raw SQL expression so one
-  connector's recorded failure schedules its next attempt instead of failing the scheduler.
+  connector's recorded failure schedules its next attempt instead of failing the scheduler. Send
+  scheduled work directly to Cloud Run while browsers continue to use the public API origin.
 - **Validation**: The media-type suite passes 38 cases. The Notion mirror route suite passes 11
   cases. The Notion retry-state suite passes 3 cases. The exact retry update now succeeds through
   the production Postgres driver. API type checking passes with a process-local 4 GB heap.

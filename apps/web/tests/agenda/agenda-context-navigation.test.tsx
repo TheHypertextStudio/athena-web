@@ -308,22 +308,26 @@ describe('AgendaProvider day navigation', () => {
         { wrapper: TestProvider },
       );
 
-      // The rail's one visible date representation always names the month; Agenda suppresses the
-      // shared scheduling lane heading so the selected day is never repeated inside the canvas.
-      expect(screen.getByRole('button', { name: /^Agenda date — Today · / })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Agenda date — July 2026' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Monday, July 13' })).toHaveAttribute(
+        'data-agenda-today',
+      );
 
       act(() => {
         vi.advanceTimersByTime(30_000);
       });
 
-      expect(
-        screen.getByRole('button', { name: /^Agenda date — Yesterday · / }),
-      ).toBeInTheDocument();
-      fireEvent.click(screen.getByRole('button', { name: /^Agenda date — Yesterday · / }));
+      expect(screen.getByRole('button', { name: 'Tuesday, July 14' })).toHaveAttribute(
+        'data-agenda-today',
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Agenda date — July 2026' }));
       fireEvent.click(screen.getByRole('button', { name: 'Today' }));
 
       expect(screen.getByLabelText('Selected date')).toHaveTextContent(NEXT_DAY);
-      expect(screen.getByRole('button', { name: /^Agenda date — Today · / })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Tuesday, July 14' })).toHaveAttribute(
+        'aria-current',
+        'date',
+      );
     } finally {
       preferencesState.data = { timezone: 'America/Los_Angeles' };
       vi.useRealTimers();
@@ -339,7 +343,7 @@ describe('AgendaProvider day navigation', () => {
       { wrapper: TestProvider },
     );
 
-    fireEvent.click(screen.getByRole('button', { name: /^Agenda date — / }));
+    fireEvent.click(screen.getByRole('button', { name: 'Agenda date — July 2026' }));
     fireEvent.click(screen.getByRole('button', { name: 'Next month' }));
     fireEvent.click(screen.getByRole('button', { name: '2026-08-24' }));
 
@@ -349,7 +353,7 @@ describe('AgendaProvider day navigation', () => {
     });
   });
 
-  it('moves one day from the visible arrows', () => {
+  it('moves directly between visible dates without rendering arrow buttons', () => {
     render(
       <>
         <AgendaHeader />
@@ -358,11 +362,13 @@ describe('AgendaProvider day navigation', () => {
       { wrapper: TestProvider },
     );
 
-    const controls = within(screen.getByRole('toolbar', { name: 'Agenda controls' }));
-    fireEvent.click(controls.getByRole('button', { name: 'Previous day' }));
+    const controls = within(screen.getByRole('group', { name: 'Agenda date navigation' }));
+    expect(controls.queryByRole('button', { name: 'Previous day' })).not.toBeInTheDocument();
+    expect(controls.queryByRole('button', { name: 'Next day' })).not.toBeInTheDocument();
+    fireEvent.click(controls.getByRole('button', { name: 'Sunday, July 12' }));
     expect(screen.getByLabelText('Selected date')).toHaveTextContent('2026-07-12');
 
-    fireEvent.click(controls.getByRole('button', { name: 'Next day' }));
+    fireEvent.click(controls.getByRole('button', { name: 'Monday, July 13' }));
     expect(screen.getByLabelText('Selected date')).toHaveTextContent(DAY);
   });
 
@@ -378,7 +384,7 @@ describe('AgendaProvider day navigation', () => {
         </>,
         { wrapper: TestProvider },
       );
-      const controls = screen.getByRole('toolbar', { name: 'Agenda controls' });
+      const controls = screen.getByRole('group', { name: 'Agenda date navigation' });
 
       fireEvent.keyDown(controls, { key: 'ArrowRight' });
       expect(screen.getByLabelText('Selected date')).toHaveTextContent(NEXT_DAY);
@@ -388,41 +394,35 @@ describe('AgendaProvider day navigation', () => {
 
       fireEvent.keyDown(controls, { key: 't' });
       expect(screen.getByLabelText('Selected date')).toHaveTextContent('2026-07-15');
+
+      fireEvent.keyDown(controls, { key: 'g' });
+      expect(screen.getByRole('grid', { name: 'Agenda date' })).toBeInTheDocument();
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it('keeps day navigation and display settings in one touch-sized control row', async () => {
+  it('separates direct date navigation from one labeled view menu', async () => {
     render(<AgendaHeader />, { wrapper: TestProvider });
 
-    const controls = screen.getByRole('toolbar', { name: 'Agenda controls' });
-    const previous = screen.getByRole('button', { name: 'Previous day' });
-    const date = screen.getByRole('button', { name: /^Agenda date — / });
-    const next = screen.getByRole('button', { name: 'Next day' });
-    const display = screen.getByRole('button', {
-      name: 'Agenda display settings, 1×, Timeline',
-    });
-
-    for (const control of [previous, date, next, display]) {
-      expect(controls).toContainElement(control);
-      expect(control).toHaveClass('min-h-10');
-    }
+    const controls = screen.getByRole('group', { name: 'Agenda date navigation' });
+    const date = screen.getByRole('button', { name: 'Agenda date — July 2026' });
+    const display = screen.getByRole('button', { name: 'Timeline view options' });
+    expect(controls).toContainElement(date);
+    expect(controls).toContainElement(display);
+    expect(date).toHaveClass('min-h-10');
+    expect(display).toHaveClass('min-h-10');
     expect(screen.queryByRole('group', { name: 'Agenda zoom' })).not.toBeInTheDocument();
 
     fireEvent.pointerDown(display, { button: 0, ctrlKey: false });
-    fireEvent.click(await screen.findByRole('menuitemradio', { name: '2×' }));
-    expect(
-      screen.getByRole('button', { name: 'Agenda display settings, 2×, Timeline' }),
-    ).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('menuitemradio', { name: 'Comfortable' }));
+    expect(screen.getByRole('button', { name: 'Timeline view options' })).toBeInTheDocument();
 
-    fireEvent.pointerDown(
-      screen.getByRole('button', { name: 'Agenda display settings, 2×, Timeline' }),
-      { button: 0, ctrlKey: false },
-    );
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Timeline view options' }), {
+      button: 0,
+      ctrlKey: false,
+    });
     fireEvent.click(await screen.findByRole('menuitemradio', { name: 'List' }));
-    expect(
-      screen.getByRole('button', { name: 'Agenda display settings, 2×, List' }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'List view options' })).toBeInTheDocument();
   });
 });

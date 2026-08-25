@@ -1,6 +1,6 @@
 'use client';
 
-import { ListView, Schedule, TuneRounded } from '@docket/ui/icons';
+import { ListView, Schedule, ChevronDown } from '@docket/ui/icons';
 import {
   Button,
   DropdownMenu,
@@ -16,11 +16,11 @@ import type { JSX } from 'react';
 import { useAgenda } from './agenda-context';
 import { AGENDA_SCALE_STEPS } from './agenda-scale';
 
+const DENSITY_LABELS = ['Compact', 'Comfortable', 'Expanded'] as const;
+
 /** Agenda display menu for timeline density and presentation. */
-export function AgendaScaleControls(): JSX.Element {
+export function AgendaDisplayMenu(): JSX.Element {
   const { pixelsPerHour, setScale, view, setView } = useAgenda();
-  const index = AGENDA_SCALE_STEPS.indexOf(pixelsPerHour as (typeof AGENDA_SCALE_STEPS)[number]);
-  const label = `${Math.max(0, index) + 1}×`;
   const viewLabel = view === 'list' ? 'List' : 'Timeline';
   return (
     <DropdownMenu>
@@ -28,16 +28,16 @@ export function AgendaScaleControls(): JSX.Element {
         <Button
           type="button"
           variant="ghost"
-          iconOnly
           controlSize="sm"
-          aria-label={`Agenda display settings, ${label}, ${viewLabel}`}
-          className="min-h-10 min-w-10"
+          aria-label={`${viewLabel} view options`}
+          className="min-h-10 shrink-0 px-2"
         >
-          <TuneRounded aria-hidden="true" />
+          {viewLabel}
+          <ChevronDown aria-hidden="true" className="size-4" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" width="sm">
-        <DropdownMenuLabel>Zoom</DropdownMenuLabel>
+        <DropdownMenuLabel>Density</DropdownMenuLabel>
         <DropdownMenuRadioGroup
           value={String(pixelsPerHour)}
           onValueChange={(next) => {
@@ -49,7 +49,7 @@ export function AgendaScaleControls(): JSX.Element {
         >
           {AGENDA_SCALE_STEPS.map((step, stepIndex) => (
             <DropdownMenuRadioItem key={step} value={String(step)}>
-              {stepIndex + 1}×
+              {DENSITY_LABELS[stepIndex]}
             </DropdownMenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>

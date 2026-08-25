@@ -516,8 +516,9 @@ export function WorkLocationTimedLaneContext({
                 : `translateX(${String((preview.targetIndex - context.geometry.laneIndex) * context.geometry.laneWidth)}px)`,
           }}
         >
-          <span className="bg-outline absolute top-0 left-[19px] h-full w-0.5 rounded-full" />
-          <span className="bg-secondary-container text-on-secondary-container absolute -top-3 left-2 flex size-6 items-center justify-center rounded-full">
+          <span className="bg-tertiary-container/35 absolute top-0 left-1.5 h-full w-7 rounded-full" />
+          <span className="bg-tertiary absolute top-0 left-[19px] h-full w-0.5 rounded-full" />
+          <span className="bg-tertiary-container text-on-tertiary-container absolute -top-3 left-2 flex size-6 items-center justify-center rounded-full">
             <PreviewMarkerIcon aria-hidden="true" className="size-3.5!" />
           </span>
         </div>
@@ -527,11 +528,19 @@ export function WorkLocationTimedLaneContext({
         const height =
           ((bounds.endMinutes - bounds.startMinutes) / 60) * context.geometry.pixelsPerHour;
         const rail = (
-          <span
-            data-testid="work-location-rail"
-            aria-hidden="true"
-            className="bg-outline absolute top-0 left-[19px] h-full w-0.5 rounded-full"
-          />
+          <>
+            <span
+              data-testid="work-location-band"
+              data-work-location-band={region.id}
+              aria-hidden="true"
+              className="bg-tertiary-container/35 pointer-events-none absolute top-0 left-1.5 h-full w-7 rounded-full"
+            />
+            <span
+              data-testid="work-location-rail"
+              aria-hidden="true"
+              className="bg-tertiary pointer-events-none absolute top-0 left-[19px] h-full w-0.5 rounded-full"
+            />
+          </>
         );
         if (!region.editable) {
           const description = `${region.label}, ${wallTimeLabel(bounds.startMinutes)} to ${wallTimeLabel(bounds.endMinutes)}`;
@@ -555,7 +564,7 @@ export function WorkLocationTimedLaneContext({
                   >
                     <span
                       data-work-location-marker-kind={region.isHome ? 'home' : 'place'}
-                      className="bg-surface-container-high text-on-surface-variant flex size-6 items-center justify-center rounded-full"
+                      className="bg-tertiary-container text-on-tertiary-container flex size-6 items-center justify-center rounded-full"
                     >
                       <MarkerIcon aria-hidden="true" className="size-3.5!" />
                     </span>
@@ -723,7 +732,7 @@ export function WorkLocationTimedLaneContext({
                 >
                   <span
                     data-work-location-marker-kind={region.isHome ? 'home' : 'place'}
-                    className="bg-surface-container-high text-on-surface-variant group-hover:bg-surface-container-highest group-active:bg-secondary-container ring-outline-variant flex size-6 items-center justify-center rounded-full ring-1 motion-safe:transition-colors motion-reduce:transition-none"
+                    className="bg-tertiary-container text-on-tertiary-container group-hover:bg-tertiary-container/80 group-active:bg-tertiary-container/70 ring-tertiary flex size-6 items-center justify-center rounded-full ring-1 motion-safe:transition-colors motion-reduce:transition-none"
                   >
                     <MarkerIcon aria-hidden="true" className="size-3.5!" />
                   </span>

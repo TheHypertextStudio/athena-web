@@ -277,7 +277,7 @@ describe('work-location calendar components', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
-  it('renders a 2px rail with 44px move and resize targets and commits cross-lane gestures', () => {
+  it('renders one tinted 28px band inside the 40px interaction track', () => {
     const onEdit = vi.fn(() => ({ status: 'accepted' as const }));
     render(
       <WorkLocationTimedLaneContext
@@ -289,7 +289,18 @@ describe('work-location calendar components', () => {
       />,
     );
 
-    expect(screen.getByTestId('work-location-rail')).toHaveClass('w-0.5');
+    expect(screen.getByTestId('work-location-band')).toHaveClass(
+      'bg-tertiary-container/35',
+      'left-1.5',
+      'w-7',
+      'rounded-full',
+    );
+    expect(screen.getByTestId('work-location-rail')).toHaveClass(
+      'bg-tertiary',
+      'left-[19px]',
+      'w-0.5',
+      'rounded-full',
+    );
     const move = screen.getByRole('button', { name: 'Move Main library work location' });
     const resizeStart = screen.getByRole('button', { name: 'Resize start of Main library' });
     const resizeEnd = screen.getByRole('button', { name: 'Resize end of Main library' });
@@ -297,7 +308,7 @@ describe('work-location calendar components', () => {
       expect(control).toHaveClass('min-h-10');
       expect(control).toHaveClass('min-w-10');
     }
-    expect(screen.getByTestId('work-location-rail')).not.toHaveClass('w-11');
+    expect(screen.getByTestId('work-location-band')).not.toHaveClass('pointer-events-auto');
 
     fireEvent.pointerDown(move, { button: 0, pointerId: 7, clientX: 100, clientY: 100 });
     fireEvent.pointerMove(window, { pointerId: 7, clientX: 300, clientY: 130 });
@@ -915,9 +926,9 @@ describe('work-location calendar components', () => {
         onEdit={vi.fn(() => ({ status: 'accepted' as const }))}
       />,
     );
-    expect(screen.getByTestId('work-location-rail')).toHaveClass('bg-outline');
+    expect(screen.getByTestId('work-location-rail')).toHaveClass('bg-tertiary');
     expect(
-      scheduleSurfaceContrast('var(--color-surface)', 'var(--color-outline)', theme),
+      scheduleSurfaceContrast('var(--color-surface)', 'var(--color-tertiary)', theme),
     ).toBeGreaterThanOrEqual(3);
 
     rerender(

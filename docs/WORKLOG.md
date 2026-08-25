@@ -7,6 +7,36 @@
 
 ## Active Tasks
 
+### [AGENDA-POLISH-004] Replace cramped Agenda chrome and edge geometry
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-08-25
+- **Priority**: P1
+- **Description**: Replace the Agenda panel's boxed arrow, date, and display toolbar with a
+  scan-first day switcher. Remove visible scrollbar chrome. Keep time labels, work-location
+  context, event cards, and dense overflow clear of the narrow panel's edges.
+- **Approach**: Follow Google Calendar's separation between direct date navigation, arbitrary-date
+  picking, and view choice. Use a Fantastical-style synchronized seven-day strip for the narrow
+  panel. Keep the existing month picker, guarded navigation, scheduling gestures, and persistence.
+  Add Agenda-only outer gutters and hidden scrollbar chrome. Compact the all-day lane and make dense
+  collision capacity use the width left after work-location composition.
+- **Subtasks**:
+  - [x] Audit the user-provided 390px failure and benchmark current calendar interaction patterns.
+  - [x] Write and self-review the implementation plan.
+  - [ ] Replace the four-control toolbar with the month trigger, day strip, and labeled view menu.
+  - [ ] Add panel gutters and hide scrollbar chrome without disabling scrolling.
+  - [ ] Compact all-day context and clarify partial-day work-location intervals.
+  - [ ] Make narrow collision cards and dense disclosures use effective cluster width.
+  - [ ] Pass focused, repository, accessibility, responsive, theme, and authenticated screenshot gates.
+- **Decisions**: The implementation will remove visible previous and next buttons. The existing mini
+  calendar will remain the arbitrary-date jump. The seven-day strip will own nearby-day selection
+  and week paging. Agenda will retain Timeline, List, and three density choices behind one labeled
+  view trigger. The browser scrollbar will remain operational but will not render chrome.
+- **Plan**: `docs/superpowers/plans/2026-08-25-agenda-panel-polish.md`
+- **Blockers**: None.
+
+---
+
 ### [CONNECTOR-POST-001] Keep connector actions and retries running
 
 - **Status**: IN_PROGRESS

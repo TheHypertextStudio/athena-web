@@ -1,7 +1,7 @@
 # AGENTS.md - Project Athena Agent Guidelines
 
-> **Version**: 2.0.0
-> **Last Updated**: 2026-08-15
+> **Version**: 2.0.1
+> **Last Updated**: 2026-08-24
 > **Applies To**: All AI coding agents working on Project Athena
 
 This document defines the operational framework for AI agents contributing to Project Athena. All agents MUST adhere to these guidelines to ensure consistent, high-quality, autonomous development.

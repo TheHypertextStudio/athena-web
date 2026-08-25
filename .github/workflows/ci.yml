@@ -59,6 +59,7 @@ jobs:
   lint:
     name: Lint (${{ matrix.group }})
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
@@ -83,7 +84,7 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm turbo run lint ${{ matrix.filter }} --concurrency=1
+      - run: timeout --signal=TERM --kill-after=10s 180s pnpm turbo run lint ${{ matrix.filter }} --concurrency=1
 
   # Sharded for the same reason as lint, and with the same memory ceiling intact: `tsc` holds a
   # whole program in memory per package, so each runner still typechecks one at a time. 26 packages

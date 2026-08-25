@@ -71,11 +71,10 @@ pnpm lint-staged
 # introduced it instead of reaching CI.
 pnpm --filter @docket/test-utils exec vitest run tests/design-policies/design-token-policy.test.ts --maxWorkers=1
 
-# lint-staged only formats indexed files. The full lint below is the one authoritative check: a
-# prior commit can otherwise leave a package lint failure behind when a later commit changes
-# unrelated files. CI lints the complete workspace, so commits must do the same before they create
-# a revision that can later reach main.
-NODE_OPTIONS=--max-old-space-size=3072 pnpm turbo run lint --concurrency=1
+# Keep commit feedback scoped to what the commit can change. The staged driver expands workspace
+# packages through their dependents, while root lint and TypeScript configuration changes still
+# select the bounded full-workspace path. CI remains the authoritative clean-checkout gate.
+pnpm lint:staged
 HOOK
 
 cat > "$hooks_dir/commit-msg" <<'HOOK'

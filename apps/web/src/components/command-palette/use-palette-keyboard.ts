@@ -4,8 +4,9 @@ import type { PaletteItem } from './types';
 
 interface UsePaletteKeyboardInput {
   items: readonly PaletteItem[];
-  activeIndex: number;
-  setActiveIndex: (updater: (prev: number) => number) => void;
+  activeId: string | null;
+  setActiveId: (next: string | null) => void;
+  runItem: (item: PaletteItem) => void;
   onClose: () => void;
   dialogRef: RefObject<HTMLDivElement | null>;
 }
@@ -18,26 +19,54 @@ interface UsePaletteKeyboardOutput {
 /** usePaletteKeyboard coordinates command palette state, loading, and mutations for its screen. */
 export function usePaletteKeyboard({
   items,
-  activeIndex,
-  setActiveIndex,
+  activeId,
+  setActiveId,
+  runItem,
   onClose,
   dialogRef,
 }: UsePaletteKeyboardInput): UsePaletteKeyboardOutput {
   const runActive = useCallback(() => {
-    const item = items[activeIndex];
-    if (item) item.run();
-  }, [items, activeIndex]);
+    const item = items.find((candidate) => candidate.id === activeId);
+    if (item) runItem(item);
+  }, [items, activeId, runItem]);
 
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
       switch (event.key) {
         case 'ArrowDown':
           event.preventDefault();
-          setActiveIndex((i) => (items.length === 0 ? 0 : (i + 1) % items.length));
+          if (items.length === 0) {
+            setActiveId(null);
+            break;
+          }
+          setActiveId(
+            items[
+              (Math.max(
+                0,
+                items.findIndex((item) => item.id === activeId),
+              ) +
+                1) %
+                items.length
+            ]?.id ?? null,
+          );
           break;
         case 'ArrowUp':
           event.preventDefault();
-          setActiveIndex((i) => (items.length === 0 ? 0 : (i - 1 + items.length) % items.length));
+          if (items.length === 0) {
+            setActiveId(null);
+            break;
+          }
+          setActiveId(
+            items[
+              (Math.max(
+                0,
+                items.findIndex((item) => item.id === activeId),
+              ) -
+                1 +
+                items.length) %
+                items.length
+            ]?.id ?? null,
+          );
           break;
         case 'Enter':
           event.preventDefault();
@@ -68,7 +97,7 @@ export function usePaletteKeyboard({
           break;
       }
     },
-    [items.length, runActive, onClose, dialogRef],
+    [items, activeId, setActiveId, runActive, onClose, dialogRef],
   );
 
   return { runActive, onKeyDown };

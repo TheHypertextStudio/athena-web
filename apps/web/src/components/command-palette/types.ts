@@ -19,7 +19,13 @@ export type PaletteScope = 'hub' | 'org';
  * Drives the grouped section headers in the palette list and is purely presentational —
  * selection behavior lives on each item's {@link PaletteItem.run}.
  */
-export type PaletteSection = 'navigation' | 'actions' | 'templates' | 'organizations' | 'results';
+export type PaletteSection =
+  | 'navigation'
+  | 'actions'
+  | 'panels'
+  | 'templates'
+  | 'organizations'
+  | 'results';
 
 /**
  * A single, selectable row in the command palette.
@@ -39,6 +45,14 @@ export interface PaletteItem {
   label: string;
   /** Optional secondary line (e.g. the entity kind, or a hint). */
   hint?: string | undefined;
+  /** Plain-language meaning used by capability search even when the row stays compact. */
+  description?: string | undefined;
+  /** Parent labels used for matching and for Settings breadcrumbs. */
+  breadcrumb?: readonly string[] | undefined;
+  /** Generic trailing kind badge for catalog-backed rows. */
+  kindLabel?: string | undefined;
+  /** Comparable only within one result source; breaks otherwise equal matches. */
+  searchScore?: number | undefined;
   /**
    * Leading glyph: either a Lucide icon component (rendered as `<Icon />`, the common case — every
    * search hit, static command, and org switch) or a fully-rendered node such as a label's own

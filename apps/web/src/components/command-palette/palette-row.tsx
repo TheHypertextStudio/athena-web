@@ -86,7 +86,14 @@ export function PaletteRow({
       )}
     >
       {paletteIcon(item.icon)}
-      <span className="min-w-0 flex-1 truncate">{item.label}</span>
+      <span className="flex min-w-0 flex-1 flex-col items-start py-0.5">
+        <span className="w-full truncate">{item.label}</span>
+        {item.breadcrumb && item.breadcrumb.length > 0 ? (
+          <span className="text-on-surface-variant text-label-small w-full truncate">
+            {item.breadcrumb.join(' › ')}
+          </span>
+        ) : null}
+      </span>
 
       {item.org ? <OrgChip orgId={item.org.id} name={item.org.name} /> : null}
 
@@ -96,7 +103,11 @@ export function PaletteRow({
         </span>
       ) : null}
 
-      {item.hitType ? (
+      {item.kindLabel ? (
+        <span className={cn(menuBadge('standard'), 'border-outline-variant ml-0 border')}>
+          {item.kindLabel}
+        </span>
+      ) : item.hitType ? (
         <span className={cn(menuBadge('standard'), 'border-outline-variant ml-0 border')}>
           {SEARCH_KIND_LABEL[item.hitType]}
         </span>

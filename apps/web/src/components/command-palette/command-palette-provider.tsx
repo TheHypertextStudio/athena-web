@@ -36,6 +36,14 @@ export interface CommandPaletteProviderProps {
   readonly children: ReactNode;
 }
 
+/** Props for the shell-owned command palette overlay. */
+export interface CommandPaletteHostProps {
+  /** Whether the current route hosts the persistent utility rail. */
+  readonly panelsAvailable: boolean;
+  /** Ask the shell to reveal one of its persistent utility panels. */
+  readonly onOpenPanel: (panelId: 'agenda' | 'focus' | 'athena') => void;
+}
+
 /**
  * Whether a keydown event is the palette's open shortcut (Cmd+K on macOS, Ctrl+K elsewhere).
  *
@@ -48,14 +56,14 @@ function isPaletteShortcut(event: KeyboardEvent): boolean {
 }
 
 /**
- * Provide the global command palette: open state, the Cmd/Ctrl+K listener, and the overlay.
+ * Provide the global command palette open state and Cmd/Ctrl+K listener.
  *
  * @remarks
  * Mounted once inside the `(app)` shell so the palette is available on every authenticated
  * page. It owns the open/closed state, installs a single document-level keydown listener that
  * toggles the palette on Cmd+K / Ctrl+K (preventing the browser default), locks body scroll
- * while open, and renders the {@link CommandPalette} overlay. Descendants — including the
- * shell's rail Search entry and the visible trigger — drive it through {@link useCommandPalette}.
+ * while open. Descendants drive it through {@link useCommandPalette}. The shell renders
+ * {@link CommandPaletteHost} where panel commands can reach the rail controller.
  */
 export function CommandPaletteProvider({
   enabled = true,
@@ -108,11 +116,23 @@ export function CommandPaletteProvider({
     [visibleOpen, openPalette, closePalette, togglePalette],
   );
 
+  return <CommandPaletteContext.Provider value={value}>{children}</CommandPaletteContext.Provider>;
+}
+
+/** Render the palette overlay inside the shell that owns persistent utility panels. */
+export function CommandPaletteHost({
+  panelsAvailable,
+  onOpenPanel,
+}: CommandPaletteHostProps): JSX.Element {
+  const { open, closePalette } = useCommandPalette();
+
   return (
-    <CommandPaletteContext.Provider value={value}>
-      {children}
-      <CommandPalette open={visibleOpen} onClose={closePalette} />
-    </CommandPaletteContext.Provider>
+    <CommandPalette
+      open={open}
+      onClose={closePalette}
+      panelsAvailable={panelsAvailable}
+      onOpenPanel={onOpenPanel}
+    />
   );
 }
 

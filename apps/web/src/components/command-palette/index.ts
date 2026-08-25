@@ -9,6 +9,8 @@
  * navigation, actions, and org-switching, with a Hub-global vs org-local scope toggle.
  */
 export {
+  CommandPaletteHost,
+  type CommandPaletteHostProps,
   CommandPaletteProvider,
   type CommandPaletteValue,
   useCommandPalette,

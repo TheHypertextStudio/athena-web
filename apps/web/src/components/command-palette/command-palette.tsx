@@ -12,15 +12,18 @@ import type { PaletteItem, PaletteScope, PaletteSection } from './types';
 import { ScopeToggle } from './scope-toggle';
 import { usePaletteKeyboard } from './use-palette-keyboard';
 import { filterCommands } from './filter';
+import { mergePaletteResults } from './merge-results';
+import { useCapabilityItems } from './use-capability-items';
 import { useCommandActions } from './use-command-actions';
 import { useHubSearch } from './use-hub-search';
 import { PALETTE_MODES, parsePrefix, useLabelPaletteMode } from './sub-modes';
 
 /** The display order + heading label for each section in the list. */
 const SECTION_ORDER: readonly { section: PaletteSection; label: string }[] = [
-  { section: 'results', label: 'Search results' },
+  { section: 'results', label: 'Best matches' },
   { section: 'navigation', label: 'Navigate' },
   { section: 'actions', label: 'Actions' },
+  { section: 'panels', label: 'Panels' },
   { section: 'templates', label: 'Create from template' },
   { section: 'organizations', label: 'Switch workspace' },
 ];
@@ -31,7 +34,13 @@ export interface CommandPaletteProps {
   open: boolean;
   /** Close the palette (Escape, backdrop click, or after a selection). */
   onClose: () => void;
+  /** Whether the current route hosts the persistent utility rail. */
+  panelsAvailable?: boolean;
+  /** Ask the shell to reveal one of its persistent utility panels. */
+  onOpenPanel?: (panelId: 'agenda' | 'focus' | 'athena') => void;
 }
+
+const IGNORE_PANEL_REQUEST = (): undefined => undefined;
 
 /**
  * The unified Cmd/Ctrl+K command palette: search · navigate · actions · org switch.
@@ -54,11 +63,16 @@ export interface CommandPaletteProps {
  * `aria-activedescendant` tracks the active row, ↑/↓ move it (wrapping), Enter runs it, and
  * Escape closes. Selecting any command closes the palette before it navigates.
  */
-export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Element | null {
+export function CommandPalette({
+  open,
+  onClose,
+  panelsAvailable = true,
+  onOpenPanel = IGNORE_PANEL_REQUEST,
+}: CommandPaletteProps): JSX.Element | null {
   const { activeOrgId, orgName } = useActiveOrg();
   const [query, setQuery] = useState('');
   const [scope, setScope] = useState<PaletteScope>('hub');
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [activeId, setActiveId] = useState<string | null>(null);
 
   const { mode, term } = useMemo(() => parsePrefix(query), [query]);
   // Gate each mode's own query on the palette actually being open and in that mode -- mirroring
@@ -77,6 +91,9 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
   // The element focused when the palette opened — restored on close so a keyboard user lands
   // back where they were (Radix Dialog/Sheet do this for free; this composed overlay does not).
   const openerRef = useRef<HTMLElement | null>(null);
+  // A dismissal returns to the opener. A selected command owns the next focus destination, so
+  // restoring the opener would race routed heading focus and newly opened panels or dialogs.
+  const restoreFocusOnCloseRef = useRef(true);
   // Latest `activeOrgId`, read by the open effect without making it a dependency (so an org
   // change mid-session does not re-run the open effect and refocus the input).
   const activeOrgIdRef = useRef(activeOrgId);
@@ -95,7 +112,8 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
     if (!open) return;
     setClosing(false);
     setQuery('');
-    setActiveIndex(0);
+    setActiveId(null);
+    restoreFocusOnCloseRef.current = true;
     // org-local is meaningless without a bound org → fall back to hub on the Hub.
     setScope((prev) => (activeOrgIdRef.current ? prev : 'hub'));
     const active = document.activeElement;
@@ -108,11 +126,17 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
       // Keep the panel mounted for one exit-animation pass, then restore focus to the opener
       // (Radix Dialog/Sheet do this for free; this composed overlay must do it explicitly).
       setClosing(true);
-      if (opener?.isConnected) opener.focus();
+      if (restoreFocusOnCloseRef.current && opener?.isConnected) opener.focus();
     };
   }, [open]);
 
-  const commands = useCommandActions({ scope, open, close: onClose });
+  const commands = useCommandActions({ open, close: onClose });
+  const capabilities = useCapabilityItems({
+    open,
+    close: onClose,
+    panelsAvailable,
+    onOpenPanel,
+  });
   const { results, loading, error, hasQuery } = useHubSearch({
     query,
     scope,
@@ -123,28 +147,48 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
   // The static (navigation/actions/org) commands matching the query — suppressed while a mode is
   // active, since a mode's own item list takes over the list entirely.
   const staticMatches = useMemo(
-    () => (mode !== null ? [] : filterCommands(commands, query)),
-    [mode, commands, query],
+    () => (mode !== null ? [] : filterCommands([...capabilities, ...commands], query)),
+    [mode, capabilities, commands, query],
   );
 
   // The flat, ordered item list the keyboard navigates: search results first, then commands, or —
   // while a mode is active — that mode's own items instead.
   const items = useMemo<readonly PaletteItem[]>(
-    () => (modeResult ? modeResult.items : [...results, ...staticMatches]),
-    [modeResult, results, staticMatches],
+    () =>
+      modeResult
+        ? modeResult.items
+        : query.trim().length > 0
+          ? mergePaletteResults(staticMatches, results, query)
+          : [...results, ...staticMatches],
+    [modeResult, query, results, staticMatches],
   );
 
-  // Keep the active row in range as the list shrinks/grows.
+  // Preserve the active result by id while asynchronous sources reorder the list.
   useEffect(() => {
-    setActiveIndex((i) => (items.length === 0 ? 0 : Math.min(i, items.length - 1)));
-  }, [items.length]);
+    if (items.length === 0) {
+      if (activeId !== null) setActiveId(null);
+      return;
+    }
+    if (activeId === null || !items.some((item) => item.id === activeId)) {
+      setActiveId(items[0]?.id ?? null);
+    }
+  }, [activeId, items]);
+
+  const activeIndex = useMemo(
+    () =>
+      Math.max(
+        0,
+        items.findIndex((item) => item.id === activeId),
+      ),
+    [activeId, items],
+  );
 
   // Scroll the active row into view as it changes.
   useEffect(() => {
     if (!open) return;
     const row = listRef.current?.querySelector('[aria-selected="true"]');
     row?.scrollIntoView({ block: 'nearest' });
-  }, [activeIndex, open]);
+  }, [activeId, open]);
 
   // Escape exits a mode before it closes the palette — a mode is a state to back out of, not
   // just query text — so the keyboard hook's `onClose` gets a wrapper instead of `onClose` itself.
@@ -156,10 +200,16 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
     onClose();
   }, [mode, onClose]);
 
+  const runItem = useCallback((item: PaletteItem) => {
+    restoreFocusOnCloseRef.current = false;
+    item.run();
+  }, []);
+
   const { onKeyDown } = usePaletteKeyboard({
     items,
-    activeIndex,
-    setActiveIndex,
+    activeId,
+    setActiveId,
+    runItem,
     onClose: handlePaletteClose,
     dialogRef,
   });
@@ -188,7 +238,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
   const showNoOrgForMode = mode !== null && activeOrgId === null;
   const showResultsSkeleton = modeResult
     ? modeResult.loading && modeResult.items.length === 0
-    : loading && results.length === 0;
+    : loading && items.length === 0;
   const showEmpty =
     !showNoOrgForMode && items.length === 0 && !showResultsSkeleton && !effectiveError;
 
@@ -263,7 +313,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
-              setActiveIndex(0);
+              setActiveId(null);
             }}
             placeholder={
               mode !== null
@@ -280,7 +330,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
             orgLabel={orgLocalLabel}
             onChange={(next) => {
               setScope(next);
-              setActiveIndex(0);
+              setActiveId(null);
             }}
           />
         </div>
@@ -348,11 +398,13 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps): JSX.Elem
                         <PaletteRow
                           key={item.id}
                           item={item}
-                          active={index === activeIndex}
+                          active={item.id === activeId}
                           rowId={`${baseRowId}-${String(index)}`}
-                          onSelect={item.run}
+                          onSelect={() => {
+                            runItem(item);
+                          }}
                           onHover={() => {
-                            setActiveIndex(index);
+                            setActiveId(item.id);
                           }}
                         />
                       );

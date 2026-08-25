@@ -12,7 +12,7 @@ import { act, renderHook } from '@testing-library/react';
 import type { JSX, ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { openCreate, routerPush, templates, members, contextState } = vi.hoisted(() => ({
+const { openCreate, routerPush, templates, members } = vi.hoisted(() => ({
   openCreate: vi.fn(),
   routerPush: vi.fn(),
   templates: {
@@ -74,25 +74,10 @@ const { openCreate, routerPush, templates, members, contextState } = vi.hoisted(
   members: {
     data: { items: [{ userId: 'user_self', actorId: 'actor_self' }] },
   },
-  contextState: {
-    density: 'comfortable' as const,
-    setDensity: vi.fn(),
-  },
 }));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: routerPush }),
-}));
-
-vi.mock('@docket/ui/components', () => ({
-  DENSITIES: ['compact', 'comfortable', 'spacious'],
-  useContextState: () => contextState,
-}));
-
-vi.mock('@docket/ui/hooks', () => ({
-  useVocabulary: (kind: string) =>
-    ({ task: 'Task', project: 'Project', initiative: 'Initiative', program: 'Program' })[kind] ??
-    kind,
 }));
 
 vi.mock('../../../src/components/active-org', () => ({
@@ -136,7 +121,7 @@ vi.mock('../../../src/lib/query', () => ({
 
 import { useCommandActions } from '../../../src/components/command-palette/use-command-actions';
 
-/** Supply the query client used by the command hook's sign-out action. */
+/** Supply the query runtime used by the dynamic template reads. */
 function wrapper({ children }: { children: ReactNode }): JSX.Element {
   return <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>;
 }
@@ -147,49 +132,9 @@ beforeEach(() => {
 });
 
 describe('command palette create actions', () => {
-  it('offers Athena as a Home destination instead of an org-scoped redirect', () => {
-    const close = vi.fn();
-    const { result } = renderHook(() => useCommandActions({ scope: 'org', open: true, close }), {
-      wrapper,
-    });
-
-    expect(result.current.find((item) => item.id === 'nav:athena')?.hint).toBe('Home');
-    expect(result.current.find((item) => item.id === 'nav:org:athena')).toBeUndefined();
-    expect(result.current.find((item) => item.id === 'nav:org:agents')).toBeUndefined();
-
-    act(() => {
-      result.current.find((item) => item.id === 'nav:athena')?.run();
-    });
-    expect(routerPush).toHaveBeenCalledWith('/athena');
-  });
-
-  it.each([
-    ['task', 'action:new:task'],
-    ['project', 'action:new:project'],
-    ['initiative', 'action:new:initiative'],
-    ['program', 'action:new:program'],
-  ] as const)('opens a workspace-scoped %s request directly', (kind, actionId) => {
-    const close = vi.fn();
-    const { result } = renderHook(() => useCommandActions({ scope: 'org', open: true, close }), {
-      wrapper,
-    });
-
-    act(() => {
-      result.current.find((item) => item.id === actionId)?.run();
-    });
-
-    expect(close).toHaveBeenCalledOnce();
-    expect(openCreate).toHaveBeenCalledWith({
-      kind,
-      initialWorkspaceId: 'org_alpha',
-      sameWorkspaceCompletion: 'open',
-    });
-    expect(routerPush).not.toHaveBeenCalled();
-  });
-
   it('opens a template-backed request directly and auto-applies its template', () => {
     const close = vi.fn();
-    const { result } = renderHook(() => useCommandActions({ scope: 'org', open: true, close }), {
+    const { result } = renderHook(() => useCommandActions({ open: true, close }), {
       wrapper,
     });
 
@@ -208,10 +153,9 @@ describe('command palette create actions', () => {
   });
 
   it('exposes only workspace, current-person, and default-team templates', () => {
-    const { result } = renderHook(
-      () => useCommandActions({ scope: 'org', open: true, close: vi.fn() }),
-      { wrapper },
-    );
+    const { result } = renderHook(() => useCommandActions({ open: true, close: vi.fn() }), {
+      wrapper,
+    });
     const ids = result.current.map((item) => item.id);
 
     expect(ids).toEqual(

@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 
 import { ContextProvider } from '@docket/ui/components';
 import { LabelId, OrganizationId } from '@docket/types';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -52,11 +52,20 @@ vi.mock('@/components/create-object/create-object-provider', () => ({
   useCreateObject: () => ({ request: null, openCreate: vi.fn(), closeCreate: vi.fn() }),
 }));
 
+vi.mock('@/components/settings/use-can-manage-org', () => ({
+  useCanManageOrg: () => ({ canManage: true, canContribute: true, loading: false }),
+}));
+
 const SEARCH_GET = vi.fn().mockResolvedValue({
   ok: true,
   status: 200,
   json: () => Promise.resolve({ items: [] }),
 });
+const EMPTY_SEARCH_RESPONSE = {
+  ok: true,
+  status: 200,
+  json: () => Promise.resolve({ items: [] }),
+};
 const LABELS_GET = vi.fn().mockResolvedValue({
   ok: true,
   status: 200,
@@ -95,7 +104,7 @@ vi.mock('@/lib/api', () => ({
 // test in this file, so without an explicit clear each test would see the previous test's calls
 // still on the mock.
 beforeEach(() => {
-  SEARCH_GET.mockClear();
+  SEARCH_GET.mockReset().mockResolvedValue(EMPTY_SEARCH_RESPONSE);
   LABELS_GET.mockClear();
   push.mockClear();
 });
@@ -114,6 +123,106 @@ function renderPalette() {
 }
 
 describe('CommandPalette — # label sub-mode', () => {
+  it('finds a Settings section through its catalog metadata', async () => {
+    renderPalette();
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'security' } });
+
+    const label = await screen.findByText('Security', { selector: 'span.w-full.truncate' });
+    const row = label.closest('[role="option"]');
+    expect(row).not.toBeNull();
+    if (!row) throw new Error('Security result did not render inside an option.');
+    expect(row).toHaveTextContent('Setting');
+    fireEvent.click(row);
+
+    expect(push).toHaveBeenCalledWith('/settings/security');
+  });
+
+  it('opens a Settings group through its stable route fragment', async () => {
+    renderPalette();
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'passkeys' } });
+
+    const row = await screen.findByRole('option', { name: /Passkeys/ });
+    expect(row).toHaveTextContent('Settings › Security');
+    fireEvent.click(row);
+
+    expect(push).toHaveBeenCalledWith(
+      '/settings/security?route-focus=settings-passkeys#settings-passkeys',
+    );
+  });
+
+  it('focuses a route-fragment destination after navigation mounts it', async () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined);
+    const heading = document.createElement('h3');
+    heading.id = 'settings-passkeys';
+    heading.tabIndex = -1;
+    heading.textContent = 'Mounted passkeys';
+    push.mockImplementationOnce((href: string) => {
+      window.history.replaceState(null, '', href);
+      document.body.append(heading);
+    });
+    renderPalette();
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'passkeys' } });
+    fireEvent.click(await screen.findByRole('option', { name: /Passkeys/ }));
+    act(() => {
+      while (frames.length > 0) frames.shift()?.(0);
+    });
+
+    expect(heading).toHaveFocus();
+    heading.remove();
+  });
+
+  it('does not restore focus to the opener after selecting a destination', async () => {
+    activeOrgState.activeOrgId = ORG;
+    const opener = document.createElement('button');
+    opener.textContent = 'Open search';
+    document.body.append(opener);
+    opener.focus();
+    const { wrapper: QueryWrapper } = makeQueryWrapper();
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryWrapper>
+        <ContextProvider initialContext={ORG}>{children}</ContextProvider>
+      </QueryWrapper>
+    );
+    const onClose = vi.fn();
+    const view = render(<CommandPalette open onClose={onClose} />, { wrapper });
+    const input = screen.getByRole('combobox');
+    await waitFor(() => {
+      expect(input).toHaveFocus();
+    });
+    fireEvent.change(input, { target: { value: 'passkeys' } });
+    fireEvent.click(await screen.findByRole('option', { name: /Passkeys/ }));
+    view.rerender(<CommandPalette open={false} onClose={onClose} />);
+
+    expect(opener).not.toHaveFocus();
+    opener.remove();
+  });
+
+  it('keeps query-only Settings entries out of the idle browse state', () => {
+    renderPalette();
+
+    expect(screen.queryByRole('option', { name: /Passkeys/ })).not.toBeInTheDocument();
+  });
+
+  it('keeps local Settings matches usable when remote search fails', async () => {
+    SEARCH_GET.mockRejectedValue(new Error('search unavailable'));
+    renderPalette();
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'security' } });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not search your workspace.');
+    const label = screen.getByText('Security', { selector: 'span.w-full.truncate' });
+    const row = label.closest('[role="option"]');
+    expect(row).not.toBeNull();
+    if (!row) throw new Error('Security result did not render inside an option.');
+    fireEvent.click(row);
+
+    expect(push).toHaveBeenCalledWith('/settings/security');
+  });
+
   it('enters the labels mode on #, suppressing hub search and static commands', async () => {
     renderPalette();
     const beforeTypingCalls = SEARCH_GET.mock.calls.length;

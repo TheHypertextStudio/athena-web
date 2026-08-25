@@ -52,6 +52,7 @@ vi.mock('next/link', () => ({
 
 vi.mock('../../src/lib/auth-client', () => ({
   authClient: { useSession: () => sessionState },
+  useSession: () => sessionState,
   signOut: vi.fn(),
 }));
 

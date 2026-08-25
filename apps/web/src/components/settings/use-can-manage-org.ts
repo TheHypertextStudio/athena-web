@@ -75,13 +75,16 @@ export interface CanManageOrg {
  * const { canManage, loading } = useCanManageOrg(orgId);
  * ```
  */
-export function useCanManageOrg(orgId: string): CanManageOrg {
+export function useCanManageOrg(
+  orgId: string,
+  options: { readonly enabled?: boolean } = {},
+): CanManageOrg {
   const { data: authSession } = useSession();
   const userId = authSession?.user.id ?? null;
   // Also gated on a non-empty orgId: a caller resolving its workspace asynchronously (e.g. the
   // settings modal's nav, before the org list loads) may briefly pass `''`, and firing a request
   // with an empty `:orgId` path segment is never useful.
-  const enabled = Boolean(userId) && Boolean(orgId);
+  const enabled = (options.enabled ?? true) && Boolean(userId) && Boolean(orgId);
 
   const membersQ = useApiQuery(
     apiQueryOptions(

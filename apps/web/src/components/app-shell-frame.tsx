@@ -40,7 +40,11 @@ import {
   useAthenaPanel,
 } from '@/components/athena/athena-panel-provider';
 import { useAuthenticationInterlock } from '@/components/authentication-interlock';
-import { CommandPaletteProvider, useCommandPalette } from '@/components/command-palette';
+import {
+  CommandPaletteHost,
+  CommandPaletteProvider,
+  useCommandPalette,
+} from '@/components/command-palette';
 import { OfflineBanner, OfflineContent } from '@/components/offline-state';
 import { NavigationProgress } from '@/components/navigation-progress';
 import { OfflineSyncIndicator, OfflineSyncRuntime, useOutboxSummary } from '@/components/pwa';
@@ -778,6 +782,7 @@ interface AthenaShellProps {
 
 /** Keep Athena's contextual state separate from the shell-owned rail selection and visibility. */
 function AthenaShell({
+  settingsSurface,
   calendarSurface,
   context,
   locationKey,
@@ -789,8 +794,8 @@ function AthenaShell({
     readonly version: number;
   }>();
   const [athenaRailVisible, setAthenaRailVisible] = useState(false);
-  const revealAthenaRail = useCallback(() => {
-    setRailRequest((current) => ({ panelId: 'athena', version: (current?.version ?? 0) + 1 }));
+  const revealRailPanel = useCallback((panelId: 'agenda' | 'focus' | 'athena') => {
+    setRailRequest((current) => ({ panelId, version: (current?.version ?? 0) + 1 }));
   }, []);
   const openFullAthena = useCallback(
     (nextContext: PersonalAthenaContext | null, draft: string | undefined) => {
@@ -804,14 +809,25 @@ function AthenaShell({
       context={context}
       locationKey={locationKey}
       railVisible={athenaRailVisible}
-      onRevealRail={calendarSurface ? undefined : revealAthenaRail}
+      onRevealRail={
+        calendarSurface || settingsSurface
+          ? undefined
+          : () => {
+              revealRailPanel('athena');
+            }
+      }
       onOpenFullAthena={openFullAthena}
     >
       <AthenaShellChrome
         {...props}
+        settingsSurface={settingsSurface}
         calendarSurface={calendarSurface}
         railRequest={railRequest}
         onAthenaRailVisibilityChange={setAthenaRailVisible}
+      />
+      <CommandPaletteHost
+        panelsAvailable={!settingsSurface && !calendarSurface}
+        onOpenPanel={revealRailPanel}
       />
     </AthenaPanelProvider>
   );

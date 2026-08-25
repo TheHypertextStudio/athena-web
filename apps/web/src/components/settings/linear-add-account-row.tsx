@@ -43,7 +43,7 @@ export function LinearAddAccountRow({ model }: LinearAddAccountRowProps): JSX.El
         <label className="text-on-surface text-label-large" htmlFor="linear-identity">
           {title}
         </label>
-        <span className="text-on-surface-variant text-body-small truncate">{description}</span>
+        <span className="text-on-surface-variant text-body-small">{description}</span>
       </div>
       {model.available.length > 0 ? (
         <div className="col-start-2 grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">

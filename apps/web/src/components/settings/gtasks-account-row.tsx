@@ -44,7 +44,7 @@ export function GtasksAccountRow({
           <DecorativeIcon icon={TaskAlt} className="bg-surface-container shrink-0" />
           <div className="flex min-w-0 flex-col gap-0.5">
             <span className="text-on-surface text-label-large truncate">{row.label}</span>
-            <span className="text-on-surface-variant text-body-small truncate">{description}</span>
+            <span className="text-on-surface-variant text-body-small">{description}</span>
           </div>
         </div>
         <IntegrationRowActions

@@ -109,7 +109,7 @@ export function IntegrationProviderCard({
         <DecorativeIcon icon={ProviderIcon} className="bg-surface-container shrink-0" />
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <span className="text-on-surface text-label-large">{provider.name}</span>
-          <span className="text-on-surface-variant text-body-small truncate">{summary}</span>
+          <span className="text-on-surface-variant text-body-small">{summary}</span>
         </div>
         {existing ? (
           <IntegrationRowActions

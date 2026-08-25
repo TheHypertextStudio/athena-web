@@ -376,7 +376,10 @@ export async function finishTaskStateTransition(
   mutation: TaskStateMutation,
 ): Promise<void> {
   const { before, after } = mutation;
-  const changes = await resolveTaskChangeLabels(after.organizationId, diffTaskFields(before, after));
+  const changes = await resolveTaskChangeLabels(
+    after.organizationId,
+    diffTaskFields(before, after),
+  );
   if (after.autoCompletedBySubtasks && before.completedAt === null && after.completedAt !== null) {
     changes.push(subtaskCompletionChange());
   }

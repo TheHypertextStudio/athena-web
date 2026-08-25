@@ -377,7 +377,12 @@ export async function assertTaskCapability(
   required: Capability,
   database: Database = db,
 ): Promise<void> {
-  const result = await canActor(actorId, required, { kind: 'task', id: target.id, orgId }, database);
+  const result = await canActor(
+    actorId,
+    required,
+    { kind: 'task', id: target.id, orgId },
+    database,
+  );
   if (result.allow) return;
   if (result.effectiveCapability === null) {
     // `canActor` intentionally resolves explicit grants only, while task reads also include the

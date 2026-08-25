@@ -116,12 +116,9 @@ export function IntegrationProviderCard({
   onDisconnect,
   onToggleConfig,
 }: IntegrationProviderCardProps): JSX.Element {
-  // Pending records exist only while the browser is away at a provider. Do not turn a canceled or
-  // interrupted redirect into a half-connected card: Connect starts the full ceremony again.
-  const visibleIntegration = existing?.status === 'pending' ? undefined : existing;
   const ProviderIcon = providerIcon(provider.provider);
-  const showSyncFeedback = visibleIntegration?.status === 'connected' && Boolean(syncFeedback);
-  const identityLabel = connectionLabel(visibleIntegration);
+  const showSyncFeedback = existing?.status === 'connected' && Boolean(syncFeedback);
+  const identityLabel = connectionLabel(existing);
 
   return (
     <li className="bg-surface-container-low overflow-hidden rounded-xl">
@@ -138,26 +135,24 @@ export function IntegrationProviderCard({
             </span>
           ) : null}
           <span className="text-on-surface-variant text-body-small">
-            {visibleIntegration
-              ? integrationStatusLabel(visibleIntegration)
-              : (mechanics ?? connectHint)}
+            {existing ? integrationStatusLabel(existing) : (mechanics ?? connectHint)}
           </span>
         </div>
-        {visibleIntegration && manageHref ? (
+        {existing && manageHref ? (
           <NextLink
             href={manageHref}
             className="text-primary text-label-large shrink-0 hover:underline"
           >
-            {visibleIntegration.status === 'connected' ? 'Manage' : 'Set up'}
+            {existing.status === 'connected' ? 'Manage' : 'Set up'}
           </NextLink>
         ) : null}
-        {visibleIntegration ? (
+        {existing ? (
           <IntegrationRowActions
             provider={provider.provider}
-            status={visibleIntegration.status}
+            status={existing.status}
             canManage={canManage}
             syncable={provider.syncable}
-            isMigration={visibleIntegration.pattern === 'migration'}
+            isMigration={existing.pattern === 'migration'}
             configurable={configurable}
             configOpen={configOpen}
             busyReconnect={busy}
@@ -179,7 +174,7 @@ export function IntegrationProviderCard({
       </div>
 
       {/* Persistent connection error from the server (survives reload), never ephemeral state. */}
-      {visibleIntegration?.status === 'error' ? (
+      {existing?.status === 'error' ? (
         <CardAlert
           message={CONNECTION_ERROR_MESSAGE}
           detail={
@@ -191,7 +186,7 @@ export function IntegrationProviderCard({
         />
       ) : null}
 
-      {visibleIntegration && actionError ? <CardNote tone="error">{actionError}</CardNote> : null}
+      {existing && actionError ? <CardNote tone="error">{actionError}</CardNote> : null}
 
       {showSyncFeedback && syncFeedback ? <CardNote tone="muted">{syncFeedback}</CardNote> : null}
 

@@ -14,7 +14,7 @@
  * marker, since the App-install callback already wrote the truthful status/connection
  * server-side — the client re-reads it rather than duplicating a client-side error message.
  */
-import type { IntegrationDirectoryProvider } from '@docket/types';
+import { IntegrationOut, type IntegrationDirectoryProvider } from '@docket/types';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { JSX, ReactNode } from 'react';
@@ -88,7 +88,8 @@ vi.mock('../../../src/lib/app-location', () => ({
 
 import { useIntegrationsData } from '../../../src/components/settings/use-integrations-data';
 
-const ORG_ID = 'org_1';
+const ORG_ID = '01KY1N724K30F3MCPQMRC7GVD3';
+const NOTION_INTEGRATION_ID = '01M04MDQ20DB0N3QCN0AA9KQKN';
 const GITHUB_DIRECTORY: IntegrationDirectoryProvider = {
   provider: 'github',
   name: 'GitHub',
@@ -99,7 +100,35 @@ const GTASKS_DIRECTORY: IntegrationDirectoryProvider = {
   name: 'Google Tasks',
   roles: ['work'],
 } as IntegrationDirectoryProvider;
+const NOTION_DIRECTORY: IntegrationDirectoryProvider = {
+  provider: 'notion',
+  name: 'Notion',
+  roles: ['work'],
+} as IntegrationDirectoryProvider;
 const CONNECTOR_PATTERN = { pattern: 'connector' as const, syncMode: 'mirror' as const };
+
+function pendingNotion(): IntegrationOut {
+  return IntegrationOut.parse({
+    id: NOTION_INTEGRATION_ID,
+    organizationId: ORG_ID,
+    provider: 'notion',
+    pattern: 'connector',
+    roles: ['work'],
+    connection: {},
+    status: 'pending',
+    config: {},
+    externalAccountId: 'notion-account',
+    syncMode: 'mirror',
+    writeBack: true,
+    lastSyncStatus: null,
+    lastSyncedAt: null,
+    lastError: null,
+    lastErrorAt: null,
+    lastErrorKind: null,
+    syncCadenceMinutes: null,
+    createdAt: '2026-08-24T00:00:00.000Z',
+  });
+}
 
 function okJson<T>(data: T): { ok: true; status: 200; json: () => Promise<T> } {
   return { ok: true, status: 200, json: () => Promise.resolve(data) };
@@ -133,7 +162,7 @@ beforeEach(() => {
 
   assignMock = vi.fn();
   Object.defineProperty(window, 'location', {
-    value: { assign: assignMock, pathname: '/orgs/org_1/settings/connections' },
+    value: { assign: assignMock, pathname: `/orgs/${ORG_ID}/settings/connections` },
     writable: true,
     configurable: true,
   });
@@ -198,7 +227,47 @@ describe('useIntegrationsData — connect ceremony routing', () => {
     // The App-install callback already wrote the truthful status server-side; the client's job
     // is just to re-read it (not fabricate its own error copy) and clear the query param.
     await waitFor(() => {
-      expect(stableRouter.replace).toHaveBeenCalledWith('/orgs/org_1/settings/connections');
+      expect(stableRouter.replace).toHaveBeenCalledWith(`/orgs/${ORG_ID}/settings/connections`);
     });
+  });
+
+  it('keeps a failed OAuth return visible with a repair action and an error', async () => {
+    const pending = pendingNotion();
+    searchParams = new URLSearchParams(`verify=${NOTION_INTEGRATION_ID}`);
+    integrationsGet.mockResolvedValue(okJson({ items: [pending] }));
+    verifyPost.mockRejectedValue(new Error('Notion verification failed'));
+    const wrapper = makeWrapper();
+    const { result } = renderHook(() => useIntegrationsData(ORG_ID), { wrapper });
+
+    await waitFor(() => {
+      expect(verifyPost).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(result.current.rowState('notion', pending).actionError).toBe(
+        'Could not validate this connection.',
+      );
+    });
+    expect(result.current.isVisible('notion')).toBe(true);
+    expect(stableRouter.replace).not.toHaveBeenCalled();
+  });
+
+  it('finishes a pending OAuth connection with its linked identity instead of restarting consent', async () => {
+    const pending = pendingNotion();
+    integrationsGet.mockResolvedValue(okJson({ items: [pending] }));
+    configGet.mockResolvedValue(
+      okJson({ appMode: 'production', oauthProviders: ['google', 'notion'] }),
+    );
+    const wrapper = makeWrapper();
+    const { result } = renderHook(() => useIntegrationsData(ORG_ID), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+    await act(async () => {
+      await result.current.rowActions(NOTION_DIRECTORY, pending, CONNECTOR_PATTERN).reconnect();
+    });
+
+    expect(verifyPost).toHaveBeenCalledWith({ param: { orgId: ORG_ID, id: pending.id } });
+    expect(linkSocial).not.toHaveBeenCalled();
   });
 });

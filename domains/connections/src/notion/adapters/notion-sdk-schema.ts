@@ -5,6 +5,9 @@ import type { NotionPropertyKind } from '../mirror-contract';
 import type { MirrorColumnSpec } from '../mirror-port';
 import { ProviderError } from '../../provider-error';
 
+/** Managed column that makes page creation recoverable without relying on a title. */
+export const DOCKET_ID_PROPERTY_TITLE = 'Docket ID';
+
 /** The property map accepted when a database creates its initial data source. */
 type SdkPropertySchemaMap = NonNullable<
   NonNullable<CreateDatabaseParameters['initial_data_source']>['properties']
@@ -96,7 +99,9 @@ export function columnSchema(column: MirrorColumnSpec): DocketPropertySchema {
 export function databaseSchema(
   columns: readonly MirrorColumnSpec[],
 ): Record<string, DocketPropertySchema> {
-  const schema: Record<string, DocketPropertySchema> = {};
+  const schema: Record<string, DocketPropertySchema> = {
+    [DOCKET_ID_PROPERTY_TITLE]: { rich_text: {} },
+  };
   for (const column of columns) schema[column.title] = columnSchema(column);
   return schema;
 }
@@ -112,4 +117,16 @@ export function readPropertyIds(
     if (typeof id === 'string' && id.length > 0) ids[column.field] = id;
   }
   return ids;
+}
+
+/** Read the stable id Notion assigned to the managed Docket ID property. */
+export function readDocketIdPropertyId(
+  properties: Readonly<Record<string, { id?: string } | undefined>>,
+): string {
+  const id = properties[DOCKET_ID_PROPERTY_TITLE]?.id;
+  if (typeof id === 'string' && id.length > 0) return id;
+  throw new ProviderError('Notion database has no Docket ID property', {
+    provider: 'notion',
+    kind: 'provider',
+  });
 }

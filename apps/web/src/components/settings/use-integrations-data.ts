@@ -170,8 +170,8 @@ export function useIntegrationsData(orgId: string): IntegrationsData {
     : null;
   const { data: config } = usePublicConfig();
 
-  const setActionError = useCallback((provider: string, message: string | null) => {
-    setActionErrors((prev) => ({ ...prev, [provider]: message }));
+  const setActionError = useCallback((key: string, message: string | null) => {
+    setActionErrors((prev) => ({ ...prev, [key]: message }));
   }, []);
 
   const refreshIntegrations = useCallback(
@@ -184,8 +184,8 @@ export function useIntegrationsData(orgId: string): IntegrationsData {
    *
    * GitHub owns repository/account selection in its App installer, so it uses its signed install
    * URL instead of linking a generic social identity. Other OAuth-backed connectors return with a
-   * `verify` token and are then validated here. A pending row is therefore redirect bookkeeping,
-   * never a user-visible state that needs a second action.
+   * `verify` token and are then validated here. A pending row remains visible so an interrupted
+   * redirect can resume against the same integration id without creating a duplicate.
    */
   const finishConnection = useCallback(
     async (id: string, provider: string, useLinkedIdentity = false): Promise<void> => {
@@ -296,13 +296,11 @@ export function useIntegrationsData(orgId: string): IntegrationsData {
     async (existing: IntegrationOut): Promise<void> => {
       setBusyProvider(existing.provider);
       setActionError(existing.provider, null);
+      setActionError(existing.id, null);
       try {
-        await finishConnection(existing.id, existing.provider);
+        await finishConnection(existing.id, existing.provider, existing.status === 'pending');
       } catch (err) {
-        setActionError(
-          existing.provider,
-          userErrorMessage(err, 'Could not reconnect this integration.'),
-        );
+        setActionError(existing.id, userErrorMessage(err, 'Could not reconnect this integration.'));
       } finally {
         setBusyProvider(null);
       }
@@ -310,8 +308,8 @@ export function useIntegrationsData(orgId: string): IntegrationsData {
     [finishConnection, setActionError],
   );
 
-  // OAuth return: the consent redirect lands back with `?verify=<id>`. Re-validate through the
-  // write path (never fetch `api.v1.*` directly inside an effect — data-layer rule), then strip.
+  // Keep the return marker on failure. It is the durable browser-side evidence that setup still
+  // needs repair, and stripping it made the failed ceremony look like it had never happened.
   const verifyReturn = useApiMutation({
     mutationFn: (id: string) =>
       unwrap(
@@ -324,11 +322,18 @@ export function useIntegrationsData(orgId: string): IntegrationsData {
   useEffect(() => {
     if (!verifyReturnId) return;
     verifyReturn.mutate(verifyReturnId, {
-      onSettled: () => {
+      onSuccess: () => {
+        setActionError(verifyReturnId, null);
         router.replace(window.location.pathname);
       },
+      onError: (err: unknown) => {
+        setActionError(
+          verifyReturnId,
+          userErrorMessage(err, 'Could not validate this connection.'),
+        );
+      },
     });
-  }, [verifyReturnId, router]);
+  }, [verifyReturnId, router, setActionError]);
 
   // GitHub's App installer writes the final connection server-side, then returns this same
   // settings route with a short outcome marker. Refresh the source of truth and remove the marker
@@ -398,7 +403,6 @@ export function useIntegrationsData(orgId: string): IntegrationsData {
   const availableLinearIdentities = useMemo(() => {
     const bound = new Set(
       (byProvider.get('linear') ?? [])
-        .filter((connection) => connection.status !== 'pending')
         .map((connection) => connection.externalAccountId)
         .filter((id): id is string => Boolean(id)),
     );
@@ -410,9 +414,7 @@ export function useIntegrationsData(orgId: string): IntegrationsData {
     [config],
   );
   const isVisible = useCallback(
-    (provider: string) =>
-      isAvailable(provider) ||
-      (byProvider.get(provider)?.some((connection) => connection.status !== 'pending') ?? false),
+    (provider: string) => isAvailable(provider) || (byProvider.get(provider)?.length ?? 0) > 0,
     [isAvailable, byProvider],
   );
 
@@ -422,7 +424,9 @@ export function useIntegrationsData(orgId: string): IntegrationsData {
       syncing: existing ? syncingId === existing.id : false,
       disconnecting: existing ? disconnectingId === existing.id : false,
       syncFeedback: existing ? (syncFeedback[existing.id] ?? null) : null,
-      actionError: actionErrors[provider] ?? null,
+      actionError: existing
+        ? (actionErrors[existing.id] ?? actionErrors[provider] ?? null)
+        : (actionErrors[provider] ?? null),
       configOpen: existing ? openConfigId === existing.id : false,
     }),
     [busyProvider, syncingId, disconnectingId, syncFeedback, actionErrors, openConfigId],

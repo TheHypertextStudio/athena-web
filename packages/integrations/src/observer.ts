@@ -167,7 +167,7 @@ export interface Observer {
    * @param input - The raw body bytes and request headers.
    * @returns `true` when the signature is valid; `false` for missing/forged/tampered requests.
    */
-  verifySignature(input: VerifySignatureInput): boolean;
+  verifySignature(input: VerifySignatureInput): boolean | Promise<boolean>;
 
   /**
    * Extract the routing identity (workspace, event id, type) from a parsed payload.

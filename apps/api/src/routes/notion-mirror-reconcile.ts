@@ -18,7 +18,14 @@
  *
  * @see `docs/engineering/specs/notion-sync.md`
  */
-import { db, integration, notionMirrorDatabase, notionMirrorRow, syncRun } from '@docket/db';
+import {
+  db,
+  integration,
+  notionMirrorDatabase,
+  notionMirrorRow,
+  notionMirrorState,
+  syncRun,
+} from '@docket/db';
 import type {
   NotionColumnBinding,
   NotionMirrorEntity,
@@ -29,7 +36,13 @@ import {
   orderedColumns,
   provisionedKind,
 } from '@docket/connections/notion/mirror-schema';
-import type { MirrorColumnSpec, NotionMirrorPort } from '@docket/connections/notion/mirror-port';
+import type {
+  MirrorColumnSpec,
+  MirrorDatabaseSpec,
+  MirrorRowResult,
+  NotionMirrorPort,
+  ProvisionedMirrorDatabase,
+} from '@docket/connections/notion/mirror-port';
 import { isProviderMissingObjectError } from '@docket/connections/provider-error';
 import {
   type MirrorEntityPages,
@@ -56,6 +69,12 @@ import {
   type MirrorEntityRecord,
 } from './notion-mirror-entities';
 import type { MirrorDatabaseRow } from './notion-mirror-design';
+import {
+  applyNotionMirrorGeneration,
+  captureNotionMirrorGeneration,
+  failNotionMirrorGeneration,
+  wakeNotionMirror,
+} from './notion-mirror-wake';
 
 /**
  * How many Notion writes one sync pass will spend.
@@ -297,6 +316,11 @@ function toColumnSpecs(
   return specs;
 }
 
+/** Exact marker that lets a retry adopt only a database this integration created. */
+function mirrorOwnershipKey(integrationId: string, entityType: NotionMirrorEntity): string {
+  return `docket:notion-mirror:${integrationId}:${entityType}`;
+}
+
 /**
  * Create every designed-but-missing database in Notion.
  *
@@ -345,20 +369,39 @@ export async function provisionMirror(
     const scalars = orderedColumns(design.propertyMap).filter(
       (binding) => provisionedKind(binding) !== 'relation',
     );
-    const provisioned = await ctx.mirror.provisionDatabase({
+    const spec: MirrorDatabaseSpec = {
       title: design.title,
       parentPageId,
+      ownershipKey: mirrorOwnershipKey(ctx.integrationId, design.entityType),
       columns: toColumnSpecs(design.entityType, scalars, dataSourceByEntity),
-    });
+    };
+    let provisioned: ProvisionedMirrorDatabase | undefined;
+    if (design.provisioningStartedAt !== null) {
+      const owned = await ctx.mirror.findDatabasesByOwnershipKey(spec);
+      if (owned.length > 1) {
+        throw new Error(
+          `Notion contains more than one database owned by ${spec.ownershipKey}; Docket will not guess which one to use.`,
+        );
+      }
+      provisioned = owned[0];
+    } else {
+      await db
+        .update(notionMirrorDatabase)
+        .set({ provisioningStartedAt: ctx.now })
+        .where(eq(notionMirrorDatabase.id, design.id));
+    }
+    provisioned ??= await ctx.mirror.provisionDatabase(spec);
     dataSourceByEntity.set(design.entityType, provisioned.externalDataSourceId);
     await db
       .update(notionMirrorDatabase)
       .set({
         externalDatabaseId: provisioned.externalDatabaseId,
         externalDataSourceId: provisioned.externalDataSourceId,
+        docketIdPropertyId: provisioned.docketIdPropertyId,
         externalUrl: provisioned.url ?? null,
         propertyMap: withPropertyIds(design.propertyMap, provisioned.propertyIds),
         provisionedAt: ctx.now,
+        provisioningStartedAt: null,
       })
       .where(eq(notionMirrorDatabase.id, design.id));
     created += 1;
@@ -383,18 +426,23 @@ export async function provisionMirror(
     if (!row?.externalDataSourceId) continue;
     const columns = orderedColumns(row.propertyMap);
     const needsPatch =
+      row.docketIdPropertyId === null ||
       columns.some((binding) => provisionedKind(binding) === 'relation') ||
       columns.some((binding) => binding.propertyId === undefined);
     if (!needsPatch) continue;
     try {
-      const ids = await ctx.mirror.updateDatabaseSchema(row.externalDataSourceId, {
+      const bindings = await ctx.mirror.updateDatabaseSchema(row.externalDataSourceId, {
         title: row.title,
         parentPageId,
+        ownershipKey: mirrorOwnershipKey(ctx.integrationId, row.entityType),
         columns: toColumnSpecs(row.entityType, columns, dataSourceByEntity),
       });
       await db
         .update(notionMirrorDatabase)
-        .set({ propertyMap: withPropertyIds(row.propertyMap, ids) })
+        .set({
+          propertyMap: withPropertyIds(row.propertyMap, bindings.propertyIds),
+          docketIdPropertyId: bindings.docketIdPropertyId,
+        })
         .where(eq(notionMirrorDatabase.id, row.id));
     } catch (error) {
       if (!isProviderMissingObjectError(error)) throw error;
@@ -443,6 +491,7 @@ async function forgetProvisionedDatabase(id: string): Promise<void> {
     .set({
       externalDatabaseId: null,
       externalDataSourceId: null,
+      docketIdPropertyId: null,
       externalUrl: null,
       provisionedAt: null,
       propertyMap: cleared,
@@ -503,6 +552,7 @@ export async function projectEntity(
   const bindings = orderedColumns(design.propertyMap);
   const records = await loadEntityRows(ctx.orgId, ctx.integrationId, design.entityType);
   const mirrors = await loadMirrorRows(ctx.integrationId, design.entityType);
+  const creationIntents = await loadCreationIntents(ctx.integrationId, design.entityType);
 
   // Seeded from what already existed, then grown by this pass's creates, so the caller can hand
   // the result straight to the entities projected after this one.
@@ -532,23 +582,59 @@ export async function projectEntity(
     const projected = projectRow(bindings, resolved.values);
 
     if (existing === undefined) {
-      const result = await ctx.mirror.writeRow({
+      const docketIdPropertyId = design.docketIdPropertyId;
+      if (docketIdPropertyId === null) {
+        throw new Error(`Notion ${design.entityType} database has no Docket ID property.`);
+      }
+      let intentId = creationIntents.get(record.entityId);
+      let result: MirrorRowResult | undefined;
+      if (intentId === undefined) {
+        const [intent] = await db
+          .insert(notionMirrorRow)
+          .values({
+            organizationId: ctx.orgId,
+            integrationId: ctx.integrationId,
+            entityType: design.entityType,
+            entityId: record.entityId,
+            externalPageId: null,
+            contentHash: projected.contentHash,
+          })
+          .returning({ id: notionMirrorRow.id });
+        if (!intent) throw new Error('Notion mirror row intent did not return an id');
+        intentId = intent.id;
+        creationIntents.set(record.entityId, intentId);
+      } else {
+        const owned = await ctx.mirror.findRowsByDocketId(
+          dataSourceId,
+          docketIdPropertyId,
+          record.entityId,
+        );
+        if (owned.length > 1) {
+          throw new Error(
+            `Notion contains more than one ${design.entityType} row with Docket ID ${record.entityId}; Docket will not guess which one to use.`,
+          );
+        }
+        result = owned[0];
+      }
+      result ??= await ctx.mirror.writeRow({
         kind: 'create',
         dataSourceId,
+        docketId: record.entityId,
+        docketIdPropertyId,
         properties: projected.properties,
       });
       if (result !== undefined) {
-        await db.insert(notionMirrorRow).values({
-          organizationId: ctx.orgId,
-          integrationId: ctx.integrationId,
-          entityType: design.entityType,
-          entityId: record.entityId,
-          externalPageId: result.externalPageId,
-          externalUpdatedAt: new Date(result.externalUpdatedAt),
-          lastPushedAt: new Date(result.externalUpdatedAt),
-          contentHash: projected.contentHash,
-        });
+        await db
+          .update(notionMirrorRow)
+          .set({
+            externalPageId: result.externalPageId,
+            externalUpdatedAt: new Date(result.externalUpdatedAt),
+            lastPushedAt: new Date(result.externalUpdatedAt),
+            contentHash: projected.contentHash,
+          })
+          .where(eq(notionMirrorRow.id, intentId));
         pageByEntityId.set(record.entityId, result.externalPageId);
+        creationIntents.delete(record.entityId);
       }
       written += 1;
       await pace();
@@ -844,9 +930,79 @@ async function loadMirrorRows(
         eq(notionMirrorRow.integrationId, integrationId),
         eq(notionMirrorRow.entityType, entityType),
         isNull(notionMirrorRow.deletedAt),
+        isNotNull(notionMirrorRow.externalPageId),
       ),
     );
   return new Map(rows.map((row) => [row.entityId, toLocalRow(row)]));
+}
+
+/** Load unfinished page creates, keyed by Docket entity id. */
+async function loadCreationIntents(
+  integrationId: string,
+  entityType: NotionMirrorEntity,
+): Promise<Map<string, string>> {
+  const rows = await db
+    .select({ id: notionMirrorRow.id, entityId: notionMirrorRow.entityId })
+    .from(notionMirrorRow)
+    .where(
+      and(
+        eq(notionMirrorRow.integrationId, integrationId),
+        eq(notionMirrorRow.entityType, entityType),
+        isNull(notionMirrorRow.externalPageId),
+        isNull(notionMirrorRow.deletedAt),
+      ),
+    );
+  return new Map(rows.map((row) => [row.entityId, row.id]));
+}
+
+/** Attach pages from ambiguous create responses before pull-back can mistake them for new work. */
+export async function recoverCreationIntents(
+  ctx: MirrorContext,
+  designs: readonly MirrorDatabaseRow[],
+): Promise<number> {
+  let recovered = 0;
+  for (const design of designs) {
+    const dataSourceId = design.externalDataSourceId;
+    const docketIdPropertyId = design.docketIdPropertyId;
+    if (dataSourceId === null || docketIdPropertyId === null) continue;
+    const intents = await db
+      .select()
+      .from(notionMirrorRow)
+      .where(
+        and(
+          eq(notionMirrorRow.integrationId, ctx.integrationId),
+          eq(notionMirrorRow.entityType, design.entityType),
+          isNull(notionMirrorRow.externalPageId),
+          isNull(notionMirrorRow.deletedAt),
+        ),
+      );
+    for (const intent of intents) {
+      const owned = await ctx.mirror.findRowsByDocketId(
+        dataSourceId,
+        docketIdPropertyId,
+        intent.entityId,
+      );
+      if (owned.length > 1) {
+        throw new Error(
+          `Notion contains more than one ${design.entityType} row with Docket ID ${intent.entityId}; Docket will not guess which one to use.`,
+        );
+      }
+      const page = owned[0];
+      if (page === undefined) continue;
+      const updatedAt = new Date(page.externalUpdatedAt);
+      await db
+        .update(notionMirrorRow)
+        .set({
+          externalPageId: page.externalPageId,
+          externalUpdatedAt: updatedAt,
+          lastPushedAt: updatedAt,
+        })
+        .where(eq(notionMirrorRow.id, intent.id));
+      recovered += 1;
+      await pace();
+    }
+  }
+  return recovered;
 }
 
 /** Load this entity's mirror rows, keyed by Notion page id. */
@@ -861,13 +1017,21 @@ async function loadMirrorRowsByPage(
       and(
         eq(notionMirrorRow.integrationId, integrationId),
         eq(notionMirrorRow.entityType, entityType),
+        isNotNull(notionMirrorRow.externalPageId),
       ),
     );
-  return new Map(rows.map((row) => [row.externalPageId, toLocalRow(row)]));
+  return new Map(
+    rows.flatMap((row) =>
+      row.externalPageId === null ? [] : [[row.externalPageId, toLocalRow(row)]],
+    ),
+  );
 }
 
 /** Project a stored mirror row onto the planner's input shape. */
 function toLocalRow(row: typeof notionMirrorRow.$inferSelect): LoadedMirrorRow {
+  if (row.externalPageId === null) {
+    throw new Error('Notion mirror row has no external page anchor');
+  }
   return {
     mirrorRowId: row.id,
     entityId: row.entityId,
@@ -957,121 +1121,148 @@ export async function runNotionMirrorSync(
   row: IntegrationRow,
   opts: RunSyncOptions,
 ): Promise<SyncRunRow | null> {
-  return runLeasedSync(row, { ...opts, purpose: 'notion_mirror' }, async ({ token, now }) => {
-    const config = ConnectorConfig.safeParse(row.config).data ?? {};
-    const parentPageId = config.notionMirror?.containerPageId;
-    // Thrown, not silently skipped: without a parent page there is nowhere to create anything, and
-    // a "successful" run that wrote nothing is the exact dishonesty the invariant forbids.
-    if (parentPageId === undefined) {
-      throw new Error('Pick a Notion page for Docket to build its databases under.');
-    }
+  const captured = await captureNotionMirrorGeneration({
+    integrationId: row.id,
+    organizationId: row.organizationId,
+  });
+  const passState = { complete: false };
+  const run = await runLeasedSync(
+    row,
+    { ...opts, purpose: 'notion_mirror' },
+    async ({ token, now }) => {
+      const config = ConnectorConfig.safeParse(row.config).data ?? {};
+      const parentPageId = config.notionMirror?.containerPageId;
+      // Thrown, not silently skipped: without a parent page there is nowhere to create anything, and
+      // a "successful" run that wrote nothing is the exact dishonesty the invariant forbids.
+      if (parentPageId === undefined) {
+        throw new Error('Pick a Notion page for Docket to build its databases under.');
+      }
 
-    const ctx: MirrorContext = {
-      orgId: row.organizationId,
-      integrationId: row.id,
-      integrationRow: row,
-      actorId: opts.actorId,
-      mirror: buildNotionMirror(token === 'mock' ? undefined : token),
-      now,
-    };
+      const ctx: MirrorContext = {
+        orgId: row.organizationId,
+        integrationId: row.id,
+        integrationRow: row,
+        actorId: opts.actorId,
+        mirror: buildNotionMirror(token === 'mock' ? undefined : token),
+        now,
+      };
 
-    // Learn who is in the Notion workspace BEFORE anything else. Without this the people surface
-    // has nothing to show and no decision to offer — the mapping rows it reads are written here
-    // and nowhere else. Email matching and the immunity of a manual link are `syncExternalActors`'
-    // existing behaviour; this only supplies the roster.
-    const workspacePeople = await ctx.mirror.listWorkspaceUsers();
-    await syncExternalActors(
-      ctx.orgId,
-      ctx.integrationId,
-      workspacePeople.map((person) => ({
-        externalId: person.externalId,
-        displayName: person.name,
-        ...(person.email !== undefined ? { email: person.email } : {}),
-        ...(person.avatarUrl !== undefined ? { avatarUrl: person.avatarUrl } : {}),
-        active: true,
-      })),
-    );
-
-    await provisionMirror(ctx, parentPageId);
-
-    const found = await db
-      .select()
-      .from(notionMirrorDatabase)
-      .where(
-        and(
-          eq(notionMirrorDatabase.organizationId, ctx.orgId),
-          eq(notionMirrorDatabase.integrationId, ctx.integrationId),
-          eq(notionMirrorDatabase.enabled, true),
-          isNull(notionMirrorDatabase.archivedAt),
-        ),
+      // Learn who is in the Notion workspace BEFORE anything else. Without this the people surface
+      // has nothing to show and no decision to offer — the mapping rows it reads are written here
+      // and nowhere else. Email matching and the immunity of a manual link are `syncExternalActors`'
+      // existing behaviour; this only supplies the roster.
+      const workspacePeople = await ctx.mirror.listWorkspaceUsers();
+      await syncExternalActors(
+        ctx.orgId,
+        ctx.integrationId,
+        workspacePeople.map((person) => ({
+          externalId: person.externalId,
+          displayName: person.name,
+          ...(person.email !== undefined ? { email: person.email } : {}),
+          ...(person.avatarUrl !== undefined ? { avatarUrl: person.avatarUrl } : {}),
+          active: true,
+        })),
       );
 
-    // Sorted, because the select's order is whatever Postgres returns. A relation can only carry
-    // a page id that already exists, so an entity has to be written before anything pointing at
-    // it; `MIRROR_PROJECTION_ORDER` encodes that, and also makes budget spend predictable rather
-    // than an accident of row layout.
-    const designs = [...found].sort(
-      (a, b) =>
-        MIRROR_PROJECTION_ORDER.indexOf(a.entityType) -
-        MIRROR_PROJECTION_ORDER.indexOf(b.entityType),
-    );
+      await provisionMirror(ctx, parentPageId);
 
-    let budget = WRITE_BUDGET;
-    let processed = 0;
-    let complete = true;
-
-    // Only the entities actually being projected get an entry. A relation pointing at one that is
-    // absent — disabled, or never provisioned — can never resolve, and the resolver reads the
-    // absence to say so rather than deferring forever.
-    let refs = await loadReferences(
-      ctx,
-      designs.map((design) => design.entityType),
-    );
-
-    for (const design of designs) {
-      if (budget <= 0) {
-        complete = false;
-        break;
-      }
-      const pulled = await pullBackEntity(ctx, design, budget, refs);
-      budget -= pulled.written;
-      processed += pulled.written;
-      if (!pulled.complete) complete = false;
-      // Adopting a row created in Notion mints a page the projection below can point at. Folded
-      // forward from what the pull already knows rather than re-reading every mirror row for
-      // every entity, which is a second full round of queries for a map we are holding.
-      // `settled` stays false: the pull is not the authority on what this entity projects.
-      if (pulled.pageByEntityId !== undefined) {
-        refs = withProjectedPages(refs, design.entityType, pulled.pageByEntityId, false);
-      }
-    }
-
-    for (const design of designs) {
-      if (budget <= 0) {
-        complete = false;
-        break;
-      }
-      const pushed = await projectEntity(ctx, design, budget, refs);
-      budget -= pushed.written;
-      processed += pushed.written;
-      if (!pushed.complete) complete = false;
-      // Fold this entity's pages forward so everything projected after it points at real pages
-      // instead of waiting a whole sweep. `settled` records whether the projection finished: an
-      // id with no page after a complete run is one this entity does not project at all, which is
-      // what lets the resolver call it permanent instead of retrying forever.
-      if (pushed.pageByEntityId !== undefined) {
-        refs = withProjectedPages(
-          refs,
-          design.entityType,
-          pushed.pageByEntityId,
-          pushed.wroteEveryRow ?? pushed.complete,
+      const found = await db
+        .select()
+        .from(notionMirrorDatabase)
+        .where(
+          and(
+            eq(notionMirrorDatabase.organizationId, ctx.orgId),
+            eq(notionMirrorDatabase.integrationId, ctx.integrationId),
+            eq(notionMirrorDatabase.enabled, true),
+            isNull(notionMirrorDatabase.archivedAt),
+          ),
         );
-      }
-    }
 
-    const total = designs.reduce((sum, design) => sum + design.rowCount, 0);
-    return { processed, total, stampFullSync: complete };
-  });
+      // Sorted, because the select's order is whatever Postgres returns. A relation can only carry
+      // a page id that already exists, so an entity has to be written before anything pointing at
+      // it; `MIRROR_PROJECTION_ORDER` encodes that, and also makes budget spend predictable rather
+      // than an accident of row layout.
+      const designs = [...found].sort(
+        (a, b) =>
+          MIRROR_PROJECTION_ORDER.indexOf(a.entityType) -
+          MIRROR_PROJECTION_ORDER.indexOf(b.entityType),
+      );
+
+      await recoverCreationIntents(ctx, designs);
+
+      let budget = WRITE_BUDGET;
+      let processed = 0;
+      let complete = true;
+
+      // Only the entities actually being projected get an entry. A relation pointing at one that is
+      // absent — disabled, or never provisioned — can never resolve, and the resolver reads the
+      // absence to say so rather than deferring forever.
+      let refs = await loadReferences(
+        ctx,
+        designs.map((design) => design.entityType),
+      );
+
+      for (const design of designs) {
+        if (budget <= 0) {
+          complete = false;
+          break;
+        }
+        const pulled = await pullBackEntity(ctx, design, budget, refs);
+        budget -= pulled.written;
+        processed += pulled.written;
+        if (!pulled.complete) complete = false;
+        // Adopting a row created in Notion mints a page the projection below can point at. Folded
+        // forward from what the pull already knows rather than re-reading every mirror row for
+        // every entity, which is a second full round of queries for a map we are holding.
+        // `settled` stays false: the pull is not the authority on what this entity projects.
+        if (pulled.pageByEntityId !== undefined) {
+          refs = withProjectedPages(refs, design.entityType, pulled.pageByEntityId, false);
+        }
+      }
+
+      for (const design of designs) {
+        if (budget <= 0) {
+          complete = false;
+          break;
+        }
+        const pushed = await projectEntity(ctx, design, budget, refs);
+        budget -= pushed.written;
+        processed += pushed.written;
+        if (!pushed.complete) complete = false;
+        // Fold this entity's pages forward so everything projected after it points at real pages
+        // instead of waiting a whole sweep. `settled` records whether the projection finished: an
+        // id with no page after a complete run is one this entity does not project at all, which is
+        // what lets the resolver call it permanent instead of retrying forever.
+        if (pushed.pageByEntityId !== undefined) {
+          refs = withProjectedPages(
+            refs,
+            design.entityType,
+            pushed.pageByEntityId,
+            pushed.wroteEveryRow ?? pushed.complete,
+          );
+        }
+      }
+
+      const total = designs.reduce((sum, design) => sum + design.rowCount, 0);
+      passState.complete = complete;
+      return { processed, total, stampFullSync: complete };
+    },
+  );
+
+  if (run === null) return null;
+  if (run.status === 'failed') {
+    await failNotionMirrorGeneration({
+      integrationId: row.id,
+      kind: run.errorKind ?? 'unknown',
+      error: run.error ?? 'Notion mirror failed',
+    });
+  } else if (passState.complete) {
+    await applyNotionMirrorGeneration({
+      integrationId: row.id,
+      generation: captured.desiredGeneration,
+    });
+  }
+  return run;
 }
 
 /** What one sweep across every configured Notion mirror did. */
@@ -1117,12 +1308,22 @@ export async function sweepNotionMirror(now: Date): Promise<NotionMirrorSweepRes
     .select()
     .from(integration)
     .where(
-      and(
-        eq(integration.provider, 'notion'),
-        inArray(integration.status, ['connected', 'error']),
-        isNotNull(integration.syncCadenceMinutes),
-      ),
+      and(eq(integration.provider, 'notion'), inArray(integration.status, ['connected', 'error'])),
     );
+
+  const demandByIntegration = new Map<string, typeof notionMirrorState.$inferSelect>();
+  if (rows.length > 0) {
+    const states = await db
+      .select()
+      .from(notionMirrorState)
+      .where(
+        inArray(
+          notionMirrorState.integrationId,
+          rows.map((row) => row.id),
+        ),
+      );
+    for (const state of states) demandByIntegration.set(state.integrationId, state);
+  }
 
   // When each integration last attempted a mirror pass, from the run history.
   //
@@ -1157,6 +1358,24 @@ export async function sweepNotionMirror(now: Date): Promise<NotionMirrorSweepRes
   let stalled = 0;
 
   for (const row of rows) {
+    const state = demandByIntegration.get(row.id);
+    const pending = state !== undefined && state.desiredGeneration > state.appliedGeneration;
+    if (pending) {
+      if (state.nextAttemptAt !== null && state.nextAttemptAt > now) continue;
+    } else {
+      const cadenceMs = (row.syncCadenceMinutes ?? 0) * 60_000;
+      if (cadenceMs <= 0) continue;
+      const lastAttempt = lastMirrorAttempt.get(row.id);
+      if (lastAttempt !== undefined && now.getTime() - lastAttempt.getTime() < cadenceMs) {
+        continue;
+      }
+      await wakeNotionMirror({
+        integrationId: row.id,
+        organizationId: row.organizationId,
+        now,
+      });
+    }
+
     const config = ConnectorConfig.safeParse(row.config).data ?? {};
     if (config.notionMirror?.containerPageId === undefined) {
       stalled += 1;
@@ -1165,13 +1384,6 @@ export async function sweepNotionMirror(now: Date): Promise<NotionMirrorSweepRes
     const actorId = row.createdBy;
     if (actorId === null) {
       stalled += 1;
-      continue;
-    }
-
-    const cadenceMs = (row.syncCadenceMinutes ?? 0) * 60_000;
-    if (cadenceMs <= 0) continue;
-    const lastAttempt = lastMirrorAttempt.get(row.id);
-    if (lastAttempt !== undefined && now.getTime() - lastAttempt.getTime() < cadenceMs) {
       continue;
     }
 

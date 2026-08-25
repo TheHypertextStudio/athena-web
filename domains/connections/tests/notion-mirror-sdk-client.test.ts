@@ -172,22 +172,27 @@ describe('NotionMirrorClient.provisionDatabase', () => {
       'GET /v1/data_sources': {
         object: 'data_source',
         id: 'ds_1',
-        properties: { 'Task name': { id: 'title' } },
+        properties: { 'Task name': { id: 'title' }, 'Docket ID': { id: 'docket-id' } },
       },
     });
 
     const provisioned = await new NotionMirrorClient('t', fetchImpl).provisionDatabase({
       parentPageId: 'page_1',
       title: 'Docket tasks',
+      ownershipKey: 'owner:tasks',
       columns: [titleColumn],
     });
 
-    expect(calls[0]?.body).toMatchObject({ parent: { type: 'page_id', page_id: 'page_1' } });
+    expect(calls[0]?.body).toMatchObject({
+      parent: { type: 'page_id', page_id: 'page_1' },
+      description: [{ type: 'text', text: { content: 'Docket ownership: owner:tasks' } }],
+    });
     expect(provisioned).toEqual({
       externalDatabaseId: 'db_1',
       externalDataSourceId: 'ds_1',
       url: 'https://www.notion.so/db-1',
       propertyIds: { title: 'title' },
+      docketIdPropertyId: 'docket-id',
     });
   });
 
@@ -201,6 +206,7 @@ describe('NotionMirrorClient.provisionDatabase', () => {
     const rejected = new NotionMirrorClient('t', fetchImpl).provisionDatabase({
       parentPageId: 'page_1',
       title: 'Docket tasks',
+      ownershipKey: 'owner:tasks',
       columns: [titleColumn],
     });
     await expect(rejected).rejects.toBeInstanceOf(ProviderError);
@@ -211,8 +217,65 @@ describe('NotionMirrorClient.provisionDatabase', () => {
     const rejected = new NotionMirrorClient(
       't',
       failing(400, 'validation_error'),
-    ).provisionDatabase({ parentPageId: 'page_1', title: 'Docket tasks', columns: [titleColumn] });
+    ).provisionDatabase({
+      parentPageId: 'page_1',
+      title: 'Docket tasks',
+      ownershipKey: 'owner:tasks',
+      columns: [titleColumn],
+    });
     await expect(rejected).rejects.toMatchObject({ provider: 'notion', kind: 'provider' });
+  });
+});
+
+describe('NotionMirrorClient.findDatabasesByOwnershipKey', () => {
+  it('adopts only a child database carrying the exact ownership description', async () => {
+    const { fetchImpl } = router({
+      'GET /v1/blocks': {
+        object: 'list',
+        type: 'block',
+        block: {},
+        next_cursor: null,
+        has_more: false,
+        results: [
+          {
+            object: 'block',
+            id: 'db_1',
+            type: 'child_database',
+            child_database: { title: 'Docket tasks' },
+          },
+        ],
+      },
+      'GET /v1/databases': {
+        object: 'database',
+        id: 'db_1',
+        title: [],
+        description: [{ plain_text: 'Docket ownership: owner:tasks' }],
+        data_sources: [{ id: 'ds_1', name: 'Tasks' }],
+        url: 'https://www.notion.so/db-1',
+      },
+      'GET /v1/data_sources': {
+        object: 'data_source',
+        id: 'ds_1',
+        properties: { 'Task name': { id: 'title' }, 'Docket ID': { id: 'docket-id' } },
+      },
+    });
+
+    const found = await new NotionMirrorClient('t', fetchImpl).findDatabasesByOwnershipKey({
+      parentPageId: 'page_1',
+      title: 'Docket tasks',
+      ownershipKey: 'owner:tasks',
+      columns: [titleColumn],
+    });
+
+    expect(found).toEqual([
+      {
+        externalDatabaseId: 'db_1',
+        externalDataSourceId: 'ds_1',
+        url: 'https://www.notion.so/db-1',
+        propertyIds: { title: 'title' },
+        docketIdPropertyId: 'docket-id',
+      },
+    ]);
   });
 });
 
@@ -222,18 +285,22 @@ describe('NotionMirrorClient.updateDatabaseSchema', () => {
       'PATCH /v1/data_sources': {
         object: 'data_source',
         id: 'ds_1',
-        properties: { 'Task name': { id: 'title' } },
+        properties: { 'Task name': { id: 'title' }, 'Docket ID': { id: 'docket-id' } },
       },
     });
 
     const ids = await new NotionMirrorClient('t', fetchImpl).updateDatabaseSchema('ds_1', {
       parentPageId: 'page_1',
       title: 'Docket tasks',
+      ownershipKey: 'owner:tasks',
       columns: [titleColumn],
     });
 
     expect(calls[0]?.path).toBe('/v1/data_sources/ds_1');
-    expect(ids).toEqual({ title: 'title' });
+    expect(ids).toEqual({
+      propertyIds: { title: 'title' },
+      docketIdPropertyId: 'docket-id',
+    });
   });
 
   it('reports a schema update Notion rejected', async () => {
@@ -243,6 +310,7 @@ describe('NotionMirrorClient.updateDatabaseSchema', () => {
     ).updateDatabaseSchema('ds_1', {
       parentPageId: 'page_1',
       title: 'Docket tasks',
+      ownershipKey: 'owner:tasks',
       columns: [titleColumn],
     });
     await expect(rejected).rejects.toBeInstanceOf(ProviderError);
@@ -255,11 +323,19 @@ describe('NotionMirrorClient.writeRow', () => {
     const written = await new NotionMirrorClient('t', fetchImpl).writeRow({
       kind: 'create',
       dataSourceId: 'ds_1',
+      docketId: 'task_1',
+      docketIdPropertyId: 'docket-id',
       properties: {},
     });
 
     expect(calls[0]?.body).toMatchObject({
       parent: { type: 'data_source_id', data_source_id: 'ds_1' },
+      properties: {
+        'docket-id': {
+          type: 'rich_text',
+          rich_text: [{ type: 'text', text: { content: 'task_1' } }],
+        },
+      },
     });
     expect(written).toEqual({
       externalPageId: 'page_1',
@@ -320,9 +396,44 @@ describe('NotionMirrorClient.writeRow', () => {
     const rejected = new NotionMirrorClient('t', fetchImpl).writeRow({
       kind: 'create',
       dataSourceId: 'ds_1',
+      docketId: 'task_1',
+      docketIdPropertyId: 'docket-id',
       properties: {},
     });
     await expect(rejected).rejects.toMatchObject({ provider: 'notion', kind: 'provider' });
+  });
+});
+
+describe('NotionMirrorClient.findRowsByDocketId', () => {
+  it('uses the managed property id and an exact rich-text filter', async () => {
+    const { calls, fetchImpl } = router({
+      'POST /v1/data_sources': {
+        object: 'list',
+        type: 'page_or_data_source',
+        page_or_data_source: {},
+        next_cursor: null,
+        has_more: false,
+        results: [page()],
+      },
+    });
+
+    const found = await new NotionMirrorClient('t', fetchImpl).findRowsByDocketId(
+      'ds_1',
+      'docket-id',
+      'task_1',
+    );
+
+    expect(calls[0]?.body).toMatchObject({
+      filter: { property: 'docket-id', rich_text: { equals: 'task_1' } },
+      page_size: 2,
+      result_type: 'page',
+    });
+    expect(found).toEqual([
+      {
+        externalPageId: 'page_1',
+        externalUpdatedAt: '2026-01-02T03:04:05.000Z',
+      },
+    ]);
   });
 });
 

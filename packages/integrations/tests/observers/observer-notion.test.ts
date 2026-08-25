@@ -34,58 +34,61 @@ function delivery(over: Record<string, unknown> = {}): Record<string, unknown> {
 
 describe('signature verification', () => {
   it('accepts a body signed by the SDK itself', async () => {
-    // The load-bearing assertion of this file. The port is synchronous and the SDK's helper is
-    // async, so this implements the HMAC with node:crypto — but "the SDK is the source of truth"
-    // has to mean something checkable, so the fixture is signed by the SDK's own signer. An SDK
-    // change to the scheme fails here rather than silently rejecting live traffic.
+    // The provider port accepts async verification because the SDK owns this protocol. Keeping the
+    // boundary synchronous forced Notion to reimplement the SDK's HMAC and made the shared ingest
+    // route unable to await a provider that verifies through Web Crypto.
     const rawBody = JSON.stringify(delivery());
     const signature = await signWebhookPayload({ body: rawBody, verificationToken: TOKEN });
-    expect(
-      observer.verifySignature({ rawBody, headers: { 'x-notion-signature': signature } }),
-    ).toBe(true);
+    const verification = observer.verifySignature({
+      rawBody,
+      headers: { 'x-notion-signature': signature },
+    });
+    expect(verification).toBeInstanceOf(Promise);
+    await expect(verification).resolves.toBe(true);
   });
 
   it('rejects a body altered after signing', async () => {
     const rawBody = JSON.stringify(delivery());
     const signature = await signWebhookPayload({ body: rawBody, verificationToken: TOKEN });
     const tampered = JSON.stringify(delivery({ workspace_id: 'ws_attacker' }));
-    expect(
+    await expect(
       observer.verifySignature({
         rawBody: tampered,
         headers: { 'x-notion-signature': signature },
       }),
-    ).toBe(false);
+    ).resolves.toBe(false);
   });
 
   it('rejects a signature made with a different token', async () => {
     const rawBody = JSON.stringify(delivery());
     const signature = await signWebhookPayload({ body: rawBody, verificationToken: 'wrong' });
-    expect(
+    await expect(
       observer.verifySignature({ rawBody, headers: { 'x-notion-signature': signature } }),
-    ).toBe(false);
+    ).resolves.toBe(false);
   });
 
-  it('rejects a missing or malformed header rather than throwing', () => {
+  it('rejects a missing or malformed header rather than throwing', async () => {
     const rawBody = JSON.stringify(delivery());
-    expect(observer.verifySignature({ rawBody, headers: {} })).toBe(false);
-    expect(
+    await expect(observer.verifySignature({ rawBody, headers: {} })).resolves.toBe(false);
+    await expect(
       observer.verifySignature({ rawBody, headers: { 'x-notion-signature': 'nonsense' } }),
-    ).toBe(false);
-    // A short digest must not throw: `timingSafeEqual` rejects mismatched lengths by exception.
-    expect(
+    ).resolves.toBe(false);
+    await expect(
       observer.verifySignature({ rawBody, headers: { 'x-notion-signature': 'sha256=ab' } }),
-    ).toBe(false);
+    ).resolves.toBe(false);
   });
 
-  it('rejects a body that is not JSON', () => {
-    expect(observer.verifySignature({ rawBody: 'not json', headers: {} })).toBe(false);
+  it('rejects a body that is not JSON', async () => {
+    await expect(observer.verifySignature({ rawBody: 'not json', headers: {} })).resolves.toBe(
+      false,
+    );
   });
 
-  it('accepts the unsigned handshake, which structurally cannot be signed', () => {
+  it('accepts the unsigned handshake, which structurally cannot be signed', async () => {
     // It is the delivery that carries the signing token, so requiring a signature on it would
     // make a subscription impossible to establish.
     const rawBody = JSON.stringify({ verification_token: TOKEN });
-    expect(observer.verifySignature({ rawBody, headers: {} })).toBe(true);
+    await expect(observer.verifySignature({ rawBody, headers: {} })).resolves.toBe(true);
   });
 });
 

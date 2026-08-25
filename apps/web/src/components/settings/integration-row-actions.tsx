@@ -6,6 +6,7 @@ import { STATUS_LABEL } from './integrations-config';
 
 /** The repair/install button label for a not-yet-healthy integration. */
 function reconnectLabel(provider: string, status: IntegrationOut['status'], busy: boolean): string {
+  if (status === 'pending') return busy ? 'Finishing…' : 'Finish setup';
   if (busy) return provider === 'github' ? 'Opening GitHub…' : 'Connecting…';
   return provider === 'github' ? 'Retry GitHub installation' : 'Reconnect';
 }
@@ -71,7 +72,7 @@ export function IntegrationRowActions({
   onToggleConfig,
 }: IntegrationRowActionsProps): JSX.Element {
   const isConnected = status === 'connected';
-  const needsConnect = status === 'error' || status === 'disconnected';
+  const needsConnect = status === 'pending' || status === 'error' || status === 'disconnected';
   const canChangeGithubInstallation = canManage && isConnected && provider === 'github';
   return (
     <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-2 sm:w-auto">

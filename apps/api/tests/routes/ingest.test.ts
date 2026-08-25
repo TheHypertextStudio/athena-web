@@ -202,3 +202,42 @@ describe('POST /internal/ingest/github', () => {
     expect(assertDefined(events[0]).provider).toBe('github');
   });
 });
+
+describe('POST /internal/ingest/notion', () => {
+  it('records and wakes one mirror generation for a retried delivery', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const [integration] = await db
+      .insert(schema.integration)
+      .values({
+        organizationId: orgId,
+        provider: 'notion',
+        pattern: 'connector',
+        roles: ['work'],
+        connection: { externalWorkspaceId: 'notion_ws_1' },
+        config: { notionMirror: { containerPageId: 'parent-1' } },
+        status: 'connected',
+        createdBy: humanActorId,
+      })
+      .returning({ id: schema.integration.id });
+    const integrationId = assertDefined(integration).id;
+    const body = JSON.stringify({
+      type: 'page.properties_updated',
+      organizationId: 'notion_ws_1',
+      externalEventId: 'notion_event_1',
+    });
+
+    await ingest.request('/notion', { method: 'POST', headers: SIGNED, body });
+    await ingest.request('/notion', { method: 'POST', headers: SIGNED, body });
+
+    const events = await db
+      .select()
+      .from(schema.inboundEvent)
+      .where(eq(schema.inboundEvent.externalEventId, 'notion_event_1'));
+    const [state] = await db
+      .select()
+      .from(schema.notionMirrorState)
+      .where(eq(schema.notionMirrorState.integrationId, integrationId));
+    expect(events).toHaveLength(1);
+    expect(state?.desiredGeneration).toBe(1);
+  });
+});

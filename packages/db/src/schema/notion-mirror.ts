@@ -21,6 +21,7 @@
  */
 import type { NotionPropertyMap } from '@docket/connections/notion/mirror-contract';
 import {
+  bigint,
   boolean,
   index,
   integer,
@@ -93,6 +94,8 @@ export const notionMirrorDatabase = pgTable(
      * and write addresses this, never the database id.
      */
     externalDataSourceId: text('external_data_source_id'),
+    /** Managed rich-text property used to recover page creates after ambiguous responses. */
+    docketIdPropertyId: text('docket_id_property_id'),
     externalUrl: text('external_url'),
     /**
      * The designed columns, keyed by Docket field key (see `NotionPropertyMap` in
@@ -108,6 +111,8 @@ export const notionMirrorDatabase = pgTable(
     schemaVersion: integer('schema_version').notNull().default(1),
     /** When the database was actually created in Notion (null = designed only). */
     provisionedAt: timestamp('provisioned_at'),
+    /** Set before create so a retry searches for an exact ownership marker before creating again. */
+    provisioningStartedAt: timestamp('provisioning_started_at'),
     /** Last successful projection of Docket rows into this database. */
     lastPushedAt: timestamp('last_pushed_at'),
     /** Last successful read of Notion edits out of this database. */
@@ -118,6 +123,44 @@ export const notionMirrorDatabase = pgTable(
   (t) => [
     index('notion_mirror_database_org_idx').on(t.organizationId),
     uniqueIndex('notion_mirror_database_entity_uq').on(t.integrationId, t.entityType),
+  ],
+);
+
+/**
+ * One durable wake-up and retry state for a Docket-designed Notion mirror.
+ *
+ * @remarks
+ * Signals collapse into monotonically increasing generations. A worker captures the desired
+ * generation before reconciling and advances only that value after a complete pass, so a write
+ * arriving during the pass remains pending. The existing `sync_run` lease still serializes work;
+ * this row records demand and health rather than introducing a second job system.
+ */
+export const notionMirrorState = pgTable(
+  'notion_mirror_state',
+  {
+    integrationId: text('integration_id')
+      .primaryKey()
+      .references(() => integration.id, { onDelete: 'cascade' }),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    desiredGeneration: bigint('desired_generation', { mode: 'number' }).notNull().default(0),
+    appliedGeneration: bigint('applied_generation', { mode: 'number' }).notNull().default(0),
+    nextAttemptAt: timestamp('next_attempt_at'),
+    consecutiveFailures: integer('consecutive_failures').notNull().default(0),
+    lastAttemptAt: timestamp('last_attempt_at'),
+    lastSuccessAt: timestamp('last_success_at'),
+    lastErrorKind: text('last_error_kind'),
+    lastError: text('last_error'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    index('notion_mirror_state_org_idx').on(t.organizationId),
+    index('notion_mirror_state_due_idx').on(t.nextAttemptAt),
   ],
 );
 
@@ -151,8 +194,8 @@ export const notionMirrorRow = pgTable(
     entityType: notionMirrorEntity('entity_type').notNull(),
     /** The Docket record's id. Polymorphic across nine tables, so no FK — see the remarks. */
     entityId: text('entity_id').notNull(),
-    /** The Notion page this record is mirrored to. */
-    externalPageId: text('external_page_id').notNull(),
+    /** The Notion page this record is mirrored to; null is a durable pre-create intent. */
+    externalPageId: text('external_page_id'),
     /** The page's `last_edited_time` as of the last sync — the remote-change anchor. */
     externalUpdatedAt: timestamp('external_updated_at'),
     /** When Docket last wrote this page — the echo guard. */

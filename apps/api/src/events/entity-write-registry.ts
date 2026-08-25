@@ -16,6 +16,7 @@ import { EntityWriteBus } from './entity-write-bus';
 import {
   mcpNotifySubscriber,
   mentionReconcileSubscriber,
+  notionMirrorWakeSubscriber,
   searchIndexSubscriber,
 } from './entity-write-subscribers';
 
@@ -35,7 +36,8 @@ export function buildEntityWriteBus(storage = createDrizzleMentionStorage()): En
   return new EntityWriteBus()
     .subscribe(searchIndexSubscriber())
     .subscribe(mentionReconcileSubscriber(createMentionReconciler(storage)))
-    .subscribe(mcpNotifySubscriber());
+    .subscribe(mcpNotifySubscriber())
+    .subscribe(notionMirrorWakeSubscriber());
 }
 
 /** The process-wide bus, built on first use. */

@@ -66,16 +66,24 @@ export interface MirrorColumnSpec {
 export interface MirrorDatabaseSpec {
   readonly title: string;
   readonly parentPageId: string;
+  /** Exact Docket ownership marker stored in the database description. */
+  readonly ownershipKey: string;
   readonly columns: readonly MirrorColumnSpec[];
 }
 
 /** What provisioning produced, including the property ids every later call addresses. */
-export interface ProvisionedMirrorDatabase {
+export interface MirrorDatabaseBindings {
+  /** Docket field key to provider property id; this binding survives a rename. */
+  readonly propertyIds: Readonly<Record<string, string>>;
+  /** Managed rich-text property that anchors a Notion page to one Docket entity id. */
+  readonly docketIdPropertyId: string;
+}
+
+/** What provisioning produced, including the property ids every later call addresses. */
+export interface ProvisionedMirrorDatabase extends MirrorDatabaseBindings {
   readonly externalDatabaseId: string;
   readonly externalDataSourceId: string;
   readonly url?: string;
-  /** Docket field key to provider property id; this binding survives a rename. */
-  readonly propertyIds: Readonly<Record<string, string>>;
 }
 
 /** One row write. */
@@ -84,6 +92,10 @@ export interface MirrorRowOp {
   readonly dataSourceId: string;
   /** Absent for `create`. */
   readonly externalPageId?: string;
+  /** Required on create so an ambiguous response can be recovered idempotently. */
+  readonly docketId?: string;
+  /** Stable property id for the managed Docket ID column. */
+  readonly docketIdPropertyId?: string;
   /** Docket field key to a provider-formatted value. */
   readonly properties?: Record<string, unknown>;
 }
@@ -124,11 +136,19 @@ export interface NotionMirrorPort {
   listWorkspaceUsers(): Promise<MirrorExternalPerson[]>;
   /** Create a database and its initial data source. */
   provisionDatabase(spec: MirrorDatabaseSpec): Promise<ProvisionedMirrorDatabase>;
+  /** Find databases carrying this exact Docket ownership marker. */
+  findDatabasesByOwnershipKey(spec: MirrorDatabaseSpec): Promise<ProvisionedMirrorDatabase[]>;
   /** Bring a provisioned data source's schema up to the current design. */
   updateDatabaseSchema(
     dataSourceId: string,
     spec: MirrorDatabaseSpec,
-  ): Promise<Record<string, string>>;
+  ): Promise<MirrorDatabaseBindings>;
+  /** Find pages carrying one exact Docket entity id. */
+  findRowsByDocketId(
+    dataSourceId: string,
+    docketIdPropertyId: string,
+    docketId: string,
+  ): Promise<MirrorRowResult[]>;
   /** Apply one row write. */
   writeRow(op: MirrorRowOp): Promise<MirrorRowResult | undefined>;
   /** Read the rows edited since a cursor. */

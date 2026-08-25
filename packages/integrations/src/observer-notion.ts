@@ -7,11 +7,9 @@
  * sha256=<hex>`. That contract is the SDK's, not a reading of the docs — `@notionhq/client`
  * ships `verifyWebhookSignature`/`signWebhookPayload` and documents it precisely.
  *
- * The SDK's helper is `async` (it prefers Web Crypto) while {@link Observer.verifySignature} is
- * synchronous, so this implements the same HMAC with `node:crypto` rather than widening the port
- * for one provider. Agreement is not assumed: the unit test signs payloads with the SDK's own
- * `signWebhookPayload` and requires this to accept them, so an SDK change to the scheme fails the
- * build rather than silently rejecting live traffic.
+ * The shared observer port accepts synchronous or asynchronous verification. Notion therefore
+ * delegates the complete signature protocol to the SDK's `verifyWebhookSignature` helper instead
+ * of maintaining a second HMAC implementation beside it.
  *
  * ## `normalize` returns nothing, deliberately
  *
@@ -27,7 +25,8 @@
  * operator has to go digging for, it is accepted and written to the inbox like any other
  * delivery: durable, queryable, and already the place inbound webhook data lives.
  */
-import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash } from 'node:crypto';
+import { verifyWebhookSignature } from '@notionhq/client';
 
 import { asRecord, str } from './json';
 import type {
@@ -41,9 +40,6 @@ import type {
 
 /** The header Notion signs each delivery with. */
 const SIGNATURE_HEADER = 'x-notion-signature';
-
-/** The prefix Notion puts before the hex digest. */
-const SIGNATURE_PREFIX = 'sha256=';
 
 /** The synthetic event type recorded for the one-time subscription handshake. */
 export const NOTION_VERIFICATION_EVENT = 'notion.verification';
@@ -120,7 +116,7 @@ export class RealNotionObserver implements Observer {
    * delivery that *carries* the signing token. Every other delivery must present a matching
    * digest, compared in constant time.
    */
-  verifySignature(input: VerifySignatureInput): boolean {
+  async verifySignature(input: VerifySignatureInput): Promise<boolean> {
     let parsed: unknown;
     try {
       parsed = JSON.parse(input.rawBody);
@@ -129,15 +125,11 @@ export class RealNotionObserver implements Observer {
     }
     if (readVerificationToken(parsed) !== undefined) return true;
 
-    const header = input.headers[SIGNATURE_HEADER];
-    if (!header?.startsWith(SIGNATURE_PREFIX)) return false;
-    const provided = Buffer.from(header.slice(SIGNATURE_PREFIX.length), 'hex');
-    const expected = createHmac('sha256', this.verificationToken)
-      .update(input.rawBody, 'utf8')
-      .digest();
-    // Length-check first: `timingSafeEqual` throws on a length mismatch rather than returning false.
-    if (provided.length !== expected.length) return false;
-    return timingSafeEqual(provided, expected);
+    return verifyWebhookSignature({
+      body: input.rawBody,
+      signature: input.headers[SIGNATURE_HEADER],
+      verificationToken: this.verificationToken,
+    });
   }
 
   /**

@@ -3,12 +3,17 @@ import {
   APIErrorCode,
   Client,
   collectPaginatedAPI,
+  isFullBlock,
+  isFullDatabase,
   isFullPage,
   isNotionClientError,
+  type CreateDatabaseParameters,
   type CreateDatabaseResponse,
+  type CreatePageParameters,
   type DataSourceObjectResponse,
   type PartialDataSourceObjectResponse,
   type QueryDataSourceResponse,
+  type QueryDataSourceParameters,
   type UpdateDataSourceParameters,
 } from '@notionhq/client';
 
@@ -17,6 +22,7 @@ import { ProviderError } from '../../provider-error';
 import type {
   MirrorChange,
   MirrorDatabaseSpec,
+  MirrorDatabaseBindings,
   MirrorExternalPerson,
   MirrorParentPage,
   MirrorParentPageList,
@@ -27,11 +33,16 @@ import type {
   ProvisionedMirrorDatabase,
 } from '../mirror-port';
 
-import { databaseSchema, readPropertyIds } from './notion-sdk-schema';
+import { databaseSchema, readDocketIdPropertyId, readPropertyIds } from './notion-sdk-schema';
 import { fullPages, toMirrorChange, toParentPage } from './notion-sdk-pages';
 
 /** Notion's documented page-size ceiling for list endpoints. */
 const NOTION_PAGE_SIZE = 100;
+
+/** The exact description text used to prove Docket ownership. */
+function ownershipDescription(ownershipKey: string): string {
+  return `Docket ownership: ${ownershipKey}`;
+}
 
 /** Translate an SDK error into the connection domain's stable provider-error contract. */
 function asProviderError(err: unknown, context: string): ProviderError<'notion'> {
@@ -165,11 +176,13 @@ export class NotionMirrorClient implements NotionMirrorPort {
   async provisionDatabase(spec: MirrorDatabaseSpec): Promise<ProvisionedMirrorDatabase> {
     let created: CreateDatabaseResponse;
     try {
-      created = await this.notion.databases.create({
+      const parameters: CreateDatabaseParameters = {
         parent: { type: 'page_id', page_id: spec.parentPageId },
         title: [{ type: 'text', text: { content: spec.title } }],
+        description: [{ type: 'text', text: { content: ownershipDescription(spec.ownershipKey) } }],
         initial_data_source: { properties: databaseSchema(spec.columns) },
-      });
+      };
+      created = await this.notion.databases.create(parameters);
     } catch (error) {
       throw asProviderError(error, `database creation for "${spec.title}"`);
     }
@@ -191,14 +204,60 @@ export class NotionMirrorClient implements NotionMirrorPort {
       externalDataSourceId: dataSourceId,
       ...(hasUrl(created) ? { url: created.url } : {}),
       propertyIds: readPropertyIds(spec.columns, dataSource.properties),
+      docketIdPropertyId: readDocketIdPropertyId(dataSource.properties),
     };
+  }
+
+  /** Find databases under the selected parent carrying the exact Docket ownership marker. */
+  async findDatabasesByOwnershipKey(
+    spec: MirrorDatabaseSpec,
+  ): Promise<ProvisionedMirrorDatabase[]> {
+    try {
+      const children = await collectPaginatedAPI(this.notion.blocks.children.list, {
+        block_id: spec.parentPageId,
+        page_size: NOTION_PAGE_SIZE,
+      });
+      const databaseIds = children.flatMap((child) =>
+        isFullBlock(child) && child.type === 'child_database' ? [child.id] : [],
+      );
+      const databases = await Promise.all(
+        databaseIds.map((databaseId) =>
+          this.notion.databases.retrieve({ database_id: databaseId }),
+        ),
+      );
+      const matches: ProvisionedMirrorDatabase[] = [];
+      for (const database of databases) {
+        if (!isFullDatabase(database)) continue;
+        const description = database.description.map((item) => item.plain_text).join('');
+        if (description !== ownershipDescription(spec.ownershipKey)) continue;
+        const dataSourceId = database.data_sources[0]?.id;
+        if (dataSourceId === undefined) {
+          throw new ProviderError('Docket-owned Notion database has no data source', {
+            provider: 'notion',
+            kind: 'provider',
+          });
+        }
+        const dataSource = await this.retrieveDataSource(dataSourceId);
+        matches.push({
+          externalDatabaseId: database.id,
+          externalDataSourceId: dataSourceId,
+          url: database.url,
+          propertyIds: readPropertyIds(spec.columns, dataSource.properties),
+          docketIdPropertyId: readDocketIdPropertyId(dataSource.properties),
+        });
+      }
+      return matches;
+    } catch (error) {
+      if (error instanceof ProviderError) throw error;
+      throw asProviderError(error, `owned database lookup for "${spec.title}"`);
+    }
   }
 
   /** Bring a provisioned data source's schema up to the current design without removing columns. */
   async updateDatabaseSchema(
     dataSourceId: string,
     spec: MirrorDatabaseSpec,
-  ): Promise<Record<string, string>> {
+  ): Promise<MirrorDatabaseBindings> {
     try {
       const parameters: UpdateDataSourceParameters = {
         data_source_id: dataSourceId,
@@ -206,7 +265,11 @@ export class NotionMirrorClient implements NotionMirrorPort {
         properties: databaseSchema(spec.columns),
       };
       const updated = await this.notion.dataSources.update(parameters);
-      return readPropertyIds(spec.columns, propertiesOf(updated));
+      const properties = propertiesOf(updated);
+      return {
+        propertyIds: readPropertyIds(spec.columns, properties),
+        docketIdPropertyId: readDocketIdPropertyId(properties),
+      };
     } catch (error) {
       throw asProviderError(error, `schema update for "${spec.title}"`);
     }
@@ -233,14 +296,11 @@ export class NotionMirrorClient implements NotionMirrorPort {
         return undefined;
       }
 
-      const properties = (op.properties ?? {}) as never;
+      const properties = op.properties ?? {};
       const page =
         op.kind === 'create'
-          ? await this.notion.pages.create({
-              parent: { type: 'data_source_id', data_source_id: op.dataSourceId },
-              properties,
-            })
-          : await this.updatePage(op.externalPageId, properties);
+          ? await this.createPage(op, properties)
+          : await this.updatePage(op.externalPageId, properties as never);
       if (!isFullPage(page)) {
         throw new ProviderError('Notion accepted the write but returned no page anchor', {
           provider: 'notion',
@@ -251,6 +311,50 @@ export class NotionMirrorClient implements NotionMirrorPort {
     } catch (error) {
       if (error instanceof ProviderError) throw error;
       throw asProviderError(error, `row ${op.kind}`);
+    }
+  }
+
+  /** Create a page with its durable Docket id in the same provider write. */
+  private createPage(op: MirrorRowOp, properties: Record<string, unknown>) {
+    if (op.docketId === undefined || op.docketIdPropertyId === undefined) {
+      throw new ProviderError('Notion create requested with no Docket ID anchor', {
+        provider: 'notion',
+        kind: 'provider',
+      });
+    }
+    const parameters: CreatePageParameters = {
+      parent: { type: 'data_source_id', data_source_id: op.dataSourceId },
+      properties: {
+        ...properties,
+        [op.docketIdPropertyId]: {
+          type: 'rich_text',
+          rich_text: [{ type: 'text', text: { content: op.docketId } }],
+        },
+      } as NonNullable<CreatePageParameters['properties']>,
+    };
+    return this.notion.pages.create(parameters);
+  }
+
+  /** Find exact page anchors for one Docket id. */
+  async findRowsByDocketId(
+    dataSourceId: string,
+    docketIdPropertyId: string,
+    docketId: string,
+  ): Promise<MirrorRowResult[]> {
+    try {
+      const parameters: QueryDataSourceParameters = {
+        data_source_id: dataSourceId,
+        filter: { property: docketIdPropertyId, rich_text: { equals: docketId } },
+        page_size: 2,
+        result_type: 'page',
+      };
+      const response = await this.notion.dataSources.query(parameters);
+      return fullPages(response.results).map((page) => ({
+        externalPageId: page.id,
+        externalUpdatedAt: page.last_edited_time,
+      }));
+    } catch (error) {
+      throw asProviderError(error, 'Docket ID lookup');
     }
   }
 

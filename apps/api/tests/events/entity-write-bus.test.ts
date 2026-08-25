@@ -108,7 +108,7 @@ describe('EntityWriteBus', () => {
 });
 
 describe('the application wiring', () => {
-  it('registers the three listeners a write is supposed to have', async () => {
+  it('registers every listener a write is supposed to have', async () => {
     const { buildEntityWriteBus } = await import('../../src/events/entity-write-registry');
     const noopStorage = {
       mentions: {
@@ -129,6 +129,26 @@ describe('the application wiring', () => {
 
     const bus = buildEntityWriteBus(noopStorage);
 
-    expect(bus.subscriberNames).toEqual(['search-index', 'mention-reconcile', 'mcp-notify']);
+    expect(bus.subscriberNames).toEqual([
+      'search-index',
+      'mention-reconcile',
+      'mcp-notify',
+      'notion-mirror-wake',
+    ]);
+  });
+
+  it('wakes Notion only for entity kinds that the mirror projects', async () => {
+    const { notionMirrorWakeSubscriber } =
+      await import('../../src/events/entity-write-subscribers');
+    const wake = vi.fn().mockResolvedValue(1);
+    const requestSweep = vi.fn();
+    const subscriber = notionMirrorWakeSubscriber(wake, requestSweep);
+
+    await subscriber.handle(event);
+    await subscriber.handle({ ...event, sourceTable: 'comment' });
+
+    expect(wake).toHaveBeenCalledOnce();
+    expect(wake).toHaveBeenCalledWith('org_1');
+    expect(requestSweep).toHaveBeenCalledOnce();
   });
 });

@@ -53,22 +53,23 @@ describe('multi-account integration settings selectors', () => {
     expect(availableLinearAccounts(identities, connections)).toEqual([identities[1]]);
   });
 
-  it('keeps unfinished redirect attempts out of every visible connection state', () => {
+  it('keeps unfinished redirect attempts visible so a person can finish or repair them', () => {
     const pendingLinear = connection('int-pending', 'linear', 'lin-one', 'pending');
     const connectedLinear = connection('int-connected', 'linear', 'lin-two');
     const pendingGithub = connection('int-github-pending', 'github', null, 'pending');
 
     expect(visibleProviderConnections('linear', [pendingLinear, connectedLinear])).toEqual([
+      pendingLinear,
       connectedLinear,
     ]);
-    expect(visibleProviderConnections('github', [pendingGithub])).toEqual([undefined]);
+    expect(visibleProviderConnections('github', [pendingGithub])).toEqual([pendingGithub]);
   });
 
-  it('does not reserve a linked Linear identity for a canceled unfinished attempt', () => {
+  it('reserves a linked Linear identity while its connection is unfinished', () => {
     const identities = [identity('lin-one', 'linear')];
     const pending = [connection('int-pending', 'linear', 'lin-one', 'pending')];
 
-    expect(availableLinearAccounts(identities, pending)).toEqual(identities);
+    expect(availableLinearAccounts(identities, pending)).toEqual([]);
   });
 });
 

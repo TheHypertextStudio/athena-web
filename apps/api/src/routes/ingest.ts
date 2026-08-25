@@ -22,6 +22,8 @@ import { Hono } from 'hono';
 import type { Context } from 'hono';
 
 import { buildObserver } from '../container';
+import { requestNotionMirrorSweep } from '../events/notion-mirror-dispatch';
+import { wakeNotionMirror } from './notion-mirror-wake';
 
 /** Narrow a routed payload to the record drizzle stores in the `payload` jsonb column. */
 function asPayload(value: unknown): Record<string, unknown> {
@@ -47,7 +49,7 @@ async function ingestWebhook(c: Context, provider: ObserverProvider): Promise<Re
 
   // Authenticate before trusting any payload (the mock trusts the local path; see MockObserver).
   // Pass all headers through — the observer owns which signature header matters per provider.
-  if (!observer.verifySignature({ rawBody, headers: c.req.header() })) {
+  if (!(await observer.verifySignature({ rawBody, headers: c.req.header() }))) {
     return c.json({ error: 'signature verification failed' }, 400);
   }
 
@@ -106,22 +108,40 @@ async function ingestWebhook(c: Context, provider: ObserverProvider): Promise<Re
     matches.length > 0
       ? matches
       : [{ organizationId: null, integrationId: null, externalEventId: routing.externalEventId }];
+  let notionWoke = false;
   for (const target of targets) {
-    await db
-      .insert(inboundEvent)
-      .values({
-        organizationId: target.organizationId,
-        integrationId: target.integrationId,
-        provider,
-        externalEventId: target.externalEventId,
-        eventType: routing.eventType,
-        payload: asPayload(payload),
-        signatureVerified: true,
-      })
-      .onConflictDoNothing({
-        target: [inboundEvent.provider, inboundEvent.externalEventId],
-      });
+    const woke = await db.transaction(async (tx) => {
+      const inserted = await tx
+        .insert(inboundEvent)
+        .values({
+          organizationId: target.organizationId,
+          integrationId: target.integrationId,
+          provider,
+          externalEventId: target.externalEventId,
+          eventType: routing.eventType,
+          payload: asPayload(payload),
+          signatureVerified: true,
+        })
+        .onConflictDoNothing({
+          target: [inboundEvent.provider, inboundEvent.externalEventId],
+        })
+        .returning({ id: inboundEvent.id });
+      if (provider === 'notion' && inserted.length > 0 && target.organizationId !== null) {
+        await wakeNotionMirror(
+          {
+            integrationId: target.integrationId,
+            organizationId: target.organizationId,
+          },
+          tx,
+        );
+        return true;
+      }
+      return false;
+    });
+    notionWoke ||= woke;
   }
+
+  if (notionWoke) requestNotionMirrorSweep();
 
   return c.json({ received: true, routed: matches.length > 0 });
 }

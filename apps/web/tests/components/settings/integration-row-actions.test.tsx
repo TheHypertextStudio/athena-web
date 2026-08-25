@@ -39,9 +39,9 @@ describe('IntegrationRowActions', () => {
     expect(screen.getByRole('button', { name: 'Change GitHub installation' })).toBeInTheDocument();
   });
 
-  it('never presents a pending integration as a second Finish connecting action', () => {
+  it('lets a person finish an interrupted connection without creating another one', () => {
     renderActions({ status: 'pending' });
 
-    expect(screen.queryByRole('button', { name: /finish connecting/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Finish setup' })).toBeInTheDocument();
   });
 });

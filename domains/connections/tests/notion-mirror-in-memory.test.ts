@@ -5,6 +5,7 @@ import { MockNotionMirror } from '../src/notion/adapters/in-memory';
 const spec = {
   title: 'Tasks',
   parentPageId: 'mock_page_workspace',
+  ownershipKey: 'owner:tasks',
   columns: [
     { field: 'title', title: 'Name', kind: 'title' as const },
     { field: 'state', title: 'Status', kind: 'select' as const },
@@ -38,8 +39,8 @@ describe('MockNotionMirror — the flow the reconciler depends on', () => {
         { field: 'state', title: 'Stage', kind: 'select' as const },
       ],
     });
-    expect(renamed['title']).toBe(provisioned.propertyIds['title']);
-    expect(renamed['state']).toBe(provisioned.propertyIds['state']);
+    expect(renamed.propertyIds['title']).toBe(provisioned.propertyIds['title']);
+    expect(renamed.propertyIds['state']).toBe(provisioned.propertyIds['state']);
   });
 
   it('advances last_edited_time on every write, so the echo guard can tell writes apart', async () => {

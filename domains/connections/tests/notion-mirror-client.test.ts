@@ -209,6 +209,7 @@ describe('provisioning a database', () => {
   const spec = {
     title: 'Tasks',
     parentPageId: 'parent-1',
+    ownershipKey: 'owner:tasks',
     columns: [{ field: 'title', title: 'Name', kind: 'title' as const }],
   };
 
@@ -220,7 +221,14 @@ describe('provisioning a database', () => {
         url: 'https://notion.so/db-1',
         data_sources: [{ id: 'ds-1', name: 'Tasks' }],
       },
-      { object: 'data_source', id: 'ds-1', properties: { Name: { id: 'prop-1', type: 'title' } } },
+      {
+        object: 'data_source',
+        id: 'ds-1',
+        properties: {
+          Name: { id: 'prop-1', type: 'title' },
+          'Docket ID': { id: 'docket-id', type: 'rich_text' },
+        },
+      },
     ]);
 
     const result = await notion.provisionDatabase(spec);
@@ -240,7 +248,11 @@ describe('provisioning a database', () => {
   it('omits the url when Notion did not return one', async () => {
     const { notion } = client([
       { object: 'database', id: 'db-1', data_sources: [{ id: 'ds-1' }] },
-      { object: 'data_source', id: 'ds-1', properties: {} },
+      {
+        object: 'data_source',
+        id: 'ds-1',
+        properties: { 'Docket ID': { id: 'docket-id', type: 'rich_text' } },
+      },
     ]);
     expect(await notion.provisionDatabase(spec)).not.toHaveProperty('url');
   });
@@ -255,18 +267,26 @@ describe('updating a schema', () => {
   const spec = {
     title: 'Tasks',
     parentPageId: 'parent-1',
+    ownershipKey: 'owner:tasks',
     columns: [{ field: 'title', title: 'Name', kind: 'title' as const }],
   };
 
   it('sends the data source id alongside the new schema', async () => {
     const { calls, notion } = client([
-      { object: 'data_source', id: 'ds-1', properties: { Name: { id: 'prop-1', type: 'title' } } },
+      {
+        object: 'data_source',
+        id: 'ds-1',
+        properties: {
+          Name: { id: 'prop-1', type: 'title' },
+          'Docket ID': { id: 'docket-id', type: 'rich_text' },
+        },
+      },
     ]);
 
     const ids = await notion.updateDatabaseSchema('ds-1', spec);
 
     expect(calls[0]?.body).toMatchObject({ title: [{ text: { content: 'Tasks' } }] });
-    expect(ids).toMatchObject({ title: 'prop-1' });
+    expect(ids.propertyIds).toMatchObject({ title: 'prop-1' });
   });
 
   it('classifies a refused schema update rather than throwing raw SDK shapes', async () => {
@@ -284,6 +304,8 @@ describe('writing a row', () => {
     const result = await notion.writeRow({
       kind: 'create',
       dataSourceId: 'ds-1',
+      docketId: 'task-1',
+      docketIdPropertyId: 'docket-id',
       properties: {},
     });
 
@@ -320,14 +342,26 @@ describe('writing a row', () => {
     // orphan it.
     const { notion } = client([{ object: 'page', id: 'p-1' }]);
     await expect(
-      notion.writeRow({ kind: 'create', dataSourceId: 'ds-1', properties: {} }),
+      notion.writeRow({
+        kind: 'create',
+        dataSourceId: 'ds-1',
+        docketId: 'task-1',
+        docketIdPropertyId: 'docket-id',
+        properties: {},
+      }),
     ).rejects.toBeInstanceOf(ProviderError);
   });
 
   it('classifies a refused write by its provider cause', async () => {
     const { notion } = client([403]);
     await expect(
-      notion.writeRow({ kind: 'create', dataSourceId: 'ds-1', properties: {} }),
+      notion.writeRow({
+        kind: 'create',
+        dataSourceId: 'ds-1',
+        docketId: 'task-1',
+        docketIdPropertyId: 'docket-id',
+        properties: {},
+      }),
     ).rejects.toMatchObject({ kind: 'auth' });
   });
 });

@@ -10,8 +10,10 @@ import { enqueueSearchIndexJob } from '../search/enqueue';
 import { notifyResourceUpdated } from '../mcp/notify';
 import { entityUri } from '../mcp/resources';
 import type { MentionReconciler } from '../content/reconcile-mentions';
+import { wakeConfiguredNotionMirrors } from '../routes/notion-mirror-wake';
 
 import type { EntityWriteSubscriber } from './entity-write-bus';
+import { requestNotionMirrorSweep } from './notion-mirror-dispatch';
 
 /** Project the written row into the search read model. */
 export function searchIndexSubscriber(): EntityWriteSubscriber {
@@ -63,6 +65,32 @@ export function mentionReconcileSubscriber(reconciler: MentionReconciler): Entit
         return;
       }
       await reconciler.reconcile(event.organizationId, event.sourceTable, event.entityId);
+    },
+  };
+}
+
+const NOTION_MIRROR_SOURCE_TABLES = new Set([
+  'task',
+  'project',
+  'initiative',
+  'program',
+  'team',
+  'cycle',
+  'milestone',
+  'label',
+  'actor',
+]);
+
+/** Wake the Docket-designed Notion mirror after a projected entity changes. */
+export function notionMirrorWakeSubscriber(
+  wake: (organizationId: string) => Promise<number> = wakeConfiguredNotionMirrors,
+  requestSweep: () => void = requestNotionMirrorSweep,
+): EntityWriteSubscriber {
+  return {
+    name: 'notion-mirror-wake',
+    handle: async (event) => {
+      if (!NOTION_MIRROR_SOURCE_TABLES.has(event.sourceTable)) return;
+      if ((await wake(event.organizationId)) > 0) requestSweep();
     },
   };
 }

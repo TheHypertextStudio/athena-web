@@ -1,9 +1,11 @@
 'use client';
 
 import { cn } from '@docket/ui/lib/utils';
+import { QueryClientContext } from '@tanstack/react-query';
 import Link from 'next/link';
 import {
   useCallback,
+  useContext,
   useEffect,
   useRef,
   type ComponentProps,
@@ -22,7 +24,7 @@ import {
 } from '@/lib/detail-aggregate';
 import { useOptionalResponsiveRouter } from '@/lib/interactions/navigation';
 import { useOfflineAvailability } from '@/lib/offline-availability';
-import { usePrefetchApi } from '@/lib/query';
+import type { usePrefetchApi } from '@/lib/query';
 import { useOnlineStatus } from '@/lib/use-online-status';
 
 /**
@@ -78,7 +80,7 @@ export default function DocketLink({
   const availability = useOfflineAvailability(href, !routerReachable);
   const navigationPending = responsiveRouter?.requestedHref === href;
   const prefetchTimer = useRef<number | null>(null);
-  const prefetchApi = usePrefetchApi();
+  const prefetchApi = useOptionalPrefetchApi();
 
   const cancelIntent = useCallback((): void => {
     if (prefetchTimer.current === null) return;
@@ -167,6 +169,24 @@ export default function DocketLink({
         if (!event.defaultPrevented) cancelIntent();
       }}
     />
+  );
+}
+
+/**
+ * Warm query data when the app provider is present without making a link depend on that provider.
+ *
+ * @remarks
+ * `DocketLink` also renders in offline shells, loading layouts, and isolated component trees. Query
+ * prefetch is an enhancement for authenticated detail links, so the absence of a query client must
+ * not stop the link from rendering or navigating.
+ */
+function useOptionalPrefetchApi(): ReturnType<typeof usePrefetchApi> {
+  const queryClient = useContext(QueryClientContext);
+  return useCallback<ReturnType<typeof usePrefetchApi>>(
+    (definition) => {
+      if (queryClient) void queryClient.prefetchQuery(definition);
+    },
+    [queryClient],
   );
 }
 

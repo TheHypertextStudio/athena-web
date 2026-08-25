@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -29,7 +30,16 @@ vi.mock('../../src/components/reachability', () => ({
 
 vi.mock('../../src/lib/app-location', () => ({ navigateWithoutRouter }));
 vi.mock('../../src/lib/authenticated-route', () => ({
-  parseAuthenticatedRoute: () => ({ kind: 'matched' }),
+  parseAuthenticatedRoute: (href: string) => ({
+    kind: 'matched',
+    route:
+      href === '/orgs/org/tasks/task'
+        ? {
+            pattern: '/orgs/[orgId]/tasks/[taskId]',
+            params: { orgId: 'org', taskId: 'task' },
+          }
+        : { pattern: '/tasks', params: {} },
+  }),
   prefetchAuthenticatedRoute,
 }));
 vi.mock('../../src/lib/offline-availability', () => ({
@@ -84,5 +94,21 @@ describe('DocketLink', () => {
     vi.advanceTimersByTime(75);
 
     expect(prefetchAuthenticatedRoute).not.toHaveBeenCalled();
+  });
+
+  it('prefetches detail data when the app query provider is present', async () => {
+    vi.useFakeTimers();
+    const client = new QueryClient();
+    const prefetch = vi.spyOn(client, 'prefetchQuery').mockResolvedValue();
+    render(
+      <QueryClientProvider client={client}>
+        <DocketLink href="/orgs/org/tasks/task">Task</DocketLink>
+      </QueryClientProvider>,
+    );
+
+    fireEvent.mouseEnter(screen.getByRole('link', { name: 'Task' }));
+    await vi.advanceTimersByTimeAsync(75);
+
+    expect(prefetch).toHaveBeenCalledTimes(1);
   });
 });

@@ -415,6 +415,11 @@ export async function provisionMirror(
     created += 1;
   }
 
+  // Notion can return a new data source from creation before relation updates can resolve it as a
+  // target. Finish this durable pass after creation and let the pending generation resume with the
+  // schema wave, instead of treating propagation delay as deletion and creating duplicates.
+  if (created > 0) return created;
+
   // Wave two: relations, now that every target data source exists — plus any column that is still
   // missing a property id.
   //
@@ -423,6 +428,7 @@ export async function provisionMirror(
   // patched again after creation, so a column added later existed in Docket's map and nowhere in
   // Notion, and every value written to it was silently dropped.
   let forgotten = 0;
+  let settling = 0;
   for (const design of designs) {
     const refreshed = await db
       .select()
@@ -451,10 +457,19 @@ export async function provisionMirror(
         .where(eq(notionMirrorDatabase.id, row.id));
     } catch (error) {
       if (!isProviderMissingObjectError(error)) throw error;
+      if (
+        row.provisionedAt !== null &&
+        ctx.now.getTime() - row.provisionedAt.getTime() < DATABASE_CREATE_RECOVERY_WINDOW_MS
+      ) {
+        settling += 1;
+        continue;
+      }
       await forgetProvisionedDatabase(row.id);
       forgotten += 1;
     }
   }
+
+  if (settling > 0) return settling;
 
   if (forgotten > 0) {
     if (rebuildsLeft <= 0) {
@@ -1196,7 +1211,10 @@ export async function runNotionMirrorSync(
         })),
       );
 
-      await provisionMirror(ctx, parentPageId);
+      const provisioned = await provisionMirror(ctx, parentPageId);
+      if (provisioned > 0) {
+        return { processed: 0, total: 0, stampFullSync: false };
+      }
 
       const found = await db
         .select()

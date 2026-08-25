@@ -292,7 +292,7 @@ describe('Notion mirror reconciliation', () => {
     expect(mirror.provisions).toHaveLength(0);
   });
 
-  it('provisions scalar columns first, resolves relations second, and is idempotent', async () => {
+  it('provisions scalar columns first, resolves relations on the next pass, and is idempotent', async () => {
     const { integration, designs, mirror, ctx } = await seedMirror();
     await db
       .update(schema.notionMirrorDatabase)
@@ -338,6 +338,8 @@ describe('Notion mirror reconciliation', () => {
     expect(mirror.provisions.flatMap((spec) => spec.columns)).not.toContainEqual(
       expect.objectContaining({ kind: 'relation' }),
     );
+    expect(mirror.schemaUpdates).toHaveLength(0);
+    expect(await provisionMirror(ctx, 'parent-1')).toBe(0);
     expect(mirror.schemaUpdates.length).toBeGreaterThan(0);
     expect(await provisionMirror(ctx, 'parent-1')).toBe(0);
 
@@ -367,8 +369,12 @@ describe('Notion mirror reconciliation', () => {
     const deleted = assertDefined(before.externalDataSourceId);
 
     mirror.deleteDataSource(deleted);
+    const laterCtx = {
+      ...ctx,
+      now: new Date(ctx.now.getTime() + 31 * 60 * 1_000),
+    };
 
-    await expect(provisionMirror(ctx, 'parent-1')).resolves.toBeGreaterThan(0);
+    await expect(provisionMirror(laterCtx, 'parent-1')).resolves.toBeGreaterThan(0);
 
     const after = one(
       await db
@@ -385,10 +391,7 @@ describe('Notion mirror reconciliation', () => {
     );
   });
 
-  it('stops rebuilding when Notion calls a database it just created missing', async () => {
-    // The rebuild recovers from a database deleted between passes, so it assumes the recreated one
-    // works. A provider that keeps answering `object_not_found` would otherwise drive an unbounded
-    // loop creating real databases in somebody's workspace. It has to fail instead.
+  it('does not rebuild a database while Notion is still propagating its creation', async () => {
     const { mirror, ctx } = await seedMirror();
     const rejectEverything = mirror.updateDatabaseSchema.bind(mirror);
     mirror.updateDatabaseSchema = (dataSourceId: string, spec: MirrorDatabaseSpec) => {
@@ -396,10 +399,10 @@ describe('Notion mirror reconciliation', () => {
       return rejectEverything(dataSourceId, spec);
     };
 
-    await expect(provisionMirror(ctx, 'parent-1')).rejects.toThrow(/stopped rebuilding/i);
+    await expect(provisionMirror(ctx, 'parent-1')).resolves.toBeGreaterThan(0);
+    await expect(provisionMirror(ctx, 'parent-1')).resolves.toBeGreaterThan(0);
 
-    // One initial creation per design, plus one rebuild each.
-    expect(mirror.provisions.length).toBeLessThanOrEqual(MIRROR_ENTITY_ORDER.length * 2);
+    expect(mirror.provisions).toHaveLength(MIRROR_ENTITY_ORDER.length);
   });
 
   it('creates, skips, updates, and budgets projected rows truthfully', async () => {
@@ -946,6 +949,7 @@ describe('Notion mirror reconciliation', () => {
       .where(eq(schema.notionMirrorDatabase.id, taskDesign.id));
 
     await provisionMirror(ctx, 'parent-1');
+    await provisionMirror(ctx, 'parent-1');
 
     const assigneeSpec = mirror.schemaUpdates
       .flatMap((spec) => spec.columns)
@@ -987,42 +991,51 @@ describe('Notion mirror reconciliation', () => {
       assigneeId: ctx.actorId,
     });
 
-    await runNotionMirrorSync(integration, { actorId: ctx.actorId, trigger: 'manual' });
+    const buildMirror = vi.spyOn(container, 'buildNotionMirror').mockReturnValue(mirror);
+    try {
+      await runNotionMirrorSync(integration, { actorId: ctx.actorId, trigger: 'manual' });
+      await runNotionMirrorSync(integration, { actorId: ctx.actorId, trigger: 'manual' });
 
-    // Person rows are written first, so by the time the task is projected its assignee's page id
-    // already exists. Sorting the pass by entity is what guarantees this, rather than the select's
-    // row order — which is whatever Postgres happens to return.
-    const createdRows = await db
-      .select({
-        entityType: schema.notionMirrorRow.entityType,
-        entityId: schema.notionMirrorRow.entityId,
-        externalPageId: schema.notionMirrorRow.externalPageId,
-      })
-      .from(schema.notionMirrorRow)
-      .where(eq(schema.notionMirrorRow.integrationId, integration.id));
-    const personRow = createdRows.find((row) => row.entityType === 'person');
-    expect(personRow).toBeDefined();
-    expect(createdRows.map((row) => row.entityType)).toContain('task');
+      // Person rows are written first, so by the time the task is projected its assignee's page id
+      // already exists. Sorting the pass by entity is what guarantees this, rather than the select's
+      // row order — which is whatever Postgres happens to return.
+      const createdRows = await db
+        .select({
+          entityType: schema.notionMirrorRow.entityType,
+          entityId: schema.notionMirrorRow.entityId,
+          externalPageId: schema.notionMirrorRow.externalPageId,
+        })
+        .from(schema.notionMirrorRow)
+        .where(eq(schema.notionMirrorRow.integrationId, integration.id));
+      const personRow = createdRows.find((row) => row.entityType === 'person');
+      expect(personRow).toBeDefined();
+      expect(createdRows.map((row) => row.entityType)).toContain('task');
 
-    // Re-projecting now writes the assignee as a real relation to that People page. Driven
-    // through `projectEntity` because `runNotionMirrorSync` builds its own provider from the
-    // container, so the recording mirror above never sees its writes.
-    const refreshedTask = one(
-      await db
-        .select()
-        .from(schema.notionMirrorDatabase)
-        .where(eq(schema.notionMirrorDatabase.id, taskDesign.id)),
-    );
-    await db.delete(schema.notionMirrorRow).where(eq(schema.notionMirrorRow.entityType, 'task'));
-    await projectEntity(
-      ctx,
-      refreshedTask,
-      10,
-      withPersonPage(ctx.actorId, assertDefined(assertDefined(personRow).externalPageId)),
-    );
+      // Re-projecting now writes the assignee as a real relation to that People page. Driven
+      // through `projectEntity` because `runNotionMirrorSync` builds its own provider from the
+      // container, so the recording mirror above never sees its writes.
+      const refreshedTask = one(
+        await db
+          .select()
+          .from(schema.notionMirrorDatabase)
+          .where(eq(schema.notionMirrorDatabase.id, taskDesign.id)),
+      );
+      await db.delete(schema.notionMirrorRow).where(eq(schema.notionMirrorRow.entityType, 'task'));
+      mirror.writes.length = 0;
+      await projectEntity(
+        ctx,
+        refreshedTask,
+        10,
+        withPersonPage(ctx.actorId, assertDefined(assertDefined(personRow).externalPageId)),
+      );
 
-    const written = mirror.writes.find((op) => op.kind === 'create');
-    expect(JSON.stringify(written?.properties)).toContain(assertDefined(personRow).externalPageId);
+      const written = mirror.writes.find((op) => op.kind === 'create');
+      expect(JSON.stringify(written?.properties)).toContain(
+        assertDefined(personRow).externalPageId,
+      );
+    } finally {
+      buildMirror.mockRestore();
+    }
   });
 
   it('leaves a relation out entirely when the People row does not exist yet', async () => {
@@ -1101,36 +1114,46 @@ describe('Notion mirror reconciliation', () => {
         .where(eq(schema.notionMirrorDatabase.id, findDesign(designs, entity).id));
     }
 
-    await runNotionMirrorSync(integration, { actorId: ctx.actorId, trigger: 'manual' });
+    const buildMirror = vi.spyOn(container, 'buildNotionMirror').mockReturnValue(mirror);
+    try {
+      await runNotionMirrorSync(integration, { actorId: ctx.actorId, trigger: 'manual' });
+      await runNotionMirrorSync(integration, { actorId: ctx.actorId, trigger: 'manual' });
 
-    // Projects are projected before tasks, so by the time the task is written its project has a
-    // page — one pass, not two.
-    const rows = await db
-      .select()
-      .from(schema.notionMirrorRow)
-      .where(eq(schema.notionMirrorRow.integrationId, integration.id));
-    const projectPage = rows.find((row) => row.entityType === 'project')?.externalPageId;
-    expect(projectPage).toEqual(expect.any(String));
-
-    const refreshedTask = one(
-      await db
+      // Projects are projected before tasks, so by the time the task is written its project has a
+      // page — one pass, not two.
+      const rows = await db
         .select()
-        .from(schema.notionMirrorDatabase)
-        .where(eq(schema.notionMirrorDatabase.id, findDesign(designs, 'task').id)),
-    );
-    await db.delete(schema.notionMirrorRow).where(eq(schema.notionMirrorRow.entityType, 'task'));
-    await projectEntity(ctx, refreshedTask, 10, {
-      notionUserByActor: new Map(),
-      pages: new Map([
-        [
-          'project',
-          { pageByEntityId: new Map([[projectRow.id, assertDefined(projectPage)]]), settled: true },
-        ],
-      ]),
-    });
+        .from(schema.notionMirrorRow)
+        .where(eq(schema.notionMirrorRow.integrationId, integration.id));
+      const projectPage = rows.find((row) => row.entityType === 'project')?.externalPageId;
+      expect(projectPage).toEqual(expect.any(String));
 
-    const created = mirror.writes.find((op) => op.kind === 'create');
-    expect(JSON.stringify(created?.properties)).toContain(assertDefined(projectPage));
+      const refreshedTask = one(
+        await db
+          .select()
+          .from(schema.notionMirrorDatabase)
+          .where(eq(schema.notionMirrorDatabase.id, findDesign(designs, 'task').id)),
+      );
+      await db.delete(schema.notionMirrorRow).where(eq(schema.notionMirrorRow.entityType, 'task'));
+      mirror.writes.length = 0;
+      await projectEntity(ctx, refreshedTask, 10, {
+        notionUserByActor: new Map(),
+        pages: new Map([
+          [
+            'project',
+            {
+              pageByEntityId: new Map([[projectRow.id, assertDefined(projectPage)]]),
+              settled: true,
+            },
+          ],
+        ]),
+      });
+
+      const created = mirror.writes.find((op) => op.kind === 'create');
+      expect(JSON.stringify(created?.properties)).toContain(assertDefined(projectPage));
+    } finally {
+      buildMirror.mockRestore();
+    }
   });
 
   it('reports a reference to a disabled database as final, so the pass can still complete', async () => {
@@ -1231,6 +1254,31 @@ describe('Notion mirror reconciliation', () => {
     expect(malformed).toMatchObject({ status: 'failed', purpose: 'notion_mirror' });
   });
 
+  it('keeps a newly provisioned mirror pending until Notion can read its relation targets', async () => {
+    const { integration, ctx, mirror } = await seedMirror();
+    await wakeNotionMirror({ integrationId: integration.id, organizationId: ctx.orgId });
+    const buildMirror = vi.spyOn(container, 'buildNotionMirror').mockReturnValue(mirror);
+
+    try {
+      const run = await runNotionMirrorSync(integration, {
+        actorId: ctx.actorId,
+        trigger: 'manual',
+      });
+      expect(run).toMatchObject({ status: 'succeeded', purpose: 'notion_mirror' });
+      expect(mirror.provisions.length).toBeGreaterThan(0);
+      expect(mirror.schemaUpdates).toHaveLength(0);
+      expect(mirror.writes).toHaveLength(0);
+
+      const [state] = await db
+        .select()
+        .from(schema.notionMirrorState)
+        .where(eq(schema.notionMirrorState.integrationId, integration.id));
+      expect(state).toMatchObject({ desiredGeneration: 1, appliedGeneration: 0 });
+    } finally {
+      buildMirror.mockRestore();
+    }
+  });
+
   it('turns a rejected Notion credential into a reauthorization state', async () => {
     // This is intentionally the whole path, not only ConnectorError classification: the provider
     // reports auth, the leased sync records failure, and the owner gets the reconnect state rather
@@ -1283,6 +1331,8 @@ describe('Notion mirror reconciliation', () => {
 
   it('applies only the generation captured before a complete mirror pass', async () => {
     const { integration, ctx, mirror } = await seedMirror();
+    await provisionMirror(ctx, 'parent-1');
+    await provisionMirror(ctx, 'parent-1');
     await wakeNotionMirror({
       integrationId: integration.id,
       organizationId: ctx.orgId,

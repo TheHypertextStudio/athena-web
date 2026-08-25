@@ -25,7 +25,8 @@
         "./turn/adapters/lattice",
         "./turn/model-backend",
         "./task-drafting/adapters/anthropic",
-        "./task-drafting/adapters/deterministic"
+        "./task-drafting/adapters/deterministic",
+        "./task-expansion"
       ],
       "allowedRuntimeDependencies": ["@anthropic-ai/sdk", "@docket/work", "zod"],
       "supportedDeployableRuntimes": ["api", "web", "runner", "desktop"]

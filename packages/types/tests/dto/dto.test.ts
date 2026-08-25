@@ -485,6 +485,7 @@ describe('task DTOs', () => {
       teamId: ID,
       state: 'todo',
       priority: 'none',
+      autoCompletedBySubtasks: false,
       assigneeId: null,
       delegateId: null,
       projectId: null,
@@ -823,6 +824,7 @@ describe('workspace settings DTOs', () => {
     expect(
       WorkspaceSettingsOut.parse({
         initiativeMaxDepth: 2,
+        autoCompleteParentTasks: true,
         estimationScale: 'fibonacci',
         fiscalYearStartMonth: 0,
       }).initiativeMaxDepth,

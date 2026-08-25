@@ -432,6 +432,7 @@ describe('CalendarItemTaskLinkResultOut', () => {
         teamId: '01BX5ZZKBKACTAV9WEVGEMMVS4',
         state: 'backlog',
         priority: 'none',
+        autoCompletedBySubtasks: false,
         provenance: {
           source: 'native',
           sourceIntegrationId: null,

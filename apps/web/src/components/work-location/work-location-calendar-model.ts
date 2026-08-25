@@ -169,21 +169,31 @@ export function buildWorkLocationCalendarModel(
       : null;
     if (allDayKey && allDayRegionKeys.has(allDayKey)) continue;
     if (allDayKey) allDayRegionKeys.add(allDayKey);
-    const allDayStart = assertionAllDay
+    const displayedAllDayStart = assertionAllDay
+      ? scheduleInstantAt(assertionAllDay.date, 0, input.timezone)
+      : null;
+    const displayedAllDayEnd = assertionAllDay
+      ? scheduleInstantAt(nextCivilDate(assertionAllDay.date), 0, input.timezone)
+      : null;
+    const sourceAllDayStart = assertionAllDay
       ? scheduleInstantAt(assertionAllDay.date, 0, assertionAllDay.timezone)
       : null;
-    const allDayEnd = assertionAllDay
+    const sourceAllDayEnd = assertionAllDay
       ? scheduleInstantAt(nextCivilDate(assertionAllDay.date), 0, assertionAllDay.timezone)
       : null;
-    const sourceStartsAt = assertionTimed?.startsAt ?? allDayStart ?? segment.effectiveStart;
-    const sourceEndsAt = assertionTimed?.endsAt ?? allDayEnd ?? segment.effectiveEnd;
+    const sourceStartsAt = assertionTimed?.startsAt ?? sourceAllDayStart ?? segment.effectiveStart;
+    const sourceEndsAt = assertionTimed?.endsAt ?? sourceAllDayEnd ?? segment.effectiveEnd;
     regions.push({
       id: `${segment.assertionId ?? segment.source}:${segment.occurrenceDate ?? 'none'}:${segment.effectiveStart}`,
       placeId: segment.place.id,
       label: place?.name ?? segment.place.name,
       isHome: segment.place.id === input.homePlaceId,
-      startsAt: allDayStart ? new Date(allDayStart).toISOString() : segment.effectiveStart,
-      endsAt: allDayEnd ? new Date(allDayEnd).toISOString() : segment.effectiveEnd,
+      startsAt: displayedAllDayStart
+        ? new Date(displayedAllDayStart).toISOString()
+        : segment.effectiveStart,
+      endsAt: displayedAllDayEnd
+        ? new Date(displayedAllDayEnd).toISOString()
+        : segment.effectiveEnd,
       sourceStartsAt: new Date(sourceStartsAt).toISOString(),
       sourceEndsAt: new Date(sourceEndsAt).toISOString(),
       allDay,

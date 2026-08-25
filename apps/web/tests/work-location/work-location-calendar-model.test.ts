@@ -219,4 +219,32 @@ describe('buildWorkLocationCalendarModel', () => {
       }),
     ]);
   });
+
+  it('anchors provider all-day dates to the display timezone', () => {
+    const model = buildWorkLocationCalendarModel({
+      timezone: 'America/Los_Angeles',
+      range: range({
+        effectiveStart: '2026-03-08T08:00:00.000Z',
+        effectiveEnd: '2026-03-09T00:00:00.000Z',
+      }),
+      assertions: [
+        assertion({
+          type: 'one_off_all_day',
+          date: '2026-03-08',
+          timezone: 'UTC',
+        }),
+      ],
+      places: [place],
+    });
+
+    expect(model.regions).toEqual([
+      expect.objectContaining({
+        allDay: true,
+        startsAt: '2026-03-08T08:00:00.000Z',
+        endsAt: '2026-03-09T07:00:00.000Z',
+        sourceStartsAt: '2026-03-08T00:00:00.000Z',
+        sourceEndsAt: '2026-03-09T00:00:00.000Z',
+      }),
+    ]);
+  });
 });

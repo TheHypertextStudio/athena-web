@@ -9,7 +9,7 @@
 
 ### [CONNECTOR-POST-001] Keep connector actions and retries running
 
-- **Status**: IN_PROGRESS
+- **Status**: COMPLETED
 - **Started**: 2026-08-25
 - **Priority**: P0
 - **Description**: The Web proxy preserves a bodyless POST as a zero-byte stream. The API's shared
@@ -17,8 +17,8 @@
   the Notion mirror's Sync now handler could run. Failed Notion mirrors then tried to place a
   JavaScript Date directly in raw SQL. The production Postgres driver rejected that retry update
   after the failed run had already been recorded, which turned the scheduler's whole response into
-  HTTP 500. The scheduler also targeted the public API proxy. A 400-write Notion pass needs at
-  least 140 seconds at the required 350 ms provider pacing, so the proxy returned HTTP 524 before
+  HTTP 500. The scheduler also targeted the public API proxy. A 400-write Notion pass took at
+  least 140 seconds under the former fixed 350 ms delay, so the proxy returned HTTP 524 before
   Cloud Scheduler's 600-second deadline. That fixed delay also slowed every successful request even
   though the official Notion SDK already handles rate limits and transient provider overloads.
 - **Approach**: Read a cloned request only when a body stream has no supported media type. Accept
@@ -27,13 +27,19 @@
   connector's recorded failure schedules its next attempt instead of failing the scheduler. Send
   scheduled work directly to Cloud Run while browsers continue to use the public API origin. Keep
   Notion writes sequential, but let the official SDK honor `Retry-After` and retry rate limits up to
-  five times instead of sleeping after every success.
+  five times instead of sleeping after every success. Read trashed Notion pages independently of
+  the live-row watermark. Provision every database before adding relations. Hold recent databases
+  in a settling state while Notion propagates relation targets. Use acknowledged Notion timestamps
+  and projected-value hashes as the two-way idempotency anchors.
 - **Validation**: The media-type suite passes 38 cases. The Notion mirror route suite passes 11
   cases. The Notion retry-state suite passes 3 cases. The exact retry update now succeeds through
   the production Postgres driver. The adaptive pacing checks prove that successful writes schedule
   no fixed 350 ms delay and that the SDK makes six attempts across five rate-limit retries. API type
-  checking passes with a process-local 4 GB heap.
-  Production rollout and the live LVBT two-way sync check remain pending.
+  checking passes with a process-local 4 GB heap. Production revision `docket-api-00190-kqw`
+  serves the merged commit. The LVBT mirror converged all 576 current rows and applied its pending
+  generation with zero failures. A task created in LVBT Docket appeared in Notion. A Notion title
+  edit reached Docket. A Docket title edit then returned to Notion. The live Tasks database and
+  proof page expose no Docket identifier property or value.
 - **Blockers**: None.
 
 ---

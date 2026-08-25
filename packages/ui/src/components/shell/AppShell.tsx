@@ -82,6 +82,7 @@ import { readStoredBoolean, readStoredString, writeStoredValue } from '../../lib
 import { Menu } from '../../icons';
 import { cn } from '../../lib/utils';
 import { Sheet, SheetContent, SheetTitle } from '../../primitives';
+import { MobilePanelSwitcher } from './MobilePanelSwitcher';
 import { ShellActivityBar } from './ShellActivityBar';
 import { useContextState } from './ContextProvider';
 import {
@@ -705,32 +706,16 @@ export function AppShell({
             className="@container flex w-[22rem] max-w-[90vw] flex-col overflow-hidden"
           >
             <SheetTitle className="sr-only">{activePanel?.label}</SheetTitle>
-            {panels.length > 1 && !isDesktop ? (
-              <div role="tablist" aria-label="Panels" className="flex shrink-0 gap-1 px-2 pb-2">
-                {panels.map((panel) => {
-                  const isActive = panel.id === activePanelIdResolved;
-                  return (
-                    <button
-                      key={panel.id}
-                      type="button"
-                      role="tab"
-                      aria-selected={isActive}
-                      onClick={() => {
-                        setRail((current) => ({ ...current, activeId: panel.id }));
-                        writeRailState(RAIL_ACTIVE_KEY, panel.id);
-                      }}
-                      className={cn(
-                        'focus-visible:ring-ring flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none [&_svg]:size-4',
-                        isActive
-                          ? 'bg-surface-container-highest text-on-surface'
-                          : 'text-on-surface-variant hover:bg-surface-container-high',
-                      )}
-                    >
-                      {panel.icon}
-                      {panel.label}
-                    </button>
-                  );
-                })}
+            {!isDesktop && activePanel ? (
+              <div className="flex shrink-0 px-2 pr-12 pb-2">
+                <MobilePanelSwitcher
+                  panels={panels}
+                  activePanel={activePanel}
+                  onSelect={(panelId) => {
+                    setRail((current) => ({ ...current, activeId: panelId }));
+                    writeRailState(RAIL_ACTIVE_KEY, panelId);
+                  }}
+                />
               </div>
             ) : null}
             <div className="min-h-0 flex-1 overflow-auto">{activePanel?.node}</div>

@@ -4,6 +4,7 @@ import type { ProgramViewRow } from '@docket/types';
 import { cn, relativeTime } from '@docket/ui';
 import { IdentityGlyph } from '@docket/ui/components';
 import { Layers } from '@docket/ui/icons';
+import { Text } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
 import { HEALTH_DOT_CLASS, HEALTH_LABEL } from '@/components/programs/health';
@@ -63,9 +64,9 @@ export function ProgramWorkCard({ row }: ProgramWorkCardProps): JSX.Element {
         <div className="min-w-0 flex-1">
           <h2 className="text-title-medium truncate">{row.name}</h2>
           {row.summary ? (
-            <p className="text-on-surface-variant text-body-small mt-1 line-clamp-2">
+            <Text as="p" token="body-small" tone="muted" className="mt-1 line-clamp-2">
               {row.summary}
-            </p>
+            </Text>
           ) : null}
         </div>
       </div>
@@ -73,20 +74,23 @@ export function ProgramWorkCard({ row }: ProgramWorkCardProps): JSX.Element {
       <div className="mt-auto flex items-end justify-between gap-4">
         <div className="min-w-0">
           {row.health ? (
-            <span className="text-on-surface-variant inline-flex items-center gap-1.5 text-xs font-medium">
+            <Text as="span" token="label-small" tone="muted" className="inline-flex items-center gap-1.5">
               <span
                 aria-hidden="true"
                 className={cn('size-1.5 shrink-0 rounded-full', HEALTH_DOT_CLASS[row.health])}
               />
               {HEALTH_LABEL[row.health]}
-            </span>
+            </Text>
           ) : null}
-          <time
+          <Text
+            as="time"
+            token="label-small"
+            tone="muted"
             dateTime={row.activity.latestOccurredAt ?? undefined}
-            className="text-on-surface-variant mt-1 block text-xs"
+            className="mt-1 block"
           >
             {activityRecency(row.activity.latestOccurredAt)}
-          </time>
+          </Text>
         </div>
         <ActivityPulse activity={row.activity} />
       </div>

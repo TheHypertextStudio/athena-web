@@ -670,6 +670,7 @@ describe('NotionMirrorClient.queryChanges', () => {
     // SDK's typed `dataSources.query` drops the former as an unknown parameter — which is why the
     // request is issued through `request` instead.
     expect(calls[1]?.body).toMatchObject({ is_archived: true });
+    expect(calls[1]?.body).not.toHaveProperty('filter');
     expect(calls[1]?.body).not.toHaveProperty('in_trash');
   });
 

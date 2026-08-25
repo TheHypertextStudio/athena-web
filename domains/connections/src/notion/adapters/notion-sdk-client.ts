@@ -399,7 +399,9 @@ export class NotionMirrorClient implements NotionMirrorPort {
           method: 'post',
           body: {
             page_size: NOTION_PAGE_SIZE,
-            ...(filter ? { filter } : {}),
+            // A page can stay trashed past the live-row watermark. A full tombstone read keeps a
+            // later Docket edit from trying to write through that archived page.
+            ...(!archived && filter ? { filter } : {}),
             ...(archived ? { is_archived: true } : {}),
             ...(cursor !== undefined ? { start_cursor: cursor } : {}),
           },

@@ -4,7 +4,7 @@ import type { ProgramViewRow } from '@docket/types';
 import { cn, relativeTime } from '@docket/ui';
 import { IdentityGlyph } from '@docket/ui/components';
 import { Layers } from '@docket/ui/icons';
-import { Text } from '@docket/ui/primitives';
+import { Text, toneClass, typeClass } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
 import { HEALTH_DOT_CLASS, HEALTH_LABEL } from '@/components/programs/health';
@@ -82,15 +82,12 @@ export function ProgramWorkCard({ row }: ProgramWorkCardProps): JSX.Element {
               {HEALTH_LABEL[row.health]}
             </Text>
           ) : null}
-          <Text
-            as="time"
-            token="label-small"
-            tone="muted"
+          <time
             dateTime={row.activity.latestOccurredAt ?? undefined}
-            className="mt-1 block"
+            className={cn(typeClass('label-small'), toneClass('muted'), 'mt-1 block')}
           >
             {activityRecency(row.activity.latestOccurredAt)}
-          </Text>
+          </time>
         </div>
         <ActivityPulse activity={row.activity} />
       </div>

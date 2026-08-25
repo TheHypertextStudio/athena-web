@@ -1,11 +1,29 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-08-24
+> **Last Updated**: 2026-08-25
 
 ---
 
 ## Active Tasks
+
+### [CONNECTOR-POST-001] Let bodyless connector actions reach their handlers
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-08-25
+- **Priority**: P0
+- **Description**: The Web proxy preserves a bodyless POST as a zero-byte stream. The API's shared
+  media-type gate treated the stream itself as content and returned HTTP 415 before routes such as
+  the Notion mirror's Sync now handler could run.
+- **Approach**: Read a cloned request only when a body stream has no supported media type. Accept
+  the request when that stream contains zero bytes. Keep rejecting every non-empty undeclared or
+  unsupported body.
+- **Validation**: The media-type suite passes 38 cases. The Notion mirror route suite passes 11
+  cases. API type checking passes with a process-local 4 GB heap. Production rollout and the live
+  LVBT two-way sync check remain pending.
+- **Blockers**: None.
+
+---
 
 ### [WORK-CANVAS-FIND-001] Add native find to Work Canvas
 

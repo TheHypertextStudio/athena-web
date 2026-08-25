@@ -440,12 +440,17 @@ describe('media types', () => {
     expect(res.status).toBe(415);
   });
 
-  it('does not demand a Content-Type from a request with no body', async () => {
+  it('does not demand a Content-Type from a request with no content', async () => {
     const { app } = await setup();
-    // A POST to a controller resource often carries nothing; requiring a type to describe an
-    // absent body would reject a well-formed call.
-    const res = await app.request('/v1/me/notifications/read-all', { method: 'POST' });
-    expect(res.status).not.toBe(415);
+    // A POST to a controller resource often carries nothing. A reverse proxy may preserve that
+    // as an empty stream rather than `null`, so both wire shapes have to mean "no content".
+    for (const body of [undefined, new Blob([])]) {
+      const res = await app.request('/v1/me/notifications/read-all', {
+        method: 'POST',
+        ...(body === undefined ? {} : { body }),
+      });
+      expect(res.status).not.toBe(415);
+    }
   });
 
   it('answers 406 when Accept excludes everything it can produce', async () => {

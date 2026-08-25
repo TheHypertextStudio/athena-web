@@ -67,7 +67,11 @@ export const mediaTypes: MiddlewareHandler<AppEnv> = async (c, next) => {
   if (BODIED.has(c.req.method) && c.req.raw.body !== null) {
     const type = bare(c.req.header('Content-Type') ?? '');
     if (type === '' || (!CONSUMED.includes(type) && !type.endsWith('+json'))) {
-      throw new UnsupportedMediaTypeError(CONSUMED);
+      // Next's reverse proxy turns a bodyless POST into a zero-byte stream. The stream is not a
+      // representation, so it needs no media type. Read a clone only on this invalid-type path;
+      // valid request bodies still reach their route without an extra buffering pass.
+      const hasContent = (await c.req.raw.clone().arrayBuffer()).byteLength > 0;
+      if (hasContent) throw new UnsupportedMediaTypeError(CONSUMED);
     }
   }
 

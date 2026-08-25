@@ -9,8 +9,9 @@
 
 ### [SETTINGS-SCROLL-001] Let settings scroll to the dialog edge
 
-- **Status**: REVIEW
+- **Status**: COMPLETED
 - **Started**: 2026-08-25
+- **Completed**: 2026-08-25
 - **Priority**: P1
 - **Description**: The desktop settings pane keeps the shell's 20 px bottom padding. Production
   measurement at 1280 by 900 places the dialog bottom at 832.5 px and both scroll-region bottoms
@@ -19,8 +20,16 @@
 - **Approach**: Keep the desktop top and side insets, but remove the bottom inset. Square the page
   surface's bottom corners where it meets the dialog edge. Keep mobile gutters, card padding, and
   the desktop rail width unchanged.
-- **Validation**: The five focused settings component files pass all 18 tests. Production geometry
-  and phone and desktop screenshots remain before release.
+- **Validation**: The five focused settings component files pass all 18 tests. The commit hook
+  passed formatting, repository tooling tests, the API dependency build, and Web lint. Production
+  deployment `dpl_aDwQ3UVFAwH2MBDrMMdVnnTFrnvD` is Ready and promoted to
+  `docket.hypertext.studio`. Authenticated Hypertext Studio Chrome geometry at 1280 by 900 places
+  the dialog bottom at 832.5 px and both scroll-region bottoms at 831.5 px. The remaining 1 px is
+  the dialog border. The page surface reports top corners only. At 390 by 844 the scroll region
+  reaches the 844 px dialog edge, and the existing mobile gutter remains unchanged. Phone and
+  desktop screenshots confirm the final card clears the bottom edge.
+- **Learnings**: Scroll viewport spacing belongs on its content, not outside the viewport. A fixed
+  bottom shell inset makes a scrollable page look clipped even when its content has enough padding.
 - **Blockers**: None.
 
 ---

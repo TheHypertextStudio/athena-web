@@ -562,4 +562,19 @@ describe('scheduleOverlapHorizontalStyle', () => {
       { left: 'calc(66.666667% + 1px)', width: 'calc(33.333333% - 2px)' },
     ]);
   });
+
+  it('reserves one shared leading track before dividing collision columns', () => {
+    expect(
+      [0, 1].map((columnIndex) =>
+        scheduleOverlapHorizontalStyle(
+          { id: `tracked-${String(columnIndex)}`, columnIndex, columnCount: 2 },
+          240,
+          40,
+        ),
+      ),
+    ).toEqual([
+      { left: 41, width: '98px' },
+      { left: 141, width: '98px' },
+    ]);
+  });
 });

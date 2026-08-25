@@ -19,7 +19,10 @@ import { SchedulingRelationSlotLane } from './scheduling-relation-slot-lane';
 import { deriveSnapMinutes, minutesToPixels, pixelsToMinutes } from './scheduling-geometry';
 import { deriveInitialScheduleScrollMinutes } from './scheduling-initial-scroll';
 import { SchedulingItemCard } from './scheduling-item-card';
-import { positionScheduleLaneItems } from './scheduling-overlap-layout';
+import {
+  normalizeScheduleLeadingInset,
+  positionScheduleLaneItems,
+} from './scheduling-overlap-layout';
 import { presentSchedulingRegion, SchedulingRegionPreview } from './scheduling-region-preview';
 import { scheduleWallPositionForInstant } from './scheduling-time-axis';
 import { SchedulingTimeGrid } from './scheduling-time-grid';
@@ -65,6 +68,7 @@ export default function SchedulingCanvas({
   renderItemAction,
   renderTimedLaneUnderlay,
   renderTimedLaneContext,
+  resolveTimedItemLeadingInset,
   renderAllDayLaneContext,
   renderTimedItemDecoration,
   selectedRegion,
@@ -194,23 +198,34 @@ export default function SchedulingCanvas({
     : undefined;
   const arrangedLaneItems = useMemo(
     () =>
-      lanes.map((lane) =>
-        arrangeDenseScheduleItems(
-          positionScheduleLaneItems(
-            lane,
-            displayTimezone,
-            effectivePixelsPerHour,
-            minimumInteractivePixels,
-          ),
-          geometry.laneWidth,
-          {
+      lanes.map((lane) => {
+        const positionedItems = positionScheduleLaneItems(
+          lane,
+          displayTimezone,
+          effectivePixelsPerHour,
+          minimumInteractivePixels,
+        );
+        const leadingInsetByCluster = new Map<string, number>();
+        for (const positioned of positionedItems) {
+          const inset = normalizeScheduleLeadingInset(
+            resolveTimedItemLeadingInset?.({ lane, bounds: positioned.bounds }) ?? 0,
+            geometry.laneWidth,
+          );
+          leadingInsetByCluster.set(
+            positioned.clusterId,
+            Math.max(leadingInsetByCluster.get(positioned.clusterId) ?? 0, inset),
+          );
+        }
+        return {
+          ...arrangeDenseScheduleItems(positionedItems, geometry.laneWidth, {
             promotedItemId:
               densePromotion.promotion?.laneId === lane.id
                 ? densePromotion.promotion.itemId
                 : undefined,
-          },
-        ),
-      ),
+          }),
+          leadingInsetByCluster,
+        };
+      }),
     [
       densePromotion.promotion,
       displayTimezone,
@@ -218,6 +233,7 @@ export default function SchedulingCanvas({
       geometry.laneWidth,
       lanes,
       minimumInteractivePixels,
+      resolveTimedItemLeadingInset,
     ],
   );
   return (
@@ -419,7 +435,7 @@ export default function SchedulingCanvas({
                     />
                   ) : null}
                   {arrangedLaneItems[laneIndex]?.directItems.map(
-                    ({ item, bounds, top, height, placement }) => (
+                    ({ item, bounds, top, height, placement, clusterId }) => (
                       <SchedulingItemCard
                         key={item.id}
                         item={item}
@@ -435,6 +451,10 @@ export default function SchedulingCanvas({
                         top={top}
                         height={height}
                         placement={placement}
+                        leadingInset={
+                          arrangedLaneItems[laneIndex]?.leadingInsetByCluster.get(clusterId) ?? 0
+                        }
+                        resolveTimedItemLeadingInset={resolveTimedItemLeadingInset}
                         viewportRef={viewportRef}
                         renderItem={renderItem}
                         renderItemAction={renderItemAction}
@@ -452,6 +472,12 @@ export default function SchedulingCanvas({
                       key={`${group.clusterId}:overflow`}
                       group={group}
                       lane={lane}
+                      laneWidth={geometry.laneWidth}
+                      leadingInset={
+                        arrangedLaneItems[laneIndex]?.leadingInsetByCluster.get(
+                          group.items[0]?.clusterId ?? '',
+                        ) ?? 0
+                      }
                       displayTimezone={displayTimezone}
                       renderItem={renderItem}
                       onOpenItem={onOpenItem}

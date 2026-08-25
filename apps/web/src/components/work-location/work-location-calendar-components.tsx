@@ -1,6 +1,7 @@
 'use client';
 
-import { MapPin } from '@docket/ui/icons';
+import { Home, MapPin } from '@docket/ui/icons';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@docket/ui/primitives';
 import { type JSX, useEffect, useRef, useState } from 'react';
 
 import {
@@ -9,14 +10,15 @@ import {
   resolveScheduleWallInstant,
   type ScheduleAllDayLaneRenderContext,
   type ScheduleLane,
+  type ScheduleMinuteBounds,
   type ScheduleTimedItemDecorationContext,
   type ScheduleTimedLaneContextRenderContext,
 } from '@/components/scheduling';
 
 import type { WorkLocationCalendarRegion } from './work-location-calendar-model';
 
-const WORK_LOCATION_RAIL_LEFT_PX = 8;
-const WORK_LOCATION_RAIL_WIDTH_PX = 2;
+/** Width reserved for a partial-day work-location rail and its interaction targets. */
+export const WORK_LOCATION_TIMED_TRACK_WIDTH_PX = 40;
 
 interface WorkLocationAllDayContextProps {
   readonly regions: readonly WorkLocationCalendarRegion[];
@@ -76,6 +78,37 @@ function regionBounds(
     lane,
     displayTimezone,
   );
+}
+
+/** Resolve the shared leading track for a timed item that intersects a partial-day location. */
+export function resolveWorkLocationTimedLeadingInset(input: {
+  readonly regions: readonly WorkLocationCalendarRegion[];
+  readonly lane: ScheduleLane;
+  readonly bounds: ScheduleMinuteBounds;
+  readonly displayTimezone: string;
+}): number {
+  const intersects = input.regions.some((region) => {
+    if (region.allDay) return false;
+    const bounds = regionBounds(region, input.lane, input.displayTimezone);
+    return (
+      bounds !== null &&
+      input.bounds.startMinutes < bounds.endMinutes &&
+      bounds.startMinutes < input.bounds.endMinutes
+    );
+  });
+  return intersects ? WORK_LOCATION_TIMED_TRACK_WIDTH_PX : 0;
+}
+
+/** Return whether one lane has a complete-day work-location region to render. */
+export function hasWorkLocationAllDayRegion(input: {
+  readonly regions: readonly WorkLocationCalendarRegion[];
+  readonly lane: ScheduleLane;
+  readonly displayTimezone: string;
+}): boolean {
+  return input.regions.some((region) => {
+    const bounds = regionBounds(region, input.lane, input.displayTimezone);
+    return region.allDay && bounds?.startMinutes === 0 && bounds.endMinutes === 1_440;
+  });
 }
 
 /** Return whether one projected lane edge maps to the region's exact owned source endpoint. */
@@ -283,6 +316,7 @@ export function WorkLocationAllDayContext({
     const bounds = regionBounds(region, context.lane, displayTimezone);
     return region.allDay && bounds?.startMinutes === 0 && bounds.endMinutes === 1_440;
   });
+  if (visible.length === 0) return null;
   return (
     <div
       className="flex h-11 min-w-0 flex-nowrap items-center gap-1 overflow-hidden"
@@ -372,7 +406,11 @@ export function WorkLocationAllDayContext({
               className="bg-surface-container-high text-on-surface-variant group-hover:bg-surface-container-highest group-active:bg-secondary-container text-label-small inline-flex min-h-7 max-w-full items-center gap-1 rounded-full px-2 motion-safe:transition-colors motion-reduce:transition-none"
               data-work-location-chip-visual=""
             >
-              <MapPin aria-hidden="true" className="size-3.5! shrink-0" />
+              {region.isHome ? (
+                <Home aria-hidden="true" className="size-3.5! shrink-0" />
+              ) : (
+                <MapPin aria-hidden="true" className="size-3.5! shrink-0" />
+              )}
               <span className="truncate">{region.label}</span>
             </span>
           </button>
@@ -382,7 +420,11 @@ export function WorkLocationAllDayContext({
             data-work-location-read-only="true"
             className="bg-surface-container text-on-surface-variant text-label-small inline-flex min-h-7 min-w-0 items-center gap-1 rounded-full px-2"
           >
-            <MapPin aria-hidden="true" className="size-3.5! shrink-0" />
+            {region.isHome ? (
+              <Home aria-hidden="true" className="size-3.5! shrink-0" />
+            ) : (
+              <MapPin aria-hidden="true" className="size-3.5! shrink-0" />
+            )}
             <span className="truncate">{region.label}</span>
           </span>
         ),
@@ -427,6 +469,10 @@ export function WorkLocationTimedLaneContext({
         ]
       : [];
   });
+  const previewRegion = preview
+    ? visible.find(({ region }) => region.id === preview.regionId)?.region
+    : undefined;
+  const PreviewMarkerIcon = previewRegion?.isHome ? Home : MapPin;
   useEffect(() => {
     setPreview(null);
   }, [context.lane.id, regions]);
@@ -454,7 +500,7 @@ export function WorkLocationTimedLaneContext({
     })[0];
   };
   return (
-    <>
+    <TooltipProvider delayDuration={300}>
       {preview ? (
         <div
           data-testid="work-location-rail-preview"
@@ -470,9 +516,9 @@ export function WorkLocationTimedLaneContext({
                 : `translateX(${String((preview.targetIndex - context.geometry.laneIndex) * context.geometry.laneWidth)}px)`,
           }}
         >
-          <span className="bg-outline absolute top-0 left-2 h-full w-0.5 rounded-full" />
-          <span className="bg-secondary-container text-on-secondary-container text-label-small absolute top-0 left-3 rounded-full px-2 py-1">
-            {visible.find(({ region }) => region.id === preview.regionId)?.region.label}
+          <span className="bg-outline absolute top-0 left-[19px] h-full w-0.5 rounded-full" />
+          <span className="bg-secondary-container text-on-secondary-container absolute -top-3 left-2 flex size-6 items-center justify-center rounded-full">
+            <PreviewMarkerIcon aria-hidden="true" className="size-3.5!" />
           </span>
         </div>
       ) : null}
@@ -484,10 +530,13 @@ export function WorkLocationTimedLaneContext({
           <span
             data-testid="work-location-rail"
             aria-hidden="true"
-            className="bg-outline absolute top-0 left-2 h-full w-0.5 rounded-full"
+            className="bg-outline absolute top-0 left-[19px] h-full w-0.5 rounded-full"
           />
         );
         if (!region.editable) {
+          const description = `${region.label}, ${wallTimeLabel(bounds.startMinutes)} to ${wallTimeLabel(bounds.endMinutes)}`;
+          const descriptionId = `work-location-description-${region.id}`;
+          const MarkerIcon = region.isHome ? Home : MapPin;
           return (
             <div
               key={region.id}
@@ -496,8 +545,26 @@ export function WorkLocationTimedLaneContext({
               style={{ top, height }}
             >
               {rail}
-              <span className="bg-surface-container text-on-surface-variant text-label-small absolute top-0 left-3 max-w-[calc(100%-1rem)] truncate rounded-full px-2 py-1">
-                {region.label}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    tabIndex={0}
+                    aria-label={`${region.label} work location`}
+                    aria-describedby={descriptionId}
+                    className="focus-visible:outline-primary pointer-events-auto absolute -top-5 left-0 flex size-10 items-center justify-center rounded-full outline-none focus-visible:outline-2 focus-visible:outline-offset-2"
+                  >
+                    <span
+                      data-work-location-marker-kind={region.isHome ? 'home' : 'place'}
+                      className="bg-surface-container-high text-on-surface-variant flex size-6 items-center justify-center rounded-full"
+                    >
+                      <MarkerIcon aria-hidden="true" className="size-3.5!" />
+                    </span>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{description}</TooltipContent>
+              </Tooltip>
+              <span id={descriptionId} className="sr-only">
+                {description}
               </span>
             </div>
           );
@@ -617,7 +684,9 @@ export function WorkLocationTimedLaneContext({
             }),
           );
         };
-        const moveWidth = Math.max(44, context.geometry.laneWidth - 88);
+        const description = `${region.label}, ${wallTimeLabel(bounds.startMinutes)} to ${wallTimeLabel(bounds.endMinutes)}`;
+        const descriptionId = `work-location-description-${region.id}`;
+        const MarkerIcon = region.isHome ? Home : MapPin;
         return (
           <div
             key={region.id}
@@ -626,45 +695,52 @@ export function WorkLocationTimedLaneContext({
             data-work-location-timed={region.id}
           >
             {rail}
-            <button
-              type="button"
-              aria-label={`Move ${region.label} work location`}
-              data-work-location-hit-slot="move"
-              className="group focus-visible:outline-primary pointer-events-auto absolute z-10 inline-flex min-h-11 min-w-11 items-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2"
-              style={{ left: 44, top: -22, width: moveWidth, height: 44 }}
-              onClick={(event) => {
-                if (suppressedClick.current !== null) {
-                  suppressedClick.current = null;
-                  return;
-                }
-                const owner =
-                  event.detail === 0
-                    ? { region }
-                    : pointerOwner('move', event.clientY, event.currentTarget);
-                if (owner) onOpen(owner.region);
-              }}
-              onPointerDown={(event) => {
-                startSession(event, 'move');
-              }}
-              onKeyDown={(event) => {
-                commitKeyboardEdit(event, 'move');
-              }}
-            >
-              <span
-                data-work-location-chip-visual=""
-                className="bg-surface-container-high text-on-surface-variant group-hover:bg-surface-container-highest group-active:bg-secondary-container text-label-small inline-flex min-h-7 max-w-full items-center gap-1 rounded-full px-2 motion-safe:transition-colors motion-reduce:transition-none"
-              >
-                <MapPin aria-hidden="true" className="size-3.5! shrink-0" />
-                <span className="truncate">{region.label}</span>
-              </span>
-            </button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={`Move ${region.label} work location`}
+                  aria-describedby={descriptionId}
+                  data-work-location-hit-slot="move"
+                  className="group focus-visible:outline-primary pointer-events-auto absolute -top-5 left-0 z-30 flex size-10 min-h-10 min-w-10 items-center justify-center rounded-full outline-none focus-visible:outline-2 focus-visible:outline-offset-2"
+                  onClick={(event) => {
+                    if (suppressedClick.current !== null) {
+                      suppressedClick.current = null;
+                      return;
+                    }
+                    const owner =
+                      event.detail === 0
+                        ? { region }
+                        : pointerOwner('move', event.clientY, event.currentTarget);
+                    if (owner) onOpen(owner.region);
+                  }}
+                  onPointerDown={(event) => {
+                    startSession(event, 'move');
+                  }}
+                  onKeyDown={(event) => {
+                    commitKeyboardEdit(event, 'move');
+                  }}
+                >
+                  <span
+                    data-work-location-marker-kind={region.isHome ? 'home' : 'place'}
+                    className="bg-surface-container-high text-on-surface-variant group-hover:bg-surface-container-highest group-active:bg-secondary-container ring-outline-variant flex size-6 items-center justify-center rounded-full ring-1 motion-safe:transition-colors motion-reduce:transition-none"
+                  >
+                    <MarkerIcon aria-hidden="true" className="size-3.5!" />
+                  </span>
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>{description}</TooltipContent>
+            </Tooltip>
+            <span id={descriptionId} className="sr-only">
+              {description}
+            </span>
             {ownsStart ? (
               <button
                 type="button"
                 aria-label={`Resize start of ${region.label}`}
                 data-work-location-hit-slot="start"
-                className="hover:bg-tertiary-container/30 active:bg-tertiary-container/50 focus-visible:bg-tertiary-container/30 focus-visible:outline-primary pointer-events-auto absolute z-20 size-11 min-h-11 min-w-11 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 motion-safe:transition-colors motion-reduce:transition-none"
-                style={{ left: 0, top: -22, width: 44, height: 44 }}
+                className="hover:bg-tertiary-container/30 active:bg-tertiary-container/50 focus-visible:bg-tertiary-container/30 focus-visible:outline-primary pointer-events-auto absolute z-20 size-10 min-h-10 min-w-10 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 motion-safe:transition-colors motion-reduce:transition-none"
+                style={{ left: 0, top: 20, width: 40, height: 40 }}
                 onPointerDown={(event) => {
                   startSession(event, 'resize-start');
                 }}
@@ -678,12 +754,12 @@ export function WorkLocationTimedLaneContext({
                 type="button"
                 aria-label={`Resize end of ${region.label}`}
                 data-work-location-hit-slot="end"
-                className="hover:bg-tertiary-container/30 active:bg-tertiary-container/50 focus-visible:bg-tertiary-container/30 focus-visible:outline-primary pointer-events-auto absolute z-20 size-11 min-h-11 min-w-11 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 motion-safe:transition-colors motion-reduce:transition-none"
+                className="hover:bg-tertiary-container/30 active:bg-tertiary-container/50 focus-visible:bg-tertiary-container/30 focus-visible:outline-primary pointer-events-auto absolute z-20 size-10 min-h-10 min-w-10 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 motion-safe:transition-colors motion-reduce:transition-none"
                 style={{
-                  left: context.geometry.laneWidth - 44,
-                  top: height - 22,
-                  width: 44,
-                  height: 44,
+                  left: 0,
+                  top: height - 20,
+                  width: 40,
+                  height: 40,
                 }}
                 onPointerDown={(event) => {
                   startSession(event, 'resize-end');
@@ -696,7 +772,7 @@ export function WorkLocationTimedLaneContext({
           </div>
         );
       })}
-    </>
+    </TooltipProvider>
   );
 }
 
@@ -716,10 +792,6 @@ export function WorkLocationTimeboxDecoration({
   const sections = partitionScheduleRangeByContext(context.geometry.bounds, projected);
   const duration = context.geometry.bounds.endMinutes - context.geometry.bounds.startMinutes;
   if (duration <= 0) return null;
-  const connectorWidth = Math.max(
-    0,
-    context.geometry.leadingOffset - WORK_LOCATION_RAIL_LEFT_PX - WORK_LOCATION_RAIL_WIDTH_PX,
-  );
   return (
     <div className="absolute inset-0 overflow-visible rounded-[inherit]">
       {sections.map((section) => {
@@ -732,17 +804,6 @@ export function WorkLocationTimeboxDecoration({
             key={`${section.contextId ?? 'neutral'}:${String(section.startMinutes)}`}
             className="contents"
           >
-            {region && connectorWidth > 0 ? (
-              <span
-                data-testid="work-location-timebox-connector"
-                className="bg-outline pointer-events-none absolute h-0.5"
-                style={{
-                  left: -connectorWidth,
-                  top: `${String(top + height / 2)}%`,
-                  width: connectorWidth,
-                }}
-              />
-            ) : null}
             <span
               data-testid="work-location-timebox-section"
               data-context={region ? 'location' : 'neutral'}

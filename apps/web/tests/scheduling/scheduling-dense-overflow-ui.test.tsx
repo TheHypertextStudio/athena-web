@@ -36,12 +36,17 @@ describe('SchedulingDenseOverflow', () => {
       <SchedulingDenseOverflow
         group={group}
         lane={lane}
+        laneWidth={240}
+        leadingInset={40}
         displayTimezone="UTC"
         onOpenItem={onOpenItem}
       />,
     );
 
     const trigger = screen.getByRole('button', { name: 'Show 3 more events in Mon, Jul 13' });
+    const overflow = trigger.closest('[data-schedule-overflow-cluster]');
+    expect(overflow).toHaveAttribute('data-schedule-leading-inset', '40');
+    expect(overflow).toHaveStyle({ left: '174.33333333333334px', width: '64.666667px' });
     expect(trigger).toHaveTextContent('+3 more');
     trigger.focus();
     await user.keyboard('{Enter}');

@@ -18,6 +18,7 @@ function region(
     id: 'region',
     placeId,
     label: 'Main library',
+    isHome: false,
     startsAt: allDay ? '2026-08-12T07:00:00.000Z' : '2026-08-12T16:00:00.000Z',
     endsAt: allDay ? '2026-08-13T07:00:00.000Z' : '2026-08-12T20:00:00.000Z',
     sourceStartsAt: allDay ? '2026-08-12T07:00:00.000Z' : '2026-08-12T16:00:00.000Z',

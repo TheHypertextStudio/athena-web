@@ -26,6 +26,46 @@ function item(id: string, appearance: 'event' | 'timebox', allDay = false): Sche
 afterEach(cleanup);
 
 describe('SchedulingCanvas composition seams', () => {
+  it('applies a leading inset to every card in an intersecting collision cluster', () => {
+    const timedItem = (id: string, startsAt: string, endsAt: string): ScheduleItem => ({
+      id,
+      title: id,
+      startsAt,
+      endsAt,
+      appearance: 'event',
+    });
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[
+          lane([
+            timedItem('outside', '2026-07-01T07:00:00Z', '2026-07-01T08:00:00Z'),
+            timedItem('cluster-outside', '2026-07-01T08:00:00Z', '2026-07-01T09:00:00Z'),
+            timedItem('boundary-crossing', '2026-07-01T08:30:00Z', '2026-07-01T09:30:00Z'),
+          ]),
+        ]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+        resolveTimedItemLeadingInset={({ bounds }) =>
+          bounds.startMinutes < 600 && bounds.endMinutes > 540 ? 40 : 0
+        }
+      />,
+    );
+
+    expect(document.querySelector('[data-schedule-item="outside"]')).toHaveAttribute(
+      'data-schedule-leading-inset',
+      '0',
+    );
+    expect(document.querySelector('[data-schedule-item="cluster-outside"]')).toHaveAttribute(
+      'data-schedule-leading-inset',
+      '40',
+    );
+    expect(document.querySelector('[data-schedule-item="boundary-crossing"]')).toHaveAttribute(
+      'data-schedule-leading-inset',
+      '40',
+    );
+  });
+
   it('places neutral timed underlay and all-day context content in their lane areas', () => {
     const allDayContextClick = vi.fn();
     render(
@@ -290,14 +330,22 @@ describe('SchedulingCanvas composition seams', () => {
             data-lane-index={'laneIndex' in geometry ? geometry.laneIndex : 'missing'}
             data-bounds={`${String(geometry.bounds.startMinutes)}:${String(geometry.bounds.endMinutes)}`}
             data-top={geometry.top}
+            data-leading-offset={geometry.leadingOffset}
             data-column={`${String(placement.columnIndex)}:${String(placement.columnCount)}`}
           />
         )}
+        resolveTimedItemLeadingInset={({ lane: renderedLane }) =>
+          renderedLane.id === 'target' ? 40 : 0
+        }
         onMoveItem={vi.fn()}
       />,
     );
 
     const body = screen.getByRole('button', { name: /^Planning timebox/ });
+    const movingCard = assertDefined(
+      document.querySelector<HTMLElement>('[data-schedule-item="moving-timebox"]'),
+    );
+    expect(movingCard).toHaveAttribute('data-schedule-leading-inset', '0');
     fireEvent.pointerDown(body, { button: 0, pointerId: 41, clientX: 100, clientY: 100 });
     fireEvent.pointerMove(window, { pointerId: 41, clientX: 500, clientY: 130 });
 
@@ -305,7 +353,9 @@ describe('SchedulingCanvas composition seams', () => {
     expect(screen.getByTestId('moving-decoration')).toHaveAttribute('data-lane-index', '1');
     expect(screen.getByTestId('moving-decoration')).toHaveAttribute('data-bounds', '570:630');
     expect(screen.getByTestId('moving-decoration')).toHaveAttribute('data-top', '570');
+    expect(screen.getByTestId('moving-decoration')).toHaveAttribute('data-leading-offset', '41');
     expect(screen.getByTestId('moving-decoration')).toHaveAttribute('data-column', '0:1');
+    expect(movingCard).toHaveAttribute('data-schedule-leading-inset', '40');
 
     fireEvent.pointerCancel(window, { pointerId: 41 });
   });

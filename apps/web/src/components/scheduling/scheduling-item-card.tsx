@@ -12,6 +12,7 @@ import {
 } from './scheduling-date-lanes';
 import { MINUTES_PER_DAY, minutesToPixels } from './scheduling-geometry';
 import {
+  normalizeScheduleLeadingInset,
   scheduleOverlapHorizontalStyle,
   scheduleOverlapLeadingOffset,
   type ScheduleOverlapPlacement,
@@ -50,6 +51,8 @@ export interface SchedulingItemCardProps {
   readonly top: number;
   readonly height: number;
   readonly placement: ScheduleOverlapPlacement;
+  readonly leadingInset: number;
+  readonly resolveTimedItemLeadingInset?: SchedulingCanvasProps['resolveTimedItemLeadingInset'];
   readonly viewportRef: RefObject<HTMLElement | null>;
   readonly renderItem?: SchedulingCanvasProps['renderItem'];
   readonly renderItemAction?: SchedulingCanvasProps['renderItemAction'];
@@ -96,6 +99,8 @@ export function SchedulingItemCard({
   top,
   height,
   placement,
+  leadingInset,
+  resolveTimedItemLeadingInset,
   viewportRef,
   renderItem,
   renderItemAction,
@@ -161,7 +166,13 @@ export function SchedulingItemCard({
   const visibleLane = previewLane ?? lane;
   const visibleLaneIndex = previewLane && gesture.preview ? gesture.preview.laneIndex : laneIndex;
   const laneTranslation = (visibleLaneIndex - laneIndex) * laneWidth;
-  const estimatedWidth = Math.max(0, laneWidth / placement.columnCount - 2);
+  const visibleLeadingInset = gesture.preview
+    ? normalizeScheduleLeadingInset(
+        resolveTimedItemLeadingInset?.({ lane: visibleLane, bounds: visibleBounds }) ?? 0,
+        laneWidth,
+      )
+    : leadingInset;
+  const estimatedWidth = Math.max(0, (laneWidth - visibleLeadingInset) / placement.columnCount - 2);
   const density = itemDensity(visibleHeight, estimatedWidth);
   const startsAtDayBoundary = visibleBounds.startMinutes === 0;
   const endsAtDayBoundary = visibleBounds.endMinutes === MINUTES_PER_DAY;
@@ -191,7 +202,7 @@ export function SchedulingItemCard({
         top: visibleTop,
         height: visibleHeight,
         laneWidth,
-        leadingOffset: scheduleOverlapLeadingOffset(placement, laneWidth),
+        leadingOffset: scheduleOverlapLeadingOffset(placement, laneWidth, visibleLeadingInset),
         pixelsPerHour,
       },
       placement: {
@@ -207,7 +218,7 @@ export function SchedulingItemCard({
   const surfaceState =
     relationTarget.canDrop && relationTarget.isOver ? 'drop' : gesture.preview ? 'preview' : 'rest';
   const surfacePalette = scheduleItemSurfacePalette(appearance, item.color, surfaceState);
-  const horizontalStyle = scheduleOverlapHorizontalStyle(placement);
+  const horizontalStyle = scheduleOverlapHorizontalStyle(placement, laneWidth, visibleLeadingInset);
   return (
     <article
       ref={relationTarget.dropProps.ref}
@@ -226,6 +237,7 @@ export function SchedulingItemCard({
       data-layout-column-count={placement.columnCount}
       data-schedule-item={item.id}
       data-schedule-item-appearance={appearance}
+      data-schedule-leading-inset={visibleLeadingInset}
       data-gesture-preview={gesture.preview ? gesture.previewMode : undefined}
       style={
         {

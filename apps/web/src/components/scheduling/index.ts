@@ -88,6 +88,7 @@ export type {
   ScheduleObjectGridDrop,
   ScheduleRegionSelection,
   ScheduleTimedItemDecorationContext,
+  ScheduleTimedItemLeadingInsetContext,
   ScheduleTimedLaneContextRenderContext,
   ScheduleTimedLaneRenderContext,
 } from './scheduling-types';

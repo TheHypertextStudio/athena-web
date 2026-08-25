@@ -14,6 +14,8 @@ import type {
 } from '@/components/scheduling';
 import {
   WorkLocationAllDayContext,
+  hasWorkLocationAllDayRegion,
+  resolveWorkLocationTimedLeadingInset,
   WorkLocationTimeboxDecoration,
   WorkLocationTimedLaneContext,
 } from '@/components/work-location/work-location-calendar-components';
@@ -43,6 +45,7 @@ function region(overrides: Partial<WorkLocationCalendarRegion> = {}): WorkLocati
     assertionId,
     occurrenceDate: '2026-07-01',
     assertionKind: 'one_off',
+    isHome: false,
     ownsStart: true,
     ownsEnd: true,
     ...overrides,
@@ -70,7 +73,7 @@ function timedContext(
 afterEach(cleanup);
 
 describe('work-location calendar components', () => {
-  it('reserves one fixed all-day location row before refreshed data arrives', () => {
+  it('omits the all-day location row when the lane has no all-day location', () => {
     const context = {
       lane: firstLane,
       geometry: { laneIndex: 0, laneWidth: 200 },
@@ -86,9 +89,7 @@ describe('work-location calendar components', () => {
       />,
     );
 
-    const slot = screen.getByLabelText('Expected work location');
-    expect(slot).toHaveClass('h-11', 'flex-nowrap', 'overflow-hidden');
-    expect(slot).not.toHaveClass('flex-wrap');
+    expect(screen.queryByLabelText('Expected work location')).not.toBeInTheDocument();
 
     rerender(
       <WorkLocationAllDayContext
@@ -106,8 +107,94 @@ describe('work-location calendar components', () => {
       />,
     );
 
-    expect(screen.getByLabelText('Expected work location')).toBe(slot);
+    expect(screen.getByLabelText('Expected work location')).toHaveClass(
+      'h-11',
+      'flex-nowrap',
+      'overflow-hidden',
+    );
     expect(screen.getByRole('button', { name: 'Main library work location' })).toBeVisible();
+  });
+
+  it('lets schedule composition omit an empty all-day context wrapper', () => {
+    expect(
+      hasWorkLocationAllDayRegion({
+        regions: [],
+        lane: firstLane,
+        displayTimezone: 'UTC',
+      }),
+    ).toBe(false);
+    expect(
+      hasWorkLocationAllDayRegion({
+        regions: [
+          region({
+            allDay: true,
+            startsAt: '2026-07-01T00:00:00.000Z',
+            endsAt: '2026-07-02T00:00:00.000Z',
+          }),
+        ],
+        lane: firstLane,
+        displayTimezone: 'UTC',
+      }),
+    ).toBe(true);
+  });
+
+  it('uses a semantic 24px marker and exposes the full place and time on focus', async () => {
+    const { rerender } = render(
+      <WorkLocationTimedLaneContext
+        regions={[region({ isHome: true })]}
+        context={timedContext()}
+        displayTimezone="UTC"
+        onOpen={vi.fn()}
+        onEdit={vi.fn(() => ({ status: 'accepted' as const }))}
+      />,
+    );
+
+    const homeMarker = screen.getByRole('button', { name: 'Move Main library work location' });
+    expect(homeMarker).toHaveAttribute(
+      'aria-describedby',
+      expect.stringMatching(/work-location-description/),
+    );
+    expect(homeMarker.querySelector('[data-work-location-marker-kind="home"]')).toHaveClass(
+      'size-6',
+    );
+    homeMarker.focus();
+    expect(homeMarker).toHaveFocus();
+    expect(await screen.findByText('Main library, 9:00 AM to 12:00 PM')).toBeVisible();
+
+    rerender(
+      <WorkLocationTimedLaneContext
+        regions={[region({ isHome: false })]}
+        context={timedContext()}
+        displayTimezone="UTC"
+        onOpen={vi.fn()}
+        onEdit={vi.fn(() => ({ status: 'accepted' as const }))}
+      />,
+    );
+    expect(
+      screen
+        .getByRole('button', { name: 'Move Main library work location' })
+        .querySelector('[data-work-location-marker-kind="place"]'),
+    ).toBeInTheDocument();
+  });
+
+  it('reserves the 40px interaction track only for intersecting timed intervals', () => {
+    const regions = [region()];
+    expect(
+      resolveWorkLocationTimedLeadingInset({
+        regions,
+        lane: firstLane,
+        bounds: { startMinutes: 480, endMinutes: 540 },
+        displayTimezone: 'UTC',
+      }),
+    ).toBe(0);
+    expect(
+      resolveWorkLocationTimedLeadingInset({
+        regions,
+        lane: firstLane,
+        bounds: { startMinutes: 480, endMinutes: 600 },
+        displayTimezone: 'UTC',
+      }),
+    ).toBe(40);
   });
 
   it('renders a compact interactive all-day chip inside a 44px target for every pointer', () => {
@@ -207,8 +294,8 @@ describe('work-location calendar components', () => {
     const resizeStart = screen.getByRole('button', { name: 'Resize start of Main library' });
     const resizeEnd = screen.getByRole('button', { name: 'Resize end of Main library' });
     for (const control of [move, resizeStart, resizeEnd]) {
-      expect(control).toHaveClass('min-h-11');
-      expect(control).toHaveClass('min-w-11');
+      expect(control).toHaveClass('min-h-10');
+      expect(control).toHaveClass('min-w-10');
     }
     expect(screen.getByTestId('work-location-rail')).not.toHaveClass('w-11');
 
@@ -372,24 +459,23 @@ describe('work-location calendar components', () => {
       expect(starts).toHaveLength(2);
       expect(ends).toHaveLength(2);
       for (const move of moves) {
-        expect(move).toHaveStyle({ left: '44px', width: `${String(laneWidth - 88)}px` });
-        expect(move).toHaveClass('min-h-11', 'min-w-11');
-        expect(move).toHaveTextContent('Main library');
+        expect(move).toHaveClass('left-0', 'size-10', 'min-h-10', 'min-w-10');
+        expect(move.querySelector('[data-work-location-marker-kind]')).toHaveClass('size-6');
       }
       for (const start of starts) {
-        expect(start).toHaveStyle({ left: '0px', width: '44px', height: '44px' });
+        expect(start).toHaveStyle({ left: '0px', width: '40px', height: '40px' });
       }
       for (const end of ends) {
         expect(end).toHaveStyle({
-          left: `${String(laneWidth - 44)}px`,
-          width: '44px',
-          height: '44px',
+          left: '0px',
+          width: '40px',
+          height: '40px',
         });
       }
-      expect(starts[0]).toHaveStyle({ top: '-22px' });
-      expect(ends[0]).toHaveStyle({ top: '-7px' });
-      expect(starts[1]).toHaveStyle({ top: '-22px' });
-      expect(ends[1]).toHaveStyle({ top: '-7px' });
+      expect(starts[0]).toHaveStyle({ top: '20px' });
+      expect(ends[0]).toHaveStyle({ top: '-5px' });
+      expect(starts[1]).toHaveStyle({ top: '20px' });
+      expect(ends[1]).toHaveStyle({ top: '-5px' });
 
       fireEvent.pointerDown(assertDefined(moves[0]), {
         button: 0,
@@ -809,56 +895,51 @@ describe('work-location calendar components', () => {
     expect(
       screen.getAllByTestId('work-location-timebox-section').map((node) => node.dataset['context']),
     ).toEqual(['neutral', 'location', 'neutral']);
-    const connector = screen.getByTestId('work-location-timebox-connector');
-    expect(connector).toHaveClass('pointer-events-none', 'h-0.5');
-    expect(connector).toHaveStyle({ left: '-91px', width: '91px' });
+    expect(screen.queryByTestId('work-location-timebox-connector')).not.toBeInTheDocument();
   });
 
-  it.each(SCHEDULE_TEST_THEMES)(
-    'keeps the %s rail and connector above 3:1 non-text contrast',
-    (theme) => {
-      const item: ScheduleItem = {
-        id: 'timebox',
-        title: 'Write brief',
-        startsAt: '2026-07-01T09:00:00.000Z',
-        endsAt: '2026-07-01T10:00:00.000Z',
-        appearance: 'timebox',
-      };
-      const { rerender } = render(
-        <WorkLocationTimedLaneContext
-          regions={[region()]}
-          context={timedContext()}
-          displayTimezone="UTC"
-          onOpen={vi.fn()}
-          onEdit={vi.fn(() => ({ status: 'accepted' as const }))}
-        />,
-      );
-      expect(screen.getByTestId('work-location-rail')).toHaveClass('bg-outline');
-      expect(
-        scheduleSurfaceContrast('var(--color-surface)', 'var(--color-outline)', theme),
-      ).toBeGreaterThanOrEqual(3);
+  it.each(SCHEDULE_TEST_THEMES)('keeps the %s rail above 3:1 non-text contrast', (theme) => {
+    const item: ScheduleItem = {
+      id: 'timebox',
+      title: 'Write brief',
+      startsAt: '2026-07-01T09:00:00.000Z',
+      endsAt: '2026-07-01T10:00:00.000Z',
+      appearance: 'timebox',
+    };
+    const { rerender } = render(
+      <WorkLocationTimedLaneContext
+        regions={[region()]}
+        context={timedContext()}
+        displayTimezone="UTC"
+        onOpen={vi.fn()}
+        onEdit={vi.fn(() => ({ status: 'accepted' as const }))}
+      />,
+    );
+    expect(screen.getByTestId('work-location-rail')).toHaveClass('bg-outline');
+    expect(
+      scheduleSurfaceContrast('var(--color-surface)', 'var(--color-outline)', theme),
+    ).toBeGreaterThanOrEqual(3);
 
-      rerender(
-        <WorkLocationTimeboxDecoration
-          regions={[region()]}
-          context={{
-            item,
-            lane: { ...firstLane, items: [item] },
-            geometry: {
-              laneIndex: 0,
-              bounds: { startMinutes: 540, endMinutes: 600 },
-              top: 540,
-              height: 60,
-              laneWidth: 200,
-              leadingOffset: 101,
-              pixelsPerHour: 60,
-            },
-            placement: { columnIndex: 1, columnCount: 2 },
-          }}
-          displayTimezone="UTC"
-        />,
-      );
-      expect(screen.getByTestId('work-location-timebox-connector')).toHaveClass('bg-outline');
-    },
-  );
+    rerender(
+      <WorkLocationTimeboxDecoration
+        regions={[region()]}
+        context={{
+          item,
+          lane: { ...firstLane, items: [item] },
+          geometry: {
+            laneIndex: 0,
+            bounds: { startMinutes: 540, endMinutes: 600 },
+            top: 540,
+            height: 60,
+            laneWidth: 200,
+            leadingOffset: 101,
+            pixelsPerHour: 60,
+          },
+          placement: { columnIndex: 1, columnCount: 2 },
+        }}
+        displayTimezone="UTC"
+      />,
+    );
+    expect(screen.queryByTestId('work-location-timebox-connector')).not.toBeInTheDocument();
+  });
 });

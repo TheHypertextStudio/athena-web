@@ -75,12 +75,14 @@ describe('buildWorkLocationCalendarModel', () => {
         }),
       ],
       places: [place],
+      homePlaceId: PLACE_ID,
     });
 
     expect(model.regions).toEqual([
       expect.objectContaining({
         id: `${ASSERTION_ID}:2026-03-08:2026-03-08T08:00:00.000Z`,
         label: 'Main library',
+        isHome: true,
         allDay: true,
         editable: true,
         assertionKind: 'one_off',

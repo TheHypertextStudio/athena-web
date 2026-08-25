@@ -21,6 +21,8 @@ interface SchedulingDenseOverflowProps {
   readonly group: DenseScheduleOverflowGroup;
   readonly lane: ScheduleLane;
   readonly displayTimezone: string;
+  readonly laneWidth?: number;
+  readonly leadingInset?: number;
   readonly renderItem?: SchedulingCanvasProps['renderItem'];
   readonly onOpenItem?: SchedulingCanvasProps['onOpenItem'];
   readonly onRevealItem?: (request: ScheduleItemOpen) => void;
@@ -37,6 +39,8 @@ export function SchedulingDenseOverflow({
   group,
   lane,
   displayTimezone,
+  laneWidth,
+  leadingInset = 0,
   renderItem,
   onOpenItem,
   onRevealItem,
@@ -45,12 +49,13 @@ export function SchedulingDenseOverflow({
   const revealingRef = useRef(false);
   const count = group.items.length;
   const label = `${String(count)} more events in ${lane.label}`;
-  const horizontalStyle = scheduleOverlapHorizontalStyle(group.placement);
+  const horizontalStyle = scheduleOverlapHorizontalStyle(group.placement, laneWidth, leadingInset);
 
   return (
     <div
       className="absolute z-20"
       data-schedule-overflow-cluster={group.clusterId}
+      data-schedule-leading-inset={leadingInset}
       style={{
         top: group.top,
         height: group.height,

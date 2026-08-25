@@ -12,6 +12,8 @@ export interface WorkLocationCalendarRegion {
   readonly id: string;
   readonly placeId: WorkPlaceOut['id'];
   readonly label: string;
+  /** Whether the place matches the profile's designated home place. */
+  readonly isHome: boolean;
   readonly startsAt: string;
   readonly endsAt: string;
   readonly sourceStartsAt: string;
@@ -42,6 +44,8 @@ export interface WorkLocationCalendarModelInput {
   readonly range: WorkLocationRangeOut | null;
   readonly assertions: readonly WorkLocationAssertionOut[];
   readonly places: readonly WorkPlaceOut[];
+  /** Profile-level Home designation, independent of the place name. */
+  readonly homePlaceId?: WorkPlaceOut['id'] | null | undefined;
 }
 
 interface LocalDayParts {
@@ -177,6 +181,7 @@ export function buildWorkLocationCalendarModel(
       id: `${segment.assertionId ?? segment.source}:${segment.occurrenceDate ?? 'none'}:${segment.effectiveStart}`,
       placeId: segment.place.id,
       label: place?.name ?? segment.place.name,
+      isHome: segment.place.id === input.homePlaceId,
       startsAt: allDayStart ? new Date(allDayStart).toISOString() : segment.effectiveStart,
       endsAt: allDayEnd ? new Date(allDayEnd).toISOString() : segment.effectiveEnd,
       sourceStartsAt: new Date(sourceStartsAt).toISOString(),

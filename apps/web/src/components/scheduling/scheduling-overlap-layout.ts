@@ -35,14 +35,23 @@ export interface ScheduleOverlapHorizontalStyle {
   readonly width: string;
 }
 
+/** Clamp a consumer-owned leading inset to finite lane geometry. */
+export function normalizeScheduleLeadingInset(value: number, laneWidth: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(Math.max(0, value), Math.max(0, laneWidth - 2));
+}
+
 /** Resolve one collision column's leading edge in CSS pixels for decorative lane geometry. */
 export function scheduleOverlapLeadingOffset(
   placement: ScheduleOverlapPlacement,
   laneWidth: number,
+  leadingInset = 0,
 ): number {
   const columnCount = Math.max(1, placement.columnCount);
   const columnIndex = Math.max(0, Math.min(columnCount - 1, placement.columnIndex));
-  return columnIndex === 0 ? 1 : (Math.max(0, laneWidth) / columnCount) * columnIndex + 1;
+  const inset = normalizeScheduleLeadingInset(leadingInset, laneWidth);
+  const columnWidth = Math.max(0, laneWidth - inset) / columnCount;
+  return inset + columnWidth * columnIndex + 1;
 }
 
 /** One lane item with vertical geometry and collision placement computed exactly once. */
@@ -80,9 +89,19 @@ function formatCssNumber(value: number): string {
  */
 export function scheduleOverlapHorizontalStyle(
   placement: ScheduleOverlapPlacement,
+  laneWidth?: number,
+  leadingInset = 0,
 ): ScheduleOverlapHorizontalStyle {
   const columnCount = Math.max(1, placement.columnCount);
   const columnIndex = Math.max(0, Math.min(columnCount - 1, placement.columnIndex));
+  if (laneWidth !== undefined && leadingInset > 0) {
+    const inset = normalizeScheduleLeadingInset(leadingInset, laneWidth);
+    const columnWidth = Math.max(0, laneWidth - inset) / columnCount;
+    return {
+      left: inset + columnWidth * columnIndex + 1,
+      width: `${formatCssNumber(Math.max(0, columnWidth - 2))}px`,
+    };
+  }
   if (columnCount === 1) return { left: 1, width: 'calc(100% - 2px)' };
 
   const columnPercentage = 100 / columnCount;

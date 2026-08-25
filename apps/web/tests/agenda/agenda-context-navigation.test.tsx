@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 
 import { type JSX, type ReactNode, useEffect } from 'react';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as QueryModule from '../../src/lib/query';
 
@@ -319,7 +319,8 @@ describe('AgendaProvider day navigation', () => {
       expect(
         screen.getByRole('button', { name: /^Agenda date — Yesterday · / }),
       ).toBeInTheDocument();
-      fireEvent.click(screen.getByRole('button', { name: 'Back to today' }));
+      fireEvent.click(screen.getByRole('button', { name: /^Agenda date — Yesterday · / }));
+      fireEvent.click(screen.getByRole('button', { name: 'Today' }));
 
       expect(screen.getByLabelText('Selected date')).toHaveTextContent(NEXT_DAY);
       expect(screen.getByRole('button', { name: /^Agenda date — Today · / })).toBeInTheDocument();
@@ -339,8 +340,89 @@ describe('AgendaProvider day navigation', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /^Agenda date — / }));
-    fireEvent.click(screen.getByRole('button', { name: NEXT_DAY }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next month' }));
+    fireEvent.click(screen.getByRole('button', { name: '2026-08-24' }));
 
-    expect(screen.getByLabelText('Selected date')).toHaveTextContent(NEXT_DAY);
+    expect(screen.getByLabelText('Selected date')).toHaveTextContent('2026-08-24');
+    return waitFor(() => {
+      expect(screen.queryByRole('grid', { name: 'Agenda date' })).not.toBeInTheDocument();
+    });
+  });
+
+  it('moves one day from the visible arrows', () => {
+    render(
+      <>
+        <AgendaHeader />
+        <AgendaProbe />
+      </>,
+      { wrapper: TestProvider },
+    );
+
+    const controls = within(screen.getByRole('toolbar', { name: 'Agenda controls' }));
+    fireEvent.click(controls.getByRole('button', { name: 'Previous day' }));
+    expect(screen.getByLabelText('Selected date')).toHaveTextContent('2026-07-12');
+
+    fireEvent.click(controls.getByRole('button', { name: 'Next day' }));
+    expect(screen.getByLabelText('Selected date')).toHaveTextContent(DAY);
+  });
+
+  it('supports day and Today keyboard shortcuts from the header', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-15T16:00:00.000Z'));
+
+    try {
+      render(
+        <>
+          <AgendaHeader />
+          <AgendaProbe />
+        </>,
+        { wrapper: TestProvider },
+      );
+      const controls = screen.getByRole('toolbar', { name: 'Agenda controls' });
+
+      fireEvent.keyDown(controls, { key: 'ArrowRight' });
+      expect(screen.getByLabelText('Selected date')).toHaveTextContent(NEXT_DAY);
+
+      fireEvent.keyDown(controls, { key: 'ArrowLeft' });
+      expect(screen.getByLabelText('Selected date')).toHaveTextContent(DAY);
+
+      fireEvent.keyDown(controls, { key: 't' });
+      expect(screen.getByLabelText('Selected date')).toHaveTextContent('2026-07-15');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps day navigation and display settings in one touch-sized control row', async () => {
+    render(<AgendaHeader />, { wrapper: TestProvider });
+
+    const controls = screen.getByRole('toolbar', { name: 'Agenda controls' });
+    const previous = screen.getByRole('button', { name: 'Previous day' });
+    const date = screen.getByRole('button', { name: /^Agenda date — / });
+    const next = screen.getByRole('button', { name: 'Next day' });
+    const display = screen.getByRole('button', {
+      name: 'Agenda display settings, 1×, Timeline',
+    });
+
+    for (const control of [previous, date, next, display]) {
+      expect(controls).toContainElement(control);
+      expect(control).toHaveClass('min-h-10');
+    }
+    expect(screen.queryByRole('group', { name: 'Agenda zoom' })).not.toBeInTheDocument();
+
+    fireEvent.pointerDown(display, { button: 0, ctrlKey: false });
+    fireEvent.click(await screen.findByRole('menuitemradio', { name: '2×' }));
+    expect(
+      screen.getByRole('button', { name: 'Agenda display settings, 2×, Timeline' }),
+    ).toBeInTheDocument();
+
+    fireEvent.pointerDown(
+      screen.getByRole('button', { name: 'Agenda display settings, 2×, Timeline' }),
+      { button: 0, ctrlKey: false },
+    );
+    fireEvent.click(await screen.findByRole('menuitemradio', { name: 'List' }));
+    expect(
+      screen.getByRole('button', { name: 'Agenda display settings, 2×, List' }),
+    ).toBeInTheDocument();
   });
 });

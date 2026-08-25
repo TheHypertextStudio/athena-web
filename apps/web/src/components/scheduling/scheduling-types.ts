@@ -198,6 +198,14 @@ export interface ScheduleTimedLaneContextRenderContext extends ScheduleTimedLane
   readonly onAnnouncementChange: (announcement: string) => void;
 }
 
+/** Lane interval supplied when a consumer reserves leading space beside timed items. */
+export interface ScheduleTimedItemLeadingInsetContext {
+  /** Lane that contains the item interval. */
+  readonly lane: ScheduleLane;
+  /** Minute-of-day bounds clipped to that lane. */
+  readonly bounds: ScheduleMinuteBounds;
+}
+
 /** Geometry supplied to a consumer-owned all-day lane context renderer. */
 export interface ScheduleAllDayLaneGeometry {
   /** Zero-based lane position in the current canvas. */
@@ -327,6 +335,10 @@ export interface SchedulingCanvasProps {
    */
   readonly renderTimedLaneContext?:
     | ((context: ScheduleTimedLaneContextRenderContext) => ReactNode)
+    | undefined;
+  /** Resolve leading lane space that an intersecting timed-item cluster must leave unobstructed. */
+  readonly resolveTimedItemLeadingInset?:
+    | ((context: ScheduleTimedItemLeadingInsetContext) => number)
     | undefined;
   /**
    * Render app-owned interactive context above the existing all-day items in each lane.

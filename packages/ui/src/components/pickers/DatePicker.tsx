@@ -79,6 +79,8 @@ export interface DatePickerProps {
   triggerVariant?: 'ghost' | 'outline' | undefined;
   /** Extra classes for the trigger. */
   triggerClassName?: string | undefined;
+  /** ISO day used by the Today shortcut when the host displays a non-local timezone. */
+  today?: string | undefined;
   /** Earliest selectable day, inclusive. Defaults to the product's 1970 floor. */
   min?: string | undefined;
   /** Latest selectable day, inclusive. Defaults to the product's 2200 ceiling. */
@@ -129,6 +131,7 @@ export function DatePicker({
   readOnly,
   triggerVariant = 'ghost',
   triggerClassName,
+  today: todayOverride,
   min = CALENDAR_MIN_DAY,
   max = CALENDAR_MAX_DAY,
   invalid,
@@ -137,7 +140,7 @@ export function DatePicker({
   const [open, setOpen] = React.useState(false);
   const day = toCalendarDay(value);
   const label = formatLabel(day);
-  const today = todayIso();
+  const today = toCalendarDay(todayOverride) ?? todayIso();
 
   const trigger = (
     <PropertyTrigger

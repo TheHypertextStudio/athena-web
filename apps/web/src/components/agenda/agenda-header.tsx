@@ -4,14 +4,14 @@
  * `agenda/agenda-header` — the agenda's day navigator.
  *
  * @remarks
- * Reads the selected day and the navigation actions from {@link useAgenda} (no props). Steps a day
- * at a time and offers a one-tap jump back to today when you've wandered off it. The label reads
- * relatively ("Today" / "Tomorrow" / "Yesterday") and falls back to a weekday-date. Controls are
- * composed from the {@link Button} primitive rather than hand-styled buttons.
+ * Reads the selected day and navigation actions from {@link useAgenda} (no props). The arrows step
+ * one day at a time. The visible date trigger opens the shared month picker, whose Today shortcut
+ * uses the same display-zone day as Agenda. The label reads relatively ("Today" / "Tomorrow" /
+ * "Yesterday") and falls back to a weekday-date.
  */
-import { CalendarToday, ChevronLeft, ChevronRight } from '@docket/ui/icons';
+import { ChevronLeft, ChevronRight } from '@docket/ui/icons';
 import { DatePicker } from '@docket/ui/components';
-import { Button, Row } from '@docket/ui/primitives';
+import { Button } from '@docket/ui/primitives';
 import { type JSX, type KeyboardEvent } from 'react';
 
 import { formatDay } from '@/components/date-picker';
@@ -42,9 +42,9 @@ function formatAgendaDate(iso: string, today: string): string {
   return formatDay(iso, { weekday: 'short', month: 'short', day: 'numeric' }) ?? iso;
 }
 
-/** The agenda day navigator: ‹ prev · the day · next › with a jump-to-today. */
+/** Render one non-wrapping row for day navigation and display settings. */
 export default function AgendaHeader(): JSX.Element {
-  const { date, today, isToday, goToDate, goToPreviousDay, goToNextDay, goToToday } = useAgenda();
+  const { date, today, goToDate, goToPreviousDay, goToNextDay, goToToday } = useAgenda();
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
     if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
@@ -61,61 +61,45 @@ export default function AgendaHeader(): JSX.Element {
   }
 
   return (
-    // One row at every rail width. The date is the only flexible child and it truncates; nothing
-    // else may shrink, wrap, or leave. The previous `w-28` floor on that child was what turned a
-    // too-narrow rail into a *control* pushed out of the row — the same failure round 3 fixed on
-    // the calendar toolbar by deleting its heading's `min-w-16`.
-    <div className="flex shrink-0 flex-col gap-1 px-1 pb-1" onKeyDown={handleKeyDown}>
-      <Row justify="between" className="flex-nowrap gap-1">
-        <Row gap={1} className="min-w-0 flex-1 flex-nowrap">
-          <Button
-            variant="ghost"
-            iconOnly
-            controlSize="sm"
-            aria-label="Previous day"
-            onClick={goToPreviousDay}
-          >
-            <ChevronLeft />
-          </Button>
-          <DatePicker
-            value={date}
-            onChange={(nextDate) => {
-              if (nextDate) goToDate(nextDate);
-            }}
-            placeholder="Choose date"
-            formatLabel={(value) => (value ? formatAgendaDate(value, today) : undefined)}
-            ariaLabel="Agenda date"
-            triggerClassName="text-title-small min-w-0 flex-1 justify-center px-1"
-          />
-          <Button
-            variant="ghost"
-            iconOnly
-            controlSize="sm"
-            aria-label="Next day"
-            onClick={goToNextDay}
-          >
-            <ChevronRight />
-          </Button>
-        </Row>
-        <Row gap={1} className="shrink-0 flex-nowrap">
-          {/* Icon, not the word, exactly as the calendar toolbar collapses its own Today control:
-            the label costs ~50px in a row that has ~256px to spend. */}
-          {isToday ? null : (
-            <Button
-              variant="ghost"
-              iconOnly
-              controlSize="sm"
-              aria-label="Back to today"
-              onClick={goToToday}
-            >
-              <CalendarToday />
-            </Button>
-          )}
-        </Row>
-      </Row>
-      <Row justify="end" className="pr-1">
-        <AgendaScaleControls />
-      </Row>
+    <div
+      role="toolbar"
+      aria-label="Agenda controls"
+      className="flex min-w-0 shrink-0 flex-nowrap items-center gap-1 px-1 pb-1"
+      onKeyDown={handleKeyDown}
+    >
+      <Button
+        variant="ghost"
+        iconOnly
+        controlSize="sm"
+        className="min-h-10 min-w-10"
+        aria-label="Previous day"
+        onClick={goToPreviousDay}
+      >
+        <ChevronLeft />
+      </Button>
+      <DatePicker
+        value={date}
+        onChange={(nextDate) => {
+          if (nextDate) goToDate(nextDate);
+        }}
+        placeholder="Choose date"
+        formatLabel={(value) => (value ? formatAgendaDate(value, today) : undefined)}
+        ariaLabel="Agenda date"
+        today={today}
+        triggerVariant="outline"
+        triggerClassName="text-title-small min-h-10 min-w-0 flex-1 justify-center px-2"
+      />
+      <Button
+        variant="ghost"
+        iconOnly
+        controlSize="sm"
+        className="min-h-10 min-w-10"
+        aria-label="Next day"
+        onClick={goToNextDay}
+      >
+        <ChevronRight />
+      </Button>
+      <AgendaScaleControls />
     </div>
   );
 }

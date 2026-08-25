@@ -73,6 +73,7 @@ vi.mock('@/lib/query', () => ({
     }
     return {
       data: {
+        profile: { homePlaceId: '01ARZ3NDEKTSV4RRFFQ69G5FAV' },
         items: [
           {
             id: '01ARZ3NDEKTSV4RRFFQ69G5FAV',
@@ -151,7 +152,9 @@ describe('useWorkLocationCalendarComposition', () => {
         })}
       </>,
     );
-    fireEvent.keyDown(screen.getByRole('button', { name: 'Move Main library work location' }), {
+    const move = screen.getByRole('button', { name: 'Move Main library work location' });
+    expect(move.querySelector('[data-work-location-marker-kind="home"]')).toBeInTheDocument();
+    fireEvent.keyDown(move, {
       key: 'ArrowDown',
     });
 

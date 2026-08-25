@@ -11,6 +11,8 @@ import { OccurrenceEditorDialog } from './occurrence-editor-dialog';
 import { ScheduleEditorDialog } from './schedule-editor-dialog';
 import {
   WorkLocationAllDayContext,
+  hasWorkLocationAllDayRegion,
+  resolveWorkLocationTimedLeadingInset,
   WorkLocationTimeboxDecoration,
   WorkLocationTimedLaneContext,
   type WorkLocationTimedEditOutcome,
@@ -35,7 +37,10 @@ import {
 export interface WorkLocationCalendarComposition {
   readonly canvasProps: Pick<
     SchedulingCanvasProps,
-    'renderAllDayLaneContext' | 'renderTimedLaneContext' | 'renderTimedItemDecoration'
+    | 'renderAllDayLaneContext'
+    | 'renderTimedLaneContext'
+    | 'renderTimedItemDecoration'
+    | 'resolveTimedItemLeadingInset'
   >;
   readonly overlays: ReactNode;
 }
@@ -74,8 +79,15 @@ export function useWorkLocationCalendarComposition({
         range: range.data ?? null,
         assertions: assertions.data?.items ?? [],
         places: places.data?.items ?? [],
+        homePlaceId: places.data?.profile.homePlaceId ?? null,
       }),
-    [assertions.data?.items, places.data?.items, range.data, timezone],
+    [
+      assertions.data?.items,
+      places.data?.items,
+      places.data?.profile.homePlaceId,
+      range.data,
+      timezone,
+    ],
   );
   const invalidateKeys = [queryKeys.workLocation()];
   const persistEdit = useApiMutation({
@@ -182,22 +194,33 @@ export function useWorkLocationCalendarComposition({
 
   return {
     canvasProps: {
-      renderAllDayLaneContext: (context) => (
-        <WorkLocationAllDayContext
-          regions={model.regions}
-          context={context}
-          lanes={lanes}
-          displayTimezone={timezone}
-          onOpen={openRegion}
-          onMove={(region, targetDate) => {
-            const edit = workLocationAllDayMove({ region, targetDate, timezone });
-            if (edit) {
-              resetMutationFailures();
-              persistEdit.mutate(edit, { onSuccess: resetMutationFailures });
-            }
-          }}
-        />
-      ),
+      renderAllDayLaneContext: (context) => {
+        if (
+          !hasWorkLocationAllDayRegion({
+            regions: model.regions,
+            lane: context.lane,
+            displayTimezone: timezone,
+          })
+        ) {
+          return null;
+        }
+        return (
+          <WorkLocationAllDayContext
+            regions={model.regions}
+            context={context}
+            lanes={lanes}
+            displayTimezone={timezone}
+            onOpen={openRegion}
+            onMove={(region, targetDate) => {
+              const edit = workLocationAllDayMove({ region, targetDate, timezone });
+              if (edit) {
+                resetMutationFailures();
+                persistEdit.mutate(edit, { onSuccess: resetMutationFailures });
+              }
+            }}
+          />
+        );
+      },
       renderTimedLaneContext: (context) => (
         <WorkLocationTimedLaneContext
           regions={model.regions}
@@ -214,6 +237,13 @@ export function useWorkLocationCalendarComposition({
           }}
         />
       ),
+      resolveTimedItemLeadingInset: ({ lane, bounds }) =>
+        resolveWorkLocationTimedLeadingInset({
+          regions: model.regions,
+          lane,
+          bounds,
+          displayTimezone: timezone,
+        }),
       renderTimedItemDecoration: (context) => (
         <WorkLocationTimeboxDecoration
           regions={model.regions}

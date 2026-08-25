@@ -1,5 +1,5 @@
 ---
-title: "Developer overview"
+title: 'Developer overview'
 description: "Docket's MCP server, REST API, and OAuth apps, and which one fits what you are building."
 ---
 
@@ -18,17 +18,17 @@ Three ways in, one domain model. Every call runs as a real person, under that pe
 </CardGroup>
 
 <Warning>
-  Docket is **pre-launch**. No SDK, and the API is unversioned. Read
+  Docket's public API is **in early access**. There is no SDK, and the API is unversioned. Read
   [Platform status](/developers/platform-status) first.
 </Warning>
 
 ## MCP, REST, or an OAuth app
 
-| You are building | Use |
-| --- | --- |
-| An AI agent that works in Docket | [MCP](/developers/connect-an-agent-mcp) |
-| A script that syncs something nightly | [REST](/developers/rest-api) |
-| A product other Docket users install | [OAuth app](/developers/authentication) + MCP or REST |
+| You are building                      | Use                                                           |
+| ------------------------------------- | ------------------------------------------------------------- |
+| An AI agent that works in Docket      | [MCP](/developers/connect-an-agent-mcp)                       |
+| A script that syncs something nightly | [REST](/developers/rest-api)                                  |
+| A product other Docket users install  | [OAuth app](/developers/authentication) + MCP or REST         |
 | An integration that reacts to changes | REST plus the [SSE stream](/developers/rest-api#live-updates) |
 
 Call `capture` and "email the caterer by Friday" becomes a task. `organize` writes a twelve-item
@@ -53,25 +53,25 @@ them. Updates set health: `on_track`, `at_risk`, `off_track`.
 
 Two kinds of edge:
 
-| Kind | What it is |
-| --- | --- |
-| **Containment** | A hard parent-to-child edge. Grant someone `contribute` on a Program and it applies to every Project and Task in it. |
+| Kind            | What it is                                                                                                                    |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **Containment** | A hard parent-to-child edge. Grant someone `contribute` on a Program and it applies to every Project and Task in it.          |
 | **Association** | A soft link. Delete it and both sides remain. An Initiative themes a Project, a Cycle schedules a Task, a Task blocks a Task. |
 
 <Note>
-  Workspaces relabel these words: a Cycle may display as a Season. **The API always uses the
-  default names.** See [Terminology](/guides/concepts/terminology).
+  Workspaces relabel these words: a Cycle may display as a Season. **The API always uses the default
+  names.** See [Terminology](/guides/concepts/terminology).
 </Note>
 
 ## Conventions every call follows
 
-| | |
-| --- | --- |
-| **Identifiers** | 26-character ULIDs. They sort. Never parse them. |
-| **Pagination** | Pass `cursor` and `limit`. Read `nextCursor`. |
-| **Errors** | RFC 9457 problem documents. Branch on `code`, such as `dependency_cycle`. See [Errors](/developers/errors). |
-| **Idempotency** | Send an `Idempotency-Key` header on unsafe operations. |
-| **Authorization** | `view < comment < contribute < assign < manage`. Reassigning a task needs `assign`. |
+|                   |                                                                                                             |
+| ----------------- | ----------------------------------------------------------------------------------------------------------- |
+| **Identifiers**   | 26-character ULIDs. They sort. Never parse them.                                                            |
+| **Pagination**    | Pass `cursor` and `limit`. Read `nextCursor`.                                                               |
+| **Errors**        | RFC 9457 problem documents. Branch on `code`, such as `dependency_cycle`. See [Errors](/developers/errors). |
+| **Idempotency**   | Send an `Idempotency-Key` header on unsafe operations.                                                      |
+| **Authorization** | `view < comment < contribute < assign < manage`. Reassigning a task needs `assign`.                         |
 
 ## What a token can do
 

@@ -1,72 +1,63 @@
 ---
-title: "Talking to Athena"
-description: "How to message her, what she can see, and what to ask her for."
+title: 'Talking to Athena'
+description: 'Give Athena enough context to answer, plan, or act without guessing what you mean.'
 ---
 
-Type a sentence. There is no command syntax to learn.
+Write to Athena in ordinary sentences. You do not need command syntax.
 
-## Where to message her
+## Open the conversation
 
-| Where | Good for |
-| --- | --- |
-| The prompt box on [Home](/guides/daily/home-today) | Planning the day, quick questions, capturing something |
-| Her own screen | Longer conversations, where she reads every earlier turn |
-| Assigning her a task | Work you want done, with a session you can watch |
-| Her [email address](/guides/athena/athena-and-your-mail) | Forwarding things from outside Docket |
+Use one of these entry points:
 
-Type "call the caterer Friday" into the Home prompt box and she captures a task. Ask "who's
-waiting on me" in the same box and she answers.
+| Entry point                    | Use it when                                              |
+| ------------------------------ | -------------------------------------------------------- |
+| **Athena in the utility rail** | You want to keep the current page visible.               |
+| **Athena page**                | You want more room for a longer conversation.            |
+| **Today**                      | The question is about the current day or plan.           |
+| **Task assignee or delegate**  | Athena should carry out bounded work in a session.       |
+| **Athena email address**       | You want to forward source material from outside Docket. |
 
-## What to ask her
+Press `Cmd+J` on macOS or `Ctrl+J` on Windows and Linux to open the utility rail.
 
-<AccordionGroup>
-  <Accordion title="Planning">
-    - "What should I focus on today?"
-    - "Plan my day around the two calls I already have."
-    - "I have four hours this afternoon. What's the best use of it?"
-    - "Create a plan to make sure I get more sleep."
-  </Accordion>
-  <Accordion title="Finding out">
-    - "What's blocking the Spring Gala project?"
-    - "Which projects haven't had an update in two weeks?"
-    - "What did I actually spend last week on?"
-    - "Who's waiting on me?"
-  </Accordion>
-  <Accordion title="Doing">
-    - "Reschedule everything on Thursday afternoon."
-    - "Draft thank-you notes for everyone who gave over $500."
-    - "Break this project into tasks and estimate each one."
-    - "File everything in Triage into the right project."
-  </Accordion>
-  <Accordion title="Looking back">
-    - "Write the retrospective for this cycle."
-    - "Summarise what changed on the nonprofit this month."
-    - "How accurate were my estimates last week?"
-  </Accordion>
-</AccordionGroup>
+## Name the result
 
-## Be specific
+Ask for the result you need, and include the constraint that would change the answer.
 
-| Instead of | Try |
-| --- | --- |
-| "Sort out my week" | "Schedule my unscheduled tasks around my existing meetings, nothing after 6pm" |
-| "Update the project" | "Post an update on Spring Gala saying we're at risk because the venue hasn't confirmed" |
-| "Fix my tasks" | "Move everything in Triage from Linear into the Website Rebuild project" |
+| Instead of            | Ask                                                                              |
+| --------------------- | -------------------------------------------------------------------------------- |
+| “Sort out my week.”   | “Plan these five Tasks around my meetings, with no work after 6pm.”              |
+| “Update the Project.” | “Post an at-risk update on Spring Gala and name the venue delay.”                |
+| “Fix Triage.”         | “Move the website Tasks from Triage into Website Rebuild. Leave the rest alone.” |
 
-## What she can see
+Use exact Project, Program, Team, or workspace names when two objects could match.
 
-Athena reads the work you can read, under your permissions, across all your workspaces. She cannot
-see work you cannot see.
+## Ask questions before asking for changes
 
-Focus a conversation on one workspace so she knows which "the launch" you mean. That focus grants
-her no access.
+Athena can summarize work, find blockers, compare actual time, or explain recent activity without
+changing anything. For example:
 
-## She asks when she is unsure
+- “What is blocking Spring Gala?”
+- “Which Projects have no update in the last two weeks?”
+- “How much human and agent time did Website Rebuild use this week?”
+- “What changed in this workspace yesterday?”
 
-Athena stops and asks. Docket shows the question in the session and in your
-[Inbox](/guides/daily/inbox). Answer it and she continues from where she paused.
+## Ask for a plan
 
-## Preferences
+Ask Athena to draft a plan when the order matters. For example:
 
-Set her tone, how much she asks before acting, and what she takes initiative on in
-**Settings → Athena**.
+- “Plan today around the two calls already on my calendar.”
+- “Break this Project into Tasks and keep each Task under half a day.”
+- “Draft a recovery plan for the off-track Projects. Do not change any dates.”
+
+Review the proposal before Docket applies changes.
+
+## Answer follow-up questions
+
+Athena pauses when it needs information or approval. The question appears in the conversation and
+can also appear in [Inbox](/guides/daily/inbox). Answer it in the active conversation so the
+session can continue.
+
+## Set durable preferences
+
+Put recurring instructions under **Settings → Athena** instead of repeating them in every prompt.
+Keep one-off constraints in the conversation where they apply.

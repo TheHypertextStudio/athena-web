@@ -1,66 +1,65 @@
 ---
-title: "Tasks"
-description: "One thing you do: call the caterer. Give it a duration, an owner, and a team."
+title: 'Tasks'
+description: 'Track one piece of work, from capture through completion.'
 ---
 
-"Draft the grant report." "Call the caterer." One person, one thing.
+A Task is one piece of work. It can stand alone, belong to a Project or Program, or sit in Triage
+until someone files it.
 
-## The fields on a task
+## Set the task properties
 
-| Field | Notes |
-| --- | --- |
-| **Assignee** | One Actor: a person or an agent. Never a team. |
-| **Delegate** | Optional. Docket records you as the owner and an agent does the work. |
-| **Status** | One of the owning team's workflow states. See [Labels and statuses](/guides/concepts/labels-and-statuses). |
-| **Priority** | `none`, `low`, `medium`, `high`, or `urgent`. Docket sorts by it and shows it as a badge. |
-| **Due date** | Optional. |
-| **Time estimate** | How long you think it will take, in minutes. |
-| **Point estimate** | A coarser abstract number, for teams that size that way. |
-| **Labels** | Free-form workspace vocabulary. |
+| Property     | What it controls                                                |
+| ------------ | --------------------------------------------------------------- |
+| **Assignee** | The person or agent responsible for the task.                   |
+| **Delegate** | An optional agent doing the work on behalf of the assignee.     |
+| **Status**   | One state from the owning Team's workflow.                      |
+| **Priority** | None, low, medium, high, or urgent.                             |
+| **Due date** | An optional date when the task is due.                          |
+| **Estimate** | A time estimate or point estimate, based on workspace settings. |
+| **Labels**   | Workspace terms used for filtering and grouping.                |
 
-A task also has **subtasks**, **attachments**, threaded **comments**, and **dependencies**.
+The Team controls the status workflow. A Project is optional.
 
-## Fill in the time estimate
+## Capture before you organize
 
-Give every task a duration so your day fits.
-[Home](/guides/daily/home-today) adds them up and compares the total to the hours you have.
+Create a Task from Today, the command palette, or a Task list. If you do not know where it belongs,
+leave it in Triage. You can move it to a Project or Program later without rewriting it.
 
-[Scheduling](/guides/daily/calendar-and-scheduling) uses the same number to place the task on your
-calendar, and the [time ledger](/guides/daily/time) compares your measured hours against it
-afterwards.
+See [Tasks and triage](/guides/daily/tasks-and-triage) for the list views and filing actions.
 
-## Where to file a task
+## Break down the work
 
-Every Task has a workspace and a [team](/guides/concepts/teams). Beyond that:
+Add subtasks when one Task needs several concrete steps. Docket shows the parent and child
+relationship in the Task detail and in [Graph](/guides/daily/graph).
 
-<CardGroup cols={3}>
-  <Card title="In a Project" icon="folder">
-    Spring Gala. Launch v2. The task closes with it.
-  </Card>
-  <Card title="In a Program" icon="rotate">
-    Support tickets, bookkeeping, the after-school program.
-  </Card>
-  <Card title="In Triage" icon="inbox">
-    Nobody has filed it yet.
-  </Card>
-</CardGroup>
+Use parent and child relationships to describe decomposition. Use dependencies to describe order.
+A Task can block or be blocked by another Task in the same workspace. Docket rejects a dependency
+that would create a loop.
 
-**A project is optional on a task.** Record the note you took on a bus, the email that implies
-something, the favour someone asked for in a hallway. Docket stores all of it without a project.
+## Add context
 
-## Dependencies
+Attach a file or link as a resource. You can also link an item from a connected provider when that
+connection supports it. The Task shows direct resources and related references without copying the
+source content into its description.
 
-Mark a Task **blocked by** or **blocking** any other Task in the same workspace, including one in
-a different project. Docket refuses any dependency that would create a loop. Docket shows blockers
-in your daily plan, next to the task they block.
+Threaded comments keep the discussion with the Task. Type `@` in a supported field to mention
+another object.
 
-## Recurring work
+## Plan and track the task
 
-Define a repeating series once. Docket creates the next occurrence on its cadence.
+Add the Task to [Today](/guides/daily/home-today) when you intend to work on it. Timebox it in
+[Calendar](/guides/daily/calendar-and-scheduling) when it needs a place in the day. Start a timer
+when the work begins so [Time](/guides/daily/time) records the interval.
 
-## Assigning to an agent
+Planning, timeboxing, and timing do not change the Task's status automatically.
 
-Assign a task to [Athena](/guides/athena/what-athena-is) and watch the session, steer it, approve
-what she proposes.
+## Repeat a task
 
-To show your own name on the work, assign it to yourself and set the agent as **delegate**.
+Set a recurrence when the same work returns on a cadence. Docket creates occurrences from the
+series while preserving each occurrence as work that can be completed on its own.
+
+## Assign work to Athena
+
+Assign the Task to Athena when Athena owns the result. Keep yourself as the assignee and set Athena
+as the delegate when Athena works on your behalf. Review any proposed changes before Docket applies
+them.

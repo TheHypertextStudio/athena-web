@@ -1,68 +1,70 @@
 ---
-title: "What Docket is"
-description: "One place to plan, schedule, and track work across every organization you belong to."
+title: 'What Docket is'
+description: 'Plan and track work across every organization you belong to without mixing their data.'
 ---
 
-Give a task a duration. Docket schedules it on your calendar and logs the hours it took against
-the same record.
+Docket combines planning, schedules, time, connected resources, and agent work. Your personal Home
+can read across your workspaces. Each workspace still keeps its own people, settings, and data.
 
-Docket lists every organization you belong to. It stores each one's work separately, and you work
-on all of them from one place you own.
+## Work across organizations
 
-## Your Hub reads across every workspace
+Use the Home section of the sidebar for personal views such as Today, Calendar, Inbox, Stream, and
+Portfolio. A row from another workspace keeps its workspace name and permissions.
+
+Switch to one workspace when you need its Tasks, Projects, Teams, Library, Views, Graph, or
+Settings. Docket then uses that workspace's terminology and workflows.
+
+See [Workspaces](/guides/concepts/workspaces) for the full split between Home and Workspace.
+
+## Organize the work
+
+| Object         | Use it for                                             |
+| -------------- | ------------------------------------------------------ |
+| **Task**       | One thing a person or agent does.                      |
+| **Project**    | Work with an outcome and a finish line.                |
+| **Program**    | Ongoing work that can contain Projects and Tasks.      |
+| **Initiative** | An outcome that connects several Projects or Programs. |
+| **Cycle**      | A recurring planning period for a Team.                |
+| **Team**       | The people and workflow that own work.                 |
+
+Your workspace can rename these objects without changing how they behave. See
+[Terminology](/guides/concepts/terminology).
+
+## Plan the day
+
+[Today](/guides/daily/home-today) keeps the current task and the next tasks visible. Agenda shows
+events and planned work beside the page. Use [Calendar](/guides/daily/calendar-and-scheduling) to
+timebox Tasks and compare several days or people.
+
+Start a timer when work begins. [Time](/guides/daily/time) separates human effort from agent effort
+and keeps the underlying sessions available for review.
+
+## Work with connected tools
+
+Connect Google, GitHub, Linear, or Notion when Docket should keep reading from another system. Use
+Import when you want a one-time move instead. [Connections and imports](/guides/manage/connections-and-imports)
+explains what each provider supports.
+
+## Work with Athena
+
+Athena is Docket's built-in agent. Ask a question, plan the day, or assign a Task. Athena works
+under your permissions and pauses for approval when the action or your settings require it.
+
+See [What Athena is](/guides/athena/what-athena-is) before you delegate work.
+
+## Start using Docket
 
 <CardGroup cols={2}>
-  <Card title="Your Hub" icon="house">
-    Your Hub shows tasks from every workspace in one list, on one timeline. Each one shows the
-    workspace it came from.
-  </Card>
-  <Card title="A workspace" icon="building">
-    A workspace stores one organization's people, tools, and work. Open one and the whole app
-    switches to it.
-  </Card>
-</CardGroup>
-
-Docket never merges data across that boundary. Your Hub reads from both sides and puts your
-nonprofit's donor outreach on the screen beside your startup's fundraising push.
-
-## The vocabulary
-
-Six words describe work inside a workspace.
-
-| Word | What it describes | Does it finish? |
-| --- | --- | --- |
-| **Task** | Call the caterer. One person does it. | Optional due date |
-| **Project** | Spring Gala. Launch v2. You close it when it ships. | Yes |
-| **Program** | Use a Program for work that never finishes, like customer support or bookkeeping. | Usually runs on |
-| **Initiative** | Group programs and projects under an Initiative like "Grow revenue". It has no tasks of its own. | No |
-| **Cycle** | Use Cycles to plan work in two-week sprints. | Yes, fixed |
-| **Team** | Support, or the Berlin chapter. Each team owns its statuses, cycles, and triage queue. | Not applicable |
-
-[Core concepts](/guides/concepts/workspaces) covers each of these in full.
-
-## People and agents
-
-Assign a task to a colleague or to an AI agent in the same field. Docket calls both **Actors**.
-
-Assign one to Athena and watch her work. She opens a session that says in plain English what she
-is reading and about to do, and she waits for your approval before committing anything that
-matters.
-
-[Athena](/guides/athena/what-athena-is) covers this in full.
-
-## Where to go from here
-
-<CardGroup cols={2}>
-  <Card title="Create your workspace" icon="play" href="/guides/create-your-workspace">
-    Sign up and bring in what you already use.
+  <Card title="Create a workspace" icon="play" href="/guides/create-your-workspace">
+    Set up a personal or shared workspace.
   </Card>
   <Card title="Your first week" icon="calendar" href="/guides/your-first-week">
-    The daily loop, from the morning plan to the end-of-week review.
+    Learn the daily and weekly operating loop.
   </Card>
   <Card title="Core concepts" icon="book-open" href="/guides/concepts/terminology">
-    The full vocabulary.
+    Learn the objects and relationships Docket uses.
   </Card>
   <Card title="Developers" icon="code" href="/developers/overview">
-    The REST API, the MCP server, and connecting your own agent.
+    Connect through MCP or use the REST API.
   </Card>
 </CardGroup>

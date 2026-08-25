@@ -1,70 +1,46 @@
 ---
-title: "Connect your calendar and mail"
-description: "What each connector brings into Docket, and how an ongoing sync differs from a one-time import."
+title: 'Connect your calendar and mail'
+description: 'Connect Google Calendar and Gmail, then choose what Docket should read and sync.'
 ---
 
-Connect tools one workspace at a time.
+Calendar and mail connections belong to your account. A workspace can use the resulting context
+only through your access and the workflows you enable.
 
-## Connections and imports
+## Connect the Google account
 
-<CardGroup cols={2}>
-  <Card title="Connections" icon="arrows-rotate">
-    Docket re-reads the source and applies changes as they happen. Set one up in
-    **Settings → Connections**.
-  </Card>
-  <Card title="Import" icon="box-archive">
-    Docket copies everything across once and then leaves the source alone. Run one from
-    **Settings → Import**.
-  </Card>
-</CardGroup>
+Open **Settings → Connections** and select Google. Approve the Google access that the feature needs.
+Docket requests access in steps, so connecting Calendar does not require you to enable Gmail or
+Drive.
 
-Migrating off a tool is an Import. Running both tools at once is a Connection.
+Use **Settings → Connected accounts** to review or remove the identity link itself.
 
-## What you can connect
+## Choose Google calendars
 
-| Tool | What it brings in |
-| --- | --- |
-| **Google Calendar** | Your events, as ordinary rows on Docket's calendar. Scheduled work writes back. |
-| **Google Tasks** | Your existing tasks. |
-| **Gmail** | Mail that implies work, which Athena turns into task suggestions for you to accept. |
-| **Google Drive** | Files you can attach to work and find in search. |
-| **Linear** | Issues, projects, and cycles. |
-| **GitHub** | Issues and pull requests, linkable onto Docket work. |
-| **Notion** | A two-way mirror of designated databases. |
+Open **Settings → Calendar** after you connect the account. Choose which calendars appear in Docket
+and which one Docket uses for supported write-back.
 
-Docket marks a tool whose credentials your deployment has not configured as unavailable.
+Calendar keeps an event's source timezone. Use the **Calendars** control on the Calendar page to
+show or hide layers and remove duplicate display when the same event arrives through two accounts.
 
-## Personal connections and workspace connections
+See [Calendar and scheduling](/guides/daily/calendar-and-scheduling) for timeboxing and editing.
 
-Connect **your own** Gmail and calendar under the Personal group in **Settings → Connections**.
-Athena reads them on your behalf. Nobody else in a workspace sees them.
+## Turn mail into suggestions
 
-An admin connects **shared** tools from **Settings → Connections** inside the workspace, and
-everyone there uses them. Connect Linear this way.
+Enable email-to-task under **Settings → Connections** when Athena should inspect new Gmail threads
+for work. Docket creates a suggestion with the source message attached. Review, edit, accept, or
+dismiss it before it becomes a Task.
 
-Your personal space has no separate workspace connections.
+Tune the email workflow rules under **Settings → Automations**. See
+[Athena and your mail](/guides/athena/athena-and-your-mail) for the suggestion lifecycle.
 
-## Google Calendar
+## Reconnect an expired account
 
-The connection runs both ways. Google's events appear on Docket's calendar, and Docket writes work
-you schedule back to Google.
+Docket marks the connection when Google revokes or expires access. Open **Settings → Connections**
+and authorize it again. Existing Docket Tasks, calendar items, and history remain in Docket while
+the connection is offline.
 
-Docket stores each event with its source calendar's time zone and displays it at its intended time
-when your own time zone differs.
+## Disconnect the account
 
-See [Calendar and scheduling](/guides/daily/calendar-and-scheduling) for what happens once the
-events are in.
-
-## Gmail becomes task suggestions
-
-Athena reads a message, works out what it implies, and drafts a Task with the original email
-attached. Accept, edit, or dismiss each suggestion.
-
-Turn it on and tune its rules under **Settings → Connections → Email to task**. See
-[Athena and your mail](/guides/athena/athena-and-your-mail).
-
-## When a connection breaks
-
-Access tokens expire and get revoked. Docket marks the connection as needing re-authorization,
-notifies the owner, and records the failure; a connection never reports success while doing
-nothing. Re-authorize from the same Connections screen.
+Disconnect the provider under **Settings → Connections** when you want to stop sync. Remove the
+identity link under **Settings → Connected accounts** when you no longer want the account attached
+to your Docket account.

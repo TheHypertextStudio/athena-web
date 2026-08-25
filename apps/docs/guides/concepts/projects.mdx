@@ -1,64 +1,59 @@
 ---
-title: "Projects"
-description: "Spring Gala, Launch v2, the donor page rebuild: work you close when it ships."
+title: 'Projects'
+description: 'Organize work that has an outcome and a finish line.'
 ---
 
-Use a Project for work with a finish line. Spring Gala. Launch v2. Rebuild the donor page. You
-close it when it ships.
+Use a Project for work that ends when an outcome ships. Put ongoing work in a
+[Program](/guides/concepts/initiatives-and-programs).
 
-Put work that never finishes in a [Program](/guides/concepts/initiatives-and-programs).
+## Set the Project properties
 
-## Project fields
+| Property     | What it controls                                              |
+| ------------ | ------------------------------------------------------------- |
+| **Lead**     | The person or agent accountable for the Project.              |
+| **Team**     | The Team that owns the Project.                               |
+| **Status**   | One state from the workspace's Project workflow.              |
+| **Health**   | On track, at risk, or off track.                              |
+| **Priority** | The Project's relative importance.                            |
+| **Start**    | A precise day or a broader planning period.                   |
+| **Target**   | A precise day or a broader planning period.                   |
+| **Program**  | The ongoing area that contains the Project, when one applies. |
 
-| Field | What it stores |
-| --- | --- |
-| **Lead** | The Actor accountable for the project. |
-| **Dates** | A start and a target. Either one can be left empty. |
-| **Status** | One of the workspace's own project statuses. |
-| **Health** | `on_track`, `at_risk`, or `off_track`, set by the [updates](/guides/concepts/updates-and-health) posted on the project. |
-| **Contents** | Milestones, Tasks, attachments, and threaded discussion. |
+A Project can contain milestones, Tasks, resources, updates, and threaded discussion.
 
-Docket weights the project's tasks and reports **progress** as one number.
+## Plan at the level you know
 
-Set "Launch v2" to **depend on** "Rebuild the donor page" when one has to ship first. Attach links,
-documents, and items from connected tools as **resources**.
+Choose a precise day when the date is firm. Choose a month, quarter, half-year, or year when that is
+all you know. Docket uses the workspace's fiscal year for broad quarters, half-years, and years.
 
-## Milestones
+Changing the fiscal-year start under **Settings → Work structure** affects new broad dates. An
+existing broad date keeps the fiscal calendar that was in effect when someone selected it.
 
-Add a Milestone to a Project to mark a date and group the tasks due by it. "Beta to design
-partners", 14 March. "Invitations mailed", 2 April.
+## Use milestones for checkpoints
 
-Docket stores each Milestone in one project. Add them when people plan around the checkpoint. See
-[Cycles and milestones](/guides/concepts/cycles-and-milestones).
+Add a Milestone when people need to plan around a checkpoint inside the Project. A Milestone has a
+date and belongs to one Project. It is not a substitute for the Project's target.
 
-## Where to put a project
+See [Cycles and milestones](/guides/concepts/cycles-and-milestones) for the difference between a
+workspace planning period and a Project checkpoint.
 
-Put "Fall term enrolment" inside the "After-School Program". Leave "Website rebuild" at the top of
-the workspace.
+## Link dependencies
 
-```
-Workspace
-  ├─ Program "After-School Program"
-  │    └─ Project "Fall term enrolment"
-  └─ Project "Website rebuild"
-```
+Make one Project depend on another when the first cannot finish before the second. Use the Project
+dependency view to inspect and edit those links. Docket rejects loops.
 
-Link a project to an [Initiative](/guides/concepts/initiatives-and-programs) to say why it matters.
-"Website rebuild" can link to "Grow revenue" and "Expand to a second city" at once, and neither one
-owns it.
+## Connect the Project to larger work
 
-## Templates
+Put the Project in one Program when it belongs to an ongoing area. Link it to one or more
+Initiatives to show why the outcome matters. The Program contains the Project. Initiatives do not.
 
-Save a template when every client engagement starts the same way, then create the next project from
-it. Scope a template to yourself, a Team, or the whole workspace in **Settings → Templates**.
+## Start from a template
 
-<Note>
-  Template Tasks, Projects, Initiatives, and Programs. Cycles and Teams have no document to seed. A
-  Cycle is a period of time and a Team is a group of people.
-</Note>
+Save a template when Projects begin with the same structure. Create the next Project with **Start
+from template**, then change the copied details for the new work. Manage templates under
+**Settings → Templates**.
 
-## Publishing a project
+## Publish a brief
 
-Publish a project as a read-only **brief** and a funder with no account can read how the Spring
-Gala is going. An admin sets the address under **Settings → Publishing**, which can be a custom
-domain.
+An admin can publish a read-only Project brief for people who do not have a Docket account. Manage
+the public address and publishing controls under **Settings → Publishing**.

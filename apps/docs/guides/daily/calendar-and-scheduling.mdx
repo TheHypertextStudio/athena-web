@@ -1,55 +1,53 @@
 ---
-title: "Calendar and scheduling"
-description: "Layered calendars, two-way Google sync, and automatic weekly scheduling."
+title: 'Calendar and scheduling'
+description: 'See events and planned work together, timebox tasks, and compare schedules.'
 ---
 
-Give a task a duration and Docket adds it to the calendar next to your 10am standup.
+Calendar puts connected events, Docket calendar items, task timeboxes, and work locations on one
+schedule. Use it to decide when work fits. Docket does not schedule a week for you automatically.
 
-## Layers
+## Move through the schedule
 
-Use layers to show and hide each source of time:
+Use **Today** and the arrow buttons to move between date ranges. Open **Display** to change the
+calendar axis, the amount of detail, or the timeline scale.
 
-- Your Google calendar
-- A workspace's shared schedule
-- Your own scheduled work
+The **Dates** axis shows the schedule across several days. The **People** axis compares the people
+you select in one workspace.
 
-Share a layer and the other person sees your busy blocks without the contents of any event.
+## Choose calendars
 
-## Google Calendar sync
+Open **Calendars** to show or hide layers. A layer can come from a connected provider or from
+Docket. When the same provider event reaches Docket through more than one account, the layer menu
+can hide the duplicate.
 
-Connect Google Calendar and Docket writes the work you schedule back to it.
+Connect Google Calendar under **Settings → Connections**. Choose which Google calendars Docket
+uses under **Settings → Calendar**. See
+[Connect your calendar and mail](/guides/connect-calendar-and-mail).
 
-Docket shows every event in its source calendar's time zone.
+## Create and edit calendar items
 
-See [Connect your calendar and mail](/guides/connect-calendar-and-mail).
+Select an empty region of the calendar or use **New** to create an event or a work block. Open an
+item to change its title, time, timezone, recurrence, relationships, or notes when the source allows
+those changes.
 
-## Schedule a week
+Drag an editable item to move it. Drag an edge to change its length. Docket keeps the original
+timezone when it displays a provider event in another timezone.
 
-Docket schedules your week from the estimates on your tasks and the gaps between your meetings. It
-matches the kind of time each gap offers and never schedules a three-hour shoot into a 25-minute
-bus ride.
+## Put tasks on the calendar
 
-<Steps>
-  <Step title="Estimate every task first">
-    Scheduling reads the [time estimate](/guides/concepts/tasks). A task with no estimate never
-    gets placed.
-  </Step>
-  <Step title="Meetings win">
-    Docket moves no existing event. Scheduling uses the time between them.
-  </Step>
-  <Step title="Approve the week">
-    Docket shows the week as a proposal. Accept it, edit it, or reject it, under the same
-    [approval model](/guides/athena/proposals-and-approvals) everything else uses.
-  </Step>
-  <Step title="Let the estimates correct themselves">
-    The [time ledger](/guides/daily/time) records how long the work took, and next week's
-    scheduling reads that history.
-  </Step>
-</Steps>
+Drag a task onto an empty time slot to create a 30-minute timebox. You can move or resize that block
+afterward. Start the task timer from its calendar block when you begin the work.
 
-Each morning, [Home](/guides/daily/home-today) reschedules the rest of the week from what happened
-yesterday.
+The task remains a task. A timebox adds schedule context without changing the task's project,
+status, or assignee.
 
-## Scheduling defaults
+## Add work locations
 
-Set working hours, default durations, and calendar sharing in **Settings → Calendar**.
+Set your work-location pattern under **Settings → Work locations**. Calendar and Agenda show those
+locations as day context. You can edit one occurrence without rewriting the whole pattern.
+
+## Use Agenda for one day
+
+Open **Agenda** in the utility rail when you only need one day's events and planned tasks. Agenda
+uses the same calendar items and task timeboxes as Calendar, so a change in either place appears in
+the other.

@@ -1,59 +1,55 @@
 ---
-title: "Proposals and approvals"
-description: "Where Docket shows an agent's work before it becomes real, and how you say yes."
+title: 'Proposals and approvals'
+description: 'Inspect an agent change, edit what is supported, and decide whether Docket applies it.'
 ---
 
-Athena shows a proposed task as a faded copy with a dashed border and a `proposed` badge, in the
-same place Docket would show the real one. Approve it and it becomes real, in that spot.
+A proposal is a change that an agent has prepared but Docket has not applied. The proposal stays
+attached to the agent session that produced it.
 
-Edit the copy before you approve it. Change the date, change the assignee, change the title.
-Docket creates exactly what you approved.
+## Read the proposed change
 
-## Approve from wherever you are
+The proposal card names the action and shows the affected fields. Proposed Tasks can also appear as
+ghost rows in the work view where they would be created.
 
-Docket shows the same approval in three places, and acting in one clears it everywhere:
+Check the object, workspace, assignee, dates, and relationships before you approve the change.
 
-- The **session**, beside the work it came from.
-- Your [**Inbox**](/guides/daily/inbox), across every workspace.
-- [**Home**](/guides/daily/home-today), inline with today's plan.
+## Edit a supported proposal
 
-## Approve, edit, or reject
+Change supported fields in the proposal before approval. Docket applies the edited input, not the
+agent's first draft.
 
-| Action | What happens |
-| --- | --- |
-| Approve | The proposal becomes the real object, in place. |
-| Edit, then approve | Docket creates what you edited. |
-| Reject | Docket discards the proposal and gives the session your reason. |
+If the proposal cannot express the change you need, reject it and tell Athena what to draft instead.
 
-Approve eleven proposed changes at once, or take them one at a time.
+## Approve or reject
 
-## Access and sign-off
+| Action          | Result                                                                   |
+| --------------- | ------------------------------------------------------------------------ |
+| **Approve**     | Docket applies the proposed action and records the approval.             |
+| **Reject**      | Docket does not apply the action and records the rejection.              |
+| **Approve all** | Docket applies the remaining supported proposals in that proposal group. |
 
-**What an agent may touch.** Every agent starts **read-only** and asks for more access at the
-moment it needs it, with the reason in front of you.
+You can decide one action or an entire proposal group. A rejected action does not run later.
 
-**Whether it needs sign-off.**
+## Act from the session or Inbox
 
-| Mode | Behaviour |
-| --- | --- |
-| `suggest` | Proposes only, and applies nothing on its own. |
-| `apply after approval` | Waits for a yes on each change, then applies it. |
-| `apply directly` | Acts, and records everything for review afterwards. |
+The session is the complete review surface. Inbox can show an approval request and offers a direct
+approval action for supported low-risk requests. Acting in either place updates the same underlying
+approval.
 
-The two settings are independent. Set a capable agent to `suggest`, or let a read-only agent apply
-directly inside its narrow scope.
+## Understand the approval setting
 
-## Who approves
+Your **Settings → Athena** choice controls the normal behavior:
 
-Whoever assigned or delegated the work approves it by default. A workspace or a team can change
-that and name one person to sign off on agent work.
+- **Ask before acting** pauses on actions that require your decision.
+- **Routine autonomy** allows routine, reversible work and keeps gates for higher-risk actions.
+- **Suggest only** records proposals without applying them directly.
 
-## Owner and delegate
+Agent, Team, and workspace rules can add narrower controls. Permissions still apply after approval.
 
-Assign the task to yourself and name Athena the **delegate**. Docket records both names on every
-action.
+## Keep ownership clear
 
-## Suggestions are not tasks
+Docket records Athena as the actor and records the person on whose behalf Athena worked. Assign
+yourself and use Athena as the delegate when you remain accountable for the Task.
 
-Accept a suggestion and Docket creates the task at that moment. Until then it is a proposal. The
-same applies to [suggestions drafted from your mail](/guides/athena/athena-and-your-mail).
+Email task suggestions use their own accept, edit, and dismiss flow. See
+[Athena and your mail](/guides/athena/athena-and-your-mail).

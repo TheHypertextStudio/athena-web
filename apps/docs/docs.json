@@ -5,7 +5,7 @@
   "colors": {
     "primary": "#4e4d4a",
     "light": "#dddcd9",
-    "dark": "#121210"
+    "dark": "#777570"
   },
   "appearance": {
     "default": "system"
@@ -42,6 +42,20 @@
             ]
           },
           {
+            "group": "Daily work",
+            "pages": [
+              "guides/daily/home-today",
+              "guides/daily/tasks-and-triage",
+              "guides/daily/calendar-and-scheduling",
+              "guides/daily/time",
+              "guides/daily/inbox",
+              "guides/daily/portfolio",
+              "guides/daily/search-and-views",
+              "guides/daily/library",
+              "guides/daily/graph"
+            ]
+          },
+          {
             "group": "Core concepts",
             "pages": [
               "guides/concepts/terminology",
@@ -56,14 +70,13 @@
             ]
           },
           {
-            "group": "Daily use",
+            "group": "Managing Docket",
             "pages": [
-              "guides/daily/home-today",
-              "guides/daily/inbox",
-              "guides/daily/portfolio",
-              "guides/daily/calendar-and-scheduling",
-              "guides/daily/time",
-              "guides/daily/search-and-views"
+              "guides/manage/workspaces-and-access",
+              "guides/manage/workflow-configuration",
+              "guides/manage/connections-and-imports",
+              "guides/manage/templates-automations-and-publishing",
+              "guides/manage/account-settings"
             ]
           },
           {

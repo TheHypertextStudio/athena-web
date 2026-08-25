@@ -1,21 +1,85 @@
 ---
-title: "Changelog"
-description: "What changed in Docket, written for the people who use it."
+title: 'Changelog'
+description: 'What changed in Docket, grouped by the work you can now do.'
 ---
 
-<Update label="2026-08-15" description="Documentation" tags={["Docs"]}>
-  ## Documentation
+<Update label="2026-08-25" description="Task context and connections" tags={["Tasks", "Connections"]}>
+  ## Tasks carry more of the work
 
-  Docket has documentation for the first time.
+Task details now show their hierarchy, related Tasks, and direct resources. The
+[Library](/guides/daily/library) also shows where a resource is attached or mentioned, so you can
+move between the work and its source without searching twice.
 
-  - **Guides** cover what Docket is, creating a workspace, the daily loop, the concept vocabulary,
-    and [Athena](/guides/athena/what-athena-is).
-  - **Developers** cover the [MCP server](/developers/connect-an-agent-mcp), the
-    [REST API](/developers/rest-api), [authentication](/developers/authentication), and the
-    [error taxonomy](/developers/errors).
-  - **[Terminology](/guides/concepts/terminology)** maps the words these docs use to the words your
-    workspace displays.
+## Connections explain themselves
 
-  Building on the API? Read [Platform status](/developers/platform-status) first. It is
-  unversioned, has no SDK, and field shapes can change without notice.
+Connection cards now state what each provider does and give one clear next action. The layout
+keeps those descriptions readable on narrow screens.
+
+</Update>
+
+<Update label="2026-08-24" description="Time review, Program activity, and canvas editing" tags={["Time", "Programs", "Graph"]}>
+  ## Review time from the total to the session
+
+[Time](/guides/daily/time) now has a private review surface with Day, Week, Month, Cycle, and
+Custom periods. You can compare human and agent effort, filter the records, and break totals down
+by Workspace, Project, Task, category, or capture source.
+
+## Read Program activity by period
+
+Programs now summarize activity in cards that preserve when the work happened. This gives ongoing
+work a useful operating view without pretending that a Program needs a completion percentage.
+
+## Edit and recover work on the canvas
+
+Task and Project canvases now support direct property and relationship changes. Canvas history
+can undo or redo changes from the current session, and moving work to trash remains recoverable.
+
+</Update>
+
+<Update label="2026-08-23" description="Athena in the utility rail and consistent work views" tags={["Athena", "Views"]}>
+  ## Keep the page open while you use Athena
+
+Athena now opens in the shared utility rail. Today and other pages can pass the current workspace
+and a draft question into the same persistent conversation instead of sending you to a second
+chat.
+
+## Work views use the same controls
+
+Task, Project, Program, and Initiative lists now share their filter, group, sort, display, and
+creation behavior. Detail pages open from local data first and then reconcile with the current
+server record.
+
+</Update>
+
+<Update label="2026-08-21" description="Planning periods, Library search, and schedule context" tags={["Planning", "Library", "Calendar"]}>
+  ## Plan without inventing a precise date
+
+Projects and Initiatives can now use a month, quarter, half-year, or year instead of a precise
+day. Broad periods follow the workspace's fiscal calendar and keep the fiscal basis that was in
+effect when someone selected them.
+
+## Find resources and long-list results
+
+[Library](/guides/daily/library) can find and open every visible resource. `Cmd+F` and `Ctrl+F`
+now search complete supported work views, including results that have not scrolled onto the
+screen.
+
+## Put work locations on the schedule
+
+Calendar and Agenda now show work-location context. You can edit a single occurrence without
+rewriting its repeating pattern.
+
+</Update>
+
+<Update label="2026-08-15" description="Public documentation" tags={["Docs"]}>
+  ## Docket has a public documentation site
+
+Usage guides cover daily work, core concepts, workspace management, and Athena. Developer guides
+cover the [MCP server](/developers/connect-an-agent-mcp), the
+[REST API](/developers/rest-api), [authentication](/developers/authentication), and
+[errors](/developers/errors).
+
+Read [Platform status](/developers/platform-status) before you build against the API. The public
+API is in early access, has no SDK, and does not yet carry a compatibility promise.
+
 </Update>

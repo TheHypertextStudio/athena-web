@@ -1,0 +1,38 @@
+---
+title: 'Graph'
+description: 'Map task hierarchy and dependencies, then edit the work without leaving the canvas.'
+---
+
+Open **Graph** inside a workspace to see how Tasks break down and block one another. Open the graph
+from a Project or Task detail page when you want the same Task canvas narrowed to that work.
+
+## Read the graph
+
+Parent and subtask lines show decomposition. Directed dependency lines show what blocks what. These
+are separate relationships: making a Task a subtask does not make either Task block the other.
+
+Use the view controls to filter the graph, group work, change density, fit the current selection, or
+lay the graph out again. Search by title from the graph toolbar.
+
+## Edit one or many items
+
+Select a Task to open its details. Select several Tasks to change shared properties in one
+operation. Mixed values stay visible until you choose a replacement or clear them.
+
+The selection controls can change supported properties, add or remove relationships, and move work
+to trash. A batch fails as one operation when any selected item is invalid or outside your access.
+It never applies half of the requested change.
+
+## Undo canvas changes
+
+Graph keeps an undo and redo history for changes made in the current canvas session. Docket checks
+the current records before it replays a change. It will not overwrite a collaborator's newer edit
+just to restore an older canvas state.
+
+Moving a Task to trash is recoverable. Project dependencies use their own canvas in the Projects
+view, where Project deletion remains a separate manage-only action.
+
+<Warning>
+  Undo history belongs to the current canvas session. Do not treat it as a permanent version
+  history.
+</Warning>

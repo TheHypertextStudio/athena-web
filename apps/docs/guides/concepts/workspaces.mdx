@@ -1,81 +1,53 @@
 ---
-title: "Workspaces and your Hub"
-description: "The two levels Docket is built on: the personal Hub that shows every workspace, and the isolated workspace that stores the work."
+title: 'Workspaces'
+description: "Keep each organization's work separate while using one personal Home across them."
 ---
 
-```
-   YOU (one person)
-     │ owns
-     ▼
-   ┌──────────────────── YOUR HUB ────────────────────┐
-   │  Home · Inbox · Portfolio · Search               │
-   │  reads from every workspace you belong to        │
-   └───────┬──────────────────────────┬───────────────┘
-           │ owns                     │ reads, via your membership
-           ▼                          ▼
-   ┌───────────────┐      ┌───────────────┐   ┌───────────────┐
-   │ Personal space│      │  Workspace    │   │  Workspace    │
-   │  (yours only) │      │  "Startup"    │   │  "Nonprofit"  │
-   └───────────────┘      └───────────────┘   └───────────────┘
-```
+A workspace holds one organization's people, Teams, settings, connections, and work. Home gives
+you personal views across every workspace you can access.
 
-## Your Hub
+## Use Home across workspaces
 
-You own one Hub personally. No organization owns it. It reads from every workspace you belong to
-and has four screens:
+The Home section of the sidebar contains your personal surfaces:
 
-- [**Home**](/guides/daily/home-today): today's plan, your calendar, and what needs attention.
-- [**Inbox**](/guides/daily/inbox): everything awaiting a response, from every workspace.
-- [**Portfolio**](/guides/daily/portfolio): every workspace's programs and projects on one
-  timeline.
-- [**Search**](/guides/daily/search-and-views): one palette that searches, navigates, acts, and
-  switches workspaces.
+- **Today** shows your current plan and work in motion.
+- **Tasks** shows Tasks across your workspaces.
+- **Calendar** combines your available schedules.
+- **Time** shows your private work history.
+- **Inbox** holds notifications that concern you.
+- **Athena** opens your Athena conversation.
+- **Stream** records activity across your workspaces.
+- **Portfolio** places dated Projects on one cross-workspace timeline.
+- **Search** finds work and actions.
 
-Every item on those screens shows the workspace it came from.
+Each item keeps its workspace identity. Home does not merge the underlying data.
 
-## A workspace
+## Work inside one workspace
 
-A workspace separates one venture from another. Docket shows its members, connected tools, agents,
-[terminology](/guides/concepts/terminology), and work only inside it. Open one and the whole app
-switches to it.
+The Workspace section of the sidebar binds the app to one workspace. It contains My Work, Triage,
+Tasks, Stream, Library, Initiatives, Programs, Projects, Cycles, Teams, People, Views, Graph, and
+Settings.
 
-<Note>
-  Docket never merges data across workspaces. Your Hub only reads from them. The same workspace
-  appears in every member's own Hub, because the workspace is shared and no single Hub owns it.
-</Note>
+Use the workspace switcher at the top of the sidebar to change workspaces or create one. Docket
+then uses that workspace's terminology, workflows, people, and permissions.
 
-## Your personal space
+## Use a personal workspace
 
-Docket creates a personal space for you when you sign up as an individual. Tasks, projects,
-cycles, and Athena work there exactly as they do in a shared workspace. It has no member roster
-and no publishing settings, and it reads from your personal connections.
+A personal workspace stores work that belongs only to you. It uses the same Tasks, Projects,
+Cycles, Views, and Athena tools as a shared workspace. It does not need a member roster.
 
-## Membership, roles, and access
+## Control access
 
-A capability plus a grant decides access inside a workspace.
+Workspace roles provide the normal access level. More specific grants can allow a person or role to
+view, comment, contribute, assign, or manage one part of the workspace.
 
-**Capabilities** form a single ordered list. A higher one satisfies every lower one.
+An admin manages members, roles, invitations, and object-level access under **Settings → Members &
+Access**. See [Workspaces and access](/guides/manage/workspaces-and-access) for the admin steps.
 
-| Capability | What it allows |
-| --- | --- |
-| `view` | Read the item. |
-| `comment` | Add comments and discussion. |
-| `contribute` | Create and edit content such as tasks and fields. |
-| `assign` | Route and assign work to others. |
-| `manage` | Full control, including settings, membership, and deletion. |
+A private object requires an explicit grant. A workspace-visible object follows the access that
+the member already has. A link to another workspace does not grant access to it.
 
-**Grants** give a capability to one person or to everyone with a given role. Grant it on the whole
-workspace, a team, an Initiative, a Program, a Project, a Cycle, or one task. A grant applies to
-everything inside the item you grant it on. Give someone `contribute` on a Program and they get it
-on every Project and Task in that Program.
+## Leave a workspace
 
-Mark an item **public** to workspace members, or **private**, which only people with an explicit
-grant can see.
-
-Define your own roles per workspace: a nonprofit names one "Volunteer", an agency names one
-"Client". Manage all of this in **Settings → Members & Access**.
-
-## Switching, adding, and leaving
-
-Switch and create workspaces from the switcher at the top of the sidebar. Leave one and Docket
-removes it from your Hub. The workspace continues for everyone else.
+Leaving removes the workspace from your account. The workspace and its work remain available to
+the other members.

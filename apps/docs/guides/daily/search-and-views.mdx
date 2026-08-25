@@ -1,46 +1,48 @@
 ---
-title: "Search and views"
-description: "One palette for finding and doing anything, and saved views for the questions you ask every week."
+title: 'Search and views'
+description: 'Find work with the command palette, and save useful ways to filter and arrange it.'
 ---
 
-## The command palette
+Search helps you find an object or an action. Views keep a useful arrangement of work so you do
+not rebuild it every time.
 
-Press `Cmd+K` to search, jump somewhere, run a command, or switch workspaces.
+## Open the command palette
 
-Type "gala" and the palette matches tasks, projects, programs, initiatives, cycles, teams,
-updates, comments, and people across all your workspaces. Each result names its workspace.
+Press `Cmd+K` on macOS or `Ctrl+K` on Windows and Linux. Search for work, jump to a page, run an
+action, or switch workspaces.
 
-Type a command to create a task, set a status, assign someone, or open a settings page.
+Results name their type and workspace. Your permissions still apply, so Search does not reveal
+work that you cannot open.
 
-<Tip>
-  Select three tasks in a list, press `Cmd+K`, and the action applies to all three.
-</Tip>
+## Find text in a long list
 
-## Mentions
+Press `Cmd+F` or `Ctrl+F` on a supported Docket list. Docket searches the complete loaded result
+set instead of asking the browser to search only the rows currently drawn on screen.
 
-Type `@` in a comment, description, or update to mention a task, a person, or a GitHub pull
-request from a connected tool. Docket stores a real reference. Rename either side and the mention
-shows the new name.
+## Change a work view
 
-## Saved views
+Use the controls above Tasks, Projects, Programs, or Initiatives to change the view:
 
-Save a filter you rebuild every week and give it a name. "Everything assigned to me and overdue."
-"This cycle, grouped by status." "Every project without an update in two weeks."
+- **Filter** limits which items appear.
+- **Group** collects items under a field such as status or assignee.
+- **Sort** controls their order.
+- **Display** changes visible properties and presentation details.
 
-Give the view one of three scopes, the same set [templates](/guides/concepts/projects#templates)
-use:
+Tasks, Projects, Programs, and Initiatives support the layouts that fit their data. These include
+List, Board, and Cards. Projects and Initiatives can also use Timeline.
 
-| Scope | Who sees it |
-| --- | --- |
-| `personal` | You |
-| `team` | One team |
-| `organization` | The whole workspace |
+## Save a view
 
-Scope a view to the team and everyone stops rebuilding the same filter every Monday.
+Open **Views** in the workspace sidebar to create and manage saved views. A view records its work
+type, layout, filters, grouping, sorting, and display settings.
 
-## Search from an agent
+Save a view after the arrangement answers a question you expect to ask again. For example, save
+Projects grouped by health and filtered to one Initiative. Reset the working view when you want to
+return to its saved state.
 
-[Athena](/guides/athena/what-athena-is) and any agent you connect through the
-[MCP server](/developers/connect-an-agent-mcp) search everything the palette searches, under your
-permissions. Ask "which projects haven't had an update in two weeks" and save the same question as
-a view.
+Personal views belong to you. Shared views use workspace access rules.
+
+## Mention an object
+
+Type `@` in supported descriptions, comments, or updates to link another object. Mentions remain
+references when either object is renamed.

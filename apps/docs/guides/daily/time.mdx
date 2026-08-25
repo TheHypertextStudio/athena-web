@@ -1,53 +1,49 @@
 ---
-title: "Time"
-description: "Track the hours your work takes and compare them to the hours you planned."
+title: 'Time'
+description: 'Run a timer while you work and review your private work history afterward.'
 ---
 
-Start a timer on a task and Docket records the exact minutes. Pause it, resume it, move it to
-different work, or stop it.
+Docket records time from timers, past-time entries, and agent sessions. The Time page is your
+private work history. Other members do not get a copy of your personal review.
 
-Docket writes each run into the **time ledger**: started 9:14, stopped 10:02, and who was working.
-Dragging a task to `completed` adds no hours. Neither does a one-hour event on Thursday's
-calendar.
+## Start a timer where the work is
 
-## What you can track
+Start a task timer from the task, Today, Calendar, or the **Focus** panel in the utility rail.
+Pause, resume, or stop it from Focus without leaving the page you are using.
 
-- A [Task](/guides/concepts/tasks)
-- A calendar item
-- A whole workspace, project, or category
-- Freeform activity that maps to nothing in Docket
-- An Athena session, or a subagent inside one
+Starting a different timer closes the current interval before it opens the next one. Docket does
+not infer time from a status change or a calendar event.
 
-Docket records Athena's hours in the same ledger as yours.
+## Add time after the fact
 
-## Switching work
+Select **Add past time** when you forgot to start a timer. Choose the date, start and end times,
+workspace, and optional Project, Task, or category.
 
-Move the timer from the grant draft to the 2pm call and Docket closes the first interval as it
-opens the second. You get two intervals.
+Open a session in the history to edit or remove it when the record allows changes.
 
-## Planned against actual
+## Choose the period
 
-| | Where it comes from |
-| --- | --- |
-| **Planned** | The [time estimate](/guides/concepts/tasks) on the task |
-| **Scheduled** | Where [scheduling](/guides/daily/calendar-and-scheduling) placed it |
-| **Actual** | The time ledger |
+Review a **Day**, **Week**, **Month**, **Cycle**, or **Custom** range. Use the arrows to move the
+selected period backward or forward.
 
-Estimate an hour, spend two, every week: Docket shows that pattern here, and next week's
-scheduling reads it.
+The page stores the period and filters in the URL. You can return to the same review or open it on
+another device.
 
-## Submitting hours
+## Filter the records
 
-Submit hours to one recipient at a time. Send a client their hours and a funder theirs from the
-same record, and neither sees the other's scope.
+Use **Filters** to narrow the history by workspace, Project, Task, category, capture source, or
+other available fields. Active filters appear above the results and can be removed one at a time.
 
-## What Docket will not do
+## Compare human and agent effort
 
-- Invent time you did not track.
-- Derive an interval from a status change.
-- Treat a calendar event as proof you were doing the thing.
+Choose **Human effort**, **Agent effort**, or **Combined effort**. Then use **Break down by** to
+group the total by:
 
-<Tip>
-  Track a week before you change anything. The first useful result is often that the Monday sync
-  costs three hours, not one.
-</Tip>
+- Workspace
+- Project
+- Task
+- Category
+- Capture source
+
+Select a breakdown row to open the sessions behind that total. Docket keeps the total and the
+underlying records connected, so you can check where a number came from.

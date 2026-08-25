@@ -1,83 +1,87 @@
 ---
-title: "What Athena is"
-description: "Docket's built-in agent, who takes work in plain language and shows you what she does with it."
+title: 'What Athena is'
+description: "Use Docket's built-in agent to answer questions, plan work, and carry out reviewed changes."
 ---
 
-Assign a task to Athena and watch her work. Ask her in a sentence: "Reschedule the offsite."
-"Create a plan to make sure I get more sleep."
+Athena is Docket's built-in agent. Open Athena for a conversation, ask from Today, or assign a Task
+when Athena should own a bounded result.
 
-## Your account owns Athena
+## Athena uses your access
 
-**Your account owns Athena. A workspace never does.** Focus a session on a workspace so she knows
-which "the launch" you mean. That focus grants her no access. She resolves your identity and your
-permissions in the workspace she acts in, on every action.
+Athena belongs to your account. Focus a conversation on a workspace to set the context. That focus
+does not grant access.
 
-<Note>
-  Athena can never do something you could not do yourself. Approving one of her proposals cannot
-  supply authority you lack. Lose access to a project and she loses it on her next action.
-</Note>
+Athena checks your identity and permissions when it reads or changes work. If you cannot change a
+Project, approving Athena's proposal does not give Athena a way around that rule.
 
-## Assign her work like a person
+## Ask from any page
 
-Docket calls a person and an agent the same thing: an **Actor**. Put Athena in the assignee field
-where you would put a colleague.
+Press `Cmd+J` on macOS or `Ctrl+J` on Windows and Linux to open Athena in the utility rail. The
+current page stays visible while you talk. Today can open the same rail with the current workspace
+and a draft question already set.
 
-## Sessions
+The Athena page opens the same conversation as a full-page surface. Moving between the page and
+the rail does not start a second thread.
 
-Every job Athena does opens a **session**.
+## Assign or delegate a Task
 
-```
-You delegate a task  ─►  a session opens  ─►  you watch, steer, approve, or take over
-```
+Assign a Task to Athena when Athena owns the result. Keep yourself as the assignee and set Athena
+as the delegate when Athena works on your behalf.
 
-Read her running account of what she is reading and what she is about to do. Correct her in a
-sentence, answer the question she stops on, or take the work back and finish it yourself. Catch
-the wrong turn while it still costs nothing.
+The Task opens an agent session. The session shows the conversation, tool calls, questions, and
+proposed changes for that run.
 
-A session drafting donor thank-yous behaves the same as one rebuilding next quarter's budget.
+## Choose how Athena acts
 
-## Access and sign-off
+Set your account default under **Settings → Athena**:
 
-Two settings move separately.
+| Setting               | What Athena does                                                                 |
+| --------------------- | -------------------------------------------------------------------------------- |
+| **Ask before acting** | Athena pauses before actions that require approval.                              |
+| **Routine autonomy**  | Athena can apply routine, reversible work and still asks on higher-risk actions. |
+| **Suggest only**      | Athena proposes changes and does not apply them directly.                        |
 
-**What she may touch.** She starts **read-only** and asks for more access at the moment she needs
-it, with the reason attached.
+A registered agent can also have its own trust setting. Workspace and Team rules can narrow how
+agent work is approved.
 
-**Whether she needs sign-off.** **Suggest** proposes only. **Apply after approval** waits for your
-yes. **Apply directly** acts and records everything.
+## Review proposed changes
 
-Whoever assigned or delegated the work approves it by default. A workspace or a team can change
-that. See [Proposals and approvals](/guides/athena/proposals-and-approvals).
+A proposal shows what Athena intends to change. You can approve it, edit supported fields before
+approval, or reject it. Docket records the decision and the person who made it.
 
-## Attribution
+See [Proposals and approvals](/guides/athena/proposals-and-approvals).
 
-Docket records two names on every agent action: Athena, and the person who set her going, as
-"Athena, on behalf of you". Docket records her hours in the [time ledger](/guides/daily/time)
-beside yours.
+## Add standing instructions
 
-## Instructions she follows
+Use **Settings → Athena** for instructions that should follow you across workspaces. Workspace and
+Team guidance can add rules for a specific context.
 
-Write standing instructions at the **workspace** or **team** level. Team instructions override the
-workspace's.
+Write instructions as operating rules. For example, write “Draft replies, but do not send them” or
+“Ask before assigning work to volunteers.”
 
-- "Always draft, never send, without my OK."
-- "Never assign work to volunteers without asking me first."
+## Choose where Athena runs
 
-Set your own preferences in **Settings → Athena**.
+Docket can use its standard model service. Supported deployments can also run Athena's model work
+on a computer connected through Lovelace. See
+[Bring your own model](/guides/athena/bring-your-own-model).
 
-## More on Athena
+## Continue learning Athena
 
 <CardGroup cols={2}>
   <Card title="Talking to Athena" icon="message" href="/guides/athena/talking-to-athena">
-    How to message her, and what to ask her for.
+    Ask clear questions and give useful instructions.
   </Card>
-  <Card title="Proposals and approvals" icon="circle-check" href="/guides/athena/proposals-and-approvals">
-    What a pending change looks like, where Docket shows it, and who signs it off.
+  <Card
+    title="Proposals and approvals"
+    icon="circle-check"
+    href="/guides/athena/proposals-and-approvals"
+  >
+    Review changes before Docket applies them.
   </Card>
   <Card title="Athena and your mail" icon="envelope" href="/guides/athena/athena-and-your-mail">
-    Her own address, and turning mail into work.
+    Forward messages and review email task suggestions.
   </Card>
   <Card title="Bring your own model" icon="server" href="/guides/athena/bring-your-own-model">
-    Run her model work on a machine you own.
+    Run model work on a computer you own.
   </Card>
 </CardGroup>

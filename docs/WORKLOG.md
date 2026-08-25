@@ -9,7 +9,7 @@
 
 ### [AGENDA-POLISH-004] Replace cramped Agenda chrome and edge geometry
 
-- **Status**: IN_PROGRESS
+- **Status**: REVIEW
 - **Started**: 2026-08-25
 - **Priority**: P1
 - **Description**: Replace the Agenda panel's boxed arrow, date, and display toolbar with a
@@ -23,17 +23,29 @@
 - **Subtasks**:
   - [x] Audit the user-provided 390px failure and benchmark current calendar interaction patterns.
   - [x] Write and self-review the implementation plan.
-  - [ ] Replace the four-control toolbar with the month trigger, day strip, and labeled view menu.
-  - [ ] Add panel gutters and hide scrollbar chrome without disabling scrolling.
-  - [ ] Compact all-day context and clarify partial-day work-location intervals.
-  - [ ] Make narrow collision cards and dense disclosures use effective cluster width.
-  - [ ] Pass focused, repository, accessibility, responsive, theme, and authenticated screenshot gates.
+  - [x] Replace the four-control toolbar with the month trigger, day strip, and labeled view menu.
+  - [x] Add panel gutters and hide scrollbar chrome without disabling scrolling.
+  - [x] Compact all-day context and clarify partial-day work-location intervals.
+  - [x] Make narrow collision cards and dense disclosures use effective cluster width.
+  - [x] Pass focused, accessibility, responsive, theme, and authenticated screenshot gates.
+  - [ ] Restore the unrelated `DocketLink` test-provider contract that blocks the repository test gate.
 - **Decisions**: The implementation will remove visible previous and next buttons. The existing mini
   calendar will remain the arbitrary-date jump. The seven-day strip will own nearby-day selection
   and week paging. Agenda will retain Timeline, List, and three density choices behind one labeled
   view trigger. The browser scrollbar will remain operational but will not render chrome.
 - **Plan**: `docs/superpowers/plans/2026-08-25-agenda-panel-polish.md`
-- **Blockers**: None.
+- **Validation**: The focused Agenda, scheduling, and work-location slice passes 104 tests across
+  nine files with one worker. Tooling passes 167 tests. Lint passes every package. The bounded
+  typecheck passes 25 packages, and the API passes separately with a command-scoped 4 GB heap after
+  the 2 GB Turbo process exhausted its heap. The Web production build passes and emits 75 pages.
+  Authenticated Chrome captures cover 1440x900 and 390x844 in both themes plus 320x844 dark. At
+  320px the document reports no horizontal overflow. The schedule keeps native Page Down scrolling
+  with `scrollbar-width: none`. The measured time-label and event insets are 19px and 13px.
+- **Evidence**: `docs/design/audits/2026-08-25-agenda-panel-polish.md`
+- **Blockers**: The full Web test command exposes a pre-existing `DocketLink` provider failure in
+  23 suites. Those suites either omit `QueryClientProvider` or mock `@/lib/query` without the new
+  `usePrefetchApi` export. The changed Agenda, scheduling, and work-location suites pass in both the
+  focused run and the broader run.
 
 ---
 

@@ -6,14 +6,19 @@ if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
 fi
 
 repo_root=$(git rev-parse --show-toplevel)
-git_common_dir=$(git -C "$repo_root" rev-parse --git-common-dir)
+git_dir=$(git -C "$repo_root" rev-parse --git-dir)
 
-case "$git_common_dir" in
+case "$git_dir" in
   /*) ;;
-  *) git_common_dir="$repo_root/$git_common_dir" ;;
+  *) git_dir="$repo_root/$git_dir" ;;
 esac
 
-hooks_dir="$git_common_dir/docket-hooks"
+# Linked worktrees share the common Git directory. Keeping generated hooks there lets an older
+# checkout overwrite this worktree's policy whenever it runs `pnpm install`. Worktree config gives
+# each checkout its own hook path under its own Git directory, so the hook always matches the code
+# that invoked it.
+git config --local extensions.worktreeConfig true
+hooks_dir="$git_dir/docket-hooks"
 mkdir -p "$hooks_dir"
 
 cat > "$hooks_dir/use-repo-node.sh" <<'HOOK'
@@ -49,7 +54,7 @@ git config --local pull.ff only
 git config --local pull.rebase true
 git config --local branch.main.rebase true
 git config --local branch.main.mergeOptions --ff-only
-git config --local core.hooksPath "$hooks_dir"
+git config --worktree core.hooksPath "$hooks_dir"
 
 cat > "$hooks_dir/pre-commit" <<'HOOK'
 #!/bin/sh

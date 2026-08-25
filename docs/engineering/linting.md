@@ -20,6 +20,9 @@ elapsed time, CPU time, and peak memory for each shard.
 
 The pre-commit hook runs `pnpm lint-staged` for formatting and then `pnpm lint:staged` for behavior.
 CI still lints every package from a clean checkout. Do not move the complete gate out of CI.
+The installer writes generated hooks below the current worktree's Git directory and stores
+`core.hooksPath` in worktree config. Do not move them back to the shared common Git directory. An
+older linked checkout can otherwise replace the staged hook with its own policy during install.
 
 The component diagram shows how the local commands share one bounded execution path.
 

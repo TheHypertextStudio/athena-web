@@ -39,6 +39,7 @@ import { userErrorMessage } from '@/lib/problem';
 import { useDebouncedAutosave } from '@/lib/use-debounced-autosave';
 import { LoadFailure } from '@/components/settings/load-failure';
 import { SettingsGroup } from '@/components/settings/settings-group';
+import { SETTINGS_NODES } from '@/components/settings/settings-capabilities';
 import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 
 /** The hour height an account gets before it has chosen one. */
@@ -209,10 +210,7 @@ export default function CalendarSettingsPage(): JSX.Element {
         />
       ) : (
         <>
-          <SettingsGroup
-            title="New calendar items"
-            description="What dragging across the calendar creates. Applies on every device."
-          >
+          <SettingsGroup capability={SETTINGS_NODES.calendarNewItems}>
             <label className="text-label-large flex flex-col gap-1">
               <span>Type</span>
               <Select
@@ -258,7 +256,7 @@ export default function CalendarSettingsPage(): JSX.Element {
             </label>
           </SettingsGroup>
 
-          <SettingsGroup title="Display">
+          <SettingsGroup capability={SETTINGS_NODES.calendarDisplay}>
             <label className="text-label-large flex flex-col gap-1">
               {/* Day-column width used to sit beside this as a second slider. It was a canvas
                   layout constant wearing the clothes of a preference: the grid already fits itself
@@ -297,10 +295,7 @@ export default function CalendarSettingsPage(): JSX.Element {
         </>
       )}
 
-      <SettingsGroup
-        title="What coworkers can see"
-        description="Nothing is shared until you tick a calendar here. Events your provider marks private only ever show as busy."
-      >
+      <SettingsGroup capability={SETTINGS_NODES.calendarVisibility}>
         {sharedWorkspaces.length === 0 ? (
           <EmptyState
             icon={Users}

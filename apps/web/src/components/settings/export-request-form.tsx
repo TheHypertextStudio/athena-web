@@ -4,6 +4,7 @@ import type { AccountExportOptionsOut } from '@docket/types';
 import { WriteError } from './write-error';
 import { Checkbox, Button } from '@docket/ui/primitives';
 import { SettingsGroup } from './settings-group';
+import { SETTINGS_NODES } from './settings-capabilities';
 import { type JSX, useState } from 'react';
 
 import {
@@ -70,10 +71,7 @@ export function ExportRequestForm({
 
   return (
     <>
-      <SettingsGroup
-        title="Choose data to include"
-        description="Start with everything selected, then remove anything you do not need."
-      >
+      <SettingsGroup capability={SETTINGS_NODES.dataExportSelection}>
         <fieldset className="flex flex-col gap-3">
           <legend className="sr-only">Data categories</legend>
           {(Object.keys(EXPORT_CATEGORY_COPY) as ExportCategory[]).map((category) => {
@@ -154,7 +152,7 @@ export function ExportRequestForm({
         ) : null}
       </SettingsGroup>
 
-      <SettingsGroup title="Review &amp; create">
+      <SettingsGroup capability={SETTINGS_NODES.dataExportReview}>
         <p className="text-on-surface-variant text-body-medium">
           Your export will be a ZIP file. Docket will email you at{' '}
           <span className="text-on-surface text-label-large">{options.deliveryEmail}</span> when

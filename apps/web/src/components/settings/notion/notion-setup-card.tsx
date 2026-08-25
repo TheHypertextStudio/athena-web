@@ -25,6 +25,7 @@ import { Button } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
 import { SettingsGroup } from '../settings-group';
+import { SETTINGS_NODES } from '../settings-capabilities';
 import { useState } from 'react';
 
 import {
@@ -32,10 +33,8 @@ import {
   NO_PAGES_HINT,
   SETUP_ACTION,
   SETUP_ACTION_BUSY,
-  SETUP_BODY,
   SETUP_PAGE_LABEL,
   SETUP_RUNNING,
-  SETUP_TITLE,
 } from './notion-copy';
 import { NotionConnectAction } from './notion-connect-action';
 import { NotionParentPagePicker } from './notion-parent-page-picker';
@@ -77,7 +76,7 @@ export function NotionSetupCard({
     query === '' && !search.pending && search.error === null && search.pages.length === 0;
 
   return (
-    <SettingsGroup title={SETUP_TITLE} description={SETUP_BODY}>
+    <SettingsGroup capability={SETTINGS_NODES.connectionsNotionSetup}>
       {noPages ? (
         <div className="flex flex-col items-start gap-2">
           <p className="text-on-surface-variant text-body-small max-w-prose" role="note">

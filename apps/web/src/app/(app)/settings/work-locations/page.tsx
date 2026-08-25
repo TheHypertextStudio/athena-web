@@ -66,6 +66,7 @@ import {
 import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
 import { ROW_BASE, ROW_INTERACTIVE, SettingRow } from '@/components/settings/setting-row';
 import { SettingsGroup } from '@/components/settings/settings-group';
+import { SETTINGS_NODES } from '@/components/settings/settings-capabilities';
 import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 import { isActionable, syncStateCopy } from '@/components/settings/work-location-copy';
 
@@ -426,7 +427,7 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
         />
       ) : (
         <>
-          <SettingsGroup title="Saved places" body="rows">
+          <SettingsGroup capability={SETTINGS_NODES.workLocationsPlaces} body="rows">
             {places.length === 0 ? (
               <EmptyState
                 icon={MapPin}
@@ -535,7 +536,7 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
           </SettingsGroup>
 
           <SettingsGroup
-            title="Schedule"
+            capability={SETTINGS_NODES.workLocationsSchedule}
             body="rows"
             action={
               assertionsQ.data.items.length > 0 ? (
@@ -634,7 +635,7 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
           </SettingsGroup>
 
           {schedulingQ.data?.commitments.length ? (
-            <SettingsGroup title="Planned work" body="rows">
+            <SettingsGroup capability={SETTINGS_NODES.workLocationsPlanned} body="rows">
               {schedulingQ.data.commitments.map((commitment) => (
                 <div
                   key={commitment.id}
@@ -669,7 +670,7 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
             </SettingsGroup>
           ) : null}
 
-          <SettingsGroup title="Automatic location" body="rows">
+          <SettingsGroup capability={SETTINGS_NODES.workLocationsAutomatic} body="rows">
             <SettingRow
               leading={<DecorativeIcon icon={Target} />}
               label="Use this device while Docket is open"
@@ -702,11 +703,7 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
             />
           </SettingsGroup>
 
-          <SettingsGroup
-            title="Calendar sync"
-            description="Google work locations appear as public calendar events."
-            body="rows"
-          >
+          <SettingsGroup capability={SETTINGS_NODES.workLocationsCalendarSync} body="rows">
             {(syncQ.data?.accounts ?? []).map((account) => (
               <div key={account.connectionId} className={cn(ROW_BASE, ROW_INTERACTIVE, 'min-h-16')}>
                 <span className="bg-surface-container-high text-on-surface-variant flex size-10 shrink-0 items-center justify-center rounded-md">

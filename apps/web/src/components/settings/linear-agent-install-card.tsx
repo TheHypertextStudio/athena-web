@@ -37,6 +37,7 @@ import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from 
 import { CardNote } from './card-note';
 import { SettingRow } from './setting-row';
 import { SettingsGroup } from './settings-group';
+import { SETTINGS_NODES } from './settings-capabilities';
 
 /** Props for {@link LinearAgentInstallCard}. */
 export interface LinearAgentInstallCardProps {
@@ -120,7 +121,7 @@ export function LinearAgentInstallCard({
   );
 
   return (
-    <SettingsGroup title="Agents" body="rows" footer={footer}>
+    <SettingsGroup capability={SETTINGS_NODES.connectionsAgents} body="rows" footer={footer}>
       <SettingRow
         leading={<DecorativeIcon icon={Sparkles} />}
         label="Athena as a Linear Agent"

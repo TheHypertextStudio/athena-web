@@ -25,6 +25,7 @@ import { type JSX, useEffect, useRef, useState } from 'react';
 
 import { useDebouncedAutosave } from '@/lib/use-debounced-autosave';
 import { SettingsGroup } from './settings-group';
+import { SETTINGS_NODES } from './settings-capabilities';
 
 /**
  * A selectable checkbox tile.
@@ -172,8 +173,7 @@ export function NotificationPreferencesSection({
   return (
     <section aria-label="Notification preferences" className="flex flex-col gap-6">
       <SettingsGroup
-        title="Quiet hours"
-        description="Hold non-urgent notifications during these hours."
+        capability={SETTINGS_NODES.notificationsQuietHours}
         icon={<Schedule aria-hidden="true" className="size-4" />}
         // The switch that gates the whole group belongs to the group, not beside the fields it
         // gates. As a peer of Start and End it was both a second thing called "Quiet hours" —
@@ -253,7 +253,7 @@ export function NotificationPreferencesSection({
         </div>
       </SettingsGroup>
 
-      <SettingsGroup title="Advanced channel rules" body="rows">
+      <SettingsGroup capability={SETTINGS_NODES.notificationsAdvancedRules} body="rows">
         <div className="overflow-x-auto">
           <table className="min-w-full border-separate border-spacing-0 text-left">
             <thead>

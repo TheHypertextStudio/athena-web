@@ -236,7 +236,7 @@ function KindGroup({
   const noun = useVocabulary(kind, { plural: true });
 
   return (
-    <SettingsGroup title={noun} body="rows">
+    <SettingsGroup title={noun} discoverable={false} body="rows">
       {templates.length === 0 ? (
         <SettingRow
           label={<span className="text-on-surface-variant">No templates yet.</span>}

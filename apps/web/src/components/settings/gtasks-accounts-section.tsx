@@ -22,6 +22,7 @@ import { DisconnectConfirmDialog } from './disconnect-confirm-dialog';
 import { GtasksAccountRow } from './gtasks-account-row';
 import { GtasksIdentityPicker } from './gtasks-identity-picker';
 import { SettingsGroup } from './settings-group';
+import { SETTINGS_NODES } from './settings-capabilities';
 import { useGtasksController } from './use-gtasks-controller';
 
 /** Props for {@link GtasksAccountsSection}. */
@@ -47,7 +48,7 @@ export function GtasksAccountsSection(props: GtasksAccountsSectionProps): JSX.El
 
   return (
     <SettingsGroup
-      title="Google Tasks"
+      capability={SETTINGS_NODES.connectionsGoogleTasks}
       body="rows"
       action={
         // While the list is empty the empty state carries the action, so the header does not offer

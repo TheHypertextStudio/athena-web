@@ -100,7 +100,7 @@ export function ProviderCategorySection({
   linearAdd,
 }: ProviderCategorySectionProps): JSX.Element {
   return (
-    <SettingsSubsection title={label}>
+    <SettingsSubsection title={label} discoverable={false}>
       <ul className="flex flex-col gap-2">
         {rows.map((row) => (
           <ProviderRow key={row.key} row={row} orgId={orgId} teams={teams} canManage={canManage} />

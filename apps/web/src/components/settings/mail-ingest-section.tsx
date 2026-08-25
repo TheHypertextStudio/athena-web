@@ -20,6 +20,7 @@ import { Button, Skeleton } from '@docket/ui/primitives';
 
 import { MailIngestRow } from './mail-ingest-row';
 import { SettingsGroup } from './settings-group';
+import { SETTINGS_NODES } from './settings-capabilities';
 import { useMailIngestList } from './use-mail-ingest-controller';
 
 /** Props for {@link MailIngestSection}. */
@@ -33,11 +34,7 @@ export function MailIngestSection({ orgId, canManage }: MailIngestSectionProps):
   const { loading, connected, connectionsHref } = useMailIngestList(orgId);
 
   return (
-    <SettingsGroup
-      title="Email to tasks"
-      description="Athena reads new mail and suggests tasks in your inbox. Turning it on adds the default rules below."
-      body="rows"
-    >
+    <SettingsGroup capability={SETTINGS_NODES.connectionsEmailTasks} body="rows">
       {/* placeholder: which inboxes are connected and whether mail ingest is switched on for
           them. The heading, the explanation and the "no inbox connected" copy are static. */}
       {loading ? (

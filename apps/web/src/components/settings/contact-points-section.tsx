@@ -169,6 +169,7 @@ function ContactPointGroup({
   return (
     <SettingsGroup
       title={copy.title}
+      discoverable={false}
       description={copy.description}
       body="rows"
       action={

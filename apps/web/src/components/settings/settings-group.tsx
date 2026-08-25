@@ -31,6 +31,7 @@ import { SETTINGS_GROUP_ATTR, settingsGroupId } from './settings-outline';
 import { ControlGroup, Surface, Text } from '@docket/ui/primitives';
 import type * as React from 'react';
 import type { JSX, ReactNode } from 'react';
+import type { SettingsNodeDefinition } from './settings-capabilities';
 
 /** Props for {@link SettingsGroup}. */
 export interface SettingsGroupProps extends Omit<
@@ -39,6 +40,10 @@ export interface SettingsGroupProps extends Omit<
 > {
   /** The group's heading. Omit for an unheaded container (a bare run of rows). */
   readonly title?: string;
+  /** Stable searchable definition for a static Settings heading. */
+  readonly capability?: SettingsNodeDefinition;
+  /** Marks a data-derived heading that must not enter the application capability catalog. */
+  readonly discoverable?: false;
   /** A glyph before the heading. Decorative — the heading is what names the group. */
   readonly icon?: ReactNode;
   /** A short, plain-language line under the heading. */
@@ -72,6 +77,7 @@ export interface SettingsGroupProps extends Omit<
  */
 export function SettingsGroup({
   title,
+  capability,
   icon,
   description,
   action,
@@ -81,7 +87,14 @@ export function SettingsGroup({
   className,
   ...rest
 }: SettingsGroupProps): JSX.Element {
-  const hasHeader = Boolean(title ?? description ?? action);
+  const resolvedTitle = capability?.label ?? title;
+  const resolvedDescription = capability?.description ?? description;
+  const headingId = capability
+    ? `settings-${capability.id}`
+    : resolvedTitle
+      ? settingsGroupId(resolvedTitle)
+      : undefined;
+  const hasHeader = Boolean(resolvedTitle ?? resolvedDescription ?? action);
   return (
     <Surface
       as="section"
@@ -107,25 +120,26 @@ export function SettingsGroup({
           )}
         >
           <div className="flex min-w-0 flex-col gap-1">
-            {title ? (
+            {resolvedTitle ? (
               // The id and the marker are what let the rail list this section's groups without a
               // second, hand-maintained copy of their names. See `settings-outline.tsx`.
               <Text
                 as="h3"
                 token="title-small"
-                id={settingsGroupId(title)}
+                id={headingId}
+                tabIndex={capability ? -1 : undefined}
                 {...{ [SETTINGS_GROUP_ATTR]: '' }}
                 className="flex items-center gap-2"
               >
                 {icon ? (
                   <span className="text-on-surface-variant flex shrink-0 items-center">{icon}</span>
                 ) : null}
-                {title}
+                {resolvedTitle}
               </Text>
             ) : null}
-            {description ? (
+            {resolvedDescription ? (
               <Text as="p" token="body-small" tone="muted">
-                {description}
+                {resolvedDescription}
               </Text>
             ) : null}
           </div>

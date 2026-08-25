@@ -33,6 +33,7 @@ import {
 
 import { DeleteAccountDialog } from './delete-account-dialog';
 import { SettingsGroup } from './settings-group';
+import { SETTINGS_NODES } from './settings-capabilities';
 import { sectionHref } from './settings-registry';
 import { userErrorMessage } from '@/lib/problem';
 
@@ -126,7 +127,7 @@ export function DangerZoneTab(): JSX.Element {
       {/* Ownership-blocker guide */}
       {!pending && blockers.length > 0 ? (
         <SettingsGroup
-          title="Resolve these workspaces first"
+          capability={SETTINGS_NODES.dataDeleteBlockers}
           description={
             <>
               You&apos;re the only owner of{' '}

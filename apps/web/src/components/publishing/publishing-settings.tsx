@@ -28,6 +28,7 @@ import { useState, type JSX, type SyntheticEvent } from 'react';
 import { api } from '@/lib/api';
 import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 import { SettingsSubsection } from '@/components/settings/settings-subsection';
+import { SETTINGS_NODES } from '@/components/settings/settings-capabilities';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
@@ -113,7 +114,7 @@ export function PublishingSettings({ orgId }: PublishingSettingsProps): JSX.Elem
   return (
     <SettingsSectionPage sectionKey="publishing">
       <SettingsSubsection
-        title="Addresses"
+        capability={SETTINGS_NODES.publishingAddresses}
         action={
           <Button
             type="button"
@@ -189,7 +190,7 @@ export function PublishingSettings({ orgId }: PublishingSettingsProps): JSX.Elem
         </ul>
       </SettingsSubsection>
 
-      <SettingsSubsection title="Published pages">
+      <SettingsSubsection capability={SETTINGS_NODES.publishingPages}>
         {publicationsQ.isPending ? (
           <Skeleton className="h-20 rounded-lg" />
         ) : livePublications.length === 0 ? (

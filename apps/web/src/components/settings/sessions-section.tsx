@@ -26,6 +26,7 @@ import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from 
 import { userErrorMessage } from '@/lib/problem';
 import { SettingRow } from './setting-row';
 import { SettingsGroup } from './settings-group';
+import { SETTINGS_NODES } from './settings-capabilities';
 
 /** A coarse, dependency-free device label parsed from a session's raw User-Agent string. */
 /**
@@ -149,8 +150,7 @@ export function SessionsSection(): JSX.Element {
   return (
     <section className="flex flex-col gap-3" aria-label="Active sessions">
       <SettingsGroup
-        title="Active sessions"
-        description="Every device currently signed in to your account. Revoke any you don't recognize."
+        capability={SETTINGS_NODES.securitySessions}
         body="rows"
         action={
           hasOtherSessions ? (

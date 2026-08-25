@@ -34,6 +34,7 @@ import { STALE, apiQueryOptions, queryKeys, useApiListQuery, useLiveApiQuery } f
 
 import { LoadFailure } from './load-failure';
 import { SettingsGroup } from './settings-group';
+import { SETTINGS_NODES } from './settings-capabilities';
 import { InviteForm } from './invite-form';
 import { InvitationsList } from './invitations-list';
 import { MemberRow } from './member-row';
@@ -210,6 +211,7 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
 
       <SettingsGroup
         title={`Members (${members.length})`}
+        discoverable={false}
         icon={<Users aria-hidden="true" className="size-4" />}
         body="rows"
       >
@@ -250,7 +252,7 @@ export function MembersTab({ orgId }: MembersTabProps): JSX.Element {
         )}
       </SettingsGroup>
 
-      <SettingsGroup title="Pending invitations" body="rows">
+      <SettingsGroup capability={SETTINGS_NODES.workspacePendingInvites} body="rows">
         <InvitationsList
           invitations={pendingInvitations}
           roleLabel={roleLabel}

@@ -26,6 +26,7 @@ import { api } from '@/lib/api';
 import { LoadFailure } from '@/components/settings/load-failure';
 import { firstWriteError } from '@/components/settings/write-error';
 import { SettingsGroup } from '@/components/settings/settings-group';
+import { SETTINGS_NODES } from '@/components/settings/settings-capabilities';
 import { userErrorMessage } from '@/lib/problem';
 import {
   apiQueryOptions,
@@ -158,7 +159,7 @@ export function LatticeSection(): JSX.Element {
     return (
       // placeholder: whether this person has authorized Lovelace and which of their computers is
       // chosen — both are per-account facts only the stored record knows.
-      <SettingsGroup title="Run Athena on your own computer">
+      <SettingsGroup capability={SETTINGS_NODES.athenaLattice}>
         <Skeleton className="h-40 rounded-xl" />
       </SettingsGroup>
     );
@@ -166,7 +167,7 @@ export function LatticeSection(): JSX.Element {
 
   if (statusQ.isError || !status) {
     return (
-      <SettingsGroup title="Run Athena on your own computer">
+      <SettingsGroup capability={SETTINGS_NODES.athenaLattice}>
         <LoadFailure
           message={userErrorMessage(statusQ.error, 'Could not load this setting.')}
           retrying
@@ -180,7 +181,7 @@ export function LatticeSection(): JSX.Element {
   if (!status.available) {
     const reason: LatticeDeploymentReason = status.deploymentReason ?? 'not_configured';
     return (
-      <SettingsGroup title="Run Athena on your own computer">
+      <SettingsGroup capability={SETTINGS_NODES.athenaLattice}>
         <Text token="body-medium" tone="muted" role="status">
           {LATTICE_DEPLOYMENT_COPY[reason]}
         </Text>
@@ -218,8 +219,7 @@ export function LatticeSection(): JSX.Element {
 
   return (
     <SettingsGroup
-      title="Run Athena on your own computer"
-      description="Athena runs on a computer you own."
+      capability={SETTINGS_NODES.athenaLattice}
       action={
         connected ? (
           <Button

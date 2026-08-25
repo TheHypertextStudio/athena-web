@@ -19,6 +19,7 @@ import { useState } from 'react';
 
 import { RoleControl, type RoleOption } from './role-control';
 import { SettingsGroup } from './settings-group';
+import { SETTINGS_NODES } from './settings-capabilities';
 
 /** The payload emitted when the invite form is submitted. */
 export interface InvitePayload {
@@ -65,10 +66,7 @@ export function InviteForm({
   const canSubmit = email.trim().length > 0 && effectiveRoleId !== null && !sending;
 
   return (
-    <SettingsGroup
-      title="Invite someone"
-      description="They&rsquo;ll get an email invitation to join this workspace."
-    >
+    <SettingsGroup capability={SETTINGS_NODES.workspaceInvite}>
       <form
         className="flex flex-col gap-3"
         onSubmit={(event) => {

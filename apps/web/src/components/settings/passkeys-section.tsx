@@ -44,6 +44,7 @@ import { passkey } from '@/lib/auth-client';
 import { formatCalendarDate } from '@/lib/format-date';
 import { toUserFacingError, userErrorMessage } from '@/lib/problem';
 import { SettingsGroup } from './settings-group';
+import { SETTINGS_NODES } from './settings-capabilities';
 
 /** The Better Auth passkey record as returned by `listUserPasskeys` (subset this UI renders). */
 interface PasskeyRecord {
@@ -108,8 +109,7 @@ export function PasskeysSection(): JSX.Element {
   return (
     <section className="flex flex-col gap-3" aria-label="Passkeys">
       <SettingsGroup
-        title="Passkeys"
-        description="How you sign in — Face ID, Touch ID, or a security key. Add one for each device you use."
+        capability={SETTINGS_NODES.securityPasskeys}
         body="rows"
         action={
           passkeys.length > 0 ? (

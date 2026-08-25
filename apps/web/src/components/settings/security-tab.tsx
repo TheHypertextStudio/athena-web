@@ -22,6 +22,7 @@ import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 
 import { ChangeEmailSection } from './change-email-section';
 import { SettingsGroup } from './settings-group';
+import { SETTINGS_NODES } from './settings-capabilities';
 import { PasskeysSection } from './passkeys-section';
 import type { RecoveryCodesMode } from './recovery-codes-dialog';
 import { RecoveryCodesDialog } from './recovery-codes-dialog';
@@ -86,10 +87,7 @@ function RecoveryCodesSection(): JSX.Element {
 
   return (
     <>
-      <SettingsGroup
-        title="Recovery codes"
-        description="If you lose your passkey, a recovery code gets you back in. Each code works once. Keep them in a password manager."
-      >
+      <SettingsGroup capability={SETTINGS_NODES.securityRecoveryCodes}>
         {status.enabled ? (
           <div className="flex flex-col gap-1">
             <p

@@ -321,7 +321,12 @@ function LabelSection({
 }): JSX.Element | null {
   if (labels.length === 0) return null;
   return (
-    <SettingsGroup title={title} {...(description ? { description } : {})} body="rows">
+    <SettingsGroup
+      title={title}
+      discoverable={false}
+      {...(description ? { description } : {})}
+      body="rows"
+    >
       <ul>{labels.map(renderRow)}</ul>
     </SettingsGroup>
   );
@@ -348,6 +353,7 @@ function GroupSection({
   return (
     <SettingsGroup
       title={group.name}
+      discoverable={false}
       description={
         group.exclusive
           ? 'Picking one of these releases the others, like a status.'

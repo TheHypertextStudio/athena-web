@@ -38,6 +38,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { type JSX, useEffect, useMemo, useState } from 'react';
 
 import { SettingsGroup } from '@/components/settings/settings-group';
+import { SETTINGS_NODES } from '@/components/settings/settings-capabilities';
 
 import { api } from '@/lib/api';
 import { formatClock } from '@/lib/format-time';
@@ -53,10 +54,6 @@ import {
 
 /** The country preselected when nothing has been bound yet. */
 const DEFAULT_COUNTRY = 'US';
-
-/** The section heading and the promise it makes. */
-const SECTION_DESCRIPTION =
-  'Add a number and Athena will answer when you call from it, picking up the same conversation you have on the web.';
 
 /** What each lifecycle state is called here. Application-owned copy, one label per state. */
 const STATUS_LABEL: Record<PhoneNumberStatus, string> = {
@@ -274,7 +271,7 @@ export function VoicePhoneNumbers(): JSX.Element {
   const alert = notice ?? (challenge?.deliveryFailed ? UNDELIVERED_MESSAGE : null);
 
   return (
-    <SettingsGroup title="Call Athena" description={SECTION_DESCRIPTION} data-phone-numbers-section>
+    <SettingsGroup capability={SETTINGS_NODES.athenaPhone} data-phone-numbers-section>
       {items.length > 0 ? (
         <ul className="flex flex-col gap-2" data-phone-number-list>
           {items.map((number) => (

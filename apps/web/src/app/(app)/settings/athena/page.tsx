@@ -16,6 +16,7 @@ import { VoicePhoneNumbers } from '@/components/athena/voice-phone-numbers';
 import { LatticeSection } from './lattice-section';
 import { LoadFailure } from '@/components/settings/load-failure';
 import { SettingsGroup } from '@/components/settings/settings-group';
+import { SETTINGS_NODES } from '@/components/settings/settings-capabilities';
 import { SettingRowStatus } from '@/components/settings/setting-row-status';
 import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 
@@ -95,10 +96,7 @@ export default function GlobalAthenaSettingsPage(): JSX.Element {
           retrying
         />
       ) : (
-        <SettingsGroup
-          title="Working preferences"
-          description="Give Athena durable guidance for how to represent you across Docket and your connected services."
-        >
+        <SettingsGroup capability={SETTINGS_NODES.athenaWorkingPreferences}>
           <Field label="Instructions for Athena">
             <Textarea
               value={instructions}

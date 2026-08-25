@@ -12,6 +12,7 @@ import type { JSX } from 'react';
 
 import { SettingRow } from './setting-row';
 import { SettingsGroup } from './settings-group';
+import { SETTINGS_NODES } from './settings-capabilities';
 
 /** Props for {@link CalendarConnectionRow}. */
 export interface CalendarConnectionRowProps {
@@ -35,7 +36,7 @@ export function CalendarConnectionRow({
   href,
 }: CalendarConnectionRowProps): JSX.Element {
   return (
-    <SettingsGroup title="Calendar" body="rows">
+    <SettingsGroup capability={SETTINGS_NODES.connectionsCalendar} body="rows">
       <SettingRow label={name} description={effect} href={href} />
     </SettingsGroup>
   );

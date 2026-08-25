@@ -40,6 +40,7 @@ import {
 import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
 import { EmptyState } from '@docket/ui/components';
 import { SettingsGroup } from './settings-group';
+import { SETTINGS_NODES } from './settings-capabilities';
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
 import {
@@ -75,8 +76,7 @@ export function McpConnectorsSection({ orgId, canManage }: McpConnectorsSectionP
 
   return (
     <SettingsGroup
-      title="Tools for Athena"
-      description="Connect services you use. Athena works through them under rules you set."
+      capability={SETTINGS_NODES.connectionsTools}
       action={
         // While nothing is connected the empty state carries the action, so the header does not
         // offer the same thing twice.

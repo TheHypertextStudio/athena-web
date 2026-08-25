@@ -8,6 +8,7 @@ import { useEffect, useState, type JSX } from 'react';
 
 import { LoadFailure } from './load-failure';
 import { SettingsGroup } from './settings-group';
+import { SETTINGS_NODES } from './settings-capabilities';
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useLiveApiQuery } from '@/lib/query';
@@ -144,7 +145,7 @@ export function WorkspaceGeneralSettings({ orgId }: WorkspaceGeneralSettingsProp
         <Skeleton className="h-[34rem] rounded-xl" />
       ) : (
         <SettingsGroup
-          title="Workspace"
+          capability={SETTINGS_NODES.workspaceGeneral}
           {...(!permissionLoading && !canManage
             ? { description: 'Only workspace owners and admins can change this.' }
             : {})}

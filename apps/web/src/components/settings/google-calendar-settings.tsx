@@ -43,6 +43,7 @@ import {
 import { EmptyState, RelativeTime } from '@docket/ui/components';
 import { relativeTime } from './format-time';
 import { SettingsGroup } from './settings-group';
+import { SETTINGS_NODES } from './settings-capabilities';
 
 const STATUS_LABEL: Record<
   CalendarConnectionStatus,
@@ -304,6 +305,7 @@ export default function GoogleCalendarSettings(): JSX.Element {
           <SettingsGroup
             key={connection.id}
             title={connection.accountEmail ?? connection.accountName ?? 'Google account'}
+            discoverable={false}
             description={
               <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                 <span>
@@ -392,7 +394,7 @@ export default function GoogleCalendarSettings(): JSX.Element {
       })}
 
       {nativeLayers.length > 0 ? (
-        <SettingsGroup title="Docket calendars">
+        <SettingsGroup capability={SETTINGS_NODES.connectionsDocketCalendars}>
           <CalendarLayerPanel layers={nativeLayers} />
         </SettingsGroup>
       ) : null}

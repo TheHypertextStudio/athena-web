@@ -298,6 +298,7 @@ export function NotionTableDesigner({
       {open && openField ? (
         <SettingsGroup
           title={`${open.title} column`}
+          discoverable={false}
           action={
             <span className="text-on-surface-variant text-label-small font-mono">
               {entity}.{open.field}

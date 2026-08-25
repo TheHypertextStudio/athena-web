@@ -12,6 +12,7 @@ import { useDebouncedAutosave } from '@/lib/use-debounced-autosave';
 import { Field, Input } from '@docket/ui/primitives';
 import { SettingRowStatus } from '@/components/settings/setting-row-status';
 import { SettingsGroup } from '@/components/settings/settings-group';
+import { SETTINGS_NODES } from '@/components/settings/settings-capabilities';
 import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 
 /** The signed-in user's profile destination. */
@@ -68,8 +69,7 @@ export default function GlobalProfileSettingsPage(): JSX.Element {
     <SettingsSectionPage sectionKey="profile" loading={isPending}>
       {session ? (
         <SettingsGroup
-          title="Your identity"
-          description="This is the identity Athena uses when working across your connected services."
+          capability={SETTINGS_NODES.profileIdentity}
           action={<SettingRowStatus pending={save.isPending} saved={save.isSuccess} />}
         >
           <Field label="Name" {...(nameError === null ? {} : { error: nameError })}>

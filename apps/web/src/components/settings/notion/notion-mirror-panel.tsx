@@ -34,6 +34,7 @@ import type { JSX } from 'react';
 
 import { CardAlert, CardNote } from '../card-note';
 import { SettingsGroup } from '../settings-group';
+import { SETTINGS_NODES } from '../settings-capabilities';
 import { CONNECTION_ERROR_MESSAGE, integrationStatusLabel } from '../integration-status';
 
 import {
@@ -45,8 +46,6 @@ import {
   MIRROR_FAILED_TITLE,
   syncFailureCopy,
   OPEN_IN_NOTION,
-  PROVISIONED_HINT,
-  PROVISIONED_TITLE,
   RECONNECT_ACTION,
   SETUP_BLOCKED,
   SYNC_ACTION,
@@ -302,8 +301,7 @@ export function NotionMirrorPanel({ orgId, canManage }: NotionMirrorPanelProps):
         </>
       ) : (
         <SettingsGroup
-          title={PROVISIONED_TITLE}
-          description={PROVISIONED_HINT}
+          capability={SETTINGS_NODES.connectionsNotionDatabases}
           body="rows"
           footer={
             <div className="bg-surface-container flex flex-wrap items-center justify-between gap-3 px-4 py-3">

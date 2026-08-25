@@ -39,6 +39,7 @@ import {
 import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
 import { LoadFailure } from './load-failure';
 import { SettingsGroup } from './settings-group';
+import { SETTINGS_NODES } from './settings-capabilities';
 import { ClientSetup } from './mcp-setup-panels';
 import { userErrorMessage } from '@/lib/problem';
 
@@ -107,10 +108,7 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
   return (
     <div className="flex flex-col gap-8">
       {/* ── Setup guide ── */}
-      <SettingsGroup
-        title="Connect an MCP client"
-        description="Give Claude Desktop, Cursor, or any MCP-compatible tool access to your Docket account."
-      >
+      <SettingsGroup capability={SETTINGS_NODES.connectedAppsClient}>
         <ClientSetup mcpUrl={mcpServerUrl} />
       </SettingsGroup>
 
@@ -120,14 +118,13 @@ export function ConnectedAppsTab({ orgId: _orgId }: ConnectedAppsTabProps): JSX.
 
       {/* ── Authorized clients roster ── */}
       <SettingsGroup
-        title="Apps with access to your Docket"
+        capability={SETTINGS_NODES.connectedAppsAccess}
         body="rows"
         // What revoking actually does, in the same words the consent screen used to grant it.
         // This copy carried a "for up to 15 minutes" caveat while the resource server checked only
         // the token's signature, and an app holding a live key kept working until it expired.
         // `apps/api/src/mcp/auth.ts` now re-checks the stored grant on every call, so the caveat is
         // gone and the immediate claim is one the product actually keeps.
-        description="These apps use the permissions you approved. Revoking takes effect immediately."
       >
         {/* placeholder: the OAuth apps this person has authorized — how many, their names, icons,
             granted permissions and consent dates. Everything above (the heading and the paragraph

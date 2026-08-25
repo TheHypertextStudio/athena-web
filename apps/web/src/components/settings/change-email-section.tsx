@@ -17,6 +17,7 @@
 import { Button, Input } from '@docket/ui/primitives';
 import { WriteError } from './write-error';
 import { SettingsGroup } from './settings-group';
+import { SETTINGS_NODES } from './settings-capabilities';
 import { type JSX, useId, useState } from 'react';
 
 import { changeEmail, useSession } from '@/lib/auth-client';
@@ -54,7 +55,7 @@ export function ChangeEmailSection(): JSX.Element {
 
   return (
     <SettingsGroup
-      title="Email address"
+      capability={SETTINGS_NODES.profileEmail}
       description={
         <>
           Your current email is{' '}

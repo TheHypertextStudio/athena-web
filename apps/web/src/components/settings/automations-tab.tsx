@@ -22,6 +22,7 @@ import { LoadFailure } from './load-failure';
 import { SettingRow } from './setting-row';
 import { SettingRowStatus } from './setting-row-status';
 import { SettingsGroup } from './settings-group';
+import { SETTINGS_NODES } from './settings-capabilities';
 import { useAutomationRules } from '@/lib/use-automation-rules';
 
 /** Transient persistence status for an in-place autosave field. */
@@ -259,8 +260,7 @@ export default function AutomationsTab({
 
   return (
     <SettingsGroup
-      title="Rules"
-      description="Each rule watches for something happening in Docket and takes an action in response."
+      capability={SETTINGS_NODES.workspaceAutomationsRules}
       body="rows"
       action={
         canManage && (rules.length > 0 || creating) ? (

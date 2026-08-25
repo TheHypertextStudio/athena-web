@@ -7,6 +7,7 @@ import { formatCalendarDate } from '@/lib/format-date';
 
 import { exportScopeSummary, exportStatusCopy } from './export-data-model';
 import { SettingsGroup } from './settings-group';
+import { SETTINGS_NODES } from './settings-capabilities';
 import { SecureExportDownloadButton } from './export-download-button';
 
 /** One archive in the persistent export history. */
@@ -62,7 +63,7 @@ export function ExportHistory({
   readonly exports: readonly AccountExportOut[];
 }): JSX.Element {
   return (
-    <SettingsGroup title="Recent exports" body="rows" aria-live="polite">
+    <SettingsGroup capability={SETTINGS_NODES.dataExportHistory} body="rows" aria-live="polite">
       {exports.length > 0 ? (
         <ol>
           {exports.map((exportJob) => (

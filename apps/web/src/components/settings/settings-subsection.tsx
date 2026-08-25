@@ -1,11 +1,16 @@
 import type { JSX, ReactNode } from 'react';
 
 import { Text } from '@docket/ui/primitives';
+import type { SettingsNodeDefinition } from './settings-capabilities';
 
 /** Props for {@link SettingsSubsection}. */
 export interface SettingsSubsectionProps {
   /** The subsection's short label, rendered as its heading and its `aria-label`. */
-  title: string;
+  title?: string;
+  /** Stable searchable definition for a static Settings heading. */
+  capability?: SettingsNodeDefinition;
+  /** Marks a data-derived heading that must not enter the application capability catalog. */
+  discoverable?: false;
   /** An optional control aligned to the right of the heading (e.g. an "Add account" button). */
   action?: ReactNode;
   /** The subsection body (rows, cards, or a single control). */
@@ -32,22 +37,32 @@ export interface SettingsSubsectionProps {
  */
 export function SettingsSubsection({
   title,
+  capability,
   action,
   children,
 }: SettingsSubsectionProps): JSX.Element {
+  const resolvedTitle = capability?.label ?? title;
+  if (!resolvedTitle) throw new Error('SettingsSubsection requires a title or capability.');
+  const heading = (
+    <Text
+      as="h3"
+      token="label-medium"
+      tone="muted"
+      id={capability ? `settings-${capability.id}` : undefined}
+      tabIndex={capability ? -1 : undefined}
+    >
+      {resolvedTitle}
+    </Text>
+  );
   return (
-    <section aria-label={title} className="flex flex-col gap-3">
+    <section aria-label={resolvedTitle} className="flex flex-col gap-3">
       {action ? (
         <div className="flex items-center justify-between gap-2">
-          <Text as="h3" token="label-medium" tone="muted">
-            {title}
-          </Text>
+          {heading}
           {action}
         </div>
       ) : (
-        <Text as="h3" token="label-medium" tone="muted">
-          {title}
-        </Text>
+        heading
       )}
       {children}
     </section>

@@ -65,6 +65,7 @@ delegation are asserted in `apps/web/tests/pickers/timeframe-picker-contract.tes
 | 22  | Work locations → schedule editor          | `apps/web/src/components/work-location/schedule-editor-dialog.tsx`          | Date, effective range              | Shared picker                                 |
 | 23  | Work locations → occurrence editor        | `apps/web/src/components/work-location/occurrence-editor-dialog.tsx`        | Occurrence date                    | Shared picker                                 |
 | 24  | Canvas → bulk Properties editor           | `apps/web/src/components/canvas/canvas-properties-editor.tsx`               | Task start/due, Project timeframes | Shared and planning pickers                   |
+| 25  | Time → custom review range                | `apps/web/src/components/time-tracking/time-analytics.tsx`                  | From, Through                      | Shared range picker                           |
 
 Before this pass, rows 9–12 each hosted their own `<input type="date">`, so four surfaces had four
 different behaviours and none of them had bounds. Rows 1–8 already shared a component, but that
@@ -86,6 +87,8 @@ calendar-day contract.
 | Settings → notification quiet hours | `apps/web/src/components/settings/notification-preferences-section.tsx` | Quiet hours start/end    | `time` (a clock, no date)                             |
 | Settings → work locations           | `apps/web/src/app/(app)/settings/work-locations/page.tsx`               | Planned start/end        | `time` + explicit Earlier/Later fold choice           |
 | Admin → notification console        | `apps/admin/src/app/(admin)/notifications/notification-console.tsx`     | Scheduled send           | `datetime-local`                                      |
+| Time → add past time                | `apps/web/src/components/time-tracking/time-add-past-dialog.tsx`        | Starts at, Ends at       | `datetime-local` in the selected timezone             |
+| Time → repair a manual interval     | `apps/web/src/components/time-tracking/time-record-dialog.tsx`          | Starts at, Ends at       | `datetime-local` in the selected timezone             |
 
 ## Formatting
 

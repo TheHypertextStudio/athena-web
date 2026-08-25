@@ -17,9 +17,9 @@ import {
   Text,
 } from '@docket/ui/primitives';
 import { Trash2 } from '@docket/ui/icons';
-import Link from 'next/link';
 import { useEffect, useState, type JSX } from 'react';
 
+import Link from '@/components/docket-link';
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
 import { useApiMutation } from '@/lib/query';

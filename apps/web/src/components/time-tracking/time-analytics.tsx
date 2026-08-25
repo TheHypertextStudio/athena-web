@@ -18,13 +18,14 @@ import {
   Text,
 } from '@docket/ui/primitives';
 import { ChevronLeft, ChevronRight, Filter, Plus, Schedule, X } from '@docket/ui/icons';
-import { useRouter } from 'next/navigation';
 import { type JSX, useMemo, useState } from 'react';
 
 import Link from '@/components/docket-link';
 import { useActiveOrg } from '@/components/active-org';
+import { DateRangePicker } from '@/components/date-picker';
 import { resolveScheduleTimezone } from '@/components/scheduling';
 import { api } from '@/lib/api';
+import { useAppRouter } from '@/lib/interactions/navigation';
 import { userErrorMessage } from '@/lib/problem';
 import { useAppSearchParams } from '@/lib/app-location';
 import { STALE, apiQueryOptions, queryKeys, useApiListQuery, useApiQuery } from '@/lib/query';
@@ -79,7 +80,7 @@ function stateKey(state: TimeReviewState, range: { start: string; end: string })
 
 /** Render one private selection and make every total lead to the records it counts. */
 export function TimeAnalytics(): JSX.Element {
-  const router = useRouter();
+  const router = useAppRouter();
   const params = useAppSearchParams();
   const { orgs, activeOrgId } = useActiveOrg();
   const preferencesQ = useApiQuery(
@@ -597,35 +598,23 @@ function CustomRangeControls({
   const through = Temporal.PlainDate.from(end).subtract({ days: 1 }).toString();
   return (
     <div className="bg-surface-container-low flex min-w-0 items-end gap-3 rounded-xl p-3">
-      <label className="flex min-w-0 flex-1 flex-col gap-1">
-        <Text token="label-medium">From</Text>
-        <input
-          type="date"
-          className="bg-surface-container rounded-md px-2 py-1.5"
-          value={state.start ?? state.anchor}
-          onChange={(event) => {
-            onPatch({ start: event.target.value });
-          }}
-        />
-      </label>
-      <label className="flex min-w-0 flex-1 flex-col gap-1">
-        <Text token="label-medium">Through</Text>
-        <input
-          type="date"
-          className="bg-surface-container rounded-md px-2 py-1.5"
-          value={through}
-          min={state.start ?? state.anchor}
-          onChange={(event) => {
-            try {
-              onPatch({
-                end: Temporal.PlainDate.from(event.target.value).add({ days: 1 }).toString(),
-              });
-            } catch {
-              /* The browser reports malformed values as an empty field. */
-            }
-          }}
-        />
-      </label>
+      <DateRangePicker
+        value={{ start: state.start ?? state.anchor, end: through }}
+        startPlaceholder="From"
+        endPlaceholder="Through"
+        startLabel="From"
+        endLabel="Through"
+        ariaLabel="Custom time range"
+        triggerVariant="outline"
+        onChange={(next) => {
+          const start = next.start ?? next.end ?? state.start ?? state.anchor;
+          const inclusiveEnd = next.end ?? next.start ?? through;
+          onPatch({
+            start,
+            end: Temporal.PlainDate.from(inclusiveEnd).add({ days: 1 }).toString(),
+          });
+        }}
+      />
     </div>
   );
 }

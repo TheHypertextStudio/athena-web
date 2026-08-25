@@ -9,8 +9,9 @@
 
 ### [SETTINGS-SCROLL-STATE-001] Show settings scroll state in the header
 
-- **Status**: IN_PROGRESS
+- **Status**: COMPLETED
 - **Started**: 2026-08-25
+- **Completed**: 2026-08-25
 - **Priority**: P1
 - **Description**: The settings header keeps the dialog's resting surface color after section
   content scrolls beneath it. MD3 top app bars use a distinct scrolled container color so the
@@ -18,8 +19,16 @@
 - **Approach**: Let the shared settings pane report whether its visible scroll region has moved.
   Keep the header on the dialog surface at the top, raise it by one semantic surface step while
   content is scrolled, and restore the resting tone when content returns to the top.
-- **Validation**: Pending focused component coverage and authenticated screenshots at phone and
-  desktop widths.
+- **Validation**: The focused settings pane suite passes all six cases. The commit hook passed
+  formatting, repository tooling tests, the API dependency build, and Web lint. Production
+  deployment `dpl_4mrPa2VxPfMfd644GEFyBaPttCPk` is Ready and promoted to
+  `docket.hypertext.studio`. Authenticated Hypertext Studio Chrome checks at 1280 by 900 and 390 by
+  844 show `surface-container-high` at scroll position zero and `surface-container-highest` at
+  scroll position 240. Returning to position zero restores the resting tone. Desktop and phone
+  screenshots confirm that the fixed header separates from the scrolling settings content.
+- **Learnings**: A modal app bar needs the same explicit resting and scrolled container states as a
+  page app bar. The scroll owner should report that state because the shell cannot infer it from
+  the routed page.
 - **Blockers**: None.
 
 ---

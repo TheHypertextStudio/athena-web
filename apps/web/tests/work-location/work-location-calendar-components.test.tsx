@@ -13,6 +13,7 @@ import type {
   ScheduleTimedLaneContextRenderContext,
 } from '@/components/scheduling';
 import {
+  WORK_LOCATION_TIMED_TRACK_WIDTH_PX,
   WorkLocationAllDayContext,
   hasWorkLocationAllDayRegion,
   resolveWorkLocationTimedLeadingInset,
@@ -177,7 +178,7 @@ describe('work-location calendar components', () => {
     ).toBeInTheDocument();
   });
 
-  it('reserves the 40px interaction track only for intersecting timed intervals', () => {
+  it('reserves the 32px visual track only for intersecting timed intervals', () => {
     const regions = [region()];
     expect(
       resolveWorkLocationTimedLeadingInset({
@@ -194,7 +195,7 @@ describe('work-location calendar components', () => {
         bounds: { startMinutes: 480, endMinutes: 600 },
         displayTimezone: 'UTC',
       }),
-    ).toBe(40);
+    ).toBe(32);
   });
 
   it('renders a compact interactive all-day chip inside a 40px target for every pointer', () => {
@@ -277,7 +278,7 @@ describe('work-location calendar components', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
-  it('renders one tinted 28px band inside the 40px interaction track', () => {
+  it('renders one tinted 12px band while 40px interaction targets end at the event boundary', () => {
     const onEdit = vi.fn(() => ({ status: 'accepted' as const }));
     render(
       <WorkLocationTimedLaneContext
@@ -292,12 +293,12 @@ describe('work-location calendar components', () => {
     expect(screen.getByTestId('work-location-band')).toHaveClass(
       'bg-tertiary-container/35',
       'left-1.5',
-      'w-7',
+      'w-3',
       'rounded-full',
     );
     expect(screen.getByTestId('work-location-rail')).toHaveClass(
       'bg-tertiary',
-      'left-[19px]',
+      'left-[11px]',
       'w-0.5',
       'rounded-full',
     );
@@ -308,6 +309,10 @@ describe('work-location calendar components', () => {
       expect(control).toHaveClass('min-h-10');
       expect(control).toHaveClass('min-w-10');
     }
+    expect(move).toHaveClass('-left-2');
+    expect(resizeStart).toHaveStyle({ left: '-8px', width: '40px', height: '40px' });
+    expect(resizeEnd).toHaveStyle({ left: '-8px', width: '40px', height: '40px' });
+    expect(-8 + 40).toBe(WORK_LOCATION_TIMED_TRACK_WIDTH_PX);
     expect(screen.getByTestId('work-location-band')).not.toHaveClass('pointer-events-auto');
 
     fireEvent.pointerDown(move, { button: 0, pointerId: 7, clientX: 100, clientY: 100 });
@@ -370,11 +375,21 @@ describe('work-location calendar components', () => {
     const move = screen.getByRole('button', { name: 'Move Main library work location' });
     fireEvent.pointerDown(move, { button: 0, pointerId: 71, clientX: 100, clientY: 100 });
     fireEvent.pointerMove(window, { pointerId: 71, clientX: 300, clientY: 130 });
-    expect(screen.getByTestId('work-location-rail-preview')).toHaveStyle({
+    const preview = screen.getByTestId('work-location-rail-preview');
+    expect(preview).toHaveStyle({
       top: '570px',
       height: '180px',
       transform: 'translateX(200px)',
     });
+    expect(preview.querySelector('[data-work-location-preview-band]')).toHaveClass(
+      'left-1.5',
+      'w-3',
+    );
+    expect(preview.querySelector('[data-work-location-preview-rail]')).toHaveClass(
+      'left-[11px]',
+      'w-0.5',
+    );
+    expect(preview.querySelector('[data-work-location-preview-marker]')).toHaveClass('left-0');
     fireEvent.pointerCancel(window, { pointerId: 71 });
     expect(screen.queryByTestId('work-location-rail-preview')).not.toBeInTheDocument();
 
@@ -470,15 +485,15 @@ describe('work-location calendar components', () => {
       expect(starts).toHaveLength(2);
       expect(ends).toHaveLength(2);
       for (const move of moves) {
-        expect(move).toHaveClass('left-0', 'size-10', 'min-h-10', 'min-w-10');
+        expect(move).toHaveClass('-left-2', 'size-10', 'min-h-10', 'min-w-10');
         expect(move.querySelector('[data-work-location-marker-kind]')).toHaveClass('size-6');
       }
       for (const start of starts) {
-        expect(start).toHaveStyle({ left: '0px', width: '40px', height: '40px' });
+        expect(start).toHaveStyle({ left: '-8px', width: '40px', height: '40px' });
       }
       for (const end of ends) {
         expect(end).toHaveStyle({
-          left: '0px',
+          left: '-8px',
           width: '40px',
           height: '40px',
         });

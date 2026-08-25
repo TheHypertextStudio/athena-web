@@ -230,6 +230,12 @@ describe('resolveMirrorValues', () => {
     expect(out.unresolved).toEqual([]);
   });
 
+  it('drops an actor with no column to render it into', () => {
+    const out = resolveMirrorValues([], { assignee: ref('act_1', 'Sam S') }, KNOWN);
+    expect(out.values['assignee']).toBeUndefined();
+    expect(out.unresolved).toEqual([]);
+  });
+
   it('an omitted reference leaves the content hash free to change when it resolves', () => {
     // This is what proves omission CONVERGES rather than stalls: the unresolved pass writes a row
     // without the property and hashes it that way, so the pass that resolves it sees a different

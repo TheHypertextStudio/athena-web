@@ -5,6 +5,7 @@ import {
   isProviderAuthError,
   isProviderMissingObjectError,
   ProviderError,
+  providerErrorKind,
   providerErrorKindForStatus,
   type ProviderErrorKind,
 } from '../src/provider-error';
@@ -40,7 +41,26 @@ describe('Connections provider-error vocabulary', () => {
     expect(isProviderMissingObjectError({ kind: 'network', status: 404 })).toBe(false);
     expect(isProviderMissingObjectError({ kind: 'provider' })).toBe(false);
     expect(isProviderMissingObjectError(new Error('not found'))).toBe(false);
+    expect(isProviderMissingObjectError({ kind: 'auth', status: 404 })).toBe(false);
     expect(isProviderMissingObjectError(undefined)).toBe(false);
+  });
+
+  it.each([
+    'auth',
+    'rate_limit',
+    'network',
+    'provider',
+    'ambiguous',
+    'unknown',
+  ] as const satisfies readonly ProviderErrorKind[])(
+    'preserves the %s kind from an adapter-shaped failure',
+    (kind) => {
+      expect(providerErrorKind({ kind })).toBe(kind);
+    },
+  );
+
+  it('returns unknown for a failure with an unrecognized kind', () => {
+    expect(providerErrorKind({ kind: 'timeout' })).toBe('unknown');
   });
 
   it('carries provider failure metadata and retry semantics on the domain error', () => {

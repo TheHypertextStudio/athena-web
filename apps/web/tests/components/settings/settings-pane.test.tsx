@@ -15,12 +15,15 @@ import '@testing-library/jest-dom/vitest';
  * section. Which of the two is *visible* at a given width is a CSS breakpoint question jsdom cannot
  * answer; the captured 390×844 evidence carries that half.
  */
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SettingsPane } from '../../../src/components/settings/settings-pane';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 /** jsdom implements no scrolling, so the pane's scroll-into-view needs a stub to be observable. */
 function stubScrollIntoView(): ReturnType<typeof vi.fn> {
@@ -136,5 +139,104 @@ describe('SettingsPane', () => {
 
     goBackToList();
     expect(screen.getByRole('navigation')).toBeInTheDocument();
+  });
+
+  it('scrolls to and focuses the Settings heading named by the route fragment', async () => {
+    const scrollIntoView = stubScrollIntoView();
+    window.history.replaceState(null, '', '/settings/security#settings-passkeys');
+    render(
+      <SettingsPane renderNav={() => null}>
+        <h3 id="settings-passkeys" tabIndex={-1}>
+          Passkeys
+        </h3>
+      </SettingsPane>,
+    );
+
+    const heading = await screen.findByRole('heading', { name: 'Passkeys' });
+    await waitFor(() => {
+      expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start' });
+      expect(heading).toHaveFocus();
+    });
+  });
+
+  it("applies route-fragment focus after the dialog's initial focus move", () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined);
+    window.history.replaceState(null, '', '/settings/security#settings-passkeys');
+    render(
+      <SettingsPane renderNav={() => null}>
+        <button type="button">Workspace selector</button>
+        <h3 id="settings-passkeys" tabIndex={-1}>
+          Passkeys
+        </h3>
+      </SettingsPane>,
+    );
+
+    screen.getByRole('button', { name: 'Workspace selector' }).focus();
+    act(() => {
+      frames.forEach((frame) => {
+        frame(0);
+      });
+    });
+
+    expect(screen.getByRole('heading', { name: 'Passkeys' })).toHaveFocus();
+  });
+
+  it('focuses a Settings heading when the router applies its fragment after mounting', () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined);
+    window.history.replaceState(null, '', '/settings/security');
+    render(
+      <SettingsPane renderNav={() => null}>
+        <h3 id="settings-passkeys" tabIndex={-1}>
+          Passkeys
+        </h3>
+      </SettingsPane>,
+    );
+
+    window.history.replaceState(null, '', '/settings/security#settings-passkeys');
+    window.dispatchEvent(new HashChangeEvent('hashchange'));
+    act(() => {
+      frames.forEach((frame) => {
+        frame(0);
+      });
+    });
+
+    expect(screen.getByRole('heading', { name: 'Passkeys' })).toHaveFocus();
+  });
+
+  it('waits for a route fragment that appears after the first mounted frame', () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined);
+    window.history.replaceState(null, '', '/settings/security');
+    render(
+      <SettingsPane renderNav={() => null}>
+        <h3 id="settings-passkeys" tabIndex={-1}>
+          Passkeys
+        </h3>
+      </SettingsPane>,
+    );
+
+    act(() => {
+      frames.shift()?.(0);
+    });
+    window.history.replaceState(null, '', '/settings/security#settings-passkeys');
+    act(() => {
+      while (frames.length > 0) frames.shift()?.(16);
+    });
+
+    expect(screen.getByRole('heading', { name: 'Passkeys' })).toHaveFocus();
   });
 });

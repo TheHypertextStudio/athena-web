@@ -6382,6 +6382,44 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [WEB-SEARCH-003] Make application capabilities searchable from Cmd+K
+
+- **Completed**: 2026-08-25
+- **Priority**: P1
+- **Summary**: Cmd+K now searches shipped application capabilities and server-owned entity results
+  through one ranked list. The frontend catalog covers Home and workspace destinations, global
+  actions, persistent panels, every stable Settings route, and static Settings groups and
+  subsections. Empty-query browsing remains grouped and does not expose the large Settings
+  inventory until a person searches.
+- **Decisions**: Views publish semantic descriptors and declarative intents. They do not import the
+  palette or its ranking code. Server search remains authoritative for user-created data. The
+  resolver removes workspace-management, shared-workspace, and unavailable rail-panel commands
+  before matching. Stable result IDs preserve keyboard selection when a delayed server response
+  reorders the list.
+- **Files changed**: Added the feature-owned capability contracts, catalog resolver, scorer,
+  merger, shell executor, and shared Home and workspace navigation descriptors. Migrated static
+  Settings headings to stable descriptors and anchors. Moved the palette host inside the shell,
+  merged local and remote candidates, added kind badges and breadcrumbs, and implemented routed
+  Settings scrolling and heading focus. The approved design lives in
+  `docs/superpowers/specs/2026-08-25-command-palette-capability-search-design.md`.
+- **Validation**: All 66 focused catalog, palette, Settings, shell, and first-paint tests pass with
+  at most two workers. The full Web suite passes all 431 files and 3,194 tests. Web type checking
+  and ESLint pass. The production build compiles all 75 routes and precaches 273 service-worker
+  assets. Browser checks pass at 1440×900 and 390×844 in light and dark themes. The mobile Settings
+  result resolves to `/settings/security#settings-passkeys`, scrolls Passkeys into view, and leaves
+  focus on the `settings-passkeys` heading.
+- **Learnings**: Route fragments alone do not survive every dialog focus-timing boundary. A
+  transient route-focus hint lets the mounted Settings shell claim focus before it replaces the
+  URL with the public fragment. Catalog policy tests keep static UI text discoverable without
+  coupling search to the rendered component tree. Destination focus and header scroll state need
+  separate effects because one tracks navigation while the other tracks the current scroll owner.
+- **Retrospective**: Sharing semantic navigation and Settings descriptors removed the duplicate
+  palette inventories that caused drift. Browser verification caught the cross-document focus
+  race that unit-only catalog coverage would have missed.
+- **Blockers**: None for this feature.
+
+---
+
 ### [CANVAS-MOBILE-MINIMAP-001] Remove the persistent mobile minimap
 
 - **Completed**: 2026-08-24

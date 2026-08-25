@@ -32,6 +32,9 @@ import { Surface } from '@docket/ui/primitives';
 import { type JSX, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 
 import { SETTINGS_BACK_CLASS } from './settings-back';
+import { focusSettingsHashTarget } from './settings-focus';
+
+const MAX_FRAGMENT_FOCUS_FRAMES = 120;
 
 /** The breakpoint where the settings list and section share the dialog. */
 const SETTINGS_SPLIT_VIEW_QUERY = '(min-width: 40rem)';
@@ -87,6 +90,40 @@ export function SettingsPane({
     const current = listRef.current?.querySelector('[aria-current="page"]');
     if (current instanceof HTMLElement) current.scrollIntoView({ block: 'center' });
   }, [browsing]);
+
+  // A capability result routes to the owning section and names the stable heading in the hash.
+  // Wait for routed content to mount, then make the destination visible and place keyboard focus
+  // on its heading without adding another tab stop to normal navigation.
+  useEffect(() => {
+    if (!content) return;
+    let frame: number | null = null;
+    let attempts = 0;
+    const attemptFocus = (): void => {
+      frame = requestAnimationFrame(() => {
+        frame = null;
+        if (focusSettingsHashTarget()) return;
+        attempts += 1;
+        // Next can apply the fragment after the routed pane has mounted without emitting a
+        // hashchange event. Two seconds at 60fps covers that transition without polling forever.
+        if (attempts < MAX_FRAGMENT_FOCUS_FRAMES) attemptFocus();
+      });
+    };
+    const beginFocus = (): void => {
+      if (frame !== null) cancelAnimationFrame(frame);
+      attempts = 0;
+      // Radix moves focus to the dialog's first control during its own opening effect. Defer this
+      // route-owned focus by one frame so the requested heading wins that one-time focus move.
+      attemptFocus();
+    };
+    beginFocus();
+    // Next commits the routed content before it applies the URL fragment. The fragment therefore
+    // needs its own event path instead of relying on the content render to rerun this effect.
+    window.addEventListener('hashchange', beginFocus);
+    return () => {
+      window.removeEventListener('hashchange', beginFocus);
+      if (frame !== null) cancelAnimationFrame(frame);
+    };
+  }, [children, content]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden sm:flex-row sm:gap-8 sm:px-5 sm:pt-5">

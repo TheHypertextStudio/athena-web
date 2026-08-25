@@ -34,6 +34,10 @@ import { type JSX, type ReactNode, useEffect, useMemo, useRef, useState } from '
 import { useActiveOrg } from '@/components/active-org';
 import { useAppPathname } from '@/lib/app-location';
 import { CREATE_WORKSPACE_PATH } from '@/lib/workspace-creation';
+import {
+  focusPendingRouteFragment,
+  hasPendingRouteFragmentFocus,
+} from '@/lib/interactions/route-fragment-focus';
 
 import {
   DEFAULT_PERSONAL_SETTINGS_SECTION,
@@ -41,11 +45,29 @@ import {
   personalSectionHref,
   sectionHref,
 } from './settings-registry';
+import { focusSettingsHashTarget } from './settings-focus';
 import { SettingsPane } from './settings-pane';
 import { SettingsShellNav, useSettingsShellWorkspace } from './settings-shell-nav';
 
 /** The pathname to fall back to when settings was opened with no prior page (a direct link). */
 const DEFAULT_CLOSE_TARGET = '/today';
+const FRAGMENT_FOCUS_RETRY_MS = 25;
+const MAX_FRAGMENT_FOCUS_ATTEMPTS = 80;
+const REQUIRED_STABLE_FRAGMENT_FOCUSES = 8;
+
+function stabilizeSettingsFragmentFocus(): void {
+  let attempts = 0;
+  const focusFragment = (): void => {
+    if (!focusSettingsHashTarget()) {
+      focusPendingRouteFragment();
+    }
+    attempts += 1;
+    if (attempts < REQUIRED_STABLE_FRAGMENT_FOCUSES) {
+      setTimeout(focusFragment, FRAGMENT_FOCUS_RETRY_MS);
+    }
+  };
+  focusFragment();
+}
 
 /** Whether an editable element currently holds focus (guards the Cmd+, shortcut). */
 function isEditableTarget(target: EventTarget | null): boolean {
@@ -78,6 +100,30 @@ export function SettingsShell({ active, children }: SettingsShellProps): JSX.Ele
   useEffect(() => {
     if (!active) setScrolled(false);
   }, [active]);
+
+  // Next can apply a route fragment after the dialog and its streamed section have mounted. The
+  // history update does not emit `hashchange`, so keep a bounded destination-side retry window.
+  useEffect(() => {
+    if (!active) return;
+    let attempts = 0;
+    let stableFocuses = 0;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const focusFragment = (): void => {
+      const focused = focusSettingsHashTarget() || focusPendingRouteFragment();
+      attempts += 1;
+      stableFocuses = focused ? stableFocuses + 1 : 0;
+      if (
+        attempts < MAX_FRAGMENT_FOCUS_ATTEMPTS &&
+        stableFocuses < REQUIRED_STABLE_FRAGMENT_FOCUSES
+      ) {
+        timer = setTimeout(focusFragment, FRAGMENT_FOCUS_RETRY_MS);
+      }
+    };
+    timer = setTimeout(focusFragment, 0);
+    return () => {
+      if (timer !== null) clearTimeout(timer);
+    };
+  }, [active, pathname]);
 
   const close = useMemo(
     () => (): void => {
@@ -115,7 +161,14 @@ export function SettingsShell({ active, children }: SettingsShellProps): JSX.Ele
         if (!open) close();
       }}
     >
-      <SettingsDialogContent className="p-0">
+      <SettingsDialogContent
+        className="p-0"
+        onOpenAutoFocus={(event) => {
+          if (!window.location.hash && !hasPendingRouteFragmentFocus()) return;
+          event.preventDefault();
+          stabilizeSettingsFragmentFocus();
+        }}
+      >
         <DialogDescription className="sr-only">
           Choose a section to update your personal or workspace settings.
         </DialogDescription>

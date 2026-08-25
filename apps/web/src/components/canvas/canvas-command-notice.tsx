@@ -12,7 +12,7 @@ export default function CanvasCommandNotice(): React.JSX.Element | null {
   const commands = useCanvasCommandContext();
   if (commands?.notice === null || commands === null) return null;
   return (
-    <Panel position="bottom-center">
+    <Panel position="bottom-center" className="!mb-24 sm:!mb-40">
       <Surface
         tone="prominent"
         shape="pill"

@@ -1,6 +1,6 @@
 /** `@docket/web` — Project graph adapter tests. */
 import { renderHook } from '@testing-library/react';
-import type { Node } from '@xyflow/react';
+import type { Edge, Node } from '@xyflow/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type {
   GraphLayoutOptions,
@@ -34,6 +34,41 @@ beforeEach(() => {
 });
 
 describe('layoutProjectGraph', () => {
+  it('packs the 36-project release fixture into a readable non-overlapping grid', () => {
+    const nodes: Node[] = Array.from({ length: 36 }, (_, index) => ({
+      id: `project-${index.toString().padStart(2, '0')}`,
+      position: { x: 0, y: 0 },
+      data: { name: `Project ${index + 1}` },
+    }));
+    const edges: Edge[] = Array.from({ length: 11 }, (_, index) => ({
+      id: `dependency-${index}`,
+      source: nodes[index * 2]?.id ?? '',
+      target: nodes[index * 2 + 1]?.id ?? '',
+    }));
+    const result = layoutProjectGraph(nodes, edges, 16 / 9);
+    const rectangles = result.nodes.map((node) => ({
+      x: node.position.x,
+      y: node.position.y,
+      width: Number(node.style?.width),
+      height: Number(node.style?.height),
+    }));
+
+    expect(result.layout.diagnostics).toMatchObject({ nodeCount: 36, componentCount: 25 });
+    expect(result.layout.diagnostics.durationMs).toBeLessThanOrEqual(100);
+    expect(new Set(rectangles.map(({ x }) => x)).size).toBeGreaterThan(1);
+    expect(new Set(rectangles.map(({ y }) => y)).size).toBeGreaterThan(1);
+    for (const [index, left] of rectangles.entries()) {
+      for (const right of rectangles.slice(index + 1)) {
+        expect(
+          left.x + left.width <= right.x ||
+            right.x + right.width <= left.x ||
+            left.y + left.height <= right.y ||
+            right.y + right.height <= left.y,
+        ).toBe(true);
+      }
+    }
+  });
+
   it('measures Project cards at full density and packs disconnected projects into rows', () => {
     const nodes: Node[] = Array.from({ length: 12 }, (_, index) => ({
       id: `project-${index}`,

@@ -647,7 +647,7 @@ export default function TaskGraphPanel({
                   </Panel>
                 ) : null}
                 {display.ready && readyNodes.length > 0 ? (
-                  <Panel position="bottom-left">
+                  <Panel position="bottom-left" className="!mb-24 sm:!mb-40">
                     <Surface tone="raised" pad="tight" className="max-h-56 w-56 overflow-auto">
                       <p className="text-on-surface-variant text-label-medium mb-1">
                         Ready to start
@@ -689,7 +689,7 @@ export default function TaskGraphPanel({
             offers an undo.
           */}
                 {activeError !== null ? (
-                  <Panel position="bottom-center">
+                  <Panel position="bottom-center" className="!mb-24 sm:!mb-40">
                     <Surface
                       tone="prominent"
                       shape="pill"

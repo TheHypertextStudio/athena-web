@@ -23,6 +23,7 @@ import {
   type EdgeTypes,
   type OnInit,
   type OnNodeDrag,
+  Panel,
   ReactFlow,
   ReactFlowProvider,
 } from '@xyflow/react';
@@ -417,26 +418,31 @@ function CanvasInner({
             every control and a divider between them, which is the wireframe look this canvas was
             called out for.
           */}
-          <Controls
-            showInteractive={false}
-            className="[&_button]:!bg-surface-container-high [&_button]:!fill-on-surface-variant [&_button:hover]:!bg-surface-container-highest overflow-hidden !rounded-lg !shadow-none [&_button]:!border-0"
-          />
-          {(minimap ?? density === 'full') ? (
-            <MiniMap
-              pannable
-              zoomable
-              {...(nodeColor !== undefined ? { nodeColor } : {})}
-              maskColor="color-mix(in srgb, var(--color-surface) 70%, transparent)"
-              bgColor="var(--color-surface-container-low)"
-              className="!rounded-lg"
+          <Panel
+            position="bottom-left"
+            className="pointer-events-none !right-[15px] !bottom-[15px] !left-[15px] !m-0 flex items-end justify-between gap-2"
+          >
+            <Controls
+              showInteractive={false}
+              className="[&_button]:!bg-surface-container-high [&_button]:!fill-on-surface-variant [&_button:hover]:!bg-surface-container-highest pointer-events-auto !static shrink-0 overflow-hidden !rounded-lg !shadow-none [&_button]:!border-0"
             />
-          ) : null}
-          <CanvasViewportToolbar
-            onRelayout={() => {
-              framed.current = false;
-              onRelayout?.();
-            }}
-          />
+            <CanvasViewportToolbar
+              onRelayout={() => {
+                framed.current = false;
+                onRelayout?.();
+              }}
+            />
+            {(minimap ?? density === 'full') ? (
+              <MiniMap
+                pannable
+                zoomable
+                {...(nodeColor !== undefined ? { nodeColor } : {})}
+                maskColor="color-mix(in srgb, var(--color-surface) 70%, transparent)"
+                bgColor="var(--color-surface-container-low)"
+                className="pointer-events-auto !static !m-0 !h-20 !w-32 shrink-0 !rounded-lg sm:!h-[150px] sm:!w-[200px]"
+              />
+            ) : null}
+          </Panel>
           {children}
         </ReactFlow>
         {menus.menu}

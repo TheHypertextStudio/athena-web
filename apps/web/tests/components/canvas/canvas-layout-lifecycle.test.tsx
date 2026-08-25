@@ -237,6 +237,9 @@ describe('Canvas measured layout lifecycle', () => {
     flushFrames();
 
     expect(flowState.fitView).toHaveBeenCalledTimes(1);
+    expect(flowState.fitView).toHaveBeenCalledWith(
+      expect.objectContaining({ minZoom: 0.5, maxZoom: 1 }),
+    );
   });
 
   it('lets non-empty search focus win over automatic framing', async () => {

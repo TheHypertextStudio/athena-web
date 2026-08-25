@@ -510,7 +510,8 @@ describe('AppShell rail', () => {
     expect(document.getElementById('shell-aside')).toHaveClass('hidden');
   });
 
-  it('switches between panels from the mobile sheet tablist when more than one exists', async () => {
+  it('switches between panels from one mobile sheet menu', async () => {
+    const user = userEvent.setup();
     vi.stubGlobal('matchMedia', (query: string) => ({
       matches: false,
       media: query,
@@ -521,12 +522,13 @@ describe('AppShell rail', () => {
       removeEventListener: vi.fn(),
       dispatchEvent: vi.fn(() => false),
     }));
-    const AGENDA_PANEL = {
-      id: 'agenda',
-      label: 'Agenda',
-      icon: <Home />,
-      node: <div>Agenda body</div>,
-    };
+    const panels = [
+      TASKS_PANEL,
+      { id: 'agenda', label: 'Agenda', icon: <Home />, node: <div>Agenda body</div> },
+      { id: 'focus', label: 'Focus', icon: <Home />, node: <div>Focus body</div> },
+      { id: 'athena', label: 'Athena', icon: <Home />, node: <div>Athena body</div> },
+      { id: 'inbox', label: 'Inbox', icon: <Home />, node: <div>Inbox body</div> },
+    ];
     render(
       <ContextProvider initialContext={ACME.id}>
         <AppShell
@@ -538,7 +540,7 @@ describe('AppShell rail', () => {
               onOpenSearch={() => undefined}
             />
           }
-          aside={{ panels: [TASKS_PANEL, AGENDA_PANEL], defaultPanelId: 'tasks' }}
+          aside={{ panels, defaultPanelId: 'tasks' }}
         >
           <div>Main</div>
         </AppShell>
@@ -547,20 +549,76 @@ describe('AppShell rail', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Show Tasks' }));
     const overlay = await screen.findByRole('dialog', { name: 'Tasks' });
-    const tablist = within(overlay).getByRole('tablist', { name: 'Panels' });
-    const tasksTab = within(tablist).getByRole('tab', { name: /Tasks/ });
-    const agendaTab = within(tablist).getByRole('tab', { name: /Agenda/ });
-    expect(tasksTab).toHaveAttribute('aria-selected', 'true');
-    expect(agendaTab).toHaveAttribute('aria-selected', 'false');
+    expect(within(overlay).queryByRole('tablist')).not.toBeInTheDocument();
 
-    fireEvent.click(agendaTab);
+    openMenu(within(overlay).getByRole('button', { name: 'Panel: Tasks. Switch panel' }));
+    expect(screen.getAllByRole('menuitem')).toHaveLength(5);
+    screen.getByRole('menuitem', { name: 'Tasks' }).focus();
+    await user.keyboard('{ArrowDown}{Enter}');
+
+    expect(await screen.findByRole('dialog', { name: 'Agenda' })).toBeInTheDocument();
     expect(within(overlay).getByText('Agenda body')).toBeInTheDocument();
+    expect(window.localStorage.getItem('docket.rail.active')).toBe('agenda');
 
     // Escape dismisses the mobile sheet (the sheet's own onOpenChange(false) path).
     fireEvent.keyDown(overlay, { key: 'Escape', code: 'Escape' });
     await waitFor(() => {
       expect(screen.queryByRole('dialog', { name: 'Agenda' })).not.toBeInTheDocument();
     });
+  });
+
+  it('keeps a long active panel name on one line and carries live status into the menu', async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(() => false),
+    }));
+    const longLabel = 'A utility panel name that cannot fit inside a narrow sheet';
+    render(
+      <ContextProvider initialContext={ACME.id}>
+        <AppShell
+          sidebar={
+            <Sidebar
+              workspaces={WORKSPACES}
+              {...sidebarHrefs()}
+              onSelectWorkspace={() => undefined}
+              onOpenSearch={() => undefined}
+            />
+          }
+          aside={{
+            panels: [
+              { id: 'long', label: longLabel, icon: <Home />, node: <div>Long panel body</div> },
+              {
+                id: 'focus',
+                label: 'Focus',
+                icon: <Home />,
+                node: <div>Focus body</div>,
+                status: { tone: 'active', label: 'tracking Deep work' },
+              },
+            ],
+            defaultPanelId: 'long',
+          }}
+        >
+          <div>Main</div>
+        </AppShell>
+      </ContextProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: `Show ${longLabel}` }));
+    const overlay = await screen.findByRole('dialog', { name: longLabel });
+    const trigger = within(overlay).getByRole('button', {
+      name: `Panel: ${longLabel}. Switch panel`,
+    });
+    expect(within(trigger).getByTitle(longLabel)).toHaveClass('truncate', 'whitespace-nowrap');
+
+    openMenu(trigger);
+    const focus = screen.getByRole('menuitem', { name: /Focus.*tracking Deep work/ });
+    expect(focus.querySelector('[data-panel-status-tone="active"]')).toBeInTheDocument();
   });
 
   // A panel's live state has to survive the rail being collapsed — that is the moment it matters,

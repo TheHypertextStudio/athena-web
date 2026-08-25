@@ -93,6 +93,9 @@ const SYNC_FAILURE_BY_KIND: Record<SyncFailureKind, string> = {
   provider:
     'Notion rejected part of the update. This is usually a page Docket can no longer see — check ' +
     'that the parent page is still shared with Docket, then run it again.',
+  ambiguous:
+    'Docket is waiting for Notion to confirm one page creation. Docket will keep checking and will ' +
+    'not create a duplicate. You do not need to do anything.',
   unknown: SYNC_FAILED,
 };
 

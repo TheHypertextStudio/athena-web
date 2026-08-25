@@ -14,9 +14,16 @@
  * - `rate_limit` — the provider asked Docket to slow down.
  * - `network` — the request did not reach the provider.
  * - `provider` — the provider returned an unsuccessful or invalid response.
+ * - `ambiguous` — the provider may have applied a non-idempotent write before the response failed.
  * - `unknown` — the source could not classify the failure.
  */
-export type ProviderErrorKind = 'auth' | 'rate_limit' | 'network' | 'provider' | 'unknown';
+export type ProviderErrorKind =
+  | 'auth'
+  | 'rate_limit'
+  | 'network'
+  | 'provider'
+  | 'ambiguous'
+  | 'unknown';
 
 /** Construction options for a {@link ProviderError}. */
 export interface ProviderErrorOptions<TProvider extends string = string> {
@@ -74,7 +81,12 @@ export class ProviderError<TProvider extends string = string> extends Error {
 
   /** Whether the failure is worth retrying later. */
   get retryable(): boolean {
-    return this.kind === 'rate_limit' || this.kind === 'network' || this.kind === 'provider';
+    return (
+      this.kind === 'rate_limit' ||
+      this.kind === 'network' ||
+      this.kind === 'provider' ||
+      this.kind === 'ambiguous'
+    );
   }
 }
 
@@ -114,6 +126,7 @@ export function providerErrorKind(value: unknown): ProviderErrorKind {
     kind === 'rate_limit' ||
     kind === 'network' ||
     kind === 'provider' ||
+    kind === 'ambiguous' ||
     kind === 'unknown'
     ? kind
     : 'unknown';

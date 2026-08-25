@@ -18,5 +18,4 @@ ALTER TABLE "notion_mirror_state" ADD CONSTRAINT "notion_mirror_state_organizati
 CREATE INDEX "notion_mirror_state_org_idx" ON "notion_mirror_state" USING btree ("organization_id");--> statement-breakpoint
 CREATE INDEX "notion_mirror_state_due_idx" ON "notion_mirror_state" USING btree ("next_attempt_at");--> statement-breakpoint
 ALTER TABLE "notion_mirror_database" ADD COLUMN "provisioning_started_at" timestamp;--> statement-breakpoint
-ALTER TABLE "notion_mirror_row" ALTER COLUMN "external_page_id" DROP NOT NULL;--> statement-breakpoint
-ALTER TABLE "notion_mirror_database" ADD COLUMN "docket_id_property_id" text;
+ALTER TABLE "notion_mirror_row" ALTER COLUMN "external_page_id" DROP NOT NULL;

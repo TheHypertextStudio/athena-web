@@ -43,7 +43,7 @@ import type {
   NotionMirrorPort,
   ProvisionedMirrorDatabase,
 } from '@docket/connections/notion/mirror-port';
-import { isProviderMissingObjectError } from '@docket/connections/provider-error';
+import { isProviderMissingObjectError, ProviderError } from '@docket/connections/provider-error';
 import {
   type MirrorEntityPages,
   type MirrorReferences,
@@ -397,7 +397,6 @@ export async function provisionMirror(
       .set({
         externalDatabaseId: provisioned.externalDatabaseId,
         externalDataSourceId: provisioned.externalDataSourceId,
-        docketIdPropertyId: provisioned.docketIdPropertyId,
         externalUrl: provisioned.url ?? null,
         propertyMap: withPropertyIds(design.propertyMap, provisioned.propertyIds),
         provisionedAt: ctx.now,
@@ -426,7 +425,6 @@ export async function provisionMirror(
     if (!row?.externalDataSourceId) continue;
     const columns = orderedColumns(row.propertyMap);
     const needsPatch =
-      row.docketIdPropertyId === null ||
       columns.some((binding) => provisionedKind(binding) === 'relation') ||
       columns.some((binding) => binding.propertyId === undefined);
     if (!needsPatch) continue;
@@ -441,7 +439,6 @@ export async function provisionMirror(
         .update(notionMirrorDatabase)
         .set({
           propertyMap: withPropertyIds(row.propertyMap, bindings.propertyIds),
-          docketIdPropertyId: bindings.docketIdPropertyId,
         })
         .where(eq(notionMirrorDatabase.id, row.id));
     } catch (error) {
@@ -491,7 +488,6 @@ async function forgetProvisionedDatabase(id: string): Promise<void> {
     .set({
       externalDatabaseId: null,
       externalDataSourceId: null,
-      docketIdPropertyId: null,
       externalUrl: null,
       provisionedAt: null,
       propertyMap: cleared,
@@ -582,60 +578,60 @@ export async function projectEntity(
     const projected = projectRow(bindings, resolved.values);
 
     if (existing === undefined) {
-      const docketIdPropertyId = design.docketIdPropertyId;
-      if (docketIdPropertyId === null) {
-        throw new Error(`Notion ${design.entityType} database has no Docket ID property.`);
+      const pendingIntent = creationIntents.get(record.entityId);
+      if (pendingIntent !== undefined) {
+        wroteEveryRow = false;
+        unresolvedPending += 1;
+        break;
       }
-      let intentId = creationIntents.get(record.entityId);
+      const [intent] = await db
+        .insert(notionMirrorRow)
+        .values({
+          organizationId: ctx.orgId,
+          integrationId: ctx.integrationId,
+          entityType: design.entityType,
+          entityId: record.entityId,
+          externalPageId: null,
+          contentHash: projected.contentHash,
+        })
+        .returning({ id: notionMirrorRow.id });
+      if (!intent) throw new Error('Notion mirror row intent did not return an id');
+      creationIntents.set(record.entityId, intent.id);
+
       let result: MirrorRowResult | undefined;
-      if (intentId === undefined) {
-        const [intent] = await db
-          .insert(notionMirrorRow)
-          .values({
-            organizationId: ctx.orgId,
-            integrationId: ctx.integrationId,
-            entityType: design.entityType,
-            entityId: record.entityId,
-            externalPageId: null,
-            contentHash: projected.contentHash,
-          })
-          .returning({ id: notionMirrorRow.id });
-        if (!intent) throw new Error('Notion mirror row intent did not return an id');
-        intentId = intent.id;
-        creationIntents.set(record.entityId, intentId);
-      } else {
-        const owned = await ctx.mirror.findRowsByDocketId(
+      try {
+        result = await ctx.mirror.writeRow({
+          kind: 'create',
           dataSourceId,
-          docketIdPropertyId,
-          record.entityId,
-        );
-        if (owned.length > 1) {
-          throw new Error(
-            `Notion contains more than one ${design.entityType} row with Docket ID ${record.entityId}; Docket will not guess which one to use.`,
-          );
+          properties: projected.properties,
+        });
+        if (result === undefined) {
+          throw new ProviderError('Notion accepted a page create without returning its page', {
+            provider: 'notion',
+            kind: 'provider',
+          });
         }
-        result = owned[0];
+      } catch (error) {
+        if (createOutcomeIsAmbiguous(error)) {
+          throw pendingCreateConfirmation(error);
+        } else {
+          await db.delete(notionMirrorRow).where(eq(notionMirrorRow.id, intent.id));
+          creationIntents.delete(record.entityId);
+        }
+        throw error;
       }
-      result ??= await ctx.mirror.writeRow({
-        kind: 'create',
-        dataSourceId,
-        docketId: record.entityId,
-        docketIdPropertyId,
-        properties: projected.properties,
-      });
-      if (result !== undefined) {
-        await db
-          .update(notionMirrorRow)
-          .set({
-            externalPageId: result.externalPageId,
-            externalUpdatedAt: new Date(result.externalUpdatedAt),
-            lastPushedAt: new Date(result.externalUpdatedAt),
-            contentHash: projected.contentHash,
-          })
-          .where(eq(notionMirrorRow.id, intentId));
-        pageByEntityId.set(record.entityId, result.externalPageId);
-        creationIntents.delete(record.entityId);
-      }
+
+      await db
+        .update(notionMirrorRow)
+        .set({
+          externalPageId: result.externalPageId,
+          externalUpdatedAt: new Date(result.externalUpdatedAt),
+          lastPushedAt: new Date(result.externalUpdatedAt),
+          contentHash: projected.contentHash,
+        })
+        .where(eq(notionMirrorRow.id, intent.id));
+      pageByEntityId.set(record.entityId, result.externalPageId);
+      creationIntents.delete(record.entityId);
       written += 1;
       await pace();
       continue;
@@ -689,6 +685,23 @@ export async function projectEntity(
     // Deliberately NOT `complete`: see `wroteEveryRow`.
     wroteEveryRow,
   };
+}
+
+/** Whether a failed create may have reached Notion before Docket lost the response. */
+function createOutcomeIsAmbiguous(error: unknown): boolean {
+  if (!(error instanceof ProviderError)) return true;
+  if (error.kind === 'network' || error.kind === 'ambiguous' || error.kind === 'unknown')
+    return true;
+  if (error.status === undefined) return error.kind === 'provider';
+  return error.status >= 500 && error.status !== 529;
+}
+
+/** Describe a create whose provider result Docket must confirm before it can write again. */
+function pendingCreateConfirmation(cause?: unknown): ProviderError<'notion'> {
+  return new ProviderError(
+    'Docket is waiting for Notion to confirm one page creation. It will keep checking without creating a duplicate.',
+    { provider: 'notion', kind: 'ambiguous', ...(cause !== undefined ? { cause } : {}) },
+  );
 }
 
 /**
@@ -961,10 +974,22 @@ export async function recoverCreationIntents(
   designs: readonly MirrorDatabaseRow[],
 ): Promise<number> {
   let recovered = 0;
+  const botId = await ctx.mirror.botId();
+  const linkedRows = await db
+    .select({ externalPageId: notionMirrorRow.externalPageId })
+    .from(notionMirrorRow)
+    .where(
+      and(
+        eq(notionMirrorRow.integrationId, ctx.integrationId),
+        isNotNull(notionMirrorRow.externalPageId),
+      ),
+    );
+  const linkedPageIds = new Set(
+    linkedRows.flatMap((row) => (row.externalPageId === null ? [] : [row.externalPageId])),
+  );
   for (const design of designs) {
     const dataSourceId = design.externalDataSourceId;
-    const docketIdPropertyId = design.docketIdPropertyId;
-    if (dataSourceId === null || docketIdPropertyId === null) continue;
+    if (dataSourceId === null) continue;
     const intents = await db
       .select()
       .from(notionMirrorRow)
@@ -976,31 +1001,36 @@ export async function recoverCreationIntents(
           isNull(notionMirrorRow.deletedAt),
         ),
       );
-    for (const intent of intents) {
-      const owned = await ctx.mirror.findRowsByDocketId(
-        dataSourceId,
-        docketIdPropertyId,
-        intent.entityId,
+    if (intents.length === 0) continue;
+    if (intents.length > 1) {
+      throw new Error(
+        `Docket is waiting for Notion to confirm multiple ${design.entityType} page creates; Docket will not guess which pages belong to them.`,
       );
-      if (owned.length > 1) {
-        throw new Error(
-          `Notion contains more than one ${design.entityType} row with Docket ID ${intent.entityId}; Docket will not guess which one to use.`,
-        );
-      }
-      const page = owned[0];
-      if (page === undefined) continue;
-      const updatedAt = new Date(page.externalUpdatedAt);
-      await db
-        .update(notionMirrorRow)
-        .set({
-          externalPageId: page.externalPageId,
-          externalUpdatedAt: updatedAt,
-          lastPushedAt: updatedAt,
-        })
-        .where(eq(notionMirrorRow.id, intent.id));
-      recovered += 1;
-      await pace();
     }
+    const intent = intents[0];
+    if (intent === undefined) continue;
+    const candidates = (
+      await ctx.mirror.queryCreatedRows(dataSourceId, intent.createdAt.toISOString())
+    ).filter((page) => page.createdBy === botId && !linkedPageIds.has(page.externalPageId));
+    if (candidates.length > 1) {
+      throw new Error(
+        `Notion returned more than one unlinked ${design.entityType} page for one pending create; Docket will not guess which page to use.`,
+      );
+    }
+    const page = candidates[0];
+    if (page === undefined) throw pendingCreateConfirmation();
+    const updatedAt = new Date(page.externalUpdatedAt);
+    await db
+      .update(notionMirrorRow)
+      .set({
+        externalPageId: page.externalPageId,
+        externalUpdatedAt: updatedAt,
+        lastPushedAt: updatedAt,
+      })
+      .where(eq(notionMirrorRow.id, intent.id));
+    linkedPageIds.add(page.externalPageId);
+    recovered += 1;
+    await pace();
   }
   return recovered;
 }

@@ -172,7 +172,7 @@ describe('NotionMirrorClient.provisionDatabase', () => {
       'GET /v1/data_sources': {
         object: 'data_source',
         id: 'ds_1',
-        properties: { 'Task name': { id: 'title' }, 'Docket ID': { id: 'docket-id' } },
+        properties: { 'Task name': { id: 'title' } },
       },
     });
 
@@ -192,7 +192,6 @@ describe('NotionMirrorClient.provisionDatabase', () => {
       externalDataSourceId: 'ds_1',
       url: 'https://www.notion.so/db-1',
       propertyIds: { title: 'title' },
-      docketIdPropertyId: 'docket-id',
     });
   });
 
@@ -256,7 +255,7 @@ describe('NotionMirrorClient.findDatabasesByOwnershipKey', () => {
       'GET /v1/data_sources': {
         object: 'data_source',
         id: 'ds_1',
-        properties: { 'Task name': { id: 'title' }, 'Docket ID': { id: 'docket-id' } },
+        properties: { 'Task name': { id: 'title' } },
       },
     });
 
@@ -273,7 +272,6 @@ describe('NotionMirrorClient.findDatabasesByOwnershipKey', () => {
         externalDataSourceId: 'ds_1',
         url: 'https://www.notion.so/db-1',
         propertyIds: { title: 'title' },
-        docketIdPropertyId: 'docket-id',
       },
     ]);
   });
@@ -285,7 +283,7 @@ describe('NotionMirrorClient.updateDatabaseSchema', () => {
       'PATCH /v1/data_sources': {
         object: 'data_source',
         id: 'ds_1',
-        properties: { 'Task name': { id: 'title' }, 'Docket ID': { id: 'docket-id' } },
+        properties: { 'Task name': { id: 'title' } },
       },
     });
 
@@ -299,7 +297,6 @@ describe('NotionMirrorClient.updateDatabaseSchema', () => {
     expect(calls[0]?.path).toBe('/v1/data_sources/ds_1');
     expect(ids).toEqual({
       propertyIds: { title: 'title' },
-      docketIdPropertyId: 'docket-id',
     });
   });
 
@@ -323,20 +320,14 @@ describe('NotionMirrorClient.writeRow', () => {
     const written = await new NotionMirrorClient('t', fetchImpl).writeRow({
       kind: 'create',
       dataSourceId: 'ds_1',
-      docketId: 'task_1',
-      docketIdPropertyId: 'docket-id',
       properties: {},
     });
 
     expect(calls[0]?.body).toMatchObject({
       parent: { type: 'data_source_id', data_source_id: 'ds_1' },
-      properties: {
-        'docket-id': {
-          type: 'rich_text',
-          rich_text: [{ type: 'text', text: { content: 'task_1' } }],
-        },
-      },
+      properties: {},
     });
+    expect(calls[0]?.body['properties']).not.toHaveProperty('Docket ID');
     expect(written).toEqual({
       externalPageId: 'page_1',
       externalUpdatedAt: '2026-01-02T03:04:05.000Z',
@@ -396,16 +387,14 @@ describe('NotionMirrorClient.writeRow', () => {
     const rejected = new NotionMirrorClient('t', fetchImpl).writeRow({
       kind: 'create',
       dataSourceId: 'ds_1',
-      docketId: 'task_1',
-      docketIdPropertyId: 'docket-id',
       properties: {},
     });
     await expect(rejected).rejects.toMatchObject({ provider: 'notion', kind: 'provider' });
   });
 });
 
-describe('NotionMirrorClient.findRowsByDocketId', () => {
-  it('uses the managed property id and an exact rich-text filter', async () => {
+describe('NotionMirrorClient.queryCreatedRows', () => {
+  it('queries the provider creation window without sending a Docket identifier', async () => {
     const { calls, fetchImpl } = router({
       'POST /v1/data_sources': {
         object: 'list',
@@ -417,21 +406,27 @@ describe('NotionMirrorClient.findRowsByDocketId', () => {
       },
     });
 
-    const found = await new NotionMirrorClient('t', fetchImpl).findRowsByDocketId(
+    const found = await new NotionMirrorClient('t', fetchImpl).queryCreatedRows(
       'ds_1',
-      'docket-id',
-      'task_1',
+      '2026-01-01T00:00:00.000Z',
     );
 
     expect(calls[0]?.body).toMatchObject({
-      filter: { property: 'docket-id', rich_text: { equals: 'task_1' } },
-      page_size: 2,
+      filter: {
+        timestamp: 'created_time',
+        created_time: { on_or_after: '2026-01-01T00:00:00.000Z' },
+      },
+      sorts: [{ timestamp: 'created_time', direction: 'ascending' }],
+      page_size: 100,
       result_type: 'page',
     });
+    expect(JSON.stringify(calls[0]?.body)).not.toContain('task_1');
     expect(found).toEqual([
       {
         externalPageId: 'page_1',
+        externalCreatedAt: '2026-01-01T00:00:00.000Z',
         externalUpdatedAt: '2026-01-02T03:04:05.000Z',
+        createdBy: 'user_9',
       },
     ]);
   });

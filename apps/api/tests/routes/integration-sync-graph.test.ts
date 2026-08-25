@@ -13,6 +13,7 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type * as DbModule from '@docket/db';
 import { publicProblemTitle } from '@docket/types';
 import { ConnectorError } from '@docket/integrations';
+import { ProviderError } from '@docket/connections/provider-error';
 
 import { problemTypeUrl } from '../../src/error';
 import { env } from '../../src/env';
@@ -446,7 +447,6 @@ describe('runSync — team-mapping scoping, config edges, and the shared spine f
   it('records a fallback "Connector error" message when the executor throws a non-Error value', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const row = await seedLinearIntegration(orgId, humanActorId);
-
     const run = await runLeasedSync(
       row,
       { actorId: humanActorId, trigger: 'scheduled', purpose: 'task_sync' },
@@ -458,6 +458,37 @@ describe('runSync — team-mapping scoping, config edges, and the shared spine f
 
     expect(assertDefined(run).status).toBe('failed');
     expect(assertDefined(run).error).toBe('Connector error');
+  });
+
+  it('records an ambiguous write without calling a healthy connection broken', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const row = await seedLinearIntegration(orgId, humanActorId);
+    await db
+      .update(schema.integration)
+      .set({ status: 'connected' })
+      .where(eq(schema.integration.id, row.id));
+    const connected = await reload(row.id);
+
+    const run = await runLeasedSync(
+      connected,
+      { actorId: humanActorId, trigger: 'scheduled', purpose: 'notion_mirror' },
+      async () => {
+        throw new ProviderError('Waiting for Notion to confirm a page create', {
+          provider: 'notion',
+          kind: 'ambiguous',
+        });
+      },
+    );
+
+    expect(run).toMatchObject({ status: 'failed', errorKind: 'ambiguous' });
+    const [stored] = await db
+      .select({
+        status: schema.integration.status,
+        lastSyncStatus: schema.integration.lastSyncStatus,
+      })
+      .from(schema.integration)
+      .where(eq(schema.integration.id, row.id));
+    expect(stored).toMatchObject({ status: 'connected', lastSyncStatus: 'failed' });
   });
 
   it('records a needs-reauth failure and notifies the owner when the executor throws an auth ConnectorError', async () => {

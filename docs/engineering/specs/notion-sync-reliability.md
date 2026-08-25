@@ -119,18 +119,37 @@ database with the exact ownership key. It creates a database only when no candid
 than one candidate stops provisioning and produces an action-required state. Docket does not guess
 from a title such as `Projects`, because a title is user-editable and does not establish ownership.
 
-Every designed database also contains one Docket-managed rich-text property named `Docket ID`.
-Docket stores its property ID with the database binding and restores the managed property if a
-schema update removes it. Every row create writes the Docket entity ID into that property. The
+Docket entity IDs remain internal. Docket never adds them to a Notion schema or page payload. The
 local mirror-row record exists before the provider call with a null page ID, so the entity's unique
-mapping row also acts as its durable creation intent.
+mapping row acts as its durable creation intent without exposing an ownership token to Notion.
 
-Before creating a row without a stored Notion page ID, the adapter queries the data source by the
-managed property. It adopts one exact match, creates after two successful zero-result reads, and
-stops on multiple matches. A process may therefore die after `pages.create` and before the local
-binding update without making a duplicate on retry. A permission or query failure leaves the
-creation intent pending. A row created by a person in Notion has no Docket ID. When two-way pull
-adopts that row as a Task or Project, Docket writes the new local ID back to the managed property.
+The official Notion SDK does not support an idempotency key for `pages.create`. The SDK also refuses
+to retry that POST after a 500 or 503 response because a retry can create a duplicate. Docket uses
+the same fail-closed rule. A definite rejection removes the local intent so the next pass can retry.
+An ambiguous response retains the intent and prevents any later page create in that database.
+
+Before pull-back can adopt an unknown Notion row, Docket queries pages created after the intent. It
+filters that result to pages created by the connected integration bot and ignores page IDs already
+bound locally. Docket adopts the page only when exactly one candidate remains. Zero candidates keep
+the connection in a waiting state. Multiple candidates move it to action required. Docket never
+guesses from a title or from user-visible property values.
+
+This sequence diagram shows recovery from a page-create response that never reaches Docket.
+
+```mermaid
+sequenceDiagram
+    participant Worker as Leased mirror worker
+    participant State as Postgres row intent
+    participant Notion as Notion API
+
+    Worker->>State: Insert null page binding
+    Worker->>Notion: Create page with visible fields only
+    Notion--xWorker: Response is lost
+    Worker->>State: Keep intent pending
+    Worker->>Notion: Query pages created after intent
+    Notion-->>Worker: Return integration-bot pages
+    Worker->>State: Bind exactly one unlinked page
+```
 
 Docket may trash an extra database only when all of these facts hold: the ownership key belongs to
 the same integration and design, another exact candidate is already bound, and the extra database
@@ -149,12 +168,13 @@ Docket-wins conflict record before Docket pushes. Equal local and remote hashes 
 without another Notion write.
 
 The other seven entity types remain push-only. Their current projected hash suppresses unchanged
-writes. A successful provider write and its local mapping update remain separate operations, but the
-database ownership key and row Docket ID make either operation safe to retry.
+writes. A successful provider write and its local mapping update remain separate operations. The
+database ownership key recovers database creation. The durable row intent and exact bot creation
+window recover page creation.
 
 The mirror advances each database's pull cursor only after it has consumed every page of results.
 An interrupted pagination run retains the old cursor and repeats data on the next pass. Page IDs,
-provider event IDs, integration/entity keys, content hashes, and Docket IDs absorb those repeats.
+provider event IDs, integration/entity keys, and content hashes absorb those repeats.
 
 ## Failure presentation
 

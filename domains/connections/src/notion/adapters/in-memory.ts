@@ -8,6 +8,7 @@
  */
 import type {
   MirrorChange,
+  MirrorCreatedRow,
   MirrorDatabaseSpec,
   MirrorExternalPerson,
   MirrorParentPage,
@@ -27,8 +28,9 @@ interface MockPage {
   properties: Record<string, unknown>;
   lastEditedTime: string;
   lastEditedBy: string;
+  createdTime: string;
+  createdBy: string;
   inTrash: boolean;
-  docketId?: string;
 }
 
 /** Configuration for {@link MockNotionMirror}. */
@@ -89,7 +91,6 @@ const DEFAULT_PEOPLE: readonly MirrorExternalPerson[] = [
 export class MockNotionMirror implements NotionMirrorPort {
   private readonly pages = new Map<string, MockPage>();
   private readonly schemas = new Map<string, Record<string, string>>();
-  private readonly docketIdProperties = new Map<string, string>();
   private readonly databasesByOwnership = new Map<string, ProvisionedMirrorDatabase[]>();
   private readonly bot: string;
   private readonly parents: readonly MirrorParentPage[];
@@ -176,14 +177,11 @@ export class MockNotionMirror implements NotionMirrorPort {
       propertyIds[column.field] = `mock_prop_${suffix}_${column.field}`;
     }
     this.schemas.set(dataSourceId, propertyIds);
-    const docketIdPropertyId = `mock_prop_${suffix}_docket_id`;
-    this.docketIdProperties.set(dataSourceId, docketIdPropertyId);
     const provisioned = {
       externalDatabaseId: `mock_db_${suffix}`,
       externalDataSourceId: dataSourceId,
       url: `https://notion.example/mock_db_${suffix}`,
       propertyIds,
-      docketIdPropertyId,
     };
     this.databasesByOwnership.set(spec.ownershipKey, [provisioned]);
     return Promise.resolve(provisioned);
@@ -201,7 +199,6 @@ export class MockNotionMirror implements NotionMirrorPort {
    */
   deleteDataSource(dataSourceId: string): void {
     this.schemas.delete(dataSourceId);
-    this.docketIdProperties.delete(dataSourceId);
     for (const [id, page] of this.pages) {
       if (page.dataSourceId === dataSourceId) this.pages.delete(id);
     }
@@ -217,7 +214,7 @@ export class MockNotionMirror implements NotionMirrorPort {
   updateDatabaseSchema(
     dataSourceId: string,
     spec: MirrorDatabaseSpec,
-  ): Promise<{ propertyIds: Record<string, string>; docketIdPropertyId: string }> {
+  ): Promise<{ propertyIds: Record<string, string> }> {
     const existing = this.schemas.get(dataSourceId);
     if (existing === undefined) {
       return Promise.reject(
@@ -233,24 +230,22 @@ export class MockNotionMirror implements NotionMirrorPort {
       next[column.field] = existing[column.field] ?? `mock_prop_${dataSourceId}_${column.field}`;
     }
     this.schemas.set(dataSourceId, next);
-    const docketIdPropertyId =
-      this.docketIdProperties.get(dataSourceId) ?? `mock_prop_${dataSourceId}_docket_id`;
-    this.docketIdProperties.set(dataSourceId, docketIdPropertyId);
-    return Promise.resolve({ propertyIds: next, docketIdPropertyId });
+    return Promise.resolve({ propertyIds: next });
   }
 
-  /** {@inheritDoc NotionMirrorPort.findRowsByDocketId} */
-  findRowsByDocketId(
-    dataSourceId: string,
-    _docketIdPropertyId: string,
-    docketId: string,
-  ): Promise<MirrorRowResult[]> {
+  /** {@inheritDoc NotionMirrorPort.queryCreatedRows} */
+  queryCreatedRows(dataSourceId: string, since: string): Promise<MirrorCreatedRow[]> {
+    const cutoff = Date.parse(since);
     return Promise.resolve(
       [...this.pages.values()]
-        .filter((page) => page.dataSourceId === dataSourceId && page.docketId === docketId)
+        .filter(
+          (page) => page.dataSourceId === dataSourceId && Date.parse(page.createdTime) >= cutoff,
+        )
         .map((page) => ({
           externalPageId: page.id,
+          externalCreatedAt: page.createdTime,
           externalUpdatedAt: page.lastEditedTime,
+          createdBy: page.createdBy,
         })),
     );
   }
@@ -280,8 +275,9 @@ export class MockNotionMirror implements NotionMirrorPort {
         properties,
         lastEditedTime,
         lastEditedBy: this.bot,
+        createdTime: lastEditedTime,
+        createdBy: this.bot,
         inTrash: false,
-        ...(op.docketId !== undefined ? { docketId: op.docketId } : {}),
       });
       return Promise.resolve({ externalPageId: id, externalUpdatedAt: lastEditedTime });
     }

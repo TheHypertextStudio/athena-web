@@ -13,6 +13,7 @@ import type * as DbModule from '@docket/db';
 import { MockNotionMirror } from '@docket/connections/notion/adapters/in-memory';
 import type {
   MirrorChange,
+  MirrorCreatedRow,
   MirrorDatabaseSpec,
   MirrorExternalPerson,
   MirrorParentPage,
@@ -39,6 +40,7 @@ import {
   projectEntity,
   provisionMirror,
   pullBackEntity,
+  recoverCreationIntents,
   runNotionMirrorSync,
   sweepNotionMirror,
   type MirrorContext,
@@ -88,8 +90,8 @@ class RecordingMirror implements NotionMirrorPort {
   includeProvisionUrl = true;
   failProvisionAfterCreate = false;
   failRowAfterCreate = false;
+  readonly createdRows: MirrorCreatedRow[] = [];
   readonly ownedDatabases = new Map<string, ProvisionedMirrorDatabase[]>();
-  readonly ownedRows = new Map<string, MirrorRowResult[]>();
   private sequence = 0;
 
   botId(): Promise<string> {
@@ -119,7 +121,6 @@ class RecordingMirror implements NotionMirrorPort {
       propertyIds: Object.fromEntries(
         spec.columns.map((column) => [column.field, `property-${suffix}-${column.field}`]),
       ),
-      docketIdPropertyId: `property-${suffix}-docket-id`,
     };
     this.ownedDatabases.set(spec.ownershipKey, [provisioned]);
     if (this.failProvisionAfterCreate) {
@@ -143,7 +144,7 @@ class RecordingMirror implements NotionMirrorPort {
   updateDatabaseSchema(
     dataSourceId: string,
     spec: MirrorDatabaseSpec,
-  ): Promise<{ propertyIds: Record<string, string>; docketIdPropertyId: string }> {
+  ): Promise<{ propertyIds: Record<string, string> }> {
     if (this.missingDataSources.has(dataSourceId)) {
       return Promise.reject(
         new ProviderError(`Notion schema update for "${spec.title}" failed (object_not_found)`, {
@@ -158,16 +159,11 @@ class RecordingMirror implements NotionMirrorPort {
       propertyIds: Object.fromEntries(
         spec.columns.map((column) => [column.field, `property-${dataSourceId}-${column.field}`]),
       ),
-      docketIdPropertyId: `property-${dataSourceId}-docket-id`,
     });
   }
 
-  findRowsByDocketId(
-    _dataSourceId: string,
-    _docketIdPropertyId: string,
-    docketId: string,
-  ): Promise<MirrorRowResult[]> {
-    return Promise.resolve(this.ownedRows.get(docketId) ?? []);
+  queryCreatedRows(_dataSourceId: string, _since: string): Promise<MirrorCreatedRow[]> {
+    return Promise.resolve(this.createdRows);
   }
 
   writeRow(op: MirrorRowOp): Promise<MirrorRowResult | undefined> {
@@ -179,8 +175,12 @@ class RecordingMirror implements NotionMirrorPort {
       externalPageId: op.externalPageId ?? `page-${String(this.sequence)}`,
       externalUpdatedAt: `2026-08-${String(10 + this.sequence).padStart(2, '0')}T12:00:00.000Z`,
     };
-    if (op.kind === 'create' && op.docketId !== undefined) {
-      this.ownedRows.set(op.docketId, [result]);
+    if (op.kind === 'create') {
+      this.createdRows.push({
+        ...result,
+        externalCreatedAt: result.externalUpdatedAt,
+        createdBy: 'notion-bot',
+      });
       if (this.failRowAfterCreate) {
         return Promise.reject(new Error('connection lost after Notion created the page'));
       }
@@ -385,7 +385,7 @@ describe('Notion mirror reconciliation', () => {
     const seeded = findDesign(designs, 'task');
     await db
       .update(schema.notionMirrorDatabase)
-      .set({ externalDataSourceId: 'ds-task', docketIdPropertyId: 'docket-id' })
+      .set({ externalDataSourceId: 'ds-task' })
       .where(eq(schema.notionMirrorDatabase.id, seeded.id));
     const design = one(
       await db
@@ -468,7 +468,7 @@ describe('Notion mirror reconciliation', () => {
     const seeded = findDesign(designs, 'task');
     await db
       .update(schema.notionMirrorDatabase)
-      .set({ externalDataSourceId: 'ds-task', docketIdPropertyId: 'docket-id' })
+      .set({ externalDataSourceId: 'ds-task' })
       .where(eq(schema.notionMirrorDatabase.id, seeded.id));
     const design = one(
       await db
@@ -489,13 +489,15 @@ describe('Notion mirror reconciliation', () => {
     if (!task) throw new Error('task was not created');
     mirror.failRowAfterCreate = true;
 
-    await expect(projectEntity(ctx, design, 10, NO_PAGES)).rejects.toThrow(
-      'connection lost after Notion created the page',
-    );
+    await expect(projectEntity(ctx, design, 10, NO_PAGES)).rejects.toMatchObject({
+      kind: 'ambiguous',
+    });
     mirror.failRowAfterCreate = false;
+    await recoverCreationIntents(ctx, [design]);
     await projectEntity(ctx, design, 10, NO_PAGES);
 
     expect(mirror.writes.filter((write) => write.kind === 'create')).toHaveLength(1);
+    expect(JSON.stringify(mirror.writes)).not.toContain(task.id);
     const [mapping] = await db
       .select()
       .from(schema.notionMirrorRow)
@@ -513,7 +515,7 @@ describe('Notion mirror reconciliation', () => {
     const seeded = findDesign(designs, 'task');
     await db
       .update(schema.notionMirrorDatabase)
-      .set({ externalDataSourceId: 'ds-task', docketIdPropertyId: 'docket-id' })
+      .set({ externalDataSourceId: 'ds-task' })
       .where(eq(schema.notionMirrorDatabase.id, seeded.id));
     const design = one(
       await db
@@ -593,7 +595,7 @@ describe('Notion mirror reconciliation', () => {
     const seeded = findDesign(designs, 'task');
     await db
       .update(schema.notionMirrorDatabase)
-      .set({ externalDataSourceId: 'ds-task', docketIdPropertyId: 'docket-id' })
+      .set({ externalDataSourceId: 'ds-task' })
       .where(eq(schema.notionMirrorDatabase.id, seeded.id));
     const design = one(
       await db
@@ -615,7 +617,9 @@ describe('Notion mirror reconciliation', () => {
     );
     mirror.omitWriteResults = true;
 
-    expect(await projectEntity(ctx, design, 10, NO_PAGES)).toMatchObject({ written: 1 });
+    await expect(projectEntity(ctx, design, 10, NO_PAGES)).rejects.toMatchObject({
+      kind: 'ambiguous',
+    });
     const [intent] = await db
       .select()
       .from(schema.notionMirrorRow)
@@ -634,7 +638,7 @@ describe('Notion mirror reconciliation', () => {
     const seeded = findDesign(designs, 'task');
     await db
       .update(schema.notionMirrorDatabase)
-      .set({ externalDataSourceId: 'ds-task', docketIdPropertyId: 'docket-id' })
+      .set({ externalDataSourceId: 'ds-task' })
       .where(eq(schema.notionMirrorDatabase.id, seeded.id));
     const design = one(
       await db
@@ -782,7 +786,7 @@ describe('Notion mirror reconciliation', () => {
     const seeded = findDesign(designs, 'initiative');
     await db
       .update(schema.notionMirrorDatabase)
-      .set({ externalDataSourceId: 'ds-initiative', docketIdPropertyId: 'docket-id' })
+      .set({ externalDataSourceId: 'ds-initiative' })
       .where(eq(schema.notionMirrorDatabase.id, seeded.id));
     const design = one(
       await db
@@ -850,7 +854,7 @@ describe('Notion mirror reconciliation', () => {
     const seeded = findDesign(designs, 'task');
     await db
       .update(schema.notionMirrorDatabase)
-      .set({ externalDataSourceId: 'ds-task', docketIdPropertyId: 'docket-id' })
+      .set({ externalDataSourceId: 'ds-task' })
       .where(eq(schema.notionMirrorDatabase.id, seeded.id));
     const design = one(
       await db
@@ -1046,7 +1050,6 @@ describe('Notion mirror reconciliation', () => {
       .update(schema.notionMirrorDatabase)
       .set({
         externalDataSourceId: 'ds-task',
-        docketIdPropertyId: 'docket-id',
         propertyMap: {
           ...taskDesign.propertyMap,
           assignee: {
@@ -1173,7 +1176,6 @@ describe('Notion mirror reconciliation', () => {
       .update(schema.notionMirrorDatabase)
       .set({
         externalDataSourceId: 'ds-task',
-        docketIdPropertyId: 'docket-id',
         propertyMap: {
           ...taskDesign.propertyMap,
           project: {

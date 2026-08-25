@@ -226,7 +226,6 @@ describe('provisioning a database', () => {
         id: 'ds-1',
         properties: {
           Name: { id: 'prop-1', type: 'title' },
-          'Docket ID': { id: 'docket-id', type: 'rich_text' },
         },
       },
     ]);
@@ -251,7 +250,7 @@ describe('provisioning a database', () => {
       {
         object: 'data_source',
         id: 'ds-1',
-        properties: { 'Docket ID': { id: 'docket-id', type: 'rich_text' } },
+        properties: {},
       },
     ]);
     expect(await notion.provisionDatabase(spec)).not.toHaveProperty('url');
@@ -278,7 +277,6 @@ describe('updating a schema', () => {
         id: 'ds-1',
         properties: {
           Name: { id: 'prop-1', type: 'title' },
-          'Docket ID': { id: 'docket-id', type: 'rich_text' },
         },
       },
     ]);
@@ -304,8 +302,6 @@ describe('writing a row', () => {
     const result = await notion.writeRow({
       kind: 'create',
       dataSourceId: 'ds-1',
-      docketId: 'task-1',
-      docketIdPropertyId: 'docket-id',
       properties: {},
     });
 
@@ -345,8 +341,6 @@ describe('writing a row', () => {
       notion.writeRow({
         kind: 'create',
         dataSourceId: 'ds-1',
-        docketId: 'task-1',
-        docketIdPropertyId: 'docket-id',
         properties: {},
       }),
     ).rejects.toBeInstanceOf(ProviderError);
@@ -358,8 +352,6 @@ describe('writing a row', () => {
       notion.writeRow({
         kind: 'create',
         dataSourceId: 'ds-1',
-        docketId: 'task-1',
-        docketIdPropertyId: 'docket-id',
         properties: {},
       }),
     ).rejects.toMatchObject({ kind: 'auth' });

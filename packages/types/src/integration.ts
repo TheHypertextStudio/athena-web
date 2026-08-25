@@ -434,7 +434,14 @@ export type SyncRunPurpose = z.infer<typeof SyncRunPurpose>;
  * This is the classification, carried through so a client can choose its own copy and its own
  * recovery for each case. The set mirrors `ProviderErrorKind` in `@docket/connections`.
  */
-export const SyncFailureKind = z.enum(['auth', 'rate_limit', 'network', 'provider', 'unknown']);
+export const SyncFailureKind = z.enum([
+  'auth',
+  'rate_limit',
+  'network',
+  'provider',
+  'ambiguous',
+  'unknown',
+]);
 /** Sync-failure classification value. */
 export type SyncFailureKind = z.infer<typeof SyncFailureKind>;
 

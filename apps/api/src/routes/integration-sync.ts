@@ -188,10 +188,11 @@ async function finishFailure(
   message: string,
   opts: { needsReauth: boolean; kind: ProviderErrorKind; now: Date },
 ): Promise<SyncRunRow> {
+  const connectionIsHealthy = opts.kind === 'ambiguous';
   await db
     .update(integration)
     .set({
-      status: 'error',
+      status: connectionIsHealthy ? row.status : 'error',
       lastSyncStatus: 'failed',
       lastError: message,
       // The connector knows *what sort* of failure this was; without recording it the only thing
@@ -207,7 +208,7 @@ async function finishFailure(
     .set({ status: 'failed', error: message, errorKind: opts.kind, finishedAt: opts.now })
     .where(eq(syncRun.id, run.id))
     .returning();
-  if (row.status !== 'error') {
+  if (row.status !== 'error' && !connectionIsHealthy) {
     await notifyOwner(row, opts.needsReauth, message);
   }
   return updated ?? run;

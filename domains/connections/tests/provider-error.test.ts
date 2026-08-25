@@ -51,6 +51,12 @@ describe('Connections provider-error vocabulary', () => {
     expect(error.retryAfterSeconds).toBe(30);
     expect(error.cause).toBe(cause);
     expect(error.retryable).toBe(true);
+    expect(
+      new ProviderError('Waiting for confirmation', {
+        provider: 'notion',
+        kind: 'ambiguous',
+      }).retryable,
+    ).toBe(true);
     expect(ProviderError.kindForStatus(401)).toBe('auth');
     expect(ProviderError.kindForStatus(503)).toBe('provider');
   });

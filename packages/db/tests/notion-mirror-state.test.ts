@@ -40,9 +40,7 @@ describe('notion mirror wake state', () => {
     expect(sql).toContain(
       'ALTER TABLE "notion_mirror_database" ADD COLUMN "provisioning_started_at" timestamp',
     );
-    expect(sql).toContain(
-      'ALTER TABLE "notion_mirror_database" ADD COLUMN "docket_id_property_id" text',
-    );
+    expect(sql).not.toContain('docket_id_property_id');
     expect(sql).toContain(
       'ALTER TABLE "notion_mirror_row" ALTER COLUMN "external_page_id" DROP NOT NULL',
     );

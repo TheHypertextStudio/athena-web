@@ -6,6 +6,7 @@ import {
   isFullBlock,
   isFullDatabase,
   isFullPage,
+  isHTTPResponseError,
   isNotionClientError,
   type CreateDatabaseParameters,
   type CreateDatabaseResponse,
@@ -21,6 +22,7 @@ import { NOTION_API_VERSION } from '../api-contract';
 import { ProviderError } from '../../provider-error';
 import type {
   MirrorChange,
+  MirrorCreatedRow,
   MirrorDatabaseSpec,
   MirrorDatabaseBindings,
   MirrorExternalPerson,
@@ -33,7 +35,7 @@ import type {
   ProvisionedMirrorDatabase,
 } from '../mirror-port';
 
-import { databaseSchema, readDocketIdPropertyId, readPropertyIds } from './notion-sdk-schema';
+import { databaseSchema, readPropertyIds } from './notion-sdk-schema';
 import { fullPages, toMirrorChange, toParentPage } from './notion-sdk-pages';
 
 /** Notion's documented page-size ceiling for list endpoints. */
@@ -59,10 +61,15 @@ function asProviderError(err: unknown, context: string): ProviderError<'notion'>
       // Carried so callers can tell "this id is gone" apart from every other `provider` failure.
       // The two want opposite handling: a transient fault should be retried against the same id,
       // while a deleted object makes every future request naming it fail the same way.
-      ...(err.code === APIErrorCode.ObjectNotFound ? { status: 404 } : {}),
+      ...(isHTTPResponseError(err) ? { status: err.status } : {}),
+      cause: err,
     });
   }
-  return new ProviderError(`Notion ${context} failed`, { provider: 'notion', kind: 'network' });
+  return new ProviderError(`Notion ${context} failed`, {
+    provider: 'notion',
+    kind: 'network',
+    cause: err,
+  });
 }
 
 /** Pull the first data-source id from a response that may omit it. */
@@ -204,7 +211,6 @@ export class NotionMirrorClient implements NotionMirrorPort {
       externalDataSourceId: dataSourceId,
       ...(hasUrl(created) ? { url: created.url } : {}),
       propertyIds: readPropertyIds(spec.columns, dataSource.properties),
-      docketIdPropertyId: readDocketIdPropertyId(dataSource.properties),
     };
   }
 
@@ -243,7 +249,6 @@ export class NotionMirrorClient implements NotionMirrorPort {
           externalDataSourceId: dataSourceId,
           url: database.url,
           propertyIds: readPropertyIds(spec.columns, dataSource.properties),
-          docketIdPropertyId: readDocketIdPropertyId(dataSource.properties),
         });
       }
       return matches;
@@ -268,7 +273,6 @@ export class NotionMirrorClient implements NotionMirrorPort {
       const properties = propertiesOf(updated);
       return {
         propertyIds: readPropertyIds(spec.columns, properties),
-        docketIdPropertyId: readDocketIdPropertyId(properties),
       };
     } catch (error) {
       throw asProviderError(error, `schema update for "${spec.title}"`);
@@ -314,47 +318,34 @@ export class NotionMirrorClient implements NotionMirrorPort {
     }
   }
 
-  /** Create a page with its durable Docket id in the same provider write. */
+  /** Create a page with user-visible properties only. */
   private createPage(op: MirrorRowOp, properties: Record<string, unknown>) {
-    if (op.docketId === undefined || op.docketIdPropertyId === undefined) {
-      throw new ProviderError('Notion create requested with no Docket ID anchor', {
-        provider: 'notion',
-        kind: 'provider',
-      });
-    }
     const parameters: CreatePageParameters = {
       parent: { type: 'data_source_id', data_source_id: op.dataSourceId },
-      properties: {
-        ...properties,
-        [op.docketIdPropertyId]: {
-          type: 'rich_text',
-          rich_text: [{ type: 'text', text: { content: op.docketId } }],
-        },
-      } as NonNullable<CreatePageParameters['properties']>,
+      properties: properties as NonNullable<CreatePageParameters['properties']>,
     };
     return this.notion.pages.create(parameters);
   }
 
-  /** Find exact page anchors for one Docket id. */
-  async findRowsByDocketId(
-    dataSourceId: string,
-    docketIdPropertyId: string,
-    docketId: string,
-  ): Promise<MirrorRowResult[]> {
+  /** Find pages created after a durable local intent without sending an internal identifier. */
+  async queryCreatedRows(dataSourceId: string, since: string): Promise<MirrorCreatedRow[]> {
     try {
       const parameters: QueryDataSourceParameters = {
         data_source_id: dataSourceId,
-        filter: { property: docketIdPropertyId, rich_text: { equals: docketId } },
-        page_size: 2,
+        filter: { timestamp: 'created_time', created_time: { on_or_after: since } },
+        sorts: [{ timestamp: 'created_time', direction: 'ascending' }],
+        page_size: NOTION_PAGE_SIZE,
         result_type: 'page',
       };
-      const response = await this.notion.dataSources.query(parameters);
-      return fullPages(response.results).map((page) => ({
+      const results = await collectPaginatedAPI(this.notion.dataSources.query, parameters);
+      return fullPages(results).map((page) => ({
         externalPageId: page.id,
+        externalCreatedAt: page.created_time,
         externalUpdatedAt: page.last_edited_time,
+        createdBy: page.created_by.id,
       }));
     } catch (error) {
-      throw asProviderError(error, 'Docket ID lookup');
+      throw asProviderError(error, 'page creation recovery');
     }
   }
 

@@ -75,8 +75,6 @@ export interface MirrorDatabaseSpec {
 export interface MirrorDatabaseBindings {
   /** Docket field key to provider property id; this binding survives a rename. */
   readonly propertyIds: Readonly<Record<string, string>>;
-  /** Managed rich-text property that anchors a Notion page to one Docket entity id. */
-  readonly docketIdPropertyId: string;
 }
 
 /** What provisioning produced, including the property ids every later call addresses. */
@@ -92,10 +90,6 @@ export interface MirrorRowOp {
   readonly dataSourceId: string;
   /** Absent for `create`. */
   readonly externalPageId?: string;
-  /** Required on create so an ambiguous response can be recovered idempotently. */
-  readonly docketId?: string;
-  /** Stable property id for the managed Docket ID column. */
-  readonly docketIdPropertyId?: string;
   /** Docket field key to a provider-formatted value. */
   readonly properties?: Record<string, unknown>;
 }
@@ -104,6 +98,14 @@ export interface MirrorRowOp {
 export interface MirrorRowResult {
   readonly externalPageId: string;
   readonly externalUpdatedAt: string;
+}
+
+/** A page creation Docket may adopt after losing the create response. */
+export interface MirrorCreatedRow extends MirrorRowResult {
+  /** When Notion created the page. */
+  readonly externalCreatedAt: string;
+  /** The provider user that created the page. */
+  readonly createdBy: string;
 }
 
 /** A change observed on the provider side. */
@@ -143,12 +145,8 @@ export interface NotionMirrorPort {
     dataSourceId: string,
     spec: MirrorDatabaseSpec,
   ): Promise<MirrorDatabaseBindings>;
-  /** Find pages carrying one exact Docket entity id. */
-  findRowsByDocketId(
-    dataSourceId: string,
-    docketIdPropertyId: string,
-    docketId: string,
-  ): Promise<MirrorRowResult[]>;
+  /** Find pages the integration created after a durable local create intent. */
+  queryCreatedRows(dataSourceId: string, since: string): Promise<MirrorCreatedRow[]>;
   /** Apply one row write. */
   writeRow(op: MirrorRowOp): Promise<MirrorRowResult | undefined>;
   /** Read the rows edited since a cursor. */

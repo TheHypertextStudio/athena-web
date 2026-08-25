@@ -6849,12 +6849,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "docket_id_property_id": {
-          "name": "docket_id_property_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
         "external_url": {
           "name": "external_url",
           "type": "text",

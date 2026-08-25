@@ -94,8 +94,6 @@ export const notionMirrorDatabase = pgTable(
      * and write addresses this, never the database id.
      */
     externalDataSourceId: text('external_data_source_id'),
-    /** Managed rich-text property used to recover page creates after ambiguous responses. */
-    docketIdPropertyId: text('docket_id_property_id'),
     externalUrl: text('external_url'),
     /**
      * The designed columns, keyed by Docket field key (see `NotionPropertyMap` in

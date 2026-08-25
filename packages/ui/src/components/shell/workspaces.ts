@@ -34,8 +34,7 @@ export interface Workspace {
  *
  * @remarks
  * `today`, `tasks`, `calendar`, `time`, `inbox`, `athena`, `stream`, and `portfolio` map 1:1 to
- * their cross-org
- * routes; `search` is not a route but the command-palette opener.
+ * their cross-org routes. `search` is not a route but the command-palette opener.
  */
 export type HomeNavKey =
   | 'today'

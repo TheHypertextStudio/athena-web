@@ -122,6 +122,101 @@ describe('inbound references', () => {
     ]);
   });
 
+  it('lists a task that directly attaches an external Library resource', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'DirectResourceBacklinkUser');
+    const orgId = await seedOrg(db, schema);
+    const statusId = await seedStatuses(db, schema, orgId);
+    const actorId = await addMember(db, schema, orgId, userId);
+    const teamId = one(
+      await db
+        .insert(schema.team)
+        .values({
+          organizationId: orgId,
+          name: 'Direct backlink team',
+          key: `D${Math.random().toString(36).slice(2, 8)}`,
+        })
+        .returning({ id: schema.team.id }),
+    ).id;
+    const taskId = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          title: 'Connect the launch plan',
+          teamId,
+          state: 'todo',
+          statusId: statusId('task', 'todo'),
+          visibility: 'public',
+        })
+        .returning({ id: schema.task.id }),
+    ).id;
+    const resourceId = one(
+      await db
+        .insert(schema.externalResource)
+        .values({
+          organizationId: orgId,
+          createdBy: actorId,
+          provider: 'web',
+          canonicalKey: `direct_${Math.random().toString(36).slice(2, 10)}`,
+          canonicalUrl: 'https://example.com/launch-plan',
+          resourceType: 'page',
+        })
+        .returning({ id: schema.externalResource.id }),
+    ).id;
+    await db.insert(schema.attachment).values({
+      organizationId: orgId,
+      createdBy: actorId,
+      subjectType: 'task',
+      subjectId: taskId,
+      kind: 'url',
+      title: 'Launch plan',
+      url: 'https://example.com/launch-plan',
+      externalResourceId: resourceId,
+    });
+    await db.insert(schema.searchDocument).values({
+      id: `task:${orgId}:${taskId}`,
+      organizationId: orgId,
+      kind: 'task',
+      family: 'work',
+      sourceTable: 'task',
+      entityId: taskId,
+      title: 'Connect the launch plan',
+      facet: {},
+      route: {
+        type: 'entity',
+        organizationId: orgId,
+        entityKind: 'task',
+        entityId: taskId,
+        href: `/orgs/${orgId}/tasks/${taskId}`,
+      },
+      visibility: { mode: 'org_members' },
+      baseRank: 100,
+    });
+
+    const result = await loadInboundReferences({
+      caller: { kind: 'user', userId },
+      orgId,
+      targetKind: 'external_resource',
+      targetId: resourceId,
+    });
+
+    expect(result.groups).toEqual([
+      {
+        subjectType: 'task',
+        items: [
+          {
+            subjectType: 'task',
+            subjectId: taskId,
+            title: 'Connect the launch plan',
+            href: `/orgs/${orgId}/tasks/${taskId}`,
+          },
+        ],
+      },
+    ]);
+  });
+
   it('omits a referencing record the caller cannot see', async () => {
     const schema = await getDb();
     const { db } = schema;

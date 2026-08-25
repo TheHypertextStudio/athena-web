@@ -25,10 +25,10 @@ const referencesRouter = new Hono<AppEnv>().get(
   '/:targetKind/:targetId',
   apiDoc({
     tag: 'Search',
-    summary: 'List the records that reference this one',
+    summary: 'List the records that use this one',
     response: EntityReferencesOut,
     description:
-      'Return every record whose prose points at this entity or external resource, grouped by the kind of record doing the referencing. Derived from stored Markdown; records the caller cannot see are omitted rather than counted.',
+      'Return every record that uses this entity or external resource, grouped by record kind. Resource uses include structured prose references and direct attachments. Records the caller cannot see are omitted rather than counted.',
   }),
   zParam(referencesParam),
   async (c) => {

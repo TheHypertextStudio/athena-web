@@ -71,6 +71,32 @@ function fileAttachment(): SearchResult {
   };
 }
 
+function externalResource(): SearchResult {
+  return {
+    id: `external_resource:${ORG_ID}:resource-1`,
+    organizationId: ORG_ID,
+    userId: null,
+    kind: 'external_resource',
+    family: 'content',
+    title: 'Launch plan',
+    summary: null,
+    snippet: null,
+    matchedFields: [],
+    route: { type: 'external', externalUrl: 'https://example.test/launch-plan' },
+    subject: null,
+    source: null,
+    facets: { provider: 'web' },
+    actions: [
+      { kind: 'open_external', label: 'Open source', href: 'https://example.test/launch-plan' },
+    ],
+    score: 0,
+    entityId: 'resource-1',
+    externalUrl: 'https://example.test/launch-plan',
+    usedIn: [],
+    updatedAt: '2026-08-20T12:00:00.000Z',
+  };
+}
+
 describe('ResourceDetailPanel attachments', () => {
   it('shows the host, file action, and work context without querying attachment backlinks', () => {
     queryDefinitions.length = 0;
@@ -88,5 +114,15 @@ describe('ResourceDetailPanel attachments', () => {
     expect(screen.queryByText('Referenced by')).not.toBeInTheDocument();
     expect(queryDefinitions).toHaveLength(1);
     expect(queryDefinitions[0]).toMatchObject({ enabled: false });
+  });
+
+  it('calls direct attachments and prose references resource uses', () => {
+    queryDefinitions.length = 0;
+    render(<ResourceDetailPanel orgId={ORG_ID} resource={externalResource()} onClose={vi.fn()} />);
+
+    expect(screen.getByText('Used by')).toBeInTheDocument();
+    expect(screen.queryByText('Referenced by')).not.toBeInTheDocument();
+    expect(queryDefinitions).toHaveLength(1);
+    expect(queryDefinitions[0]).toMatchObject({ enabled: true });
   });
 });

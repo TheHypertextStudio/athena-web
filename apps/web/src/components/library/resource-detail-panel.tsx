@@ -66,7 +66,7 @@ export default function ResourceDetailPanel({
         api.v1.orgs[':orgId'].references[':targetKind'][':targetId'].$get({
           param: { orgId, targetKind: resource.kind, targetId: resource.entityId },
         }),
-      'Could not load what references this.',
+      'Could not load where this is used.',
       { enabled: !attachment },
     ),
   );
@@ -161,7 +161,7 @@ export default function ResourceDetailPanel({
         </>
       ) : (
         <div className="flex flex-col gap-2">
-          <h3 className="text-on-surface text-title-small">Referenced by</h3>
+          <h3 className="text-on-surface text-title-small">Used by</h3>
           {referencesQ.isPending ? (
             <div className="flex flex-col gap-1" aria-hidden="true">
               {Array.from({ length: 3 }, (_, index) => (
@@ -170,7 +170,7 @@ export default function ResourceDetailPanel({
             </div>
           ) : referencesQ.error ? (
             <p role="alert" className="text-error text-body-medium">
-              {userErrorMessage(referencesQ.error, 'Could not load what references this.')}
+              {userErrorMessage(referencesQ.error, 'Could not load where this is used.')}
             </p>
           ) : referencesQ.data.total > 0 ? (
             <div className="flex flex-col gap-3">
@@ -192,7 +192,9 @@ export default function ResourceDetailPanel({
               ))}
             </div>
           ) : (
-            <p className="text-on-surface-variant text-body-medium">Nothing references this yet.</p>
+            <p className="text-on-surface-variant text-body-medium">
+              This resource is not used yet.
+            </p>
           )}
         </div>
       )}

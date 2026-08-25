@@ -12,7 +12,7 @@
  * something the reader cannot open.
  */
 import type { EntityReferencesOut } from '@docket/types';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 
 import { loadVisibleDocuments, type SearchCaller } from '../search/query';
 
@@ -40,7 +40,7 @@ function groupRank(subjectType: string): number {
 }
 
 /**
- * Load the records whose prose references one entity or external resource.
+ * Load the records that use one entity or external resource.
  *
  * @remarks
  * Titles and routes come from the search projection rather than from each source table, so one
@@ -49,7 +49,7 @@ function groupRank(subjectType: string): number {
  * and both cases should read the same to the caller.
  *
  * @param input - The caller, the workspace, and the referenced thing.
- * @returns The visible referencing records, grouped by subject kind.
+ * @returns The visible records using the target, grouped by subject kind.
  */
 export async function loadInboundReferences(
   input: InboundReferencesQuery,
@@ -64,13 +64,31 @@ export async function loadInboundReferences(
           eq(schema.mention.targetEntityId, input.targetId),
         );
 
-  const rows = await schema.db
-    .select({
-      subjectType: schema.mention.subjectType,
-      subjectId: schema.mention.subjectId,
-    })
-    .from(schema.mention)
-    .where(and(eq(schema.mention.organizationId, input.orgId), targetMatch));
+  const [mentionRows, attachmentRows] = await Promise.all([
+    schema.db
+      .select({
+        subjectType: schema.mention.subjectType,
+        subjectId: schema.mention.subjectId,
+      })
+      .from(schema.mention)
+      .where(and(eq(schema.mention.organizationId, input.orgId), targetMatch)),
+    input.targetKind === 'external_resource'
+      ? schema.db
+          .select({
+            subjectType: schema.attachment.subjectType,
+            subjectId: schema.attachment.subjectId,
+          })
+          .from(schema.attachment)
+          .where(
+            and(
+              eq(schema.attachment.organizationId, input.orgId),
+              eq(schema.attachment.externalResourceId, input.targetId),
+              isNull(schema.attachment.archivedAt),
+            ),
+          )
+      : Promise.resolve([]),
+  ]);
+  const rows = [...mentionRows, ...attachmentRows];
   if (rows.length === 0) return { total: 0, groups: [] };
 
   // One record can reference the same target several times in one field; it is still one backlink.

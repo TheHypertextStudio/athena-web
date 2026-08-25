@@ -772,7 +772,18 @@ export async function pullBackEntity(
       break;
     }
     const local = mirrors.get(change.externalPageId);
-    const action = planMirrorRow(local, change, direction);
+    const localRecord = await records.get(local?.entityId);
+    const plannedLocal =
+      local === undefined
+        ? undefined
+        : {
+            ...local,
+            currentContentHash:
+              localRecord === undefined
+                ? local.contentHash
+                : projectedHash(bindings, localRecord, refs),
+          };
+    const action = planMirrorRow(plannedLocal, change, direction);
 
     if (action.kind === 'noop') continue;
 
@@ -880,7 +891,7 @@ export async function pullBackEntity(
     }
 
     if (action.kind === 'push' || action.kind === 'create') {
-      const record = await records.get(local?.entityId);
+      const record = localRecord ?? (await records.get(local?.entityId));
       if (record === undefined) continue;
       const projected = projectRow(
         bindings,

@@ -30,6 +30,8 @@ export interface MirrorLocalRow {
   readonly lastPushedAt: Date | null;
   /** Hash of the values last projected, so an unchanged entity costs no write. */
   readonly contentHash: string | null;
+  /** Hash of the entity's current projectable values, when the caller has loaded them. */
+  readonly currentContentHash?: string | null;
   /** Whether the Docket entity has been archived. */
   readonly archived: boolean;
 }
@@ -72,16 +74,18 @@ export type MirrorAction =
  * Whether the Docket entity changed since Docket last wrote the page.
  *
  * @remarks
- * Measured against `lastPushedAt`, not against the remote anchor, because those answer different
- * questions: the anchor tracks what Notion last told us, while this asks "is what we would write
- * different from what we last wrote". A row Docket has never pushed is dirty by definition —
- * there is nothing in Notion to be up to date with.
+ * Measured by the projected content hash when the caller has loaded the current entity. Mirror-row
+ * timestamps change when Docket updates sync bookkeeping, so treating them as entity timestamps
+ * makes every successful push dirty again. A row Docket has never pushed is dirty by definition.
  *
  * @param local - The projected row's local state.
  * @returns true when Docket holds an unpushed change.
  */
 export function isLocallyDirty(local: MirrorLocalRow): boolean {
   if (local.lastPushedAt === null) return true;
+  if (local.currentContentHash !== undefined) {
+    return local.currentContentHash !== local.contentHash;
+  }
   return local.updatedAt.getTime() > local.lastPushedAt.getTime();
 }
 

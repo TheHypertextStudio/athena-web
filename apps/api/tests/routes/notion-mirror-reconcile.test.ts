@@ -706,12 +706,18 @@ describe('Notion mirror reconciliation', () => {
 
     const records = await loadEntityRows(orgId, integration.id, 'task');
     const bindings = orderedColumns(design.propertyMap);
-    const propertiesFor = (entityId: string) => {
+    const projectionFor = (entityId: string) => {
       const record = records.find((candidate) => candidate.entityId === entityId);
       if (!record) throw new Error(`missing record ${entityId}`);
-      return projectRow(bindings, resolveMirrorValues(bindings, record.values, NO_PAGES).values)
-        .properties;
+      return projectRow(bindings, resolveMirrorValues(bindings, record.values, NO_PAGES).values);
     };
+    const propertiesFor = (entityId: string) => {
+      return projectionFor(entityId).properties;
+    };
+    await db
+      .update(schema.notionMirrorRow)
+      .set({ contentHash: projectionFor(pullTask.id).contentHash })
+      .where(eq(schema.notionMirrorRow.externalPageId, 'page-pull'));
     mirror.changes = [
       {
         externalPageId: 'page-pull',

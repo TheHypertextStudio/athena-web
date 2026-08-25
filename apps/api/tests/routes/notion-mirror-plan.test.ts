@@ -21,6 +21,7 @@ function local(over: Partial<MirrorLocalRow> = {}): MirrorLocalRow {
     externalUpdatedAt: T0,
     lastPushedAt: T0,
     contentHash: 'hash_a',
+    currentContentHash: 'hash_a',
     archived: false,
     ...over,
   };
@@ -46,7 +47,32 @@ describe('isLocallyDirty', () => {
   });
 
   it('is dirty when the entity changed after the push', () => {
-    expect(isLocallyDirty(local({ updatedAt: T1, lastPushedAt: T0 }))).toBe(true);
+    expect(
+      isLocallyDirty(local({ updatedAt: T1, lastPushedAt: T0, currentContentHash: 'hash_b' })),
+    ).toBe(true);
+  });
+
+  it('uses projected values instead of mirror-row bookkeeping time', () => {
+    expect(
+      isLocallyDirty(
+        local({
+          updatedAt: T1,
+          lastPushedAt: T0,
+          contentHash: 'hash_a',
+          currentContentHash: 'hash_a',
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      isLocallyDirty(
+        local({
+          updatedAt: T0,
+          lastPushedAt: T1,
+          contentHash: 'hash_a',
+          currentContentHash: 'hash_b',
+        }),
+      ),
+    ).toBe(true);
   });
 });
 
@@ -119,14 +145,18 @@ describe('planMirrorRow — the two-way matrix', () => {
   });
 
   it('pushes a one-sided local change', () => {
-    expect(planMirrorRow(local({ updatedAt: T1, lastPushedAt: T0 }), remote(), 'two_way')).toEqual({
-      kind: 'push',
-    });
+    expect(
+      planMirrorRow(
+        local({ updatedAt: T1, lastPushedAt: T0, currentContentHash: 'hash_b' }),
+        remote(),
+        'two_way',
+      ),
+    ).toEqual({ kind: 'push' });
   });
 
   it('pushes and records a conflict when both sides changed', () => {
     const action = planMirrorRow(
-      local({ updatedAt: T1, lastPushedAt: T0 }),
+      local({ updatedAt: T1, lastPushedAt: T0, currentContentHash: 'hash_b' }),
       remote({ externalUpdatedAt: T2.toISOString() }),
       'two_way',
     );
@@ -138,7 +168,7 @@ describe('planMirrorRow — the two-way matrix', () => {
     // The whole point. Last-write-wins here would mean the tool Docket is replacing can still
     // overwrite it, which is not a replacement.
     const action = planMirrorRow(
-      local({ updatedAt: T1, lastPushedAt: T0 }),
+      local({ updatedAt: T1, lastPushedAt: T0, currentContentHash: 'hash_b' }),
       remote({ externalUpdatedAt: T2.toISOString() }),
       'two_way',
     );
@@ -212,9 +242,13 @@ describe('planMirrorRow — absence', () => {
   });
 
   it('still pushes an unpushed local change when the row was not read', () => {
-    expect(planMirrorRow(local({ updatedAt: T1, lastPushedAt: T0 }), undefined, 'two_way')).toEqual(
-      { kind: 'push' },
-    );
+    expect(
+      planMirrorRow(
+        local({ updatedAt: T1, lastPushedAt: T0, currentContentHash: 'hash_b' }),
+        undefined,
+        'two_way',
+      ),
+    ).toEqual({ kind: 'push' });
   });
 
   it('does nothing when there is neither a local row nor a remote page', () => {

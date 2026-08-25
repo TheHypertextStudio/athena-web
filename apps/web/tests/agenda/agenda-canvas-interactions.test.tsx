@@ -9,6 +9,7 @@ import {
   TaskId,
 } from '@docket/types';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgendaEntry } from '../../src/components/agenda/agenda-model';
 import type * as SchedulingModule from '../../src/components/scheduling';
@@ -61,6 +62,11 @@ const mutationState = vi.hoisted(() => ({
 
 vi.mock('next/navigation', () => ({ useRouter: () => router }));
 vi.mock('@docket/ui/hooks', () => ({ useMediaQuery: () => mediaState.isDesktop }));
+vi.mock('../../src/components/docket-link', () => ({
+  default: ({ children, href }: { readonly children: ReactNode; readonly href: string }) => (
+    <a href={href}>{children}</a>
+  ),
+}));
 
 vi.mock('../../src/components/agenda/agenda-context', () => ({
   isTimeboxed: (entry: { startsAt?: string; endsAt?: string }) =>
@@ -262,6 +268,15 @@ afterEach(() => {
 });
 
 describe('Agenda scheduling interactions', () => {
+  it('frames the timeline inside one clipped twelve-pixel gutter', () => {
+    renderTimeline([]);
+
+    const frame = screen.getByTestId('agenda-canvas-frame');
+    expect(frame).toHaveClass('h-full', 'min-h-0', 'overflow-hidden', 'px-3');
+    expect(frame).not.toHaveClass('overflow-auto');
+    expect(screen.getByRole('region', { name: 'Schedule' })).toBe(frame.firstElementChild);
+  });
+
   it('mounts the same work-location composition slots and editor overlays as Calendar', () => {
     const renderAllDayLaneContext = vi.fn(() => null);
     const renderTimedLaneContext = vi.fn(() => null);

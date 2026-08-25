@@ -857,6 +857,18 @@
 }
 
 /*
+ * A schedule can retain native scrolling without spending narrow-panel width on persistent
+ * scrollbar chrome. Apply this only to components that expose another clear scroll affordance.
+ */
+@utility scrollbar-none {
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/*
  * The page bleed grid: one declaration of the measure, for every section that sits on it.
  *
  * Sections used to each re-derive `mx-auto max-w-7xl px-3 …`, which meant four copies of the same

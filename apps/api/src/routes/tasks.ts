@@ -228,13 +228,25 @@ async function loadTaskDetailAggregate(
         WHERE t.parent_task_id = ${id}
           AND t.organization_id = ${orgId}
           AND t.archived_at IS NULL
+        UNION ALL
+        SELECT 'related'::text AS relation, t.id, t.title, t.state,
+          t.team_id AS "teamId", t.project_id AS "projectId",
+          t.program_id AS "programId", t.visibility
+        FROM task_related_task r
+        INNER JOIN task t ON t.id = CASE
+          WHEN r.task_id = ${id} THEN r.related_task_id
+          ELSE r.task_id
+        END
+        WHERE (r.task_id = ${id} OR r.related_task_id = ${id})
+          AND r.organization_id = ${orgId}
+          AND t.archived_at IS NULL
       )
       SELECT * FROM related
     `),
     labelsForSubject('task', orgId, row.id),
   ]);
   interface RelatedTaskRow {
-    readonly relation: 'parent' | 'blockedBy' | 'blocking' | 'subtask';
+    readonly relation: 'parent' | 'blockedBy' | 'blocking' | 'subtask' | 'related';
     readonly id: string;
     readonly title: string;
     readonly state: string;
@@ -263,7 +275,7 @@ async function loadTaskDetailAggregate(
       blocking: related('blocking').map(toRef),
       blockedBy: related('blockedBy').map(toRef),
       subtasks: related('subtask').map(toRef),
-      relatedTasks: [],
+      relatedTasks: related('related').map(toRef),
     },
   };
 }

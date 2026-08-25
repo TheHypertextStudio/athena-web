@@ -31,6 +31,7 @@ import {
   seedProject,
   seedStatuses,
   seedTask,
+  seedTaskAccessOrg,
 } from '../support/routes-harness';
 
 let schema!: typeof DbModule;
@@ -338,7 +339,7 @@ describe('detail aggregate routes', () => {
   });
 
   it('returns one bounded Task detail aggregate with its local snapshot and no org roster', async () => {
-    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const { orgId, teamId, humanActorId } = await seedTaskAccessOrg(db, schema);
     const writer = appWithActor(tasks, orgId, ['contribute'], humanActorId);
     const created = await writer.request('/', {
       method: 'POST',
@@ -348,9 +349,24 @@ describe('detail aggregate routes', () => {
     expect(created.status).toBe(201);
     const task = (await created.json()) as { id: string };
 
+    const relatedResponse = await writer.request('/', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        title: 'Review rider feedback',
+        teamId,
+        relatedTaskIds: [task.id],
+      }),
+    });
+    expect(relatedResponse.status).toBe(201);
+    const relatedTask = (await relatedResponse.json()) as { id: string };
+
     const response = await writer.request(`/${task.id}/aggregate-detail`);
     expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({
+    const aggregateResponse = (await response.json()) as {
+      defaultView: { task: { relatedTasks: unknown[] } };
+    };
+    expect(aggregateResponse).toMatchObject({
       target: 'task',
       snapshot: {
         target: 'task',
@@ -361,6 +377,10 @@ describe('detail aggregate routes', () => {
       viewer: { actorId: humanActorId },
       capabilities: { comment: true, contribute: true, assign: false, manage: false },
       defaultView: { task: { id: task.id } },
+    });
+
+    expect(aggregateResponse).toMatchObject({
+      defaultView: { task: { relatedTasks: [{ id: relatedTask.id }] } },
     });
 
     const body = await writer.request(`/${task.id}/aggregate-detail`);

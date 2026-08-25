@@ -12,6 +12,7 @@ import type * as DbModule from '@docket/db';
 
 import { appWithActor, getDb, seedTaskAccessOrg as seedBaseOrg } from '../support/routes-harness';
 import type tasksRouter from '../../src/routes/tasks';
+import { rawResultRows } from '../../src/lib/raw-result';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
@@ -230,17 +231,16 @@ describe('tasks create (POST /)', () => {
       });
       expect(created.status).toBe(201);
       const createdTaskId = (await json<{ id: string }>(created)).id;
-      const insertedPairs = await db.execute(sql<{
-        task_id: string;
-        related_task_id: string;
-      }>`
-        select task_id, related_task_id
-        from task_related_task_order_probe
-        order by sequence asc
-      `);
+      const insertedPairs = rawResultRows<{ task_id: string; related_task_id: string }>(
+        await db.execute(sql`
+          select task_id, related_task_id
+          from task_related_task_order_probe
+          order by sequence asc
+        `),
+      );
 
       expect(
-        insertedPairs.rows.map((pair) =>
+        insertedPairs.map((pair) =>
           pair.task_id === createdTaskId ? pair.related_task_id : pair.task_id,
         ),
       ).toEqual([...requestedTaskIds].sort());
@@ -289,17 +289,16 @@ describe('tasks create (POST /)', () => {
         body: JSON.stringify({ relatedTaskIds: requestedTaskIds }),
       });
       expect(patched.status).toBe(200);
-      const insertedPairs = await db.execute(sql<{
-        task_id: string;
-        related_task_id: string;
-      }>`
-        select task_id, related_task_id
-        from task_related_task_patch_order_probe
-        order by sequence asc
-      `);
+      const insertedPairs = rawResultRows<{ task_id: string; related_task_id: string }>(
+        await db.execute(sql`
+          select task_id, related_task_id
+          from task_related_task_patch_order_probe
+          order by sequence asc
+        `),
+      );
 
       expect(
-        insertedPairs.rows.map((pair) =>
+        insertedPairs.map((pair) =>
           pair.task_id === subjectTaskId ? pair.related_task_id : pair.task_id,
         ),
       ).toEqual([...requestedTaskIds].sort());

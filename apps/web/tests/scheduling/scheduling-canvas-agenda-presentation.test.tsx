@@ -35,9 +35,24 @@ describe('SchedulingCanvas Agenda presentation', () => {
 
     const canvas = screen.getByRole('region', { name: 'Schedule' });
     expect(canvas).toHaveAttribute('data-schedule-presentation', 'agenda');
+    expect(canvas).toHaveClass('overflow-auto', 'overscroll-contain', 'scrollbar-none');
     expect(canvas).not.toHaveClass('rounded-xl');
     expect(screen.queryByText('Agenda date label')).not.toBeInTheDocument();
     expect(screen.getByText('Team offsite')).toBeInTheDocument();
+  });
+
+  it('keeps visible scrollbar styling on the Calendar presentation', () => {
+    render(
+      <SchedulingCanvas
+        presentation="calendar"
+        displayTimezone="UTC"
+        lanes={[LANE]}
+        pixelsPerHour={48}
+        viewportWidth={320}
+      />,
+    );
+
+    expect(screen.getByRole('region', { name: 'Schedule' })).not.toHaveClass('scrollbar-none');
   });
 
   it('lets a focused Agenda grid create a thirty-minute draft from the keyboard', () => {

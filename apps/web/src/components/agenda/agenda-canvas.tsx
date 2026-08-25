@@ -281,60 +281,62 @@ function TimelineArrangement({
           className="bg-surface absolute inset-0 isolate"
         />
       ) : (
-        <SchedulingCanvas
-          presentation="agenda"
-          displayTimezone={displayTimezone}
-          lanes={[lane]}
-          pixelsPerHour={pixelsPerHour}
-          now={now}
-          viewportHeight="100%"
-          minimumLaneWidth={180}
-          {...workLocationComposition?.canvasProps}
-          selectedRegion={draftSelection?.canvasRegion}
-          selectedRegionAnchorRef={draftAnchorRef}
-          onSelectRegion={selectTimedRegion}
-          onSelectAllDayRegion={(targetLane, anchor) => {
-            allDayDraftAnchorRef.current = anchor;
-            setDraftSelection({
-              selection: {
-                allDayStartDate: targetLane.date,
-                allDayEndDate: shiftISODate(targetLane.date, 1),
-              },
-              canvasRegion: null,
-            });
-          }}
-          onDateShortcut={(shortcut) => {
-            if (shortcut === 'previous') goToPreviousDay();
-            else if (shortcut === 'next') goToNextDay();
-            else goToToday();
-          }}
-          error={timeboxFailed || updateCalendarItem.isError ? INLINE_UPDATE_FAILURE_COPY : null}
-          emptyMessage={loading ? '' : 'Nothing scheduled.'}
-          emptyAction={
-            loading ? null : (
-              <Button asChild variant="outline" size="sm">
-                <Link href="/calendar">Plan in the calendar</Link>
-              </Button>
-            )
-          }
-          onOpenItem={({ item }) => {
-            const entry = entryById.get(item.id);
-            if (!entry) return;
-            if (entry.taskId && entry.organizationId) {
-              router.push(`/orgs/${entry.organizationId}/tasks/${entry.taskId}`);
-            } else if (entry.calendarItem) {
-              onOpenCalendarItem(entry.calendarItem.id);
-            } else {
-              router.push('/calendar');
+        <div data-testid="agenda-canvas-frame" className="h-full min-h-0 overflow-hidden px-3">
+          <SchedulingCanvas
+            presentation="agenda"
+            displayTimezone={displayTimezone}
+            lanes={[lane]}
+            pixelsPerHour={pixelsPerHour}
+            now={now}
+            viewportHeight="100%"
+            minimumLaneWidth={180}
+            {...workLocationComposition?.canvasProps}
+            selectedRegion={draftSelection?.canvasRegion}
+            selectedRegionAnchorRef={draftAnchorRef}
+            onSelectRegion={selectTimedRegion}
+            onSelectAllDayRegion={(targetLane, anchor) => {
+              allDayDraftAnchorRef.current = anchor;
+              setDraftSelection({
+                selection: {
+                  allDayStartDate: targetLane.date,
+                  allDayEndDate: shiftISODate(targetLane.date, 1),
+                },
+                canvasRegion: null,
+              });
+            }}
+            onDateShortcut={(shortcut) => {
+              if (shortcut === 'previous') goToPreviousDay();
+              else if (shortcut === 'next') goToNextDay();
+              else goToToday();
+            }}
+            error={timeboxFailed || updateCalendarItem.isError ? INLINE_UPDATE_FAILURE_COPY : null}
+            emptyMessage={loading ? '' : 'Nothing scheduled.'}
+            emptyAction={
+              loading ? null : (
+                <Button asChild variant="outline" size="sm">
+                  <Link href="/calendar">Plan in the calendar</Link>
+                </Button>
+              )
             }
-          }}
-          onMoveItem={({ item, toLane, startMinutes }) => {
-            persistMove(item, toLane, startMinutes);
-          }}
-          onResizeItem={({ item, lane: targetLane, edge, startMinutes, endMinutes }) => {
-            persistResize(item, targetLane, edge, startMinutes, endMinutes);
-          }}
-        />
+            onOpenItem={({ item }) => {
+              const entry = entryById.get(item.id);
+              if (!entry) return;
+              if (entry.taskId && entry.organizationId) {
+                router.push(`/orgs/${entry.organizationId}/tasks/${entry.taskId}`);
+              } else if (entry.calendarItem) {
+                onOpenCalendarItem(entry.calendarItem.id);
+              } else {
+                router.push('/calendar');
+              }
+            }}
+            onMoveItem={({ item, toLane, startMinutes }) => {
+              persistMove(item, toLane, startMinutes);
+            }}
+            onResizeItem={({ item, lane: targetLane, edge, startMinutes, endMinutes }) => {
+              persistResize(item, targetLane, edge, startMinutes, endMinutes);
+            }}
+          />
+        </div>
       )}
       {workLocationComposition?.overlays}
       <CreateBlockForm

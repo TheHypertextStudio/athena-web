@@ -1,7 +1,12 @@
 import '@testing-library/jest-dom/vitest';
 
 import { fireEvent, render, screen } from '@testing-library/react';
-import { TaskViewDefinition, TaskViewRow } from '@docket/types';
+import {
+  ProgramViewDefinition,
+  ProgramViewRow,
+  TaskViewDefinition,
+  TaskViewRow,
+} from '@docket/types';
 import { describe, expect, it, vi } from 'vitest';
 
 import { WorkCards } from '../../src/components/work-views/work-cards';
@@ -48,6 +53,49 @@ const task = TaskViewRow.parse({
   archived: false,
   manualRank: 'a0',
   isContext: false,
+});
+
+const programDefinition = ProgramViewDefinition.parse({
+  version: 2,
+  target: 'program',
+  filter: null,
+  arrangement: { groupBy: null, subGroupBy: null, orderBy: [] },
+  presentation: {
+    layout: 'cards',
+    properties: ['status', 'owner', 'projectCount', 'taskCount'],
+    density: 'compact',
+    showEmptyGroups: false,
+  },
+});
+
+const program = ProgramViewRow.parse({
+  target: 'program',
+  organizationId: '01ARZ3NDEKTSV4RRFFQ69G5FA0',
+  id: '01ARZ3NDEKTSV4RRFFQ69G5FA2',
+  name: 'Transit coalition partnerships',
+  summary: 'Coordinate advocacy with regional partners.',
+  status: 'active',
+  health: 'at_risk',
+  owner: '01ARZ3NDEKTSV4RRFFQ69G5FE0',
+  ownerActor: {
+    id: '01ARZ3NDEKTSV4RRFFQ69G5FE0',
+    kind: 'human',
+    displayName: 'Willie Chalmers III',
+    avatar: null,
+  },
+  initiatives: [],
+  labels: [],
+  visibility: 'private',
+  creator: null,
+  updatedAt: '2026-08-23T00:00:00.000Z',
+  projectCount: 4,
+  taskCount: 8,
+  manualRank: 'a0',
+  isContext: false,
+  activity: {
+    weeks: [0, 2, 1, 3, 0, 4, 2, 5],
+    latestOccurredAt: '2026-08-23T00:00:00.000Z',
+  },
 });
 
 describe('WorkCards', () => {
@@ -128,5 +176,66 @@ describe('WorkCards', () => {
     );
 
     expect(screen.getByText('Willie Chalmers III')).toBeVisible();
+  });
+
+  it('renders a Program card around health and visible activity instead of its generic properties', () => {
+    render(
+      <WorkCards
+        target="program"
+        definition={programDefinition}
+        rows={[program]}
+        selectedIds={new Set()}
+        onSelectionChange={vi.fn()}
+        onActivate={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('link', { name: /Transit coalition partnerships/ })).toBeVisible();
+    expect(
+      screen.getByRole('checkbox', { name: 'Select Transit coalition partnerships' }).parentElement
+        ?.parentElement,
+    ).toHaveClass('right-4');
+    expect(screen.getByText('Coordinate advocacy with regional partners.')).toBeVisible();
+    expect(screen.getByText('At risk')).toBeVisible();
+    expect(
+      screen.getByLabelText('Activity over the last 8 weeks: 0, 2, 1, 3, 0, 4, 2, 5'),
+    ).toBeVisible();
+    expect(screen.getAllByRole('listitem')).toHaveLength(9);
+    expect(screen.getByRole('listitem', { name: 'Week 1: 0 events' })).toBeVisible();
+    expect(screen.getByRole('listitem', { name: 'Week 2: 2 events' })).toBeVisible();
+    expect(screen.getByRole('listitem', { name: 'Week 3: 1 event' })).toBeVisible();
+    expect(screen.getByRole('listitem', { name: 'Week 8: 5 events' })).toBeVisible();
+    expect(screen.getByText(/active/i)).toBeVisible();
+    expect(screen.queryByText('Status')).not.toBeInTheDocument();
+    expect(screen.queryByText('Owner')).not.toBeInTheDocument();
+    expect(screen.queryByText('Project count')).not.toBeInTheDocument();
+    expect(screen.queryByText('Task count')).not.toBeInTheDocument();
+    expect(screen.queryByText('Willie Chalmers III')).not.toBeInTheDocument();
+  });
+
+  it('renders a quiet Program pulse when its activity summary has no events', () => {
+    render(
+      <WorkCards
+        target="program"
+        definition={programDefinition}
+        rows={[
+          ProgramViewRow.parse({
+            ...program,
+            summary: null,
+            health: null,
+            activity: { weeks: [0, 0, 0, 0, 0, 0, 0, 0], latestOccurredAt: null },
+          }),
+        ]}
+        selectedIds={new Set()}
+        onSelectionChange={vi.fn()}
+        onActivate={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByLabelText('Activity over the last 8 weeks: 0, 0, 0, 0, 0, 0, 0, 0'),
+    ).toBeVisible();
+    expect(screen.getByText('No recent activity')).toBeVisible();
+    expect(screen.queryByText('At risk')).not.toBeInTheDocument();
   });
 });

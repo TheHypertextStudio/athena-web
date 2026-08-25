@@ -7,9 +7,10 @@ Board, Timeline, saved-view, or Program-detail contracts.
 ## Decision
 
 Program Cards will read like a calm portfolio gallery. Each card will show the fixed Program glyph,
-Program name, a clamped summary when one exists, a quiet lifecycle-status badge, and the shared
-Initiative/Program health dot and label. The card will not repeat that it is a Program, show
-owner/property rows, or show a project/task count as though cardinality were a useful status.
+Program name, a clamped summary when one exists, and the shared Initiative/Program health dot and
+label. The card omits lifecycle status because Health and recent activity answer the gallery use
+case. The card will not repeat that it is a Program, show owner/property rows, or show a
+project/task count as though cardinality were a useful status.
 
 The lower edge will show an eight-week activity pulse. Each neutral bar represents real visible
 work activity in one calendar week. A user can scan which areas are active or quiet, then open a
@@ -31,7 +32,7 @@ shows the same pulse at zero and the plain-language recency copy `No recent acti
 ## Card structure
 
 ```
-fixed glyph  Program name                         lifecycle badge
+fixed glyph  Program name
              one-line summary when available
 
              health dot + label

@@ -21,6 +21,7 @@ import {
   workViewRowTitle,
 } from './renderer-types';
 import { objectForWorkViewRow } from './work-view-object';
+import { ProgramWorkCard } from './program-work-card';
 
 function WorkObjectCard<TTarget extends ViewTarget>({
   row,
@@ -71,7 +72,7 @@ export interface WorkCardsProps<TTarget extends ViewTarget> {
   readonly onLoadMoreRows?: (() => void) | undefined;
 }
 
-/** Render any target-backed collection as a responsive card grid without target-specific cards. */
+/** Render a responsive card grid while preserving shared interaction behavior around target-specific content. */
 export function WorkCards<TTarget extends ViewTarget>({
   target,
   definition,
@@ -109,7 +110,13 @@ export function WorkCards<TTarget extends ViewTarget>({
             }}
           >
             <span
-              className={`${selectedIds.size > 0 || selectedIds.has(row.id) ? 'opacity-100' : 'opacity-0 group-focus-within/card:opacity-100 group-hover/card:opacity-100'} absolute top-4 left-4 z-10 transition-opacity`}
+              className={cn(
+                selectedIds.size > 0 || selectedIds.has(row.id)
+                  ? 'opacity-100'
+                  : 'opacity-0 group-focus-within/card:opacity-100 group-hover/card:opacity-100',
+                'absolute top-4 z-10 transition-opacity',
+                row.target === 'program' ? 'right-4' : 'left-4',
+              )}
             >
               <Checkbox
                 aria-label={`Select ${workViewRowTitle(row)}`}
@@ -138,27 +145,31 @@ export function WorkCards<TTarget extends ViewTarget>({
                 onActivate(row);
               }}
             >
-              <div className="flex items-start gap-3">
-                <span aria-hidden className="size-6 shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <h2 className="text-title-medium truncate">{workViewRowTitle(row)}</h2>
-                  {properties.length > 0 ? (
-                    <dl className="text-on-surface-variant text-body-small mt-3 grid gap-1">
-                      {properties.map((field) => (
-                        <div key={field.key} className="flex min-w-0 gap-2">
-                          <dt className="shrink-0">{field.label}</dt>
-                          <dd className="truncate">
-                            {formatWorkViewValue(
-                              workViewRowDisplayValue(row, field.key),
-                              field.kind,
-                            )}
-                          </dd>
-                        </div>
-                      ))}
-                    </dl>
-                  ) : null}
+              {row.target === 'program' ? (
+                <ProgramWorkCard row={row} />
+              ) : (
+                <div className="flex items-start gap-3">
+                  <span aria-hidden className="size-6 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <h2 className="text-title-medium truncate">{workViewRowTitle(row)}</h2>
+                    {properties.length > 0 ? (
+                      <dl className="text-on-surface-variant text-body-small mt-3 grid gap-1">
+                        {properties.map((field) => (
+                          <div key={field.key} className="flex min-w-0 gap-2">
+                            <dt className="shrink-0">{field.label}</dt>
+                            <dd className="truncate">
+                              {formatWorkViewValue(
+                                workViewRowDisplayValue(row, field.key),
+                                field.kind,
+                              )}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    ) : null}
+                  </div>
                 </div>
-              </div>
+              )}
             </DocketLink>
           </WorkObjectCard>
         ))}

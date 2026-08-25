@@ -4,7 +4,8 @@ import type { EntityNavigationSnapshot } from '@docket/types';
 import { useEffect, useState, type ComponentType, type JSX } from 'react';
 
 import { OfflineContent } from '@/components/offline-state';
-import { EntityDetailSnapshot } from '@/components/views/entity-detail-skeleton';
+import { TaskDetailLoading } from '@/components/task-detail/task-detail-loading';
+import { EntityDetailSkeleton } from '@/components/views/entity-detail-skeleton';
 import { useAppLocation } from '@/lib/app-location';
 import { parseAuthenticatedRoute } from '@/lib/authenticated-route';
 import { peekNavigationSnapshot } from '@/lib/navigation-snapshot-runtime';
@@ -29,7 +30,8 @@ import { useOnlineStatus } from '@/lib/use-online-status';
  * chunk was never cached, so the dynamic import rejects; that is the case the precached chunk set
  * exists to make rare, and it stays possible for anything excluded from it. Or the chunk is still
  * arriving, which is a frame or two from disk. The first two land on {@link OfflineContent}; the
- * third renders nothing rather than flashing a skeleton for a load measured in milliseconds.
+ * third uses the route's structured loading layout. It preserves the page's geometry for that one
+ * browser paint without pretending the deferred document has already loaded.
  */
 
 /** What the outlet knows about the route it is trying to render. */
@@ -96,7 +98,7 @@ export default function OfflineRouteOutlet(): JSX.Element | null {
   }, [pathname]);
 
   if (state.pathname !== pathname || state.status === 'loading') {
-    return snapshot === null ? null : <NavigationSnapshotPlaceholder snapshot={snapshot} />;
+    return snapshot === null ? null : <NavigationSnapshotLoading snapshot={snapshot} />;
   }
   if (state.status === 'unavailable') {
     if (state.reason === 'not-found') {
@@ -150,51 +152,40 @@ function matchingSnapshot<TTarget extends EntityNavigationSnapshot['target']>(
   return snapshot as Extract<EntityNavigationSnapshot, { readonly target: TTarget }>;
 }
 
-/** Paint a truthful entity identity immediately while the detail route module loads. */
-function NavigationSnapshotPlaceholder({
+/** Paint the matching detail layout immediately while the detail route module loads. */
+function NavigationSnapshotLoading({
   snapshot,
 }: {
   readonly snapshot: EntityNavigationSnapshot;
 }): JSX.Element {
   switch (snapshot.target) {
     case 'task':
-      return (
-        <EntityDetailSnapshot
-          label="Task"
-          title={snapshot.title}
-          metadata={
-            <span className="text-on-surface-variant text-body-small">
-              Status: {snapshot.status.replaceAll('_', ' ')} · Priority: {snapshot.priority}
-            </span>
-          }
-          syncing={false}
-        />
-      );
+      return <TaskDetailLoading snapshot={snapshot} />;
     case 'project':
       return (
-        <EntityDetailSnapshot
-          label="Project"
+        <EntityDetailSkeleton
+          entityName="Project"
+          tabCount={4}
           title={snapshot.name}
-          metadata={<SnapshotMetadata snapshot={snapshot} />}
-          syncing={false}
+          snapshotMetadata={<SnapshotMetadata snapshot={snapshot} />}
         />
       );
     case 'program':
       return (
-        <EntityDetailSnapshot
-          label="Program"
+        <EntityDetailSkeleton
+          entityName="Program"
+          tabCount={4}
           title={snapshot.name}
-          metadata={<SnapshotMetadata snapshot={snapshot} />}
-          syncing={false}
+          snapshotMetadata={<SnapshotMetadata snapshot={snapshot} />}
         />
       );
     case 'initiative':
       return (
-        <EntityDetailSnapshot
-          label="Initiative"
+        <EntityDetailSkeleton
+          entityName="Initiative"
+          tabCount={5}
           title={snapshot.name}
-          metadata={<SnapshotMetadata snapshot={snapshot} />}
-          syncing={false}
+          snapshotMetadata={<SnapshotMetadata snapshot={snapshot} />}
         />
       );
   }

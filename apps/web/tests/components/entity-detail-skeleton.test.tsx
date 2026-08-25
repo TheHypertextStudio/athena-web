@@ -11,6 +11,7 @@
 import { render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
+import { TaskDetailLoading } from '../../src/components/task-detail/task-detail-loading';
 import { EntityDetailLayout } from '../../src/components/views/entity-detail-layout';
 import { EntityDetailSkeleton } from '../../src/components/views/entity-detail-skeleton';
 
@@ -48,7 +49,7 @@ function renderLoaded() {
 
 describe('EntityDetailSkeleton', () => {
   it('renders the same structural regions as the loaded page', () => {
-    const loading = render(<EntityDetailSkeleton label="Loading project" />);
+    const loading = render(<EntityDetailSkeleton entityName="Project" />);
     const loaded = renderLoaded();
 
     const before = structureOf(loading.container);
@@ -59,7 +60,7 @@ describe('EntityDetailSkeleton', () => {
   });
 
   it('owns the page scroll the same way the loaded page does', () => {
-    const { container } = render(<EntityDetailSkeleton label="Loading project" />);
+    const { container } = render(<EntityDetailSkeleton entityName="Project" />);
 
     // The loaded page takes the scroll from the shell. A placeholder that does not hands it back
     // on resolve, and the shell's reserved scrollbar gutter appears and disappears with it.
@@ -67,15 +68,16 @@ describe('EntityDetailSkeleton', () => {
   });
 
   it('announces itself as busy for assistive tech', () => {
-    const { getByRole } = render(<EntityDetailSkeleton label="Loading project" />);
+    const { getByRole, queryByText } = render(<EntityDetailSkeleton entityName="Project" />);
 
     const status = getByRole('status');
     expect(status.getAttribute('aria-busy')).toBe('true');
-    expect(status.getAttribute('aria-label')).toBe('Loading project');
+    expect(status.getAttribute('aria-label')).toBe('Project detail');
+    expect(queryByText(/loading project/i)).toBeNull();
   });
 
   it('reserves a tab bar, which the old placeholders omitted entirely', () => {
-    const { container } = render(<EntityDetailSkeleton label="Loading project" tabCount={3} />);
+    const { container } = render(<EntityDetailSkeleton entityName="Project" tabCount={3} />);
 
     const header = container.querySelector('header');
     // Every detail page has tabs; a placeholder without them is shorter than the page it
@@ -85,7 +87,7 @@ describe('EntityDetailSkeleton', () => {
 
   it('shows the real name once it is known instead of a placeholder bar', () => {
     const { container, queryByText } = render(
-      <EntityDetailSkeleton label="Loading initiative" title="Reduce churn" />,
+      <EntityDetailSkeleton entityName="Initiative" title="Reduce churn" />,
     );
 
     expect(queryByText('Reduce churn')).not.toBeNull();
@@ -94,8 +96,15 @@ describe('EntityDetailSkeleton', () => {
   });
 
   it('falls back to a placeholder title when the name is not known yet', () => {
-    const { container } = render(<EntityDetailSkeleton label="Loading initiative" />);
+    const { container } = render(<EntityDetailSkeleton entityName="Initiative" />);
 
     expect(container.querySelector('.detail-title [data-slot="skeleton"]')).not.toBeNull();
+  });
+
+  it('keeps the Task layout busy without rendering loading copy', () => {
+    const { getByRole, queryByText } = render(<TaskDetailLoading />);
+
+    expect(getByRole('status')).toHaveAttribute('aria-label', 'Task detail');
+    expect(queryByText(/loading task/i)).toBeNull();
   });
 });

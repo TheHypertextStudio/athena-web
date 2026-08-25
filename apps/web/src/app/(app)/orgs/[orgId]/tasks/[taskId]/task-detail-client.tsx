@@ -3,7 +3,7 @@
 import type { Priority } from '@docket/work/task-contract';
 import { ActorAvatar, ActorPicker, type ActorKind, type PickerOption } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Button, Skeleton, SkeletonChip, SkeletonText } from '@docket/ui/primitives';
+import { Button } from '@docket/ui/primitives';
 import { useTypedRoute } from '@/lib/app-location';
 import { useQueryClient } from '@tanstack/react-query';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
@@ -18,9 +18,9 @@ import { formatWindow } from '@/components/cycles/format-window';
 import { Dependencies } from '@/components/task-detail/Dependencies';
 import { CommentActivityFeed } from '@/components/task-detail/CommentActivityFeed';
 import { PriorityPicker } from '@/components/task-detail/PriorityPicker';
-import { PRIORITY_LABEL } from '@/components/task-detail/priority';
 import { StatusPicker } from '@/components/task-detail/StatusPicker';
 import { Subtasks } from '@/components/task-detail/Subtasks';
+import { TaskDetailLoading } from '@/components/task-detail/task-detail-loading';
 import { MailAttachmentsPanel } from '@/components/athena/mail-attachments-panel';
 import TaskAttachments from '@/components/task-detail/TaskAttachments';
 import { TaskActivitySection } from '@/components/task-detail/task-activity-section';
@@ -30,7 +30,6 @@ import {
 } from '@/components/task-detail/task-header-controls';
 import { TaskTimerButton } from '@/components/time-tracking';
 import { TaskPropertiesRail } from '@/components/task-detail/task-properties-rail';
-import { EntityDetailSnapshot } from '@/components/views/entity-detail-skeleton';
 import {
   cycleOptions as toCycleOptions,
   labelOptions as toLabelOptions,
@@ -44,8 +43,6 @@ import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
 import { useEstimationScale } from '@/lib/use-estimation-scale';
 import { useTaskDetail } from '@/lib/use-task-detail';
 import { useTaskMutations } from '@/lib/use-task-mutations';
-import { useDelayedBoolean } from '@/lib/use-delayed-boolean';
-import { snapshotReconciliationPending } from '@/lib/detail-aggregate';
 import { useRenameTask } from '@/lib/use-rename-task';
 import { useCategoryOf } from '@/components/entity-display/use-work-status';
 import { TaskRepeatingWorkBacklink } from '@/components/recurrence/repeating-work-backlink';
@@ -115,11 +112,6 @@ export default function TaskDetailPage(): JSX.Element {
     milestonesOpen,
     cyclesOpen,
   });
-  const snapshotSyncing = useDelayedBoolean(
-    snapshotReconciliationPending(navigationSnapshot !== null, isPending),
-    300,
-  );
-
   useEffect(() => {
     setTerminalState(null);
   }, [taskId]);
@@ -274,71 +266,8 @@ export default function TaskDetailPage(): JSX.Element {
       </div>
     );
   }
-  if (navigationSnapshot !== null && (isPending || isError)) {
-    return (
-      <>
-        <EntityDetailSnapshot
-          label="Task"
-          title={navigationSnapshot.title}
-          metadata={
-            <span className="text-on-surface-variant text-body-small">
-              Status: {navigationSnapshot.status.replaceAll('_', ' ')} · Priority:{' '}
-              {PRIORITY_LABEL[navigationSnapshot.priority]}
-            </span>
-          }
-          syncing={snapshotSyncing}
-        />
-        {isError ? (
-          <p role="alert" className="text-error text-body-medium mx-auto max-w-6xl px-6 pb-6">
-            Could not refresh this task.
-          </p>
-        ) : null}
-      </>
-    );
-  }
   if (isPending) {
-    // placeholder: the task's own record — its title, the state/priority/assignee controls whose
-    // current values are the whole point of rendering them, its description, and its subtasks,
-    // comments and relations. The route carries only a task id.
-    return (
-      // The same container, header block and two-column split the loaded page uses, so nothing
-      // moves when the read resolves. A single column here was the visible bug: the content
-      // column jumped left the moment the 18rem property rail appeared beside it.
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
-        <header className="flex flex-col gap-4">
-          {navigationSnapshot ? (
-            <h1 className="text-on-surface text-title-large leading-tight">
-              {navigationSnapshot.title}
-            </h1>
-          ) : (
-            <SkeletonText scale="title" className="w-2/3 max-w-lg" />
-          )}
-          {navigationSnapshot ? (
-            <div className="text-on-surface-variant text-body-small flex flex-wrap gap-2">
-              <span className="bg-surface-container rounded-full px-3 py-1">
-                Status: {navigationSnapshot.status.replaceAll('_', ' ')}
-              </span>
-              <span className="bg-surface-container rounded-full px-3 py-1">
-                Priority: {PRIORITY_LABEL[navigationSnapshot.priority]}
-              </span>
-            </div>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              <SkeletonChip className="w-32" />
-              <SkeletonChip className="w-32" />
-              <SkeletonChip className="w-24" />
-            </div>
-          )}
-        </header>
-        <div className="grid grid-cols-1 gap-6 @4xl:grid-cols-[minmax(0,1fr)_18rem]">
-          <div className="flex flex-col gap-6">
-            <Skeleton className="h-32 w-full rounded-lg" />
-            <Skeleton className="h-48 w-full rounded-lg" />
-          </div>
-          <Skeleton className="h-64 w-full rounded-lg" />
-        </div>
-      </div>
-    );
+    return <TaskDetailLoading snapshot={navigationSnapshot} />;
   }
 
   if (isError) {

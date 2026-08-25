@@ -14,8 +14,15 @@ import {
 import { useServerReachable } from '@/components/reachability';
 import { navigateWithoutRouter } from '@/lib/app-location';
 import { parseAuthenticatedRoute, prefetchAuthenticatedRoute } from '@/lib/authenticated-route';
+import {
+  initiativeDetailAggregateDef,
+  programDetailAggregateDef,
+  projectDetailAggregateDef,
+  taskDetailAggregateDef,
+} from '@/lib/detail-aggregate';
 import { useOptionalResponsiveRouter } from '@/lib/interactions/navigation';
 import { useOfflineAvailability } from '@/lib/offline-availability';
+import { usePrefetchApi } from '@/lib/query';
 import { useOnlineStatus } from '@/lib/use-online-status';
 
 /**
@@ -71,6 +78,7 @@ export default function DocketLink({
   const availability = useOfflineAvailability(href, !routerReachable);
   const navigationPending = responsiveRouter?.requestedHref === href;
   const prefetchTimer = useRef<number | null>(null);
+  const prefetchApi = usePrefetchApi();
 
   const cancelIntent = useCallback((): void => {
     if (prefetchTimer.current === null) return;
@@ -83,8 +91,9 @@ export default function DocketLink({
     prefetchTimer.current = window.setTimeout(() => {
       prefetchTimer.current = null;
       void prefetchAuthenticatedRoute(href);
+      prefetchDetailAggregate(href, prefetchApi);
     }, MODULE_PREFETCH_DELAY_MS);
-  }, [href, localRoute]);
+  }, [href, localRoute, prefetchApi]);
 
   useEffect(() => cancelIntent, [cancelIntent]);
 
@@ -159,6 +168,32 @@ export default function DocketLink({
       }}
     />
   );
+}
+
+/** Warm the same aggregate query the destination detail route reads. */
+function prefetchDetailAggregate(href: string, prefetch: ReturnType<typeof usePrefetchApi>): void {
+  const queryAt = href.indexOf('?');
+  const pathname = queryAt === -1 ? href : href.slice(0, queryAt);
+  const match = parseAuthenticatedRoute(pathname);
+  if (match.kind !== 'matched') return;
+
+  const { params, pattern } = match.route;
+  switch (pattern) {
+    case '/orgs/[orgId]/tasks/[taskId]':
+      prefetch(taskDetailAggregateDef(params.orgId, params.taskId));
+      return;
+    case '/orgs/[orgId]/projects/[projectId]':
+      prefetch(projectDetailAggregateDef(params.orgId, params.projectId));
+      return;
+    case '/orgs/[orgId]/programs/[programId]':
+      prefetch(programDetailAggregateDef(params.orgId, params.programId));
+      return;
+    case '/orgs/[orgId]/initiatives/[initiativeId]':
+      prefetch(initiativeDetailAggregateDef(params.orgId, params.initiativeId));
+      return;
+    default:
+      return;
+  }
 }
 
 function routePathIsAuthenticated(href: string): boolean {

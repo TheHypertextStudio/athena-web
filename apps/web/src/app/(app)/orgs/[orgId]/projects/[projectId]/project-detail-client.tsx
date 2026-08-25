@@ -48,10 +48,7 @@ import { ProjectPeopleRow } from '@/components/project-detail/project-people-row
 import { PropertiesPanel } from '@/components/project-detail/properties-panel';
 import { PublishAction } from '@/components/publishing/publish-action';
 import { RepeatProjectDialog } from '@/components/recurrence/repeat-project-dialog';
-import {
-  EntityDetailSkeleton,
-  EntityDetailSnapshot,
-} from '@/components/views/entity-detail-skeleton';
+import { EntityDetailSkeleton } from '@/components/views/entity-detail-skeleton';
 import { EntityDetailLayout, EntityMetadataRow } from '@/components/views/entity-detail-layout';
 import { useDocumentTitle } from '@/components/tabs/use-document-title';
 import { useRegisterTabTitle } from '@/components/tabs/use-register-tab-title';
@@ -60,7 +57,6 @@ import { useTypedRoute } from '@/lib/app-location';
 import {
   aggregateLoadState,
   projectDetailAggregateDef,
-  snapshotReconciliationPending,
   terminalDetailFailure,
 } from '@/lib/detail-aggregate';
 import { useEntityMentions } from '@/lib/use-entity-mentions';
@@ -78,7 +74,6 @@ import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 import { orgMembersDef } from '@/lib/use-org-membership';
 import { useProjectMutations } from '@/lib/use-project-mutations';
-import { useDelayedBoolean } from '@/lib/use-delayed-boolean';
 
 type TabId = 'overview' | 'tasks' | 'updates' | 'resources';
 
@@ -101,13 +96,8 @@ export default function ProjectDetailPage(): JSX.Element {
   const project = aggregate?.defaultView.project ?? null;
   const aggregateState = aggregateLoadState(
     aggregateQ.data,
-    navigationSnapshot !== null,
     aggregateQ.isPending,
     aggregateQ.isError,
-  );
-  const snapshotSyncing = useDelayedBoolean(
-    snapshotReconciliationPending(navigationSnapshot !== null, aggregateQ.isPending),
-    300,
   );
   const [tab, setTab] = useState<TabId>('overview');
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
@@ -430,33 +420,11 @@ export default function ProjectDetailPage(): JSX.Element {
       </p>
     );
   }
-  if (aggregateState === 'snapshot' && navigationSnapshot !== null) {
-    return (
-      <>
-        <EntityDetailSnapshot
-          label={projectNoun}
-          title={navigationSnapshot.name}
-          metadata={
-            <span className="text-on-surface-variant text-body-small">
-              {navigationSnapshot.status} · {navigationSnapshot.priority}
-              {navigationSnapshot.health ? ` · ${navigationSnapshot.health}` : ''}
-            </span>
-          }
-          syncing={snapshotSyncing}
-        />
-        {aggregateQ.isError ? (
-          <p role="alert" className="text-error text-body-medium mx-auto max-w-7xl px-6 pb-6">
-            Could not refresh this {projectNoun.toLowerCase()}.
-          </p>
-        ) : null}
-      </>
-    );
-  }
   if (aggregateState === 'loading') {
     return (
       <>
         <EntityDetailSkeleton
-          label={`Loading ${projectNoun.toLowerCase()}`}
+          entityName={projectNoun}
           title={navigationSnapshot?.name}
           snapshotMetadata={
             navigationSnapshot ? (

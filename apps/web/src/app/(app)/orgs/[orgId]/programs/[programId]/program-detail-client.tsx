@@ -25,10 +25,7 @@ import { EditableTitle } from '@/components/editor/editable-title';
 import { EditableSubtitle } from '@/components/editor/editable-subtitle';
 import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
 import { PageContainer } from '@/components/views/page-layout';
-import {
-  EntityDetailSkeleton,
-  EntityDetailSnapshot,
-} from '@/components/views/entity-detail-skeleton';
+import { EntityDetailSkeleton } from '@/components/views/entity-detail-skeleton';
 import { EntityDetailLayout, EntityMetadataRow } from '@/components/views/entity-detail-layout';
 import { ProgramProjectsPanel } from '@/components/programs/program-projects-panel';
 import { ProgramPropertiesPanel } from '@/components/programs/properties-panel';
@@ -43,7 +40,6 @@ import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from 
 import {
   aggregateLoadState,
   programDetailAggregateDef,
-  snapshotReconciliationPending,
   terminalDetailFailure,
 } from '@/lib/detail-aggregate';
 import { orgMembersDef } from '@/lib/use-org-membership';
@@ -56,7 +52,6 @@ import {
 } from '@/lib/navigation-snapshot-runtime';
 import { useAppRouter } from '@/lib/interactions/navigation';
 import { openProjectRecord } from '@/lib/local-first-navigation';
-import { useDelayedBoolean } from '@/lib/use-delayed-boolean';
 
 type TabId = 'overview' | 'projects' | 'work' | 'updates';
 
@@ -86,13 +81,8 @@ export default function ProgramDetailPage(): JSX.Element {
   const program = aggregate?.defaultView.program ?? null;
   const aggregateState = aggregateLoadState(
     aggregateQ.data,
-    navigationSnapshot !== null,
     aggregateQ.isPending,
     aggregateQ.isError,
-  );
-  const snapshotSyncing = useDelayedBoolean(
-    snapshotReconciliationPending(navigationSnapshot !== null, aggregateQ.isPending),
-    300,
   );
 
   useEffect(() => {
@@ -201,28 +191,6 @@ export default function ProgramDetailPage(): JSX.Element {
       </p>
     );
   }
-  if (aggregateState === 'snapshot' && navigationSnapshot !== null) {
-    return (
-      <>
-        <EntityDetailSnapshot
-          label={programLabel}
-          title={navigationSnapshot.name}
-          metadata={
-            <span className="text-on-surface-variant text-body-small">
-              {navigationSnapshot.status}
-              {navigationSnapshot.health ? ` · ${navigationSnapshot.health}` : ''}
-            </span>
-          }
-          syncing={snapshotSyncing}
-        />
-        {aggregateQ.isError ? (
-          <p role="alert" className="text-error text-body-medium px-6 pb-6">
-            Could not refresh this {programLabel.toLowerCase()}.
-          </p>
-        ) : null}
-      </>
-    );
-  }
   if (aggregateState === 'loading') {
     // placeholder: the program's own record — name, summary, the metric strip, detail tabs,
     // and the projects under it. The route carries only a program
@@ -233,8 +201,8 @@ export default function ProgramDetailPage(): JSX.Element {
     return (
       <>
         <EntityDetailSkeleton
-          tabCount={3}
-          label={`Loading ${programLabel.toLowerCase()}`}
+          tabCount={4}
+          entityName={programLabel}
           title={navigationSnapshot?.name}
           snapshotMetadata={
             navigationSnapshot ? (

@@ -91,10 +91,36 @@ describe('detail route ownership', () => {
     expect(source).toContain('Load attachments and dependency map');
   });
 
-  it('keeps Task snapshot status and priority visible while the aggregate reconciles', () => {
-    const source = readFileSync(join(root, details[0]), 'utf8');
+  it('never renders a partial navigation snapshot as an entity document', () => {
+    for (const file of details) {
+      const source = readFileSync(join(root, file), 'utf8');
+      expect(source).not.toContain('EntityDetailSnapshot');
+      expect(source).not.toContain("aggregateState === 'snapshot'");
+    }
+  });
 
-    expect(source).toContain('navigationSnapshot.status');
-    expect(source).toContain('navigationSnapshot.priority');
+  it('warms the exact aggregate query before opening an entity detail route', () => {
+    const source = readFileSync(join(root, 'src/components/docket-link.tsx'), 'utf8');
+
+    expect(source).toContain('usePrefetchApi');
+    expect(source).toContain('prefetchDetailAggregate');
+    expect(source).toContain('taskDetailAggregateDef');
+    expect(source).toContain('projectDetailAggregateDef');
+    expect(source).toContain('programDetailAggregateDef');
+    expect(source).toContain('initiativeDetailAggregateDef');
+  });
+
+  it('gives every entity route a designed loading boundary before client code mounts', () => {
+    const loadingEntries = [
+      ['tasks/[taskId]/loading.tsx', 'TaskDetailLoading'],
+      ['projects/[projectId]/loading.tsx', 'EntityDetailSkeleton'],
+      ['programs/[programId]/loading.tsx', 'EntityDetailSkeleton'],
+      ['initiatives/[initiativeId]/loading.tsx', 'EntityDetailSkeleton'],
+    ] as const;
+
+    for (const [file, component] of loadingEntries) {
+      const source = readFileSync(join(root, `src/app/(app)/orgs/[orgId]/${file}`), 'utf8');
+      expect(source).toContain(component);
+    }
   });
 });

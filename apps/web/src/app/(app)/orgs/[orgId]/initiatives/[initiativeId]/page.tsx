@@ -2,23 +2,17 @@
  * An Initiative's detail — server entry (SSR prefetch + hydration).
  *
  * @remarks
- * Prefetches the initiative's own row with the caller's session cookie, dehydrates it, and hands the
- * warm cache to the client page, so the masthead — icon, name, summary, property row — is in the
- * first paint instead of behind a full composite read.
- *
- * Deliberately only the row: the page's composite read is several requests, each a hop from this
- * server back through the app's own origin to the API, so prefetching it here would move that
- * cost in front of the first byte rather than removing it. The tab panels keep loading on the
- * client, in parallel with the page becoming interactive. A failed prefetch degrades to the
- * previous behavior — nothing cached, so the client fetches it.
+ * Prefetches the bounded aggregate with the caller's session cookie and dehydrates the exact query
+ * key the client detail page reads. The page therefore paints the document it fetched rather than
+ * an identity-only transition shell.
  *
  * @see `docs/engineering/specs/data-layer.md` §7.
  */
 import { HydrationBoundary } from '@tanstack/react-query';
 import type { JSX } from 'react';
 
-import { unwrap } from '@/lib/query-core';
 import { queryKeys } from '@/lib/query-keys';
+import { apiQueryOptions } from '@/lib/query';
 import { dehydrate, getServerApi, getServerQueryClient } from '@/lib/query-server';
 
 import InitiativeDetailClient from './initiative-detail-client';
@@ -39,15 +33,16 @@ export default async function InitiativeDetailPage({
   const api = await getServerApi();
 
   await queryClient
-    .prefetchQuery({
-      queryKey: queryKeys.initiativeRecord(orgId, initiativeId),
-      queryFn: () =>
-        unwrap(
-          () =>
-            api.v1.orgs[':orgId'].initiatives[':id'].$get({ param: { orgId, id: initiativeId } }),
-          'Could not load this initiative.',
-        ),
-    })
+    .prefetchQuery(
+      apiQueryOptions(
+        queryKeys.initiativeAggregate(orgId, initiativeId),
+        () =>
+          api.v1.orgs[':orgId'].initiatives[':id']['aggregate-detail'].$get({
+            param: { orgId, id: initiativeId },
+          }),
+        'Could not refresh this initiative.',
+      ),
+    )
     .catch(() => undefined);
 
   return (

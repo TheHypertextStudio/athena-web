@@ -33,8 +33,13 @@ export interface EntityDetailSkeletonProps {
   tabCount?: number | undefined;
   /** Whether the page shows a summary line under its title. */
   hasSubtitle?: boolean | undefined;
-  /** Accessible label naming what is loading (e.g. "Loading project"). */
-  label: string;
+  /**
+   * The entity's noun for hidden accessibility names.
+   *
+   * This value never renders as loading copy. The layout uses it only to name its busy region and
+   * metadata row while screen readers report `aria-busy`.
+   */
+  entityName: string;
   /**
    * The entity's real name, when it is already known.
    *
@@ -61,13 +66,13 @@ export function EntityDetailSkeleton({
   chipCount = 5,
   tabCount = 4,
   hasSubtitle = true,
-  label,
+  entityName,
   title,
   subtitle,
   snapshotMetadata,
 }: EntityDetailSkeletonProps): JSX.Element {
   return (
-    <div role="status" aria-busy="true" aria-label={label} className="h-full">
+    <div role="status" aria-busy="true" aria-label={`${entityName} detail`} className="h-full">
       <EntityDetailLayout
         // placeholder: the breadcrumb trail, which names containers the record has not been read
         // from yet.
@@ -83,7 +88,7 @@ export function EntityDetailSkeleton({
           subtitle ?? (hasSubtitle ? <SkeletonText className="w-1/2 max-w-sm" /> : undefined)
         }
         metadata={
-          <EntityMetadataRow ariaLabel={label}>
+          <EntityMetadataRow ariaLabel={`${entityName} details`}>
             {snapshotMetadata ??
               Array.from({ length: chipCount }, (_, index) => (
                 // placeholder: one property whose value is part of the record being read.
@@ -112,48 +117,10 @@ export function EntityDetailSkeleton({
   );
 }
 
-/** Props for {@link EntityDetailSnapshot}. */
-export interface EntityDetailSnapshotProps {
-  /** Accessible name for the local document. */
-  label: string;
-  /** Identity carried from the source row. */
-  title: string;
-  /** Core state carried from the source row. */
-  metadata: ReactNode;
-  /** Whether the aggregate has exceeded the quiet reconciliation window. */
-  syncing: boolean;
-}
-
-/** Render a local entity identity without pretending its deferred content has loaded. */
-export function EntityDetailSnapshot({
-  label,
-  title,
-  metadata,
-  syncing,
-}: EntityDetailSnapshotProps): JSX.Element {
-  return (
-    <EntityDetailLayout
-      eyebrow={<span className="sr-only">{label}</span>}
-      icon={<span aria-hidden className="size-10" />}
-      title={title}
-      metadata={<EntityMetadataRow ariaLabel={label}>{metadata}</EntityMetadataRow>}
-      tabs={<div className="h-10" />}
-    >
-      <div className="min-h-96 pt-6">
-        {syncing ? (
-          <p role="status" className="text-on-surface-variant text-body-small">
-            Syncing…
-          </p>
-        ) : null}
-      </div>
-    </EntityDetailLayout>
-  );
-}
-
 /** Props for {@link EntityDetailBodySkeleton}. */
 export interface EntityDetailBodySkeletonProps {
-  /** Accessible label naming what is loading (e.g. "Loading project tasks"). */
-  label: string;
+  /** Hidden accessibility name for the busy body region. */
+  ariaLabel: string;
 }
 
 /**
@@ -167,13 +134,15 @@ export interface EntityDetailBodySkeletonProps {
  * properties are all in hand — and only the composite feeding the tab panels is still in flight.
  * Covering the whole page then would hide data the reader could already be looking at.
  */
-export function EntityDetailBodySkeleton({ label }: EntityDetailBodySkeletonProps): JSX.Element {
+export function EntityDetailBodySkeleton({
+  ariaLabel,
+}: EntityDetailBodySkeletonProps): JSX.Element {
   return (
     // placeholder: the active tab's panel, still being assembled from the composite read.
     <Skeleton
       role="status"
       aria-busy="true"
-      aria-label={label}
+      aria-label={ariaLabel}
       className="h-96 w-full rounded-xl"
     />
   );

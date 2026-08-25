@@ -2,19 +2,9 @@
  * A Project's detail — server entry (SSR prefetch + hydration).
  *
  * @remarks
- * Prefetches the project's own row with the caller's session cookie, dehydrates it, and hands the
- * warm cache to the client page. That is enough for the masthead — icon, name, summary, property
- * row — to be in the first paint, which is what a cold open previously had to wait a full
- * composite read to show.
- *
- * Deliberately *only* the row. The page's composite read is around a dozen requests, each of them
- * a hop from this server back through the app's own origin to the API, so prefetching it here
- * would move that whole cost in front of the first byte rather than removing it. The row is one
- * cheap read; the tab panels keep loading on the client, where they can arrive in parallel with
- * the page becoming interactive.
- *
- * A failed prefetch degrades to exactly the previous behavior: nothing is cached, so the client
- * fetches it.
+ * Prefetches the bounded aggregate with the caller's session cookie and dehydrates the exact query
+ * key the client detail page reads. The page therefore paints the document it fetched rather than
+ * an identity-only transition shell.
  *
  * @see `docs/engineering/specs/data-layer.md` §7.
  */
@@ -23,6 +13,7 @@ import type { JSX } from 'react';
 
 import { unwrap } from '@/lib/query-core';
 import { queryKeys } from '@/lib/query-keys';
+import { apiQueryOptions } from '@/lib/query';
 import { dehydrate, getServerApi, getServerQueryClient } from '@/lib/query-server';
 
 import ProjectDetailClient from './project-detail-client';
@@ -65,14 +56,16 @@ export default async function ProjectDetailPage({
   ];
 
   await Promise.allSettled([
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.projectRecord(orgId, projectId),
-      queryFn: () =>
-        unwrap(
-          () => api.v1.orgs[':orgId'].projects[':id'].$get({ param: { orgId, id: projectId } }),
-          'Could not load this project.',
-        ),
-    }),
+    queryClient.prefetchQuery(
+      apiQueryOptions(
+        queryKeys.projectAggregate(orgId, projectId),
+        () =>
+          api.v1.orgs[':orgId'].projects[':id']['aggregate-detail'].$get({
+            param: { orgId, id: projectId },
+          }),
+        'Could not refresh this project.',
+      ),
+    ),
     ...roster,
   ]);
 

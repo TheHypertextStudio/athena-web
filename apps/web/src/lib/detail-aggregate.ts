@@ -21,7 +21,7 @@ import { ApiRequestError } from './query-core';
 const DETAIL_AGGREGATE_STALE_MS = 120_000;
 
 /** The render source that may safely replace a detail route's primary document. */
-export type AggregateLoadState = 'data' | 'snapshot' | 'loading' | 'error' | 'missing';
+export type AggregateLoadState = 'data' | 'loading' | 'error' | 'missing';
 
 /** A server-confirmed detail failure that must evict cached entity data. */
 export type TerminalDetailFailure = 'forbidden' | 'not-found';
@@ -42,40 +42,23 @@ export function terminalDetailFailure(error: unknown): TerminalDetailFailure | n
 /**
  * Decide which detail source stays visible while one aggregate request reconciles.
  *
- * Cached aggregate data always wins over a failed background refresh. A local navigation
- * snapshot is the next truthful fallback. Only a route with neither can enter a load or error
- * state that replaces the document.
+ * Cached aggregate data always wins over a failed background refresh. A navigation snapshot can
+ * name a destination, but it cannot render that destination's tabs or body. Only aggregate data
+ * may render the entity document. Every unresolved route uses its layout-matched loading state.
  *
  * @param data - Cached aggregate data, if a successful read has occurred.
- * @param hasSnapshot - Whether the local navigation store has a matching entity snapshot.
  * @param pending - Whether the first aggregate request is pending.
  * @param failed - Whether the most recent aggregate request failed.
  * @returns The only source the route may use for its primary content.
  */
 export function aggregateLoadState(
   data: unknown,
-  hasSnapshot: boolean,
   pending: boolean,
   failed: boolean,
 ): AggregateLoadState {
   if (data !== undefined) return 'data';
-  if (hasSnapshot) return 'snapshot';
   if (pending) return 'loading';
   return failed ? 'error' : 'missing';
-}
-
-/**
- * Report whether a retained navigation snapshot is still reconciling.
- *
- * A failed request may leave the snapshot visible, but it has stopped syncing. Keeping those
- * states separate prevents the route from claiming that a completed failure is still in flight.
- *
- * @param hasSnapshot - Whether the route has a matching navigation snapshot.
- * @param pending - Whether the aggregate request is still pending.
- * @returns Whether the snapshot should show its delayed syncing indicator.
- */
-export function snapshotReconciliationPending(hasSnapshot: boolean, pending: boolean): boolean {
-  return hasSnapshot && pending;
 }
 
 /** Read a Task's bounded initial detail content. */

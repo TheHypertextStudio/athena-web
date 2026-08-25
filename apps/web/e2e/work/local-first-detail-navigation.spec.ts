@@ -3,8 +3,8 @@ import { orgHref } from '../helpers/constants';
 import { expect, test } from '../helpers/fixtures';
 import { apiJson } from '../helpers/net';
 
-/** Verify a list row paints its local snapshot while the only aggregate reconciliation is held. */
-test('a task row paints locally without an RSC transition or speculative detail data', async ({
+/** Verify explicit pointer intent warms the aggregate before the entity document opens. */
+test('a task row opens from its prefetched aggregate without an RSC transition', async ({
   page,
 }) => {
   test.setTimeout(180_000);
@@ -26,66 +26,18 @@ test('a task row paints locally without an RSC transition or speculative detail 
   await expect(row).toBeVisible();
 
   const aggregatePath = `/v1/orgs/${orgId}/tasks/${task.id}/aggregate-detail`;
-  const postShellApiPaths: string[] = [];
   let rscRequests = 0;
-  let releaseApi!: () => void;
-  const apiHeld = new Promise<void>((resolve) => {
-    releaseApi = resolve;
-  });
   page.on('request', (request) => {
     if (/[?&]_rsc=/u.test(request.url())) rscRequests += 1;
   });
-  await page.route('**/v1/**', async (route) => {
-    postShellApiPaths.push(new URL(route.request().url()).pathname);
-    await apiHeld;
-    await route.continue();
-  });
+  const aggregateResponse = page.waitForResponse(
+    (response) => new URL(response.url()).pathname === aggregatePath && response.ok(),
+  );
+  await row.hover();
+  await aggregateResponse;
 
-  try {
-    await page.evaluate((entityTitle) => {
-      const timing = { clickedAt: null as number | null, identityPaintAt: null as number | null };
-      (window as unknown as Record<string, unknown>)['__localFirstNavigationTiming'] = timing;
-      const observer = new MutationObserver(() => {
-        if (timing.identityPaintAt !== null) return;
-        const heading = Array.from(document.querySelectorAll('h1')).find(
-          (candidate) => candidate.textContent === entityTitle,
-        );
-        if (heading === undefined) return;
-        window.requestAnimationFrame(() => {
-          timing.identityPaintAt ??= performance.now();
-          observer.disconnect();
-        });
-      });
-      observer.observe(document.body, { childList: true, subtree: true, characterData: true });
-      window.addEventListener(
-        'click',
-        () => {
-          timing.clickedAt = performance.now();
-        },
-        { capture: true, once: true },
-      );
-    }, title);
-    await row.click();
-    await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible({
-      timeout: 200,
-    });
-    const identityPaintMs = await page.evaluate(() => {
-      const timing = (window as unknown as Record<string, unknown>)['__localFirstNavigationTiming'];
-      if (typeof timing !== 'object' || timing === null) return null;
-      const { clickedAt, identityPaintAt } = timing as {
-        readonly clickedAt: unknown;
-        readonly identityPaintAt: unknown;
-      };
-      return typeof clickedAt === 'number' && typeof identityPaintAt === 'number'
-        ? identityPaintAt - clickedAt
-        : null;
-    });
-    if (identityPaintMs === null) throw new Error('The browser did not record the identity paint.');
-    expect(identityPaintMs).toBeLessThan(200);
-    await expect.poll(() => postShellApiPaths).toEqual([aggregatePath]);
-    expect(rscRequests).toBe(0);
-  } finally {
-    releaseApi();
-  }
-  await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+  await row.click();
+  await expect(page.getByRole('textbox', { name: 'Task title' })).toHaveValue(title);
+  await expect(page.getByRole('status', { name: 'Loading task' })).toHaveCount(0);
+  expect(rscRequests).toBe(0);
 });

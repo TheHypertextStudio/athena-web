@@ -2,15 +2,9 @@
  * A Program's detail — server entry (SSR prefetch + hydration).
  *
  * @remarks
- * Prefetches the program's own row with the caller's session cookie, dehydrates it, and hands the
- * warm cache to the client page, so the masthead — icon, name, summary, property row — is in the
- * first paint instead of behind a full composite read.
- *
- * Deliberately only the row: the page's composite read is several requests, each a hop from this
- * server back through the app's own origin to the API, so prefetching it here would move that
- * cost in front of the first byte rather than removing it. The tab panels keep loading on the
- * client, in parallel with the page becoming interactive. A failed prefetch degrades to the
- * previous behavior — nothing cached, so the client fetches it.
+ * Prefetches the bounded aggregate with the caller's session cookie and dehydrates the exact query
+ * key the client detail page reads. This prevents a route from mounting a title-only snapshot while
+ * its document waits for a second client request.
  *
  * @see `docs/engineering/specs/data-layer.md` §7.
  */
@@ -19,6 +13,7 @@ import type { JSX } from 'react';
 
 import { unwrap } from '@/lib/query-core';
 import { queryKeys } from '@/lib/query-keys';
+import { apiQueryOptions } from '@/lib/query';
 import { dehydrate, getServerApi, getServerQueryClient } from '@/lib/query-server';
 
 import ProgramDetailClient from './program-detail-client';
@@ -61,14 +56,16 @@ export default async function ProgramDetailPage({
   ];
 
   await Promise.allSettled([
-    queryClient.prefetchQuery({
-      queryKey: queryKeys.programRecord(orgId, programId),
-      queryFn: () =>
-        unwrap(
-          () => api.v1.orgs[':orgId'].programs[':id'].$get({ param: { orgId, id: programId } }),
-          'Could not load this program.',
-        ),
-    }),
+    queryClient.prefetchQuery(
+      apiQueryOptions(
+        queryKeys.programAggregate(orgId, programId),
+        () =>
+          api.v1.orgs[':orgId'].programs[':id']['aggregate-detail'].$get({
+            param: { orgId, id: programId },
+          }),
+        'Could not refresh this program.',
+      ),
+    ),
     ...roster,
   ]);
 

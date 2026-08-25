@@ -47,10 +47,7 @@ import {
 import { memberActorOptions } from '@/components/pickers/options';
 import { usePickerOverlay } from '@/components/pickers/picker-overlay';
 import { PublishAction } from '@/components/publishing/publish-action';
-import {
-  EntityDetailSkeleton,
-  EntityDetailSnapshot,
-} from '@/components/views/entity-detail-skeleton';
+import { EntityDetailSkeleton } from '@/components/views/entity-detail-skeleton';
 import {
   ENTITY_METADATA_CHIP_CLASS,
   EntityDetailLayout,
@@ -63,7 +60,6 @@ import { api } from '@/lib/api';
 import {
   aggregateLoadState,
   initiativeDetailAggregateDef,
-  snapshotReconciliationPending,
   terminalDetailFailure,
 } from '@/lib/detail-aggregate';
 import { initiativeRelationshipSectionsDef } from '@/lib/fetch-initiative-sections';
@@ -82,7 +78,6 @@ import { formatPlanningTimeframe, toPlanningTimeframe } from '@/lib/planning-tim
 import { useFiscalYearStartMonth } from '@/lib/use-fiscal-year-start-month';
 import { useNavigationSnapshot } from '@/lib/use-navigation-snapshot';
 import { useAppRouter } from '@/lib/interactions/navigation';
-import { useDelayedBoolean } from '@/lib/use-delayed-boolean';
 import {
   removeNavigationSnapshot,
   seedNavigationSnapshot,
@@ -132,13 +127,8 @@ export default function InitiativeDetailPage(): JSX.Element {
   const detail = aggregate?.defaultView.initiative ?? null;
   const aggregateState = aggregateLoadState(
     aggregateQ.data,
-    navigationSnapshot !== null,
     aggregateQ.isPending,
     aggregateQ.isError,
-  );
-  const snapshotSyncing = useDelayedBoolean(
-    snapshotReconciliationPending(navigationSnapshot !== null, aggregateQ.isPending),
-    300,
   );
   const relationshipsQ = useApiQuery({
     ...initiativeRelationshipSectionsDef(orgId, initiativeId),
@@ -351,32 +341,12 @@ export default function InitiativeDetailPage(): JSX.Element {
       </p>
     );
   }
-  if (aggregateState === 'snapshot' && navigationSnapshot !== null)
-    return (
-      <>
-        <EntityDetailSnapshot
-          label={initiativeNoun}
-          title={navigationSnapshot.name}
-          metadata={
-            <span className="text-on-surface-variant text-body-small">
-              {navigationSnapshot.status} · {navigationSnapshot.priority}
-              {navigationSnapshot.health ? ` · ${navigationSnapshot.health}` : ''}
-            </span>
-          }
-          syncing={snapshotSyncing}
-        />
-        {aggregateQ.isError ? (
-          <p role="alert" className="text-error text-body-medium px-6 pb-6">
-            Could not refresh this {initiativeNoun.toLowerCase()}.
-          </p>
-        ) : null}
-      </>
-    );
   if (aggregateState === 'loading')
     return (
       <>
         <EntityDetailSkeleton
-          label={`Loading ${initiativeNoun.toLowerCase()}`}
+          tabCount={5}
+          entityName={initiativeNoun}
           title={navigationSnapshot?.name}
           snapshotMetadata={
             navigationSnapshot ? (

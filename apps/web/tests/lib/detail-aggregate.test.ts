@@ -7,7 +7,6 @@ import {
   initiativeDetailAggregateDef,
   programDetailAggregateDef,
   projectDetailAggregateDef,
-  snapshotReconciliationPending,
   taskDetailAggregateDef,
   terminalDetailFailure,
 } from '@/lib/detail-aggregate';
@@ -48,17 +47,11 @@ describe('detail aggregate query definitions', () => {
     ]);
   });
 
-  it('keeps a cached aggregate visible when its background reconciliation fails', () => {
-    expect(aggregateLoadState({ target: 'program' }, true, false, true)).toBe('data');
-    expect(aggregateLoadState(undefined, true, false, true)).toBe('snapshot');
-    expect(aggregateLoadState(undefined, false, true, false)).toBe('loading');
-    expect(aggregateLoadState(undefined, false, false, true)).toBe('error');
-  });
-
-  it('stops calling a retained snapshot syncing after the aggregate request settles', () => {
-    expect(snapshotReconciliationPending(true, true)).toBe(true);
-    expect(snapshotReconciliationPending(true, false)).toBe(false);
-    expect(snapshotReconciliationPending(false, true)).toBe(false);
+  it('keeps a cached aggregate visible but never promotes an identity snapshot to a document', () => {
+    expect(aggregateLoadState({ target: 'program' }, false, true)).toBe('data');
+    expect(aggregateLoadState(undefined, false, true)).toBe('error');
+    expect(aggregateLoadState(undefined, true, false)).toBe('loading');
+    expect(aggregateLoadState(undefined, false, true)).toBe('error');
   });
 
   it('does not retain a snapshot after the server reports deletion or revoked access', () => {

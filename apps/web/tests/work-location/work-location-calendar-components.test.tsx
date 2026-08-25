@@ -108,7 +108,7 @@ describe('work-location calendar components', () => {
     );
 
     expect(screen.getByLabelText('Expected work location')).toHaveClass(
-      'h-11',
+      'h-10',
       'flex-nowrap',
       'overflow-hidden',
     );
@@ -197,7 +197,7 @@ describe('work-location calendar components', () => {
     ).toBe(40);
   });
 
-  it('renders a compact interactive all-day chip inside a 44px target for every pointer', () => {
+  it('renders a compact interactive all-day chip inside a 40px target for every pointer', () => {
     const onOpen = vi.fn();
     render(
       <WorkLocationAllDayContext
@@ -222,7 +222,7 @@ describe('work-location calendar components', () => {
     );
 
     const chip = screen.getByRole('button', { name: 'Main library work location' });
-    expect(chip).toHaveClass('min-h-11', 'min-w-11');
+    expect(chip).toHaveClass('min-h-10', 'min-w-10');
     expect(chip.querySelector('[data-work-location-chip-visual]')).toHaveClass('min-h-7');
     expect(chip).toHaveClass('focus-visible:outline-primary');
     chip.focus();

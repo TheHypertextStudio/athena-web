@@ -49,4 +49,21 @@ describe('SchedulingCanvas all-day overflow', () => {
     );
     expect(screen.getByRole('button', { name: 'All day 8' })).toBeInTheDocument();
   });
+
+  it('shows two primary all-day rows before Agenda overflow', () => {
+    render(
+      <SchedulingCanvas
+        presentation="agenda"
+        displayTimezone="UTC"
+        lanes={[LANE]}
+        pixelsPerHour={60}
+        viewportWidth={320}
+        onOpenItem={vi.fn()}
+      />,
+    );
+
+    const lane = document.querySelector('[data-schedule-all-day-lane="date"]');
+    expect(lane?.querySelectorAll('[data-schedule-all-day-primary]')).toHaveLength(2);
+    expect(screen.getByText('+6 more')).toBeInTheDocument();
+  });
 });

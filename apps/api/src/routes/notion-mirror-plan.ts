@@ -91,8 +91,9 @@ export function isLocallyDirty(local: MirrorLocalRow): boolean {
  * @remarks
  * **The echo guard, in timestamp form.** Docket's own push bumps `last_edited_time`, so a naive
  * "is the remote newer than the anchor" test treats every push as a remote change and loops. The
- * comparison is therefore against `lastPushedAt`: only an edit made *after* Docket last wrote is
- * somebody else's.
+ * comparison is therefore against the newest timestamp Docket has acknowledged. That timestamp
+ * is either Docket's last push or the last Notion edit Docket pulled. Comparing only against the
+ * push would make every accepted Notion edit look new again on every later poll.
  *
  * The webhook path has a stronger guard available (the payload names its authors), but the
  * polling path has only timestamps — and polling is the safety net that has to keep working when
@@ -105,15 +106,13 @@ export function isLocallyDirty(local: MirrorLocalRow): boolean {
 export function isRemoteEdited(local: MirrorLocalRow, remote: MirrorRemoteRow): boolean {
   const remoteMs = Date.parse(remote.externalUpdatedAt);
   if (Number.isNaN(remoteMs)) return false;
-  const pushedMs = local.lastPushedAt?.getTime();
-  if (pushedMs === undefined) {
-    // Never pushed, so any remote timestamp we have not already recorded is somebody else's.
-    const anchorMs = local.externalUpdatedAt?.getTime();
-    return anchorMs === undefined || remoteMs > anchorMs;
-  }
-  // A page Docket wrote reports a `last_edited_time` at or a hair after the write. Strictly
-  // greater is the right test; equality is our own echo.
-  return remoteMs > pushedMs;
+  const acknowledgedMs = Math.max(
+    local.lastPushedAt?.getTime() ?? Number.NEGATIVE_INFINITY,
+    local.externalUpdatedAt?.getTime() ?? Number.NEGATIVE_INFINITY,
+  );
+  // A page Docket wrote reports a `last_edited_time` at or a hair after the write. A page Docket
+  // pulled reports the same timestamp again on later polls. Strictly greater rejects both echoes.
+  return remoteMs > acknowledgedMs;
 }
 
 /**

@@ -66,6 +66,15 @@ describe('isRemoteEdited', () => {
     ).toBe(true);
   });
 
+  it('does not replay a remote edit that Docket already accepted', () => {
+    expect(
+      isRemoteEdited(
+        local({ lastPushedAt: T0, externalUpdatedAt: T1 }),
+        remote({ externalUpdatedAt: T1.toISOString() }),
+      ),
+    ).toBe(false);
+  });
+
   it('ignores an edit older than our write', () => {
     expect(
       isRemoteEdited(local({ lastPushedAt: T1 }), remote({ externalUpdatedAt: T0.toISOString() })),

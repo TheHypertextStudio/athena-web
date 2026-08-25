@@ -7,6 +7,24 @@
 
 ## Active Tasks
 
+### [SETTINGS-SCROLL-001] Let settings scroll to the dialog edge
+
+- **Status**: REVIEW
+- **Started**: 2026-08-25
+- **Priority**: P1
+- **Description**: The desktop settings pane keeps the shell's 20 px bottom padding. Production
+  measurement at 1280 by 900 places the dialog bottom at 832.5 px and both scroll-region bottoms
+  at 811.5 px. The 21 px dead band and the page surface's 14 px bottom corners make content look
+  clipped as it scrolls out of view.
+- **Approach**: Keep the desktop top and side insets, but remove the bottom inset. Square the page
+  surface's bottom corners where it meets the dialog edge. Keep mobile gutters, card padding, and
+  the desktop rail width unchanged.
+- **Validation**: The five focused settings component files pass all 18 tests. Production geometry
+  and phone and desktop screenshots remain before release.
+- **Blockers**: None.
+
+---
+
 ### [SETTINGS-MOBILE-001] Use one mobile settings gutter
 
 - **Status**: COMPLETED

@@ -63,7 +63,7 @@ export function SettingsPane({ renderNav, children }: SettingsPaneProps): JSX.El
   }, [browsing]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden sm:flex-row sm:gap-8 sm:p-5">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden sm:flex-row sm:gap-8 sm:px-5 sm:pt-5">
       <div
         ref={listRef}
         className={cn(
@@ -111,7 +111,7 @@ export function SettingsPane({ renderNav, children }: SettingsPaneProps): JSX.El
             tone="page"
             shape="none"
             pad="none"
-            className="min-h-full px-4 pb-4 sm:rounded-xl sm:p-4"
+            className="min-h-full px-4 pb-4 sm:rounded-t-xl sm:p-4"
           >
             {children}
           </Surface>

@@ -9,8 +9,9 @@
 
 ### [SETTINGS-MOBILE-001] Use one mobile settings gutter
 
-- **Status**: REVIEW
+- **Status**: COMPLETED
 - **Started**: 2026-08-25
+- **Completed**: 2026-08-25
 - **Priority**: P1
 - **Description**: The settings shell applies a 20 px mobile inset and its page surface applies
   another 16 px inset. Connection cards then keep their text and actions in one row. The combined
@@ -19,9 +20,15 @@
   spacing, rounded page surface, and page padding unchanged. Move connection actions below their
   descriptions on phones, keep every action row on one line, and let the Linear account picker use
   the full card width.
-- **Validation**: The five focused settings component files pass all 18 tests. Authenticated
-  screenshots of Connections and an unrelated settings page at phone and desktop widths remain
-  before release.
+- **Validation**: The five focused settings component files pass all 18 tests. The commit hook
+  passed formatting, repository tooling tests, the API dependency build, and Web lint. Vercel
+  production deployment `dpl_Cv2xhZPTYRbLczxTL8q3cZomyF5u` is Ready and serves through
+  `docket.hypertext.studio`. Authenticated Hypertext Studio Chrome screenshots cover Connections
+  and General at 390 by 844 and 1280 by 900. The phone screenshots show one page gutter, readable
+  descriptions, one-line action rows, and a full-width Linear picker. The desktop screenshots show
+  the unchanged rail and content spacing.
+- **Learnings**: The shared settings shell must own the page gutter. Card padding belongs inside
+  each card, while secondary actions must leave the text column at phone widths.
 - **Blockers**: None.
 
 ---

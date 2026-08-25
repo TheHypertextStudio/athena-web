@@ -1304,6 +1304,25 @@ export const ProjectViewRow = z
 /** A validated Project work-view row. */
 export type ProjectViewRow = z.infer<typeof ProjectViewRow>;
 
+/** A fixed oldest-to-newest eight-week summary of visible Program activity. */
+export const ProgramActivitySummary = z
+  .object({
+    weeks: z.tuple([
+      z.number().int().nonnegative(),
+      z.number().int().nonnegative(),
+      z.number().int().nonnegative(),
+      z.number().int().nonnegative(),
+      z.number().int().nonnegative(),
+      z.number().int().nonnegative(),
+      z.number().int().nonnegative(),
+      z.number().int().nonnegative(),
+    ]),
+    latestOccurredAt: TimestampString.nullable(),
+  })
+  .strict();
+/** A validated fixed-window Program activity summary. */
+export type ProgramActivitySummary = z.infer<typeof ProgramActivitySummary>;
+
 /** Program projection returned by the work-view query operation. */
 export const ProgramViewRow = z
   .object({
@@ -1323,6 +1342,7 @@ export const ProgramViewRow = z
     updatedAt: TimestampString,
     projectCount: count,
     taskCount: count,
+    activity: ProgramActivitySummary,
   })
   .strict();
 /** A validated Program work-view row. */

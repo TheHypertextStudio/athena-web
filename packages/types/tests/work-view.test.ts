@@ -18,6 +18,8 @@ import {
   TaskWorkViewOrderRequest,
   InitiativeViewDefinition,
   ProjectViewRow,
+  ProgramActivitySummary,
+  ProgramViewRow,
   RelativeDateOperand,
   TaskWorkViewQueryRequest,
   ViewInstanceKey,
@@ -246,6 +248,67 @@ describe('work-view contracts', () => {
       leadActor: { displayName: 'Ada Lovelace' },
       display: { iconKey: 'folder', colorKey: 'blue' },
     });
+  });
+
+  it('carries an ordered eight-week activity pulse on Program view rows', () => {
+    const row = ProgramViewRow.parse({
+      target: 'program',
+      organizationId: ACTOR_ID,
+      id: '01ARZ3NDEKTSV4RRFFQ69G5FBV',
+      name: 'Transit coalition',
+      summary: null,
+      status: 'active',
+      health: 'at_risk',
+      owner: null,
+      ownerActor: null,
+      initiatives: [],
+      labels: [],
+      visibility: 'private',
+      creator: null,
+      updatedAt: '2026-08-24T12:00:00.000Z',
+      projectCount: 2,
+      taskCount: 5,
+      manualRank: 'a0',
+      isContext: false,
+      activity: {
+        weeks: [0, 2, 0, 1, 0, 0, 3, 1],
+        latestOccurredAt: '2026-08-24T12:00:00.000Z',
+      },
+    });
+
+    expect(row.activity).toEqual({
+      weeks: [0, 2, 0, 1, 0, 0, 3, 1],
+      latestOccurredAt: '2026-08-24T12:00:00.000Z',
+    });
+  });
+
+  it('rejects Program activity pulses outside the fixed nonnegative integer window', () => {
+    const latestOccurredAt = '2026-08-24T12:00:00.000Z';
+
+    expect(
+      ProgramActivitySummary.safeParse({
+        weeks: [0, 0, 0, 0, 0, 0, 0],
+        latestOccurredAt,
+      }).success,
+    ).toBe(false);
+    expect(
+      ProgramActivitySummary.safeParse({
+        weeks: [0, 0, 0, 0, 0, 0, 0, 0, 0],
+        latestOccurredAt,
+      }).success,
+    ).toBe(false);
+    expect(
+      ProgramActivitySummary.safeParse({
+        weeks: [0, 0, 0, 0, -1, 0, 0, 0],
+        latestOccurredAt,
+      }).success,
+    ).toBe(false);
+    expect(
+      ProgramActivitySummary.safeParse({
+        weeks: [0, 0, 0, 0, 0, 0, 0, 1.5],
+        latestOccurredAt,
+      }).success,
+    ).toBe(false);
   });
 
   it('validates view instance keys and mutable group keys', () => {

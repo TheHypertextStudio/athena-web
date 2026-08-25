@@ -196,6 +196,10 @@ describe('EntityNavigationSnapshot', () => {
           creator: null,
           projectCount: 2,
           taskCount: 5,
+          activity: {
+            weeks: [0, 0, 0, 0, 0, 0, 0, 0],
+            latestOccurredAt: null,
+          },
         }),
       ),
     ).toEqual({

@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { ComponentProps } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -29,7 +30,16 @@ vi.mock('../../src/components/reachability', () => ({
 
 vi.mock('../../src/lib/app-location', () => ({ navigateWithoutRouter }));
 vi.mock('../../src/lib/authenticated-route', () => ({
-  parseAuthenticatedRoute: () => ({ kind: 'matched' }),
+  parseAuthenticatedRoute: (pathname: string) => ({
+    kind: 'matched',
+    route:
+      pathname === '/orgs/org-1/tasks/task-1'
+        ? {
+            params: { orgId: 'org-1', taskId: 'task-1' },
+            pattern: '/orgs/[orgId]/tasks/[taskId]',
+          }
+        : { params: {}, pattern: '/tasks' },
+  }),
   prefetchAuthenticatedRoute,
 }));
 vi.mock('../../src/lib/offline-availability', () => ({
@@ -84,5 +94,27 @@ describe('DocketLink', () => {
     vi.advanceTimersByTime(75);
 
     expect(prefetchAuthenticatedRoute).not.toHaveBeenCalled();
+  });
+
+  it('warms the Task aggregate after sustained navigation intent', async () => {
+    vi.useFakeTimers();
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('{}', { headers: { 'content-type': 'application/json' } }));
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <DocketLink href="/orgs/org-1/tasks/task-1">Task</DocketLink>
+      </QueryClientProvider>,
+    );
+
+    fireEvent.mouseEnter(screen.getByRole('link', { name: 'Task' }));
+    await vi.advanceTimersByTimeAsync(75);
+    await Promise.resolve();
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      '/v1/orgs/org-1/tasks/task-1/aggregate-detail',
+      expect.objectContaining({ credentials: 'include' }),
+    );
   });
 });

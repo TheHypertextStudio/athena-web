@@ -12,7 +12,7 @@ import { HydrationBoundary } from '@tanstack/react-query';
 import type { JSX } from 'react';
 
 import { queryKeys } from '@/lib/query-keys';
-import { apiQueryOptions } from '@/lib/query';
+import { apiQueryOptions } from '@/lib/query-core';
 import { dehydrate, getServerApi, getServerQueryClient } from '@/lib/query-server';
 
 import TaskDetailClient from './task-detail-client';

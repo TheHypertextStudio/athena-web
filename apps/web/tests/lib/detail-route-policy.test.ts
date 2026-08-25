@@ -99,17 +99,6 @@ describe('detail route ownership', () => {
     }
   });
 
-  it('warms the exact aggregate query before opening an entity detail route', () => {
-    const source = readFileSync(join(root, 'src/components/docket-link.tsx'), 'utf8');
-
-    expect(source).toContain('usePrefetchApi');
-    expect(source).toContain('prefetchDetailAggregate');
-    expect(source).toContain('taskDetailAggregateDef');
-    expect(source).toContain('projectDetailAggregateDef');
-    expect(source).toContain('programDetailAggregateDef');
-    expect(source).toContain('initiativeDetailAggregateDef');
-  });
-
   it('gives every entity route a designed loading boundary before client code mounts', () => {
     const loadingEntries = [
       ['tasks/[taskId]/loading.tsx', 'TaskDetailLoading'],

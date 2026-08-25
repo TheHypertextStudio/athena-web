@@ -13,7 +13,7 @@ import type { JSX } from 'react';
 
 import { unwrap } from '@/lib/query-core';
 import { queryKeys } from '@/lib/query-keys';
-import { apiQueryOptions } from '@/lib/query';
+import { apiQueryOptions } from '@/lib/query-core';
 import { dehydrate, getServerApi, getServerQueryClient } from '@/lib/query-server';
 
 import ProgramDetailClient from './program-detail-client';

@@ -1,9 +1,11 @@
 'use client';
 
 import { cn } from '@docket/ui/lib/utils';
+import { QueryClientContext, type DefaultError, type UseQueryOptions } from '@tanstack/react-query';
 import Link from 'next/link';
 import {
   useCallback,
+  useContext,
   useEffect,
   useRef,
   type ComponentProps,
@@ -22,7 +24,6 @@ import {
 } from '@/lib/detail-aggregate';
 import { useOptionalResponsiveRouter } from '@/lib/interactions/navigation';
 import { useOfflineAvailability } from '@/lib/offline-availability';
-import { usePrefetchApi } from '@/lib/query';
 import { useOnlineStatus } from '@/lib/use-online-status';
 
 /**
@@ -54,6 +55,8 @@ export type DocketLinkProps = ComponentProps<typeof Link>;
 
 const MODULE_PREFETCH_DELAY_MS = 75;
 
+type PrefetchApi = <T>(definition: UseQueryOptions<T, DefaultError, T>) => void;
+
 /**
  * Navigate without losing the shell when there is no server to ask.
  *
@@ -78,7 +81,13 @@ export default function DocketLink({
   const availability = useOfflineAvailability(href, !routerReachable);
   const navigationPending = responsiveRouter?.requestedHref === href;
   const prefetchTimer = useRef<number | null>(null);
-  const prefetchApi = usePrefetchApi();
+  const queryClient = useContext(QueryClientContext);
+  const prefetchApi = useCallback<PrefetchApi>(
+    (definition) => {
+      if (queryClient !== undefined) void queryClient.prefetchQuery(definition);
+    },
+    [queryClient],
+  );
 
   const cancelIntent = useCallback((): void => {
     if (prefetchTimer.current === null) return;
@@ -171,7 +180,7 @@ export default function DocketLink({
 }
 
 /** Warm the same aggregate query the destination detail route reads. */
-function prefetchDetailAggregate(href: string, prefetch: ReturnType<typeof usePrefetchApi>): void {
+function prefetchDetailAggregate(href: string, prefetch: PrefetchApi): void {
   const queryAt = href.indexOf('?');
   const pathname = queryAt === -1 ? href : href.slice(0, queryAt);
   const match = parseAuthenticatedRoute(pathname);

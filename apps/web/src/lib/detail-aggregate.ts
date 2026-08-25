@@ -14,8 +14,8 @@ import type {
 } from '@docket/types';
 
 import { api } from './api';
-import { apiQueryOptions, queryKeys } from './query';
-import { ApiRequestError } from './query-core';
+import { ApiRequestError, apiQueryOptions } from './query-core';
+import { queryKeys } from './query-keys';
 
 /** Aggregate content stays fresh for two minutes without retaining an inactive page indefinitely. */
 const DETAIL_AGGREGATE_STALE_MS = 120_000;

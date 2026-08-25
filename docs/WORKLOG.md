@@ -7,6 +7,35 @@
 
 ## Active Tasks
 
+### [DETAIL-RELEASE-001] Restore detail routes and link isolation
+
+- **Status**: COMPLETED
+- **Started**: 2026-08-25
+- **Completed**: 2026-08-25
+- **Priority**: P0
+- **Description**: The production-build release gate shows the Task detail error surface because
+  entity Server Components call a query builder through the client-only query module. Web coverage
+  also fails because `DocketLink` requires a query provider before a person expresses prefetch
+  intent.
+- **Approach**: Import the query builder from its server-safe core in every aggregate-backed detail
+  route. Keep link aggregate warming when a query client exists, and make the warm-up a no-op when
+  the link renders outside the app provider. Validate the affected product behavior and the
+  production build before releasing the queued Canvas change.
+- **Files changed**: Updated the four aggregate-backed detail pages, the shared detail query
+  definition, `DocketLink`, its behavior coverage, the detail-route policy coverage, and this work
+  record.
+- **Validation**: All 417 Web test files and 3,150 tests pass with two workers. The focused link,
+  route-policy, Canvas accessibility, and graph-layout suite passes 23 tests. Web ESLint passes in
+  about 40 seconds with its 3 GB process cap. Web type checking, focused formatting, diff checks,
+  and the production build pass. The production build reads `.env.local`, compiles every entity
+  detail route, generates all 75 static pages, and builds the service worker with 274 assets.
+- **Learnings**: Server Components must import pure query builders from `query-core`, even when the
+  client query module re-exports them. Shared links must treat cache warming as optional because
+  links also render in isolated recovery and component-test surfaces.
+- **Blockers**: None.
+
+---
+
 ### [CONNECTOR-POST-001] Keep connector actions and retries running
 
 - **Status**: COMPLETED

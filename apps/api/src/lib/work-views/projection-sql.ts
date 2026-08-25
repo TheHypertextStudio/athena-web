@@ -2,6 +2,7 @@ import { sql, type SQL } from 'drizzle-orm';
 
 import type { ViewTarget } from '@docket/work/view-contract';
 
+import { compileProgramActivitySql } from './program-activity-sql';
 import { compileProjectTeamMembershipSql } from './project-team-sql';
 import {
   compileTenantRelationArraySql,
@@ -13,6 +14,20 @@ import {
 
 /** Context fields used by work-view rank and projection SQL. */
 export type WorkViewSqlContext = { readonly kind: string } & Record<string, unknown>;
+
+/** Caller scope and clock values shared by work-view projection builders. */
+export interface WorkViewSqlExecution {
+  /** Organization that bounds the roster query. */
+  readonly organizationId: string;
+  /** Active actor in that organization. */
+  readonly actorId: string;
+  /** User identity used for cross-organization authorization. */
+  readonly userId: string | null;
+  /** IANA timezone used by calendar filter compilers. */
+  readonly timeZone: string;
+  /** Cursor-stable timestamp for time-relative projection data. */
+  readonly asOf: string;
+}
 
 /**
  * Read the nullable contextual manual rank joined into the page candidate set.
@@ -127,7 +142,7 @@ const projections = {
     coalesce((select json_agg(d.blocked_project_id order by d.blocked_project_id)
       from project_dependency d join authorized related on related.id=d.blocked_project_id
       where d.blocking_project_id=e.id and d.organization_id=e.organization_id), '[]'::json) blocks_ids`,
-  program: (): SQL => sql`${base()},
+  program: (_context: WorkViewSqlContext, execution: WorkViewSqlExecution): SQL => sql`${base()},
     e.id, e.name, e.summary, e.status, e.health,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.actor, 'owner_id')} as owner,
     ${actorIdentity('owner_id')} as owner_actor,
@@ -142,8 +157,9 @@ const projections = {
       sql`e.organization_id`,
     )} labels, e.visibility,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.actor, 'created_by')} as creator, e.updated_at,
-    e._project_count::int project_count, e._task_count::int task_count`,
-  initiative: (_context: WorkViewSqlContext, organizationId: string): SQL => sql`${base()},
+    e._project_count::int project_count, e._task_count::int task_count,
+    ${compileProgramActivitySql(execution)} as activity`,
+  initiative: (_context: WorkViewSqlContext, execution: WorkViewSqlExecution): SQL => sql`${base()},
     e.id, e.name, e.summary, e.status, e.priority, e.health,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.actor, 'owner_id')} as owner,
     ${actorIdentity('owner_id')} as owner_actor,
@@ -159,11 +175,11 @@ const projections = {
     (select h.parent_initiative_id from initiative_hierarchy_link h
       join authorized parent on parent.id=h.parent_initiative_id
       where h.child_initiative_id=e.id
-        and h.context_organization_id=${organizationId} limit 1) parent,
+        and h.context_organization_id=${execution.organizationId} limit 1) parent,
     (select h.id from initiative_hierarchy_link h
       join authorized parent on parent.id=h.parent_initiative_id
       where h.child_initiative_id=e.id
-        and h.context_organization_id=${organizationId} limit 1) parent_link_id,
+        and h.context_organization_id=${execution.organizationId} limit 1) parent_link_id,
     e.organization_id as organization,
     coalesce((select json_agg(json_build_object(
       'id', p.id, 'name', p.name,
@@ -178,7 +194,10 @@ const projections = {
       on p.id=ip.project_id and p.organization_id=ip.organization_id
       where ip.initiative_id=e.id and ip.organization_id=e.organization_id
         and p.archived_at is null), '[]'::json) contributing_projects`,
-} satisfies Record<ViewTarget, (context: WorkViewSqlContext, organizationId: string) => SQL>;
+} satisfies Record<
+  ViewTarget,
+  (context: WorkViewSqlContext, execution: WorkViewSqlExecution) => SQL
+>;
 
 /** Target-indexed projection builders used by the typed SQL registry. */
 export const WORK_VIEW_PROJECTIONS = projections;
@@ -210,8 +229,14 @@ export function transportWorkViewRow(
     if (['start_date', 'due_date', 'target_date'].includes(key)) {
       const timestamp = timestampValue(value);
       result[camel] = typeof timestamp === 'string' ? timestamp.slice(0, 10) : timestamp;
-    } else if (['created_at', 'updated_at', 'latest_update'].includes(key)) {
+    } else if (['created_at', 'updated_at', 'latest_update', 'latest_occurred_at'].includes(key)) {
       result[camel] = timestampValue(value);
+    } else if (key === 'activity' && value !== null && typeof value === 'object') {
+      const activity = value as Record<string, unknown>;
+      result[camel] = {
+        ...activity,
+        latestOccurredAt: timestampValue(activity['latestOccurredAt']),
+      };
     } else {
       result[camel] = value;
     }

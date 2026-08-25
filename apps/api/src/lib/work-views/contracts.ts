@@ -37,7 +37,11 @@ import {
   type TenantRelationDefinition,
 } from './relation-sql';
 import type { SortCompilerMap } from './sort-sql';
-import { WORK_VIEW_PROJECTIONS, type WorkViewSqlContext } from './projection-sql';
+import {
+  WORK_VIEW_PROJECTIONS,
+  type WorkViewSqlContext,
+  type WorkViewSqlExecution,
+} from './projection-sql';
 
 const column = (name: string): SQL => sql.raw(`e.${name}`);
 
@@ -363,7 +367,7 @@ export interface WorkViewSqlContract<TContract extends ViewContract> {
   /** Every groupable target field. */
   readonly groups: GroupCompilerMap<GroupableFieldKey<TContract>>;
   /** Target-specific SQL projection tied to the row schema. */
-  readonly projection: (context: WorkViewSqlContext, organizationId: string) => SQL;
+  readonly projection: (context: WorkViewSqlContext, execution: WorkViewSqlExecution) => SQL;
   /** Runtime parser for one projected transport row. */
   readonly rowSchema: z.ZodType<WorkViewRowByTarget[TContract['target']]>;
 }

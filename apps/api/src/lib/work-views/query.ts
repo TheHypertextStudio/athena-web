@@ -279,7 +279,7 @@ export async function queryWorkView(input: QueryWorkViewInput): Promise<WorkView
         selected._cursor_sort_tuple, selected._page_order
       from authorized e join page_selection selected on selected.id=e.id
     ), page_data as materialized (
-      select ${contract.projection(request.context, input.organizationId)},
+      select ${contract.projection(request.context, execution)},
         e._cursor_sort_tuple, e._page_order from projectable e
     )
     select coalesce((select json_agg(page_data order by page_data._page_order) from page_data), '[]'::json) rows,

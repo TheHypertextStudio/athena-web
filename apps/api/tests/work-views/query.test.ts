@@ -124,6 +124,212 @@ describe('queryWorkView', () => {
     ]);
   });
 
+  it('summarizes visible Program work activity in a cursor-stable eight-week window', async () => {
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(schema.db, schema);
+    const [program] = await schema.db
+      .insert(schema.program)
+      .values({
+        organizationId: orgId,
+        name: 'Activity program',
+        status: 'active',
+        statusId: statusId('program', 'active'),
+        visibility: 'public',
+      })
+      .returning({ id: schema.program.id });
+    if (!program) throw new Error('activity Program was not seeded');
+    const [visibleProject, privateProject] = await schema.db
+      .insert(schema.project)
+      .values([
+        {
+          organizationId: orgId,
+          teamId,
+          programId: program.id,
+          name: 'Visible linked project',
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
+          visibility: 'public',
+        },
+        {
+          organizationId: orgId,
+          teamId,
+          programId: program.id,
+          name: 'Private linked project',
+          status: 'planned',
+          statusId: statusId('project', 'planned'),
+          visibility: 'private',
+        },
+      ])
+      .returning({ id: schema.project.id, name: schema.project.name });
+    if (!visibleProject || !privateProject) throw new Error('activity projects were not seeded');
+    const [visibleTask, duplicatePathTask, privateTask] = await schema.db
+      .insert(schema.task)
+      .values([
+        {
+          organizationId: orgId,
+          teamId,
+          projectId: visibleProject.id,
+          title: 'Visible linked task',
+          state: 'todo',
+          statusId: statusId('task', 'todo'),
+          visibility: 'public',
+        },
+        {
+          organizationId: orgId,
+          teamId,
+          programId: program.id,
+          projectId: visibleProject.id,
+          title: 'Task linked through both paths',
+          state: 'todo',
+          statusId: statusId('task', 'todo'),
+          visibility: 'public',
+        },
+        {
+          organizationId: orgId,
+          teamId,
+          projectId: visibleProject.id,
+          title: 'Private linked task',
+          state: 'todo',
+          statusId: statusId('task', 'todo'),
+          visibility: 'private',
+        },
+      ])
+      .returning({ id: schema.task.id, title: schema.task.title });
+    if (!visibleTask || !duplicatePathTask || !privateTask) {
+      throw new Error('activity tasks were not seeded');
+    }
+    const event = (docketEntityId: string, occurredAt: string, suffix: string) => ({
+      organizationId: orgId,
+      createdBy: humanActorId,
+      sourceSystem: 'docket' as const,
+      kind: 'created' as const,
+      occurredAt: new Date(occurredAt),
+      title: `Activity ${suffix}`,
+      entityKind: 'work_item' as const,
+      entityAssociation: 'matched' as const,
+      docketEntityId,
+      dedupeKey: `program-activity:${orgId}:${suffix}`,
+    });
+    await schema.db
+      .insert(schema.event)
+      .values([
+        event(program.id, '2026-07-06T08:00:00.000Z', 'program'),
+        event(visibleProject.id, '2026-07-20T08:00:00.000Z', 'project'),
+        event(visibleTask.id, '2026-08-03T08:00:00.000Z', 'task'),
+        event(duplicatePathTask.id, '2026-08-17T08:00:00.000Z', 'duplicate-path'),
+        event(privateProject.id, '2026-08-24T08:00:00.000Z', 'private-project'),
+        event(privateTask.id, '2026-08-24T09:00:00.000Z', 'private-task'),
+        event(program.id, '2026-07-05T08:00:00.000Z', 'before-window'),
+        event(program.id, '2026-08-24T13:00:00.000Z', 'after-as-of'),
+      ]);
+
+    const response = await queryWorkView({
+      database: schema.db,
+      organizationId: orgId,
+      actorId: humanActorId,
+      request: programRequest(),
+      now: new Date('2026-08-24T12:00:00.000Z'),
+    });
+
+    expect(response.rows).toEqual([
+      expect.objectContaining({
+        id: program.id,
+        activity: {
+          weeks: [1, 0, 1, 0, 1, 0, 1, 0],
+          latestOccurredAt: '2026-08-17T08:00:00.000Z',
+        },
+      }),
+    ]);
+  });
+
+  it('keeps Program activity pinned to the first page cursor clock', async () => {
+    const { orgId, humanActorId, statusId } = await seedBaseOrg(schema.db, schema);
+    const [firstProgram, secondProgram] = await schema.db
+      .insert(schema.program)
+      .values([
+        {
+          organizationId: orgId,
+          name: 'A first Program page',
+          status: 'active',
+          statusId: statusId('program', 'active'),
+          visibility: 'public',
+        },
+        {
+          organizationId: orgId,
+          name: 'B second Program page',
+          status: 'active',
+          statusId: statusId('program', 'active'),
+          visibility: 'public',
+        },
+      ])
+      .returning({ id: schema.program.id, name: schema.program.name });
+    if (!firstProgram || !secondProgram) throw new Error('pagination Programs were not seeded');
+    await schema.db.insert(schema.event).values([
+      {
+        organizationId: orgId,
+        createdBy: humanActorId,
+        sourceSystem: 'docket',
+        kind: 'created',
+        occurredAt: new Date('2026-08-17T08:00:00.000Z'),
+        title: 'Program activity before the cursor boundary',
+        entityKind: 'work_item',
+        entityAssociation: 'matched',
+        docketEntityId: secondProgram.id,
+        dedupeKey: `program-activity:${orgId}:before-cursor-boundary`,
+      },
+      {
+        organizationId: orgId,
+        createdBy: humanActorId,
+        sourceSystem: 'docket',
+        kind: 'created',
+        occurredAt: new Date('2026-08-25T08:00:00.000Z'),
+        title: 'Program activity after the cursor boundary',
+        entityKind: 'work_item',
+        entityAssociation: 'matched',
+        docketEntityId: secondProgram.id,
+        dedupeKey: `program-activity:${orgId}:after-cursor-boundary`,
+      },
+    ]);
+    const request = programRequest({
+      definition: {
+        ...programRequest().definition,
+        arrangement: {
+          groupBy: null,
+          subGroupBy: null,
+          orderBy: [{ field: 'name', direction: 'asc' }],
+        },
+      },
+      limit: 1,
+    });
+    const first = await queryWorkView({
+      database: schema.db,
+      organizationId: orgId,
+      actorId: humanActorId,
+      request,
+      now: new Date('2026-08-24T12:00:00.000Z'),
+    });
+    if (!first.nextCursor) throw new Error('Program cursor was not returned');
+    expect(first.rows).toEqual([expect.objectContaining({ id: firstProgram.id })]);
+    expect(decodeWorkViewCursor(first.nextCursor).asOf).toBe('2026-08-24T12:00:00.000Z');
+
+    const second = await queryWorkView({
+      database: schema.db,
+      organizationId: orgId,
+      actorId: humanActorId,
+      request: { ...request, cursor: first.nextCursor },
+      now: new Date('2026-08-31T12:00:00.000Z'),
+    });
+
+    expect(second.rows).toEqual([
+      expect.objectContaining({
+        id: secondProgram.id,
+        activity: {
+          weeks: [0, 0, 0, 0, 0, 0, 1, 0],
+          latestOccurredAt: '2026-08-17T08:00:00.000Z',
+        },
+      }),
+    ]);
+  });
+
   it('accepts postgres-js raw row arrays', async () => {
     const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(schema.db, schema);
     await schema.db.insert(schema.project).values({

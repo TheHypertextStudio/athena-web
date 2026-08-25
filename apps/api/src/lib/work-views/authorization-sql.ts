@@ -4,37 +4,46 @@ import { sql, type SQL } from 'drizzle-orm';
 import { compileProjectHasTeamSql } from './project-team-sql';
 import { compileTenantScalarRelationHasValueSql, WORK_VIEW_SCALAR_RELATIONS } from './relation-sql';
 
-function grantResourceSql(target: ViewTarget): SQL {
-  const direct = sql`(g.resource_kind=${target} and g.resource_id=e.id)`;
-  const organization = sql`(g.resource_kind='organization' and g.resource_id=e.organization_id)`;
+function entityColumn(entityAlias: string, column: string): SQL {
+  return sql`${sql.raw(entityAlias)}.${sql.raw(column)}`;
+}
+
+function grantResourceSql(target: ViewTarget, entityAlias: string): SQL {
+  const direct = sql`(g.resource_kind=${target} and g.resource_id=${entityColumn(entityAlias, 'id')})`;
+  const organization = sql`(g.resource_kind='organization' and g.resource_id=${entityColumn(entityAlias, 'organization_id')})`;
   switch (target) {
     case 'task':
       return sql`(${direct} or (g.cascades and (${organization}
         or (g.resource_kind='team' and ${compileTenantScalarRelationHasValueSql(
           WORK_VIEW_SCALAR_RELATIONS.team,
-          sql`e.team_id`,
-          sql`e.organization_id`,
+          entityColumn(entityAlias, 'team_id'),
+          entityColumn(entityAlias, 'organization_id'),
           sql`g.resource_id`,
         )})
         or (g.resource_kind='project' and ${compileTenantScalarRelationHasValueSql(
           WORK_VIEW_SCALAR_RELATIONS.project,
-          sql`e.project_id`,
-          sql`e.organization_id`,
+          entityColumn(entityAlias, 'project_id'),
+          entityColumn(entityAlias, 'organization_id'),
           sql`g.resource_id`,
         )})
         or (g.resource_kind='program' and ${compileTenantScalarRelationHasValueSql(
           WORK_VIEW_SCALAR_RELATIONS.program,
-          sql`e.program_id`,
-          sql`e.organization_id`,
+          entityColumn(entityAlias, 'program_id'),
+          entityColumn(entityAlias, 'organization_id'),
           sql`g.resource_id`,
         )}))))`;
     case 'project':
       return sql`(${direct} or (g.cascades and (${organization}
-        or (g.resource_kind='team' and ${compileProjectHasTeamSql(sql`e.id`, sql`e.organization_id`, sql`e.team_id`, sql`g.resource_id`)})
+        or (g.resource_kind='team' and ${compileProjectHasTeamSql(
+          entityColumn(entityAlias, 'id'),
+          entityColumn(entityAlias, 'organization_id'),
+          entityColumn(entityAlias, 'team_id'),
+          sql`g.resource_id`,
+        )})
         or (g.resource_kind='program' and ${compileTenantScalarRelationHasValueSql(
           WORK_VIEW_SCALAR_RELATIONS.program,
-          sql`e.program_id`,
-          sql`e.organization_id`,
+          entityColumn(entityAlias, 'program_id'),
+          entityColumn(entityAlias, 'organization_id'),
           sql`g.resource_id`,
         )}))))`;
     case 'program':
@@ -53,17 +62,20 @@ function grantResourceSql(target: ViewTarget): SQL {
  * @param organizationId - Requested organization boundary.
  * @param actorId - Authenticated actor in the requested organization.
  * @param userId - User identity used to resolve corresponding actors across organizations.
- * @returns A correlated authorization condition for entity alias `e`.
+ * @param entityAlias - SQL alias that names the entity checked by this predicate.
+ * @returns A correlated authorization condition for the supplied entity alias.
  */
 export function compileAuthorizationSql(
   target: ViewTarget,
   organizationId: string,
   actorId: string,
   userId: string | null,
+  entityAlias = 'e',
 ): SQL {
-  const visibility = target === 'initiative' ? sql`'public'` : sql`e.visibility`;
-  const viewerOrganization =
-    target === 'initiative' ? sql`e.organization_id` : sql`${organizationId}`;
+  const entityOrganization = entityColumn(entityAlias, 'organization_id');
+  const visibility =
+    target === 'initiative' ? sql`'public'` : entityColumn(entityAlias, 'visibility');
+  const viewerOrganization = target === 'initiative' ? entityOrganization : sql`${organizationId}`;
   const viewerIdentity = sql`viewer.organization_id = ${viewerOrganization}
     and ((viewer.id = ${actorId} and viewer.organization_id=${organizationId})
       or (${userId}::text is not null and viewer.user_id=${userId}))
@@ -84,10 +96,10 @@ export function compileAuthorizationSql(
       where ${viewerIdentity}
         and exists (
           select 1 from "grant" g
-          where g.organization_id = e.organization_id
+          where g.organization_id = ${entityOrganization}
             and ((g.subject_kind = 'actor' and g.subject_id = viewer.id)
               or (g.subject_kind = 'role' and g.subject_id = viewer_role.id))
-            and ${grantResourceSql(target)}
+            and ${grantResourceSql(target, entityAlias)}
             and g.effect = 'allow'
             and (g.expires_at is null or g.expires_at > now())
             and g.capabilities ?| array['view','comment','contribute','assign','manage','admin','owner']

@@ -6,6 +6,7 @@ import { TaskWorkViewQueryRequest } from '@docket/types';
 
 import { queryWorkView } from '../../src/lib/work-views/query';
 import { getDb, seedBaseOrg } from '../support/routes-harness';
+import { programRequest } from './request-fixtures';
 
 process.env['BETTER_AUTH_SECRET'] ??= 'work-view-query-plan-test-secret-at-least-32-characters';
 
@@ -74,5 +75,38 @@ describe('work-view query plan', () => {
     }
     const planRows: unknown = Reflect.get(explained, 'rows');
     expect(Array.isArray(planRows) ? planRows.length : 0).toBeGreaterThan(0);
+  });
+
+  it('keeps Program activity inside the shared two-statement roster query', async () => {
+    const { orgId, humanActorId, statusId } = await seedBaseOrg(schema.db, schema);
+    await schema.db.insert(schema.program).values({
+      organizationId: orgId,
+      name: 'Program activity plan probe',
+      status: 'active',
+      statusId: statusId('program', 'active'),
+      visibility: 'public',
+    });
+    const statements: SQL[] = [];
+    const countingDatabase = new Proxy(schema.db, {
+      get(target, property, receiver) {
+        if (property === 'execute') {
+          return (statement: SQL) => {
+            statements.push(statement);
+            return target.execute(statement);
+          };
+        }
+        const value: unknown = Reflect.get(target, property, receiver);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
+
+    await queryWorkView({
+      database: countingDatabase,
+      organizationId: orgId,
+      actorId: humanActorId,
+      request: programRequest(),
+    });
+
+    expect(statements).toHaveLength(2);
   });
 });

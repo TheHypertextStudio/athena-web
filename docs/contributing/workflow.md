@@ -1,7 +1,7 @@
 # Development Workflow
 
-> **Version**: 1.0.1
-> **Last Updated**: 2026-06-30
+> **Version**: 1.0.2
+> **Last Updated**: 2026-08-24
 
 ## Overview
 
@@ -139,11 +139,18 @@ git config --local core.hooksPath "$(git rev-parse --git-common-dir)/docket-hook
 
 The generated native Git hooks are:
 
-- `pre-commit` - formats staged files, then runs the one repository-wide lint gate with one worker
-  and a 3GB heap so an existing package lint failure cannot bypass a later commit
-- `commit-msg` - runs `node scripts/validate-commit-message.mjs "$1"`
+- `pre-commit` - formats staged files before Git captures the commit, checks the design-token
+  policy, then runs the one repository-wide lint gate with one worker and a 3GB heap so an existing
+  package lint failure cannot bypass a later commit
+- `commit-msg` - validates the Conventional Commit text and requires a `Co-authored-by` trailer when
+  a supported agent environment variable identifies an agent-authored commit
 - `pre-merge-commit` - rejects merge commits before Git opens an editor
 - `prepare-commit-msg` - blocks commits while `.git/MERGE_HEAD` exists
+
+Keep code and index checks in `pre-commit`. Git runs that hook before it captures the staged
+snapshot. Keep `commit-msg` limited to the prepared message. Git does not create that message until
+after `pre-commit` finishes, and a formatter in `commit-msg` would rewrite the index too late to
+enter the commit.
 
 Do not add Husky for this. Native Git hooks are enough, and the installer makes them turnkey.
 

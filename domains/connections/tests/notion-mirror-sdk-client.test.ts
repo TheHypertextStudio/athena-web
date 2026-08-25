@@ -212,6 +212,22 @@ describe('NotionMirrorClient.provisionDatabase', () => {
     await expect(rejected).rejects.toMatchObject({ provider: 'notion', kind: 'provider' });
   });
 
+  it('refuses a partial database response that omits its data sources', async () => {
+    // Notion can return partial objects when a token loses access between creation and response.
+    // Treating that shape as provisioned would persist an unusable database binding.
+    const { fetchImpl } = router({
+      'POST /v1/databases': { object: 'database', id: 'db_1' },
+    });
+
+    const rejected = new NotionMirrorClient('t', fetchImpl).provisionDatabase({
+      parentPageId: 'page_1',
+      title: 'Docket tasks',
+      ownershipKey: 'owner:tasks',
+      columns: [titleColumn],
+    });
+    await expect(rejected).rejects.toMatchObject({ provider: 'notion', kind: 'provider' });
+  });
+
   it('names the database in the error when creation itself fails', async () => {
     const rejected = new NotionMirrorClient(
       't',
@@ -274,6 +290,81 @@ describe('NotionMirrorClient.findDatabasesByOwnershipKey', () => {
         propertyIds: { title: 'title' },
       },
     ]);
+  });
+
+  it('ignores non-database children and databases owned by another mirror', async () => {
+    const { fetchImpl } = router({
+      'GET /v1/blocks': {
+        object: 'list',
+        type: 'block',
+        block: {},
+        next_cursor: null,
+        has_more: false,
+        results: [
+          { object: 'block', id: 'note_1', type: 'paragraph', paragraph: {} },
+          {
+            object: 'block',
+            id: 'db_1',
+            type: 'child_database',
+            child_database: { title: 'Another mirror' },
+          },
+        ],
+      },
+      'GET /v1/databases': {
+        object: 'database',
+        id: 'db_1',
+        title: [],
+        description: [{ plain_text: 'Docket ownership: somebody-else:tasks' }],
+        data_sources: [{ id: 'ds_1', name: 'Tasks' }],
+        url: 'https://www.notion.so/db-1',
+      },
+    });
+
+    const found = await new NotionMirrorClient('t', fetchImpl).findDatabasesByOwnershipKey({
+      parentPageId: 'page_1',
+      title: 'Docket tasks',
+      ownershipKey: 'owner:tasks',
+      columns: [titleColumn],
+    });
+
+    expect(found).toEqual([]);
+  });
+
+  it('refuses to adopt an owned database that has no data source', async () => {
+    const { fetchImpl } = router({
+      'GET /v1/blocks': {
+        object: 'list',
+        type: 'block',
+        block: {},
+        next_cursor: null,
+        has_more: false,
+        results: [
+          {
+            object: 'block',
+            id: 'db_1',
+            type: 'child_database',
+            child_database: { title: 'Docket tasks' },
+          },
+        ],
+      },
+      'GET /v1/databases': {
+        object: 'database',
+        id: 'db_1',
+        title: [],
+        description: [{ plain_text: 'Docket ownership: owner:tasks' }],
+        data_sources: [],
+        url: 'https://www.notion.so/db-1',
+      },
+    });
+
+    const rejected = new NotionMirrorClient('t', fetchImpl).findDatabasesByOwnershipKey({
+      parentPageId: 'page_1',
+      title: 'Docket tasks',
+      ownershipKey: 'owner:tasks',
+      columns: [titleColumn],
+    });
+
+    await expect(rejected).rejects.toMatchObject({ provider: 'notion', kind: 'provider' });
   });
 });
 
@@ -478,6 +569,45 @@ describe('NotionMirrorClient.queryChanges', () => {
     expect(calls[1]?.body).not.toHaveProperty('in_trash');
   });
 
+  it('follows every cursor in both the live and archived partitions', async () => {
+    const bodies: { is_archived?: boolean; start_cursor?: string }[] = [];
+    const fetchImpl = ((_url: string, init?: { body?: string }) => {
+      const body = JSON.parse(init?.body ?? '{}') as {
+        is_archived?: boolean;
+        start_cursor?: string;
+      };
+      bodies.push(body);
+      const id = body.is_archived === true ? 'trashed' : 'live';
+      const firstPage = body.start_cursor === undefined;
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            object: 'list',
+            next_cursor: firstPage ? 'next' : null,
+            has_more: firstPage,
+            results: [page({ id: `${id}_${firstPage ? '1' : '2'}` })],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+      );
+    }) as unknown as typeof fetch;
+
+    const changes = await new NotionMirrorClient('t', fetchImpl).queryChanges('ds_1');
+
+    expect(bodies).toEqual([
+      { page_size: 100 },
+      { page_size: 100, start_cursor: 'next' },
+      { page_size: 100, is_archived: true },
+      { page_size: 100, is_archived: true, start_cursor: 'next' },
+    ]);
+    expect(changes.map((change) => change.externalPageId)).toEqual([
+      'live_1',
+      'live_2',
+      'trashed_1',
+      'trashed_2',
+    ]);
+  });
+
   it('reports a failed query as a provider error', async () => {
     const rejected = new NotionMirrorClient(
       't',
@@ -500,5 +630,14 @@ describe('NotionMirrorClient error translation', () => {
       Promise.reject(new Error('socket hang up'))) as unknown as typeof fetch;
     const rejected = new NotionMirrorClient('t', fetchImpl).botId();
     await expect(rejected).rejects.toMatchObject({ provider: 'notion', kind: 'network' });
+  });
+
+  it('preserves object-not-found as a missing provider object', async () => {
+    const rejected = new NotionMirrorClient('t', failing(404, 'object_not_found')).botId();
+    await expect(rejected).rejects.toMatchObject({
+      provider: 'notion',
+      kind: 'provider',
+      status: 404,
+    });
   });
 });

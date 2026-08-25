@@ -26,18 +26,26 @@
   - [x] Remove empty work-location rows and obsolete connectors.
   - [x] Pass focused and repository validation.
   - [x] Rebase onto current `origin/main` and push the verified branch.
-  - [ ] Fast-forward `main` and pass the deployment gates.
+  - [x] Fast-forward the Agenda changes onto `main` without a pull request.
+  - [x] Restore the connections coverage gate exposed by the newer `main` tip.
+  - [ ] Pass the deployment gates.
   - [ ] Capture authenticated visual evidence and deploy the verified revision.
 - **Validation**: Before the rebase, the complete Web suite passed 415 files and 3,116 tests. API
   passed 391 files and 4,744 tests. DB passed 31 files and 203 tests. After the rebase, the focused
   Agenda, scheduling, and work-location run passes 88 tests across eight files with one worker.
   Repository tooling passes 165 tests, typecheck passes 26 tasks, lint passes 25 tasks, and the
   production build passes all four executable tasks with a process-local 3 GB heap and two Turbo
-  workers. The branch contains no merge commits and is verified at revision `4da13664`.
-- **Blockers**: Authenticated screenshot review at 1440×900, 390×844, and 320px remains pending.
-  The user told this task to stop opening or controlling browsers after earlier audit instances
-  disrupted their desktop. The user directed this branch onto `main` without a pull request, so the
-  release still needs browser permission for its required visual evidence.
+  workers. `main` contains the Agenda implementation at `c5cf92e2` with no merge commit. The current
+  connections coverage gate passes 247 tests with 92.21% branch coverage after adding behavior
+  coverage for malformed database bindings, ownership filtering, paginated change reads, and
+  missing-object classification. The post-rebase suite also confirms that Docket's private row
+  anchors remain out of the Notion write contract.
+- **Blockers**: The authenticated production session is available and browser permission is now
+  explicit. CI attempt 2 passed builds, lint, types, API coverage, and core-screen acceptance, but
+  the newer Notion work on `main` left connections branch coverage at 88.01%. The local coverage fix
+  passes. Production and the four required screenshots must wait for that fix to reach `main` and
+  clear the deployment workflow. The advisory E2E workflow also has unrelated auth, scheduling,
+  Notion, and document failures; it does not gate production.
 
 ---
 

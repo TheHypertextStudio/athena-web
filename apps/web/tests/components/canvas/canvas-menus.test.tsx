@@ -84,7 +84,6 @@ function Harness(): React.JSX.Element {
               id: 'project-a->project-b',
               source: 'project-a',
               target: 'project-b',
-              data: { kind: 'dependency' },
             },
           );
         }}

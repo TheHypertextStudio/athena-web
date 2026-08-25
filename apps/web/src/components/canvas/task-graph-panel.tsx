@@ -24,7 +24,7 @@ import { EmptyState } from '@docket/ui/components';
 import { Workflow, X } from '@docket/ui/icons';
 import { Button, Skeleton, Surface } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
-import { type Edge, type Node, Panel, type ReactFlowInstance } from '@xyflow/react';
+import { type Edge, type Node, type ReactFlowInstance } from '@xyflow/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useCallback, useMemo, useState } from 'react';
@@ -76,6 +76,7 @@ import { taskGraphScopeKey } from './scope';
 import { useTaskGraphCreation } from './use-task-graph-creation';
 import { focusCanvasNode } from './focus-canvas-node';
 import { canvasCommandId, useCanvasCommandHistory } from './use-canvas-command-history';
+import CanvasOverlayPanel from './canvas-overlay-panel';
 
 /** Stable registries (must not be re-created per render — xyflow warns otherwise). */
 const NODE_TYPES = { task: TaskNode, taskBranch: TaskBranchNode, group: GroupNode };
@@ -279,6 +280,13 @@ export default function TaskGraphPanel({
     queryKeys.tasks(orgId),
   ]);
   const [flowInstance, setFlowInstance] = useState<ReactFlowInstance | null>(null);
+  const resolveTaskTitle = useCallback(
+    (id: string): string => {
+      const node = nodes.find((candidate) => candidate.id === id);
+      return node === undefined ? 'Task' : taskData(node).title;
+    },
+    [nodes],
+  );
 
   const toOptions = useCallback(
     (items: readonly { id: string; name: string }[] | undefined): readonly FieldOption[] =>
@@ -301,37 +309,51 @@ export default function TaskGraphPanel({
         objectIds: [id],
         operation: { type: 'replace_property', property: 'state', value: target.key },
       } as ObjectCommandIn;
-      void history.execute(command, complete ? 'Mark Task done' : 'Reopen Task');
+      const taskTitle = resolveTaskTitle(id);
+      void history.execute(command, {
+        historyLabel: complete ? 'Mark Task done' : 'Reopen Task',
+        title: complete ? 'Task completed' : 'Task reopened',
+        detail: taskTitle,
+        unchangedTitle: complete ? 'Task already completed' : 'Task already open',
+        unchangedDetail: taskTitle,
+      });
     },
-    [history, statuses],
+    [history, resolveTaskTitle, statuses],
   );
 
   const executeDependency = useCallback(
-    async (
-      type: 'add_dependency' | 'remove_dependency',
-      blockingId: string,
-      blockedId: string,
-      label: string,
-    ) => {
+    async (type: 'add_dependency' | 'remove_dependency', blockingId: string, blockedId: string) => {
       const command = {
         commandId: canvasCommandId(),
         objectKind: 'task',
         objectIds: [blockingId, blockedId],
         operation: { type, blockingId, blockedId },
       } as ObjectCommandIn;
-      return history.execute(command, label);
+      return history.execute(command, {
+        historyLabel: type === 'add_dependency' ? 'Add dependency' : 'Remove dependency',
+        title: type === 'add_dependency' ? 'Dependency added' : 'Dependency removed',
+        detail:
+          type === 'add_dependency'
+            ? `${resolveTaskTitle(blockedId)} depends on ${resolveTaskTitle(blockingId)}`
+            : `${resolveTaskTitle(blockedId)} no longer depends on ${resolveTaskTitle(blockingId)}`,
+        unchangedTitle: 'Dependency unchanged',
+        unchangedDetail:
+          type === 'add_dependency'
+            ? `${resolveTaskTitle(blockedId)} already depends on ${resolveTaskTitle(blockingId)}`
+            : `${resolveTaskTitle(blockedId)} did not depend on ${resolveTaskTitle(blockingId)}`,
+      });
     },
-    [history],
+    [history, resolveTaskTitle],
   );
   const addDependency = useCallback(
     (blockingId: string, blockedId: string) => {
-      void executeDependency('add_dependency', blockingId, blockedId, 'Add dependency');
+      void executeDependency('add_dependency', blockingId, blockedId);
     },
     [executeDependency],
   );
   const removeDependency = useCallback(
     (blockingId: string, blockedId: string) => {
-      void executeDependency('remove_dependency', blockingId, blockedId, 'Remove dependency');
+      void executeDependency('remove_dependency', blockingId, blockedId);
     },
     [executeDependency],
   );
@@ -479,9 +501,15 @@ export default function TaskGraphPanel({
         objectIds: [taskId],
         operation: { type: 'change_parent', parentId: parentTaskId },
       } as ObjectCommandIn;
-      void history.execute(command, 'Move Task branch');
+      void history.execute(command, {
+        historyLabel: 'Move Task branch',
+        title: 'Task moved',
+        detail: `${resolveTaskTitle(taskId)} is now under ${resolveTaskTitle(parentTaskId)}`,
+        unchangedTitle: 'Task already there',
+        unchangedDetail: `${resolveTaskTitle(taskId)} is already under ${resolveTaskTitle(parentTaskId)}`,
+      });
     },
-    [history],
+    [history, resolveTaskTitle],
   );
   const activeError = creation.error;
   const clearActiveError = creation.clearError;
@@ -599,6 +627,33 @@ export default function TaskGraphPanel({
                 onRelayout={() => {
                   setLayoutEpoch((current) => current + 1);
                 }}
+                bottomNotice={
+                  activeError !== null ? (
+                    <Surface
+                      tone="prominent"
+                      shape="large"
+                      role="alert"
+                      className="text-state-canceled pointer-events-auto flex w-full max-w-[min(32rem,calc(100vw-2rem))] flex-col items-stretch gap-2 px-3 py-2 sm:w-auto sm:flex-row sm:items-center"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-label-large">Task creation failed</p>
+                        <p className="text-body-small break-words sm:truncate">{activeError}</p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        iconOnly
+                        onClick={clearActiveError}
+                        aria-label="Dismiss"
+                      >
+                        <X className="size-4" />
+                      </Button>
+                    </Surface>
+                  ) : history.notice !== null ? (
+                    <CanvasCommandNotice />
+                  ) : undefined
+                }
               >
                 <CanvasSelectionBridge
                   requestedSelectionId={createdSelectionId}
@@ -609,7 +664,6 @@ export default function TaskGraphPanel({
                   onRequestedSelectionApplied={applyCreatedSelection}
                 />
                 <BulkActionsBar />
-                <CanvasCommandNotice />
                 {createdHidden ? (
                   <CanvasCreatedHiddenNotice
                     message="Created, but hidden by current filters"
@@ -638,16 +692,16 @@ export default function TaskGraphPanel({
                   />
                 ) : null}
                 {isEmpty ? (
-                  <Panel position="top-center" className="!top-1/2 !-translate-y-1/2">
+                  <CanvasOverlayPanel position="top-center" className="!top-1/2 !-translate-y-1/2">
                     <EmptyState
                       icon={Workflow}
                       title="No tasks to map yet"
                       body="Right-click the canvas or use the New Task command to add the first Task."
                     />
-                  </Panel>
+                  </CanvasOverlayPanel>
                 ) : null}
                 {display.ready && readyNodes.length > 0 ? (
-                  <Panel position="bottom-left" className="!mb-24 sm:!mb-40">
+                  <CanvasOverlayPanel position="bottom-left" className="!mb-4">
                     <Surface tone="raised" pad="tight" className="max-h-56 w-56 overflow-auto">
                       <p className="text-on-surface-variant text-label-medium mb-1">
                         Ready to start
@@ -665,10 +719,10 @@ export default function TaskGraphPanel({
                         </button>
                       ))}
                     </Surface>
-                  </Panel>
+                  </CanvasOverlayPanel>
                 ) : null}
                 {selectedNode !== null ? (
-                  <Panel position="top-right">
+                  <CanvasOverlayPanel position="top-right">
                     <NodePeek
                       node={selectedNode}
                       nodes={filtered.nodes}
@@ -680,34 +734,7 @@ export default function TaskGraphPanel({
                         setSelectedId(null);
                       }}
                     />
-                  </Panel>
-                ) : null}
-                {/*
-            One strip, two messages. A write that failed and an edit that can be taken back both
-            want the same place — under the graph, out of the way of the nodes — and only one of
-            them is ever live, because a successful removal clears the error and a failure never
-            offers an undo.
-          */}
-                {activeError !== null ? (
-                  <Panel position="bottom-center" className="!mb-24 sm:!mb-40">
-                    <Surface
-                      tone="prominent"
-                      shape="pill"
-                      className="text-state-canceled text-body-medium flex items-center gap-2 py-1.5 pr-2 pl-4"
-                    >
-                      {activeError}
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        iconOnly
-                        onClick={clearActiveError}
-                        aria-label="Dismiss"
-                      >
-                        <X className="size-4" />
-                      </Button>
-                    </Surface>
-                  </Panel>
+                  </CanvasOverlayPanel>
                 ) : null}
               </Canvas>
             </CanvasActionsProvider>

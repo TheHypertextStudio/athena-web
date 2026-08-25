@@ -24,12 +24,28 @@ const commandHistory = new CanvasCommandHistory();
 
 /** Transient application-owned feedback shown over a canvas. */
 export interface CanvasCommandNotice {
-  /** Safe status or failure copy. */
-  readonly copy: string;
+  /** Short result that names what changed. */
+  readonly title: string;
+  /** One-line explanation that names the affected work and outcome. */
+  readonly detail: string;
   /** Whether the current notice should expose an Undo action. */
   readonly offerUndo: boolean;
   /** Whether assistive technology should announce this as a failure. */
   readonly tone: 'status' | 'error';
+}
+
+/** User-facing result copy and the related Undo history label for one command. */
+export interface CanvasCommandFeedback {
+  /** Imperative action name used by Undo and Redo menus. */
+  readonly historyLabel: string;
+  /** Short result that names what changed. */
+  readonly title: string;
+  /** One-line explanation that names the affected work and outcome. */
+  readonly detail: string;
+  /** Short result shown when the server reports that the requested state already existed. */
+  readonly unchangedTitle: string;
+  /** Explicit current state shown when the server reports no receipt entries. */
+  readonly unchangedDetail: string;
 }
 
 /** Controls exposed to canvas menus, selection bars, and keyboard handlers. */
@@ -37,7 +53,7 @@ export interface CanvasCommandHistoryControls {
   /** Apply one atomic forward command and store its receipt. */
   readonly execute: (
     command: ObjectCommandIn,
-    label: string,
+    feedback: CanvasCommandFeedback,
   ) => Promise<ObjectCommandResult | null>;
   /** Undo the newest receipt in this route and scope. */
   readonly undo: () => Promise<void>;
@@ -71,6 +87,72 @@ function shouldOfferNoticeUndo(command: ObjectCommandIn): boolean {
   return ['replace_property', 'add_association', 'remove_association'].includes(
     command.operation.type,
   );
+}
+
+function replayActionName(entry: CanvasHistoryEntry): string {
+  const [verb, ...rest] = entry.label.split(' ');
+  const subject = rest.join(' ').toLowerCase();
+  const phrase = (() => {
+    switch (verb) {
+      case 'Add':
+        return `${subject} addition`;
+      case 'Remove':
+        return `${subject} removal`;
+      case 'Change':
+        return `${subject} change`;
+      case 'Complete':
+        return `${subject} completion`;
+      case 'Mark':
+        return subject.endsWith(' done')
+          ? `${subject.slice(0, -' done'.length)} completion`
+          : `${subject} update`;
+      case 'Reopen':
+        return `${subject} reopening`;
+      case 'Move':
+        return `${subject} move`;
+      case 'Restore':
+        return `${subject} restoration`;
+      default:
+        return entry.label.toLowerCase();
+    }
+  })();
+  return phrase.charAt(0).toUpperCase() + phrase.slice(1);
+}
+
+function replayNoticeTitle(entry: CanvasHistoryEntry, direction: 'undo' | 'redo'): string {
+  if (entry.receipt.action === 'trash') {
+    return direction === 'undo' ? 'Restored from trash' : 'Moved to trash again';
+  }
+  return `${replayActionName(entry)} ${direction === 'undo' ? 'undone' : 'restored'}`;
+}
+
+function replayFailureTitle(entry: CanvasHistoryEntry, direction: 'undo' | 'redo'): string {
+  return `${replayActionName(entry)} was not ${direction === 'undo' ? 'undone' : 'restored'}`;
+}
+
+function replayNoticeDetail(
+  entry: CanvasHistoryEntry,
+  direction: 'undo' | 'redo',
+  result: ObjectCommandResult,
+): string {
+  const changed = result.appliedIds.length;
+  const skipped = result.conflictingIds.length + result.deniedIds.length;
+  const noun = entry.receipt.objectKind === 'task' ? 'task' : 'project';
+  const objects = `${String(changed)} ${noun}${changed === 1 ? '' : 's'}`;
+  if (skipped > 0) {
+    return `${objects} updated and ${String(skipped)} skipped after state or access changes`;
+  }
+  if (entry.receipt.action === 'add_dependency' || entry.receipt.action === 'remove_dependency') {
+    return direction === 'undo'
+      ? 'The dependency returned to its previous state'
+      : 'The dependency was updated again';
+  }
+  if (entry.receipt.action === 'trash') {
+    return direction === 'undo' ? `${objects} active again` : `${objects} in trash again`;
+  }
+  return direction === 'undo'
+    ? `${objects} returned to the previous state`
+    : `${objects} received the update again`;
 }
 
 function replayAccessDef(
@@ -134,25 +216,30 @@ export function useCanvasCommandHistory(
   const redoAccess = useApiQuery(replayAccessDef(orgId, scopeKey, 'redo', redoReceipt));
 
   const execute = useCallback(
-    async (command: ObjectCommandIn, label: string): Promise<ObjectCommandResult | null> => {
+    async (
+      command: ObjectCommandIn,
+      feedback: CanvasCommandFeedback,
+    ): Promise<ObjectCommandResult | null> => {
       setNotice(null);
       try {
         const result = await mutation.mutateAsync(command);
         applyReceipt?.(result.receipt, 'forward');
         const storedReceipt = result.receipt.entries.length > 0;
         if (storedReceipt) {
-          commandHistory.push(scopeKey, { label, receipt: result.receipt });
+          commandHistory.push(scopeKey, { label: feedback.historyLabel, receipt: result.receipt });
           refresh();
         }
         setNotice({
-          copy: `${label} applied.`,
+          title: storedReceipt ? feedback.title : feedback.unchangedTitle,
+          detail: storedReceipt ? feedback.detail : feedback.unchangedDetail,
           offerUndo: storedReceipt && shouldOfferNoticeUndo(command),
           tone: 'status',
         });
         return result;
       } catch {
         setNotice({
-          copy: 'Could not apply this change. Your selection was kept.',
+          title: 'Change failed',
+          detail: 'Your selection was kept',
           offerUndo: false,
           tone: 'error',
         });
@@ -184,7 +271,8 @@ export function useCanvasCommandHistory(
         accessAllowed = checked.data?.allowed === true;
       } catch {
         setNotice({
-          copy: `Could not ${direction} ${entry.label.toLowerCase()}. No collaborator changes were overwritten.`,
+          title: replayFailureTitle(entry, direction),
+          detail: 'No collaborator changes were overwritten',
           offerUndo: false,
           tone: 'error',
         });
@@ -224,12 +312,9 @@ export function useCanvasCommandHistory(
           destination,
           narrowed.entries.length === 0 ? null : { ...entry, receipt: narrowed },
         );
-        const skipped = result.conflictingIds.length + result.deniedIds.length;
         setNotice({
-          copy:
-            skipped === 0
-              ? `${direction === 'undo' ? 'Undid' : 'Redid'} ${entry.label.toLowerCase()}.`
-              : `${direction === 'undo' ? 'Undid' : 'Redid'} ${String(result.appliedIds.length)} items. ${String(skipped)} items changed elsewhere or no longer allow this action.`,
+          title: replayNoticeTitle(entry, direction),
+          detail: replayNoticeDetail(entry, direction, result),
           offerUndo: false,
           tone: 'status',
         });
@@ -238,7 +323,8 @@ export function useCanvasCommandHistory(
         // opposite action must not become available over a receipt the server never applied.
         commandHistory.restoreFailedReplay(scopeKey, direction, entry);
         setNotice({
-          copy: `Could not ${direction} ${entry.label.toLowerCase()}. No collaborator changes were overwritten.`,
+          title: replayFailureTitle(entry, direction),
+          detail: 'No collaborator changes were overwritten',
           offerUndo: false,
           tone: 'error',
         });

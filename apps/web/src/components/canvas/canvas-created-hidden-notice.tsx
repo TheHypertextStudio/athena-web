@@ -2,7 +2,8 @@
 
 /** Feedback shown after active canvas filters exclude a newly created object. */
 import { Button, Surface } from '@docket/ui/primitives';
-import { Panel } from '@xyflow/react';
+
+import CanvasOverlayPanel from './canvas-overlay-panel';
 
 /** Props for {@link CanvasCreatedHiddenNotice}. */
 export interface CanvasCreatedHiddenNoticeProps {
@@ -21,7 +22,7 @@ export default function CanvasCreatedHiddenNotice({
   onAction,
 }: CanvasCreatedHiddenNoticeProps): React.JSX.Element {
   return (
-    <Panel position="top-center">
+    <CanvasOverlayPanel position="top-center">
       <Surface
         tone="prominent"
         shape="pill"
@@ -33,6 +34,6 @@ export default function CanvasCreatedHiddenNotice({
           {actionLabel}
         </Button>
       </Surface>
-    </Panel>
+    </CanvasOverlayPanel>
   );
 }

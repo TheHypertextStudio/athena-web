@@ -15,6 +15,7 @@
  */
 import {
   type Edge,
+  type FitViewOptions,
   type Node,
   type OnEdgesChange,
   type OnNodesChange,
@@ -92,17 +93,19 @@ export function useControlledFlow(laidOut: Node[], rawEdges: Edge[]): Controlled
  *   search to one node lands it at the same scale the graph opens at, rather than magnifying it to
  *   fill the viewport.
  * @param enabled - Whether measured layout and xyflow state are ready for viewport work.
+ * @param padding - Space kept clear inside the visible graph viewport.
  */
 export function useFitViewOnChange(
   ids: readonly string[] | undefined,
   maxZoom: number,
   enabled = true,
+  padding: FitViewOptions['padding'] = 0.3,
 ): void {
   const { fitView } = useReactFlow();
   const key = ids?.join(',') ?? '';
   useEffect(() => {
     if (!enabled || ids === undefined || ids.length === 0) return;
     // Keyed on the joined id list (not the array identity); `fitView` is stable from the store.
-    void fitView({ nodes: ids.map((id) => ({ id })), duration: 400, maxZoom, padding: 0.3 });
-  }, [enabled, key, fitView, ids, maxZoom]);
+    void fitView({ nodes: ids.map((id) => ({ id })), duration: 400, maxZoom, padding });
+  }, [enabled, key, fitView, ids, maxZoom, padding]);
 }

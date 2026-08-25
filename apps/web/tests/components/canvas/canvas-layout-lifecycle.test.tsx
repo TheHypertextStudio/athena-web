@@ -79,8 +79,22 @@ vi.mock('@xyflow/react', async () => {
     Background: () => null,
     BackgroundVariant: { Dots: 'dots' },
     Controls: () => null,
-    MiniMap: () => null,
-    Panel: ({ children }: { children?: ReactNode }) => children ?? null,
+    MiniMap: () => <div data-testid="minimap" />,
+    Panel: ({
+      children,
+      className,
+      position: _position,
+      ...props
+    }: {
+      children?: ReactNode;
+      className?: string;
+      position?: string;
+      [key: string]: unknown;
+    }) => (
+      <div className={className} {...props}>
+        {children}
+      </div>
+    ),
     Position: { Bottom: 'bottom', Left: 'left', Right: 'right', Top: 'top' },
     ReactFlow,
     ReactFlowProvider: ({ children }: { children?: ReactNode }) => children ?? null,
@@ -164,12 +178,15 @@ function Harness({ focusOn }: { readonly focusOn?: readonly string[] }): React.J
 describe('Canvas measured layout lifecycle', () => {
   let width = 0;
   let height = 0;
-  let resize: ResizeObserverCallback;
+  let chromeHeight = 150;
+  let resizeCallbacks: ResizeObserverCallback[];
   let frames: FrameRequestCallback[];
 
   beforeEach(() => {
     width = 0;
     height = 0;
+    chromeHeight = 150;
+    resizeCallbacks = [];
     flowState.nodes = [];
     flowState.fitView.mockReset().mockResolvedValue(true);
     flowState.setViewport.mockReset().mockResolvedValue(true);
@@ -178,9 +195,14 @@ describe('Canvas measured layout lifecycle', () => {
     flowState.menuOptions = {};
     flowState.commandKeyDown.mockReset();
     frames = [];
-    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
-      () => ({ width, height }) as DOMRect,
-    );
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return {
+        width,
+        height: this.dataset['testid'] === 'canvas-bottom-chrome-content' ? chromeHeight : height,
+      } as DOMRect;
+    });
     Object.defineProperties(HTMLElement.prototype, {
       clientWidth: { configurable: true, get: () => 800 },
       clientHeight: { configurable: true, get: () => 600 },
@@ -194,7 +216,7 @@ describe('Canvas measured layout lifecycle', () => {
       'ResizeObserver',
       class ResizeObserverMock {
         constructor(callback: ResizeObserverCallback) {
-          resize = callback;
+          resizeCallbacks.push(callback);
         }
         observe(): void {
           return undefined;
@@ -217,6 +239,12 @@ describe('Canvas measured layout lifecycle', () => {
     });
   }
 
+  function notifyResize(): void {
+    act(() => {
+      for (const resize of resizeCallbacks) resize([], {} as ResizeObserver);
+    });
+  }
+
   it('applies portrait positions before running the automatic first frame', async () => {
     render(<Harness />);
     flushFrames();
@@ -224,9 +252,7 @@ describe('Canvas measured layout lifecycle', () => {
 
     width = 600;
     height = 900;
-    act(() => {
-      resize([], {} as ResizeObserver);
-    });
+    notifyResize();
 
     await waitFor(() => {
       const positions = screen.getByTestId('flow').querySelectorAll<HTMLElement>('[data-node-id]');
@@ -238,7 +264,47 @@ describe('Canvas measured layout lifecycle', () => {
 
     expect(flowState.fitView).toHaveBeenCalledTimes(1);
     expect(flowState.fitView).toHaveBeenCalledWith(
-      expect.objectContaining({ minZoom: 0.5, maxZoom: 1 }),
+      expect.objectContaining({
+        minZoom: 0.5,
+        maxZoom: 1,
+        padding: { top: '24px', right: '24px', bottom: '24px', left: '24px' },
+      }),
+    );
+    expect(screen.getByTestId('canvas-viewport')).toHaveStyle({ bottom: '180px' });
+  });
+
+  it('docks command feedback above the viewport toolbar in the top overlay layer', () => {
+    render(
+      <Canvas
+        nodes={[]}
+        edges={[]}
+        bottomNotice={<div data-testid="command-feedback">Dependency added</div>}
+      />,
+    );
+
+    const chrome = screen.getByTestId('canvas-bottom-chrome');
+    expect(chrome).toContainElement(screen.getByTestId('command-feedback'));
+    expect(chrome).toHaveClass('!z-[2000]');
+    expect(screen.getByTestId('canvas-bottom-notice')).toHaveTextContent('Dependency added');
+  });
+
+  it('measures no-minimap feedback and keeps the graph viewport above the complete dock', () => {
+    chromeHeight = 196;
+    render(
+      <Canvas
+        nodes={[]}
+        edges={[]}
+        density="compact"
+        minimap={false}
+        bottomNotice={<div data-testid="command-feedback">Dependency added</div>}
+      />,
+    );
+    notifyResize();
+
+    expect(screen.queryByTestId('minimap')).not.toBeInTheDocument();
+    expect(screen.getByTestId('canvas-viewport')).toHaveStyle({ bottom: '226px' });
+    expect(screen.getByTestId('canvas-bottom-chrome')).toContainElement(
+      screen.getByTestId('command-feedback'),
     );
   });
 
@@ -247,9 +313,7 @@ describe('Canvas measured layout lifecycle', () => {
     expect(flowState.fitView).not.toHaveBeenCalled();
     width = 600;
     height = 900;
-    act(() => {
-      resize([], {} as ResizeObserver);
-    });
+    notifyResize();
     await waitFor(() => {
       expect(flowState.fitView).toHaveBeenCalled();
     });

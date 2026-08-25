@@ -23,7 +23,6 @@ import {
   type EdgeTypes,
   type OnInit,
   type OnNodeDrag,
-  Panel,
   ReactFlow,
   ReactFlowProvider,
 } from '@xyflow/react';
@@ -54,10 +53,21 @@ import {
 } from './use-graph-interactions';
 import { LodProvider, useLodValue } from './use-lod';
 import { isCanvasEditableTarget } from './canvas-keyboard';
+import CanvasOverlayPanel from './canvas-overlay-panel';
 
 const READABLE_INITIAL_ZOOM = 0.5;
 const WORKING_AREA_PADDING = 24;
+const BOTTOM_CHROME_EDGE_GAP = 30;
+const BOTTOM_CHROME_FALLBACK_HEIGHT = 78;
+const BOTTOM_CHROME_NOTICE_FALLBACK_HEIGHT = 190;
+const BOTTOM_CHROME_MINIMAP_HEIGHT = 150;
 const MOBILE_CANVAS_QUERY = '(max-width: 39.999rem)';
+const VIEWPORT_FIT_PADDING = {
+  top: '24px',
+  right: '24px',
+  bottom: '24px',
+  left: '24px',
+} as const;
 
 /** Props for {@link Canvas}. */
 export interface CanvasProps extends GraphInteractionHandlers {
@@ -134,6 +144,8 @@ export interface CanvasProps extends GraphInteractionHandlers {
   onNodeDragStop?: OnNodeDrag | undefined;
   /** Recompute the host's deterministic structural layout. */
   onRelayout?: (() => void) | undefined;
+  /** Status or failure feedback docked directly above the bottom-center view controls. */
+  bottomNotice?: ReactNode | undefined;
   /** Overlays rendered inside the flow (e.g. `<Panel>` legend/toolbar/peek). */
   children?: ReactNode | undefined;
   /** Extra classes for the canvas container. */
@@ -166,6 +178,7 @@ function CanvasInner({
   onNodeDrag,
   onNodeDragStop,
   onRelayout,
+  bottomNotice,
   onConnectEdge,
   onDeleteEdge,
   onReparentEdge,
@@ -173,10 +186,21 @@ function CanvasInner({
   className,
 }: CanvasProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const bottomChromeRef = useRef<HTMLDivElement>(null);
   const [flowInstance, setFlowInstance] = useState<Parameters<OnInit>[0] | null>(null);
   const [shiftSelecting, setShiftSelecting] = useState(false);
   const [oneShotSelecting, setOneShotSelecting] = useState(false);
+  const [measuredBottomChromeHeight, setMeasuredBottomChromeHeight] = useState(0);
   const isMobileCanvas = useMediaQuery(MOBILE_CANVAS_QUERY);
+  const showMinimap = (minimap ?? density === 'full') && !isMobileCanvas;
+  const bottomChromeFallbackHeight = showMinimap
+    ? BOTTOM_CHROME_MINIMAP_HEIGHT
+    : bottomNotice === undefined
+      ? BOTTOM_CHROME_FALLBACK_HEIGHT
+      : BOTTOM_CHROME_NOTICE_FALLBACK_HEIGHT;
+  const bottomChromeHeight =
+    Math.max(bottomChromeFallbackHeight, measuredBottomChromeHeight) + BOTTOM_CHROME_EDGE_GAP;
   const framed = useRef(false);
   // Grouped/swimlane layouts arrive pre-positioned; otherwise dagre lays the flat graph out.
   const dagreLaidOut = useDagreLayout(rawNodes, rawEdges, density, layoutDirection);
@@ -188,7 +212,20 @@ function CanvasInner({
 
   const interactions = useGraphInteractions({ onConnectEdge, onDeleteEdge, onReparentEdge });
   const highlight = useGraphHighlight(nodes, edges, highlightIds, highlightChains);
-  useFitViewOnChange(focusOn, fitMaxZoom, layoutReady && layoutApplied);
+  useFitViewOnChange(focusOn, fitMaxZoom, layoutReady && layoutApplied, VIEWPORT_FIT_PADDING);
+  useEffect(() => {
+    const element = bottomChromeRef.current;
+    if (element === null || typeof ResizeObserver === 'undefined') return;
+    const update = (): void => {
+      setMeasuredBottomChromeHeight(Math.ceil(element.getBoundingClientRect().height));
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
   // An edge and the empty pane are not core objects, so the app's object-level right-click handler
   // never claims them; these are the canvas's own menus for the two.
   const menus = useCanvasMenus({
@@ -294,7 +331,7 @@ function CanvasInner({
         frameId = requestAnimationFrame(frameGraph);
         return;
       }
-      const element = containerRef.current;
+      const element = viewportRef.current;
       if (element === null) return;
       framed.current = true;
       const allNodeIds = flowInstance
@@ -314,7 +351,7 @@ function CanvasInner({
           nodes: allNodeIds.map((id) => ({ id })),
           minZoom: READABLE_INITIAL_ZOOM,
           maxZoom: fitMaxZoom,
-          padding: 0.15,
+          padding: VIEWPORT_FIT_PADDING,
         });
         return;
       }
@@ -329,7 +366,7 @@ function CanvasInner({
           nodes: initialFrame.nodeIds.map((id) => ({ id })),
           minZoom: READABLE_INITIAL_ZOOM,
           maxZoom: fitMaxZoom,
-          padding: 0.15,
+          padding: VIEWPORT_FIT_PADDING,
         });
         return;
       }
@@ -360,101 +397,138 @@ function CanvasInner({
         onKeyDown={handleCanvasKeyDown}
         className={cn('relative h-full min-h-0 w-full focus:outline-none', className)}
       >
-        <ReactFlow
-          nodes={highlight.nodes}
-          edges={highlight.edges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          {...(nodeTypes !== undefined ? { nodeTypes } : {})}
-          {...(edgeTypes !== undefined ? { edgeTypes } : {})}
-          onNodeClick={(_, node) => onSelectNode?.(node.id)}
-          onNodeContextMenu={(event, node) => {
-            if (!node.selected) {
-              flowInstance?.setNodes((current) =>
-                current.map((candidate) => ({ ...candidate, selected: candidate.id === node.id })),
-              );
-              onSelectNode?.(node.id);
-            }
-            menus.onNodeContextMenu(event, node);
-          }}
-          onNodeDoubleClick={(_, node) => onNavigate?.(node.id)}
-          onInit={initializeFlow}
-          {...(onNodeDragStart !== undefined ? { onNodeDragStart } : {})}
-          {...(onNodeDrag !== undefined ? { onNodeDrag } : {})}
-          {...(onNodeDragStop !== undefined ? { onNodeDragStop } : {})}
-          onPaneClick={() => onSelectNode?.(null)}
-          onEdgeContextMenu={menus.onEdgeContextMenu}
-          onPaneContextMenu={menus.onPaneContextMenu}
-          onNodeMouseEnter={highlight.onNodeMouseEnter}
-          onNodeMouseLeave={highlight.onNodeMouseLeave}
-          nodesConnectable={interactive}
-          edgesReconnectable={interactive}
-          isValidConnection={interactions.isValidConnection}
-          onConnect={interactions.onConnect}
-          onReconnect={interactions.onReconnect}
-          onBeforeDelete={interactions.onBeforeDelete}
-          onEdgesDelete={interactions.onEdgesDelete}
-          // Object deletion is a recoverable server command owned by the host. Letting xyflow
-          // consume this key would remove selected nodes only from local render state.
-          deleteKeyCode={null}
-          panOnDrag={!areaSelecting}
-          selectionOnDrag={areaSelecting}
-          onSelectionEnd={() => {
-            if (oneShotSelecting) setOneShotSelecting(false);
-          }}
-          elementsSelectable
-          nodesFocusable={false}
-          onlyRenderVisibleElements
-          fitView={false}
-          proOptions={{ hideAttribution: true }}
-          minZoom={0.1}
-          maxZoom={maxZoom}
-          fitViewOptions={{ maxZoom: fitMaxZoom, padding: 0.15 }}
+        <div
+          ref={viewportRef}
+          data-testid="canvas-viewport"
+          className="absolute inset-x-0 top-0 min-h-0"
+          style={{ bottom: bottomChromeHeight }}
         >
-          {/*
+          <ReactFlow
+            nodes={highlight.nodes}
+            edges={highlight.edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            {...(nodeTypes !== undefined ? { nodeTypes } : {})}
+            {...(edgeTypes !== undefined ? { edgeTypes } : {})}
+            onNodeClick={(_, node) => onSelectNode?.(node.id)}
+            onNodeContextMenu={(event, node) => {
+              if (!node.selected) {
+                flowInstance?.setNodes((current) =>
+                  current.map((candidate) => ({
+                    ...candidate,
+                    selected: candidate.id === node.id,
+                  })),
+                );
+                onSelectNode?.(node.id);
+              }
+              menus.onNodeContextMenu(event, node);
+            }}
+            onNodeDoubleClick={(_, node) => onNavigate?.(node.id)}
+            onInit={initializeFlow}
+            {...(onNodeDragStart !== undefined ? { onNodeDragStart } : {})}
+            {...(onNodeDrag !== undefined ? { onNodeDrag } : {})}
+            {...(onNodeDragStop !== undefined ? { onNodeDragStop } : {})}
+            onPaneClick={() => onSelectNode?.(null)}
+            onEdgeContextMenu={menus.onEdgeContextMenu}
+            onPaneContextMenu={menus.onPaneContextMenu}
+            onNodeMouseEnter={highlight.onNodeMouseEnter}
+            onNodeMouseLeave={highlight.onNodeMouseLeave}
+            nodesConnectable={interactive}
+            edgesReconnectable={interactive}
+            isValidConnection={interactions.isValidConnection}
+            onConnect={interactions.onConnect}
+            onReconnect={interactions.onReconnect}
+            onBeforeDelete={interactions.onBeforeDelete}
+            onEdgesDelete={interactions.onEdgesDelete}
+            // Object deletion is a recoverable server command owned by the host. Letting xyflow
+            // consume this key would remove selected nodes only from local render state.
+            deleteKeyCode={null}
+            panOnDrag={!areaSelecting}
+            selectionOnDrag={areaSelecting}
+            onSelectionEnd={() => {
+              if (oneShotSelecting) setOneShotSelecting(false);
+            }}
+            elementsSelectable
+            nodesFocusable={false}
+            onlyRenderVisibleElements
+            fitView={false}
+            proOptions={{ hideAttribution: true }}
+            minZoom={0.1}
+            maxZoom={maxZoom}
+            fitViewOptions={{ maxZoom: fitMaxZoom, padding: VIEWPORT_FIT_PADDING }}
+          >
+            {/*
             The canvas takes the page's own surface. It used to force `surface-container`, so the
             graph sat on a visibly darker slab than the panel around it and read as a widget
             embedded in the page rather than as the page.
           */}
-          <Background variant={BackgroundVariant.Dots} gap={20} className="!bg-surface" />
-          {/*
+            <Background variant={BackgroundVariant.Dots} gap={20} className="!bg-surface" />
+            {/*
             Canvas navigation stays tonal and stroke-free. The minimap disappears on mobile,
             where its reduced graph is unreadable and takes space from direct commands.
           */}
-          <Panel
-            position="bottom-left"
-            className="pointer-events-none !right-[15px] !bottom-[15px] !left-[15px] !m-0 flex items-end justify-between gap-2"
+            {children}
+          </ReactFlow>
+        </div>
+        <CanvasOverlayPanel
+          position="bottom-left"
+          data-testid="canvas-bottom-chrome"
+          className="pointer-events-none !right-[15px] !bottom-[15px] !left-[15px] !m-0"
+        >
+          <div
+            ref={bottomChromeRef}
+            data-testid="canvas-bottom-chrome-content"
+            className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-end gap-2"
           >
-            <Controls
-              showInteractive={false}
-              className="[&_button]:!bg-surface-container-high [&_button]:!fill-on-surface-variant [&_button:hover]:!bg-surface-container-highest pointer-events-auto !static !m-0 shrink-0 overflow-hidden !rounded-lg !shadow-none [&_button]:!border-0"
-            />
-            <CanvasViewportToolbar
-              onRelayout={() => {
-                framed.current = false;
-                onRelayout?.();
-              }}
-            />
-            {(minimap ?? density === 'full') && !isMobileCanvas ? (
-              <MiniMap
-                pannable
-                zoomable
-                {...(nodeColor !== undefined ? { nodeColor } : {})}
-                maskColor="color-mix(in srgb, var(--color-surface) 70%, transparent)"
-                bgColor="var(--color-surface-container-low)"
-                className="pointer-events-auto !static !m-0 !h-[150px] !w-[200px] shrink-0 !rounded-lg"
+            {bottomNotice === undefined ? null : (
+              <div
+                data-testid="canvas-bottom-notice"
+                className="col-span-3 col-start-1 row-start-1 flex min-w-0 justify-center sm:col-span-1 sm:col-start-2"
+              >
+                {bottomNotice}
+              </div>
+            )}
+            <div className="col-start-1 row-start-2 self-end sm:row-span-2 sm:row-start-1">
+              <Controls
+                showInteractive={false}
+                className="[&_button]:!bg-surface-container-high [&_button]:!fill-on-surface-variant [&_button:hover]:!bg-surface-container-highest pointer-events-auto !static !m-0 shrink-0 overflow-hidden !rounded-lg !shadow-none [&_button]:!border-0"
               />
-            ) : null}
-          </Panel>
-          {children}
-        </ReactFlow>
+            </div>
+            <div
+              data-testid="canvas-bottom-center"
+              className="col-start-2 row-start-2 flex min-w-0 justify-center"
+            >
+              <CanvasViewportToolbar
+                fitPadding={VIEWPORT_FIT_PADDING}
+                onRelayout={() => {
+                  framed.current = false;
+                  onRelayout?.();
+                }}
+              />
+            </div>
+            <div className="col-start-3 row-start-2 self-end sm:row-span-2 sm:row-start-1">
+              {showMinimap ? (
+                <MiniMap
+                  pannable
+                  zoomable
+                  {...(nodeColor !== undefined ? { nodeColor } : {})}
+                  maskColor="color-mix(in srgb, var(--color-surface) 70%, transparent)"
+                  bgColor="var(--color-surface-container-low)"
+                  className="pointer-events-auto !static !m-0 !h-[150px] !w-[200px] shrink-0 !rounded-lg"
+                />
+              ) : (
+                <div aria-hidden className="w-10 shrink-0" />
+              )}
+            </div>
+          </div>
+        </CanvasOverlayPanel>
         {menus.menu}
         {onExpand ? (
           <button
             type="button"
             onClick={onExpand}
             aria-label="Expand graph"
-            className="bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant hover:text-on-surface absolute top-2 right-2 z-10 inline-flex size-9 items-center justify-center rounded-full transition-colors"
+            className="bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant hover:text-on-surface absolute top-2 right-2 z-[2000] inline-flex size-9 items-center justify-center rounded-full transition-colors"
           >
             <Maximize className="size-4" />
           </button>

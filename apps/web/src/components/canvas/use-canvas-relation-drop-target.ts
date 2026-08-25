@@ -90,16 +90,37 @@ export function useCanvasRelationDropTarget(target: ObjectRef): RelationDropTarg
   const commands = useCanvasCommandContext();
   const canEdit = commands?.canEdit ?? false;
   const executeCommand = commands?.execute;
+  const selectedObjects = commands?.selectedObjects ?? [];
   const execute = useCallback(
     async (intent: RelationIntent): Promise<RelationDropExecutionResult> => {
       if (!canEdit || executeCommand === undefined) return 'failed';
       const resolved = canvasRelationCommand(intent, canvasCommandId());
       if (resolved === null) return 'failed';
-      const result = await executeCommand(resolved.command, resolved.label);
+      const subjectName =
+        selectedObjects.find(({ id }) => id === intent.subjects[0]?.id)?.title ??
+        (intent.subjects[0]?.kind === 'project' ? 'Project' : 'Task');
+      const result = await executeCommand(resolved.command, {
+        historyLabel: resolved.label,
+        title: intent.relationId === 'project.blocks' ? 'Dependency added' : 'Task moved',
+        detail:
+          intent.relationId === 'project.blocks'
+            ? `${target.title} depends on ${subjectName}`
+            : intent.subjects.length === 1
+              ? `${subjectName} is now under ${target.title}`
+              : `${String(intent.subjects.length)} tasks are now under ${target.title}`,
+        unchangedTitle:
+          intent.relationId === 'project.blocks' ? 'Dependency unchanged' : 'Task already there',
+        unchangedDetail:
+          intent.relationId === 'project.blocks'
+            ? `${target.title} already depends on ${subjectName}`
+            : intent.subjects.length === 1
+              ? `${subjectName} is already under ${target.title}`
+              : `${String(intent.subjects.length)} tasks are already under ${target.title}`,
+      });
       if (result === null) return 'failed';
       return result.receipt.entries.length === 0 ? 'unchanged' : 'applied';
     },
-    [canEdit, executeCommand],
+    [canEdit, executeCommand, selectedObjects, target.title],
   );
   return useRelationDropTarget({ target, disabled: !canEdit, execute });
 }

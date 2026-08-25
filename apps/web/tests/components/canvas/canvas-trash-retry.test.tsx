@@ -10,7 +10,8 @@ vi.mock('../../../src/components/canvas/use-canvas-command-history', () => ({
   canvasCommandId: () => 'trash-command',
   useCanvasCommandHistory: () => {
     const [notice, setNotice] = useState<{
-      copy: string;
+      title: string;
+      detail: string;
       offerUndo: boolean;
       tone: 'error';
     } | null>(null);
@@ -18,7 +19,8 @@ vi.mock('../../../src/components/canvas/use-canvas-command-history', () => ({
       execute: async () => {
         execute();
         setNotice({
-          copy: 'Could not apply this change. Your selection was kept.',
+          title: 'Change failed',
+          detail: 'Your selection was kept',
           offerUndo: false,
           tone: 'error',
         });
@@ -138,9 +140,7 @@ describe('confirmed canvas trash retry', () => {
 
     await waitFor(() => {
       expect(screen.getByRole('dialog', { name: 'Confirm trash' })).toBeInTheDocument();
-      expect(screen.getByRole('alert')).toHaveTextContent(
-        'Could not apply this change. Your selection was kept.',
-      );
+      expect(screen.getByRole('alert')).toHaveTextContent('Your selection was kept');
     });
     expect(execute).toHaveBeenCalledOnce();
   });

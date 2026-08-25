@@ -17,6 +17,7 @@ import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { useStatusRegistry } from '@/components/statuses/status-registry';
 import { EstimatePicker } from '@/components/task-detail/EstimatePicker';
 import type { CanvasPropertySnapshot } from '@/lib/actions';
+import { formatPlanningTimeframe, toPlanningTimeframe } from '@/lib/planning-timeframe';
 import { useEstimationScale } from '@/lib/use-estimation-scale';
 import { useFiscalYearStartMonth } from '@/lib/use-fiscal-year-start-month';
 
@@ -113,6 +114,24 @@ function sameTimeframe(left: PlanningTimeframe | null, right: PlanningTimeframe 
     left?.fiscalYearStartMonth === right?.fiscalYearStartMonth
   );
 }
+
+function titleCase(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function humanizeValue(value: string): string {
+  const words = value.replaceAll(/[_-]+/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+type CanvasScalarFeedbackValue =
+  | string
+  | number
+  | null
+  | {
+      readonly date: string | null;
+      readonly resolution: PlanningTimeframe['resolution'];
+    };
 
 function AssociationField({
   label,
@@ -223,13 +242,84 @@ export default function CanvasPropertiesEditor({
     commands === null || !commands.canEdit || commands.pending || selectionIssue !== null;
   const optionDisabled = (kind: (typeof OPTION_KINDS)[number]): boolean =>
     disabled || options.loading || options.failedKinds.has(kind);
+  const first = snapshots[0];
+  const kind = first?.kind ?? commands?.objectKind ?? 'task';
+  const subject =
+    selectedCount === 1
+      ? (commands?.selectedObjects[0]?.title ?? (kind === 'task' ? 'Task' : 'Project'))
+      : `${String(selectedCount)} ${kind === 'task' ? 'tasks' : 'projects'}`;
+  const subjectVerb = selectedCount === 1 ? 'is' : 'are';
+  const labelForScalarValue = (
+    property: CanvasScalarProperty,
+    value: CanvasScalarFeedbackValue,
+    label: string,
+  ) => {
+    if (value === null || (typeof value === 'object' && value.date === null)) {
+      return `No ${label}`;
+    }
+    const fieldOptions: readonly PickerOption[] = (() => {
+      switch (property) {
+        case 'state':
+          return statusOptions(
+            snapshots.flatMap((snapshot) =>
+              snapshot.kind === 'task' ? registry.statusesFor('task', snapshot.teamId) : [],
+            ),
+          );
+        case 'status':
+          return statusOptions(registry.statusesFor('project'));
+        case 'priority':
+          return PRIORITY_OPTIONS;
+        case 'health':
+          return HEALTH_OPTIONS;
+        case 'assigneeId':
+        case 'leadId':
+          return property === 'leadId' ? options.memberOptions : options.actorOptions;
+        case 'projectId':
+          return options.projectOptions;
+        case 'programId':
+          return options.programOptions;
+        case 'milestoneId':
+          return options.milestones.map((item) => ({ value: item.id, label: item.name }));
+        case 'cycleId':
+          return options.cycles.map((item) => ({ value: item.id, label: item.displayName }));
+        case 'teamId':
+          return options.teamOptions;
+        default:
+          return [];
+      }
+    })();
+    const option = fieldOptions.find(({ value: optionValue }) => optionValue === value);
+    if (option !== undefined) return option.label;
+    if (typeof value === 'object') {
+      return (
+        formatPlanningTimeframe(
+          toPlanningTimeframe(value.date, value.resolution, planning.fiscalYearStartMonth),
+        ) ?? `No ${label}`
+      );
+    }
+    return typeof value === 'string' ? humanizeValue(value) : value.toString();
+  };
 
-  const executeScalar = (property: CanvasScalarProperty, value: unknown, label: string): void => {
+  const executeScalar = (
+    property: CanvasScalarProperty,
+    value: CanvasScalarFeedbackValue,
+    label: string,
+  ): void => {
     if (commands === null || disabled) return;
-    void commands.execute(
-      buildScalarCommand(snapshots, property, value, canvasCommandId()),
-      `Change ${label}`,
-    );
+    const valueLabel = labelForScalarValue(property, value, label);
+    void commands.execute(buildScalarCommand(snapshots, property, value, canvasCommandId()), {
+      historyLabel: `Change ${label}`,
+      title: `${titleCase(label)} changed`,
+      detail:
+        label.toLowerCase() === 'status'
+          ? `${subject} ${subjectVerb} now ${valueLabel}`
+          : `${subject} ${subjectVerb} now set to ${valueLabel}`,
+      unchangedTitle: `${titleCase(label)} unchanged`,
+      unchangedDetail:
+        label.toLowerCase() === 'status'
+          ? `${subject} ${subjectVerb} already ${valueLabel}`
+          : `${subject} ${subjectVerb} already set to ${valueLabel}`,
+    });
   };
   const executeAssociation = (
     association: 'label' | 'initiative',
@@ -237,10 +327,13 @@ export default function CanvasPropertiesEditor({
     label: string,
   ): void => {
     if (commands === null || disabled) return;
-    void commands.execute(
-      buildAssociationCommand(snapshots, association, id, canvasCommandId()),
-      `Change ${label}`,
-    );
+    void commands.execute(buildAssociationCommand(snapshots, association, id, canvasCommandId()), {
+      historyLabel: `Add ${label}`,
+      title: `${titleCase(association)} added`,
+      detail: `${subject} now ${selectedCount === 1 ? 'has' : 'have'} ${label}`,
+      unchangedTitle: `${titleCase(association)} unchanged`,
+      unchangedDetail: `${subject} already ${selectedCount === 1 ? 'has' : 'have'} ${label}`,
+    });
   };
   const executeAssociationRemoval = (
     association: 'label' | 'initiative',
@@ -250,11 +343,16 @@ export default function CanvasPropertiesEditor({
     if (commands === null || disabled) return;
     void commands.execute(
       buildAssociationRemovalCommand(snapshots, association, id, canvasCommandId()),
-      `Remove ${label}`,
+      {
+        historyLabel: `Remove ${label}`,
+        title: `${titleCase(association)} removed`,
+        detail: `${subject} no longer ${selectedCount === 1 ? 'has' : 'have'} ${label}`,
+        unchangedTitle: `${titleCase(association)} unchanged`,
+        unchangedDetail: `${subject} did not ${selectedCount === 1 ? 'have' : 'have'} ${label}`,
+      },
     );
   };
 
-  const first = snapshots[0];
   if (first === undefined) {
     return <p className="text-body-small text-on-surface-variant">{selectionIssue}</p>;
   }

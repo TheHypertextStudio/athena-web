@@ -79,7 +79,13 @@ function HistoryControls(): React.JSX.Element {
                 value: 'project-after',
               },
             } as ObjectCommandIn,
-            'Change Project',
+            {
+              historyLabel: 'Change Project',
+              title: 'Project changed',
+              detail: 'Task is now set to Project after',
+              unchangedTitle: 'Project unchanged',
+              unchangedDetail: 'Task is already set to Project after',
+            },
           );
         }}
       >

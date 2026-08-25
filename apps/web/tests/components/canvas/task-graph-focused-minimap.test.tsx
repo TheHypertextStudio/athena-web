@@ -207,6 +207,9 @@ describe('focused Task graph navigation', () => {
         { type: 'change_parent', parentId: 'task-parent' },
       ]);
     });
+    expect(
+      wiring.history.execute.mock.calls.slice(0, 2).map(([, feedback]) => feedback?.detail),
+    ).toEqual(['Task depends on Task', 'Task no longer depends on Task']);
     expect(wiring.actions).not.toHaveProperty('reverseDependency');
     expect(wiring.canvasProps).not.toHaveProperty('onReverseDependency');
     expect(wiring.commandProviderProps?.['history']).toBe(wiring.history);

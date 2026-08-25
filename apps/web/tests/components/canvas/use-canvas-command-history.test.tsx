@@ -119,7 +119,13 @@ function AccessControls(): React.JSX.Element {
               objectIds: ['task-a'],
               operation: { type: 'replace_property', property: 'priority', value: 'high' },
             } as ObjectCommandIn,
-            'Change object',
+            {
+              historyLabel: 'Change object',
+              title: 'Priority changed',
+              detail: 'Task is now set to High',
+              unchangedTitle: 'Priority unchanged',
+              unchangedDetail: 'Task is already set to High',
+            },
           );
         }}
       >
@@ -170,7 +176,13 @@ async function executeReceipt(
         objectIds: receipt.entries.map(({ objectId }) => objectId),
         operation: { type: 'replace_property', property: 'priority', value: 'high' },
       } as ObjectCommandIn,
-      'Change object',
+      {
+        historyLabel: 'Change object',
+        title: 'Priority changed',
+        detail: 'Task is now set to High',
+        unchangedTitle: 'Priority unchanged',
+        unchangedDetail: 'Task is already set to High',
+      },
     );
   });
 }
@@ -180,6 +192,38 @@ describe('useCanvasCommandHistory', () => {
     mutateAsync.mockReset();
     replayAccessPost.mockReset();
     replayAccessPost.mockImplementation(async () => replayAccessResponse(true));
+  });
+
+  it('reports the existing state when a forward command changes nothing', async () => {
+    const rendered = renderHistory('unchanged-forward');
+    mutateAsync.mockResolvedValueOnce(
+      commandResult(objectReceipt('unchanged-forward', 'replace_property', [])),
+    );
+
+    await act(async () => {
+      await rendered.result.current.execute(
+        {
+          commandId: 'unchanged-forward',
+          objectKind: 'task',
+          objectIds: ['task-a'],
+          operation: { type: 'replace_property', property: 'priority', value: 'high' },
+        } as ObjectCommandIn,
+        {
+          historyLabel: 'Change priority',
+          title: 'Priority changed',
+          detail: 'Task is now set to High',
+          unchangedTitle: 'Priority unchanged',
+          unchangedDetail: 'Task is already set to High',
+        },
+      );
+    });
+
+    expect(rendered.result.current.notice).toMatchObject({
+      title: 'Priority unchanged',
+      detail: 'Task is already set to High',
+      offerUndo: false,
+    });
+    expect(rendered.result.current.canUndo).toBe(false);
   });
 
   it('keeps Undo disabled while replay access is loading, then enables it when allowed', async () => {
@@ -242,6 +286,10 @@ describe('useCanvasCommandHistory', () => {
       mutateAsync.mock.invocationCallOrder[1] ?? Number.POSITIVE_INFINITY,
     );
     expect(mutateAsync).toHaveBeenCalledTimes(2);
+    expect(rendered.result.current.notice).toMatchObject({
+      title: 'Object change undone',
+      detail: '1 task returned to the previous state',
+    });
   });
 
   it('does not consume history when invocation-time access is denied', async () => {
@@ -278,10 +326,11 @@ describe('useCanvasCommandHistory', () => {
       await rendered.result.current.undo();
     });
 
-    expect(rendered.result.current.notice?.copy).toBe(
-      'Could not undo change object. No collaborator changes were overwritten.',
-    );
-    expect(rendered.result.current.notice?.copy).not.toContain('provider');
+    expect(rendered.result.current.notice).toMatchObject({
+      title: 'Object change was not undone',
+      detail: 'No collaborator changes were overwritten',
+    });
+    expect(rendered.result.current.notice?.detail).not.toContain('provider');
     expect(mutateAsync).toHaveBeenCalledOnce();
   });
 

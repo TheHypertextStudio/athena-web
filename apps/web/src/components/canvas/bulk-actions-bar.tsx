@@ -14,7 +14,6 @@ import {
   DropdownMenuTrigger,
   Surface,
 } from '@docket/ui/primitives';
-import { Panel } from '@xyflow/react';
 import { useRef } from 'react';
 
 import type { CanvasPropertySnapshot } from '@/lib/actions';
@@ -23,6 +22,7 @@ import { useCanvasActions } from './canvas-actions-context';
 import { useCanvasCommandContext } from './canvas-command-context';
 import CanvasPropertiesEditor from './canvas-properties-editor';
 import { useOptionalCanvasPropertySnapshots } from './canvas-selection-retention';
+import CanvasOverlayPanel from './canvas-overlay-panel';
 
 /** Props for {@link BulkActionsBar}. */
 export interface BulkActionsBarProps {
@@ -49,7 +49,7 @@ export default function BulkActionsBar({
 
   return (
     <>
-      <Panel position="top-center">
+      <CanvasOverlayPanel position="top-center">
         <Surface
           tone="raised"
           shape="pill"
@@ -131,7 +131,7 @@ export default function BulkActionsBar({
             </DropdownMenuContent>
           </DropdownMenu>
         </Surface>
-      </Panel>
+      </CanvasOverlayPanel>
       <Dialog
         open={commands.propertiesOpen}
         onOpenChange={(open) => {

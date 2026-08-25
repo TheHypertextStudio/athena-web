@@ -29,11 +29,20 @@ describe('CanvasViewportToolbar', () => {
   });
 
   it('exposes fit selection and deterministic re-layout without a context menu', () => {
-    render(<CanvasViewportToolbar onRelayout={onRelayout} />);
+    render(
+      <CanvasViewportToolbar
+        onRelayout={onRelayout}
+        fitPadding={{ top: '24px', right: '24px', bottom: '24px', left: '24px' }}
+      />,
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'Fit selection' }));
     expect(fitView).toHaveBeenCalledWith(
-      expect.objectContaining({ nodes: [{ id: 'project-a', selected: true }], maxZoom: 1 }),
+      expect.objectContaining({
+        nodes: [{ id: 'project-a', selected: true }],
+        maxZoom: 1,
+        padding: { top: '24px', right: '24px', bottom: '24px', left: '24px' },
+      }),
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Re-layout' }));

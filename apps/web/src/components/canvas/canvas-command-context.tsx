@@ -198,10 +198,20 @@ export function CanvasCommandProviderWithHistory({
         objectIds: objects.map(({ id }) => id),
         operation: { type: 'trash' },
       } as ObjectCommandIn;
-      const result = await history.execute(
-        command,
-        `Move ${objects.length === 1 ? (objects[0]?.title ?? objectKind) : describeCanvasSelectionCounts(objects)} to trash`,
-      );
+      const subject =
+        objects.length === 1
+          ? (objects[0]?.title ?? objectKind)
+          : describeCanvasSelectionCounts(objects);
+      const result = await history.execute(command, {
+        historyLabel: `Move ${subject} to trash`,
+        title:
+          objects.length === 1
+            ? `${objectKind === 'task' ? 'Task' : 'Project'} moved to trash`
+            : 'Selection moved to trash',
+        detail: `${subject} can be restored`,
+        unchangedTitle: 'Already in trash',
+        unchangedDetail: `${subject} was already in trash`,
+      });
       if (result !== null) setPendingTrash(null);
     },
     [canTrash, history, objectKind],
@@ -303,7 +313,7 @@ export function CanvasCommandProviderWithHistory({
         }
         confirmLabel="Move to trash"
         pending={history.pending}
-        error={history.notice?.tone === 'error' ? history.notice.copy : null}
+        error={history.notice?.tone === 'error' ? history.notice.detail : null}
         onConfirm={() => {
           if (pendingTrash !== null) void applyTrash(pendingTrash.objects);
         }}

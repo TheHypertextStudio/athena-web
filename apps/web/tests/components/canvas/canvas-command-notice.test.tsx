@@ -6,15 +6,16 @@ import { describe, expect, it, vi } from 'vitest';
 const { commands } = vi.hoisted(() => ({
   commands: {
     selectedObjects: [],
-    notice: { copy: 'Moved Project to trash.', offerUndo: true, tone: 'status' as const },
+    notice: {
+      title: 'Project moved to trash',
+      detail: 'Project with Tasks can be restored',
+      offerUndo: true,
+      tone: 'status' as const,
+    },
     canUndo: true,
     undo: vi.fn(),
     clearNotice: vi.fn(),
   },
-}));
-
-vi.mock('@xyflow/react', () => ({
-  Panel: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
 vi.mock('../../../src/components/canvas/canvas-command-context', () => ({
@@ -27,7 +28,9 @@ describe('CanvasCommandNotice', () => {
   it('keeps trash Undo available after the command prunes the selection', () => {
     render(<CanvasCommandNotice />);
 
-    expect(screen.getByRole('status')).toHaveTextContent('Moved Project to trash.');
+    expect(screen.getByRole('status')).toHaveTextContent('Project moved to trash');
+    expect(screen.getByRole('status')).toHaveTextContent('Project with Tasks can be restored');
+    expect(screen.getByRole('status')).not.toHaveTextContent('applied');
     fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
     expect(commands.undo).toHaveBeenCalledOnce();
   });

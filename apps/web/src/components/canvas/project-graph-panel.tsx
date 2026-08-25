@@ -26,7 +26,7 @@
  *   enlarging.
  */
 import { type ObjectCommandIn, type ProjectOverviewItem } from '@docket/types';
-import { type Edge, type Node, Panel, type ReactFlowInstance } from '@xyflow/react';
+import { type Edge, type Node, type ReactFlowInstance } from '@xyflow/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -53,6 +53,7 @@ import {
   canvasCommandId,
   useCanvasCommandHistory,
 } from '@/components/canvas/use-canvas-command-history';
+import CanvasOverlayPanel from '@/components/canvas/canvas-overlay-panel';
 
 /** The registered node renderers for this canvas (only the project card). */
 const NODE_TYPES = { project: ProjectNode };
@@ -161,12 +162,23 @@ export function ProjectGraphPanel({
         objectIds: [source, target],
         operation: { type, blockingId: source, blockedId: target },
       } as ObjectCommandIn;
-      void history.execute(
-        command,
-        type === 'add_dependency' ? 'Add dependency' : 'Remove dependency',
-      );
+      const blockingName = rows.find(({ id }) => id === source)?.name ?? 'Project';
+      const blockedName = rows.find(({ id }) => id === target)?.name ?? 'Project';
+      void history.execute(command, {
+        historyLabel: type === 'add_dependency' ? 'Add dependency' : 'Remove dependency',
+        title: type === 'add_dependency' ? 'Dependency added' : 'Dependency removed',
+        detail:
+          type === 'add_dependency'
+            ? `${blockedName} depends on ${blockingName}`
+            : `${blockedName} no longer depends on ${blockingName}`,
+        unchangedTitle: 'Dependency unchanged',
+        unchangedDetail:
+          type === 'add_dependency'
+            ? `${blockedName} already depends on ${blockingName}`
+            : `${blockedName} did not depend on ${blockingName}`,
+      });
     },
-    [history],
+    [history, rows],
   );
   const addDependency = useCallback(
     (source: string, target: string) => {
@@ -354,6 +366,7 @@ export function ProjectGraphPanel({
               onRelayout={() => {
                 setLayoutEpoch((current) => current + 1);
               }}
+              bottomNotice={history.notice === null ? undefined : <CanvasCommandNotice />}
             >
               <CanvasSelectionBridge
                 objectKind="project"
@@ -366,16 +379,15 @@ export function ProjectGraphPanel({
                 onRequestedSelectionApplied={applyCreatedSelection}
               />
               <BulkActionsBar />
-              <CanvasCommandNotice />
               {rows.length === 0 ? (
-                <Panel position="top-center" className="!top-1/2 !-translate-y-1/2">
+                <CanvasOverlayPanel position="top-center" className="!top-1/2 !-translate-y-1/2">
                   <p className="text-on-surface-variant text-body-medium rounded-lg px-5 py-3 text-center">
                     No matching Projects. Right-click the canvas to create one.
                   </p>
-                </Panel>
+                </CanvasOverlayPanel>
               ) : null}
               {selected ? (
-                <Panel position="top-right">
+                <CanvasOverlayPanel position="top-right">
                   <ProjectPeek
                     project={selected}
                     orgId={orgId}
@@ -387,7 +399,7 @@ export function ProjectGraphPanel({
                       setSelectedId(null);
                     }}
                   />
-                </Panel>
+                </CanvasOverlayPanel>
               ) : null}
             </Canvas>
           </div>

@@ -270,5 +270,11 @@ describe('Project graph creation continuity', () => {
       { type: 'add_dependency', blockingId: EXISTING_ID, blockedId: CREATED_ID },
       { type: 'remove_dependency', blockingId: EXISTING_ID, blockedId: CREATED_ID },
     ]);
+    expect(commandState.history.execute.mock.calls.map(([, feedback]) => feedback?.detail)).toEqual(
+      [
+        'Created Project depends on Existing Project',
+        'Created Project no longer depends on Existing Project',
+      ],
+    );
   });
 });

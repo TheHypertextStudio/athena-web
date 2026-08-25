@@ -40,7 +40,7 @@ export interface GraphInteractionProps {
 
 /** The `kind` discriminator carried on every edge's `data` (one place for the cast). */
 export function edgeKind(edge: Edge): string | undefined {
-  return (edge.data as { kind?: string }).kind;
+  return (edge.data as { kind?: string } | undefined)?.kind;
 }
 
 /**

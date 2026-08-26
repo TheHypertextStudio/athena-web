@@ -61,26 +61,40 @@ export async function ensureBillingCustomer(
   const existing = await getBillingCustomer(db, organizationId);
   if (existing) return existing;
 
-  const subscriptions = await gateway.listSubscriptions(organizationId);
-  const customerIds = [
+  const [subscriptions, customers] = await Promise.all([
+    gateway.listSubscriptions(organizationId),
+    gateway.listCustomers(organizationId),
+  ]);
+  const subscriptionCustomerIds = [
     ...new Set(
       subscriptions
         .map((subscription) => subscription.customerId)
         .filter((customerId): customerId is string => Boolean(customerId)),
     ),
   ];
-  if (subscriptions.length > 0 && customerIds.length !== 1) {
-    throw new Error('Existing Stripe subscriptions do not resolve to one billing customer.');
+  const providerCustomerIds = [...new Set(customers.map((customer) => customer.id))];
+  if (
+    (subscriptions.length > 0 && subscriptionCustomerIds.length !== 1) ||
+    providerCustomerIds.length > 1 ||
+    (subscriptionCustomerIds[0] !== undefined &&
+      providerCustomerIds[0] !== undefined &&
+      subscriptionCustomerIds[0] !== providerCustomerIds[0])
+  ) {
+    throw new Error(
+      'Existing Stripe customers and subscriptions do not resolve to one billing customer.',
+    );
   }
 
   const stripeCustomerId =
-    customerIds[0] ?? (await gateway.createCustomer(organizationId, email)).id;
+    subscriptionCustomerIds[0] ??
+    providerCustomerIds[0] ??
+    (await gateway.createCustomer(organizationId, email)).id;
   const inserted = await db
     .insert(organizationBillingAccount)
     .values({
       organizationId,
       stripeCustomerId,
-      countryVerificationRequired: customerIds.length === 0,
+      countryVerificationRequired: subscriptionCustomerIds.length === 0,
     })
     .onConflictDoNothing({ target: organizationBillingAccount.organizationId })
     .returning({

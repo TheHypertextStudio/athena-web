@@ -368,6 +368,7 @@ export const billingCredit = pgTable(
   },
   (table) => [
     index('billing_credit_org_idx').on(table.organizationId, table.createdAt),
+    uniqueIndex('billing_credit_provider_note_uq').on(table.providerCreditNoteId),
     check(
       'billing_credit_amount_check',
       sql`${table.baseAmount} >= 0 AND ${table.totalAmount} >= 0`,

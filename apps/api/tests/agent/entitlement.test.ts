@@ -102,12 +102,14 @@ async function grantDocketPro(
   orgId: string,
   status: 'trialing' | 'active' | 'past_due' | 'canceled' = 'active',
   source: 'stripe' | 'complimentary' = 'stripe',
+  graceEndsAt?: Date,
 ): Promise<void> {
   await db.insert(schema.organizationProductEntitlement).values({
     organizationId: orgId,
     productKey: 'docket_pro',
     status,
     source,
+    graceEndsAt,
   });
 }
 
@@ -160,6 +162,16 @@ describe('assertProductCapability', () => {
     await expect(assertProductCapability(org.orgId, 'athena')).rejects.toMatchObject({
       status: 402,
       code: 'product_required',
+    });
+  });
+
+  it('reports an expired payment grace period separately from a workspace that never had Pro', async () => {
+    const org = await seedOrg('active');
+    await grantDocketPro(org.orgId, 'past_due', 'stripe', new Date(Date.now() - 60_000));
+
+    await expect(assertProductCapability(org.orgId, 'athena')).rejects.toMatchObject({
+      status: 402,
+      code: 'billing_grace_expired',
     });
   });
 });

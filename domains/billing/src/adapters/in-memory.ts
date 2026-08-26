@@ -74,6 +74,10 @@ export class InMemoryBillingGateway implements BillingGateway {
   private readonly lifecycleStep = new Map<string, number>();
   private readonly coupons = new Map<string, DiscountCouponInput>();
   private readonly discounts = new Map<string, { discountId: string; couponId: string }>();
+  private readonly creditNotes = new Map<
+    string,
+    { input: CreditNoteIssueInput; result: IssuedCreditNote }
+  >();
   private readonly discountApplications = new Map<
     string,
     { referenceId: string; couponId: string; discountId: string }
@@ -338,8 +342,23 @@ export class InMemoryBillingGateway implements BillingGateway {
 
   /** {@inheritDoc BillingGateway.issueCreditNote} */
   async issueCreditNote(input: CreditNoteIssueInput): Promise<IssuedCreditNote> {
+    const replay = this.creditNotes.get(input.idempotencyKey);
+    if (replay) {
+      if (
+        replay.input.invoiceId !== input.invoiceId ||
+        replay.input.invoiceLineId !== input.invoiceLineId ||
+        replay.input.baseAmount !== input.baseAmount ||
+        replay.input.creditAmount !== input.creditAmount ||
+        replay.input.memo !== input.memo
+      ) {
+        throw new Error('InMemoryBillingGateway: idempotency key reused with another credit note.');
+      }
+      return replay.result;
+    }
     const preview = await this.previewCreditNote(input);
-    return { id: this.nextId('cn'), ...preview };
+    const result = { id: this.nextId('cn'), ...preview };
+    this.creditNotes.set(input.idempotencyKey, { input, result });
+    return result;
   }
 
   /**

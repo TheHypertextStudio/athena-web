@@ -833,21 +833,24 @@ export const adminDiscountRoutes = new Hono<AppEnv>()
             idempotencyKey: `${syncKey}:credit`,
             memo: `${application.programKey === 'student' ? 'Student' : 'Nonprofit'} discount effective ${now.toISOString().slice(0, 10)}`,
           });
-          await db.insert(billingCredit).values({
-            organizationId: application.organizationId,
-            awardId: award.id,
-            status: 'issued',
-            currency: preview.invoice.currency,
-            baseAmount: issued.baseAmount,
-            taxAmount: issued.taxAmount,
-            totalAmount: issued.totalAmount,
-            servicePeriodStartsAt: new Date(preview.invoice.periodStartsAt),
-            servicePeriodEndsAt: new Date(preview.invoice.periodEndsAt),
-            providerInvoiceId: preview.invoice.invoiceId,
-            providerCreditNoteId: issued.id,
-            providerPreview: { ...preview.credit },
-            issuedAt: now,
-          });
+          await db
+            .insert(billingCredit)
+            .values({
+              organizationId: application.organizationId,
+              awardId: award.id,
+              status: 'issued',
+              currency: preview.invoice.currency,
+              baseAmount: issued.baseAmount,
+              taxAmount: issued.taxAmount,
+              totalAmount: issued.totalAmount,
+              servicePeriodStartsAt: new Date(preview.invoice.periodStartsAt),
+              servicePeriodEndsAt: new Date(preview.invoice.periodEndsAt),
+              providerInvoiceId: preview.invoice.invoiceId,
+              providerCreditNoteId: issued.id,
+              providerPreview: { ...preview.credit },
+              issuedAt: now,
+            })
+            .onConflictDoNothing({ target: billingCredit.providerCreditNoteId });
           creditOut = {
             invoiceId: preview.invoice.invoiceId,
             currency: preview.invoice.currency,

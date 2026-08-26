@@ -80,7 +80,7 @@ const webhooks = new Hono().post('/webhook', async (c) => {
     }
     // Verified, but Docket does not model this event type: acknowledge without effect.
     if (!event) return c.json({ received: true, effect: null });
-    if (event.referenceId && event.type !== 'subscription.trial_will_end') {
+    if (event.referenceId) {
       const subscriptionId = event.subscription?.id ?? event.subscriptionId;
       const subscription = subscriptionId
         ? await gateway.getSubscriptionById(subscriptionId, event.referenceId)
@@ -238,14 +238,20 @@ const webhooks = new Hono().post('/webhook', async (c) => {
           )
         : 'the date shown in Billing settings';
     let notice: { subject: string; text: string; urgent?: boolean } | null = null;
-    if (originalEventType === 'subscription.trial_will_end') {
+    if (
+      originalEventType === 'subscription.trial_will_end' &&
+      event.subscription?.status === 'trialing' &&
+      effect === 'trialing'
+    ) {
       notice = {
         subject: 'Your Docket Pro trial is ending',
-        text: `Your Docket Pro trial ends ${billingUrlDate(event.subscription?.trialEnd)}. Billing settings show the payment method and first charge date.`,
+        text: `Your Docket Pro trial ends ${billingUrlDate(event.subscription.trialEnd)}. Billing settings show the payment method and first charge date.`,
       };
     } else if (
-      originalEventType === 'subscription.past_due' ||
-      originalEventType === 'subscription.payment_action_required'
+      (originalEventType === 'subscription.past_due' ||
+        originalEventType === 'subscription.payment_action_required') &&
+      event.subscription?.status === 'past_due' &&
+      effect === 'past_due'
     ) {
       const [current] = await db
         .select({ graceEndsAt: organizationProductEntitlement.graceEndsAt })
@@ -264,13 +270,15 @@ const webhooks = new Hono().post('/webhook', async (c) => {
       };
     } else if (
       originalEventType === 'subscription.paid' &&
-      previousEntitlement?.status === 'past_due'
+      previousEntitlement?.status === 'past_due' &&
+      event.subscription?.status === 'active' &&
+      effect === 'active'
     ) {
       notice = {
         subject: 'Docket Pro payment recovered',
         text: 'Stripe confirmed the payment. Docket Pro access is active, and the payment grace period is cleared.',
       };
-    } else if (originalEventType === 'subscription.canceled') {
+    } else if (originalEventType === 'subscription.canceled' && effect === 'canceled') {
       notice = {
         subject: 'Shared work is now read-only',
         text: 'Docket Pro ended. Shared work is now read-only. You can export or reactivate at any time, and Docket did not delete workspace data.',

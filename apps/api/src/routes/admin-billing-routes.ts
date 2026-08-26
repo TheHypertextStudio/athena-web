@@ -662,21 +662,24 @@ export const adminBillingRoutes = new Hono<AppEnv>()
             idempotencyKey: `${syncKey}:credit`,
             memo: `Partner discount effective ${now.toISOString().slice(0, 10)}`,
           });
-          await db.insert(billingCredit).values({
-            organizationId: id,
-            awardId: award.id,
-            status: 'issued',
-            currency: invoice.currency,
-            baseAmount: issued.baseAmount,
-            taxAmount: issued.taxAmount,
-            totalAmount: issued.totalAmount,
-            servicePeriodStartsAt: new Date(invoice.periodStartsAt),
-            servicePeriodEndsAt: new Date(invoice.periodEndsAt),
-            providerInvoiceId: invoice.invoiceId,
-            providerCreditNoteId: issued.id,
-            providerPreview: { ...creditPreview },
-            issuedAt: now,
-          });
+          await db
+            .insert(billingCredit)
+            .values({
+              organizationId: id,
+              awardId: award.id,
+              status: 'issued',
+              currency: invoice.currency,
+              baseAmount: issued.baseAmount,
+              taxAmount: issued.taxAmount,
+              totalAmount: issued.totalAmount,
+              servicePeriodStartsAt: new Date(invoice.periodStartsAt),
+              servicePeriodEndsAt: new Date(invoice.periodEndsAt),
+              providerInvoiceId: invoice.invoiceId,
+              providerCreditNoteId: issued.id,
+              providerPreview: { ...creditPreview },
+              issuedAt: now,
+            })
+            .onConflictDoNothing({ target: billingCredit.providerCreditNoteId });
         }
         const [updated] = await db
           .update(billingDiscountAward)

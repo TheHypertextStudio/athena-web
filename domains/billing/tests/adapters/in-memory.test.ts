@@ -473,16 +473,21 @@ describe('InMemoryBillingGateway', () => {
         prePaymentAmount: 0,
         postPaymentAmount: 200,
       });
-      await expect(
-        gw.issueCreditNote({
-          invoiceId: 'in_1',
-          invoiceLineId: 'il_1',
-          baseAmount: 200,
-          creditAmount: 200,
-          idempotencyKey: 'credit-1',
-          memo: 'Approved discount',
-        }),
-      ).resolves.toMatchObject({ id: expect.stringMatching(/^cn_/), totalAmount: 200 });
+      const input = {
+        invoiceId: 'in_1',
+        invoiceLineId: 'il_1',
+        baseAmount: 200,
+        creditAmount: 200,
+        idempotencyKey: 'credit-1',
+        memo: 'Approved discount',
+      };
+      const first = await gw.issueCreditNote(input);
+      const replay = await gw.issueCreditNote(input);
+      const separate = await gw.issueCreditNote({ ...input, idempotencyKey: 'credit-2' });
+
+      expect(first).toMatchObject({ id: expect.stringMatching(/^cn_/), totalAmount: 200 });
+      expect(replay).toEqual(first);
+      expect(separate.id).not.toBe(first.id);
     });
   });
 

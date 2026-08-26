@@ -1,7 +1,7 @@
 # AGENTS.md - Project Athena Agent Guidelines
 
-> **Version**: 2.0.2
-> **Last Updated**: 2026-08-25
+> **Version**: 2.0.3
+> **Last Updated**: 2026-08-26
 > **Applies To**: All AI coding agents working on Project Athena
 
 This document defines the operational framework for AI agents contributing to Project Athena. All agents MUST adhere to these guidelines to ensure consistent, high-quality, autonomous development.
@@ -189,6 +189,21 @@ instead.
 Only the user may suspend this policy. The user must explicitly direct the agent to use a pull
 request in the current task and must explicitly authorize reenabling the repository setting. A
 generic instruction to review, ship, merge, or deploy does not authorize a pull request.
+
+### Stripe Provider Policy
+
+**Stripe belongs exclusively to Hypertext Studio.** Agents MUST use only the Hypertext Studio
+Stripe account for Docket configuration, testing, evidence, reconciliation, canaries, and live
+payments. Evidence from any other Stripe account is invalid and MUST NOT satisfy a launch gate.
+
+Agents MUST perform Stripe browser work only in the dedicated Hypertext Studio Chrome instance.
+Agents MUST NOT use, inspect, or modify Stripe through the user's personal Chrome instance. If the
+Hypertext Studio Chrome instance is unavailable or its Stripe account identity cannot be verified,
+the agent must stop the provider operation and keep Checkout disabled.
+
+Agents MUST NOT copy or auto-load Stripe credentials from a global or personal Stripe CLI profile.
+Any automated provider operation must verify the configured Hypertext Studio Stripe account before
+it reads or mutates provider state.
 
 ### Linear History Requirement
 

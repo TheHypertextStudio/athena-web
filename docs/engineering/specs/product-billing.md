@@ -4,9 +4,10 @@
 >
 > **Action:** Keep public Checkout disabled until every release gate in this document passes.
 >
-> **Status:** Implemented locally on 2026-08-25. Stripe test-mode payment and recovery paths pass.
-> Merchant identity, production-snapshot migration, finance, legal, and live canary proof remain
-> open.
+> **Status:** Implemented locally on 2026-08-25. The prior Stripe test-mode run used an account that
+> does not belong to Hypertext Studio, so it is not launch evidence. Hypertext Studio merchant
+> identity, fresh test-mode proof, production-snapshot migration, finance, legal, and live canary
+> proof remain open.
 
 ## Product contract
 
@@ -153,10 +154,10 @@ The local implementation is not public-launch proof. The release owner must comp
    enablement.
 2. Deploy additive migrations and the reconciliation worker with Checkout disabled. Observe shadow
    reconciliation for at least 24 hours.
-3. Preserve the checked-in Stripe test-mode evidence for hosted Checkout, the portal, signed
-   webhook replay, automatic tax, failed-card recovery, authentication-required payment,
-   cancellation, renewal, discount application, and credit notes. Repeat this gate only after a
-   provider or billing-boundary change invalidates that evidence.
+3. Run hosted Checkout, the portal, signed webhook replay, automatic tax, failed-card recovery,
+   authentication-required payment, cancellation, renewal, discount application, and credit notes
+   in the Hypertext Studio Stripe test account. Evidence from another Stripe account does not
+   satisfy this gate.
 4. Have finance approve US tax registrations, invoices, credits, refunds, and reconciliation.
    Have legal approve trial renewal, cancellation, read-only retention, discount evidence, tax,
    Pricing, Terms, and Privacy copy.

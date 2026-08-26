@@ -147,6 +147,13 @@ export class SubscriptionExistsError extends ApiError {
   }
 }
 
+/** 402 — the organization exhausted its fixed payment-recovery period. */
+export class BillingGraceExpiredError extends ApiError {
+  constructor(message = 'The Docket Pro payment recovery period has ended') {
+    super(402, 'billing_grace_expired', message);
+  }
+}
+
 /**
  * 405 — the path exists but not for this method.
  *

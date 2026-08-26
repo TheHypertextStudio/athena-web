@@ -87,21 +87,24 @@ describe('Docket Pro capabilities', () => {
     await seedDocketPro(orgId, 'past_due', 'stripe', boundary);
 
     await expect(resolveProductCapability(db, orgId, 'athena', boundary)).resolves.toEqual({
-      kind: 'product-required',
+      kind: 'grace-expired',
     });
   });
 
   it.each([
-    ['past_due', new Date('2026-08-30T00:00:00.000Z')],
-    ['canceled', undefined],
-  ] as const)('does not grant capabilities after %s access ends', async (status, graceEndsAt) => {
-    const orgId = await seedOrg();
-    await seedDocketPro(orgId, status, 'stripe', graceEndsAt);
+    ['past_due', new Date('2026-08-30T00:00:00.000Z'), 'grace-expired'],
+    ['canceled', undefined, 'product-required'],
+  ] as const)(
+    'does not grant capabilities after %s access ends',
+    async (status, graceEndsAt, kind) => {
+      const orgId = await seedOrg();
+      await seedDocketPro(orgId, status, 'stripe', graceEndsAt);
 
-    await expect(
-      resolveProductCapability(db, orgId, 'athena', new Date('2026-08-31T00:00:00.000Z')),
-    ).resolves.toEqual({ kind: 'product-required' });
-  });
+      await expect(
+        resolveProductCapability(db, orgId, 'athena', new Date('2026-08-31T00:00:00.000Z')),
+      ).resolves.toEqual({ kind });
+    },
+  );
 
   it('keeps organization lifecycle separate from product ownership', async () => {
     const orgId = await seedOrg('export_window');

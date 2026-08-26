@@ -9,6 +9,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import {
   billingCheckoutAttempt,
+  billingCredit,
   billingDiscountApplication,
   billingDiscountAward,
   billingDiscountProgram,
@@ -72,6 +73,44 @@ describe('billing launch schema', () => {
     };
     await db.insert(billingProviderEvent).values(event);
     await expect(db.insert(billingProviderEvent).values(event)).rejects.toBeDefined();
+  });
+
+  it('stores one audit row for each issued provider credit note', async () => {
+    const [org] = await db
+      .insert(organization)
+      .values({ name: 'Credit test', slug: `credit-${Date.now()}`, lifecycleState: 'active' })
+      .returning({ id: organization.id });
+    if (!org) throw new Error('Organization insertion returned no row');
+    const [award] = await db
+      .insert(billingDiscountAward)
+      .values({
+        organizationId: org.id,
+        percentOff: 25,
+        status: 'active',
+        startsAt: new Date('2026-08-01T00:00:00.000Z'),
+        endsAt: new Date('2027-08-01T00:00:00.000Z'),
+        reviewAt: new Date('2027-08-01T00:00:00.000Z'),
+        reason: 'Credit identity test',
+      })
+      .returning({ id: billingDiscountAward.id });
+    if (!award) throw new Error('Award insertion returned no row');
+    const credit = {
+      organizationId: org.id,
+      awardId: award.id,
+      status: 'issued' as const,
+      currency: 'usd',
+      baseAmount: 100,
+      taxAmount: 0,
+      totalAmount: 100,
+      servicePeriodStartsAt: new Date('2026-08-01T00:00:00.000Z'),
+      servicePeriodEndsAt: new Date('2026-09-01T00:00:00.000Z'),
+      providerInvoiceId: 'in_credit_identity',
+      providerCreditNoteId: 'cn_credit_identity',
+      issuedAt: new Date('2026-08-15T00:00:00.000Z'),
+    };
+
+    await db.insert(billingCredit).values(credit);
+    await expect(db.insert(billingCredit).values(credit)).rejects.toBeDefined();
   });
 
   it('prevents stacked awards and duplicate in-review applications', async () => {

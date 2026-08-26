@@ -5,7 +5,7 @@ import { db } from '@docket/db';
 import type { MiddlewareHandler } from 'hono';
 
 import type { AppEnv } from './context';
-import { NotFoundError, ProductRequiredError } from './error';
+import { BillingGraceExpiredError, NotFoundError, ProductRequiredError } from './error';
 
 /**
  * Assert that an organization owns an active product granting a capability.
@@ -25,6 +25,8 @@ export async function assertProductCapability(
       return;
     case 'organization-not-found':
       throw new NotFoundError('Organization not found');
+    case 'grace-expired':
+      throw new BillingGraceExpiredError();
     case 'product-required':
       throw new ProductRequiredError();
     /* v8 ignore start -- @preserve exhaustive: every domain entitlement is handled above */

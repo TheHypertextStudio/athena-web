@@ -22,6 +22,7 @@ export type ProductCapabilityEntitlement =
       readonly source: ProductEntitlementSource;
     }
   | { readonly kind: 'organization-not-found' }
+  | { readonly kind: 'grace-expired' }
   | { readonly kind: 'product-required' };
 
 /**
@@ -58,22 +59,34 @@ export async function resolveProductCapability(
     .where(eq(organization.id, organizationId));
 
   if (rows.length === 0) return { kind: 'organization-not-found' };
+  let graceExpired = false;
   for (const row of rows) {
+    const productKey = row.productKey && isProductKey(row.productKey) ? row.productKey : null;
+    const productGrantsRequestedCapability =
+      productKey !== null && productGrantsCapability(productKey, capability);
     if (
+      productGrantsRequestedCapability &&
+      row.status === 'past_due' &&
+      row.graceEndsAt !== null &&
+      row.graceEndsAt <= now
+    ) {
+      graceExpired = true;
+    }
+    if (
+      productGrantsRequestedCapability &&
       row.productKey &&
-      isProductKey(row.productKey) &&
       row.status &&
       row.source &&
       (ACCESS_STATUSES.has(row.status) ||
-        (row.status === 'past_due' && row.graceEndsAt !== null && row.graceEndsAt > now)) &&
-      productGrantsCapability(row.productKey, capability)
+        (row.status === 'past_due' && row.graceEndsAt !== null && row.graceEndsAt > now))
     ) {
       return {
         kind: 'entitled',
-        productKey: row.productKey,
+        productKey,
         source: row.source,
       };
     }
   }
+  if (graceExpired) return { kind: 'grace-expired' };
   return { kind: 'product-required' };
 }

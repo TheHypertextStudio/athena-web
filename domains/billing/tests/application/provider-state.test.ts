@@ -41,6 +41,7 @@ describe('ensureBillingCustomer', () => {
     let creates = 0;
     let createdEmail: string | undefined;
     const gateway = {
+      listCustomers: async () => [],
       listSubscriptions: async () => [],
       createCustomer: async (referenceId: string, email?: string) => {
         creates += 1;
@@ -63,6 +64,7 @@ describe('ensureBillingCustomer', () => {
     const orgId = await seedOrg();
     let creates = 0;
     const gateway = {
+      listCustomers: async () => [{ id: 'cus_legacy', referenceId: orgId }],
       listSubscriptions: async () => [
         {
           id: 'sub_legacy',
@@ -89,6 +91,7 @@ describe('ensureBillingCustomer', () => {
     const orgId = await seedOrg();
     let creates = 0;
     const gateway = {
+      listCustomers: async () => [],
       listSubscriptions: async () => [
         {
           id: 'sub_legacy',
@@ -113,6 +116,7 @@ describe('ensureBillingCustomer', () => {
     const orgId = await seedOrg();
     let creates = 0;
     const gateway = {
+      listCustomers: async () => [],
       listSubscriptions: async () => [
         {
           id: 'sub_first',
@@ -142,6 +146,47 @@ describe('ensureBillingCustomer', () => {
     await expect(getBillingCustomer(db, orgId)).resolves.toBeNull();
   });
 
+  it('reuses one existing provider customer when no subscription exists', async () => {
+    const orgId = await seedOrg();
+    let creates = 0;
+    const gateway = {
+      listCustomers: async () => [{ id: 'cus_existing', referenceId: orgId }],
+      listSubscriptions: async () => [],
+      createCustomer: async () => {
+        creates += 1;
+        return { id: 'cus_duplicate', referenceId: orgId };
+      },
+    } as unknown as BillingGateway;
+
+    const account = await ensureBillingCustomer(db, gateway, orgId);
+
+    expect(account.stripeCustomerId).toBe('cus_existing');
+    expect(account.countryVerificationRequired).toBe(true);
+    expect(creates).toBe(0);
+  });
+
+  it('blocks customer creation when provider ownership is ambiguous', async () => {
+    const orgId = await seedOrg();
+    let creates = 0;
+    const gateway = {
+      listCustomers: async () => [
+        { id: 'cus_first', referenceId: orgId },
+        { id: 'cus_second', referenceId: orgId },
+      ],
+      listSubscriptions: async () => [],
+      createCustomer: async () => {
+        creates += 1;
+        return { id: 'cus_third', referenceId: orgId };
+      },
+    } as unknown as BillingGateway;
+
+    await expect(ensureBillingCustomer(db, gateway, orgId)).rejects.toThrow(
+      'do not resolve to one billing customer',
+    );
+    expect(creates).toBe(0);
+    await expect(getBillingCustomer(db, orgId)).resolves.toBeNull();
+  });
+
   it('converges concurrent customer creation on the durable organization identity', async () => {
     const orgId = await seedOrg();
     let creates = 0;
@@ -150,6 +195,7 @@ describe('ensureBillingCustomer', () => {
       releaseCustomerCreation = resolve;
     });
     const gateway = {
+      listCustomers: async () => [],
       listSubscriptions: async () => [],
       createCustomer: async (referenceId: string) => {
         creates += 1;

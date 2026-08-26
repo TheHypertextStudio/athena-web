@@ -12,6 +12,7 @@ import {
   db,
   genId,
   organization,
+  organizationProductEntitlement,
 } from '@docket/db';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
@@ -20,7 +21,13 @@ import { z } from 'zod';
 import type { AppEnv } from '../context';
 import { getContainer } from '../container';
 import { env } from '../env';
-import { AuthError, BillingUnavailableError, ConflictError, NotFoundError } from '../error';
+import {
+  AuthError,
+  BillingUnavailableError,
+  ConflictError,
+  NotFoundError,
+  SubscriptionExistsError,
+} from '../error';
 import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { hasSqlState } from '../lib/sql-state';
@@ -275,6 +282,32 @@ async function submitApplication(
   }
 }
 
+/** Return whether the workspace has Stripe-independent complimentary Pro. */
+async function hasComplimentaryPro(organizationId: string): Promise<boolean> {
+  const rows = await db
+    .select({ productKey: organizationProductEntitlement.productKey })
+    .from(organizationProductEntitlement)
+    .where(
+      and(
+        eq(organizationProductEntitlement.organizationId, organizationId),
+        eq(organizationProductEntitlement.productKey, 'docket_pro'),
+        eq(organizationProductEntitlement.status, 'active'),
+        eq(organizationProductEntitlement.source, 'complimentary'),
+      ),
+    )
+    .limit(1);
+  return rows.length === 1;
+}
+
+/** Refuse revenue-assistance applications while the workspace already receives free Pro. */
+async function assertDiscountApplicationAvailable(organizationId: string): Promise<void> {
+  if (await hasComplimentaryPro(organizationId)) {
+    throw new SubscriptionExistsError(
+      'Complimentary Docket Pro does not accept discount applications',
+    );
+  }
+}
+
 /** Customer discount router, mounted at `/v1/orgs/:orgId/billing/discounts`. */
 const billingDiscounts = new Hono<AppEnv>()
   .get(
@@ -288,7 +321,7 @@ const billingDiscounts = new Hono<AppEnv>()
     }),
     async (c) => {
       const { orgId } = c.get('actorCtx');
-      const [programs, applications, awards, credits] = await Promise.all([
+      const [programs, applications, awards, credits, complimentary] = await Promise.all([
         db.select().from(billingDiscountProgram).where(eq(billingDiscountProgram.active, true)),
         db
           .select()
@@ -313,6 +346,7 @@ const billingDiscounts = new Hono<AppEnv>()
           .where(eq(billingCredit.organizationId, orgId))
           .orderBy(desc(billingCredit.createdAt))
           .limit(1),
+        hasComplimentaryPro(orgId),
       ]);
       const application = applications[0] ?? null;
       const events = application
@@ -325,7 +359,7 @@ const billingDiscounts = new Hono<AppEnv>()
       const award = awards[0] ?? null;
       const credit = credits[0] ?? null;
       return ok(c, DiscountsOut, {
-        applicationsEnabled: env.BILLING_ENABLED,
+        applicationsEnabled: env.BILLING_ENABLED && !complimentary,
         programs: programs.map((program) => ({
           key: program.key,
           name: program.name,
@@ -374,6 +408,7 @@ const billingDiscounts = new Hono<AppEnv>()
         .where(eq(organization.id, orgId))
         .limit(1);
       if (!org) throw new NotFoundError('Organization not found');
+      await assertDiscountApplicationAvailable(orgId);
       if (input.programKey === 'student') {
         if (!org.isPersonal) {
           throw new ConflictError('Student discounts apply only to a personal workspace');
@@ -419,6 +454,7 @@ const billingDiscounts = new Hono<AppEnv>()
       if (!session?.user) throw new AuthError();
       const { orgId } = c.get('actorCtx');
       const input = c.req.valid('json');
+      await assertDiscountApplicationAvailable(orgId);
       const [award] = await db
         .select()
         .from(billingDiscountAward)

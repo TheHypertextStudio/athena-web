@@ -11,6 +11,7 @@ import {
   billingCredit,
   billingDiscountApplication,
   billingDiscountAward,
+  notificationIntent,
   organizationBillingAccount,
   user,
 } from '@docket/db';
@@ -171,6 +172,68 @@ describe('POST /billing/webhook', () => {
       body: payload,
     });
     await expect(duplicate.json()).resolves.toMatchObject({ received: true, effect: 'duplicate' });
+  });
+
+  it('reconciles a late trial-ending event before changing access or notifying the customer', async () => {
+    const id = await makeOrg('active');
+    const customerId = await bindBillingAccount(id);
+    await db.insert(organizationProductEntitlement).values({
+      organizationId: id,
+      productKey: 'docket_pro',
+      status: 'active',
+      source: 'stripe',
+      stripeSubscriptionId: `sub_${id}`,
+      currentPeriodEnd: new Date('2026-10-01T00:00:00.000Z'),
+    });
+    const gateway = getContainer().billing;
+    const verifyWebhook = vi.fn(async () => ({
+      id: `evt_trial_will_end_${id}`,
+      type: 'subscription.trial_will_end' as const,
+      referenceId: id,
+      customerId,
+      subscription: {
+        id: `sub_${id}`,
+        customerId,
+        referenceId: id,
+        status: 'trialing' as const,
+        currentPeriodEnd: '2026-09-01T00:00:00.000Z',
+        trialEnd: '2026-09-01T00:00:00.000Z',
+      },
+      createdAt: '2026-08-29T00:00:00.000Z',
+    }));
+    const canonical = vi.spyOn(gateway, 'getSubscriptionById').mockResolvedValueOnce({
+      id: `sub_${id}`,
+      customerId,
+      referenceId: id,
+      status: 'active',
+      currentPeriodEnd: '2026-10-01T00:00:00.000Z',
+    });
+    Reflect.set(gateway, 'verifyWebhook', verifyWebhook);
+
+    try {
+      const response = await webhooks.request('/webhook', {
+        method: 'POST',
+        headers: { 'stripe-signature': 'verified-by-test' },
+        body: '{}',
+      });
+
+      expect(response.status).toBe(200);
+      await expect(response.json()).resolves.toMatchObject({ received: true, effect: 'active' });
+      expect(canonical).toHaveBeenCalledWith(`sub_${id}`, id);
+      const [entitlement] = await db
+        .select({ status: organizationProductEntitlement.status })
+        .from(organizationProductEntitlement)
+        .where(eq(organizationProductEntitlement.organizationId, id));
+      expect(entitlement?.status).toBe('active');
+      const trialNotices = await db
+        .select({ id: notificationIntent.id })
+        .from(notificationIntent)
+        .where(eq(notificationIntent.subject, 'Your Docket Pro trial is ending'));
+      expect(trialNotices).toHaveLength(0);
+    } finally {
+      Reflect.deleteProperty(gateway, 'verifyWebhook');
+      canonical.mockRestore();
+    }
   });
 
   it('records an active product without changing organization data retention', async () => {
@@ -579,6 +642,35 @@ describe('billing router (org-scoped, via the BillingGateway port)', () => {
     }
   });
 
+  it('does not accept a discount application for Complimentary Docket Pro', async () => {
+    const orgId = await makeOrg('active');
+    await db.insert(organizationProductEntitlement).values({
+      organizationId: orgId,
+      productKey: 'docket_pro',
+      status: 'active',
+      source: 'complimentary',
+    });
+    const app = billingApp(orgId, ['manage']);
+
+    const response = await app.request('/discounts/applications', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        programKey: 'nonprofit',
+        evidenceType: 'irs_registry',
+        ein: '12-3456789',
+      }),
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ code: 'subscription_exists' });
+    const applications = await db
+      .select()
+      .from(billingDiscountApplication)
+      .where(eq(billingDiscountApplication.organizationId, orgId));
+    expect(applications).toHaveLength(0);
+  });
+
   it('does not accept caller-controlled checkout return URLs', async () => {
     const app = billingApp(`${ORG}_redirect`, ['manage']);
     const res = await app.request('/checkout', {
@@ -630,6 +722,26 @@ describe('billing router (org-scoped, via the BillingGateway port)', () => {
     const res = await app.request('/portal', { method: 'POST' });
     expect(res.status).toBe(409);
     await expect(res.json()).resolves.toMatchObject({ code: 'billing_customer_missing' });
+  });
+
+  it('does not expose Stripe management for Complimentary Docket Pro', async () => {
+    const orgId = await makeOrg('active');
+    await bindBillingAccount(orgId);
+    await db.insert(organizationProductEntitlement).values({
+      organizationId: orgId,
+      productKey: 'docket_pro',
+      status: 'active',
+      source: 'complimentary',
+    });
+    const createPortal = vi.spyOn(getContainer().billing, 'createBillingPortalSession');
+    const app = billingApp(orgId, ['manage']);
+
+    const response = await app.request('/portal', { method: 'POST' });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ code: 'subscription_exists' });
+    expect(createPortal).not.toHaveBeenCalled();
+    createPortal.mockRestore();
   });
 
   it('submits a student application from the Better Auth verified email for a personal workspace', async () => {

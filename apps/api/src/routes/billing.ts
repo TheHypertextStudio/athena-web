@@ -471,6 +471,23 @@ Side effect: creates a checkout session. Docket Pro ownership changes only after
     }),
     async (c) => {
       const { orgId } = c.get('actorCtx');
+      const [complimentary] = await db
+        .select({ source: organizationProductEntitlement.source })
+        .from(organizationProductEntitlement)
+        .where(
+          and(
+            eq(organizationProductEntitlement.organizationId, orgId),
+            eq(organizationProductEntitlement.productKey, 'docket_pro'),
+            eq(organizationProductEntitlement.status, 'active'),
+            eq(organizationProductEntitlement.source, 'complimentary'),
+          ),
+        )
+        .limit(1);
+      if (complimentary) {
+        throw new SubscriptionExistsError(
+          'Complimentary Docket Pro does not use Stripe billing management',
+        );
+      }
       const account = await getBillingCustomer(db, orgId);
       if (!account) throw new BillingCustomerMissingError();
       const result = await getContainer().billing.createBillingPortalSession({

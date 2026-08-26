@@ -7,9 +7,10 @@ launch record, and keep public Checkout disabled until MISS-03 reaches `closed`.
 
 **MISS-03: PARTIAL.** The current local slice resolves every prior Critical, Important, and Minor
 code finding. It also resolves the transaction-bound task visibility defect found during the root
-test run. Stripe test-mode payment and recovery paths now pass. Merchant identity, production,
-finance, legal, and telephony gates remain open, so this review cannot pass MISS-03 or authorize a
-public launch.
+test run. The provider run used a Stripe account outside Hypertext Studio, so its payment and
+recovery results are invalid for launch. Hypertext Studio provider proof, production, finance,
+legal, and telephony gates remain open, so this review cannot pass MISS-03 or authorize a public
+launch.
 
 This review covers commit `94a94f2a1a6ae9b5c446375413b5463eaaff629c` plus the uncommitted billing
 slice present on 2026-08-25. The repository launch record now lists MISS-03 as `in-progress` with
@@ -149,11 +150,10 @@ No local test or build evidence in this review closes these launch gates:
 1. Finance must configure and approve the US tax-registration matrix, invoice settings, credit-note
    treatment, refund policy, and reconciliation reports. Legal must approve the trial, cancellation,
    read-only retention, discount evidence, eligibility, and tax language.
-2. The shared Stripe account identifies the hosted merchant as “The Rebuilding America Project.”
-   Finance must provision a Docket Stripe account or approve the shared legal merchant before
-   public Checkout. The checked-in test-mode evidence now proves hosted Checkout, the customer
-   portal, signed webhooks, duplicate delivery, failed-card recovery, authentication-required
-   payment, cancellation, reactivation, renewal, discounts, and credit notes.
+2. Stripe is exclusively a Hypertext Studio provider. The prior run used an account outside
+   Hypertext Studio, so none of its hosted Checkout, portal, webhook, recovery, cancellation,
+   discount, or credit-note results satisfy the launch gate. The release owner must repeat those
+   paths in the Hypertext Studio Stripe account.
 3. A production-shaped database snapshot must run the additive migrations. The report must show one
    Stripe customer and at most one current subscription per billed organization. Every unresolved
    row blocks enablement. The team must then observe shadow reconciliation for at least 24 hours.

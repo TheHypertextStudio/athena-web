@@ -280,6 +280,9 @@ export interface BillingGateway {
   /** Create the provider customer owned by one Docket organization. */
   createCustomer(referenceId: string, email?: string): Promise<BillingCustomer>;
 
+  /** List every provider customer carrying one Docket organization reference. */
+  listCustomers(referenceId: string): Promise<readonly BillingCustomer[]>;
+
   /** Read the ISO billing country saved on a provider customer after hosted Checkout. */
   getCustomerBillingCountry(customerId: string): Promise<string | null>;
 
@@ -299,6 +302,15 @@ export interface BillingGateway {
    */
   getSubscription(referenceId: string): Promise<Subscription | null>;
 
+  /**
+   * Read one exact provider subscription carried by a webhook.
+   *
+   * @param subscriptionId - Provider subscription id from the signed event.
+   * @param referenceId - Docket organization that the event claims owns the subscription.
+   * @returns the current subscription, or `null` when it is not observable yet.
+   */
+  getSubscriptionById(subscriptionId: string, referenceId: string): Promise<Subscription | null>;
+
   /** List every provider subscription carrying this Docket organization reference. */
   listSubscriptions(referenceId: string): Promise<readonly Subscription[]>;
 
@@ -309,8 +321,18 @@ export interface BillingGateway {
    */
   cancelSubscription(referenceId: string): Promise<void>;
 
-  /** Cancel one exact provider subscription without relying on eventually consistent search. */
-  cancelSubscriptionById(subscriptionId: string, idempotencyKey: string): Promise<void>;
+  /**
+   * Cancel one exact provider subscription without relying on eventually consistent search.
+   *
+   * @param subscriptionId - Exact Stripe subscription id.
+   * @param idempotencyKey - Stable provider mutation key.
+   * @param atPeriodEnd - Preserve paid access through the current service period when true.
+   */
+  cancelSubscriptionById(
+    subscriptionId: string,
+    idempotencyKey: string,
+    atPeriodEnd?: boolean,
+  ): Promise<void>;
 
   /**
    * Extend an existing provider trial without changing local access directly.

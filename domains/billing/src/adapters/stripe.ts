@@ -161,6 +161,22 @@ export class RealStripeGateway implements BillingGateway {
     /* v8 ignore stop */
   }
 
+  /** {@inheritDoc BillingGateway.listCustomers} */
+  async listCustomers(referenceId: string): Promise<readonly BillingCustomer[]> {
+    /* v8 ignore start */
+    let result: Stripe.ApiSearchResult<Stripe.Customer>;
+    try {
+      result = await this.stripe.customers.search({
+        query: `metadata['referenceId']:'${referenceId}'`,
+        limit: 100,
+      });
+    } catch (cause) {
+      throw new Error('RealStripeGateway: failed to list organization customers.', { cause });
+    }
+    return result.data.map((customer) => ({ id: customer.id, referenceId }));
+    /* v8 ignore stop */
+  }
+
   /** {@inheritDoc BillingGateway.getCustomerBillingCountry} */
   async getCustomerBillingCountry(customerId: string): Promise<string | null> {
     /* v8 ignore start */
@@ -271,6 +287,33 @@ export class RealStripeGateway implements BillingGateway {
     return toSubscription(sub, referenceId);
   }
 
+  /** {@inheritDoc BillingGateway.getSubscriptionById} */
+  async getSubscriptionById(
+    subscriptionId: string,
+    referenceId: string,
+  ): Promise<Subscription | null> {
+    /* v8 ignore start */
+    let subscription: Stripe.Subscription;
+    try {
+      subscription = await this.stripe.subscriptions.retrieve(subscriptionId, {
+        expand: ['items', 'discounts'],
+      });
+    } catch (cause) {
+      const status =
+        typeof cause === 'object' && cause !== null && 'statusCode' in cause
+          ? (cause as { statusCode?: unknown }).statusCode
+          : null;
+      if (status === 404) return null;
+      throw new Error('RealStripeGateway: failed to retrieve the exact subscription.', { cause });
+    }
+    const mapped = toSubscription(subscription, referenceId);
+    if (mapped.referenceId !== referenceId) {
+      throw new Error('RealStripeGateway: exact subscription belongs to another organization.');
+    }
+    return mapped;
+    /* v8 ignore stop */
+  }
+
   /** {@inheritDoc BillingGateway.listSubscriptions} */
   async listSubscriptions(referenceId: string): Promise<readonly Subscription[]> {
     /* v8 ignore start */
@@ -302,10 +345,22 @@ export class RealStripeGateway implements BillingGateway {
   }
 
   /** {@inheritDoc BillingGateway.cancelSubscriptionById} */
-  async cancelSubscriptionById(subscriptionId: string, idempotencyKey: string): Promise<void> {
+  async cancelSubscriptionById(
+    subscriptionId: string,
+    idempotencyKey: string,
+    atPeriodEnd = false,
+  ): Promise<void> {
     /* v8 ignore start */
     try {
-      await this.stripe.subscriptions.cancel(subscriptionId, {}, { idempotencyKey });
+      if (atPeriodEnd) {
+        await this.stripe.subscriptions.update(
+          subscriptionId,
+          { cancel_at_period_end: true },
+          { idempotencyKey },
+        );
+      } else {
+        await this.stripe.subscriptions.cancel(subscriptionId, {}, { idempotencyKey });
+      }
     } catch (cause) {
       throw new Error('RealStripeGateway: failed to cancel the exact subscription.', { cause });
     }

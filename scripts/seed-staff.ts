@@ -2,7 +2,7 @@
  * `pnpm db:seed:staff` — grant a developer operator (staff) access to the admin console.
  *
  * @remarks
- * Solves the staff chicken-and-egg: the operator console (`/v1/admin/*`) requires a
+ * Solves the staff chicken-and-egg: the operator console (`/admin/*`) requires a
  * `staff_user` row, but the only API that mints staff itself requires being a superadmin —
  * so the FIRST operator must be seeded out of band. This is that step, made repeatable on
  * every device (it talks to whatever `DATABASE_URL` points at).

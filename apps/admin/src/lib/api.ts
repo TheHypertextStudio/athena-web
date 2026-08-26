@@ -9,7 +9,7 @@ import { hc } from 'hono/client';
  * Built from the `@docket/api/rpc-contract` {@link AdminAppType} contract, so every call is fully
  * typed
  * end-to-end (e.g. `api.admin.users.$get(...)`,
- * `api.admin.orgs[':id'].lifecycle.$post(...)`).
+ * `api.admin.orgs[':id'].reconcile.$post(...)`).
  *
  * The base URL is empty (same-origin): requests resolve to relative paths (`/admin/*`,
  * `/api/auth/*`) which the Next `rewrites` proxy to the API origin. Because the browser

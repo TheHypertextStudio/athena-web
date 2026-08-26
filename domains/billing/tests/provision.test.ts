@@ -111,12 +111,12 @@ const input = {
 };
 
 describe('reconcileDocketStripe', () => {
-  it('creates the Docket Pro product, price, portal, and billing webhook', async () => {
+  it('creates Stripe resources while keeping public Checkout disabled', async () => {
     const fake = fakeClient(emptyState());
     const result = await reconcileDocketStripe(fake.client, input);
 
     expect(result.values).toEqual({
-      BILLING_ENABLED: 'true',
+      BILLING_ENABLED: 'false',
       DOCKET_PRICE_LOOKUP_DOCKET_PRO: DOCKET_PRO_MONTHLY_LOOKUP_KEY,
       STRIPE_BILLING_PORTAL_CONFIG_ID: 'bpc_3',
       STRIPE_PRICE_DOCKET_PRO: 'price_2',

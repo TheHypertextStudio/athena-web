@@ -198,6 +198,26 @@ describe('BillingSettings', () => {
     expect(screen.getByText(/Docket does not delete workspace data/)).toBeInTheDocument();
   });
 
+  it('does not promise a first charge after a trial cancellation is scheduled', async () => {
+    billingGet.mockResolvedValue(
+      okResponse(
+        summary({
+          status: 'trialing',
+          trialEndsAt: '2026-09-11T12:00:00.000Z',
+          cancelAtPeriodEnd: true,
+          cancellationDate: '2026-09-11T12:00:00.000Z',
+          renewalDate: '2026-09-11T12:00:00.000Z',
+        }),
+      ),
+    );
+
+    render(<BillingSettings orgId="org-1" isPersonal={false} />, { wrapper: wrapper() });
+
+    expect(await screen.findByText('Cancellation scheduled')).toBeInTheDocument();
+    expect(screen.getByText(/trial ends Sep 11, 2026/i)).toBeInTheDocument();
+    expect(screen.queryByText(/first monthly charge/i)).not.toBeInTheDocument();
+  });
+
   it('shows the recovery deadline and direct payment action while past due', async () => {
     billingGet.mockResolvedValue(
       okResponse(summary({ status: 'past_due', graceEndsAt: '2026-09-01T12:00:00.000Z' })),

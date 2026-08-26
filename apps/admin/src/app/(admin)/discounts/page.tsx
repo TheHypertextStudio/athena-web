@@ -117,7 +117,7 @@ export default function DiscountsPage(): JSX.Element {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-8">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 sm:p-8">
       <PageHeader
         title="Discount applications"
         description="Review eligibility and preview every Stripe effect before approval."

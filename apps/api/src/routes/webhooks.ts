@@ -81,7 +81,13 @@ const webhooks = new Hono().post('/webhook', async (c) => {
     // Verified, but Docket does not model this event type: acknowledge without effect.
     if (!event) return c.json({ received: true, effect: null });
     if (event.referenceId && event.type !== 'subscription.trial_will_end') {
-      const subscription = await gateway.getSubscription(event.referenceId);
+      const subscriptionId = event.subscription?.id ?? event.subscriptionId;
+      const subscription = subscriptionId
+        ? await gateway.getSubscriptionById(subscriptionId, event.referenceId)
+        : await gateway.getSubscription(event.referenceId);
+      if (!subscription && event.type !== 'checkout.completed') {
+        throw new Error('The current Stripe subscription is not observable yet.');
+      }
       if (subscription) {
         event = {
           ...event,
@@ -126,11 +132,7 @@ const webhooks = new Hono().post('/webhook', async (c) => {
   if (account && event.customerId && event.customerId !== account.stripeCustomerId) {
     countryEffect = 'billing_customer_mismatch';
   }
-  if (
-    countryEffect === null &&
-    account?.countryVerificationRequired &&
-    account.countryVerifiedAt === null
-  ) {
+  if (countryEffect === null && account?.countryVerificationRequired) {
     if (!event.customerId || event.customerId !== account.stripeCustomerId) {
       countryEffect = 'awaiting_billing_country';
     } else {
@@ -142,7 +144,11 @@ const webhooks = new Hono().post('/webhook', async (c) => {
         if (!subscriptionId) {
           throw new Error('The unsupported-country subscription is not observable yet.');
         }
-        await gateway.cancelSubscriptionById(subscriptionId, `billing-country:${event.id}:cancel`);
+        await gateway.cancelSubscriptionById(
+          subscriptionId,
+          `billing-country:${event.id}:cancel`,
+          event.subscription?.status !== 'trialing',
+        );
         countryEffect = 'unsupported_country';
       } else {
         await db
@@ -164,7 +170,7 @@ const webhooks = new Hono().post('/webhook', async (c) => {
       return countryEffect;
     }
     const applied = await applyBillingEvent(tx, event, now);
-    if (event.type === 'subscription.paid') {
+    if (event.type === 'subscription.paid' && event.subscription?.status === 'active') {
       const [scheduled] = await tx
         .select({ award: billingDiscountAward, program: billingDiscountProgram })
         .from(billingDiscountAward)

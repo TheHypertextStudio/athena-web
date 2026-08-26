@@ -4,8 +4,9 @@
 >
 > **Action:** Keep public Checkout disabled until every release gate in this document passes.
 >
-> **Status:** Implemented locally on 2026-08-25. Stripe test-mode, finance, legal, migration, and
-> production canary proof remain open.
+> **Status:** Implemented locally on 2026-08-25. Stripe test-mode payment and recovery paths pass.
+> Merchant identity, production-snapshot migration, finance, legal, and live canary proof remain
+> open.
 
 ## Product contract
 
@@ -26,7 +27,7 @@ The product uses these customer states:
 | Active                 | Pro works. Billing shows renewal, invoices, cancellation, and discount review.       |
 | Past due               | Pro works for seven days. Billing shows the deadline and payment-method action.      |
 | Cancellation scheduled | Pro works through the paid period, then shared work becomes read-only.               |
-| Read-only              | Shared data remains readable and exportable. An administrator may reactivate Pro.    |
+| Read-only              | Shared data remains readable and exportable. An administrator may restart Pro.       |
 | Complimentary          | Every current and future Pro capability works without price, renewal, or payment UI. |
 
 Billing cancellation never schedules data deletion. The confirmed account Danger Zone owns data
@@ -53,10 +54,13 @@ collection, uses dynamic payment methods, and does not accept customer-entered p
 Every provider mutation carries a Docket idempotency key.
 
 Stripe does not offer an allowed-country list for billing addresses. Docket therefore reads the
-saved customer billing country after hosted Checkout. Docket reconciles Pro access only after the
-country is `US`. It cancels a new non-US trial before the first charge and does not grant product
-access. Reconciliation marks a backfilled customer from an existing subscription as exempt from
-the new-address check, so a previously uncollected address cannot revoke existing access.
+saved customer billing country after hosted Checkout and on every webhook or scheduled
+reconciliation observation. Docket reconciles Pro access only after the country is `US`. It cancels
+a new non-US trial before the first charge and does not grant product access. Reconciliation marks
+a backfilled customer from an existing subscription as exempt from the new-address check, so a
+previously uncollected address cannot revoke existing access. If a paid customer later changes the
+billing country outside the US, Docket schedules cancellation at period end and preserves the paid
+service period while finance reviews the account.
 
 The portal uses the stored Stripe customer id. It owns payment methods, invoices, and
 cancellation-at-period-end. It does not allow plan switching or coupon entry. The return URL points
@@ -98,11 +102,14 @@ second partial unique index prevents stacked current awards.
 Finance may create a private partner award from 1% through 90% with an end date no more than 24
 months away. A 100% or permanent grant must use the superadmin-only complimentary entitlement.
 
-Docket applies an approved coupon at Checkout when no subscription exists. It applies the coupon
-without proration for an existing subscription. When the current invoice has a paid recurring
-line, finance previews and issues a Stripe credit note for the unused service period. Stripe
-calculates tax. Docket stores the exact preview for 15 minutes. Approval requires that preview's
-confirmation id, so Docket never recalculates or changes the credit after finance confirms it.
+Docket applies an approved coupon at Checkout when no subscription exists. A public award remains
+`scheduled` while the subscription is trialing. Its 12-month review period starts with the first
+paid period. Reconciliation repairs an early provider event that reports the award active during
+the trial. Docket applies the coupon without proration for an existing paid subscription. When the
+current invoice has a paid recurring line, finance previews and issues a Stripe credit note for the
+unused service period. Stripe calculates tax. Docket stores the exact preview for 15 minutes.
+Approval requires that preview's confirmation id, so Docket never recalculates or changes the
+credit after finance confirms it.
 Private partner awards use the same preview-before-approval rule. Docket stores the preview and
 issued values. Docket does not show the award as active until Stripe confirms every provider
 write.
@@ -139,16 +146,17 @@ and evidence but does not see finance or superadmin mutation controls.
 
 ## Release gates
 
-The implementation is not public-launch proof. The release owner must complete these gates:
+The local implementation is not public-launch proof. The release owner must complete these gates:
 
 1. Run migrations against a production-shaped snapshot. The report must show one Stripe customer
    and no more than one current subscription per billed organization. Every unresolved row blocks
    enablement.
 2. Deploy additive migrations and the reconciliation worker with Checkout disabled. Observe shadow
    reconciliation for at least 24 hours.
-3. Complete hosted Checkout, portal, signed webhook replay, automatic tax, failed-card,
-   authentication-required, cancellation, renewal, discount, and credit-note tests in Stripe test
-   mode. Mocks do not satisfy this gate.
+3. Preserve the checked-in Stripe test-mode evidence for hosted Checkout, the portal, signed
+   webhook replay, automatic tax, failed-card recovery, authentication-required payment,
+   cancellation, renewal, discount application, and credit notes. Repeat this gate only after a
+   provider or billing-boundary change invalidates that evidence.
 4. Have finance approve US tax registrations, invoices, credits, refunds, and reconciliation.
    Have legal approve trial renewal, cancellation, read-only retention, discount evidence, tax,
    Pricing, Terms, and Privacy copy.

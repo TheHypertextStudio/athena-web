@@ -482,7 +482,7 @@ async function scheduleEvidenceDeletion(applicationId: string, decidedAt: Date):
     .where(eq(billingDiscountEvidence.applicationId, applicationId));
 }
 
-/** Finance discount router, mounted at `/v1/admin/discount-applications`. */
+/** Finance discount router, mounted at `/admin/discount-applications`. */
 export const adminDiscountRoutes = new Hono<AppEnv>()
   .get(
     '/',

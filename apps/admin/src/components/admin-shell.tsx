@@ -22,7 +22,6 @@ const NAV: readonly NavItem[] = [
   { href: '/users', label: 'Users' },
   { href: '/orgs', label: 'Organizations' },
   { href: '/discounts', label: 'Discounts' },
-  { href: '/lifecycle', label: 'Lifecycle' },
   { href: '/notifications', label: 'Notifications' },
   { href: '/audit', label: 'Audit log' },
 ];
@@ -78,19 +77,33 @@ export function AdminShell({ children }: AdminShellProps): JSX.Element {
   }
 
   return (
-    <div className="bg-surface-container text-on-surface flex min-h-screen gap-2 p-2">
-      <aside className="flex w-60 shrink-0 flex-col gap-6 px-2 py-4">
-        <div className="px-2">
-          <p className="text-on-surface text-body-medium font-semibold tracking-tight">Docket</p>
-          <p className="text-on-surface-variant text-xs">Service admin</p>
+    <div className="bg-surface-container text-on-surface flex min-h-screen flex-col gap-2 p-2 md:flex-row">
+      <aside className="flex w-full shrink-0 flex-col gap-3 px-2 py-2 md:w-60 md:gap-6 md:py-4">
+        <div className="flex items-center justify-between gap-3 px-2 md:block">
+          <div>
+            <p className="text-on-surface text-body-medium font-semibold tracking-tight">Docket</p>
+            <p className="text-on-surface-variant text-xs">Service admin</p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="md:hidden"
+            disabled={signingOut}
+            onClick={() => void handleSignOut()}
+          >
+            {signingOut ? 'Signing out…' : 'Sign out'}
+          </Button>
         </div>
-        <nav className="flex flex-col gap-1" aria-label="Primary">
+        <nav
+          className="flex flex-nowrap gap-1 overflow-x-auto pb-1 md:flex-col md:overflow-visible md:pb-0"
+          aria-label="Primary"
+        >
           {NAV.map((item) => (
             <Link
               key={item.href}
               href={item.href}
               aria-current={isActive(pathname, item.href) ? 'page' : undefined}
-              className={`focus-visible:ring-ring text-body-medium rounded-lg px-3 py-2 transition-colors focus-visible:ring-1 focus-visible:outline-none ${
+              className={`focus-visible:ring-ring text-body-medium shrink-0 rounded-lg px-3 py-2 transition-colors focus-visible:ring-1 focus-visible:outline-none ${
                 isActive(pathname, item.href)
                   ? 'bg-surface-container-highest text-on-surface font-medium'
                   : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
@@ -100,7 +113,7 @@ export function AdminShell({ children }: AdminShellProps): JSX.Element {
             </Link>
           ))}
         </nav>
-        <div className="mt-auto flex flex-col gap-2 px-1">
+        <div className="mt-auto hidden flex-col gap-2 px-1 md:flex">
           {session?.user.email ? (
             <p className="text-on-surface-variant truncate text-xs" title={session.user.email}>
               {session.user.email}

@@ -63,6 +63,45 @@ describe('reconcileBilling', () => {
     expect(entitlement).toMatchObject({ source: 'stripe', status: 'trialing' });
   });
 
+  it('cancels access when a previously verified customer changes to a non-US address', async () => {
+    const { orgId } = await seedBaseOrg(db, schema, false);
+    await db.insert(schema.organizationBillingAccount).values({
+      organizationId: orgId,
+      stripeCustomerId: `cus_${orgId}`,
+      billingCountry: 'US',
+      countryVerifiedAt: new Date('2026-08-24T00:00:00.000Z'),
+      countryVerificationRequired: true,
+    });
+    const subscription: Subscription = {
+      id: 'sub_country_changed',
+      customerId: `cus_${orgId}`,
+      referenceId: orgId,
+      status: 'active',
+      currentPeriodEnd: '2026-09-08T00:00:00.000Z',
+    };
+    class ChangedCountryGateway extends InMemoryBillingGateway {
+      override async listSubscriptions(referenceId: string): Promise<readonly Subscription[]> {
+        return referenceId === orgId ? [subscription] : [];
+      }
+
+      override async getCustomerBillingCountry(customerId: string): Promise<string | null> {
+        return customerId === `cus_${orgId}` ? 'CA' : null;
+      }
+    }
+    const gateway = new ChangedCountryGateway();
+    const cancelSubscriptionById = vi.spyOn(gateway, 'cancelSubscriptionById');
+    const { blob } = blobDouble();
+
+    const result = await reconcileBilling(db, gateway, blob, new Date('2026-08-25T01:00:00.000Z'));
+
+    expect(result.alerts).toBeGreaterThanOrEqual(1);
+    expect(cancelSubscriptionById).toHaveBeenCalledWith(
+      'sub_country_changed',
+      `billing-country:reconcile:${orgId}:sub_country_changed:cancel`,
+      true,
+    );
+  });
+
   it('activates a scheduled award when the observed Stripe coupon matches', async () => {
     const { orgId } = await seedBaseOrg(db, schema, false);
     await db.insert(schema.organizationBillingAccount).values({
@@ -114,6 +153,67 @@ describe('reconcileBilling', () => {
       .where(eq(schema.billingDiscountAward.id, award.id));
     expect(updated).toMatchObject({ status: 'active', providerDiscountId: 'di_student' });
   });
+
+  it.each(['scheduled', 'active'] as const)(
+    'keeps or repairs a %s public award until its discounted trial produces a paid period',
+    async (initialStatus) => {
+      const { orgId } = await seedBaseOrg(db, schema, false);
+      await db.insert(schema.organizationBillingAccount).values({
+        organizationId: orgId,
+        stripeCustomerId: `cus_${orgId}`,
+        countryVerificationRequired: false,
+      });
+      const [award] = await db
+        .insert(schema.billingDiscountAward)
+        .values({
+          organizationId: orgId,
+          programKey: 'student',
+          percentOff: 50,
+          status: initialStatus,
+          startsAt: new Date('2026-08-25T00:00:00.000Z'),
+          endsAt: new Date('2027-08-25T00:00:00.000Z'),
+          reviewAt: new Date('2027-08-25T00:00:00.000Z'),
+          reason: 'Verified student',
+          providerCouponId: 'coupon_trial_student',
+          providerDiscountId: initialStatus === 'active' ? 'di_trial_student' : null,
+        })
+        .returning();
+      if (!award) throw new Error('award seed failed');
+      const subscription: Subscription = {
+        id: 'sub_trial_student',
+        customerId: `cus_${orgId}`,
+        referenceId: orgId,
+        status: 'trialing',
+        currentPeriodEnd: '2026-09-08T00:00:00.000Z',
+        trialEnd: '2026-09-08T00:00:00.000Z',
+        discountIds: ['di_trial_student'],
+        couponIds: ['coupon_trial_student'],
+      };
+      class TrialDiscountGateway extends InMemoryBillingGateway {
+        override async listSubscriptions(referenceId: string): Promise<readonly Subscription[]> {
+          return referenceId === orgId ? [subscription] : [];
+        }
+      }
+      const { blob } = blobDouble();
+
+      const result = await reconcileBilling(
+        db,
+        new TrialDiscountGateway(),
+        blob,
+        new Date('2026-08-25T01:00:00.000Z'),
+      );
+
+      expect(result.alerts).toBe(0);
+      const [updated] = await db
+        .select()
+        .from(schema.billingDiscountAward)
+        .where(eq(schema.billingDiscountAward.id, award.id));
+      expect(updated).toMatchObject({
+        status: 'scheduled',
+        providerDiscountId: 'di_trial_student',
+      });
+    },
+  );
 
   it('alerts when Stripe stacks a second discount onto the current Docket award', async () => {
     const { orgId } = await seedBaseOrg(db, schema, false);

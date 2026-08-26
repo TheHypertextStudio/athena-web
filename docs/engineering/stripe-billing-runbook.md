@@ -11,10 +11,24 @@ Docket Pro product and its $8 USD monthly price through `pnpm integrations`. Con
 portal for payment methods, invoices, and cancellation at period end. Disable plan switching and
 promotion codes. Configure Stripe Tax only after finance approves the US registration matrix.
 
-Run the database migrations against a production-shaped snapshot. Query
-`organization_billing_account` and compare each row with Stripe. Every billed organization must
-have one customer and no more than one current Docket Pro subscription. Do not create a second
-customer when a backfill cannot resolve the first one. Record and resolve the mismatch.
+Open hosted Checkout and the portal before enablement. Both pages must name Docket or the approved
+legal merchant. The current shared Stripe test account displays “The Rebuilding America Project,”
+so public Docket Checkout must remain disabled until finance provisions a Docket account or
+approves that merchant identity in the customer terms and payment copy.
+
+Run the database migrations against a production-shaped snapshot. Then run:
+
+```sh
+pnpm billing:launch-audit --out .data/billing-launch-audit.json
+```
+
+The command writes a mode-0600 JSON report and exits nonzero when a billed organization lacks its
+durable customer, has anything other than one Stripe customer, has more than one current Docket Pro
+subscription, has an ownership or entitlement mismatch, or has an unresolved provider write. The
+audit excludes `preview_*` rows because they record finance confirmation snapshots rather than
+provider mutations. Stripe customer search is eventually consistent, so retry once after a newly
+created customer becomes searchable. Repeated failure is a blocker, not a reason to create another
+customer.
 
 Deploy the reconciliation endpoint and Cloud Scheduler job before enabling Checkout. Inspect
 `billing_provider_sync` rows where `operation = 'reconcile_billing'`. A `failed` row blocks public
@@ -38,6 +52,10 @@ entitlement status column to make an unpaid organization active.
 The first failed invoice starts a seven-day grace period. A later failure must keep the original
 deadline. A paid invoice must clear grace. When Docket shows stale access after a valid event, check
 the provider-event ledger for duplicate or stale observations before replaying the event.
+
+Docket cancels a new non-US trial before its first charge. If an active customer later changes the
+billing country outside the US, Docket schedules cancellation at period end. Finance must inspect
+the address and tax record. Do not cancel the paid period immediately or edit the entitlement.
 
 ## Discount failures
 

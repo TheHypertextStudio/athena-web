@@ -81,6 +81,16 @@ describe('Docket Pro capabilities', () => {
     ).resolves.toMatchObject({ kind: 'entitled' });
   });
 
+  it('ends capabilities at the exact seven-day grace boundary', async () => {
+    const orgId = await seedOrg();
+    const boundary = new Date('2026-09-01T00:00:00.000Z');
+    await seedDocketPro(orgId, 'past_due', 'stripe', boundary);
+
+    await expect(resolveProductCapability(db, orgId, 'athena', boundary)).resolves.toEqual({
+      kind: 'product-required',
+    });
+  });
+
   it.each([
     ['past_due', new Date('2026-08-30T00:00:00.000Z')],
     ['canceled', undefined],
@@ -104,16 +114,19 @@ describe('Docket Pro capabilities', () => {
 });
 
 describe('complimentary Docket Pro', () => {
-  it('grants the same product capabilities with explicit provenance', async () => {
-    const orgId = await seedOrg();
-    await seedDocketPro(orgId, 'active', 'complimentary');
+  it.each(PRODUCT_CAPABILITIES)(
+    'grants complimentary %s with explicit provenance',
+    async (capability) => {
+      const orgId = await seedOrg();
+      await seedDocketPro(orgId, 'active', 'complimentary');
 
-    await expect(resolveProductCapability(db, orgId, 'voice')).resolves.toEqual({
-      kind: 'entitled',
-      productKey: 'docket_pro',
-      source: 'complimentary',
-    });
-  });
+      await expect(resolveProductCapability(db, orgId, capability)).resolves.toEqual({
+        kind: 'entitled',
+        productKey: 'docket_pro',
+        source: 'complimentary',
+      });
+    },
+  );
 
   it('does not leak a complimentary product to another organization', async () => {
     const complimentaryOrgId = await seedOrg();

@@ -83,25 +83,41 @@ function routeSlug(route: string): string {
 async function waitForSettledPage(page: Page): Promise<void> {
   await page.waitForFunction(() => document.body.innerText.trim().length > 0);
   await page.evaluate(async () => document.fonts.ready);
-  await page.waitForFunction(
-    () => {
-      const loadingText = /\bLoading(?: your)? [^\n]*…/i.test(document.body.innerText);
-      return !loadingText && document.querySelector('.animate-pulse') === null;
-    },
-    undefined,
-    { timeout: 20_000 },
-  );
+  const waitForNoLoadingState = (): Promise<unknown> =>
+    page.waitForFunction(
+      () => {
+        const loadingText = /\bLoading(?: your)? [^\n]*…/i.test(document.body.innerText);
+        return (
+          !loadingText &&
+          document.querySelector('.animate-pulse') === null &&
+          document.querySelector('[data-slot="skeleton"]') === null
+        );
+      },
+      undefined,
+      { timeout: 20_000 },
+    );
+  await waitForNoLoadingState();
+  // A lazy settings panel can mount its query skeleton after the route shell first reports no
+  // loading state. Require the resolved state to survive one render window before capture.
   await page.waitForTimeout(500);
+  await waitForNoLoadingState();
 }
 
 /** Navigate to a review route and fail before capture when the surface did not resolve. */
 async function openReviewRoute(page: Page, url: string): Promise<void> {
-  const response = await page.goto(url, { waitUntil: 'networkidle' });
+  // Next development builds a route on its first request. Billing took 30.4 seconds on a cold
+  // compile, which exceeded Playwright's default navigation timeout even though the route returned
+  // 200. DOM readiness plus the explicit settled-page check below gives cold routes the same
+  // 60-second budget as the e2e helpers without waiting on background requests to become idle.
+  const response = await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60_000 });
   if (!response?.ok()) {
     throw new Error(`Could not capture ${url}: HTTP ${String(response?.status() ?? 'unknown')}`);
   }
   if (page.url().includes('/sign-in')) {
     throw new Error(`Could not capture ${url}: the saved test session is no longer authenticated`);
+  }
+  if (new URL(url).pathname.includes('/settings/')) {
+    await page.locator('[role="dialog"]').waitFor({ state: 'visible', timeout: 20_000 });
   }
   await waitForSettledPage(page);
 }

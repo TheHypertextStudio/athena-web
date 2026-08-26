@@ -26,12 +26,16 @@
 - **Validation**: The focused UI shell suite passes 97 tests across five files. Web type checking
   and the authenticated Playwright evidence test pass. The audit captures expanded, rail, More,
   keyboard focus, and settled transition endpoints at 1024 px and 1440 px in light and dark
-  themes. The branch is clean and the evidence commit is on `main`.
+  themes. The branch is clean and the evidence commit is on `main`. The expected resource-status
+  helper at `/Users/williecubed/.claude/resource-limits/agentctl` is absent, so complete API
+  reproduction used two Vitest workers and the focused UI checks used one.
 - **Learnings**: A density change must swap one navigation presentation for another. Rendering
   both trees and hiding one in CSS creates duplicate transition names and makes the collapse state
   look like a separate product surface.
 - **Blockers**: Production deployment is held by unrelated API branch coverage at 88.74%, below
-  the 89% repository gate. The rail evidence commit does not modify API source or test coverage.
+  the 89% repository gate. Since the last green `main` run (`3a0b0d98`), API source additions
+  introduced 266 currently uncovered branch outcomes; `routes/tasks.ts` accounts for 52. The rail
+  evidence commit does not modify API source or test coverage.
 
 ---
 

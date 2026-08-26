@@ -630,6 +630,7 @@ describe('reconcileTasks — startDate, estimateMinutes, and parent linkage on t
     expect(afterAbsent.title).toBe('Renamed remotely');
     expect(afterAbsent.startDate?.toISOString()).toBe('2026-08-10T00:00:00.000Z');
     expect(afterAbsent.estimateMinutes).toBe(25);
+    expect(afterAbsent.updatedAt.toISOString()).toBe('2026-02-01T00:00:00.000Z');
 
     // A provider that carries the concepts and says "explicitly unset" clears them.
     await reconcileTasks(
@@ -658,6 +659,7 @@ describe('reconcileTasks — startDate, estimateMinutes, and parent linkage on t
     );
     expect(afterNull.startDate).toBeNull();
     expect(afterNull.estimateMinutes).toBeNull();
+    expect(afterNull.updatedAt.toISOString()).toBe('2026-03-01T00:00:00.000Z');
   });
 
   it('refuses a re-parent that would form a cycle across runs, without failing the pull', async () => {

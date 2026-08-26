@@ -68,6 +68,8 @@ export async function writeTaskStateTransition(
     readonly state: string;
     readonly completedAt: Date | null;
     readonly canceledAt: Date | null;
+    /** Preserve a provider timestamp when a sync transition must remain clean after this write. */
+    readonly updatedAt?: Date;
     /** Internal cascade writes pass true; every direct transition clears the marker. */
     readonly autoCompletedBySubtasks?: boolean;
     /** Status replacement also has to move archived rows before the old status can be deleted. */
@@ -86,6 +88,7 @@ export async function writeTaskStateTransition(
       completedAt: input.completedAt,
       canceledAt: input.canceledAt,
       autoCompletedBySubtasks: input.autoCompletedBySubtasks ?? false,
+      ...(input.updatedAt === undefined ? {} : { updatedAt: input.updatedAt }),
       ...(input.assigneeId === undefined ? {} : { assigneeId: input.assigneeId }),
     })
     .where(

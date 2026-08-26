@@ -745,6 +745,7 @@ async function applyItemFields(
       state,
       completedAt,
       canceledAt,
+      updatedAt: patch.updatedAt,
     });
     if (!mutation) return [];
     return [

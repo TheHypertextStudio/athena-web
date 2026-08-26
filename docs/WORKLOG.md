@@ -7,6 +7,31 @@
 
 ## Active Tasks
 
+### [RELEASE-GATE-005] Preserve task sync anchors through state changes
+
+- **Status**: COMPLETED
+- **Started**: 2026-08-25
+- **Completed**: 2026-08-25
+- **Priority**: P0
+- **Description**: Main could not deploy after API coverage found two contract regressions. Task
+  expansion returned an authorized undo handle that the credential-schema audit had not recorded.
+  Integration pulls wrote the provider timestamp, then a second state-transition update replaced
+  it with wall-clock time and made a clean task appear locally edited.
+- **Approach**: Record the two task-expansion responses as operation-scoped credential-name
+  exceptions. Let provider-backed state transitions preserve their explicit update timestamp so
+  the shared transition helper cannot break the sync echo guard.
+- **Files changed**: Updated the shared task transition, both integration reconcile paths, the
+  credential contract test, and this work record.
+- **Validation**: The two CI failures reproduce locally before the fix. Both pass afterward. Four
+  adjacent task-expansion and integration-graph suites also pass, for 106 focused tests. API type
+  checking and API lint pass with a process-scoped 4 GB heap. Formatting and diff checks pass.
+- **Learnings**: A second update on a table with an `updatedAt` callback changes the timestamp even
+  when the first update set an explicit sync anchor. Provider writes must carry that anchor through
+  every update in the transaction.
+- **Blockers**: None.
+
+---
+
 ### [RELEASE-GATE-004] Keep task authorization inside its transaction
 
 - **Status**: COMPLETED

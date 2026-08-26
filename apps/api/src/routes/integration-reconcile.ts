@@ -590,6 +590,7 @@ async function applyPull(
         state: status.key,
         completedAt: item.completed ? anchor : null,
         canceledAt: null,
+        updatedAt: anchor,
       });
       if (!mutation) return null;
       return {
@@ -621,6 +622,7 @@ async function applyPull(
       state: status.key,
       completedAt: item.completed ? anchor : null,
       canceledAt: null,
+      updatedAt: anchor,
     });
     if (!mutation) return null;
     return {
@@ -725,6 +727,7 @@ async function archiveLocal(
       state: keys.canceled.key,
       completedAt: null,
       canceledAt: anchor,
+      updatedAt: anchor,
     });
     if (!mutation) return null;
     return {

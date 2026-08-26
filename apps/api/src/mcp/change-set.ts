@@ -291,39 +291,41 @@ async function insertChangeSet(
     summary: input.summary,
   });
   if (input.changes.length === 0) return;
-  await tx
-    .insert(changeSetEntry)
-    .values(
-      input.changes.map((change) =>
-        isTaskLabelsRecord(change)
-          ? {
-              changeSetId: id,
-              entityKind: change.kind,
-              entityId: change.taskId,
-              op: 'update' as const,
-              before: { labelIds: [...change.before].sort() },
-              after: { labelIds: [...change.after].sort() },
-            }
-          : isLinkRecord(change)
-            ? {
-                changeSetId: id,
-                entityKind: change.kind,
-                entityId: edgeKey(change.from, change.to),
-                op: 'link' as const,
-                before: change.linked ? null : { from: change.from, to: change.to },
-                after: change.linked ? { from: change.from, to: change.to } : null,
-              }
-            : {
-                changeSetId: id,
-                entityKind: change.kind,
-                entityId: change.id,
-                op: change.op,
-                before: change.before ?? null,
-                after: change.after ?? null,
-              },
-      ),
-    )
-    .onConflictDoNothing();
+  const entries = input.changes.map((change) =>
+    isTaskLabelsRecord(change)
+      ? {
+          changeSetId: id,
+          entityKind: change.kind,
+          entityId: change.taskId,
+          op: 'update' as const,
+          before: { labelIds: [...change.before].sort() },
+          after: { labelIds: [...change.after].sort() },
+        }
+      : isLinkRecord(change)
+        ? {
+            changeSetId: id,
+            entityKind: change.kind,
+            entityId: edgeKey(change.from, change.to),
+            op: 'link' as const,
+            before: change.linked ? null : { from: change.from, to: change.to },
+            after: change.linked ? { from: change.from, to: change.to } : null,
+          }
+        : {
+            changeSetId: id,
+            entityKind: change.kind,
+            entityId: change.id,
+            op: change.op,
+            before: change.before ?? null,
+            after: change.after ?? null,
+          },
+  );
+  const batchSize = 500;
+  for (let offset = 0; offset < entries.length; offset += batchSize) {
+    await tx
+      .insert(changeSetEntry)
+      .values(entries.slice(offset, offset + batchSize))
+      .onConflictDoNothing();
+  }
 }
 
 /** Record a whole reversible operation in the same transaction as its writes. */

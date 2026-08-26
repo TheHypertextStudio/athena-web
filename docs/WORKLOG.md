@@ -7,6 +7,32 @@
 
 ## Active Tasks
 
+### [RELEASE-GATE-003] Keep large change-set audits below database limits
+
+- **Status**: COMPLETED
+- **Started**: 2026-08-25
+- **Completed**: 2026-08-25
+- **Priority**: P0
+- **Description**: Main could not deploy the Cmd+K capability search because API coverage failed
+  while one MCP audit inserted 12,000 relation entries through 72,000 PostgreSQL bind parameters.
+  The first failure left the shared test database blocked, which caused 46 later task-route tests
+  to time out and hid the original cause in the CI summary.
+- **Approach**: Restore bounded entry batches inside the shared change-set insert path. Keep the
+  change-set header and every entry in the caller's transaction, and apply the same limit to MCP,
+  task, and object-command audit writers.
+- **Files changed**: Updated the shared API change-set writer and this work record.
+- **Validation**: The focused 12,000-entry regression failed against the rebased main tip with one
+  72,000-parameter insert. It passes after the fix and records all 12,000 entries in 500-row
+  batches. API type checking, API lint, focused formatting, and diff checks pass. The first local
+  typecheck exhausted Node's default 2 GB heap, so the passing retry used a 4 GB heap for that one
+  API process.
+- **Learnings**: Centralizing a transaction helper must preserve the batching invariant at the
+  shared boundary. A failed transaction in the shared PGlite process can make unrelated tests
+  report timeouts instead of the first database error.
+- **Blockers**: None.
+
+---
+
 ### [SETTINGS-APPBAR-SEAM-001] Remove the gap below the settings app bar
 
 - **Status**: COMPLETED

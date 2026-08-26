@@ -5355,12 +5355,14 @@
       "id": "MISS-03",
       "area": "Billing & entitlements",
       "severity": "launch-blocker",
-      "owner": "unassigned",
-      "claim": "",
-      "state": "not-started",
+      "owner": "billing-launch",
+      "claim": "partial",
+      "state": "in-progress",
       "evidence": "",
-      "verifiedBy": "",
-      "verificationArtifacts": [],
+      "verifiedBy": "Boyle",
+      "verificationArtifacts": [
+        "docs/engineering/launch/evidence/verification/2026-08-25-billing-launch-review.md"
+      ],
       "worklogAnchor": "",
       "blockedReason": null
     },

@@ -55,6 +55,13 @@ export interface CronJob {
 /** The jobs Docket needs. All target secret-guarded, idempotent, retry-safe sweeps. */
 export const JOBS: readonly CronJob[] = [
   {
+    name: 'docket-billing-reconciliation',
+    path: '/internal/cron/billing-reconciliation',
+    schedule: '*/15 * * * *',
+    description:
+      'Docket: reconcile Stripe subscriptions, discount expiry, and billing evidence retention.',
+  },
+  {
     name: 'docket-sync-connectors',
     path: '/internal/cron/sync-connectors',
     schedule: '*/15 * * * *',

@@ -46,6 +46,8 @@ function appWithActor(
 }
 
 beforeAll(async () => {
+  const { env } = await import('../../src/env');
+  Reflect.set(env, 'BILLING_ENABLED', false);
   schema = await getDb();
   db = schema.db;
   orgs = (await import('../../src/routes/orgs')).default;
@@ -381,9 +383,52 @@ describe('orgs router', () => {
     const { organization } = await body<{ organization: { id: string } }>(created);
     await clearDocketPro(db, schema, organization.id);
 
-    const blocked = await app.request(`/${organization.id}/tasks`);
+    const readable = await app.request(`/${organization.id}/tasks`);
+    expect(readable.status).toBe(200);
+
+    const blocked = await app.request(`/${organization.id}/tasks`, {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ title: 'Blocked write' }),
+    });
     expect(blocked.status).toBe(402);
     expect(await body<{ code: string }>(blocked)).toMatchObject({ code: 'product_required' });
+
+    const blockedSettings = await app.request(`/${organization.id}/settings/work-structure`, {
+      method: 'PATCH',
+      headers: J,
+      body: JSON.stringify({ initiativeMaxDepth: 4 }),
+    });
+    expect(blockedSettings.status).toBe(402);
+
+    const hydrated = await app.request(`/${organization.id}/mentions/hydrate`, {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({
+        refs: [{ kind: 'entity', entityKind: 'task', entityId: 'missing_task' }],
+      }),
+    });
+    expect(hydrated.status).toBe(200);
+
+    const workViewRead = await app.request(`/${organization.id}/work-views/query`, {
+      method: 'POST',
+      headers: J,
+      body: '{}',
+    });
+    expect(workViewRead.status).toBe(422);
+
+    const rollingCycles = await app.request(`/${organization.id}/cycles?roll=true`);
+    expect(rollingCycles.status).toBe(402);
+    const currentCycles = await app.request(`/${organization.id}/cycles/current`);
+    expect(currentCycles.status).toBe(402);
+
+    const chatSession = await app.request(`/${organization.id}/sessions/chat`);
+    expect(chatSession.status).toBe(402);
+
+    const notionDesigns = await app.request(
+      `/${organization.id}/integrations/missing/notion/databases`,
+    );
+    expect(notionDesigns.status).toBe(402);
 
     const billing = await app.request(`/${organization.id}/billing`);
     expect(billing.status).toBe(200);

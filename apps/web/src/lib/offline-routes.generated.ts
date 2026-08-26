@@ -39,6 +39,10 @@ export const OFFLINE_ROUTES = [
     load: async () => (await import('@/app/(app)/billing/return/page')).default,
   },
   {
+    pattern: '/billing/start',
+    load: async () => (await import('@/app/(app)/billing/start/page')).default,
+  },
+  {
     pattern: '/calendar',
     load: async () => (await import('@/app/(app)/calendar/calendar-client')).default,
   },

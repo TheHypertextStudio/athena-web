@@ -286,7 +286,9 @@ export const billingDiscountAward = pgTable(
     index('billing_discount_award_org_idx').on(table.organizationId, table.createdAt),
     uniqueIndex('billing_discount_award_current_org_uq')
       .on(table.organizationId)
-      .where(sql`${table.status} IN ('scheduled', 'applying', 'active', 'ending')`),
+      .where(
+        sql`${table.status} IN ('scheduled', 'applying', 'active', 'ending', 'provider_failed')`,
+      ),
     check('billing_discount_award_percent_check', sql`${table.percentOff} BETWEEN 1 AND 90`),
     check('billing_discount_award_window_check', sql`${table.endsAt} > ${table.startsAt}`),
     check(

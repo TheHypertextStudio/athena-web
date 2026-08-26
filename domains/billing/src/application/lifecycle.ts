@@ -79,7 +79,7 @@ async function syncDocketProEntitlement(
     status === 'past_due'
       ? existing?.status === 'past_due' && existing.graceEndsAt
         ? existing.graceEndsAt
-        : new Date(new Date(now).getTime() + PAYMENT_GRACE_DAYS * 24 * 60 * 60 * 1000)
+        : new Date(observedAt.getTime() + PAYMENT_GRACE_DAYS * 24 * 60 * 60 * 1000)
       : null;
   const subscriptionId = event.subscription?.id ?? event.subscriptionId;
   await db

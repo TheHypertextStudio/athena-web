@@ -31,6 +31,16 @@ export interface StripeSubscriptionView {
   readonly trial_end?: number | null;
   /** Whether cancellation is scheduled for the end of the current period. */
   readonly cancel_at_period_end?: boolean;
+  /** Expanded provider discounts when subscription reconciliation requests them. */
+  readonly discounts?: readonly (
+    | string
+    | {
+        readonly id?: string;
+        readonly source?: {
+          readonly coupon?: string | { readonly id?: string } | null;
+        } | null;
+      }
+  )[];
 }
 
 /** Non-subscription Stripe event object fields Docket reads. */
@@ -147,13 +157,27 @@ export function toSubscription(
   fallbackReferenceId?: string,
 ): Subscription {
   const referenceId = sub.metadata?.['referenceId'] ?? fallbackReferenceId ?? '';
+  const customerId =
+    typeof sub.customer === 'string' ? sub.customer : (sub.customer?.id ?? undefined);
   const periodEndUnix = sub.items?.data?.[0]?.current_period_end ?? 0;
+  const discountIds = (sub.discounts ?? []).flatMap((discount) =>
+    typeof discount === 'string' ? [discount] : discount.id ? [discount.id] : [],
+  );
+  const couponIds = (sub.discounts ?? []).flatMap((discount) => {
+    if (typeof discount === 'string') return [];
+    const coupon = discount.source?.coupon;
+    if (typeof coupon === 'string') return [coupon];
+    return coupon?.id ? [coupon.id] : [];
+  });
   return {
     id: sub.id,
+    ...(customerId ? { customerId } : {}),
     referenceId,
     status: toStatus(sub.status),
     currentPeriodEnd: new Date(periodEndUnix * 1000).toISOString(),
     cancelAtPeriodEnd: sub.cancel_at_period_end ?? false,
+    ...(discountIds.length > 0 ? { discountIds } : {}),
+    ...(couponIds.length > 0 ? { couponIds } : {}),
     ...(sub.trial_end ? { trialEnd: new Date(sub.trial_end * 1000).toISOString() } : {}),
   };
 }

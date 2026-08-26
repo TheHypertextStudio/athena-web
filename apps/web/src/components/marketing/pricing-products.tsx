@@ -3,7 +3,7 @@ import { Button, Text } from '@docket/ui/primitives';
 import Link from 'next/link';
 import type { JSX } from 'react';
 
-import { openAppUrl, signUpUrl } from '@/lib/marketing-links';
+import { signUpUrl, startDocketProUrl } from '@/lib/marketing-links';
 
 interface Product {
   readonly name: string;
@@ -33,7 +33,7 @@ const PRODUCTS: readonly Product[] = [
     description: 'Shared work, integrations, MCP, and current Athena functionality.',
     features: ['Shared work', 'Integrations', 'MCP', 'Athena and voice'],
     cta: 'Add Docket Pro',
-    href: openAppUrl,
+    href: startDocketProUrl,
     featured: true,
   },
 ];
@@ -91,7 +91,7 @@ export function PricingProducts(): JSX.Element {
             >
               <Link
                 href={product.href}
-                {...(product.href === openAppUrl ? { prefetch: false } : {})}
+                {...(product.href === startDocketProUrl ? { prefetch: false } : {})}
               >
                 {product.cta}
               </Link>

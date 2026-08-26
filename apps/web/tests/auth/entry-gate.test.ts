@@ -341,6 +341,7 @@ describe('protected-path matcher', () => {
     'exports',
     'workspaces',
     'orgs',
+    'billing',
   ];
 
   it('covers every (app) segment as both the bare path and its subtree', () => {

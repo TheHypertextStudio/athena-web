@@ -22,7 +22,9 @@ export const DOCKET_STRIPE_WEBHOOK_EVENTS = [
   'customer.subscription.updated',
   'customer.subscription.deleted',
   'customer.subscription.trial_will_end',
+  'invoice.paid',
   'invoice.payment_failed',
+  'invoice.payment_action_required',
 ] as const;
 
 const MANAGED_BY_KEY = 'docket_managed_by';

@@ -75,7 +75,9 @@ function fakeVerifyingGateway(
     getCustomerBillingCountry: vi.fn(),
     createCheckoutSession: vi.fn(),
     getSubscription: vi.fn(),
+    listSubscriptions: vi.fn(),
     cancelSubscription: vi.fn(),
+    cancelSubscriptionById: vi.fn(),
     extendTrial: vi.fn(),
     createBillingPortalSession: vi.fn(),
     createDiscountCoupon: vi.fn(),
@@ -241,7 +243,7 @@ describe('webhooks signature verification (real Stripe gateway path)', () => {
       currentPeriodEnd: '2026-09-08T00:00:00.000Z',
       trialEnd: '2026-09-08T00:00:00.000Z',
     });
-    const cancelSubscription = vi.fn();
+    const cancelSubscriptionById = vi.fn();
     const gateway = {
       ...fakeVerifyingGateway(() => ({
         id: 'evt_subscription_gb',
@@ -252,7 +254,7 @@ describe('webhooks signature verification (real Stripe gateway path)', () => {
       })),
       getCustomerBillingCountry,
       getSubscription,
-      cancelSubscription,
+      cancelSubscriptionById,
     };
     useGateway(gateway);
 
@@ -263,7 +265,53 @@ describe('webhooks signature verification (real Stripe gateway path)', () => {
     });
 
     expect(await response.json()).toEqual({ received: true, effect: 'unsupported_country' });
-    expect(cancelSubscription).toHaveBeenCalledWith(orgId);
+    expect(cancelSubscriptionById).toHaveBeenCalledWith(
+      'sub_gb',
+      'billing-country:evt_subscription_gb:cancel',
+    );
+    const entitlements = await db
+      .select()
+      .from(schema.organizationProductEntitlement)
+      .where(eq(schema.organizationProductEntitlement.organizationId, orgId));
+    expect(entitlements).toHaveLength(0);
+  });
+
+  it('rejects an event whose Stripe customer does not own the organization account', async () => {
+    const { orgId } = await seedBaseOrg(db, schema, false);
+    await db.insert(schema.organizationBillingAccount).values({
+      organizationId: orgId,
+      stripeCustomerId: 'cus_owner',
+      countryVerificationRequired: false,
+    });
+    const getSubscription = vi.fn().mockResolvedValue({
+      id: 'sub_attacker',
+      customerId: 'cus_attacker',
+      referenceId: orgId,
+      status: 'active',
+      currentPeriodEnd: '2026-09-25T00:00:00.000Z',
+    });
+    const gateway = {
+      ...fakeVerifyingGateway(() => ({
+        id: 'evt_customer_mismatch',
+        type: 'subscription.updated',
+        referenceId: orgId,
+        customerId: 'cus_attacker',
+        createdAt: '2026-08-25T00:00:00.000Z',
+      })),
+      getSubscription,
+    };
+    useGateway(gateway);
+
+    const response = await webhooks.request('/webhook', {
+      method: 'POST',
+      headers: { ...J, 'stripe-signature': 't=1,v1=ok' },
+      body: 'verified-mismatch',
+    });
+
+    expect(await response.json()).toEqual({
+      received: true,
+      effect: 'billing_customer_mismatch',
+    });
     const entitlements = await db
       .select()
       .from(schema.organizationProductEntitlement)

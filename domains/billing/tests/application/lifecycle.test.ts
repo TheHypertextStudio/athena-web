@@ -105,6 +105,21 @@ describe('billing access lifecycle', () => {
     expect(replay.product?.graceEndsAt?.getTime()).toBe(first.product?.graceEndsAt?.getTime());
   });
 
+  it('anchors grace to the Stripe failure time when webhook delivery is delayed', async () => {
+    const organizationId = await seedOrg();
+    const failureAt = '2026-08-25T00:00:00.000Z';
+
+    await applyBillingEvent(
+      db,
+      event(organizationId, 'past_due', failureAt),
+      '2026-08-27T00:00:00.000Z',
+    );
+
+    expect((await readState(organizationId)).product?.graceEndsAt?.getTime()).toBe(
+      new Date(failureAt).getTime() + PAYMENT_GRACE_DAYS * DAY_MS,
+    );
+  });
+
   it('clears payment grace after a successful payment', async () => {
     const organizationId = await seedOrg();
     await applyBillingEvent(db, event(organizationId, 'past_due'), NOW);

@@ -345,6 +345,7 @@ Returns \`OrgCreateResult\` — the new org plus its seeded \`defaultTeam\` and 
   .patch(
     '/:orgId/settings/work-structure',
     orgContextMiddleware,
+    sharedWorkCapabilityGuard,
     capabilityGuard('manage'),
     apiDoc({
       tag: 'Orgs',
@@ -418,6 +419,7 @@ Related: \`GET /\` lists all orgs the caller belongs to; the nested routers unde
   .patch(
     '/:orgId',
     orgContextMiddleware,
+    sharedWorkCapabilityGuard,
     capabilityGuard('manage'),
     apiDoc({
       tag: 'Orgs',

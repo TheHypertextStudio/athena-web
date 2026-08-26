@@ -5,10 +5,17 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import type { JSX, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { billingGet, checkoutPost, portalPost } = vi.hoisted(() => ({
+const { billingGet, discountsGet, checkoutPost, portalPost } = vi.hoisted(() => ({
   billingGet: vi.fn(),
+  discountsGet: vi.fn(),
   checkoutPost: vi.fn(),
   portalPost: vi.fn(),
+}));
+
+vi.mock('../../../src/lib/auth-client', () => ({
+  useSession: () => ({
+    data: { user: { email: 'student@unlv.edu', emailVerified: true } },
+  }),
 }));
 
 vi.mock('../../../src/lib/api', () => ({
@@ -20,6 +27,18 @@ vi.mock('../../../src/lib/api', () => ({
             $get: billingGet,
             checkout: { $post: checkoutPost },
             portal: { $post: portalPost },
+            discounts: {
+              $get: discountsGet,
+              applications: {
+                $post: vi.fn(),
+                ':applicationId': {
+                  evidence: { $post: vi.fn() },
+                  supplement: { $post: vi.fn() },
+                  withdraw: { $post: vi.fn() },
+                },
+              },
+              renew: { $post: vi.fn() },
+            },
           },
         },
       },
@@ -45,6 +64,7 @@ function summary(
 ): Record<string, unknown> {
   return {
     organizationId: 'org-1',
+    checkoutEnabled: true,
     listPrice: { amount: 800, currency: 'usd', interval: 'month' },
     accessMode: product ? 'writable' : 'read_only',
     canManageBilling: true,
@@ -74,6 +94,31 @@ function summary(
 
 beforeEach(() => {
   billingGet.mockReset();
+  discountsGet.mockReset();
+  discountsGet.mockResolvedValue(
+    okResponse({
+      applicationsEnabled: true,
+      programs: [
+        {
+          key: 'student',
+          name: 'Student',
+          percentOff: 50,
+          reviewMonths: 12,
+          terms: 'For the verified person’s personal workspace.',
+        },
+        {
+          key: 'nonprofit',
+          name: 'Nonprofit',
+          percentOff: 50,
+          reviewMonths: 12,
+          terms: 'For verified nonprofit organizations.',
+        },
+      ],
+      application: null,
+      award: null,
+      credit: null,
+    }),
+  );
   checkoutPost.mockReset();
   portalPost.mockReset();
 });
@@ -91,7 +136,37 @@ describe('BillingSettings', () => {
     ).toBeInTheDocument();
     expect(screen.getAllByText('Free')).toHaveLength(2);
     expect(screen.getByText(/Personal planning.*remain writable/)).toBeInTheDocument();
-    expect(screen.getByText(/50% off Docket Pro/)).toBeInTheDocument();
+    expect(await screen.findByText(/50% off Docket Pro/)).toBeInTheDocument();
+  });
+
+  it('explains the rollout pause instead of offering checkout or a new application', async () => {
+    billingGet.mockResolvedValue(
+      okResponse(summary(undefined, { accessMode: 'writable', checkoutEnabled: false })),
+    );
+    discountsGet.mockResolvedValue(
+      okResponse({
+        applicationsEnabled: false,
+        programs: [
+          {
+            key: 'student',
+            name: 'Student',
+            percentOff: 50,
+            reviewMonths: 12,
+            terms: 'For the verified person’s personal workspace.',
+          },
+        ],
+        application: null,
+        award: null,
+        credit: null,
+      }),
+    );
+
+    render(<BillingSettings orgId="org-1" isPersonal />, { wrapper: wrapper() });
+
+    expect(await screen.findByText(/checkout is not open yet/i)).toBeInTheDocument();
+    expect(await screen.findByText(/discount applications are not open yet/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Start Docket Pro/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Apply for/i })).not.toBeInTheDocument();
   });
 
   it('shows renewal and management for an active Stripe product', async () => {

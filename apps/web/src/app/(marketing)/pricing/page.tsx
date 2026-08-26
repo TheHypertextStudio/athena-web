@@ -41,7 +41,7 @@ const FAQS: readonly Faq[] = [
   {
     question: 'What happens after cancellation?',
     answer:
-      'A personal workspace returns to free Docket and keeps its data. A shared organization receives a 14-day export window before its deletion process begins.',
+      'A personal workspace returns to free Docket and keeps its data. Shared work becomes read-only after the paid period. You can export or reactivate at any time, and Docket does not delete workspace data when Pro ends.',
   },
 ];
 

@@ -29,11 +29,13 @@ import {
   billingDiscountProgram,
   db,
   organizationBillingAccount,
+  organizationProductEntitlement,
 } from '@docket/db';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 
 import { getContainer } from '../container';
+import { dispatchEssentialBillingNotice } from '../services/billing-notifications';
 
 /**
  * A {@link BillingGateway} that can verify provider webhook signatures (the real Stripe
@@ -101,9 +103,34 @@ const webhooks = new Hono().post('/webhook', async (c) => {
   }
 
   const now = new Date().toISOString();
+  const originalEventType = event.type;
+  const [previousEntitlement] = event.referenceId
+    ? await db
+        .select({ status: organizationProductEntitlement.status })
+        .from(organizationProductEntitlement)
+        .where(
+          and(
+            eq(organizationProductEntitlement.organizationId, event.referenceId),
+            eq(organizationProductEntitlement.productKey, 'docket_pro'),
+          ),
+        )
+        .limit(1)
+    : [];
   const account = event.referenceId ? await getBillingCustomer(db, event.referenceId) : null;
-  let countryEffect: 'verified' | 'awaiting_billing_country' | 'unsupported_country' | null = null;
-  if (account?.countryVerificationRequired && account.countryVerifiedAt === null) {
+  let countryEffect:
+    | 'verified'
+    | 'awaiting_billing_country'
+    | 'unsupported_country'
+    | 'billing_customer_mismatch'
+    | null = null;
+  if (account && event.customerId && event.customerId !== account.stripeCustomerId) {
+    countryEffect = 'billing_customer_mismatch';
+  }
+  if (
+    countryEffect === null &&
+    account?.countryVerificationRequired &&
+    account.countryVerifiedAt === null
+  ) {
     if (!event.customerId || event.customerId !== account.stripeCustomerId) {
       countryEffect = 'awaiting_billing_country';
     } else {
@@ -111,7 +138,11 @@ const webhooks = new Hono().post('/webhook', async (c) => {
       if (!country) {
         countryEffect = 'awaiting_billing_country';
       } else if (country !== 'US') {
-        await gateway.cancelSubscription(event.referenceId);
+        const subscriptionId = event.subscription?.id ?? event.subscriptionId;
+        if (!subscriptionId) {
+          throw new Error('The unsupported-country subscription is not observable yet.');
+        }
+        await gateway.cancelSubscriptionById(subscriptionId, `billing-country:${event.id}:cancel`);
         countryEffect = 'unsupported_country';
       } else {
         await db
@@ -124,7 +155,11 @@ const webhooks = new Hono().post('/webhook', async (c) => {
   }
   const effect = await db.transaction(async (tx) => {
     if (!(await claimProviderEvent(tx, event))) return 'duplicate' as const;
-    if (countryEffect === 'awaiting_billing_country' || countryEffect === 'unsupported_country') {
+    if (
+      countryEffect === 'awaiting_billing_country' ||
+      countryEffect === 'unsupported_country' ||
+      countryEffect === 'billing_customer_mismatch'
+    ) {
       await completeProviderEvent(tx, event.id, new Date(now));
       return countryEffect;
     }
@@ -157,6 +192,72 @@ const webhooks = new Hono().post('/webhook', async (c) => {
     await completeProviderEvent(tx, event.id, new Date(now));
     return applied;
   });
+  if (
+    event.referenceId &&
+    effect !== 'duplicate' &&
+    effect !== 'awaiting_billing_country' &&
+    effect !== 'unsupported_country' &&
+    effect !== 'billing_customer_mismatch'
+  ) {
+    const billingUrlDate = (value: string | undefined): string =>
+      value
+        ? new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeZone: 'UTC' }).format(
+            new Date(value),
+          )
+        : 'the date shown in Billing settings';
+    let notice: { subject: string; text: string; urgent?: boolean } | null = null;
+    if (originalEventType === 'subscription.trial_will_end') {
+      notice = {
+        subject: 'Your Docket Pro trial is ending',
+        text: `Your Docket Pro trial ends ${billingUrlDate(event.subscription?.trialEnd)}. Billing settings show the payment method and first charge date.`,
+      };
+    } else if (
+      originalEventType === 'subscription.past_due' ||
+      originalEventType === 'subscription.payment_action_required'
+    ) {
+      const [current] = await db
+        .select({ graceEndsAt: organizationProductEntitlement.graceEndsAt })
+        .from(organizationProductEntitlement)
+        .where(
+          and(
+            eq(organizationProductEntitlement.organizationId, event.referenceId),
+            eq(organizationProductEntitlement.productKey, 'docket_pro'),
+          ),
+        )
+        .limit(1);
+      notice = {
+        subject: 'Docket Pro payment needs attention',
+        text: `We could not collect this payment. Update the payment method by ${billingUrlDate(current?.graceEndsAt?.toISOString())} to keep editing shared work.`,
+        urgent: true,
+      };
+    } else if (
+      originalEventType === 'subscription.paid' &&
+      previousEntitlement?.status === 'past_due'
+    ) {
+      notice = {
+        subject: 'Docket Pro payment recovered',
+        text: 'Stripe confirmed the payment. Docket Pro access is active, and the payment grace period is cleared.',
+      };
+    } else if (originalEventType === 'subscription.canceled') {
+      notice = {
+        subject: 'Shared work is now read-only',
+        text: 'Docket Pro ended. Shared work is now read-only. You can export or reactivate at any time, and Docket did not delete workspace data.',
+        urgent: true,
+      };
+    } else if (event.subscription?.cancelAtPeriodEnd) {
+      notice = {
+        subject: 'Docket Pro cancellation scheduled',
+        text: `Your Pro features remain available through ${billingUrlDate(event.subscription.currentPeriodEnd)}. After that, shared work becomes read-only. You can export or reactivate at any time. Docket does not delete workspace data when Pro ends.`,
+      };
+    }
+    if (notice) {
+      await dispatchEssentialBillingNotice(db, {
+        organizationId: event.referenceId,
+        idempotencyKey: `billing:${event.id}:${notice.subject}`,
+        ...notice,
+      }).catch(() => undefined);
+    }
+  }
   return c.json({ received: true, effect });
 });
 

@@ -47,7 +47,28 @@ export function productCapabilityGuard(capability: ProductCapability): Middlewar
 /** Require Docket Pro for nested work in shared organizations, while baseline personal work stays free. */
 export const sharedWorkCapabilityGuard: MiddlewareHandler<AppEnv> = async (c, next) => {
   const actorCtx = c.get('actorCtx');
-  if (actorCtx.isPersonal !== true) {
+  const method = c.req.method.toUpperCase();
+  const path = c.req.path;
+  // These reads use POST because their request bodies contain private, structured, or oversized
+  // query data. Keep this list explicit because treating every POST as a write breaks read-only
+  // access, while treating every GET as a read misses legacy lazy-materialization handlers.
+  const readOnlyPostSuffixes = [
+    '/mentions/hydrate',
+    '/object-commands/replay-access',
+    '/work-views/query',
+    '/work-views/facets',
+  ];
+  const mutatingGet =
+    (path.endsWith('/cycles') && c.req.query('roll') === 'true') ||
+    path.endsWith('/cycles/current') ||
+    path.endsWith('/sessions/chat') ||
+    /\/integrations\/[^/]+\/notion\/(databases|design\/[^/]+)$/.test(path);
+  const isRead =
+    (method === 'GET' && !mutatingGet) ||
+    method === 'HEAD' ||
+    method === 'OPTIONS' ||
+    (method === 'POST' && readOnlyPostSuffixes.some((suffix) => path.endsWith(suffix)));
+  if (!isRead && actorCtx.isPersonal !== true) {
     await assertProductCapability(actorCtx.orgId, 'shared_work');
   }
   await next();

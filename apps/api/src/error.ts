@@ -115,6 +115,13 @@ export class BillingCustomerMissingError extends ApiError {
   }
 }
 
+/** 503 — new billing changes are disabled while existing access remains operational. */
+export class BillingUnavailableError extends ApiError {
+  constructor(message = 'New billing changes are not available') {
+    super(503, 'billing_unavailable', message);
+  }
+}
+
 /** 409 — another Checkout request is still creating the organization session. */
 export class CheckoutPendingError extends ApiError {
   constructor(message = 'Checkout is already being prepared') {

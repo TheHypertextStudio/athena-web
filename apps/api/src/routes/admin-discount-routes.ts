@@ -1,4 +1,6 @@
 /** Finance review routes for discount applications, awards, evidence, and credits. */
+import { randomUUID } from 'node:crypto';
+
 import {
   BILLING_DISCOUNT_APPLICATION_STATUSES,
   BILLING_DISCOUNT_AWARD_STATUSES,
@@ -25,11 +27,12 @@ import type {
 import type { AppEnv } from '../context';
 import { getContainer } from '../container';
 import { env } from '../env';
-import { ConflictError, NotFoundError } from '../error';
+import { ConflictError, NotFoundError, PreconditionFailedError } from '../error';
 import { ok } from '../lib/ok';
 import { apiDoc, describeRoute } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import { requireStaffRole } from '../permissions/staff-guard';
+import { dispatchEssentialBillingNotice } from '../services/billing-notifications';
 
 import { audit } from './admin-serializers';
 
@@ -53,9 +56,34 @@ export type AdminDiscountApplicationOut = z.infer<typeof AdminDiscountApplicatio
 /** Finance queue response. */
 export const AdminDiscountApplicationPage = z.object({
   items: z.array(AdminDiscountApplicationOut),
+  canDecide: z.boolean(),
 });
 /** Finance queue response value. */
 export type AdminDiscountApplicationPage = z.infer<typeof AdminDiscountApplicationPage>;
+
+/** Staff-visible private evidence metadata and customer decision history. */
+export const AdminDiscountApplicationDetailOut = AdminDiscountApplicationOut.extend({
+  evidence: z.array(
+    z.object({
+      id: z.string(),
+      evidenceType: z.string(),
+      fileName: z.string().nullable(),
+      mimeType: z.string(),
+      byteSize: z.number().int(),
+      deletedAt: z.string().nullable(),
+    }),
+  ),
+  events: z.array(
+    z.object({
+      id: z.string(),
+      type: z.string(),
+      reason: z.string().nullable(),
+      createdAt: z.string(),
+    }),
+  ),
+});
+/** Staff application detail response value. */
+export type AdminDiscountApplicationDetailOut = z.infer<typeof AdminDiscountApplicationDetailOut>;
 
 /** Tax-aware credit preview attached to an approval preview. */
 export const AdminCreditPreviewOut = z.object({
@@ -72,16 +100,25 @@ export const AdminCreditPreviewOut = z.object({
 /** Finance credit preview response value. */
 export type AdminCreditPreviewOut = z.infer<typeof AdminCreditPreviewOut>;
 
-/** Approval effect shown before finance confirms the decision. */
-export const AdminDiscountApprovalPreviewOut = z.object({
+/** Approval effect that finance must inspect before confirmation. */
+const AdminDiscountApprovalEffectOut = z.object({
   applicationId: z.string(),
   organizationId: z.string(),
   percentOff: z.number().int(),
   reviewMonths: z.number().int(),
   startsAt: z.string(),
   endsAt: z.string(),
-  providerAction: z.enum(['attach_at_checkout', 'apply_to_trial', 'apply_to_subscription']),
+  providerAction: z.enum([
+    'attach_at_checkout',
+    'apply_to_trial',
+    'apply_to_subscription',
+    'renew_existing',
+  ]),
   credit: AdminCreditPreviewOut.nullable(),
+});
+/** Approval effect shown before finance confirms the decision. */
+export const AdminDiscountApprovalPreviewOut = AdminDiscountApprovalEffectOut.extend({
+  confirmation: z.string(),
 });
 /** Finance approval preview response value. */
 export type AdminDiscountApprovalPreviewOut = z.infer<typeof AdminDiscountApprovalPreviewOut>;
@@ -120,6 +157,47 @@ export const DiscountDecisionBody = z
 /** Finance decision request value. */
 export type DiscountDecisionBody = z.infer<typeof DiscountDecisionBody>;
 
+/** Required preview confirmation and rationale for a finance approval. */
+export const DiscountApprovalBody = DiscountDecisionBody.extend({
+  confirmation: z.string().min(1),
+}).strict();
+/** Finance approval request value. */
+export type DiscountApprovalBody = z.infer<typeof DiscountApprovalBody>;
+
+/** Finance renewal rationale with a required new end date for private partner awards. */
+export const DiscountRenewalBody = DiscountDecisionBody.extend({
+  endsAt: z.iso.datetime().optional(),
+}).strict();
+
+const StoredRecurringInvoiceLine = z.object({
+  invoiceId: z.string(),
+  lineId: z.string(),
+  invoiceStatus: z.enum(['open', 'paid']),
+  currency: z.string(),
+  recurringAmount: z.number().int(),
+  periodStartsAt: z.string(),
+  periodEndsAt: z.string(),
+});
+
+const StoredCreditNotePreview = z.object({
+  baseAmount: z.number().int(),
+  taxAmount: z.number().int(),
+  totalAmount: z.number().int(),
+  prePaymentAmount: z.number().int(),
+  postPaymentAmount: z.number().int(),
+});
+
+const StoredApprovalPreview = z.object({
+  applicationId: z.string(),
+  organizationId: z.string(),
+  output: AdminDiscountApprovalEffectOut,
+  invoice: StoredRecurringInvoiceLine.nullable(),
+  credit: StoredCreditNotePreview.nullable(),
+  currentAwardId: z.string().nullable(),
+  subscriptionFingerprint: z.string().nullable(),
+  expiresAt: z.string(),
+});
+
 /** Application path parameter. */
 const applicationParam = z.object({ applicationId: z.string() });
 /** Evidence path parameter. */
@@ -130,13 +208,111 @@ const awardParam = z.object({ awardId: z.string() });
 /** Internal approval preview with the provider objects needed for confirmation. */
 interface ApprovalPreview {
   /** Public preview. */
-  readonly output: z.input<typeof AdminDiscountApprovalPreviewOut>;
+  readonly output: z.input<typeof AdminDiscountApprovalEffectOut>;
   /** Current provider subscription, if one exists. */
   readonly subscription: Subscription | null;
   /** Invoice line used to calculate the credit. */
   readonly invoice: RecurringInvoiceLine | null;
   /** Provider-calculated credit values. */
   readonly credit: CreditNotePreview | null;
+  /** Existing public award when this application is a renewal. */
+  readonly currentAward: typeof billingDiscountAward.$inferSelect | null;
+}
+
+/** Produce a stable provider snapshot key for preview confirmation. */
+function subscriptionFingerprint(subscription: Subscription | null): string | null {
+  if (!subscription) return null;
+  return JSON.stringify({
+    id: subscription.id,
+    customerId: subscription.customerId ?? null,
+    status: subscription.status,
+    currentPeriodEnd: subscription.currentPeriodEnd,
+    trialEnd: subscription.trialEnd ?? null,
+    cancelAtPeriodEnd: subscription.cancelAtPeriodEnd ?? false,
+    discountIds: [...(subscription.discountIds ?? [])].sort(),
+    couponIds: [...(subscription.couponIds ?? [])].sort(),
+  });
+}
+
+/** Persist the exact provider effect that finance reviewed for fifteen minutes. */
+async function storeApprovalPreview(preview: ApprovalPreview): Promise<string> {
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+  const [stored] = await db
+    .insert(billingProviderSync)
+    .values({
+      organizationId: preview.output.organizationId,
+      operation: 'preview_discount_approval',
+      status: 'pending',
+      idempotencyKey: `discount-approval-preview:${randomUUID()}`,
+      payload: {
+        applicationId: preview.output.applicationId,
+        organizationId: preview.output.organizationId,
+        output: preview.output,
+        invoice: preview.invoice,
+        credit: preview.credit,
+        currentAwardId: preview.currentAward?.id ?? null,
+        subscriptionFingerprint: subscriptionFingerprint(preview.subscription),
+        expiresAt: expiresAt.toISOString(),
+      },
+      nextAttemptAt: expiresAt,
+    })
+    .returning({ id: billingProviderSync.id });
+  if (!stored) throw new Error('Discount approval preview insert returned no row');
+  return stored.id;
+}
+
+/** Load the exact unexpired provider effect that finance confirmed. */
+async function loadApprovalPreview(
+  confirmation: string,
+  application: typeof billingDiscountApplication.$inferSelect,
+): Promise<ApprovalPreview> {
+  const [stored] = await db
+    .select()
+    .from(billingProviderSync)
+    .where(
+      and(
+        eq(billingProviderSync.id, confirmation),
+        eq(billingProviderSync.operation, 'preview_discount_approval'),
+      ),
+    )
+    .limit(1);
+  const parsed = stored ? StoredApprovalPreview.safeParse(stored.payload) : null;
+  if (
+    !parsed?.success ||
+    parsed.data.applicationId !== application.id ||
+    parsed.data.organizationId !== application.organizationId ||
+    new Date(parsed.data.expiresAt) <= new Date()
+  ) {
+    throw new PreconditionFailedError(
+      'The discount approval preview expired or no longer matches this application',
+    );
+  }
+  const currentAward = parsed.data.currentAwardId
+    ? (
+        await db
+          .select()
+          .from(billingDiscountAward)
+          .where(eq(billingDiscountAward.id, parsed.data.currentAwardId))
+          .limit(1)
+      )[0]
+    : null;
+  if (
+    parsed.data.currentAwardId &&
+    (!currentAward || !['active', 'ending'].includes(currentAward.status))
+  ) {
+    throw new PreconditionFailedError('The current discount award changed after the preview');
+  }
+  const subscription = await getContainer().billing.getSubscription(application.organizationId);
+  if (subscriptionFingerprint(subscription) !== parsed.data.subscriptionFingerprint) {
+    throw new PreconditionFailedError('The Stripe subscription changed after the preview');
+  }
+  return {
+    output: parsed.data.output,
+    invoice: parsed.data.invoice,
+    credit: parsed.data.credit,
+    currentAward: currentAward ?? null,
+    subscription,
+  };
 }
 
 /** Add calendar months without turning a 12-month review into a fixed-day approximation. */
@@ -212,8 +388,38 @@ async function previewApproval(
     .where(eq(billingDiscountProgram.key, application.programKey))
     .limit(1);
   if (!program?.active) throw new ConflictError('This discount program is not active');
+  const [currentAward] = await db
+    .select()
+    .from(billingDiscountAward)
+    .where(
+      and(
+        eq(billingDiscountAward.organizationId, application.organizationId),
+        eq(billingDiscountAward.programKey, application.programKey),
+        inArray(billingDiscountAward.status, ['active', 'ending']),
+      ),
+    )
+    .limit(1);
   const gateway = getContainer().billing;
   const subscription = await gateway.getSubscription(application.organizationId);
+  if (currentAward) {
+    const endsAt = addUtcMonths(currentAward.endsAt, program.reviewMonths);
+    return {
+      subscription,
+      invoice: null,
+      credit: null,
+      currentAward,
+      output: {
+        applicationId: application.id,
+        organizationId: application.organizationId,
+        percentOff: currentAward.percentOff,
+        reviewMonths: program.reviewMonths,
+        startsAt: currentAward.startsAt.toISOString(),
+        endsAt: endsAt.toISOString(),
+        providerAction: 'renew_existing',
+        credit: null,
+      },
+    };
+  }
   const startsAt =
     subscription?.status === 'trialing' && subscription.trialEnd
       ? new Date(subscription.trialEnd)
@@ -249,6 +455,7 @@ async function previewApproval(
     subscription,
     invoice,
     credit,
+    currentAward: null,
     output: {
       applicationId: application.id,
       organizationId: application.organizationId,
@@ -287,6 +494,7 @@ export const adminDiscountRoutes = new Hono<AppEnv>()
         'Lists submitted and needs-information applications for support visibility and finance review. This read does not grant revenue authority.',
     }),
     async (c) => {
+      const { role } = c.get('staffCtx');
       const rows = await db
         .select({ application: billingDiscountApplication, org: organization })
         .from(billingDiscountApplication)
@@ -295,6 +503,51 @@ export const adminDiscountRoutes = new Hono<AppEnv>()
         .orderBy(billingDiscountApplication.submittedAt);
       return ok(c, AdminDiscountApplicationPage, {
         items: rows.map((row) => applicationOut(row.application, row.org)),
+        canDecide: role === 'finance' || role === 'superadmin',
+      });
+    },
+  )
+  .get(
+    '/:applicationId',
+    apiDoc({
+      tag: 'Admin',
+      summary: 'Get discount application review detail',
+      response: AdminDiscountApplicationDetailOut,
+      description:
+        'Returns the application, immutable decision history, and private evidence metadata. Staff downloads evidence through the authenticated evidence route, which never exposes its storage key.',
+    }),
+    zParam(applicationParam),
+    async (c) => {
+      const { applicationId } = c.req.valid('param');
+      const { application, org } = await loadApplication(applicationId);
+      const [evidence, events] = await Promise.all([
+        db
+          .select()
+          .from(billingDiscountEvidence)
+          .where(eq(billingDiscountEvidence.applicationId, application.id))
+          .orderBy(billingDiscountEvidence.createdAt),
+        db
+          .select()
+          .from(billingDiscountApplicationEvent)
+          .where(eq(billingDiscountApplicationEvent.applicationId, application.id))
+          .orderBy(billingDiscountApplicationEvent.createdAt),
+      ]);
+      return ok(c, AdminDiscountApplicationDetailOut, {
+        ...applicationOut(application, org),
+        evidence: evidence.map((item) => ({
+          id: item.id,
+          evidenceType: item.evidenceType,
+          fileName: item.fileName,
+          mimeType: item.mimeType,
+          byteSize: item.byteSize,
+          deletedAt: item.deletedAt?.toISOString() ?? null,
+        })),
+        events: events.map((event) => ({
+          id: event.id,
+          type: event.type,
+          reason: event.reason,
+          createdAt: event.createdAt.toISOString(),
+        })),
       });
     },
   )
@@ -343,6 +596,12 @@ export const adminDiscountRoutes = new Hono<AppEnv>()
         application.id,
         { reason },
       );
+      await dispatchEssentialBillingNotice(db, {
+        organizationId: application.organizationId,
+        idempotencyKey: `billing:discount-application:${application.id}:information-requested`,
+        subject: 'Your discount application needs information',
+        text: `Finance requested more information: ${reason}`,
+      }).catch(() => undefined);
       return ok(c, AdminDiscountApplicationOut, applicationOut(updated, org));
     },
   )
@@ -364,7 +623,8 @@ export const adminDiscountRoutes = new Hono<AppEnv>()
         throw new ConflictError('Only a submitted application can be approved');
       }
       const preview = await previewApproval(application);
-      return ok(c, AdminDiscountApprovalPreviewOut, preview.output);
+      const confirmation = await storeApprovalPreview(preview);
+      return ok(c, AdminDiscountApprovalPreviewOut, { ...preview.output, confirmation });
     },
   )
   .post(
@@ -378,10 +638,10 @@ export const adminDiscountRoutes = new Hono<AppEnv>()
         'Creates a retryable provider operation, confirms the Stripe coupon and existing-subscription discount, issues the previously previewed credit when needed, and only then marks the customer application approved.',
     }),
     zParam(applicationParam),
-    zJson(DiscountDecisionBody),
+    zJson(DiscountApprovalBody),
     async (c) => {
       const { applicationId } = c.req.valid('param');
-      const { reason } = c.req.valid('json');
+      const { confirmation, reason } = c.req.valid('json');
       const { staffUserId } = c.get('staffCtx');
       const { application, org } = await loadApplication(applicationId);
       if (application.status === 'approved') {
@@ -402,7 +662,74 @@ export const adminDiscountRoutes = new Hono<AppEnv>()
         throw new ConflictError('Only a submitted application can be approved');
       }
       const now = new Date();
-      const preview = await previewApproval(application, now);
+      const preview = await loadApprovalPreview(confirmation, application);
+      if (preview.currentAward) {
+        const currentAward = preview.currentAward;
+        const gateway = getContainer().billing;
+        let providerDiscountId = currentAward.providerDiscountId;
+        if (preview.subscription && !providerDiscountId) {
+          if (!currentAward.providerCouponId) {
+            throw new ConflictError(
+              'The award has no confirmed Stripe coupon. Finance must reconcile it before renewal.',
+              'billing_provider_sync_failed',
+            );
+          }
+          const applied = await gateway.applySubscriptionDiscount({
+            referenceId: application.organizationId,
+            couponId: currentAward.providerCouponId,
+            idempotencyKey: `discount-award:${currentAward.id}:renew:${application.id}`,
+          });
+          providerDiscountId = applied.discountId;
+        }
+        const result = await db.transaction(async (tx) => {
+          const [updatedAward] = await tx
+            .update(billingDiscountAward)
+            .set({
+              status: preview.subscription ? 'active' : 'scheduled',
+              endsAt: new Date(preview.output.endsAt),
+              reviewAt: new Date(preview.output.endsAt),
+              reason,
+              providerDiscountId,
+            })
+            .where(eq(billingDiscountAward.id, currentAward.id))
+            .returning();
+          const [updatedApplication] = await tx
+            .update(billingDiscountApplication)
+            .set({ status: 'approved', decisionReason: reason, decidedAt: now })
+            .where(eq(billingDiscountApplication.id, application.id))
+            .returning();
+          if (!updatedAward || !updatedApplication) {
+            throw new Error('Discount renewal update returned no row');
+          }
+          await tx.insert(billingDiscountApplicationEvent).values({
+            applicationId: application.id,
+            type: 'approved',
+            reason,
+            staffUserId,
+          });
+          return { updatedAward, updatedApplication };
+        });
+        await scheduleEvidenceDeletion(application.id, now);
+        await audit(
+          db,
+          staffUserId,
+          'billing.discount_renewed',
+          'discount_award',
+          result.updatedAward.id,
+          { reason, applicationId: application.id, endsAt: preview.output.endsAt },
+        );
+        await dispatchEssentialBillingNotice(db, {
+          organizationId: application.organizationId,
+          idempotencyKey: `billing:discount-award:${result.updatedAward.id}:renew:${application.id}`,
+          subject: 'Your Docket Pro discount was renewed',
+          text: `Finance renewed the ${String(result.updatedAward.percentOff)}% discount through ${preview.output.endsAt.slice(0, 10)}.`,
+        }).catch(() => undefined);
+        return ok(c, AdminDiscountApprovalOut, {
+          application: applicationOut(result.updatedApplication, org),
+          award: awardOut(result.updatedAward),
+          credit: null,
+        });
+      }
       const [failedAward] = await db
         .select()
         .from(billingDiscountAward)
@@ -550,6 +877,14 @@ export const adminDiscountRoutes = new Hono<AppEnv>()
           application.id,
           { reason, awardId: result.updatedAward.id },
         );
+        await dispatchEssentialBillingNotice(db, {
+          organizationId: application.organizationId,
+          idempotencyKey: `billing:discount-application:${application.id}:approved`,
+          subject: 'Your Docket Pro discount was approved',
+          text: creditOut
+            ? `Finance approved your ${String(result.updatedAward.percentOff)}% discount. Billing settings show the account credit that Stripe issued.`
+            : `Finance approved your ${String(result.updatedAward.percentOff)}% discount. Billing settings show when it starts and when eligibility is reviewed.`,
+        }).catch(() => undefined);
         return ok(c, AdminDiscountApprovalOut, {
           application: applicationOut(result.updatedApplication, org),
           award: awardOut(result.updatedAward),
@@ -616,6 +951,12 @@ export const adminDiscountRoutes = new Hono<AppEnv>()
         application.id,
         { reason },
       );
+      await dispatchEssentialBillingNotice(db, {
+        organizationId: application.organizationId,
+        idempotencyKey: `billing:discount-application:${application.id}:rejected`,
+        subject: 'Your discount application was not approved',
+        text: `Finance completed its review: ${reason}`,
+      }).catch(() => undefined);
       return ok(c, AdminDiscountApplicationOut, applicationOut(updated, org));
     },
   )
@@ -630,10 +971,10 @@ export const adminDiscountRoutes = new Hono<AppEnv>()
         'Extends a current public-program award by its configured review term. The current Stripe coupon remains attached, so the customer sees no billing interruption.',
     }),
     zParam(awardParam),
-    zJson(DiscountDecisionBody),
+    zJson(DiscountRenewalBody),
     async (c) => {
       const { awardId } = c.req.valid('param');
-      const { reason } = c.req.valid('json');
+      const { endsAt: requestedEndsAt, reason } = c.req.valid('json');
       const { staffUserId } = c.get('staffCtx');
       const [current] = await db
         .select({ award: billingDiscountAward, program: billingDiscountProgram })
@@ -647,17 +988,96 @@ export const adminDiscountRoutes = new Hono<AppEnv>()
       if (!current || !['active', 'ending'].includes(current.award.status)) {
         throw new ConflictError('Only a current award can be renewed');
       }
-      const endsAt = addUtcMonths(current.award.endsAt, current.program?.reviewMonths ?? 12);
-      const [updated] = await db
-        .update(billingDiscountAward)
-        .set({ status: 'active', endsAt, reviewAt: endsAt, reason })
-        .where(eq(billingDiscountAward.id, awardId))
-        .returning();
-      if (!updated) throw new NotFoundError('Discount award not found');
+      const [renewal] = current.award.programKey
+        ? await db
+            .select()
+            .from(billingDiscountApplication)
+            .where(
+              and(
+                eq(billingDiscountApplication.organizationId, current.award.organizationId),
+                eq(billingDiscountApplication.programKey, current.award.programKey),
+                inArray(billingDiscountApplication.status, ['submitted', 'needs_information']),
+              ),
+            )
+            .orderBy(desc(billingDiscountApplication.submittedAt))
+            .limit(1)
+        : [null];
+      if (current.award.programKey && !renewal) {
+        throw new ConflictError('Approve a current renewal application before extending the award');
+      }
+      const gateway = getContainer().billing;
+      const subscription = await gateway.getSubscription(current.award.organizationId);
+      let providerDiscountId = current.award.providerDiscountId;
+      if (subscription && !providerDiscountId) {
+        if (!current.award.providerCouponId) {
+          throw new ConflictError(
+            'The award has no confirmed Stripe coupon. Finance must reconcile it before renewal.',
+            'billing_provider_sync_failed',
+          );
+        }
+        const applied = await gateway.applySubscriptionDiscount({
+          referenceId: current.award.organizationId,
+          couponId: current.award.providerCouponId,
+          idempotencyKey: `discount-award:${current.award.id}:renew:${renewal?.id ?? requestedEndsAt ?? 'private'}`,
+        });
+        providerDiscountId = applied.discountId;
+      }
+      const now = new Date();
+      const endsAt = current.award.programKey
+        ? addUtcMonths(current.award.endsAt, current.program?.reviewMonths ?? 12)
+        : requestedEndsAt
+          ? new Date(requestedEndsAt)
+          : null;
+      if (!endsAt) {
+        throw new ConflictError('A private partner renewal requires a new end date');
+      }
+      const latestPartnerEnd = addUtcMonths(now, 24);
+      if (
+        !current.award.programKey &&
+        (endsAt <= current.award.endsAt || endsAt > latestPartnerEnd)
+      ) {
+        throw new ConflictError(
+          'A private partner renewal must extend the award and end within 24 months',
+        );
+      }
+      const updated = await db.transaction(async (tx) => {
+        const [award] = await tx
+          .update(billingDiscountAward)
+          .set({
+            status: subscription ? 'active' : 'scheduled',
+            endsAt,
+            reviewAt: endsAt,
+            reason,
+            providerDiscountId,
+          })
+          .where(eq(billingDiscountAward.id, awardId))
+          .returning();
+        if (!award) throw new NotFoundError('Discount award not found');
+        if (renewal) {
+          await tx
+            .update(billingDiscountApplication)
+            .set({ status: 'approved', decisionReason: reason, decidedAt: now })
+            .where(eq(billingDiscountApplication.id, renewal.id));
+          await tx.insert(billingDiscountApplicationEvent).values({
+            applicationId: renewal.id,
+            type: 'approved',
+            reason,
+            staffUserId,
+          });
+        }
+        return award;
+      });
+      if (renewal) await scheduleEvidenceDeletion(renewal.id, now);
       await audit(db, staffUserId, 'billing.discount_renewed', 'discount_award', awardId, {
         reason,
         endsAt: endsAt.toISOString(),
       });
+      await dispatchEssentialBillingNotice(db, {
+        organizationId: current.award.organizationId,
+        idempotencyKey: `billing:discount-award:${awardId}:renew:${renewal?.id ?? endsAt.toISOString()}`,
+        subject: 'Your Docket Pro discount was renewed',
+        text: `Finance renewed the ${String(updated.percentOff)}% discount through ${endsAt.toISOString().slice(0, 10)}.`,
+      }).catch(() => undefined);
       return ok(c, AdminDiscountAwardOut, awardOut(updated));
     },
   )
@@ -685,7 +1105,7 @@ export const adminDiscountRoutes = new Hono<AppEnv>()
       if (!award || !['scheduled', 'active', 'ending'].includes(award.status)) {
         throw new ConflictError('Only a current award can be revoked');
       }
-      if (award.providerDiscountId) {
+      if (award.providerDiscountId || award.providerCouponId) {
         try {
           await getContainer().billing.removeSubscriptionDiscount(
             award.organizationId,
@@ -707,6 +1127,12 @@ export const adminDiscountRoutes = new Hono<AppEnv>()
       await audit(db, staffUserId, 'billing.discount_revoked', 'discount_award', award.id, {
         reason,
       });
+      await dispatchEssentialBillingNotice(db, {
+        organizationId: award.organizationId,
+        idempotencyKey: `billing:discount-award:${award.id}:revoked`,
+        subject: 'Your Docket Pro discount was revoked',
+        text: `Finance ended the discount: ${reason}`,
+      }).catch(() => undefined);
       return ok(c, AdminDiscountAwardOut, awardOut(updated));
     },
   )

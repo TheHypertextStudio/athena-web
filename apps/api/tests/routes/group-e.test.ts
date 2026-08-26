@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
+import { appWithActor, clearDocketPro, getDb, seedBaseOrg } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
@@ -10,6 +10,8 @@ let db!: typeof DbModule.db;
 const r: Record<string, unknown> = {};
 
 beforeAll(async () => {
+  const { env } = await import('../../src/env');
+  Reflect.set(env, 'BILLING_ENABLED', true);
   schema = await getDb();
   db = schema.db;
   r['cycles'] = (await import('../../src/routes/cycles')).default;
@@ -174,7 +176,8 @@ describe('minimal patches cover the "field-absent" spread branches', () => {
 describe('billing checkout/portal defaults (no urls/price/email provided)', () => {
   it('checkout uses defaultPriceKey + appUrl defaults', async () => {
     const { orgId } = await seedBaseOrg(db, schema);
-    const w = appWithActor(r['billing'], `${orgId}-defaults`, ['manage']);
+    await clearDocketPro(db, schema, orgId);
+    const w = appWithActor(r['billing'], orgId, ['manage']);
     const res = await w.request('/checkout', {
       method: 'POST',
       headers: J,
@@ -186,7 +189,8 @@ describe('billing checkout/portal defaults (no urls/price/email provided)', () =
 
   it('checkout passes through a customerEmail when provided', async () => {
     const { orgId } = await seedBaseOrg(db, schema);
-    const w = appWithActor(r['billing'], `${orgId}-email`, ['manage']);
+    await clearDocketPro(db, schema, orgId);
+    const w = appWithActor(r['billing'], orgId, ['manage']);
     const res = await w.request('/checkout', {
       method: 'POST',
       headers: J,
@@ -197,7 +201,13 @@ describe('billing checkout/portal defaults (no urls/price/email provided)', () =
 
   it('portal returns a hosted url', async () => {
     const { orgId } = await seedBaseOrg(db, schema);
-    const w = appWithActor(r['billing'], `${orgId}-portal`, ['manage']);
+    await clearDocketPro(db, schema, orgId);
+    const w = appWithActor(r['billing'], orgId, ['manage']);
+    await w.request('/checkout', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({}),
+    });
     const res = await w.request('/portal', { method: 'POST' });
     expect(res.status).toBe(200);
   });

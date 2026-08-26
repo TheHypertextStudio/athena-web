@@ -37,3 +37,6 @@ export const appHomeUrl = '/today';
  * static because nothing on it has to touch `cookies()`.
  */
 export const openAppUrl = '/open';
+
+/** Authenticated organization chooser for the Docket Pro pricing action. */
+export const startDocketProUrl = '/billing/start';

@@ -255,7 +255,7 @@ export class RealStripeGateway implements BillingGateway {
       result = await this.stripe.subscriptions.search({
         query: `metadata['referenceId']:'${referenceId}'`,
         limit: 1,
-        expand: ['data.items'],
+        expand: ['data.items', 'data.discounts'],
       });
     } catch (cause) {
       throw new Error('RealStripeGateway: failed to look up subscription.', { cause });
@@ -271,6 +271,23 @@ export class RealStripeGateway implements BillingGateway {
     return toSubscription(sub, referenceId);
   }
 
+  /** {@inheritDoc BillingGateway.listSubscriptions} */
+  async listSubscriptions(referenceId: string): Promise<readonly Subscription[]> {
+    /* v8 ignore start */
+    let result: Stripe.ApiSearchResult<Stripe.Subscription>;
+    try {
+      result = await this.stripe.subscriptions.search({
+        query: `metadata['referenceId']:'${referenceId}'`,
+        limit: 10,
+        expand: ['data.items', 'data.discounts'],
+      });
+    } catch (cause) {
+      throw new Error('RealStripeGateway: failed to list organization subscriptions.', { cause });
+    }
+    return result.data.map((subscription) => toSubscription(subscription, referenceId));
+    /* v8 ignore stop */
+  }
+
   /** {@inheritDoc BillingGateway.cancelSubscription} */
   async cancelSubscription(referenceId: string): Promise<void> {
     const sub = await this.findSubscription(referenceId);
@@ -280,6 +297,17 @@ export class RealStripeGateway implements BillingGateway {
       await this.stripe.subscriptions.cancel(sub.id);
     } catch (cause) {
       throw new Error('RealStripeGateway: failed to cancel subscription.', { cause });
+    }
+    /* v8 ignore stop */
+  }
+
+  /** {@inheritDoc BillingGateway.cancelSubscriptionById} */
+  async cancelSubscriptionById(subscriptionId: string, idempotencyKey: string): Promise<void> {
+    /* v8 ignore start */
+    try {
+      await this.stripe.subscriptions.cancel(subscriptionId, {}, { idempotencyKey });
+    } catch (cause) {
+      throw new Error('RealStripeGateway: failed to cancel the exact subscription.', { cause });
     }
     /* v8 ignore stop */
   }
@@ -423,6 +451,11 @@ export class RealStripeGateway implements BillingGateway {
   async getLatestRecurringInvoice(referenceId: string): Promise<RecurringInvoiceLine | null> {
     const subscription = await this.findSubscription(referenceId);
     if (!subscription) return null;
+    const priceRef = this.config.priceKey;
+    if (!priceRef) {
+      throw new Error('RealStripeGateway: no Docket Pro price configured for invoice matching.');
+    }
+    const priceId = await this.resolvePrice(priceRef);
     /* v8 ignore start */
     let invoices: Stripe.ApiList<Stripe.Invoice>;
     try {
@@ -436,7 +469,23 @@ export class RealStripeGateway implements BillingGateway {
     }
     for (const invoice of invoices.data) {
       if (invoice.status !== 'open' && invoice.status !== 'paid') continue;
-      const line = invoice.lines.data.find((candidate) => candidate.amount > 0);
+      const line = invoice.lines.data.find((candidate) => {
+        const view = candidate as typeof candidate & {
+          price?: { id?: string } | null;
+          pricing?: { price_details?: { price?: string } | null } | null;
+          parent?: {
+            type?: string;
+            subscription_item_details?: { proration?: boolean } | null;
+          } | null;
+        };
+        const linePriceId = view.pricing?.price_details?.price ?? view.price?.id;
+        return (
+          candidate.amount > 0 &&
+          linePriceId === priceId &&
+          view.parent?.type === 'subscription_item_details' &&
+          view.parent.subscription_item_details?.proration === false
+        );
+      });
       if (!line) continue;
       return {
         invoiceId: invoice.id,

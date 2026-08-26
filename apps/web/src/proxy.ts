@@ -24,6 +24,7 @@ const PROTECTED_SEGMENTS: readonly string[] = [
   'exports',
   'workspaces',
   'orgs',
+  'billing',
 ];
 
 /**
@@ -270,6 +271,8 @@ export const config = {
     '/workspaces/:path*',
     '/orgs',
     '/orgs/:path*',
+    '/billing',
+    '/billing/:path*',
     '/((?!_next|v1|api|briefs|.*\\..*).*)',
   ],
 };

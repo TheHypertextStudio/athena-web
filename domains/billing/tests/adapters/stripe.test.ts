@@ -85,6 +85,7 @@ function stripeSub(over: {
   periodEnd?: number;
   trialEnd?: number | null;
   cancelAtPeriodEnd?: boolean;
+  discounts?: StripeSubscriptionView['discounts'];
 }): StripeSubscriptionView {
   const metadata: Record<string, string> =
     over.referenceId === null ? {} : { referenceId: over.referenceId ?? 'org_1' };
@@ -95,6 +96,7 @@ function stripeSub(over: {
     metadata,
     trial_end: over.trialEnd === undefined ? null : over.trialEnd,
     cancel_at_period_end: over.cancelAtPeriodEnd ?? false,
+    ...(over.discounts ? { discounts: over.discounts } : {}),
     items: {
       data: [{ current_period_end: over.periodEnd ?? 1_700_000_000 }],
     },
@@ -183,6 +185,23 @@ describe('toSubscription', () => {
     expect(sub).not.toHaveProperty('trialEnd');
   });
 
+  it('maps expanded subscription discounts for award reconciliation', () => {
+    const sub = toSubscription(
+      stripeSub({
+        discounts: [
+          {
+            id: 'di_student',
+            source: { coupon: { id: 'coupon_student' } },
+          },
+        ],
+      }),
+    );
+    expect(sub).toMatchObject({
+      discountIds: ['di_student'],
+      couponIds: ['coupon_student'],
+    });
+  });
+
   it('falls back to the provided referenceId when metadata is absent', () => {
     const sub = toSubscription(stripeSub({ referenceId: null }), 'org_fallback');
     expect(sub.referenceId).toBe('org_fallback');
@@ -266,6 +285,7 @@ describe('RealStripeGateway.mapStripeEvent', () => {
       customerId: 'cus_42',
       subscription: {
         id: 'sub_42',
+        customerId: 'cus_42',
         referenceId: 'org_9',
         status: 'past_due',
         currentPeriodEnd: new Date(1_700_000_000 * 1000).toISOString(),
@@ -523,6 +543,25 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
     expect(await gw.getSubscription('none')).toBeNull();
   });
 
+  it('lists every current subscription so reconciliation can alert on duplicates', async () => {
+    const { http, reqs } = scriptedHttp([
+      searchResult([
+        stripeSub({ id: 'sub_first', referenceId: 'org_duplicate' }),
+        stripeSub({ id: 'sub_second', referenceId: 'org_duplicate', status: 'past_due' }),
+      ]),
+    ]);
+    const gw = new RealStripeGateway({ secretKey: 'sk' }, http);
+
+    const subscriptions = await gw.listSubscriptions('org_duplicate');
+
+    expect(subscriptions.map((subscription) => subscription.id)).toEqual([
+      'sub_first',
+      'sub_second',
+    ]);
+    expect(requestAt(reqs, 0).url).toContain('/v1/subscriptions/search');
+    expect(requestAt(reqs, 0).url).toContain('limit=10');
+  });
+
   it('cancels the resolved subscription', async () => {
     const { http, reqs } = scriptedHttp([
       searchResult([
@@ -534,6 +573,19 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
     await gw.cancelSubscription('org_1');
     expect(requestAt(reqs, 1).url).toContain('/v1/subscriptions/sub_cancel');
     expect(requestAt(reqs, 1).method).toBe('DELETE');
+  });
+
+  it('cancels an exact subscription without a search race', async () => {
+    const { http, reqs } = scriptedHttp([
+      { id: 'sub_exact', object: 'subscription', status: 'canceled', items: list([]) },
+    ]);
+    const gw = new RealStripeGateway({ secretKey: 'sk' }, http);
+
+    await gw.cancelSubscriptionById('sub_exact', 'country-event-1');
+
+    expect(requestAt(reqs, 0).url).toContain('/v1/subscriptions/sub_exact');
+    expect(requestAt(reqs, 0).method).toBe('DELETE');
+    expect(requestAt(reqs, 0).headers.get('idempotency-key')).toBe('country-event-1');
   });
 
   it('cancel is a no-op when there is no subscription', async () => {
@@ -734,16 +786,39 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
           currency: 'usd',
           lines: list([
             {
+              id: 'il_setup_fee',
+              object: 'line_item',
+              amount: 2_500,
+              pricing: { price_details: { price: 'price_setup' } },
+              period: { start: 1_700_000_000, end: 1_700_000_000 },
+            },
+            {
+              id: 'il_proration',
+              object: 'line_item',
+              amount: 400,
+              pricing: { price_details: { price: 'price_docket_pro' } },
+              parent: {
+                type: 'subscription_item_details',
+                subscription_item_details: { proration: true },
+              },
+              period: { start: 1_701_000_000, end: 1_702_678_400 },
+            },
+            {
               id: 'il_1',
               object: 'line_item',
               amount: 800,
+              pricing: { price_details: { price: 'price_docket_pro' } },
+              parent: {
+                type: 'subscription_item_details',
+                subscription_item_details: { proration: false },
+              },
               period: { start: 1_700_000_000, end: 1_702_678_400 },
             },
           ]),
         },
       ]),
     ]);
-    const gw = new RealStripeGateway({ secretKey: 'sk' }, http);
+    const gw = new RealStripeGateway({ secretKey: 'sk', priceKey: 'price_docket_pro' }, http);
 
     await expect(gw.getLatestRecurringInvoice('org_1')).resolves.toEqual({
       invoiceId: 'in_1',

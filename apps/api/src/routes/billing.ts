@@ -8,19 +8,15 @@
  * {@link InMemoryBillingGateway}. The org id (from the path's actor context) is the
  * gateway `referenceId`.
  *
- * This router also exposes the **org-facing** slice of the data-lifecycle pipeline
- * (data-model §3): `GET /lifecycle` reads `lifecycle_state` / `export_ready_at` /
- * `delete_after_at`; `POST /lifecycle/start-export-window` cancels the subscription
- * and opens the 14-day export window; `POST /lifecycle/reactivate` rescues an org out
- * of the window when its subscription is healthy again. The admin-only transitions
- * (place / release {@link lifecycleHold}) live in the `/admin/*` surface, not here.
+ * This router keeps the deprecated `GET /lifecycle` response for older clients. Billing no
+ * longer changes account-retention state. The confirmed Danger Zone account-deletion flow owns
+ * retention, while Docket Pro access comes from the organization's billing entitlement.
  *
  * `POST /export` generates a downloadable snapshot of the org's entire work layer and
  * stores it via the {@link BlobStore} port, stamping `export_ready_at` on the org.
  *
- * Subscription/lifecycle reads are open to any org member; every mutation (`/checkout`,
- * `/portal`, `/export`, the lifecycle transitions) requires the `manage` capability via
- * {@link capabilityGuard}.
+ * Subscription and lifecycle reads are open to any org member. Every mutation (`/checkout`,
+ * `/portal`, and `/export`) requires the `manage` capability via {@link capabilityGuard}.
  */
 import {
   BILLING_DISCOUNT_APPLICATION_STATUSES,
@@ -54,6 +50,7 @@ import { getContainer } from '../container';
 import { env } from '../env';
 import {
   BillingCustomerMissingError,
+  BillingUnavailableError,
   CheckoutPendingError,
   NotFoundError,
   SubscriptionExistsError,
@@ -114,6 +111,7 @@ export type BillingProductOut = z.infer<typeof BillingProductOut>;
 /** Organization billing summary. Baseline Docket is represented by an empty products array. */
 export const BillingSummaryOut = z.object({
   organizationId: z.string(),
+  checkoutEnabled: z.boolean(),
   listPrice: z.object({
     amount: z.literal(800),
     currency: z.literal('usd'),
@@ -153,6 +151,12 @@ export const CheckoutBody = z
       .describe(
         'Email to pre-fill on the hosted checkout page; omit to let the provider collect it.',
       ),
+    returnTo: z
+      .string()
+      .max(2_000)
+      .refine((value) => value.startsWith('/') && !value.startsWith('//'))
+      .optional()
+      .describe('Same-origin product path to restore after Stripe confirms access.'),
   })
   .strict();
 /** Validated checkout-body value. */
@@ -170,15 +174,12 @@ export const RedirectOut = z.object({
 export type RedirectOut = z.infer<typeof RedirectOut>;
 
 /**
- * The org's data-lifecycle status returned by `GET /lifecycle` and the lifecycle
- * transition endpoints (data-model §3).
+ * Deprecated account-retention status returned by `GET /lifecycle`.
  *
  * @remarks
- * `lifecycleState` is one of `trialing | active | past_due | export_window |
- * pending_deletion | deleted`. `exportReadyAt` is set once the org enters the export
- * window (or a manual export is generated); `deleteAfterAt` is the instant the cron
- * sweep may advance the org toward deletion. Both timestamps are `null` for a healthy
- * org.
+ * Billing cancellation and payment failure never mutate these fields. The confirmed Danger Zone
+ * account-deletion flow owns retention state. Billing keeps this read response for older clients
+ * while customer access comes from {@link BillingSummaryOut.accessMode}.
  */
 export const LifecycleOut = z
   .object({
@@ -186,19 +187,19 @@ export const LifecycleOut = z
     lifecycleState: z
       .enum(['trialing', 'active', 'past_due', 'export_window', 'pending_deletion', 'deleted'])
       .describe(
-        "The org's data-lifecycle state (data-model §3): `trialing`/`active` are healthy; `past_due` is a failed payment under retry; `export_window` is the 14-day grace period after cancellation where data can still be exported; `pending_deletion` is queued for the cron sweep to purge (writes are frozen with a 402 `card_required`); `deleted` is purged.",
+        "The organization's legacy account-retention state. Billing does not change this value. Older `export_window` and `pending_deletion` values remain visible for compatibility while access comes from the billing summary.",
       ),
     exportReadyAt: z
       .string()
       .nullable()
       .describe(
-        'ISO-8601 instant a downloadable export became available (set on entering the export window or generating one manually); `null` for a healthy org.',
+        'ISO-8601 instant a downloadable export became available through the independent export flow, or `null` when no export is ready.',
       ),
     deleteAfterAt: z
       .string()
       .nullable()
       .describe(
-        'ISO-8601 instant after which the background cron sweep may advance the org toward deletion; `null` for a healthy org.',
+        'Legacy account-deletion deadline retained for older clients. Billing never sets this value.',
       ),
   })
   .meta({ id: 'LifecycleOut', description: "An organization's data-lifecycle status." });
@@ -248,6 +249,11 @@ function defaultPriceKey(): string {
     env.DOCKET_PRICE_LOOKUP_TEAM ??
     'docket_pro_monthly'
   );
+}
+
+/** Read the rollout flag safely when test-only validation skipping leaves raw env strings. */
+function checkoutRolloutEnabled(value: unknown): boolean {
+  return value === true || value === 'true';
 }
 
 /** Build an absolute app URL for the given path (checkout success/cancel defaults). */
@@ -319,24 +325,26 @@ const billing = new Hono<AppEnv>()
       const now = Date.now();
       const pro = products.find((product) => product.productKey === 'docket_pro');
       const hasWritablePro =
-        pro?.source === 'complimentary' ||
+        (pro?.source === 'complimentary' && pro.status === 'active') ||
         pro?.status === 'trialing' ||
         pro?.status === 'active' ||
         (pro?.status === 'past_due' && pro.graceEndsAt !== null && pro.graceEndsAt.getTime() > now);
       return ok(c, BillingSummaryOut, {
         organizationId: actorCtx.orgId,
+        checkoutEnabled: checkoutRolloutEnabled(env.BILLING_ENABLED),
         listPrice: { amount: 800, currency: 'usd', interval: 'month' },
         accessMode: org.isPersonal || hasWritablePro ? 'writable' : 'read_only',
         canManageBilling: actorCtx.capabilities.includes('manage'),
-        effectiveDiscount: awards[0]
-          ? {
-              percentOff: awards[0].percentOff,
-              status: awards[0].status,
-              startsAt: awards[0].startsAt.toISOString(),
-              endsAt: awards[0].endsAt.toISOString(),
-              reviewAt: awards[0].reviewAt.toISOString(),
-            }
-          : null,
+        effectiveDiscount:
+          awards[0] && ['scheduled', 'active', 'ending'].includes(awards[0].status)
+            ? {
+                percentOff: awards[0].percentOff,
+                status: awards[0].status,
+                startsAt: awards[0].startsAt.toISOString(),
+                endsAt: awards[0].endsAt.toISOString(),
+                reviewAt: awards[0].reviewAt.toISOString(),
+              }
+            : null,
         applicationStatus: applications[0]?.status ?? null,
         issuedCredit: credits[0]?.issuedAt
           ? {
@@ -376,6 +384,9 @@ Side effect: creates a checkout session. Docket Pro ownership changes only after
     }),
     zJson(CheckoutBody),
     async (c) => {
+      if (!env.BILLING_ENABLED) {
+        throw new BillingUnavailableError('Docket Pro checkout is not open yet');
+      }
       const { orgId } = c.get('actorCtx');
       const input = c.req.valid('json');
       await loadOrg(orgId);
@@ -398,6 +409,7 @@ Side effect: creates a checkout session. Docket Pro ownership changes only after
       }
 
       const now = new Date();
+      const gateway = getContainer().billing;
       const lease = await acquireCheckoutAttempt(
         db,
         orgId,
@@ -407,36 +419,44 @@ Side effect: creates a checkout session. Docket Pro ownership changes only after
       );
       if (lease.kind === 'reusable') return ok(c, RedirectOut, { url: lease.url });
       if (lease.kind === 'pending') throw new CheckoutPendingError();
-
-      const gateway = getContainer().billing;
-      try {
-        const account = await ensureBillingCustomer(db, gateway, orgId, input.customerEmail);
-        const [award] = await db
-          .select({ providerCouponId: billingDiscountAward.providerCouponId })
-          .from(billingDiscountAward)
-          .where(
-            and(
-              eq(billingDiscountAward.organizationId, orgId),
-              inArray(billingDiscountAward.status, ['scheduled', 'active']),
-            ),
-          )
-          .limit(1);
-        const result = await gateway.createCheckoutSession({
-          referenceId: orgId,
-          customerId: account.stripeCustomerId,
-          priceKey: defaultPriceKey(),
-          successUrl: appUrl(`/billing/return?org=${orgId}&status=success`),
-          cancelUrl: appUrl(`/billing/return?org=${orgId}&status=cancel`),
-          trialDays: existing.length === 0 && account.trialConsumedAt === null ? 14 : 0,
-          ...(award?.providerCouponId ? { couponId: award.providerCouponId } : {}),
-          idempotencyKey: `docket:checkout:${lease.id}`,
-        });
-        await completeCheckoutAttempt(db, lease.id, result.sessionId, result.url, now);
-        return ok(c, RedirectOut, { url: result.url });
-      } catch (cause) {
+      const providerSubscriptions = await gateway.listSubscriptions(orgId);
+      if (providerSubscriptions.some((subscription) => subscription.status !== 'canceled')) {
         await failCheckoutAttempt(db, lease.id, now);
-        throw cause;
+        throw new SubscriptionExistsError();
       }
+
+      let account;
+      try {
+        account = await ensureBillingCustomer(db, gateway, orgId, input.customerEmail);
+      } catch {
+        throw new BillingCustomerMissingError();
+      }
+      const [award] = await db
+        .select({ providerCouponId: billingDiscountAward.providerCouponId })
+        .from(billingDiscountAward)
+        .where(
+          and(
+            eq(billingDiscountAward.organizationId, orgId),
+            inArray(billingDiscountAward.status, ['scheduled', 'active']),
+          ),
+        )
+        .limit(1);
+      const returnTo = input.returnTo ?? `/orgs/${orgId}/settings/billing`;
+      const returnQuery = encodeURIComponent(returnTo);
+      // Keep this lease reserved when Stripe times out. The result is unknown, so a new
+      // idempotency key could create a second subscription before the first reply arrives.
+      const result = await gateway.createCheckoutSession({
+        referenceId: orgId,
+        customerId: account.stripeCustomerId,
+        priceKey: defaultPriceKey(),
+        successUrl: appUrl(`/billing/return?org=${orgId}&status=success&returnTo=${returnQuery}`),
+        cancelUrl: appUrl(`/billing/return?org=${orgId}&status=cancel&returnTo=${returnQuery}`),
+        trialDays: existing.length === 0 && account.trialConsumedAt === null ? 14 : 0,
+        ...(award?.providerCouponId ? { couponId: award.providerCouponId } : {}),
+        idempotencyKey: `docket:checkout:${lease.id}`,
+      });
+      await completeCheckoutAttempt(db, lease.id, result.sessionId, result.url, now);
+      return ok(c, RedirectOut, { url: result.url });
     },
   )
   .post(
@@ -447,7 +467,7 @@ Side effect: creates a checkout session. Docket Pro ownership changes only after
       summary: 'Open the billing portal',
       capability: 'manage',
       response: RedirectOut,
-      description: `Open the provider's hosted billing portal and return {@link RedirectOut} \`{ url }\` — the Stripe customer-portal URL where an admin manages Docket Pro (update the payment method, cancel Docket Pro, or view invoices). Goes through the BillingGateway port with the org id as \`referenceId\`. Side effect: any change the admin makes in the portal flows back via the provider webhook, which drives Docket's product entitlement and lifecycle state — this route only mints the portal link. Requires \`manage\`. Related: \`POST /checkout\` (add Docket Pro), \`GET /\` (current state), \`POST /lifecycle/reactivate\` (rescue an org out of the export window once billing is healthy).`,
+      description: `Open the provider's hosted billing portal and return {@link RedirectOut} \`{ url }\` — the Stripe customer-portal URL where an admin manages Docket Pro (update the payment method, cancel Docket Pro, or view invoices). Goes through the BillingGateway port with the durable Stripe customer id. Any change the admin makes in the portal flows back through signed provider webhooks, which update Docket Pro access without changing account-retention fields. This route only mints the portal link. Requires \`manage\`. Related: \`POST /checkout\` (add Docket Pro) and \`GET /\` (current state).`,
     }),
     async (c) => {
       const { orgId } = c.get('actorCtx');
@@ -466,7 +486,7 @@ Side effect: creates a checkout session. Docket Pro ownership changes only after
       tag: 'Billing',
       summary: 'Get the org lifecycle status',
       response: LifecycleOut,
-      description: `Return the org's **data-lifecycle** status as {@link LifecycleOut} (data-model §3): the \`lifecycleState\` (\`trialing\` | \`active\` | \`past_due\` | \`export_window\` | \`pending_deletion\` | \`deleted\`) plus \`exportReadyAt\` and \`deleteAfterAt\` timestamps. This is the Docket-side view of what a failed/cancelled subscription *means for the org's data* — distinct from the raw provider subscription at \`GET /\`. A healthy org reports \`null\` for both timestamps; once it enters the export window \`exportReadyAt\` is set and \`deleteAfterAt\` marks when the background cron sweep may advance it toward deletion. When an org is \`pending_deletion\` (or otherwise frozen), write endpoints across the API reject with a typed 402 (\`card_required\`) — this endpoint, a read open to any org member, is how a client discovers that state. A missing/purged org 404s. Related: \`POST /lifecycle/start-export-window\`, \`POST /lifecycle/reactivate\`, \`POST /export\`.`,
+      description: `Return the org's deprecated account-retention fields as {@link LifecycleOut}. Billing cancellation and payment failure never write these fields. The confirmed Danger Zone account-deletion flow owns retention state. Current customer access, cancellation, and grace state come from \`GET /\`. This read remains for older clients while they migrate to the billing summary. A missing or purged organization returns 404. Related: \`GET /\` and \`POST /export\`.`,
     }),
     async (c) => {
       const { orgId } = c.get('actorCtx');
@@ -484,7 +504,7 @@ Side effect: creates a checkout session. Docket Pro ownership changes only after
       response: ExportOut,
       description: `Generate a downloadable snapshot of the org's entire work layer and return {@link ExportOut} \`{ downloadUrl, expiresAt }\`. The handler scans the org's work-layer tables (\`collectWorkLayer\`), serializes them to a single JSON document, and writes it through the BlobStore **port** (in-memory/local or real object storage) under \`exports/<orgId>/<ulid>.json\`. \`downloadUrl\` is the API path \`GET /v1/orgs/:orgId/billing/export/file\` — a session and the \`manage\` capability are required to read it, and the 14-day \`expiresAt\` is enforced there on every read rather than advertised. Generating a new export deletes the object the previous one wrote.
 
-Side effect: stamps \`exportReadyAt\` on the org so both the org's \`GET /lifecycle\` view and the admin lifecycle views reflect the fresh artifact — this is the export an admin takes before letting the deletion pipeline proceed, and it can be generated at any time (not only inside the export window). A missing/purged org 404s. Requires \`manage\`. Related: \`POST /lifecycle/start-export-window\` (which opens the grace period this export is meant for), \`GET /lifecycle\`.`,
+Side effect: stamps \`exportReadyAt\` so the API can enforce the 14-day download lifetime. Export remains available to administrators in every non-deleted billing state and does not schedule deletion. A missing or purged organization returns 404. Requires \`manage\`. Related: \`GET /lifecycle\`.`,
     }),
     async (c) => {
       const { orgId } = c.get('actorCtx');
@@ -505,7 +525,7 @@ Side effect: stamps \`exportReadyAt\` on the org so both the org's \`GET /lifecy
       const key = `exports/${orgId}/${genId()}.json`;
       await getContainer().blob.put(key, bytes, 'application/json');
 
-      // Stamp export_ready_at so the org + admin lifecycle views reflect the fresh artifact.
+      // The download route uses this timestamp to enforce the 14-day export lifetime.
       await db
         .update(organization)
         .set({ exportReadyAt: now, exportBlobKey: key })

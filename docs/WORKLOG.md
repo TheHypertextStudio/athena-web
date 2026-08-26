@@ -38,6 +38,14 @@
   payment authentication, cancellation, reactivation, renewal, discounts, credit notes, and
   complimentary conflicts. Responsive customer and admin captures cover desktop, mobile, light,
   and dark states.
+- **Coverage gate correction**: The billing package's CI job passed all behavior tests but failed
+  its 90% coverage gate after the provider-state work added untested branches. The package now has
+  142 passing tests and reports 97.65% statements, 92.58% branches, 100% functions, and 98.87%
+  lines. The new tests cover durable customer ownership, exact subscription lookup, duplicate
+  Checkout leases, event completion, cancellation, discounts, and recurring invoice eligibility.
+  They also found and fixed three in-memory provider defects that could hide production failures:
+  provider transitions now retain customer ownership, Checkout rejects unknown or mis-scoped
+  coupons, and a retried discount application returns the first provider result.
 - **Deployment correction**: The repository-level kill switch did not control production because
   the GitHub `production` environment overrode `BILLING_ENABLED=true`. The production environment
   now holds `false`, and a deployment policy test covers the missing attestation pass-through.
@@ -46,7 +54,9 @@
   a recorded verification timestamp before `BILLING_ENABLED=true` can pass configuration. Docket
   still keeps its own Checkout lease and exact subscription lookup because Stripe does not treat a
   trialing subscription as active for that redirect. Billing work integrates directly into
-  `main`; agents must not enable or use GitHub pull requests.
+  `main`; agents must not enable or use GitHub pull requests. Operators must use only the
+  Hypertext Studio Stripe account through the Hypertext Studio Chrome instance. They must never
+  use a personal Chrome profile or personal Stripe account for Docket billing work.
 - **Blockers**: Finance and legal must approve the Docket merchant identity, tax registrations,
   invoice and credit treatment, refund policy, discount eligibility, evidence retention, and
   customer terms. Production still needs the 24-hour shadow reconciliation, one live full-price

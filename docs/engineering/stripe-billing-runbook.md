@@ -6,6 +6,10 @@
 
 ## Enablement
 
+Operate Docket billing only in the Hypertext Studio Stripe account. Use the Hypertext Studio Chrome
+instance for every Stripe Dashboard check. Never use a personal Chrome profile or personal Stripe
+account for Docket configuration, verification, or canary work.
+
 Keep `BILLING_ENABLED=false` while migrations or backfill rows remain unresolved. Configure the
 Docket Pro product and its $8 USD monthly price through `pnpm integrations`. Configure the customer
 portal for payment methods, invoices, and cancellation at period end. Disable plan switching and
@@ -23,9 +27,9 @@ and exact subscription checks remain responsible for the trialing state that Str
 redirect does not classify as an existing active subscription.
 
 Open hosted Checkout and the portal before enablement. Both pages must name Docket or the approved
-legal merchant. The current shared Stripe test account displays “The Rebuilding America Project,”
-so public Docket Checkout must remain disabled until finance provisions a Docket account or
-approves that merchant identity in the customer terms and payment copy.
+legal merchant. Public Docket Checkout must remain disabled until finance verifies the customer
+statement descriptor and merchant name in both test and live mode on the Hypertext Studio Stripe
+account. Finance must approve that identity in the customer terms and payment copy.
 
 Run the database migrations against a production-shaped snapshot. Then run:
 

@@ -74,6 +74,10 @@ export class InMemoryBillingGateway implements BillingGateway {
   private readonly lifecycleStep = new Map<string, number>();
   private readonly coupons = new Map<string, DiscountCouponInput>();
   private readonly discounts = new Map<string, { discountId: string; couponId: string }>();
+  private readonly discountApplications = new Map<
+    string,
+    { referenceId: string; couponId: string; discountId: string }
+  >();
   private counter = 0;
   /** The synthetic webhook events emitted so far, in order. */
   readonly events: BillingEvent[] = [];
@@ -111,6 +115,13 @@ export class InMemoryBillingGateway implements BillingGateway {
 
   /** {@inheritDoc BillingGateway.createCheckoutSession} */
   async createCheckoutSession(input: CheckoutSessionInput): Promise<CheckoutSessionResult> {
+    if (input.couponId) {
+      const coupon = this.coupons.get(input.couponId);
+      if (!coupon) throw new Error('InMemoryBillingGateway: unknown coupon.');
+      if (coupon.priceKey !== input.priceKey) {
+        throw new Error('InMemoryBillingGateway: coupon is scoped to another product.');
+      }
+    }
     const sessionId = this.nextId('cs');
     // Simulate the customer completing checkout. A zero-day trial is an immediate paid start.
     const trialDays = input.trialDays ?? 14;
@@ -168,9 +179,13 @@ export class InMemoryBillingGateway implements BillingGateway {
   async cancelSubscription(referenceId: string): Promise<void> {
     const sub = this.subscriptions.get(referenceId);
     if (!sub) return;
+    const {
+      trialEnd: _trialEnd,
+      cancelAtPeriodEnd: _cancelAtPeriodEnd,
+      ...preservedSubscription
+    } = sub;
     const canceled: Subscription = {
-      id: sub.id,
-      referenceId,
+      ...preservedSubscription,
       status: 'canceled',
       currentPeriodEnd: this.now,
     };
@@ -250,6 +265,15 @@ export class InMemoryBillingGateway implements BillingGateway {
   async applySubscriptionDiscount(
     input: SubscriptionDiscountInput,
   ): Promise<AppliedSubscriptionDiscount> {
+    const replay = this.discountApplications.get(input.idempotencyKey);
+    if (replay) {
+      if (replay.referenceId !== input.referenceId || replay.couponId !== input.couponId) {
+        throw new Error(
+          'InMemoryBillingGateway: idempotency key reused with another discount application.',
+        );
+      }
+      return { discountId: replay.discountId };
+    }
     if (!this.subscriptions.has(input.referenceId)) {
       throw new Error('InMemoryBillingGateway: no subscription for discount.');
     }
@@ -258,6 +282,11 @@ export class InMemoryBillingGateway implements BillingGateway {
     }
     const discountId = this.nextId('di');
     this.discounts.set(input.referenceId, { discountId, couponId: input.couponId });
+    this.discountApplications.set(input.idempotencyKey, {
+      referenceId: input.referenceId,
+      couponId: input.couponId,
+      discountId,
+    });
     const subscription = this.subscriptions.get(input.referenceId);
     if (subscription) {
       this.subscriptions.set(input.referenceId, {
@@ -328,7 +357,9 @@ export class InMemoryBillingGateway implements BillingGateway {
     if (!step) return null;
     /* v8 ignore stop */
     const existing = this.subscriptions.get(referenceId);
+    const { trialEnd: _trialEnd, ...preservedSubscription } = existing ?? {};
     const sub: Subscription = {
+      ...preservedSubscription,
       id: existing?.id ?? this.nextId('sub'),
       referenceId,
       status: step.status,

@@ -287,11 +287,11 @@ export class RealStripeGateway implements BillingGateway {
     return toSubscription(sub, referenceId);
   }
 
-  /** {@inheritDoc BillingGateway.getSubscriptionById} */
-  async getSubscriptionById(
+  /** Retrieve one exact Stripe subscription only when its metadata names the expected owner. */
+  private async retrieveOwnedSubscription(
     subscriptionId: string,
     referenceId: string,
-  ): Promise<Subscription | null> {
+  ): Promise<Stripe.Subscription | null> {
     /* v8 ignore start */
     let subscription: Stripe.Subscription;
     try {
@@ -306,12 +306,20 @@ export class RealStripeGateway implements BillingGateway {
       if (status === 404) return null;
       throw new Error('RealStripeGateway: failed to retrieve the exact subscription.', { cause });
     }
-    const mapped = toSubscription(subscription, referenceId);
-    if (mapped.referenceId !== referenceId) {
+    if (subscription.metadata['referenceId'] !== referenceId) {
       throw new Error('RealStripeGateway: exact subscription belongs to another organization.');
     }
-    return mapped;
+    return subscription;
     /* v8 ignore stop */
+  }
+
+  /** {@inheritDoc BillingGateway.getSubscriptionById} */
+  async getSubscriptionById(
+    subscriptionId: string,
+    referenceId: string,
+  ): Promise<Subscription | null> {
+    const subscription = await this.retrieveOwnedSubscription(subscriptionId, referenceId);
+    return subscription ? toSubscription(subscription) : null;
   }
 
   /** {@inheritDoc BillingGateway.listSubscriptions} */
@@ -351,6 +359,10 @@ export class RealStripeGateway implements BillingGateway {
     idempotencyKey: string,
     atPeriodEnd = false,
   ): Promise<Subscription> {
+    const existing = await this.retrieveOwnedSubscription(subscriptionId, referenceId);
+    if (!existing) {
+      throw new Error('RealStripeGateway: exact subscription not found.');
+    }
     /* v8 ignore start */
     let updated: Stripe.Subscription;
     try {
@@ -366,7 +378,7 @@ export class RealStripeGateway implements BillingGateway {
     } catch (cause) {
       throw new Error('RealStripeGateway: failed to cancel the exact subscription.', { cause });
     }
-    const mapped = toSubscription(updated, referenceId);
+    const mapped = toSubscription(updated);
     if (mapped.referenceId !== referenceId) {
       throw new Error('RealStripeGateway: exact subscription belongs to another organization.');
     }

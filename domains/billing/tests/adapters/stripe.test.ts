@@ -579,6 +579,23 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
     expect(await gw.getSubscription('none')).toBeNull();
   });
 
+  it('rejects an exact subscription that lacks Docket ownership metadata', async () => {
+    const { http } = scriptedHttp([
+      {
+        id: 'sub_unowned',
+        object: 'subscription',
+        status: 'active',
+        metadata: {},
+        items: list([{ current_period_end: 1_700_000_000 }]),
+      },
+    ]);
+    const gw = new RealStripeGateway({ secretKey: 'sk' }, http);
+
+    await expect(gw.getSubscriptionById('sub_unowned', 'org_claimed')).rejects.toThrow(
+      'belongs to another organization',
+    );
+  });
+
   it('lists every current subscription so reconciliation can alert on duplicates', async () => {
     const { http, reqs } = scriptedHttp([
       searchResult([
@@ -613,21 +630,67 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
 
   it('cancels an exact subscription without a search race', async () => {
     const { http, reqs } = scriptedHttp([
-      { id: 'sub_exact', object: 'subscription', status: 'canceled', items: list([]) },
+      {
+        id: 'sub_exact',
+        object: 'subscription',
+        status: 'active',
+        metadata: { referenceId: 'org_1' },
+        items: list([]),
+      },
+      {
+        id: 'sub_exact',
+        object: 'subscription',
+        status: 'canceled',
+        metadata: { referenceId: 'org_1' },
+        items: list([]),
+      },
     ]);
     const gw = new RealStripeGateway({ secretKey: 'sk' }, http);
 
     const canceled = await gw.cancelSubscriptionById('sub_exact', 'org_1', 'country-event-1');
 
-    expect(requestAt(reqs, 0).url).toContain('/v1/subscriptions/sub_exact');
-    expect(requestAt(reqs, 0).method).toBe('DELETE');
-    expect(requestAt(reqs, 0).headers.get('idempotency-key')).toBe('country-event-1');
+    expect(requestAt(reqs, 0).method).toBe('GET');
+    expect(requestAt(reqs, 1).url).toContain('/v1/subscriptions/sub_exact');
+    expect(requestAt(reqs, 1).method).toBe('DELETE');
+    expect(requestAt(reqs, 1).headers.get('idempotency-key')).toBe('country-event-1');
     expect(canceled).toMatchObject({ id: 'sub_exact', referenceId: 'org_1', status: 'canceled' });
+  });
+
+  it('checks exact subscription ownership before sending a cancellation mutation', async () => {
+    const { http, reqs } = scriptedHttp([
+      {
+        id: 'sub_other',
+        object: 'subscription',
+        status: 'active',
+        metadata: { referenceId: 'org_other' },
+        items: list([{ current_period_end: 1_700_000_000 }]),
+      },
+    ]);
+    const gw = new RealStripeGateway({ secretKey: 'sk' }, http);
+
+    await expect(
+      gw.cancelSubscriptionById('sub_other', 'org_claimed', 'country-event-wrong-owner'),
+    ).rejects.toThrow('belongs to another organization');
+    expect(reqs).toHaveLength(1);
+    expect(requestAt(reqs, 0).method).toBe('GET');
   });
 
   it('schedules an exact paid subscription to end after its service period', async () => {
     const { http, reqs } = scriptedHttp([
-      { id: 'sub_exact', object: 'subscription', status: 'active', items: list([]) },
+      {
+        id: 'sub_exact',
+        object: 'subscription',
+        status: 'active',
+        metadata: { referenceId: 'org_1' },
+        items: list([]),
+      },
+      {
+        id: 'sub_exact',
+        object: 'subscription',
+        status: 'active',
+        metadata: { referenceId: 'org_1' },
+        items: list([]),
+      },
     ]);
     const gw = new RealStripeGateway({ secretKey: 'sk' }, http);
 
@@ -638,7 +701,8 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
       true,
     );
 
-    const request = requestAt(reqs, 0);
+    expect(requestAt(reqs, 0).method).toBe('GET');
+    const request = requestAt(reqs, 1);
     expect(request.url).toContain('/v1/subscriptions/sub_exact');
     expect(request.method).toBe('POST');
     expect(decodeURIComponent(request.body)).toContain('cancel_at_period_end=true');

@@ -7,6 +7,34 @@
 
 ## Active Tasks
 
+### [SHELL-NAV-RAIL-001] Replace the collapsed sidebar with an MD3 navigation rail
+
+- **Status**: COMPLETED
+- **Started**: 2026-08-25
+- **Completed**: 2026-08-25
+- **Priority**: P1
+- **Description**: The collapsed desktop sidebar replaced its labeled navigation with a separate
+  icon dictionary. That made collapse feel like a different layout, obscured route identity, and
+  forced tooltips to carry the navigation vocabulary.
+- **Approach**: Resolve one typed navigation catalog, then render it through either the existing
+  expanded sidebar or a persistent 96 px MD3 rail. Keep the desktop rail labeled, put secondary
+  routes in an anchored More menu, preserve the mobile drawer, and animate desktop density with
+  one reduced-motion-aware View Transition.
+- **Files changed**: Added the catalog, expanded sidebar, navigation rail, transition helper,
+  focused shell contracts, authenticated evidence test, audit captures, and the shell style and
+  geometry updates needed to use them.
+- **Validation**: The focused UI shell suite passes 97 tests across five files. Web type checking
+  and the authenticated Playwright evidence test pass. The audit captures expanded, rail, More,
+  keyboard focus, and settled transition endpoints at 1024 px and 1440 px in light and dark
+  themes. The branch is clean and the evidence commit is on `main`.
+- **Learnings**: A density change must swap one navigation presentation for another. Rendering
+  both trees and hiding one in CSS creates duplicate transition names and makes the collapse state
+  look like a separate product surface.
+- **Blockers**: Production deployment is held by unrelated API branch coverage at 88.74%, below
+  the 89% repository gate. The rail evidence commit does not modify API source or test coverage.
+
+---
+
 ### [RELEASE-GATE-005] Preserve task sync anchors through state changes
 
 - **Status**: COMPLETED

@@ -1,7 +1,7 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-08-25
+> **Last Updated**: 2026-08-26
 
 ---
 
@@ -52,6 +52,13 @@
   table catalog now includes those tables, and the billing schema test exercises mutable
   application and award timestamps. The database package passes 209 tests with 94.27% statements,
   94.28% branches, 90.28% functions, and 94.01% lines.
+- **E2E gate correction**: Product gating installed an automatic complimentary entitlement only in
+  API unit-test databases. The Playwright workflow used a separately migrated database, so existing
+  Pro product journeys failed with `402 product_required`. The workflow now installs the same
+  trigger after migrations and before API startup. The fixture remains confined to each disposable
+  CI database. A fresh PGlite proof inserts an organization and observes one active complimentary
+  Docket Pro entitlement. The existing product-gate suites pass 61 tests with both entitled and
+  free boundaries intact.
 - **Deployment correction**: The repository-level kill switch did not control production because
   the GitHub `production` environment overrode `BILLING_ENABLED=true`. The production environment
   now holds `false`, and a deployment policy test covers the missing attestation pass-through.

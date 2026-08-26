@@ -158,6 +158,12 @@ jobs:
       - name: Apply migrations
         run: pnpm exec dotenv -e .env.local -- pnpm turbo run db:migrate --filter=@docket/db
 
+      # The suite predates paid product gates and exercises fully enabled product surfaces. Install
+      # the same disposable complimentary-entitlement fixture used by API route tests. This step
+      # is confined to the isolated CI database and never touches local or production data.
+      - name: Install the product-surface entitlement fixture
+        run: pnpm exec dotenv -e .env.local -- pnpm exec tsx scripts/install-e2e-product-fixture.ts
+
       - name: Start the API
         run: |
           PORT=4000 pnpm exec dotenv -e .env.local -- \

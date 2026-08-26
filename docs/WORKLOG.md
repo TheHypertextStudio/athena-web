@@ -7,6 +7,49 @@
 
 ## Active Tasks
 
+### [BILLING-LAUNCH-001] Make Docket Pro safe for real customer payments
+
+- **Status**: REVIEW
+- **Started**: 2026-08-25
+- **Priority**: P0
+- **Description**: Replace the trial-only billing shell with a customer, finance, and operator
+  contract that can accept real Docket Pro subscriptions. Billing access must never delete
+  organization data. Stripe must remain authoritative through duplicate and reordered events.
+  Approved Student, Nonprofit, and partner discounts must reach invoices without stacking.
+- **Approach**: Store one billing account per organization and reconcile exact Stripe customer and
+  subscription snapshots into a product entitlement. Keep canceled shared work read-only after the
+  paid period, and keep failed payments writable for one fixed seven-day grace period. Process
+  discount applications separately from provider-backed awards. Use Better Auth sessions,
+  organization roles, and verified institutional email evidence at the billing boundary. Keep
+  Checkout disabled until the audit, deployment, finance, legal, and canary gates pass.
+- **Files changed**: Added the billing account, Checkout attempt, provider-event, discount,
+  evidence, award, provider-sync, and credit records with additive migrations and legacy lifecycle
+  repair. Rebuilt the billing domain, API routes, customer settings, admin operations, notices,
+  launch audit, Stripe runbook, billing specification, state-machine diagrams, and focused launch
+  evidence.
+- **Validation**: Focused billing, API, web, admin, environment, and repository-policy suites pass.
+  Package typechecks and production builds pass. Stripe test mode covered hosted Checkout, portal
+  management, signed webhooks, duplicate and reordered events, payment failure and recovery,
+  payment authentication, cancellation, reactivation, renewal, discounts, credit notes, and
+  complimentary conflicts. The launch audit found no customer, subscription, entitlement, or
+  provider-sync mismatch in its isolated Stripe test account. Responsive customer and admin
+  captures cover desktop, mobile, light, and dark states. Pull request 49 is open. Its first hosted
+  run exposed two short-circuited Stripe key-pair branches below the environment package's 100%
+  branch gate. Direct mixed-mode and valid production-pair tests now cover those outcomes, and the
+  environment coverage suite passes at 100% across statements, branches, functions, and lines.
+- **Learnings**: Testing one test-key pair and one live-key pair does not cover the mixed-key
+  outcomes inside an OR expression. Production configuration tests must prove both halves of a
+  credential pair independently. The repository had `has_pull_requests` disabled even though the
+  account had administration rights. Enabling that reversible repository setting allowed the
+  normal review and gated deployment path to run.
+- **Blockers**: Finance and legal must approve the Docket merchant identity, tax registrations,
+  invoice and credit treatment, refund policy, discount eligibility, evidence retention, and
+  customer terms. Production still needs the 24-hour shadow reconciliation, one live full-price
+  canary, one live discounted canary, the Founder complimentary grant, and the 72-hour public
+  canary. Whole-product launch sign-off remains independent of this billing slice.
+
+---
+
 ### [SHELL-NAV-RAIL-001] Replace the collapsed sidebar with an MD3 navigation rail
 
 - **Status**: COMPLETED

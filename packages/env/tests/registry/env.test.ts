@@ -534,12 +534,72 @@ describe('api composition', () => {
       );
     });
 
+    it('rejects a test publishable key paired with a live production secret key', async () => {
+      for (const [key, value] of Object.entries({
+        ...validApiEnv(),
+        APP_MODE: 'production',
+        BILLING_ENABLED: 'true',
+        LINEAR_CLIENT_ID: 'linear-client-id',
+        LINEAR_CLIENT_SECRET: 'linear-client-secret',
+        LINEAR_WEBHOOK_SECRET: 'linear-webhook-secret',
+        PUBLIC_BRIEF_HOST: 'briefs.example.com',
+        CUSTOM_DOMAIN_CNAME_TARGET: 'briefs.example.com',
+        STRIPE_SECRET_KEY: 'sk_live_123',
+        STRIPE_PUBLISHABLE_KEY: 'pk_test_123',
+        STRIPE_WEBHOOK_SECRET: 'whsec_123',
+        STRIPE_PRICE_DOCKET_PRO: 'price_123',
+      })) {
+        vi.stubEnv(key, value);
+      }
+      await expect(import('../../src/api')).rejects.toThrow(
+        'production billing requires live-mode Stripe keys',
+      );
+    });
+
+    it('accepts matching live Stripe keys in production', async () => {
+      for (const [key, value] of Object.entries({
+        ...validApiEnv(),
+        APP_MODE: 'production',
+        BILLING_ENABLED: 'true',
+        LINEAR_CLIENT_ID: 'linear-client-id',
+        LINEAR_CLIENT_SECRET: 'linear-client-secret',
+        LINEAR_WEBHOOK_SECRET: 'linear-webhook-secret',
+        PUBLIC_BRIEF_HOST: 'briefs.example.com',
+        CUSTOM_DOMAIN_CNAME_TARGET: 'briefs.example.com',
+        STRIPE_SECRET_KEY: 'sk_live_123',
+        STRIPE_PUBLISHABLE_KEY: 'pk_live_123',
+        STRIPE_WEBHOOK_SECRET: 'whsec_123',
+        STRIPE_PRICE_DOCKET_PRO: 'price_123',
+      })) {
+        vi.stubEnv(key, value);
+      }
+      const mod = await import('../../src/api');
+      expect(mod.env.APP_MODE).toBe('production');
+    });
+
     it('rejects live Stripe keys outside production', async () => {
       for (const [key, value] of Object.entries({
         ...validApiEnv(),
         APP_MODE: 'local',
         BILLING_ENABLED: 'true',
         STRIPE_SECRET_KEY: 'sk_live_123',
+        STRIPE_PUBLISHABLE_KEY: 'pk_live_123',
+        STRIPE_WEBHOOK_SECRET: 'whsec_123',
+        STRIPE_PRICE_DOCKET_PRO: 'price_123',
+      })) {
+        vi.stubEnv(key, value);
+      }
+      await expect(import('../../src/api')).rejects.toThrow(
+        'non-production billing requires test-mode Stripe keys',
+      );
+    });
+
+    it('rejects a live publishable key paired with a test non-production secret key', async () => {
+      for (const [key, value] of Object.entries({
+        ...validApiEnv(),
+        APP_MODE: 'local',
+        BILLING_ENABLED: 'true',
+        STRIPE_SECRET_KEY: 'sk_test_123',
         STRIPE_PUBLISHABLE_KEY: 'pk_live_123',
         STRIPE_WEBHOOK_SECRET: 'whsec_123',
         STRIPE_PRICE_DOCKET_PRO: 'price_123',

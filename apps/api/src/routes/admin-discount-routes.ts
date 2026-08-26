@@ -34,6 +34,7 @@ import { zJson, zParam } from '../lib/validate';
 import { requireStaffRole } from '../permissions/staff-guard';
 import { dispatchEssentialBillingNotice } from '../services/billing-notifications';
 import { assertSubscriptionDiscountOwnership } from '../services/billing-discount-ownership';
+import { loadSingleCurrentSubscription } from '../services/billing-provider-state';
 
 import { audit } from './admin-serializers';
 
@@ -303,7 +304,10 @@ async function loadApprovalPreview(
   ) {
     throw new PreconditionFailedError('The current discount award changed after the preview');
   }
-  const subscription = await getContainer().billing.getSubscription(application.organizationId);
+  const subscription = await loadSingleCurrentSubscription(
+    getContainer().billing,
+    application.organizationId,
+  );
   if (subscriptionFingerprint(subscription) !== parsed.data.subscriptionFingerprint) {
     throw new PreconditionFailedError('The Stripe subscription changed after the preview');
   }
@@ -406,7 +410,7 @@ async function previewApproval(
     )
     .limit(1);
   const gateway = getContainer().billing;
-  const subscription = await gateway.getSubscription(application.organizationId);
+  const subscription = await loadSingleCurrentSubscription(gateway, application.organizationId);
   const renewingCurrentProgram =
     currentAward?.programKey === application.programKey &&
     ['active', 'ending'].includes(currentAward.status);
@@ -1029,7 +1033,10 @@ export const adminDiscountRoutes = new Hono<AppEnv>()
         throw new ConflictError('Approve a current renewal application before extending the award');
       }
       const gateway = getContainer().billing;
-      const subscription = await gateway.getSubscription(current.award.organizationId);
+      const subscription = await loadSingleCurrentSubscription(
+        gateway,
+        current.award.organizationId,
+      );
       const observedProviderDiscountId = assertSubscriptionDiscountOwnership(
         subscription,
         current.award,

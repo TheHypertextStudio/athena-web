@@ -143,7 +143,10 @@ const webhooks = new Hono().post('/webhook', async (c) => {
       const country = await gateway.getCustomerBillingCountry(observedCustomerId);
       if (!country) {
         countryEffect = 'awaiting_billing_country';
-      } else if (country !== 'US') {
+      } else if (
+        country !== 'US' &&
+        (account.countryVerificationRequired || account.billingCountry === 'US')
+      ) {
         const subscriptionId = event.subscription?.id ?? event.subscriptionId;
         if (!subscriptionId) {
           throw new Error('The unsupported-country subscription is not observable yet.');

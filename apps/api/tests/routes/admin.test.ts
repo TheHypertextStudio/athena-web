@@ -289,15 +289,19 @@ describe('discount application review', () => {
     const { applicationId, organizationId } = await makeApplication();
     const finance = await makeStaff('finance');
     const app = appWithSession(admin, fakeSession(finance.userId));
-    const getSubscription = vi.spyOn(getContainer().billing, 'getSubscription').mockResolvedValue({
-      id: 'sub_external_discount',
-      customerId: `cus_${organizationId}`,
-      referenceId: organizationId,
-      status: 'active',
-      currentPeriodEnd: '2026-09-25T00:00:00.000Z',
-      discountIds: ['di_external'],
-      couponIds: ['coupon_external'],
-    });
+    const listSubscriptions = vi
+      .spyOn(getContainer().billing, 'listSubscriptions')
+      .mockResolvedValue([
+        {
+          id: 'sub_external_discount',
+          customerId: `cus_${organizationId}`,
+          referenceId: organizationId,
+          status: 'active',
+          currentPeriodEnd: '2026-09-25T00:00:00.000Z',
+          discountIds: ['di_external'],
+          couponIds: ['coupon_external'],
+        },
+      ]);
     const applyDiscount = vi.spyOn(getContainer().billing, 'applySubscriptionDiscount');
 
     const preview = await app.request(`/discount-applications/${applicationId}/approval-previews`, {
@@ -307,7 +311,7 @@ describe('discount application review', () => {
     expect(preview.status).toBe(409);
     await expect(preview.json()).resolves.toMatchObject({ code: 'discount_award_conflict' });
     expect(applyDiscount).not.toHaveBeenCalled();
-    getSubscription.mockRestore();
+    listSubscriptions.mockRestore();
     applyDiscount.mockRestore();
   });
 
@@ -700,15 +704,19 @@ describe('private partner awards', () => {
     const app = appWithSession(admin, fakeSession(finance.userId));
     const endsAt = new Date();
     endsAt.setUTCMonth(endsAt.getUTCMonth() + 12);
-    const getSubscription = vi.spyOn(getContainer().billing, 'getSubscription').mockResolvedValue({
-      id: 'sub_external_partner_discount',
-      customerId: `cus_${organizationId}`,
-      referenceId: organizationId,
-      status: 'active',
-      currentPeriodEnd: '2026-09-25T00:00:00.000Z',
-      discountIds: ['di_external_partner'],
-      couponIds: ['coupon_external_partner'],
-    });
+    const listSubscriptions = vi
+      .spyOn(getContainer().billing, 'listSubscriptions')
+      .mockResolvedValue([
+        {
+          id: 'sub_external_partner_discount',
+          customerId: `cus_${organizationId}`,
+          referenceId: organizationId,
+          status: 'active',
+          currentPeriodEnd: '2026-09-25T00:00:00.000Z',
+          discountIds: ['di_external_partner'],
+          couponIds: ['coupon_external_partner'],
+        },
+      ]);
     const applyDiscount = vi.spyOn(getContainer().billing, 'applySubscriptionDiscount');
 
     const preview = await app.request(`/orgs/${organizationId}/discount-awards/preview`, {
@@ -724,7 +732,7 @@ describe('private partner awards', () => {
     expect(preview.status).toBe(409);
     await expect(preview.json()).resolves.toMatchObject({ code: 'discount_award_conflict' });
     expect(applyDiscount).not.toHaveBeenCalled();
-    getSubscription.mockRestore();
+    listSubscriptions.mockRestore();
     applyDiscount.mockRestore();
   });
 
@@ -880,14 +888,18 @@ describe('private partner awards', () => {
       })
       .returning();
     if (!award) throw new Error('partner award seed failed');
-    const getSubscription = vi.spyOn(getContainer().billing, 'getSubscription').mockResolvedValue({
-      id: 'sub_external_renewal_discount',
-      referenceId: organizationId,
-      status: 'active',
-      currentPeriodEnd: '2026-09-25T00:00:00.000Z',
-      discountIds: ['di_external'],
-      couponIds: ['coupon_external'],
-    });
+    const listSubscriptions = vi
+      .spyOn(getContainer().billing, 'listSubscriptions')
+      .mockResolvedValue([
+        {
+          id: 'sub_external_renewal_discount',
+          referenceId: organizationId,
+          status: 'active',
+          currentPeriodEnd: '2026-09-25T00:00:00.000Z',
+          discountIds: ['di_external'],
+          couponIds: ['coupon_external'],
+        },
+      ]);
     const applyDiscount = vi.spyOn(getContainer().billing, 'applySubscriptionDiscount');
 
     const response = await app.request(`/discount-applications/awards/${award.id}/renewals`, {
@@ -902,7 +914,7 @@ describe('private partner awards', () => {
     expect(response.status).toBe(409);
     await expect(response.json()).resolves.toMatchObject({ code: 'discount_award_conflict' });
     expect(applyDiscount).not.toHaveBeenCalled();
-    getSubscription.mockRestore();
+    listSubscriptions.mockRestore();
     applyDiscount.mockRestore();
   });
 

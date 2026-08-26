@@ -36,6 +36,49 @@ function blobDouble(): { blob: BlobStore; deleteBlob: ReturnType<typeof vi.fn> }
 }
 
 describe('reconcileBilling', () => {
+  it('limits an operator-requested reconciliation to the selected organization', async () => {
+    const first = await seedBaseOrg(db, schema, false);
+    const second = await seedBaseOrg(db, schema, false);
+    await db.insert(schema.organizationBillingAccount).values([
+      {
+        organizationId: first.orgId,
+        stripeCustomerId: `cus_${first.orgId}`,
+        countryVerificationRequired: false,
+      },
+      {
+        organizationId: second.orgId,
+        stripeCustomerId: `cus_${second.orgId}`,
+        countryVerificationRequired: false,
+      },
+    ]);
+    const gateway = new InMemoryBillingGateway({ now: '2026-08-25T00:00:00.000Z' });
+    await gateway.createCheckoutSession({
+      referenceId: first.orgId,
+      priceKey: 'docket_pro_monthly',
+      successUrl: 'https://app.test/success',
+      cancelUrl: 'https://app.test/cancel',
+    });
+    await gateway.createCheckoutSession({
+      referenceId: second.orgId,
+      priceKey: 'docket_pro_monthly',
+      successUrl: 'https://app.test/success',
+      cancelUrl: 'https://app.test/cancel',
+    });
+    const listSubscriptions = vi.spyOn(gateway, 'listSubscriptions');
+    const { blob } = blobDouble();
+
+    const result = await reconcileBilling(db, gateway, blob, new Date('2026-08-25T01:00:00.000Z'), {
+      organizationId: first.orgId,
+    });
+
+    expect(result).toMatchObject({ accounts: 1, repaired: 1, alerts: 0 });
+    expect(listSubscriptions).toHaveBeenCalledTimes(1);
+    expect(listSubscriptions).toHaveBeenCalledWith(first.orgId);
+    const entitlements = await db.select().from(schema.organizationProductEntitlement);
+    expect(entitlements).toHaveLength(1);
+    expect(entitlements[0]).toMatchObject({ organizationId: first.orgId });
+  });
+
   it('repairs the entitlement mirror from one current provider subscription', async () => {
     const { orgId } = await seedBaseOrg(db, schema, false);
     await db.insert(schema.organizationBillingAccount).values({
@@ -213,7 +256,7 @@ describe('reconcileBilling', () => {
     await db.insert(schema.organizationBillingAccount).values({
       organizationId: orgId,
       stripeCustomerId: `cus_${orgId}`,
-      billingCountry: 'CA',
+      billingCountry: 'US',
       countryVerifiedAt: new Date('2026-08-24T00:00:00.000Z'),
       countryVerificationRequired: false,
     });
@@ -248,6 +291,10 @@ describe('reconcileBilling', () => {
       override async getCustomerBillingCountry(): Promise<string | null> {
         return 'CA';
       }
+
+      override async cancelSubscriptionById(): Promise<Subscription> {
+        return { ...subscription, cancelAtPeriodEnd: true };
+      }
     }
     const gateway = new CanceledCountryGateway();
     const cancelSubscriptionById = vi.spyOn(gateway, 'cancelSubscriptionById');
@@ -264,7 +311,7 @@ describe('reconcileBilling', () => {
     expect(entitlement).toMatchObject({ status: 'canceled', cancelAtPeriodEnd: false });
   });
 
-  it('keeps a legacy customer pending country verification when Stripe has no address', async () => {
+  it('grandfathers a legacy paid customer when Stripe has no billing address', async () => {
     const { orgId } = await seedBaseOrg(db, schema, false);
     await db.insert(schema.organizationProductEntitlement).values({
       organizationId: orgId,
@@ -305,9 +352,62 @@ describe('reconcileBilling', () => {
       .where(eq(schema.organizationBillingAccount.organizationId, orgId));
     expect(account).toMatchObject({
       stripeCustomerId: `cus_${orgId}`,
-      countryVerificationRequired: true,
+      countryVerificationRequired: false,
       countryVerifiedAt: null,
     });
+  });
+
+  it('does not cancel a grandfathered legacy subscription when Stripe first reports a non-US country', async () => {
+    const { orgId } = await seedBaseOrg(db, schema, false);
+    await db.insert(schema.organizationProductEntitlement).values({
+      organizationId: orgId,
+      productKey: 'docket_pro',
+      source: 'stripe',
+      status: 'active',
+      stripeSubscriptionId: 'sub_legacy_non_us',
+      currentPeriodEnd: new Date('2026-09-25T00:00:00.000Z'),
+    });
+    const subscription: Subscription = {
+      id: 'sub_legacy_non_us',
+      customerId: `cus_${orgId}`,
+      referenceId: orgId,
+      status: 'active',
+      currentPeriodEnd: '2026-09-25T00:00:00.000Z',
+    };
+    class LegacyNonUsGateway extends InMemoryBillingGateway {
+      override async listSubscriptions(referenceId: string): Promise<readonly Subscription[]> {
+        return referenceId === orgId ? [subscription] : [];
+      }
+
+      override async getCustomerBillingCountry(): Promise<string | null> {
+        return 'CA';
+      }
+
+      override async cancelSubscriptionById(): Promise<Subscription> {
+        return { ...subscription, cancelAtPeriodEnd: true };
+      }
+    }
+    const gateway = new LegacyNonUsGateway();
+    const cancelSubscriptionById = vi.spyOn(gateway, 'cancelSubscriptionById');
+    const { blob } = blobDouble();
+
+    const result = await reconcileBilling(db, gateway, blob, new Date('2026-08-25T01:00:00.000Z'));
+
+    expect(result).toMatchObject({ repaired: 1, alerts: 0 });
+    expect(cancelSubscriptionById).not.toHaveBeenCalled();
+    const [account] = await db
+      .select()
+      .from(schema.organizationBillingAccount)
+      .where(eq(schema.organizationBillingAccount.organizationId, orgId));
+    expect(account).toMatchObject({
+      billingCountry: 'CA',
+      countryVerificationRequired: false,
+    });
+    const [entitlement] = await db
+      .select()
+      .from(schema.organizationProductEntitlement)
+      .where(eq(schema.organizationProductEntitlement.organizationId, orgId));
+    expect(entitlement).toMatchObject({ status: 'active', cancelAtPeriodEnd: false });
   });
 
   it('notifies the organization when an unpaid grace period expires', async () => {

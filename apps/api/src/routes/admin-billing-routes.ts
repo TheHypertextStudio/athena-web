@@ -38,6 +38,7 @@ import { zJson, zParam } from '../lib/validate';
 import { requireStaffRole } from '../permissions/staff-guard';
 import { dispatchEssentialBillingNotice } from '../services/billing-notifications';
 import { assertSubscriptionDiscountOwnership } from '../services/billing-discount-ownership';
+import { loadSingleCurrentSubscription } from '../services/billing-provider-state';
 import { reconcileBilling } from '../services/billing-reconciliation';
 
 import {
@@ -284,7 +285,7 @@ async function createPartnerPreview(
   const currentAward = await loadCurrentAward(organizationId);
   assertPartnerAwardAvailable(currentAward, input);
   const gateway = getContainer().billing;
-  const subscription = await gateway.getSubscription(organizationId);
+  const subscription = await loadSingleCurrentSubscription(gateway, organizationId);
   assertSubscriptionDiscountOwnership(subscription, currentAward);
   const invoice = await gateway.getLatestRecurringInvoice(organizationId);
   let credit = null;
@@ -376,7 +377,7 @@ async function loadPartnerPreview(
       'The partner discount preview expired or no longer matches this award',
     );
   }
-  const subscription = await getContainer().billing.getSubscription(organizationId);
+  const subscription = await loadSingleCurrentSubscription(getContainer().billing, organizationId);
   if (subscriptionFingerprint(subscription) !== parsed.data.subscriptionFingerprint) {
     throw new PreconditionFailedError('The Stripe subscription changed after the preview');
   }
@@ -526,6 +527,7 @@ export const adminBillingRoutes = new Hono<AppEnv>()
         getContainer().billing,
         getContainer().blob,
         new Date(),
+        { organizationId: id },
       );
       await audit(db, staffUserId, 'billing.reconciled', 'organization', id, { ...result });
       return ok(c, AdminBillingReconciliationOut, result);
@@ -642,7 +644,7 @@ export const adminBillingRoutes = new Hono<AppEnv>()
           priceKey: docketProPriceKey(),
           idempotencyKey: `${syncKey}:coupon`,
         });
-        const subscription = await gateway.getSubscription(id);
+        const subscription = await loadSingleCurrentSubscription(gateway, id);
         assertSubscriptionDiscountOwnership(subscription, current);
         const applied = subscription
           ? await gateway.applySubscriptionDiscount({
@@ -981,7 +983,7 @@ export const adminBillingRoutes = new Hono<AppEnv>()
       const { staffUserId } = c.get('staffCtx');
       const org = await loadOrg(id);
       const gateway = getContainer().billing;
-      const current = await gateway.getSubscription(id);
+      const current = await loadSingleCurrentSubscription(gateway, id);
       if (current?.status !== 'trialing' || !current.trialEnd) {
         throw new ConflictError('Only an existing Stripe trial can be extended');
       }

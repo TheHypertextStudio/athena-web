@@ -86,7 +86,10 @@ it finds duplicates. It compares the expanded Stripe discount and coupon identif
 current Docket award. It activates a scheduled award only when the coupon matches. It alerts on an
 unknown or mismatched discount. It also records the latest invoice observation, ends unrenewed
 awards, sends eligibility reminders, and removes expired evidence. The worker never cancels a
-duplicate or issues money.
+duplicate or issues money. A staff-requested organization reconciliation inspects only that
+organization. It does not advance installation-wide awards, expire applications, or delete
+evidence. Finance actions that change trials or discounts also refuse to proceed when Stripe
+reports more than one current subscription.
 
 ## Discounts
 

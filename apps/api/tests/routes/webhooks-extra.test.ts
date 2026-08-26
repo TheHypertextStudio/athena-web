@@ -406,6 +406,60 @@ describe('webhooks signature verification (real Stripe gateway path)', () => {
     });
   });
 
+  it('does not cancel a grandfathered legacy subscription when a webhook first reveals a non-US country', async () => {
+    const { orgId } = await seedBaseOrg(db, schema, false);
+    await db.insert(schema.organizationBillingAccount).values({
+      organizationId: orgId,
+      stripeCustomerId: 'cus_legacy_ca',
+      countryVerificationRequired: false,
+    });
+    const subscription = {
+      id: 'sub_legacy_ca',
+      customerId: 'cus_legacy_ca',
+      referenceId: orgId,
+      status: 'active' as const,
+      currentPeriodEnd: '2026-09-25T00:00:00.000Z',
+    };
+    const cancelSubscriptionById = vi
+      .fn()
+      .mockResolvedValue({ ...subscription, cancelAtPeriodEnd: true });
+    const gateway = {
+      ...fakeVerifyingGateway(() => ({
+        id: 'evt_legacy_ca',
+        type: 'subscription.updated',
+        referenceId: orgId,
+        customerId: 'cus_legacy_ca',
+        createdAt: '2026-08-25T00:00:00.000Z',
+      })),
+      getCustomerBillingCountry: vi.fn().mockResolvedValue('CA'),
+      getSubscription: vi.fn().mockResolvedValue(subscription),
+      cancelSubscriptionById,
+    };
+    useGateway(gateway);
+
+    const response = await webhooks.request('/webhook', {
+      method: 'POST',
+      headers: { ...J, 'stripe-signature': 't=1,v1=ok' },
+      body: 'verified-legacy-ca',
+    });
+
+    expect(await response.json()).toEqual({ received: true, effect: 'active' });
+    expect(cancelSubscriptionById).not.toHaveBeenCalled();
+    const [account] = await db
+      .select()
+      .from(schema.organizationBillingAccount)
+      .where(eq(schema.organizationBillingAccount.organizationId, orgId));
+    expect(account).toMatchObject({
+      billingCountry: 'CA',
+      countryVerificationRequired: false,
+    });
+    const [entitlement] = await db
+      .select()
+      .from(schema.organizationProductEntitlement)
+      .where(eq(schema.organizationProductEntitlement.organizationId, orgId));
+    expect(entitlement).toMatchObject({ status: 'active', cancelAtPeriodEnd: false });
+  });
+
   it('cancels a non-US trial before Docket grants product access', async () => {
     const { orgId } = await seedBaseOrg(db, schema, false);
     await db.insert(schema.organizationBillingAccount).values({

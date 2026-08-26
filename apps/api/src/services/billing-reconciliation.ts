@@ -30,6 +30,12 @@ export interface BillingReconciliationResult {
   readonly evidenceDeleted: number;
 }
 
+/** Optional boundary for a staff-requested reconciliation. Scheduled passes remain installation-wide. */
+export interface BillingReconciliationOptions {
+  /** Inspect only this organization and skip installation-wide award and evidence maintenance. */
+  readonly organizationId?: string;
+}
+
 /** Store the latest reconciliation outcome for one organization. */
 async function recordReconciliation(
   database: Database,
@@ -244,6 +250,7 @@ async function sendAwardReviewReminders(database: Database, now: Date): Promise<
  * @param gateway - Stripe provider boundary.
  * @param blob - Private object-storage boundary.
  * @param now - Stable timestamp for this pass.
+ * @param options - Optional organization scope for a staff-requested repair.
  * @returns reconciliation counts for monitoring.
  */
 export async function reconcileBilling(
@@ -251,6 +258,7 @@ export async function reconcileBilling(
   gateway: BillingGateway,
   blob: BlobStore,
   now: Date,
+  options: BillingReconciliationOptions = {},
 ): Promise<BillingReconciliationResult> {
   const legacyEntitlements = await database
     .select({ organizationId: organizationProductEntitlement.organizationId })
@@ -263,6 +271,9 @@ export async function reconcileBilling(
       and(
         eq(organizationProductEntitlement.source, 'stripe'),
         isNull(organizationBillingAccount.organizationId),
+        options.organizationId
+          ? eq(organizationProductEntitlement.organizationId, options.organizationId)
+          : undefined,
       ),
     );
   let repaired = 0;
@@ -295,7 +306,7 @@ export async function reconcileBilling(
         .values({
           organizationId: legacy.organizationId,
           stripeCustomerId: customerId,
-          countryVerificationRequired: true,
+          countryVerificationRequired: false,
         })
         .onConflictDoNothing({ target: organizationBillingAccount.organizationId });
     } catch (error) {
@@ -310,7 +321,12 @@ export async function reconcileBilling(
       alerts += 1;
     }
   }
-  const accounts = await database.select().from(organizationBillingAccount);
+  const accounts = options.organizationId
+    ? await database
+        .select()
+        .from(organizationBillingAccount)
+        .where(eq(organizationBillingAccount.organizationId, options.organizationId))
+    : await database.select().from(organizationBillingAccount);
   for (const account of accounts) {
     try {
       let discountMismatch: string | null = null;
@@ -400,7 +416,9 @@ export async function reconcileBilling(
           alerts += 1;
           continue;
         }
-        if (country !== 'US') {
+        const enforceLaunchCountry =
+          account.countryVerificationRequired || account.billingCountry === 'US';
+        if (country !== 'US' && enforceLaunchCountry) {
           await database
             .update(organizationBillingAccount)
             .set({
@@ -580,6 +598,15 @@ export async function reconcileBilling(
       await recordReconciliation(database, account.organizationId, now, 'failed', {}, message);
       alerts += 1;
     }
+  }
+  if (options.organizationId) {
+    return {
+      accounts: accounts.length,
+      repaired,
+      alerts,
+      awardsAdvanced: 0,
+      evidenceDeleted: 0,
+    };
   }
   await sendAwardReviewReminders(database, now);
   const awards = await advanceAwards(database, gateway, now);

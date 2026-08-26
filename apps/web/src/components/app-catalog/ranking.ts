@@ -5,7 +5,6 @@ export interface SearchCandidate {
   readonly description: string;
   readonly aliases: readonly string[];
   readonly breadcrumb: readonly string[];
-  readonly kindLabel: string;
   readonly source: 'catalog' | 'remote';
   readonly sourceRank: number;
 }

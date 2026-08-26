@@ -16,7 +16,11 @@ import {
   executeCapabilityTarget,
   type CapabilityExecutor,
 } from '@/components/app-catalog/executor';
-import { resolveCapabilities, type CapabilityContext } from '@/components/app-catalog';
+import {
+  resolveCapabilities,
+  type CapabilityContext,
+  type CapabilityTarget,
+} from '@/components/app-catalog';
 import { useCreateObject } from '@/components/create-object/create-object-provider';
 import { SETTINGS_CAPABILITIES } from '@/components/settings/settings-capabilities';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
@@ -68,10 +72,10 @@ function focusRouteFragmentAfterNavigation(href: string): void {
   requestAnimationFrame(findDestination);
 }
 
-function sectionFor(kind: 'destination' | 'setting' | 'panel' | 'action'): PaletteSection {
-  if (kind === 'action') return 'actions';
-  if (kind === 'panel') return 'panels';
-  return 'navigation';
+function sectionFor(target: CapabilityTarget): PaletteSection {
+  if (target.type === 'route') return 'navigation';
+  if (target.intent.type === 'open-panel') return 'panels';
+  return 'actions';
 }
 
 interface CapabilityItemsInput {
@@ -141,12 +145,11 @@ export function useCapabilityItems({
     return resolveCapabilities(CATALOG, context).map(
       (capability): PaletteItem => ({
         id: capability.id,
-        section: sectionFor(capability.kind),
+        section: sectionFor(capability.target),
         label: capability.label,
         description: capability.description,
         hint: capability.breadcrumb.length > 0 ? capability.breadcrumb.join(' › ') : undefined,
         breadcrumb: capability.breadcrumb,
-        kindLabel: capability.kindLabel,
         icon: capability.icon,
         keywords: [...capability.aliases, capability.description, ...capability.breadcrumb],
         requiresQuery: capability.requiresQuery,

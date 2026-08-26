@@ -9,17 +9,9 @@ export type {
   AppCapability,
   CapabilityContext,
   CapabilityIntent,
-  CapabilityKind,
   CapabilityTarget,
   ResolvedCapability,
 } from './types';
-
-const KIND_LABEL = {
-  destination: 'Destination',
-  setting: 'Setting',
-  panel: 'Panel',
-  action: 'Action',
-} as const;
 
 function resolveValue<T>(
   value: T | ((context: CapabilityContext) => T),
@@ -49,8 +41,6 @@ export function resolveCapabilities(
     return [
       {
         id: entry.id,
-        kind: entry.kind,
-        kindLabel: KIND_LABEL[entry.kind],
         label,
         description: entry.description,
         aliases: entry.aliases ?? [],

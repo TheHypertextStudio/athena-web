@@ -92,6 +92,10 @@ describe('capability catalog integrity', () => {
     expect(ids).toContain('settings:workspace:connections:notion-people');
     expect(ids).toContain('settings:node:passkeys');
   });
+
+  it('does not assign user-facing types to Settings commands', () => {
+    expect(SETTINGS_CAPABILITIES.every((entry) => !('kind' in entry))).toBe(true);
+  });
 });
 
 describe('resolveCapabilities', () => {

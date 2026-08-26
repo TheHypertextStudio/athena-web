@@ -312,7 +312,6 @@ export const SETTINGS_NODES = {
 
 const personal: readonly AppCapability[] = PERSONAL_SETTINGS_SECTIONS.map((section) => ({
   id: `settings:personal:${section.key}`,
-  kind: 'setting',
   label: section.label,
   description: section.description,
   aliases: ['settings', 'preferences', section.key],
@@ -325,7 +324,6 @@ const personal: readonly AppCapability[] = PERSONAL_SETTINGS_SECTIONS.map((secti
 
 const workspace: readonly AppCapability[] = SETTINGS_SECTIONS.map((section) => ({
   id: `settings:workspace:${section.key}`,
-  kind: 'setting',
   label: section.label,
   description: section.description,
   aliases: ['settings', 'preferences', section.key],
@@ -352,7 +350,6 @@ if (!connectionsIcon) throw new Error('The Settings registry must define Connect
 export const NESTED_SETTINGS_CAPABILITIES: readonly AppCapability[] = [
   {
     id: 'settings:personal:connections:google-calendar',
-    kind: 'setting',
     label: 'Google Calendar',
     description: 'Connect Google Calendar and choose which calendars Docket can use.',
     aliases: ['calendar account', 'calendar connection'],
@@ -364,7 +361,6 @@ export const NESTED_SETTINGS_CAPABILITIES: readonly AppCapability[] = [
   },
   {
     id: 'settings:workspace:connections:google-calendar',
-    kind: 'setting',
     label: 'Google Calendar',
     description: 'Connect Google Calendar to the current workspace.',
     aliases: ['calendar account', 'calendar connection'],
@@ -383,7 +379,6 @@ export const NESTED_SETTINGS_CAPABILITIES: readonly AppCapability[] = [
   },
   {
     id: 'settings:workspace:connections:notion',
-    kind: 'setting',
     label: 'Notion',
     description: 'Connect and synchronize Notion databases with the current workspace.',
     aliases: ['Notion mirror', 'Notion databases'],
@@ -400,7 +395,6 @@ export const NESTED_SETTINGS_CAPABILITIES: readonly AppCapability[] = [
   },
   {
     id: 'settings:workspace:connections:notion-people',
-    kind: 'setting',
     label: 'Notion people',
     description: 'Match people from Notion to members of the current workspace.',
     aliases: ['Notion users', 'person mapping'],
@@ -428,7 +422,6 @@ const nodeCapabilities: readonly AppCapability[] = Object.values(SETTINGS_NODES)
   const fragment = `settings-${node.id}`;
   return {
     id: `settings:node:${node.id}`,
-    kind: 'setting',
     label: node.label,
     description: node.description,
     aliases: ['settings', ...(node.aliases ?? [])],

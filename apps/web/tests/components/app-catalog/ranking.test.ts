@@ -17,7 +17,6 @@ function candidate(
     description: '',
     aliases: [],
     breadcrumb: [],
-    kindLabel: 'Destination',
     source: 'catalog',
     sourceRank: 0,
     ...input,
@@ -71,11 +70,10 @@ describe('rankSearchCandidates', () => {
 describe('mergeSearchCandidates', () => {
   it('lets an exact catalog match outrank a weak server match', () => {
     const merged = mergeSearchCandidates(
-      [candidate('setting:security', 'Security', { kindLabel: 'Setting' })],
+      [candidate('setting:security', 'Security')],
       [
         candidate('task:security-review', 'Quarterly review', {
           description: 'Review the security program.',
-          kindLabel: 'Task',
           source: 'remote',
           sourceRank: 0,
         }),

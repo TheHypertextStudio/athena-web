@@ -21,13 +21,11 @@ describe('mergePaletteResults', () => {
       [
         item('setting:security', 'Security', {
           description: 'Manage passkeys and active sessions.',
-          kindLabel: 'Setting',
         }),
       ],
       [
         item('task:review', 'Quarterly review', {
           description: 'Review the security program.',
-          hitType: 'task',
           searchScore: 10,
         }),
       ],

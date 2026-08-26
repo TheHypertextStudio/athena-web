@@ -21,9 +21,11 @@ tenant data and does not need indexing jobs, migrations, or query-time data perm
 
 ## Result contract
 
-Every capability has a stable ID, kind, label, plain-text description, aliases, icon, breadcrumb,
-scope, availability rule, and declarative target. Targets identify routes or shell-owned intents.
-They never capture React callbacks.
+Every capability has a stable ID, label, plain-text description, aliases, icon, breadcrumb, scope,
+availability rule, and declarative target. Every result is a command, so the contract does not
+assign a user-facing type. Targets identify routes or shell-owned intents. They never capture React
+callbacks. The palette derives its empty-query browse group from the target instead of storing a
+second classification.
 
 An empty query keeps the current grouped browse state. A typed query merges immediate catalog
 matches with the debounced server response into one list of at most 20 results. Exact labels and

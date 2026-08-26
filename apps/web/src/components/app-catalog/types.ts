@@ -44,13 +44,9 @@ export type CapabilityTargetDefinition =
   | { readonly type: 'route'; readonly href: ContextValue<string> }
   | { readonly type: 'intent'; readonly intent: CapabilityIntent };
 
-/** The kinds of shipped application capability that Cmd+K can identify. */
-export type CapabilityKind = 'destination' | 'setting' | 'panel' | 'action';
-
 /** Static application metadata shared by its view and the command palette. */
 export interface AppCapability {
   readonly id: string;
-  readonly kind: CapabilityKind;
   readonly label: ContextValue<string>;
   readonly description: string;
   readonly aliases?: readonly string[];
@@ -65,8 +61,6 @@ export interface AppCapability {
 /** A capability after its context-sensitive label, route, and ownership have been resolved. */
 export interface ResolvedCapability {
   readonly id: string;
-  readonly kind: CapabilityKind;
-  readonly kindLabel: string;
   readonly label: string;
   readonly description: string;
   readonly aliases: readonly string[];

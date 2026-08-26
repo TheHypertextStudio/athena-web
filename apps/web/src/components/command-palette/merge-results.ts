@@ -13,7 +13,6 @@ function candidate(item: PaletteItem, source: SearchCandidate['source']): Palett
     description: item.description ?? item.hint ?? '',
     aliases: item.keywords ?? [],
     breadcrumb: item.breadcrumb ?? [],
-    kindLabel: item.kindLabel ?? item.hitType ?? 'Destination',
     source,
     sourceRank: item.searchScore ?? 0,
     item,

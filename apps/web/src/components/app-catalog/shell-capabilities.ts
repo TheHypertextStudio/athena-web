@@ -10,7 +10,6 @@ import type { AppCapability, CapabilityContext } from './types';
 export const ACTION_CAPABILITIES: readonly AppCapability[] = [
   {
     id: 'action:new:task',
-    kind: 'action',
     label: (context) => `New ${context.vocabulary.task.toLocaleLowerCase()}`,
     description: 'Create a task in the current workspace.',
     aliases: ['new task', 'create task', 'add issue'],
@@ -21,7 +20,6 @@ export const ACTION_CAPABILITIES: readonly AppCapability[] = [
   },
   {
     id: 'action:new:project',
-    kind: 'action',
     label: (context) => `New ${context.vocabulary.project.toLocaleLowerCase()}`,
     description: 'Create a project in the current workspace.',
     aliases: ['new project', 'create project'],
@@ -32,7 +30,6 @@ export const ACTION_CAPABILITIES: readonly AppCapability[] = [
   },
   {
     id: 'action:new:initiative',
-    kind: 'action',
     label: (context) => `New ${context.vocabulary.initiative.toLocaleLowerCase()}`,
     description: 'Create a strategic initiative in the current workspace.',
     aliases: ['new initiative', 'create initiative', 'new goal'],
@@ -43,7 +40,6 @@ export const ACTION_CAPABILITIES: readonly AppCapability[] = [
   },
   {
     id: 'action:new:program',
-    kind: 'action',
     label: (context) => `New ${context.vocabulary.program.toLocaleLowerCase()}`,
     description: 'Create an ongoing program in the current workspace.',
     aliases: ['new program', 'create program', 'new stream'],
@@ -54,7 +50,6 @@ export const ACTION_CAPABILITIES: readonly AppCapability[] = [
   },
   {
     id: 'action:new-org',
-    kind: 'action',
     label: 'Create workspace',
     description: 'Create another shared workspace.',
     aliases: ['new workspace', 'new organization'],
@@ -64,7 +59,6 @@ export const ACTION_CAPABILITIES: readonly AppCapability[] = [
   },
   {
     id: 'action:density',
-    kind: 'action',
     label: 'Switch display density',
     description: 'Cycle between compact, comfortable, and spacious row spacing.',
     aliases: ['compact', 'comfortable', 'spacious', 'spacing'],
@@ -74,7 +68,6 @@ export const ACTION_CAPABILITIES: readonly AppCapability[] = [
   },
   {
     id: 'action:sign-out',
-    kind: 'action',
     label: 'Sign out',
     description: 'End this Docket session on the current device.',
     aliases: ['log out', 'logout'],
@@ -88,7 +81,6 @@ export const ACTION_CAPABILITIES: readonly AppCapability[] = [
 export const HOME_CAPABILITIES: readonly AppCapability[] = HOME_NAVIGATION_DESCRIPTORS.map(
   (descriptor) => ({
     id: `home:${descriptor.key}`,
-    kind: 'destination',
     label: descriptor.label,
     description: descriptor.description,
     aliases: descriptor.aliases,
@@ -106,7 +98,6 @@ function workspaceHref(segment: string, context: CapabilityContext): string {
 export const WORKSPACE_CAPABILITIES: readonly AppCapability[] =
   WORKSPACE_NAVIGATION_DESCRIPTORS.map((descriptor) => ({
     id: `workspace:${descriptor.key}`,
-    kind: 'destination',
     label: (context) =>
       typeof descriptor.label === 'string'
         ? descriptor.label
@@ -127,7 +118,6 @@ export const WORKSPACE_CAPABILITIES: readonly AppCapability[] =
 export const PANEL_CAPABILITIES: readonly AppCapability[] = [
   {
     id: 'panel:agenda',
-    kind: 'panel',
     label: 'Open Agenda',
     description: 'Show today’s calendar and schedule in the utility rail.',
     aliases: ['calendar panel', 'schedule panel'],
@@ -138,7 +128,6 @@ export const PANEL_CAPABILITIES: readonly AppCapability[] = [
   },
   {
     id: 'panel:focus',
-    kind: 'panel',
     label: 'Open Focus',
     description: 'Show the focus timer in the utility rail.',
     aliases: ['timer panel', 'focus timer'],
@@ -149,7 +138,6 @@ export const PANEL_CAPABILITIES: readonly AppCapability[] = [
   },
   {
     id: 'panel:athena',
-    kind: 'panel',
     label: 'Open Athena panel',
     description: 'Show your Athena conversation beside the current page.',
     aliases: ['assistant panel', 'chat panel'],

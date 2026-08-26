@@ -40,6 +40,24 @@ describe('collapsed sidebar navigation rail', () => {
     );
   });
 
+  it('gives each persisted navigation identity one unique shared-element name', () => {
+    renderRail();
+
+    const names = [...document.querySelectorAll<HTMLElement>('[style*="view-transition-name"]')]
+      .map((element) => element.style.viewTransitionName)
+      .sort();
+
+    expect(names).toEqual([
+      'navigation-home-athena',
+      'navigation-home-calendar',
+      'navigation-home-inbox',
+      'navigation-home-search',
+      'navigation-home-today',
+      'navigation-workspace',
+      'navigation-workspace-my-work',
+    ]);
+  });
+
   it('groups secondary destinations in More without dropping Inbox attention', async () => {
     const user = userEvent.setup();
     renderRail(3);

@@ -16,6 +16,10 @@ import {
 } from '../../primitives';
 import type { HomeNavKey, Workspace, WorkspaceNavKey } from './workspaces';
 import { type ResolvedNavigationDestination, selectRailDestinations } from './navigation-catalog';
+import {
+  NAVIGATION_WORKSPACE_TRANSITION_NAME,
+  navigationDestinationTransitionName,
+} from './navigation-transition';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 
 /** Props for the shell's compact, labeled Material 3 navigation rail. */
@@ -194,7 +198,7 @@ export function NavigationRail({
   return (
     <aside
       aria-label="Navigation"
-      className="text-on-surface flex h-full w-full shrink-0 flex-col items-center p-2 lg:w-24"
+      className="text-on-surface flex h-full w-full shrink-0 flex-col items-center p-2 motion-reduce:transition-none lg:w-24 lg:transition-[width] lg:duration-200 lg:ease-out"
     >
       <div className="flex w-full shrink-0 flex-col items-center gap-1">
         <WorkspaceSwitcher
@@ -203,6 +207,7 @@ export function NavigationRail({
           onCreate={onCreateWorkspace}
           loading={loading}
           collapsed
+          viewTransitionName={NAVIGATION_WORKSPACE_TRANSITION_NAME}
         />
         <Button
           type="button"
@@ -211,6 +216,7 @@ export function NavigationRail({
           controlSize="sm"
           aria-label="Expand navigation"
           aria-pressed
+          data-shell-sidebar-toggle="true"
           onClick={onToggle}
           className="text-on-surface-variant hover:text-on-surface hidden shrink-0 lg:inline-flex"
         >
@@ -221,17 +227,21 @@ export function NavigationRail({
       <nav aria-label="Primary navigation" className="min-h-0 w-full flex-1 overflow-y-auto pt-2">
         <div className="flex flex-col gap-1">
           {railDestinations.map((destination) => (
-            <RailDestination
+            <div
               key={destination.id}
-              destination={destination}
-              activeOrgId={activeOrgId}
-              unreadCount={unreadCount}
-              hrefForHome={hrefForHome}
-              hrefForWorkspace={hrefForWorkspace}
-              renderLink={renderLink}
-              onOpenSearch={onOpenSearch}
-              loading={loading}
-            />
+              style={{ viewTransitionName: navigationDestinationTransitionName(destination.id) }}
+            >
+              <RailDestination
+                destination={destination}
+                activeOrgId={activeOrgId}
+                unreadCount={unreadCount}
+                hrefForHome={hrefForHome}
+                hrefForWorkspace={hrefForWorkspace}
+                renderLink={renderLink}
+                onOpenSearch={onOpenSearch}
+                loading={loading}
+              />
+            </div>
           ))}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

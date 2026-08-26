@@ -606,6 +606,11 @@ describe('AppShell rail', () => {
 });
 
 describe('Sidebar collapse', () => {
+  afterEach(() => {
+    Reflect.deleteProperty(document, 'startViewTransition');
+    window.localStorage.removeItem('docket.sidebar.collapsed');
+  });
+
   /** Render the sidebar inside a shell-collapse provider at the given state. */
   function renderSidebar(collapsed: boolean, onToggle = () => undefined): void {
     render(
@@ -653,6 +658,43 @@ describe('Sidebar collapse', () => {
     cleanupRender();
     renderSidebar(false);
     expect(screen.getByRole('button', { name: 'Collapse navigation' })).toBeInTheDocument();
+  });
+
+  it('uses a shared transition and keeps focus on the state-changing control', async () => {
+    window.localStorage.setItem('docket.sidebar.collapsed', '0');
+    const startViewTransition = vi.fn((update: () => void) => {
+      update();
+      return { finished: Promise.resolve() };
+    });
+    Object.defineProperty(document, 'startViewTransition', {
+      configurable: true,
+      value: startViewTransition,
+    });
+    render(
+      <ContextProvider initialContext={ACME.id}>
+        <AppShell
+          sidebar={
+            <Sidebar
+              workspaces={WORKSPACES}
+              {...sidebarHrefs()}
+              onSelectWorkspace={() => undefined}
+              onOpenSearch={() => undefined}
+            />
+          }
+        >
+          <div>Main</div>
+        </AppShell>
+      </ContextProvider>,
+    );
+
+    const collapse = screen.getByRole('button', { name: 'Collapse navigation' });
+    collapse.focus();
+    fireEvent.click(collapse);
+
+    await waitFor(() => {
+      expect(startViewTransition).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.getByRole('button', { name: 'Expand navigation' })).toHaveFocus();
   });
 
   // The drawer IS the surface someone opened to navigate. Shrinking it to glyphs would leave a

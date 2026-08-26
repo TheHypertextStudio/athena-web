@@ -10,6 +10,10 @@ import { SidebarNavItem } from './SidebarNavItem';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 import type { HomeNavKey, Workspace, WorkspaceNavKey } from './workspaces';
 import type { ResolvedNavigationDestination } from './navigation-catalog';
+import {
+  NAVIGATION_WORKSPACE_TRANSITION_NAME,
+  navigationDestinationTransitionName,
+} from './navigation-transition';
 
 /** Props for the full labeled sidebar presentation. */
 export interface ExpandedSidebarProps {
@@ -105,7 +109,7 @@ export function ExpandedSidebar({
   return (
     <aside
       aria-label="Navigation"
-      className="text-on-surface flex h-full w-full shrink-0 flex-col p-2 lg:w-60"
+      className="text-on-surface flex h-full w-full shrink-0 flex-col p-2 motion-reduce:transition-none lg:w-60 lg:transition-[width] lg:duration-200 lg:ease-out"
     >
       <div className="flex shrink-0 items-center gap-1">
         <div className="min-w-0 flex-1">
@@ -114,6 +118,7 @@ export function ExpandedSidebar({
             onSelect={onSelectWorkspace}
             onCreate={onCreateWorkspace}
             loading={loading}
+            viewTransitionName={NAVIGATION_WORKSPACE_TRANSITION_NAME}
           />
         </div>
         {dismissDrawer === null ? (
@@ -126,6 +131,7 @@ export function ExpandedSidebar({
                 controlSize="sm"
                 aria-label="Collapse navigation"
                 aria-pressed={false}
+                data-shell-sidebar-toggle="true"
                 onClick={onToggle}
                 className="text-on-surface-variant hover:text-on-surface hidden shrink-0 lg:inline-flex"
               >
@@ -147,28 +153,38 @@ export function ExpandedSidebar({
             const href = destinationHref(destination, activeOrgId, hrefForHome, hrefForWorkspace);
             if (destination.group === 'home' && destination.key === 'search') {
               return (
-                <SidebarNavItem
+                <div
                   key={destination.id}
-                  label={destination.label}
-                  icon={destination.icon}
-                  onSelect={onOpenSearch}
-                  disabled={loading}
-                />
+                  style={{
+                    viewTransitionName: navigationDestinationTransitionName(destination.id),
+                  }}
+                >
+                  <SidebarNavItem
+                    label={destination.label}
+                    icon={destination.icon}
+                    onSelect={onOpenSearch}
+                    disabled={loading}
+                  />
+                </div>
               );
             }
             if (!href) return null;
             return (
-              <SidebarNavItem
+              <div
                 key={destination.id}
-                label={destination.label}
-                icon={destination.icon}
-                active={destination.active}
-                badge={destination.id === 'home:inbox' ? unreadCount : undefined}
-                badgeLabel="unread"
-                asChild
+                style={{ viewTransitionName: navigationDestinationTransitionName(destination.id) }}
               >
-                {renderLink(href, <RowBody icon={destination.icon} label={destination.label} />)}
-              </SidebarNavItem>
+                <SidebarNavItem
+                  label={destination.label}
+                  icon={destination.icon}
+                  active={destination.active}
+                  badge={destination.id === 'home:inbox' ? unreadCount : undefined}
+                  badgeLabel="unread"
+                  asChild
+                >
+                  {renderLink(href, <RowBody icon={destination.icon} label={destination.label} />)}
+                </SidebarNavItem>
+              </div>
             );
           })}
         </nav>
@@ -185,7 +201,7 @@ export function ExpandedSidebar({
             {workspaceDestinations.map((destination) => {
               const href = destinationHref(destination, activeOrgId, hrefForHome, hrefForWorkspace);
               if (!href) return null;
-              return (
+              const item = (
                 <SidebarNavItem
                   key={destination.id}
                   label={destination.label}
@@ -195,6 +211,18 @@ export function ExpandedSidebar({
                 >
                   {renderLink(href, <RowBody icon={destination.icon} label={destination.label} />)}
                 </SidebarNavItem>
+              );
+              return destination.rail ? (
+                <div
+                  key={destination.id}
+                  style={{
+                    viewTransitionName: navigationDestinationTransitionName(destination.id),
+                  }}
+                >
+                  {item}
+                </div>
+              ) : (
+                item
               );
             })}
           </nav>

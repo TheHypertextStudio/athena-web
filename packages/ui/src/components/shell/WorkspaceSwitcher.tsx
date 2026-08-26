@@ -58,6 +58,8 @@ export interface WorkspaceSwitcherProps {
    * name stays in the trigger's accessible name and in the menu the trigger opens.
    */
   readonly collapsed?: boolean;
+  /** Stable shared-element name when the shell swaps navigation presentations. */
+  readonly viewTransitionName?: string;
 }
 
 /** Compute up-to-two-letter initials from a workspace name for the avatar fallback. */
@@ -160,6 +162,7 @@ export function WorkspaceSwitcher({
   onCreate,
   loading = false,
   collapsed = false,
+  viewTransitionName,
 }: WorkspaceSwitcherProps): React.JSX.Element {
   const { activeOrgId } = useContextState();
   const [open, setOpen] = React.useState(false);
@@ -196,6 +199,7 @@ export function WorkspaceSwitcher({
             loading ? 'Loading workspaces' : `Workspace: ${triggerLabel}. Switch workspace`
           }
           disabled={loading}
+          style={viewTransitionName ? { viewTransitionName } : undefined}
           className={
             collapsed
               ? 'size-10 shrink-0 justify-center px-0 py-0'

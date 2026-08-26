@@ -732,6 +732,22 @@
   }
 
   /*
+   * Sidebar collapse swaps two presentation trees. Only elements with a stable navigation name
+   * participate in the View Transition, so route labels and the workspace identity move to their
+   * matching rail controls instead of the entire shell cross-fading as one bitmap.
+   */
+  @media (prefers-reduced-motion: no-preference) {
+    :root[data-shell-navigation-transition='true'] {
+      view-transition-name: none;
+    }
+
+    :root[data-shell-navigation-transition='true']::view-transition-group(*) {
+      animation-duration: 200ms;
+      animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+    }
+  }
+
+  /*
    * Native cursor affordance for every plain `<button>` (and any `role="button"` element that
    * isn't one). Unlike `<a href>`, browsers do not give `<button>` a pointer cursor by default —
    * and Tailwind's preflight doesn't add one either — so every button in this product rendered

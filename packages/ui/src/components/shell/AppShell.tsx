@@ -93,6 +93,7 @@ import {
   type AppShellAside,
 } from './ShellAside';
 import { usePageScrollOwner } from './page-scroll';
+import { startNavigationTransition } from './navigation-transition';
 import { ShellDrawerProvider } from './ShellDrawerContext';
 import { ShellSidebarProvider } from './ShellSidebarContext';
 import { ShellOverlayProvider } from './ShellOverlayContext';
@@ -139,24 +140,25 @@ export const SHELL_DESKTOP_MIN_PX = 1024;
 export const SHELL_DESKTOP_CHROME_PX = 328;
 
 /**
- * The same chrome with the sidebar collapsed to its icon rail: 56px of sidebar in place of 240px.
+ * The same chrome with the sidebar collapsed to its labeled MD3 rail: 96px of sidebar in place of
+ * 240px.
  *
  * @remarks
  * The column *count* is unchanged, so the 40px of gutters and the 48px activity bar are identical —
  * only the sidebar's own width moves, and it moves by a constant. Collapsing therefore hands
- * `<main>` a flat 184px at every width rather than a share, which is why it can be offered at all
+ * `<main>` a flat 144px at every width rather than a share, which is why it can be offered at all
  * widths without putting a slope anywhere in the contract.
  */
-export const SHELL_DESKTOP_CHROME_COLLAPSED_PX = 144;
+export const SHELL_DESKTOP_CHROME_COLLAPSED_PX = 184;
 
 /**
  * The viewport width at or above which the sidebar starts out expanded.
  *
  * @remarks
  * Below this the shell has to spend its width on the content and the rail, and a 240px column of
- * labels is the least valuable of the three — the same destinations are all still one click away as
- * glyphs. Sampled **once, at mount**, and only when the viewer has expressed no preference: making
- * it track the window live would mean dragging a window across 1440px silently took 184px away from
+ * labels is the least valuable of the three — the same daily destinations stay visible in the
+ * labeled rail. Sampled **once, at mount**, and only when the viewer has expressed no preference:
+ * making it track the window live would mean dragging a window across 1440px silently took 144px away from
  * `<main>`, which is the exact discontinuity the rest of this contract exists to prevent.
  */
 export const SHELL_SIDEBAR_EXPAND_MIN_PX = 1440;
@@ -193,13 +195,13 @@ export const SHELL_MAIN_MIN_VIEWPORT_SHARE = 0.4;
  *
  * @param viewportWidth - The viewport's inline size in CSS px.
  * @param railExpanded - Whether the viewer has the rail's panel host expanded.
- * @param sidebarCollapsed - Whether the sidebar is showing its icon rail rather than labels.
+ * @param sidebarCollapsed - Whether the sidebar is showing its labeled rail rather than the full sidebar.
  * @returns `<main>`'s inline size in CSS px.
  *
  * @example
  * ```ts
  * shellMainInlineSize(1440, true); // 832 — a majority of the viewport
- * shellMainInlineSize(1024, true, true); // 600 — the same window, sidebar collapsed
+ * shellMainInlineSize(1024, true, true); // 560 — the same window, sidebar collapsed
  * ```
  */
 export function shellMainInlineSize(
@@ -270,7 +272,7 @@ function readRailState(): RailState {
  *
  * Deliberately **not** re-evaluated on resize. The width test is a first-run default, not a
  * responsive rule: recomputing it live would make dragging a window across
- * {@link SHELL_SIDEBAR_EXPAND_MIN_PX} hand `<main>` 184px less than it had a pixel earlier, which is
+ * {@link SHELL_SIDEBAR_EXPAND_MIN_PX} hand `<main>` 144px less than it had a pixel earlier, which is
  * precisely the discontinuity the layout contract forbids.
  */
 function readSidebarCollapsed(): boolean {
@@ -423,6 +425,7 @@ export function AppShell({
   // Expanded on the server and on the first client paint, so the markup matches; the mount effect
   // below applies the viewer's choice (or the width default) once hydration is safe.
   const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
+  const restoreSidebarToggleFocus = React.useRef(false);
   const railCollapsed = rail.collapsed;
 
   // Adopt the persisted choice once the DOM the server produced is safely hydrated. See
@@ -432,12 +435,23 @@ export function AppShell({
   }, []);
 
   const toggleSidebar = React.useCallback((): void => {
-    setSidebarCollapsed((current) => {
-      const next = !current;
-      writeRailState(SIDEBAR_COLLAPSED_KEY, next ? '1' : '0');
-      return next;
+    restoreSidebarToggleFocus.current =
+      document.activeElement instanceof HTMLElement &&
+      document.activeElement.dataset['shellSidebarToggle'] === 'true';
+    startNavigationTransition(() => {
+      setSidebarCollapsed((current) => {
+        const next = !current;
+        writeRailState(SIDEBAR_COLLAPSED_KEY, next ? '1' : '0');
+        return next;
+      });
     });
   }, []);
+
+  React.useLayoutEffect(() => {
+    if (!restoreSidebarToggleFocus.current) return;
+    document.querySelector<HTMLButtonElement>('[data-shell-sidebar-toggle="true"]')?.focus();
+    restoreSidebarToggleFocus.current = false;
+  }, [sidebarCollapsed]);
 
   const sidebarState = React.useMemo(
     () => ({ collapsed: sidebarCollapsed, onToggle: toggleSidebar }),

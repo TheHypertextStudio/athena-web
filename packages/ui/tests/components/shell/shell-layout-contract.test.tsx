@@ -217,6 +217,10 @@ const DESKTOP_WIDTHS = Array.from(
 const COMPACT_WIDTHS = Array.from({ length: SHELL_DESKTOP_MIN_PX - 320 }, (_, i) => 320 + i);
 
 describe('AppShell layout contract — geometry read from the rendered shell', () => {
+  it('reserves 96px for the labeled navigation rail when the sidebar is collapsed', () => {
+    expect(SHELL_DESKTOP_CHROME_COLLAPSED_PX).toBe(SHELL_DESKTOP_CHROME_PX - 144);
+  });
+
   it('sizes the rail as a viewport share, and every other column as a constant', () => {
     renderShell();
     const geometry = readGeometry();

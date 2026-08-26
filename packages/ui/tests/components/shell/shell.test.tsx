@@ -25,6 +25,9 @@ function renderLink(href: string, content: React.ReactNode): React.ReactNode {
 
 describe('AppShell + Sidebar', () => {
   it('renders the integrated sidebar inside the providers, skinned to the active org', () => {
+    // This test exercises the expanded catalog. jsdom reports 1024px, where a first-time viewer
+    // correctly receives the rail; pin the saved choice so the assertion does not test width policy.
+    window.localStorage.setItem('docket.sidebar.collapsed', '0');
     render(
       <ContextProvider initialContext={ACME.id}>
         <VocabularyProvider skin={AGENCY_SKIN}>

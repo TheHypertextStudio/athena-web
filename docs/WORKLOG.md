@@ -6515,6 +6515,25 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [REPO-POLICY-001] Keep agent work out of GitHub pull requests
+
+- **Completed**: 2026-08-25
+- **Priority**: P0
+- **Summary**: The repository agent policy now forbids agents from opening, creating, updating,
+  reviewing, merging, or depending on GitHub pull requests. Agents must keep
+  `has_pull_requests=false` and integrate validated commits directly into `main` with linear
+  history.
+- **Decision**: A review, merge, ship, or deploy request does not authorize a pull request. Only an
+  explicit user instruction to use a pull request may suspend the rule, and the user must also
+  authorize the repository setting change. Agents may not treat a disabled GitHub feature as a
+  tooling problem to work around.
+- **Files changed**: Updated `AGENTS.md`, which also governs Claude through the existing
+  `CLAUDE.md` symlink, and recorded the repository policy here.
+- **Validation**: Verified that `CLAUDE.md` resolves to `AGENTS.md`, closed the unmerged billing
+  pull request, and restored the GitHub repository's `has_pull_requests` setting to `false`.
+- **Learnings**: Repository settings encode policy as well as capability. An agent must not expand
+  its authority by changing a disabled feature when the user did not request that change.
+
 ### [WEB-SEARCH-003] Make application capabilities searchable from Cmd+K
 
 - **Completed**: 2026-08-25

@@ -1,7 +1,7 @@
 # AGENTS.md - Project Athena Agent Guidelines
 
-> **Version**: 2.0.1
-> **Last Updated**: 2026-08-24
+> **Version**: 2.0.2
+> **Last Updated**: 2026-08-25
 > **Applies To**: All AI coding agents working on Project Athena
 
 This document defines the operational framework for AI agents contributing to Project Athena. All agents MUST adhere to these guidelines to ensure consistent, high-quality, autonomous development.
@@ -173,6 +173,22 @@ main
 Development is feature-oriented. A branch and its commits should deliver one coherent product
 slice, including the implementation, tests, documentation, migrations, and operational changes
 needed to ship it. Do not split supporting work into process-oriented branches or commits.
+
+### Pull Request Policy
+
+**Agents MUST NOT open, create, draft, update, review, merge, or depend on GitHub pull requests in
+this repository.** The repository setting `has_pull_requests` MUST remain disabled. An agent MUST
+NOT change that setting or any other GitHub setting to make pull requests available.
+
+Agents work in dedicated worktrees or feature branches, validate and commit there, then integrate
+the finished commits directly into `main` with linear history. Use `git rebase`, `git cherry-pick`,
+or `git merge --ff-only`. Push `main` only after the required checks pass. Do not create a temporary
+pull request for review, CI, deployment, or evidence. Use local review and the direct-push checks
+instead.
+
+Only the user may suspend this policy. The user must explicitly direct the agent to use a pull
+request in the current task and must explicitly authorize reenabling the repository setting. A
+generic instruction to review, ship, merge, or deploy does not authorize a pull request.
 
 ### Linear History Requirement
 

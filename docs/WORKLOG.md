@@ -7,6 +7,25 @@
 
 ## Active Tasks
 
+### [TIME-HYDRATION-001] Restore production navigation from Time
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-08-26
+- **Priority**: P0
+- **Description**: The deployed `/time` document fails React hydration. The browser then accepts
+  local-first history updates without mounting the destination route, so every in-app click changes
+  the address bar while leaving Time on screen.
+- **Approach**: Keep Time's server output to a deterministic loading boundary. Mount the
+  timezone- and query-dependent review UI after hydration. This prevents runtime locale and
+  preference state from changing server text during hydration, while preserving the existing
+  client-side Time review once the app is interactive.
+- **Validation**: Reproduce the Time-only hydration failure on production. Add a server-render
+  regression test. Run the focused Time suite, typecheck, and an authenticated production route
+  round trip after deployment.
+- **Blockers**: None.
+
+---
+
 ### [CONNECTOR-POST-001] Keep connector actions and retries running
 
 - **Status**: IN_PROGRESS

@@ -333,16 +333,6 @@ export function FreeformTextEditor({
   return (
     <div
       data-editor-surface=""
-      onMouseDown={(event) => {
-        // Click anywhere the surface *looks* editable and the caret goes there — including the
-        // empty space to the right of a line and the whitespace below the last paragraph. The
-        // ProseMirror element only covers its own text, so without this a person clicking the
-        // obvious blank area inside an editor-shaped box gets nothing at all.
-        if (!editor.isEditable) return;
-        if (event.target !== event.currentTarget) return;
-        event.preventDefault();
-        editor.commands.focus('end');
-      }}
       className={cn(
         'relative flex min-h-0 max-w-[75ch] flex-1 flex-col [&_.ProseMirror]:min-h-10 [&_.ProseMirror]:flex-1 [&_.ProseMirror]:outline-none [&_.ProseMirror_.is-editor-empty:first-child::before]:hidden',
         editor.isEditable ? 'cursor-text' : '',

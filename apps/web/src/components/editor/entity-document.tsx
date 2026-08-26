@@ -21,28 +21,6 @@ import { extractMarkdownHeadings } from '@/components/initiatives/markdown-toc';
 
 import type { EditorContribution } from './editor-contribution';
 
-/**
- * Focus the editable ProseMirror document inside `container`, with the caret at the end.
- *
- * @remarks
- * A DOM-level fallback for the one editor surface that is not itself the element a click landed
- * on (see the card's own `onMouseDown` below) — the editor's tiptap instance is not reachable
- * from here, so this reproduces `editor.commands.focus('end')` with the underlying Selection
- * APIs instead. A no-op when the document is read-only (no `contenteditable="true"` descendant)
- * or not yet mounted.
- */
-function focusDocumentEnd(container: HTMLElement | null): void {
-  const editable = container?.querySelector<HTMLElement>('.ProseMirror[contenteditable="true"]');
-  if (!editable) return;
-  editable.focus();
-  const range = document.createRange();
-  range.selectNodeContents(editable);
-  range.collapse(false);
-  const selection = window.getSelection();
-  selection?.removeAllRanges();
-  selection?.addRange(range);
-}
-
 /** Props for {@link EntityDocument}. */
 export interface EntityDocumentProps {
   /** The Markdown body, or null/undefined when none has been written yet. */
@@ -171,30 +149,8 @@ export function EntityDocument({
             <div className="px-3 pb-2">{renderContents(false)}</div>
           </details>
         ) : null}
-        {/*
-         * `p-4`, not `px-4 py-3`: the inset a person sees on the left of the first line is the
-         * same inset they see above it. Asymmetric padding is the single most common reason an
-         * editor looks "off" without anyone being able to say why.
-         *
-         * `flex` + a `flex-1` editor means the editor's own box reaches the bottom of the
-         * container, so the empty space below the last paragraph belongs to the editor and
-         * clicking it puts the caret at the end — rather than being inert container padding
-         * that looks editable and does nothing.
-         *
-         * That still leaves this card's own `p-4` band itself: it carries the visible
-         * background, so it reads as part of the editor, but it sits *outside* the editor's own
-         * box (the editor fills exactly up to this inset, not into it). The editor's own
-         * click-anywhere handling can't reach it — this is a different element — so the same
-         * fallback is repeated here for this one band, focusing the caret at the end of the
-         * document exactly as clicking inside the editor's own blank space does.
-         */}
         <div
           ref={rootRef}
-          onMouseDown={(event) => {
-            if (event.target !== event.currentTarget) return;
-            event.preventDefault();
-            focusDocumentEnd(rootRef.current);
-          }}
           className="entity-document bg-surface-container-low flex min-h-56 flex-1 flex-col rounded-xl p-4 sm:min-w-[32rem] print:bg-transparent print:p-0"
         >
           <EditableFreeformText

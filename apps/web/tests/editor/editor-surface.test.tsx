@@ -3,7 +3,7 @@ import '@testing-library/jest-dom/vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useRef, useState, type ReactElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -166,17 +166,23 @@ describe('Markdown formats as it is typed, not on blur or save', () => {
   });
 });
 
-describe('clicking an editor-shaped surface starts editing', () => {
-  it('focuses the editor from the empty space below the last line', async () => {
+describe('clicking an editor-shaped surface', () => {
+  it('does not move the caret when the click lands in the outer editor margin', async () => {
     renderEditor(<EntityDocument value="A single line." canEdit onSave={vi.fn()} />);
     const surface = await screen.findByRole('textbox', { name: 'Description' });
-    // The wrapper that draws the editor-looking box, not the text itself.
-    const box = surface.closest('[data-editor-surface]');
-    expect(box).not.toBeNull();
-    fireEvent.mouseDown(box as HTMLElement, { bubbles: true });
-    await waitFor(() => {
-      expect(document.activeElement).toBe(surface);
-    });
+    // This margin is outside ProseMirror's content. Treating it as a click at the end made a
+    // long document scroll to the last line and moved a previously placed caret.
+    const outerMargin = assertDefined(surface.closest('[data-editor-surface]'));
+    fireEvent.mouseDown(outerMargin, { bubbles: true });
+    expect(document.activeElement).not.toBe(surface);
+  });
+
+  it('does not move the caret from a click on entity-card padding', async () => {
+    renderEditor(<EntityDocument value="A single line." canEdit onSave={vi.fn()} />);
+    const surface = await screen.findByRole('textbox', { name: 'Description' });
+    const cardPadding = assertDefined(surface.closest('.entity-document'));
+    fireEvent.mouseDown(cardPadding, { bubbles: true });
+    expect(document.activeElement).not.toBe(surface);
   });
 
   it('does not hijack a click that landed on the text itself', async () => {
@@ -198,7 +204,7 @@ describe('clicking an editor-shaped surface starts editing', () => {
     expect(screen.queryByRole('textbox')).toBeNull();
   });
 
-  it('focuses the composer body editor from a click on its own tinted background/padding', async () => {
+  it('uses ProseMirror rather than the outer wrapper for a composer body click', async () => {
     renderEditor(
       <ComposerShell
         open
@@ -219,14 +225,9 @@ describe('clicking an editor-shaped surface starts editing', () => {
       </ComposerShell>,
     );
     const surface = await screen.findByRole('textbox', { name: 'Add description' });
-    // There is no separate padded wrapper: the background/padding live on the same element the
-    // editor already makes clickable everywhere, so this *is* the click-anywhere surface.
-    const box = surface.closest('[data-editor-surface]');
-    expect(box).not.toBeNull();
-    fireEvent.mouseDown(box as HTMLElement, { bubbles: true });
-    await waitFor(() => {
-      expect(document.activeElement).toBe(surface);
-    });
+    const outerMargin = assertDefined(surface.closest('[data-editor-surface]'));
+    fireEvent.mouseDown(outerMargin, { bubbles: true });
+    expect(document.activeElement).not.toBe(surface);
   });
 
   it('keeps composer chrome fixed while the body owns contained scrolling in both size states', async () => {
@@ -362,14 +363,16 @@ describe('description edit sessions', () => {
 
     renderEditor(<LaggingControlledEditor />);
     const surface = await screen.findByRole('textbox', { name: 'Description' });
-    fireEvent.mouseDown(assertDefined(surface.closest<HTMLElement>('[data-editor-surface]')));
+    act(() => {
+      surface.focus();
+    });
     await waitFor(() => expect(surface).toHaveFocus());
-    await user.keyboard(' final');
+    await user.keyboard('updated ');
 
     await waitFor(() => {
-      expect(onChange).toHaveBeenLastCalledWith('Persisted final');
+      expect(onChange).toHaveBeenLastCalledWith('updated Persisted');
     });
-    expect(surface).toHaveTextContent('Persisted final');
+    expect(surface).toHaveTextContent('updated Persisted');
   });
 
   it('flushes the final draft as soon as focus leaves the editor', async () => {
@@ -378,11 +381,13 @@ describe('description edit sessions', () => {
     renderEditor(<EntityDocument value="Persisted" canEdit onSave={onSave} />);
     const surface = await screen.findByRole('textbox', { name: 'Description' });
 
-    fireEvent.mouseDown(assertDefined(surface.closest<HTMLElement>('.entity-document')));
+    act(() => {
+      surface.focus();
+    });
     await waitFor(() => expect(surface).toHaveFocus());
-    await user.keyboard(' final');
+    await user.keyboard('updated ');
     expect(onSave).not.toHaveBeenCalled();
-    const finalDraft = surface.textContent.trim();
+    const finalDraft = surface.textContent;
     expect(finalDraft).not.toBe('Persisted');
 
     fireEvent.blur(surface, { relatedTarget: document.body });
@@ -396,11 +401,13 @@ describe('description edit sessions', () => {
     const mounted = renderEditor(<EntityDocument value="Persisted" canEdit onSave={onSave} />);
     const surface = await screen.findByRole('textbox', { name: 'Description' });
 
-    fireEvent.mouseDown(assertDefined(surface.closest<HTMLElement>('.entity-document')));
+    act(() => {
+      surface.focus();
+    });
     await waitFor(() => expect(surface).toHaveFocus());
-    await user.keyboard(' final');
+    await user.keyboard('updated ');
     expect(onSave).not.toHaveBeenCalled();
-    const finalDraft = surface.textContent.trim();
+    const finalDraft = surface.textContent;
     expect(finalDraft).not.toBe('Persisted');
 
     mounted.unmount();

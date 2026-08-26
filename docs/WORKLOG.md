@@ -7,6 +7,22 @@
 
 ## Active Tasks
 
+### [EDITOR-FOCUS-001] Stop blank editor clicks from moving the caret
+
+- **Status**: REVIEW
+- **Started**: 2026-08-26
+- **Priority**: P1
+- **Description**: Clicking blank editor chrome can focus the document at its end. The browser then
+  scrolls the end selection into view, which turns an ordinary click near an editor into a jump.
+- **Approach**: Preserve ProseMirror's native text hit-testing. Remove the fallback handlers that
+  treat wrapper whitespace and entity-card padding as an instruction to select the document end.
+- **Validation**: The focused editor suite passes 16 tests. Prettier and focused ESLint pass for
+  the changed source and test files. The Web type check passes with a process-local 4 GB heap after
+  the default 2 GB heap exhausted memory.
+- **Blockers**: Production deployment and live verification are pending.
+
+---
+
 ### [MCP-OAUTH-ISSUER-001] Keep Codex OAuth callbacks on the canonical issuer
 
 - **Status**: REVIEW

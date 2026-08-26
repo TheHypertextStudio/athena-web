@@ -11,14 +11,11 @@ import { isAuthError, userErrorMessage, userProblemMessage } from '@/lib/problem
 import type { AdminLifecycleBoard } from '@/lib/types';
 
 /**
- * The data-lifecycle pipeline board.
+ * The legacy organization-retention board.
  *
  * @remarks
- * A Client Component. Reads `GET /admin/lifecycle` at runtime — one column per lifecycle
- * state (trial → active → past due → export window → pending deletion → deleted), each
- * holding the orgs currently in that state. Cards link to the org detail screen. A 403
- * (non-staff session) surfaces inline. The column layout scrolls horizontally on narrow
- * viewports so every stage stays reachable.
+ * This compatibility screen reads `GET /admin/lifecycle` for migration diagnostics. Billing
+ * never changes these markers. The Billing section reports subscription access and recovery.
  */
 export default function LifecyclePage(): JSX.Element {
   const [board, setBoard] = useState<AdminLifecycleBoard | null>(null);
@@ -51,10 +48,10 @@ export default function LifecyclePage(): JSX.Element {
   }, [load]);
 
   return (
-    <div className="flex w-full flex-col gap-6 p-8">
+    <div className="flex w-full flex-col gap-6 p-4 sm:p-8">
       <PageHeader
-        title="Data lifecycle"
-        description="Every organization by its position in the data-retention pipeline."
+        title="Legacy retention markers"
+        description="Migration diagnostics for old retention records. Billing cancellation never changes these markers or deletes workspace data."
       />
       <ErrorBanner message={error} action={authFailed ? <SignInAction /> : null} />
 

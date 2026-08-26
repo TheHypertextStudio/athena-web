@@ -10,6 +10,8 @@
  */
 import { describe, expect, it } from 'vitest';
 
+import { InMemoryBillingGateway } from '@docket/billing/adapters/in-memory';
+import { RealStripeGateway } from '@docket/billing/adapters/stripe';
 import { MockNotionMirror } from '@docket/connections/notion/adapters/in-memory';
 import { NotionMirrorClient } from '@docket/connections/notion/adapters/notion-sdk';
 import {
@@ -33,6 +35,7 @@ import {
   buildLinearAgentClient,
   buildNotionMirror,
   buildObserver,
+  buildStripeBillingGateway,
   toModelBackendEnv,
   type AppRuntimeEnv,
 } from '../../src/container';
@@ -202,6 +205,37 @@ describe('buildAppContainer', () => {
     expect(container.inboundMail).toBeDefined();
     expect(container.mcpConnector).toBeDefined();
     expect(container.blob).toBeDefined();
+  });
+
+  it('uses Stripe test mode for an explicitly enabled local billing run', () => {
+    const container = buildAppContainer({
+      APP_MODE: 'local',
+      BILLING_ENABLED: true,
+      STRIPE_SECRET_KEY: 'sk_test_x',
+      STRIPE_PRICE_DOCKET_PRO: 'price_x',
+      STRIPE_WEBHOOK_SECRET: 'whsec_x',
+      STRIPE_BILLING_PORTAL_CONFIG_ID: 'bpc_x',
+    });
+    expect(container.billing).toBeInstanceOf(RealStripeGateway);
+  });
+
+  it('builds the real read-only Stripe audit boundary while public Checkout is disabled', () => {
+    const gateway = buildStripeBillingGateway({
+      APP_MODE: 'local',
+      BILLING_ENABLED: false,
+      STRIPE_SECRET_KEY: 'sk_test_x',
+      STRIPE_PRICE_DOCKET_PRO: 'price_x',
+    });
+    expect(gateway).toBeInstanceOf(RealStripeGateway);
+  });
+
+  it('keeps billing mocked in test mode even when a route test enables Checkout', () => {
+    const container = buildAppContainer({
+      APP_MODE: 'test',
+      BILLING_ENABLED: true,
+      STRIPE_SECRET_KEY: 'sk_test_x',
+    });
+    expect(container.billing).toBeInstanceOf(InMemoryBillingGateway);
   });
 
   it('builds every real service in production mode with a fully configured environment', () => {

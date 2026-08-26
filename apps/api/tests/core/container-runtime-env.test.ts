@@ -12,6 +12,7 @@ import type { toAppRuntimeEnv as ToAppRuntimeEnv } from '../../src/container';
 
 const FULL_ENV = {
   APP_MODE: 'production' as const,
+  BILLING_ENABLED: true,
   STRIPE_SECRET_KEY: 'sk_live_x',
   STRIPE_WEBHOOK_SECRET: 'whsec_x',
   STRIPE_PRICE_TEAM: 'price_team',

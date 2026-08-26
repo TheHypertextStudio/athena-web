@@ -2,7 +2,7 @@
  * `@docket/api` — service-admin (operator back-office) DTOs.
  *
  * @remarks
- * Zod request/response shapes for the staff-gated `/v1/admin/*` router. These are
+ * Zod request/response shapes for the staff-gated `/admin/*` router. These are
  * plain (un-branded) schemas — the admin surface is operator-facing tooling, not the
  * tenant RPC contract, so it uses raw string ids and the org lifecycle string union
  * directly. Validated through {@link ok} / `zJson` / `zQuery` like every other route.
@@ -13,7 +13,7 @@ import { z } from 'zod';
 export const LifecycleState = z
   .enum(['trialing', 'active', 'past_due', 'export_window', 'pending_deletion', 'deleted'])
   .describe(
-    "An organization's position in the billing-driven data-retention pipeline. `trialing`: in-trial, full access. `active`: paying, healthy subscription. `past_due`: a payment failed — a soft warning state where the org stays usable. `export_window`: the trial ended or payment terminally lapsed — a 14-day grace period where data stays readable/exportable before deletion. `pending_deletion`: the grace period elapsed; the org is staged for deletion (dwells here at least one cron-sweep cycle). `deleted`: the lifecycle terminus authorizing the data purge.",
+    'A legacy organization-retention marker kept for migration compatibility. Billing access is stored on product entitlements and never advances this state. Account deletion uses the confirmed user Danger Zone flow.',
   );
 /** Validated lifecycle-state value. */
 export type LifecycleState = z.infer<typeof LifecycleState>;
@@ -22,7 +22,7 @@ export type LifecycleState = z.infer<typeof LifecycleState>;
 export const StaffRoleDto = z
   .enum(['support', 'finance', 'superadmin'])
   .describe(
-    'A Docket operator tier, in ascending privilege (`support` < `finance` < `superadmin`). `support` can read the back-office and impersonate end-users; `finance` adds billing/lifecycle actions (extend-trial, reactivate, set-lifecycle); `superadmin` adds the audit feed and staff management, and outranks every lower tier.',
+    'A Docket operator tier, in ascending privilege (`support` < `finance` < `superadmin`). `support` can inspect the back-office and impersonate users; `finance` can reconcile Stripe, extend eligible Stripe trials, and decide discounts; `superadmin` adds complimentary Pro, the audit feed, and staff management.',
   );
 /** Validated staff-tier value. */
 export type StaffRoleDto = z.infer<typeof StaffRoleDto>;
@@ -135,19 +135,17 @@ export const AdminOrgOut = z.object({
     .string()
     .nullable()
     .describe(
-      'When the export window opened (ISO-8601), or null when the org is not in/after the window. Set on entry to `export_window`; cleared on reactivation and on final deletion.',
+      'Legacy organization-retention timestamp retained for migration inspection. Billing does not write it.',
     ),
   deleteAfterAt: z
     .string()
     .nullable()
     .describe(
-      'When the deletion sweep may advance this org (ISO-8601 = export-window open + 14 days), or null when no deletion is scheduled.',
+      'Legacy organization-deletion deadline retained for migration inspection. Billing does not create it.',
     ),
   isBillingExempt: z
     .boolean()
-    .describe(
-      'True when a staff-granted billing exemption is currently active on this org — it bypasses the lifecycle-state entitlement gate entirely, independent of Stripe.',
-    ),
+    .describe('True when a superadmin granted complimentary Docket Pro independently of Stripe.'),
   createdAt: z.string().describe('Org creation timestamp (ISO-8601).'),
 });
 /** Validated admin-org value. */
@@ -221,12 +219,12 @@ export const AdminLifecycleColumn = z.object({
 /** Validated lifecycle-column value. */
 export type AdminLifecycleColumn = z.infer<typeof AdminLifecycleColumn>;
 
-/** The lifecycle pipeline board: one column per lifecycle state. */
+/** The legacy organization-retention board: one column per compatibility marker. */
 export const AdminLifecycleBoard = z.object({
   columns: z
     .array(AdminLifecycleColumn)
     .describe(
-      'One column per lifecycle state, in fixed pipeline order (`trialing → active → past_due → export_window → pending_deletion → deleted`); empty columns are still present.',
+      'Legacy organization-retention buckets kept for migration diagnostics. Billing access does not use this board.',
     ),
 });
 /** Validated lifecycle-board value. */
@@ -300,7 +298,7 @@ export const AdminAuditQuery = z.object({
     .string()
     .optional()
     .describe(
-      'Optional exact filter on the audit-event type (e.g. `billing.reactivated`, `lifecycle_hold.placed`, `staff.granted`).',
+      'Optional exact filter on the audit-event type (e.g. `billing.reconciled`, `billing.discount_approved`, `staff.granted`).',
     ),
   limit: z.coerce
     .number()
@@ -329,7 +327,7 @@ export const AdminAuditOut = z.object({
   type: z
     .string()
     .describe(
-      'The action type (e.g. `impersonation.started`, `lifecycle_hold.released`, `billing.trial_extended`, `lifecycle.state_set`, `staff.revoked`).',
+      'The action type (e.g. `impersonation.started`, `billing.reconciled`, `billing.trial_extended`, `staff.revoked`).',
     ),
   subjectType: z
     .string()
@@ -365,7 +363,7 @@ export type AdminLifecycleCount = z.infer<typeof AdminLifecycleCount>;
  * Deliberately high-level — never session contents. `stuckApprovals` counts agent
  * sessions parked in `awaiting_approval` (work blocked on a human decision);
  * `agentErrors` counts `failed` sessions; `agentVolume` is the total session count;
- * `activeHolds` is the number of un-released lifecycle holds pausing the delete sweep.
+ * `activeHolds` is the number of unreleased legacy retention holds. Billing never creates one.
  */
 export const AdminQueues = z.object({
   stuckApprovals: z
@@ -377,7 +375,7 @@ export const AdminQueues = z.object({
   activeHolds: z
     .number()
     .int()
-    .describe('Un-released lifecycle holds currently pausing the delete pipeline.'),
+    .describe('Unreleased legacy account-retention holds. Billing never creates one.'),
 });
 /** Validated operator-queue value. */
 export type AdminQueues = z.infer<typeof AdminQueues>;

@@ -44,16 +44,7 @@ async function syncDocketProEntitlement(
   event: BillingEvent,
   now: string,
 ): Promise<BillingAccessEffect> {
-  const status =
-    event.subscription?.status ??
-    (event.type === 'subscription.paid'
-      ? 'active'
-      : event.type === 'subscription.past_due' ||
-          event.type === 'subscription.payment_action_required'
-        ? 'past_due'
-        : event.type === 'subscription.canceled'
-          ? 'canceled'
-          : null);
+  const status = event.subscription?.status ?? null;
   if (!status) return 'none';
 
   const observedAt = new Date(event.createdAt);

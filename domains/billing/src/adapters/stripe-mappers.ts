@@ -31,6 +31,8 @@ export interface StripeSubscriptionView {
   readonly trial_end?: number | null;
   /** Whether cancellation is scheduled for the end of the current period. */
   readonly cancel_at_period_end?: boolean;
+  /** Explicit cancellation timestamp used by current Stripe portal cancellations. */
+  readonly cancel_at?: number | null;
   /** Expanded provider discounts when subscription reconciliation requests them. */
   readonly discounts?: readonly (
     | string
@@ -160,6 +162,8 @@ export function toSubscription(
   const customerId =
     typeof sub.customer === 'string' ? sub.customer : (sub.customer?.id ?? undefined);
   const periodEndUnix = sub.items?.data?.[0]?.current_period_end ?? 0;
+  const cancellationUnix = sub.cancel_at ?? null;
+  const accessEndUnix = cancellationUnix ?? periodEndUnix;
   const discountIds = (sub.discounts ?? []).flatMap((discount) =>
     typeof discount === 'string' ? [discount] : discount.id ? [discount.id] : [],
   );
@@ -174,8 +178,8 @@ export function toSubscription(
     ...(customerId ? { customerId } : {}),
     referenceId,
     status: toStatus(sub.status),
-    currentPeriodEnd: new Date(periodEndUnix * 1000).toISOString(),
-    cancelAtPeriodEnd: sub.cancel_at_period_end ?? false,
+    currentPeriodEnd: new Date(accessEndUnix * 1000).toISOString(),
+    cancelAtPeriodEnd: (sub.cancel_at_period_end ?? false) || cancellationUnix !== null,
     ...(discountIds.length > 0 ? { discountIds } : {}),
     ...(couponIds.length > 0 ? { couponIds } : {}),
     ...(sub.trial_end ? { trialEnd: new Date(sub.trial_end * 1000).toISOString() } : {}),

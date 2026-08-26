@@ -184,8 +184,8 @@ export function BillingSettings({ orgId, isPersonal }: BillingSettingsProps): JS
         ) : null}
         {product?.status === 'trialing' && product.trialEndsAt ? (
           <p className="text-on-surface-variant text-body-medium">
-            Your trial ends {formatDate(product.trialEndsAt)}. Your first monthly charge follows on
-            that date.
+            Your trial ends {formatDate(product.trialEndsAt)}.
+            {!product.cancelAtPeriodEnd ? ' Your first monthly charge follows on that date.' : null}
           </p>
         ) : null}
         {product?.status === 'active' && !product.cancelAtPeriodEnd && product.renewalDate ? (

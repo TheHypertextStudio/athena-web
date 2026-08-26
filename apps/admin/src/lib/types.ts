@@ -39,7 +39,7 @@ export type AdminOrgBillingState = InferResponseType<
 /** A lifecycle hold (`POST /admin/orgs/:id/holds`). */
 export type AdminHold = InferResponseType<(typeof api.admin.orgs)[':id']['holds']['$post']>;
 
-/** The lifecycle pipeline board (`GET /admin/lifecycle`). */
+/** The legacy organization-retention board (`GET /admin/lifecycle`). */
 export type AdminLifecycleBoard = InferResponseType<typeof api.admin.lifecycle.$get>;
 
 /** A page of operator audit events (`GET /admin/audit`). */

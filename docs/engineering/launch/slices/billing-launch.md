@@ -70,11 +70,23 @@ Database billing schema and upgrade tests pass four cases. Tooling tests pass 16
 checking and lint pass. The production build passes for API, Runner, Admin, Web, and the service
 worker. `pnpm db:generate` reports `No schema changes, nothing to migrate` after migrations 0101 and 0102.
 
-**Residual gap:** This requirement remains `partial`. No local test proves Stripe hosted Checkout,
-the portal, signed webhook replay, automatic tax, payment authentication, failed cards, live credit
-notes, or real money movement. The team has not run the migration on a production-shaped snapshot,
-observed reconciliation for 24 hours, completed finance and legal approval, or run the live $8 and
-72-hour canaries. The Founder production grant and one discounted production subscription remain
-unverified. The repository also lacks the required live telephone round trip from a verified number
-through this entitlement. The release owner must keep public Checkout disabled until those checks
-pass and the whole-product launch record reaches sign-off.
+The isolated launch database replayed all 102 checked-in migrations. The launch audit then compared
+two billed organizations with Stripe test mode. Each organization had one durable customer, one
+current subscription, matching ownership and entitlement state, and no unresolved provider write.
+The report contained zero findings.
+
+Stripe test mode also proved hosted Checkout, the customer portal, signed webhook delivery,
+duplicate delivery, failed payment, 3DS authentication, recovery, cancellation, reactivation,
+renewal, discount application, discount removal, and credit-note behavior. A Student trial ended
+with a paid $4 USD invoice. Docket kept the award scheduled during the trial, activated it at the
+first paid period, started a new 12-month review clock, and issued no trial-period credit.
+
+**Residual gap:** This requirement remains `partial`. The shared Stripe account identifies the
+merchant as “The Rebuilding America Project,” not Docket. The team must provision a Docket Stripe
+account or approve the shared legal merchant before accepting customers. The team has not run the
+migration on a production-shaped snapshot, observed reconciliation for 24 hours, completed finance
+and legal approval, or run the live $8 and 72-hour canaries. The Founder production grant and one
+discounted live subscription remain unverified. The repository also lacks the required live
+telephone round trip from a verified number through this entitlement. The release owner must keep
+public Checkout disabled until those checks pass and the whole-product launch record reaches
+sign-off.

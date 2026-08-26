@@ -337,7 +337,7 @@ export async function reconcileBilling(
           alerts += 1;
           continue;
         }
-        if (account.countryVerificationRequired && account.countryVerifiedAt === null) {
+        if (account.countryVerificationRequired) {
           const country = await gateway.getCustomerBillingCountry(account.stripeCustomerId);
           if (!country) {
             await recordReconciliation(
@@ -355,6 +355,7 @@ export async function reconcileBilling(
             await gateway.cancelSubscriptionById(
               subscription.id,
               `billing-country:reconcile:${account.organizationId}:${subscription.id}:cancel`,
+              subscription.status !== 'trialing',
             );
             await recordReconciliation(
               database,
@@ -400,6 +401,8 @@ export async function reconcileBilling(
         const providerDiscountIds = subscription.discountIds ?? [];
         const providerCouponIds = subscription.couponIds ?? [];
         if (award) {
+          const publicAwardIsTrialing =
+            award.programKey !== null && subscription.status === 'trialing';
           const discountMatches =
             (award.providerDiscountId !== null &&
               providerDiscountIds.includes(award.providerDiscountId)) ||
@@ -409,11 +412,15 @@ export async function reconcileBilling(
           if (!discountMatches || !hasOneProviderDiscount) {
             discountMismatch =
               'Stripe subscription discounts do not exactly match the current Docket award.';
-          } else if (award.status === 'scheduled' || award.providerDiscountId === null) {
+          } else if (
+            publicAwardIsTrialing ||
+            award.status === 'scheduled' ||
+            award.providerDiscountId === null
+          ) {
             await database
               .update(billingDiscountAward)
               .set({
-                status: 'active',
+                status: publicAwardIsTrialing ? 'scheduled' : 'active',
                 providerDiscountId: providerDiscountIds[0] ?? award.providerDiscountId,
                 providerSyncError: null,
               })

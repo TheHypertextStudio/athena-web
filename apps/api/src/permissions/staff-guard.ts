@@ -2,7 +2,7 @@
  * `@docket/api` — the service-admin staff guard.
  *
  * @remarks
- * The operator back-office (`/v1/admin/*`) is gated by {@link staffMiddleware}: it
+ * The operator back-office (`/admin/*`) is gated by {@link staffMiddleware}: it
  * resolves the caller's session → global user → `staff_user` row and 403s anyone who
  * is not a registered Docket operator (existence is not hidden here — a logged-in
  * non-staff user simply lacks the privilege). On success it sets `c.var.staffCtx`.

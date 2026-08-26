@@ -1,5 +1,5 @@
 /**
- * `@docket/api` — service-admin (operator back-office) router (mounted at `/v1/admin`).
+ * `@docket/api` — service-admin (operator back-office) router (mounted at `/admin`).
  *
  * @remarks
  * Top-level + staff-gated: every route runs behind {@link staffMiddleware}. Reads are open
@@ -76,7 +76,7 @@ export function createAdminRoutes<
 
 **Search & paging.** When \`search\` is supplied it filters case-insensitively on a substring of the user's name OR email; omit it to list everyone. Rows are ordered by \`createdAt\` descending and bounded by offset pagination (\`limit\` 1..100, default 50; \`offset\` default 0). The response carries \`items\` plus \`total\` — the full count of rows matching the (optional) search — so the UI can render pager controls.
 
-**Access.** Mounted under \`/v1/admin\`, which is gated by \`staffMiddleware\`: the caller must be a registered Docket operator (a \`staff_user\` row). A signed-in non-operator gets \`403 forbidden\`; an unauthenticated caller \`401 unauthorized\`. This is a read, so any staff tier (\`support\`, \`finance\`, \`superadmin\`) suffices — there is no \`requireStaffRole\` tier gate.
+**Access.** Mounted under \`/admin\`, which is gated by \`staffMiddleware\`: the caller must be a registered Docket operator (a \`staff_user\` row). A signed-in non-operator gets \`403 forbidden\`; an unauthenticated caller \`401 unauthorized\`. This is a read, so any staff tier (\`support\`, \`finance\`, \`superadmin\`) suffices — there is no \`requireStaffRole\` tier gate.
 
 **Side effects.** None — a pure read; writes no operator audit event.
 
@@ -150,13 +150,13 @@ export function createAdminRoutes<
           response: AdminOrgPage,
           description: `Returns a paginated, newest-first slice of every organization (tenant) in Docket — the operator org directory.
 
-**Search & filter.** \`search\` matches a case-insensitive substring of the org name OR slug; \`lifecycleState\` further restricts to one exact data-lifecycle bucket (\`trialing\`, \`active\`, \`past_due\`, \`export_window\`, \`pending_deletion\`, \`deleted\`). Both are optional and combine with AND. Ordered by \`createdAt\` descending; offset-paginated (\`limit\` 1..100 default 50, \`offset\` default 0). Each item also exposes \`exportReadyAt\` and \`deleteAfterAt\`, the timestamps that drive the export-window/deletion sweep.
+**Search & filter.** \`search\` matches a case-insensitive substring of the org name OR slug. \`lifecycleState\` optionally filters the legacy organization-retention marker. Billing access is reported through \`GET /admin/orgs/{id}/billing-state\` and does not use that marker. Both filters combine with AND. Results use offset pagination and newest-first order.
 
 **Access.** Behind \`staffMiddleware\` (any staff tier — it's a read). Non-operator → \`403\`; anonymous → \`401\`.
 
 **Side effects.** None — a read; no audit event.
 
-**Related.** \`GET /admin/orgs/{id}\` for one org; \`GET /admin/lifecycle\` for the same orgs grouped into a pipeline board; the \`/admin/orgs/{id}/*\` billing actions to act on an org.`,
+**Related.** \`GET /admin/orgs/{id}\` for one org and \`GET /admin/orgs/{id}/billing-state\` for provider-backed access.`,
         }),
         zQuery(AdminOrgListQuery),
         async (c) => {
@@ -206,7 +206,7 @@ export function createAdminRoutes<
 
 **Side effects.** None — a read; no audit event.
 
-**Related.** \`POST /admin/orgs/{id}/holds\`, \`/extend-trial\`, \`/reactivate\`, \`/lifecycle\` to mutate this org's billing/lifecycle.`,
+**Related.** \`GET /admin/orgs/{id}/billing-state\`, \`POST /admin/orgs/{id}/reconcile\`, and \`POST /admin/orgs/{id}/extend-trial\` provide safe billing operations.`,
         }),
         zParam(idParam),
         async (c) => {
@@ -221,19 +221,19 @@ export function createAdminRoutes<
         '/lifecycle',
         apiDoc({
           tag: 'Admin',
-          summary: 'Get the lifecycle pipeline board',
+          summary: 'Get the legacy organization-retention board',
           response: AdminLifecycleBoard,
-          description: `Returns every organization grouped into a kanban-style board, one column per data-lifecycle state — the operator's at-a-glance view of where each tenant sits in the billing/retention pipeline.
+          description: `Returns every organization grouped by the legacy organization-retention marker for migration diagnostics.
 
-**Behavior.** Loads all orgs (newest first) once, then buckets them into a fixed, ordered column set: \`trialing → active → past_due → export_window → pending_deletion → deleted\`. Columns are always present even when empty, so the board layout is stable. This is the same org data as \`GET /admin/orgs\`, reshaped for the pipeline UI.
+**Behavior.** Loads all orgs (newest first) once, then buckets them by the legacy retention marker. Columns are always present even when empty, so old migration states remain inspectable. This is the same organization data as \`GET /admin/orgs\`, reshaped for compatibility diagnostics.
 
-**Lifecycle meaning.** A trial ending or payment terminally lapsing moves an org into \`export_window\` (a 14-day grace period where data stays readable/exportable); an idempotent cron sweep then advances \`export_window → pending_deletion → deleted\`. A recovered subscription (or a \`reactivate\`/\`extend-trial\` operator action) rescues an org back to \`active\`/\`trialing\`.
+**Billing boundary.** Billing events never write these columns. Cancellation and payment failure change the Docket Pro entitlement only. Account deletion remains under the confirmed user Danger Zone flow. The Admin navigation no longer links this compatibility board.
 
 **Access.** Behind \`staffMiddleware\` (any staff tier — a read). Non-operator → \`403\`; anonymous → \`401\`.
 
 **Side effects.** None — a read; no audit event.
 
-**Related.** \`POST /admin/orgs/{id}/lifecycle\` to force a column move; \`GET /admin/metrics\` for the same buckets as counts.`,
+**Related.** \`GET /admin/orgs/{id}/billing-state\` reports the current payment and access state.`,
         }),
         async (c) => {
           const rows = await db.select().from(organization).orderBy(desc(organization.createdAt));
@@ -340,7 +340,7 @@ export function createAdminRoutes<
           response: AdminAuditPage,
           description: `Returns the immutable operator audit feed — every privileged back-office action (impersonations, lifecycle holds, billing actions, lifecycle-state changes, staff grants/revocations) written by the other admin endpoints.
 
-**Filter & paging.** \`staffUserId\` narrows to one acting operator; \`type\` narrows to one event type (e.g. \`billing.reactivated\`, \`lifecycle_hold.placed\`, \`staff.granted\`). Both optional, combined with AND. Newest-first, offset-paginated (\`limit\` 1..200 default 50, \`offset\` default 0). Each event carries the acting \`staffUserId\`, the \`type\`, the \`subjectType\`/\`subjectId\` it acted on, and a free-form \`metadata\` object.
+**Filter & paging.** \`staffUserId\` narrows to one acting operator; \`type\` narrows to one event type (e.g. \`billing.reconciled\`, \`complimentary.granted\`, \`staff.granted\`). Both optional, combined with AND. Newest-first, offset-paginated (\`limit\` 1..200 default 50, \`offset\` default 0). Each event carries the acting \`staffUserId\`, the \`type\`, the \`subjectType\`/\`subjectId\` it acted on, and a free-form \`metadata\` object.
 
 **Access — superadmin only.** Gated by \`requireStaffRole('superadmin')\` on top of \`staffMiddleware\`. The audit log is the system of record for accountability, so it must not be readable (or tamperable) by the same \`support\`/\`finance\` operators whose actions it records — only \`superadmin\` may review it. \`support\`/\`finance\` callers get \`403 forbidden\`; non-operators \`403\`; anonymous \`401\`.
 

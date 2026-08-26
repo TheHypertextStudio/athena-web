@@ -847,6 +847,33 @@ describe('billing exemptions', () => {
 });
 
 describe('billing actions', () => {
+  it('lets finance run the safe Stripe reconciliation worker', async () => {
+    const orgId = await makeOrg();
+    const finance = await makeStaff('finance');
+    const app = appWithSession(admin, fakeSession(finance.userId));
+    await getContainer().billing.createCustomer(orgId);
+    await db.insert(schema.organizationBillingAccount).values({
+      organizationId: orgId,
+      stripeCustomerId: `cus_${orgId}`,
+      countryVerificationRequired: false,
+    });
+    await startProviderTrial(orgId);
+
+    const response = await app.request(`/orgs/${orgId}/reconcile`, { method: 'POST' });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      repaired: expect.any(Number),
+      alerts: expect.any(Number),
+    });
+    const [entitlement] = await db
+      .select()
+      .from(schema.organizationProductEntitlement)
+      .where(eq(schema.organizationProductEntitlement.organizationId, orgId));
+    expect(entitlement).toMatchObject({ source: 'stripe', status: 'trialing' });
+    expect(await auditCount('billing.reconciled', orgId)).toBe(1);
+  });
+
   it('extends an eligible Stripe trial and reconciles the provider snapshot', async () => {
     const { userId } = await makeStaff('finance');
     const orgId = await makeOrg('active');

@@ -511,8 +511,10 @@ For sandbox use, the wizard can read test keys from an authenticated Stripe CLI 
 configure CLI forwarding to the local API without creating a localhost webhook endpoint. For
 production, it requires explicit live credentials and validates that every key matches live mode.
 The resulting `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`,
-`DOCKET_PRICE_LOOKUP_DOCKET_PRO`, `STRIPE_PRICE_DOCKET_PRO`, and optional portal configuration ID
-flow through the standard local or cloud writer only after operator review.
+`DOCKET_PRICE_LOOKUP_DOCKET_PRO`, `STRIPE_PRICE_DOCKET_PRO`, optional portal configuration ID, and
+`BILLING_ENABLED=false` flow through the standard local or cloud writer only after operator
+review. Provisioning never opens Checkout. The release owner changes `BILLING_ENABLED` only after
+the migration, shadow reconciliation, and canary gates pass.
 
 ### 3.6 Step 7 — Athena agent
 

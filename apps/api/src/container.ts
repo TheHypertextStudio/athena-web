@@ -61,6 +61,7 @@ import { resolveVoiceProvider, type VoiceRealtimeProvider } from './routes/voice
 /** Runtime configuration values used to choose local mocks or production services. */
 export interface AppRuntimeEnv {
   readonly APP_MODE?: 'local' | 'test' | 'production';
+  readonly BILLING_ENABLED?: boolean;
   readonly STRIPE_SECRET_KEY?: string;
   readonly STRIPE_WEBHOOK_SECRET?: string;
   readonly STRIPE_PRICE_DOCKET_PRO?: string;
@@ -165,6 +166,7 @@ export function anthropicConfigFromEnv(runtimeEnv: AppRuntimeEnv): AnthropicClie
 export function toAppRuntimeEnv(): AppRuntimeEnv {
   return {
     APP_MODE: env.APP_MODE,
+    BILLING_ENABLED: env.BILLING_ENABLED,
     ...(env.STRIPE_SECRET_KEY ? { STRIPE_SECRET_KEY: env.STRIPE_SECRET_KEY } : {}),
     ...(env.STRIPE_WEBHOOK_SECRET ? { STRIPE_WEBHOOK_SECRET: env.STRIPE_WEBHOOK_SECRET } : {}),
     ...(env.STRIPE_PRICE_DOCKET_PRO
@@ -226,6 +228,27 @@ export function toAppRuntimeEnv(): AppRuntimeEnv {
       : {}),
     ...(env.GOOGLE_TASKS_API_BASE ? { GOOGLE_TASKS_API_BASE: env.GOOGLE_TASKS_API_BASE } : {}),
   };
+}
+
+/** Build the real Stripe boundary without consulting the public Checkout feature flag. */
+export function buildStripeBillingGateway(runtimeEnv: AppRuntimeEnv): BillingGateway {
+  const priceKey =
+    runtimeEnv.STRIPE_PRICE_DOCKET_PRO ??
+    runtimeEnv.DOCKET_PRICE_LOOKUP_DOCKET_PRO ??
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- One-release compatibility for the former Docket Team configuration.
+    runtimeEnv.STRIPE_PRICE_TEAM ??
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- One-release compatibility for the former Docket Team configuration.
+    runtimeEnv.DOCKET_PRICE_LOOKUP_TEAM;
+  return new RealStripeGateway({
+    secretKey: required('STRIPE_SECRET_KEY', runtimeEnv.STRIPE_SECRET_KEY),
+    ...(priceKey ? { priceKey } : {}),
+    ...(runtimeEnv.STRIPE_WEBHOOK_SECRET
+      ? { webhookSecret: runtimeEnv.STRIPE_WEBHOOK_SECRET }
+      : {}),
+    ...(runtimeEnv.STRIPE_BILLING_PORTAL_CONFIG_ID
+      ? { portalConfigId: runtimeEnv.STRIPE_BILLING_PORTAL_CONFIG_ID }
+      : {}),
+  });
 }
 
 function connectorApiBase(
@@ -410,26 +433,10 @@ function buildPushSender(runtimeEnv: AppRuntimeEnv): PushSender {
  */
 export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv()): AppContainer {
   const mock = localMode(runtimeEnv);
-  const priceKey =
-    runtimeEnv.STRIPE_PRICE_DOCKET_PRO ??
-    runtimeEnv.DOCKET_PRICE_LOOKUP_DOCKET_PRO ??
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- One-release compatibility for the former Docket Team configuration.
-    runtimeEnv.STRIPE_PRICE_TEAM ??
-    // eslint-disable-next-line @typescript-eslint/no-deprecated -- One-release compatibility for the former Docket Team configuration.
-    runtimeEnv.DOCKET_PRICE_LOOKUP_TEAM;
+  const useRealBilling =
+    !mock || (runtimeEnv.APP_MODE === 'local' && runtimeEnv.BILLING_ENABLED === true);
   const billing = lazyValue(() =>
-    mock
-      ? new InMemoryBillingGateway()
-      : new RealStripeGateway({
-          secretKey: required('STRIPE_SECRET_KEY', runtimeEnv.STRIPE_SECRET_KEY),
-          ...(priceKey ? { priceKey } : {}),
-          ...(runtimeEnv.STRIPE_WEBHOOK_SECRET
-            ? { webhookSecret: runtimeEnv.STRIPE_WEBHOOK_SECRET }
-            : {}),
-          ...(runtimeEnv.STRIPE_BILLING_PORTAL_CONFIG_ID
-            ? { portalConfigId: runtimeEnv.STRIPE_BILLING_PORTAL_CONFIG_ID }
-            : {}),
-        }),
+    useRealBilling ? buildStripeBillingGateway(runtimeEnv) : new InMemoryBillingGateway(),
   );
   const agentRuntime = lazyValue(() =>
     mock ? new MockAgentRuntime() : new RealProviderRuntime(anthropicConfigFromEnv(runtimeEnv)),

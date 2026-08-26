@@ -197,6 +197,12 @@ describe('POST /billing/webhook', () => {
         id: `evt_discount_paid_${id}`,
         type: 'subscription.paid',
         referenceId: id,
+        subscription: {
+          id: `sub_discount_paid_${id}`,
+          referenceId: id,
+          status: 'active',
+          currentPeriodEnd: '2026-10-08T00:00:00.000Z',
+        },
         createdAt: paidAt,
       }),
     });

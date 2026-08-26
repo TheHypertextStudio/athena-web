@@ -5,7 +5,7 @@ import type { InferResponseType } from 'hono/client';
 
 import { api } from '@/lib/api';
 import { isAuthError, userErrorMessage, userProblemMessage } from '@/lib/problem';
-import type { AdminHold, AdminOrg, AdminOrgBillingState } from '@/lib/types';
+import type { AdminOrg, AdminOrgBillingState } from '@/lib/types';
 
 type PartnerPreview = InferResponseType<
   (typeof api.admin.orgs)[':id']['discount-awards']['preview']['$post']
@@ -31,10 +31,8 @@ export interface OrgDetailData {
   partnerReason: string;
   setPartnerReason: (v: string) => void;
   partnerPreview: PartnerPreview | null;
-  holds: readonly AdminHold[];
-  holdReason: string;
-  setHoldReason: (v: string) => void;
   load: () => Promise<void>;
+  reconcileStripe: () => void;
   extendTrial: () => void;
   grantComplimentary: () => void;
   revokeComplimentary: () => void;
@@ -42,8 +40,6 @@ export interface OrgDetailData {
   previewPartnerDiscount: () => void;
   renewPartnerDiscount: () => void;
   revokeDiscount: () => void;
-  placeHold: () => Promise<void>;
-  releaseHold: (holdId: string) => Promise<void>;
 }
 
 /** useOrgDetail coordinates use org detail state, loading, and mutations for its screen. */
@@ -65,8 +61,6 @@ export function useOrgDetail(orgId: string): OrgDetailData {
   });
   const [partnerReason, setPartnerReason] = useState('');
   const [partnerPreview, setPartnerPreview] = useState<PartnerPreview | null>(null);
-  const [holds, setHolds] = useState<readonly AdminHold[]>([]);
-  const [holdReason, setHoldReason] = useState('');
 
   const load = useCallback(async (): Promise<void> => {
     setLoading(true);
@@ -131,6 +125,29 @@ export function useOrgDetail(orgId: string): OrgDetailData {
       'Could not extend the trial.',
     );
   }, [orgId, runOrgAction, trialDays]);
+
+  const reconcileStripe = useCallback((): void => {
+    void (async () => {
+      setActionError(null);
+      setPending('reconcile-stripe');
+      try {
+        const response = await api.admin.orgs[':id'].reconcile.$post({
+          param: { id: orgId },
+        });
+        if (!response.ok) {
+          setActionError(
+            await userProblemMessage(response, 'Could not reconcile Stripe billing state.'),
+          );
+          return;
+        }
+        await load();
+      } catch (caught) {
+        setActionError(userErrorMessage(caught, 'Could not reconcile Stripe billing state.'));
+      } finally {
+        setPending(null);
+      }
+    })();
+  }, [load, orgId]);
 
   const changeComplimentary = useCallback(
     async (grant: boolean): Promise<void> => {
@@ -285,50 +302,6 @@ export function useOrgDetail(orgId: string): OrgDetailData {
     changeCurrentAward('revoke');
   }, [changeCurrentAward]);
 
-  const placeHold = useCallback(async (): Promise<void> => {
-    setActionError(null);
-    setPending('place-hold');
-    try {
-      const res = await api.admin.orgs[':id'].holds.$post({
-        param: { id: orgId },
-        json: { reason: holdReason },
-      });
-      if (!res.ok) {
-        setActionError(await userProblemMessage(res, 'Could not place the hold.'));
-        return;
-      }
-      const hold = await res.json();
-      setHolds((prev) => [hold, ...prev]);
-      setHoldReason('');
-    } catch (caught) {
-      setActionError(userErrorMessage(caught, 'Something went wrong placing the hold.'));
-    } finally {
-      setPending(null);
-    }
-  }, [holdReason, orgId]);
-
-  const releaseHold = useCallback(
-    async (holdId: string): Promise<void> => {
-      setActionError(null);
-      setPending(`release-${holdId}`);
-      try {
-        const res = await api.admin.orgs[':id'].holds[':holdId'].$delete({
-          param: { id: orgId, holdId },
-        });
-        if (!res.ok) {
-          setActionError(await userProblemMessage(res, 'Could not release the hold.'));
-          return;
-        }
-        setHolds((prev) => prev.filter((h) => h.id !== holdId));
-      } catch (caught) {
-        setActionError(userErrorMessage(caught, 'Something went wrong releasing the hold.'));
-      } finally {
-        setPending(null);
-      }
-    },
-    [orgId],
-  );
-
   return {
     org,
     billing,
@@ -357,10 +330,8 @@ export function useOrgDetail(orgId: string): OrgDetailData {
       setPartnerPreview(null);
     },
     partnerPreview,
-    holds,
-    holdReason,
-    setHoldReason,
     load,
+    reconcileStripe,
     extendTrial,
     grantComplimentary,
     revokeComplimentary,
@@ -368,7 +339,5 @@ export function useOrgDetail(orgId: string): OrgDetailData {
     previewPartnerDiscount,
     renewPartnerDiscount,
     revokeDiscount,
-    placeHold,
-    releaseHold,
   };
 }

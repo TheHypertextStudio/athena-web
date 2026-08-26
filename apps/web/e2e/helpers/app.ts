@@ -166,7 +166,13 @@ async function onboardJustMe(page: Page): Promise<string> {
   );
 
   await page.getByText('Just me', { exact: false }).first().click();
-  await page.getByRole('button', { name: /Create your space|Continue/ }).click();
+  // The personal fork creates its workspace as soon as the intent card is selected. Waiting for
+  // the connection step keeps this helper aligned with that transition and avoids targeting its
+  // disabled primary action while the organization request is still in flight.
+  await page.getByRole('button', { name: 'Skip for now' }).waitFor({
+    state: 'visible',
+    timeout: TIMEOUTS.sweep,
+  });
   await page.getByRole('button', { name: 'Skip for now' }).click({ timeout: TIMEOUTS.sweep });
 
   const orgId = await orgIdFromResponse;

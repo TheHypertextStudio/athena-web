@@ -72,9 +72,11 @@ function fakeVerifyingGateway(
 } {
   return {
     createCustomer: vi.fn(),
+    listCustomers: vi.fn(),
     getCustomerBillingCountry: vi.fn(),
     createCheckoutSession: vi.fn(),
     getSubscription: vi.fn(),
+    getSubscriptionById: vi.fn(),
     listSubscriptions: vi.fn(),
     cancelSubscription: vi.fn(),
     cancelSubscriptionById: vi.fn(),
@@ -158,16 +160,24 @@ describe('webhooks signature verification (real Stripe gateway path)', () => {
       id: 'evt_real',
       type: 'subscription.canceled',
       referenceId: orgId,
+      subscription: {
+        id: 'sub_real',
+        referenceId: orgId,
+        status: 'canceled',
+        currentPeriodEnd: '2026-01-01T00:00:00.000Z',
+      },
       createdAt: '2026-01-01T00:00:00.000Z',
     };
     // The verifier asserts it received the EXACT raw bytes (HMAC requires this), then
     // returns the normalized event the route should fold in.
-    useGateway(
-      fakeVerifyingGateway((rawBody) => {
+    const getSubscriptionById = vi.fn().mockResolvedValue(normalized.subscription);
+    useGateway({
+      ...fakeVerifyingGateway((rawBody) => {
         expect(rawBody).toBe(rawPayload);
         return normalized;
       }),
-    );
+      getSubscriptionById,
+    });
     const res = await webhooks.request('/webhook', {
       method: 'POST',
       headers: { ...J, 'stripe-signature': 't=1,v1=ok' },
@@ -175,11 +185,41 @@ describe('webhooks signature verification (real Stripe gateway path)', () => {
     });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ received: true, effect: 'canceled' });
+    expect(getSubscriptionById).toHaveBeenCalledWith('sub_real', orgId);
     const [org] = await db
       .select({ lifecycleState: schema.organization.lifecycleState })
       .from(schema.organization)
       .where(eq(schema.organization.id, orgId));
     expect(org?.lifecycleState).toBe('active');
+  });
+
+  it('retries a mutable event when Stripe cannot return its current subscription', async () => {
+    const { orgId } = await seedBaseOrg(db, schema, false);
+    const gateway = {
+      ...fakeVerifyingGateway(() => ({
+        id: `evt_unobservable_${orgId}`,
+        type: 'subscription.updated',
+        referenceId: orgId,
+        subscriptionId: `sub_unobservable_${orgId}`,
+        createdAt: '2026-08-25T00:00:00.000Z',
+      })),
+      getSubscriptionById: vi.fn().mockResolvedValue(null),
+    };
+    useGateway(gateway);
+
+    const response = await webhooks.request('/webhook', {
+      method: 'POST',
+      headers: { ...J, 'stripe-signature': 't=1,v1=ok' },
+      body: 'verified-but-not-observable',
+    });
+
+    expect(response.status).toBe(500);
+    expect(gateway.getSubscriptionById).toHaveBeenCalledWith(`sub_unobservable_${orgId}`, orgId);
+    const claimed = await db
+      .select()
+      .from(schema.billingProviderEvent)
+      .where(eq(schema.billingProviderEvent.providerEventId, `evt_unobservable_${orgId}`));
+    expect(claimed).toHaveLength(0);
   });
 
   it('verifies a US Checkout customer before reconciling the retrieved subscription', async () => {
@@ -229,6 +269,117 @@ describe('webhooks signature verification (real Stripe gateway path)', () => {
     expect(entitlement).toMatchObject({ status: 'trialing', stripeSubscriptionId: 'sub_us' });
   });
 
+  it('keeps a scheduled award trialing when the zero-dollar invoice arrives first', async () => {
+    const { orgId } = await seedBaseOrg(db, schema, false);
+    await db.insert(schema.organizationBillingAccount).values({
+      organizationId: orgId,
+      stripeCustomerId: 'cus_student_trial',
+      billingCountry: 'US',
+      countryVerifiedAt: new Date('2026-08-25T00:00:00.000Z'),
+    });
+    const [award] = await db
+      .insert(schema.billingDiscountAward)
+      .values({
+        organizationId: orgId,
+        programKey: 'student',
+        percentOff: 50,
+        status: 'scheduled',
+        startsAt: new Date('2026-08-25T00:00:00.000Z'),
+        endsAt: new Date('2027-08-25T00:00:00.000Z'),
+        reviewAt: new Date('2027-08-25T00:00:00.000Z'),
+        reason: 'Verified student',
+        providerCouponId: 'coupon_student_trial',
+      })
+      .returning();
+    if (!award) throw new Error('award seed failed');
+    const getSubscriptionById = vi.fn().mockResolvedValue({
+      id: 'sub_student_trial',
+      customerId: 'cus_student_trial',
+      referenceId: orgId,
+      status: 'trialing',
+      currentPeriodEnd: '2026-09-08T00:00:00.000Z',
+      trialEnd: '2026-09-08T00:00:00.000Z',
+      discountIds: ['di_student_trial'],
+      couponIds: ['coupon_student_trial'],
+    });
+    const gateway = {
+      ...fakeVerifyingGateway(() => ({
+        id: 'evt_trial_invoice_paid_first',
+        type: 'subscription.paid',
+        referenceId: orgId,
+        customerId: 'cus_student_trial',
+        subscriptionId: 'sub_student_trial',
+        createdAt: '2026-08-25T00:00:00.000Z',
+      })),
+      getCustomerBillingCountry: vi.fn().mockResolvedValue('US'),
+      getSubscription: vi.fn().mockResolvedValue(null),
+      getSubscriptionById,
+    };
+    useGateway(gateway);
+
+    const response = await webhooks.request('/webhook', {
+      method: 'POST',
+      headers: { ...J, 'stripe-signature': 't=1,v1=ok' },
+      body: 'verified-zero-dollar-invoice',
+    });
+
+    expect(await response.json()).toEqual({ received: true, effect: 'trialing' });
+    expect(getSubscriptionById).toHaveBeenCalledWith('sub_student_trial', orgId);
+    const [entitlement] = await db
+      .select()
+      .from(schema.organizationProductEntitlement)
+      .where(eq(schema.organizationProductEntitlement.organizationId, orgId));
+    expect(entitlement).toMatchObject({ status: 'trialing' });
+    const [unchangedAward] = await db
+      .select()
+      .from(schema.billingDiscountAward)
+      .where(eq(schema.billingDiscountAward.id, award.id));
+    expect(unchangedAward).toMatchObject({ status: 'scheduled' });
+  });
+
+  it('rejects a subscription update after a verified customer changes to a non-US address', async () => {
+    const { orgId } = await seedBaseOrg(db, schema, false);
+    await db.insert(schema.organizationBillingAccount).values({
+      organizationId: orgId,
+      stripeCustomerId: 'cus_changed_country',
+      billingCountry: 'US',
+      countryVerifiedAt: new Date('2026-08-24T00:00:00.000Z'),
+    });
+    const cancelSubscriptionById = vi.fn();
+    const gateway = {
+      ...fakeVerifyingGateway(() => ({
+        id: 'evt_country_changed',
+        type: 'subscription.updated',
+        referenceId: orgId,
+        customerId: 'cus_changed_country',
+        createdAt: '2026-08-25T00:00:00.000Z',
+      })),
+      getCustomerBillingCountry: vi.fn().mockResolvedValue('GB'),
+      getSubscription: vi.fn().mockResolvedValue({
+        id: 'sub_country_changed',
+        customerId: 'cus_changed_country',
+        referenceId: orgId,
+        status: 'active',
+        currentPeriodEnd: '2026-09-08T00:00:00.000Z',
+      }),
+      cancelSubscriptionById,
+    };
+    useGateway(gateway);
+
+    const response = await webhooks.request('/webhook', {
+      method: 'POST',
+      headers: { ...J, 'stripe-signature': 't=1,v1=ok' },
+      body: 'verified-country-change',
+    });
+
+    expect(await response.json()).toEqual({ received: true, effect: 'unsupported_country' });
+    expect(cancelSubscriptionById).toHaveBeenCalledWith(
+      'sub_country_changed',
+      'billing-country:evt_country_changed:cancel',
+      true,
+    );
+  });
+
   it('cancels a non-US trial before Docket grants product access', async () => {
     const { orgId } = await seedBaseOrg(db, schema, false);
     await db.insert(schema.organizationBillingAccount).values({
@@ -268,6 +419,7 @@ describe('webhooks signature verification (real Stripe gateway path)', () => {
     expect(cancelSubscriptionById).toHaveBeenCalledWith(
       'sub_gb',
       'billing-country:evt_subscription_gb:cancel',
+      false,
     );
     const entitlements = await db
       .select()

@@ -69,6 +69,7 @@ function addHours(iso: string, hours: number): string {
 export class InMemoryBillingGateway implements BillingGateway {
   private readonly now: string;
   private readonly baseUrl: string;
+  private readonly customers = new Map<string, BillingCustomer>();
   private readonly subscriptions = new Map<string, Subscription>();
   private readonly lifecycleStep = new Map<string, number>();
   private readonly coupons = new Map<string, DiscountCouponInput>();
@@ -92,7 +93,15 @@ export class InMemoryBillingGateway implements BillingGateway {
 
   /** {@inheritDoc BillingGateway.createCustomer} */
   async createCustomer(referenceId: string): Promise<BillingCustomer> {
-    return { id: `cus_${referenceId}`, referenceId };
+    const customer = { id: `cus_${referenceId}`, referenceId };
+    this.customers.set(referenceId, customer);
+    return customer;
+  }
+
+  /** {@inheritDoc BillingGateway.listCustomers} */
+  async listCustomers(referenceId: string): Promise<readonly BillingCustomer[]> {
+    const customer = this.customers.get(referenceId);
+    return customer ? [customer] : [];
   }
 
   /** {@inheritDoc BillingGateway.getCustomerBillingCountry} */
@@ -140,6 +149,15 @@ export class InMemoryBillingGateway implements BillingGateway {
     return this.subscriptions.get(referenceId) ?? null;
   }
 
+  /** {@inheritDoc BillingGateway.getSubscriptionById} */
+  async getSubscriptionById(
+    subscriptionId: string,
+    referenceId: string,
+  ): Promise<Subscription | null> {
+    const subscription = this.subscriptions.get(referenceId);
+    return subscription?.id === subscriptionId ? subscription : null;
+  }
+
   /** {@inheritDoc BillingGateway.listSubscriptions} */
   async listSubscriptions(referenceId: string): Promise<readonly Subscription[]> {
     const subscription = this.subscriptions.get(referenceId);
@@ -167,11 +185,19 @@ export class InMemoryBillingGateway implements BillingGateway {
   }
 
   /** {@inheritDoc BillingGateway.cancelSubscriptionById} */
-  async cancelSubscriptionById(subscriptionId: string, _idempotencyKey: string): Promise<void> {
+  async cancelSubscriptionById(
+    subscriptionId: string,
+    _idempotencyKey: string,
+    atPeriodEnd = false,
+  ): Promise<void> {
     const entry = [...this.subscriptions.entries()].find(
       ([, subscription]) => subscription.id === subscriptionId,
     );
     if (!entry) throw new Error('InMemoryBillingGateway: subscription not found.');
+    if (atPeriodEnd) {
+      this.subscriptions.set(entry[0], { ...entry[1], cancelAtPeriodEnd: true });
+      return;
+    }
     await this.cancelSubscription(entry[0]);
   }
 

@@ -37,6 +37,7 @@ import { hasSqlState } from '../lib/sql-state';
 import { zJson, zParam } from '../lib/validate';
 import { requireStaffRole } from '../permissions/staff-guard';
 import { dispatchEssentialBillingNotice } from '../services/billing-notifications';
+import { reconcileBilling } from '../services/billing-reconciliation';
 
 import {
   audit,
@@ -96,6 +97,15 @@ export const PartnerDiscountPreviewOut = z.object({
   providerAction: z.enum(['attach_at_checkout', 'apply_to_trial', 'apply_to_subscription']),
   credit: AdminCreditPreviewOut.nullable(),
   confirmation: z.string(),
+});
+
+/** Result of one safe provider reconciliation pass triggered by finance. */
+export const AdminBillingReconciliationOut = z.object({
+  accounts: z.number().int().nonnegative(),
+  repaired: z.number().int().nonnegative(),
+  alerts: z.number().int().nonnegative(),
+  awardsAdvanced: z.number().int().nonnegative(),
+  evidenceDeleted: z.number().int().nonnegative(),
 });
 
 const StoredPartnerPreview = z.object({
@@ -494,6 +504,31 @@ export const adminBillingRoutes = new Hono<AppEnv>()
     },
   )
   .post(
+    '/:id/reconcile',
+    requireStaffRole('finance'),
+    apiDoc({
+      tag: 'Admin',
+      summary: 'Reconcile Stripe billing state',
+      response: AdminBillingReconciliationOut,
+      description:
+        'Runs the same safe, idempotent Stripe reconciliation pass as the scheduler, then returns its counts. The organization id is checked before the pass. The worker may repair mirrors, but it never cancels duplicate subscriptions, issues money, or marks an unpaid subscription active without a provider snapshot.',
+    }),
+    zParam(idParam),
+    async (c) => {
+      const { id } = c.req.valid('param');
+      const { staffUserId } = c.get('staffCtx');
+      await loadOrg(id);
+      const result = await reconcileBilling(
+        db,
+        getContainer().billing,
+        getContainer().blob,
+        new Date(),
+      );
+      await audit(db, staffUserId, 'billing.reconciled', 'organization', id, { ...result });
+      return ok(c, AdminBillingReconciliationOut, result);
+    },
+  )
+  .post(
     '/:id/discount-awards/preview',
     requireStaffRole('finance'),
     apiDoc({
@@ -686,9 +721,9 @@ export const adminBillingRoutes = new Hono<AppEnv>()
       tag: 'Admin',
       summary: 'Place a lifecycle hold on an org',
       response: AdminHoldOut,
-      description: `Places a named lifecycle hold on an organization — an operator's "do not delete" brake on the data-retention pipeline.
+      description: `Records a legacy organization lifecycle hold for compatibility with existing operator records.
 
-**Behavior.** Verifies the org exists (else \`404 not_found\`), then inserts a \`lifecycle_hold\` row with the required free-text \`reason\` and \`placedBy = \` the acting operator. While any un-released hold exists, the org counts toward \`activeHolds\` in metrics and the deletion sweep is expected to skip it, so it cannot silently advance \`export_window → pending_deletion → deleted\` while under investigation, dispute, or legal hold. The returned record has a null \`releasedAt\` (active).
+**Behavior.** Verifies the org exists, then inserts a \`lifecycle_hold\` row with the required reason and acting operator. Billing reconciliation and product access ignore this record. Account deletion remains under the confirmed user Danger Zone flow. The Admin billing page no longer exposes this compatibility action.
 
 **Side effects.** Creates the hold **and** writes a \`lifecycle_hold.placed\` operator audit event (subject = the org) capturing the hold id and reason.
 
@@ -761,13 +796,13 @@ export const adminBillingRoutes = new Hono<AppEnv>()
       tag: 'Admin',
       summary: 'Grant a billing exemption',
       response: AdminBillingExemptionOut,
-      description: `Grants an organization a permanent, free, Stripe-independent bypass of the agent-session entitlement gate — the operator mechanism for comping internal or gifted accounts.
+      description: `Grants an organization permanent, free, Stripe-independent Docket Pro through the shared product capability catalog.
 
-**Behavior.** Verifies the org exists (else \`404 not_found\`), then inserts a \`billing_exemption\` row with the required free-text \`reason\` and \`grantedBy = \` the acting operator. A partial unique index enforces at most one active (\`revokedAt IS NULL\`) grant per org; attempting a second concurrent grant returns \`409 conflict\`. Once granted, \`assertAgentSessionsEntitled\` treats the org as entitled regardless of \`lifecycleState\`, indefinitely, until revoked.
+**Behavior.** Verifies the org exists and has no current Stripe subscription, then inserts the audited grant and an active complimentary Docket Pro entitlement. The same catalog grants shared work, integrations, MCP, Athena, and voice. A partial unique index enforces at most one active grant per organization.
 
 **Side effects.** Creates the exemption **and** writes a \`billing.exemption_granted\` operator audit event (subject = the org) capturing the exemption id and reason.
 
-**Access — superadmin only.** Gated by \`requireStaffRole('superadmin')\`: unlike the time-boxed \`finance\` actions (extend-trial, reactivate), this is an indefinite, full bypass of the revenue gate — the highest-blast-radius billing action, restricted to the top tier. \`support\`/\`finance\` → \`403 forbidden\`; non-operators \`403\`; anonymous \`401\`.
+**Access — superadmin only.** Gated by \`requireStaffRole('superadmin')\` because this is an indefinite revenue concession. \`support\` and \`finance\` receive \`403 forbidden\`.
 
 **Related.** \`DELETE /admin/orgs/{id}/billing-exemption\` to revoke; \`GET /admin/orgs/{id}\` reports \`isBillingExempt\`.`,
     }),
@@ -862,7 +897,7 @@ export const adminBillingRoutes = new Hono<AppEnv>()
       tag: 'Admin',
       summary: 'Revoke a billing exemption',
       response: AdminBillingExemptionOut,
-      description: `Revokes an organization's active billing exemption, reverting it to the normal Stripe-driven entitlement gate.
+      description: `Revokes an organization's active complimentary Docket Pro grant.
 
 **Behavior.** Atomically updates the exemption row matched by \`organizationId\` AND still active (\`revokedAt IS NULL\`), stamping \`revokedAt = now\` and \`revokedBy = \` the acting operator, in one conditional \`UPDATE\`. Returns \`404 not_found\` when no active exemption matches — including an org with no exemption at all, or one already revoked (the guard makes revoke idempotent-safe: a second call 404s rather than double-firing). Returns the now-revoked record.
 
@@ -916,15 +951,15 @@ export const adminBillingRoutes = new Hono<AppEnv>()
       tag: 'Admin',
       summary: 'Extend an org trial',
       response: AdminOrgOut,
-      description: `Returns an organization to a clean \`trialing\` state — the operator goodwill/sales lever for extending a trial.
+      description: `Extends an eligible current Stripe trial and reconciles the returned provider snapshot.
 
-**Behavior.** Loads the org (else \`404 not_found\`), then sets \`lifecycleState = 'trialing'\` and clears both \`exportReadyAt\` and \`deleteAfterAt\`, which cancels any pending export window or scheduled deletion and removes the org from the delete sweep's path. The \`days\` body value (1..365) is recorded in the audit metadata as the operator's intent; the state reset itself is what re-opens the trial. Returns the updated org.
+**Behavior.** Loads the organization and current Stripe subscription. The action rejects unless Stripe reports a trial with a trial end. Stripe receives the idempotent extension, and Docket applies the returned subscription snapshot through the normal entitlement state machine. The action never writes organization-retention fields or activates an unpaid database row.
 
 **Access — finance+.** Gated by \`requireStaffRole('finance')\` on top of \`staffMiddleware\`: extending a trial is a revenue-affecting billing concession, so it is restricted to \`finance\` (and \`superadmin\`, which outranks it). \`support\` operators get \`403 forbidden\`; non-operators \`403\`; anonymous \`401\`.
 
 **Side effects.** Writes a \`billing.trial_extended\` operator audit event (subject = the org) capturing the requested \`days\` and the previous lifecycle state.
 
-**Related.** \`POST /admin/orgs/{id}/reactivate\` (recover a lapsed paid org); \`POST /admin/orgs/{id}/lifecycle\` (force any state directly).`,
+**Related.** \`POST /admin/orgs/{id}/reconcile\` repairs safe provider drift. Customers reactivate paid access through the Stripe portal.`,
     }),
     zParam(idParam),
     zJson(ExtendTrialBody),

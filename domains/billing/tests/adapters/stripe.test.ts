@@ -85,6 +85,7 @@ function stripeSub(over: {
   periodEnd?: number;
   trialEnd?: number | null;
   cancelAtPeriodEnd?: boolean;
+  cancelAt?: number | null;
   discounts?: StripeSubscriptionView['discounts'];
 }): StripeSubscriptionView {
   const metadata: Record<string, string> =
@@ -96,6 +97,7 @@ function stripeSub(over: {
     metadata,
     trial_end: over.trialEnd === undefined ? null : over.trialEnd,
     cancel_at_period_end: over.cancelAtPeriodEnd ?? false,
+    cancel_at: over.cancelAt === undefined ? null : over.cancelAt,
     ...(over.discounts ? { discounts: over.discounts } : {}),
     items: {
       data: [{ current_period_end: over.periodEnd ?? 1_700_000_000 }],
@@ -183,6 +185,21 @@ describe('toSubscription', () => {
   it('omits trialEnd when there is no trial_end', () => {
     const sub = toSubscription(stripeSub({ status: 'active', trialEnd: null }));
     expect(sub).not.toHaveProperty('trialEnd');
+  });
+
+  it('maps an explicit cancel_at timestamp as a scheduled cancellation', () => {
+    const cancelAt = 1_700_000_000;
+    const sub = toSubscription(
+      stripeSub({
+        status: 'trialing',
+        periodEnd: cancelAt,
+        cancelAtPeriodEnd: false,
+        cancelAt,
+      }),
+    );
+
+    expect(sub.cancelAtPeriodEnd).toBe(true);
+    expect(sub.currentPeriodEnd).toBe(new Date(cancelAt * 1000).toISOString());
   });
 
   it('maps expanded subscription discounts for award reconciliation', () => {
@@ -398,6 +415,25 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
     expect(req.headers.get('idempotency-key')).toBe('docket:customer:org_1');
   });
 
+  it('lists every Stripe customer carrying the organization reference', async () => {
+    const { http, reqs } = scriptedHttp([
+      searchResult([
+        { id: 'cus_1', object: 'customer', metadata: { referenceId: 'org_1' } },
+        { id: 'cus_2', object: 'customer', metadata: { referenceId: 'org_1' } },
+      ]),
+    ]);
+    const gw = new RealStripeGateway({ secretKey: 'sk_test_x' }, http);
+
+    await expect(gw.listCustomers('org_1')).resolves.toEqual([
+      { id: 'cus_1', referenceId: 'org_1' },
+      { id: 'cus_2', referenceId: 'org_1' },
+    ]);
+
+    const req = requestAt(reqs, 0);
+    expect(req.url).toContain('/v1/customers/search');
+    expect(decodeURIComponent(req.url)).toContain("metadata['referenceId']:'org_1'");
+  });
+
   it('reads the hosted Checkout billing country from the durable customer', async () => {
     const { http } = scriptedHttp([
       { id: 'cus_1', object: 'customer', address: { country: 'US' } },
@@ -586,6 +622,21 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
     expect(requestAt(reqs, 0).url).toContain('/v1/subscriptions/sub_exact');
     expect(requestAt(reqs, 0).method).toBe('DELETE');
     expect(requestAt(reqs, 0).headers.get('idempotency-key')).toBe('country-event-1');
+  });
+
+  it('schedules an exact paid subscription to end after its service period', async () => {
+    const { http, reqs } = scriptedHttp([
+      { id: 'sub_exact', object: 'subscription', status: 'active', items: list([]) },
+    ]);
+    const gw = new RealStripeGateway({ secretKey: 'sk' }, http);
+
+    await gw.cancelSubscriptionById('sub_exact', 'country-event-2', true);
+
+    const request = requestAt(reqs, 0);
+    expect(request.url).toContain('/v1/subscriptions/sub_exact');
+    expect(request.method).toBe('POST');
+    expect(decodeURIComponent(request.body)).toContain('cancel_at_period_end=true');
+    expect(request.headers.get('idempotency-key')).toBe('country-event-2');
   });
 
   it('cancel is a no-op when there is no subscription', async () => {

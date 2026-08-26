@@ -329,6 +329,11 @@ const CREDENTIAL_NAME_ALLOWLIST = new Set([
  */
 const MINTED_CREDENTIAL_RESPONSES: ReadonlySet<string> = new Set([
   'POST /v1/time/share-tokens 201 → token',
+  // Description expansion returns an opaque change-set handle so the same authorized actor can
+  // undo or redo that one mutation. The task route rechecks organization and actor ownership
+  // before using it, so this is an operation handle rather than a provider or session credential.
+  'POST /v1/orgs/{orgId}/tasks/{id}/expand 200 → undoToken',
+  'POST /v1/orgs/{orgId}/tasks/{id}/expand/undo 200 → undoToken',
   // Starting a voice session mints an EPHEMERAL client secret (minutes, one session) so the
   // browser can hold its own audio link to the speech model. Returning it is the entire point of
   // the operation, and it is deliberately not Docket's provider key — that never leaves the

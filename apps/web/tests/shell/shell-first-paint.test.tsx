@@ -116,6 +116,10 @@ beforeEach(() => {
   sessionState.error = null;
   sessionState.refetch.mockReset();
   window.localStorage.clear();
+  // This suite protects fetch-independent sidebar labels and the one permitted workspace skeleton.
+  // jsdom reports a 1024px viewport, which selects the rail for a first-time viewer. Pin the full
+  // sidebar so the test stays about loading behavior; the rail has its own labeled-loading tests.
+  window.localStorage.setItem('docket.sidebar.collapsed', '0');
   pathnameState.value = '/today';
   // Never settles: the shell must be fully usable before any of this arrives.
   orgsGet.mockReset().mockImplementation(() => new Promise(() => undefined));

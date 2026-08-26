@@ -59,6 +59,12 @@
   CI database. A fresh PGlite proof inserts an organization and observes one active complimentary
   Docket Pro entitlement. The existing product-gate suites pass 61 tests with both entitled and
   free boundaries intact.
+- **API gate correction**: The focused billing lifecycle database stopped at the billing account
+  table even after lifecycle reconciliation began checking active complimentary grants. CI then
+  spent 17 minutes before four lifecycle cases failed on the missing `billing_exemption` relation.
+  The focused fixture now includes the exemption table and its one-active-grant constraint. A new
+  regression case proves that a Stripe cancellation snapshot cannot replace the Founder
+  organization's complimentary entitlement. All six lifecycle cases pass in 2.03 seconds.
 - **Deployment correction**: The repository-level kill switch did not control production because
   the GitHub `production` environment overrode `BILLING_ENABLED=true`. The production environment
   now holds `false`, and a deployment policy test covers the missing attestation pass-through.

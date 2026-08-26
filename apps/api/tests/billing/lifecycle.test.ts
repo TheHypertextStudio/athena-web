@@ -1,6 +1,11 @@
 import { applyBillingEvent, PAYMENT_GRACE_DAYS } from '@docket/billing/application/lifecycle';
 import type { BillingEvent } from '@docket/billing/contracts';
-import { type Database, organization, organizationProductEntitlement } from '@docket/db';
+import {
+  billingExemption,
+  type Database,
+  organization,
+  organizationProductEntitlement,
+} from '@docket/db';
 import type { PGlite } from '@electric-sql/pglite';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -135,5 +140,23 @@ describe('applyBillingEvent', () => {
 
     expect(await applyBillingEvent(db, subscriptionEvent(id, 'active'), NOW)).toBe('stale');
     expect((await readAccess(id)).status).toBe('canceled');
+  });
+
+  it('does not let a Stripe snapshot replace an active complimentary grant', async () => {
+    const id = await makeOrg();
+    await db.insert(billingExemption).values({
+      id: `exemption-${id}`,
+      organizationId: id,
+      reason: 'Founder production access',
+    });
+    await db.insert(organizationProductEntitlement).values({
+      organizationId: id,
+      productKey: 'docket_pro',
+      status: 'active',
+      source: 'complimentary',
+    });
+
+    expect(await applyBillingEvent(db, subscriptionEvent(id, 'canceled'), NOW)).toBe('none');
+    expect(await readAccess(id)).toMatchObject({ status: 'active', source: 'complimentary' });
   });
 });

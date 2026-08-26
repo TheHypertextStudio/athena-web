@@ -61,10 +61,11 @@ localhost reload under its URL policy. No alternate browser automation path was 
 
 ## Repository gate status
 
-The focused shell suite passes 102 tests across six files. UI lint, UI type checking, and the
-eight-case design-token policy pass. The full bounded typecheck passed 25 packages, and the API
-package passed when rerun with a command-scoped 4 GB heap after Node exhausted its default 2 GB
-heap. Both navigation commits passed the staged formatting, policy, and lint hook.
+The focused shell suite passes 102 tests across six files. The complete Web suite passes 3,162
+tests across 418 files. UI lint, UI type checking, and the eight-case design-token policy pass.
+The full bounded typecheck passed 25 packages, and the API package passed when rerun with a
+command-scoped 4 GB heap after Node exhausted its default 2 GB heap. The production build passes
+all four targets. Both navigation commits passed the staged formatting, policy, and lint hook.
 
 The aggregate lint script stopped at its API task's 180-second watchdog. An isolated API lint
 produced no lint diagnostic for four minutes and was stopped. This review does not treat that as a

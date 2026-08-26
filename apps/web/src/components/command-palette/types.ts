@@ -1,4 +1,3 @@
-import type { SearchDocumentKind } from '@docket/types';
 import type { LucideIcon } from '@docket/ui/icons';
 import type { ReactNode } from 'react';
 
@@ -49,8 +48,6 @@ export interface PaletteItem {
   description?: string | undefined;
   /** Parent labels used for matching and for Settings breadcrumbs. */
   breadcrumb?: readonly string[] | undefined;
-  /** Generic trailing kind badge for catalog-backed rows. */
-  kindLabel?: string | undefined;
   /** Comparable only within one result source; breaks otherwise equal matches. */
   searchScore?: number | undefined;
   /**
@@ -77,8 +74,6 @@ export interface PaletteItem {
   org?: { id: string; name: string } | undefined;
   /** Source/provider label for integration-backed search hits. */
   source?: string | undefined;
-  /** The search-hit entity kind, for result rows (drives the trailing kind label). */
-  hitType?: SearchDocumentKind | undefined;
   /** Invoked when the row is selected; the palette closes immediately after. */
   run: () => void;
 }

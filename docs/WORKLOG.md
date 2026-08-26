@@ -6475,8 +6475,9 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 - **Files changed**: Added the feature-owned capability contracts, catalog resolver, scorer,
   merger, shell executor, and shared Home and workspace navigation descriptors. Migrated static
   Settings headings to stable descriptors and anchors. Moved the palette host inside the shell,
-  merged local and remote candidates, added kind badges and breadcrumbs, and implemented routed
-  Settings scrolling and heading focus. The approved design lives in
+  merged local and remote candidates, placed breadcrumbs and result context on one secondary line,
+  and implemented routed Settings scrolling and heading focus. Settings entries use the same
+  command contract as every other result. The approved design lives in
   `docs/superpowers/specs/2026-08-25-command-palette-capability-search-design.md`.
 - **Validation**: All 66 focused catalog, palette, Settings, shell, and first-paint tests pass with
   at most two workers. The full Web suite passes all 431 files and 3,194 tests. Web type checking

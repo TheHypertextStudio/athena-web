@@ -121,7 +121,6 @@ export function searchResultToPaletteItem(
     label: hit.title,
     hint: resultHint(hit),
     icon: SEARCH_KIND_ICON[hit.kind],
-    hitType: hit.kind,
     searchScore: hit.score,
     org: hit.organizationId
       ? { id: hit.organizationId, name: input.orgName(hit.organizationId) }

@@ -53,7 +53,6 @@ describe('searchResultToPaletteItem', () => {
       section: 'results',
       label: 'Ship beta',
       hint: 'Release checklist',
-      hitType: 'task',
       org: { id: ORG, name: 'Acme' },
     });
 

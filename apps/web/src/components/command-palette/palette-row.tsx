@@ -1,14 +1,13 @@
 'use client';
 
 import { CornerDownLeft, type LucideIcon } from '@docket/ui/icons';
-import { MENU_METRICS, menuBadge, menuItemClass, menuTrailingText } from '@docket/ui/primitives';
+import { MENU_METRICS, menuItemClass } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import { isValidElement, type JSX } from 'react';
 
 import { OrgChip } from '@/components/org-chip';
 
 import type { PaletteItem } from './types';
-import { SEARCH_KIND_LABEL } from './use-hub-search';
 
 /**
  * Render a row's leading glyph.
@@ -58,8 +57,7 @@ export interface PaletteRowProps {
  * @remarks
  * Rendered as an ARIA `option` (the list is a `listbox`), so the palette input can own focus
  * while `aria-activedescendant` tracks the active row for screen readers. Carries the
- * command's glyph + label, an optional org chip (for org-chipped commands and search hits),
- * a trailing entity-kind tag for search results, and a return-key affordance when active.
+ * command's glyph + label, one secondary context line, and a return-key affordance when active.
  * Hover and keyboard share a single active row, so the highlight never desyncs.
  */
 export function PaletteRow({
@@ -88,32 +86,25 @@ export function PaletteRow({
       {paletteIcon(item.icon)}
       <span className="flex min-w-0 flex-1 flex-col items-start py-0.5">
         <span className="w-full truncate">{item.label}</span>
-        {item.breadcrumb && item.breadcrumb.length > 0 ? (
-          <span className="text-on-surface-variant text-label-small w-full truncate">
-            {item.breadcrumb.join(' › ')}
+        {(item.breadcrumb && item.breadcrumb.length > 0) || item.hint || item.org || item.source ? (
+          <span
+            data-testid="palette-row-context"
+            className="text-on-surface-variant text-label-small flex w-full min-w-0 items-center gap-2"
+          >
+            {item.breadcrumb && item.breadcrumb.length > 0 ? (
+              <span className="min-w-0 truncate">{item.breadcrumb.join(' › ')}</span>
+            ) : item.hint ? (
+              <span className="min-w-0 truncate">{item.hint}</span>
+            ) : null}
+            {item.org ? (
+              <span className="min-w-0 shrink truncate">
+                <OrgChip orgId={item.org.id} name={item.org.name} />
+              </span>
+            ) : null}
+            {item.source ? <span className="shrink-0">{item.source}</span> : null}
           </span>
         ) : null}
       </span>
-
-      {item.org ? <OrgChip orgId={item.org.id} name={item.org.name} /> : null}
-
-      {item.source ? (
-        <span className={cn(menuBadge('standard'), 'bg-surface-container ml-0')}>
-          {item.source}
-        </span>
-      ) : null}
-
-      {item.kindLabel ? (
-        <span className={cn(menuBadge('standard'), 'border-outline-variant ml-0 border')}>
-          {item.kindLabel}
-        </span>
-      ) : item.hitType ? (
-        <span className={cn(menuBadge('standard'), 'border-outline-variant ml-0 border')}>
-          {SEARCH_KIND_LABEL[item.hitType]}
-        </span>
-      ) : item.hint ? (
-        <span className={cn(menuTrailingText('standard'), 'ml-0 shrink-0')}>{item.hint}</span>
-      ) : null}
 
       {active ? (
         <CornerDownLeft aria-hidden="true" className="text-on-surface-variant shrink-0" />

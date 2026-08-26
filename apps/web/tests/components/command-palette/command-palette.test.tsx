@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 
 import { ContextProvider } from '@docket/ui/components';
 import { LabelId, OrganizationId } from '@docket/types';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -129,9 +129,11 @@ describe('CommandPalette — # label sub-mode', () => {
 
     const label = await screen.findByText('Security', { selector: 'span.w-full.truncate' });
     const row = label.closest('[role="option"]');
-    expect(row).not.toBeNull();
-    if (!row) throw new Error('Security result did not render inside an option.');
-    expect(row).toHaveTextContent('Setting');
+    expect(row).toBeInstanceOf(HTMLElement);
+    if (!(row instanceof HTMLElement)) {
+      throw new Error('Security result did not render inside an option.');
+    }
+    expect(within(row).queryByText('Setting', { exact: true })).not.toBeInTheDocument();
     fireEvent.click(row);
 
     expect(push).toHaveBeenCalledWith('/settings/security');

@@ -28,7 +28,8 @@
   launch audit, Stripe runbook, billing specification, state-machine diagrams, and focused launch
   evidence. The final hardening pass bound every provider observation to the durable customer,
   protected complimentary access, rejected unknown provider discounts, preserved private award
-  end dates, and mirrored Stripe's authoritative non-US cancellation snapshot.
+  end dates, and mirrored Stripe's authoritative non-US cancellation snapshot. The Cloud Run
+  deployment now passes the Dashboard attestation into the API revision instead of dropping it.
 - **Validation**: The bounded final pass ran 329 focused tests across billing, API, web,
   environment, and launch-policy packages. API, billing, environment, test-utils, web, and admin
   typechecks passed. The same packages passed lint, and the repository commit hook completed its
@@ -37,6 +38,9 @@
   payment authentication, cancellation, reactivation, renewal, discounts, credit notes, and
   complimentary conflicts. Responsive customer and admin captures cover desktop, mobile, light,
   and dark states.
+- **Deployment correction**: The repository-level kill switch did not control production because
+  the GitHub `production` environment overrode `BILLING_ENABLED=true`. The production environment
+  now holds `false`, and a deployment policy test covers the missing attestation pass-through.
 - **Decisions**: Checkout derives the customer email from the Better Auth server session and
   rejects a browser-supplied email. Stripe's Dashboard-only existing-subscriber redirect requires
   a recorded verification timestamp before `BILLING_ENABLED=true` can pass configuration. Docket

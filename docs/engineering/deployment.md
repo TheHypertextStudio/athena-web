@@ -180,8 +180,9 @@ guided GitHub App flow rotates them to canonical secret names.
 `BETTER_AUTH_TRUSTED_ORIGINS`, `BETTER_AUTH_ALLOWED_HOSTS`,
 `BETTER_AUTH_PASSKEY_RP_ID`, `BETTER_AUTH_PASSKEY_RP_NAME`,
 `GOOGLE_CALENDAR_WEBHOOK_URL`, `GOOGLE_OAUTH_PUBLIC`, `GOOGLE_OAUTH_TEST_EMAILS`,
-`BILLING_ENABLED`, `DOCKET_PRICE_LOOKUP_DOCKET_PRO`, `STRIPE_PRICE_DOCKET_PRO`, and
-`MCP_TASKS_ENABLED`.
+`BILLING_ENABLED`, `STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT`, and `MCP_TASKS_ENABLED`.
+The production `API_SECRET_BINDINGS` manifest supplies Stripe credentials, the Docket Pro lookup
+key and price id, and the portal configuration id under their canonical runtime names.
 
 The MCP OAuth authorization server is **on by default in every deploy** — it needs no MCP-specific
 client-list variables. `MCP_ISSUER_URL`, `MCP_RESOURCE_URL`, and `OIDC_LOGIN_PAGE_URL` derive

@@ -117,6 +117,7 @@ describe('reconcileDocketStripe', () => {
 
     expect(result.values).toEqual({
       BILLING_ENABLED: 'false',
+      BILLING_RECONCILIATION_MODE: 'off',
       DOCKET_PRICE_LOOKUP_DOCKET_PRO: DOCKET_PRO_MONTHLY_LOOKUP_KEY,
       STRIPE_BILLING_PORTAL_CONFIG_ID: 'bpc_3',
       STRIPE_PRICE_DOCKET_PRO: 'price_2',

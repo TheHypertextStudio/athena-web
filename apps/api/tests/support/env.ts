@@ -25,6 +25,7 @@ export const API_TEST_ENV = {
   AGENT_MAX_TURNS: '8',
   ATHENA_ASYNC_RUNNER_ENABLED: 'false',
   BILLING_ENABLED: 'false',
+  BILLING_RECONCILIATION_MODE: 'off',
   // Athena's receiving domain. The host contract deliberately never derives this, so without a
   // value `apiHosts.athenaMail` is undefined and every inbound-mail test
   // would exercise the "no inbox configured" branch instead of the pipeline.

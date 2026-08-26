@@ -53,7 +53,6 @@ import {
   providerVars,
   DEFAULT_LOCAL_API_URL,
   copyToClipboard,
-  fetchStripeCliWebhookSecret,
   type Environment,
   type ProviderGroup,
   type ProviderId,
@@ -1250,10 +1249,10 @@ async function runProviderProvisioner(
   if (!publishableKey.startsWith(publishablePrefix)) {
     throw new Error(`${mode} Stripe provisioning requires a ${publishablePrefix} publishable key.`);
   }
-  const stripeCliWebhookSecret = env === 'local' ? fetchStripeCliWebhookSecret() : undefined;
-  if (env === 'local' && !stripeCliWebhookSecret) {
+  const existingWebhookSecret = current('STRIPE_WEBHOOK_SECRET');
+  if (env === 'local' && !existingWebhookSecret) {
     throw new Error(
-      'Stripe sandbox provisioning requires a signed Stripe CLI session. Run `stripe login`, then retry.',
+      'Stripe sandbox provisioning requires STRIPE_WEBHOOK_SECRET from an explicitly selected Hypertext Studio Stripe CLI profile.',
     );
   }
   const result = await provisionDocketStripe({
@@ -1262,9 +1261,9 @@ async function runProviderProvisioner(
     apiOrigin: urls.apiBase,
     webOrigin: urls.webBases[0] ?? urls.apiBase,
     ...(env === 'local'
-      ? { webhookTransport: 'stripe-cli' as const, existingWebhookSecret: stripeCliWebhookSecret }
-      : current('STRIPE_WEBHOOK_SECRET')
-        ? { existingWebhookSecret: current('STRIPE_WEBHOOK_SECRET') }
+      ? { webhookTransport: 'stripe-cli' as const, existingWebhookSecret }
+      : existingWebhookSecret
+        ? { existingWebhookSecret }
         : {}),
   });
   for (const action of result.actions) ok(`Stripe: ${action}`);

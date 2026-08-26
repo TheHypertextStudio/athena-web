@@ -44,6 +44,7 @@
         "BLOB_READ_WRITE_TOKEN",
         "EXPORT_BUCKET_*",
         "BILLING_ENABLED",
+        "BILLING_RECONCILIATION_MODE",
         "SMTP_*",
         "RESEND_API_KEY",
         "MAIL_FROM",

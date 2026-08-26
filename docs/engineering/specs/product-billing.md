@@ -80,16 +80,20 @@ invoice clears grace and restores access. Cancellation preserves Pro through
 `current_period_end`; the canceled observation changes shared work to read-only and leaves all
 retention columns alone.
 
-The `billing-reconciliation` job runs every 15 minutes. It repairs a mirror only when Stripe has
-zero or one current subscription. It records an operator alert and changes no provider state when
-it finds duplicates. It compares the expanded Stripe discount and coupon identifiers with the
-current Docket award. It activates a scheduled award only when the coupon matches. It alerts on an
-unknown or mismatched discount. It also records the latest invoice observation, ends unrenewed
-awards, sends eligibility reminders, and removes expired evidence. The worker never cancels a
-duplicate or issues money. A staff-requested organization reconciliation inspects only that
-organization. It does not advance installation-wide awards, expire applications, or delete
-evidence. Finance actions that change trials or discounts also refuse to proceed when Stripe
-reports more than one current subscription.
+The `billing-reconciliation` job runs every 15 minutes under one explicit deployment mode. `off`
+makes no Stripe call. `shadow` runs the read-only launch audit and reports drift without changing
+Stripe, entitlements, awards, applications, or evidence. `active` repairs a mirror only when Stripe
+has zero or one current subscription. Public Checkout cannot start unless the mode is `active`.
+
+Active reconciliation records an operator alert and changes no provider state when it finds
+duplicates. It compares the expanded Stripe discount and coupon identifiers with the current
+Docket award. It activates a scheduled award only when the coupon matches. It alerts on an unknown
+or mismatched discount. It also records the latest invoice observation, ends unrenewed awards,
+sends eligibility reminders, and removes expired evidence. The worker never cancels a duplicate or
+issues money. A staff-requested organization reconciliation inspects only that organization. It
+does not advance installation-wide awards, expire applications, or delete evidence. Finance
+actions that change trials or discounts also refuse to proceed when Stripe reports more than one
+current subscription.
 
 ## Discounts
 
@@ -155,8 +159,9 @@ The local implementation is not public-launch proof. The release owner must comp
 1. Run migrations against a production-shaped snapshot. The report must show one Stripe customer
    and no more than one current subscription per billed organization. Every unresolved row blocks
    enablement.
-2. Deploy additive migrations and the reconciliation worker with Checkout disabled. Observe shadow
-   reconciliation for at least 24 hours.
+2. Deploy additive migrations with `BILLING_ENABLED=false` and
+   `BILLING_RECONCILIATION_MODE=shadow`. Observe the read-only scheduled audit for at least 24
+   hours. Resolve every finding before changing the mode to `active`.
 3. Run hosted Checkout, the portal, signed webhook replay, automatic tax, failed-card recovery,
    authentication-required payment, cancellation, renewal, discount application, and credit notes
    in the Hypertext Studio Stripe test account. Evidence from another Stripe account does not

@@ -508,14 +508,17 @@ immutable, it deactivates a drifted price before creating the required replaceme
 already exists but its signing secret can no longer be retrieved, the wizard rotates that endpoint
 so the runtime receives a usable secret.
 
-For sandbox use, the wizard can read test keys from an authenticated Stripe CLI profile and can
-configure CLI forwarding to the local API without creating a localhost webhook endpoint. For
-production, it requires explicit live credentials and validates that every key matches live mode.
+For sandbox use, the wizard requires explicit Hypertext Studio test keys. It never reads the
+globally selected Stripe CLI profile. Local CLI forwarding requires an explicitly supplied signing
+secret from a named Hypertext Studio profile. For production, the wizard requires explicit live
+credentials and validates that every key matches live mode.
 The resulting `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`,
 `DOCKET_PRICE_LOOKUP_DOCKET_PRO`, `STRIPE_PRICE_DOCKET_PRO`, optional portal configuration ID, and
-`BILLING_ENABLED=false` flow through the standard local or cloud writer only after operator
-review. Provisioning never opens Checkout. The release owner changes `BILLING_ENABLED` only after
-the migration, shadow reconciliation, and canary gates pass.
+`BILLING_ENABLED=false` and `BILLING_RECONCILIATION_MODE=off` flow through the standard local or
+cloud writer only after operator review. Provisioning never opens Checkout. The release owner
+changes reconciliation to `shadow` for the 24-hour read-only observation and then to `active` after
+every finding is resolved. The release owner changes `BILLING_ENABLED` only after the migration,
+shadow reconciliation, and canary gates pass.
 
 ### 3.6 Step 7 — Athena agent
 

@@ -54,6 +54,7 @@ function validApiEnv(): Record<string, string> {
     ATHENA_ASYNC_RUNNER_ENABLED: 'false',
     CRON_SECRET: 'test-cron-secret',
     BILLING_ENABLED: 'false',
+    BILLING_RECONCILIATION_MODE: 'off',
     MCP_TASKS_ENABLED: 'false',
   };
 }
@@ -180,6 +181,10 @@ describe('slices', () => {
     expect(() => stripeServer.BILLING_ENABLED.parse(undefined)).toThrow();
     expect(stripeServer.BILLING_ENABLED.parse('true')).toBe(true);
     expect(stripeServer.BILLING_ENABLED.parse('false')).toBe(false);
+    expect(stripeServer.BILLING_RECONCILIATION_MODE.parse('off')).toBe('off');
+    expect(stripeServer.BILLING_RECONCILIATION_MODE.parse('shadow')).toBe('shadow');
+    expect(stripeServer.BILLING_RECONCILIATION_MODE.parse('active')).toBe('active');
+    expect(() => stripeServer.BILLING_RECONCILIATION_MODE.parse('mutating')).toThrow();
     expect(
       stripeServer.STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT.parse(
         '2026-08-25T22:30:00.000Z',
@@ -331,6 +336,7 @@ describe('api composition', () => {
     expect(mod.env.PORT).toBe(4000);
     expect(mod.env.NODE_ENV).toBe('development');
     expect(mod.env.BILLING_ENABLED).toBe(false);
+    expect(mod.env.BILLING_RECONCILIATION_MODE).toBe('off');
     expect(mod.env.STRIPE_PUBLISHABLE_KEY).toBeUndefined();
     expect(mod.env.MCP_ISSUER_URL).toBe('http://localhost:4000');
     expect(mod.env.MCP_RESOURCE_URL).toBe('http://localhost:4000/mcp');
@@ -495,7 +501,35 @@ describe('api composition', () => {
       STRIPE_PUBLISHABLE_KEY: 'pk_test_123',
       STRIPE_WEBHOOK_SECRET: 'whsec_123',
       STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT: '2026-08-25T22:30:00.000Z',
+      BILLING_RECONCILIATION_MODE: 'active',
     } as const;
+
+    it('rejects public Checkout unless scheduled reconciliation is active', async () => {
+      for (const [key, value] of Object.entries({
+        ...validApiEnv(),
+        BILLING_ENABLED: 'true',
+        ...requiredStripeRuntime,
+        BILLING_RECONCILIATION_MODE: 'shadow',
+        STRIPE_PRICE_DOCKET_PRO: 'price_123',
+      })) {
+        vi.stubEnv(key, value);
+      }
+      await expect(import('../../src/api')).rejects.toThrow(
+        'BILLING_ENABLED=true requires BILLING_RECONCILIATION_MODE=active',
+      );
+    });
+
+    it('requires a Stripe secret before shadow reconciliation can query the provider', async () => {
+      for (const [key, value] of Object.entries({
+        ...validApiEnv(),
+        BILLING_RECONCILIATION_MODE: 'shadow',
+      })) {
+        vi.stubEnv(key, value);
+      }
+      await expect(import('../../src/api')).rejects.toThrow(
+        'BILLING_RECONCILIATION_MODE=shadow requires STRIPE_SECRET_KEY',
+      );
+    });
 
     it('passes with secret key + price id', async () => {
       for (const [key, value] of Object.entries({
@@ -548,6 +582,7 @@ describe('api composition', () => {
         ...validApiEnv(),
         APP_MODE: 'production',
         BILLING_ENABLED: 'true',
+        BILLING_RECONCILIATION_MODE: 'active',
         LINEAR_CLIENT_ID: 'linear-client-id',
         LINEAR_CLIENT_SECRET: 'linear-client-secret',
         LINEAR_WEBHOOK_SECRET: 'linear-webhook-secret',
@@ -571,6 +606,7 @@ describe('api composition', () => {
         ...validApiEnv(),
         APP_MODE: 'production',
         BILLING_ENABLED: 'true',
+        BILLING_RECONCILIATION_MODE: 'active',
         LINEAR_CLIENT_ID: 'linear-client-id',
         LINEAR_CLIENT_SECRET: 'linear-client-secret',
         LINEAR_WEBHOOK_SECRET: 'linear-webhook-secret',
@@ -593,6 +629,7 @@ describe('api composition', () => {
         ...validApiEnv(),
         APP_MODE: 'local',
         BILLING_ENABLED: 'true',
+        BILLING_RECONCILIATION_MODE: 'active',
         STRIPE_SECRET_KEY: 'sk_live_123',
         STRIPE_PUBLISHABLE_KEY: 'pk_live_123',
         STRIPE_WEBHOOK_SECRET: 'whsec_123',
@@ -611,6 +648,7 @@ describe('api composition', () => {
         ...validApiEnv(),
         APP_MODE: 'local',
         BILLING_ENABLED: 'true',
+        BILLING_RECONCILIATION_MODE: 'active',
         STRIPE_SECRET_KEY: 'sk_test_123',
         STRIPE_PUBLISHABLE_KEY: 'pk_live_123',
         STRIPE_WEBHOOK_SECRET: 'whsec_123',
@@ -628,6 +666,7 @@ describe('api composition', () => {
       for (const [key, value] of Object.entries({
         ...validApiEnv(),
         BILLING_ENABLED: 'true',
+        BILLING_RECONCILIATION_MODE: 'active',
         STRIPE_PUBLISHABLE_KEY: 'pk_test_123',
         STRIPE_WEBHOOK_SECRET: 'whsec_123',
         STRIPE_PRICE_DOCKET_PRO: 'price_123',
@@ -656,6 +695,7 @@ describe('api composition', () => {
       for (const [key, value] of Object.entries({
         ...validApiEnv(),
         BILLING_ENABLED: 'true',
+        BILLING_RECONCILIATION_MODE: 'active',
         STRIPE_SECRET_KEY: 'sk_test_123',
         STRIPE_WEBHOOK_SECRET: 'whsec_123',
         STRIPE_PRICE_DOCKET_PRO: 'price_123',
@@ -671,6 +711,7 @@ describe('api composition', () => {
       for (const [key, value] of Object.entries({
         ...validApiEnv(),
         BILLING_ENABLED: 'true',
+        BILLING_RECONCILIATION_MODE: 'active',
         STRIPE_SECRET_KEY: 'sk_test_123',
         STRIPE_PUBLISHABLE_KEY: 'pk_test_123',
         STRIPE_PRICE_DOCKET_PRO: 'price_123',
@@ -686,6 +727,7 @@ describe('api composition', () => {
       for (const [key, value] of Object.entries({
         ...validApiEnv(),
         BILLING_ENABLED: 'true',
+        BILLING_RECONCILIATION_MODE: 'active',
         STRIPE_SECRET_KEY: 'sk_test_123',
         STRIPE_PUBLISHABLE_KEY: 'pk_test_123',
         STRIPE_WEBHOOK_SECRET: 'whsec_123',

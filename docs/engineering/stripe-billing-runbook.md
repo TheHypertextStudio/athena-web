@@ -15,6 +15,13 @@ Docket Pro product and its $8 USD monthly price through `pnpm integrations`. Con
 portal for payment methods, invoices, and cancellation at period end. Disable plan switching and
 promotion codes. Configure Stripe Tax only after finance approves the US registration matrix.
 
+Set `BILLING_RECONCILIATION_MODE=off` before Stripe credentials are present. Set it to `shadow`
+only after the deployment carries the Hypertext Studio Stripe secret. Shadow mode runs the
+read-only launch audit every 15 minutes. It does not repair entitlements, cancel subscriptions,
+change discounts, advance awards, expire applications, or delete evidence. Observe that mode for
+at least 24 hours. Resolve every audit finding before setting the mode to `active`.
+`BILLING_ENABLED=true` fails environment validation unless reconciliation is already `active`.
+
 Stripe exposes its one-subscription redirect only through Dashboard settings. In both test and
 live mode, activate the no-code customer portal, keep its login link enabled, and enable **Redirect
 customers with an active subscription to the customer portal** under Checkout and Payment Links.
@@ -46,8 +53,15 @@ created customer becomes searchable. Repeated failure is a blocker, not a reason
 customer.
 
 Deploy the reconciliation endpoint and Cloud Scheduler job before enabling Checkout. Inspect
-`billing_provider_sync` rows where `operation = 'reconcile_billing'`. A `failed` row blocks public
-enablement. Observe this shadow pass for at least 24 hours.
+the mode-tagged Cloud Scheduler results during the shadow period. A shadow result with
+`audit.passed=false` blocks active reconciliation and public enablement. After the shadow period,
+set `BILLING_RECONCILIATION_MODE=active` and inspect `billing_provider_sync` rows where
+`operation = 'reconcile_billing'`. A `failed` row blocks public enablement.
+
+The setup wizard never reads the globally selected Stripe CLI profile. For local signed webhook
+forwarding, obtain `STRIPE_WEBHOOK_SECRET` from an explicitly selected Hypertext Studio Stripe CLI
+profile and supply it before running the Stripe provisioner. Never let the wizard infer credentials
+from a personal or unnamed profile.
 
 ## Duplicate subscriptions
 
@@ -98,10 +112,11 @@ authenticated application route. A customer or staff response must never expose 
 
 ## Rollback
 
-Set `BILLING_ENABLED=false` and disable new discount applications. Do not disable the Stripe portal,
-webhooks, billing reconciliation, essential notices, or existing entitlements. Those paths protect
-customers who already paid. Record the rollback time and affected organizations before changing
-provider state or issuing money.
+Set `BILLING_ENABLED=false` and disable new discount applications. Keep
+`BILLING_RECONCILIATION_MODE=active`. Do not disable the Stripe portal, webhooks, billing
+reconciliation, essential notices, or existing entitlements. Those paths protect customers who
+already paid. Record the rollback time and affected organizations before changing provider state
+or issuing money.
 
 ## Live canary
 

@@ -6,10 +6,8 @@ import { describe, expect, it } from 'vitest';
 import { parseBootstrapFlags } from '../../scripts/bootstrap';
 import {
   linearOAuthAppManifestUrl,
-  parseStripeCliProfile,
   PROVIDER_GROUPS,
   providerVars,
-  stripeCliCredential,
 } from '../../scripts/integration-providers';
 import {
   buildApiSecretBindings,
@@ -59,6 +57,7 @@ describe('bootstrap phase flags', () => {
       'utf8',
     );
     expect(bootstrap).toContain('WORK_LOCATION_PROJECTION_ENABLED=false');
+    expect(bootstrap).toContain('BILLING_RECONCILIATION_MODE=off');
   });
 });
 
@@ -172,7 +171,9 @@ describe('mandatory production provider catalog', () => {
       'STRIPE_PRICE_DOCKET_PRO',
       'STRIPE_BILLING_PORTAL_CONFIG_ID',
       'BILLING_ENABLED',
+      'BILLING_RECONCILIATION_MODE',
     ]);
+    expect(stripe.autoFetch).toBeUndefined();
     const guide = stripe
       .instructions('production', {
         apiBase: 'https://docket-api.hypertext.studio',
@@ -196,39 +197,6 @@ describe('mandatory production provider catalog', () => {
     expect(shouldRunProviderProvisioner(stripe, 'replace')).toBe(true);
     expect(shouldRunProviderProvisioner(stripe, 'skip')).toBe(false);
     expect(shouldRunProviderProvisioner(google, 'keep')).toBe(false);
-  });
-
-  it('parses only the selected Stripe CLI profile', () => {
-    const profile = parseStripeCliProfile(`
-project-name = 'default'
-
-[default]
-account_id = 'acct_docket'
-test_mode_api_key = 'sk_test_docket'
-test_mode_pub_key = 'pk_test_docket'
-
-['another account']
-test_mode_api_key = 'sk_test_other'
-test_mode_pub_key = 'pk_test_other'
-`);
-
-    expect(profile).toEqual({
-      accountId: 'acct_docket',
-      testSecretKey: 'sk_test_docket',
-      testPublishableKey: 'pk_test_docket',
-    });
-  });
-
-  it('does not import live Stripe credentials from the CLI', () => {
-    const profile = {
-      testSecretKey: 'sk_test_docket',
-      testPublishableKey: 'pk_test_docket',
-      liveSecretKey: 'rk_live_************1234',
-      livePublishableKey: 'pk_live_docket',
-    };
-    expect(stripeCliCredential(profile, 'local', 'secret')).toBe('sk_test_docket');
-    expect(stripeCliCredential(profile, 'production', 'secret')).toBeUndefined();
-    expect(stripeCliCredential(profile, 'production', 'publishable')).toBeUndefined();
   });
 
   it('redacts Stripe credential shapes from provider errors', () => {
@@ -412,6 +380,9 @@ describe('production account-creation deployment contract', () => {
 
   it('deploys bootstrap-managed billing without an MCP vendor allowlist', () => {
     expect(workflow).toContain('BILLING_ENABLED: "${{ vars.BILLING_ENABLED }}"');
+    expect(workflow).toContain(
+      'BILLING_RECONCILIATION_MODE: "${{ vars.BILLING_RECONCILIATION_MODE }}"',
+    );
     expect(workflow).not.toContain('BILLING_ENABLED: "false"');
     expect(workflow).not.toContain('MCP_ALLOWED_ORIGINS');
     expect(workflow).not.toContain('https://claude.ai');

@@ -7,13 +7,12 @@
  * declarative data + formatting; `integrations-setup.ts` drives prompts, provisioners, cloud
  * writes, and ordering.
  */
-import { execFileSync, execSync } from 'node:child_process';
+import { execSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import process from 'node:process';
 
-import { DOCKET_STRIPE_WEBHOOK_EVENTS } from '../domains/billing/src/provision';
 import { fetchNotionWebhookToken } from './notion-webhook-token';
 
 // ── environments ────────────────────────────────────────────────────────────────
@@ -48,110 +47,6 @@ export function copyToClipboard(text: string): boolean {
     }
   }
   return false;
-}
-
-/** Credentials available from the Stripe CLI's selected profile. */
-export interface StripeCliProfile {
-  readonly accountId?: string;
-  readonly testSecretKey?: string;
-  readonly testPublishableKey?: string;
-  readonly liveSecretKey?: string;
-  readonly livePublishableKey?: string;
-}
-
-function stripeCliValue(raw: string): string {
-  const value = raw.trim();
-  if (
-    value.length >= 2 &&
-    ((value.startsWith("'") && value.endsWith("'")) ||
-      (value.startsWith('"') && value.endsWith('"')))
-  ) {
-    return value.slice(1, -1);
-  }
-  return value;
-}
-
-/** Parse only the active Stripe CLI profile without logging its credentials. */
-export function parseStripeCliProfile(raw: string): StripeCliProfile {
-  const sections = new Map<string, Map<string, string>>();
-  let selectedProfile = 'default';
-  let section: string | undefined;
-  for (const sourceLine of raw.split(/\r?\n/u)) {
-    const line = sourceLine.trim();
-    if (!line || line.startsWith('#')) continue;
-    const sectionMatch = /^\[(.+)\]$/u.exec(line);
-    if (sectionMatch?.[1]) {
-      section = stripeCliValue(sectionMatch[1]);
-      if (!sections.has(section)) sections.set(section, new Map());
-      continue;
-    }
-    const assignment = /^([^=]+?)\s*=\s*(.*)$/u.exec(line);
-    if (!assignment?.[1]) continue;
-    const key = assignment[1].trim();
-    const value = stripeCliValue(assignment[2] ?? '');
-    if (!section) {
-      if (key === 'project-name' && value) selectedProfile = value;
-      continue;
-    }
-    sections.get(section)?.set(key, value);
-  }
-  const values = sections.get(selectedProfile);
-  if (!values) return {};
-  const accountId = values.get('account_id');
-  const testSecretKey = values.get('test_mode_api_key');
-  const testPublishableKey = values.get('test_mode_pub_key');
-  const liveSecretKey = values.get('live_mode_api_key');
-  const livePublishableKey = values.get('live_mode_pub_key');
-  return {
-    ...(accountId ? { accountId } : {}),
-    ...(testSecretKey ? { testSecretKey } : {}),
-    ...(testPublishableKey ? { testPublishableKey } : {}),
-    ...(liveSecretKey ? { liveSecretKey } : {}),
-    ...(livePublishableKey ? { livePublishableKey } : {}),
-  };
-}
-
-/** Select a mode-correct CLI credential; production is always entered explicitly. */
-export function stripeCliCredential(
-  profile: StripeCliProfile,
-  env: Environment,
-  field: 'secret' | 'publishable',
-): string | undefined {
-  if (env === 'production') return undefined;
-  const value = field === 'secret' ? profile.testSecretKey : profile.testPublishableKey;
-  const valid = field === 'secret' ? /^(?:sk|rk)_test_[A-Za-z0-9]+$/u : /^pk_test_[A-Za-z0-9]+$/u;
-  return value && valid.test(value) ? value : undefined;
-}
-
-async function fetchStripeCliCredential(
-  env: Environment,
-  field: 'secret' | 'publishable',
-): Promise<string | undefined> {
-  try {
-    const profile = parseStripeCliProfile(
-      execFileSync('stripe', ['config', '--list'], {
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-      }),
-    );
-    return stripeCliCredential(profile, env, field);
-  } catch {
-    return undefined;
-  }
-}
-
-/** Read the sandbox signing secret issued by the selected Stripe CLI profile. */
-export function fetchStripeCliWebhookSecret(): string | undefined {
-  try {
-    const value = execFileSync(
-      'stripe',
-      ['listen', '--print-secret', '--events', DOCKET_STRIPE_WEBHOOK_EVENTS.join(',')],
-      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
-    ).trim();
-    return value.startsWith('whsec_') ? value : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 // ── provider groups (curated order + DX copy; metadata comes from the registry) ──
@@ -813,6 +708,7 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
       'STRIPE_PRICE_DOCKET_PRO',
       'STRIPE_BILLING_PORTAL_CONFIG_ID',
       'BILLING_ENABLED',
+      'BILLING_RECONCILIATION_MODE',
     ],
     requiredVars: [
       'STRIPE_SECRET_KEY',
@@ -822,6 +718,7 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
       'STRIPE_PRICE_DOCKET_PRO',
       'STRIPE_BILLING_PORTAL_CONFIG_ID',
       'BILLING_ENABLED',
+      'BILLING_RECONCILIATION_MODE',
     ],
     managedVars: [
       'STRIPE_WEBHOOK_SECRET',
@@ -829,13 +726,10 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
       'STRIPE_PRICE_DOCKET_PRO',
       'STRIPE_BILLING_PORTAL_CONFIG_ID',
       'BILLING_ENABLED',
+      'BILLING_RECONCILIATION_MODE',
     ],
-    cloudVariables: ['BILLING_ENABLED'],
+    cloudVariables: ['BILLING_ENABLED', 'BILLING_RECONCILIATION_MODE'],
     provisioner: 'docket-stripe',
-    autoFetch: {
-      STRIPE_SECRET_KEY: (env) => fetchStripeCliCredential(env, 'secret'),
-      STRIPE_PUBLISHABLE_KEY: (env) => fetchStripeCliCredential(env, 'publishable'),
-    },
     instructions: (env, urls) => {
       const mode = env === 'production' ? 'live' : 'test';
       return [

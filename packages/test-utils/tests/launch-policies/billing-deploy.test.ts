@@ -13,4 +13,10 @@ describe('billing deployment policy', () => {
       'STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT: "${{ vars.STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT }}"',
     );
   });
+
+  it('passes the explicit scheduled reconciliation rollout mode into the API revision', () => {
+    expect(workflow).toContain(
+      'BILLING_RECONCILIATION_MODE: "${{ vars.BILLING_RECONCILIATION_MODE }}"',
+    );
+  });
 });

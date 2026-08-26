@@ -154,6 +154,7 @@ export interface ReconcileDocketStripeInput {
 /** Runtime variables emitted by successful provisioning. */
 export interface DocketStripeRuntimeValues {
   readonly BILLING_ENABLED: 'false';
+  readonly BILLING_RECONCILIATION_MODE: 'off';
   readonly DOCKET_PRICE_LOOKUP_DOCKET_PRO: typeof DOCKET_PRO_MONTHLY_LOOKUP_KEY;
   readonly STRIPE_PRICE_DOCKET_PRO: string;
   readonly STRIPE_BILLING_PORTAL_CONFIG_ID: string;
@@ -300,6 +301,7 @@ export async function reconcileDocketStripe(
     return {
       values: {
         BILLING_ENABLED: 'false',
+        BILLING_RECONCILIATION_MODE: 'off',
         DOCKET_PRICE_LOOKUP_DOCKET_PRO: DOCKET_PRO_MONTHLY_LOOKUP_KEY,
         STRIPE_PRICE_DOCKET_PRO: price.id,
         STRIPE_BILLING_PORTAL_CONFIG_ID: portal.id,
@@ -349,6 +351,7 @@ export async function reconcileDocketStripe(
   return {
     values: {
       BILLING_ENABLED: 'false',
+      BILLING_RECONCILIATION_MODE: 'off',
       DOCKET_PRICE_LOOKUP_DOCKET_PRO: DOCKET_PRO_MONTHLY_LOOKUP_KEY,
       STRIPE_PRICE_DOCKET_PRO: price.id,
       STRIPE_BILLING_PORTAL_CONFIG_ID: portal.id,

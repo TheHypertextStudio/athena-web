@@ -109,6 +109,15 @@ export const SERVICE_VARS: readonly VarSpec[] = [
     zod: stripeServer.BILLING_ENABLED,
     where: 'true|false — gate that requires the Stripe keys when on (default false)',
   },
+  {
+    name: 'BILLING_RECONCILIATION_MODE',
+    slice: 'stripe',
+    scope: 'server',
+    targets: ['api'],
+    required: true,
+    zod: stripeServer.BILLING_RECONCILIATION_MODE,
+    where: 'off|shadow|active — scheduled Stripe reconciliation rollout state',
+  },
 
   // mcp
   {

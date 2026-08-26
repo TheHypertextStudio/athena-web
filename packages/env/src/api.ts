@@ -183,6 +183,13 @@ function assertCrossFieldRules(e: typeof env): void {
     if (e.APP_MODE !== 'production' && (secretMode !== 'test' || publishableMode !== 'test')) {
       fail('non-production billing requires test-mode Stripe keys.');
     }
+    if (e.BILLING_RECONCILIATION_MODE !== 'active') {
+      fail('BILLING_ENABLED=true requires BILLING_RECONCILIATION_MODE=active.');
+    }
+  } else if (e.BILLING_RECONCILIATION_MODE !== 'off' && !e.STRIPE_SECRET_KEY) {
+    fail(
+      `BILLING_RECONCILIATION_MODE=${e.BILLING_RECONCILIATION_MODE} requires STRIPE_SECRET_KEY.`,
+    );
   }
 
   if (Boolean(e.EXPORT_BUCKET_URL) !== Boolean(e.EXPORT_BUCKET_TOKEN)) {

@@ -1824,6 +1824,7 @@ describe('billing router (GET status only; checkout/portal covered elsewhere)', 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       organizationId: orgId,
+      checkoutEnabled: false,
       listPrice: { amount: 800, currency: 'usd', interval: 'month' },
       accessMode: 'read_only',
       products: [],

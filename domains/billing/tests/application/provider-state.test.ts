@@ -31,11 +31,12 @@ describe('ensureBillingCustomer', () => {
     const orgId = await seedOrg();
     let creates = 0;
     const gateway = {
+      listSubscriptions: async () => [],
       createCustomer: async (referenceId: string) => {
         creates += 1;
         return { id: `cus_${referenceId}`, referenceId };
       },
-    } as BillingGateway;
+    } as unknown as BillingGateway;
 
     const first = await ensureBillingCustomer(db, gateway, orgId, 'owner@example.com');
     const second = await ensureBillingCustomer(db, gateway, orgId, 'owner@example.com');
@@ -43,6 +44,56 @@ describe('ensureBillingCustomer', () => {
     expect(first).toEqual(second);
     expect(first.stripeCustomerId).toBe(`cus_${orgId}`);
     expect(creates).toBe(1);
+  });
+
+  it('backfills the customer from one existing subscription without creating another', async () => {
+    const orgId = await seedOrg();
+    let creates = 0;
+    const gateway = {
+      listSubscriptions: async () => [
+        {
+          id: 'sub_legacy',
+          customerId: 'cus_legacy',
+          referenceId: orgId,
+          status: 'active',
+          currentPeriodEnd: '2026-09-25T00:00:00.000Z',
+        },
+      ],
+      createCustomer: async () => {
+        creates += 1;
+        return { id: 'cus_wrong', referenceId: orgId };
+      },
+    } as unknown as BillingGateway;
+
+    const account = await ensureBillingCustomer(db, gateway, orgId);
+
+    expect(account.stripeCustomerId).toBe('cus_legacy');
+    expect(account.countryVerificationRequired).toBe(false);
+    expect(creates).toBe(0);
+  });
+
+  it('refuses to create a customer when existing subscriptions do not resolve one owner', async () => {
+    const orgId = await seedOrg();
+    let creates = 0;
+    const gateway = {
+      listSubscriptions: async () => [
+        {
+          id: 'sub_legacy',
+          referenceId: orgId,
+          status: 'active',
+          currentPeriodEnd: '2026-09-25T00:00:00.000Z',
+        },
+      ],
+      createCustomer: async () => {
+        creates += 1;
+        return { id: 'cus_wrong', referenceId: orgId };
+      },
+    } as unknown as BillingGateway;
+
+    await expect(ensureBillingCustomer(db, gateway, orgId)).rejects.toThrow(
+      'do not resolve to one billing customer',
+    );
+    expect(creates).toBe(0);
   });
 });
 

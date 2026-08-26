@@ -66,6 +66,7 @@ delegation are asserted in `apps/web/tests/pickers/timeframe-picker-contract.tes
 | 23  | Work locations → occurrence editor        | `apps/web/src/components/work-location/occurrence-editor-dialog.tsx`        | Occurrence date                    | Shared picker                                 |
 | 24  | Canvas → bulk Properties editor           | `apps/web/src/components/canvas/canvas-properties-editor.tsx`               | Task start/due, Project timeframes | Shared and planning pickers                   |
 | 25  | Time → custom review range                | `apps/web/src/components/time-tracking/time-analytics.tsx`                  | From, Through                      | Shared range picker                           |
+| 26  | Admin → private partner discount          | `apps/admin/src/app/(admin)/orgs/[id]/page.tsx`                             | Award end date                     | Shared picker with a 24-month maximum         |
 
 Before this pass, rows 9–12 each hosted their own `<input type="date">`, so four surfaces had four
 different behaviours and none of them had bounds. Rows 1–8 already shared a component, but that

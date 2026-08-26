@@ -72,6 +72,8 @@ export function productGrantsCapability(
 export interface Subscription {
   /** Provider subscription id (e.g. a Stripe `sub_...`). */
   readonly id: string;
+  /** Provider customer that owns this subscription, when the provider supplied it. */
+  readonly customerId?: string;
   /** Docket scope this subscription belongs to (usually the organization id). */
   readonly referenceId: string;
   /** Current lifecycle state. */
@@ -82,6 +84,10 @@ export interface Subscription {
   readonly trialEnd?: string;
   /** Whether Stripe will cancel the subscription when the current paid period ends. */
   readonly cancelAtPeriodEnd?: boolean;
+  /** Provider discount ids currently attached to this subscription. */
+  readonly discountIds?: readonly string[];
+  /** Provider coupon ids behind the current subscription discounts. */
+  readonly couponIds?: readonly string[];
 }
 
 /** Input to open a hosted checkout session for a Docket scope. */
@@ -293,12 +299,18 @@ export interface BillingGateway {
    */
   getSubscription(referenceId: string): Promise<Subscription | null>;
 
+  /** List every provider subscription carrying this Docket organization reference. */
+  listSubscriptions(referenceId: string): Promise<readonly Subscription[]>;
+
   /**
    * Cancel the subscription for a Docket scope.
    *
    * @param referenceId - The Docket scope key (usually the organization id).
    */
   cancelSubscription(referenceId: string): Promise<void>;
+
+  /** Cancel one exact provider subscription without relying on eventually consistent search. */
+  cancelSubscriptionById(subscriptionId: string, idempotencyKey: string): Promise<void>;
 
   /**
    * Extend an existing provider trial without changing local access directly.

@@ -4,6 +4,7 @@ import { Button, Skeleton } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
 import { SectionHeader } from '@/components/settings/section-header';
+import { BillingDiscountsSection } from '@/components/settings/billing-discounts-section';
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
@@ -25,6 +26,7 @@ interface BillingProduct {
 /** Organization billing state used by this settings surface. */
 interface BillingSummary {
   readonly organizationId: string;
+  readonly checkoutEnabled: boolean;
   readonly listPrice: {
     readonly amount: 800;
     readonly currency: 'usd';
@@ -33,9 +35,19 @@ interface BillingSummary {
   readonly accessMode: 'writable' | 'read_only';
   readonly products: BillingProduct[];
   readonly canManageBilling: boolean;
-  readonly effectiveDiscount: null;
-  readonly applicationStatus: null;
-  readonly issuedCredit: null;
+  readonly effectiveDiscount: {
+    readonly percentOff: number;
+    readonly status: string;
+    readonly startsAt: string;
+    readonly endsAt: string;
+    readonly reviewAt: string;
+  } | null;
+  readonly applicationStatus: string | null;
+  readonly issuedCredit: {
+    readonly currency: string;
+    readonly amount: number;
+    readonly issuedAt: string;
+  } | null;
 }
 
 /** Props for {@link BillingSettings}. */
@@ -67,7 +79,7 @@ function statusLabel(
   accessMode: BillingSummary['accessMode'],
 ) {
   if (!product) return accessMode === 'read_only' ? 'Read-only' : 'Free';
-  if (product.source === 'complimentary') return 'Complimentary';
+  if (product.source === 'complimentary' && product.status === 'active') return 'Complimentary';
   if (product.cancelAtPeriodEnd) return 'Cancellation scheduled';
   switch (product.status) {
     case 'trialing':
@@ -83,7 +95,7 @@ function statusLabel(
 
 /** Organization-product billing settings. */
 export function BillingSettings({ orgId, isPersonal }: BillingSettingsProps): JSX.Element {
-  const billingQ = useApiQuery<BillingSummary>(
+  const billingQ = useApiQuery(
     apiQueryOptions(
       queryKeys.billing(orgId),
       () => api.v1.orgs[':orgId'].billing.$get({ param: { orgId } }),
@@ -93,7 +105,11 @@ export function BillingSettings({ orgId, isPersonal }: BillingSettingsProps): JS
   const checkout = useApiMutation<{ url: string }, undefined>({
     mutationFn: () =>
       unwrap(
-        () => api.v1.orgs[':orgId'].billing.checkout.$post({ param: { orgId }, json: {} }),
+        () =>
+          api.v1.orgs[':orgId'].billing.checkout.$post({
+            param: { orgId },
+            json: { returnTo: `${window.location.pathname}${window.location.search}` },
+          }),
         'Could not open Docket Pro checkout.',
       ),
     onSuccess: ({ url }) => {
@@ -122,7 +138,7 @@ export function BillingSettings({ orgId, isPersonal }: BillingSettingsProps): JS
 
   const summary = billingQ.data;
   const [product] = summary.products;
-  const complimentary = product?.source === 'complimentary';
+  const complimentary = product?.source === 'complimentary' && product.status === 'active';
   const canOpenPortal = product?.source === 'stripe' && product.status !== 'canceled';
   const mutation = canOpenPortal ? portal : checkout;
   const mutationError = checkout.error ?? portal.error;
@@ -160,7 +176,7 @@ export function BillingSettings({ orgId, isPersonal }: BillingSettingsProps): JS
               : 'Shared work is read-only until an administrator adds Docket Pro.'}
         </p>
 
-        {product?.source === 'complimentary' ? (
+        {complimentary ? (
           <p className="text-on-surface-variant text-body-medium">
             All current and future Docket Pro features are included. No payment method or renewal is
             required.
@@ -198,7 +214,17 @@ export function BillingSettings({ orgId, isPersonal }: BillingSettingsProps): JS
           </p>
         ) : null}
 
-        {summary.canManageBilling && !complimentary ? (
+        {summary.effectiveDiscount ? (
+          <p className="text-on-surface-variant text-body-medium">
+            Your {summary.effectiveDiscount.percentOff}% discount is active through{' '}
+            {formatDate(summary.effectiveDiscount.endsAt)}. Docket will review eligibility on{' '}
+            {formatDate(summary.effectiveDiscount.reviewAt)}.
+          </p>
+        ) : null}
+
+        {summary.canManageBilling &&
+        !complimentary &&
+        (canOpenPortal || summary.checkoutEnabled) ? (
           <div className="flex flex-nowrap items-center gap-2 overflow-hidden">
             <Button
               type="button"
@@ -216,6 +242,11 @@ export function BillingSettings({ orgId, isPersonal }: BillingSettingsProps): JS
                   : 'Start Docket Pro trial'}
             </Button>
           </div>
+        ) : summary.canManageBilling && !complimentary ? (
+          <p className="text-on-surface-variant text-body-medium">
+            Docket Pro checkout is not open yet. Existing subscriptions and billing management stay
+            available.
+          </p>
         ) : summary.canManageBilling ? null : (
           <p className="text-on-surface-variant text-body-medium">
             A workspace administrator can change billing. You can still see the plan and dates.
@@ -229,18 +260,11 @@ export function BillingSettings({ orgId, isPersonal }: BillingSettingsProps): JS
       </section>
 
       {!complimentary ? (
-        <section className="border-outline-variant flex max-w-2xl flex-col gap-4 rounded-lg border p-5">
-          <div>
-            <h3 className="text-on-surface text-title-medium">Discounts</h3>
-            <p className="text-on-surface-variant text-body-medium mt-1">
-              Eligible students and nonprofit organizations can apply for 50% off Docket Pro.
-            </p>
-          </div>
-          <p className="text-on-surface-variant text-body-small">
-            Docket reviews student and nonprofit eligibility every 12 months. Discounts do not
-            stack, and Docket never publishes promotion codes.
-          </p>
-        </section>
+        <BillingDiscountsSection
+          orgId={orgId}
+          isPersonal={isPersonal}
+          canManageBilling={summary.canManageBilling}
+        />
       ) : null}
     </div>
   );

@@ -1,14 +1,20 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import type { InferResponseType } from 'hono/client';
 
 import { api } from '@/lib/api';
 import { isAuthError, userErrorMessage, userProblemMessage } from '@/lib/problem';
-import type { AdminHold, AdminOrg } from '@/lib/types';
+import type { AdminHold, AdminOrg, AdminOrgBillingState } from '@/lib/types';
+
+type PartnerPreview = InferResponseType<
+  (typeof api.admin.orgs)[':id']['discount-awards']['preview']['$post']
+>;
 
 /** All state + actions for the org detail screen. */
 export interface OrgDetailData {
   org: AdminOrg | null;
+  billing: AdminOrgBillingState | null;
   loading: boolean;
   error: string | null;
   authFailed: boolean;
@@ -18,6 +24,13 @@ export interface OrgDetailData {
   setTrialDays: (v: string) => void;
   complimentaryReason: string;
   setComplimentaryReason: (v: string) => void;
+  partnerPercent: string;
+  setPartnerPercent: (v: string) => void;
+  partnerEndsAt: string;
+  setPartnerEndsAt: (v: string) => void;
+  partnerReason: string;
+  setPartnerReason: (v: string) => void;
+  partnerPreview: PartnerPreview | null;
   holds: readonly AdminHold[];
   holdReason: string;
   setHoldReason: (v: string) => void;
@@ -25,6 +38,10 @@ export interface OrgDetailData {
   extendTrial: () => void;
   grantComplimentary: () => void;
   revokeComplimentary: () => void;
+  grantPartnerDiscount: () => void;
+  previewPartnerDiscount: () => void;
+  renewPartnerDiscount: () => void;
+  revokeDiscount: () => void;
   placeHold: () => Promise<void>;
   releaseHold: (holdId: string) => Promise<void>;
 }
@@ -32,6 +49,7 @@ export interface OrgDetailData {
 /** useOrgDetail coordinates use org detail state, loading, and mutations for its screen. */
 export function useOrgDetail(orgId: string): OrgDetailData {
   const [org, setOrg] = useState<AdminOrg | null>(null);
+  const [billing, setBilling] = useState<AdminOrgBillingState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [authFailed, setAuthFailed] = useState(false);
@@ -39,6 +57,14 @@ export function useOrgDetail(orgId: string): OrgDetailData {
   const [pending, setPending] = useState<string | null>(null);
   const [trialDays, setTrialDays] = useState('14');
   const [complimentaryReason, setComplimentaryReason] = useState('Founder production access');
+  const [partnerPercent, setPartnerPercent] = useState('25');
+  const [partnerEndsAt, setPartnerEndsAt] = useState(() => {
+    const date = new Date();
+    date.setUTCFullYear(date.getUTCFullYear() + 1);
+    return date.toISOString().slice(0, 10);
+  });
+  const [partnerReason, setPartnerReason] = useState('');
+  const [partnerPreview, setPartnerPreview] = useState<PartnerPreview | null>(null);
   const [holds, setHolds] = useState<readonly AdminHold[]>([]);
   const [holdReason, setHoldReason] = useState('');
 
@@ -47,13 +73,22 @@ export function useOrgDetail(orgId: string): OrgDetailData {
     setError(null);
     setAuthFailed(false);
     try {
-      const res = await api.admin.orgs[':id'].$get({ param: { id: orgId } });
+      const [res, billingRes] = await Promise.all([
+        api.admin.orgs[':id'].$get({ param: { id: orgId } }),
+        api.admin.orgs[':id']['billing-state'].$get({ param: { id: orgId } }),
+      ]);
       if (!res.ok) {
         setAuthFailed(isAuthError(res));
         setError(await userProblemMessage(res, 'Could not load this organization.'));
         return;
       }
+      if (!billingRes.ok) {
+        setAuthFailed(isAuthError(billingRes));
+        setError(await userProblemMessage(billingRes, 'Could not load this billing account.'));
+        return;
+      }
       setOrg(await res.json());
+      setBilling(await billingRes.json());
     } catch (caught) {
       setError(userErrorMessage(caught, 'Something went wrong loading this organization.'));
     } finally {
@@ -145,6 +180,111 @@ export function useOrgDetail(orgId: string): OrgDetailData {
     void changeComplimentary(false);
   }, [changeComplimentary]);
 
+  const grantPartnerDiscount = useCallback((): void => {
+    void (async () => {
+      setActionError(null);
+      setPending('grant-partner-discount');
+      try {
+        const response = await api.admin.orgs[':id']['discount-awards'].$post({
+          param: { id: orgId },
+          json: {
+            percentOff: Number(partnerPercent),
+            endsAt: new Date(`${partnerEndsAt}T23:59:59.000Z`).toISOString(),
+            reason: partnerReason,
+            confirmation: partnerPreview?.confirmation ?? '',
+          },
+        });
+        if (!response.ok) {
+          setActionError(
+            await userProblemMessage(response, 'Could not grant the partner discount.'),
+          );
+          return;
+        }
+        setPartnerReason('');
+        setPartnerPreview(null);
+        await load();
+      } catch (caught) {
+        setActionError(userErrorMessage(caught, 'Could not grant the partner discount.'));
+      } finally {
+        setPending(null);
+      }
+    })();
+  }, [load, orgId, partnerEndsAt, partnerPercent, partnerPreview, partnerReason]);
+
+  const previewPartnerDiscount = useCallback((): void => {
+    void (async () => {
+      setActionError(null);
+      setPending('preview-partner-discount');
+      try {
+        const response = await api.admin.orgs[':id']['discount-awards'].preview.$post({
+          param: { id: orgId },
+          json: {
+            percentOff: Number(partnerPercent),
+            endsAt: new Date(`${partnerEndsAt}T23:59:59.000Z`).toISOString(),
+            reason: partnerReason,
+          },
+        });
+        if (!response.ok) {
+          setActionError(
+            await userProblemMessage(response, 'Could not preview the partner discount.'),
+          );
+          return;
+        }
+        setPartnerPreview(await response.json());
+      } catch (caught) {
+        setActionError(userErrorMessage(caught, 'Could not preview the partner discount.'));
+      } finally {
+        setPending(null);
+      }
+    })();
+  }, [orgId, partnerEndsAt, partnerPercent, partnerReason]);
+
+  const changeCurrentAward = useCallback(
+    (action: 'renew' | 'revoke'): void => {
+      if (!billing?.award) return;
+      const award = billing.award;
+      void (async () => {
+        setActionError(null);
+        setPending(`${action}-discount`);
+        try {
+          const route = api.admin['discount-applications'].awards[':awardId'][action];
+          const response = await route.$post({
+            param: { awardId: award.id },
+            json:
+              action === 'renew'
+                ? {
+                    reason: partnerReason,
+                    endsAt: new Date(`${partnerEndsAt}T23:59:59.000Z`).toISOString(),
+                  }
+                : { reason: partnerReason },
+          });
+          if (!response.ok) {
+            setActionError(
+              await userProblemMessage(response, `Could not ${action} the current discount.`),
+            );
+            return;
+          }
+          setPartnerReason('');
+          setPartnerPreview(null);
+          await load();
+        } catch (caught) {
+          setActionError(userErrorMessage(caught, `Could not ${action} the current discount.`));
+        } finally {
+          setPending(null);
+        }
+      })();
+    },
+    [billing?.award, load, partnerEndsAt, partnerReason],
+  );
+
+  const renewPartnerDiscount = useCallback((): void => {
+    changeCurrentAward('renew');
+  }, [changeCurrentAward]);
+
+  const revokeDiscount = useCallback((): void => {
+    changeCurrentAward('revoke');
+  }, [changeCurrentAward]);
+
   const placeHold = useCallback(async (): Promise<void> => {
     setActionError(null);
     setPending('place-hold');
@@ -191,6 +331,7 @@ export function useOrgDetail(orgId: string): OrgDetailData {
 
   return {
     org,
+    billing,
     loading,
     error,
     authFailed,
@@ -200,6 +341,22 @@ export function useOrgDetail(orgId: string): OrgDetailData {
     setTrialDays,
     complimentaryReason,
     setComplimentaryReason,
+    partnerPercent,
+    setPartnerPercent: (value) => {
+      setPartnerPercent(value);
+      setPartnerPreview(null);
+    },
+    partnerEndsAt,
+    setPartnerEndsAt: (value) => {
+      setPartnerEndsAt(value);
+      setPartnerPreview(null);
+    },
+    partnerReason,
+    setPartnerReason: (value) => {
+      setPartnerReason(value);
+      setPartnerPreview(null);
+    },
+    partnerPreview,
     holds,
     holdReason,
     setHoldReason,
@@ -207,6 +364,10 @@ export function useOrgDetail(orgId: string): OrgDetailData {
     extendTrial,
     grantComplimentary,
     revokeComplimentary,
+    grantPartnerDiscount,
+    previewPartnerDiscount,
+    renewPartnerDiscount,
+    revokeDiscount,
     placeHold,
     releaseHold,
   };

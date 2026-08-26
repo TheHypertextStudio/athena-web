@@ -1,13 +1,18 @@
 import { Hono } from 'hono';
 import { eq } from 'drizzle-orm';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type {
   db as DbType,
   organization as OrgTable,
   organizationProductEntitlement as ProductTable,
 } from '@docket/db';
-import { billingDiscountAward, organizationBillingAccount, user } from '@docket/db';
+import {
+  billingDiscountApplication,
+  billingDiscountAward,
+  organizationBillingAccount,
+  user,
+} from '@docket/db';
 
 import type { ActorCtx, AppEnv, AuthSession } from '../../src/context';
 import { getContainer } from '../../src/container';
@@ -42,6 +47,8 @@ function billingApp(orgId: string, capabilities: readonly string[], session: Aut
 }
 
 beforeAll(async () => {
+  const { env } = await import('../../src/env');
+  Reflect.set(env, 'BILLING_ENABLED', true);
   const dbmod = await getMigratedDb();
   db = dbmod.db;
   organization = dbmod.organization;
@@ -256,6 +263,7 @@ describe('billing router (org-scoped, via the BillingGateway port)', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       organizationId: orgId,
+      checkoutEnabled: true,
       listPrice: { amount: 800, currency: 'usd', interval: 'month' },
       accessMode: 'read_only',
       products: [],
@@ -305,6 +313,7 @@ describe('billing router (org-scoped, via the BillingGateway port)', () => {
     const status = await app.request('/', { method: 'GET' });
     expect(await status.json()).toEqual({
       organizationId: orgId,
+      checkoutEnabled: true,
       listPrice: { amount: 800, currency: 'usd', interval: 'month' },
       accessMode: 'read_only',
       products: [],
@@ -313,6 +322,83 @@ describe('billing router (org-scoped, via the BillingGateway port)', () => {
       applicationStatus: null,
       issuedCredit: null,
     });
+  });
+
+  it('keeps an ambiguous provider attempt reserved instead of creating a second Checkout', async () => {
+    const orgId = await makeOrg('active');
+    const app = billingApp(orgId, ['manage']);
+    vi.spyOn(getContainer().billing, 'createCheckoutSession').mockRejectedValueOnce(
+      new Error('Stripe timeout with an unknown result'),
+    );
+
+    const first = await app.request('/checkout', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    expect(first.status).toBe(500);
+
+    const repeated = await app.request('/checkout', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    expect(repeated.status).toBe(409);
+    await expect(repeated.json()).resolves.toMatchObject({ code: 'checkout_pending' });
+  });
+
+  it('blocks new Checkout before it creates provider or database state when billing is disabled', async () => {
+    const { env } = await import('../../src/env');
+    const orgId = await makeOrg('active');
+    const app = billingApp(orgId, ['manage']);
+    Reflect.set(env, 'BILLING_ENABLED', false);
+    try {
+      const response = await app.request('/checkout', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      expect(response.status).toBe(503);
+      await expect(response.json()).resolves.toMatchObject({ code: 'billing_unavailable' });
+      const accounts = await db
+        .select()
+        .from(organizationBillingAccount)
+        .where(eq(organizationBillingAccount.organizationId, orgId));
+      expect(accounts).toHaveLength(0);
+    } finally {
+      Reflect.set(env, 'BILLING_ENABLED', true);
+    }
+  });
+
+  it('blocks new discount applications without hiding existing discount status', async () => {
+    const { env } = await import('../../src/env');
+    const orgId = await makeOrg('active');
+    const app = billingApp(orgId, ['manage']);
+    Reflect.set(env, 'BILLING_ENABLED', false);
+    try {
+      const status = await app.request('/discounts');
+      expect(status.status).toBe(200);
+      await expect(status.json()).resolves.toMatchObject({ applicationsEnabled: false });
+
+      const response = await app.request('/discounts/applications', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          programKey: 'nonprofit',
+          evidenceType: 'irs_registry',
+          ein: '12-3456789',
+        }),
+      });
+      expect(response.status).toBe(503);
+      await expect(response.json()).resolves.toMatchObject({ code: 'billing_unavailable' });
+      const applications = await db
+        .select()
+        .from(billingDiscountApplication)
+        .where(eq(billingDiscountApplication.organizationId, orgId));
+      expect(applications).toHaveLength(0);
+    } finally {
+      Reflect.set(env, 'BILLING_ENABLED', true);
+    }
   });
 
   it('does not accept caller-controlled checkout return URLs', async () => {
@@ -444,6 +530,48 @@ describe('billing router (org-scoped, via the BillingGateway port)', () => {
         institutionalEmail: `${userId}@unlv.edu`,
       }),
     });
+    expect(response.status).toBe(409);
+  });
+
+  it('uses Better Auth verification when a student supplements requested information', async () => {
+    const userId = `supplement-${Date.now()}`;
+    const verifiedEmail = `${userId}@unlv.edu`;
+    await db.insert(user).values({
+      id: userId,
+      name: 'Verified Student',
+      email: verifiedEmail,
+      emailVerified: true,
+    });
+    const orgId = await makeOrg('active');
+    await db.update(organization).set({ isPersonal: true }).where(eq(organization.id, orgId));
+    const [application] = await db
+      .insert(billingDiscountApplication)
+      .values({
+        organizationId: orgId,
+        applicantUserId: userId,
+        programKey: 'student',
+        status: 'needs_information',
+        evidenceType: 'institutional_email',
+        institutionalEmail: verifiedEmail,
+        informationRequest: 'Confirm the current institutional email.',
+      })
+      .returning();
+    if (!application) throw new Error('application seed failed');
+    const app = billingApp(
+      orgId,
+      ['manage'],
+      fakeSession(userId, 'Verified Student', verifiedEmail),
+    );
+
+    const response = await app.request(`/discounts/applications/${application.id}/supplement`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        institutionalEmail: 'someone-else@unlv.edu',
+        note: 'Use this address.',
+      }),
+    });
+
     expect(response.status).toBe(409);
   });
 });

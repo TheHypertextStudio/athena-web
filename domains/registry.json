@@ -51,6 +51,8 @@
         "./adapters/stripe",
         "./application/lifecycle",
         "./application/entitlement",
+        "./application/discounts",
+        "./application/provider-state",
         "./provision"
       ],
       "allowedRuntimeDependencies": ["@docket/db", "drizzle-orm", "stripe"],

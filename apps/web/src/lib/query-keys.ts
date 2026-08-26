@@ -159,6 +159,7 @@ export const queryKeys = {
   taskGraph: (orgId: string, scopeKey: string) => ['org', orgId, 'task-graph', scopeKey] as const,
   settings: (orgId: string, tab: string) => ['org', orgId, 'settings', tab] as const,
   billing: (orgId: string) => ['org', orgId, 'settings', 'billing'] as const,
+  billingDiscounts: (orgId: string) => ['org', orgId, 'settings', 'billing', 'discounts'] as const,
   connectedApps: () => ['me', 'connected-apps'] as const,
   identities: () => ['me', 'identities'] as const,
   publicConfig: () => ['public-config'] as const,

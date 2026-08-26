@@ -9,8 +9,8 @@ Sign-off: **withheld**
 | Measure                                           | Count |
 | ------------------------------------------------- | ----- |
 | Requirements tracked                              | 399   |
-| State: not-started                                | 366   |
-| State: in-progress                                | 21    |
+| State: not-started                                | 365   |
+| State: in-progress                                | 22    |
 | State: closed                                     | 12    |
 | State: blocked                                    | 0     |
 | Severity: launch-blocker                          | 138   |
@@ -128,7 +128,7 @@ Sign-off: **withheld**
 | INT-29   | Accessibility                              | launch-blocker | unassigned           | —         | not-started | —                                                                        |
 | INT-30   | Accessibility                              | launch-blocker | unassigned           | —         | not-started | —                                                                        |
 | MISS-02  | Core Functionality / Data integrity        | launch-blocker | unassigned           | —         | not-started | —                                                                        |
-| MISS-03  | Billing & entitlements                     | launch-blocker | unassigned           | —         | not-started | —                                                                        |
+| MISS-03  | Billing & entitlements                     | launch-blocker | billing-launch       | partial   | in-progress | —                                                                        |
 | MISS-04  | Core Functionality / Publishable Artifacts | launch-blocker | unassigned           | —         | not-started | —                                                                        |
 | MISS-05  | Screens / Auth                             | launch-blocker | unassigned           | —         | not-started | —                                                                        |
 | SCR-07   | Screens / Auth                             | launch-blocker | unassigned           | —         | not-started | —                                                                        |

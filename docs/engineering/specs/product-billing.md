@@ -1,112 +1,163 @@
 # Product billing
 
-> **Status:** Implemented locally; production purchase-path proof is required before revised
-> pricing copy is released.
+> **Reader:** The engineer who changes Docket billing and the finance owner who configures Stripe.
 >
-> **Last updated:** 2026-08-15
+> **Action:** Keep public Checkout disabled until every release gate in this document passes.
+>
+> **Status:** Implemented locally on 2026-08-25. Stripe test-mode, finance, legal, migration, and
+> production canary proof remain open.
 
 ## Product contract
 
-Docket and Docket Pro are separate products.
+Docket is free for personal planning, scheduling, and time tracking. Docket Pro costs $8 USD per
+organization each month, plus tax where required. It adds shared work, integrations, MCP, Athena,
+and voice. Launch supports monthly USD subscriptions and US billing addresses only.
 
-- **Docket** is available without a billing record. It supplies one personal workspace with
-  planning, scheduling, and time tracking.
-- **Docket Pro** costs USD $8 per organization each month. It supplies shared work, integrations,
-  MCP, and current Athena and voice functionality.
+The server grants each organization at most one 14-day card-required trial. The durable
+`trial_consumed_at` value prevents a canceled subscription or complimentary grant from creating a
+second public trial.
 
-`docket_pro` is the only paid product key shipped now. Possible future products use the same
-ownership and capability mechanism, but they do not appear in public copy or runtime catalogs
-until they exist.
+The product uses these customer states:
 
-## Ownership and capabilities
+| State                  | Access and customer action                                                           |
+| ---------------------- | ------------------------------------------------------------------------------------ |
+| Free                   | Personal baseline remains writable. The customer may start a trial or apply for aid. |
+| Trialing               | Pro works. Billing shows the first charge date, discount, and payment method action. |
+| Active                 | Pro works. Billing shows renewal, invoices, cancellation, and discount review.       |
+| Past due               | Pro works for seven days. Billing shows the deadline and payment-method action.      |
+| Cancellation scheduled | Pro works through the paid period, then shared work becomes read-only.               |
+| Read-only              | Shared data remains readable and exportable. An administrator may reactivate Pro.    |
+| Complimentary          | Every current and future Pro capability works without price, renewal, or payment UI. |
 
-`organization_product_entitlement` records ownership with the composite key
-`(organization_id, product_key)`. A missing row means the organization owns no paid product; it
-does not remove baseline Docket access.
+Billing cancellation never schedules data deletion. The confirmed account Danger Zone owns data
+deletion. Administrators retain export access in every non-deleted billing state.
 
-| Field                    | Meaning                                                |
-| ------------------------ | ------------------------------------------------------ |
-| `product_key`            | Stable product identifier; currently `docket_pro`      |
-| `status`                 | `trialing`, `active`, `past_due`, or `canceled`        |
-| `source`                 | `stripe` or `complimentary`                            |
-| `stripe_subscription_id` | Stripe subscription mirror when the source is Stripe   |
-| `trial_ends_at`          | End of the first 14-day Docket Pro trial, when present |
-| `current_period_end`     | Renewal date mirrored from Stripe                      |
-| `canceled_at`            | Product cancellation time                              |
+## Stored ownership
 
-Docket Pro grants five explicit capabilities:
+`organization_billing_account` stores the one durable Stripe customer id, first trial use, and US
+billing-country verification. `organization_product_entitlement` stores the mirrored subscription
+status, period end, cancellation flag, seven-day grace deadline, and last provider observation.
+`billing_checkout_attempt` prevents repeated clicks from creating concurrent Checkout sessions.
+`billing_provider_event` claims each Stripe event once.
 
-- `shared_work`
-- `integrations`
-- `mcp`
-- `athena`
-- `voice`
+`docket_pro` grants `shared_work`, `integrations`, `mcp`, `athena`, and `voice`. A complimentary
+entitlement uses the same capability catalog, so it cannot drift behind the paid product. A paid
+capability failure returns HTTP 402 with stable Problem code `product_required` and an upgrade
+path. Baseline personal features do not require an entitlement row.
 
-`assertProductCapability(organizationId, capability)` permits a request only when an owned
-`trialing` or `active` product grants that capability. Paid-capability failures return HTTP 402
-with Problem code `product_required`. `agent_plan_required` remains in the Problem-code union for
-one compatibility window, but new server failures do not emit it.
+## Stripe boundary
 
-The route policy applies `shared_work` to shared-organization work routes, `integrations` to
-provider connections, `mcp` to MCP connections and protocol access, `athena` to agent execution,
-and `voice` to browser and telephone voice access. Billing and export routes remain reachable when
-a paid product is inactive so an administrator can recover billing or export data.
+Docket persists the Stripe customer before creating Checkout. Checkout always uses that customer,
+requires billing address and payment method collection, enables automatic tax and tax-id
+collection, uses dynamic payment methods, and does not accept customer-entered promotion codes.
+Every provider mutation carries a Docket idempotency key.
 
-## Complimentary products
+Stripe does not offer an allowed-country list for billing addresses. Docket therefore reads the
+saved customer billing country after hosted Checkout. Docket reconciles Pro access only after the
+country is `US`. It cancels a new non-US trial before the first charge and does not grant product
+access. Reconciliation marks a backfilled customer from an existing subscription as exempt from
+the new-address check, so a previously uncollected address cannot revoke existing access.
 
-Staff billing grants create or reactivate a complimentary Docket Pro entitlement. Revocation marks
-that entitlement canceled. Historical `billing_exemption` rows remain for operator audit and API
-compatibility, but they no longer determine product access.
+The portal uses the stored Stripe customer id. It owns payment methods, invoices, and
+cancellation-at-period-end. It does not allow plan switching or coupon entry. The return URL points
+to the originating organization's Billing settings.
 
-## Stripe configuration and lifecycle
+## Provider events and reconciliation
 
-New configuration uses:
+The webhook consumes Checkout completion, subscription create/update/delete, invoice paid,
+invoice payment failure, payment action required, and trial ending. Checkout completion does not
+grant access by itself. The handler retrieves the current Stripe subscription and reconciles that
+canonical snapshot. Mutable events use the same retrieval path, so duplicate and reversed Stripe
+delivery cannot restore stale access.
 
-- `DOCKET_PRICE_LOOKUP_DOCKET_PRO=docket_pro_monthly`
-- `STRIPE_PRICE_DOCKET_PRO=price_...` as the direct-price fallback
+The first failed payment starts one seven-day grace period. Later failures do not extend it. A paid
+invoice clears grace and restores access. Cancellation preserves Pro through
+`current_period_end`; the canceled observation changes shared work to read-only and leaves all
+retention columns alone.
 
-`DOCKET_PRICE_LOOKUP_TEAM` and `STRIPE_PRICE_TEAM` are read only as one-release compatibility
-aliases. Current names always win when both are present. Docket Pro is monthly only.
+The `billing-reconciliation` job runs every 15 minutes. It repairs a mirror only when Stripe has
+zero or one current subscription. It records an operator alert and changes no provider state when
+it finds duplicates. It compares the expanded Stripe discount and coupon identifiers with the
+current Docket award. It activates a scheduled award only when the coupon matches. It alerts on an
+unknown or mismatched discount. It also records the latest invoice observation, ends unrenewed
+awards, sends eligibility reminders, and removes expired evidence. The worker never cancels a
+duplicate or issues money.
 
-Checkout owns its product, price, return URLs, and trial decision on the server. Return URLs use
-`WEB_URL`; callers cannot provide an arbitrary redirect or price. An organization receives the
-14-day trial only when it has never had a Docket Pro entitlement. Reopening checkout after a trial
-or cancellation sends no new trial period. Product activation and status changes come from signed
-Stripe webhooks, not from the browser return page.
+## Discounts
 
-`GET /v1/orgs/:orgId/billing` returns product summaries with status, source, trial end, renewal
-date, and `canManageBilling`. Checkout and portal endpoints return hosted Stripe URLs. The web
-settings page uses those endpoints; the return page explains that webhook confirmation, not the
-redirect, controls availability.
+Docket seeds two public programs. Student eligibility gives the verified person's personal
+workspace 50% off for 12 months. Docket accepts the Better Auth account's verified institutional
+email or a dated enrollment document. Nonprofit eligibility gives a verified organization 50% off
+with annual review. Docket accepts an EIN plus an IRS registry record or determination letter.
 
-The standard `pnpm integrations` workflow provisions the Docket Pro product, its USD $8 monthly
-price, a billing portal configuration, and the Docket billing webhook. The same desired-state
-reconciler is used for Stripe test mode and live mode. Test credentials may be read from a local
-Stripe CLI profile; live credentials must be provided explicitly. The bootstrap never relies on a
-one-off dashboard setup script.
+Applications and awards have separate state machines. Finance must give a reason when it requests
+information, approves, rejects, renews, or revokes. Support may inspect the queue and evidence but
+cannot make a revenue decision. One partial unique index prevents two applications in review. A
+second partial unique index prevents stacked current awards.
 
-## Cancellation
+Finance may create a private partner award from 1% through 90% with an end date no more than 24
+months away. A 100% or permanent grant must use the superadmin-only complimentary entitlement.
 
-- Canceling Docket Pro for a personal organization marks the product canceled and returns the
-  workspace to free Docket. Planning, scheduling, time records, and the workspace data remain.
-- Canceling Docket Pro for a shared organization preserves the existing 14-day export window and
-  subsequent deletion lifecycle. Billing and export access remain available during that window.
+Docket applies an approved coupon at Checkout when no subscription exists. It applies the coupon
+without proration for an existing subscription. When the current invoice has a paid recurring
+line, finance previews and issues a Stripe credit note for the unused service period. Stripe
+calculates tax. Docket stores the exact preview for 15 minutes. Approval requires that preview's
+confirmation id, so Docket never recalculates or changes the credit after finance confirms it.
+Private partner awards use the same preview-before-approval rule. Docket stores the preview and
+issued values. Docket does not show the award as active until Stripe confirms every provider
+write.
 
-Past-due and canceled products grant no Docket Pro capability. Trialing, active, and complimentary
-active products do.
+Private evidence uses object storage behind authenticated API routes. The API accepts PDF, PNG,
+and JPEG files up to 4 MB. It never returns an object key to the customer. Docket deletes the file
+30 days after a final decision and retains only evidence type, dates, decision history, and audit
+records.
 
-## Release gate
+## Customer and staff experience
 
-Local types, tests, builds, and browser renders are necessary but do not prove production billing.
-Before the revised pricing copy is published, an operator must verify in Stripe test mode and the
-production deployment:
+Billing settings shows the current plan first. It shows status, list price, tax language, trial or
+renewal date, cancellation date, grace deadline, effective discount, review date, issued credit,
+and the next available action. Members without billing permission see the same state and learn that
+a workspace administrator must act.
 
-1. Docket Pro checkout opens at $8 per organization each month.
-2. A signed webhook activates the product and every granted capability.
-3. Billing management opens for an authorized organization administrator.
-4. Personal cancellation preserves the free workspace and data.
-5. Shared cancellation starts the export and deletion lifecycle.
-6. Checkout return routing uses the deployed web origin and never grants access itself.
-7. A returning organization receives no duplicate trial.
+The pricing action passes through Better Auth and an organization chooser. The Checkout return
+page polls billing state for 15 seconds and distinguishes confirmed, processing, canceled, and
+failed outcomes. It never treats the browser redirect as payment proof.
 
-The legal pages received operator/legal approval for this release on 2026-08-15.
+Customer identity comes from Better Auth's server session API. Student submission, supplemental
+email evidence, and renewal use the current session's verified email. Docket does not accept an
+email supplied by the browser as proof of eligibility.
+
+Payment and access notices use the shared notification service with user preference bypass. Docket
+sends them through web and email because disabling optional billing news cannot suppress payment
+failure, read-only, cancellation, discount-decision, or complimentary-grant notices.
+
+The staff console exposes Stripe customer and subscription ids, provider observation, reconciliation
+errors, application history, private evidence downloads, award state, credit-note results, and
+complimentary controls. Finance previews approval effects before confirmation. Superadmins must
+give an audit reason for complimentary grants and revocations. Support sees the same diagnostics
+and evidence but does not see finance or superadmin mutation controls.
+
+## Release gates
+
+The implementation is not public-launch proof. The release owner must complete these gates:
+
+1. Run migrations against a production-shaped snapshot. The report must show one Stripe customer
+   and no more than one current subscription per billed organization. Every unresolved row blocks
+   enablement.
+2. Deploy additive migrations and the reconciliation worker with Checkout disabled. Observe shadow
+   reconciliation for at least 24 hours.
+3. Complete hosted Checkout, portal, signed webhook replay, automatic tax, failed-card,
+   authentication-required, cancellation, renewal, discount, and credit-note tests in Stripe test
+   mode. Mocks do not satisfy this gate.
+4. Have finance approve US tax registrations, invoices, credits, refunds, and reconciliation.
+   Have legal approve trial renewal, cancellation, read-only retention, discount evidence, tax,
+   Pricing, Terms, and Privacy copy.
+5. Run one live $8 purchase, portal visit, cancellation, reactivation, invoice, and refund or credit
+   check. Verify the Founder complimentary organization and one discounted live subscription.
+6. Hold the canary for 72 hours with no entitlement mismatch, duplicate subscription, failed
+   credit, or payment-access incident.
+7. Regenerate the repository launch record. Whole-product launch remains blocked until that record
+   reaches sign-off.
+
+Rollback disables new Checkout and applications. It leaves the portal, webhooks, reconciliation,
+notices, and existing entitlements running.

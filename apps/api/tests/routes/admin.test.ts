@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
@@ -241,7 +241,8 @@ describe('discount application review', () => {
       method: 'POST',
     });
     expect(preview.status).toBe(200);
-    await expect(preview.json()).resolves.toMatchObject({
+    const previewBody = (await preview.json()) as { confirmation: string };
+    expect(previewBody).toMatchObject({
       percentOff: 50,
       reviewMonths: 12,
       credit: null,
@@ -250,7 +251,10 @@ describe('discount application review', () => {
     const approved = await app.request(`/discount-applications/${applicationId}/approve`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ reason: 'Institutional email is current.' }),
+      body: JSON.stringify({
+        reason: 'Institutional email is current.',
+        confirmation: previewBody.confirmation,
+      }),
     });
     expect(approved.status).toBe(200);
     await expect(approved.json()).resolves.toMatchObject({
@@ -264,6 +268,26 @@ describe('discount application review', () => {
     expect(award?.providerCouponId).toMatch(/^coupon_/);
     expect(await auditCount('billing.discount_approved', applicationId)).toBe(1);
   });
+
+  it('rejects approval when the Stripe subscription changes after preview', async () => {
+    const { applicationId, organizationId } = await makeApplication();
+    const finance = await makeStaff('finance');
+    const app = appWithSession(admin, fakeSession(finance.userId));
+    const preview = await app.request(`/discount-applications/${applicationId}/preview-approval`, {
+      method: 'POST',
+    });
+    const { confirmation } = await json<{ confirmation: string }>(preview);
+    await startProviderTrial(organizationId);
+
+    const approved = await app.request(`/discount-applications/${applicationId}/approve`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reason: 'Verified.', confirmation }),
+    });
+
+    expect(approved.status).toBe(412);
+    await expect(approved.json()).resolves.toMatchObject({ code: 'precondition_failed' });
+  });
 });
 
 describe('private partner awards', () => {
@@ -274,15 +298,22 @@ describe('private partner awards', () => {
     const app = appWithSession(admin, fakeSession(finance.userId));
     const endsAt = new Date();
     endsAt.setUTCMonth(endsAt.getUTCMonth() + 12);
+    const input = {
+      percentOff: 25,
+      endsAt: endsAt.toISOString(),
+      reason: 'Launch partner agreement.',
+    };
+    const preview = await app.request(`/orgs/${organizationId}/discount-awards/preview`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    const { confirmation } = await json<{ confirmation: string }>(preview);
 
     const response = await app.request(`/orgs/${organizationId}/discount-awards`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        percentOff: 25,
-        endsAt: endsAt.toISOString(),
-        reason: 'Launch partner agreement.',
-      }),
+      body: JSON.stringify({ ...input, confirmation }),
     });
 
     expect(response.status).toBe(200);
@@ -294,7 +325,7 @@ describe('private partner awards', () => {
     });
     expect(await auditCount('billing.partner_discount_granted', organizationId)).toBe(1);
 
-    const stacked = await app.request(`/orgs/${organizationId}/discount-awards`, {
+    const stacked = await app.request(`/orgs/${organizationId}/discount-awards/preview`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -307,6 +338,35 @@ describe('private partner awards', () => {
     await expect(stacked.json()).resolves.toMatchObject({ code: 'discount_award_conflict' });
   });
 
+  it('rejects a partner award when Checkout completes after finance previews it', async () => {
+    const organizationId = await makeOrg();
+    const finance = await makeStaff('finance');
+    const app = appWithSession(admin, fakeSession(finance.userId));
+    const endsAt = new Date();
+    endsAt.setUTCMonth(endsAt.getUTCMonth() + 12);
+    const input = {
+      percentOff: 25,
+      endsAt: endsAt.toISOString(),
+      reason: 'Launch partner agreement.',
+    };
+    const preview = await app.request(`/orgs/${organizationId}/discount-awards/preview`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    const { confirmation } = await json<{ confirmation: string }>(preview);
+    await startProviderTrial(organizationId);
+
+    const response = await app.request(`/orgs/${organizationId}/discount-awards`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...input, confirmation }),
+    });
+
+    expect(response.status).toBe(412);
+    await expect(response.json()).resolves.toMatchObject({ code: 'precondition_failed' });
+  });
+
   it('rejects free or longer-than-24-month partner grants', async () => {
     const organizationId = await makeOrg();
     const finance = await makeStaff('finance');
@@ -314,19 +374,126 @@ describe('private partner awards', () => {
     const tooLate = new Date();
     tooLate.setUTCMonth(tooLate.getUTCMonth() + 25);
 
-    const free = await app.request(`/orgs/${organizationId}/discount-awards`, {
+    const free = await app.request(`/orgs/${organizationId}/discount-awards/preview`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ percentOff: 100, endsAt: tooLate.toISOString(), reason: 'No.' }),
     });
     expect(free.status).toBe(422);
 
-    const long = await app.request(`/orgs/${organizationId}/discount-awards`, {
+    const long = await app.request(`/orgs/${organizationId}/discount-awards/preview`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ percentOff: 50, endsAt: tooLate.toISOString(), reason: 'Too long.' }),
     });
     expect(long.status).toBe(422);
+  });
+
+  it('retries one failed provider award with the same durable award and idempotency key', async () => {
+    const organizationId = await makeOrg();
+    const finance = await makeStaff('finance');
+    const app = appWithSession(admin, fakeSession(finance.userId));
+    const endsAt = new Date();
+    endsAt.setUTCMonth(endsAt.getUTCMonth() + 12);
+    const input = {
+      percentOff: 25,
+      endsAt: endsAt.toISOString(),
+      reason: 'Retryable partner agreement.',
+    };
+    vi.spyOn(getContainer().billing, 'createDiscountCoupon').mockRejectedValueOnce(
+      new Error('Stripe timeout'),
+    );
+    const firstPreview = await app.request(`/orgs/${organizationId}/discount-awards/preview`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    const firstConfirmation = await json<{ confirmation: string }>(firstPreview);
+
+    const failed = await app.request(`/orgs/${organizationId}/discount-awards`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...input, confirmation: firstConfirmation.confirmation }),
+    });
+    expect(failed.status).toBe(409);
+    const [failedAward] = await db
+      .select()
+      .from(schema.billingDiscountAward)
+      .where(eq(schema.billingDiscountAward.organizationId, organizationId));
+    expect(failedAward?.status).toBe('provider_failed');
+
+    const retryPreview = await app.request(`/orgs/${organizationId}/discount-awards/preview`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    const retryConfirmation = await json<{ confirmation: string }>(retryPreview);
+
+    const retried = await app.request(`/orgs/${organizationId}/discount-awards`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...input, confirmation: retryConfirmation.confirmation }),
+    });
+    expect(retried.status).toBe(200);
+    const result = await json<{ id: string; status: string }>(retried);
+    expect(result).toMatchObject({ id: failedAward?.id, status: 'scheduled' });
+    const syncs = await db
+      .select()
+      .from(schema.billingProviderSync)
+      .where(eq(schema.billingProviderSync.awardId, failedAward?.id ?? 'missing'));
+    expect(syncs).toHaveLength(1);
+    expect(syncs[0]?.attempts).toBe(2);
+  });
+
+  it('lets finance renew and revoke a current private partner award', async () => {
+    const organizationId = await makeOrg();
+    const finance = await makeStaff('finance');
+    const app = appWithSession(admin, fakeSession(finance.userId));
+    const currentEnd = new Date();
+    currentEnd.setUTCMonth(currentEnd.getUTCMonth() + 6);
+    const renewedEnd = new Date();
+    renewedEnd.setUTCMonth(renewedEnd.getUTCMonth() + 12);
+    const [award] = await db
+      .insert(schema.billingDiscountAward)
+      .values({
+        organizationId,
+        percentOff: 25,
+        status: 'active',
+        startsAt: new Date(),
+        endsAt: currentEnd,
+        reviewAt: currentEnd,
+        reason: 'Launch partner agreement.',
+        providerCouponId: 'coupon_partner',
+      })
+      .returning();
+    if (!award) throw new Error('partner award seed failed');
+
+    const renewed = await app.request(`/discount-applications/awards/${award.id}/renew`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        reason: 'Partner agreement renewed.',
+        endsAt: renewedEnd.toISOString(),
+      }),
+    });
+    expect(renewed.status).toBe(200);
+    await expect(renewed.json()).resolves.toMatchObject({
+      id: award.id,
+      reason: 'Partner agreement renewed.',
+    });
+
+    const removeDiscount = vi.spyOn(getContainer().billing, 'removeSubscriptionDiscount');
+    const revoked = await app.request(`/discount-applications/awards/${award.id}/revoke`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reason: 'Partner agreement ended.' }),
+    });
+    expect(revoked.status).toBe(200);
+    await expect(revoked.json()).resolves.toMatchObject({ id: award.id, status: 'revoked' });
+    expect(removeDiscount).toHaveBeenCalledWith(
+      organizationId,
+      `discount-award:${award.id}:revoke`,
+    );
   });
 });
 

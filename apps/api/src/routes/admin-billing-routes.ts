@@ -1,18 +1,23 @@
+import { randomUUID } from 'node:crypto';
+
 import {
   billingCredit,
+  billingDiscountApplication,
   billingDiscountAward,
   billingExemption,
   billingProviderSync,
   db,
   lifecycleHold,
   organizationProductEntitlement,
+  organizationBillingAccount,
 } from '@docket/db';
 import { calculateUnusedPeriodCredit } from '@docket/billing/application/discounts';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
 import { applyBillingEvent } from '@docket/billing/application/lifecycle';
+import type { Subscription } from '@docket/billing/contracts';
 
 import {
   AdminBillingExemptionOut,
@@ -25,12 +30,13 @@ import {
 import type { AppEnv } from '../context';
 import { getContainer } from '../container';
 import { env } from '../env';
-import { ConflictError, NotFoundError } from '../error';
+import { ConflictError, NotFoundError, PreconditionFailedError } from '../error';
 import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { hasSqlState } from '../lib/sql-state';
 import { zJson, zParam } from '../lib/validate';
 import { requireStaffRole } from '../permissions/staff-guard';
+import { dispatchEssentialBillingNotice } from '../services/billing-notifications';
 
 import {
   audit,
@@ -42,7 +48,7 @@ import {
   toHoldOut,
   toOrgOut,
 } from './admin-serializers';
-import { AdminDiscountAwardOut } from './admin-discount-routes';
+import { AdminCreditPreviewOut, AdminDiscountAwardOut } from './admin-discount-routes';
 
 /** The Postgres SQLSTATE for a unique-constraint (including unique-index) violation. */
 const UNIQUE_VIOLATION_CODE = '23505';
@@ -52,28 +58,125 @@ function isUniqueViolation(err: unknown): boolean {
   return hasSqlState(err, UNIQUE_VIOLATION_CODE);
 }
 
+const PartnerDiscountAwardFields = z.object({
+  percentOff: z.number().int().min(1).max(90),
+  endsAt: z.iso.datetime(),
+  reason: z.string().trim().min(1).max(2_000),
+});
+
+function validatePartnerAwardDates(value: { endsAt: string }, ctx: z.RefinementCtx): void {
+  const now = new Date();
+  const endsAt = new Date(value.endsAt);
+  const latest = new Date(now);
+  latest.setUTCMonth(latest.getUTCMonth() + 24);
+  if (endsAt <= now || endsAt > latest) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['endsAt'],
+      message: 'Partner awards must end within 24 months.',
+    });
+  }
+}
+
+/** Private partner award preview request. */
+export const PartnerDiscountPreviewBody =
+  PartnerDiscountAwardFields.superRefine(validatePartnerAwardDates);
 /** Private partner award request. A free or permanent grant must use complimentary Pro instead. */
-export const PartnerDiscountAwardBody = z
-  .object({
-    percentOff: z.number().int().min(1).max(90),
-    endsAt: z.iso.datetime(),
-    reason: z.string().trim().min(1).max(2_000),
-  })
-  .superRefine((value, ctx) => {
-    const now = new Date();
-    const endsAt = new Date(value.endsAt);
-    const latest = new Date(now);
-    latest.setUTCMonth(latest.getUTCMonth() + 24);
-    if (endsAt <= now || endsAt > latest) {
-      ctx.addIssue({
-        code: 'custom',
-        path: ['endsAt'],
-        message: 'Partner awards must end within 24 months.',
-      });
-    }
-  });
+export const PartnerDiscountAwardBody = PartnerDiscountAwardFields.extend({
+  confirmation: z.string().min(1),
+}).superRefine(validatePartnerAwardDates);
 /** Private partner award request value. */
 export type PartnerDiscountAwardBody = z.infer<typeof PartnerDiscountAwardBody>;
+
+/** Provider and credit effects that finance must confirm for a partner award. */
+export const PartnerDiscountPreviewOut = z.object({
+  organizationId: z.string(),
+  percentOff: z.number().int(),
+  endsAt: z.string(),
+  providerAction: z.enum(['attach_at_checkout', 'apply_to_trial', 'apply_to_subscription']),
+  credit: AdminCreditPreviewOut.nullable(),
+  confirmation: z.string(),
+});
+
+const StoredPartnerPreview = z.object({
+  organizationId: z.string(),
+  input: PartnerDiscountPreviewBody,
+  invoice: z
+    .object({
+      invoiceId: z.string(),
+      lineId: z.string(),
+      invoiceStatus: z.enum(['open', 'paid']),
+      currency: z.string(),
+      recurringAmount: z.number().int(),
+      periodStartsAt: z.string(),
+      periodEndsAt: z.string(),
+    })
+    .nullable(),
+  credit: z
+    .object({
+      baseAmount: z.number().int(),
+      taxAmount: z.number().int(),
+      totalAmount: z.number().int(),
+      prePaymentAmount: z.number().int(),
+      postPaymentAmount: z.number().int(),
+    })
+    .nullable(),
+  subscriptionFingerprint: z.string().nullable(),
+  expiresAt: z.string(),
+});
+
+/** Staff billing diagnostics for one organization. */
+export const AdminOrgBillingStateOut = z.object({
+  permissions: z.object({
+    manageDiscounts: z.boolean(),
+    manageComplimentary: z.boolean(),
+  }),
+  customer: z
+    .object({
+      stripeCustomerId: z.string(),
+      billingCountry: z.string().nullable(),
+      countryVerifiedAt: z.string().nullable(),
+      trialConsumedAt: z.string().nullable(),
+    })
+    .nullable(),
+  entitlement: z
+    .object({
+      source: z.enum(['stripe', 'complimentary']),
+      status: z.enum(['trialing', 'active', 'past_due', 'canceled']),
+      stripeSubscriptionId: z.string().nullable(),
+      currentPeriodEnd: z.string().nullable(),
+      graceEndsAt: z.string().nullable(),
+      cancelAtPeriodEnd: z.boolean(),
+      providerObservedAt: z.string().nullable(),
+    })
+    .nullable(),
+  reconciliation: z
+    .object({
+      status: z.enum(['pending', 'running', 'succeeded', 'failed']),
+      lastError: z.string().nullable(),
+      updatedAt: z.string(),
+    })
+    .nullable(),
+  application: z
+    .object({
+      id: z.string(),
+      programKey: z.enum(['student', 'nonprofit']),
+      status: z.string(),
+      submittedAt: z.string(),
+    })
+    .nullable(),
+  award: AdminDiscountAwardOut.nullable(),
+  credit: z
+    .object({
+      status: z.string(),
+      currency: z.string(),
+      totalAmount: z.number().int(),
+      providerCreditNoteId: z.string().nullable(),
+    })
+    .nullable(),
+});
+/** Staff billing diagnostics response value. */
+export type AdminOrgBillingStateOut = z.infer<typeof AdminOrgBillingStateOut>;
 
 /** Resolve the configured Docket Pro price id or lookup key. */
 function docketProPriceKey(): string {
@@ -108,11 +211,307 @@ function partnerAwardOut(
   };
 }
 
+/** Produce a stable provider snapshot key for partner preview confirmation. */
+function subscriptionFingerprint(subscription: Subscription | null): string | null {
+  if (!subscription) return null;
+  return JSON.stringify({
+    id: subscription.id,
+    customerId: subscription.customerId ?? null,
+    status: subscription.status,
+    currentPeriodEnd: subscription.currentPeriodEnd,
+    trialEnd: subscription.trialEnd ?? null,
+    cancelAtPeriodEnd: subscription.cancelAtPeriodEnd ?? false,
+    discountIds: [...(subscription.discountIds ?? [])].sort(),
+    couponIds: [...(subscription.couponIds ?? [])].sort(),
+  });
+}
+
+/** Find the one award that blocks stacking or represents a retry. */
+async function loadCurrentAward(organizationId: string) {
+  const [current] = await db
+    .select()
+    .from(billingDiscountAward)
+    .where(
+      and(
+        eq(billingDiscountAward.organizationId, organizationId),
+        inArray(billingDiscountAward.status, [
+          'scheduled',
+          'applying',
+          'active',
+          'ending',
+          'provider_failed',
+        ]),
+      ),
+    )
+    .limit(1);
+  return current;
+}
+
+/** Refuse a second award while permitting an exact provider-failure retry. */
+function assertPartnerAwardAvailable(
+  current: typeof billingDiscountAward.$inferSelect | undefined,
+  input: z.infer<typeof PartnerDiscountPreviewBody>,
+): void {
+  const retrying =
+    current?.status === 'provider_failed' &&
+    current.percentOff === input.percentOff &&
+    current.endsAt.getTime() === new Date(input.endsAt).getTime() &&
+    current.reason === input.reason;
+  if (current && !retrying) {
+    throw new ConflictError(
+      'This workspace already has a discount award',
+      'discount_award_conflict',
+    );
+  }
+}
+
+/** Preview and persist the exact Stripe credit effect that finance will approve. */
+async function createPartnerPreview(
+  organizationId: string,
+  input: z.infer<typeof PartnerDiscountPreviewBody>,
+): Promise<z.input<typeof PartnerDiscountPreviewOut>> {
+  assertPartnerAwardAvailable(await loadCurrentAward(organizationId), input);
+  const gateway = getContainer().billing;
+  const subscription = await gateway.getSubscription(organizationId);
+  const invoice = await gateway.getLatestRecurringInvoice(organizationId);
+  let credit = null;
+  let publicCredit: z.input<typeof AdminCreditPreviewOut> | null = null;
+  if (invoice) {
+    const baseAmount = calculateUnusedPeriodCredit({
+      recurringAmount: invoice.recurringAmount,
+      percentOff: input.percentOff,
+      periodStartsAt: new Date(invoice.periodStartsAt),
+      periodEndsAt: new Date(invoice.periodEndsAt),
+      approvedAt: new Date(),
+    });
+    if (baseAmount > 0) {
+      credit = await gateway.previewCreditNote({
+        invoiceId: invoice.invoiceId,
+        invoiceLineId: invoice.lineId,
+        baseAmount,
+      });
+      publicCredit = {
+        invoiceId: invoice.invoiceId,
+        currency: invoice.currency,
+        ...credit,
+        servicePeriodStartsAt: invoice.periodStartsAt,
+        servicePeriodEndsAt: invoice.periodEndsAt,
+      };
+    }
+  }
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+  const [stored] = await db
+    .insert(billingProviderSync)
+    .values({
+      organizationId,
+      operation: 'preview_partner_award',
+      status: 'pending',
+      idempotencyKey: `partner-award-preview:${randomUUID()}`,
+      payload: {
+        organizationId,
+        input,
+        invoice,
+        credit,
+        subscriptionFingerprint: subscriptionFingerprint(subscription),
+        expiresAt: expiresAt.toISOString(),
+      },
+      nextAttemptAt: expiresAt,
+    })
+    .returning({ id: billingProviderSync.id });
+  if (!stored) throw new Error('Partner award preview insert returned no row');
+  return {
+    organizationId,
+    percentOff: input.percentOff,
+    endsAt: input.endsAt,
+    providerAction:
+      subscription === null
+        ? 'attach_at_checkout'
+        : subscription.status === 'trialing'
+          ? 'apply_to_trial'
+          : 'apply_to_subscription',
+    credit: publicCredit,
+    confirmation: stored.id,
+  };
+}
+
+/** Load the exact unexpired partner award effect that finance confirmed. */
+async function loadPartnerPreview(
+  confirmation: string,
+  organizationId: string,
+  input: z.infer<typeof PartnerDiscountPreviewBody>,
+) {
+  const [stored] = await db
+    .select()
+    .from(billingProviderSync)
+    .where(
+      and(
+        eq(billingProviderSync.id, confirmation),
+        eq(billingProviderSync.operation, 'preview_partner_award'),
+      ),
+    )
+    .limit(1);
+  const parsed = stored ? StoredPartnerPreview.safeParse(stored.payload) : null;
+  if (
+    !parsed?.success ||
+    parsed.data.organizationId !== organizationId ||
+    parsed.data.input.percentOff !== input.percentOff ||
+    parsed.data.input.endsAt !== input.endsAt ||
+    parsed.data.input.reason !== input.reason ||
+    new Date(parsed.data.expiresAt) <= new Date()
+  ) {
+    throw new PreconditionFailedError(
+      'The partner discount preview expired or no longer matches this award',
+    );
+  }
+  const subscription = await getContainer().billing.getSubscription(organizationId);
+  if (subscriptionFingerprint(subscription) !== parsed.data.subscriptionFingerprint) {
+    throw new PreconditionFailedError('The Stripe subscription changed after the preview');
+  }
+  return parsed.data;
+}
+
 /**
  * Sub-router for lifecycle-hold and billing-action routes (mounted at `/orgs`).
  * All routes require staff auth (enforced by the parent admin router's middleware).
  */
 export const adminBillingRoutes = new Hono<AppEnv>()
+  .get(
+    '/:id/billing-state',
+    apiDoc({
+      tag: 'Admin',
+      summary: 'Inspect organization billing state',
+      response: AdminOrgBillingStateOut,
+      description:
+        'Shows the durable Stripe customer, entitlement mirror, reconciliation result, latest discount application, award, and issued credit. Support may inspect this state, but only finance and superadmins may make revenue decisions.',
+    }),
+    zParam(idParam),
+    async (c) => {
+      const { id } = c.req.valid('param');
+      const { role } = c.get('staffCtx');
+      await loadOrg(id);
+      const [customers, entitlements, reconciliations, applications, awards, credits] =
+        await Promise.all([
+          db
+            .select()
+            .from(organizationBillingAccount)
+            .where(eq(organizationBillingAccount.organizationId, id))
+            .limit(1),
+          db
+            .select()
+            .from(organizationProductEntitlement)
+            .where(
+              and(
+                eq(organizationProductEntitlement.organizationId, id),
+                eq(organizationProductEntitlement.productKey, 'docket_pro'),
+              ),
+            )
+            .limit(1),
+          db
+            .select()
+            .from(billingProviderSync)
+            .where(
+              and(
+                eq(billingProviderSync.organizationId, id),
+                eq(billingProviderSync.operation, 'reconcile_billing'),
+              ),
+            )
+            .orderBy(desc(billingProviderSync.updatedAt))
+            .limit(1),
+          db
+            .select()
+            .from(billingDiscountApplication)
+            .where(eq(billingDiscountApplication.organizationId, id))
+            .orderBy(desc(billingDiscountApplication.createdAt))
+            .limit(1),
+          db
+            .select()
+            .from(billingDiscountAward)
+            .where(eq(billingDiscountAward.organizationId, id))
+            .orderBy(desc(billingDiscountAward.createdAt))
+            .limit(1),
+          db
+            .select()
+            .from(billingCredit)
+            .where(eq(billingCredit.organizationId, id))
+            .orderBy(desc(billingCredit.createdAt))
+            .limit(1),
+        ]);
+      const customer = customers[0];
+      const entitlement = entitlements[0];
+      const reconciliation = reconciliations[0];
+      const application = applications[0];
+      const award = awards[0];
+      const credit = credits[0];
+      return ok(c, AdminOrgBillingStateOut, {
+        permissions: {
+          manageDiscounts: role === 'finance' || role === 'superadmin',
+          manageComplimentary: role === 'superadmin',
+        },
+        customer: customer
+          ? {
+              stripeCustomerId: customer.stripeCustomerId,
+              billingCountry: customer.billingCountry,
+              countryVerifiedAt: customer.countryVerifiedAt?.toISOString() ?? null,
+              trialConsumedAt: customer.trialConsumedAt?.toISOString() ?? null,
+            }
+          : null,
+        entitlement: entitlement
+          ? {
+              source: entitlement.source,
+              status: entitlement.status,
+              stripeSubscriptionId: entitlement.stripeSubscriptionId,
+              currentPeriodEnd: entitlement.currentPeriodEnd?.toISOString() ?? null,
+              graceEndsAt: entitlement.graceEndsAt?.toISOString() ?? null,
+              cancelAtPeriodEnd: entitlement.cancelAtPeriodEnd,
+              providerObservedAt: entitlement.providerObservedAt?.toISOString() ?? null,
+            }
+          : null,
+        reconciliation: reconciliation
+          ? {
+              status: reconciliation.status,
+              lastError: reconciliation.lastError,
+              updatedAt: reconciliation.updatedAt.toISOString(),
+            }
+          : null,
+        application: application
+          ? {
+              id: application.id,
+              programKey: application.programKey,
+              status: application.status,
+              submittedAt: application.submittedAt.toISOString(),
+            }
+          : null,
+        award: award ? partnerAwardOut(award) : null,
+        credit: credit
+          ? {
+              status: credit.status,
+              currency: credit.currency,
+              totalAmount: credit.totalAmount,
+              providerCreditNoteId: credit.providerCreditNoteId,
+            }
+          : null,
+      });
+    },
+  )
+  .post(
+    '/:id/discount-awards/preview',
+    requireStaffRole('finance'),
+    apiDoc({
+      tag: 'Admin',
+      summary: 'Preview a private partner discount',
+      response: PartnerDiscountPreviewOut,
+      description:
+        'Previews and freezes the provider action and tax-aware credit for fifteen minutes. Finance must pass the returned confirmation when granting the award.',
+    }),
+    zParam(idParam),
+    zJson(PartnerDiscountPreviewBody),
+    async (c) => {
+      const { id } = c.req.valid('param');
+      const input = c.req.valid('json');
+      await loadOrg(id);
+      return ok(c, PartnerDiscountPreviewOut, await createPartnerPreview(id, input));
+    },
+  )
   .post(
     '/:id/discount-awards',
     requireStaffRole('finance'),
@@ -130,60 +529,72 @@ export const adminBillingRoutes = new Hono<AppEnv>()
       const input = c.req.valid('json');
       const { staffUserId } = c.get('staffCtx');
       await loadOrg(id);
-      const [current] = await db
-        .select({ id: billingDiscountAward.id })
-        .from(billingDiscountAward)
-        .where(
-          and(
-            eq(billingDiscountAward.organizationId, id),
-            inArray(billingDiscountAward.status, ['scheduled', 'applying', 'active', 'ending']),
-          ),
-        )
-        .limit(1);
-      if (current) {
-        throw new ConflictError(
-          'This workspace already has a discount award',
-          'discount_award_conflict',
-        );
-      }
+      const preview = await loadPartnerPreview(input.confirmation, id, input);
+      const current = await loadCurrentAward(id);
+      const retrying =
+        current?.status === 'provider_failed' &&
+        current.percentOff === input.percentOff &&
+        current.endsAt.getTime() === new Date(input.endsAt).getTime() &&
+        current.reason === input.reason;
+      assertPartnerAwardAvailable(current, input);
 
       const now = new Date();
-      let award: typeof billingDiscountAward.$inferSelect | undefined;
-      try {
-        const inserted = await db
-          .insert(billingDiscountAward)
-          .values({
-            organizationId: id,
-            percentOff: input.percentOff,
-            status: 'applying',
-            startsAt: now,
-            endsAt: new Date(input.endsAt),
-            reviewAt: new Date(input.endsAt),
-            reason: input.reason,
-            approvedByStaffId: staffUserId,
-          })
+      let award: typeof billingDiscountAward.$inferSelect | undefined = current;
+      if (retrying && award) {
+        const [updated] = await db
+          .update(billingDiscountAward)
+          .set({ status: 'applying', providerSyncError: null })
+          .where(eq(billingDiscountAward.id, award.id))
           .returning();
-        award = inserted[0];
-      } catch (error) {
-        if (isUniqueViolation(error)) {
-          throw new ConflictError(
-            'This workspace already has a discount award',
-            'discount_award_conflict',
-          );
+        award = updated;
+      } else {
+        try {
+          const inserted = await db
+            .insert(billingDiscountAward)
+            .values({
+              organizationId: id,
+              percentOff: input.percentOff,
+              status: 'applying',
+              startsAt: now,
+              endsAt: new Date(input.endsAt),
+              reviewAt: new Date(input.endsAt),
+              reason: input.reason,
+              approvedByStaffId: staffUserId,
+            })
+            .returning();
+          award = inserted[0];
+        } catch (error) {
+          if (isUniqueViolation(error)) {
+            throw new ConflictError(
+              'This workspace already has a discount award',
+              'discount_award_conflict',
+            );
+          }
+          throw error;
         }
-        throw error;
       }
       if (!award) throw new Error('Partner award insert returned no row');
 
       const syncKey = `discount-award:${award.id}:apply`;
-      await db.insert(billingProviderSync).values({
-        organizationId: id,
-        awardId: award.id,
-        operation: 'apply_partner_award',
-        status: 'running',
-        idempotencyKey: syncKey,
-        attempts: 1,
-      });
+      await db
+        .insert(billingProviderSync)
+        .values({
+          organizationId: id,
+          awardId: award.id,
+          operation: 'apply_partner_award',
+          status: 'running',
+          idempotencyKey: syncKey,
+          attempts: 1,
+        })
+        .onConflictDoUpdate({
+          target: billingProviderSync.idempotencyKey,
+          set: {
+            status: 'running',
+            attempts: sql`${billingProviderSync.attempts} + 1`,
+            lastError: null,
+            completedAt: null,
+          },
+        });
       const gateway = getContainer().billing;
       try {
         const coupon = await gateway.createDiscountCoupon({
@@ -201,45 +612,32 @@ export const adminBillingRoutes = new Hono<AppEnv>()
               idempotencyKey: `${syncKey}:subscription`,
             })
           : null;
-        const invoice = await gateway.getLatestRecurringInvoice(id);
-        if (invoice) {
-          const baseAmount = calculateUnusedPeriodCredit({
-            recurringAmount: invoice.recurringAmount,
-            percentOff: award.percentOff,
-            periodStartsAt: new Date(invoice.periodStartsAt),
-            periodEndsAt: new Date(invoice.periodEndsAt),
-            approvedAt: now,
+        const invoice = preview.invoice;
+        if (invoice && preview.credit) {
+          const creditPreview = preview.credit;
+          const issued = await gateway.issueCreditNote({
+            invoiceId: invoice.invoiceId,
+            invoiceLineId: invoice.lineId,
+            baseAmount: creditPreview.baseAmount,
+            creditAmount: creditPreview.postPaymentAmount,
+            idempotencyKey: `${syncKey}:credit`,
+            memo: `Partner discount effective ${now.toISOString().slice(0, 10)}`,
           });
-          if (baseAmount > 0) {
-            const preview = await gateway.previewCreditNote({
-              invoiceId: invoice.invoiceId,
-              invoiceLineId: invoice.lineId,
-              baseAmount,
-            });
-            const issued = await gateway.issueCreditNote({
-              invoiceId: invoice.invoiceId,
-              invoiceLineId: invoice.lineId,
-              baseAmount,
-              creditAmount: preview.postPaymentAmount,
-              idempotencyKey: `${syncKey}:credit`,
-              memo: `Partner discount effective ${now.toISOString().slice(0, 10)}`,
-            });
-            await db.insert(billingCredit).values({
-              organizationId: id,
-              awardId: award.id,
-              status: 'issued',
-              currency: invoice.currency,
-              baseAmount: issued.baseAmount,
-              taxAmount: issued.taxAmount,
-              totalAmount: issued.totalAmount,
-              servicePeriodStartsAt: new Date(invoice.periodStartsAt),
-              servicePeriodEndsAt: new Date(invoice.periodEndsAt),
-              providerInvoiceId: invoice.invoiceId,
-              providerCreditNoteId: issued.id,
-              providerPreview: { ...preview },
-              issuedAt: now,
-            });
-          }
+          await db.insert(billingCredit).values({
+            organizationId: id,
+            awardId: award.id,
+            status: 'issued',
+            currency: invoice.currency,
+            baseAmount: issued.baseAmount,
+            taxAmount: issued.taxAmount,
+            totalAmount: issued.totalAmount,
+            servicePeriodStartsAt: new Date(invoice.periodStartsAt),
+            servicePeriodEndsAt: new Date(invoice.periodEndsAt),
+            providerInvoiceId: invoice.invoiceId,
+            providerCreditNoteId: issued.id,
+            providerPreview: { ...creditPreview },
+            issuedAt: now,
+          });
         }
         const [updated] = await db
           .update(billingDiscountAward)
@@ -401,6 +799,12 @@ export const adminBillingRoutes = new Hono<AppEnv>()
           'Resolve the active Stripe subscription before granting complimentary Docket Pro',
         );
       }
+      const providerSubscriptions = await getContainer().billing.listSubscriptions(id);
+      if (providerSubscriptions.some((subscription) => subscription.status !== 'canceled')) {
+        throw new ConflictError(
+          'Resolve the active Stripe subscription before granting complimentary Docket Pro',
+        );
+      }
       let inserted;
       try {
         inserted = await db
@@ -442,6 +846,12 @@ export const adminBillingRoutes = new Hono<AppEnv>()
         exemptionId: exemption.id,
         reason,
       });
+      await dispatchEssentialBillingNotice(db, {
+        organizationId: id,
+        idempotencyKey: `billing:complimentary:${exemption.id}:granted`,
+        subject: 'Complimentary Docket Pro was granted',
+        text: 'This workspace now has Complimentary Docket Pro. All current and future Pro features are available without a payment method or renewal.',
+      }).catch(() => undefined);
       return ok(c, AdminBillingExemptionOut, toExemptionOut(exemption));
     },
   )
@@ -489,6 +899,13 @@ export const adminBillingRoutes = new Hono<AppEnv>()
         exemptionId: exemption.id,
         reason,
       });
+      await dispatchEssentialBillingNotice(db, {
+        organizationId: id,
+        idempotencyKey: `billing:complimentary:${exemption.id}:revoked`,
+        subject: 'Complimentary Docket Pro was revoked',
+        text: 'Complimentary Docket Pro ended. Billing settings show the workspace access state and available next action.',
+        urgent: true,
+      }).catch(() => undefined);
       return ok(c, AdminBillingExemptionOut, toExemptionOut(exemption));
     },
   )

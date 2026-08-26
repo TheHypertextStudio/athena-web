@@ -38,6 +38,7 @@ import { sweepExpiredSessions } from './session-sweep';
 import { sweepRecurrenceMaterialization } from '../lib/recurrence/sweep';
 import { createGoogleWorkLocationTransport } from '../services/work-location/google-transport';
 import { sweepWorkLocations } from '../services/work-location/sweep';
+import { reconcileBilling } from '../services/billing-reconciliation';
 
 /** Extract the presented cron secret from `Authorization: Bearer …` or `x-cron-secret`. */
 function presentedSecret(
@@ -57,6 +58,16 @@ function authorized(c: { req: { header: (name: string) => string | undefined } }
 
 /** The cron app: secret-guarded, idempotent scheduled sweeps. */
 const cron = new Hono()
+  .post('/billing-reconciliation', async (c) => {
+    if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
+    const result = await reconcileBilling(
+      db,
+      getContainer().billing,
+      getContainer().blob,
+      new Date(),
+    );
+    return c.json({ swept: true, ...result });
+  })
   .post('/lifecycle-sweep', async (c) => {
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
     const now = new Date();

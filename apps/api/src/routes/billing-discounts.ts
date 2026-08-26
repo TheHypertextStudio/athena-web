@@ -19,7 +19,8 @@ import { z } from 'zod';
 
 import type { AppEnv } from '../context';
 import { getContainer } from '../container';
-import { AuthError, ConflictError, NotFoundError } from '../error';
+import { env } from '../env';
+import { AuthError, BillingUnavailableError, ConflictError, NotFoundError } from '../error';
 import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { hasSqlState } from '../lib/sql-state';
@@ -91,6 +92,7 @@ export type DiscountCreditOut = z.infer<typeof DiscountCreditOut>;
 
 /** Customer discount center summary. */
 export const DiscountsOut = z.object({
+  applicationsEnabled: z.boolean(),
   programs: z.array(DiscountProgramOut),
   application: DiscountApplicationOut.nullable(),
   award: DiscountAwardOut.nullable(),
@@ -251,6 +253,7 @@ async function submitApplication(
           institutionalEmail:
             input.programKey === 'student' ? (input.institutionalEmail ?? null) : null,
           ein: input.programKey === 'nonprofit' ? input.ein : null,
+          expiresAt: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000),
         })
         .returning();
       if (!application) throw new Error('Discount application insert returned no row');
@@ -296,7 +299,12 @@ const billingDiscounts = new Hono<AppEnv>()
         db
           .select()
           .from(billingDiscountAward)
-          .where(eq(billingDiscountAward.organizationId, orgId))
+          .where(
+            and(
+              eq(billingDiscountAward.organizationId, orgId),
+              inArray(billingDiscountAward.status, ['scheduled', 'applying', 'active', 'ending']),
+            ),
+          )
           .orderBy(desc(billingDiscountAward.createdAt))
           .limit(1),
         db
@@ -317,6 +325,7 @@ const billingDiscounts = new Hono<AppEnv>()
       const award = awards[0] ?? null;
       const credit = credits[0] ?? null;
       return ok(c, DiscountsOut, {
+        applicationsEnabled: env.BILLING_ENABLED,
         programs: programs.map((program) => ({
           key: program.key,
           name: program.name,
@@ -352,6 +361,9 @@ const billingDiscounts = new Hono<AppEnv>()
     }),
     zJson(SubmitDiscountApplicationBody),
     async (c) => {
+      if (!env.BILLING_ENABLED) {
+        throw new BillingUnavailableError('Discount applications are not open yet');
+      }
       const session = c.get('session');
       if (!session?.user) throw new AuthError();
       const { orgId } = c.get('actorCtx');
@@ -400,6 +412,9 @@ const billingDiscounts = new Hono<AppEnv>()
     }),
     zJson(SubmitDiscountApplicationBody),
     async (c) => {
+      if (!env.BILLING_ENABLED) {
+        throw new BillingUnavailableError('Discount renewal applications are not open yet');
+      }
       const session = c.get('session');
       if (!session?.user) throw new AuthError();
       const { orgId } = c.get('actorCtx');
@@ -457,6 +472,16 @@ const billingDiscounts = new Hono<AppEnv>()
       const application = await loadOwnedApplication(orgId, applicationId, session.user.id);
       if (application.status !== 'needs_information') {
         throw new ConflictError('This application is not waiting for more information');
+      }
+      if (
+        application.programKey === 'student' &&
+        input.institutionalEmail &&
+        (!session.user.emailVerified ||
+          session.user.email.toLowerCase() !== input.institutionalEmail.toLowerCase())
+      ) {
+        throw new ConflictError(
+          'Use the verified email on your Docket account for institutional-email evidence',
+        );
       }
       const updated = await db.transaction(async (tx) => {
         const [row] = await tx

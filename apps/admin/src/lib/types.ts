@@ -31,6 +31,11 @@ export type AdminOrgPage = InferResponseType<typeof api.admin.orgs.$get>;
 /** A single org row in the admin org list / detail. */
 export type AdminOrg = AdminOrgPage['items'][number];
 
+/** Billing-provider and discount diagnostics for one organization. */
+export type AdminOrgBillingState = InferResponseType<
+  (typeof api.admin.orgs)[':id']['billing-state']['$get']
+>;
+
 /** A lifecycle hold (`POST /admin/orgs/:id/holds`). */
 export type AdminHold = InferResponseType<(typeof api.admin.orgs)[':id']['holds']['$post']>;
 

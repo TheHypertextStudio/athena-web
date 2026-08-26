@@ -72,7 +72,7 @@ export class InMemoryBillingGateway implements BillingGateway {
   private readonly subscriptions = new Map<string, Subscription>();
   private readonly lifecycleStep = new Map<string, number>();
   private readonly coupons = new Map<string, DiscountCouponInput>();
-  private readonly discounts = new Map<string, string>();
+  private readonly discounts = new Map<string, { discountId: string; couponId: string }>();
   private counter = 0;
   /** The synthetic webhook events emitted so far, in order. */
   readonly events: BillingEvent[] = [];
@@ -106,13 +106,23 @@ export class InMemoryBillingGateway implements BillingGateway {
     // Simulate the customer completing checkout. A zero-day trial is an immediate paid start.
     const trialDays = input.trialDays ?? 14;
     const hasTrial = trialDays > 0;
+    const checkoutDiscountId = input.couponId ? this.nextId('di') : null;
     const sub: Subscription = {
       id: this.nextId('sub'),
+      ...(input.customerId ? { customerId: input.customerId } : {}),
       referenceId: input.referenceId,
       status: hasTrial ? 'trialing' : 'active',
       currentPeriodEnd: addHours(this.now, (hasTrial ? trialDays : 30) * 24),
       ...(hasTrial ? { trialEnd: addHours(this.now, trialDays * 24) } : {}),
+      ...(checkoutDiscountId ? { discountIds: [checkoutDiscountId] } : {}),
+      ...(input.couponId ? { couponIds: [input.couponId] } : {}),
     };
+    if (checkoutDiscountId && input.couponId) {
+      this.discounts.set(input.referenceId, {
+        discountId: checkoutDiscountId,
+        couponId: input.couponId,
+      });
+    }
     this.subscriptions.set(input.referenceId, sub);
     this.lifecycleStep.set(input.referenceId, hasTrial ? 0 : 1);
     this.events.push({
@@ -128,6 +138,12 @@ export class InMemoryBillingGateway implements BillingGateway {
   /** {@inheritDoc BillingGateway.getSubscription} */
   async getSubscription(referenceId: string): Promise<Subscription | null> {
     return this.subscriptions.get(referenceId) ?? null;
+  }
+
+  /** {@inheritDoc BillingGateway.listSubscriptions} */
+  async listSubscriptions(referenceId: string): Promise<readonly Subscription[]> {
+    const subscription = this.subscriptions.get(referenceId);
+    return subscription ? [subscription] : [];
   }
 
   /** {@inheritDoc BillingGateway.cancelSubscription} */
@@ -148,6 +164,15 @@ export class InMemoryBillingGateway implements BillingGateway {
       subscription: canceled,
       createdAt: this.now,
     });
+  }
+
+  /** {@inheritDoc BillingGateway.cancelSubscriptionById} */
+  async cancelSubscriptionById(subscriptionId: string, _idempotencyKey: string): Promise<void> {
+    const entry = [...this.subscriptions.entries()].find(
+      ([, subscription]) => subscription.id === subscriptionId,
+    );
+    if (!entry) throw new Error('InMemoryBillingGateway: subscription not found.');
+    await this.cancelSubscription(entry[0]);
   }
 
   /** {@inheritDoc BillingGateway.extendTrial} */
@@ -198,13 +223,26 @@ export class InMemoryBillingGateway implements BillingGateway {
       throw new Error('InMemoryBillingGateway: unknown coupon.');
     }
     const discountId = this.nextId('di');
-    this.discounts.set(input.referenceId, discountId);
+    this.discounts.set(input.referenceId, { discountId, couponId: input.couponId });
+    const subscription = this.subscriptions.get(input.referenceId);
+    if (subscription) {
+      this.subscriptions.set(input.referenceId, {
+        ...subscription,
+        discountIds: [discountId],
+        couponIds: [input.couponId],
+      });
+    }
     return { discountId };
   }
 
   /** {@inheritDoc BillingGateway.removeSubscriptionDiscount} */
   async removeSubscriptionDiscount(referenceId: string, _idempotencyKey: string): Promise<void> {
     this.discounts.delete(referenceId);
+    const subscription = this.subscriptions.get(referenceId);
+    if (subscription) {
+      const { discountIds: _discountIds, couponIds: _couponIds, ...withoutDiscount } = subscription;
+      this.subscriptions.set(referenceId, withoutDiscount);
+    }
   }
 
   /** {@inheritDoc BillingGateway.getLatestRecurringInvoice} */

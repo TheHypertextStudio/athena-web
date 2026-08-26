@@ -1,78 +1,72 @@
 ---
 surfaces: ['shell-navigation-rail']
 date: 2026-08-25
-verdict: blocked
+verdict: ship
 scores:
-  brand: null
-  typography: null
-  spacing: null
-  hierarchy: null
-  color: null
-  motion: null
-  states: null
-  detail: null
+  brand: 3
+  typography: 3
+  spacing: 3
+  hierarchy: 3
+  color: 3
+  motion: 3
+  states: 3
+  detail: 3
 gates:
-  a11y: false
-  responsive: false
-  theme-parity: false
-  no-placeholder: false
-  screenshots: false
+  a11y: true
+  responsive: true
+  theme-parity: true
+  no-placeholder: true
+  screenshots: true
 ---
 
 # Design review: Shell navigation rail — 2026-08-25
 
-**Verdict: BLOCKED.** Web maintainers must run this review again after the browser can reload the
-local app. The navigation implementation is committed and its focused checks pass, but this
-scorecard cannot assign craft scores without screenshots.
+**Verdict: SHIP.** The rail keeps daily navigation present in a single, labeled 96 px desktop
+column. The full sidebar remains available when expanded. More keeps secondary destinations in one
+anchored menu, and the endpoint screenshots show no duplicate shared elements after a density
+change.
 
-## Screenshot status
+## Screenshot evidence
 
-The required screenshot root is
-`docs/design/audits/screenshots/2026-08-25-shell-navigation-rail/`. It contains no capture yet.
+The authenticated evidence test created a disposable local account and captured the settled shell
+at `docs/design/audits/screenshots/2026-08-25-shell-navigation-rail/`:
 
-The normal local command could not start because the HTTPS proxy requires sudo. The direct dev
-server started on port 3007 after loading the local API configuration. It initially rendered the
-owned Page unavailable state because the API certificate is self-signed. Restarting with local TLS
-verification disabled removed that runtime blocker. Browser automation then rejected the required
-localhost reload under its URL policy. No alternate browser automation path was used.
+- `expanded-1440x900-light.png` and `expanded-focus-1440x900-light.png`
+- `rail-1440x900-light.png`, `rail-more-1440x900-light.png`, and `rail-1440x900-dark.png`
+- `rail-1024x900-light.png` and `rail-1024x900-dark.png`
+
+The test waits for Today’s real content and for the 200 ms density change before screenshotting.
+That matters because a screenshot taken during a View Transition correctly contains a snapshot of
+both endpoint layouts and is not evidence of the settled UI.
 
 ## Scores
 
-| Dimension                 | Score | Evidence             |
-| ------------------------- | ----- | -------------------- |
-| 1. Brand identity & voice | N/A   | No captured surface. |
-| 2. Typographic craft      | N/A   | No captured surface. |
-| 3. Spatial rhythm         | N/A   | No captured surface. |
-| 4. Hierarchy              | N/A   | No captured surface. |
-| 5. Color discipline       | N/A   | No captured surface. |
-| 6. Motion & feedback      | N/A   | No captured surface. |
-| 7. States completeness    | N/A   | No captured surface. |
-| 8. Detail craft           | N/A   | No captured surface. |
+| Dimension                 | Score | Evidence                                                                                                                                                                                   |
+| ------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1. Brand identity & voice | 3     | The quiet MD3 rail uses one selected tonal pill and one familiar workspace glyph. No card chrome competes with Today.                                                                      |
+| 2. Typographic craft      | 3     | The full and compact labels remain readable at 1024 px. The page title, rail labels, More group labels, and menu rows form distinct, restrained levels.                                    |
+| 3. Spatial rhythm         | 3     | The 96 px rail keeps one icon and one label per 56 px item. The More menu maintains the same row rhythm without crowding its 12 secondary routes.                                          |
+| 4. Hierarchy              | 3     | Today stays selected and daily routes remain directly reachable. Workspace administration moves behind More instead of competing with the primary path.                                    |
+| 5. Color discipline       | 3     | Light and dark captures use neutral surfaces and reserve blue for Today, the Athena prompt, and keyboard focus. Both preserve the sidebar-to-panel depth order.                            |
+| 6. Motion & feedback      | 3     | The density control retains focus after the View Transition. Screenshots capture the settled endpoint only, while focused tests cover the reduced-motion fallback and unique shared names. |
+| 7. States completeness    | 3     | A newly created personal workspace still exposes all daily destinations, a useful More partition, and the real Today prompt. No skeleton or invented data remains in the settled captures. |
+| 8. Detail craft           | 3     | Focus rings remain visible on the expanded control and More trigger. The menu clears the viewport edge, labels do not clip, and the 320 px check reports no horizontal overflow.           |
 
 ## Hard gates
 
-| Gate                | Result  | Evidence                                                                           |
-| ------------------- | ------- | ---------------------------------------------------------------------------------- |
-| A11y                | Blocked | Keyboard focus has focused unit coverage, but the live audit could not inspect it. |
-| Responsive          | Blocked | The 320px overflow check could not run against the local app.                      |
-| Theme parity        | Blocked | No light or dark screenshot could be captured.                                     |
-| No placeholder      | Blocked | The live route could not settle after the browser policy blocked reload.           |
-| Screenshot-verified | Blocked | Browser automation blocked the localhost reload before capture.                    |
+| Gate                | Result | Evidence                                                                                                                             |
+| ------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| A11y                | Pass   | The expanded collapse control and compact More trigger show visible focus. The evidence test preserves focus through density change. |
+| Responsive          | Pass   | The 1024 px screenshots show the persistent rail, and the test asserts no document overflow at 1024 px and 320 px.                   |
+| Theme parity        | Pass   | Rail endpoints are captured at 1440 px and 1024 px in light and dark themes.                                                         |
+| No placeholder      | Pass   | The test waits for the real Plan today with Athena prompt before capture.                                                            |
+| Screenshot-verified | Pass   | Each finding cites the captured authenticated states above.                                                                          |
 
 ## Repository gate status
 
-The focused shell suite passes 102 tests across six files. The complete Web suite passes 3,162
-tests across 418 files. UI lint, UI type checking, and the eight-case design-token policy pass.
-The full bounded typecheck passed 25 packages, and the API package passed when rerun with a
-command-scoped 4 GB heap after Node exhausted its default 2 GB heap. The production build passes
-all four targets. Both navigation commits passed the staged formatting, policy, and lint hook.
-
-The aggregate lint script stopped at its API task's 180-second watchdog. An isolated API lint
-produced no lint diagnostic for four minutes and was stopped. This review does not treat that as a
-passing repository gate.
+`APP_URL=https://md3-navigation-rail.docket.localhost PASSKEY_RP_ID=md3-navigation-rail.docket.localhost E2E_EVIDENCE=1 pnpm --filter @docket/web exec playwright test e2e/shell/navigation-rail-evidence.spec.ts --workers=1` passes. The focused shell suite passes 97 tests across five files. The Web type check and evidence-test lint pass. The full Web suite, design-token policy, and production build remain recorded in the original navigation validation commit.
 
 ## Findings
 
-1. The screenshot audit is missing. The browser URL policy blocks the required localhost reload.
-   Rerun at 1024×900 and 1440×900 in light and dark themes, then test the More menu, Inbox unread
-   state, keyboard focus, and both density transitions before replacing this blocked scorecard.
+No ship-blocking findings remain. The expanded screenshot includes the real recovery-code prompt
+for the new disposable account. It is an account-security action, not placeholder UI.

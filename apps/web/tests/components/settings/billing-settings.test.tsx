@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { JSX, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -137,6 +137,26 @@ describe('BillingSettings', () => {
     expect(screen.getAllByText('Free')).toHaveLength(2);
     expect(screen.getByText(/Personal planning.*remain writable/)).toBeInTheDocument();
     expect(await screen.findByText(/50% off Docket Pro/)).toBeInTheDocument();
+  });
+
+  it('preserves the original product location when billing recovery starts Checkout', async () => {
+    window.history.replaceState(
+      null,
+      '',
+      '/orgs/org-1/settings/billing?returnTo=%2Forgs%2Forg-1%2Fmy-work%3Fview%3Dassigned',
+    );
+    billingGet.mockResolvedValue(okResponse(summary(undefined, { accessMode: 'writable' })));
+    checkoutPost.mockImplementation(() => new Promise(() => undefined));
+
+    render(<BillingSettings orgId="org-1" isPersonal />, { wrapper: wrapper() });
+    fireEvent.click(await screen.findByRole('button', { name: 'Start Docket Pro trial' }));
+
+    await waitFor(() => {
+      expect(checkoutPost).toHaveBeenCalledWith({
+        param: { orgId: 'org-1' },
+        json: { returnTo: '/orgs/org-1/my-work?view=assigned' },
+      });
+    });
   });
 
   it('explains the rollout pause instead of offering checkout or a new application', async () => {

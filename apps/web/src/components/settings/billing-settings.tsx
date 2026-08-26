@@ -5,6 +5,7 @@ import type { JSX } from 'react';
 
 import { SectionHeader } from '@/components/settings/section-header';
 import { BillingDiscountsSection } from '@/components/settings/billing-discounts-section';
+import { safeSameOriginPath } from '@/components/app-shell-utils';
 import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
@@ -73,6 +74,12 @@ function formatPrice(amount: number, currency: string): string {
   }).format(amount / 100);
 }
 
+/** Preserve a product action across Billing and hosted Checkout without accepting another origin. */
+function checkoutReturnPath(): string {
+  const requested = new URLSearchParams(window.location.search).get('returnTo');
+  return safeSameOriginPath(requested) ?? `${window.location.pathname}${window.location.search}`;
+}
+
 /** Literal label for the customer's current billing state. */
 function statusLabel(
   product: BillingProduct | undefined,
@@ -108,7 +115,7 @@ export function BillingSettings({ orgId, isPersonal }: BillingSettingsProps): JS
         () =>
           api.v1.orgs[':orgId'].billing.checkout.$post({
             param: { orgId },
-            json: { returnTo: `${window.location.pathname}${window.location.search}` },
+            json: { returnTo: checkoutReturnPath() },
           }),
         'Could not open Docket Pro checkout.',
       ),

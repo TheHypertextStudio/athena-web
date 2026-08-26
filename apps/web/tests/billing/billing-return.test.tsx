@@ -62,4 +62,24 @@ describe('BillingReturnPage', () => {
     expect(screen.getByText('No billing change was made.')).toBeInTheDocument();
     expect(billingGet).not.toHaveBeenCalled();
   });
+
+  it('rejects a backslash return path that the browser would resolve to another origin', async () => {
+    useAppSearchParams.mockReturnValue(
+      new URLSearchParams('org=org-1&status=success&returnTo=%2F%5Cevil.example%2Fcollect'),
+    );
+    billingGet.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ products: [{ source: 'stripe', status: 'active' }] }),
+    });
+
+    render(<BillingReturnPage />, { wrapper: wrapper() });
+
+    expect(await screen.findByRole('heading', { name: 'Docket Pro is ready' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open billing settings' })).toHaveAttribute(
+      'href',
+      '/orgs/org-1/settings/billing',
+    );
+    expect(screen.queryByRole('link', { name: 'Continue' })).not.toBeInTheDocument();
+  });
 });

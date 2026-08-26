@@ -40,6 +40,7 @@ import {
   useAthenaPanel,
 } from '@/components/athena/athena-panel-provider';
 import { useAuthenticationInterlock } from '@/components/authentication-interlock';
+import { BillingRecovery } from '@/components/billing/billing-recovery';
 import {
   CommandPaletteHost,
   CommandPaletteProvider,
@@ -732,6 +733,7 @@ function AppShellInner({
 
   return (
     <VocabularyProvider skin={skin}>
+      <BillingRecovery orgId={resolvedOrgId} workspaceName={activeWorkspaceName} />
       <PageScrollProvider>
         <AthenaShell
           sidebar={sidebar}

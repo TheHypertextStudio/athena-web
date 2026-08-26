@@ -137,6 +137,16 @@ renewal date, cancellation date, grace deadline, effective discount, review date
 and the next available action. Members without billing permission see the same state and learn that
 a workspace administrator must act.
 
+The authenticated app shell observes typed API failures from the shared TanStack Query read and
+write caches. `product_required` opens a Docket Pro recovery action. `billing_grace_expired` opens
+payment recovery. The interaction reads billing permission from the organization billing summary,
+which derives its actor from the Better Auth session. Billing managers receive the provider action.
+Other members learn that a workspace owner or administrator must act. Docket preserves the failed
+product route through Billing and hosted Checkout. The recovery request binds to the organization
+in the failed API request, so a later workspace switch cannot open or change billing for a different
+organization. Docket accepts only same-origin return paths, and the interaction never renders
+provider error text.
+
 The pricing action passes through Better Auth and an organization chooser. The Checkout return
 page polls billing state for 15 seconds and distinguishes confirmed, processing, canceled, and
 failed outcomes. It never treats the browser redirect as payment proof.

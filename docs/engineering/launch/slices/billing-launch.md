@@ -51,6 +51,13 @@ a card-required 14-day hosted Stripe Checkout session. The return page waits for
 entitlement state instead of trusting the redirect. Billing settings shows trial, renewal,
 cancellation, payment-grace, read-only, discount, credit, and complimentary states.
 
+The app shell catches `product_required` and `billing_grace_expired` from the shared typed read and
+write caches. It shows one permission-aware recovery interaction. Billing managers can review the
+plan or open hosted payment recovery directly. Other members learn which workspace roles can act.
+The failed API request supplies the organization, so a delayed failure cannot target a workspace the
+customer opened later. The Billing route carries a validated same-origin product location into
+Checkout so the confirmed return restores the customer's place.
+
 The API stores one Stripe customer per organization. It prevents duplicate Checkout attempts and
 subscriptions. It claims signed events once, retrieves the current subscription before changing
 access, and reconciles provider state on a schedule. The first failed invoice starts one seven-day

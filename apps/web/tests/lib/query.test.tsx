@@ -97,6 +97,34 @@ describe('useApiQuery', () => {
     expect(result.current.data).toBeUndefined();
   });
 
+  it('retains the organization from an org-scoped failed response URL', async () => {
+    const { wrapper } = makeQueryWrapper();
+    const response = problemResponse('private provider detail', 402, 'product_required');
+    Object.defineProperty(response, 'url', {
+      value: 'https://api.docket.localhost/v1/orgs/org-a/tasks/task-1',
+    });
+
+    const { result } = renderHook(
+      () =>
+        useApiQuery(
+          apiQueryOptions<ProjectShape>(
+            queryKeys.project('org-a', 'p1'),
+            () => Promise.resolve(response),
+            'Docket Pro is required.',
+          ),
+        ),
+      { wrapper },
+    );
+
+    await waitFor(() => {
+      expect(result.current.isError).toBe(true);
+    });
+    expect(result.current.error).toMatchObject({
+      code: 'product_required',
+      organizationId: 'org-a',
+    });
+  });
+
   it('throws a SessionExpiredError on a 401 so the global handler can redirect', async () => {
     const { wrapper } = makeQueryWrapper();
 

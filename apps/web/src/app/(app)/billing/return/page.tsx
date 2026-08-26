@@ -6,6 +6,7 @@ import { useEffect, useState, type JSX } from 'react';
 
 import { api } from '@/lib/api';
 import { useAppSearchParams } from '@/lib/app-location';
+import { safeSameOriginPath } from '@/components/app-shell-utils';
 import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 
 /** How long the return page waits for Stripe webhook reconciliation. */
@@ -17,8 +18,7 @@ export default function BillingReturnPage(): JSX.Element {
   const org = searchParams.get('org');
   const status = searchParams.get('status');
   const requestedReturn = searchParams.get('returnTo');
-  const returnTo =
-    requestedReturn?.startsWith('/') && !requestedReturn.startsWith('//') ? requestedReturn : null;
+  const returnTo = safeSameOriginPath(requestedReturn);
   const completed = status === 'success';
   const [timedOut, setTimedOut] = useState(false);
   const billingHref = org ? `/orgs/${encodeURIComponent(org)}/settings/billing` : '/today';

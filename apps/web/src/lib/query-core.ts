@@ -152,6 +152,8 @@ export interface RpcResponse<T> {
   readonly ok: boolean;
   /** The HTTP status code. */
   readonly status: number;
+  /** Final request URL when the transport exposes it. */
+  readonly url?: string | undefined;
   /** Parse the JSON body as the typed payload `T`. */
   json(): Promise<T>;
 }
@@ -219,11 +221,14 @@ export class ApiRequestError extends UserFacingError {
   override readonly status: number;
   /** The closed problem code, when the body parsed as a {@link Problem}. */
   override readonly code?: Problem['code'] | undefined;
+  /** Organization named by an org-scoped failed request URL. */
+  readonly organizationId?: string | undefined;
 
   constructor(details: {
     message: string;
     status: number;
     code?: Problem['code'] | undefined;
+    organizationId?: string | undefined;
     cause?: unknown;
   }) {
     super(details.message, {
@@ -234,6 +239,22 @@ export class ApiRequestError extends UserFacingError {
     this.name = 'ApiRequestError';
     this.status = details.status;
     this.code = details.code;
+    this.organizationId = details.organizationId;
+  }
+}
+
+/** Read an organization id only from the canonical `/v1/orgs/:orgId` API path. */
+function organizationIdFromRequestUrl(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  try {
+    const segments = new URL(value, 'https://api.docket.invalid').pathname.split('/');
+    const versionIndex = segments.findIndex(
+      (segment, index) => segment === 'v1' && segments[index + 1] === 'orgs',
+    );
+    const encoded = versionIndex === -1 ? undefined : segments[versionIndex + 2];
+    return encoded ? decodeURIComponent(encoded) : undefined;
+  } catch {
+    return undefined;
   }
 }
 
@@ -283,10 +304,12 @@ export async function unwrap(
     if (response.status === 401 && error.code === 'unauthorized') {
       throw new SessionExpiredError();
     }
+    const organizationId = organizationIdFromRequestUrl(response.url);
     throw new ApiRequestError({
       message: error.message,
       status: response.status,
       ...(error.code ? { code: error.code } : {}),
+      ...(organizationId ? { organizationId } : {}),
     });
   }
   return response.json();

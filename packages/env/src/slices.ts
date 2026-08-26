@@ -213,6 +213,7 @@ export const stripeServer = {
   /** @deprecated One-release compatibility for the former Docket Team product name. */
   STRIPE_PRICE_TEAM: z.string().optional(),
   STRIPE_BILLING_PORTAL_CONFIG_ID: z.string().optional(),
+  STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT: z.iso.datetime({ offset: true }).optional(),
   BILLING_ENABLED: boolFromString(),
 };
 

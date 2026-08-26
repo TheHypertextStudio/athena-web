@@ -91,6 +91,16 @@ export const SERVICE_VARS: readonly VarSpec[] = [
     where: 'Stripe billing portal configuration id',
   },
   {
+    name: 'STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT',
+    slice: 'stripe',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: stripeServer.STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT,
+    where:
+      'ISO timestamp recorded after an operator verifies Stripe redirects existing subscribers to the portal',
+  },
+  {
     name: 'BILLING_ENABLED',
     slice: 'stripe',
     scope: 'server',

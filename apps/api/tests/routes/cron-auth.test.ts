@@ -23,6 +23,7 @@ const CRON_PATHS: readonly string[] = [
   '/directive-posture',
   '/day-cadence',
   '/athena-triggers',
+  '/billing-reconciliation',
   '/expired-sessions-sweep',
 ];
 

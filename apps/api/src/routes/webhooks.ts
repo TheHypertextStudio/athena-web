@@ -123,20 +123,24 @@ const webhooks = new Hono().post('/webhook', async (c) => {
         .limit(1)
     : [];
   const account = event.referenceId ? await getBillingCustomer(db, event.referenceId) : null;
+  const observedCustomerId = event.customerId ?? event.subscription?.customerId;
+  if (event.referenceId && event.subscription && !account) {
+    throw new Error('The Stripe subscription has no durable Docket billing account.');
+  }
   let countryEffect:
     | 'verified'
     | 'awaiting_billing_country'
     | 'unsupported_country'
     | 'billing_customer_mismatch'
     | null = null;
-  if (account && event.customerId && event.customerId !== account.stripeCustomerId) {
+  if (account && observedCustomerId !== account.stripeCustomerId) {
     countryEffect = 'billing_customer_mismatch';
   }
-  if (countryEffect === null && account?.countryVerificationRequired) {
-    if (!event.customerId || event.customerId !== account.stripeCustomerId) {
+  if (countryEffect === null && account) {
+    if (!observedCustomerId || observedCustomerId !== account.stripeCustomerId) {
       countryEffect = 'awaiting_billing_country';
     } else {
-      const country = await gateway.getCustomerBillingCountry(event.customerId);
+      const country = await gateway.getCustomerBillingCountry(observedCustomerId);
       if (!country) {
         countryEffect = 'awaiting_billing_country';
       } else if (country !== 'US') {
@@ -144,16 +148,38 @@ const webhooks = new Hono().post('/webhook', async (c) => {
         if (!subscriptionId) {
           throw new Error('The unsupported-country subscription is not observable yet.');
         }
-        await gateway.cancelSubscriptionById(
-          subscriptionId,
-          `billing-country:${event.id}:cancel`,
-          event.subscription?.status !== 'trialing',
-        );
+        await db
+          .update(organizationBillingAccount)
+          .set({
+            billingCountry: country,
+            countryVerifiedAt: new Date(now),
+            countryVerificationRequired: false,
+          })
+          .where(eq(organizationBillingAccount.organizationId, event.referenceId));
+        if (
+          event.subscription?.status !== 'canceled' &&
+          event.subscription?.cancelAtPeriodEnd !== true
+        ) {
+          const updated = await gateway.cancelSubscriptionById(
+            subscriptionId,
+            event.referenceId,
+            `billing-country:${event.id}:cancel`,
+            event.subscription?.status !== 'trialing',
+          );
+          if (updated.customerId && updated.customerId !== account.stripeCustomerId) {
+            throw new Error('The canceled Stripe subscription changed billing customers.');
+          }
+          event = { ...event, subscription: updated };
+        }
         countryEffect = 'unsupported_country';
       } else {
         await db
           .update(organizationBillingAccount)
-          .set({ billingCountry: country, countryVerifiedAt: new Date(now) })
+          .set({
+            billingCountry: country,
+            countryVerifiedAt: new Date(now),
+            countryVerificationRequired: false,
+          })
           .where(eq(organizationBillingAccount.organizationId, event.referenceId));
         countryEffect = 'verified';
       }
@@ -163,7 +189,6 @@ const webhooks = new Hono().post('/webhook', async (c) => {
     if (!(await claimProviderEvent(tx, event))) return 'duplicate' as const;
     if (
       countryEffect === 'awaiting_billing_country' ||
-      countryEffect === 'unsupported_country' ||
       countryEffect === 'billing_customer_mismatch'
     ) {
       await completeProviderEvent(tx, event.id, new Date(now));
@@ -187,24 +212,25 @@ const webhooks = new Hono().post('/webhook', async (c) => {
         .limit(1);
       if (scheduled) {
         const startsAt = new Date(event.createdAt);
-        const endsAt = new Date(startsAt);
-        endsAt.setUTCMonth(endsAt.getUTCMonth() + (scheduled.program?.reviewMonths ?? 12));
-        await tx
-          .update(billingDiscountAward)
-          .set({ status: 'active', startsAt, endsAt, reviewAt: endsAt })
-          .where(eq(billingDiscountAward.id, scheduled.award.id));
+        if (scheduled.program) {
+          const endsAt = new Date(startsAt);
+          endsAt.setUTCMonth(endsAt.getUTCMonth() + scheduled.program.reviewMonths);
+          await tx
+            .update(billingDiscountAward)
+            .set({ status: 'active', startsAt, endsAt, reviewAt: endsAt })
+            .where(eq(billingDiscountAward.id, scheduled.award.id));
+        } else if (scheduled.award.endsAt > startsAt) {
+          await tx
+            .update(billingDiscountAward)
+            .set({ status: 'active' })
+            .where(eq(billingDiscountAward.id, scheduled.award.id));
+        }
       }
     }
     await completeProviderEvent(tx, event.id, new Date(now));
     return applied;
   });
-  if (
-    event.referenceId &&
-    effect !== 'duplicate' &&
-    effect !== 'awaiting_billing_country' &&
-    effect !== 'unsupported_country' &&
-    effect !== 'billing_customer_mismatch'
-  ) {
+  if (event.referenceId && ['trialing', 'active', 'past_due', 'canceled'].includes(effect)) {
     const billingUrlDate = (value: string | undefined): string =>
       value
         ? new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeZone: 'UTC' }).format(

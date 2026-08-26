@@ -7,6 +7,50 @@
 
 ## Active Tasks
 
+### [BILLING-LAUNCH-001] Make Docket Pro safe for real customer payments
+
+- **Status**: REVIEW
+- **Started**: 2026-08-25
+- **Priority**: P0
+- **Description**: Replace the trial-only billing shell with a customer, finance, and operator
+  contract that can accept real Docket Pro subscriptions. Billing access must never delete
+  organization data. Stripe must remain authoritative through duplicate and reordered events.
+  Approved Student, Nonprofit, and partner discounts must reach invoices without stacking.
+- **Approach**: Store one billing account per organization and reconcile exact Stripe customer and
+  subscription snapshots into a product entitlement. Keep canceled shared work read-only after the
+  paid period, and keep failed payments writable for one fixed seven-day grace period. Process
+  discount applications separately from provider-backed awards. Use Better Auth sessions,
+  organization roles, and verified institutional email evidence at the billing boundary. Keep
+  Checkout disabled until the audit, deployment, finance, legal, and canary gates pass.
+- **Files changed**: Added the billing account, Checkout attempt, provider-event, discount,
+  evidence, award, provider-sync, and credit records with additive migrations and legacy lifecycle
+  repair. Rebuilt the billing domain, API routes, customer settings, admin operations, notices,
+  launch audit, Stripe runbook, billing specification, state-machine diagrams, and focused launch
+  evidence. The final hardening pass bound every provider observation to the durable customer,
+  protected complimentary access, rejected unknown provider discounts, preserved private award
+  end dates, and mirrored Stripe's authoritative non-US cancellation snapshot.
+- **Validation**: The bounded final pass ran 329 focused tests across billing, API, web,
+  environment, and launch-policy packages. API, billing, environment, test-utils, web, and admin
+  typechecks passed. The same packages passed lint, and the repository commit hook completed its
+  full staged checks and package lint gates. Stripe test mode covered hosted Checkout, portal
+  management, signed webhooks, duplicate and reordered events, payment failure and recovery,
+  payment authentication, cancellation, reactivation, renewal, discounts, credit notes, and
+  complimentary conflicts. Responsive customer and admin captures cover desktop, mobile, light,
+  and dark states.
+- **Decisions**: Checkout derives the customer email from the Better Auth server session and
+  rejects a browser-supplied email. Stripe's Dashboard-only existing-subscriber redirect requires
+  a recorded verification timestamp before `BILLING_ENABLED=true` can pass configuration. Docket
+  still keeps its own Checkout lease and exact subscription lookup because Stripe does not treat a
+  trialing subscription as active for that redirect. Billing work integrates directly into
+  `main`; agents must not enable or use GitHub pull requests.
+- **Blockers**: Finance and legal must approve the Docket merchant identity, tax registrations,
+  invoice and credit treatment, refund policy, discount eligibility, evidence retention, and
+  customer terms. Production still needs the 24-hour shadow reconciliation, one live full-price
+  canary, one live discounted canary, the Founder complimentary grant, and the 72-hour public
+  canary. Whole-product launch sign-off remains independent of this billing slice.
+
+---
+
 ### [SHELL-NAV-RAIL-001] Replace the collapsed sidebar with an MD3 navigation rail
 
 - **Status**: COMPLETED

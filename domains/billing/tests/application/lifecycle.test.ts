@@ -162,6 +162,63 @@ describe('billing access lifecycle', () => {
     expect((await readState(organizationId)).product?.status).toBe('canceled');
   });
 
+  it('applies a newly observed current snapshot when the triggering event is older', async () => {
+    const organizationId = await seedOrg();
+    await applyBillingEvent(
+      db,
+      event(organizationId, 'active', '2026-08-27T00:00:00.000Z'),
+      '2026-08-27T00:00:00.000Z',
+    );
+
+    await expect(
+      applyBillingEvent(
+        db,
+        event(organizationId, 'past_due', '2026-08-26T00:00:00.000Z'),
+        '2026-08-28T00:00:00.000Z',
+      ),
+    ).resolves.toBe('past_due');
+    expect((await readState(organizationId)).product?.status).toBe('past_due');
+  });
+
+  it('does not let a Stripe snapshot replace active complimentary access', async () => {
+    const organizationId = await seedOrg();
+    await db
+      .insert(schema.billingExemption)
+      .values({ organizationId, reason: 'Founder production access' });
+    await db.insert(schema.organizationProductEntitlement).values({
+      organizationId,
+      productKey: 'docket_pro',
+      status: 'active',
+      source: 'complimentary',
+    });
+
+    await expect(applyBillingEvent(db, event(organizationId, 'canceled'), NOW)).resolves.toBe(
+      'none',
+    );
+    expect((await readState(organizationId)).product).toMatchObject({
+      status: 'active',
+      source: 'complimentary',
+    });
+  });
+
+  it('preserves a legacy active complimentary entitlement without an exemption row', async () => {
+    const organizationId = await seedOrg();
+    await db.insert(schema.organizationProductEntitlement).values({
+      organizationId,
+      productKey: 'docket_pro',
+      status: 'active',
+      source: 'complimentary',
+    });
+
+    await expect(applyBillingEvent(db, event(organizationId, 'canceled'), NOW)).resolves.toBe(
+      'none',
+    );
+    expect((await readState(organizationId)).product).toMatchObject({
+      status: 'active',
+      source: 'complimentary',
+    });
+  });
+
   it('does not grant access from Checkout completion without a subscription snapshot', async () => {
     const organizationId = await seedOrg();
     const checkout: BillingEvent = {

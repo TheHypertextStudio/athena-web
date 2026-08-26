@@ -178,7 +178,8 @@ describe('sharedWorkCapabilityGuard', () => {
         await next();
       })
       .use('*', sharedWorkCapabilityGuard)
-      .get('/', (c) => c.json({ ok: true }));
+      .get('/', (c) => c.json({ ok: true }))
+      .post('/', (c) => c.json({ ok: true }));
     app.onError((error, c) => {
       const productError = error as { status?: number; code?: string };
       return c.json(
@@ -195,11 +196,13 @@ describe('sharedWorkCapabilityGuard', () => {
     expect(response.status).toBe(200);
   });
 
-  it('requires Docket Pro for shared organization work', async () => {
+  it('keeps shared work readable but requires Docket Pro for writes', async () => {
     const org = await seedOrg('active');
-    const response = await guardedApp(org.orgId, false).request('/');
-    expect(response.status).toBe(402);
-    await expect(response.json()).resolves.toMatchObject({ code: 'product_required' });
+    const app = guardedApp(org.orgId, false);
+    expect((await app.request('/')).status).toBe(200);
+    const write = await app.request('/', { method: 'POST' });
+    expect(write.status).toBe(402);
+    await expect(write.json()).resolves.toMatchObject({ code: 'product_required' });
   });
 
   it('allows shared organization work with active Docket Pro', async () => {

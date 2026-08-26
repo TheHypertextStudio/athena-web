@@ -24,6 +24,11 @@ interface ApplicationMutationInput {
   readonly file?: File;
 }
 
+interface SupplementMutationInput {
+  readonly applicationId: string;
+  readonly file?: File;
+}
+
 /** Props for the customer discount center. */
 export interface BillingDiscountsSectionProps {
   /** Organization whose application and award are shown. */
@@ -62,6 +67,7 @@ export function BillingDiscountsSection({
   const [institutionalEmail, setInstitutionalEmail] = useState(session?.user.email ?? '');
   const [ein, setEin] = useState('');
   const [file, setFile] = useState<File | undefined>();
+  const [supplementFile, setSupplementFile] = useState<File | undefined>();
   const [note, setNote] = useState('');
   useEffect(() => {
     if (!institutionalEmail && session?.user.email) setInstitutionalEmail(session.user.email);
@@ -135,9 +141,19 @@ export function BillingDiscountsSection({
       ),
     onSuccess: refresh,
   });
-  const supplement = useApiMutation<unknown, string>({
-    mutationFn: (applicationId) =>
-      unwrap(
+  const supplement = useApiMutation<unknown, SupplementMutationInput>({
+    mutationFn: async ({ applicationId, file: replacementEvidence }) => {
+      if (replacementEvidence) {
+        await unwrap(
+          () =>
+            api.v1.orgs[':orgId'].billing.discounts.applications[':applicationId'].evidence.$post({
+              param: { orgId, applicationId },
+              form: { file: replacementEvidence },
+            }),
+          'Could not upload the requested evidence.',
+        );
+      }
+      return unwrap(
         () =>
           api.v1.orgs[':orgId'].billing.discounts.applications[':applicationId'].supplement.$post({
             param: { orgId, applicationId },
@@ -148,9 +164,11 @@ export function BillingDiscountsSection({
             },
           }),
         'Could not send the requested information.',
-      ),
+      );
+    },
     onSuccess: async () => {
       setNote('');
+      setSupplementFile(undefined);
       await refresh();
     },
   });
@@ -255,7 +273,10 @@ export function BillingDiscountsSection({
           className="flex flex-col gap-3"
           onSubmit={(event) => {
             event.preventDefault();
-            supplement.mutate(application.id);
+            supplement.mutate({
+              applicationId: application.id,
+              ...(supplementFile ? { file: supplementFile } : {}),
+            });
           }}
         >
           <Field
@@ -269,6 +290,19 @@ export function BillingDiscountsSection({
               }}
               required
               rows={3}
+            />
+          </Field>
+          <Field
+            label="Replacement evidence"
+            description="Add a PDF, PNG, or JPEG when finance requested a new document. Maximum 4 MB."
+          >
+            <Input
+              key={`${application.id}-${supplementFile?.name ?? 'empty'}`}
+              type="file"
+              accept="application/pdf,image/png,image/jpeg"
+              onChange={(event) => {
+                setSupplementFile(event.target.files?.[0]);
+              }}
             />
           </Field>
           <Button type="submit" disabled={supplement.isPending || note.trim().length === 0}>

@@ -7,12 +7,13 @@
  * retrieve the current subscription before they grant access.
  */
 import {
+  billingExemption,
   type Database,
   organizationBillingAccount,
   organizationProductEntitlement,
 } from '@docket/db';
 import type { organization } from '@docket/db';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 
 import type { BillingEvent } from '../contracts';
 
@@ -47,10 +48,12 @@ async function syncDocketProEntitlement(
   const status = event.subscription?.status ?? null;
   if (!status) return 'none';
 
-  const observedAt = new Date(event.createdAt);
+  const providerEventAt = new Date(event.createdAt);
+  const observedAt = new Date(now);
   const existingRows = await db
     .select({
       status: organizationProductEntitlement.status,
+      source: organizationProductEntitlement.source,
       graceEndsAt: organizationProductEntitlement.graceEndsAt,
       providerObservedAt: organizationProductEntitlement.providerObservedAt,
     })
@@ -63,6 +66,19 @@ async function syncDocketProEntitlement(
     )
     .limit(1);
   const existing = existingRows[0];
+  const [activeExemption] = await db
+    .select({ id: billingExemption.id })
+    .from(billingExemption)
+    .where(
+      and(
+        eq(billingExemption.organizationId, event.referenceId),
+        isNull(billingExemption.revokedAt),
+      ),
+    )
+    .limit(1);
+  if (activeExemption || (existing?.source === 'complimentary' && existing.status === 'active')) {
+    return 'none';
+  }
   if (existing?.providerObservedAt && existing.providerObservedAt > observedAt) return 'stale';
 
   const canceledAt = status === 'canceled' ? new Date(now) : null;
@@ -70,7 +86,7 @@ async function syncDocketProEntitlement(
     status === 'past_due'
       ? existing?.status === 'past_due' && existing.graceEndsAt
         ? existing.graceEndsAt
-        : new Date(observedAt.getTime() + PAYMENT_GRACE_DAYS * 24 * 60 * 60 * 1000)
+        : new Date(providerEventAt.getTime() + PAYMENT_GRACE_DAYS * 24 * 60 * 60 * 1000)
       : null;
   const subscriptionId = event.subscription?.id ?? event.subscriptionId;
   await db

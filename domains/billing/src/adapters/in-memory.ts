@@ -187,18 +187,26 @@ export class InMemoryBillingGateway implements BillingGateway {
   /** {@inheritDoc BillingGateway.cancelSubscriptionById} */
   async cancelSubscriptionById(
     subscriptionId: string,
+    referenceId: string,
     _idempotencyKey: string,
     atPeriodEnd = false,
-  ): Promise<void> {
+  ): Promise<Subscription> {
     const entry = [...this.subscriptions.entries()].find(
       ([, subscription]) => subscription.id === subscriptionId,
     );
     if (!entry) throw new Error('InMemoryBillingGateway: subscription not found.');
+    if (entry[0] !== referenceId) {
+      throw new Error('InMemoryBillingGateway: subscription belongs to another organization.');
+    }
     if (atPeriodEnd) {
-      this.subscriptions.set(entry[0], { ...entry[1], cancelAtPeriodEnd: true });
-      return;
+      const updated = { ...entry[1], cancelAtPeriodEnd: true };
+      this.subscriptions.set(entry[0], updated);
+      return updated;
     }
     await this.cancelSubscription(entry[0]);
+    const canceled = this.subscriptions.get(entry[0]);
+    if (!canceled) throw new Error('InMemoryBillingGateway: cancellation was not observable.');
+    return canceled;
   }
 
   /** {@inheritDoc BillingGateway.extendTrial} */

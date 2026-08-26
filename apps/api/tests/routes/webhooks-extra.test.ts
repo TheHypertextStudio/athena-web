@@ -155,6 +155,12 @@ describe('webhooks signature verification (real Stripe gateway path)', () => {
 
   it('folds a verified event into billing access without changing retention', async () => {
     const { orgId } = await seedBaseOrg(db, schema, false);
+    await db.insert(schema.organizationBillingAccount).values({
+      organizationId: orgId,
+      stripeCustomerId: 'cus_real',
+      billingCountry: 'US',
+      countryVerifiedAt: new Date('2025-12-31T00:00:00.000Z'),
+    });
     const rawPayload = 'opaque-stripe-bytes-{not-the-normalized-event}';
     const normalized: BillingEvent = {
       id: 'evt_real',
@@ -162,6 +168,7 @@ describe('webhooks signature verification (real Stripe gateway path)', () => {
       referenceId: orgId,
       subscription: {
         id: 'sub_real',
+        customerId: 'cus_real',
         referenceId: orgId,
         status: 'canceled',
         currentPeriodEnd: '2026-01-01T00:00:00.000Z',
@@ -177,6 +184,7 @@ describe('webhooks signature verification (real Stripe gateway path)', () => {
         return normalized;
       }),
       getSubscriptionById,
+      getCustomerBillingCountry: vi.fn().mockResolvedValue('US'),
     });
     const res = await webhooks.request('/webhook', {
       method: 'POST',
@@ -337,7 +345,7 @@ describe('webhooks signature verification (real Stripe gateway path)', () => {
     expect(unchangedAward).toMatchObject({ status: 'scheduled' });
   });
 
-  it('rejects a subscription update after a verified customer changes to a non-US address', async () => {
+  it('mirrors period-end cancellation after a verified customer changes to a non-US address', async () => {
     const { orgId } = await seedBaseOrg(db, schema, false);
     await db.insert(schema.organizationBillingAccount).values({
       organizationId: orgId,
@@ -345,7 +353,15 @@ describe('webhooks signature verification (real Stripe gateway path)', () => {
       billingCountry: 'US',
       countryVerifiedAt: new Date('2026-08-24T00:00:00.000Z'),
     });
-    const cancelSubscriptionById = vi.fn();
+    const canceledAtPeriodEnd = {
+      id: 'sub_country_changed',
+      customerId: 'cus_changed_country',
+      referenceId: orgId,
+      status: 'active' as const,
+      currentPeriodEnd: '2026-09-08T00:00:00.000Z',
+      cancelAtPeriodEnd: true,
+    };
+    const cancelSubscriptionById = vi.fn().mockResolvedValue(canceledAtPeriodEnd);
     const gateway = {
       ...fakeVerifyingGateway(() => ({
         id: 'evt_country_changed',
@@ -372,12 +388,22 @@ describe('webhooks signature verification (real Stripe gateway path)', () => {
       body: 'verified-country-change',
     });
 
-    expect(await response.json()).toEqual({ received: true, effect: 'unsupported_country' });
+    expect(await response.json()).toEqual({ received: true, effect: 'active' });
     expect(cancelSubscriptionById).toHaveBeenCalledWith(
       'sub_country_changed',
+      orgId,
       'billing-country:evt_country_changed:cancel',
       true,
     );
+    const [entitlement] = await db
+      .select()
+      .from(schema.organizationProductEntitlement)
+      .where(eq(schema.organizationProductEntitlement.organizationId, orgId));
+    expect(entitlement).toMatchObject({
+      status: 'active',
+      cancelAtPeriodEnd: true,
+      currentPeriodEnd: new Date('2026-09-08T00:00:00.000Z'),
+    });
   });
 
   it('cancels a non-US trial before Docket grants product access', async () => {
@@ -394,7 +420,13 @@ describe('webhooks signature verification (real Stripe gateway path)', () => {
       currentPeriodEnd: '2026-09-08T00:00:00.000Z',
       trialEnd: '2026-09-08T00:00:00.000Z',
     });
-    const cancelSubscriptionById = vi.fn();
+    const cancelSubscriptionById = vi.fn().mockResolvedValue({
+      id: 'sub_gb',
+      customerId: 'cus_gb',
+      referenceId: orgId,
+      status: 'canceled',
+      currentPeriodEnd: '2026-08-25T00:00:00.000Z',
+    });
     const gateway = {
       ...fakeVerifyingGateway(() => ({
         id: 'evt_subscription_gb',
@@ -415,9 +447,10 @@ describe('webhooks signature verification (real Stripe gateway path)', () => {
       body: 'verified-subscription',
     });
 
-    expect(await response.json()).toEqual({ received: true, effect: 'unsupported_country' });
+    expect(await response.json()).toEqual({ received: true, effect: 'canceled' });
     expect(cancelSubscriptionById).toHaveBeenCalledWith(
       'sub_gb',
+      orgId,
       'billing-country:evt_subscription_gb:cancel',
       false,
     );
@@ -425,7 +458,63 @@ describe('webhooks signature verification (real Stripe gateway path)', () => {
       .select()
       .from(schema.organizationProductEntitlement)
       .where(eq(schema.organizationProductEntitlement.organizationId, orgId));
-    expect(entitlements).toHaveLength(0);
+    expect(entitlements).toHaveLength(1);
+    expect(entitlements[0]).toMatchObject({ status: 'canceled', source: 'stripe' });
+  });
+
+  it('applies a canceled non-US subscription without trying to cancel it again', async () => {
+    const { orgId } = await seedBaseOrg(db, schema, false);
+    await db.insert(schema.organizationBillingAccount).values({
+      organizationId: orgId,
+      stripeCustomerId: 'cus_canceled_gb',
+      billingCountry: 'GB',
+      countryVerifiedAt: new Date('2026-08-24T00:00:00.000Z'),
+    });
+    await db.insert(schema.organizationProductEntitlement).values({
+      organizationId: orgId,
+      productKey: 'docket_pro',
+      source: 'stripe',
+      status: 'active',
+      stripeSubscriptionId: 'sub_canceled_gb',
+      currentPeriodEnd: new Date('2026-09-08T00:00:00.000Z'),
+      cancelAtPeriodEnd: true,
+    });
+    const canceledSubscription = {
+      id: 'sub_canceled_gb',
+      customerId: 'cus_canceled_gb',
+      referenceId: orgId,
+      status: 'canceled' as const,
+      currentPeriodEnd: '2026-09-08T00:00:00.000Z',
+    };
+    const cancelSubscriptionById = vi.fn();
+    const gateway = {
+      ...fakeVerifyingGateway(() => ({
+        id: 'evt_canceled_gb',
+        type: 'subscription.canceled',
+        referenceId: orgId,
+        customerId: 'cus_canceled_gb',
+        subscriptionId: 'sub_canceled_gb',
+        createdAt: '2026-09-08T00:00:00.000Z',
+      })),
+      getSubscriptionById: vi.fn().mockResolvedValue(canceledSubscription),
+      getCustomerBillingCountry: vi.fn().mockResolvedValue('GB'),
+      cancelSubscriptionById,
+    };
+    useGateway(gateway);
+
+    const response = await webhooks.request('/webhook', {
+      method: 'POST',
+      headers: { ...J, 'stripe-signature': 't=1,v1=ok' },
+      body: 'verified-canceled-subscription',
+    });
+
+    expect(await response.json()).toEqual({ received: true, effect: 'canceled' });
+    expect(cancelSubscriptionById).not.toHaveBeenCalled();
+    const [entitlement] = await db
+      .select()
+      .from(schema.organizationProductEntitlement)
+      .where(eq(schema.organizationProductEntitlement.organizationId, orgId));
+    expect(entitlement).toMatchObject({ status: 'canceled', cancelAtPeriodEnd: false });
   });
 
   it('rejects an event whose Stripe customer does not own the organization account', async () => {

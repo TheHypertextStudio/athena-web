@@ -33,7 +33,11 @@ let cron!: typeof cronRouter;
 let billing!: typeof billingRouter;
 
 /** Mount the billing router behind an injected actor context with the given capabilities. */
-function billingApp(orgId: string, capabilities: readonly string[], session: AuthSession = null) {
+function billingApp(
+  orgId: string,
+  capabilities: readonly string[],
+  session: AuthSession = fakeSession('billing-user', 'Billing User', 'billing@example.com'),
+) {
   const app = new Hono<AppEnv>();
   app.use('*', async (c, next) => {
     const ctx: ActorCtx = { orgId, actorId: 'actor_test', roleId: 'role_test', capabilities };
@@ -78,6 +82,16 @@ async function makeOrg(
   return id;
 }
 
+/** Bind the organization to the same durable customer that the mock Stripe gateway owns. */
+async function bindBillingAccount(organizationId: string): Promise<string> {
+  const customer = await getContainer().billing.createCustomer(organizationId);
+  await db.insert(organizationBillingAccount).values({
+    organizationId,
+    stripeCustomerId: customer.id,
+  });
+  return customer.id;
+}
+
 /** Read an org's lifecycle state. */
 async function stateOf(id: string): Promise<string> {
   const rows = await db
@@ -100,6 +114,7 @@ describe('POST /billing/webhook', () => {
 
   it('records a canceled product without putting workspace data on a deletion path', async () => {
     const id = await makeOrg('active');
+    const customerId = await bindBillingAccount(id);
     const res = await webhooks.request('/webhook', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -107,8 +122,10 @@ describe('POST /billing/webhook', () => {
         id: 'evt_1',
         type: 'subscription.canceled',
         referenceId: id,
+        customerId,
         subscription: {
           id: 'sub_1',
+          customerId,
           referenceId: id,
           status: 'canceled',
           currentPeriodEnd: '2026-01-01T00:00:00.000Z',
@@ -125,12 +142,15 @@ describe('POST /billing/webhook', () => {
 
   it('acknowledges a duplicate event without applying it twice', async () => {
     const id = await makeOrg('active');
+    const customerId = await bindBillingAccount(id);
     const payload = JSON.stringify({
       id: `evt_duplicate_${id}`,
       type: 'subscription.updated',
       referenceId: id,
+      customerId,
       subscription: {
         id: `sub_${id}`,
+        customerId,
         referenceId: id,
         status: 'active',
         currentPeriodEnd: '2026-09-01T00:00:00.000Z',
@@ -154,6 +174,7 @@ describe('POST /billing/webhook', () => {
 
   it('records an active product without changing organization data retention', async () => {
     const id = await makeOrg('active');
+    const customerId = await bindBillingAccount(id);
     const res = await webhooks.request('/webhook', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -161,8 +182,10 @@ describe('POST /billing/webhook', () => {
         id: 'evt_2',
         type: 'subscription.updated',
         referenceId: id,
+        customerId,
         subscription: {
           id: 'sub_2',
+          customerId,
           referenceId: id,
           status: 'active',
           currentPeriodEnd: '2030-01-01T00:00:00.000Z',
@@ -176,6 +199,7 @@ describe('POST /billing/webhook', () => {
 
   it('starts a scheduled award with the first paid period after trial', async () => {
     const id = await makeOrg('active');
+    const customerId = await bindBillingAccount(id);
     const provisionalStart = new Date('2026-08-25T00:00:00.000Z');
     await db.insert(billingDiscountAward).values({
       organizationId: id,
@@ -197,8 +221,10 @@ describe('POST /billing/webhook', () => {
         id: `evt_discount_paid_${id}`,
         type: 'subscription.paid',
         referenceId: id,
+        customerId,
         subscription: {
           id: `sub_discount_paid_${id}`,
+          customerId,
           referenceId: id,
           status: 'active',
           currentPeriodEnd: '2026-10-08T00:00:00.000Z',
@@ -214,6 +240,79 @@ describe('POST /billing/webhook', () => {
     expect(award).toMatchObject({ status: 'active' });
     expect(award?.startsAt.toISOString()).toBe(paidAt);
     expect(award?.endsAt.toISOString()).toBe('2027-09-08T00:00:00.000Z');
+  });
+
+  it('refuses to grant Pro when the Stripe customer is not bound to the organization', async () => {
+    const id = await makeOrg('active');
+    const response = await webhooks.request('/webhook', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        id: `evt_unbound_${id}`,
+        type: 'subscription.updated',
+        referenceId: id,
+        customerId: `cus_unbound_${id}`,
+        subscription: {
+          id: `sub_unbound_${id}`,
+          customerId: `cus_unbound_${id}`,
+          referenceId: id,
+          status: 'active',
+          currentPeriodEnd: '2026-10-08T00:00:00.000Z',
+        },
+        createdAt: '2026-09-08T00:00:00.000Z',
+      }),
+    });
+
+    expect(response.status).toBe(500);
+    expect(
+      await db
+        .select()
+        .from(organizationProductEntitlement)
+        .where(eq(organizationProductEntitlement.organizationId, id)),
+    ).toHaveLength(0);
+  });
+
+  it('activates a scheduled partner award without extending its finance-approved end date', async () => {
+    const id = await makeOrg('active');
+    const customerId = await bindBillingAccount(id);
+    const approvedEnd = new Date('2026-10-01T00:00:00.000Z');
+    await db.insert(billingDiscountAward).values({
+      organizationId: id,
+      percentOff: 25,
+      status: 'scheduled',
+      startsAt: new Date('2026-08-25T00:00:00.000Z'),
+      endsAt: approvedEnd,
+      reviewAt: approvedEnd,
+      reason: 'One-month launch partner award',
+      providerCouponId: `coupon_partner_${id}`,
+    });
+
+    const response = await webhooks.request('/webhook', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        id: `evt_partner_paid_${id}`,
+        type: 'subscription.paid',
+        referenceId: id,
+        customerId,
+        subscription: {
+          id: `sub_partner_paid_${id}`,
+          customerId,
+          referenceId: id,
+          status: 'active',
+          currentPeriodEnd: '2026-10-08T00:00:00.000Z',
+        },
+        createdAt: '2026-09-08T00:00:00.000Z',
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    const [award] = await db
+      .select()
+      .from(billingDiscountAward)
+      .where(eq(billingDiscountAward.organizationId, id));
+    expect(award).toMatchObject({ status: 'active', programKey: null });
+    expect(award?.endsAt.toISOString()).toBe(approvedEnd.toISOString());
   });
 });
 
@@ -278,6 +377,54 @@ describe('billing router (org-scoped, via the BillingGateway port)', () => {
       applicationStatus: null,
       issuedCredit: null,
     });
+  });
+
+  it('does not describe a scheduled discount as effective before Stripe activates it', async () => {
+    const orgId = await makeOrg('active');
+    await db.insert(billingDiscountAward).values({
+      organizationId: orgId,
+      percentOff: 50,
+      status: 'scheduled',
+      startsAt: new Date('2026-09-01T00:00:00.000Z'),
+      endsAt: new Date('2027-09-01T00:00:00.000Z'),
+      reviewAt: new Date('2027-09-01T00:00:00.000Z'),
+      reason: 'Approved student discount',
+      providerCouponId: 'coupon_scheduled',
+    });
+    const app = billingApp(orgId, ['view']);
+
+    const response = await app.request('/');
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ effectiveDiscount: null });
+  });
+
+  it('does not attach an expired scheduled award to Checkout', async () => {
+    const orgId = await makeOrg('active');
+    await db.insert(billingDiscountAward).values({
+      organizationId: orgId,
+      percentOff: 25,
+      status: 'scheduled',
+      startsAt: new Date('2025-01-01T00:00:00.000Z'),
+      endsAt: new Date('2025-12-31T00:00:00.000Z'),
+      reviewAt: new Date('2025-12-31T00:00:00.000Z'),
+      reason: 'Expired partner award',
+      providerCouponId: 'coupon_expired',
+    });
+    const createCheckout = vi.spyOn(getContainer().billing, 'createCheckoutSession');
+    const app = billingApp(orgId, ['manage']);
+
+    const response = await app.request('/checkout', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+
+    expect(response.status).toBe(200);
+    expect(createCheckout).toHaveBeenCalledWith(
+      expect.not.objectContaining({ couponId: 'coupon_expired' }),
+    );
+    createCheckout.mockRestore();
   });
 
   it('POST /checkout requires manage (403 for a view-only member)', async () => {
@@ -351,6 +498,30 @@ describe('billing router (org-scoped, via the BillingGateway port)', () => {
     });
     expect(repeated.status).toBe(409);
     await expect(repeated.json()).resolves.toMatchObject({ code: 'checkout_pending' });
+  });
+
+  it('releases the Checkout lease when subscription discovery fails before provider creation', async () => {
+    const orgId = await makeOrg('active');
+    const app = billingApp(orgId, ['manage']);
+    const listSubscriptions = vi
+      .spyOn(getContainer().billing, 'listSubscriptions')
+      .mockRejectedValueOnce(new Error('Stripe search unavailable'));
+
+    const first = await app.request('/checkout', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    expect(first.status).toBe(500);
+
+    const retry = await app.request('/checkout', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    expect(retry.status).toBe(200);
+    expect(listSubscriptions).toHaveBeenCalledTimes(3);
+    listSubscriptions.mockRestore();
   });
 
   it('blocks new Checkout before it creates provider or database state when billing is disabled', async () => {

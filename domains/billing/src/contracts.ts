@@ -325,14 +325,17 @@ export interface BillingGateway {
    * Cancel one exact provider subscription without relying on eventually consistent search.
    *
    * @param subscriptionId - Exact Stripe subscription id.
+   * @param referenceId - Docket organization that owns the subscription.
    * @param idempotencyKey - Stable provider mutation key.
    * @param atPeriodEnd - Preserve paid access through the current service period when true.
+   * @returns the provider's updated subscription snapshot.
    */
   cancelSubscriptionById(
     subscriptionId: string,
+    referenceId: string,
     idempotencyKey: string,
     atPeriodEnd?: boolean,
-  ): Promise<void>;
+  ): Promise<Subscription>;
 
   /**
    * Extend an existing provider trial without changing local access directly.

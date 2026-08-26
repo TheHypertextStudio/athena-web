@@ -264,17 +264,20 @@ export function useOrgDetail(orgId: string): OrgDetailData {
         setActionError(null);
         setPending(`${action}-discount`);
         try {
-          const route = api.admin['discount-applications'].awards[':awardId'][action];
-          const response = await route.$post({
-            param: { awardId: award.id },
-            json:
-              action === 'renew'
-                ? {
+          const awardRoutes = api.admin['discount-applications'].awards[':awardId'];
+          const response =
+            action === 'renew'
+              ? await awardRoutes.renewals.$post({
+                  param: { awardId: award.id },
+                  json: {
                     reason: partnerReason,
                     endsAt: new Date(`${partnerEndsAt}T23:59:59.000Z`).toISOString(),
-                  }
-                : { reason: partnerReason },
-          });
+                  },
+                })
+              : await awardRoutes.revocations.$post({
+                  param: { awardId: award.id },
+                  json: { reason: partnerReason },
+                });
           if (!response.ok) {
             setActionError(
               await userProblemMessage(response, `Could not ${action} the current discount.`),

@@ -18,11 +18,15 @@ function outputPath(argv: readonly string[]): string | null {
 async function main(): Promise<number> {
   // This command must use Stripe while public Checkout remains disabled. The feature flag gates
   // customer mutations, not the release owner's read-only provider audit.
-  const report = await auditBillingLaunch(
-    db,
-    buildStripeBillingGateway(toAppRuntimeEnv()),
-    new Date(),
-  );
+  const runtimeEnv = toAppRuntimeEnv();
+  const report = await auditBillingLaunch(db, buildStripeBillingGateway(runtimeEnv), new Date(), {
+    ...(runtimeEnv.STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT
+      ? {
+          singleSubscriptionRedirectVerifiedAt:
+            runtimeEnv.STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT,
+        }
+      : {}),
+  });
   const json = `${JSON.stringify(report, null, 2)}\n`;
   const target = outputPath(process.argv.slice(2));
   if (target) {

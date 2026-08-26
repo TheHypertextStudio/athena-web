@@ -14,7 +14,7 @@ type Detail = InferResponseType<
   (typeof api.admin)['discount-applications'][':applicationId']['$get']
 >;
 type Preview = InferResponseType<
-  (typeof api.admin)['discount-applications'][':applicationId']['preview-approval']['$post']
+  (typeof api.admin)['discount-applications'][':applicationId']['approval-previews']['$post']
 >;
 
 /** Finance queue for eligibility evidence, approval effects, and final decisions. */
@@ -69,7 +69,7 @@ export default function DiscountsPage(): JSX.Element {
     setError(null);
     try {
       const response = await api.admin['discount-applications'][':applicationId'][
-        'preview-approval'
+        'approval-previews'
       ].$post({ param: { applicationId: selected.id } });
       if (response.ok) setPreview(await response.json());
       else setError(await userProblemMessage(response, 'Could not preview the Stripe effects.'));
@@ -85,17 +85,17 @@ export default function DiscountsPage(): JSX.Element {
     try {
       const response =
         action === 'approve'
-          ? await api.admin['discount-applications'][':applicationId'].approve.$post({
+          ? await api.admin['discount-applications'][':applicationId'].approvals.$post({
               param: { applicationId: selected.id },
               json: { reason, confirmation: preview?.confirmation ?? '' },
             })
           : action === 'reject'
-            ? await api.admin['discount-applications'][':applicationId'].reject.$post({
+            ? await api.admin['discount-applications'][':applicationId'].rejections.$post({
                 param: { applicationId: selected.id },
                 json: { reason },
               })
             : await api.admin['discount-applications'][':applicationId'][
-                'request-information'
+                'information-requests'
               ].$post({
                 param: { applicationId: selected.id },
                 json: { reason },

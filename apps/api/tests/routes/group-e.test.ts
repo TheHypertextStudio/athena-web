@@ -2,7 +2,13 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { appWithActor, clearDocketPro, getDb, seedBaseOrg } from '../support/routes-harness';
+import {
+  appWithActor,
+  clearDocketPro,
+  fakeSession,
+  getDb,
+  seedBaseOrg,
+} from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
@@ -187,16 +193,38 @@ describe('billing checkout/portal defaults (no urls/price/email provided)', () =
     expect((await body<{ url: string }>(res)).url).toMatch(/^https?:\/\//);
   });
 
-  it('checkout passes through a customerEmail when provided', async () => {
+  it('checkout derives the customer email from the Better Auth session', async () => {
+    const { orgId } = await seedBaseOrg(db, schema);
+    await clearDocketPro(db, schema, orgId);
+    const { getContainer } = await import('../../src/container');
+    const createCustomer = vi.spyOn(getContainer().billing, 'createCustomer');
+    const w = appWithActor(
+      r['billing'],
+      orgId,
+      ['manage'],
+      'actor_test',
+      fakeSession('billing-user', 'Billing User', 'owner@example.com'),
+    );
+    const res = await w.request('/checkout', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(200);
+    expect(createCustomer).toHaveBeenCalledWith(orgId, 'owner@example.com');
+    createCustomer.mockRestore();
+  });
+
+  it('checkout rejects a caller-controlled customer email', async () => {
     const { orgId } = await seedBaseOrg(db, schema);
     await clearDocketPro(db, schema, orgId);
     const w = appWithActor(r['billing'], orgId, ['manage']);
     const res = await w.request('/checkout', {
       method: 'POST',
       headers: J,
-      body: JSON.stringify({ customerEmail: 'a@e.com' }),
+      body: JSON.stringify({ customerEmail: 'attacker@example.com' }),
     });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(422);
   });
 
   it('portal returns a hosted url', async () => {

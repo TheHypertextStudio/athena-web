@@ -37,6 +37,7 @@ import { hasSqlState } from '../lib/sql-state';
 import { zJson, zParam } from '../lib/validate';
 import { requireStaffRole } from '../permissions/staff-guard';
 import { dispatchEssentialBillingNotice } from '../services/billing-notifications';
+import { assertSubscriptionDiscountOwnership } from '../services/billing-discount-ownership';
 import { reconcileBilling } from '../services/billing-reconciliation';
 
 import {
@@ -280,9 +281,11 @@ async function createPartnerPreview(
   organizationId: string,
   input: z.infer<typeof PartnerDiscountPreviewBody>,
 ): Promise<z.input<typeof PartnerDiscountPreviewOut>> {
-  assertPartnerAwardAvailable(await loadCurrentAward(organizationId), input);
+  const currentAward = await loadCurrentAward(organizationId);
+  assertPartnerAwardAvailable(currentAward, input);
   const gateway = getContainer().billing;
   const subscription = await gateway.getSubscription(organizationId);
+  assertSubscriptionDiscountOwnership(subscription, currentAward);
   const invoice = await gateway.getLatestRecurringInvoice(organizationId);
   let credit = null;
   let publicCredit: z.input<typeof AdminCreditPreviewOut> | null = null;
@@ -640,6 +643,7 @@ export const adminBillingRoutes = new Hono<AppEnv>()
           idempotencyKey: `${syncKey}:coupon`,
         });
         const subscription = await gateway.getSubscription(id);
+        assertSubscriptionDiscountOwnership(subscription, current);
         const applied = subscription
           ? await gateway.applySubscriptionDiscount({
               referenceId: id,
@@ -840,12 +844,41 @@ export const adminBillingRoutes = new Hono<AppEnv>()
           'Resolve the active Stripe subscription before granting complimentary Docket Pro',
         );
       }
-      let inserted;
+      let exemption;
       try {
-        inserted = await db
-          .insert(billingExemption)
-          .values({ organizationId: id, reason, grantedBy: staffUserId })
-          .returning();
+        exemption = await db.transaction(async (tx) => {
+          const [inserted] = await tx
+            .insert(billingExemption)
+            .values({ organizationId: id, reason, grantedBy: staffUserId })
+            .returning();
+          /* v8 ignore next -- @preserve defensive: insert always returns the inserted row */
+          if (!inserted) throw new NotFoundError('Exemption insert returned no row');
+          await tx
+            .insert(organizationProductEntitlement)
+            .values({
+              organizationId: id,
+              productKey: 'docket_pro',
+              status: 'active',
+              source: 'complimentary',
+            })
+            .onConflictDoUpdate({
+              target: [
+                organizationProductEntitlement.organizationId,
+                organizationProductEntitlement.productKey,
+              ],
+              set: {
+                status: 'active',
+                source: 'complimentary',
+                canceledAt: null,
+                updatedAt: new Date(),
+              },
+            });
+          await audit(tx, staffUserId, 'billing.exemption_granted', 'organization', id, {
+            exemptionId: inserted.id,
+            reason,
+          });
+          return inserted;
+        });
       } catch (err) {
         if (isUniqueViolation(err)) {
           throw new ConflictError(
@@ -854,33 +887,6 @@ export const adminBillingRoutes = new Hono<AppEnv>()
         }
         throw err;
       }
-      const exemption = inserted[0];
-      /* v8 ignore next -- @preserve defensive: insert always returns the inserted row */
-      if (!exemption) throw new NotFoundError('Exemption insert returned no row');
-      await db
-        .insert(organizationProductEntitlement)
-        .values({
-          organizationId: id,
-          productKey: 'docket_pro',
-          status: 'active',
-          source: 'complimentary',
-        })
-        .onConflictDoUpdate({
-          target: [
-            organizationProductEntitlement.organizationId,
-            organizationProductEntitlement.productKey,
-          ],
-          set: {
-            status: 'active',
-            source: 'complimentary',
-            canceledAt: null,
-            updatedAt: new Date(),
-          },
-        });
-      await audit(db, staffUserId, 'billing.exemption_granted', 'organization', id, {
-        exemptionId: exemption.id,
-        reason,
-      });
       await dispatchEssentialBillingNotice(db, {
         organizationId: id,
         idempotencyKey: `billing:complimentary:${exemption.id}:granted`,
@@ -913,26 +919,29 @@ export const adminBillingRoutes = new Hono<AppEnv>()
       const { id } = c.req.valid('param');
       const { reason } = c.req.valid('json');
       const { staffUserId } = c.get('staffCtx');
-      const revoked = await db
-        .update(billingExemption)
-        .set({ revokedAt: new Date(), revokedBy: staffUserId })
-        .where(and(eq(billingExemption.organizationId, id), isNull(billingExemption.revokedAt)))
-        .returning();
-      const exemption = revoked[0];
-      if (!exemption) throw new NotFoundError('Active billing exemption not found');
-      await db
-        .update(organizationProductEntitlement)
-        .set({ status: 'canceled', canceledAt: new Date() })
-        .where(
-          and(
-            eq(organizationProductEntitlement.organizationId, id),
-            eq(organizationProductEntitlement.productKey, 'docket_pro'),
-            eq(organizationProductEntitlement.source, 'complimentary'),
-          ),
-        );
-      await audit(db, staffUserId, 'billing.exemption_revoked', 'organization', id, {
-        exemptionId: exemption.id,
-        reason,
+      const revokedAt = new Date();
+      const exemption = await db.transaction(async (tx) => {
+        const [revoked] = await tx
+          .update(billingExemption)
+          .set({ revokedAt, revokedBy: staffUserId })
+          .where(and(eq(billingExemption.organizationId, id), isNull(billingExemption.revokedAt)))
+          .returning();
+        if (!revoked) throw new NotFoundError('Active billing exemption not found');
+        await tx
+          .update(organizationProductEntitlement)
+          .set({ status: 'canceled', canceledAt: revokedAt })
+          .where(
+            and(
+              eq(organizationProductEntitlement.organizationId, id),
+              eq(organizationProductEntitlement.productKey, 'docket_pro'),
+              eq(organizationProductEntitlement.source, 'complimentary'),
+            ),
+          );
+        await audit(tx, staffUserId, 'billing.exemption_revoked', 'organization', id, {
+          exemptionId: revoked.id,
+          reason,
+        });
+        return revoked;
       });
       await dispatchEssentialBillingNotice(db, {
         organizationId: id,

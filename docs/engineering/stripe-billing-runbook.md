@@ -11,6 +11,17 @@ Docket Pro product and its $8 USD monthly price through `pnpm integrations`. Con
 portal for payment methods, invoices, and cancellation at period end. Disable plan switching and
 promotion codes. Configure Stripe Tax only after finance approves the US registration matrix.
 
+Stripe exposes its one-subscription redirect only through Dashboard settings. In both test and
+live mode, activate the no-code customer portal, keep its login link enabled, and enable **Redirect
+customers with an active subscription to the customer portal** under Checkout and Payment Links.
+Follow Stripe's [one-subscription Checkout procedure](https://docs.stripe.com/payments/checkout/limit-subscriptions).
+After testing the redirect with the durable Docket customer, record the UTC verification time in
+`STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT`. `BILLING_ENABLED=true` must fail environment
+validation when this evidence is absent. The launch audit must also report
+`single_subscription_redirect_unverified` until the timestamp is present. Docket's database lease
+and exact subscription checks remain responsible for the trialing state that Stripe's Dashboard
+redirect does not classify as an existing active subscription.
+
 Open hosted Checkout and the portal before enablement. Both pages must name Docket or the approved
 legal merchant. The current shared Stripe test account displays “The Rebuilding America Project,”
 so public Docket Checkout must remain disabled until finance provisions a Docket account or

@@ -67,7 +67,21 @@ describe('auditBillingLaunch', () => {
       payload: {},
     });
 
-    const passing = await auditBillingLaunch(db, gateway, new Date('2026-08-25T00:00:00.000Z'));
+    const missingProviderControl = await auditBillingLaunch(
+      db,
+      gateway,
+      new Date('2026-08-25T00:00:00.000Z'),
+    );
+    expect(missingProviderControl).toMatchObject({
+      passed: false,
+      providerControls: {
+        singleSubscriptionRedirect: { verified: false, verifiedAt: null },
+      },
+    });
+
+    const passing = await auditBillingLaunch(db, gateway, new Date('2026-08-25T00:00:00.000Z'), {
+      singleSubscriptionRedirectVerifiedAt: '2026-08-24T23:00:00.000Z',
+    });
     expect(passing).toMatchObject({ passed: true, organizationCount: 1, unresolvedCount: 0 });
 
     const { orgId: duplicateOrg } = await seedBaseOrg(db, schema, false);
@@ -106,7 +120,9 @@ describe('auditBillingLaunch', () => {
       lastError: 'Multiple current Stripe subscriptions require finance review.',
     });
 
-    const blocked = await auditBillingLaunch(db, gateway, new Date('2026-08-25T00:05:00.000Z'));
+    const blocked = await auditBillingLaunch(db, gateway, new Date('2026-08-25T00:05:00.000Z'), {
+      singleSubscriptionRedirectVerifiedAt: '2026-08-24T23:00:00.000Z',
+    });
     expect(blocked.passed).toBe(false);
     expect(blocked.unresolvedCount).toBeGreaterThanOrEqual(3);
     const duplicate = blocked.organizations.find((row) => row.organizationId === duplicateOrg);

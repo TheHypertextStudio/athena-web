@@ -347,23 +347,30 @@ export class RealStripeGateway implements BillingGateway {
   /** {@inheritDoc BillingGateway.cancelSubscriptionById} */
   async cancelSubscriptionById(
     subscriptionId: string,
+    referenceId: string,
     idempotencyKey: string,
     atPeriodEnd = false,
-  ): Promise<void> {
+  ): Promise<Subscription> {
     /* v8 ignore start */
+    let updated: Stripe.Subscription;
     try {
       if (atPeriodEnd) {
-        await this.stripe.subscriptions.update(
+        updated = await this.stripe.subscriptions.update(
           subscriptionId,
           { cancel_at_period_end: true },
           { idempotencyKey },
         );
       } else {
-        await this.stripe.subscriptions.cancel(subscriptionId, {}, { idempotencyKey });
+        updated = await this.stripe.subscriptions.cancel(subscriptionId, {}, { idempotencyKey });
       }
     } catch (cause) {
       throw new Error('RealStripeGateway: failed to cancel the exact subscription.', { cause });
     }
+    const mapped = toSubscription(updated, referenceId);
+    if (mapped.referenceId !== referenceId) {
+      throw new Error('RealStripeGateway: exact subscription belongs to another organization.');
+    }
+    return mapped;
     /* v8 ignore stop */
   }
 

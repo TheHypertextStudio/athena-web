@@ -180,6 +180,14 @@ describe('slices', () => {
     expect(() => stripeServer.BILLING_ENABLED.parse(undefined)).toThrow();
     expect(stripeServer.BILLING_ENABLED.parse('true')).toBe(true);
     expect(stripeServer.BILLING_ENABLED.parse('false')).toBe(false);
+    expect(
+      stripeServer.STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT.parse(
+        '2026-08-25T22:30:00.000Z',
+      ),
+    ).toBe('2026-08-25T22:30:00.000Z');
+    expect(() =>
+      stripeServer.STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT.parse('yesterday'),
+    ).toThrow();
 
     expect(mcpServer.MCP_TASKS_ENABLED.parse('false')).toBe(false);
 
@@ -486,6 +494,7 @@ describe('api composition', () => {
       STRIPE_SECRET_KEY: 'sk_test_123',
       STRIPE_PUBLISHABLE_KEY: 'pk_test_123',
       STRIPE_WEBHOOK_SECRET: 'whsec_123',
+      STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT: '2026-08-25T22:30:00.000Z',
     } as const;
 
     it('passes with secret key + price id', async () => {
@@ -548,6 +557,7 @@ describe('api composition', () => {
         STRIPE_PUBLISHABLE_KEY: 'pk_test_123',
         STRIPE_WEBHOOK_SECRET: 'whsec_123',
         STRIPE_PRICE_DOCKET_PRO: 'price_123',
+        STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT: '2026-08-25T22:30:00.000Z',
       })) {
         vi.stubEnv(key, value);
       }
@@ -570,6 +580,7 @@ describe('api composition', () => {
         STRIPE_PUBLISHABLE_KEY: 'pk_live_123',
         STRIPE_WEBHOOK_SECRET: 'whsec_123',
         STRIPE_PRICE_DOCKET_PRO: 'price_123',
+        STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT: '2026-08-25T22:30:00.000Z',
       })) {
         vi.stubEnv(key, value);
       }
@@ -586,6 +597,7 @@ describe('api composition', () => {
         STRIPE_PUBLISHABLE_KEY: 'pk_live_123',
         STRIPE_WEBHOOK_SECRET: 'whsec_123',
         STRIPE_PRICE_DOCKET_PRO: 'price_123',
+        STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT: '2026-08-25T22:30:00.000Z',
       })) {
         vi.stubEnv(key, value);
       }
@@ -603,6 +615,7 @@ describe('api composition', () => {
         STRIPE_PUBLISHABLE_KEY: 'pk_live_123',
         STRIPE_WEBHOOK_SECRET: 'whsec_123',
         STRIPE_PRICE_DOCKET_PRO: 'price_123',
+        STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT: '2026-08-25T22:30:00.000Z',
       })) {
         vi.stubEnv(key, value);
       }
@@ -666,6 +679,22 @@ describe('api composition', () => {
       }
       await expect(import('../../src/api')).rejects.toThrow(
         'BILLING_ENABLED=true requires STRIPE_WEBHOOK_SECRET',
+      );
+    });
+
+    it('throws when Stripe duplicate-subscription redirect has not been verified', async () => {
+      for (const [key, value] of Object.entries({
+        ...validApiEnv(),
+        BILLING_ENABLED: 'true',
+        STRIPE_SECRET_KEY: 'sk_test_123',
+        STRIPE_PUBLISHABLE_KEY: 'pk_test_123',
+        STRIPE_WEBHOOK_SECRET: 'whsec_123',
+        STRIPE_PRICE_DOCKET_PRO: 'price_123',
+      })) {
+        vi.stubEnv(key, value);
+      }
+      await expect(import('../../src/api')).rejects.toThrow(
+        'BILLING_ENABLED=true requires STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT',
       );
     });
   });

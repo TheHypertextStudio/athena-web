@@ -23,7 +23,8 @@ export type BillingLaunchAuditProblemCode =
   | 'entitlement_period_mismatch'
   | 'entitlement_cancellation_mismatch'
   | 'provider_sync_unresolved'
-  | 'provider_query_failed';
+  | 'provider_query_failed'
+  | 'single_subscription_redirect_unverified';
 
 /** One actionable launch-audit finding. */
 export interface BillingLaunchAuditProblem {
@@ -52,7 +53,7 @@ export interface BillingLaunchAuditOrganization {
 /** Complete machine-readable billing enablement report. */
 export interface BillingLaunchAuditReport {
   /** Stable report format version. */
-  readonly schemaVersion: 1;
+  readonly schemaVersion: 2;
   /** ISO timestamp for the provider and database observations. */
   readonly generatedAt: string;
   /** True only when no organization has an unresolved finding. */
@@ -61,8 +62,26 @@ export interface BillingLaunchAuditReport {
   readonly organizationCount: number;
   /** Total actionable findings. */
   readonly unresolvedCount: number;
+  /** Stripe account controls that cannot be read through the provider API. */
+  readonly providerControls: {
+    /** Dashboard control that redirects an existing subscriber away from a second Checkout. */
+    readonly singleSubscriptionRedirect: {
+      /** Whether an operator supplied a valid non-future verification timestamp. */
+      readonly verified: boolean;
+      /** Operator verification timestamp, or null when it is absent or invalid. */
+      readonly verifiedAt: string | null;
+      /** Blocking audit finding, or null when verified. */
+      readonly problem: BillingLaunchAuditProblem | null;
+    };
+  };
   /** Per-organization evidence and findings. */
   readonly organizations: readonly BillingLaunchAuditOrganization[];
+}
+
+/** Operator attestations for Stripe controls that Stripe does not expose through its API. */
+export interface BillingLaunchAuditAttestations {
+  /** Timestamp recorded after verifying Stripe's existing-subscriber Checkout redirect. */
+  readonly singleSubscriptionRedirectVerifiedAt?: string;
 }
 
 function sameInstant(providerValue: string, storedValue: Date | null): boolean {
@@ -75,13 +94,28 @@ function sameInstant(providerValue: string, storedValue: Date | null): boolean {
  * @param database - Docket database to inspect.
  * @param gateway - Stripe provider boundary used only for customer and subscription reads.
  * @param now - Stable observation timestamp written into the report.
+ * @param attestations - Operator evidence for dashboard-only provider controls.
  * @returns A report whose `passed` value can gate billing enablement.
  */
 export async function auditBillingLaunch(
   database: Database,
   gateway: BillingGateway,
   now: Date = new Date(),
+  attestations: BillingLaunchAuditAttestations = {},
 ): Promise<BillingLaunchAuditReport> {
+  const redirectVerifiedAt = attestations.singleSubscriptionRedirectVerifiedAt;
+  const parsedRedirectVerifiedAt = redirectVerifiedAt ? new Date(redirectVerifiedAt) : null;
+  const redirectVerified =
+    parsedRedirectVerifiedAt !== null &&
+    Number.isFinite(parsedRedirectVerifiedAt.getTime()) &&
+    parsedRedirectVerifiedAt <= now;
+  const redirectProblem: BillingLaunchAuditProblem | null = redirectVerified
+    ? null
+    : {
+        code: 'single_subscription_redirect_unverified',
+        message:
+          'Stripe Checkout is not attested to redirect existing subscribers to the customer portal.',
+      };
   const [accounts, entitlements, unresolvedSyncs, organizations] = await Promise.all([
     database.select().from(organizationBillingAccount),
     database
@@ -223,13 +257,21 @@ export async function auditBillingLaunch(
       problems,
     });
   }
-  const unresolvedCount = rows.reduce((count, row) => count + row.problems.length, 0);
+  const unresolvedCount =
+    rows.reduce((count, row) => count + row.problems.length, 0) + (redirectProblem ? 1 : 0);
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     generatedAt: now.toISOString(),
     passed: unresolvedCount === 0,
     organizationCount: rows.length,
     unresolvedCount,
+    providerControls: {
+      singleSubscriptionRedirect: {
+        verified: redirectVerified,
+        verifiedAt: redirectVerified ? parsedRedirectVerifiedAt.toISOString() : null,
+        problem: redirectProblem,
+      },
+    },
     organizations: rows,
   };
 }

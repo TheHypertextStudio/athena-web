@@ -617,11 +617,12 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
     ]);
     const gw = new RealStripeGateway({ secretKey: 'sk' }, http);
 
-    await gw.cancelSubscriptionById('sub_exact', 'country-event-1');
+    const canceled = await gw.cancelSubscriptionById('sub_exact', 'org_1', 'country-event-1');
 
     expect(requestAt(reqs, 0).url).toContain('/v1/subscriptions/sub_exact');
     expect(requestAt(reqs, 0).method).toBe('DELETE');
     expect(requestAt(reqs, 0).headers.get('idempotency-key')).toBe('country-event-1');
+    expect(canceled).toMatchObject({ id: 'sub_exact', referenceId: 'org_1', status: 'canceled' });
   });
 
   it('schedules an exact paid subscription to end after its service period', async () => {
@@ -630,13 +631,19 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
     ]);
     const gw = new RealStripeGateway({ secretKey: 'sk' }, http);
 
-    await gw.cancelSubscriptionById('sub_exact', 'country-event-2', true);
+    const scheduled = await gw.cancelSubscriptionById(
+      'sub_exact',
+      'org_1',
+      'country-event-2',
+      true,
+    );
 
     const request = requestAt(reqs, 0);
     expect(request.url).toContain('/v1/subscriptions/sub_exact');
     expect(request.method).toBe('POST');
     expect(decodeURIComponent(request.body)).toContain('cancel_at_period_end=true');
     expect(request.headers.get('idempotency-key')).toBe('country-event-2');
+    expect(scheduled).toMatchObject({ id: 'sub_exact', referenceId: 'org_1', status: 'active' });
   });
 
   it('cancel is a no-op when there is no subscription', async () => {

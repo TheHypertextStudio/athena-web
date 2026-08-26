@@ -160,6 +160,9 @@ function assertCrossFieldRules(e: typeof env): void {
     const publishableKey =
       e.STRIPE_PUBLISHABLE_KEY ?? fail('BILLING_ENABLED=true requires STRIPE_PUBLISHABLE_KEY.');
     if (!e.STRIPE_WEBHOOK_SECRET) fail('BILLING_ENABLED=true requires STRIPE_WEBHOOK_SECRET.');
+    if (!e.STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT) {
+      fail('BILLING_ENABLED=true requires STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT.');
+    }
     if (
       !e.STRIPE_PRICE_DOCKET_PRO &&
       !e.DOCKET_PRICE_LOOKUP_DOCKET_PRO &&

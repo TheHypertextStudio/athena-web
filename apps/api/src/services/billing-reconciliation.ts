@@ -12,7 +12,7 @@ import {
   organizationBillingAccount,
   organizationProductEntitlement,
 } from '@docket/db';
-import { and, eq, inArray, isNull, lte } from 'drizzle-orm';
+import { and, eq, gt, inArray, isNull, lte } from 'drizzle-orm';
 
 import { dispatchEssentialBillingNotice } from './billing-notifications';
 
@@ -173,7 +173,12 @@ async function advanceAwards(
   const expiredAwards = await database
     .select()
     .from(billingDiscountAward)
-    .where(and(eq(billingDiscountAward.status, 'ending'), lte(billingDiscountAward.endsAt, now)));
+    .where(
+      and(
+        inArray(billingDiscountAward.status, ['scheduled', 'ending']),
+        lte(billingDiscountAward.endsAt, now),
+      ),
+    );
   for (const award of expiredAwards) {
     try {
       await gateway.removeSubscriptionDiscount(
@@ -290,7 +295,7 @@ export async function reconcileBilling(
         .values({
           organizationId: legacy.organizationId,
           stripeCustomerId: customerId,
-          countryVerificationRequired: false,
+          countryVerificationRequired: true,
         })
         .onConflictDoNothing({ target: organizationBillingAccount.organizationId });
     } catch (error) {
@@ -309,6 +314,17 @@ export async function reconcileBilling(
   for (const account of accounts) {
     try {
       let discountMismatch: string | null = null;
+      const [mirroredEntitlement] = await database
+        .select()
+        .from(organizationProductEntitlement)
+        .where(
+          and(
+            eq(organizationProductEntitlement.organizationId, account.organizationId),
+            eq(organizationProductEntitlement.productKey, 'docket_pro'),
+            eq(organizationProductEntitlement.source, 'stripe'),
+          ),
+        )
+        .limit(1);
       const subscriptions = await gateway.listSubscriptions(account.organizationId);
       const current = subscriptions.filter((subscription) => subscription.status !== 'canceled');
       if (current.length > 1) {
@@ -323,7 +339,41 @@ export async function reconcileBilling(
         alerts += 1;
         continue;
       }
-      const subscription = current[0];
+      let subscription = current[0];
+      if (!subscription && mirroredEntitlement?.stripeSubscriptionId) {
+        subscription =
+          (await gateway.getSubscriptionById(
+            mirroredEntitlement.stripeSubscriptionId,
+            account.organizationId,
+          )) ?? undefined;
+        if (!subscription) {
+          await recordReconciliation(
+            database,
+            account.organizationId,
+            now,
+            'failed',
+            { subscriptionId: mirroredEntitlement.stripeSubscriptionId },
+            'Stripe could not confirm the stored subscription state.',
+          );
+          alerts += 1;
+          continue;
+        }
+      } else if (
+        !subscription &&
+        mirroredEntitlement &&
+        ['trialing', 'active', 'past_due'].includes(mirroredEntitlement.status)
+      ) {
+        await recordReconciliation(
+          database,
+          account.organizationId,
+          now,
+          'failed',
+          {},
+          'The active Stripe entitlement has no stored subscription ID.',
+        );
+        alerts += 1;
+        continue;
+      }
       if (subscription) {
         if (subscription.customerId && subscription.customerId !== account.stripeCustomerId) {
           await recordReconciliation(
@@ -337,44 +387,93 @@ export async function reconcileBilling(
           alerts += 1;
           continue;
         }
-        if (account.countryVerificationRequired) {
-          const country = await gateway.getCustomerBillingCountry(account.stripeCustomerId);
-          if (!country) {
-            await recordReconciliation(
-              database,
-              account.organizationId,
-              now,
-              'failed',
-              { subscriptionId: subscription.id },
-              'Stripe billing country is not available yet.',
-            );
-            alerts += 1;
-            continue;
-          }
-          if (country !== 'US') {
-            await gateway.cancelSubscriptionById(
+        const country = await gateway.getCustomerBillingCountry(account.stripeCustomerId);
+        if (!country) {
+          await recordReconciliation(
+            database,
+            account.organizationId,
+            now,
+            'failed',
+            { subscriptionId: subscription.id },
+            'Stripe billing country is not available yet.',
+          );
+          alerts += 1;
+          continue;
+        }
+        if (country !== 'US') {
+          await database
+            .update(organizationBillingAccount)
+            .set({
+              billingCountry: country,
+              countryVerifiedAt: now,
+              countryVerificationRequired: false,
+            })
+            .where(eq(organizationBillingAccount.organizationId, account.organizationId));
+          if (subscription.status !== 'canceled' && subscription.cancelAtPeriodEnd !== true) {
+            subscription = await gateway.cancelSubscriptionById(
               subscription.id,
+              account.organizationId,
               `billing-country:reconcile:${account.organizationId}:${subscription.id}:cancel`,
               subscription.status !== 'trialing',
             );
-            await recordReconciliation(
-              database,
-              account.organizationId,
-              now,
-              'failed',
-              { subscriptionId: subscription.id, billingCountry: country },
-              'The launch accepts US billing addresses only.',
-            );
-            alerts += 1;
-            continue;
+            if (subscription.customerId && subscription.customerId !== account.stripeCustomerId) {
+              throw new Error('Stripe subscription customer changed during country cancellation.');
+            }
           }
-          await database
-            .update(organizationBillingAccount)
-            .set({ billingCountry: country, countryVerifiedAt: now })
-            .where(eq(organizationBillingAccount.organizationId, account.organizationId));
+          const [previous] = await database
+            .select({
+              status: organizationProductEntitlement.status,
+              graceEndsAt: organizationProductEntitlement.graceEndsAt,
+            })
+            .from(organizationProductEntitlement)
+            .where(
+              and(
+                eq(organizationProductEntitlement.organizationId, account.organizationId),
+                eq(organizationProductEntitlement.productKey, 'docket_pro'),
+              ),
+            )
+            .limit(1);
+          await applyBillingEvent(
+            database,
+            reconciliationEvent(account.organizationId, subscription, now),
+            now.toISOString(),
+          );
+          if (previous?.status && previous.status !== subscription.status) {
+            await dispatchEssentialBillingNotice(database, {
+              organizationId: account.organizationId,
+              idempotencyKey: `billing:reconcile:${account.organizationId}:${subscription.id}:${subscription.status}:${subscription.currentPeriodEnd}`,
+              subject: 'Docket Pro access changed',
+              text: `Stripe reconciliation changed Docket Pro from ${previous.status} to ${subscription.status}. Billing settings show the current access state and next action.`,
+              ...(subscription.status === 'past_due' || subscription.status === 'canceled'
+                ? { urgent: true }
+                : {}),
+            }).catch(() => undefined);
+          }
+          await recordReconciliation(
+            database,
+            account.organizationId,
+            now,
+            'failed',
+            { subscriptionId: subscription.id, billingCountry: country },
+            'The launch accepts US billing addresses only.',
+          );
+          alerts += 1;
+          repaired += 1;
+          continue;
         }
+        await database
+          .update(organizationBillingAccount)
+          .set({
+            billingCountry: country,
+            countryVerifiedAt: now,
+            countryVerificationRequired: false,
+          })
+          .where(eq(organizationBillingAccount.organizationId, account.organizationId));
         const [previous] = await database
-          .select({ status: organizationProductEntitlement.status })
+          .select({
+            status: organizationProductEntitlement.status,
+            graceEndsAt: organizationProductEntitlement.graceEndsAt,
+          })
           .from(organizationProductEntitlement)
           .where(
             and(
@@ -395,6 +494,7 @@ export async function reconcileBilling(
             and(
               eq(billingDiscountAward.organizationId, account.organizationId),
               inArray(billingDiscountAward.status, ['scheduled', 'active', 'ending']),
+              gt(billingDiscountAward.endsAt, now),
             ),
           )
           .limit(1);
@@ -440,37 +540,21 @@ export async function reconcileBilling(
               : {}),
           }).catch(() => undefined);
         }
-        repaired += 1;
-      } else {
-        const [entitlement] = await database
-          .select()
-          .from(organizationProductEntitlement)
-          .where(
-            and(
-              eq(organizationProductEntitlement.organizationId, account.organizationId),
-              eq(organizationProductEntitlement.productKey, 'docket_pro'),
-              eq(organizationProductEntitlement.source, 'stripe'),
-              inArray(organizationProductEntitlement.status, ['trialing', 'active', 'past_due']),
-            ),
-          )
-          .limit(1);
-        if (entitlement) {
-          await applyBillingEvent(
-            database,
-            reconciliationEvent(
-              account.organizationId,
-              {
-                id: entitlement.stripeSubscriptionId ?? 'provider_subscription_missing',
-                referenceId: account.organizationId,
-                status: 'canceled',
-                currentPeriodEnd: now.toISOString(),
-              },
-              now,
-            ),
-            now.toISOString(),
-          );
-          repaired += 1;
+        if (
+          previous?.status === 'past_due' &&
+          previous.graceEndsAt &&
+          previous.graceEndsAt <= now &&
+          subscription.status === 'past_due'
+        ) {
+          await dispatchEssentialBillingNotice(database, {
+            organizationId: account.organizationId,
+            idempotencyKey: `billing:grace-expired:${account.organizationId}:${previous.graceEndsAt.toISOString()}`,
+            subject: 'Shared work is now read-only',
+            text: 'The payment recovery period ended. Shared work is now read-only. An administrator can update the payment method to restore editing. Docket has not deleted workspace data.',
+            urgent: true,
+          }).catch(() => undefined);
         }
+        repaired += 1;
       }
       const invoice = subscription
         ? await gateway.getLatestRecurringInvoice(account.organizationId)

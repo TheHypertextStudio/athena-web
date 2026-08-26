@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { appWithSession, fakeSession, getDb } from '../support/routes-harness';
+import { appWithSession, clearDocketPro, fakeSession, getDb } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 import { getContainer } from '../../src/container';
 
@@ -75,6 +75,7 @@ async function makeOrg(
 
 /** Create the provider trial required by the finance trial-extension action. */
 async function startProviderTrial(orgId: string): Promise<void> {
+  await clearDocketPro(db, schema, orgId);
   await getContainer().billing.createCheckoutSession({
     referenceId: orgId,
     customerId: `cus_${orgId}`,
@@ -200,7 +201,7 @@ describe('discount application review', () => {
     });
 
     const decision = await app.request(
-      `/discount-applications/${applicationId}/request-information`,
+      `/discount-applications/${applicationId}/information-requests`,
       {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -216,7 +217,7 @@ describe('discount application review', () => {
     const app = appWithSession(admin, fakeSession(finance.userId));
 
     const response = await app.request(
-      `/discount-applications/${applicationId}/request-information`,
+      `/discount-applications/${applicationId}/information-requests`,
       {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -237,7 +238,7 @@ describe('discount application review', () => {
     const finance = await makeStaff('finance');
     const app = appWithSession(admin, fakeSession(finance.userId));
 
-    const preview = await app.request(`/discount-applications/${applicationId}/preview-approval`, {
+    const preview = await app.request(`/discount-applications/${applicationId}/approval-previews`, {
       method: 'POST',
     });
     expect(preview.status).toBe(200);
@@ -248,7 +249,7 @@ describe('discount application review', () => {
       credit: null,
     });
 
-    const approved = await app.request(`/discount-applications/${applicationId}/approve`, {
+    const approved = await app.request(`/discount-applications/${applicationId}/approvals`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -273,13 +274,13 @@ describe('discount application review', () => {
     const { applicationId, organizationId } = await makeApplication();
     const finance = await makeStaff('finance');
     const app = appWithSession(admin, fakeSession(finance.userId));
-    const preview = await app.request(`/discount-applications/${applicationId}/preview-approval`, {
+    const preview = await app.request(`/discount-applications/${applicationId}/approval-previews`, {
       method: 'POST',
     });
     const { confirmation } = await json<{ confirmation: string }>(preview);
     await startProviderTrial(organizationId);
 
-    const approved = await app.request(`/discount-applications/${applicationId}/approve`, {
+    const approved = await app.request(`/discount-applications/${applicationId}/approvals`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ reason: 'Verified.', confirmation }),
@@ -287,6 +288,32 @@ describe('discount application review', () => {
 
     expect(approved.status).toBe(412);
     await expect(approved.json()).resolves.toMatchObject({ code: 'precondition_failed' });
+  });
+
+  it('refuses to preview a public award over an unknown Stripe discount', async () => {
+    const { applicationId, organizationId } = await makeApplication();
+    const finance = await makeStaff('finance');
+    const app = appWithSession(admin, fakeSession(finance.userId));
+    const getSubscription = vi.spyOn(getContainer().billing, 'getSubscription').mockResolvedValue({
+      id: 'sub_external_discount',
+      customerId: `cus_${organizationId}`,
+      referenceId: organizationId,
+      status: 'active',
+      currentPeriodEnd: '2026-09-25T00:00:00.000Z',
+      discountIds: ['di_external'],
+      couponIds: ['coupon_external'],
+    });
+    const applyDiscount = vi.spyOn(getContainer().billing, 'applySubscriptionDiscount');
+
+    const preview = await app.request(`/discount-applications/${applicationId}/approval-previews`, {
+      method: 'POST',
+    });
+
+    expect(preview.status).toBe(409);
+    await expect(preview.json()).resolves.toMatchObject({ code: 'discount_award_conflict' });
+    expect(applyDiscount).not.toHaveBeenCalled();
+    getSubscription.mockRestore();
+    applyDiscount.mockRestore();
   });
 });
 
@@ -365,6 +392,40 @@ describe('private partner awards', () => {
 
     expect(response.status).toBe(412);
     await expect(response.json()).resolves.toMatchObject({ code: 'precondition_failed' });
+  });
+
+  it('refuses to preview a partner award over an unknown Stripe discount', async () => {
+    const organizationId = await makeOrg();
+    const finance = await makeStaff('finance');
+    const app = appWithSession(admin, fakeSession(finance.userId));
+    const endsAt = new Date();
+    endsAt.setUTCMonth(endsAt.getUTCMonth() + 12);
+    const getSubscription = vi.spyOn(getContainer().billing, 'getSubscription').mockResolvedValue({
+      id: 'sub_external_partner_discount',
+      customerId: `cus_${organizationId}`,
+      referenceId: organizationId,
+      status: 'active',
+      currentPeriodEnd: '2026-09-25T00:00:00.000Z',
+      discountIds: ['di_external_partner'],
+      couponIds: ['coupon_external_partner'],
+    });
+    const applyDiscount = vi.spyOn(getContainer().billing, 'applySubscriptionDiscount');
+
+    const preview = await app.request(`/orgs/${organizationId}/discount-awards/preview`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        percentOff: 25,
+        endsAt: endsAt.toISOString(),
+        reason: 'Launch partner agreement.',
+      }),
+    });
+
+    expect(preview.status).toBe(409);
+    await expect(preview.json()).resolves.toMatchObject({ code: 'discount_award_conflict' });
+    expect(applyDiscount).not.toHaveBeenCalled();
+    getSubscription.mockRestore();
+    applyDiscount.mockRestore();
   });
 
   it('rejects free or longer-than-24-month partner grants', async () => {
@@ -468,7 +529,7 @@ describe('private partner awards', () => {
       .returning();
     if (!award) throw new Error('partner award seed failed');
 
-    const renewed = await app.request(`/discount-applications/awards/${award.id}/renew`, {
+    const renewed = await app.request(`/discount-applications/awards/${award.id}/renewals`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -483,7 +544,7 @@ describe('private partner awards', () => {
     });
 
     const removeDiscount = vi.spyOn(getContainer().billing, 'removeSubscriptionDiscount');
-    const revoked = await app.request(`/discount-applications/awards/${award.id}/revoke`, {
+    const revoked = await app.request(`/discount-applications/awards/${award.id}/revocations`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ reason: 'Partner agreement ended.' }),
@@ -494,6 +555,55 @@ describe('private partner awards', () => {
       organizationId,
       `discount-award:${award.id}:revoke`,
     );
+  });
+
+  it('refuses to renew an award over a different Stripe discount', async () => {
+    const organizationId = await makeOrg();
+    const finance = await makeStaff('finance');
+    const app = appWithSession(admin, fakeSession(finance.userId));
+    const currentEnd = new Date();
+    currentEnd.setUTCMonth(currentEnd.getUTCMonth() + 6);
+    const renewedEnd = new Date();
+    renewedEnd.setUTCMonth(renewedEnd.getUTCMonth() + 12);
+    const [award] = await db
+      .insert(schema.billingDiscountAward)
+      .values({
+        organizationId,
+        percentOff: 25,
+        status: 'active',
+        startsAt: new Date(),
+        endsAt: currentEnd,
+        reviewAt: currentEnd,
+        reason: 'Launch partner agreement.',
+        providerCouponId: 'coupon_owned',
+        providerDiscountId: 'di_owned',
+      })
+      .returning();
+    if (!award) throw new Error('partner award seed failed');
+    const getSubscription = vi.spyOn(getContainer().billing, 'getSubscription').mockResolvedValue({
+      id: 'sub_external_renewal_discount',
+      referenceId: organizationId,
+      status: 'active',
+      currentPeriodEnd: '2026-09-25T00:00:00.000Z',
+      discountIds: ['di_external'],
+      couponIds: ['coupon_external'],
+    });
+    const applyDiscount = vi.spyOn(getContainer().billing, 'applySubscriptionDiscount');
+
+    const response = await app.request(`/discount-applications/awards/${award.id}/renewals`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        reason: 'Partner agreement renewed.',
+        endsAt: renewedEnd.toISOString(),
+      }),
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ code: 'discount_award_conflict' });
+    expect(applyDiscount).not.toHaveBeenCalled();
+    getSubscription.mockRestore();
+    applyDiscount.mockRestore();
   });
 });
 

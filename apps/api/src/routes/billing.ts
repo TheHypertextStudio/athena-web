@@ -34,7 +34,7 @@ import {
   PRODUCT_ENTITLEMENT_STATUSES,
   PRODUCT_KEYS,
 } from '@docket/billing/contracts';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -144,13 +144,6 @@ export type BillingSummaryOut = z.infer<typeof BillingSummaryOut>;
 /** Body for `POST /checkout`; product, price, redirects, and trial are server policy. */
 export const CheckoutBody = z
   .object({
-    customerEmail: z
-      .string()
-      .min(1)
-      .optional()
-      .describe(
-        'Email to pre-fill on the hosted checkout page; omit to let the provider collect it.',
-      ),
     returnTo: z
       .string()
       .max(2_000)
@@ -336,7 +329,9 @@ const billing = new Hono<AppEnv>()
         accessMode: org.isPersonal || hasWritablePro ? 'writable' : 'read_only',
         canManageBilling: actorCtx.capabilities.includes('manage'),
         effectiveDiscount:
-          awards[0] && ['scheduled', 'active', 'ending'].includes(awards[0].status)
+          awards[0] &&
+          ['active', 'ending'].includes(awards[0].status) &&
+          awards[0].endsAt.getTime() > now
             ? {
                 percentOff: awards[0].percentOff,
                 status: awards[0].status,
@@ -378,7 +373,7 @@ const billing = new Hono<AppEnv>()
       summary: 'Open a checkout session',
       capability: 'manage',
       response: RedirectOut,
-      description: `Open a hosted Stripe checkout session for Docket Pro and return {@link RedirectOut} \`{ url }\`. The server selects the Docket Pro price, the app's \`/billing/return\` URLs, and whether this organization receives its first 14-day trial. The optional \`customerEmail\` only pre-fills the hosted checkout page.
+      description: `Open a hosted Stripe checkout session for Docket Pro and return {@link RedirectOut} \`{ url }\`. The server selects the Docket Pro price, the app's \`/billing/return\` URLs, whether this organization receives its first 14-day trial, and the signed-in Better Auth account email used to pre-fill Checkout.
 
 Side effect: creates a checkout session. Docket Pro ownership changes only after a signed Stripe webhook records the subscription state; returning from checkout does not grant access. Requires \`manage\` because adding a paid product is an organization billing action. Related: \`POST /portal\` (manage Docket Pro), \`GET /\` (owned products), \`GET /lifecycle\` (data lifecycle).`,
     }),
@@ -419,28 +414,33 @@ Side effect: creates a checkout session. Docket Pro ownership changes only after
       );
       if (lease.kind === 'reusable') return ok(c, RedirectOut, { url: lease.url });
       if (lease.kind === 'pending') throw new CheckoutPendingError();
-      const providerSubscriptions = await gateway.listSubscriptions(orgId);
-      if (providerSubscriptions.some((subscription) => subscription.status !== 'canceled')) {
-        await failCheckoutAttempt(db, lease.id, now);
-        throw new SubscriptionExistsError();
-      }
-
       let account;
+      let award: { providerCouponId: string | null } | undefined;
       try {
-        account = await ensureBillingCustomer(db, gateway, orgId, input.customerEmail);
-      } catch {
-        throw new BillingCustomerMissingError();
+        const providerSubscriptions = await gateway.listSubscriptions(orgId);
+        if (providerSubscriptions.some((subscription) => subscription.status !== 'canceled')) {
+          throw new SubscriptionExistsError();
+        }
+        try {
+          account = await ensureBillingCustomer(db, gateway, orgId, c.get('session')?.user.email);
+        } catch {
+          throw new BillingCustomerMissingError();
+        }
+        [award] = await db
+          .select({ providerCouponId: billingDiscountAward.providerCouponId })
+          .from(billingDiscountAward)
+          .where(
+            and(
+              eq(billingDiscountAward.organizationId, orgId),
+              inArray(billingDiscountAward.status, ['scheduled', 'active']),
+              gt(billingDiscountAward.endsAt, now),
+            ),
+          )
+          .limit(1);
+      } catch (error) {
+        await failCheckoutAttempt(db, lease.id, now);
+        throw error;
       }
-      const [award] = await db
-        .select({ providerCouponId: billingDiscountAward.providerCouponId })
-        .from(billingDiscountAward)
-        .where(
-          and(
-            eq(billingDiscountAward.organizationId, orgId),
-            inArray(billingDiscountAward.status, ['scheduled', 'active']),
-          ),
-        )
-        .limit(1);
       const returnTo = input.returnTo ?? `/orgs/${orgId}/settings/billing`;
       const returnQuery = encodeURIComponent(returnTo);
       // Keep this lease reserved when Stripe times out. The result is unknown, so a new

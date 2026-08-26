@@ -33,6 +33,7 @@ import { apiDoc, describeRoute } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import { requireStaffRole } from '../permissions/staff-guard';
 import { dispatchEssentialBillingNotice } from '../services/billing-notifications';
+import { assertSubscriptionDiscountOwnership } from '../services/billing-discount-ownership';
 
 import { audit } from './admin-serializers';
 
@@ -394,14 +395,29 @@ async function previewApproval(
     .where(
       and(
         eq(billingDiscountAward.organizationId, application.organizationId),
-        eq(billingDiscountAward.programKey, application.programKey),
-        inArray(billingDiscountAward.status, ['active', 'ending']),
+        inArray(billingDiscountAward.status, [
+          'scheduled',
+          'applying',
+          'active',
+          'ending',
+          'provider_failed',
+        ]),
       ),
     )
     .limit(1);
   const gateway = getContainer().billing;
   const subscription = await gateway.getSubscription(application.organizationId);
-  if (currentAward) {
+  const renewingCurrentProgram =
+    currentAward?.programKey === application.programKey &&
+    ['active', 'ending'].includes(currentAward.status);
+  if (currentAward && !renewingCurrentProgram) {
+    throw new ConflictError(
+      'This workspace already has a discount award',
+      'discount_award_conflict',
+    );
+  }
+  assertSubscriptionDiscountOwnership(subscription, currentAward);
+  if (currentAward && renewingCurrentProgram) {
     const endsAt = addUtcMonths(currentAward.endsAt, program.reviewMonths);
     return {
       subscription,
@@ -552,7 +568,7 @@ export const adminDiscountRoutes = new Hono<AppEnv>()
     },
   )
   .post(
-    '/:applicationId/request-information',
+    '/:applicationId/information-requests',
     requireStaffRole('finance'),
     apiDoc({
       tag: 'Admin',
@@ -606,7 +622,7 @@ export const adminDiscountRoutes = new Hono<AppEnv>()
     },
   )
   .post(
-    '/:applicationId/preview-approval',
+    '/:applicationId/approval-previews',
     requireStaffRole('finance'),
     apiDoc({
       tag: 'Admin',
@@ -628,7 +644,7 @@ export const adminDiscountRoutes = new Hono<AppEnv>()
     },
   )
   .post(
-    '/:applicationId/approve',
+    '/:applicationId/approvals',
     requireStaffRole('finance'),
     apiDoc({
       tag: 'Admin',
@@ -666,8 +682,12 @@ export const adminDiscountRoutes = new Hono<AppEnv>()
       if (preview.currentAward) {
         const currentAward = preview.currentAward;
         const gateway = getContainer().billing;
-        let providerDiscountId = currentAward.providerDiscountId;
-        if (preview.subscription && !providerDiscountId) {
+        const observedProviderDiscountId = assertSubscriptionDiscountOwnership(
+          preview.subscription,
+          currentAward,
+        );
+        let providerDiscountId = observedProviderDiscountId ?? currentAward.providerDiscountId;
+        if (preview.subscription && !observedProviderDiscountId) {
           if (!currentAward.providerCouponId) {
             throw new ConflictError(
               'The award has no confirmed Stripe coupon. Finance must reconcile it before renewal.',
@@ -910,7 +930,7 @@ export const adminDiscountRoutes = new Hono<AppEnv>()
     },
   )
   .post(
-    '/:applicationId/reject',
+    '/:applicationId/rejections',
     requireStaffRole('finance'),
     apiDoc({
       tag: 'Admin',
@@ -961,7 +981,7 @@ export const adminDiscountRoutes = new Hono<AppEnv>()
     },
   )
   .post(
-    '/awards/:awardId/renew',
+    '/awards/:awardId/renewals',
     requireStaffRole('finance'),
     apiDoc({
       tag: 'Admin',
@@ -1007,8 +1027,12 @@ export const adminDiscountRoutes = new Hono<AppEnv>()
       }
       const gateway = getContainer().billing;
       const subscription = await gateway.getSubscription(current.award.organizationId);
-      let providerDiscountId = current.award.providerDiscountId;
-      if (subscription && !providerDiscountId) {
+      const observedProviderDiscountId = assertSubscriptionDiscountOwnership(
+        subscription,
+        current.award,
+      );
+      let providerDiscountId = observedProviderDiscountId ?? current.award.providerDiscountId;
+      if (subscription && !observedProviderDiscountId) {
         if (!current.award.providerCouponId) {
           throw new ConflictError(
             'The award has no confirmed Stripe coupon. Finance must reconcile it before renewal.',
@@ -1082,7 +1106,7 @@ export const adminDiscountRoutes = new Hono<AppEnv>()
     },
   )
   .post(
-    '/awards/:awardId/revoke',
+    '/awards/:awardId/revocations',
     requireStaffRole('finance'),
     apiDoc({
       tag: 'Admin',

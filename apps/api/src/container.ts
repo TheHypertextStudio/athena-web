@@ -71,6 +71,7 @@ export interface AppRuntimeEnv {
   /** @deprecated One-release compatibility alias for Docket Pro. */
   readonly DOCKET_PRICE_LOOKUP_TEAM?: string;
   readonly STRIPE_BILLING_PORTAL_CONFIG_ID?: string;
+  readonly STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT?: string;
   readonly ANTHROPIC_API_KEY?: string;
   readonly CLOUDFLARE_AI_GATEWAY_BASE_URL?: string;
   readonly CLOUDFLARE_AI_GATEWAY_TOKEN?: string;
@@ -184,6 +185,12 @@ export function toAppRuntimeEnv(): AppRuntimeEnv {
       : {}),
     ...(env.STRIPE_BILLING_PORTAL_CONFIG_ID
       ? { STRIPE_BILLING_PORTAL_CONFIG_ID: env.STRIPE_BILLING_PORTAL_CONFIG_ID }
+      : {}),
+    ...(env.STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT
+      ? {
+          STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT:
+            env.STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT,
+        }
       : {}),
     ...(env.ANTHROPIC_API_KEY ? { ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY } : {}),
     ...(env.CLOUDFLARE_AI_GATEWAY_BASE_URL

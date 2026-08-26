@@ -152,8 +152,12 @@ interface TaskViewScope {
 }
 
 /** Load the one grant scope consumed by both in-memory and SQL task visibility predicates. */
-async function loadTaskViewScope(orgId: string, actorId: string): Promise<TaskViewScope | null> {
-  const rows = await db
+async function loadTaskViewScope(
+  orgId: string,
+  actorId: string,
+  database: Database = db,
+): Promise<TaskViewScope | null> {
+  const rows = await database
     .select({
       id: actor.id,
       roleId: role.id,
@@ -246,13 +250,15 @@ async function loadTaskViewScope(orgId: string, actorId: string): Promise<TaskVi
  *
  * @param orgId - The caller's organization.
  * @param actorId - The caller's human actor id.
+ * @param database - The database or active transaction that owns the visibility read.
  * @returns a predicate over the minimal task columns.
  */
 export async function buildTaskViewFilter(
   orgId: string,
   actorId: string,
+  database: Database = db,
 ): Promise<(t: ViewableTaskParts) => boolean> {
-  const scope = await loadTaskViewScope(orgId, actorId);
+  const scope = await loadTaskViewScope(orgId, actorId, database);
   if (scope === null) return () => false;
 
   return (t) =>
@@ -389,7 +395,7 @@ export async function assertTaskCapability(
     // documented public, non-guest view baseline. Preserve that distinction in the error shape:
     // a visible public task with no write grant is forbidden, not hidden; a private/unviewable
     // task remains indistinguishable from a missing one.
-    const canView = await buildTaskViewFilter(orgId, actorId);
+    const canView = await buildTaskViewFilter(orgId, actorId, database);
     if (!canView(target)) throw new NotFoundError('Task not found');
   }
   throw new CapabilityError();

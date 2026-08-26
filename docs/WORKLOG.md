@@ -7,6 +7,31 @@
 
 ## Active Tasks
 
+### [RELEASE-GATE-004] Keep task authorization inside its transaction
+
+- **Status**: COMPLETED
+- **Started**: 2026-08-25
+- **Completed**: 2026-08-25
+- **Priority**: P0
+- **Description**: Main still could not finish API coverage after the large change-set audit was
+  repaired. A task-link PATCH that denied access to one endpoint opened its fallback visibility
+  query through the global database while the request transaction held task locks. PGlite waited
+  forever for that second connection, and all 46 later tests in the file timed out.
+- **Approach**: Let the task visibility scope use a caller-supplied database handle. Pass the
+  active transaction from task capability checks so the primary grant decision and its visibility
+  fallback read one snapshot and one connection.
+- **Files changed**: Updated the shared task authorization helper and this work record.
+- **Validation**: The isolated denial case timed out at 60 seconds before the fix. It passes in 9.1
+  seconds after the fix. The complete task-detail file passes all 55 cases in 61.9 seconds, and the
+  task-visibility helper file passes all 16 cases. API type checking, API lint, focused formatting,
+  and diff checks pass.
+- **Learnings**: A helper that accepts a transaction must not fall back to the global database on
+  an error branch. Test databases expose the deadlock immediately, while a PostgreSQL pool can hide
+  the split snapshot until concurrent work makes it visible.
+- **Blockers**: None.
+
+---
+
 ### [RELEASE-GATE-003] Keep large change-set audits below database limits
 
 - **Status**: COMPLETED

@@ -593,7 +593,10 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
       // Required by oauthProvider() (unless `disableJwtPlugin` is set, which Docket does not
       // set): issues the JWT-formatted, locally-verifiable access tokens the MCP resource
       // server checks via `verifyAccessToken` — no DB round-trip per tool call.
-      jwt(),
+      // Browser authorization arrives through the Web app's same-origin rewrite, so its dynamic
+      // base URL is the Web host. OAuth discovery names the API auth mount as the issuer, and
+      // RFC 9207 requires the authorization response to return that exact issuer too.
+      jwt({ jwt: { issuer: new URL('/api/auth', e.BETTER_AUTH_URL).toString() } }),
       oauthProvider({
         loginPage: e.OIDC_LOGIN_PAGE_URL,
         consentPage,

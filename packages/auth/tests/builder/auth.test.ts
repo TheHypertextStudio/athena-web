@@ -1687,6 +1687,24 @@ describe('buildAuthOptions env-gating', () => {
     expect(opts.advanced?.trustedProxyHeaders).toBe(true);
   });
 
+  it('pins the OAuth issuer to the canonical API auth URL', async () => {
+    const { buildAuthOptions } = await import('../../src/index');
+    const opts = buildAuthOptions(
+      {
+        ...baseEnv,
+        BETTER_AUTH_URL: 'https://api.docket.test',
+        BETTER_AUTH_ALLOWED_HOSTS: 'docket.test,api.docket.test',
+        OIDC_LOGIN_PAGE_URL: 'https://docket.test/sign-in',
+      },
+      MAILER_DEPS,
+    );
+
+    const jwtPlugin = opts.plugins?.find((plugin) => plugin.id === 'jwt');
+    expect(jwtPlugin?.options).toMatchObject({
+      jwt: { issuer: 'https://api.docket.test/api/auth' },
+    });
+  });
+
   it('shares session cookies across a parent domain only when BETTER_AUTH_COOKIE_DOMAIN is set', async () => {
     const { buildAuthOptions } = await import('../../src/index');
     const withoutDomain = buildAuthOptions(baseEnv, MAILER_DEPS);

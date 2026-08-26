@@ -29,6 +29,14 @@ and test-utils typechecks passed. Focused lint passed after the first broad lint
 Node's default 2 GB heap. The commit hook then passed its staged test and repository package lint
 gate with bounded package execution.
 
+The complete 0000 through 0103 migration chain also replayed into a fresh local PostgreSQL 16.15
+database. PostgreSQL recorded 104 migrations. The replay created the customer, open-Checkout, and
+provider-credit uniqueness indexes and seeded the active 50-percent Student and Nonprofit programs
+with 12-month review periods. Fresh-database audits reported zero duplicate provider customers and
+zero organizations with multiple current Docket Pro subscription ids. The disposable database was
+removed after the audit. This result proves PostgreSQL compatibility, but it does not replace the
+required replay and backfill report from a production-shaped snapshot.
+
 The hardening tests prove these boundaries:
 
 - A staff reconciliation does not touch another organization or run installation-wide award and

@@ -1602,8 +1602,7 @@ describe('buildAuthOptions env-gating', () => {
       MAILER_DEPS,
     );
     const provider = (opts.plugins ?? []).find((p) => p.id === 'oauth-provider') as
-      | { options?: Record<string, unknown> }
-      | undefined;
+      { options?: Record<string, unknown> } | undefined;
     expect(provider).toBeDefined();
     const options = provider?.options ?? {};
 
@@ -1692,9 +1691,11 @@ describe('buildAuthOptions env-gating', () => {
     const opts = buildAuthOptions(
       {
         ...baseEnv,
-        BETTER_AUTH_URL: 'https://api.docket.test',
+        // The browser reaches authorize through this host so host-only session cookies apply.
+        BETTER_AUTH_URL: 'https://docket.test',
         BETTER_AUTH_ALLOWED_HOSTS: 'docket.test,api.docket.test',
         OIDC_LOGIN_PAGE_URL: 'https://docket.test/sign-in',
+        MCP_ISSUER_URL: 'https://api.docket.test',
       },
       MAILER_DEPS,
     );

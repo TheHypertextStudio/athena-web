@@ -91,6 +91,7 @@ export interface AuthEnv {
   readonly OAUTH_PROXY_SECRET?: string | undefined;
   readonly OAUTH_PROXY_PRODUCTION_URL?: string | undefined;
   readonly OIDC_LOGIN_PAGE_URL?: string | undefined;
+  readonly MCP_ISSUER_URL?: string | undefined;
   readonly MCP_RESOURCE_URL?: string | undefined;
 }
 
@@ -208,13 +209,7 @@ export async function resolvePasskeyUser(
 
 /** A social provider a user can sign in / link an account with. */
 export type SocialProvider =
-  | 'google'
-  | 'github'
-  | 'linear'
-  | 'notion'
-  | 'apple'
-  | 'discord'
-  | 'microsoft';
+  'google' | 'github' | 'linear' | 'notion' | 'apple' | 'discord' | 'microsoft';
 
 /**
  * The `test-oauth` `generic-oauth` provider's OAuth2 client credentials.
@@ -596,7 +591,11 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
       // Browser authorization arrives through the Web app's same-origin rewrite, so its dynamic
       // base URL is the Web host. OAuth discovery names the API auth mount as the issuer, and
       // RFC 9207 requires the authorization response to return that exact issuer too.
-      jwt({ jwt: { issuer: new URL('/api/auth', e.BETTER_AUTH_URL).toString() } }),
+      jwt({
+        jwt: {
+          issuer: new URL('/api/auth', e.MCP_ISSUER_URL ?? e.BETTER_AUTH_URL).toString(),
+        },
+      }),
       oauthProvider({
         loginPage: e.OIDC_LOGIN_PAGE_URL,
         consentPage,

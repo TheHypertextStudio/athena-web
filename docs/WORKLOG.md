@@ -7,6 +7,20 @@
 
 ## Active Tasks
 
+### [MCP-OAUTH-ISSUER-001] Keep Codex OAuth callbacks on the canonical issuer
+
+- **Status**: REVIEW
+- **Started**: 2026-08-26
+- **Priority**: P0
+- **Description**: Codex rejected Docket's authorization callback because discovery advertised
+  `https://docket-api.hypertext.studio/api/auth` while the callback returned the Web host.
+- **Approach**: Keep the Web host for browser authorization and derive the OAuth issuer from
+  `MCP_ISSUER_URL`, which already names the canonical API origin.
+- **Validation**: The focused auth test first reproduced the Web/API issuer mismatch, then passed
+  after the issuer used `MCP_ISSUER_URL`.
+
+---
+
 ### [BILLING-LAUNCH-001] Make Docket Pro safe for real customer payments
 
 - **Status**: REVIEW
@@ -6420,8 +6434,8 @@ false`, and touched-file ESLint pass. Browser E2E remains a later dev-stack gate
 --dir apps/web test:e2e sign-in.spec.ts` passed 1/1 in 1.7m; `APP_URL=http://localhost:3100
 API_URL=http://localhost:4100 PASSKEY_RP_ID=localhost pnpm --dir apps/web test:e2e
 notifications.spec.ts` passed 1/1 after selector tightening; `pnpm --dir apps/web exec tsc -p
-  e2e/tsconfig.json --noEmit`, `pnpm --filter @docket/web lint`, and `pnpm exec prettier --check
-  apps/web/e2e/notifications.spec.ts` passed.
+e2e/tsconfig.json --noEmit`, `pnpm --filter @docket/web lint`, and `pnpm exec prettier --check
+apps/web/e2e/notifications.spec.ts` passed.
 - **Completion audit (2026-07-07)**: Verified the implemented tree against the notification-service
   spec checklist: schema symbols exist for intents, recipient snapshots, deliveries, preferences,
   contact points, and inbound events; API mounts exist for `/v1/me/notifications`,

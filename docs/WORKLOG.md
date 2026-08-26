@@ -9,7 +9,7 @@
 
 ### [TIME-HYDRATION-001] Restore production navigation from Time
 
-- **Status**: IN_PROGRESS
+- **Status**: BLOCKED
 - **Started**: 2026-08-26
 - **Priority**: P0
 - **Description**: The deployed `/time` document fails React hydration. The browser then accepts
@@ -19,10 +19,12 @@
   timezone- and query-dependent review UI after hydration. This prevents runtime locale and
   preference state from changing server text during hydration, while preserving the existing
   client-side Time review once the app is interactive.
-- **Validation**: Reproduce the Time-only hydration failure on production. Add a server-render
-  regression test. Run the focused Time suite, typecheck, and an authenticated production route
-  round trip after deployment.
-- **Blockers**: None.
+- **Validation**: Reproduced the Time-only hydration failure on production. The focused Time suite
+  passed with six tests. The Vercel production build `dpl_BhUCyoRpnDxyY3H1WNHv2dxy4EpF` reached
+  `READY`, but it has deployment protection and cannot receive the public alias.
+- **Blockers**: `docket.hypertext.studio` is not owned by any Vercel team available to this account.
+  Vercel rejected the alias assignment, so the authenticated production round trip cannot run and
+  the public domain still serves `dpl_4hA3mNJKzTVg6q4yXNmNfEmpnk9b`.
 
 ---
 

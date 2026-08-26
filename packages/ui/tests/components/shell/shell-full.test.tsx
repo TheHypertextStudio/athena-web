@@ -622,18 +622,21 @@ describe('Sidebar collapse', () => {
     );
   }
 
-  // Collapsing must cost reachability nothing. The words leave the screen; they do not leave the
-  // accessibility tree, so every destination is still findable by the name it always had.
-  it('keeps every destination reachable by name once the labels are gone', () => {
+  // Collapsing keeps daily routes on the labeled rail and exposes secondary navigation through More.
+  it('keeps daily destinations named and exposes secondary navigation through More', () => {
     renderSidebar(true);
     expect(screen.getByRole('link', { name: 'Today' })).toHaveAttribute('href', '/today');
-    expect(screen.getByRole('link', { name: 'Projects' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'My Work' })).toHaveAttribute(
+      'href',
+      `/orgs/${ACME.id}/my-work`,
+    );
     expect(screen.getByRole('button', { name: 'Search' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'More navigation' })).toBeInTheDocument();
   });
 
-  it('narrows to the icon rail, and back', () => {
+  it('narrows to the labeled navigation rail, and back', () => {
     renderSidebar(true);
-    expect(screen.getByRole('complementary', { name: 'Navigation' })).toHaveClass('lg:w-14');
+    expect(screen.getByRole('complementary', { name: 'Navigation' })).toHaveClass('lg:w-24');
     cleanupRender();
     renderSidebar(false);
     expect(screen.getByRole('complementary', { name: 'Navigation' })).toHaveClass('lg:w-60');

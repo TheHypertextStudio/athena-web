@@ -157,6 +157,9 @@ function assertCrossFieldRules(e: typeof env): void {
   if (e.BILLING_ENABLED) {
     const secretKey =
       e.STRIPE_SECRET_KEY ?? fail('BILLING_ENABLED=true requires STRIPE_SECRET_KEY.');
+    if (!e.STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID) {
+      fail('BILLING_ENABLED=true requires STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID.');
+    }
     const publishableKey =
       e.STRIPE_PUBLISHABLE_KEY ?? fail('BILLING_ENABLED=true requires STRIPE_PUBLISHABLE_KEY.');
     if (!e.STRIPE_WEBHOOK_SECRET) fail('BILLING_ENABLED=true requires STRIPE_WEBHOOK_SECRET.');
@@ -186,10 +189,17 @@ function assertCrossFieldRules(e: typeof env): void {
     if (e.BILLING_RECONCILIATION_MODE !== 'active') {
       fail('BILLING_ENABLED=true requires BILLING_RECONCILIATION_MODE=active.');
     }
-  } else if (e.BILLING_RECONCILIATION_MODE !== 'off' && !e.STRIPE_SECRET_KEY) {
-    fail(
-      `BILLING_RECONCILIATION_MODE=${e.BILLING_RECONCILIATION_MODE} requires STRIPE_SECRET_KEY.`,
-    );
+  } else if (e.BILLING_RECONCILIATION_MODE !== 'off') {
+    if (!e.STRIPE_SECRET_KEY) {
+      fail(
+        `BILLING_RECONCILIATION_MODE=${e.BILLING_RECONCILIATION_MODE} requires STRIPE_SECRET_KEY.`,
+      );
+    }
+    if (!e.STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID) {
+      fail(
+        `BILLING_RECONCILIATION_MODE=${e.BILLING_RECONCILIATION_MODE} requires STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID.`,
+      );
+    }
   }
 
   if (Boolean(e.EXPORT_BUCKET_URL) !== Boolean(e.EXPORT_BUCKET_TOKEN)) {

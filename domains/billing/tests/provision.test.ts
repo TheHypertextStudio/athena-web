@@ -266,11 +266,46 @@ describe('reconcileDocketStripe', () => {
 
   it('rejects mode-mismatched SDK credentials before contacting Stripe', async () => {
     await expect(
-      provisionDocketStripe({ ...input, secretKey: 'sk_live_wrong_mode' }),
+      provisionDocketStripe({
+        ...input,
+        secretKey: 'sk_live_wrong_mode',
+        expectedAccountId: 'acct_hypertext',
+      }),
     ).rejects.toThrow('test Stripe provisioning requires a mode-matched secret or restricted key');
     await expect(
-      provisionDocketStripe({ ...input, mode: 'live', secretKey: 'rk_test_wrong_mode' }),
+      provisionDocketStripe({
+        ...input,
+        mode: 'live',
+        secretKey: 'rk_test_wrong_mode',
+        expectedAccountId: 'acct_hypertext',
+      }),
     ).rejects.toThrow('live Stripe provisioning requires a mode-matched secret or restricted key');
+  });
+
+  it('performs no provisioning write when Stripe reports another account', async () => {
+    const createProduct = vi.fn();
+    const createPrice = vi.fn();
+    const createPortalConfiguration = vi.fn();
+    const createWebhookEndpoint = vi.fn();
+    const stripe = {
+      accounts: { retrieveCurrent: vi.fn(async () => ({ id: 'acct_personal' })) },
+      products: { create: createProduct },
+      prices: { create: createPrice },
+      billingPortal: { configurations: { create: createPortalConfiguration } },
+      webhookEndpoints: { create: createWebhookEndpoint },
+    } as unknown as Stripe;
+
+    await expect(
+      provisionDocketStripe(
+        { ...input, secretKey: 'sk_test_hypertext', expectedAccountId: 'acct_hypertext' },
+        stripe,
+      ),
+    ).rejects.toThrow('Stripe provisioning is not connected to the Hypertext Studio account');
+
+    expect(createProduct).not.toHaveBeenCalled();
+    expect(createPrice).not.toHaveBeenCalled();
+    expect(createPortalConfiguration).not.toHaveBeenCalled();
+    expect(createWebhookEndpoint).not.toHaveBeenCalled();
   });
 });
 

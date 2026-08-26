@@ -212,6 +212,7 @@ describe('buildAppContainer', () => {
       APP_MODE: 'local',
       BILLING_ENABLED: true,
       STRIPE_SECRET_KEY: 'sk_test_x',
+      STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID: 'acct_hypertext',
       STRIPE_PRICE_DOCKET_PRO: 'price_x',
       STRIPE_WEBHOOK_SECRET: 'whsec_x',
       STRIPE_BILLING_PORTAL_CONFIG_ID: 'bpc_x',
@@ -224,6 +225,7 @@ describe('buildAppContainer', () => {
       APP_MODE: 'local',
       BILLING_ENABLED: false,
       STRIPE_SECRET_KEY: 'sk_test_x',
+      STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID: 'acct_hypertext',
       STRIPE_PRICE_DOCKET_PRO: 'price_x',
     });
     expect(gateway).toBeInstanceOf(RealStripeGateway);
@@ -242,6 +244,7 @@ describe('buildAppContainer', () => {
     const container = buildAppContainer({
       APP_MODE: 'production',
       STRIPE_SECRET_KEY: 'sk_live_x',
+      STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID: 'acct_hypertext',
       STRIPE_PRICE_TEAM: 'price_x',
       STRIPE_WEBHOOK_SECRET: 'whsec_x',
       STRIPE_BILLING_PORTAL_CONFIG_ID: 'bpc_x',
@@ -283,6 +286,7 @@ describe('buildAppContainer', () => {
     const container = buildAppContainer({
       APP_MODE: 'production',
       STRIPE_SECRET_KEY: 'sk_live_x',
+      STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID: 'acct_hypertext',
       ANTHROPIC_API_KEY: 'sk-ant-x',
       RESEND_API_KEY: 'resend-key',
       RESEND_INBOUND_WEBHOOK_SECRET: 'resend-inbound-secret',

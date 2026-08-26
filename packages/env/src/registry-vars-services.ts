@@ -15,6 +15,15 @@ export const SERVICE_VARS: readonly VarSpec[] = [
     sensitive: true,
   },
   {
+    name: 'STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID',
+    slice: 'stripe',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: stripeServer.STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID,
+    where: 'Hypertext Studio Stripe account id (acct_...) pinned to every provider request',
+  },
+  {
     name: 'STRIPE_PUBLISHABLE_KEY',
     slice: 'stripe',
     scope: 'server',

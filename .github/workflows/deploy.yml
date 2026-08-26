@@ -87,6 +87,7 @@ jobs:
           ATHENA_ASYNC_RUNNER_ENABLED: "false"
           BILLING_ENABLED: "${{ vars.BILLING_ENABLED }}"
           BILLING_RECONCILIATION_MODE: "${{ vars.BILLING_RECONCILIATION_MODE }}"
+          STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID: "${{ vars.STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID }}"
           STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT: "${{ vars.STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT }}"
           # Required by the API's own env contract, which is validated at boot — so a missing value
           # is not a disabled feature, it is a container that exits before it listens on $PORT and a

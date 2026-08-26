@@ -6,6 +6,7 @@ import {
   mapEventType,
   parseApiBase,
   RealStripeGateway,
+  type RealStripeGatewayConfig,
   STRIPE_API_VERSION,
   toStatus,
   toSubscription,
@@ -25,6 +26,16 @@ const neverHttp: HttpClient = () => {
   throw new Error('unexpected network call in a pure-logic test');
 };
 
+const TEST_STRIPE_ACCOUNT_ID = 'acct_hypertext';
+
+/** Build the gateway against one non-production account fixture. */
+function createGateway(
+  config: Omit<RealStripeGatewayConfig, 'expectedAccountId'>,
+  http: HttpClient = neverHttp,
+): RealStripeGateway {
+  return new RealStripeGateway({ ...config, expectedAccountId: TEST_STRIPE_ACCOUNT_ID }, http);
+}
+
 /** One recorded SDK request: method, URL, and form/query body. */
 interface RecordedReq {
   readonly url: string;
@@ -39,16 +50,28 @@ interface RecordedReq {
  * response mapping) run end-to-end without a live Stripe. The SDK calls reached through
  * it are themselves v8-ignored; this exercises the surrounding pure logic.
  */
-function scriptedHttp(payloads: unknown[]): { http: HttpClient; reqs: RecordedReq[] } {
+function scriptedHttp(
+  payloads: unknown[],
+  accountId = TEST_STRIPE_ACCOUNT_ID,
+  recordAccount = false,
+): { http: HttpClient; reqs: RecordedReq[] } {
   const reqs: RecordedReq[] = [];
   let i = 0;
   const http: HttpClient = async (url, init) => {
-    reqs.push({
+    const request = {
       url,
       method: init?.method ?? 'GET',
       body: typeof init?.body === 'string' ? init.body : '',
       headers: new Headers(init?.headers),
-    });
+    };
+    if (url.includes('/v1/account')) {
+      if (recordAccount) reqs.push(request);
+      return new Response(JSON.stringify({ id: accountId, object: 'account' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', 'Request-Id': 'req_account' },
+      });
+    }
+    reqs.push(request);
     const payload = payloads[i] ?? {};
     i += 1;
     return new Response(JSON.stringify(payload), {
@@ -277,7 +300,7 @@ describe('RealStripeGateway constants', () => {
 });
 
 describe('RealStripeGateway.mapStripeEvent', () => {
-  const gw = new RealStripeGateway({ secretKey: 'sk_test_x' }, neverHttp);
+  const gw = createGateway({ secretKey: 'sk_test_x' }, neverHttp);
 
   it('normalizes a subscription event with its subscription snapshot', () => {
     const event = stripeEvent('customer.subscription.updated', {
@@ -372,21 +395,21 @@ describe('RealStripeGateway.mapStripeEvent', () => {
 
 describe('RealStripeGateway.verifyWebhook', () => {
   it('throws a clear error when no webhook secret is configured', async () => {
-    const gw = new RealStripeGateway({ secretKey: 'sk_test_x' }, neverHttp);
+    const gw = createGateway({ secretKey: 'sk_test_x' }, neverHttp);
     await expect(gw.verifyWebhook('{}', 'sig')).rejects.toThrow(/no STRIPE_WEBHOOK_SECRET/);
   });
 });
 
 describe('RealStripeGateway checkout guards (pure)', () => {
   it('createCheckoutSession throws when no price is configured', async () => {
-    const gw = new RealStripeGateway({ secretKey: 'sk_test_x' }, neverHttp);
+    const gw = createGateway({ secretKey: 'sk_test_x' }, neverHttp);
     await expect(
       gw.createCheckoutSession({ referenceId: 'o', priceKey: '', successUrl: 's', cancelUrl: 'c' }),
     ).rejects.toThrow(/no price key configured/);
   });
 
   it('createEmbeddedCheckoutSession throws when no price is configured', async () => {
-    const gw = new RealStripeGateway({ secretKey: 'sk_test_x' }, neverHttp);
+    const gw = createGateway({ secretKey: 'sk_test_x' }, neverHttp);
     await expect(
       gw.createEmbeddedCheckoutSession({
         referenceId: 'o',
@@ -399,9 +422,57 @@ describe('RealStripeGateway checkout guards (pure)', () => {
 });
 
 describe('RealStripeGateway methods (driven through the SDK over a scripted http)', () => {
+  it('verifies the Hypertext Studio account before the first provider request', async () => {
+    const { http, reqs } = scriptedHttp(
+      [{ id: 'cus_1', object: 'customer' }],
+      TEST_STRIPE_ACCOUNT_ID,
+      true,
+    );
+    const gw = createGateway({ secretKey: 'sk_test_x' }, http);
+
+    await expect(gw.createCustomer('org_1')).resolves.toEqual({
+      id: 'cus_1',
+      referenceId: 'org_1',
+    });
+
+    expect(requestAt(reqs, 0).url).toContain('/v1/account');
+    expect(requestAt(reqs, 1).url).toContain('/v1/customers');
+  });
+
+  it('blocks the provider request when the configured account does not match', async () => {
+    const { http, reqs } = scriptedHttp([], 'acct_personal', true);
+    const gw = createGateway({ secretKey: 'sk_test_x' }, http);
+
+    await expect(gw.createCustomer('org_1')).rejects.toThrow(
+      'RealStripeGateway: failed to create customer.',
+    );
+    expect(reqs).toHaveLength(1);
+    expect(requestAt(reqs, 0).url).toContain('/v1/account');
+  });
+
+  it('shares one account verification across concurrent provider requests', async () => {
+    let accountReads = 0;
+    let customerCreates = 0;
+    const http: HttpClient = async (url) => {
+      if (url.includes('/v1/account')) {
+        accountReads += 1;
+        await Promise.resolve();
+        return Response.json({ id: TEST_STRIPE_ACCOUNT_ID, object: 'account' });
+      }
+      customerCreates += 1;
+      return Response.json({ id: `cus_${customerCreates}`, object: 'customer' });
+    };
+    const gw = createGateway({ secretKey: 'sk_test_x' }, http);
+
+    await Promise.all([gw.createCustomer('org_1'), gw.createCustomer('org_2')]);
+
+    expect(accountReads).toBe(1);
+    expect(customerCreates).toBe(2);
+  });
+
   it('creates one organization customer with an idempotent provider request', async () => {
     const { http, reqs } = scriptedHttp([{ id: 'cus_1', object: 'customer' }]);
-    const gw = new RealStripeGateway({ secretKey: 'sk_test_x' }, http);
+    const gw = createGateway({ secretKey: 'sk_test_x' }, http);
 
     await expect(gw.createCustomer('org_1', 'owner@example.com')).resolves.toEqual({
       id: 'cus_1',
@@ -422,7 +493,7 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
         { id: 'cus_2', object: 'customer', metadata: { referenceId: 'org_1' } },
       ]),
     ]);
-    const gw = new RealStripeGateway({ secretKey: 'sk_test_x' }, http);
+    const gw = createGateway({ secretKey: 'sk_test_x' }, http);
 
     await expect(gw.listCustomers('org_1')).resolves.toEqual([
       { id: 'cus_1', referenceId: 'org_1' },
@@ -438,14 +509,20 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
     const { http } = scriptedHttp([
       { id: 'cus_1', object: 'customer', address: { country: 'US' } },
     ]);
-    const gw = new RealStripeGateway({ secretKey: 'sk_test_x' }, http);
+    const gw = createGateway({ secretKey: 'sk_test_x' }, http);
 
     await expect(gw.getCustomerBillingCountry('cus_1')).resolves.toBe('US');
   });
 
   it('creates a hosted checkout, mapping price + redirect URLs', async () => {
     const { http, reqs } = scriptedHttp([{ id: 'cs_h', url: 'https://stripe/checkout' }]);
-    const gw = new RealStripeGateway({ secretKey: 'sk_test_x', priceKey: 'price_default' }, http);
+    const gw = createGateway(
+      {
+        secretKey: 'sk_test_x',
+        priceKey: 'price_default',
+      },
+      http,
+    );
     const result = await gw.createCheckoutSession({
       referenceId: 'org_1',
       priceKey: 'price_override',
@@ -477,8 +554,12 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
 
   it('falls back to the configured price and a custom trial-days override', async () => {
     const { http, reqs } = scriptedHttp([{ id: 'cs_1', url: 'u' }]);
-    const gw = new RealStripeGateway(
-      { secretKey: 'sk', priceKey: 'price_default', trialDays: 30 },
+    const gw = createGateway(
+      {
+        secretKey: 'sk',
+        priceKey: 'price_default',
+        trialDays: 30,
+      },
       http,
     );
     await gw.createCheckoutSession({
@@ -493,7 +574,7 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
 
   it('omits Stripe trial parameters when the organization already consumed its trial', async () => {
     const { http, reqs } = scriptedHttp([{ id: 'cs_paid', url: 'u' }]);
-    const gw = new RealStripeGateway({ secretKey: 'sk', priceKey: 'price_default' }, http);
+    const gw = createGateway({ secretKey: 'sk', priceKey: 'price_default' }, http);
     await gw.createCheckoutSession({
       referenceId: 'returning',
       priceKey: 'price_default',
@@ -509,7 +590,7 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
       list([{ id: 'price_resolved', object: 'price' }]),
       { id: 'cs_2', url: 'u2' },
     ]);
-    const gw = new RealStripeGateway({ secretKey: 'sk' }, http);
+    const gw = createGateway({ secretKey: 'sk' }, http);
     await gw.createCheckoutSession({
       referenceId: 'o',
       priceKey: 'lookup_team', // not a price_ id → triggers prices.list
@@ -523,7 +604,7 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
 
   it('throws a clear error when a lookup key resolves to no price', async () => {
     const { http } = scriptedHttp([list([])]);
-    const gw = new RealStripeGateway({ secretKey: 'sk' }, http);
+    const gw = createGateway({ secretKey: 'sk' }, http);
     await expect(
       gw.createCheckoutSession({
         referenceId: 'o',
@@ -536,7 +617,7 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
 
   it('creates an embedded checkout and returns the client secret', async () => {
     const { http, reqs } = scriptedHttp([{ id: 'cs_e', client_secret: 'cs_secret_123' }]);
-    const gw = new RealStripeGateway({ secretKey: 'sk', priceKey: 'price_default' }, http);
+    const gw = createGateway({ secretKey: 'sk', priceKey: 'price_default' }, http);
     const result = await gw.createEmbeddedCheckoutSession({
       referenceId: 'org_1',
       priceKey: 'price_default',
@@ -561,7 +642,7 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
         },
       ]),
     ]);
-    const gw = new RealStripeGateway({ secretKey: 'sk' }, http);
+    const gw = createGateway({ secretKey: 'sk' }, http);
     const sub = await gw.getSubscription('org_5');
     expect(sub).toEqual({
       id: 'sub_found',
@@ -575,7 +656,7 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
 
   it('returns null when no subscription matches', async () => {
     const { http } = scriptedHttp([searchResult([])]);
-    const gw = new RealStripeGateway({ secretKey: 'sk' }, http);
+    const gw = createGateway({ secretKey: 'sk' }, http);
     expect(await gw.getSubscription('none')).toBeNull();
   });
 
@@ -589,7 +670,7 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
         items: list([{ current_period_end: 1_700_000_000 }]),
       },
     ]);
-    const gw = new RealStripeGateway({ secretKey: 'sk' }, http);
+    const gw = createGateway({ secretKey: 'sk' }, http);
 
     await expect(gw.getSubscriptionById('sub_unowned', 'org_claimed')).rejects.toThrow(
       'belongs to another organization',
@@ -603,7 +684,7 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
         stripeSub({ id: 'sub_second', referenceId: 'org_duplicate', status: 'past_due' }),
       ]),
     ]);
-    const gw = new RealStripeGateway({ secretKey: 'sk' }, http);
+    const gw = createGateway({ secretKey: 'sk' }, http);
 
     const subscriptions = await gw.listSubscriptions('org_duplicate');
 
@@ -622,7 +703,7 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
       ]),
       { id: 'sub_cancel', object: 'subscription', status: 'canceled', items: list([]) },
     ]);
-    const gw = new RealStripeGateway({ secretKey: 'sk' }, http);
+    const gw = createGateway({ secretKey: 'sk' }, http);
     await gw.cancelSubscription('org_1');
     expect(requestAt(reqs, 1).url).toContain('/v1/subscriptions/sub_cancel');
     expect(requestAt(reqs, 1).method).toBe('DELETE');
@@ -645,7 +726,7 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
         items: list([]),
       },
     ]);
-    const gw = new RealStripeGateway({ secretKey: 'sk' }, http);
+    const gw = createGateway({ secretKey: 'sk' }, http);
 
     const canceled = await gw.cancelSubscriptionById('sub_exact', 'org_1', 'country-event-1');
 
@@ -666,7 +747,7 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
         items: list([{ current_period_end: 1_700_000_000 }]),
       },
     ]);
-    const gw = new RealStripeGateway({ secretKey: 'sk' }, http);
+    const gw = createGateway({ secretKey: 'sk' }, http);
 
     await expect(
       gw.cancelSubscriptionById('sub_other', 'org_claimed', 'country-event-wrong-owner'),
@@ -692,7 +773,7 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
         items: list([]),
       },
     ]);
-    const gw = new RealStripeGateway({ secretKey: 'sk' }, http);
+    const gw = createGateway({ secretKey: 'sk' }, http);
 
     const scheduled = await gw.cancelSubscriptionById(
       'sub_exact',
@@ -712,7 +793,7 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
 
   it('cancel is a no-op when there is no subscription', async () => {
     const { http, reqs } = scriptedHttp([searchResult([])]);
-    const gw = new RealStripeGateway({ secretKey: 'sk' }, http);
+    const gw = createGateway({ secretKey: 'sk' }, http);
     await gw.cancelSubscription('org_x');
     expect(reqs).toHaveLength(1);
   });
@@ -740,7 +821,7 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
         items: list([{ current_period_end: extendedEnd }]),
       },
     ]);
-    const gw = new RealStripeGateway({ secretKey: 'sk' }, http);
+    const gw = createGateway({ secretKey: 'sk' }, http);
 
     const result = await gw.extendTrial('org_trial', 7, 'trial-extension-op');
 
@@ -754,7 +835,7 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
 
   it('opens a billing portal session with the configured config id', async () => {
     const { http, reqs } = scriptedHttp([{ id: 'bps_1', url: 'https://portal' }]);
-    const gw = new RealStripeGateway({ secretKey: 'sk', portalConfigId: 'bpc_1' }, http);
+    const gw = createGateway({ secretKey: 'sk', portalConfigId: 'bpc_1' }, http);
     const result = await gw.createBillingPortalSession({
       customerId: 'cus_1',
       returnUrl: 'https://app.example/orgs/org_1/settings/billing',
@@ -774,7 +855,7 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
       { id: 'price_pro', object: 'price', product: 'prod_pro' },
       { id: 'coupon_student', object: 'coupon' },
     ]);
-    const gw = new RealStripeGateway({ secretKey: 'sk' }, http);
+    const gw = createGateway({ secretKey: 'sk' }, http);
 
     await expect(
       gw.createDiscountCoupon({
@@ -809,7 +890,7 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
         items: list([]),
       },
     ]);
-    const gw = new RealStripeGateway({ secretKey: 'sk' }, http);
+    const gw = createGateway({ secretKey: 'sk' }, http);
 
     await expect(
       gw.applySubscriptionDiscount({
@@ -832,7 +913,7 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
       ]),
       { id: 'di_1', object: 'discount', deleted: true },
     ]);
-    const gw = new RealStripeGateway({ secretKey: 'sk' }, http);
+    const gw = createGateway({ secretKey: 'sk' }, http);
 
     await gw.removeSubscriptionDiscount('org_1', 'award-1-remove');
 
@@ -864,7 +945,7 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
         tax_amounts: [{ amount: 18 }],
       },
     ]);
-    const gw = new RealStripeGateway({ secretKey: 'sk' }, http);
+    const gw = createGateway({ secretKey: 'sk' }, http);
 
     await expect(
       gw.previewCreditNote({ invoiceId: 'in_1', invoiceLineId: 'il_1', baseAmount: 200 }),
@@ -940,7 +1021,7 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
         },
       ]),
     ]);
-    const gw = new RealStripeGateway({ secretKey: 'sk', priceKey: 'price_docket_pro' }, http);
+    const gw = createGateway({ secretKey: 'sk', priceKey: 'price_docket_pro' }, http);
 
     await expect(gw.getLatestRecurringInvoice('org_1')).resolves.toEqual({
       invoiceId: 'in_1',
@@ -955,7 +1036,13 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
 
   it('honors a custom apiBase override (stripe-mock)', async () => {
     const { http, reqs } = scriptedHttp([{ id: 'bps_2', url: 'https://portal' }]);
-    const gw = new RealStripeGateway({ secretKey: 'sk', apiBase: 'http://localhost:12111' }, http);
+    const gw = createGateway(
+      {
+        secretKey: 'sk',
+        apiBase: 'http://localhost:12111',
+      },
+      http,
+    );
     await gw.createBillingPortalSession({ customerId: 'cus_2', returnUrl: 'https://app/return' });
     expect(requestAt(reqs, 0).url).toContain('http://localhost:12111/v1/billing_portal/sessions');
   });

@@ -10,13 +10,21 @@ Operate Docket billing only in the Hypertext Studio Stripe account. Use the Hype
 instance for every Stripe Dashboard check. Never use a personal Chrome profile or personal Stripe
 account for Docket configuration, verification, or canary work.
 
+Set `STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID` from an independently verified Hypertext Studio Dashboard
+session anywhere a real Stripe key can reach Docket. Do not discover or replace this pin from the
+same API key that it verifies. The API checks the account through Stripe before the gateway sends
+its first read or mutation. The gateway caches that result because one immutable secret cannot
+change accounts inside a running process. A mismatch or failed verification blocks every later
+provider request from that process. The setup provisioner performs the same account check before it
+creates or updates any Stripe resource.
+
 Keep `BILLING_ENABLED=false` while migrations or backfill rows remain unresolved. Configure the
 Docket Pro product and its $8 USD monthly price through `pnpm integrations`. Configure the customer
 portal for payment methods, invoices, and cancellation at period end. Disable plan switching and
 promotion codes. Configure Stripe Tax only after finance approves the US registration matrix.
 
 Set `BILLING_RECONCILIATION_MODE=off` before Stripe credentials are present. Set it to `shadow`
-only after the deployment carries the Hypertext Studio Stripe secret. Shadow mode runs the
+only after the deployment carries the Hypertext Studio Stripe secret and account pin. Shadow mode runs the
 read-only launch audit every 15 minutes. It does not repair entitlements, cancel subscriptions,
 change discounts, advance awards, expire applications, or delete evidence. Observe that mode for
 at least 24 hours. Resolve every audit finding before setting the mode to `active`.

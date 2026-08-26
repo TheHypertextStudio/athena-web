@@ -14,6 +14,7 @@ const FULL_ENV = {
   APP_MODE: 'production' as const,
   BILLING_ENABLED: true,
   STRIPE_SECRET_KEY: 'sk_live_x',
+  STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID: 'acct_hypertext',
   STRIPE_WEBHOOK_SECRET: 'whsec_x',
   STRIPE_PRICE_TEAM: 'price_team',
   DOCKET_PRICE_LOOKUP_TEAM: 'lookup_team',

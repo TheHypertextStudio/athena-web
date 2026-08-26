@@ -201,6 +201,11 @@ export const authServer = {
 /** Stripe billing (server scope; publishable key is a client var). */
 export const stripeServer = {
   STRIPE_SECRET_KEY: z.string().optional(),
+  /** Hypertext Studio Stripe account pinned to every provider request. */
+  STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID: z
+    .string()
+    .regex(/^acct_[A-Za-z0-9]+$/u)
+    .optional(),
   /** Browser-safe Stripe key returned through `/v1/config`; stored server-side for runtime deploys. */
   STRIPE_PUBLISHABLE_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),

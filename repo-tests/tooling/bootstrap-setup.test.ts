@@ -383,6 +383,9 @@ describe('production account-creation deployment contract', () => {
     expect(workflow).toContain(
       'BILLING_RECONCILIATION_MODE: "${{ vars.BILLING_RECONCILIATION_MODE }}"',
     );
+    expect(workflow).toContain(
+      'STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID: "${{ vars.STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID }}"',
+    );
     expect(workflow).not.toContain('BILLING_ENABLED: "false"');
     expect(workflow).not.toContain('MCP_ALLOWED_ORIGINS');
     expect(workflow).not.toContain('https://claude.ai');

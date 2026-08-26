@@ -185,6 +185,10 @@ describe('slices', () => {
     expect(stripeServer.BILLING_RECONCILIATION_MODE.parse('shadow')).toBe('shadow');
     expect(stripeServer.BILLING_RECONCILIATION_MODE.parse('active')).toBe('active');
     expect(() => stripeServer.BILLING_RECONCILIATION_MODE.parse('mutating')).toThrow();
+    expect(stripeServer.STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID.parse('acct_hypertext')).toBe(
+      'acct_hypertext',
+    );
+    expect(() => stripeServer.STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID.parse('hypertext')).toThrow();
     expect(
       stripeServer.STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT.parse(
         '2026-08-25T22:30:00.000Z',
@@ -498,6 +502,7 @@ describe('api composition', () => {
   describe('cross-field: BILLING_ENABLED requires complete Stripe configuration', () => {
     const requiredStripeRuntime = {
       STRIPE_SECRET_KEY: 'sk_test_123',
+      STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID: 'acct_hypertext',
       STRIPE_PUBLISHABLE_KEY: 'pk_test_123',
       STRIPE_WEBHOOK_SECRET: 'whsec_123',
       STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT: '2026-08-25T22:30:00.000Z',
@@ -528,6 +533,37 @@ describe('api composition', () => {
       }
       await expect(import('../../src/api')).rejects.toThrow(
         'BILLING_RECONCILIATION_MODE=shadow requires STRIPE_SECRET_KEY',
+      );
+    });
+
+    it('requires the Hypertext Studio account pin before shadow reconciliation can query Stripe', async () => {
+      for (const [key, value] of Object.entries({
+        ...validApiEnv(),
+        BILLING_RECONCILIATION_MODE: 'shadow',
+        STRIPE_SECRET_KEY: 'sk_test_123',
+      })) {
+        vi.stubEnv(key, value);
+      }
+      await expect(import('../../src/api')).rejects.toThrow(
+        'BILLING_RECONCILIATION_MODE=shadow requires STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID',
+      );
+    });
+
+    it('requires the Hypertext Studio account pin before public Checkout can start', async () => {
+      for (const [key, value] of Object.entries({
+        ...validApiEnv(),
+        BILLING_ENABLED: 'true',
+        BILLING_RECONCILIATION_MODE: 'active',
+        STRIPE_SECRET_KEY: 'sk_test_123',
+        STRIPE_PUBLISHABLE_KEY: 'pk_test_123',
+        STRIPE_WEBHOOK_SECRET: 'whsec_123',
+        STRIPE_PRICE_DOCKET_PRO: 'price_123',
+        STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT: '2026-08-25T22:30:00.000Z',
+      })) {
+        vi.stubEnv(key, value);
+      }
+      await expect(import('../../src/api')).rejects.toThrow(
+        'BILLING_ENABLED=true requires STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID',
       );
     });
 
@@ -589,6 +625,7 @@ describe('api composition', () => {
         PUBLIC_BRIEF_HOST: 'briefs.example.com',
         CUSTOM_DOMAIN_CNAME_TARGET: 'briefs.example.com',
         STRIPE_SECRET_KEY: 'sk_live_123',
+        STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID: 'acct_hypertext',
         STRIPE_PUBLISHABLE_KEY: 'pk_test_123',
         STRIPE_WEBHOOK_SECRET: 'whsec_123',
         STRIPE_PRICE_DOCKET_PRO: 'price_123',
@@ -613,6 +650,7 @@ describe('api composition', () => {
         PUBLIC_BRIEF_HOST: 'briefs.example.com',
         CUSTOM_DOMAIN_CNAME_TARGET: 'briefs.example.com',
         STRIPE_SECRET_KEY: 'sk_live_123',
+        STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID: 'acct_hypertext',
         STRIPE_PUBLISHABLE_KEY: 'pk_live_123',
         STRIPE_WEBHOOK_SECRET: 'whsec_123',
         STRIPE_PRICE_DOCKET_PRO: 'price_123',
@@ -631,6 +669,7 @@ describe('api composition', () => {
         BILLING_ENABLED: 'true',
         BILLING_RECONCILIATION_MODE: 'active',
         STRIPE_SECRET_KEY: 'sk_live_123',
+        STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID: 'acct_hypertext',
         STRIPE_PUBLISHABLE_KEY: 'pk_live_123',
         STRIPE_WEBHOOK_SECRET: 'whsec_123',
         STRIPE_PRICE_DOCKET_PRO: 'price_123',
@@ -650,6 +689,7 @@ describe('api composition', () => {
         BILLING_ENABLED: 'true',
         BILLING_RECONCILIATION_MODE: 'active',
         STRIPE_SECRET_KEY: 'sk_test_123',
+        STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID: 'acct_hypertext',
         STRIPE_PUBLISHABLE_KEY: 'pk_live_123',
         STRIPE_WEBHOOK_SECRET: 'whsec_123',
         STRIPE_PRICE_DOCKET_PRO: 'price_123',
@@ -697,6 +737,7 @@ describe('api composition', () => {
         BILLING_ENABLED: 'true',
         BILLING_RECONCILIATION_MODE: 'active',
         STRIPE_SECRET_KEY: 'sk_test_123',
+        STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID: 'acct_hypertext',
         STRIPE_WEBHOOK_SECRET: 'whsec_123',
         STRIPE_PRICE_DOCKET_PRO: 'price_123',
       })) {
@@ -713,6 +754,7 @@ describe('api composition', () => {
         BILLING_ENABLED: 'true',
         BILLING_RECONCILIATION_MODE: 'active',
         STRIPE_SECRET_KEY: 'sk_test_123',
+        STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID: 'acct_hypertext',
         STRIPE_PUBLISHABLE_KEY: 'pk_test_123',
         STRIPE_PRICE_DOCKET_PRO: 'price_123',
       })) {
@@ -729,6 +771,7 @@ describe('api composition', () => {
         BILLING_ENABLED: 'true',
         BILLING_RECONCILIATION_MODE: 'active',
         STRIPE_SECRET_KEY: 'sk_test_123',
+        STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID: 'acct_hypertext',
         STRIPE_PUBLISHABLE_KEY: 'pk_test_123',
         STRIPE_WEBHOOK_SECRET: 'whsec_123',
         STRIPE_PRICE_DOCKET_PRO: 'price_123',

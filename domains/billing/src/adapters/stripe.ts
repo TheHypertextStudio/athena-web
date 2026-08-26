@@ -73,6 +73,8 @@ export const STRIPE_API_VERSION = '2026-03-25.dahlia';
 export interface RealStripeGatewayConfig {
   /** Stripe secret key (`sk_...`). Never logged. */
   readonly secretKey: string;
+  /** Independently attested Stripe account id (`acct_...`) assigned to Hypertext Studio. */
+  readonly expectedAccountId: string;
   /** Stripe webhook signing secret (`whsec_...`). */
   readonly webhookSecret?: string | undefined;
   /** Default price the checkout subscribes to when the caller supplies none. */
@@ -107,6 +109,7 @@ export interface EmbeddedCheckoutSessionResult {
 export class RealStripeGateway implements BillingGateway {
   private readonly config: RealStripeGatewayConfig;
   private readonly stripe: Stripe;
+  private accountVerification: Promise<void> | undefined;
 
   constructor(config: RealStripeGatewayConfig, http: HttpClient = defaultHttpClient) {
     this.config = config;
@@ -123,7 +126,11 @@ export class RealStripeGateway implements BillingGateway {
       return input.url;
     };
     /* v8 ignore stop */
-    const fetchFn: typeof fetch = (input, init) => http(toUrl(input), init ?? undefined);
+    const fetchFn: typeof fetch = async (input, init) => {
+      const url = toUrl(input);
+      await this.verifyProviderAccount(http, url, init ?? undefined);
+      return http(url, init ?? undefined);
+    };
     /* v8 ignore start */
     type StripeOptions = NonNullable<ConstructorParameters<typeof Stripe>[1]>;
     const apiVersion = (config.apiVersion ?? STRIPE_API_VERSION) as NonNullable<
@@ -136,6 +143,45 @@ export class RealStripeGateway implements BillingGateway {
     };
     this.stripe = new Stripe(config.secretKey, options);
     /* v8 ignore stop */
+  }
+
+  /** Verify that the immutable configured secret belongs to Hypertext Studio. */
+  private async verifyProviderAccount(
+    http: HttpClient,
+    requestUrl: string,
+    requestInit: RequestInit | undefined,
+  ): Promise<void> {
+    this.accountVerification ??= this.readProviderAccount(http, requestUrl, requestInit);
+    await this.accountVerification;
+  }
+
+  /** Read the Stripe account through the same authenticated HTTP edge as the pending request. */
+  private async readProviderAccount(
+    http: HttpClient,
+    requestUrl: string,
+    requestInit: RequestInit | undefined,
+  ): Promise<void> {
+    const headers = new Headers(requestInit?.headers);
+    headers.delete('content-length');
+    headers.delete('content-type');
+    headers.delete('idempotency-key');
+    const accountUrl = new URL('/v1/account', requestUrl).toString();
+    const response = await http(accountUrl, {
+      method: 'GET',
+      headers,
+      ...(requestInit?.signal ? { signal: requestInit.signal } : {}),
+    });
+    if (!response.ok) {
+      throw new Error('RealStripeGateway: failed to verify the configured Stripe account.');
+    }
+    const account: unknown = await response.json();
+    const accountId =
+      typeof account === 'object' && account !== null && 'id' in account
+        ? (account as { id?: unknown }).id
+        : null;
+    if (accountId !== this.config.expectedAccountId) {
+      throw new Error('RealStripeGateway: configured Stripe account is not Hypertext Studio.');
+    }
   }
 
   private get trialDays(): number {

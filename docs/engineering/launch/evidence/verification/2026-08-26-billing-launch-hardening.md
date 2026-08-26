@@ -68,8 +68,10 @@ every Dashboard action and must repeat all provider checks in the Hypertext Stud
 
 The following gates remain open:
 
-1. The deployment must pin and verify the Hypertext Studio Stripe account identity before any
-   provider read or mutation. The expected account-id contract still needs product-owner approval.
+1. Every real gateway and setup provisioner now verifies its immutable Stripe key against an
+   independently configured Hypertext Studio account pin. The dedicated `hypertext.studio` Chrome
+   profile confirmed that the pinned account contains the $8 monthly Docket Pro product. Production
+   must carry the verified account pin before shadow reconciliation starts.
 2. The complete migration chain, including 0104, must run against a production-shaped snapshot.
    The report must show one provider customer and at most one current subscription for every billed
    organization.

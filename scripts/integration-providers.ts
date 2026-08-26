@@ -702,6 +702,7 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
     consoleUrl: 'https://dashboard.stripe.com/apikeys',
     vars: [
       'STRIPE_SECRET_KEY',
+      'STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID',
       'STRIPE_PUBLISHABLE_KEY',
       'STRIPE_WEBHOOK_SECRET',
       'DOCKET_PRICE_LOOKUP_DOCKET_PRO',
@@ -728,24 +729,31 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
       'BILLING_ENABLED',
       'BILLING_RECONCILIATION_MODE',
     ],
-    cloudVariables: ['BILLING_ENABLED', 'BILLING_RECONCILIATION_MODE'],
+    cloudVariables: [
+      'BILLING_ENABLED',
+      'BILLING_RECONCILIATION_MODE',
+      'STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID',
+    ],
     provisioner: 'docket-stripe',
     instructions: (env, urls) => {
       const mode = env === 'production' ? 'live' : 'test';
       return [
         `Use ${mode}-mode keys for the "${env}" environment. Never mix test and live across envs.`,
         '',
-        '1) Open https://dashboard.stripe.com and sign in.',
-        `2) Top-right toggle: switch to ${mode} mode (the "Test mode" switch must show "${mode}").`,
-        '3) API keys: Developers → API keys (https://dashboard.stripe.com/apikeys).',
+        '1) Open https://dashboard.stripe.com in the Hypertext Studio Chrome profile and sign in.',
+        '2) Confirm the current account matches the independently configured Hypertext Studio',
+        '   account pin. The wizard neither discovers nor replaces that pin from an API key.',
+        `3) Top-right toggle: switch to ${mode} mode (the "Test mode" switch must show "${mode}").`,
+        '4) API keys: Developers → API keys (https://dashboard.stripe.com/apikeys).',
         `     • Copy "Secret or restricted key" → ${env === 'production' ? 'sk_live_ or rk_live_' : 'sk_test_ or rk_test_'}`,
         `     • Copy "Publishable key" → starts with ${env === 'production' ? 'pk_live_' : 'pk_test_'}`,
-        '4) Enter those two values. The standard provisioner creates or repairs:',
+        '5) Enter both keys. The provisioner verifies the configured Hypertext Studio account before it',
+        '   creates or repairs:',
         '     • Docket Pro',
         '     • USD $8 monthly organization price (lookup key docket_pro_monthly)',
         '     • Docket Pro customer portal configuration',
         `     • ${urls.apiBase}/internal/billing/webhook`,
-        '5) It captures the webhook signing secret and writes every runtime binding through this',
+        '6) It captures the webhook signing secret and writes every runtime binding through this',
         '   wizard. Do not create Stripe objects separately.',
         ...(env === 'production'
           ? [

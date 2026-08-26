@@ -1240,9 +1240,12 @@ async function runProviderProvisioner(
   const current = (name: string): string | undefined =>
     collected[name] ?? state.secretValues.get(name) ?? state.variableValues.get(name);
   const secretKey = current('STRIPE_SECRET_KEY');
+  const expectedAccountId = current('STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID');
   const publishableKey = current('STRIPE_PUBLISHABLE_KEY');
-  if (!secretKey || !publishableKey) {
-    throw new Error('Stripe provisioning requires both secret and publishable API keys.');
+  if (!secretKey || !expectedAccountId || !publishableKey) {
+    throw new Error(
+      'Stripe provisioning requires an independently configured Hypertext Studio account pin plus both API keys.',
+    );
   }
   const mode = env === 'production' ? 'live' : 'test';
   const publishablePrefix = mode === 'live' ? 'pk_live_' : 'pk_test_';
@@ -1258,6 +1261,7 @@ async function runProviderProvisioner(
   const result = await provisionDocketStripe({
     mode,
     secretKey,
+    expectedAccountId,
     apiOrigin: urls.apiBase,
     webOrigin: urls.webBases[0] ?? urls.apiBase,
     ...(env === 'local'

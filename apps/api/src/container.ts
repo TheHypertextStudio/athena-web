@@ -63,6 +63,7 @@ export interface AppRuntimeEnv {
   readonly APP_MODE?: 'local' | 'test' | 'production';
   readonly BILLING_ENABLED?: boolean;
   readonly STRIPE_SECRET_KEY?: string;
+  readonly STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID?: string;
   readonly STRIPE_WEBHOOK_SECRET?: string;
   readonly STRIPE_PRICE_DOCKET_PRO?: string;
   readonly DOCKET_PRICE_LOOKUP_DOCKET_PRO?: string;
@@ -169,6 +170,9 @@ export function toAppRuntimeEnv(): AppRuntimeEnv {
     APP_MODE: env.APP_MODE,
     BILLING_ENABLED: env.BILLING_ENABLED,
     ...(env.STRIPE_SECRET_KEY ? { STRIPE_SECRET_KEY: env.STRIPE_SECRET_KEY } : {}),
+    ...(env.STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID
+      ? { STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID: env.STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID }
+      : {}),
     ...(env.STRIPE_WEBHOOK_SECRET ? { STRIPE_WEBHOOK_SECRET: env.STRIPE_WEBHOOK_SECRET } : {}),
     ...(env.STRIPE_PRICE_DOCKET_PRO
       ? { STRIPE_PRICE_DOCKET_PRO: env.STRIPE_PRICE_DOCKET_PRO }
@@ -248,6 +252,10 @@ export function buildStripeBillingGateway(runtimeEnv: AppRuntimeEnv): BillingGat
     runtimeEnv.DOCKET_PRICE_LOOKUP_TEAM;
   return new RealStripeGateway({
     secretKey: required('STRIPE_SECRET_KEY', runtimeEnv.STRIPE_SECRET_KEY),
+    expectedAccountId: required(
+      'STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID',
+      runtimeEnv.STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID,
+    ),
     ...(priceKey ? { priceKey } : {}),
     ...(runtimeEnv.STRIPE_WEBHOOK_SECRET
       ? { webhookSecret: runtimeEnv.STRIPE_WEBHOOK_SECRET }

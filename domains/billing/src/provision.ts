@@ -554,11 +554,19 @@ export class StripeSdkProvisioningClient implements StripeProvisioningClient {
 /** Inputs for the official-SDK provisioning entrypoint used by bootstrap. */
 export interface ProvisionDocketStripeInput extends ReconcileDocketStripeInput {
   readonly secretKey: string;
+  readonly expectedAccountId: string;
 }
 
-/** Provision Docket Pro with the official Stripe SDK. */
+/**
+ * Provision Docket Pro with the official Stripe SDK.
+ *
+ * @param input - Mode, origins, credentials, and the independently attested account pin.
+ * @param stripeOverride - Deterministic SDK boundary supplied only by tests.
+ * @returns The disabled-by-default runtime values and applied provider actions.
+ */
 export async function provisionDocketStripe(
   input: ProvisionDocketStripeInput,
+  stripeOverride?: Stripe,
 ): Promise<DocketStripeProvisioningResult> {
   const expectedPrefixes =
     input.mode === 'live'
@@ -571,7 +579,11 @@ export async function provisionDocketStripe(
   }
   type StripeOptions = NonNullable<ConstructorParameters<typeof Stripe>[1]>;
   const apiVersion = STRIPE_API_VERSION as NonNullable<StripeOptions['apiVersion']>;
-  const stripe = new Stripe(input.secretKey, { apiVersion });
+  const stripe = stripeOverride ?? new Stripe(input.secretKey, { apiVersion });
+  const account = await stripe.accounts.retrieveCurrent();
+  if (account.id !== input.expectedAccountId) {
+    throw new Error('Stripe provisioning is not connected to the Hypertext Studio account.');
+  }
   return reconcileDocketStripe(
     new StripeSdkProvisioningClient(stripe, input.mode === 'live'),
     input,

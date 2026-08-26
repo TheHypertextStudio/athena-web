@@ -489,7 +489,7 @@ Side effect: creates a checkout session. Docket Pro ownership changes only after
         );
       }
       const account = await getBillingCustomer(db, orgId);
-      if (!account) throw new BillingCustomerMissingError();
+      if (!account?.stripeCustomerId) throw new BillingCustomerMissingError();
       const result = await getContainer().billing.createBillingPortalSession({
         customerId: account.stripeCustomerId,
         returnUrl: appUrl(`/orgs/${orgId}/settings/billing`),

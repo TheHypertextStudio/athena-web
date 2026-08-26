@@ -736,6 +736,13 @@
       "when": 1787776614352,
       "tag": "0104_billing-credit-provider-identity",
       "breakpoints": true
+    },
+    {
+      "idx": 105,
+      "version": "7",
+      "when": 1787776692374,
+      "tag": "0105_complimentary-trial-history",
+      "breakpoints": true
     }
   ]
 }

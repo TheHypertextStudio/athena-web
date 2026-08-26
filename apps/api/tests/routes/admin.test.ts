@@ -1164,6 +1164,11 @@ describe('billing exemptions', () => {
       .from(schema.organizationProductEntitlement)
       .where(eq(schema.organizationProductEntitlement.organizationId, orgId));
     expect(complimentaryGrant).toEqual({ status: 'active', source: 'complimentary' });
+    const [billingAccountAfterGrant] = await db
+      .select({ trialConsumedAt: schema.organizationBillingAccount.trialConsumedAt })
+      .from(schema.organizationBillingAccount)
+      .where(eq(schema.organizationBillingAccount.organizationId, orgId));
+    expect(billingAccountAfterGrant?.trialConsumedAt).toBeInstanceOf(Date);
 
     const orgAfterGrant = await app.request(`/orgs/${orgId}`, { method: 'GET' });
     expect((await json<{ isBillingExempt: boolean }>(orgAfterGrant)).isBillingExempt).toBe(true);
@@ -1196,6 +1201,13 @@ describe('billing exemptions', () => {
       .from(schema.organizationProductEntitlement)
       .where(eq(schema.organizationProductEntitlement.organizationId, orgId));
     expect(revokedGrant?.status).toBe('canceled');
+    const [billingAccountAfterRevoke] = await db
+      .select({ trialConsumedAt: schema.organizationBillingAccount.trialConsumedAt })
+      .from(schema.organizationBillingAccount)
+      .where(eq(schema.organizationBillingAccount.organizationId, orgId));
+    expect(billingAccountAfterRevoke?.trialConsumedAt).toEqual(
+      billingAccountAfterGrant?.trialConsumedAt,
+    );
 
     const orgAfterRevoke = await app.request(`/orgs/${orgId}`, { method: 'GET' });
     expect((await json<{ isBillingExempt: boolean }>(orgAfterRevoke)).isBillingExempt).toBe(false);

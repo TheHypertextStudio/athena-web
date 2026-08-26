@@ -29,13 +29,20 @@ and test-utils typechecks passed. Focused lint passed after the first broad lint
 Node's default 2 GB heap. The commit hook then passed its staged test and repository package lint
 gate with bounded package execution.
 
-The complete 0000 through 0103 migration chain also replayed into a fresh local PostgreSQL 16.15
-database. PostgreSQL recorded 104 migrations. The replay created the customer, open-Checkout, and
+The complete 0000 through 0105 migration chain also replayed into a fresh local PostgreSQL 16.15
+database. PostgreSQL recorded 106 migrations. The replay created the customer, open-Checkout, and
 provider-credit uniqueness indexes and seeded the active 50-percent Student and Nonprofit programs
 with 12-month review periods. Fresh-database audits reported zero duplicate provider customers and
 zero organizations with multiple current Docket Pro subscription ids. The disposable database was
 removed after the audit. This result proves PostgreSQL compatibility, but it does not replace the
 required replay and backfill report from a production-shaped snapshot.
+
+The complimentary trial-history correction passed 111 focused billing, API, Checkout,
+reconciliation, launch-audit, administration, and database tests. It stores first Pro access before
+a complimentary organization has a Stripe customer. Revocation preserves that marker. A later
+Checkout creates or resolves one customer into the same row and receives no second public trial.
+The shadow audit makes no provider call for complimentary-only history, while reconciliation can
+backfill a customer into a Stripe entitlement whose history row predates provider billing.
 
 The hardening tests prove these boundaries:
 
@@ -63,7 +70,7 @@ The following gates remain open:
 
 1. The deployment must pin and verify the Hypertext Studio Stripe account identity before any
    provider read or mutation. The expected account-id contract still needs product-owner approval.
-2. The complete migration chain, including 0103, must run against a production-shaped snapshot.
+2. The complete migration chain, including 0104, must run against a production-shaped snapshot.
    The report must show one provider customer and at most one current subscription for every billed
    organization.
 3. The deployed scheduler must run `shadow` for 24 hours without an unresolved audit finding. The

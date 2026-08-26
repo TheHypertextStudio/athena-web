@@ -145,7 +145,7 @@ export const AdminOrgBillingStateOut = z.object({
   }),
   customer: z
     .object({
-      stripeCustomerId: z.string(),
+      stripeCustomerId: z.string().nullable(),
       billingCountry: z.string().nullable(),
       countryVerifiedAt: z.string().nullable(),
       trialConsumedAt: z.string().nullable(),
@@ -852,12 +852,27 @@ export const adminBillingRoutes = new Hono<AppEnv>()
       let exemption;
       try {
         exemption = await db.transaction(async (tx) => {
+          const accessStartedAt = new Date();
           const [inserted] = await tx
             .insert(billingExemption)
             .values({ organizationId: id, reason, grantedBy: staffUserId })
             .returning();
           /* v8 ignore next -- @preserve defensive: insert always returns the inserted row */
           if (!inserted) throw new NotFoundError('Exemption insert returned no row');
+          await tx
+            .insert(organizationBillingAccount)
+            .values({
+              organizationId: id,
+              stripeCustomerId: null,
+              trialConsumedAt: accessStartedAt,
+            })
+            .onConflictDoUpdate({
+              target: organizationBillingAccount.organizationId,
+              set: {
+                trialConsumedAt: sql`coalesce(${organizationBillingAccount.trialConsumedAt}, ${accessStartedAt})`,
+                updatedAt: accessStartedAt,
+              },
+            });
           await tx
             .insert(organizationProductEntitlement)
             .values({

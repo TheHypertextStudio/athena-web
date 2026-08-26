@@ -1,7 +1,7 @@
 import { InMemoryBillingGateway } from '@docket/billing/adapters/in-memory';
 import type { BillingCustomer, Subscription } from '@docket/billing/contracts';
 import { eq } from 'drizzle-orm';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
@@ -14,6 +14,10 @@ let db!: typeof DbModule.db;
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
+});
+
+beforeEach(async () => {
+  await db.delete(schema.organization);
 });
 
 class AuditGateway extends InMemoryBillingGateway {
@@ -30,6 +34,32 @@ class AuditGateway extends InMemoryBillingGateway {
 }
 
 describe('auditBillingLaunch', () => {
+  it('does not treat complimentary trial history as a Stripe billing account', async () => {
+    const gateway = new AuditGateway();
+    const { orgId } = await seedBaseOrg(db, schema, false);
+    await db.insert(schema.organizationBillingAccount).values({
+      organizationId: orgId,
+      stripeCustomerId: null,
+      trialConsumedAt: new Date('2026-08-25T00:00:00.000Z'),
+    });
+    await db.insert(schema.organizationProductEntitlement).values({
+      organizationId: orgId,
+      productKey: 'docket_pro',
+      source: 'complimentary',
+      status: 'active',
+    });
+    const listCustomers = vi.spyOn(gateway, 'listCustomers');
+    const listSubscriptions = vi.spyOn(gateway, 'listSubscriptions');
+
+    const report = await auditBillingLaunch(db, gateway, new Date('2026-08-25T01:00:00.000Z'), {
+      singleSubscriptionRedirectVerifiedAt: '2026-08-25T00:00:00.000Z',
+    });
+
+    expect(report).toMatchObject({ passed: true, organizationCount: 0, unresolvedCount: 0 });
+    expect(listCustomers).not.toHaveBeenCalled();
+    expect(listSubscriptions).not.toHaveBeenCalled();
+  });
+
   it('passes a coherent mirror and blocks duplicate provider ownership', async () => {
     const gateway = new AuditGateway();
     const { orgId: healthyOrg } = await seedBaseOrg(db, schema, false);

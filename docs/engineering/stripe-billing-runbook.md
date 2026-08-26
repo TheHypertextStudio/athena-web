@@ -48,9 +48,10 @@ The command writes a mode-0600 JSON report and exits nonzero when a billed organ
 durable customer, has anything other than one Stripe customer, has more than one current Docket Pro
 subscription, has an ownership or entitlement mismatch, or has an unresolved provider write. The
 audit excludes `preview_*` rows because they record finance confirmation snapshots rather than
-provider mutations. Stripe customer search is eventually consistent, so retry once after a newly
-created customer becomes searchable. Repeated failure is a blocker, not a reason to create another
-customer.
+provider mutations. It also excludes complimentary-only trial-history rows because they have no
+Stripe customer or subscription to reconcile. Stripe customer search is eventually consistent, so
+retry once after a newly created customer becomes searchable. Repeated failure is a blocker, not a
+reason to create another customer.
 
 Deploy the reconciliation endpoint and Cloud Scheduler job before enabling Checkout. Inspect
 the mode-tagged Cloud Scheduler results during the shadow period. A shadow result with

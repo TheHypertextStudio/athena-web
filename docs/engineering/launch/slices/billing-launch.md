@@ -26,7 +26,8 @@ filesChanged:
   - packages/db/src/schema/billing.ts
   - packages/db/drizzle/0101_minor_squadron_supreme.sql
   - packages/db/drizzle/0102_billing-lifecycle-data-repair.sql
-  - packages/db/drizzle/0103_billing-credit-provider-identity.sql
+  - packages/db/drizzle/0104_billing-credit-provider-identity.sql
+  - packages/db/drizzle/0105_complimentary-trial-history.sql
   - docs/engineering/specs/product-billing.md
   - docs/engineering/billing-state-machine.md
   - docs/engineering/stripe-billing-runbook.md
@@ -67,6 +68,9 @@ Migration 0101 adds the billing records and constraints. Migration 0102 seeds th
 moves legacy past-due organizations into a seven-day entitlement grace period, and moves legacy
 export-window or pending-deletion organizations to read-only access. The migration clears the old
 billing-created deletion dates. It does not restore rows that an earlier purge already deleted.
+Migration 0104 makes provider credit-note identity unique. Migration 0105 lets complimentary access
+record first Pro use before the organization has a Stripe customer. Checkout fills the customer id
+later without clearing that trial history.
 
 **Evidence:** The independent review is in
 `docs/engineering/launch/evidence/verification/2026-08-25-billing-launch-review.md`. Billing domain
@@ -75,7 +79,7 @@ Database billing schema and upgrade tests pass four cases. Tooling tests pass 16
 checking and lint pass. The production build passes for API, Runner, Admin, Web, and the service
 worker. `pnpm db:generate` reports `No schema changes, nothing to migrate` after migrations 0101 and 0102.
 
-The complete 0000 through 0103 chain replays on a fresh local PostgreSQL 16.15 database. That replay
+The complete 0000 through 0105 chain replays on a fresh local PostgreSQL 16.15 database. That replay
 does not contain production-shaped legacy billing rows, so the release owner must still run the
 same chain and duplicate-customer report against a production-shaped snapshot. The prior provider
 run used a Stripe account outside Hypertext Studio. Docket cannot use that run as payment-launch

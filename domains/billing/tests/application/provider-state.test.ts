@@ -60,6 +60,31 @@ describe('ensureBillingCustomer', () => {
     expect(creates).toBe(1);
   });
 
+  it('adds a provider customer to complimentary trial history without erasing it', async () => {
+    const orgId = await seedOrg();
+    const consumedAt = new Date('2026-08-26T00:00:00.000Z');
+    await db.insert(schema.organizationBillingAccount).values({
+      organizationId: orgId,
+      stripeCustomerId: null,
+      trialConsumedAt: consumedAt,
+    });
+    let creates = 0;
+    const gateway = {
+      listCustomers: async () => [],
+      listSubscriptions: async () => [],
+      createCustomer: async (referenceId: string) => {
+        creates += 1;
+        return { id: `cus_${referenceId}`, referenceId };
+      },
+    } as unknown as BillingGateway;
+
+    const account = await ensureBillingCustomer(db, gateway, orgId);
+
+    expect(account.stripeCustomerId).toBe(`cus_${orgId}`);
+    expect(account.trialConsumedAt).toEqual(consumedAt);
+    expect(creates).toBe(1);
+  });
+
   it('backfills the customer from one existing subscription without creating another', async () => {
     const orgId = await seedOrg();
     let creates = 0;

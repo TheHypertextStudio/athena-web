@@ -701,6 +701,43 @@ describe('billing router (org-scoped, via the BillingGateway port)', () => {
     expect(subscription).not.toHaveProperty('trialEnd');
   });
 
+  it('does not grant a public trial after complimentary Pro is revoked', async () => {
+    const orgId = await makeOrg('active');
+    const consumedAt = new Date('2026-08-01T00:00:00.000Z');
+    await db.insert(organizationBillingAccount).values({
+      organizationId: orgId,
+      stripeCustomerId: null,
+      trialConsumedAt: consumedAt,
+    });
+    await db.insert(organizationProductEntitlement).values({
+      organizationId: orgId,
+      productKey: 'docket_pro',
+      status: 'canceled',
+      source: 'complimentary',
+      canceledAt: new Date('2026-08-15T00:00:00.000Z'),
+    });
+    const app = billingApp(orgId, ['manage']);
+
+    const response = await app.request('/checkout', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+
+    expect(response.status).toBe(200);
+    const subscription = await getContainer().billing.getSubscription(orgId);
+    expect(subscription).toMatchObject({ status: 'active' });
+    expect(subscription).not.toHaveProperty('trialEnd');
+    const [account] = await db
+      .select()
+      .from(organizationBillingAccount)
+      .where(eq(organizationBillingAccount.organizationId, orgId));
+    expect(account).toMatchObject({
+      stripeCustomerId: `cus_${orgId}`,
+      trialConsumedAt: consumedAt,
+    });
+  });
+
   it('POST /portal returns a hosted portal url for a manager', async () => {
     const orgId = await makeOrg('active');
     const app = billingApp(orgId, ['manage']);

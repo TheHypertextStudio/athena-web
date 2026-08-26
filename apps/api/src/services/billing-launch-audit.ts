@@ -134,6 +134,7 @@ export async function auditBillingLaunch(
     database.select({ id: organization.id, name: organization.name }).from(organization),
   ]);
   const accountByOrg = new Map(accounts.map((row) => [row.organizationId, row]));
+  const providerAccounts = accounts.filter((row) => row.stripeCustomerId !== null);
   const entitlementByOrg = new Map(entitlements.map((row) => [row.organizationId, row]));
   const organizationNameById = new Map(organizations.map((row) => [row.id, row.name]));
   const syncsByOrg = new Map<string, typeof unresolvedSyncs>();
@@ -142,7 +143,7 @@ export async function auditBillingLaunch(
   }
   const organizationIds = [
     ...new Set([
-      ...accounts.map((row) => row.organizationId),
+      ...providerAccounts.map((row) => row.organizationId),
       ...entitlements.map((row) => row.organizationId),
       ...unresolvedSyncs.map((row) => row.organizationId),
     ]),
@@ -156,10 +157,10 @@ export async function auditBillingLaunch(
     let providerCustomerCount: number | null = null;
     let currentSubscriptionCount: number | null = null;
 
-    if (!account) {
+    if (entitlement && !account?.stripeCustomerId) {
       problems.push({
         code: 'billing_account_missing',
-        message: 'A Stripe-backed entitlement has no durable organization billing account.',
+        message: 'A Stripe-backed entitlement has no durable provider customer.',
       });
     }
     for (const sync of syncsByOrg.get(organizationId) ?? []) {
@@ -183,7 +184,7 @@ export async function auditBillingLaunch(
           code: 'provider_customer_count',
           message: `Stripe has ${String(customers.length)} customers carrying this organization reference; exactly one is required.`,
         });
-      } else if (account && customers[0]?.id !== account.stripeCustomerId) {
+      } else if (account?.stripeCustomerId && customers[0]?.id !== account.stripeCustomerId) {
         problems.push({
           code: 'billing_customer_mismatch',
           message: 'The durable billing customer does not match the Stripe customer reference.',
@@ -196,7 +197,11 @@ export async function auditBillingLaunch(
         });
       }
       const subscription = current.length === 1 ? current[0] : undefined;
-      if (subscription && account && subscription.customerId !== account.stripeCustomerId) {
+      if (
+        subscription &&
+        account?.stripeCustomerId &&
+        subscription.customerId !== account.stripeCustomerId
+      ) {
         problems.push({
           code: 'subscription_customer_mismatch',
           message: 'The current subscription belongs to a different Stripe customer.',

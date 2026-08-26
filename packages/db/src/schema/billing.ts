@@ -71,7 +71,7 @@ export const organizationBillingAccount = pgTable(
     organizationId: text('organization_id')
       .primaryKey()
       .references(() => organization.id, { onDelete: 'cascade' }),
-    stripeCustomerId: text('stripe_customer_id').notNull(),
+    stripeCustomerId: text('stripe_customer_id'),
     trialConsumedAt: timestamp('trial_consumed_at'),
     billingCountry: text('billing_country'),
     countryVerifiedAt: timestamp('country_verified_at'),

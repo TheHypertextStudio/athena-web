@@ -12,7 +12,7 @@ import {
   organizationBillingAccount,
   organizationProductEntitlement,
 } from '@docket/db';
-import { and, eq, gt, inArray, isNull, lte } from 'drizzle-orm';
+import { and, eq, gt, inArray, isNull, lte, or } from 'drizzle-orm';
 
 import { dispatchEssentialBillingNotice } from './billing-notifications';
 
@@ -270,7 +270,10 @@ export async function reconcileBilling(
     .where(
       and(
         eq(organizationProductEntitlement.source, 'stripe'),
-        isNull(organizationBillingAccount.organizationId),
+        or(
+          isNull(organizationBillingAccount.organizationId),
+          isNull(organizationBillingAccount.stripeCustomerId),
+        ),
         options.organizationId
           ? eq(organizationProductEntitlement.organizationId, options.organizationId)
           : undefined,
@@ -308,7 +311,15 @@ export async function reconcileBilling(
           stripeCustomerId: customerId,
           countryVerificationRequired: false,
         })
-        .onConflictDoNothing({ target: organizationBillingAccount.organizationId });
+        .onConflictDoUpdate({
+          target: organizationBillingAccount.organizationId,
+          set: {
+            stripeCustomerId: customerId,
+            countryVerificationRequired: false,
+            updatedAt: now,
+          },
+          setWhere: isNull(organizationBillingAccount.stripeCustomerId),
+        });
     } catch (error) {
       await recordReconciliation(
         database,
@@ -329,6 +340,7 @@ export async function reconcileBilling(
     : await database.select().from(organizationBillingAccount);
   for (const account of accounts) {
     try {
+      if (!account.stripeCustomerId) continue;
       let discountMismatch: string | null = null;
       const [mirroredEntitlement] = await database
         .select()

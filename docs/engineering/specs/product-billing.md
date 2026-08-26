@@ -36,9 +36,12 @@ deletion. Administrators retain export access in every non-deleted billing state
 
 ## Stored ownership
 
-`organization_billing_account` stores the one durable Stripe customer id, first trial use, and US
-billing-country verification. `organization_product_entitlement` stores the mirrored subscription
-status, period end, cancellation flag, seven-day grace deadline, and last provider observation.
+`organization_billing_account` stores durable billing history, first Pro access, and US
+billing-country verification. Its Stripe customer id remains null for complimentary-only access.
+Checkout or reconciliation fills that id before the first provider operation. A complimentary
+grant stamps first Pro access, and revocation never clears it, so the organization cannot receive a
+later public trial. `organization_product_entitlement` stores the mirrored subscription status,
+period end, cancellation flag, seven-day grace deadline, and last provider observation.
 `billing_checkout_attempt` prevents repeated clicks from creating concurrent Checkout sessions.
 `billing_provider_event` claims each Stripe event once.
 

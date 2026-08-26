@@ -5,7 +5,7 @@ import {
   organizationBillingAccount,
   type Database,
 } from '@docket/db';
-import { and, eq, inArray, lte } from 'drizzle-orm';
+import { and, eq, inArray, isNull, lte } from 'drizzle-orm';
 
 import type { BillingEvent, BillingGateway } from '../contracts';
 
@@ -19,8 +19,8 @@ export type CheckoutAttemptLease =
 export interface OrganizationBillingAccount {
   /** Docket organization id. */
   readonly organizationId: string;
-  /** Stripe customer id used by Checkout and the customer portal. */
-  readonly stripeCustomerId: string;
+  /** Stripe customer id used by Checkout and the customer portal, once provider billing begins. */
+  readonly stripeCustomerId: string | null;
   /** The first instant this organization consumed product access, when present. */
   readonly trialConsumedAt: Date | null;
   /** ISO country last verified from the provider customer. */
@@ -29,6 +29,12 @@ export interface OrganizationBillingAccount {
   readonly countryVerifiedAt: Date | null;
   /** Whether this account must pass the US launch-country check before access reconciliation. */
   readonly countryVerificationRequired: boolean;
+}
+
+/** A billing account whose Stripe customer identity is ready for provider operations. */
+export interface ResolvedOrganizationBillingAccount extends OrganizationBillingAccount {
+  /** Stripe customer id verified or created for this organization. */
+  readonly stripeCustomerId: string;
 }
 
 /** Load the persisted provider customer for an organization. */
@@ -57,9 +63,11 @@ export async function ensureBillingCustomer(
   gateway: BillingGateway,
   organizationId: string,
   email?: string,
-): Promise<OrganizationBillingAccount> {
+): Promise<ResolvedOrganizationBillingAccount> {
   const existing = await getBillingCustomer(db, organizationId);
-  if (existing) return existing;
+  if (existing?.stripeCustomerId) {
+    return { ...existing, stripeCustomerId: existing.stripeCustomerId };
+  }
 
   const [subscriptions, customers] = await Promise.all([
     gateway.listSubscriptions(organizationId),
@@ -89,25 +97,46 @@ export async function ensureBillingCustomer(
     subscriptionCustomerIds[0] ??
     providerCustomerIds[0] ??
     (await gateway.createCustomer(organizationId, email)).id;
-  const inserted = await db
-    .insert(organizationBillingAccount)
-    .values({
-      organizationId,
-      stripeCustomerId,
-      countryVerificationRequired: subscriptionCustomerIds.length === 0,
-    })
-    .onConflictDoNothing({ target: organizationBillingAccount.organizationId })
-    .returning({
-      organizationId: organizationBillingAccount.organizationId,
-      stripeCustomerId: organizationBillingAccount.stripeCustomerId,
-      trialConsumedAt: organizationBillingAccount.trialConsumedAt,
-      billingCountry: organizationBillingAccount.billingCountry,
-      countryVerifiedAt: organizationBillingAccount.countryVerifiedAt,
-      countryVerificationRequired: organizationBillingAccount.countryVerificationRequired,
-    });
-  const account = inserted[0] ?? (await getBillingCustomer(db, organizationId));
-  if (!account) throw new Error('Billing customer could not be persisted.');
-  return account;
+  const persisted = existing
+    ? await db
+        .update(organizationBillingAccount)
+        .set({
+          stripeCustomerId,
+          countryVerificationRequired: subscriptionCustomerIds.length === 0,
+        })
+        .where(
+          and(
+            eq(organizationBillingAccount.organizationId, organizationId),
+            isNull(organizationBillingAccount.stripeCustomerId),
+          ),
+        )
+        .returning({
+          organizationId: organizationBillingAccount.organizationId,
+          stripeCustomerId: organizationBillingAccount.stripeCustomerId,
+          trialConsumedAt: organizationBillingAccount.trialConsumedAt,
+          billingCountry: organizationBillingAccount.billingCountry,
+          countryVerifiedAt: organizationBillingAccount.countryVerifiedAt,
+          countryVerificationRequired: organizationBillingAccount.countryVerificationRequired,
+        })
+    : await db
+        .insert(organizationBillingAccount)
+        .values({
+          organizationId,
+          stripeCustomerId,
+          countryVerificationRequired: subscriptionCustomerIds.length === 0,
+        })
+        .onConflictDoNothing({ target: organizationBillingAccount.organizationId })
+        .returning({
+          organizationId: organizationBillingAccount.organizationId,
+          stripeCustomerId: organizationBillingAccount.stripeCustomerId,
+          trialConsumedAt: organizationBillingAccount.trialConsumedAt,
+          billingCountry: organizationBillingAccount.billingCountry,
+          countryVerifiedAt: organizationBillingAccount.countryVerifiedAt,
+          countryVerificationRequired: organizationBillingAccount.countryVerificationRequired,
+        });
+  const account = persisted[0] ?? (await getBillingCustomer(db, organizationId));
+  if (!account?.stripeCustomerId) throw new Error('Billing customer could not be persisted.');
+  return { ...account, stripeCustomerId: account.stripeCustomerId };
 }
 
 /** Expire stale attempts and acquire the one open Checkout lease for an organization product. */

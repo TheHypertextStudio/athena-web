@@ -36,6 +36,58 @@ function blobDouble(): { blob: BlobStore; deleteBlob: ReturnType<typeof vi.fn> }
 }
 
 describe('reconcileBilling', () => {
+  it('backfills a provider customer without erasing complimentary trial history', async () => {
+    const { orgId } = await seedBaseOrg(db, schema, false);
+    const consumedAt = new Date('2026-08-01T00:00:00.000Z');
+    await db.insert(schema.organizationBillingAccount).values({
+      organizationId: orgId,
+      stripeCustomerId: null,
+      trialConsumedAt: consumedAt,
+    });
+    await db.insert(schema.organizationProductEntitlement).values({
+      organizationId: orgId,
+      productKey: 'docket_pro',
+      source: 'stripe',
+      status: 'active',
+      stripeSubscriptionId: `sub_${orgId}`,
+      currentPeriodEnd: new Date('2026-09-25T00:00:00.000Z'),
+    });
+    const subscription: Subscription = {
+      id: `sub_${orgId}`,
+      customerId: `cus_${orgId}`,
+      referenceId: orgId,
+      status: 'active',
+      currentPeriodEnd: '2026-09-25T00:00:00.000Z',
+    };
+    class BackfillGateway extends InMemoryBillingGateway {
+      override async listSubscriptions(referenceId: string): Promise<readonly Subscription[]> {
+        return referenceId === orgId ? [subscription] : [];
+      }
+
+      override async getCustomerBillingCountry(): Promise<string | null> {
+        return 'US';
+      }
+    }
+    const { blob } = blobDouble();
+
+    const result = await reconcileBilling(
+      db,
+      new BackfillGateway(),
+      blob,
+      new Date('2026-08-25T01:00:00.000Z'),
+    );
+
+    expect(result).toMatchObject({ accounts: 1, repaired: 1, alerts: 0 });
+    const [account] = await db
+      .select()
+      .from(schema.organizationBillingAccount)
+      .where(eq(schema.organizationBillingAccount.organizationId, orgId));
+    expect(account).toMatchObject({
+      stripeCustomerId: `cus_${orgId}`,
+      trialConsumedAt: consumedAt,
+    });
+  });
+
   it('limits an operator-requested reconciliation to the selected organization', async () => {
     const first = await seedBaseOrg(db, schema, false);
     const second = await seedBaseOrg(db, schema, false);

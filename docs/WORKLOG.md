@@ -46,6 +46,12 @@
   They also found and fixed three in-memory provider defects that could hide production failures:
   provider transitions now retain customer ownership, Checkout rejects unknown or mis-scoped
   coupons, and a retried discount application returns the first provider result.
+- **Database gate correction**: After billing passed, the same CI shard reached the database
+  package and exposed 87.53% function coverage. The schema completeness test had omitted all eleven
+  billing tables, so Drizzle's lazy foreign-key, index, and check callbacks never ran. The complete
+  table catalog now includes those tables, and the billing schema test exercises mutable
+  application and award timestamps. The database package passes 209 tests with 94.27% statements,
+  94.28% branches, 90.28% functions, and 94.01% lines.
 - **Deployment correction**: The repository-level kill switch did not control production because
   the GitHub `production` environment overrode `BILLING_ENABLED=true`. The production environment
   now holds `false`, and a deployment policy test covers the missing attestation pass-through.

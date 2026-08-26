@@ -2,6 +2,7 @@
 import { resolve } from 'node:path';
 
 import { PGlite } from '@electric-sql/pglite';
+import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/pglite';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -93,12 +94,17 @@ describe('billing launch schema', () => {
       ]),
     );
 
-    await db.insert(billingDiscountApplication).values({
-      organizationId: org.id,
-      programKey: 'student',
-      applicantUserId: 'discount-application-user',
-      status: 'submitted',
-    });
+    const [submittedApplication] = await db
+      .insert(billingDiscountApplication)
+      .values({
+        organizationId: org.id,
+        programKey: 'student',
+        applicantUserId: 'discount-application-user',
+        status: 'submitted',
+        updatedAt: new Date('2020-01-01T00:00:00.000Z'),
+      })
+      .returning({ updatedAt: billingDiscountApplication.updatedAt });
+    if (!submittedApplication) throw new Error('Application insertion returned no row');
     await expect(
       db.insert(billingDiscountApplication).values({
         organizationId: org.id,
@@ -108,16 +114,21 @@ describe('billing launch schema', () => {
       }),
     ).rejects.toBeDefined();
 
-    await db.insert(billingDiscountAward).values({
-      organizationId: org.id,
-      programKey: 'student',
-      percentOff: 50,
-      status: 'active',
-      startsAt: new Date('2026-08-25T00:00:00.000Z'),
-      endsAt: new Date('2027-08-25T00:00:00.000Z'),
-      reviewAt: new Date('2027-08-25T00:00:00.000Z'),
-      reason: 'Verified student',
-    });
+    const [activeAward] = await db
+      .insert(billingDiscountAward)
+      .values({
+        organizationId: org.id,
+        programKey: 'student',
+        percentOff: 50,
+        status: 'active',
+        startsAt: new Date('2026-08-25T00:00:00.000Z'),
+        endsAt: new Date('2027-08-25T00:00:00.000Z'),
+        reviewAt: new Date('2027-08-25T00:00:00.000Z'),
+        reason: 'Verified student',
+        updatedAt: new Date('2020-01-01T00:00:00.000Z'),
+      })
+      .returning({ updatedAt: billingDiscountAward.updatedAt });
+    if (!activeAward) throw new Error('Award insertion returned no row');
     await expect(
       db.insert(billingDiscountAward).values({
         organizationId: org.id,
@@ -130,5 +141,29 @@ describe('billing launch schema', () => {
         reason: 'Verified nonprofit',
       }),
     ).rejects.toBeDefined();
+
+    const [reviewedApplication] = await db
+      .update(billingDiscountApplication)
+      .set({ status: 'approved', decisionReason: 'Verified enrollment' })
+      .where(eq(billingDiscountApplication.organizationId, org.id))
+      .returning({
+        status: billingDiscountApplication.status,
+        updatedAt: billingDiscountApplication.updatedAt,
+      });
+    expect(reviewedApplication?.status).toBe('approved');
+    expect(reviewedApplication?.updatedAt.getTime()).toBeGreaterThan(
+      submittedApplication.updatedAt.getTime(),
+    );
+
+    const [endingAward] = await db
+      .update(billingDiscountAward)
+      .set({ status: 'ending' })
+      .where(eq(billingDiscountAward.organizationId, org.id))
+      .returning({
+        status: billingDiscountAward.status,
+        updatedAt: billingDiscountAward.updatedAt,
+      });
+    expect(endingAward?.status).toBe('ending');
+    expect(endingAward?.updatedAt.getTime()).toBeGreaterThan(activeAward.updatedAt.getTime());
   });
 });

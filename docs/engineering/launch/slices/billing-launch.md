@@ -11,6 +11,9 @@ filesChanged:
   - apps/api/src/routes/admin-billing-routes.ts
   - apps/api/src/routes/admin-discount-routes.ts
   - apps/api/src/services/billing-reconciliation.ts
+  - apps/api/src/services/billing-provider-state.ts
+  - apps/api/src/services/scheduled-billing-reconciliation.ts
+  - apps/api/src/services/billing-launch-audit.ts
   - apps/api/src/services/billing-notifications.ts
   - apps/web/src/components/settings/billing-settings.tsx
   - apps/web/src/components/settings/billing-discounts-section.tsx
@@ -23,13 +26,15 @@ filesChanged:
   - packages/db/src/schema/billing.ts
   - packages/db/drizzle/0101_minor_squadron_supreme.sql
   - packages/db/drizzle/0102_billing-lifecycle-data-repair.sql
+  - packages/db/drizzle/0103_billing-credit-provider-note-unique.sql
   - docs/engineering/specs/product-billing.md
   - docs/engineering/billing-state-machine.md
   - docs/engineering/stripe-billing-runbook.md
 verifier: Boyle
 verifierArtifacts:
   - docs/engineering/launch/evidence/verification/2026-08-25-billing-launch-review.md
-verification: 'Focused billing, API, Web, database, and tooling tests pass; root typecheck and lint pass; the production build passes; Drizzle reports no schema changes after migrations 0101 and 0102.'
+  - docs/engineering/launch/evidence/verification/2026-08-26-billing-launch-hardening.md
+verification: 'Focused billing, API, Web, database, environment, and tooling tests pass; affected package typechecks and lint pass; the commit hook passes its repository package lint gate. The prior production build evidence predates the final hardening commits and must be repeated before deployment.'
 ---
 
 ## MISS-03 — A working web subscription must gate live phone access
@@ -70,10 +75,11 @@ Database billing schema and upgrade tests pass four cases. Tooling tests pass 16
 checking and lint pass. The production build passes for API, Runner, Admin, Web, and the service
 worker. `pnpm db:generate` reports `No schema changes, nothing to migrate` after migrations 0101 and 0102.
 
-The isolated launch database replayed all 102 checked-in migrations. The prior provider run used a
-Stripe account outside Hypertext Studio. Docket cannot use that run as payment-launch evidence. The
-release owner must repeat the launch audit and every hosted payment path in the Hypertext Studio
-Stripe test account.
+The isolated launch database replayed the migrations that existed before the final provider-credit
+constraint. The final hardening added migration 0103, so the production-shaped migration gate must
+replay the complete current chain. The prior provider run used a Stripe account outside Hypertext
+Studio. Docket cannot use that run as payment-launch evidence. The release owner must repeat the
+launch audit and every hosted payment path in the Hypertext Studio Stripe test account.
 
 **Residual gap:** This requirement remains `partial`. Stripe is exclusively a Hypertext Studio
 provider, and no valid Hypertext Studio test-mode or live-mode evidence exists in this slice. The

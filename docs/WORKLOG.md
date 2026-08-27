@@ -127,6 +127,13 @@
   mock-free action-menu journey that schedules a task and verifies the persisted 30-minute block
   and contained task link. Seventeen focused unit tests pass. Four production-build Playwright
   flows pass in 19.3 seconds against a clean migrated PGlite database.
+- **Shadow-mode coverage correction**: The exact-SHA CI run on `bfbd51fcc` passed the build,
+  typecheck, lint, Web test, and first browser shard before the environment package stopped at
+  99.26% branch coverage. The environment contract already rejected shadow reconciliation when
+  its Hypertext Studio account pin was missing, but it did not prove the valid inverse. A focused
+  test now starts shadow reconciliation with Checkout disabled, a Stripe test key, and a provider
+  account pin. The package passes 138 tests and reports 100% statement, branch, function, and line
+  coverage. Its lint, typecheck, formatting, and diff checks pass.
 - **Decisions**: Checkout derives the customer email from the Better Auth server session and
   rejects a browser-supplied email. Stripe's Dashboard-only existing-subscriber redirect requires
   a recorded verification timestamp before `BILLING_ENABLED=true` can pass configuration. Docket

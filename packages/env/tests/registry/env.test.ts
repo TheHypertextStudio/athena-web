@@ -549,6 +549,22 @@ describe('api composition', () => {
       );
     });
 
+    it('allows shadow reconciliation with Checkout disabled and a verified provider identity', async () => {
+      for (const [key, value] of Object.entries({
+        ...validApiEnv(),
+        BILLING_RECONCILIATION_MODE: 'shadow',
+        STRIPE_SECRET_KEY: 'sk_test_123',
+        STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID: 'acct_hypertext',
+      })) {
+        vi.stubEnv(key, value);
+      }
+
+      const mod = await import('../../src/api');
+
+      expect(mod.env.BILLING_ENABLED).toBe(false);
+      expect(mod.env.BILLING_RECONCILIATION_MODE).toBe('shadow');
+    });
+
     it('requires the Hypertext Studio account pin before public Checkout can start', async () => {
       for (const [key, value] of Object.entries({
         ...validApiEnv(),

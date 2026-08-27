@@ -181,6 +181,25 @@ export const NotionPropertyMap = z.record(z.string(), NotionColumnBinding).meta(
 /** Notion property-map value. */
 export type NotionPropertyMap = z.infer<typeof NotionPropertyMap>;
 
+/** The aggregate page-content state for one designed Notion database. */
+export const NotionMirrorContentStatus = z
+  .object({
+    state: z
+      .enum(['complete', 'truncated', 'inaccessible', 'not_applicable'])
+      .describe('Whether Docket could read complete page bodies for this database.'),
+    unknownBlockCount: z
+      .number()
+      .int()
+      .nonnegative()
+      .describe('How many page blocks Notion could not represent as enhanced Markdown.'),
+  })
+  .meta({
+    id: 'NotionMirrorContentStatus',
+    description: 'The safe aggregate content state for one Docket-designed Notion database.',
+  });
+/** One designed database's page-content status. */
+export type NotionMirrorContentStatus = z.infer<typeof NotionMirrorContentStatus>;
+
 /** One designed database, as the API returns it. */
 export const NotionMirrorDatabaseOut = z
   .object({
@@ -190,6 +209,7 @@ export const NotionMirrorDatabaseOut = z
     enabled: z.boolean().describe('Whether this entity is projected at all.'),
     direction: NotionMirrorDirection,
     propertyMap: NotionPropertyMap,
+    content: NotionMirrorContentStatus,
     externalDatabaseId: z
       .string()
       .nullable()

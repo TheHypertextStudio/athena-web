@@ -101,6 +101,7 @@ function database(over: Record<string, unknown> = {}) {
     title: 'Tasks',
     direction: 'two_way',
     enabled: true,
+    content: { state: 'complete', unknownBlockCount: 0 },
     provisionedAt: null,
     externalUrl: null,
     lastPushedAt: null,
@@ -264,6 +265,41 @@ describe('NotionMirrorPanel — saying whether the sync actually works', () => {
     renderPanel();
 
     expect(await screen.findByRole('alert')).toBeInTheDocument();
+  });
+
+  it('asks for reauthorization when page bodies are inaccessible', async () => {
+    databasesGet.mockResolvedValue(
+      okResponse({
+        items: [
+          database({
+            ...provisioned,
+            content: { state: 'inaccessible', unknownBlockCount: 0 },
+          }),
+        ],
+      }),
+    );
+    renderPanel();
+
+    expect(await screen.findByText('Notion page content needs permission.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: RECONNECT_ACTION })).toBeInTheDocument();
+  });
+
+  it('warns without clearing anything when Notion truncates page content', async () => {
+    databasesGet.mockResolvedValue(
+      okResponse({
+        items: [
+          database({
+            ...provisioned,
+            content: { state: 'truncated', unknownBlockCount: 2 },
+          }),
+        ],
+      }),
+    );
+    renderPanel();
+
+    expect(
+      await screen.findByText(/Some Notion page content could not be read/),
+    ).toBeInTheDocument();
   });
 
   it('ignores another purpose running against the same connection', async () => {

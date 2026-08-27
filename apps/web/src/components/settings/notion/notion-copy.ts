@@ -119,6 +119,18 @@ export function syncFailureCopy(kind: SyncFailureKind | null | undefined): strin
  */
 export const MIRROR_FAILED_TITLE = 'The last update to Notion didn’t finish.';
 
+/** The action-required state for a connection that cannot access page bodies. */
+export const PAGE_CONTENT_PERMISSION_TITLE = 'Notion page content needs permission.';
+/** Why reconnecting is necessary while metadata sync keeps running. */
+export const PAGE_CONTENT_PERMISSION_DETAIL =
+  'Docket is still syncing properties, but it cannot read or replace some Task or Project bodies. Reconnect Notion to grant page-content access.';
+
+/** The safe warning when Notion omitted blocks from its Markdown response. */
+export const PAGE_CONTENT_TRUNCATED_TITLE = 'Some Notion page content could not be read.';
+/** The outcome of a truncated Markdown response. */
+export const PAGE_CONTENT_TRUNCATED_DETAIL =
+  'Docket kept the existing body unchanged. Unsupported Notion blocks are not copied or removed.';
+
 /** The follow-up line on the hub's broken-connection alert, beside {@link RECONNECT_ACTION}. */
 export const CONNECTION_ERROR_DETAIL =
   'Your designed databases are kept — reconnecting picks up where this left off rather than rebuilding them.';

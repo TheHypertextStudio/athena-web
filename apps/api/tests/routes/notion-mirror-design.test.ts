@@ -19,6 +19,7 @@ import {
   buildDesignOut,
   buildPreview,
   cellFor,
+  contentStateForRows,
   ensureDesigns,
   formatDate,
   loadDesign,
@@ -52,6 +53,20 @@ async function seedDesigner() {
 }
 
 describe('Notion mirror designs', () => {
+  it('reports the most actionable body-content state for a designed database', () => {
+    expect(
+      contentStateForRows('task', [
+        { bodyState: 'complete', bodyUnknownBlockIds: [] },
+        { bodyState: 'truncated', bodyUnknownBlockIds: ['block_1'] },
+        { bodyState: 'inaccessible', bodyUnknownBlockIds: [] },
+      ]),
+    ).toEqual({ state: 'inaccessible', unknownBlockCount: 1 });
+    expect(contentStateForRows('initiative', [])).toEqual({
+      state: 'not_applicable',
+      unknownBlockCount: 0,
+    });
+  });
+
   it('seeds every catalog entity once, in designer order, using workspace vocabulary', async () => {
     const { orgId, humanActorId, integration } = await seedDesigner();
     await db

@@ -42,6 +42,7 @@ import { runNotionMirrorSync } from './notion-mirror-reconcile';
 import {
   applyDesignPatch,
   buildDesignOut,
+  contentStatesForDesigns,
   ensureDesigns,
   loadDesign,
   toMirrorDatabaseOut,
@@ -154,7 +155,10 @@ Requires \`manage\`: shaping what a workspace publishes into a third-party tool 
       const { id } = c.req.valid('param');
       await assertNotionIntegration(orgId, id);
       const rows = await ensureDesigns(orgId, id, c.get('actorCtx').actorId);
-      return ok(c, pageOf(NotionMirrorDatabaseOut), { items: rows.map(toMirrorDatabaseOut) });
+      const contentStates = await contentStatesForDesigns(id);
+      return ok(c, pageOf(NotionMirrorDatabaseOut), {
+        items: rows.map((row) => toMirrorDatabaseOut(row, contentStates.get(row.entityType))),
+      });
     },
   )
   .get(

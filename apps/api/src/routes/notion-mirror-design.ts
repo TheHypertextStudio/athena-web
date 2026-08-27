@@ -23,6 +23,7 @@ import {
   label,
   milestone,
   notionMirrorDatabase,
+  notionMirrorRow,
   organization,
   program,
   project,
@@ -32,6 +33,7 @@ import {
 import type {
   NotionColumnBinding,
   NotionMirrorDatabaseOut,
+  NotionMirrorContentStatus,
   NotionMirrorDesignOut,
   NotionMirrorDesignPatch,
   NotionMirrorEntity,
@@ -60,7 +62,10 @@ const PREVIEW_LIMIT = 3;
 export type MirrorDatabaseRow = typeof notionMirrorDatabase.$inferSelect;
 
 /** Serialize a mirror-database row to its DTO. */
-export function toMirrorDatabaseOut(row: MirrorDatabaseRow): NotionMirrorDatabaseOut {
+export function toMirrorDatabaseOut(
+  row: MirrorDatabaseRow,
+  content: NotionMirrorContentStatus = contentStateForRows(row.entityType, []),
+): NotionMirrorDatabaseOut {
   return {
     id: row.id,
     entityType: row.entityType,
@@ -68,6 +73,7 @@ export function toMirrorDatabaseOut(row: MirrorDatabaseRow): NotionMirrorDatabas
     enabled: row.enabled,
     direction: MIRROR_ENTITY_SPECS[row.entityType].direction,
     propertyMap: row.propertyMap,
+    content,
     externalDatabaseId: row.externalDatabaseId,
     externalDataSourceId: row.externalDataSourceId,
     externalUrl: row.externalUrl,
@@ -76,6 +82,52 @@ export function toMirrorDatabaseOut(row: MirrorDatabaseRow): NotionMirrorDatabas
     lastPushedAt: row.lastPushedAt?.toISOString() ?? null,
     lastPulledAt: row.lastPulledAt?.toISOString() ?? null,
   };
+}
+
+/** Derive one truthful content status without turning unread content into an empty body. */
+export function contentStateForRows(
+  entityType: NotionMirrorEntity,
+  rows: readonly {
+    readonly bodyState: string;
+    readonly bodyUnknownBlockIds: readonly string[];
+  }[],
+): NotionMirrorContentStatus {
+  if (entityType !== 'task' && entityType !== 'project') {
+    return { state: 'not_applicable', unknownBlockCount: 0 };
+  }
+  const unknownBlockCount = rows.reduce((count, row) => count + row.bodyUnknownBlockIds.length, 0);
+  if (rows.some((row) => row.bodyState === 'inaccessible')) {
+    return { state: 'inaccessible', unknownBlockCount };
+  }
+  if (rows.some((row) => row.bodyState === 'truncated')) {
+    return { state: 'truncated', unknownBlockCount };
+  }
+  return { state: 'complete', unknownBlockCount };
+}
+
+/** Load aggregate content status once for every database in one integration. */
+export async function contentStatesForDesigns(
+  integrationId: string,
+): Promise<ReadonlyMap<NotionMirrorEntity, NotionMirrorContentStatus>> {
+  const rows = await db
+    .select({
+      entityType: notionMirrorRow.entityType,
+      bodyState: notionMirrorRow.bodyState,
+      bodyUnknownBlockIds: notionMirrorRow.bodyUnknownBlockIds,
+    })
+    .from(notionMirrorRow)
+    .where(
+      and(eq(notionMirrorRow.integrationId, integrationId), isNull(notionMirrorRow.deletedAt)),
+    );
+  return new Map(
+    MIRROR_ENTITY_ORDER.map((entityType) => [
+      entityType,
+      contentStateForRows(
+        entityType,
+        rows.filter((row) => row.entityType === entityType),
+      ),
+    ]),
+  );
 }
 
 /** Read the org's vocabulary skin, so designed titles use the org's own words. */
@@ -664,10 +716,13 @@ export async function buildDesignOut(
   entity: NotionMirrorEntity,
 ): Promise<NotionMirrorDesignOut> {
   const row = await loadDesign(orgId, integrationId, entity);
-  const skin = await orgVocabulary(orgId);
-  const preview = await buildPreview(orgId, integrationId, row);
+  const [skin, preview, contentStates] = await Promise.all([
+    orgVocabulary(orgId),
+    buildPreview(orgId, integrationId, row),
+    contentStatesForDesigns(integrationId),
+  ]);
   return {
-    database: toMirrorDatabaseOut(row),
+    database: toMirrorDatabaseOut(row, contentStates.get(entity)),
     availableFields: availableFields(entity, skin),
     rows: preview.rows,
     sample: preview.sample,

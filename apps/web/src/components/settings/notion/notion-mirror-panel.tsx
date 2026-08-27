@@ -44,6 +44,10 @@ import {
   CONTAINER_UNKNOWN,
   EMPTY_DATABASE_HINT,
   MIRROR_FAILED_TITLE,
+  PAGE_CONTENT_PERMISSION_DETAIL,
+  PAGE_CONTENT_PERMISSION_TITLE,
+  PAGE_CONTENT_TRUNCATED_DETAIL,
+  PAGE_CONTENT_TRUNCATED_TITLE,
   syncFailureCopy,
   OPEN_IN_NOTION,
   RECONNECT_ACTION,
@@ -176,6 +180,12 @@ export function NotionMirrorPanel({ orgId, canManage }: NotionMirrorPanelProps):
   // A mirror that failed while the credential still works. Suppressed when the connection itself
   // is broken, because then the alert above already says the true, more actionable thing.
   const mirrorBroken = !connectionBroken && health.lastRun === 'failed';
+  const contentNeedsPermission = model.databases.some(
+    (database) => database.content.state === 'inaccessible',
+  );
+  const contentTruncated = model.databases.some(
+    (database) => database.content.state === 'truncated',
+  );
 
   // Gated on the container page, not on `provisionedCount`: a provision that recorded the page and
   // then failed before creating anything has zero databases, and gating on those would leave the
@@ -242,6 +252,20 @@ export function NotionMirrorPanel({ orgId, canManage }: NotionMirrorPanelProps):
             <NotionConnectAction label={RECONNECT_ACTION} variant="default" disabled={!canManage} />
           }
         />
+      ) : null}
+
+      {!connectionBroken && contentNeedsPermission ? (
+        <CardAlert
+          message={PAGE_CONTENT_PERMISSION_TITLE}
+          detail={PAGE_CONTENT_PERMISSION_DETAIL}
+          action={
+            <NotionConnectAction label={RECONNECT_ACTION} variant="default" disabled={!canManage} />
+          }
+        />
+      ) : contentTruncated ? (
+        <CardNote tone="muted">
+          {PAGE_CONTENT_TRUNCATED_TITLE} {PAGE_CONTENT_TRUNCATED_DETAIL}
+        </CardNote>
       ) : null}
 
       {sync.error !== null ? (

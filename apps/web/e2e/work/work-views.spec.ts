@@ -203,7 +203,7 @@ test('all four rosters execute typed views and preserve layout and saved-view st
     await arrangeRoster(page, route);
     await expect(page.getByText(row, { exact: true })).toBeVisible();
     const viewName = `${title} shared`;
-    await page.getByRole('button', { name: 'Save view' }).click();
+    await openOverflowControl(page, 'Save as new view');
     const saveDialog = page.getByRole('dialog', { name: 'Save view' });
     await saveDialog.getByRole('textbox', { name: 'View name' }).fill(viewName);
     await saveDialog.getByRole('combobox', { name: 'Share with' }).selectOption('organization');

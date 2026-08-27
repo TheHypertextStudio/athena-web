@@ -33,10 +33,7 @@ test('typed roster controls stay operable at every supported width and theme', a
         }));
         expect(widths.document).toBeLessThanOrEqual(widths.viewport);
         await expect(page.getByRole('button', { name: 'Filter' })).toBeVisible();
-        await expect(page.getByRole('button', { name: 'Save view' })).toBeVisible();
-        if (viewport.width < 720) {
-          await expect(page.getByRole('button', { name: 'More view controls' })).toBeVisible();
-        }
+        await expect(page.getByRole('button', { name: 'More view controls' })).toBeVisible();
       }
     }
   }

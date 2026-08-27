@@ -15,6 +15,7 @@ import { FilterBuilder } from '../../src/components/work-views/filter-builder';
 import { SortBuilder } from '../../src/components/work-views/sort-builder';
 import { WorkViewToolbar } from '../../src/components/work-views/work-view-toolbar';
 import { InPageSearchField } from '../../src/components/in-page-search/in-page-search-field';
+import { DropdownMenuItem } from '@docket/ui/primitives';
 import {
   InPageSearchProvider,
   useInPageSearchTarget,
@@ -225,12 +226,58 @@ describe('WorkViewToolbar', () => {
     expect(screen.getByRole('button', { name: 'Display' })).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Save view' })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'View settings' }));
-    const views = await screen.findByRole('menu', { name: 'View settings' });
+    await user.click(screen.getByRole('button', { name: 'More view controls' }));
+    const views = await screen.findByRole('menu', { name: 'More view controls' });
     expect(within(views).getByRole('menuitem', { name: 'Save as new view' })).toBeVisible();
     expect(within(views).getByRole('separator')).toBeVisible();
     expect(within(views).getByRole('menuitem', { name: 'Use as workspace default' })).toBeVisible();
     expect(within(views).getByRole('menuitem', { name: 'Restore default view' })).toBeVisible();
+  });
+
+  it('keeps hidden view tabs reachable from the dedicated More menu', async () => {
+    const user = userEvent.setup();
+    render(
+      <WorkViewToolbar
+        target="task"
+        definition={taskDefinition}
+        onDefinitionChange={vi.fn()}
+        onSaveView={vi.fn()}
+        onSetDefault={vi.fn()}
+        onReset={vi.fn()}
+        overflowItems={
+          <>
+            <DropdownMenuItem>All tasks</DropdownMenuItem>
+            <DropdownMenuItem>Release work</DropdownMenuItem>
+          </>
+        }
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'More view controls' }));
+    const menu = await screen.findByRole('menu', { name: 'More view controls' });
+    expect(within(menu).getByRole('menuitem', { name: 'All tasks' })).toBeVisible();
+    expect(within(menu).getByRole('menuitem', { name: 'Release work' })).toBeVisible();
+  });
+
+  it('keeps the view switcher and More menu when a canvas hides query controls', () => {
+    render(
+      <WorkViewToolbar
+        target="task"
+        definition={taskDefinition}
+        onDefinitionChange={vi.fn()}
+        onSaveView={vi.fn()}
+        onSetDefault={vi.fn()}
+        onReset={vi.fn()}
+        leading={<div role="tablist" aria-label="Tasks views" />}
+        showQueryControls={false}
+      />,
+    );
+
+    const toolbar = screen.getByRole('toolbar', { name: 'Task view controls' });
+    expect(within(toolbar).getByRole('tablist', { name: 'Tasks views' })).toBeVisible();
+    expect(within(toolbar).getByRole('button', { name: 'More view controls' })).toBeVisible();
+    expect(within(toolbar).queryByRole('button', { name: 'Filter' })).not.toBeInTheDocument();
+    expect(within(toolbar).queryByRole('button', { name: 'Display' })).not.toBeInTheDocument();
   });
 
   it('keeps the roster toolbar to query and view controls', () => {
@@ -239,7 +286,7 @@ describe('WorkViewToolbar', () => {
     const toolbar = screen.getByRole('toolbar', { name: 'Task view controls' });
     expect(within(toolbar).getByRole('button', { name: 'Filter' })).toBeVisible();
     expect(within(toolbar).getByRole('button', { name: 'Display' })).toBeVisible();
-    expect(within(toolbar).getByRole('button', { name: 'View settings' })).toBeVisible();
+    expect(within(toolbar).getByRole('button', { name: 'More view controls' })).toBeVisible();
     expect(within(toolbar).queryByRole('button', { name: 'Sort' })).not.toBeInTheDocument();
     expect(within(toolbar).queryByRole('button', { name: 'Group' })).not.toBeInTheDocument();
     expect(
@@ -260,7 +307,7 @@ describe('WorkViewToolbar', () => {
         onReset={onReset}
       />,
     );
-    await user.click(screen.getByRole('button', { name: 'View settings' }));
+    await user.click(screen.getByRole('button', { name: 'More view controls' }));
     await user.click(await screen.findByRole('menuitem', { name: 'Restore default view' }));
 
     expect(onReset).toHaveBeenCalledOnce();
@@ -501,7 +548,7 @@ describe('WorkViewToolbar', () => {
     expect(screen.queryByRole('button', { name: 'Sort' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Group' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Display' })).toBeVisible();
-    expect(screen.getByRole('button', { name: 'View settings' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'More view controls' })).toBeVisible();
     expect(screen.queryByRole('button', { name: 'More controls' })).not.toBeInTheDocument();
   });
 

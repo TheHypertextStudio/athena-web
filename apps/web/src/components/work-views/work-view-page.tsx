@@ -26,12 +26,14 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DropdownMenuItem,
+  DropdownMenuLabel,
   Input,
   Select,
   Skeleton,
 } from '@docket/ui/primitives';
 import type { ViewTarget } from '@docket/work/view-contract';
-import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, type JSX, useCallback, useEffect, useRef, useState } from 'react';
 
 import { useCreateObject } from '@/components/create-object/create-object-provider';
 import { useActiveOrg } from '@/components/active-org';
@@ -463,7 +465,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
     <div
       role="tablist"
       aria-label={`${copy.title} views`}
-      className="flex min-w-0 items-center gap-1 overflow-x-auto"
+      className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden"
     >
       <Button
         role="tab"
@@ -535,6 +537,56 @@ export function WorkViewPage<TTarget extends ViewTarget>({
     </div>
   );
 
+  const viewOverflowItems = (
+    <>
+      <DropdownMenuLabel>Views</DropdownMenuLabel>
+      <DropdownMenuItem
+        selected={!dependencyMode && selectedViewId === null}
+        onSelect={() => {
+          setDependencyMode(false);
+          setSelectedViewId(null);
+        }}
+      >
+        All {copy.title.toLowerCase()}
+      </DropdownMenuItem>
+      {savedViews.map((view) => {
+        const favorite = controller.favoriteViewIds.has(view.id);
+        return (
+          <Fragment key={view.id}>
+            <DropdownMenuItem
+              selected={!dependencyMode && selectedViewId === view.id}
+              onSelect={() => {
+                setDependencyMode(false);
+                setSelectedViewId(view.id);
+              }}
+            >
+              {view.name}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              inset
+              onSelect={() => {
+                controller.toggleFavoriteView(view.id);
+              }}
+            >
+              {favorite ? `Remove ${view.name} from favorites` : `Add ${view.name} to favorites`}
+            </DropdownMenuItem>
+          </Fragment>
+        );
+      })}
+      {target === 'project' ? (
+        <DropdownMenuItem
+          selected={dependencyMode}
+          onSelect={() => {
+            setDependencyMode(true);
+            setSelectedViewId(null);
+          }}
+        >
+          Dependencies
+        </DropdownMenuItem>
+      ) : null}
+    </>
+  );
+
   return (
     <div ref={rootRef} className="contents">
       <ListPageLayout
@@ -568,32 +620,30 @@ export function WorkViewPage<TTarget extends ViewTarget>({
                 className="w-full @2xl:max-w-md"
               />
             ) : null}
-            {!dependencyMode ? (
-              <WorkViewToolbar
-                target={target}
-                timezone={controller.timezone}
-                definition={controller.definition}
-                onDefinitionChange={controller.setDefinition}
-                leading={viewTabs}
-                onSaveView={() => {
-                  setSaveOpen(true);
-                }}
-                onSetDefault={controller.setAsDefault}
-                onReset={controller.resetPersonalOverride}
-                onFind={(restoreElement) => {
-                  openSearch(restoreElement);
-                }}
-                facetResponse={controller.facetResponse}
-                facetMetadataResponse={controller.facetMetadataResponse}
-                facetLoading={controller.facetLoading}
-                facetHasMore={controller.facetHasMore}
-                facetLoadingMore={controller.facetLoadingMore}
-                onFacetLoadMore={controller.loadMoreFacets}
-                onFacetRequest={controller.requestFacet}
-              />
-            ) : (
-              viewTabs
-            )}
+            <WorkViewToolbar
+              target={target}
+              timezone={controller.timezone}
+              definition={controller.definition}
+              onDefinitionChange={controller.setDefinition}
+              leading={viewTabs}
+              overflowItems={viewOverflowItems}
+              showQueryControls={!dependencyMode}
+              onSaveView={() => {
+                setSaveOpen(true);
+              }}
+              onSetDefault={controller.setAsDefault}
+              onReset={controller.resetPersonalOverride}
+              onFind={(restoreElement) => {
+                openSearch(restoreElement);
+              }}
+              facetResponse={controller.facetResponse}
+              facetMetadataResponse={controller.facetMetadataResponse}
+              facetLoading={controller.facetLoading}
+              facetHasMore={controller.facetHasMore}
+              facetLoadingMore={controller.facetLoadingMore}
+              onFacetLoadMore={controller.loadMoreFacets}
+              onFacetRequest={controller.requestFacet}
+            />
           </div>
         }
       >

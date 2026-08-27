@@ -9,6 +9,7 @@ const overviewPath = join(
   'apps/web/src/app/(app)/orgs/[orgId]/initiatives/initiatives-client.tsx',
 );
 const workPagePath = join(root, 'apps/web/src/components/work-views/work-view-page.tsx');
+const workViewToolbarPath = join(root, 'apps/web/src/components/work-views/work-view-toolbar.tsx');
 const workListPath = join(root, 'apps/web/src/components/work-views/work-list.tsx');
 const initiativeRailsPath = join(root, 'apps/web/src/components/work-views/initiative-rails.ts');
 const detailPath = join(
@@ -144,9 +145,22 @@ describe('Initiative visual contract', () => {
   it('keeps Initiative controls in the shared non-wrapping toolbar', () => {
     const workPage = source(workPagePath);
     expect(workPage).toContain('<WorkViewToolbar');
-    expect(workPage).toContain('!dependencyMode ?');
+    expect(workPage).toContain('showQueryControls={!dependencyMode}');
     expect(workPage).not.toContain('data-testid="initiative-attention-controls"');
     expect(workPage).not.toContain('gap-3 border-y px-1 py-4');
+  });
+
+  it('keeps view tabs and the dedicated More menu in one clipped control row', () => {
+    const workPage = source(workPagePath);
+    const toolbar = source(workViewToolbarPath);
+
+    expect(workPage).toContain('flex min-w-0 flex-1 items-center gap-1 overflow-hidden');
+    expect(workPage).not.toContain('overflow-x-auto');
+    expect(toolbar).toContain('w-full flex-nowrap overflow-hidden');
+    expect(toolbar).toContain('aria-label="More view controls"');
+    expect(workPage).toMatch(
+      /const viewOverflowItems[\s\S]*?controller\.toggleFavoriteView\(view\.id\)/,
+    );
   });
 
   it('separates the page header, attention surface, and roster with grouped spacing', () => {

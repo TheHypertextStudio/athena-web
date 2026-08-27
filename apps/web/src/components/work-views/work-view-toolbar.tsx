@@ -107,6 +107,10 @@ export interface WorkViewToolbarProps<TTarget extends ViewTarget> {
   readonly onReset: () => void;
   /** View chips that lead the same control row as filter and display. */
   readonly leading?: ReactNode;
+  /** View items kept reachable through the dedicated overflow menu when tabs clip. */
+  readonly overflowItems?: ReactNode;
+  /** Hide query controls when a target-specific canvas replaces the roster. */
+  readonly showQueryControls?: boolean;
   /** Open the target's temporary finder from Display. */
   readonly onFind?: (restoreElement?: HTMLElement | null) => void;
   readonly canSetDefault?: boolean;
@@ -129,6 +133,8 @@ export function WorkViewToolbar<TTarget extends ViewTarget>({
   onSetDefault,
   onReset,
   leading,
+  overflowItems,
+  showQueryControls = true,
   onFind,
   canSetDefault = true,
   facetResponse,
@@ -164,76 +170,90 @@ export function WorkViewToolbar<TTarget extends ViewTarget>({
           controlSize="sm"
           role="toolbar"
           aria-label={`${targetLabel(target)} view controls`}
-          className="w-full flex-nowrap overflow-x-hidden"
+          className="w-full flex-nowrap overflow-hidden"
         >
           {leading}
-          <span className="flex-1" aria-hidden />
-          <FilterBuilder
-            key={`${editingFilterIndex === null ? 'all' : String(editingFilterIndex)}:${JSON.stringify(filterToEdit)}`}
-            target={target}
-            filter={filterToEdit}
-            {...(timezone ? { timezone } : {})}
-            open={filterOpen}
-            onOpenChange={(next) => {
-              setFilterOpen(next);
-              if (!next) setEditingFilterIndex(null);
-            }}
-            facetResponse={facetResponse}
-            facetLoading={facetLoading}
-            facetHasMore={facetHasMore}
-            facetLoadingMore={facetLoadingMore}
-            onFacetLoadMore={onFacetLoadMore}
-            onFacetRequest={onFacetRequest}
-            onApply={(nextFilter) => {
-              if (editingFilterIndex === null) {
-                commit({ ...definition, filter: nextFilter });
-                return;
-              }
-              const replacement = formulaNodes(nextFilter);
-              const nextNodes = nodes.flatMap((node, index) =>
-                index === editingFilterIndex ? replacement : [node],
-              );
-              commit({ ...definition, filter: combineWorkViewFilters(target, nextNodes) });
-            }}
-            trigger={
-              <Button
-                variant={filter !== null ? 'secondary' : 'ghost'}
-                iconOnly
-                aria-label="Filter"
-                className="rounded-full"
-              >
-                <Filter aria-hidden />
-              </Button>
-            }
-          />
-          <DisplayControls
-            kind="display"
-            target={target}
-            definition={definition}
-            onChange={commit}
-            onFind={
-              onFind
-                ? () => {
-                    onFind(displayTriggerRef.current);
+          {showQueryControls ? (
+            <>
+              <FilterBuilder
+                key={`${editingFilterIndex === null ? 'all' : String(editingFilterIndex)}:${JSON.stringify(filterToEdit)}`}
+                target={target}
+                filter={filterToEdit}
+                {...(timezone ? { timezone } : {})}
+                open={filterOpen}
+                onOpenChange={(next) => {
+                  setFilterOpen(next);
+                  if (!next) setEditingFilterIndex(null);
+                }}
+                facetResponse={facetResponse}
+                facetLoading={facetLoading}
+                facetHasMore={facetHasMore}
+                facetLoadingMore={facetLoadingMore}
+                onFacetLoadMore={onFacetLoadMore}
+                onFacetRequest={onFacetRequest}
+                onApply={(nextFilter) => {
+                  if (editingFilterIndex === null) {
+                    commit({ ...definition, filter: nextFilter });
+                    return;
                   }
-                : undefined
-            }
-            trigger={
-              <DisplayControlsTrigger
-                ref={displayTriggerRef}
-                kind="display"
-                iconOnly
-                className="rounded-full"
+                  const replacement = formulaNodes(nextFilter);
+                  const nextNodes = nodes.flatMap((node, index) =>
+                    index === editingFilterIndex ? replacement : [node],
+                  );
+                  commit({ ...definition, filter: combineWorkViewFilters(target, nextNodes) });
+                }}
+                trigger={
+                  <Button
+                    variant={filter !== null ? 'secondary' : 'ghost'}
+                    iconOnly
+                    aria-label="Filter"
+                    className="rounded-full"
+                  >
+                    <Filter aria-hidden />
+                  </Button>
+                }
               />
-            }
-          />
+              <DisplayControls
+                kind="display"
+                target={target}
+                definition={definition}
+                onChange={commit}
+                onFind={
+                  onFind
+                    ? () => {
+                        onFind(displayTriggerRef.current);
+                      }
+                    : undefined
+                }
+                trigger={
+                  <DisplayControlsTrigger
+                    ref={displayTriggerRef}
+                    kind="display"
+                    iconOnly
+                    className="rounded-full"
+                  />
+                }
+              />
+            </>
+          ) : null}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" iconOnly aria-label="View settings" className="rounded-full">
+              <Button
+                variant="ghost"
+                iconOnly
+                aria-label="More view controls"
+                className="rounded-full"
+              >
                 <Ellipsis aria-hidden />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" aria-label="View settings" width="lg">
+            <DropdownMenuContent align="end" aria-label="More view controls" width="lg">
+              {overflowItems ? (
+                <>
+                  {overflowItems}
+                  <DropdownMenuSeparator />
+                </>
+              ) : null}
               <DropdownMenuItem onSelect={onSaveView}>Save as new view</DropdownMenuItem>
               <DropdownMenuSeparator />
               {canSetDefault ? (
@@ -247,7 +267,7 @@ export function WorkViewToolbar<TTarget extends ViewTarget>({
         </ControlGroup>
       </div>
 
-      {nodes.length > 0 ? (
+      {showQueryControls && nodes.length > 0 ? (
         <ControlGroup
           as="ul"
           controlSize="xs"

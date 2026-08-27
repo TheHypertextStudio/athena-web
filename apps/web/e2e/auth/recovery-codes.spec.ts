@@ -54,12 +54,14 @@ test.describe('recovery codes', () => {
     await page.fill('#code', assertDefined(codes[0]));
     await page.getByRole('button', { name: 'Recover account' }).click();
 
-    // Verified (no passkey) → the "you're back in" re-enrolment screen.
-    await expect(page.getByText("You're back in")).toBeVisible({ timeout: TIMEOUTS.ceremony });
+    // Verification succeeds only when the account can enroll a replacement passkey.
+    const addPasskey = page.getByRole('button', { name: 'Add a new passkey' });
+    await expect(addPasskey).toBeEnabled({ timeout: TIMEOUTS.ceremony });
+    await expect(page).toHaveURL(/\/recover/);
     await attachShot(testInfo, page, 'recovery-2-back-in.png');
 
     // Enrol a fresh passkey (virtual authenticator) → land in the app, signed in again.
-    await page.getByRole('button', { name: 'Add a new passkey' }).click();
+    await addPasskey.click();
     await page.waitForURL('**/today**', { timeout: TIMEOUTS.ceremony });
     await expect(page.getByRole('heading', { name: 'Today', exact: true })).toBeVisible({
       timeout: TIMEOUTS.ceremony,

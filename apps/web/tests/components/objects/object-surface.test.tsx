@@ -100,6 +100,21 @@ describe('ObjectSurface', () => {
     expect(onActivate).not.toHaveBeenCalled();
   });
 
+  it('lets an enhanced native button activate from Enter', async () => {
+    const onClick = vi.fn();
+    render(
+      <ObjectSurface object={initiative}>
+        <button type="button" onClick={onClick}>
+          Create relationship
+        </button>
+      </ObjectSurface>,
+    );
+
+    screen.getByRole('button', { name: 'Create relationship' }).focus();
+    await userEvent.keyboard('{Enter}');
+    expect(onClick).toHaveBeenCalledOnce();
+  });
+
   it('registers the object body with the shared transport without native draggable state', async () => {
     const onNestedClick = vi.fn();
     render(

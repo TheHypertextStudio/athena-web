@@ -69,11 +69,31 @@ export function useRegisterCalendarActions(): void {
         (target.kind !== 'calendar_event' && target.kind !== 'time_block')
       )
         return;
+      const destinationOwnsRelation = context.source === 'drag' || context.source === 'shortcut';
+      const effectiveRelationId = destinationOwnsRelation
+        ? target.kind === 'time_block'
+          ? 'calendar-item.contained'
+          : 'calendar-item.related'
+        : relationId;
+      // Scheduling destinations own their outgoing edges. A drop into a time block means that the
+      // block contains the dragged event, while picker actions keep the selected source as owner.
+      const relationSource = destinationOwnsRelation ? target : source;
+      const relationTarget = destinationOwnsRelation ? source : target;
       await port.execute({
-        relationId,
+        relationId: effectiveRelationId,
         effect: 'link',
-        subjects: [{ kind: 'calendar_item', id: source.id, organizationId: source.organizationId }],
-        target: { kind: 'calendar_item', id: target.id, organizationId: target.organizationId },
+        subjects: [
+          {
+            kind: 'calendar_item',
+            id: relationSource.id,
+            organizationId: relationSource.organizationId,
+          },
+        ],
+        target: {
+          kind: 'calendar_item',
+          id: relationTarget.id,
+          organizationId: relationTarget.organizationId,
+        },
       });
     };
     return defineActionDomain('calendar', [

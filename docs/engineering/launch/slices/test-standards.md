@@ -31,7 +31,7 @@ filesChanged:
   - apps/web/e2e/scheduling/fluid-scheduling-all-day.spec.ts
   - apps/web/e2e/scheduling/fluid-scheduling-dense-overflow.spec.ts
   - apps/web/e2e/scheduling/fluid-scheduling-gestures.spec.ts
-  - apps/web/e2e/scheduling/fluid-scheduling-grid-drop.spec.ts
+  - apps/web/e2e/scheduling/task-calendar-scheduling.spec.ts
   - apps/web/e2e/scheduling/fluid-scheduling-relations.spec.ts
   - apps/web/e2e/scheduling/fluid-scheduling.spec.ts
   - apps/web/e2e/work/verify-attachments.spec.ts

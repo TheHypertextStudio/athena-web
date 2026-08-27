@@ -1,5 +1,5 @@
 /** Geometry-aware browser input helpers for the fluid scheduling canvas. */
-import type { Locator, Page, TestInfo } from '@playwright/test';
+import { expect, type Locator, type Page, type TestInfo } from '@playwright/test';
 
 /** Locate the always-mounted bounded schedule viewport. */
 export function scheduleViewport(page: Page): Locator {
@@ -83,7 +83,7 @@ export async function dragScheduleResizeGrip(
   await page.mouse.up();
 }
 
-/** Perform a native HTML drag between two rendered controls using only browser mouse input. */
+/** Drag one Dnd Kit object source onto one eligible relationship target. */
 export async function dragLocatorToLocator(
   page: Page,
   source: Locator,
@@ -91,46 +91,39 @@ export async function dragLocatorToLocator(
 ): Promise<void> {
   await target.scrollIntoViewIfNeeded();
   await source.scrollIntoViewIfNeeded();
-  const [sourceHandle, targetHandle] = await Promise.all([
-    source.elementHandle(),
-    target.elementHandle(),
-  ]);
-  if (!sourceHandle || !targetHandle) throw new Error('Relationship drag has no browser geometry.');
+  const [sourceBox, targetBox] = await Promise.all([source.boundingBox(), target.boundingBox()]);
+  if (!sourceBox || !targetBox) throw new Error('Relationship drag has no browser geometry.');
+
+  const from = {
+    x: sourceBox.x + sourceBox.width / 2,
+    y: sourceBox.y + sourceBox.height / 2,
+  };
+  const to = {
+    x: targetBox.x + targetBox.width / 2,
+    y: targetBox.y + targetBox.height / 2,
+  };
+  const distance = Math.hypot(to.x - from.x, to.y - from.y);
+  if (distance < 8) throw new Error('Relationship drag source and target overlap.');
+  const activation = {
+    x: from.x + ((to.x - from.x) / distance) * 8,
+    y: from.y + ((to.y - from.y) / distance) * 8,
+  };
+
+  let pointerDown = false;
   try {
-    // The scheduling relationship drag is native HTML5 drag-and-drop (a `draggable` source that
-    // writes `dataTransfer` on `dragstart`, and a target with `onDragOver`/`onDrop`). Chromium only
-    // synthesizes that sequence from raw mouse moves unreliably — fine locally, but the source of
-    // the CI-only flake where the drop never fired. Drive it deterministically instead: dispatch
-    // the real drag events with one shared `DataTransfer`, exactly as the browser would, so the
-    // source's `onDragStart` payload is the same object the target's `onDrop` reads back.
-    await page.evaluate(
-      ([src, tgt]) => {
-        const dataTransfer = new DataTransfer();
-        const pointOf = (el: Element): { clientX: number; clientY: number } => {
-          const rect = el.getBoundingClientRect();
-          return { clientX: rect.x + rect.width / 2, clientY: rect.y + rect.height / 2 };
-        };
-        const fire = (el: Element, type: string, from: Element): void => {
-          el.dispatchEvent(
-            new DragEvent(type, {
-              bubbles: true,
-              cancelable: true,
-              composed: true,
-              dataTransfer,
-              ...pointOf(from),
-            }),
-          );
-        };
-        fire(src, 'dragstart', src);
-        fire(tgt, 'dragenter', tgt);
-        fire(tgt, 'dragover', tgt);
-        fire(tgt, 'drop', tgt);
-        fire(src, 'dragend', tgt);
-      },
-      [sourceHandle, targetHandle] as const,
-    );
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    pointerDown = true;
+    await page.mouse.move(activation.x, activation.y, { steps: 2 });
+    await expect(source).toHaveAttribute('data-drag-state', 'dragging');
+    await page.mouse.move(to.x, to.y, { steps: 12 });
+    await expect(target).toHaveAttribute('data-drop-state', 'accept');
+    await page.mouse.up();
+    pointerDown = false;
+    await expect(source).toHaveAttribute('data-drag-state', 'idle');
+    await expect(target).toHaveAttribute('data-drop-state', 'idle');
   } finally {
-    await Promise.all([sourceHandle.dispose(), targetHandle.dispose()]);
+    if (pointerDown) await page.mouse.up();
   }
 }
 

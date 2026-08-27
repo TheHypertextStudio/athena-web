@@ -116,6 +116,17 @@
   therefore passed locally and failed from a clean checkout. The tracked template now keeps
   reconciliation off by default. Private local Stripe credentials and provider ids remain outside
   the committed diff.
+- **Browser gate correction**: The exact-SHA E2E run on `496b981ee` exposed two stale test
+  contracts and two product regressions from the Dnd Kit migration. Recovery now asserts the
+  replacement-passkey action instead of deleted prose. Relationship tests use real pointer input
+  and wait on the shared drag and drop state hooks instead of dispatching obsolete HTML drag
+  events. Calendar drops now preserve the prior direction: an event dropped into a time block is
+  stored as an outgoing `contained` edge from the block. `ObjectSurface` no longer suppresses a
+  native button's Enter activation when the surface has no custom activation handler. The August
+  22 Calendar decision removed the Tasks rail, so the rail-only drag specs were replaced with a
+  mock-free action-menu journey that schedules a task and verifies the persisted 30-minute block
+  and contained task link. Seventeen focused unit tests pass. Four production-build Playwright
+  flows pass in 19.3 seconds against a clean migrated PGlite database.
 - **Decisions**: Checkout derives the customer email from the Better Auth server session and
   rejects a browser-supplied email. Stripe's Dashboard-only existing-subscriber redirect requires
   a recorded verification timestamp before `BILLING_ENABLED=true` can pass configuration. Docket

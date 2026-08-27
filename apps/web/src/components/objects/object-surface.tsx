@@ -178,7 +178,8 @@ export function ObjectSurface({
         event.defaultPrevented ||
         event.key !== 'Enter' ||
         isNativeAnchor(event.currentTarget) ||
-        isInteractiveTarget(event.target, event.currentTarget)
+        isInteractiveTarget(event.target, event.currentTarget) ||
+        (onActivate === undefined && href === undefined)
       )
         return;
       event.preventDefault();

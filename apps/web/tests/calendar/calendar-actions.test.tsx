@@ -6,10 +6,30 @@ import { useRegisterCalendarActions } from '../../src/components/calendar/calend
 import { InteractionProvider } from '../../src/lib/actions/interaction-provider';
 import { createActionRegistry } from '../../src/lib/actions/registry';
 
-const open = vi.fn();
+const { open, relationsPost } = vi.hoisted(() => ({
+  open: vi.fn(),
+  relationsPost: vi.fn(),
+}));
+
 vi.mock('../../src/components/pickers/picker-overlay', () => ({
   usePickerOverlay: () => ({ open }),
 }));
+vi.mock('../../src/lib/api', () => ({
+  api: {
+    v1: {
+      me: {
+        calendar: {
+          items: {
+            ':id': { relations: { $post: relationsPost } },
+          },
+        },
+      },
+    },
+  },
+}));
+
+const SOURCE_ID = '01BX5ZZKBKACTAV9WEVGEMMVS1';
+const TARGET_ID = '01BX5ZZKBKACTAV9WEVGEMMVT1';
 
 function Registration(): null {
   useRegisterCalendarActions();
@@ -18,6 +38,7 @@ function Registration(): null {
 
 afterEach(() => {
   open.mockClear();
+  relationsPost.mockReset();
 });
 
 describe('Calendar relation actions', () => {
@@ -50,6 +71,83 @@ describe('Calendar relation actions', () => {
       relationId,
       organizationId: null,
       subjects: objects,
+    });
+  });
+
+  it.each(['drag', 'shortcut'] as const)(
+    'stores a %s into a time block as an outgoing contained edge from the block',
+    async (source) => {
+      relationsPost.mockResolvedValue({ ok: true, status: 201, json: async () => ({}) });
+      const registry = createActionRegistry();
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      render(
+        <QueryClientProvider client={client}>
+          <InteractionProvider registry={registry}>
+            <Registration />
+          </InteractionProvider>
+        </QueryClientProvider>,
+      );
+
+      await registry.invoke('calendar.related', () => ({
+        objects: [
+          {
+            kind: 'calendar_event',
+            id: SOURCE_ID,
+            organizationId: null,
+            title: 'Research review',
+          },
+        ],
+        target: {
+          kind: 'time_block',
+          id: TARGET_ID,
+          organizationId: null,
+          title: 'Launch window',
+        },
+        source,
+        organizationId: null,
+      }));
+
+      expect(relationsPost).toHaveBeenCalledWith({
+        param: { id: TARGET_ID },
+        json: { targetItemId: SOURCE_ID, role: 'contained' },
+      });
+    },
+  );
+
+  it('keeps a picker relation directed from the selected source item', async () => {
+    relationsPost.mockResolvedValue({ ok: true, status: 201, json: async () => ({}) });
+    const registry = createActionRegistry();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <InteractionProvider registry={registry}>
+          <Registration />
+        </InteractionProvider>
+      </QueryClientProvider>,
+    );
+
+    await registry.invoke('calendar.contained', () => ({
+      objects: [
+        {
+          kind: 'time_block',
+          id: SOURCE_ID,
+          organizationId: null,
+          title: 'Launch window',
+        },
+      ],
+      target: {
+        kind: 'calendar_event',
+        id: TARGET_ID,
+        organizationId: null,
+        title: 'Research review',
+      },
+      source: 'button',
+      organizationId: null,
+    }));
+
+    expect(relationsPost).toHaveBeenCalledWith({
+      param: { id: SOURCE_ID },
+      json: { targetItemId: TARGET_ID, role: 'contained' },
     });
   });
 });

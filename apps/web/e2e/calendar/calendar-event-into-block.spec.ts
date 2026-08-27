@@ -90,15 +90,15 @@ test('drags an event onto a time block and the association survives a reload', a
 
   await dragLocatorToLocator(page, eventDrag, scheduleItem(page, block.id).card);
 
-  // 1. The UI reflects it immediately: open the block and the event is listed inside it.
-  await scheduleItem(page, block.id).body.click();
-  const drawer = page.getByRole('dialog');
-  await expect(drawer.getByText(event.title)).toBeVisible();
-
-  // 2. The server actually stored it.
+  // 1. The server stored the relationship before the UI reads it back.
   await expect
     .poll(async () => relationTargets(page, block.id), { timeout: 15_000 })
     .toEqual([event.id]);
+
+  // 2. The UI reflects the stored relationship when the block opens.
+  await scheduleItem(page, block.id).body.click();
+  const drawer = page.getByRole('dialog');
+  await expect(drawer.getByText(event.title)).toBeVisible();
 
   // 3. It survives a cold reload — nothing here is optimistic cache state.
   await page.reload({ waitUntil: 'domcontentloaded' });

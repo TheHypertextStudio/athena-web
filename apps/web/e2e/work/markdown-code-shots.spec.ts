@@ -9,6 +9,7 @@ import { expect, test } from '../helpers/fixtures';
 import { apiFetch } from '../helpers/net';
 import { seedMentionFixtures } from '../helpers/mentions';
 import { setColorScheme } from '../helpers/ui';
+import { descriptionEditor, taskActivity } from '../helpers/editors';
 
 const SHOT_ROOT = resolve(
   import.meta.dirname,
@@ -63,7 +64,7 @@ test.describe('Markdown code visual evidence', () => {
     expect(commentCreate.status, 'the comment fixture should persist').toBe(200);
 
     await openPersistedRoute(page, orgHref(orgId, `projects/${projectId}`));
-    const prose = page.locator('section[aria-label="Project document"] [contenteditable="true"]');
+    const prose = descriptionEditor(page);
     const block = prose.locator('[data-code-block]');
     await expect(block.locator('.hljs-keyword').first()).toHaveText('const', {
       timeout: TIMEOUTS.pageReady,
@@ -155,8 +156,7 @@ test.describe('Markdown code visual evidence', () => {
     await expect(copy).toHaveAttribute('data-copy-state', 'copied');
 
     await openPersistedRoute(page, orgHref(orgId, `tasks/${taskId}`));
-    const conversation = page.locator('section[aria-labelledby="conversation-heading"]');
-    const comment = conversation.locator('[data-static-markdown]');
+    const comment = taskActivity(page).locator('[data-static-markdown]');
     const commentEntry = comment.locator('xpath=ancestor::li');
     const commentBlock = comment.locator('[data-code-block]');
     await expect(commentBlock.locator('.hljs-keyword').first()).toHaveText('const', {

@@ -134,6 +134,20 @@
   test now starts shadow reconciliation with Checkout disabled, a Stripe test key, and a provider
   account pin. The package passes 138 tests and reports 100% statement, branch, function, and line
   coverage. Its lint, typecheck, formatting, and diff checks pass.
+- **Current exact-SHA release gate**: CI passes on `969a03ce7`. The failed browser shard exposed
+  stale Notion, project-editor, and Initiative contracts. It also exposed two product defects on
+  the newer Notion integration stack. Local Notion requests now reuse one mirror adapter per
+  integration, so a later sync pass sees the databases and pages that an earlier pass created.
+  Task details now trust the API's aggregate capabilities and current actor identity, so owners can
+  comment without downloading the full member roster. The browser tests now use the editor's
+  accessible Description role, the Settings content breadcrumb, state-driven Notion sync, and the
+  icon picker's visible behavior. They no longer depend on deleted wrapper markup or one exact
+  pixel width. The unmatched Notion people list has an accessible name. A production build passes
+  for API and Web, including 85 generated pages and a 275-asset service worker. The container suite
+  passes 36 tests. The corrected Notion, clipboard, navigation, Initiative, Markdown, and mention
+  journeys pass against a clean migrated PGlite database. The mention journey passes all three
+  cases with the local scheduler enabled. Checkout remains disabled until the provider and launch
+  gates below pass.
 - **Decisions**: Checkout derives the customer email from the Better Auth server session and
   rejects a browser-supplied email. Stripe's Dashboard-only existing-subscriber redirect requires
   a recorded verification timestamp before `BILLING_ENABLED=true` can pass configuration. Docket

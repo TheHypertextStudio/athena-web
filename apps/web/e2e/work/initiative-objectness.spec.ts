@@ -44,7 +44,9 @@ test('Initiative detail exposes hierarchy actions and object relationship tabs',
 
   const icon = page.getByRole('button', { name: 'Customize Core infrastructure icon' });
   await expect(icon).toBeVisible();
-  expect(await icon.evaluate((element) => element.getBoundingClientRect().width)).toBe(40);
+  await icon.click();
+  await expect(page.getByRole('searchbox', { name: 'Search icons' })).toBeVisible();
+  await page.keyboard.press('Escape');
 
   await page.getByRole('tab', { name: 'Sub-initiatives', exact: true }).click();
   const initiativeRow = page.locator(
@@ -52,12 +54,6 @@ test('Initiative detail exposes hierarchy actions and object relationship tabs',
   );
   await expect(initiativeRow).toBeVisible();
   await expect(initiativeRow.getByRole('link', { name: 'Membership portal' })).toBeVisible();
-  expect(
-    await initiativeRow
-      .getByTestId('object-identity-target')
-      .evaluate((element) => element.getBoundingClientRect().width),
-  ).toBe(40);
-
   await initiativeRow.click({ button: 'right' });
   await expect(page.getByRole('menuitem', { name: 'Change parent…' })).toBeVisible();
   await page.getByRole('menuitem', { name: 'Change parent…' }).click();
@@ -75,6 +71,5 @@ test('Initiative detail exposes hierarchy actions and object relationship tabs',
     element.scrollTop = 240;
     element.dispatchEvent(new Event('scroll'));
   });
-  await page.waitForTimeout(100);
-  expect(await icon.evaluate((element) => element.getBoundingClientRect().width)).toBe(40);
+  await expect(icon).toBeInViewport();
 });

@@ -12,6 +12,7 @@ import { ORIGIN, orgHref, TIMEOUTS } from '../helpers/constants';
 import { expect, test } from '../helpers/fixtures';
 import { apiFetch } from '../helpers/net';
 import { seedMentionFixtures } from '../helpers/mentions';
+import { descriptionEditor, taskActivity } from '../helpers/editors';
 
 test.describe('Markdown code formatting', () => {
   test('inline and fenced code persist, highlight lazily, reload, and copy exactly', async ({
@@ -27,7 +28,7 @@ test.describe('Markdown code formatting', () => {
     await page.goto(orgHref(orgId, `projects/${projectId}`), {
       waitUntil: 'domcontentloaded',
     });
-    const prose = page.locator('section[aria-label="Project document"] [contenteditable="true"]');
+    const prose = descriptionEditor(page);
     await expect(prose).toBeVisible({ timeout: TIMEOUTS.pageReady });
 
     await prose.click();
@@ -58,9 +59,7 @@ test.describe('Markdown code formatting', () => {
 
     await page.waitForTimeout(2000);
     await page.reload({ waitUntil: 'domcontentloaded' });
-    const reloaded = page.locator(
-      'section[aria-label="Project document"] [contenteditable="true"]',
-    );
+    const reloaded = descriptionEditor(page);
     await expect(reloaded.locator('[data-inline-code]')).toHaveText('pnpm test', {
       timeout: TIMEOUTS.pageReady,
     });
@@ -78,8 +77,8 @@ test.describe('Markdown code formatting', () => {
     await expect(copy).toHaveAttribute('data-copy-state', 'copied', { timeout: TIMEOUTS.ui });
 
     await page.goto(orgHref(orgId, `tasks/${taskId}`), { waitUntil: 'domcontentloaded' });
-    const conversation = page.locator('section[aria-labelledby="conversation-heading"]');
-    const composer = conversation.getByRole('textbox', { name: 'Add a comment' });
+    const activity = taskActivity(page);
+    const composer = activity.getByRole('textbox', { name: 'Add a comment' });
     await expect(composer).toBeVisible({ timeout: TIMEOUTS.pageReady });
     await composer.click();
     await composer.pressSequentially('Review with `pnpm test`.');
@@ -89,15 +88,15 @@ test.describe('Markdown code formatting', () => {
     await expect(draftBlock).toBeVisible();
     await composer.pressSequentially('const commentReady = true');
     await draftBlock.getByRole('combobox', { name: 'Code language' }).selectOption('typescript');
-    await conversation.getByRole('button', { name: 'Comment', exact: true }).click();
+    await activity.getByRole('button', { name: 'Comment', exact: true }).click();
 
-    const posted = conversation.locator('[data-static-markdown]');
+    const posted = activity.locator('[data-static-markdown]');
     await expect(posted.locator('[data-inline-code]')).toHaveText('pnpm test', {
       timeout: TIMEOUTS.pageReady,
     });
     await expect(posted.getByText('TypeScript')).toBeVisible();
     await expect(posted.locator('.hljs-keyword')).toHaveText('const');
-    await expect(conversation.locator('.ProseMirror')).toHaveCount(1);
+    await expect(activity.locator('.ProseMirror')).toHaveCount(1);
     await expect
       .poll(async () => {
         const result = await apiFetch(
@@ -115,8 +114,7 @@ test.describe('Markdown code formatting', () => {
     await page.locator(`a[href="${orgHref(orgId, 'tasks')}"]`).click();
     await page.getByText(taskTitle, { exact: true }).first().click({ timeout: TIMEOUTS.pageReady });
     await page.waitForURL(new RegExp(`/tasks/${taskId}$`), { timeout: TIMEOUTS.pageReady });
-    const reloadedConversation = page.locator('section[aria-labelledby="conversation-heading"]');
-    const reloadedComment = reloadedConversation.locator('[data-static-markdown]');
+    const reloadedComment = taskActivity(page).locator('[data-static-markdown]');
     await expect(reloadedComment.getByText('TypeScript')).toBeVisible({
       timeout: TIMEOUTS.pageReady,
     });

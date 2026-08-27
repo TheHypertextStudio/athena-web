@@ -16,6 +16,7 @@ import { signUpAndOnboard } from '../helpers/app';
 import { ORIGIN, orgHref, TIMEOUTS } from '../helpers/constants';
 import { expect, test } from '../helpers/fixtures';
 import { seedMentionFixtures } from '../helpers/mentions';
+import { descriptionEditor, taskActivity } from '../helpers/editors';
 
 /** What the clipboard's plain flavor currently holds. */
 async function clipboardText(page: Parameters<typeof signUpAndOnboard>[0]): Promise<string> {
@@ -35,7 +36,7 @@ test.describe('Clipboard fidelity', () => {
 
     // --- Copying out of a body -------------------------------------------------------------
     await page.goto(orgHref(orgId, `projects/${projectId}`), { waitUntil: 'domcontentloaded' });
-    const prose = page.locator('section[aria-label="Project document"] [contenteditable="true"]');
+    const prose = descriptionEditor(page);
     await expect(prose).toBeVisible({ timeout: TIMEOUTS.pageReady });
 
     await prose.click();
@@ -76,17 +77,17 @@ test.describe('Clipboard fidelity', () => {
 
     // --- Copying out of a posted comment ---------------------------------------------------
     await page.goto(orgHref(orgId, `tasks/${taskId}`), { waitUntil: 'domcontentloaded' });
-    const conversation = page.locator('section[aria-labelledby="conversation-heading"]');
-    const composer = conversation.getByRole('textbox', { name: 'Add a comment' });
+    const activity = taskActivity(page);
+    const composer = activity.getByRole('textbox', { name: 'Add a comment' });
     await expect(composer).toBeVisible({ timeout: TIMEOUTS.pageReady });
 
     await composer.click();
     await composer.pressSequentially('## Findings');
     await page.keyboard.press('Enter');
     await composer.pressSequentially('- Checked the logs');
-    await conversation.getByRole('button', { name: 'Comment', exact: true }).click();
+    await activity.getByRole('button', { name: 'Comment', exact: true }).click();
 
-    const posted = conversation.locator('[data-static-markdown]').last();
+    const posted = activity.locator('[data-static-markdown]').last();
     await expect(posted.locator('h2')).toHaveText('Findings', { timeout: TIMEOUTS.pageReady });
 
     // A posted comment is rendered from tokens with no editor behind it, so this exercises the

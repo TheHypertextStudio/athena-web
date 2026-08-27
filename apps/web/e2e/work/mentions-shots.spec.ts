@@ -15,6 +15,7 @@ import { orgHref, TIMEOUTS } from '../helpers/constants';
 import { expect, test } from '../helpers/fixtures';
 import { openMentionMenu, seedMentionFixtures, waitForMentionable } from '../helpers/mentions';
 import { attachShot, setColorScheme } from '../helpers/ui';
+import { descriptionEditor } from '../helpers/editors';
 
 /** The two viewports the rest of the suite captures at. */
 const VIEWPORTS = [
@@ -31,7 +32,7 @@ test.describe('mention visuals', () => {
       await waitForMentionable(page, orgId, 'zep', taskTitle);
 
       await page.goto(orgHref(orgId, `projects/${projectId}`), { waitUntil: 'domcontentloaded' });
-      const prose = page.locator('section[aria-label="Project document"] [contenteditable="true"]');
+      const prose = descriptionEditor(page);
       await expect(prose).toBeVisible({ timeout: TIMEOUTS.pageReady });
 
       await prose.click();
@@ -75,7 +76,7 @@ test.describe('mention visuals', () => {
 
     await page.goto(orgHref(orgId, `projects/${projectId}`), { waitUntil: 'domcontentloaded' });
     await page.addStyleTag({ content: 'html { font-size: 200% !important; }' });
-    const prose = page.locator('section[aria-label="Project document"] [contenteditable="true"]');
+    const prose = descriptionEditor(page);
     await expect(prose).toBeVisible({ timeout: TIMEOUTS.pageReady });
     await prose.click();
     await page.keyboard.press('End');

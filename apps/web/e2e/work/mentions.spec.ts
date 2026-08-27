@@ -21,6 +21,7 @@ import { orgHref, TIMEOUTS } from '../helpers/constants';
 import { expect, test } from '../helpers/fixtures';
 import { apiFetch } from '../helpers/net';
 import { openMentionMenu, seedMentionFixtures, waitForMentionable } from '../helpers/mentions';
+import { descriptionEditor } from '../helpers/editors';
 
 test.describe('mentions', () => {
   test('a mention in prose persists, reloads as a chip, and lands in Resources', async ({
@@ -31,7 +32,7 @@ test.describe('mentions', () => {
     await waitForMentionable(page, orgId, 'zep', taskTitle);
 
     await page.goto(orgHref(orgId, `projects/${projectId}`), { waitUntil: 'domcontentloaded' });
-    const prose = page.locator('section[aria-label="Project document"] [contenteditable="true"]');
+    const prose = descriptionEditor(page);
     await expect(prose).toBeVisible({ timeout: TIMEOUTS.pageReady });
 
     await prose.click();
@@ -112,7 +113,7 @@ test.describe('mentions', () => {
     await waitForMentionable(page, orgId, 'zep', taskTitle);
 
     await page.goto(orgHref(orgId, `projects/${projectId}`), { waitUntil: 'domcontentloaded' });
-    const prose = page.locator('section[aria-label="Project document"] [contenteditable="true"]');
+    const prose = descriptionEditor(page);
     await expect(prose).toBeVisible({ timeout: TIMEOUTS.pageReady });
 
     // They are two separate runs on two separate plugins, so the risk worth a test is that one

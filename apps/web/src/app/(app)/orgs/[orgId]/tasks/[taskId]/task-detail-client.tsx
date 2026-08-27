@@ -42,11 +42,9 @@ import { useEstimationScale } from '@/lib/use-estimation-scale';
 import { useTaskDetail } from '@/lib/use-task-detail';
 import { useTaskAttachments } from '@/lib/use-attachments';
 import { useTaskMutations } from '@/lib/use-task-mutations';
-import { useOrgCapability } from '@/lib/use-org-capability';
 import { useRenameTask } from '@/lib/use-rename-task';
 import { useCategoryOf } from '@/components/entity-display/use-work-status';
 import { TaskRepeatingWorkBacklink } from '@/components/recurrence/repeating-work-backlink';
-import { useSession } from '@/lib/auth-client';
 import { removeNavigationSnapshot } from '@/lib/navigation-snapshot-runtime';
 
 interface TaskFeedActor {
@@ -79,7 +77,8 @@ export default function TaskDetailPage(): JSX.Element {
     agents,
     milestones,
     cycles,
-    roles,
+    capabilities,
+    currentActorId,
     entityMentions,
     detailKey,
     activityKey,
@@ -98,10 +97,6 @@ export default function TaskDetailPage(): JSX.Element {
     isUploading: resourceUploadPending,
     actionError: resourceActionError,
   } = useTaskAttachments(orgId, taskId);
-
-  const { data: session } = useSession();
-  const currentActorId =
-    members.find((member) => member.userId === session?.user.id)?.actorId ?? null;
 
   // The tab bar and the browser tab both follow the name on screen, including through a rename.
   useRegisterTabTitle('task', orgId, taskId, task?.title);
@@ -162,9 +157,9 @@ export default function TaskDetailPage(): JSX.Element {
     [task, resolveActor],
   );
 
-  const canEdit = useOrgCapability(members, roles, 'contribute');
-  const canComment = useOrgCapability(members, roles, 'comment');
-  const canManage = useOrgCapability(members, roles, 'manage');
+  const canEdit = capabilities?.contribute ?? false;
+  const canComment = capabilities?.comment ?? false;
+  const canManage = capabilities?.manage ?? false;
   // Rename any subtask in place (an arbitrary task by id), then re-read this task's detail so the
   // refreshed subtask titles flow back in.
   const renameSubtask = useRenameTask(orgId, [detailKey]);

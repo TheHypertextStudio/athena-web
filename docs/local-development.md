@@ -194,6 +194,6 @@ Apple Developer console the Services ID's return URL must be `https://<host>/api
   firehose, the same `pnpm bootstrap` tunnel step exposes your own stack — point a personal GitHub
   App's webhook at it.)
 - **Stripe** — no tunnel; use the Stripe CLI (`stripe listen`), and locally the billing gateway is
-  mocked anyway. Note the handler path is `POST /v1/billing/webhook`
+  mocked anyway. Note the handler path is `POST /internal/billing/webhook`
   (`apps/api/src/routes/webhooks.ts`), not the `@better-auth/stripe` `/api/auth/stripe/webhook`
   some older docs reference.

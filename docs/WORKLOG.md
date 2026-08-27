@@ -166,6 +166,20 @@
   migration passes its idempotent boundary test. The database package passes 213 tests in 35 files,
   type checking, lint, formatting, and the diff check. Deployment and a repeated production audit
   remain required before this gate can close.
+- **Exact-main release correction**: CI on `631983372` found two browser-facing regressions before
+  production deployment. A static Notion mapping-review heading bypassed the Settings capability
+  catalog, so Cmd+K could not discover it. The Athena utility rail also treated a newly allocated
+  object for the same workspace as a workspace change, which cleared the selected session as soon
+  as the shell rerendered. The Notion section now owns a stable capability definition. Athena now
+  keys its shell context by workspace id and name rather than object identity. The regression test
+  first reproduced the selection reset, then passed with the fix. The two focused suites pass 11
+  tests. A local Playwright attempt never reached the changed code because the shared sign-up stack
+  stalled before onboarding, so the isolated exact-main browser shard remains the release proof.
+- **Webhook contract documentation correction**: The local-development guide now names
+  `/internal/billing/webhook`, which is the implemented and provisioned route, instead of the stale
+  `/v1/billing/webhook` path. The live Hypertext Studio custom endpoint currently lacks
+  `invoice.paid` and `invoice.payment_action_required`; the exact eight-event contract is staged in
+  the Dashboard but remains unsaved pending action-time confirmation.
 - **Decisions**: Checkout derives the customer email from the Better Auth server session and
   rejects a browser-supplied email. Stripe's Dashboard-only existing-subscriber redirect requires
   a recorded verification timestamp before `BILLING_ENABLED=true` can pass configuration. Docket

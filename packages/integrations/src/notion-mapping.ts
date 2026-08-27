@@ -63,6 +63,8 @@ export interface NotionSchema {
   readonly dataSourceId: string;
   /** The data source's human-readable title. */
   readonly title: string;
+  /** Raw property definitions used to retain a reviewable mapping profile. */
+  readonly properties: Readonly<Record<string, unknown>>;
   /** The name of the (single) `title` property — Docket's task title. */
   readonly titleProperty: string;
   /** The `status` property name driving completion, when the data source has one. */
@@ -283,6 +285,7 @@ export function readNotionSchema(
   return {
     dataSourceId,
     title,
+    properties,
     titleProperty,
     statusProperty,
     checkboxProperty,

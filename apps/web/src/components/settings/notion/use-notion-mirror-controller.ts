@@ -23,6 +23,7 @@ import type {
 import {
   ConnectorConfig,
   type IntegrationOut,
+  type NotionMappingProfile,
   type SyncFailureKind,
   type SyncRunOut,
 } from '@docket/types';
@@ -101,6 +102,8 @@ export interface NotionMirrorModel {
    * generic label rather than to nothing.
    */
   containerPage: { title: string | null; url: string | null } | null;
+  /** Linked-database mappings whose relation targets require a human decision. */
+  mappingProfiles: readonly NotionMappingProfile[];
 }
 
 /** Read the Notion connection and the databases designed against it. */
@@ -158,6 +161,7 @@ export function useNotionMirror(orgId: string): NotionMirrorModel {
     ),
     health: mirrorHealth(integration, runsQ.data?.items ?? []),
     containerPage: readContainerPage(integration?.config),
+    mappingProfiles: readNotionMappingProfiles(integration?.config),
   };
 }
 
@@ -209,6 +213,14 @@ function readContainerPage(
   const mirror = ConnectorConfig.safeParse(config ?? {}).data?.notionMirror;
   if (mirror === undefined) return null;
   return { title: mirror.containerPageTitle ?? null, url: mirror.containerPageUrl ?? null };
+}
+
+/** Read versioned mapping profiles without treating an older connection as malformed. */
+function readNotionMappingProfiles(
+  config: Record<string, unknown> | undefined,
+): readonly NotionMappingProfile[] {
+  const profiles = ConnectorConfig.safeParse(config ?? {}).data?.notionMappingProfiles;
+  return profiles === undefined ? [] : Object.values(profiles);
 }
 
 /**

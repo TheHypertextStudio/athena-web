@@ -16,6 +16,7 @@ import type { ActivitySource } from './activity-source';
 import type { MailActions } from './mail';
 import type { ResourceSearch } from './resource-search';
 import type { WorkGraphConnector } from './work-graph';
+import type { NotionMappingProfile } from './notion-mapping';
 
 /**
  * The external providers Docket can connect to.
@@ -154,6 +155,13 @@ export interface ImportedItem {
    * linked task. Read-only mirror imports never set this.
    */
   readonly removed?: boolean;
+  /**
+   * The Notion data-source mapping inferred while this row was read.
+   *
+   * The sync spine persists this with the connection rather than deriving it again from page
+   * values, which makes ambiguous relation mappings visible for review before Docket uses them.
+   */
+  readonly notionMappingProfile?: NotionMappingProfile;
   /** Where the item came from. */
   readonly provenance: ItemProvenance;
 }

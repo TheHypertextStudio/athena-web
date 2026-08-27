@@ -23,7 +23,11 @@ import {
   type ProviderErrorKind,
 } from '@docket/connections/provider-error';
 import type { ConnectorProvider } from '@docket/integrations';
-import { MAIL_CAPABLE_PROVIDERS, type ImportedItem } from '@docket/integrations';
+import {
+  MAIL_CAPABLE_PROVIDERS,
+  type ImportedItem,
+  type NotionMappingProfile,
+} from '@docket/integrations';
 import { and, eq, inArray, isNotNull, isNull, lt, notInArray, or } from 'drizzle-orm';
 import type { z } from 'zod';
 
@@ -80,6 +84,40 @@ function mappedExternalTeamIds(config: ConnectorConfig): readonly string[] {
     return config.teamMappings.map((m) => m.externalTeamId);
   }
   return config.listIds ?? [];
+}
+
+/**
+ * Retain mapping proposals discovered while reading linked Notion pages.
+ *
+ * A profile is written only once for a mapping-rule version. That keeps a person's later
+ * correction in `integration.config` intact while allowing a future inference-version bump to
+ * ask for a fresh review instead of silently changing a live connection.
+ */
+async function persistInferredNotionMappings(
+  row: IntegrationRow,
+  items: readonly ImportedItem[],
+): Promise<void> {
+  if (row.provider !== 'notion') return;
+  const inferred = new Map<string, NotionMappingProfile>();
+  for (const item of items) {
+    const profile = item.notionMappingProfile;
+    if (profile !== undefined) inferred.set(profile.dataSourceId, profile);
+  }
+  if (inferred.size === 0) return;
+
+  const config = ConnectorConfig.safeParse(row.config).data;
+  const existing = config?.notionMappingProfiles ?? {};
+  const additions = [...inferred.values()].filter(
+    (profile) => existing[profile.dataSourceId]?.version !== profile.version,
+  );
+  if (additions.length === 0) return;
+
+  const notionMappingProfiles = { ...existing };
+  for (const profile of additions) notionMappingProfiles[profile.dataSourceId] = profile;
+  await db
+    .update(integration)
+    .set({ config: { ...row.config, notionMappingProfiles } })
+    .where(eq(integration.id, row.id));
 }
 
 /**
@@ -426,6 +464,7 @@ export async function runSync(
       ...(config.listIds && config.listIds.length > 0 ? { listIds: config.listIds } : {}),
       ...(!full ? { since: lookbackISO(flatLastSyncedAt, row.syncCadenceMinutes) } : {}),
     });
+    await persistInferredNotionMappings(row, items);
     const tally = await reconcileTasks(row.organizationId, opts.actorId, row, teamId, items, {
       assigneeId: null,
       writable: connector.asWritable?.() ?? null,

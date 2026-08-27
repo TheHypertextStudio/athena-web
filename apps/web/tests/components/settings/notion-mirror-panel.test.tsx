@@ -223,6 +223,35 @@ describe('NotionMirrorPanel — once the databases exist', () => {
   });
 });
 
+describe('NotionMirrorPanel — linked database mappings', () => {
+  it('calls out relation mappings that Docket will not guess', async () => {
+    integrationsGet.mockResolvedValue(
+      okResponse({
+        items: [
+          integration({
+            notionMappingProfiles: {
+              'data-source-1': {
+                version: 1,
+                dataSourceId: 'data-source-1',
+                fields: [
+                  { field: 'title', property: 'Name', confidence: 'structural' },
+                  { field: 'project', property: 'Project', confidence: 'review' },
+                ],
+              },
+            },
+          }),
+        ],
+      }),
+    );
+    databasesGet.mockResolvedValue(okResponse({ items: [database()] }));
+
+    renderPanel();
+
+    expect(await screen.findByText('Review linked Notion mappings')).toBeInTheDocument();
+    expect(screen.getByText(/Project.*won’t be synced until you review it/)).toBeInTheDocument();
+  });
+});
+
 describe('NotionMirrorPanel — saying whether the sync actually works', () => {
   const provisioned = {
     provisionedAt: '2026-01-02T00:00:00Z',

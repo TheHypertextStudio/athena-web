@@ -146,6 +146,29 @@ describe('integrations directory', () => {
 });
 
 describe('integrations sync', () => {
+  it('retains a versioned mapping profile when a linked Notion database is imported', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const id = await seedIntegration(orgId, humanActorId, 'notion');
+    const w = appWithActor(integrations, orgId, ['manage'], humanActorId);
+
+    expect((await w.request(`/${id}/sync`, { method: 'POST', headers: J })).status).toBe(200);
+
+    const [row] = await db
+      .select({ config: schema.integration.config })
+      .from(schema.integration)
+      .where(eq(schema.integration.id, id));
+    expect(row?.config).toMatchObject({
+      notionMappingProfiles: {
+        '383c7791-208f-802e-9508-000b6d244e57': {
+          version: 1,
+          fields: expect.arrayContaining([
+            { field: 'project', property: 'Project', confidence: 'review' },
+          ]),
+        },
+      },
+    });
+  });
+
   it('runs the connector, records a succeeded run, and marks the integration connected', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const id = await seedIntegration(orgId, humanActorId, 'github');

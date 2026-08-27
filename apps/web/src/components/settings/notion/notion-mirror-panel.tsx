@@ -186,6 +186,11 @@ export function NotionMirrorPanel({ orgId, canManage }: NotionMirrorPanelProps):
   const contentTruncated = model.databases.some(
     (database) => database.content.state === 'truncated',
   );
+  const mappingsNeedingReview = model.mappingProfiles.flatMap((profile) =>
+    profile.fields
+      .filter((field) => field.confidence === 'review')
+      .map((field) => ({ dataSourceId: profile.dataSourceId, property: field.property })),
+  );
 
   // Gated on the container page, not on `provisionedCount`: a provision that recorded the page and
   // then failed before creating anything has zero databases, and gating on those would leave the
@@ -295,6 +300,25 @@ export function NotionMirrorPanel({ orgId, canManage }: NotionMirrorPanelProps):
           >
             Match people <ArrowRight aria-hidden="true" className="inline size-3.5" />
           </NextLink>
+        </SettingsGroup>
+      ) : null}
+
+      {mappingsNeedingReview.length > 0 ? (
+        <SettingsGroup
+          title="Review linked Notion mappings"
+          description="Docket mapped the fields it can identify safely. It will not guess where a Notion relation points."
+        >
+          <ul className="divide-outline-variant divide-y">
+            {mappingsNeedingReview.map((mapping) => (
+              <li key={`${mapping.dataSourceId}:${mapping.property}`} className="px-4 py-3">
+                <p className="text-on-surface text-body-medium">{mapping.property}</p>
+                <p className="text-on-surface-variant text-body-small mt-1">
+                  {mapping.property} won’t be synced until you review it. Docket only resolves
+                  relations that already map to a page in this connection.
+                </p>
+              </li>
+            ))}
+          </ul>
         </SettingsGroup>
       ) : null}
 

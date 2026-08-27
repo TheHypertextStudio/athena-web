@@ -268,6 +268,14 @@ describe('NotionProviderClient.importWork', () => {
     );
 
     expect(item?.body).toBe('## Decision\n\n- [ ] Ship the real content.');
+    expect(item?.notionMappingProfile).toEqual({
+      version: 1,
+      dataSourceId: TASKS_TRACKER_DATA_SOURCE,
+      fields: expect.arrayContaining([
+        { field: 'title', property: 'Task name', confidence: 'structural' },
+        { field: 'dueDate', property: 'Due date', confidence: 'high' },
+      ]),
+    });
     expect(http.calls).toContainEqual(
       expect.objectContaining({ method: 'get', path: '/pages/page-body/markdown' }),
     );

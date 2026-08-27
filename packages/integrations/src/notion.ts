@@ -33,6 +33,7 @@ import { asRecord, str } from './json';
 import { MAX_IMPORT_PAGES, logConnectorTruncation } from './connector-log';
 import {
   type NotionSchema,
+  createNotionMappingProfile,
   mapNotionPage,
   notionPageUrl,
   notionPlainText,
@@ -304,17 +305,19 @@ export class NotionProviderClient implements WritableConnectorProviderClient {
     const items: ImportedItem[] = [];
     for (const dataSourceId of selected) {
       const schema = await this.schemaFor(dataSourceId);
+      const profile = createNotionMappingProfile(schema, schema.properties);
       for (const row of await this.queryDataSource(dataSourceId, input.since)) {
         const record = asRecord(row);
         if (record === undefined) continue;
         const item = mapNotionPage(record, schema, importedAt);
         if (item === undefined) continue;
-        if (item.removed === true) {
-          items.push(item);
+        const mapped = { ...item, notionMappingProfile: profile };
+        if (mapped.removed === true) {
+          items.push(mapped);
           continue;
         }
-        const markdown = await this.pageMarkdown(item.id);
-        items.push(markdown === undefined ? item : { ...item, body: markdown });
+        const markdown = await this.pageMarkdown(mapped.id);
+        items.push(markdown === undefined ? mapped : { ...mapped, body: markdown });
       }
     }
     return items;

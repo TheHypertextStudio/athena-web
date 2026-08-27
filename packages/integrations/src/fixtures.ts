@@ -226,6 +226,15 @@ export const CONNECTOR_ITEMS: Readonly<Record<ConnectorProvider, readonly Import
       body: 'Attach the bylaws and the EIN letter before filing.',
       completed: false,
       dueDate: '2026-02-15',
+      notionMappingProfile: {
+        version: 1,
+        dataSourceId: NOTION_TASKS_DATA_SOURCE_ID,
+        fields: [
+          { field: 'title', property: 'Task name', confidence: 'structural' },
+          { field: 'completed', property: 'Status', confidence: 'structural' },
+          { field: 'project', property: 'Project', confidence: 'review' },
+        ],
+      },
       provenance: {
         provider: 'notion',
         externalId: '386c7791-208f-80e6-a74e-da40db98177e',

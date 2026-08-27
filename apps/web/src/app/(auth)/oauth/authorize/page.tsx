@@ -66,7 +66,14 @@ import {
   XCircle,
 } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
-import { Avatar, AvatarFallback, AvatarImage, Button, focusRingInset } from '@docket/ui/primitives';
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+  Button,
+  focusRingInset,
+  Text,
+} from '@docket/ui/primitives';
 import Link from 'next/link';
 // `next/navigation` directly, not `@/lib/app-location`: this page is in the `(auth)` route group,
 // which mounts no `AppLocationProvider` — that provider wraps `(app)` only. Reading through the
@@ -103,6 +110,23 @@ const SCOPE_ICON: Readonly<Record<string, ComponentType<{ className?: string }>>
 
 /** Shown while the session read is still in flight, in place of the account address. */
 const ACCOUNT_PENDING_LABEL = 'Checking your account…';
+
+type ConsentError = 'expired' | 'unavailable' | 'missing-return-address';
+
+const CONSENT_ERROR_COPY: Readonly<Record<ConsentError, { title: string; detail: string }>> = {
+  expired: {
+    title: 'Connection link expired',
+    detail: 'Return to Codex and start the connection again. No access was granted.',
+  },
+  unavailable: {
+    title: 'Docket could not finish the connection',
+    detail: 'Check your connection, then try again.',
+  },
+  'missing-return-address': {
+    title: 'Docket could not finish the connection',
+    detail: 'Return to Codex and start the connection again. No access was granted.',
+  },
+};
 
 /** Fetch the server-validated display metadata for an OAuth client. Returns `null` on any failure. */
 async function fetchClientMetadata(
@@ -291,7 +315,7 @@ function ConsentPage(): JSX.Element {
 
   const [clientMeta, setClientMeta] = useState<{ name: string; icon: string | null } | null>(null);
   const [pending, setPending] = useState<'accept' | 'deny' | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ConsentError | null>(null);
 
   // Fetch CIMD metadata for URL-form client IDs.
   useEffect(() => {
@@ -325,7 +349,6 @@ function ConsentPage(): JSX.Element {
   const decide = useCallback(
     async (accept: boolean): Promise<void> => {
       if (!signature) {
-        setError('This authorization link is incomplete. Please try connecting again.');
         return;
       }
       setPending(accept ? 'accept' : 'deny');
@@ -341,7 +364,7 @@ function ConsentPage(): JSX.Element {
           credentials: 'same-origin',
         });
         if (!res.ok) {
-          setError('Docket could not record this access decision. Try again.');
+          setError(res.status === 400 ? 'expired' : 'unavailable');
           return;
         }
         // The handler answers `{ redirect: true, url }` even though the plugin's own OpenAPI
@@ -351,12 +374,12 @@ function ConsentPage(): JSX.Element {
         const body = (await res.json()) as { url?: string; redirect_uri?: string };
         const destination = body.url ?? body.redirect_uri;
         if (!destination) {
-          setError('Docket did not receive a return address. Restart the connection.');
+          setError('missing-return-address');
           return;
         }
         window.location.href = destination;
       } catch {
-        setError('Docket could not record this access decision. Try again.');
+        setError('unavailable');
       } finally {
         setPending(null);
       }
@@ -415,6 +438,7 @@ function ConsentPage(): JSX.Element {
     requestedScopes.length > 0
       ? `${displayName} can use only the access listed here until you revoke it.`
       : `${displayName} can connect to your Docket account until you revoke it.`;
+  const errorCopy = error ? CONSENT_ERROR_COPY[error] : null;
 
   return (
     <AuthLayout
@@ -452,10 +476,19 @@ function ConsentPage(): JSX.Element {
         </section>
       ) : null}
 
-      {error ? (
-        <p role="alert" className="text-error text-body-medium">
-          {error}
-        </p>
+      {errorCopy ? (
+        <section
+          role="alert"
+          className="border-error/40 bg-error-container text-on-error-container flex gap-3 rounded-lg border p-4"
+        >
+          <XCircle aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
+          <div className="flex min-w-0 flex-col gap-1">
+            <Text as="h2" token="title-small">
+              {errorCopy.title}
+            </Text>
+            <p className="text-body-medium">{errorCopy.detail}</p>
+          </div>
+        </section>
       ) : null}
 
       {/* What each button actually does, in the same words a person would use. Two bare verbs on
@@ -466,29 +499,31 @@ function ConsentPage(): JSX.Element {
       </p>
 
       {/* Reversed so the primary lands on the right at width and first when stacked. */}
-      <div className="flex flex-col-reverse gap-2 @3xl:flex-row @3xl:justify-end">
-        <Button
-          type="button"
-          variant="outline"
-          size="lg"
-          disabled={pending !== null || !sessionSettled}
-          onClick={() => {
-            void decide(false);
-          }}
-        >
-          {pending === 'deny' ? 'Returning…' : 'Deny access'}
-        </Button>
-        <Button
-          type="button"
-          size="lg"
-          disabled={pending !== null || !sessionSettled}
-          onClick={() => {
-            void decide(true);
-          }}
-        >
-          {pending === 'accept' ? 'Allowing…' : 'Allow access'}
-        </Button>
-      </div>
+      {error !== 'expired' && error !== 'missing-return-address' ? (
+        <div className="flex flex-col-reverse gap-2 @3xl:flex-row @3xl:justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            disabled={pending !== null || !sessionSettled}
+            onClick={() => {
+              void decide(false);
+            }}
+          >
+            {pending === 'deny' ? 'Returning…' : 'Deny access'}
+          </Button>
+          <Button
+            type="button"
+            size="lg"
+            disabled={pending !== null || !sessionSettled}
+            onClick={() => {
+              void decide(true);
+            }}
+          >
+            {pending === 'accept' ? 'Allowing…' : 'Allow access'}
+          </Button>
+        </div>
+      ) : null}
 
       <p className="text-on-surface-variant text-body-small">
         Revoke access any time in{' '}

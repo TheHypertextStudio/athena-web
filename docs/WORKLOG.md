@@ -34,9 +34,13 @@
 - **Description**: Codex rejected Docket's authorization callback because discovery advertised
   `https://docket-api.hypertext.studio/api/auth` while the callback returned the Web host.
 - **Approach**: Keep the Web host for browser authorization and derive the OAuth issuer from
-  `MCP_ISSUER_URL`, which already names the canonical API origin.
+  `MCP_ISSUER_URL`, which already names the canonical API origin. Treat Better Auth's terminal
+  consent rejection as an expired connection link, tell the person to restart in Codex, and remove
+  the decision controls that cannot succeed.
 - **Validation**: The focused auth test first reproduced the Web/API issuer mismatch, then passed
-  after the issuer used `MCP_ISSUER_URL`.
+  after the issuer used `MCP_ISSUER_URL`. The consent-page suite covers both an expired link and a
+  recoverable network failure, and web type checking passes. The changed files pass ESLint. The
+  whole-web lint process exceeds its 2 GB Node heap before reporting a lint violation.
 
 ---
 

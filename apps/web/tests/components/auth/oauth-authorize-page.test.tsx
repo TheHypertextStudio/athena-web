@@ -15,7 +15,7 @@
 import '@testing-library/jest-dom/vitest';
 
 import { OAUTH_ISSUABLE_SCOPES } from '@docket/types';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { OAUTH_SCOPE_COPY } from '@/lib/oauth-scope-copy';
@@ -31,7 +31,8 @@ interface MockSession {
   error: { status: number } | null;
 }
 
-const { metadataGet, replace, useSession } = vi.hoisted(() => ({
+const { fetchMock, metadataGet, replace, useSession } = vi.hoisted(() => ({
+  fetchMock: vi.fn(),
   metadataGet: vi.fn(),
   replace: vi.fn(),
   useSession: vi.fn((): MockSession => ({ data: null, isPending: false, error: null })),
@@ -77,6 +78,8 @@ function renderSignedRequest(): void {
 }
 
 beforeEach(() => {
+  vi.stubGlobal('fetch', fetchMock);
+  fetchMock.mockReset();
   metadataGet.mockReset();
   metadataGet.mockResolvedValue({ ok: false });
   replace.mockReset();
@@ -86,6 +89,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   cleanup();
 });
 
@@ -248,6 +252,33 @@ describe('OAuthAuthorizePage', () => {
       expect(explanation.textContent).toContain(
         'Denying access returns you to callback.example without granting access.',
       );
+    });
+
+    it('replaces an expired consent link with Codex recovery instructions', async () => {
+      fetchMock.mockResolvedValue({ ok: false, status: 400 });
+      renderSignedRequest();
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Allow access' }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('Connection link expired');
+      expect(screen.getByRole('alert')).toHaveTextContent(
+        'Return to Codex and start the connection again. No access was granted.',
+      );
+      expect(screen.queryByRole('button', { name: 'Allow access' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Deny access' })).toBeNull();
+    });
+
+    it('keeps the decision controls available after a temporary failure', async () => {
+      fetchMock.mockRejectedValue(new Error('offline'));
+      renderSignedRequest();
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Allow access' }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Docket could not finish the connection',
+      );
+      expect(screen.getByRole('button', { name: 'Allow access' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: 'Deny access' })).toBeEnabled();
     });
 
     it('paints the request before the session read answers', async () => {

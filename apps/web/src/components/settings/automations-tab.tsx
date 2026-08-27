@@ -33,9 +33,7 @@ const SAVED_LINGER_MS = 2000;
 
 /** Supported guided templates for creating a rule without exposing the rule grammar. */
 export type AutomationTemplate =
-  | 'archive_completed_email'
-  | 'dismiss_promotions'
-  | 'assign_new_tasks_to_cycle';
+  'archive_completed_email' | 'dismiss_promotions' | 'assign_new_tasks_to_cycle';
 
 const TEMPLATE_NAMES: Record<AutomationTemplate, string> = {
   archive_completed_email: 'Archive source email when its task is completed',

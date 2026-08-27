@@ -189,9 +189,9 @@ export class RealSlackObserver implements Observer {
     const actor: EventActorRef | undefined = userId ? { externalId: userId } : undefined;
     const text = str(ev, 'text') ?? '';
     const threadTs = str(ev, 'thread_ts') ?? null;
-    const participants = slackMentionedUserIds(text).map(
-      (externalId): EventActorRef => ({ externalId }),
-    );
+    const participants = slackMentionedUserIds(text).map((externalId): EventActorRef => ({
+      externalId,
+    }));
     const entity: EventEntityRef | undefined = channelId
       ? { kind: 'thread', externalId: channelId }
       : undefined;

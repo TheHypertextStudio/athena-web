@@ -71,9 +71,7 @@ export function createInitiativeParentCommandPort(
 
 /** Initiative property relations owned by the Initiative update route. */
 export type InitiativePropertyRelationId =
-  | 'initiative.lead-team'
-  | 'initiative.owner'
-  | 'initiative.label';
+  'initiative.lead-team' | 'initiative.owner' | 'initiative.label';
 
 /** Narrow Initiative property intent accepted by the application port. */
 export interface InitiativePropertyRelationIntent extends Omit<

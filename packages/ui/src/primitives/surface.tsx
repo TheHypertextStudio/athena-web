@@ -85,14 +85,7 @@ const surfaceVariants = cva('min-w-0', {
 
 /** The elements a surface may render as. A surface is a region, never a control. */
 export type SurfaceElement =
-  | 'div'
-  | 'section'
-  | 'header'
-  | 'footer'
-  | 'aside'
-  | 'nav'
-  | 'li'
-  | 'ul';
+  'div' | 'section' | 'header' | 'footer' | 'aside' | 'nav' | 'li' | 'ul';
 
 /** Props for {@link Surface}. */
 export interface SurfaceProps

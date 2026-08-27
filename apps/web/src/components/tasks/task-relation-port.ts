@@ -6,11 +6,7 @@ import type {
 
 /** Task relations implemented by the existing typed Task update route. */
 export type PatchableTaskRelationId =
-  | 'task.project'
-  | 'task.program'
-  | 'task.cycle'
-  | 'task.milestone'
-  | 'task.assignee';
+  'task.project' | 'task.program' | 'task.cycle' | 'task.milestone' | 'task.assignee';
 
 /** Task relation implemented by the existing workflow-aware work-view transition use case. */
 export type TaskTeamRelationId = 'task.team';
@@ -111,11 +107,7 @@ export function createTaskTeamRelationCommandPort(
 
 /** Task relations that use hierarchy, dependency, label, or Calendar application services. */
 export type TaskAssociationRelationId =
-  | 'task.parent'
-  | 'task.blocks'
-  | 'task.label'
-  | 'task.calendar-item'
-  | 'task.calendar-slot';
+  'task.parent' | 'task.blocks' | 'task.label' | 'task.calendar-item' | 'task.calendar-slot';
 
 /** Narrow Task association intent accepted by the application-service port. */
 export interface TaskAssociationRelationIntent extends Omit<

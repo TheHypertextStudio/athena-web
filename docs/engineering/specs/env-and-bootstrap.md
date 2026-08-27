@@ -26,12 +26,13 @@ These follow directly from the engineering plan; everything below is pinned to t
 - **Three Next apps + one API**, all 12-factor, env-var-only deploy. Each deployable validates **only the variables it actually consumes** via its own `@docket/env` composition.
 - **Hosting (overridable):** Vercel for `web`, `marketing`, `admin`, and `api`; **Neon serverless Postgres**. Dev mirrors prod: identical variable names and Zod validation, different values.
 - **Domains (canonical example; substitute real domains in bootstrap):**
-  | Logical | Dev | Prod |
-  |---|---|---|
-  | API (auth + MCP + OIDC issuer) | `http://localhost:8787` | `https://docket-api.hypertext.studio` |
-  | Product web | `http://localhost:3000` | `https://docket.hypertext.studio` |
-  | Marketing | `http://localhost:3001` | `https://docket.app` |
-  | Admin | `http://localhost:3002` | `https://docket-admin.hypertext.studio` |
+
+  | Logical                        | Dev                     | Prod                                    |
+  | ------------------------------ | ----------------------- | --------------------------------------- |
+  | API (auth + MCP + OIDC issuer) | `http://localhost:8787` | `https://docket-api.hypertext.studio`   |
+  | Product web                    | `http://localhost:3000` | `https://docket.hypertext.studio`       |
+  | Marketing                      | `http://localhost:3001` | `https://docket.app`                    |
+  | Admin                          | `http://localhost:3002` | `https://docket-admin.hypertext.studio` |
 
   All four prod hosts share the apex `docket.app` so **passkey RP ID = `docket.app`** works across subdomains.
 

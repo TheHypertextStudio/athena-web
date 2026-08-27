@@ -237,11 +237,9 @@ describe('env + RPC transport contract', () => {
     type SavedCreateJson = InferRequestType<OrgClient['saved-views']['$post']>['json'];
     type SavedUpdateJson = InferRequestType<OrgClient['saved-views'][':id']['$patch']>['json'];
     type SavedCreateWire =
-      | z.input<typeof SavedWorkViewCreateSchema>
-      | z.input<typeof SavedViewCreateSchema>;
+      z.input<typeof SavedWorkViewCreateSchema> | z.input<typeof SavedViewCreateSchema>;
     type SavedUpdateWire =
-      | z.input<typeof SavedWorkViewUpdateSchema>
-      | z.input<typeof SavedViewUpdateSchema>;
+      z.input<typeof SavedWorkViewUpdateSchema> | z.input<typeof SavedViewUpdateSchema>;
     expectTypeOf<SavedCreateJson>().toExtend<SavedCreateWire>();
     expectTypeOf<SavedCreateWire>().toExtend<SavedCreateJson>();
     expectTypeOf<SavedUpdateJson>().toExtend<SavedUpdateWire>();

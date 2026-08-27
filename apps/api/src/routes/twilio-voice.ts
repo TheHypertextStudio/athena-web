@@ -142,10 +142,7 @@ export function relaySocketUrl(): string {
 
 /** How an inbound call was answered, for tests and for metrics. */
 export type InboundCallDisposition =
-  | 'connected'
-  | 'product-required'
-  | 'unrecognized-caller'
-  | 'forged-request';
+  'connected' | 'product-required' | 'unrecognized-caller' | 'forged-request';
 
 /** The result of deciding what to do with one inbound call. */
 export interface InboundCallDecision {

@@ -48,8 +48,7 @@ interface WorkLocationTimedLaneContextProps {
 
 /** Explicit result of converting a visible gesture into exact work-location bounds. */
 export type WorkLocationTimedEditOutcome =
-  | { readonly status: 'accepted' }
-  | { readonly status: 'rejected'; readonly announcement: string };
+  { readonly status: 'accepted' } | { readonly status: 'rejected'; readonly announcement: string };
 
 interface WorkLocationTimedPreview {
   readonly regionId: string;

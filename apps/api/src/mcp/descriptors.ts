@@ -39,13 +39,7 @@ import { currentElicitor } from './request-context';
 
 /** The entity kinds a descriptor can name. */
 export type DescriptorKind =
-  | 'actor'
-  | 'team'
-  | 'project'
-  | 'program'
-  | 'initiative'
-  | 'label'
-  | 'cycle';
+  'actor' | 'team' | 'project' | 'program' | 'initiative' | 'label' | 'cycle';
 
 /** How many candidate names an error lists before truncating. */
 const MAX_SUGGESTIONS = 12;

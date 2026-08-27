@@ -6,9 +6,7 @@ import type {
 
 /** Calendar-item relations owned by the Calendar application domain. */
 export type CalendarRelationId =
-  | 'calendar-item.related'
-  | 'calendar-item.contained'
-  | 'calendar-item.follow-up';
+  'calendar-item.related' | 'calendar-item.contained' | 'calendar-item.follow-up';
 
 /** Narrow Calendar relation intent accepted by the Calendar command port. */
 export interface CalendarRelationIntent extends Omit<RelationIntent, 'relationId' | 'subjects'> {

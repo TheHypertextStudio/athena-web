@@ -719,8 +719,7 @@ export class LinearProviderClient implements WorkGraphProviderClient {
   private toWriteResult(
     field: string,
     payload:
-      | { success?: boolean; issue?: { id: string; updatedAt: string; url?: string } }
-      | undefined,
+      { success?: boolean; issue?: { id: string; updatedAt: string; url?: string } } | undefined,
   ): ExternalWriteResult {
     if (payload?.success !== true || payload.issue === undefined) {
       throw new ConnectorError(`linear ${field} did not succeed`, {

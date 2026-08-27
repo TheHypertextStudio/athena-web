@@ -111,10 +111,7 @@ export type WorkViewFacetResponseForTarget<TTarget extends ViewTarget> =
 
 /** Any validated v2 definition accepted by the shared work-view UI. */
 export type AnyWorkViewDefinition =
-  | TaskViewDefinition
-  | ProjectViewDefinition
-  | ProgramViewDefinition
-  | InitiativeViewDefinition;
+  TaskViewDefinition | ProjectViewDefinition | ProgramViewDefinition | InitiativeViewDefinition;
 
 /** Any executable filter node accepted by one of the four target contracts. */
 export type AnyWorkViewFilter =

@@ -182,8 +182,7 @@ describe('tool → widget linkage', () => {
     const tools = await allTools(client);
     const uriFor = (name: string): string | undefined => {
       const meta = tools.find((t) => t.name === name)?._meta as
-        | Record<string, { resourceUri?: string | undefined }>
-        | undefined;
+        Record<string, { resourceUri?: string | undefined }> | undefined;
       return meta?.[UI_EXTENSION]?.resourceUri;
     };
 
@@ -243,8 +242,7 @@ describe('spec spelling of the tool → widget metadata', () => {
     const client = await connect(await seedCtx());
     const tools = await allTools(client);
     const meta = tools.find((t) => t.name === 'list_work')?._meta as
-      | Record<string, { resourceUri?: string | undefined }>
-      | undefined;
+      Record<string, { resourceUri?: string | undefined }> | undefined;
 
     // The stable specification (2026-01-26) spells the linkage `_meta.ui`. The full extension id
     // is kept alongside it for hosts written against the pre-stable drafts; `_meta` is an open

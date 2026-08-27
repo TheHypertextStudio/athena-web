@@ -43,9 +43,7 @@ export interface CompletionTaskRepeatDraft {
 
 /** The composer's discriminated repeat value. */
 export type TaskRepeatDraft =
-  | NonRepeatingTaskDraft
-  | CalendarTaskRepeatDraft
-  | CompletionTaskRepeatDraft;
+  NonRepeatingTaskDraft | CalendarTaskRepeatDraft | CompletionTaskRepeatDraft;
 
 /** Cadences directly authorable from the ordinary task composer. */
 export type TaskRepeatCadence = CalendarRecurrenceSchedule['kind'] | 'after_completion';

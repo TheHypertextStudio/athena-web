@@ -289,9 +289,7 @@ export interface PersonalRuntimeTarget {
 
 /** Anything that can name a device. Upstream `PersonalRuntimeSelector`. */
 export type PersonalRuntimeSelector =
-  | string
-  | PersonalRuntimeTarget
-  | PersonalLatticeRuntimeResource;
+  string | PersonalRuntimeTarget | PersonalLatticeRuntimeResource;
 
 /** An OpenAI-compatible chat request. Upstream `ChatCompletionsRequest`. */
 export interface ChatCompletionsRequest {

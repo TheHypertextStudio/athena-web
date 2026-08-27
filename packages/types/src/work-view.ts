@@ -900,9 +900,9 @@ export const WorkViewFacetResponse = z.union([
 export type WorkViewFacetResponse = z.infer<typeof WorkViewFacetResponse>;
 
 type RelationManyMutableGroupKey<TContract extends ViewContract> = {
-  [TField in MutableGroupKey<TContract>]: TContract['fields'][TField]['kind'] extends 'relation-many'
-    ? TField
-    : never;
+  [
+    TField in MutableGroupKey<TContract>
+  ]: TContract['fields'][TField]['kind'] extends 'relation-many' ? TField : never;
 }[MutableGroupKey<TContract>];
 
 type ScalarMutableGroupKey<TContract extends ViewContract> = Exclude<

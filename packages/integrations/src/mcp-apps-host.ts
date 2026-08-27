@@ -97,8 +97,7 @@ export interface McpAppToolInvocation {
 
 /** Whether a view may invoke a given tool, and why not when it may not. */
 export type McpAppToolDecision =
-  | { readonly allowed: true }
-  | { readonly allowed: false; readonly reason: string };
+  { readonly allowed: true } | { readonly allowed: false; readonly reason: string };
 
 /** Everything the host needs in order to serve one view. */
 export interface McpAppHostOptions {

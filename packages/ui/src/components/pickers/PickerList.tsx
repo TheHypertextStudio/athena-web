@@ -300,8 +300,7 @@ export function PickerList<TValue extends string = string>({
     setActiveRowKey(key);
     const element = rowElements.current.get(key);
     const maybeScrollable = element as
-      | { scrollIntoView?: (options?: ScrollIntoViewOptions) => void }
-      | undefined;
+      { scrollIntoView?: (options?: ScrollIntoViewOptions) => void } | undefined;
     if (scroll) maybeScrollable?.scrollIntoView?.({ block: 'nearest' });
   }, []);
 

@@ -53,12 +53,7 @@ async function makeStaff(
 
 /** A lifecycle state literal accepted by {@link makeOrg}. */
 type LifecycleStateLiteral =
-  | 'trialing'
-  | 'active'
-  | 'past_due'
-  | 'export_window'
-  | 'pending_deletion'
-  | 'deleted';
+  'trialing' | 'active' | 'past_due' | 'export_window' | 'pending_deletion' | 'deleted';
 
 /** Insert an org in the given lifecycle state; returns its id. */
 async function makeOrg(

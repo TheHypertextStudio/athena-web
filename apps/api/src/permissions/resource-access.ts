@@ -3,13 +3,7 @@ import { and, eq, inArray, isNull } from 'drizzle-orm';
 
 /** A resource kind whose visibility can be resolved through grants. */
 export type GrantableResourceKind =
-  | 'organization'
-  | 'team'
-  | 'initiative'
-  | 'program'
-  | 'project'
-  | 'cycle'
-  | 'task';
+  'organization' | 'team' | 'initiative' | 'program' | 'project' | 'cycle' | 'task';
 
 /** An organization-scoped resource whose access should be resolved. */
 export interface ResourceAccessRef {

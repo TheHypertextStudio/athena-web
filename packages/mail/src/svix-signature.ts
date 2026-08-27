@@ -47,8 +47,7 @@ export type SvixVerificationFailure = 'missing-signature' | 'invalid-signature' 
 
 /** The outcome of one signature check. */
 export type SvixVerification =
-  | { readonly ok: true }
-  | { readonly ok: false; readonly code: SvixVerificationFailure };
+  { readonly ok: true } | { readonly ok: false; readonly code: SvixVerificationFailure };
 
 /** Everything one signature check needs. */
 export interface SvixVerifyInput {

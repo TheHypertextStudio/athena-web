@@ -48,8 +48,7 @@ export interface AsyncRunnerDependencies extends AsyncDispatchDependencies {
 
 /** Synchronous fallback or accepted asynchronous generation. */
 export type AthenaGenerationAdmission =
-  | { readonly mode: 'sync' }
-  | { readonly mode: 'async'; readonly queued: QueuedRunGeneration };
+  { readonly mode: 'sync' } | { readonly mode: 'async'; readonly queued: QueuedRunGeneration };
 
 /** Inputs controlling one bounded recovery pass. */
 export interface DispatchSweepOptions {

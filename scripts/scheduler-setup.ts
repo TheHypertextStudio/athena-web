@@ -246,8 +246,7 @@ function section(title: string): void {
 
 /** A captured gcloud outcome — classified instead of crashing the process. */
 type GcloudResult =
-  | { readonly ok: true; readonly out: string }
-  | { readonly ok: false; readonly err: string };
+  { readonly ok: true; readonly out: string } | { readonly ok: false; readonly err: string };
 
 /** Run a gcloud command, capturing stderr so the caller can classify a failure. */
 function gcloud(cmd: string): GcloudResult {

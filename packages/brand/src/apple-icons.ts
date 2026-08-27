@@ -21,12 +21,7 @@ import { EXPORTS_DIR, WEB_ROOT } from './paths';
  * groundwork for a native target.
  */
 export type AppleRendition =
-  | 'Default'
-  | 'Dark'
-  | 'TintedLight'
-  | 'TintedDark'
-  | 'ClearLight'
-  | 'ClearDark';
+  'Default' | 'Dark' | 'TintedLight' | 'TintedDark' | 'ClearLight' | 'ClearDark';
 
 /** One exported Apple asset. */
 export interface AppleIconExport {

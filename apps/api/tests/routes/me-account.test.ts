@@ -63,7 +63,9 @@ describe('GET and PATCH /me/account/profile', () => {
     });
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ name: 'Ada Lovelace' });
-    const stored = await (await import('../../src/container'))
+    const stored = await (
+      await import('../../src/container')
+    )
       .getContainer()
       .blob.get(`settings/profile/${userId}`);
     expect(new TextDecoder().decode(stored ?? new Uint8Array())).toBe('hello');
@@ -80,7 +82,9 @@ describe('GET and PATCH /me/account/profile', () => {
     expect(removed.status).toBe(200);
     expect(await removed.json()).toMatchObject({ image: null });
     expect(
-      await (await import('../../src/container'))
+      await (
+        await import('../../src/container')
+      )
         .getContainer()
         .blob.get(`settings/profile/${userId}`),
     ).toBeNull();

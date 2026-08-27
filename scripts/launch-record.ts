@@ -829,12 +829,10 @@ export function deriveLaunchRecord(
   // `notes` is optional in the reconciler's view of a requirement and required in the record
   // schema's; normalizing here keeps the two type declarations honest instead of casting past them.
   const base = buildLaunchRecord(
-    requirements.map(
-      (requirement): ComplianceRequirement => ({
-        ...requirement,
-        notes: requirement.notes ?? '',
-      }),
-    ),
+    requirements.map((requirement): ComplianceRequirement => ({
+      ...requirement,
+      notes: requirement.notes ?? '',
+    })),
     previous,
   );
   const rows = new Map(result.rows.map((row) => [row.id, row]));

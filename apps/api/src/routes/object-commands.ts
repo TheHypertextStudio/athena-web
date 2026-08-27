@@ -487,26 +487,24 @@ function objectCommandEffects(
     archivedById.set(entry.objectId, target !== null);
   }
   return [
-    ...effects.taskStateMutations.map(
-      (mutation): ObjectCommandEffect => ({ kind: 'task_state', mutation }),
-    ),
-    ...effects.taskFieldChanges.map(
-      (change): ObjectCommandEffect => ({ kind: 'task_fields', change }),
-    ),
-    ...effects.projectStatusRows.map(
-      (row): ObjectCommandEffect => ({
-        kind: 'project_status',
-        project: { id: row.id, name: row.name, status: row.status },
-      }),
-    ),
-    ...[...changedIds].map(
-      (entityId): ObjectCommandEffect => ({
-        kind: 'entity_write',
-        sourceTable: result.receipt.objectKind,
-        entityId,
-        operation: archivedById.get(entityId) === true ? 'delete' : 'upsert',
-      }),
-    ),
+    ...effects.taskStateMutations.map((mutation): ObjectCommandEffect => ({
+      kind: 'task_state',
+      mutation,
+    })),
+    ...effects.taskFieldChanges.map((change): ObjectCommandEffect => ({
+      kind: 'task_fields',
+      change,
+    })),
+    ...effects.projectStatusRows.map((row): ObjectCommandEffect => ({
+      kind: 'project_status',
+      project: { id: row.id, name: row.name, status: row.status },
+    })),
+    ...[...changedIds].map((entityId): ObjectCommandEffect => ({
+      kind: 'entity_write',
+      sourceTable: result.receipt.objectKind,
+      entityId,
+      operation: archivedById.get(entityId) === true ? 'delete' : 'upsert',
+    })),
   ];
 }
 

@@ -26,8 +26,7 @@ export interface WorkLocationOccurrenceReplaceEdit {
 
 /** Mutation payload for a direct calendar edit that remains independent from schedule items. */
 export type WorkLocationCalendarEdit =
-  | WorkLocationAssertionPatchEdit
-  | WorkLocationOccurrenceReplaceEdit;
+  WorkLocationAssertionPatchEdit | WorkLocationOccurrenceReplaceEdit;
 
 interface WorkLocationTimedEditInput {
   readonly region: WorkLocationCalendarRegion;

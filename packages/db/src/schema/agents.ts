@@ -73,10 +73,7 @@ export type AgentSessionWorkLinkage = 'task' | 'conversation' | 'unclassified';
  * than by Athena. It is never the answer for work Athena herself dispatched.
  */
 export type AgentRunDispatchOrigin =
-  | 'athena_admission'
-  | 'execution_advance'
-  | 'lease_recovery'
-  | 'unclassified';
+  'athena_admission' | 'execution_advance' | 'lease_recovery' | 'unclassified';
 /** Opaque Cloudflare side effect recoverable from an agent run row. */
 export type AgentSessionDispatchAction = 'enqueue' | 'wake';
 /** Delivery lifecycle for a Docket-owned execution outbox intent. */

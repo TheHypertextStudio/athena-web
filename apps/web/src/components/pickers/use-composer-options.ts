@@ -43,14 +43,7 @@ import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 
 /** The org-scoped option lists a composer can opt into loading. */
 export type ComposerOptionKind =
-  | 'actors'
-  | 'projects'
-  | 'programs'
-  | 'initiatives'
-  | 'labels'
-  | 'cycles'
-  | 'milestones'
-  | 'teams';
+  'actors' | 'projects' | 'programs' | 'initiatives' | 'labels' | 'cycles' | 'milestones' | 'teams';
 
 /** The resolved option arrays + loaders returned by {@link useComposerOptions}. */
 export interface ComposerOptions {

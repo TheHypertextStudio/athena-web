@@ -47,12 +47,7 @@ const LEGACY_KINDS = new Set<string>([
 
 /** The entity kinds a legacy shortcode can name, once mapped onto the current vocabulary. */
 export type LegacyMentionEntityKind =
-  | 'task'
-  | 'project'
-  | 'initiative'
-  | 'program'
-  | 'cycle'
-  | 'actor';
+  'task' | 'project' | 'initiative' | 'program' | 'cycle' | 'actor';
 
 /** Map an old shortcode kind onto the reference vocabulary in use now. */
 function entityKindFor(kind: string): LegacyMentionEntityKind | undefined {

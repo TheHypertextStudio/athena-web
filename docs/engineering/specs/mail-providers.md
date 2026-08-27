@@ -95,13 +95,13 @@ what was actually consumed.
 
 ## 5. MailAction → provider mapping
 
-| Verb                         | Gmail (`threads.modify` deltas) |
+| Verb | Gmail (`threads.modify` deltas) |
 | ---------------------------- | ------------------------------- | ----------------------------------- |
-| `archive`                    | remove label `INBOX`            |
-| `markRead`                   | remove label `UNREAD`           | `PATCH { isRead: true }`            |
-| `markUnread`                 | add label `UNREAD`              | `PATCH { isRead: false }`           |
-| `trash`                      | `POST /threads/{id}/trash`      | move to `deleteditems`              |
-| `applyLabel` / `removeLabel` | add/remove the label id         | read-modify-write of `categories[]` |
+| `archive` | remove label `INBOX` |
+| `markRead` | remove label `UNREAD` | `PATCH { isRead: true }` |
+| `markUnread` | add label `UNREAD` | `PATCH { isRead: false }` |
+| `trash` | `POST /threads/{id}/trash` | move to `deleteditems` |
+| `applyLabel` / `removeLabel` | add/remove the label id | read-modify-write of `categories[]` |
 
 Gmail acts on whole threads.
 Rule-layer idempotency is the `attachment.lastEmailStateAction` ledger — providers don't

@@ -442,8 +442,7 @@ interface OccurrenceRowProps {
   readonly orgId: string;
   readonly item: RecurrenceSeriesDetailOut['occurrences'][number];
   readonly onResolve?:
-    | ((scheduledFor: string, resolution: OccurrenceResolution) => void)
-    | undefined;
+    ((scheduledFor: string, resolution: OccurrenceResolution) => void) | undefined;
 }
 
 /** One durable occurrence, including explicit actions only when it needs a decision. */

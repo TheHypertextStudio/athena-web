@@ -76,8 +76,7 @@ export interface ObjectSurfaceProps {
   readonly href?: string | undefined;
   /** Activate the object when a non-control part of the surface is clicked. */
   readonly onActivate?:
-    | ((event: ReactMouseEvent<HTMLElement> | ReactKeyboardEvent<HTMLElement>) => void)
-    | undefined;
+    ((event: ReactMouseEvent<HTMLElement> | ReactKeyboardEvent<HTMLElement>) => void) | undefined;
   /** Called after a body drag begins. */
   readonly onDragStart?: (() => void) | undefined;
   /** Called when a body drag ends or is cancelled. */

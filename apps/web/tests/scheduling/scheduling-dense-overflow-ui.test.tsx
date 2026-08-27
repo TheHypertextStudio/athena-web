@@ -14,16 +14,13 @@ const lane: ScheduleLane = {
   id: 'date:2026-07-13',
   label: 'Mon, Jul 13',
   date: '2026-07-13',
-  items: Array.from(
-    { length: 5 },
-    (_, index): ScheduleItem => ({
-      id: `dense-${String(index)}`,
-      title: `Dense event ${String(index)}`,
-      startsAt: '2026-07-13T09:00:00Z',
-      endsAt: '2026-07-13T10:00:00Z',
-      openable: true,
-    }),
-  ),
+  items: Array.from({ length: 5 }, (_, index): ScheduleItem => ({
+    id: `dense-${String(index)}`,
+    title: `Dense event ${String(index)}`,
+    startsAt: '2026-07-13T09:00:00Z',
+    endsAt: '2026-07-13T10:00:00Z',
+    openable: true,
+  })),
 };
 
 describe('SchedulingDenseOverflow', () => {

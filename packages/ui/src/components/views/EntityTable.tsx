@@ -101,8 +101,7 @@ export interface EntityTableProps<T> {
   onRowPrefetch?: ((row: T) => void) | undefined;
   /** Inject application-owned row selection/focus behavior. */
   renderRowInteraction?:
-    | ((props: EntityTableRowInteractionProps<T>) => React.ReactNode)
-    | undefined;
+    ((props: EntityTableRowInteractionProps<T>) => React.ReactNode) | undefined;
   /** Restrict `rowHref` navigation to this column instead of making the whole row a link. */
   rowLinkColumnKey?: string | undefined;
   /** Application-owned props/ref merged onto the grid container. */

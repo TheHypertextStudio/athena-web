@@ -39,11 +39,7 @@ import type {
 
 /** The GitHub webhook event types Docket ingests, inferred from the payload shape. */
 type GitHubEventType =
-  | 'issues'
-  | 'issue_comment'
-  | 'pull_request'
-  | 'pull_request_review_comment'
-  | 'unknown';
+  'issues' | 'issue_comment' | 'pull_request' | 'pull_request_review_comment' | 'unknown';
 
 /** Build the external person ref from a GitHub user-shaped sub-object (`login`/`id`/`avatar_url`). */
 function actorFrom(user: Record<string, unknown> | undefined): EventActorRef | undefined {

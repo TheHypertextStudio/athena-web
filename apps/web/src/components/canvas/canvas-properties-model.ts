@@ -9,8 +9,7 @@ import { taskData } from './task-node';
 
 /** One scalar aggregation without using null as a mixed sentinel. */
 export type ScalarAggregation<T> =
-  | { readonly state: 'same'; readonly value: T }
-  | { readonly state: 'mixed' };
+  { readonly state: 'same'; readonly value: T } | { readonly state: 'mixed' };
 
 /** Whether every, some, or no selected objects carry one association. */
 export type AssociationAggregation = 'all' | 'some' | 'none';

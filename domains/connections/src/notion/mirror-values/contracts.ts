@@ -58,10 +58,7 @@ export interface MirrorReferences {
 
 /** Why a reference could not be written. */
 export type MirrorUnresolvedReason =
-  | 'no_notion_account'
-  | 'person_page_missing'
-  | 'related_page_missing'
-  | 'related_page_impossible';
+  'no_notion_account' | 'person_page_missing' | 'related_page_missing' | 'related_page_impossible';
 
 /** One unresolved reference and whether later work can fix it. */
 export interface MirrorUnresolvedRef {

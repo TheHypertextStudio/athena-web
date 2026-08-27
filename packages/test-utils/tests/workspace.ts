@@ -16,10 +16,7 @@ const WORKSPACE_GROUPS = ['apps', 'domains', 'packages', 'services', 'tooling'] 
 export const WORKSPACE_ROOT = resolve(import.meta.dirname, '../../..');
 
 export type DependencySection =
-  | 'dependencies'
-  | 'devDependencies'
-  | 'peerDependencies'
-  | 'optionalDependencies';
+  'dependencies' | 'devDependencies' | 'peerDependencies' | 'optionalDependencies';
 
 export interface PackageManifest {
   name?: string;

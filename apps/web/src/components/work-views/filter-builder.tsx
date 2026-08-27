@@ -73,8 +73,7 @@ export interface FilterBuilderProps<TTarget extends ViewTarget> {
   readonly facetLoadingMore?: boolean;
   readonly onFacetLoadMore?: (() => void) | undefined;
   readonly onFacetRequest?:
-    | ((field: WorkViewFilterFieldKey<TTarget>, search: string) => void)
-    | undefined;
+    ((field: WorkViewFilterFieldKey<TTarget>, search: string) => void) | undefined;
 }
 
 function emptyPredicate<TTarget extends ViewTarget>(): WorkViewFilterDraftFor<TTarget> {
@@ -525,8 +524,7 @@ interface DraftEditorProps<TTarget extends ViewTarget> {
   readonly facetLoadingMore: boolean;
   readonly onFacetLoadMore?: (() => void) | undefined;
   readonly onFacetRequest?:
-    | ((field: WorkViewFilterFieldKey<TTarget>, search: string) => void)
-    | undefined;
+    ((field: WorkViewFilterFieldKey<TTarget>, search: string) => void) | undefined;
   readonly onReplace: (path: readonly number[], draft: WorkViewFilterDraftFor<TTarget>) => void;
   readonly onAppend: (path: readonly number[], draft: WorkViewFilterDraftFor<TTarget>) => void;
   readonly onNegate: (nodeId: string) => void;

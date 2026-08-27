@@ -32,12 +32,7 @@ export const PAYMENT_GRACE_DAYS = 7;
 
 /** A billing event's observable effect on Docket Pro access. */
 export type BillingAccessEffect =
-  | 'trialing'
-  | 'active'
-  | 'past_due'
-  | 'canceled'
-  | 'stale'
-  | 'none';
+  'trialing' | 'active' | 'past_due' | 'canceled' | 'stale' | 'none';
 
 /** Persist one authoritative provider subscription snapshot as Docket Pro ownership. */
 async function syncDocketProEntitlement(

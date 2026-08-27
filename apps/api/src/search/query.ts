@@ -27,8 +27,7 @@ import {
  * recipient-only activity are invisible to it rather than matched against a stand-in id.
  */
 export type SearchCaller =
-  | { kind: 'user'; userId: string }
-  | { kind: 'agent'; actorId: string; organizationId: string };
+  { kind: 'user'; userId: string } | { kind: 'agent'; actorId: string; organizationId: string };
 
 interface SearchWorkspaceInput {
   scope: 'hub' | 'org';

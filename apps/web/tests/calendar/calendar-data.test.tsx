@@ -528,8 +528,7 @@ describe('useUpdateCalendarItemById', () => {
 
     let rejectFirst: ((reason: Error) => void) | undefined;
     let resolveSecond:
-      | ((response: ReturnType<typeof okResponse<CalendarItemOut>>) => void)
-      | undefined;
+      ((response: ReturnType<typeof okResponse<CalendarItemOut>>) => void) | undefined;
     itemPatch
       .mockImplementationOnce(
         () =>

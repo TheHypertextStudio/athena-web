@@ -15,12 +15,7 @@ interface EntitlementRow {
 interface OrganizationRow {
   id: string;
   lifecycle_state:
-    | 'trialing'
-    | 'active'
-    | 'past_due'
-    | 'export_window'
-    | 'pending_deletion'
-    | 'deleted';
+    'trialing' | 'active' | 'past_due' | 'export_window' | 'pending_deletion' | 'deleted';
   export_ready_at: Date | null;
   delete_after_at: Date | null;
 }

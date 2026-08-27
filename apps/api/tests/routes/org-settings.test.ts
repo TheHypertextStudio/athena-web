@@ -99,7 +99,9 @@ describe('workspace general settings', () => {
       body: JSON.stringify({ avatar: selected }),
     });
     expect(response.status).toBe(200);
-    const stored = await (await import('../../src/container'))
+    const stored = await (
+      await import('../../src/container')
+    )
       .getContainer()
       .blob.get(`settings/workspace/${orgId}`);
     expect(new TextDecoder().decode(stored ?? new Uint8Array())).toBe('hello');

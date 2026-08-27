@@ -170,7 +170,6 @@ export function useOptionalCanvasPropertySnapshots(): readonly CanvasPropertySna
 
 /** Apply a successful command receipt when the caller is mounted inside a retention boundary. */
 export function useOptionalCanvasSnapshotReceiptApplier():
-  | CanvasPropertySnapshotsContextValue['applyReceipt']
-  | null {
+  CanvasPropertySnapshotsContextValue['applyReceipt'] | null {
   return useContext(CanvasPropertySnapshotsContext)?.applyReceipt ?? null;
 }

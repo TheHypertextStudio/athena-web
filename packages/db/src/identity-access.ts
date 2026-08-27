@@ -41,10 +41,7 @@ export interface ExplicitAuthorizationFacts {
 
 /** A reason this adapter could not load authorization facts for an actor. */
 export type ExplicitAuthorizationFactsDenial =
-  | 'actor_not_found'
-  | 'cross_org'
-  | 'actor_suspended'
-  | 'actor_archived';
+  'actor_not_found' | 'cross_org' | 'actor_suspended' | 'actor_archived';
 
 /** The result of loading explicit authorization facts from Athena's database. */
 export type LoadExplicitAuthorizationFactsResult =

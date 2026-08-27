@@ -47,12 +47,7 @@ import { fileURLToPath } from 'node:url';
  * very gate this module implements.
  */
 export type YamlValue =
-  | string
-  | number
-  | boolean
-  | null
-  | YamlValue[]
-  | { [key: string]: YamlValue };
+  string | number | boolean | null | YamlValue[] | { [key: string]: YamlValue };
 
 /** A physical line of a YAML document, retained verbatim. */
 interface YamlLine {

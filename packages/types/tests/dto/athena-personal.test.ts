@@ -13,8 +13,7 @@ describe('personal Athena API contracts', () => {
   it('defines invocation context without accepting an owner id', async () => {
     const types = await import('../../src/index');
     const schema = Reflect.get(types, 'AthenaSessionCreateBody') as
-      | { safeParse(value: unknown): { success: boolean } }
-      | undefined;
+      { safeParse(value: unknown): { success: boolean } } | undefined;
 
     expect(schema).toBeDefined();
     expect(
@@ -34,8 +33,7 @@ describe('personal Athena API contracts', () => {
   it('groups personal work into product queue states', async () => {
     const types = await import('../../src/index');
     const schema = Reflect.get(types, 'AthenaOverviewOut') as
-      | { safeParse(value: unknown): { success: boolean } }
-      | undefined;
+      { safeParse(value: unknown): { success: boolean } } | undefined;
 
     expect(schema).toBeDefined();
     expect(
@@ -50,8 +48,7 @@ describe('personal Athena API contracts', () => {
   it('requires application-owned display metadata on personal work summaries', async () => {
     const types = await import('../../src/index');
     const schema = Reflect.get(types, 'AthenaSessionSummaryOut') as
-      | { safeParse(value: unknown): { success: boolean } }
-      | undefined;
+      { safeParse(value: unknown): { success: boolean } } | undefined;
     const summary = {
       id: ID,
       kind: 'job',
@@ -81,8 +78,7 @@ describe('personal Athena API contracts', () => {
   it('defines a compact pulse that cannot carry personal session history', async () => {
     const types = await import('../../src/index');
     const schema = Reflect.get(types, 'AthenaPulseOut') as
-      | { safeParse(value: unknown): { success: boolean } }
-      | undefined;
+      { safeParse(value: unknown): { success: boolean } } | undefined;
 
     expect(schema).toBeDefined();
     expect(schema?.safeParse({ needsYou: 2, working: 3 }).success).toBe(true);

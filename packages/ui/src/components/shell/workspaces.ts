@@ -37,15 +37,7 @@ export interface Workspace {
  * their cross-org routes. `search` is not a route but the command-palette opener.
  */
 export type HomeNavKey =
-  | 'today'
-  | 'tasks'
-  | 'calendar'
-  | 'time'
-  | 'inbox'
-  | 'athena'
-  | 'stream'
-  | 'portfolio'
-  | 'search';
+  'today' | 'tasks' | 'calendar' | 'time' | 'inbox' | 'athena' | 'stream' | 'portfolio' | 'search';
 
 /**
  * The org-scoped **Workspace** destinations, in mvp-plan §7 order.

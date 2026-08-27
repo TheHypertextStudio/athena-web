@@ -142,24 +142,22 @@ export function useCapabilityItems({
       },
     };
 
-    return resolveCapabilities(CATALOG, context).map(
-      (capability): PaletteItem => ({
-        id: capability.id,
-        section: sectionFor(capability.target),
-        label: capability.label,
-        description: capability.description,
-        hint: capability.breadcrumb.length > 0 ? capability.breadcrumb.join(' › ') : undefined,
-        breadcrumb: capability.breadcrumb,
-        icon: capability.icon,
-        keywords: [...capability.aliases, capability.description, ...capability.breadcrumb],
-        requiresQuery: capability.requiresQuery,
-        org: capability.org,
-        run: () => {
-          close();
-          executeCapabilityTarget(capability.target, executor);
-        },
-      }),
-    );
+    return resolveCapabilities(CATALOG, context).map((capability): PaletteItem => ({
+      id: capability.id,
+      section: sectionFor(capability.target),
+      label: capability.label,
+      description: capability.description,
+      hint: capability.breadcrumb.length > 0 ? capability.breadcrumb.join(' › ') : undefined,
+      breadcrumb: capability.breadcrumb,
+      icon: capability.icon,
+      keywords: [...capability.aliases, capability.description, ...capability.breadcrumb],
+      requiresQuery: capability.requiresQuery,
+      org: capability.org,
+      run: () => {
+        close();
+        executeCapabilityTarget(capability.target, executor);
+      },
+    }));
   }, [
     activeOrgId,
     canManage,

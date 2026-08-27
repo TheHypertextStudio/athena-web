@@ -235,13 +235,11 @@ export function toStoredView(state: ViewState): {
   sort: readonly ViewSort[];
 } {
   return {
-    filters: state.filters.map(
-      (f: ViewFilterTerm): ViewFilter => ({
-        field: f.field,
-        op: f.op,
-        value: f.value,
-      }),
-    ),
+    filters: state.filters.map((f: ViewFilterTerm): ViewFilter => ({
+      field: f.field,
+      op: f.op,
+      value: f.value,
+    })),
     grouping: state.groupBy ? { by: state.groupBy.field } : null,
     sort: state.sort.map((s: ViewSortTerm): ViewSort => ({ field: s.field, order: s.dir })),
   };

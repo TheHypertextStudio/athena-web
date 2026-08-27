@@ -19,14 +19,7 @@ import {
 import { taskRequest, type TaskQueryRequest } from './request-fixtures';
 
 type FixtureField =
-  | 'status'
-  | 'priority'
-  | 'title'
-  | 'dueDate'
-  | 'createdAt'
-  | 'estimate'
-  | 'archived'
-  | 'labels';
+  'status' | 'priority' | 'title' | 'dueDate' | 'createdAt' | 'estimate' | 'archived' | 'labels';
 
 process.env['BETTER_AUTH_SECRET'] ??= 'work-view-query-test-secret-at-least-32-characters';
 

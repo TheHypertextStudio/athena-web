@@ -14,14 +14,7 @@ export type ViewLayout = (typeof VIEW_LAYOUTS)[number];
 
 /** The storage and editor behavior of one view field. */
 export type ViewFieldKind =
-  | 'enum'
-  | 'relation-one'
-  | 'relation-many'
-  | 'text'
-  | 'date'
-  | 'datetime'
-  | 'number'
-  | 'boolean';
+  'enum' | 'relation-one' | 'relation-many' | 'text' | 'date' | 'datetime' | 'number' | 'boolean';
 
 /** Operations that a field may participate in. */
 export interface ViewFieldCapabilities {
@@ -137,31 +130,18 @@ export type UnaryFilterOperator = 'isEmpty' | 'isNotEmpty';
 
 /** Operators available to fixed enums and single relations. */
 export type ScalarChoiceFilterOperator =
-  | 'is'
-  | 'isNot'
-  | 'isAnyOf'
-  | 'isNoneOf'
-  | UnaryFilterOperator;
+  'is' | 'isNot' | 'isAnyOf' | 'isNoneOf' | UnaryFilterOperator;
 
 /** Operators available to multi-valued relations. */
 export type RelationSetFilterOperator =
-  | 'includesAny'
-  | 'includesAll'
-  | 'includesNone'
-  | UnaryFilterOperator;
+  'includesAny' | 'includesAll' | 'includesNone' | UnaryFilterOperator;
 
 /** Operators available to text fields. */
 export type TextFilterOperator = 'is' | 'isNot' | 'contains' | 'notContains' | UnaryFilterOperator;
 
 /** Operators available to dates and timestamps. */
 export type TemporalFilterOperator =
-  | 'on'
-  | 'before'
-  | 'after'
-  | 'onOrBefore'
-  | 'onOrAfter'
-  | 'between'
-  | UnaryFilterOperator;
+  'on' | 'before' | 'after' | 'onOrBefore' | 'onOrAfter' | 'between' | UnaryFilterOperator;
 
 /** Operators available to numeric fields. */
 export type NumberFilterOperator =
@@ -179,8 +159,7 @@ export type BooleanFilterOperator = 'is';
 
 /** The operator union selected by a field kind. */
 export type FilterOperatorForKind<TKind extends ViewFieldKind> = TKind extends
-  | 'enum'
-  | 'relation-one'
+  'enum' | 'relation-one'
   ? ScalarChoiceFilterOperator
   : TKind extends 'relation-many'
     ? RelationSetFilterOperator

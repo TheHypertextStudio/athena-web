@@ -19,12 +19,7 @@ export type PaletteScope = 'hub' | 'org';
  * selection behavior lives on each item's {@link PaletteItem.run}.
  */
 export type PaletteSection =
-  | 'navigation'
-  | 'actions'
-  | 'panels'
-  | 'templates'
-  | 'organizations'
-  | 'results';
+  'navigation' | 'actions' | 'panels' | 'templates' | 'organizations' | 'results';
 
 /**
  * A single, selectable row in the command palette.

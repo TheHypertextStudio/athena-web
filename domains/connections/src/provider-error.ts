@@ -18,12 +18,7 @@
  * - `unknown` — the source could not classify the failure.
  */
 export type ProviderErrorKind =
-  | 'auth'
-  | 'rate_limit'
-  | 'network'
-  | 'provider'
-  | 'ambiguous'
-  | 'unknown';
+  'auth' | 'rate_limit' | 'network' | 'provider' | 'ambiguous' | 'unknown';
 
 /** Construction options for a {@link ProviderError}. */
 export interface ProviderErrorOptions<TProvider extends string = string> {

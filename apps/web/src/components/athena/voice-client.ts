@@ -51,10 +51,7 @@ export interface VoiceClientEvents {
 
 /** Why a voice session could not start, as a stable code the surface writes copy for. */
 export type VoiceStartRefusal =
-  | 'microphone-denied'
-  | 'microphone-missing'
-  | 'audio-unsupported'
-  | 'link-failed';
+  'microphone-denied' | 'microphone-missing' | 'audio-unsupported' | 'link-failed';
 
 /** A voice session start attempt that did not succeed. */
 export class VoiceStartError extends Error {

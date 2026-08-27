@@ -34,9 +34,7 @@ type Step = 'collect' | 'verify';
 
 /** The only outcomes that may move the signup UI from email collection to code verification. */
 type SignupCodeResult =
-  | { readonly kind: 'sent' }
-  | { readonly kind: 'rate-limited' }
-  | { readonly kind: 'unavailable' };
+  { readonly kind: 'sent' } | { readonly kind: 'rate-limited' } | { readonly kind: 'unavailable' };
 
 /**
  * Request a one-time sign-up code for the given email.

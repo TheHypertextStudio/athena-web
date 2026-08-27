@@ -30,11 +30,7 @@ import {
 
 /** The task lifecycle states the MCP Tasks extension defines, in the spec's own order. */
 export type McpTaskStatusColumn =
-  | 'working'
-  | 'input_required'
-  | 'completed'
-  | 'failed'
-  | 'cancelled';
+  'working' | 'input_required' | 'completed' | 'failed' | 'cancelled';
 
 /**
  * One MCP task: durable state for a `tools/call` the server chose to run asynchronously.

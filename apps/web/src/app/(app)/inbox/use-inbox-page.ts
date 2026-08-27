@@ -12,12 +12,7 @@ import { apiQueryOptions, queryKeys, useLiveApiQuery } from '@/lib/query';
 
 /** The Inbox's attention slices and passive activity feed. */
 export type InboxTab =
-  | 'all'
-  | 'unread'
-  | 'needs_action'
-  | 'announcements'
-  | 'mentions'
-  | 'activity';
+  'all' | 'unread' | 'needs_action' | 'announcements' | 'mentions' | 'activity';
 
 /** The number of activity events pulled per page of the passive awareness feed. */
 const ACTIVITY_PAGE_SIZE = 50;

@@ -15,10 +15,7 @@ interface ApplicationMutationInput {
   readonly renewal: boolean;
   readonly programKey: ProgramKey;
   readonly evidenceType:
-    | 'institutional_email'
-    | 'enrollment_document'
-    | 'irs_registry'
-    | 'determination_letter';
+    'institutional_email' | 'enrollment_document' | 'irs_registry' | 'determination_letter';
   readonly institutionalEmail?: string;
   readonly ein?: string;
   readonly file?: File;

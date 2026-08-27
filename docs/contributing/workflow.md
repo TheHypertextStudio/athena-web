@@ -215,10 +215,11 @@ and any important implementation or operational context.
 ```
 
 **Types:**
-| Type | Description |
-|------|-------------|
-| `feat` | A new product capability or meaningful extension |
-| `fix` | A correction to broken or incorrect behavior |
+
+| Type    | Description                                             |
+| ------- | ------------------------------------------------------- |
+| `feat`  | A new product capability or meaningful extension        |
+| `fix`   | A correction to broken or incorrect behavior            |
 | `chore` | Standalone maintenance without product behavior changes |
 
 **Scopes:**

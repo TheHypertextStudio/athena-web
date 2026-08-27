@@ -125,20 +125,10 @@ export interface NotificationBody {
 export type NotificationServiceChannel = 'web' | 'email' | 'sms' | 'push';
 /** Notification-service categories that drive policy and preferences. */
 export type NotificationServiceCategory =
-  | 'security'
-  | 'account'
-  | 'service_announcement'
-  | 'workflow'
-  | 'digest'
-  | 'billing'
-  | 'marketing';
+  'security' | 'account' | 'service_announcement' | 'workflow' | 'digest' | 'billing' | 'marketing';
 /** Why a recipient was included in a notification intent. */
 export type NotificationRecipientReason =
-  | 'explicit'
-  | 'org_member'
-  | 'segment_match'
-  | 'owner'
-  | 'assignee';
+  'explicit' | 'org_member' | 'segment_match' | 'owner' | 'assignee';
 /** Why a delivery was suppressed or delayed. */
 export type NotificationSuppressionReason =
   | 'user_disabled_channel'
@@ -263,12 +253,7 @@ export interface SessionActivityBody {
           | {
               /** Supported ambient entry-point kind. */
               readonly type:
-                | 'task'
-                | 'project'
-                | 'initiative'
-                | 'program'
-                | 'calendar_item'
-                | 'stream_event';
+                'task' | 'project' | 'initiative' | 'program' | 'calendar_item' | 'stream_event';
               /** Canonical source row id. */
               readonly id: string;
             }

@@ -66,10 +66,7 @@ export function vapidPublicKey(): string | null {
 
 /** Why one elicitation produced no push. */
 export type ElicitationNotifySkip =
-  | 'not_time_sensitive'
-  | 'not_configured'
-  | 'no_subscription'
-  | 'already_settled';
+  'not_time_sensitive' | 'not_configured' | 'no_subscription' | 'already_settled';
 
 /** What one notification attempt actually did. */
 export interface ElicitationNotifyResult {

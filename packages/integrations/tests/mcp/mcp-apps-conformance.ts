@@ -55,12 +55,7 @@ export interface SpecSurfaceItem {
 
 /** The categories the matrix groups the surface into. */
 export type SpecSurfaceKind =
-  | 'method'
-  | 'notification'
-  | 'host-capability'
-  | 'app-capability'
-  | 'meta'
-  | 'convention';
+  'method' | 'notification' | 'host-capability' | 'app-capability' | 'meta' | 'convention';
 
 /** Extract the block of an `interface Name { … }` declaration from a TypeScript source. */
 function interfaceBody(source: string, name: string): string {

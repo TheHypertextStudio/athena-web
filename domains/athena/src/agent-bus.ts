@@ -7,11 +7,7 @@
 
 /** Lifecycle verbs an agent may publish. */
 export type AgentUpdateKind =
-  | 'agent_started'
-  | 'agent_progress'
-  | 'agent_blocked'
-  | 'agent_completed'
-  | 'agent_failed';
+  'agent_started' | 'agent_progress' | 'agent_blocked' | 'agent_completed' | 'agent_failed';
 
 /** All lifecycle verbs, in normal progression order. */
 export const AGENT_UPDATE_KINDS: readonly AgentUpdateKind[] = [

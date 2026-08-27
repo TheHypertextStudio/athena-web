@@ -323,8 +323,7 @@ export interface SchedulingCanvasProps {
    * but no mutation callbacks, so the underlay can show rails without taking gesture ownership.
    */
   readonly renderTimedLaneUnderlay?:
-    | ((context: ScheduleTimedLaneRenderContext) => ReactNode)
-    | undefined;
+    ((context: ScheduleTimedLaneRenderContext) => ReactNode) | undefined;
   /**
    * Render app-owned controls in a timed lane without exposing scheduling item mutations.
    *
@@ -334,12 +333,10 @@ export interface SchedulingCanvasProps {
    * geometry, visible lanes, and the neutral snap interval.
    */
   readonly renderTimedLaneContext?:
-    | ((context: ScheduleTimedLaneContextRenderContext) => ReactNode)
-    | undefined;
+    ((context: ScheduleTimedLaneContextRenderContext) => ReactNode) | undefined;
   /** Resolve leading lane space that an intersecting timed-item cluster must leave unobstructed. */
   readonly resolveTimedItemLeadingInset?:
-    | ((context: ScheduleTimedItemLeadingInsetContext) => number)
-    | undefined;
+    ((context: ScheduleTimedItemLeadingInsetContext) => number) | undefined;
   /**
    * Render app-owned interactive context above the existing all-day items in each lane.
    *
@@ -349,8 +346,7 @@ export interface SchedulingCanvasProps {
    * mutation callbacks. Returning `null` omits the wrapper and its flex gap.
    */
   readonly renderAllDayLaneContext?:
-    | ((context: ScheduleAllDayLaneRenderContext) => ReactNode)
-    | undefined;
+    ((context: ScheduleAllDayLaneRenderContext) => ReactNode) | undefined;
   /**
    * Render decoration above a timed item's base surface and below its text and controls.
    *
@@ -359,8 +355,7 @@ export interface SchedulingCanvasProps {
    * readonly scheduling data and cannot take ownership of item mutation or gestures.
    */
   readonly renderTimedItemDecoration?:
-    | ((context: ScheduleTimedItemDecorationContext) => ReactNode)
-    | undefined;
+    ((context: ScheduleTimedItemDecorationContext) => ReactNode) | undefined;
   /**
    * Optional per-item action control (e.g. a start-timer button), rendered as a fixed corner
    * control alongside the built-in resize/move/relationship controls.
@@ -393,8 +388,7 @@ export interface SchedulingCanvasProps {
   readonly onResizeAllDayItem?: ((request: ScheduleAllDayItemResize) => void) | undefined;
   /** Resolve exact empty grid time into a canonical relation target. */
   readonly calendarSlotTarget?:
-    | ((request: ScheduleCalendarSlotTargetRequest) => ObjectRef | null)
-    | undefined;
+    ((request: ScheduleCalendarSlotTargetRequest) => ObjectRef | null) | undefined;
   /**
    * Receive a pinch / ctrl+wheel zoom intent as a multiplicative scale factor.
    * `> 1` zooms in (more pixels per hour), `< 1` zooms out. The canvas emits raw intent only;

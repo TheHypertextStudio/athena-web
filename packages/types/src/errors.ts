@@ -94,13 +94,7 @@ export type ProblemCode = z.infer<typeof ProblemCode>;
 
 /** Public recovery action associated with a stable problem code. */
 export type ProblemRecovery =
-  | 'sign_in'
-  | 'reauthenticate'
-  | 'retry'
-  | 'review'
-  | 'billing'
-  | 'reconnect'
-  | 'return';
+  'sign_in' | 'reauthenticate' | 'retry' | 'review' | 'billing' | 'reconnect' | 'return';
 
 /**
  * Public, application-owned summaries for every problem code.

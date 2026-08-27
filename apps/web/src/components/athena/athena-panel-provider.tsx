@@ -90,8 +90,7 @@ export interface AthenaPanelProviderProps {
   readonly railVisible?: boolean | undefined;
   /** Open the full Athena workspace when this route deliberately has no utility rail. */
   readonly onOpenFullAthena?:
-    | ((context: PersonalAthenaContext | null, draft: string | undefined) => void)
-    | undefined;
+    ((context: PersonalAthenaContext | null, draft: string | undefined) => void) | undefined;
 }
 
 /**

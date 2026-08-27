@@ -53,13 +53,7 @@ export type ActionId = `${ActionDomain}.${string}`;
 
 /** Where an invocation came from — recorded so an action can adapt without new definitions. */
 export type ActionSource =
-  | 'context-menu'
-  | 'command-palette'
-  | 'shortcut'
-  | 'button'
-  | 'drag'
-  | 'bulk-bar'
-  | 'detail';
+  'context-menu' | 'command-palette' | 'shortcut' | 'button' | 'drag' | 'bulk-bar' | 'detail';
 
 /**
  * Where an action is grouped when it is listed.

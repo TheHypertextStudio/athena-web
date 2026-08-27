@@ -18,10 +18,7 @@ export interface WorkLocationVisibilitySource {
 
 /** Product-owned device evidence failure states. */
 export type ForegroundLocationError =
-  | 'permission_denied'
-  | 'position_unavailable'
-  | 'timed_out'
-  | 'delivery_failed';
+  'permission_denied' | 'position_unavailable' | 'timed_out' | 'delivery_failed';
 
 /** Inputs for one user-gesture-started foreground reporter. */
 export interface ForegroundLocationReporterInput {

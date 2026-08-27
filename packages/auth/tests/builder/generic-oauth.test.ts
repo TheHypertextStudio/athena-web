@@ -51,8 +51,7 @@ function findTestOAuthConfig(
   plugins: { id: string; options?: unknown }[] | undefined,
 ): GenericOAuthProviderShape | undefined {
   const plugin = (plugins ?? []).find((p) => p.id === 'generic-oauth') as
-    | { options?: { config?: GenericOAuthProviderShape[] } }
-    | undefined;
+    { options?: { config?: GenericOAuthProviderShape[] } } | undefined;
   return plugin?.options?.config?.[0];
 }
 

@@ -41,13 +41,7 @@ export type LaunchEntryState = 'not-started' | 'in-progress' | 'closed' | 'block
 
 /** An external system the launch has to authenticate against. */
 export type ExternalSystem =
-  | 'google'
-  | 'notion'
-  | 'sunsama'
-  | 'cloudflare'
-  | 'vercel'
-  | 'lovelace-lattice'
-  | 'twilio';
+  'google' | 'notion' | 'sunsama' | 'cloudflare' | 'vercel' | 'lovelace-lattice' | 'twilio';
 
 /**
  * Where an external system stands.

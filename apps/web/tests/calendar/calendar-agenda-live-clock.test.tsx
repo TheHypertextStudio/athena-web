@@ -245,8 +245,7 @@ describe('live calendar viewport heading', () => {
     });
 
     const update = displayDateState.setDate.mock.calls[0]?.[0] as
-      | string
-      | ((current: string) => string);
+      string | ((current: string) => string);
     expect(typeof update === 'function' ? update('2026-07-13') : update).toBe('2026-07-16');
   });
 
@@ -265,8 +264,7 @@ describe('live calendar viewport heading', () => {
     });
 
     const update = displayDateState.setDate.mock.calls[0]?.[0] as
-      | string
-      | ((current: string) => string);
+      string | ((current: string) => string);
     expect(typeof update === 'function' ? update('2026-07-13') : update).toBe('2026-07-14');
   });
 
@@ -291,8 +289,7 @@ describe('live calendar viewport heading', () => {
       });
 
       const update = displayDateState.setDate.mock.calls[0]?.[0] as
-        | string
-        | ((current: string) => string);
+        string | ((current: string) => string);
       expect(typeof update === 'function' ? update('2026-07-13') : update).toBe(visibleStart);
     },
   );

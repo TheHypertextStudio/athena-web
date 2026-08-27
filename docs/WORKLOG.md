@@ -70,11 +70,9 @@
 - **Validation**: The bounded final pass ran 329 focused tests across billing, API, web,
   environment, and launch-policy packages. API, billing, environment, test-utils, web, and admin
   typechecks passed. The same packages passed lint, and the repository commit hook completed its
-  full staged checks and package lint gates. Stripe test mode covered hosted Checkout, portal
-  management, signed webhooks, duplicate and reordered events, payment failure and recovery,
-  payment authentication, cancellation, reactivation, renewal, discounts, credit notes, and
-  complimentary conflicts. Responsive customer and admin captures cover desktop, mobile, light,
-  and dark states.
+  full staged checks and package lint gates. The prior Stripe run covered hosted Checkout and the
+  provider lifecycle, but it used an account outside Hypertext Studio and cannot satisfy a launch
+  gate. Responsive customer and admin captures cover desktop, mobile, light, and dark states.
 - **Coverage gate correction**: The billing package's CI job passed all behavior tests but failed
   its 90% coverage gate after the provider-state work added untested branches. The package now has
   142 passing tests and reports 97.65% statements, 92.58% branches, 100% functions, and 98.87%
@@ -105,6 +103,13 @@
 - **Deployment correction**: The repository-level kill switch did not control production because
   the GitHub `production` environment overrode `BILLING_ENABLED=true`. The production environment
   now holds `false`, and a deployment policy test covers the missing attestation pass-through.
+- **Post-rebase validation**: The current branch passes all 26 typecheck tasks. The API task needs
+  a 4 GB Node heap, while the other 25 tasks pass inside the bounded root run. The repository
+  tooling suite passes 165 tests. The package graph passes after Web runs with two workers: Web
+  passes 3,218 tests in 436 files, database passes 210 tests in 34 files, and billing passes 151
+  tests. The production build passes Runner, API, Admin, Web, and the service worker with one
+  package at a time. Focused ESLint and Prettier checks pass for the post-rebase billing and test
+  corrections.
 - **Decisions**: Checkout derives the customer email from the Better Auth server session and
   rejects a browser-supplied email. Stripe's Dashboard-only existing-subscriber redirect requires
   a recorded verification timestamp before `BILLING_ENABLED=true` can pass configuration. Docket

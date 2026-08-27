@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -77,7 +77,7 @@ describe('ObjectSurface', () => {
     await userEvent.keyboard('{Enter}');
     expect(onActivate).toHaveBeenCalledOnce();
 
-    screen.getByRole('button', { name: 'Edit' }).focus();
+    within(screen.getByTestId('keyboard-row')).getByRole('button', { name: 'Edit' }).focus();
     await userEvent.keyboard('{Enter}');
     expect(onActivate).toHaveBeenCalledOnce();
   });

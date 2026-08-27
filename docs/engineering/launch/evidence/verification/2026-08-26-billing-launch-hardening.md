@@ -7,16 +7,12 @@
 
 ## Result
 
-The final local hardening is complete through commit `6b3695c4c`. The branch contains four billing
-hardening commits after `origin/main`:
-
-1. `1bf820b25` checks exact subscription ownership before provider mutations.
-2. `c0f59e8db` uses canonical provider snapshots, protects complimentary access, reuses one
-   unambiguous Stripe customer, and makes credit-note retries idempotent.
-3. `4b9bafb5b` scopes staff reconciliation to one organization, preserves legacy address
-   grandfathering, and refuses finance mutations over duplicate subscriptions.
-4. `6b3695c4c` adds explicit `off`, `shadow`, and `active` scheduled reconciliation modes. It also
-   removes automatic reads from the globally selected Stripe CLI profile.
+The final local hardening is present on `codex/billing-launch-readiness`, rebased on the current
+`origin/main`. The branch checks exact subscription ownership before provider mutations. It uses
+canonical provider snapshots, protects complimentary access, reuses one unambiguous Stripe
+customer, and makes credit-note retries idempotent. Staff reconciliation stays inside the selected
+organization. The scheduled job has explicit `off`, `shadow`, and `active` modes and does not read
+the globally selected Stripe CLI profile.
 
 No commit was pushed or deployed during this hardening pass. No pull request exists for this work.
 No Stripe provider operation ran. Public Checkout remains disabled.
@@ -29,7 +25,7 @@ and test-utils typechecks passed. Focused lint passed after the first broad lint
 Node's default 2 GB heap. The commit hook then passed its staged test and repository package lint
 gate with bounded package execution.
 
-The complete 0000 through 0105 migration chain also replayed into a fresh local PostgreSQL 16.15
+The complete 0000 through 0105 migration chain also replayed into a fresh local PostgreSQL 18.4
 database. PostgreSQL recorded 106 migrations. The replay created the customer, open-Checkout, and
 provider-credit uniqueness indexes and seeded the active 50-percent Student and Nonprofit programs
 with 12-month review periods. Fresh-database audits reported zero duplicate provider customers and
@@ -60,6 +56,12 @@ The hardening tests prove these boundaries:
 - Stripe provisioning emits `BILLING_ENABLED=false` and `BILLING_RECONCILIATION_MODE=off`.
 - The setup wizard does not infer Stripe credentials or webhook secrets from a global CLI profile.
 
+The branch was rebased onto the current `origin/main` after the hardening pass. All 26 typecheck
+tasks pass, with the API compiler isolated under a 4 GB Node heap after the bounded root run hit its
+2 GB default. The repository tooling suite passes 165 tests. Web passes 3,218 tests in 436 files,
+database passes 210 tests in 34 files, and billing passes 151 tests. The serial production build
+passes Runner, API, Admin, Web, and the service worker.
+
 ## Gates still open
 
 The local evidence does not prove the merchant or deployed system. Stripe belongs only to
@@ -72,7 +74,7 @@ The following gates remain open:
    independently configured Hypertext Studio account pin. The dedicated `hypertext.studio` Chrome
    profile confirmed that the pinned account contains the $8 monthly Docket Pro product. Production
    must carry the verified account pin before shadow reconciliation starts.
-2. The complete migration chain, including 0104, must run against a production-shaped snapshot.
+2. The complete migration chain through 0105 must run against a production-shaped snapshot.
    The report must show one provider customer and at most one current subscription for every billed
    organization.
 3. The deployed scheduler must run `shadow` for 24 hours without an unresolved audit finding. The

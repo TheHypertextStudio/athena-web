@@ -12,6 +12,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { JSX } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import DocketLink from '@/components/docket-link';
 import { api } from '@/lib/api';
 import { UserFacingError, userErrorMessage } from '@/lib/problem';
 import {
@@ -191,7 +192,7 @@ export function BillingRecovery({ orgId, workspaceName }: BillingRecoveryProps):
             </Button>
           ) : productRequired && (canManageBilling || billingQ.isError) ? (
             <Button asChild className="shrink-0">
-              <a href={settingsHref}>Review Docket Pro</a>
+              <DocketLink href={settingsHref}>Review Docket Pro</DocketLink>
             </Button>
           ) : request?.code === 'billing_grace_expired' && canManageBilling ? (
             <Button

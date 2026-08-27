@@ -2,9 +2,10 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { OrganizationId, TaskId } from '@docket/types';
 
-const { nextPush, nextReplace } = vi.hoisted(() => ({
+const { nextPush, nextReplace, scrollTo } = vi.hoisted(() => ({
   nextPush: vi.fn(),
   nextReplace: vi.fn(),
+  scrollTo: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -30,7 +31,7 @@ function TaskRouteProbe(): React.JSX.Element {
 
 beforeEach(() => {
   window.history.replaceState(null, '', '/today');
-  window.scrollTo = vi.fn();
+  window.scrollTo = scrollTo;
   window.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
     callback(0);
     return 1;
@@ -40,6 +41,7 @@ beforeEach(() => {
   document.body.append(main);
   nextPush.mockReset();
   nextReplace.mockReset();
+  scrollTo.mockReset();
 });
 
 afterEach(() => {
@@ -114,7 +116,7 @@ describe('authenticated app location', () => {
       taskId: TASK_ID,
     });
     expect(main.scrollTop).toBe(0);
-    expect(window.scrollTo).not.toHaveBeenCalled();
+    expect(scrollTo).not.toHaveBeenCalled();
   });
 
   it('restores the shell scroll owner across native back and forward navigation', async () => {

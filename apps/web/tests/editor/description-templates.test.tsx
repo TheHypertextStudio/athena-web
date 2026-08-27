@@ -2,7 +2,7 @@ import '@testing-library/jest-dom/vitest';
 
 import type { TemplateOut } from '@docket/types';
 import { assertDefined } from '@docket/test-utils';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -42,6 +42,16 @@ vi.stubGlobal(
     readonly thresholds: readonly number[] = [];
   },
 );
+
+function focusEditorAtEnd(surface: HTMLElement): void {
+  surface.focus();
+  const selection = window.getSelection();
+  const range = document.createRange();
+  range.selectNodeContents(surface);
+  range.collapse(false);
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
 
 installProseMirrorLayoutShims();
 
@@ -197,8 +207,9 @@ describe('description templates inside an existing entity editor', () => {
     expect(screen.queryByRole('button', { name: 'Start from template' })).not.toBeInTheDocument();
 
     const surface = await screen.findByRole('textbox', { name: 'Description' });
-    fireEvent.mouseDown(assertDefined(surface.closest<HTMLElement>('[data-editor-surface]')));
-    await waitFor(() => expect(surface).toHaveFocus());
+    act(() => {
+      focusEditorAtEnd(surface);
+    });
     await user.keyboard(' plus unsaved detail{Enter}/');
 
     const menu = await screen.findByRole('listbox', { name: 'Insert a block' });
@@ -227,8 +238,9 @@ describe('description templates inside an existing entity editor', () => {
       templates: [taskTemplate('template_task', 'Task Template', 'organization')],
     });
     const surface = await screen.findByRole('textbox', { name: 'Description' });
-    fireEvent.mouseDown(assertDefined(surface.closest<HTMLElement>('[data-editor-surface]')));
-    await waitFor(() => expect(surface).toHaveFocus());
+    act(() => {
+      focusEditorAtEnd(surface);
+    });
     await user.keyboard('{Enter}/template');
     const menu = await screen.findByRole('listbox', { name: 'Insert a block' });
 

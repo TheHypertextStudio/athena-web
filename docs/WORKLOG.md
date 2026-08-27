@@ -148,6 +148,24 @@
   journeys pass against a clean migrated PGlite database. The mention journey passes all three
   cases with the local scheduler enabled. Checkout remains disabled until the provider and launch
   gates below pass.
+- **Production-shaped billing audit correction**: The read-only August 27 production audit found
+  ten legacy `trialing` Stripe entitlements with no billing account, Stripe customer, subscription,
+  service period, or provider observation. Migration 0092 created those rows from the old
+  organization lifecycle before billing had a durable customer boundary. The repair will remove
+  only that orphan shape and close its obsolete reconciliation retries. It will preserve paid,
+  canceled, past-due, and complimentary entitlement history. A migration test will prove both the
+  repair boundary and idempotency before deployment. Checkout remains disabled.
+- **Production-shaped billing audit result**: The private mode-0600 report was generated at
+  `2026-08-27T17:20:36.927Z` against the production database and the independently verified
+  Hypertext Studio Stripe account. It found zero durable billing accounts, ten orphan Stripe
+  entitlements, and ten failed reconciliation rows. It also withheld pass status because the
+  Dashboard-only duplicate-subscription redirect lacks a recorded verification timestamp.
+  Migration 0107 now removes only active or trialing Stripe rows that have no customer,
+  subscription, service period, grace period, cancellation, or provider observation. It records
+  the repair on the matching reconciliation rows instead of deleting their audit history. The
+  migration passes its idempotent boundary test. The database package passes 213 tests in 35 files,
+  type checking, lint, formatting, and the diff check. Deployment and a repeated production audit
+  remain required before this gate can close.
 - **Decisions**: Checkout derives the customer email from the Better Auth server session and
   rejects a browser-supplied email. Stripe's Dashboard-only existing-subscriber redirect requires
   a recorded verification timestamp before `BILLING_ENABLED=true` can pass configuration. Docket

@@ -7,6 +7,7 @@ describe('Connections Notion mirror contract', () => {
   it('owns the complete public runtime schema surface', () => {
     expect(Object.keys(contract).sort()).toEqual([
       'NotionColumnBinding',
+      'NotionMirrorContentStatus',
       'NotionMirrorDatabaseOut',
       'NotionMirrorDesignOut',
       'NotionMirrorDesignPatch',
@@ -30,6 +31,10 @@ describe('Connections Notion mirror contract', () => {
       title: 'Tasks',
       enabled: true,
       direction: 'two_way' as const,
+      content: {
+        state: 'complete' as const,
+        unknownBlockCount: 0,
+      },
       propertyMap: {
         title: {
           field: 'title',

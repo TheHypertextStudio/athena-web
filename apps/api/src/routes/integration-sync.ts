@@ -113,7 +113,14 @@ async function persistInferredNotionMappings(
   if (additions.length === 0) return;
 
   const notionMappingProfiles = { ...existing };
-  for (const profile of additions) notionMappingProfiles[profile.dataSourceId] = profile;
+  for (const profile of additions) {
+    // The connector port exposes immutable values. JSON config is mutable by contract, so copy
+    // the profile at this boundary instead of weakening the provider-facing type.
+    notionMappingProfiles[profile.dataSourceId] = {
+      ...profile,
+      fields: profile.fields.map((field) => ({ ...field })),
+    };
+  }
   await db
     .update(integration)
     .set({ config: { ...row.config, notionMappingProfiles } })

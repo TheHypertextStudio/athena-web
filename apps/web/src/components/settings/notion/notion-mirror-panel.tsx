@@ -304,10 +304,7 @@ export function NotionMirrorPanel({ orgId, canManage }: NotionMirrorPanelProps):
       ) : null}
 
       {mappingsNeedingReview.length > 0 ? (
-        <SettingsGroup
-          title="Review linked Notion mappings"
-          description="Docket mapped the fields it can identify safely. It will not guess where a Notion relation points."
-        >
+        <SettingsGroup capability={SETTINGS_NODES.connectionsNotionMappings}>
           <ul className="divide-outline-variant divide-y">
             {mappingsNeedingReview.map((mapping) => (
               <li key={`${mapping.dataSourceId}:${mapping.property}`} className="px-4 py-3">

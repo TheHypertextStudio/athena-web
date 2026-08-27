@@ -151,6 +151,16 @@ export const SETTINGS_NODES = {
     ),
     nestedPath: 'connections/notion',
   },
+  connectionsNotionMappings: {
+    ...workspaceNode(
+      'connections-notion-mappings',
+      'connections',
+      'Review linked Notion mappings',
+      'Review the Notion properties that Docket mapped automatically before they sync.',
+      ['Notion sync', 'field mappings'],
+    ),
+    nestedPath: 'connections/notion',
+  },
   connectedAppsClient: personalNode(
     'connected-apps-client',
     'connected-apps',

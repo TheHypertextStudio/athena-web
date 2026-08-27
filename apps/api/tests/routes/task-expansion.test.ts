@@ -365,6 +365,183 @@ describe('task expansion (POST /:id/expand)', () => {
     ).toEqual([]);
   });
 
+  it('reverses one expansion that changes task fields and creates every supported relation', async () => {
+    const { orgId, teamId, humanActorId } = await seedTaskAccessOrg(db, schema);
+    const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const [label] = await db
+      .insert(schema.label)
+      .values({ organizationId: orgId, name: 'Customer impact', color: 'orange' })
+      .returning({ id: schema.label.id });
+    if (!label) throw new Error('combined expansion test label was not created');
+    const taskId = await createTask(
+      app,
+      teamId,
+      'Investigate customer report. Collect affected request ids must finish before Investigate customer report. Check failing requests.',
+    );
+    const blockingTaskId = await createTask(app, teamId, 'Collect affected request ids');
+    const relatedTaskId = await createTask(app, teamId, 'Review the previous incident.');
+    await db
+      .update(schema.task)
+      .set({ title: 'Investigate customer report' })
+      .where(eq(schema.task.id, taskId));
+    await db
+      .update(schema.task)
+      .set({ title: 'Collect affected request ids' })
+      .where(eq(schema.task.id, blockingTaskId));
+    await db
+      .update(schema.task)
+      .set({ title: 'Review previous incident' })
+      .where(eq(schema.task.id, relatedTaskId));
+    injectExpander({
+      async expandTask() {
+        return {
+          description:
+            'Investigate customer report. Collect affected request ids must finish before Investigate customer report. Check failing requests.\n\n## Evidence',
+          patch: {
+            priority: 'high',
+            startDate: '2026-09-01',
+            dueDate: '2026-09-03',
+            estimateMinutes: 90,
+            labelIds: [label.id],
+          },
+          subtasks: [
+            {
+              title: 'Check the failing requests',
+              evidence: 'Check failing requests.',
+            },
+          ],
+          dependencies: [
+            {
+              blockingTaskId,
+              blockedTaskId: taskId,
+              evidence:
+                'Collect affected request ids must finish before Investigate customer report.',
+            },
+          ],
+          relatedTaskIds: [relatedTaskId],
+          resourceUrls: [],
+        };
+      },
+    });
+
+    const expanded = await app.request(`/${taskId}/expand`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
+    expect(expanded.status).toBe(200);
+    const expandedBody = (await expanded.json()) as {
+      undoToken: string;
+      task: {
+        priority: string;
+        startDate: string | null;
+        dueDate: string | null;
+        estimateMinutes: number | null;
+        labels: { id: string }[];
+        relatedTasks: { id: string }[];
+      };
+    };
+    expect(expandedBody.task).toMatchObject({
+      priority: 'high',
+      estimateMinutes: 90,
+      labels: [{ id: label.id }],
+      relatedTasks: [{ id: relatedTaskId }],
+    });
+    expect(expandedBody.task.startDate).toContain('2026-09-01');
+    expect(expandedBody.task.dueDate).toContain('2026-09-03');
+    const createdSubtasks = await db
+      .select({ id: schema.task.id, archivedAt: schema.task.archivedAt })
+      .from(schema.task)
+      .where(eq(schema.task.parentTaskId, taskId));
+    expect(createdSubtasks).toHaveLength(1);
+    expect(
+      await db
+        .select({ blockingTaskId: schema.taskDependency.blockingTaskId })
+        .from(schema.taskDependency)
+        .where(
+          and(
+            eq(schema.taskDependency.organizationId, orgId),
+            eq(schema.taskDependency.blockingTaskId, blockingTaskId),
+            eq(schema.taskDependency.blockedTaskId, taskId),
+          ),
+        ),
+    ).toEqual([{ blockingTaskId }]);
+
+    const undone = await app.request(`/${taskId}/expand/undo`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ undoToken: expandedBody.undoToken }),
+    });
+    expect(undone.status).toBe(200);
+    const restored = (await undone.json()) as {
+      task: {
+        description: string | null;
+        priority: string;
+        startDate: string | null;
+        dueDate: string | null;
+        estimateMinutes: number | null;
+        labels: unknown[];
+        relatedTasks: unknown[];
+      };
+    };
+    expect(restored.task).toMatchObject({
+      description:
+        'Investigate customer report. Collect affected request ids must finish before Investigate customer report. Check failing requests.',
+      priority: 'none',
+      startDate: null,
+      dueDate: null,
+      estimateMinutes: null,
+      labels: [],
+      relatedTasks: [],
+    });
+    expect(
+      await db
+        .select({ archivedAt: schema.task.archivedAt })
+        .from(schema.task)
+        .where(eq(schema.task.parentTaskId, taskId)),
+    ).toEqual([{ archivedAt: expect.any(Date) }]);
+    expect(
+      await db
+        .select({ blockingTaskId: schema.taskDependency.blockingTaskId })
+        .from(schema.taskDependency)
+        .where(
+          and(
+            eq(schema.taskDependency.organizationId, orgId),
+            eq(schema.taskDependency.blockingTaskId, blockingTaskId),
+            eq(schema.taskDependency.blockedTaskId, taskId),
+          ),
+        ),
+    ).toEqual([]);
+  });
+
+  it('rejects an invalid inferred date before it mutates the task', async () => {
+    const { orgId, teamId, humanActorId } = await seedTaskAccessOrg(db, schema);
+    const app = appWithActor(tasks, orgId, ['contribute'], humanActorId);
+    const taskId = await createTask(app, teamId, 'Investigate the customer report.');
+    injectExpander({
+      async expandTask(input) {
+        return {
+          description: input.description ?? '',
+          patch: { dueDate: 'when the incident is resolved' },
+          subtasks: [],
+          dependencies: [],
+          relatedTaskIds: [],
+          resourceUrls: [],
+        };
+      },
+    });
+
+    const response = await app.request(`/${taskId}/expand`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{}',
+    });
+    expect(response.status).toBe(422);
+    expect(
+      ((await (await app.request(`/${taskId}`)).json()) as { dueDate: string | null }).dueDate,
+    ).toBeNull();
+  });
+
   it('requires assign access for an inferred assignee', async () => {
     const { orgId, teamId, humanActorId } = await seedTaskAccessOrg(db, schema);
     await db

@@ -17,12 +17,11 @@
 - **Approach**: Preserve ProseMirror's native text hit-testing. Remove the fallback handlers that
   treat wrapper whitespace and entity-card padding as an instruction to select the document end.
 - **Validation**: The focused editor suite passes 14 tests on current `main`. Prettier and focused
-  ESLint pass for the changed source and test files. The supported Web typecheck rebuilt the API
-  declarations without errors, then the local resource watchdog killed the Web compiler with exit
-  137 and no diagnostic. The full CI typecheck remains the release gate.
-- **Release blocker**: Current `main` upgraded TypeScript to 7.0.2, but the latest stable and canary
-  `typescript-eslint` releases only support TypeScript below 6.1.0. Restore TypeScript 6.0.3 so
-  ESLint can run and CI can reach the deploy.
+  ESLint pass for the changed source and test files. CI passes the Web test, typecheck, lint,
+  formatting, production build, and core-screen acceptance gates. The API suite passes 4,908
+  tests. Recovered billing and task-expansion tests raise API branch coverage from 87.86% to
+  88.30%, which establishes the ratchet for the API surface already merged into `main`.
+- **Release blocker**: None in the working tree. The next exact-SHA CI run must pass and deploy.
 - **Blockers**: Production deployment and live verification are pending.
 
 ---

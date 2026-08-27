@@ -8,6 +8,7 @@ import type {
   organizationProductEntitlement as ProductTable,
 } from '@docket/db';
 import {
+  billingCredit,
   billingDiscountApplication,
   billingDiscountAward,
   organizationBillingAccount,
@@ -750,5 +751,283 @@ describe('billing router (org-scoped, via the BillingGateway port)', () => {
     });
 
     expect(response.status).toBe(409);
+  });
+
+  it('submits nonprofit evidence only for a nonprofit workspace', async () => {
+    const userId = `nonprofit-${Date.now()}`;
+    await db.insert(user).values({
+      id: userId,
+      name: 'Nonprofit Applicant',
+      email: `${userId}@example.org`,
+      emailVerified: true,
+    });
+    const orgId = await makeOrg('active');
+    const app = billingApp(
+      orgId,
+      ['manage'],
+      fakeSession(userId, 'Nonprofit Applicant', `${userId}@example.org`),
+    );
+
+    const submitted = await app.request('/discounts/applications', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        programKey: 'nonprofit',
+        evidenceType: 'irs_registry',
+        ein: '12-3456789',
+      }),
+    });
+
+    expect(submitted.status).toBe(201);
+    await expect(submitted.json()).resolves.toMatchObject({
+      programKey: 'nonprofit',
+      ein: '12-3456789',
+      institutionalEmail: null,
+    });
+
+    await db.update(organization).set({ isPersonal: true }).where(eq(organization.id, orgId));
+    const personal = await app.request('/discounts/applications', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        programKey: 'nonprofit',
+        evidenceType: 'irs_registry',
+        ein: '12-3456789',
+      }),
+    });
+    expect(personal.status).toBe(409);
+  });
+
+  it('returns a supplemented application to review and lets its owner withdraw it', async () => {
+    const userId = `lifecycle-${Date.now()}`;
+    const email = `${userId}@unlv.edu`;
+    await db.insert(user).values({
+      id: userId,
+      name: 'Student Applicant',
+      email,
+      emailVerified: true,
+    });
+    const orgId = await makeOrg('active');
+    await db.update(organization).set({ isPersonal: true }).where(eq(organization.id, orgId));
+    const [application] = await db
+      .insert(billingDiscountApplication)
+      .values({
+        organizationId: orgId,
+        applicantUserId: userId,
+        programKey: 'student',
+        status: 'needs_information',
+        evidenceType: 'institutional_email',
+        institutionalEmail: email,
+        informationRequest: 'Confirm the institutional address.',
+      })
+      .returning();
+    const row = assertDefined(application);
+    const app = billingApp(orgId, ['manage'], fakeSession(userId, 'Student Applicant', email));
+
+    const supplemented = await app.request(`/discounts/applications/${row.id}/supplement`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ institutionalEmail: email, note: 'The address is current.' }),
+    });
+    expect(supplemented.status).toBe(200);
+    await expect(supplemented.json()).resolves.toMatchObject({
+      status: 'submitted',
+      informationRequest: null,
+      events: expect.arrayContaining([expect.objectContaining({ type: 'supplemented' })]),
+    });
+
+    const withdrawn = await app.request(`/discounts/applications/${row.id}/withdraw`, {
+      method: 'POST',
+    });
+    expect(withdrawn.status).toBe(200);
+    await expect(withdrawn.json()).resolves.toMatchObject({
+      status: 'withdrawn',
+      events: expect.arrayContaining([expect.objectContaining({ type: 'withdrawn' })]),
+    });
+  });
+
+  it('stores supported private evidence and rejects evidence after withdrawal', async () => {
+    const userId = `evidence-${Date.now()}`;
+    const email = `${userId}@unlv.edu`;
+    await db.insert(user).values({
+      id: userId,
+      name: 'Evidence Applicant',
+      email,
+      emailVerified: true,
+    });
+    const orgId = await makeOrg('active');
+    await db.update(organization).set({ isPersonal: true }).where(eq(organization.id, orgId));
+    const [application] = await db
+      .insert(billingDiscountApplication)
+      .values({
+        organizationId: orgId,
+        applicantUserId: userId,
+        programKey: 'student',
+        status: 'submitted',
+        evidenceType: 'enrollment_document',
+      })
+      .returning();
+    const row = assertDefined(application);
+    const app = billingApp(orgId, ['manage'], fakeSession(userId, 'Evidence Applicant', email));
+    const form = new FormData();
+    form.set('file', new File(['proof'], 'enrollment.pdf', { type: 'application/pdf' }));
+
+    const uploaded = await app.request(`/discounts/applications/${row.id}/evidence`, {
+      method: 'POST',
+      body: form,
+    });
+    expect(uploaded.status).toBe(201);
+    await expect(uploaded.json()).resolves.toMatchObject({
+      events: expect.arrayContaining([expect.objectContaining({ type: 'evidence_uploaded' })]),
+    });
+
+    await app.request(`/discounts/applications/${row.id}/withdraw`, { method: 'POST' });
+    const rejected = await app.request(`/discounts/applications/${row.id}/evidence`, {
+      method: 'POST',
+      body: form,
+    });
+    expect(rejected.status).toBe(409);
+  });
+
+  it('returns the application, award, and issued credit from the discount summary', async () => {
+    const userId = `summary-${Date.now()}`;
+    await db.insert(user).values({
+      id: userId,
+      name: 'Summary Applicant',
+      email: `${userId}@example.org`,
+    });
+    const orgId = await makeOrg('active');
+    const [application] = await db
+      .insert(billingDiscountApplication)
+      .values({
+        organizationId: orgId,
+        applicantUserId: userId,
+        programKey: 'nonprofit',
+        status: 'approved',
+        evidenceType: 'irs_registry',
+        ein: '12-3456789',
+        decisionReason: 'Verified.',
+        decidedAt: new Date('2026-08-01T00:00:00.000Z'),
+      })
+      .returning();
+    const [award] = await db
+      .insert(billingDiscountAward)
+      .values({
+        organizationId: orgId,
+        applicationId: assertDefined(application).id,
+        programKey: 'nonprofit',
+        percentOff: 50,
+        status: 'active',
+        startsAt: new Date('2026-08-01T00:00:00.000Z'),
+        endsAt: new Date('2027-08-01T00:00:00.000Z'),
+        reviewAt: new Date('2027-08-01T00:00:00.000Z'),
+        reason: 'Verified.',
+      })
+      .returning();
+    await db.insert(billingCredit).values({
+      organizationId: orgId,
+      awardId: assertDefined(award).id,
+      status: 'issued',
+      currency: 'usd',
+      baseAmount: 400,
+      taxAmount: 0,
+      totalAmount: 400,
+      servicePeriodStartsAt: new Date('2026-08-01T00:00:00.000Z'),
+      servicePeriodEndsAt: new Date('2026-09-01T00:00:00.000Z'),
+      providerInvoiceId: `in_${orgId}`,
+      providerCreditNoteId: `cn_${orgId}`,
+      issuedAt: new Date('2026-08-02T00:00:00.000Z'),
+    });
+
+    const response = await billingApp(orgId, ['view']).request('/discounts');
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      application: { id: assertDefined(application).id, programKey: 'nonprofit' },
+      award: { id: assertDefined(award).id, status: 'active' },
+      credit: { status: 'issued', totalAmount: 400, issuedAt: '2026-08-02T00:00:00.000Z' },
+    });
+  });
+
+  it('accepts a matching renewal application and refuses an unmatched renewal', async () => {
+    const userId = `renewal-${Date.now()}`;
+    const email = `${userId}@unlv.edu`;
+    await db.insert(user).values({
+      id: userId,
+      name: 'Renewing Student',
+      email,
+      emailVerified: true,
+    });
+    const orgId = await makeOrg('active');
+    await db.update(organization).set({ isPersonal: true }).where(eq(organization.id, orgId));
+    await db.insert(billingDiscountAward).values({
+      organizationId: orgId,
+      programKey: 'student',
+      percentOff: 50,
+      status: 'active',
+      startsAt: new Date('2026-08-01T00:00:00.000Z'),
+      endsAt: new Date('2027-08-01T00:00:00.000Z'),
+      reviewAt: new Date('2027-08-01T00:00:00.000Z'),
+      reason: 'Existing student award.',
+    });
+    const app = billingApp(orgId, ['manage'], fakeSession(userId, 'Renewing Student', email));
+
+    const renewed = await app.request('/discounts/renew', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        programKey: 'student',
+        evidenceType: 'institutional_email',
+        institutionalEmail: email,
+      }),
+    });
+    expect(renewed.status).toBe(201);
+    await expect(renewed.json()).resolves.toMatchObject({
+      programKey: 'student',
+      status: 'submitted',
+    });
+
+    const mismatch = await app.request('/discounts/renew', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        programKey: 'nonprofit',
+        evidenceType: 'irs_registry',
+        ein: '12-3456789',
+      }),
+    });
+    expect(mismatch.status).toBe(409);
+  });
+
+  it('keeps discount applications private to the member who submitted them', async () => {
+    const ownerId = `owner-${Date.now()}`;
+    const otherId = `other-${Date.now()}`;
+    await db.insert(user).values([
+      { id: ownerId, name: 'Application Owner', email: `${ownerId}@example.com` },
+      { id: otherId, name: 'Other Member', email: `${otherId}@example.com` },
+    ]);
+    const orgId = await makeOrg('active');
+    const [application] = await db
+      .insert(billingDiscountApplication)
+      .values({
+        organizationId: orgId,
+        applicantUserId: ownerId,
+        programKey: 'nonprofit',
+        status: 'submitted',
+        evidenceType: 'irs_registry',
+        ein: '12-3456789',
+      })
+      .returning();
+    const app = billingApp(
+      orgId,
+      ['manage'],
+      fakeSession(otherId, 'Other Member', `${otherId}@example.com`),
+    );
+
+    const withdrawal = await app.request(
+      `/discounts/applications/${assertDefined(application).id}/withdraw`,
+      { method: 'POST' },
+    );
+    expect(withdrawal.status).toBe(404);
   });
 });

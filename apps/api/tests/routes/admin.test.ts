@@ -310,6 +310,311 @@ describe('discount application review', () => {
     getSubscription.mockRestore();
     applyDiscount.mockRestore();
   });
+
+  it('returns the prior award when finance repeats an approved application', async () => {
+    const { applicationId, organizationId } = await makeApplication();
+    const finance = await makeStaff('finance');
+    const app = appWithSession(admin, fakeSession(finance.userId));
+    const [award] = await db
+      .insert(schema.billingDiscountAward)
+      .values({
+        organizationId,
+        applicationId,
+        programKey: 'student',
+        percentOff: 50,
+        status: 'scheduled',
+        startsAt: new Date('2026-09-01T00:00:00.000Z'),
+        endsAt: new Date('2027-09-01T00:00:00.000Z'),
+        reviewAt: new Date('2027-09-01T00:00:00.000Z'),
+        reason: 'Already approved.',
+        providerCouponId: 'coupon_already_approved',
+      })
+      .returning();
+    const existing = assertDefined(award);
+    await db
+      .update(schema.billingDiscountApplication)
+      .set({ status: 'approved', decisionReason: 'Already approved.', decidedAt: new Date() })
+      .where(eq(schema.billingDiscountApplication.id, applicationId));
+
+    const repeated = await app.request(`/discount-applications/${applicationId}/approvals`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ confirmation: 'ignored-after-approval', reason: 'Repeat click.' }),
+    });
+
+    expect(repeated.status).toBe(200);
+    await expect(repeated.json()).resolves.toMatchObject({
+      application: { id: applicationId, status: 'approved' },
+      award: { id: existing.id, status: 'scheduled' },
+      credit: null,
+    });
+  });
+
+  it('rejects a needs-information application and refuses another final decision', async () => {
+    const { applicationId } = await makeApplication();
+    const finance = await makeStaff('finance');
+    const app = appWithSession(admin, fakeSession(finance.userId));
+    const request = await app.request(
+      `/discount-applications/${applicationId}/information-requests`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ reason: 'Please provide current evidence.' }),
+      },
+    );
+    expect(request.status).toBe(200);
+
+    const rejected = await app.request(`/discount-applications/${applicationId}/rejections`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reason: 'The requested evidence was not provided.' }),
+    });
+    expect(rejected.status).toBe(200);
+    await expect(rejected.json()).resolves.toMatchObject({ status: 'rejected' });
+
+    const repeated = await app.request(`/discount-applications/${applicationId}/rejections`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reason: 'A second decision must not replace the first.' }),
+    });
+    expect(repeated.status).toBe(409);
+  });
+
+  it('lists private evidence metadata and streams the staff-only evidence file', async () => {
+    const { applicationId } = await makeApplication();
+    const finance = await makeStaff('finance');
+    const app = appWithSession(admin, fakeSession(finance.userId));
+    const evidenceId = `evidence_${uniq()}`;
+    const blobKey = `test-discount-evidence/${evidenceId}`;
+    await getContainer().blob.put(blobKey, new Uint8Array([1, 2, 3]), 'application/pdf');
+    await db.insert(schema.billingDiscountEvidence).values({
+      id: evidenceId,
+      applicationId,
+      evidenceType: 'enrollment_document',
+      blobKey,
+      fileName: 'proof.pdf',
+      mimeType: 'application/pdf',
+      byteSize: 3,
+      deleteAfter: new Date('2027-01-01T00:00:00.000Z'),
+    });
+
+    const detail = await app.request(`/discount-applications/${applicationId}`);
+    expect(detail.status).toBe(200);
+    await expect(detail.json()).resolves.toMatchObject({
+      evidence: [expect.objectContaining({ id: evidenceId, fileName: 'proof.pdf' })],
+    });
+
+    const downloaded = await app.request(
+      `/discount-applications/${applicationId}/evidence/${evidenceId}`,
+    );
+    expect(downloaded.status).toBe(200);
+    expect(downloaded.headers.get('content-type')).toBe('application/pdf');
+    expect(downloaded.headers.get('cache-control')).toBe('private, no-store, max-age=0');
+    await expect(downloaded.arrayBuffer()).resolves.toEqual(new Uint8Array([1, 2, 3]).buffer);
+
+    await db
+      .update(schema.billingDiscountEvidence)
+      .set({ deletedAt: new Date() })
+      .where(eq(schema.billingDiscountEvidence.id, evidenceId));
+    const deleted = await app.request(
+      `/discount-applications/${applicationId}/evidence/${evidenceId}`,
+    );
+    expect(deleted.status).toBe(404);
+  });
+
+  it('applies a reviewed discount to a trial and records the provider credit', async () => {
+    const { applicationId, organizationId } = await makeApplication();
+    await startProviderTrial(organizationId);
+    const finance = await makeStaff('finance');
+    const app = appWithSession(admin, fakeSession(finance.userId));
+    const invoice = {
+      invoiceId: `in_${applicationId}`,
+      lineId: `il_${applicationId}`,
+      invoiceStatus: 'open' as const,
+      currency: 'usd',
+      recurringAmount: 800,
+      periodStartsAt: '2026-08-01T00:00:00.000Z',
+      periodEndsAt: '2026-09-01T00:00:00.000Z',
+    };
+    const credit = {
+      baseAmount: 400,
+      taxAmount: 32,
+      totalAmount: 432,
+      prePaymentAmount: 432,
+      postPaymentAmount: 432,
+    };
+    const latestInvoice = vi
+      .spyOn(getContainer().billing, 'getLatestRecurringInvoice')
+      .mockResolvedValue(invoice);
+    const previewCredit = vi
+      .spyOn(getContainer().billing, 'previewCreditNote')
+      .mockResolvedValue(credit);
+    const issueCredit = vi.spyOn(getContainer().billing, 'issueCreditNote').mockResolvedValue({
+      id: `cn_${applicationId}`,
+      ...credit,
+    });
+    try {
+      const preview = await app.request(
+        `/discount-applications/${applicationId}/approval-previews`,
+        {
+          method: 'POST',
+        },
+      );
+      expect(preview.status).toBe(200);
+      const { confirmation } = await json<{ confirmation: string }>(preview);
+
+      const approved = await app.request(`/discount-applications/${applicationId}/approvals`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ confirmation, reason: 'The current enrollment is verified.' }),
+      });
+      expect(approved.status).toBe(200);
+      await expect(approved.json()).resolves.toMatchObject({
+        application: { status: 'approved' },
+        award: { status: 'active' },
+        credit: { invoiceId: invoice.invoiceId, totalAmount: 432 },
+      });
+      const credits = await db
+        .select()
+        .from(schema.billingCredit)
+        .where(eq(schema.billingCredit.organizationId, organizationId));
+      expect(credits).toHaveLength(1);
+      expect(credits[0]).toMatchObject({ providerCreditNoteId: `cn_${applicationId}` });
+    } finally {
+      latestInvoice.mockRestore();
+      previewCredit.mockRestore();
+      issueCredit.mockRestore();
+    }
+  });
+
+  it('approves a renewal against the current public-program award', async () => {
+    const { applicationId, organizationId } = await makeApplication();
+    const finance = await makeStaff('finance');
+    const app = appWithSession(admin, fakeSession(finance.userId));
+    const [currentAward] = await db
+      .insert(schema.billingDiscountAward)
+      .values({
+        organizationId,
+        programKey: 'student',
+        percentOff: 50,
+        status: 'active',
+        startsAt: new Date('2026-08-01T00:00:00.000Z'),
+        endsAt: new Date('2027-08-01T00:00:00.000Z'),
+        reviewAt: new Date('2027-08-01T00:00:00.000Z'),
+        reason: 'Current award.',
+      })
+      .returning();
+    const award = assertDefined(currentAward);
+
+    const preview = await app.request(`/discount-applications/${applicationId}/approval-previews`, {
+      method: 'POST',
+    });
+    expect(preview.status).toBe(200);
+    const previewBody = await json<{ confirmation: string; providerAction: string }>(preview);
+    expect(previewBody.providerAction).toBe('renew_existing');
+
+    const approved = await app.request(`/discount-applications/${applicationId}/approvals`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        confirmation: previewBody.confirmation,
+        reason: 'Renewed eligibility.',
+      }),
+    });
+    expect(approved.status).toBe(200);
+    await expect(approved.json()).resolves.toMatchObject({
+      application: { status: 'approved' },
+      award: { id: award.id, status: 'scheduled', reason: 'Renewed eligibility.' },
+    });
+  });
+
+  it('rejects a missing approval confirmation before it creates an award', async () => {
+    const { applicationId } = await makeApplication();
+    const finance = await makeStaff('finance');
+    const app = appWithSession(admin, fakeSession(finance.userId));
+
+    const response = await app.request(`/discount-applications/${applicationId}/approvals`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ confirmation: 'missing-preview', reason: 'No preview exists.' }),
+    });
+
+    expect(response.status).toBe(412);
+    const awards = await db
+      .select()
+      .from(schema.billingDiscountAward)
+      .where(eq(schema.billingDiscountAward.applicationId, applicationId));
+    expect(awards).toHaveLength(0);
+  });
+
+  it('blocks approval when the program closes or the application leaves review', async () => {
+    const { applicationId } = await makeApplication();
+    const finance = await makeStaff('finance');
+    const app = appWithSession(admin, fakeSession(finance.userId));
+    await db
+      .update(schema.billingDiscountProgram)
+      .set({ active: false })
+      .where(eq(schema.billingDiscountProgram.key, 'student'));
+    try {
+      const closed = await app.request(
+        `/discount-applications/${applicationId}/approval-previews`,
+        {
+          method: 'POST',
+        },
+      );
+      expect(closed.status).toBe(409);
+    } finally {
+      await db
+        .update(schema.billingDiscountProgram)
+        .set({ active: true })
+        .where(eq(schema.billingDiscountProgram.key, 'student'));
+    }
+
+    await db
+      .update(schema.billingDiscountApplication)
+      .set({ status: 'needs_information' })
+      .where(eq(schema.billingDiscountApplication.id, applicationId));
+    const noLongerSubmitted = await app.request(
+      `/discount-applications/${applicationId}/approval-previews`,
+      { method: 'POST' },
+    );
+    expect(noLongerSubmitted.status).toBe(409);
+  });
+
+  it('rejects a renewal confirmation after the reviewed award stops being current', async () => {
+    const { applicationId, organizationId } = await makeApplication();
+    const finance = await makeStaff('finance');
+    const app = appWithSession(admin, fakeSession(finance.userId));
+    const [currentAward] = await db
+      .insert(schema.billingDiscountAward)
+      .values({
+        organizationId,
+        programKey: 'student',
+        percentOff: 50,
+        status: 'active',
+        startsAt: new Date('2026-08-01T00:00:00.000Z'),
+        endsAt: new Date('2027-08-01T00:00:00.000Z'),
+        reviewAt: new Date('2027-08-01T00:00:00.000Z'),
+        reason: 'Current award.',
+      })
+      .returning();
+    const award = assertDefined(currentAward);
+    const preview = await app.request(`/discount-applications/${applicationId}/approval-previews`, {
+      method: 'POST',
+    });
+    const { confirmation } = await json<{ confirmation: string }>(preview);
+    await db
+      .update(schema.billingDiscountAward)
+      .set({ status: 'revoked' })
+      .where(eq(schema.billingDiscountAward.id, award.id));
+
+    const approved = await app.request(`/discount-applications/${applicationId}/approvals`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ confirmation, reason: 'Renewed eligibility.' }),
+    });
+    expect(approved.status).toBe(412);
+  });
 });
 
 describe('private partner awards', () => {
@@ -599,6 +904,48 @@ describe('private partner awards', () => {
     expect(applyDiscount).not.toHaveBeenCalled();
     getSubscription.mockRestore();
     applyDiscount.mockRestore();
+  });
+
+  it('rejects invalid finance renewals before changing an award', async () => {
+    const finance = await makeStaff('finance');
+    const app = appWithSession(admin, fakeSession(finance.userId));
+    const missing = await app.request('/discount-applications/awards/missing/renewals', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reason: 'There is no award.' }),
+    });
+    expect(missing.status).toBe(409);
+
+    const organizationId = await makeOrg();
+    const currentEnd = new Date();
+    currentEnd.setUTCMonth(currentEnd.getUTCMonth() + 6);
+    const [privateAward] = await db
+      .insert(schema.billingDiscountAward)
+      .values({
+        organizationId,
+        percentOff: 25,
+        status: 'active',
+        startsAt: new Date(),
+        endsAt: currentEnd,
+        reviewAt: currentEnd,
+        reason: 'Current partner award.',
+      })
+      .returning();
+    const award = assertDefined(privateAward);
+
+    const noEnd = await app.request(`/discount-applications/awards/${award.id}/renewals`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reason: 'Missing end date.' }),
+    });
+    expect(noEnd.status).toBe(409);
+
+    const shorter = await app.request(`/discount-applications/awards/${award.id}/renewals`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reason: 'Shorter end date.', endsAt: currentEnd.toISOString() }),
+    });
+    expect(shorter.status).toBe(409);
   });
 });
 

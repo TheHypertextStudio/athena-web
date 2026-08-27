@@ -200,6 +200,17 @@ export const notionMirrorRow = pgTable(
     lastPushedAt: timestamp('last_pushed_at'),
     /** Hash of the projected field values, so an unchanged record costs no Notion write. */
     contentHash: text('content_hash'),
+    /** Per-field anchors make independent Docket and Notion edits merge without a record overwrite. */
+    propertyAnchors: jsonb('property_anchors')
+      .$type<Record<string, string>>()
+      .notNull()
+      .default({}),
+    /** Hash of the full Notion Markdown body, separate from property projection. */
+    bodyHash: text('body_hash'),
+    /** A missing content capability or truncated response must never read as an empty body. */
+    bodyState: text('body_state').notNull().default('complete'),
+    /** Provider block ids Notion omitted from a truncated body response. */
+    bodyUnknownBlockIds: jsonb('body_unknown_block_ids').$type<string[]>().notNull().default([]),
     /** Set when the Docket record is archived and its Notion page moved to the trash. */
     deletedAt: timestamp('deleted_at'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -212,5 +223,44 @@ export const notionMirrorRow = pgTable(
     uniqueIndex('notion_mirror_row_entity_uq').on(t.integrationId, t.entityType, t.entityId),
     uniqueIndex('notion_mirror_row_page_uq').on(t.integrationId, t.externalPageId),
     index('notion_mirror_row_lookup_idx').on(t.organizationId, t.entityType, t.entityId),
+  ],
+);
+
+/**
+ * Per-page content and field anchors for a task linked from an existing Notion database.
+ *
+ * Linked tasks keep provider provenance on `task`; this table holds the richer Notion-specific
+ * reconciliation state so generic connector columns do not become an untyped provider blob.
+ */
+export const notionLinkedPageState = pgTable(
+  'notion_linked_page_state',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    integrationId: text('integration_id')
+      .notNull()
+      .references(() => integration.id, { onDelete: 'cascade' }),
+    /** The linked task id. Kept polymorphism-free but without a circular schema dependency. */
+    taskId: text('task_id').notNull(),
+    externalPageId: text('external_page_id').notNull(),
+    propertyAnchors: jsonb('property_anchors')
+      .$type<Record<string, string>>()
+      .notNull()
+      .default({}),
+    bodyHash: text('body_hash'),
+    bodyState: text('body_state').notNull().default('complete'),
+    bodyUnknownBlockIds: jsonb('body_unknown_block_ids').$type<string[]>().notNull().default([]),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex('notion_linked_page_state_page_uq').on(t.integrationId, t.externalPageId),
+    uniqueIndex('notion_linked_page_state_task_uq').on(t.integrationId, t.taskId),
+    index('notion_linked_page_state_org_idx').on(t.organizationId),
   ],
 );

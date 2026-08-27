@@ -27,6 +27,7 @@ import type {
   MirrorDatabaseRecovery,
   MirrorDatabaseBindings,
   MirrorExternalPerson,
+  NotionPageContent,
   MirrorParentPage,
   MirrorParentPageList,
   MirrorParentPageQuery,
@@ -95,6 +96,22 @@ function propertiesOf(
   return typeof properties === 'object' && properties !== null
     ? (properties as Record<string, { id?: string }>)
     : {};
+}
+
+/** Translate a Markdown endpoint response into the provider-neutral content contract. */
+function pageContent(response: {
+  readonly markdown?: unknown;
+  readonly truncated?: unknown;
+  readonly unknown_block_ids?: unknown;
+}): NotionPageContent {
+  const unknownBlockIds = Array.isArray(response.unknown_block_ids)
+    ? response.unknown_block_ids.filter((id): id is string => typeof id === 'string')
+    : [];
+  return {
+    markdown: typeof response.markdown === 'string' ? response.markdown : '',
+    state: response.truncated === true ? 'truncated' : 'complete',
+    unknownBlockIds,
+  };
 }
 
 /**
@@ -361,6 +378,46 @@ export class NotionMirrorClient implements NotionMirrorPort {
       }));
     } catch (error) {
       throw asProviderError(error, 'page creation recovery');
+    }
+  }
+
+  /** Read page content through the Markdown endpoint the installed SDK does not yet expose. */
+  async readPageContent(pageId: string): Promise<NotionPageContent> {
+    try {
+      const response = await this.notion.request<{
+        markdown?: unknown;
+        truncated?: unknown;
+        unknown_block_ids?: unknown;
+      }>({ path: `pages/${pageId}/markdown`, method: 'get' });
+      return pageContent(response);
+    } catch (error) {
+      throw asProviderError(error, 'page-content lookup');
+    }
+  }
+
+  /** Replace Notion blocks atomically through the Markdown endpoint. */
+  async writePageContent(pageId: string, markdown: string): Promise<NotionPageContent> {
+    try {
+      const response = await this.notion.request<{
+        markdown?: unknown;
+        truncated?: unknown;
+        unknown_block_ids?: unknown;
+      }>({
+        path: `pages/${pageId}/markdown`,
+        method: 'patch',
+        body: { type: 'replace_content', replace_content: { new_str: markdown } },
+      });
+      const page = await this.notion.pages.retrieve({ page_id: pageId });
+      const full = fullPages([page])[0];
+      if (full === undefined) {
+        throw new ProviderError('Notion content update returned no page anchor', {
+          provider: 'notion',
+          kind: 'provider',
+        });
+      }
+      return { ...pageContent(response), externalUpdatedAt: full.last_edited_time };
+    } catch (error) {
+      throw asProviderError(error, 'page-content update');
     }
   }
 

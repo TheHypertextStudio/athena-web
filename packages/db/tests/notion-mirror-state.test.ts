@@ -46,5 +46,39 @@ describe('notion mirror wake state', () => {
     );
   });
 });
+
+describe('notion page content state', () => {
+  it('keeps field and body anchors separate for a designed Notion page', () => {
+    const row = (notionMirrorSchema as Record<string, unknown>)['notionMirrorRow'];
+    const config = getTableConfig(row as PgTable);
+
+    expect(config.columns.map((column) => column.name)).toEqual(
+      expect.arrayContaining([
+        'property_anchors',
+        'body_hash',
+        'body_state',
+        'body_unknown_block_ids',
+      ]),
+    );
+  });
+
+  it('persists the same anchors for linked Notion pages without overloading task provenance', () => {
+    const state = (notionMirrorSchema as Record<string, unknown>)['notionLinkedPageState'];
+    const config = getTableConfig(state as PgTable);
+
+    expect(config.name).toBe('notion_linked_page_state');
+    expect(config.columns.map((column) => column.name)).toEqual(
+      expect.arrayContaining([
+        'integration_id',
+        'external_page_id',
+        'task_id',
+        'property_anchors',
+        'body_hash',
+        'body_state',
+        'body_unknown_block_ids',
+      ]),
+    );
+  });
+});
 import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';

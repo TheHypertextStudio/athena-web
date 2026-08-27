@@ -32,6 +32,12 @@ export interface MirrorLocalRow {
   readonly contentHash: string | null;
   /** Hash of the entity's current projectable values, when the caller has loaded them. */
   readonly currentContentHash?: string | null;
+  /** Per-property anchors keep independent page edits from becoming a whole-row collision. */
+  readonly propertyAnchors?: Readonly<Record<string, string>>;
+  /** The last complete Markdown anchor, when Docket could access page content. */
+  readonly bodyHash?: string | null;
+  /** Whether Docket could read and write the page body at the last projection. */
+  readonly bodyState?: 'complete' | 'truncated' | 'inaccessible';
   /** Whether the Docket entity has been archived. */
   readonly archived: boolean;
 }

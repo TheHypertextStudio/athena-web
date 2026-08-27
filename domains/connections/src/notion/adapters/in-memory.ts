@@ -11,6 +11,7 @@ import type {
   MirrorCreatedRow,
   MirrorDatabaseSpec,
   MirrorExternalPerson,
+  NotionPageContent,
   MirrorParentPage,
   MirrorParentPageList,
   MirrorParentPageQuery,
@@ -31,6 +32,7 @@ interface MockPage {
   createdTime: string;
   createdBy: string;
   inTrash: boolean;
+  markdown: string;
 }
 
 /** Configuration for {@link MockNotionMirror}. */
@@ -250,6 +252,37 @@ export class MockNotionMirror implements NotionMirrorPort {
     );
   }
 
+  /** {@inheritDoc NotionMirrorPort.readPageContent} */
+  readPageContent(pageId: string): Promise<NotionPageContent> {
+    if (!this.pages.has(pageId)) {
+      return Promise.reject(
+        new ProviderError('Notion page-content lookup failed (object_not_found)', {
+          provider: 'notion',
+          kind: 'provider',
+          status: 404,
+        }),
+      );
+    }
+    const page = this.pages.get(pageId);
+    if (page === undefined) throw new Error('Notion page vanished during content lookup');
+    return Promise.resolve({ markdown: page.markdown, state: 'complete', unknownBlockIds: [] });
+  }
+
+  /** {@inheritDoc NotionMirrorPort.writePageContent} */
+  writePageContent(pageId: string, markdown: string): Promise<NotionPageContent> {
+    const page = this.pages.get(pageId);
+    if (page === undefined) return this.readPageContent(pageId);
+    page.markdown = markdown;
+    page.lastEditedTime = this.tick();
+    page.lastEditedBy = this.bot;
+    return Promise.resolve({
+      markdown,
+      state: 'complete',
+      unknownBlockIds: [],
+      externalUpdatedAt: page.lastEditedTime,
+    });
+  }
+
   /** {@inheritDoc NotionMirrorPort.writeRow} */
   writeRow(op: MirrorRowOp): Promise<MirrorRowResult | undefined> {
     if (op.kind === 'delete') {
@@ -278,6 +311,7 @@ export class MockNotionMirror implements NotionMirrorPort {
         createdTime: lastEditedTime,
         createdBy: this.bot,
         inTrash: false,
+        markdown: '',
       });
       return Promise.resolve({ externalPageId: id, externalUpdatedAt: lastEditedTime });
     }

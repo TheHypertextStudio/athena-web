@@ -114,6 +114,37 @@ export interface MirrorCreatedRow extends MirrorRowResult {
   readonly createdBy: string;
 }
 
+/** Whether the complete page body was available from Notion. */
+export type NotionContentState = 'complete' | 'truncated' | 'inaccessible';
+
+/** @deprecated Use {@link NotionContentState}; retained for existing mirror callers. */
+export type MirrorPageContentState = NotionContentState;
+
+/** A Notion page body rendered as Markdown, with its retrieval completeness. */
+export interface NotionPageContent {
+  /** Notion-enhanced Markdown for the page body. */
+  readonly markdown: string;
+  /** A truncated or inaccessible body must never be interpreted as empty. */
+  readonly state: NotionContentState;
+  /** Blocks Notion could not include in the response. */
+  readonly unknownBlockIds: readonly string[];
+  /** The page's current provider edit anchor after a successful content write. */
+  readonly externalUpdatedAt?: string;
+}
+
+/** @deprecated Use {@link NotionPageContent}; retained for existing mirror callers. */
+export type MirrorPageContent = NotionPageContent;
+
+/** Stable hashes for independently reconciled page properties and the long-form body. */
+export interface NotionFieldAnchors {
+  /** Docket field key to the last acknowledged value hash. */
+  readonly properties: Readonly<Record<string, string>>;
+  /** Hash of the last acknowledged complete Markdown body, when Docket could read one. */
+  readonly bodyHash: string | null;
+  /** Why the body hash is absent or cannot safely be used for replacement. */
+  readonly bodyState: NotionContentState;
+}
+
 /** A change observed on the provider side. */
 export interface MirrorChange {
   readonly externalPageId: string;
@@ -156,6 +187,10 @@ export interface NotionMirrorPort {
   ): Promise<MirrorDatabaseBindings>;
   /** Find pages the integration created after a durable local create intent. */
   queryCreatedRows(dataSourceId: string, since: string): Promise<MirrorCreatedRow[]>;
+  /** Read a page body without flattening its Notion block structure into a property. */
+  readPageContent(pageId: string): Promise<NotionPageContent>;
+  /** Replace a page body with Docket's canonical Markdown. */
+  writePageContent(pageId: string, markdown: string): Promise<NotionPageContent>;
   /** Apply one row write. */
   writeRow(op: MirrorRowOp): Promise<MirrorRowResult | undefined>;
   /** Read the rows edited since a cursor. */

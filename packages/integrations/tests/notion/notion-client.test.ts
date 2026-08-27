@@ -234,6 +234,45 @@ describe('NotionProviderClient.listContainers', () => {
 });
 
 describe('NotionProviderClient.importWork', () => {
+  it('imports a page body from Notion Markdown instead of flattening it into Description', async () => {
+    const http = new RecordingHttp();
+    http.get = (path) =>
+      path === '/pages/page-body/markdown'
+        ? {
+            object: 'page_markdown',
+            id: 'page-body',
+            markdown: '## Decision\n\n- [ ] Ship the real content.',
+            truncated: false,
+            unknown_block_ids: [],
+          }
+        : trackerSchemaPayload;
+    http.post = (path, body) => {
+      if (!path.endsWith('/query')) return { results: [], has_more: false };
+      if ((body as Record<string, unknown>)['is_archived'] === true) {
+        return { results: [], has_more: false };
+      }
+      return {
+        results: [
+          tasksTrackerPage({
+            id: 'page-body',
+            description: 'This short property is no longer the page body.',
+          }),
+        ],
+        has_more: false,
+      };
+    };
+
+    const [item] = await notion(http).importWork(
+      { connectionId: 'c', provider: 'notion', listIds: [TASKS_TRACKER_DATA_SOURCE] },
+      '2026-08-02T00:00:00.000Z',
+    );
+
+    expect(item?.body).toBe('## Decision\n\n- [ ] Ship the real content.');
+    expect(http.calls).toContainEqual(
+      expect.objectContaining({ method: 'get', path: '/pages/page-body/markdown' }),
+    );
+  });
+
   it('queries the selected data sources and maps every row', async () => {
     const http = new RecordingHttp();
     http.get = () => trackerSchemaPayload;
@@ -261,8 +300,11 @@ describe('NotionProviderClient.importWork', () => {
       ['Two', false],
     ]);
     expect(items[0]?.provenance.externalListId).toBe(TASKS_TRACKER_DATA_SOURCE);
-    // The schema was fetched once, then reused for the second row (and the archived pass).
-    expect(http.calls.filter((c) => c.method === 'get')).toHaveLength(1);
+    // The schema was fetched once, then reused for the second row. Each page body has its own
+    // Markdown request, so count only schema reads here.
+    expect(
+      http.calls.filter((c) => c.method === 'get' && c.path.startsWith('/data_sources/')),
+    ).toHaveLength(1);
   });
 
   it('deduplicates a page that appears in both the live and archived passes, live winning', async () => {
@@ -425,8 +467,10 @@ describe('NotionProviderClient.importWork', () => {
       { connectionId: 'c', provider: 'notion', listIds: [TASKS_TRACKER_DATA_SOURCE] },
       '2026-08-02T00:00:00.000Z',
     );
-    // One `GET /data_sources/{id}` total — the second run's schema lookup hit the cache.
-    expect(http.calls.filter((c) => c.method === 'get')).toHaveLength(1);
+    // One schema read total — body reads remain per page and per sync.
+    expect(
+      http.calls.filter((c) => c.method === 'get' && c.path.startsWith('/data_sources/')),
+    ).toHaveLength(1);
   });
 
   it('paginates a data source query across multiple pages, in both the live and archived partitions', async () => {
@@ -472,6 +516,37 @@ describe('NotionProviderClient.importWork', () => {
 });
 
 describe('NotionProviderClient.pushTask — the write half', () => {
+  it('writes the full Markdown body and refreshes the page anchor after a property update', async () => {
+    const http = new RecordingHttp();
+    http.get = (path) =>
+      path === '/pages/page-1'
+        ? { object: 'page', id: 'page-1', last_edited_time: '2026-08-03T10:00:02.000Z' }
+        : trackerSchemaPayload;
+    http.patch = (path) =>
+      path === '/pages/page-1/markdown'
+        ? { object: 'page_markdown', id: 'page-1', markdown: '# Full body' }
+        : { object: 'page', id: 'page-1', last_edited_time: '2026-08-03T10:00:00.000Z' };
+
+    const result = await notion(http).pushTask({
+      kind: 'update',
+      listId: TASKS_TRACKER_DATA_SOURCE,
+      externalId: 'page-1',
+      notes: '# Full body',
+    });
+
+    expect(http.calls).toContainEqual(
+      expect.objectContaining({
+        method: 'patch',
+        path: '/pages/page-1/markdown',
+        body: { type: 'replace_content', replace_content: { new_str: '# Full body' } },
+      }),
+    );
+    expect(result).toEqual({
+      externalId: 'page-1',
+      externalUpdatedAt: '2026-08-03T10:00:02.000Z',
+    });
+  });
+
   it('PATCHes the page properties and returns the new sync anchor', async () => {
     const http = new RecordingHttp();
     http.get = () => trackerSchemaPayload;

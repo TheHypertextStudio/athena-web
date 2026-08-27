@@ -110,6 +110,59 @@ describe('NotionMirrorClient.describePage', () => {
   });
 });
 
+describe('NotionMirrorClient page content', () => {
+  it('reads a page body without confusing an incomplete response for an empty body', async () => {
+    const { calls, fetchImpl } = router({
+      'GET /v1/pages/page_1/markdown': {
+        object: 'page_markdown',
+        id: 'page_1',
+        markdown: '## Decision\n\nShip the body.',
+        truncated: true,
+        unknown_block_ids: ['block_9'],
+      },
+    });
+
+    const content = await new NotionMirrorClient('t', fetchImpl).readPageContent('page_1');
+
+    expect(calls[0]?.path).toBe('/v1/pages/page_1/markdown');
+    expect(content).toEqual({
+      markdown: '## Decision\n\nShip the body.',
+      state: 'truncated',
+      unknownBlockIds: ['block_9'],
+    });
+  });
+
+  it('replaces a page body through the Markdown endpoint and records the returned completeness', async () => {
+    const { calls, fetchImpl } = router({
+      'PATCH /v1/pages/page_1/markdown': {
+        object: 'page_markdown',
+        id: 'page_1',
+        markdown: '# Updated',
+        truncated: false,
+        unknown_block_ids: [],
+      },
+      'GET /v1/pages/page_1': page({ last_edited_time: '2026-01-02T03:04:07.000Z' }),
+    });
+
+    const content = await new NotionMirrorClient('t', fetchImpl).writePageContent(
+      'page_1',
+      '# Updated',
+    );
+
+    expect(calls[0]).toMatchObject({
+      method: 'PATCH',
+      path: '/v1/pages/page_1/markdown',
+      body: { type: 'replace_content', replace_content: { new_str: '# Updated' } },
+    });
+    expect(content).toEqual({
+      markdown: '# Updated',
+      state: 'complete',
+      unknownBlockIds: [],
+      externalUpdatedAt: '2026-01-02T03:04:07.000Z',
+    });
+  });
+});
+
 describe('NotionMirrorClient.listWorkspaceUsers', () => {
   it('returns people and leaves integration bots out of the roster', async () => {
     // A bot in the assignee picker is a name nobody can hand work to.

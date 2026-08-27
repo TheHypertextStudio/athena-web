@@ -101,6 +101,37 @@ export interface NotionUnmappedProperty {
   readonly type: string;
 }
 
+/** Confidence that Docket can assign a Notion property a semantic role without user input. */
+export type NotionMappingConfidence = 'structural' | 'high' | 'review';
+
+/** One persisted, user-reviewable field decision for a linked Notion data source. */
+export interface NotionMappingProfileField {
+  /** The Docket task field the Notion property can populate. */
+  readonly field:
+    | 'title'
+    | 'completed'
+    | 'dueDate'
+    | 'description'
+    | 'priority'
+    | 'assignee'
+    | 'project'
+    | 'parentTask';
+  /** The property name Notion exposes in this data source. */
+  readonly property: string;
+  /** Whether the first sync can apply this mapping without asking a person. */
+  readonly confidence: NotionMappingConfidence;
+}
+
+/** A versioned mapping proposal for one linked Notion data source. */
+export interface NotionMappingProfile {
+  /** Bump when the role-inference rules change. */
+  readonly version: 1;
+  /** The data source whose schema produced this profile. */
+  readonly dataSourceId: string;
+  /** Every inferred semantic field, including ones which need review. */
+  readonly fields: readonly NotionMappingProfileField[];
+}
+
 /** The completion-driving property resolved for one data source. */
 export type NotionCompletionProperty =
   | { readonly kind: 'status'; readonly name: string; readonly groups: NotionStatusGroups }
@@ -115,6 +146,14 @@ const DESCRIPTION_NAMES = ['description', 'notes', 'details', 'summary'] as cons
 const PRIORITY_NAMES = ['priority', 'urgency'] as const;
 /** Candidate names, in preference order, for the property carrying assignees. */
 const ASSIGNEE_NAMES = ['assignee', 'assigned to', 'owner', 'person'] as const;
+
+/** Normalize a user-authored property name for exact semantic matching. */
+function normalizedName(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, ' ');
+}
 
 /**
  * Pick a property of a given Notion type, preferring one whose (case-insensitive) name is in
@@ -258,6 +297,53 @@ export function readNotionSchema(
     },
     unmappedProperties,
   };
+}
+
+/**
+ * Derive the first mapping profile for a linked data source.
+ *
+ * Structural roles come from Notion's schema. The scalar roles below require both the expected
+ * Notion type and a preferred name. Relations always wait for review because their target might
+ * be an unrelated database that Docket cannot resolve into a local record.
+ */
+export function createNotionMappingProfile(
+  schema: NotionSchema,
+  properties: Readonly<Record<string, unknown>>,
+): NotionMappingProfile {
+  const fields: NotionMappingProfileField[] = [
+    { field: 'title', property: schema.titleProperty, confidence: 'structural' },
+  ];
+  if (schema.statusProperty !== null) {
+    fields.push({ field: 'completed', property: schema.statusProperty, confidence: 'structural' });
+  } else if (schema.checkboxProperty !== null) {
+    fields.push({
+      field: 'completed',
+      property: schema.checkboxProperty,
+      confidence: 'structural',
+    });
+  }
+  const scalarFields: readonly [
+    Exclude<NotionMappingProfileField['field'], 'title' | 'completed' | 'project' | 'parentTask'>,
+    string | null,
+  ][] = [
+    ['dueDate', schema.dueDateProperty],
+    ['description', schema.descriptionProperty],
+    ['priority', schema.priorityProperty],
+    ['assignee', schema.assigneeProperty],
+  ];
+  for (const [field, property] of scalarFields) {
+    if (property !== null) fields.push({ field, property, confidence: 'high' });
+  }
+  for (const [property, definition] of Object.entries(properties)) {
+    if (str(asRecord(definition), 'type') !== 'relation') continue;
+    const name = normalizedName(property);
+    if (name === 'project') {
+      fields.push({ field: 'project', property, confidence: 'review' });
+    } else if (name === 'parent task' || name === 'parent') {
+      fields.push({ field: 'parentTask', property, confidence: 'review' });
+    }
+  }
+  return { version: 1, dataSourceId: schema.dataSourceId, fields };
 }
 
 /** The property (if any) whose value decides whether a Notion page is done. */

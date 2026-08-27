@@ -28,7 +28,7 @@ import type {
   TaskPushOp,
 } from './connector';
 import { NOTION_API_VERSION } from '@docket/connections/notion/api-contract';
-import { ConnectorError } from './connector-error';
+import { ConnectorError, isConnectorError } from './connector-error';
 import { asRecord, str } from './json';
 import { MAX_IMPORT_PAGES, logConnectorTruncation } from './connector-log';
 import {
@@ -207,6 +207,25 @@ export class NotionProviderClient implements WritableConnectorProviderClient {
   }
 
   /**
+   * Read a complete Notion page body when the connection has content permission.
+   *
+   * A missing content capability is a degraded connection, not an empty description and not a
+   * reason to stop the metadata sync that the same connection can still perform.
+   */
+  private async pageMarkdown(pageId: string): Promise<string | undefined> {
+    try {
+      const payload = asRecord(
+        await this.http.getJson(`/pages/${pageId}/markdown`, NOTION_HEADERS),
+      );
+      if (payload?.['truncated'] === true) return undefined;
+      return typeof payload?.['markdown'] === 'string' ? payload['markdown'] : undefined;
+    } catch (error) {
+      if (isConnectorError(error) && error.status === 403) return undefined;
+      throw error;
+    }
+  }
+
+  /**
    * Query one data source's rows, in both the live and archived partitions.
    *
    * @remarks
@@ -289,7 +308,13 @@ export class NotionProviderClient implements WritableConnectorProviderClient {
         const record = asRecord(row);
         if (record === undefined) continue;
         const item = mapNotionPage(record, schema, importedAt);
-        if (item !== undefined) items.push(item);
+        if (item === undefined) continue;
+        if (item.removed === true) {
+          items.push(item);
+          continue;
+        }
+        const markdown = await this.pageMarkdown(item.id);
+        items.push(markdown === undefined ? item : { ...item, body: markdown });
       }
     }
     return items;
@@ -349,14 +374,42 @@ export class NotionProviderClient implements WritableConnectorProviderClient {
     );
 
     const externalId = str(payload, 'id');
-    const externalUpdatedAt = str(payload, 'last_edited_time');
+    let externalUpdatedAt = str(payload, 'last_edited_time');
     if (externalId === undefined || externalUpdatedAt === undefined) {
       throw new ConnectorError('Notion accepted the write but returned no page anchor', {
         provider: 'notion',
         kind: 'provider',
       });
     }
-    return { externalId, externalUpdatedAt };
+    if (op.notes !== undefined) {
+      try {
+        await this.http.patchJson(
+          `/pages/${externalId}/markdown`,
+          { type: 'replace_content', replace_content: { new_str: op.notes ?? '' } },
+          NOTION_HEADERS,
+        );
+        const page = asRecord(await this.http.getJson(`/pages/${externalId}`, NOTION_HEADERS));
+        externalUpdatedAt = str(page, 'last_edited_time');
+        if (externalUpdatedAt === undefined) {
+          throw new ConnectorError('Notion content update returned no page anchor', {
+            provider: 'notion',
+            kind: 'provider',
+          });
+        }
+      } catch (error) {
+        // A grant without content access still has property access. Keep that sync healthy rather
+        // than reclassifying the unchanged metadata as a failed write.
+        if (!(isConnectorError(error) && error.status === 403)) throw error;
+      }
+    }
+    const anchor = externalUpdatedAt;
+    if (anchor === undefined) {
+      throw new ConnectorError('Notion content update returned no page anchor', {
+        provider: 'notion',
+        kind: 'provider',
+      });
+    }
+    return { externalId, externalUpdatedAt: anchor };
   }
 }
 

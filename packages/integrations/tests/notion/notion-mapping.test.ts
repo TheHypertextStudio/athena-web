@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   completionProperty,
+  createNotionMappingProfile,
   mapNotionPage,
   notionPageUrl,
   notionPushProperties,
@@ -186,6 +187,24 @@ describe('readNotionSchema', () => {
     });
     expect(schema.statusGroups.complete).toEqual(['Substantially complete', 'Complete']);
     expect(schema.statusGroups.todo).toEqual(['In backlog', 'Conceptualizing']);
+  });
+});
+
+describe('createNotionMappingProfile', () => {
+  it('keeps structural fields automatic and marks relation mappings for review', () => {
+    const profile = createNotionMappingProfile(trackerSchema, TASKS_TRACKER_PROPERTIES);
+
+    expect(profile.version).toBe(1);
+    expect(profile.fields).toEqual(
+      expect.arrayContaining([
+        { field: 'title', property: 'Task name', confidence: 'structural' },
+        { field: 'completed', property: 'Status', confidence: 'structural' },
+        { field: 'priority', property: 'Priority', confidence: 'high' },
+        { field: 'assignee', property: 'Assignee', confidence: 'high' },
+        { field: 'project', property: 'Project', confidence: 'review' },
+        { field: 'parentTask', property: 'Parent Task', confidence: 'review' },
+      ]),
+    );
   });
 });
 

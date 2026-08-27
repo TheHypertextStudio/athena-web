@@ -92,6 +92,8 @@ class RecordingMirror implements NotionMirrorPort {
   failRowAfterCreate = false;
   readonly createdRows: MirrorCreatedRow[] = [];
   readonly ownedDatabases = new Map<string, ProvisionedMirrorDatabase[]>();
+  readonly pageContentWrites: { pageId: string; markdown: string }[] = [];
+  readonly pageContents = new Map<string, string>();
   private sequence = 0;
 
   botId(): Promise<string> {
@@ -164,6 +166,25 @@ class RecordingMirror implements NotionMirrorPort {
 
   queryCreatedRows(_dataSourceId: string, _since: string): Promise<MirrorCreatedRow[]> {
     return Promise.resolve(this.createdRows);
+  }
+
+  readPageContent(
+    pageId: string,
+  ): Promise<{ markdown: string; state: 'complete'; unknownBlockIds: string[] }> {
+    return Promise.resolve({
+      markdown: this.pageContents.get(pageId) ?? '',
+      state: 'complete',
+      unknownBlockIds: [],
+    });
+  }
+
+  writePageContent(
+    pageId: string,
+    markdown: string,
+  ): Promise<{ markdown: string; state: 'complete'; unknownBlockIds: string[] }> {
+    this.pageContentWrites.push({ pageId, markdown });
+    this.pageContents.set(pageId, markdown);
+    return Promise.resolve({ markdown, state: 'complete', unknownBlockIds: [] });
   }
 
   writeRow(op: MirrorRowOp): Promise<MirrorRowResult | undefined> {
@@ -425,6 +446,7 @@ describe('Notion mirror reconciliation', () => {
           organizationId: orgId,
           teamId,
           title: 'First',
+          description: '## Full page body',
           state: 'backlog',
           statusId: statusId('task', 'backlog'),
         })
@@ -470,6 +492,10 @@ describe('Notion mirror reconciliation', () => {
     });
     expect(mirror.writes.some((write) => write.kind === 'create')).toBe(true);
     expect(mirror.writes.some((write) => write.kind === 'update')).toBe(true);
+    expect(mirror.pageContentWrites).toContainEqual({
+      pageId: expect.any(String),
+      markdown: '## Full page body',
+    });
 
     expect(
       await projectEntity(ctx, { ...design, externalDataSourceId: null }, 10, NO_PAGES),
@@ -751,6 +777,8 @@ describe('Notion mirror reconciliation', () => {
         lastEditedBy: 'person-1',
       },
     ];
+    mirror.pageContents.set('page-pull', '## Imported body\n\nThis came from Notion.');
+    mirror.pageContents.set('page-conflict', '## Losing body\n\nKeep this exact value.');
     mirror.omitWriteResults = true;
 
     expect(await pullBackEntity(ctx, design, 10, NO_PAGES)).toEqual({
@@ -763,6 +791,18 @@ describe('Notion mirror reconciliation', () => {
     });
     expect(mirror.writes.some((write) => write.kind === 'update')).toBe(true);
     expect(mirror.writes.some((write) => write.kind === 'delete')).toBe(true);
+    const [pulledTask] = await db
+      .select({ description: schema.task.description })
+      .from(schema.task)
+      .where(eq(schema.task.id, pullTask.id));
+    expect(pulledTask?.description).toBe('## Imported body\n\nThis came from Notion.');
+    const [conflictEvent] = await db
+      .select({ metadata: schema.auditEvent.metadata })
+      .from(schema.auditEvent)
+      .where(eq(schema.auditEvent.subjectId, conflictTask.id));
+    expect(conflictEvent?.metadata).toMatchObject({
+      remoteBody: '## Losing body\n\nKeep this exact value.',
+    });
     const adoptedMapping = await db
       .select()
       .from(schema.notionMirrorRow)

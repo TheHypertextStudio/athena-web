@@ -18,6 +18,8 @@
  *
  * @see `docs/engineering/specs/notion-sync.md`
  */
+import { createHash } from 'node:crypto';
+
 import {
   db,
   integration,
@@ -43,7 +45,11 @@ import type {
   NotionMirrorPort,
   ProvisionedMirrorDatabase,
 } from '@docket/connections/notion/mirror-port';
-import { isProviderMissingObjectError, ProviderError } from '@docket/connections/provider-error';
+import {
+  isProviderAuthError,
+  isProviderMissingObjectError,
+  ProviderError,
+} from '@docket/connections/provider-error';
 import {
   type MirrorEntityPages,
   type MirrorReferences,
@@ -188,6 +194,95 @@ function projectedHash(
 ): string {
   return projectRow(bindings, resolveMirrorValues(bindings, record.values, refs).values)
     .contentHash;
+}
+
+/** Hash one stable sync value without exposing its content in durable sync state. */
+function syncHash(value: unknown): string {
+  return createHash('sha256').update(JSON.stringify(value)).digest('hex').slice(0, 32);
+}
+
+/** The long-form Docket field that lives in a Notion page body for this entity. */
+function pageBody(entity: NotionMirrorEntity, record: MirrorEntityRecord): string | undefined {
+  const field = entity === 'task' ? 'description' : entity === 'project' ? 'summary' : undefined;
+  if (field === undefined) return undefined;
+  const value = record.values[field];
+  return value?.kind === 'text' ? (value.value ?? '') : undefined;
+}
+
+/** The record value key whose long-form content belongs in the Notion page body. */
+function pageBodyField(entity: NotionMirrorEntity): 'description' | 'summary' | undefined {
+  return entity === 'task' ? 'description' : entity === 'project' ? 'summary' : undefined;
+}
+
+/** Read page content without confusing an authorization failure with an empty page. */
+async function readPageBody(
+  mirror: NotionMirrorPort,
+  entity: NotionMirrorEntity,
+  pageId: string,
+): Promise<
+  | {
+      readonly state: 'complete';
+      readonly markdown: string;
+      readonly unknownBlockIds: readonly string[];
+    }
+  | { readonly state: 'truncated' | 'inaccessible'; readonly unknownBlockIds: readonly string[] }
+  | undefined
+> {
+  if (pageBodyField(entity) === undefined) return undefined;
+  try {
+    const content = await mirror.readPageContent(pageId);
+    return content.state === 'complete'
+      ? content
+      : { state: content.state, unknownBlockIds: content.unknownBlockIds };
+  } catch (error) {
+    if (isProviderAuthError(error)) return { state: 'inaccessible', unknownBlockIds: [] };
+    throw error;
+  }
+}
+
+/** Replace a page body while preserving property sync when this connection lacks content access. */
+async function writePageBody(
+  mirror: NotionMirrorPort,
+  entity: NotionMirrorEntity,
+  pageId: string,
+  markdown: string | undefined,
+) {
+  if (markdown === undefined || pageBodyField(entity) === undefined) return undefined;
+  try {
+    return await mirror.writePageContent(pageId, markdown);
+  } catch (error) {
+    if (isProviderAuthError(error)) {
+      return { markdown, state: 'inaccessible' as const, unknownBlockIds: [] };
+    }
+    throw error;
+  }
+}
+
+/** Read a Notion rich-text value without guessing at non-text property shapes. */
+function mirrorText(
+  values: Readonly<Record<string, MirrorValue>>,
+  field: string,
+): string | undefined {
+  const value = values[field];
+  return value?.kind === 'text' ? (value.value ?? '') : undefined;
+}
+
+/** Read Notion's date value in the format the conflict ledger already uses. */
+function mirrorDate(
+  values: Readonly<Record<string, MirrorValue>>,
+  field: string,
+): string | null | undefined {
+  const value = values[field];
+  return value?.kind === 'date' ? value.value : undefined;
+}
+
+/** Separate field hashes make body-only edits distinguishable from table-property edits. */
+function propertyAnchors(values: Readonly<Record<string, MirrorValue>>): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(values)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([field, value]) => [field, syncHash(value)]),
+  );
 }
 
 /**
@@ -598,6 +693,10 @@ export async function projectEntity(
       else unresolvedPermanent += 1;
     }
     const projected = projectRow(bindings, resolved.values);
+    const body = pageBody(design.entityType, record);
+    const bodyHash = body === undefined ? null : syncHash(body);
+    const currentHash = syncHash({ properties: projected.contentHash, bodyHash });
+    const anchors = propertyAnchors(resolved.values);
 
     if (existing === undefined) {
       const pendingIntent = creationIntents.get(record.entityId);
@@ -614,7 +713,9 @@ export async function projectEntity(
           entityType: design.entityType,
           entityId: record.entityId,
           externalPageId: null,
-          contentHash: projected.contentHash,
+          contentHash: currentHash,
+          propertyAnchors: anchors,
+          bodyHash,
         })
         .returning({ id: notionMirrorRow.id });
       if (!intent) throw new Error('Notion mirror row intent did not return an id');
@@ -643,13 +744,29 @@ export async function projectEntity(
         throw error;
       }
 
+      const pageContent = await writePageBody(
+        ctx.mirror,
+        design.entityType,
+        result.externalPageId,
+        body,
+      );
+      const pushedAt = pageContent?.externalUpdatedAt ?? result.externalUpdatedAt;
+
       await db
         .update(notionMirrorRow)
         .set({
           externalPageId: result.externalPageId,
-          externalUpdatedAt: new Date(result.externalUpdatedAt),
-          lastPushedAt: new Date(result.externalUpdatedAt),
-          contentHash: projected.contentHash,
+          externalUpdatedAt: new Date(pushedAt),
+          lastPushedAt: new Date(pushedAt),
+          contentHash: currentHash,
+          propertyAnchors: anchors,
+          bodyHash,
+          ...(pageContent !== undefined
+            ? {
+                bodyState: pageContent.state,
+                bodyUnknownBlockIds: [...pageContent.unknownBlockIds],
+              }
+            : {}),
         })
         .where(eq(notionMirrorRow.id, intent.id));
       pageByEntityId.set(record.entityId, result.externalPageId);
@@ -658,8 +775,36 @@ export async function projectEntity(
       continue;
     }
 
-    // Unchanged values cost nothing: this is the check that makes the rate limit survivable.
-    if (!contentChanged(existing, projected.contentHash)) continue;
+    // Unchanged properties cost nothing. A page that previously denied body access is the one
+    // exception: retry only the Markdown request after reauthorization, not the whole row write.
+    if (!contentChanged(existing, currentHash)) {
+      if (body === undefined || existing.bodyState === 'complete') continue;
+      const pageContent = await writePageBody(
+        ctx.mirror,
+        design.entityType,
+        existing.externalPageId,
+        body,
+      );
+      await db
+        .update(notionMirrorRow)
+        .set({
+          ...(pageContent?.externalUpdatedAt !== undefined
+            ? {
+                externalUpdatedAt: new Date(pageContent.externalUpdatedAt),
+                lastPushedAt: new Date(pageContent.externalUpdatedAt),
+              }
+            : {}),
+          ...(pageContent !== undefined
+            ? {
+                bodyState: pageContent.state,
+                bodyUnknownBlockIds: [...pageContent.unknownBlockIds],
+              }
+            : {}),
+        })
+        .where(eq(notionMirrorRow.id, existing.mirrorRowId));
+      written += 1;
+      continue;
+    }
 
     const result = await ctx.mirror.writeRow({
       kind: 'update',
@@ -668,12 +813,27 @@ export async function projectEntity(
       properties: projected.properties,
     });
     if (result !== undefined) {
+      const pageContent = await writePageBody(
+        ctx.mirror,
+        design.entityType,
+        result.externalPageId,
+        body,
+      );
+      const pushedAt = pageContent?.externalUpdatedAt ?? result.externalUpdatedAt;
       await db
         .update(notionMirrorRow)
         .set({
-          externalUpdatedAt: new Date(result.externalUpdatedAt),
-          lastPushedAt: new Date(result.externalUpdatedAt),
-          contentHash: projected.contentHash,
+          externalUpdatedAt: new Date(pushedAt),
+          lastPushedAt: new Date(pushedAt),
+          contentHash: currentHash,
+          propertyAnchors: anchors,
+          bodyHash,
+          ...(pageContent !== undefined
+            ? {
+                bodyState: pageContent.state,
+                bodyUnknownBlockIds: [...pageContent.unknownBlockIds],
+              }
+            : {}),
         })
         .where(
           and(
@@ -784,6 +944,8 @@ export async function pullBackEntity(
                 : projectedHash(bindings, localRecord, refs),
           };
     const action = planMirrorRow(plannedLocal, change, direction);
+    let contestedValues: Record<string, MirrorValue> | undefined;
+    let contestedContent: Awaited<ReturnType<typeof readPageBody>> | undefined;
 
     if (action.kind === 'noop') continue;
 
@@ -830,6 +992,11 @@ export async function pullBackEntity(
        * the narrowing does not cross the function-call boundary. */
       if (local === undefined) continue;
       const values = readMirrorProperties(bindings, change.properties);
+      const pageContent = await readPageBody(ctx.mirror, design.entityType, change.externalPageId);
+      const bodyField = pageBodyField(design.entityType);
+      if (pageContent?.state === 'complete' && bodyField !== undefined) {
+        values[bodyField] = { kind: 'text', value: pageContent.markdown };
+      }
       const applied = await applyPulledValues(
         ctx.orgId,
         ctx.actorId,
@@ -846,7 +1013,16 @@ export async function pullBackEntity(
         // `applyPulledValues` just changed this row, so the hash must come from its new values.
         records.invalidate();
         const record = await records.get(local.entityId);
-        const contentHash = record === undefined ? null : projectedHash(bindings, record, refs);
+        const body = record === undefined ? undefined : pageBody(design.entityType, record);
+        const bodyHash = body === undefined ? null : syncHash(body);
+        const contentHash =
+          record === undefined
+            ? null
+            : syncHash({ properties: projectedHash(bindings, record, refs), bodyHash });
+        const anchors =
+          record === undefined
+            ? undefined
+            : propertyAnchors(resolveMirrorValues(bindings, record.values, refs).values);
         // No Notion call here — this is a local DB write, not a Notion write, so it is not paced
         // against the rate limit. It IS counted against the pass's write budget: the budget's real
         // job is capping how long one sweep runs, and a pull that reads Notion's full property set
@@ -856,6 +1032,13 @@ export async function pullBackEntity(
           .set({
             externalUpdatedAt: new Date(change.externalUpdatedAt),
             ...(contentHash !== null ? { contentHash } : {}),
+            ...(anchors !== undefined ? { propertyAnchors: anchors, bodyHash } : {}),
+            ...(pageContent !== undefined
+              ? {
+                  bodyState: pageContent.state,
+                  bodyUnknownBlockIds: [...pageContent.unknownBlockIds],
+                }
+              : {}),
           })
           .where(eq(notionMirrorRow.id, local.mirrorRowId));
         written += 1;
@@ -863,14 +1046,17 @@ export async function pullBackEntity(
       continue;
     }
 
-    if (action.kind === 'push' && action.conflict !== undefined && local !== undefined) {
+    if (
+      action.kind === 'push' &&
+      action.conflict !== undefined &&
+      local !== undefined &&
+      design.entityType === 'task'
+    ) {
       // Recorded first, always. The push immediately below destroys the remote value, so the
       // order is what decides whether a crash loses a write or loses the evidence of one.
       //
-      // The remote field values are deliberately null/undefined rather than invented: Notion
-      // returns page properties keyed by property id, and turning those back into Docket's
-      // title/body/dueDate shape needs the pull mapping that is not built yet. Recording the
-      // conflict with honest gaps beats recording plausible-looking values that were never read.
+      contestedValues = readMirrorProperties(bindings, change.properties);
+      contestedContent = await readPageBody(ctx.mirror, design.entityType, change.externalPageId);
       await recordSyncConflict(
         ctx.orgId,
         ctx.actorId,
@@ -881,9 +1067,9 @@ export async function pullBackEntity(
           externalId: local.externalPageId,
           remoteUpdatedAt: action.conflict.remoteUpdatedAt,
           localUpdatedAt: action.conflict.localUpdatedAt,
-          remoteTitle: '',
-          remoteBody: null,
-          remoteDueDate: undefined,
+          remoteTitle: mirrorText(contestedValues, 'title') ?? '',
+          remoteBody: contestedContent?.state === 'complete' ? contestedContent.markdown : null,
+          remoteDueDate: mirrorDate(contestedValues, 'dueDate'),
           remoteCompleted: undefined,
         },
       );
@@ -891,12 +1077,59 @@ export async function pullBackEntity(
     }
 
     if (action.kind === 'push' || action.kind === 'create') {
-      const record = localRecord ?? (await records.get(local?.entityId));
+      let record = localRecord ?? (await records.get(local?.entityId));
       if (record === undefined) continue;
-      const projected = projectRow(
-        bindings,
-        resolveMirrorValues(bindings, record.values, refs).values,
-      );
+      if (
+        action.kind === 'push' &&
+        action.conflict !== undefined &&
+        local !== undefined &&
+        contestedValues !== undefined
+      ) {
+        const localValues = resolveMirrorValues(bindings, record.values, refs).values;
+        const localAnchors = propertyAnchors(localValues);
+        const remoteOnly: Record<string, MirrorValue> = {};
+        for (const [field, remoteValue] of Object.entries(contestedValues)) {
+          // The body is canonical for Tasks and Projects. A legacy Description column remains
+          // readable for compatibility, but it cannot override a complete page body.
+          if (
+            field === pageBodyField(design.entityType) &&
+            contestedContent?.state === 'complete'
+          ) {
+            continue;
+          }
+          const anchor = local.propertyAnchors?.[field];
+          const remoteChanged = syncHash(remoteValue) !== anchor;
+          const localChanged = localAnchors[field] !== anchor;
+          if (remoteChanged && !localChanged) remoteOnly[field] = remoteValue;
+        }
+        const bodyField = pageBodyField(design.entityType);
+        if (bodyField !== undefined && contestedContent?.state === 'complete') {
+          const remoteChanged = syncHash(contestedContent.markdown) !== local.bodyHash;
+          const localChanged =
+            syncHash(pageBody(design.entityType, record) ?? '') !== local.bodyHash;
+          if (remoteChanged && !localChanged) {
+            remoteOnly[bodyField] = { kind: 'text', value: contestedContent.markdown };
+          }
+        }
+        if (Object.keys(remoteOnly).length > 0) {
+          await applyPulledValues(
+            ctx.orgId,
+            ctx.actorId,
+            design.entityType,
+            local.entityId,
+            remoteOnly,
+          );
+          records.invalidate();
+          record = await records.get(local.entityId);
+          if (record === undefined) continue;
+        }
+      }
+      const resolved = resolveMirrorValues(bindings, record.values, refs);
+      const projected = projectRow(bindings, resolved.values);
+      const body = pageBody(design.entityType, record);
+      const bodyHash = body === undefined ? null : syncHash(body);
+      const contentHash = syncHash({ properties: projected.contentHash, bodyHash });
+      const anchors = propertyAnchors(resolved.values);
       const result = await ctx.mirror.writeRow(
         action.kind === 'create'
           ? { kind: 'create', dataSourceId, properties: projected.properties }
@@ -908,13 +1141,28 @@ export async function pullBackEntity(
             },
       );
       if (result !== undefined && local !== undefined) {
+        const pageContent = await writePageBody(
+          ctx.mirror,
+          design.entityType,
+          result.externalPageId,
+          body,
+        );
+        const pushedAt = pageContent?.externalUpdatedAt ?? result.externalUpdatedAt;
         await db
           .update(notionMirrorRow)
           .set({
             externalPageId: result.externalPageId,
-            externalUpdatedAt: new Date(result.externalUpdatedAt),
-            lastPushedAt: new Date(result.externalUpdatedAt),
-            contentHash: projected.contentHash,
+            externalUpdatedAt: new Date(pushedAt),
+            lastPushedAt: new Date(pushedAt),
+            contentHash,
+            propertyAnchors: anchors,
+            bodyHash,
+            ...(pageContent !== undefined
+              ? {
+                  bodyState: pageContent.state,
+                  bodyUnknownBlockIds: [...pageContent.unknownBlockIds],
+                }
+              : {}),
           })
           .where(eq(notionMirrorRow.id, local.mirrorRowId));
         adoptedPages.set(local.entityId, result.externalPageId);
@@ -1090,6 +1338,12 @@ function toLocalRow(row: typeof notionMirrorRow.$inferSelect): LoadedMirrorRow {
   if (row.externalPageId === null) {
     throw new Error('Notion mirror row has no external page anchor');
   }
+  const bodyState =
+    row.bodyState === 'complete' ||
+    row.bodyState === 'truncated' ||
+    row.bodyState === 'inaccessible'
+      ? row.bodyState
+      : undefined;
   return {
     mirrorRowId: row.id,
     entityId: row.entityId,
@@ -1098,6 +1352,9 @@ function toLocalRow(row: typeof notionMirrorRow.$inferSelect): LoadedMirrorRow {
     externalUpdatedAt: row.externalUpdatedAt,
     lastPushedAt: row.lastPushedAt,
     contentHash: row.contentHash,
+    propertyAnchors: row.propertyAnchors,
+    bodyHash: row.bodyHash,
+    ...(bodyState !== undefined ? { bodyState } : {}),
     archived: row.deletedAt !== null,
   };
 }

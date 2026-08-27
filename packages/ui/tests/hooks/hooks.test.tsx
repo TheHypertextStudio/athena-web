@@ -289,14 +289,16 @@ describe('useMediaQuery', () => {
   it('falls back to false, without throwing, when matchMedia is unavailable', () => {
     // Simulates an SSR-like environment; jsdom does implement matchMedia (via the suite-wide
     // stub), so this removes it for the duration of the test and restores it afterward.
-    const original = window.matchMedia;
+    const originalMatchMedia = Object.getOwnPropertyDescriptor(window, 'matchMedia');
     // @ts-expect-error - deliberately simulating an environment without matchMedia
     delete window.matchMedia;
     try {
       const { result } = renderHook(() => useMediaQuery('(min-width: 64rem)'));
       expect(result.current).toBe(false);
     } finally {
-      window.matchMedia = original;
+      if (originalMatchMedia !== undefined) {
+        Object.defineProperty(window, 'matchMedia', originalMatchMedia);
+      }
     }
   });
 });

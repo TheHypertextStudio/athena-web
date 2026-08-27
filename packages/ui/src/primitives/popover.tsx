@@ -46,9 +46,7 @@ export const PopoverAnchor = React.forwardRef<HTMLDivElement, PopoverAnchorProps
     <PopoverPrimitive.Anchor
       {...props}
       ref={forwardedRef}
-      {...(virtualRef !== undefined
-        ? { virtualRef: virtualRef as NonNullable<RadixPopoverAnchorProps['virtualRef']> }
-        : {})}
+      {...(virtualRef !== undefined ? { virtualRef } : {})}
     />
   ),
 );

@@ -16,9 +16,13 @@
   scrolls the end selection into view, which turns an ordinary click near an editor into a jump.
 - **Approach**: Preserve ProseMirror's native text hit-testing. Remove the fallback handlers that
   treat wrapper whitespace and entity-card padding as an instruction to select the document end.
-- **Validation**: The focused editor suite passes 16 tests. Prettier and focused ESLint pass for
-  the changed source and test files. The Web type check passes with a process-local 4 GB heap after
-  the default 2 GB heap exhausted memory.
+- **Validation**: The focused editor suite passes 14 tests on current `main`. Prettier and focused
+  ESLint pass for the changed source and test files. The supported Web typecheck rebuilt the API
+  declarations without errors, then the local resource watchdog killed the Web compiler with exit
+  137 and no diagnostic. The full CI typecheck remains the release gate.
+- **Release blocker**: Current `main` upgraded TypeScript to 7.0.2, but the latest stable and canary
+  `typescript-eslint` releases only support TypeScript below 6.1.0. Restore TypeScript 6.0.3 so
+  ESLint can run and CI can reach the deploy.
 - **Blockers**: Production deployment and live verification are pending.
 
 ---

@@ -4,6 +4,22 @@ import { describe, expect, it } from 'vitest';
 import * as notionMirrorSchema from '../src/schema/notion-mirror';
 
 describe('notion mirror wake state', () => {
+  it('keeps one configurable database definition per integration and entity kind', () => {
+    const database = (notionMirrorSchema as Record<string, unknown>)['notionMirrorDatabase'];
+    const config = getTableConfig(database as PgTable);
+
+    expect(config.name).toBe('notion_mirror_database');
+    expect(config.columns.map((column) => column.name)).toEqual(
+      expect.arrayContaining([
+        'integration_id',
+        'entity_type',
+        'property_map',
+        'provisioning_started_at',
+        'external_data_source_id',
+      ]),
+    );
+  });
+
   it('stores one durable generation pair per integration', () => {
     const state = (notionMirrorSchema as Record<string, unknown>)['notionMirrorState'];
     expect(state).toBeDefined();
@@ -26,6 +42,9 @@ describe('notion mirror wake state', () => {
     );
     expect(config.primaryKeys).toHaveLength(0);
     expect(config.columns.find((column) => column.name === 'integration_id')?.primary).toBe(true);
+    expect(
+      config.columns.find((column) => column.name === 'updated_at')?.onUpdateFn?.(),
+    ).toBeInstanceOf(Date);
   });
 
   it('creates the wake state in a production migration', () => {

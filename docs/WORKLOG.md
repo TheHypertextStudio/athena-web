@@ -1,7 +1,7 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-08-26
+> **Last Updated**: 2026-08-27
 
 ---
 
@@ -110,6 +110,12 @@
   tests. The production build passes Runner, API, Admin, Web, and the service worker with one
   package at a time. Focused ESLint and Prettier checks pass for the post-rebase billing and test
   corrections.
+- **Direct-main CI correction**: The first exact-SHA CI run on `a543c53c6` exposed one committed
+  environment-contract defect. The local `.env.local` used Git's skip-worktree bit and already
+  contained `BILLING_RECONCILIATION_MODE=off`, but the tracked copy did not. The environment test
+  therefore passed locally and failed from a clean checkout. The tracked template now keeps
+  reconciliation off by default. Private local Stripe credentials and provider ids remain outside
+  the committed diff.
 - **Decisions**: Checkout derives the customer email from the Better Auth server session and
   rejects a browser-supplied email. Stripe's Dashboard-only existing-subscriber redirect requires
   a recorded verification timestamp before `BILLING_ENABLED=true` can pass configuration. Docket

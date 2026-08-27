@@ -70,26 +70,39 @@ test('a person can reach Notion from Connections and create the databases', asyn
   // An unmatched person can actually be RESOLVED, not merely counted. The mock workspace has
   // three; resolving one must leave two, which is what proves the decision was applied rather
   // than the list simply re-rendering.
-  const peopleNeedingDecision = page.locator('section[aria-label="People who need a decision"]');
+  const peopleNeedingDecision = page.getByRole('list', {
+    name: 'People who need a decision',
+  });
   const decisions = peopleNeedingDecision.getByRole('listitem');
   await expect(decisions).toHaveCount(3);
 
-  const dana = decisions.filter({ hasText: 'Dana Whitfield' });
+  const dana = decisions.filter({
+    has: page.getByRole('combobox', {
+      name: 'What should Docket do about Dana Whitfield?',
+    }),
+  });
+  const danaDecision = dana.getByRole('combobox', {
+    name: 'What should Docket do about Dana Whitfield?',
+  });
   await dana.getByRole('button', { name: 'Apply' }).click();
-  await expect(dana).toHaveCount(0, { timeout: TIMEOUTS.ui });
+  await expect(danaDecision).toHaveCount(0, { timeout: TIMEOUTS.ui });
   await expect(decisions).toHaveCount(2, { timeout: TIMEOUTS.ui });
 
   // "Don't sync them" is a decision like any other, and has to stick like one. This is the exact
   // path that used to refresh the list and put the person straight back: the skip wrote a state
   // indistinguishable from never having decided, so the count never fell.
-  const sam = decisions.filter({ hasText: 'Sam Ortega' });
+  const sam = decisions.filter({
+    has: page.getByRole('combobox', {
+      name: 'What should Docket do about Sam Ortega?',
+    }),
+  });
   const samDecision = sam.getByRole('combobox', {
     name: 'What should Docket do about Sam Ortega?',
   });
   await samDecision.selectOption('skip');
   await expect(samDecision).toHaveValue('skip');
   await sam.getByRole('button', { name: 'Apply' }).click();
-  await expect(sam).toHaveCount(0, { timeout: TIMEOUTS.ui });
+  await expect(samDecision).toHaveCount(0, { timeout: TIMEOUTS.ui });
   await expect(decisions).toHaveCount(1, { timeout: TIMEOUTS.ui });
 
   // They are not gone, just decided — and the decision can be taken back.

@@ -84,6 +84,33 @@ test.describe('notion mirror provisioning', () => {
     // reported as an optimistic success.
     expect(run.status).toBe('succeeded');
 
+    const createdDatabases = await databases(page, orgId, integrationId);
+    expect(createdDatabases.every((d) => d.provisionedAt !== null)).toBe(true);
+    expect(createdDatabases.every((d) => d.externalDataSourceId !== null)).toBe(true);
+    expect(createdDatabases.every((d) => d.rowCount === 0)).toBe(true);
+
+    // Notion may expose each newly created data source and its relation targets on different
+    // provider observations. Keep invoking the real idempotent sync until projection becomes
+    // possible instead of encoding a provider-specific number of settling passes in the test.
+    await expect
+      .poll(
+        async () => {
+          const sync = await apiJson<{ status: string; processed: number }>(
+            page,
+            `/v1/orgs/${orgId}/integrations/${integrationId}/notion/sync`,
+            { method: 'POST' },
+          );
+          expect(sync.status).toBe('succeeded');
+          const current = await databases(page, orgId, integrationId);
+          return current.find((database) => database.entityType === 'task')?.rowCount ?? -1;
+        },
+        {
+          timeout: TIMEOUTS.sweep,
+          message: 'the Notion mirror should project the seeded tasks after provider settling',
+        },
+      )
+      .toBe(3);
+
     const provisioned = await databases(page, orgId, integrationId);
     expect(provisioned.every((d) => d.provisionedAt !== null)).toBe(true);
     expect(provisioned.every((d) => d.externalDataSourceId !== null)).toBe(true);
@@ -91,12 +118,11 @@ test.describe('notion mirror provisioning', () => {
     const tasks = provisioned.find((d) => d.entityType === 'task');
     expect(tasks?.rowCount).toBe(3);
 
-    // Provisioning again must not create a second set of databases, because it is also the repair
+    // Syncing again must not create a second set of databases. The same operation is the repair
     // path for a database somebody deleted in Notion.
     const before = provisioned.map((d) => d.externalDataSourceId).sort();
-    await apiJson(page, `/v1/orgs/${orgId}/integrations/${integrationId}/notion/provision`, {
+    await apiJson(page, `/v1/orgs/${orgId}/integrations/${integrationId}/notion/sync`, {
       method: 'POST',
-      body: { containerPageId: parentPageId },
     });
     const after = (await databases(page, orgId, integrationId))
       .map((d) => d.externalDataSourceId)

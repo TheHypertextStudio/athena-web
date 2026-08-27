@@ -123,7 +123,7 @@ export function NotionPeoplePanel({
             These people work in your Notion workspace but Docket doesn’t know who they are. Until
             you say, anything assigned to them in Notion can’t reach Docket.
           </p>
-          <ul>
+          <ul aria-label="People who need a decision">
             {people.unmatched.map((person) => (
               <UnmatchedRow
                 key={person.externalId}

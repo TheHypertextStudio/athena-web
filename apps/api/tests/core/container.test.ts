@@ -174,18 +174,34 @@ describe('buildNotionMirror', () => {
   it.each([LOCAL, TEST])(
     'returns the Connections in-memory adapter in local/test mode',
     (runtimeEnv) => {
-      expect(buildNotionMirror(undefined, runtimeEnv)).toBeInstanceOf(MockNotionMirror);
+      expect(buildNotionMirror(undefined, { runtimeEnv })).toBeInstanceOf(MockNotionMirror);
     },
   );
 
   it('returns the Connections SDK adapter in production with an access token', () => {
-    expect(buildNotionMirror('notion-token', PROD_BASE)).toBeInstanceOf(NotionMirrorClient);
+    expect(buildNotionMirror('notion-token', { runtimeEnv: PROD_BASE })).toBeInstanceOf(
+      NotionMirrorClient,
+    );
   });
 
   it('refuses a production mirror without an access token', () => {
-    expect(() => buildNotionMirror(undefined, PROD_BASE)).toThrow(
+    expect(() => buildNotionMirror(undefined, { runtimeEnv: PROD_BASE })).toThrow(
       'Missing required production config: NOTION_ACCESS_TOKEN',
     );
+  });
+
+  it('reuses local provider state within one integration without crossing integrations', () => {
+    const first = buildNotionMirror(undefined, {
+      runtimeEnv: LOCAL,
+      integrationId: 'integration-a',
+    });
+
+    expect(
+      buildNotionMirror(undefined, { runtimeEnv: LOCAL, integrationId: 'integration-a' }),
+    ).toBe(first);
+    expect(
+      buildNotionMirror(undefined, { runtimeEnv: LOCAL, integrationId: 'integration-b' }),
+    ).not.toBe(first);
   });
 });
 

@@ -233,7 +233,7 @@ An empty list is a legitimate and common state, not an error: a public Notion in
       const { q, cursor, limit } = c.req.valid('query');
       const row = await assertNotionIntegration(orgId, id);
       const token = await mirrorToken(row);
-      const page = await buildNotionMirror(token).listParentPages({
+      const page = await buildNotionMirror(token, { integrationId: id }).listParentPages({
         ...(q !== undefined ? { query: q } : {}),
         ...(cursor !== undefined ? { cursor } : {}),
         limit: limit ?? PARENT_PAGE_LIMIT,
@@ -274,7 +274,9 @@ Requires \`manage\`. Returns 409 when another run already holds the integration'
       // only the config write below needs either.
       const [, described] = await Promise.all([
         ensureDesigns(orgId, id, actorId),
-        mirrorToken(row).then((token) => buildNotionMirror(token).describePage(containerPageId)),
+        mirrorToken(row).then((token) =>
+          buildNotionMirror(token, { integrationId: id }).describePage(containerPageId),
+        ),
       ]);
 
       // Spread the existing config: `config` is a wholesale replace, so writing only the mirror

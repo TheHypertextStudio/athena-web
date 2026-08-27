@@ -286,20 +286,36 @@ function connectorApiBase(
   }
 }
 
+const localNotionMirrors = new Map<string, MockNotionMirror>();
+
+interface NotionMirrorBuildOptions {
+  readonly runtimeEnv?: AppRuntimeEnv;
+  readonly integrationId?: string;
+}
+
 /**
- * Build a connector client for a provider.
+ * Build the Notion mirror client for one integration.
  *
- * @param provider - The integration provider to connect to.
  * @param token - The provider access token used outside local/test mode.
- * @param runtimeEnv - Optional runtime configuration override for tests.
+ * @param options - Runtime override and local integration scope.
+ * @returns the real provider client or an integration-scoped local adapter.
  */
 export function buildNotionMirror(
   token: string | undefined,
-  runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv(),
+  options: NotionMirrorBuildOptions = {},
 ): NotionMirrorPort {
+  const runtimeEnv = options.runtimeEnv ?? toAppRuntimeEnv();
   // Same seam as `buildConnector`: the whole provision → project → pull-back flow has to run on a
   // laptop with no Notion workspace, per the zero-external-accounts rule.
-  if (localMode(runtimeEnv)) return new MockNotionMirror();
+  if (localMode(runtimeEnv)) {
+    const { integrationId } = options;
+    if (integrationId === undefined) return new MockNotionMirror();
+    const existing = localNotionMirrors.get(integrationId);
+    if (existing !== undefined) return existing;
+    const created = new MockNotionMirror();
+    localNotionMirrors.set(integrationId, created);
+    return created;
+  }
   return new NotionMirrorClient(required('NOTION_ACCESS_TOKEN', token));
 }
 

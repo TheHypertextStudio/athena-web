@@ -77,7 +77,11 @@ test('Connections has a nav row and reaches the real team workspace, not the cal
   await expect(page.getByRole('heading', { name: 'Notion', exact: true })).toBeVisible({
     timeout: TIMEOUTS.pageReady,
   });
-  await expect(page.getByRole('link', { name: 'Back to Connections' })).toBeVisible();
+  await expect(
+    page
+      .getByRole('region', { name: 'Settings content' })
+      .getByRole('link', { name: 'Connections', exact: true }),
+  ).toBeVisible();
 
   // 4. And People, one hop deeper still — the whole chain has a way back at every level.
   await page.goto(orgHref(orgId, 'settings/connections/notion/people'), {
@@ -86,5 +90,9 @@ test('Connections has a nav row and reaches the real team workspace, not the cal
   await expect(page.getByRole('heading', { name: 'People' })).toBeVisible({
     timeout: TIMEOUTS.pageReady,
   });
-  await expect(page.getByRole('link', { name: 'Back to Notion' })).toBeVisible();
+  await expect(
+    page
+      .getByRole('region', { name: 'Settings content' })
+      .getByRole('link', { name: 'Notion', exact: true }),
+  ).toBeVisible();
 });

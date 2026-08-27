@@ -1458,7 +1458,9 @@ export async function runNotionMirrorSync(
         integrationId: row.id,
         integrationRow: row,
         actorId: opts.actorId,
-        mirror: buildNotionMirror(token === 'mock' ? undefined : token),
+        mirror: buildNotionMirror(token === 'mock' ? undefined : token, {
+          integrationId: row.id,
+        }),
         now,
       };
 

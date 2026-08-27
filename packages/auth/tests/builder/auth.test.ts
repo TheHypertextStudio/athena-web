@@ -1,4 +1,4 @@
-import { generateKeyPairSync } from 'node:crypto';
+import { createHash, generateKeyPairSync, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 
 import type * as DocketMail from '@docket/mail';
@@ -211,6 +211,68 @@ describe('auth config', () => {
     const { auth } = await import('../../src/index');
     expect(typeof auth.handler).toBe('function');
     expect(auth.api).toBeDefined();
+  });
+
+  it('rotates an MCP refresh token through the live OAuth token endpoint', async () => {
+    const { auth } = await import('../../src/index');
+    const { db, oauthClient, oauthRefreshToken, session, user } = await import('@docket/db');
+
+    const suffix = randomUUID();
+    const clientId = `mcp-refresh-${suffix}`;
+    const refreshToken = `refresh-${suffix}`;
+    const [owner] = await db
+      .insert(user)
+      .values({ name: 'MCP refresh', email: `mcp-refresh-${suffix}@example.com` })
+      .returning();
+    const userId = assertDefined(owner).id;
+    const [activeSession] = await db
+      .insert(session)
+      .values({ token: `session-${suffix}`, userId, expiresAt: new Date(Date.now() + 3_600_000) })
+      .returning();
+    await db.insert(oauthClient).values({
+      clientId,
+      redirectUris: ['http://127.0.0.1/callback'],
+      public: true,
+      type: 'public',
+      requirePKCE: true,
+      tokenEndpointAuthMethod: 'none',
+      grantTypes: ['authorization_code'],
+      responseTypes: ['code'],
+      scopes: ['work:read', 'offline_access'],
+    });
+    await db.insert(oauthRefreshToken).values({
+      // oauthProvider stores refresh tokens as SHA-256 base64url values. Seed the database in
+      // the same form that the live token endpoint resolves from the presented bearer value.
+      token: createHash('sha256').update(refreshToken).digest('base64url'),
+      clientId,
+      userId,
+      sessionId: assertDefined(activeSession).id,
+      scopes: ['work:read', 'offline_access'],
+      expiresAt: new Date(Date.now() + 3_600_000),
+    });
+
+    const response = await auth.handler(
+      new Request('http://localhost:4000/api/auth/oauth2/token', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          origin: 'http://localhost:4000',
+        },
+        body: new URLSearchParams({
+          grant_type: 'refresh_token',
+          client_id: clientId,
+          refresh_token: refreshToken,
+          resource: 'http://localhost:4000/mcp',
+        }),
+      }),
+    );
+
+    const responseText = await response.text();
+    expect(response.status, responseText).toBe(200);
+    const body = JSON.parse(responseText) as { access_token?: string; refresh_token?: string };
+    expect(body.access_token).toEqual(expect.any(String));
+    expect(body.refresh_token).toEqual(expect.any(String));
+    expect(body.refresh_token).not.toBe(refreshToken);
   });
 
   it('parses BETTER_AUTH_TRUSTED_ORIGINS (trimmed, empties dropped)', async () => {

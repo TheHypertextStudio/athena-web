@@ -157,6 +157,45 @@ describe('AthenaPanelProvider', () => {
     ).toBeVisible();
   });
 
+  it('keeps the selected session when the shell rerenders the same workspace context', async () => {
+    const api = transport();
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const view = render(
+      <QueryClientProvider client={client}>
+        <AthenaPanelProvider
+          context={{ workspaceId: 'workspace_1', workspaceName: 'Hypertext Studio' }}
+          transport={api}
+          railVisible
+          onRevealRail={vi.fn()}
+        >
+          <AthenaRailPanel />
+        </AthenaPanelProvider>
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Confirm the private launch review change/ }),
+    );
+    expect(await screen.findByRole('button', { name: 'Back' })).toBeVisible();
+
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <AthenaPanelProvider
+          context={{ workspaceId: 'workspace_1', workspaceName: 'Hypertext Studio' }}
+          transport={api}
+          railVisible
+          onRevealRail={vi.fn()}
+        >
+          <AthenaRailPanel />
+        </AthenaPanelProvider>
+      </QueryClientProvider>,
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: 'Confirm the private launch review change' }),
+    ).toBeVisible();
+  });
+
   it('opens a contextual composer in the rail and retains the context in the full-workspace URL', async () => {
     const onRevealRail = vi.fn();
     const api = renderPanel({ onRevealRail, railVisible: false });

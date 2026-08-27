@@ -114,17 +114,17 @@ export function AthenaPanelProvider({
   const [launchDraft, setLaunchDraft] = useState<string | null>(null);
   const pulse = useLiveApiQuery(personalAthenaPulseDef(transport), 5_000);
   const queue = useLiveApiQuery(personalAthenaQueueDef(transport, railVisible), 5_000);
+  const shellWorkspaceId = initialContext?.workspaceId;
+  const shellWorkspaceName = initialContext?.workspaceName;
   const shellContext = useMemo<PersonalAthenaContext | null>(
     () =>
-      initialContext?.workspaceId || initialContext?.workspaceName
+      shellWorkspaceId || shellWorkspaceName
         ? {
-            ...(initialContext.workspaceId ? { workspaceId: initialContext.workspaceId } : {}),
-            ...(initialContext.workspaceName
-              ? { workspaceName: initialContext.workspaceName }
-              : {}),
+            ...(shellWorkspaceId ? { workspaceId: shellWorkspaceId } : {}),
+            ...(shellWorkspaceName ? { workspaceName: shellWorkspaceName } : {}),
           }
         : null,
-    [initialContext],
+    [shellWorkspaceId, shellWorkspaceName],
   );
 
   useEffect(() => {

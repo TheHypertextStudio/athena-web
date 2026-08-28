@@ -243,6 +243,18 @@
   pre-existing timestamp. Production still rejects both public Checkout and a canary allowlist
   until the timestamp exists. The focused contract test first reproduced the rejection, then
   passed with the production-only boundary.
+- **Local provider canary correction**: The route gate admitted the Better Auth canary while public
+  Checkout stayed disabled, but the dependency container still selected the in-memory billing
+  gateway whenever `BILLING_ENABLED=false`. The real canary therefore returned a mock provider URL
+  and could never prove Stripe's duplicate-subscription redirect. The fix must carry the canary
+  allowlist into the runtime container and select the real Hypertext Studio Stripe test gateway for
+  that one local rollout mode. Test mode must remain mocked, and production must retain its stricter
+  environment gates. The regression test first observed `InMemoryBillingGateway`, then passed with
+  `RealStripeGateway`. All 37 container tests, API type checking with the package-local 4 GB heap,
+  changed-file ESLint, and formatting pass. The resumed canary then reached the real account pin and
+  stopped before mutation because the configured test secret belongs to a different Stripe account
+  than the pinned Hypertext Studio account. A fresh Hypertext Studio test key is now an explicit
+  provider blocker; public Checkout remains disabled.
 - **Public billing policy correction**: The Terms and core MVP plan still claimed that ending Pro
   scheduled workspace deletion. They now state the implemented contract: one card-required trial,
   access through the paid period, a fixed seven-day payment-recovery window, read-only shared work,

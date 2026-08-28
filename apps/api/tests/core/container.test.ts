@@ -236,6 +236,19 @@ describe('buildAppContainer', () => {
     expect(container.billing).toBeInstanceOf(RealStripeGateway);
   });
 
+  it('uses Stripe test mode for a Better Auth local billing canary while public Checkout is closed', () => {
+    const container = buildAppContainer({
+      APP_MODE: 'local',
+      BILLING_ENABLED: false,
+      BILLING_CANARY_EMAILS: 'billing-canary@example.com',
+      STRIPE_SECRET_KEY: 'sk_test_x',
+      STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID: 'acct_hypertext',
+      STRIPE_PRICE_DOCKET_PRO: 'price_x',
+      STRIPE_WEBHOOK_SECRET: 'whsec_x',
+    });
+    expect(container.billing).toBeInstanceOf(RealStripeGateway);
+  });
+
   it('builds the real read-only Stripe audit boundary while public Checkout is disabled', () => {
     const gateway = buildStripeBillingGateway({
       APP_MODE: 'local',

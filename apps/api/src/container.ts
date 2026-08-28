@@ -62,6 +62,7 @@ import { resolveVoiceProvider, type VoiceRealtimeProvider } from './routes/voice
 export interface AppRuntimeEnv {
   readonly APP_MODE?: 'local' | 'test' | 'production';
   readonly BILLING_ENABLED?: boolean;
+  readonly BILLING_CANARY_EMAILS?: string;
   readonly STRIPE_SECRET_KEY?: string;
   readonly STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID?: string;
   readonly STRIPE_WEBHOOK_SECRET?: string;
@@ -169,6 +170,7 @@ export function toAppRuntimeEnv(): AppRuntimeEnv {
   return {
     APP_MODE: env.APP_MODE,
     BILLING_ENABLED: env.BILLING_ENABLED,
+    ...(env.BILLING_CANARY_EMAILS ? { BILLING_CANARY_EMAILS: env.BILLING_CANARY_EMAILS } : {}),
     ...(env.STRIPE_SECRET_KEY ? { STRIPE_SECRET_KEY: env.STRIPE_SECRET_KEY } : {}),
     ...(env.STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID
       ? { STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID: env.STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID }
@@ -464,8 +466,12 @@ function buildPushSender(runtimeEnv: AppRuntimeEnv): PushSender {
  */
 export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv()): AppContainer {
   const mock = localMode(runtimeEnv);
+  const billingCanaryEnabled =
+    runtimeEnv.BILLING_CANARY_EMAILS?.split(',').some((email) => email.trim().length > 0) ?? false;
   const useRealBilling =
-    !mock || (runtimeEnv.APP_MODE === 'local' && runtimeEnv.BILLING_ENABLED === true);
+    !mock ||
+    (runtimeEnv.APP_MODE === 'local' &&
+      (runtimeEnv.BILLING_ENABLED === true || billingCanaryEnabled));
   const billing = lazyValue(() =>
     useRealBilling ? buildStripeBillingGateway(runtimeEnv) : new InMemoryBillingGateway(),
   );

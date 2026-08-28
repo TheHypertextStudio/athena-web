@@ -733,7 +733,7 @@ function AppShellInner({
 
   return (
     <VocabularyProvider skin={skin}>
-      <BillingRecovery orgId={resolvedOrgId} workspaceName={activeWorkspaceName} />
+      <BillingRecovery />
       <PageScrollProvider>
         <AthenaShell
           sidebar={sidebar}

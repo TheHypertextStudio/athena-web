@@ -19,6 +19,7 @@ import { GtasksAccountsSection } from './gtasks-accounts-section';
 import { IntegrationsStatus } from './integrations-status';
 import { LinearAgentInstallCard } from './linear-agent-install-card';
 import { ProviderCategorySection } from './provider-category-section';
+import { ProductRequiredNotice } from './product-required-notice';
 import { useConnectionsController } from './use-connections-controller';
 import { WorkspaceScopeHeader } from './workspace-scope-header';
 
@@ -48,6 +49,16 @@ export function ConnectionsPanel({
   isPersonal = false,
 }: ConnectionsPanelProps): JSX.Element {
   const c = useConnectionsController({ orgId, canManage, linkedAccountsHref, isPersonal });
+
+  if (c.productRequired) {
+    return (
+      <ProductRequiredNotice
+        orgId={c.orgId}
+        title="Connect external tools with Docket Pro"
+        body="Docket Pro adds live connections for calendars, tasks, documents, and code. The rest of your workspace remains available on your current plan."
+      />
+    );
+  }
 
   return (
     <IntegrationsStatus loading={c.loading} loadError={c.loadError}>

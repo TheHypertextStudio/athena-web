@@ -77,26 +77,26 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('BillingRecovery', () => {
-  it('offers a billing path that preserves the failed action location', async () => {
-    billingGet.mockResolvedValue(okResponse(billingSummary(true)));
+  it('ignores a plan-gated read instead of blocking the application', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
     render(
       <>
-        <BillingRecovery orgId="org-1" />
+        <BillingRecovery />
         <FailingRead code="product_required" />
       </>,
       { wrapper: wrapper(client) },
     );
 
-    expect(
-      await screen.findByRole('heading', { name: 'Docket Pro is required' }),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/work is still here/i)).toBeInTheDocument();
-    expect(await screen.findByRole('link', { name: 'Review Docket Pro' })).toHaveAttribute(
-      'href',
-      '/orgs/org-1/settings/billing?returnTo=%2Forgs%2Forg-1%2Fmy-work%3Fview%3Dassigned',
-    );
+    await waitFor(() => {
+      expect(
+        client.getQueryState(['org', 'org-1', 'billing-recovery-trigger', 'product_required'])
+          ?.status,
+      ).toBe('error');
+    });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(billingGet).not.toHaveBeenCalled();
   });
 
   it('names the roles that can act when the current member cannot manage billing', async () => {
@@ -105,15 +105,14 @@ describe('BillingRecovery', () => {
 
     render(
       <>
-        <BillingRecovery orgId="org-1" />
+        <BillingRecovery />
         <FailingRead code="billing_grace_expired" />
       </>,
       { wrapper: wrapper(client) },
     );
 
-    expect(
-      await screen.findByRole('heading', { name: 'Payment recovery ended' }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole('status')).toHaveTextContent('Payment recovery ended');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(await screen.findByText(/workspace owner or administrator/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Update payment' })).not.toBeInTheDocument();
   });
@@ -125,7 +124,7 @@ describe('BillingRecovery', () => {
 
     render(
       <>
-        <BillingRecovery orgId="org-1" />
+        <BillingRecovery />
         <FailingRead code="billing_grace_expired" />
       </>,
       { wrapper: wrapper(client) },
@@ -138,8 +137,7 @@ describe('BillingRecovery', () => {
     });
   });
 
-  it('uses the failed mutation workspace after the shell moves to another workspace', async () => {
-    billingGet.mockResolvedValue(okResponse(billingSummary(true)));
+  it('ignores a plan-gated write instead of opening global recovery', async () => {
     window.history.replaceState(null, '', '/orgs/org-b/my-work');
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
@@ -169,7 +167,7 @@ describe('BillingRecovery', () => {
 
     render(
       <>
-        <BillingRecovery orgId="org-b" workspaceName="Workspace B" />
+        <BillingRecovery />
         <FailingWrite />
       </>,
       { wrapper: wrapper(client) },
@@ -177,33 +175,12 @@ describe('BillingRecovery', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Run gated action' }));
 
-    expect(await screen.findByRole('link', { name: 'Review Docket Pro' })).toHaveAttribute(
-      'href',
-      '/orgs/org-a/settings/billing?returnTo=%2Forgs%2Forg-b%2Fmy-work',
-    );
-    expect(billingGet).toHaveBeenCalledWith({ param: { orgId: 'org-a' } });
-    expect(screen.queryByText(/Workspace B needs Docket Pro/)).not.toBeInTheDocument();
-  });
-
-  it('uses the failed query workspace after the shell moves to another workspace', async () => {
-    billingGet.mockResolvedValue(okResponse(billingSummary(true)));
-    window.history.replaceState(null, '', '/orgs/org-b/my-work');
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-
-    render(
-      <>
-        <BillingRecovery orgId="org-b" workspaceName="Workspace B" />
-        <FailingRead code="product_required" orgId="org-a" />
-      </>,
-      { wrapper: wrapper(client) },
-    );
-
-    expect(await screen.findByRole('link', { name: 'Review Docket Pro' })).toHaveAttribute(
-      'href',
-      '/orgs/org-a/settings/billing?returnTo=%2Forgs%2Forg-b%2Fmy-work',
-    );
-    expect(billingGet).toHaveBeenCalledWith({ param: { orgId: 'org-a' } });
-    expect(screen.queryByText(/Workspace B needs Docket Pro/)).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(client.getMutationCache().getAll()[0]?.state.status).toBe('error');
+    });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(billingGet).not.toHaveBeenCalled();
   });
 
   it('ignores unrelated request failures', async () => {
@@ -219,7 +196,7 @@ describe('BillingRecovery', () => {
 
     render(
       <>
-        <BillingRecovery orgId="org-1" />
+        <BillingRecovery />
         <OrdinaryFailure />
       </>,
       { wrapper: wrapper(client) },

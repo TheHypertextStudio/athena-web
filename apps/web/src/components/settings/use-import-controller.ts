@@ -40,6 +40,7 @@ export interface ImportController {
   teams: readonly TeamOut[];
   loading: boolean;
   loadError: string | null;
+  productRequired: boolean;
   intro: { crossHref: string; crossText: string };
   categories: readonly ImportCategoryModel[];
   confirm: ConfirmDisconnectModel;
@@ -95,6 +96,7 @@ export function useImportController({
     teams,
     loading: data.loading,
     loadError: data.loadError,
+    productRequired: data.productRequired,
     intro: {
       crossHref: `/orgs/${orgId}/settings/connections`,
       crossText: 'Want to keep a tool in sync instead? Connect it →',

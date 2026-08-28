@@ -1,18 +1,10 @@
 'use client';
 
-import {
-  Button,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@docket/ui/primitives';
+import { Button } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import type { JSX } from 'react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
-import DocketLink from '@/components/docket-link';
 import { api } from '@/lib/api';
 import { UserFacingError, userErrorMessage } from '@/lib/problem';
 import {
@@ -24,28 +16,17 @@ import {
   useApiQuery,
 } from '@/lib/query';
 
-type BillingRecoveryCode = 'product_required' | 'billing_grace_expired';
+type BillingRecoveryCode = 'billing_grace_expired';
 
 interface BillingRecoveryRequest {
   readonly code: BillingRecoveryCode;
   readonly orgId: string;
-  readonly returnTo: string;
 }
 
-/** Props for the application-wide billing recovery interaction. */
-export interface BillingRecoveryProps {
-  /** The workspace whose current product state caused the failed action. */
-  readonly orgId: string | null;
-  /** Customer-facing workspace name used to explain whose access needs attention. */
-  readonly workspaceName?: string | undefined;
-}
-
-/** Resolve only the two product-access failures that need application-wide recovery. */
+/** Resolve only a payment failure that changed existing shared work to read-only. */
 export function billingRecoveryCode(error: unknown): BillingRecoveryCode | null {
   if (!(error instanceof UserFacingError)) return null;
-  return error.code === 'product_required' || error.code === 'billing_grace_expired'
-    ? error.code
-    : null;
+  return error.code === 'billing_grace_expired' ? error.code : null;
 }
 
 /** Resolve the organization carried by the failed request or its standardized query key. */
@@ -60,28 +41,15 @@ function billingRecoveryOrganizationId(
   return requestOrgId ?? queryOrgId ?? null;
 }
 
-/** Read the exact location that the customer should regain after billing succeeds. */
-function currentReturnPath(): string {
-  return `${window.location.pathname}${window.location.search}`;
-}
-
-/** Build the billing-settings route without letting the current location become a new origin. */
-function billingSettingsHref(orgId: string, returnTo: string): string {
-  const query = new URLSearchParams({ returnTo });
-  return `/orgs/${orgId}/settings/billing?${query.toString()}`;
-}
-
 /**
- * Recover product-gated reads and writes from one shared, customer-owned interaction.
+ * Offer payment recovery without taking focus, navigation, or the current task away from a user.
  *
  * @remarks
- * TanStack Query owns every API read and write in the product, so its query and mutation caches are
- * the only complete observation boundary. This component subscribes to those public caches and
- * opens only for stable `product_required` or `billing_grace_expired` codes. It never renders a
- * provider message. The authenticated billing summary supplies the caller's organization
- * permission, which the API derives from the Better Auth-backed actor context.
+ * TanStack Query owns every API read and write in the product, so its public caches provide the
+ * complete observation boundary for an expired payment grace period. A missing product is not a
+ * recovery event. Feature surfaces own `product_required` and may explain Docket Pro inline.
  */
-export function BillingRecovery({ orgId, workspaceName }: BillingRecoveryProps): JSX.Element {
+export function BillingRecovery(): JSX.Element | null {
   const queryClient = useQueryClient();
   const [request, setRequest] = useState<BillingRecoveryRequest | null>(null);
 
@@ -89,7 +57,7 @@ export function BillingRecovery({ orgId, workspaceName }: BillingRecoveryProps):
     const code = billingRecoveryCode(error);
     const failedOrgId = billingRecoveryOrganizationId(error, queryKey);
     if (!code || !failedOrgId) return;
-    setRequest({ code, orgId: failedOrgId, returnTo: currentReturnPath() });
+    setRequest({ code, orgId: failedOrgId });
   }, []);
 
   useEffect(() => {
@@ -127,87 +95,68 @@ export function BillingRecovery({ orgId, workspaceName }: BillingRecoveryProps):
     },
   });
 
-  const settingsHref = useMemo(
-    () => (request ? billingSettingsHref(request.orgId, request.returnTo) : '/billing/start'),
-    [request],
-  );
+  if (!request) return null;
+
   const canManageBilling = billingQ.data?.canManageBilling === true;
-  const accessResolved = billingQ.isSuccess;
-  const productRequired = request?.code === 'product_required';
-  const subject =
-    request?.orgId === orgId
-      ? (workspaceName ?? 'This workspace')
-      : 'The workspace for that action';
-
   return (
-    <Dialog
-      open={request !== null}
-      onOpenChange={(open) => {
-        if (!open) setRequest(null);
-      }}
+    <section
+      role="status"
+      aria-live="polite"
+      aria-label="Payment recovery"
+      className="border-outline-variant bg-surface-container-high text-on-surface fixed right-4 bottom-4 left-4 z-50 flex max-w-xl flex-col gap-3 rounded-xl border p-4 sm:left-auto"
     >
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>
-            {productRequired ? 'Docket Pro is required' : 'Payment recovery ended'}
-          </DialogTitle>
-          <DialogDescription>
-            {productRequired
-              ? `${subject} needs Docket Pro for that action. Your work is still here. Review the plan and return to this exact place after Checkout.`
-              : 'The payment recovery period has ended, so shared work is read-only. Update the payment method to restore editing. Docket has not deleted the workspace.'}
-          </DialogDescription>
-        </DialogHeader>
+      <div className="min-w-0">
+        <h2 className="text-title-medium">Payment recovery ended</h2>
+        <p className="text-on-surface-variant text-body-medium mt-1">
+          Shared work is read-only. Update the payment method to restore editing. Docket has not
+          deleted the workspace.
+        </p>
+      </div>
 
-        {accessResolved && !canManageBilling ? (
-          <p className="text-on-surface-variant text-body-medium">
-            A workspace owner or administrator can change billing. Ask one of them to{' '}
-            {productRequired ? 'add Docket Pro' : 'update the payment method'}.
-          </p>
-        ) : null}
-        {billingQ.isError ? (
-          <p role="alert" className="text-error text-body-medium">
-            {userErrorMessage(billingQ.error, 'Could not confirm who can manage billing.')}
-          </p>
-        ) : null}
-        {portal.error ? (
-          <p role="alert" className="text-error text-body-medium">
-            {userErrorMessage(portal.error, 'Could not open payment settings.')}
-          </p>
-        ) : null}
+      {billingQ.isSuccess && !canManageBilling ? (
+        <p className="text-on-surface-variant text-body-medium">
+          A workspace owner or administrator can update the payment method.
+        </p>
+      ) : null}
+      {billingQ.isError ? (
+        <p role="alert" className="text-error text-body-medium">
+          {userErrorMessage(billingQ.error, 'Could not confirm who can manage billing.')}
+        </p>
+      ) : null}
+      {portal.error ? (
+        <p role="alert" className="text-error text-body-medium">
+          {userErrorMessage(portal.error, 'Could not open payment settings.')}
+        </p>
+      ) : null}
 
-        <div className="flex flex-nowrap items-center justify-end gap-2 overflow-x-auto">
+      <div className="flex flex-nowrap items-center justify-end gap-2 overflow-x-auto">
+        <Button
+          type="button"
+          variant="outline"
+          className="shrink-0"
+          onClick={() => {
+            setRequest(null);
+          }}
+        >
+          Dismiss
+        </Button>
+        {billingQ.isPending ? (
+          <Button type="button" className="shrink-0" disabled>
+            Checking access
+          </Button>
+        ) : canManageBilling ? (
           <Button
             type="button"
-            variant="outline"
             className="shrink-0"
+            disabled={portal.isPending}
             onClick={() => {
-              setRequest(null);
+              portal.mutate(undefined);
             }}
           >
-            Not now
+            Update payment
           </Button>
-          {billingQ.isPending && request ? (
-            <Button type="button" className="shrink-0" disabled>
-              Checking access
-            </Button>
-          ) : productRequired && (canManageBilling || billingQ.isError) ? (
-            <Button asChild className="shrink-0">
-              <DocketLink href={settingsHref}>Review Docket Pro</DocketLink>
-            </Button>
-          ) : request?.code === 'billing_grace_expired' && canManageBilling ? (
-            <Button
-              type="button"
-              className="shrink-0"
-              disabled={portal.isPending}
-              onClick={() => {
-                portal.mutate(undefined);
-              }}
-            >
-              Update payment
-            </Button>
-          ) : null}
-        </div>
-      </DialogContent>
-    </Dialog>
+        ) : null}
+      </div>
+    </section>
   );
 }

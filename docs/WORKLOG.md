@@ -53,6 +53,14 @@
   contract that can accept real Docket Pro subscriptions. Billing access must never delete
   organization data. Stripe must remain authoritative through duplicate and reordered events.
   Approved Student, Nonprofit, and partner discounts must reach invoices without stacking.
+- **Plan-gating UX correction**: Treat `product_required` as caller-owned feature availability,
+  never as an application-wide recovery event. Optional Pro reads must settle into an inline
+  feature explanation with a Billing action. Optional Pro writes must fail at their own control.
+  Neither case may open a modal, redirect navigation, or block unrelated work. Payment recovery
+  remains visible as a non-modal notice because it changes existing shared work to read-only. The
+  focused Web suite passes 12 behavior tests, and Web type checking and changed-file lint pass. A
+  disposable free workspace in the Hypertext Studio Chrome profile verifies Connections at
+  1440×900 and 390×844 in light and dark themes without a nested dialog or horizontal overflow.
 - **Approach**: Store one billing account per organization and reconcile exact Stripe customer and
   subscription snapshots into a product entitlement. Keep canceled shared work read-only after the
   paid period, and keep failed payments writable for one fixed seven-day grace period. Process

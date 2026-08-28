@@ -174,6 +174,28 @@ afterEach(() => {
 });
 
 describe('useIntegrationsData — connect ceremony routing', () => {
+  it('settles a plan-gated directory as unavailable feature state', async () => {
+    directoryGet.mockResolvedValue(
+      Response.json(
+        {
+          type: 'https://docket.local/problems/product_required',
+          title: 'Private provider prose.',
+          status: 402,
+          code: 'product_required',
+        },
+        { status: 402 },
+      ),
+    );
+    const wrapper = makeWrapper();
+    const { result } = renderHook(() => useIntegrationsData(ORG_ID), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.productRequired).toBe(true);
+    });
+    expect(result.current.loading).toBe(false);
+    expect(result.current.loadError).toBeNull();
+  });
+
   it('connecting github fetches the App-install URL and navigates via window.location.assign, never linkSocial', async () => {
     const wrapper = makeWrapper();
     const { result } = renderHook(() => useIntegrationsData(ORG_ID), { wrapper });

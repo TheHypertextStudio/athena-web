@@ -60,6 +60,7 @@ export interface ConnectionsController {
   teams: readonly TeamOut[];
   loading: boolean;
   loadError: string | null;
+  productRequired: boolean;
   intro: { crossHref: string; crossText: string };
   /** Drives the "This workspace" scope header; `linkedAccountsHref` links to identity linking. */
   scope: { linkedAccountsHref: string | undefined };
@@ -232,6 +233,7 @@ export function useConnectionsController({
     teams,
     loading: data.loading,
     loadError: data.loadError,
+    productRequired: data.productRequired,
     intro: {
       crossHref: `/orgs/${orgId}/settings/import`,
       crossText: 'Moving off a tool entirely? Import it →',

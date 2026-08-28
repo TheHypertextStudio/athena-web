@@ -33,7 +33,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { useAuthenticationRecovery } from '@/components/authentication-interlock';
-import { userErrorMessage } from '@/lib/problem';
+import { UserFacingError, userErrorMessage } from '@/lib/problem';
 import { connectorAvailable, connectorOAuthConfigured, usePublicConfig } from '@/lib/public-config';
 import {
   apiQueryOptions,
@@ -85,6 +85,8 @@ export interface IntegrationsData {
   orgId: string;
   loading: boolean;
   loadError: string | null;
+  /** Whether integrations are available only after the workspace adds Docket Pro. */
+  productRequired: boolean;
   directory: readonly IntegrationDirectoryProvider[];
   byProvider: ReadonlyMap<string, IntegrationOut[]>;
   teams: readonly TeamOut[];
@@ -164,10 +166,14 @@ export function useIntegrationsData(orgId: string): IntegrationsData {
   const integrations: readonly IntegrationOut[] = integrationsQ.data?.items ?? [];
   const teams: readonly TeamOut[] = teamsQ.data?.items ?? [];
   const identities: readonly IdentityOut[] = identitiesQ.data?.items ?? [];
-  const loading = directoryQ.isPending;
-  const loadError = directoryQ.isError
-    ? userErrorMessage(directoryQ.error, 'Could not load integrations.')
-    : null;
+  const productRequired = [directoryQ.error, integrationsQ.error].some(
+    (error) => error instanceof UserFacingError && error.code === 'product_required',
+  );
+  const loading = !productRequired && directoryQ.isPending;
+  const loadError =
+    directoryQ.isError && !productRequired
+      ? userErrorMessage(directoryQ.error, 'Could not load integrations.')
+      : null;
   const { data: config } = usePublicConfig();
 
   const setActionError = useCallback((key: string, message: string | null) => {
@@ -493,6 +499,7 @@ export function useIntegrationsData(orgId: string): IntegrationsData {
     orgId,
     loading,
     loadError,
+    productRequired,
     directory,
     byProvider,
     teams,

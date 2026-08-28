@@ -15,6 +15,7 @@ import { IntegrationsIntro } from './integrations-intro';
 import { DisconnectConfirmDialog } from './disconnect-confirm-dialog';
 import { IntegrationsStatus } from './integrations-status';
 import { ProviderCategorySection } from './provider-category-section';
+import { ProductRequiredNotice } from './product-required-notice';
 import { useImportController } from './use-import-controller';
 
 /** Props for {@link ImportPanel}. */
@@ -26,6 +27,16 @@ export interface ImportPanelProps {
 /** The Import settings panel (one-time migration). */
 export function ImportPanel({ orgId, canManage }: ImportPanelProps): JSX.Element {
   const c = useImportController({ orgId, canManage });
+
+  if (c.productRequired) {
+    return (
+      <ProductRequiredNotice
+        orgId={c.orgId}
+        title="Import external work with Docket Pro"
+        body="Docket Pro adds one-time imports from supported tools. The rest of your workspace remains available on your current plan."
+      />
+    );
+  }
 
   return (
     <IntegrationsStatus loading={c.loading} loadError={c.loadError}>

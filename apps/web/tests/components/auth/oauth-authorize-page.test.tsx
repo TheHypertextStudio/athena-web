@@ -305,6 +305,26 @@ describe('OAuthAuthorizePage', () => {
       expect(screen.getByRole('button', { name: 'Deny access' })).toBeDisabled();
     });
 
+    it('does not show an opaque OAuth client identifier before metadata resolves', () => {
+      // A desktop client identifies itself with a registered opaque id. The metadata request
+      // supplies its human name asynchronously, so the first consent paint must not briefly
+      // expose that implementation identifier to the person deciding whether to grant access.
+      const opaqueClientId = 'GboxfbkXBGdnIaNfYNOiAAyNhERqLHJW';
+      window.history.replaceState(
+        null,
+        '',
+        `/oauth/authorize?sig=abc123&client_id=${opaqueClientId}&scope=work%3Aread`,
+      );
+      useSession.mockReturnValue({ data: null, isPending: true, error: null });
+
+      render(<OAuthAuthorizePage />);
+
+      expect(
+        screen.getByRole('heading', { name: 'An app is requesting access to Docket' }),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(opaqueClientId)).toBeNull();
+    });
+
     it('keeps the decision reachable when the session read fails outright', async () => {
       // `unreachable` shares the pending treatment: the read is still retrying, and abandoning a
       // consent grant over one failed request is exactly the wrong response.

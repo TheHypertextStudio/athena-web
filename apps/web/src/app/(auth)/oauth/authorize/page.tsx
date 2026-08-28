@@ -111,6 +111,9 @@ const SCOPE_ICON: Readonly<Record<string, ComponentType<{ className?: string }>>
 /** Shown while the session read is still in flight, in place of the account address. */
 const ACCOUNT_PENDING_LABEL = 'Checking your account…';
 
+/** Safe temporary name while the server-validated OAuth client metadata is still loading. */
+const UNKNOWN_CLIENT_DISPLAY_NAME = 'An app';
+
 type ConsentError = 'expired' | 'unavailable' | 'missing-return-address';
 
 const CONSENT_ERROR_COPY: Readonly<Record<ConsentError, { title: string; detail: string }>> = {
@@ -141,14 +144,10 @@ async function fetchClientMetadata(
   }
 }
 
-/** Derive a display name for the client: prefer the server's name, fall back to the domain. */
-function clientDisplayName(clientId: string, metadata: { name: string } | null): string {
+/** Derive a display name from server-validated client metadata without exposing an OAuth identifier. */
+function clientDisplayName(metadata: { name: string } | null): string {
   if (metadata?.name) return metadata.name;
-  try {
-    return new URL(clientId).hostname;
-  } catch {
-    return clientId;
-  }
+  return UNKNOWN_CLIENT_DISPLAY_NAME;
 }
 
 /** The hostname of an absolute URL, or `null` when the value is absent or unparseable. */
@@ -420,7 +419,7 @@ function ConsentPage(): JSX.Element {
     );
   }
 
-  const displayName = clientDisplayName(clientId, clientMeta);
+  const displayName = clientDisplayName(clientMeta);
   // Only call the domain "verified" when the server actually returned validated metadata for this
   // client id. Without it the hostname is just an attacker-supplied string we happen to be able to
   // parse, and labelling that as verified is precisely the wrong thing to do on a consent screen.

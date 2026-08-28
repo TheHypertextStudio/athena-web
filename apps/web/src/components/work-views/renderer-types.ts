@@ -65,6 +65,9 @@ export function formatWorkViewValue(value: unknown, kind?: string): string {
   ) {
     return value.displayName;
   }
+  if (typeof value === 'object' && 'label' in value && typeof value.label === 'string') {
+    return value.label;
+  }
   if (kind === 'relation-one') return '—';
   if (kind === 'relation-many')
     return Array.isArray(value) && value.length > 0 ? String(value.length) : '—';

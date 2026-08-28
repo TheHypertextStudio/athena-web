@@ -37,6 +37,7 @@ import {
   type TenantRelationDefinition,
 } from './relation-sql';
 import type { SortCompilerMap } from './sort-sql';
+import { targetTimeframeKeySql, targetTimeframeLabelSql } from './planning-timeframe-sql';
 import {
   WORK_VIEW_PROJECTIONS,
   type WorkViewSqlContext,
@@ -249,6 +250,19 @@ const projectGroup = {
   initiatives: relationGroup(WORK_VIEW_RELATIONS.projectInitiatives),
   labels: relationGroup(WORK_VIEW_RELATIONS.projectLabels),
   creator: actorGroup('created_by'),
+  targetTimeframe: {
+    kind: 'scalar',
+    key: targetTimeframeKeySql(
+      column('target_date'),
+      column('target_date_resolution'),
+      column('target_date_fiscal_year_start_month'),
+    ),
+    label: targetTimeframeLabelSql(
+      column('target_date'),
+      column('target_date_resolution'),
+      column('target_date_fiscal_year_start_month'),
+    ),
+  },
 } satisfies GroupCompilerMap<GroupableFieldKey<typeof PROJECT_VIEW_CONTRACT>>;
 
 const programFilter = {

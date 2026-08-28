@@ -48,16 +48,20 @@ async function capture(page: Page, name: string, ready: RegExp): Promise<void> {
   await page.screenshot({ path: resolve(SHOT_ROOT, `${name}.png`) });
 }
 
-/** Open a detail masthead's progressive overflow when the planning field is not inline. */
+/** Open a surface's progressive overflow when the planning field is not inline. */
 async function revealPlanningField(
   page: Page,
   kind: 'Project' | 'Initiative',
   field: RegExp,
 ): Promise<void> {
-  if (await page.getByRole('button', { name: field }).first().isVisible()) return;
   await expect(async () => {
-    await page.getByRole('button', { name: `More ${kind} properties` }).click();
-    await expect(page.getByRole('button', { name: field }).first()).toBeVisible({ timeout: 1000 });
+    const trigger = page.getByRole('button', { name: field }).first();
+    if (!(await trigger.isVisible())) {
+      await page.getByRole('button', { name: `More ${kind} properties` }).click();
+    }
+    await expect(trigger).toBeVisible({ timeout: 1000 });
+    await page.waitForTimeout(250);
+    await expect(trigger).toBeVisible({ timeout: 1000 });
   }).toPass({ timeout: TIMEOUTS.pageReady });
 }
 
@@ -69,11 +73,18 @@ async function openGroupedProjects(page: Page, orgId: string): Promise<void> {
   });
   await expect(async () => {
     await page.getByRole('button', { name: 'Display', exact: true }).click();
-    await expect(page.getByRole('menuitemradio', { name: 'Target timeframe' })).toBeVisible({
-      timeout: 1000,
-    });
+    await expect(
+      page
+        .getByRole('dialog', { name: 'Display view' })
+        .getByRole('combobox', { name: 'Group by', exact: true }),
+    ).toBeVisible({ timeout: 1000 });
   }).toPass({ timeout: TIMEOUTS.pageReady });
-  await page.getByRole('menuitemradio', { name: 'Target timeframe' }).click();
+  await page
+    .getByRole('dialog', { name: 'Display view' })
+    .getByRole('combobox', { name: 'Group by', exact: true })
+    .selectOption('targetTimeframe');
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog', { name: 'Display view' })).toHaveCount(0);
   await expect(page.getByText('H2 FY 2027', { exact: true }).first()).toBeVisible();
 }
 
@@ -93,6 +104,7 @@ async function captureSurfaceSet(
     }
     await expect(dialog).toBeVisible({ timeout: 1000 });
   }).toPass({ timeout: TIMEOUTS.pageReady });
+  await revealPlanningField(page, 'Project', /Project target/);
   const projectTarget = page.getByRole('button', { name: /Project target/ });
   await expect(projectTarget).toBeEnabled({ timeout: TIMEOUTS.pageReady });
   await projectTarget.click();
@@ -115,6 +127,7 @@ async function captureSurfaceSet(
     }
     await expect(dialog).toBeVisible({ timeout: 1000 });
   }).toPass({ timeout: TIMEOUTS.pageReady });
+  await revealPlanningField(page, 'Initiative', /Initiative target/);
   const initiativeTarget = page.getByRole('button', { name: /Initiative target/ });
   await expect(initiativeTarget).toBeEnabled({ timeout: TIMEOUTS.pageReady });
   await initiativeTarget.click();
@@ -130,6 +143,7 @@ async function captureSurfaceSet(
 }
 
 test('saved planning periods retain their fiscal basis across every product surface', async ({
+  browser,
   page,
 }) => {
   test.setTimeout(600_000);
@@ -248,13 +262,28 @@ test('saved planning periods retain their fiscal basis across every product surf
   await revealPlanningField(page, 'Initiative', /Target date.*not set/);
   await expect(page.getByRole('button', { name: 'Target date — not set' })).toBeVisible();
 
-  await page.setViewportSize({ width: 320, height: 720 });
-  await expectNoHorizontalOverflow(page);
-  const planningTriggers = page.getByRole('button', { name: /Target date/ });
-  for (let index = 0; index < (await planningTriggers.count()); index++) {
-    expect(
-      await planningTriggers.nth(index).evaluate((node) => node.getBoundingClientRect().height),
-    ).toBeGreaterThanOrEqual(40);
+  const touchContext = await browser.newContext({
+    hasTouch: true,
+    ignoreHTTPSErrors: true,
+    serviceWorkers: 'block',
+    storageState: await page.context().storageState(),
+    viewport: { width: 320, height: 720 },
+  });
+  try {
+    const touchPage = await touchContext.newPage();
+    await touchPage.goto(orgHref(orgId, `initiatives/${initiative.id}`), {
+      waitUntil: 'domcontentloaded',
+    });
+    await revealPlanningField(touchPage, 'Initiative', /Target date.*not set/);
+    await expectNoHorizontalOverflow(touchPage);
+    const planningTriggers = touchPage.getByRole('button', { name: /Target date/ });
+    for (let index = 0; index < (await planningTriggers.count()); index++) {
+      expect(
+        await planningTriggers.nth(index).evaluate((node) => node.getBoundingClientRect().height),
+      ).toBeGreaterThanOrEqual(40);
+    }
+  } finally {
+    await touchContext.close();
   }
   expect(runtimeErrors).toEqual([]);
 });

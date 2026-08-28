@@ -193,7 +193,8 @@ function baseColumns(target: ViewTarget): SQL {
         e.created_at, e.updated_at, e.estimate, e.estimate_minutes, e.archived_at`;
     case 'project':
       return sql`e.organization_id, e.id, e.name, e.summary, e.status, e.status_id, e.priority, e.health,
-        e.lead_id, e.team_id, e.program_id, e.visibility, e.start_date, e.target_date, e.created_by,
+        e.lead_id, e.team_id, e.program_id, e.visibility, e.start_date, e.target_date,
+        e.target_date_resolution, e.target_date_fiscal_year_start_month, e.created_by,
         e.created_at, e.updated_at`;
     case 'program':
       return sql`e.organization_id, e.id, e.name, e.summary, e.status, e.status_id, e.health,

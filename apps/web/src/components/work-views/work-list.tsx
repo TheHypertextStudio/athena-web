@@ -39,6 +39,7 @@ import { deriveInitiativeTreePositions, type InitiativeTreePosition } from './in
 import type { WorkViewDefinitionFor } from './view-state';
 import { workViewDisplayFieldCatalog } from './view-state';
 import {
+  formatWorkViewValue,
   type WorkViewGroupPage,
   type WorkViewGroupSummary,
   type WorkViewRowFor,
@@ -105,6 +106,7 @@ const FIELD_WIDTH: Record<string, string> = {
   startDate: 'w-28',
   dueDate: 'w-28',
   targetDate: 'w-28',
+  targetTimeframe: 'w-32',
   latestUpdate: 'w-28',
   progress: 'w-28',
   estimate: 'w-24',
@@ -372,7 +374,7 @@ function SelectionIdentity({
       </span>
       <span
         aria-hidden={selected || selectionActive}
-        className={`transition-opacity ${selected || selectionActive ? 'opacity-0' : 'opacity-100 group-focus-within/roster:opacity-0 group-hover/roster:opacity-0'}`}
+        className={`pointer-events-none transition-opacity ${selected || selectionActive ? 'opacity-0' : 'opacity-100 group-focus-within/roster:opacity-0 group-hover/roster:opacity-0'}`}
       >
         <Identity row={row} statusOf={statusOf} />
       </span>
@@ -455,6 +457,8 @@ function PropertyValue({
   if (typeof value === 'number') return <span className="tabular-nums">{value}</span>;
   if (typeof value === 'boolean') return <span>{value ? 'Yes' : '—'}</span>;
   if (field.kind === 'relation-one' || field.kind === 'relation-many') return <span>—</span>;
+  if (typeof value === 'object' && value !== null && 'label' in value)
+    return <span>{formatWorkViewValue(value, field.kind)}</span>;
   if (typeof value === 'string' && value.length < 40)
     return <span>{value.replaceAll('_', ' ')}</span>;
   return <span>—</span>;

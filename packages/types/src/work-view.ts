@@ -375,6 +375,17 @@ export const PROJECT_VIEW_CONTRACT = defineViewContract({
       operandSchema: DateOperand,
       capabilities: { filter: true, sort: true, display: true },
     },
+    targetTimeframe: {
+      kind: 'enum',
+      schema: z
+        .object({
+          key: z.string().min(1),
+          label: z.string().min(1),
+        })
+        .strict()
+        .nullable(),
+      capabilities: { group: true, display: true },
+    },
     creator: {
       kind: 'relation-one',
       schema: nullableActor,
@@ -1290,6 +1301,14 @@ export const ProjectViewRow = z
     labels: z.array(LabelId),
     startDate: nullableDate,
     targetDate: nullableDate,
+    targetTimeframe: z
+      .object({
+        key: z.string().min(1),
+        label: z.string().min(1),
+      })
+      .strict()
+      .nullable()
+      .default(null),
     creator: nullableActor,
     createdAt: TimestampString,
     updatedAt: TimestampString,

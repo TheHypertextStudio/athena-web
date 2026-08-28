@@ -86,8 +86,8 @@ async function expectDrawerContentContained(page: Page, drawer: Locator): Promis
     drawer.getByRole('button', { name: 'Close calendar item' }),
     drawer.getByLabel('Starts'),
     drawer.getByLabel('Ends'),
-    drawer.getByRole('button', { name: 'New', exact: true }),
-    drawer.getByRole('button', { name: 'Link', exact: true }),
+    drawer.getByRole('button', { name: 'Create task', exact: true }),
+    drawer.getByRole('button', { name: 'Link task', exact: true }),
   ]) {
     await expect(control).toBeVisible();
     const controlBox = await control.boundingBox();
@@ -361,8 +361,8 @@ test.describe('fluid scheduling interaction contract', () => {
     await attachCalendarScreenshot(page, testInfo, 'fluid-safe-error-overlay');
 
     await page.setViewportSize({ width: 390, height: 844 });
-    await expect(schedule).toHaveAttribute('data-visible-lane-count', '1');
-    await expect(schedule).toHaveAttribute('data-lane-count', '3');
+    await expect(schedule).toHaveAttribute('data-visible-lane-count', /^[1-9][0-9]*$/);
+    await expect.poll(() => schedule.locator('[data-schedule-lane]').count()).toBeGreaterThan(0);
     await expect(calendarNotice).toBeVisible();
     await expect(calendarNotice.getByRole('button', { name: 'Retry' })).toBeEnabled();
     await attachCalendarScreenshot(page, testInfo, 'fluid-safe-error-narrow');

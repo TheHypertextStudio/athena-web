@@ -40,11 +40,6 @@ const CONTROL_CASES = {
 } as const;
 
 async function openOverflowControl(page: Page, label: string): Promise<void> {
-  const visibleControl = page.getByRole('button', { name: label, exact: true });
-  if (await visibleControl.isVisible()) {
-    await visibleControl.click();
-    return;
-  }
   await page.getByRole('button', { name: 'More view controls' }).click();
   await page.getByRole('menuitem', { name: label, exact: true }).click();
 }
@@ -60,21 +55,11 @@ function waitForViewQuery(page: Page): ReturnType<Page['waitForResponse']> {
   );
 }
 
-/** Open the ordered-sort editor from either its direct trigger or the single overflow surface. */
-async function openSortEditor(page: Page): Promise<Locator> {
-  const dialog = page
-    .locator('[role="dialog"]')
-    .filter({ has: page.getByText('Sort view', { exact: true }) });
+/** Open the consolidated display surface that owns layout, grouping, sorting, and properties. */
+async function openDisplayControls(page: Page): Promise<Locator> {
+  const dialog = page.getByRole('dialog', { name: 'Display view' });
   if (await dialog.isVisible()) return dialog;
-  const menu = page.getByRole('menu', { name: 'Sort' });
-  if (await menu.isVisible()) return menu;
-  const trigger = page.getByRole('button', { name: 'Sort', exact: true });
-  if (await trigger.isVisible()) {
-    await page.getByRole('button', { name: 'Sort' }).click();
-    await expect(menu).toBeVisible();
-    return menu;
-  }
-  await openOverflowControl(page, 'Sort');
+  await page.getByRole('button', { name: 'Display', exact: true }).click();
   await expect(dialog).toBeVisible();
   return dialog;
 }
@@ -104,35 +89,28 @@ async function applyNestedFilter(
 /** Apply nested grouping and two ordered sort terms through the shared toolbar. */
 async function arrangeRoster(page: Page, route: keyof typeof CONTROL_CASES): Promise<void> {
   const { filterLabel, subgroup, secondSort } = CONTROL_CASES[route];
-  await openOverflowControl(page, 'Group');
-  const groupDialog = page.getByRole('dialog', { name: 'Group view' });
-  const groupBy = groupDialog.getByRole('combobox', { name: 'Group by', exact: true });
+  const display = await openDisplayControls(page);
+  const groupBy = display.getByRole('combobox', { name: 'Group by', exact: true });
+  const grouped = waitForViewQuery(page);
   await groupBy.selectOption('status');
+  await grouped;
   await expect(groupBy).toHaveValue('status');
   const subgrouped = waitForViewQuery(page);
-  await groupDialog
-    .getByRole('combobox', { name: 'Subgroup by', exact: true })
-    .selectOption(subgroup);
+  await display.getByRole('combobox', { name: 'Subgroup by', exact: true }).selectOption(subgroup);
   await subgrouped;
-  await page.keyboard.press('Escape');
-  await expect(groupDialog).toHaveCount(0);
-  await expect(page.locator('body')).not.toHaveAttribute('data-scroll-locked', /\d+/);
 
   for (const field of [filterLabel, secondSort]) {
-    const sort = await openSortEditor(page);
-    await sort.getByRole('button', { name: 'Add sort' }).click();
+    await display.getByRole('button', { name: 'Add sort' }).click();
     const sorted = waitForViewQuery(page);
-    await page
-      .getByRole('menu', { name: 'Add sort' })
-      .getByRole('menuitem', { name: field, exact: true })
-      .click();
+    await page.getByRole('menuitem', { name: field, exact: true }).click();
     await sorted;
   }
-  const sort = await openSortEditor(page);
-  const ordered = sort.getByRole('list', { name: 'Ordered sort terms' });
+  const ordered = display.getByRole('list', { name: 'Ordered sort terms' });
   await expect(ordered).toContainText(`1. ${filterLabel}`);
   await expect(ordered).toContainText(`2. ${secondSort}`);
   await page.keyboard.press('Escape');
+  await expect(display).toHaveCount(0);
+  await expect(page.locator('body')).not.toHaveAttribute('data-scroll-locked', /\d+/);
 }
 
 /** Seed one row for every organization-level planning roster. */
@@ -230,13 +208,10 @@ test('all four rosters execute typed views and preserve layout and saved-view st
     await expect(bulkActions.getByRole('button', { name: 'Copied' })).toBeVisible();
     await bulkActions.getByRole('button', { name: 'Clear' }).click();
 
-    await page.getByRole('button', { name: 'More view controls' }).click();
-    await page.getByRole('menuitem', { name: 'Layout' }).click();
+    const display = await openDisplayControls(page);
     const layout = route === 'initiatives' ? 'Timeline' : 'Board';
-    await page
-      .getByRole('dialog', { name: 'Layout view' })
-      .getByRole('radio', { name: layout })
-      .click();
+    await display.getByRole('radio', { name: layout }).click();
+    await page.keyboard.press('Escape');
     if (layout === 'Board') {
       const board = page.getByRole('region', { name: `${title.slice(0, -1)} board` });
       await expect(board).toBeVisible();
@@ -261,7 +236,7 @@ test('all four rosters execute typed views and preserve layout and saved-view st
       page.getByRole('button', { name: `Remove ${viewName} from favorites` }),
     ).toHaveAttribute('aria-pressed', 'true');
     await reloadedTab.click();
-    await openOverflowControl(page, 'Reset to default');
+    await openOverflowControl(page, 'Restore default view');
     await expect(page.getByRole('checkbox', { name: `Select ${row}` })).toBeVisible();
   }
 });

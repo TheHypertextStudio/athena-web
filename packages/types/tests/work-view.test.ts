@@ -11,6 +11,7 @@ import {
 import {
   ActorOperand,
   createViewDefinitionSchema,
+  ProjectWorkViewQueryRequest,
   ProjectWorkViewOrderRequest,
   ProgramWorkViewOrderRequest,
   resolveWorkViewDefinition,
@@ -230,6 +231,7 @@ describe('work-view contracts', () => {
       labels: [],
       startDate: null,
       targetDate: null,
+      targetTimeframe: null,
       creator: null,
       createdAt: '2026-08-23T12:00:00.000Z',
       updatedAt: '2026-08-23T12:00:00.000Z',
@@ -248,6 +250,35 @@ describe('work-view contracts', () => {
       leadActor: { displayName: 'Ada Lovelace' },
       display: { iconKey: 'folder', colorKey: 'blue' },
     });
+  });
+
+  it('preserves semantic Project target timeframes in view rows and grouping', () => {
+    const request = ProjectWorkViewQueryRequest.parse({
+      target: 'project',
+      definition: {
+        version: 2,
+        target: 'project',
+        filter: null,
+        arrangement: { groupBy: 'targetTimeframe', subGroupBy: null, orderBy: [] },
+        presentation: {
+          layout: 'list',
+          properties: ['targetTimeframe'],
+          density: 'compact',
+          showEmptyGroups: false,
+        },
+      },
+      temporaryFilter: null,
+      context: { kind: 'organization' },
+      limit: 100,
+    });
+
+    expect(request.definition.arrangement.groupBy).toBe('targetTimeframe');
+    expect(
+      ProjectViewRow.shape.targetTimeframe.parse({
+        key: '2027-06-30|halfYear|6',
+        label: 'H2 FY 2027',
+      }),
+    ).toEqual({ key: '2027-06-30|halfYear|6', label: 'H2 FY 2027' });
   });
 
   it('carries an ordered eight-week activity pulse on Program view rows', () => {

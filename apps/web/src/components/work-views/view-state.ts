@@ -197,6 +197,7 @@ const FIELD_LABELS = {
     labels: 'Labels',
     startDate: 'Start date',
     targetDate: 'Target date',
+    targetTimeframe: 'Target timeframe',
     creator: 'Creator',
     createdAt: 'Created',
     updatedAt: 'Updated',

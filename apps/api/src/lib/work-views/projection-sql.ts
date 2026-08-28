@@ -4,6 +4,7 @@ import type { ViewTarget } from '@docket/work/view-contract';
 
 import { compileProgramActivitySql } from './program-activity-sql';
 import { compileProjectTeamMembershipSql } from './project-team-sql';
+import { targetTimeframeKeySql, targetTimeframeLabelSql } from './planning-timeframe-sql';
 import {
   compileTenantRelationArraySql,
   compileTenantScalarRelationIdSql,
@@ -126,6 +127,18 @@ const projections = {
       sql`e.id`,
       sql`e.organization_id`,
     )} labels, e.start_date, e.target_date,
+    case when e.target_date is null then null else json_build_object(
+      'key', ${targetTimeframeKeySql(
+        sql`e.target_date`,
+        sql`e.target_date_resolution`,
+        sql`e.target_date_fiscal_year_start_month`,
+      )},
+      'label', ${targetTimeframeLabelSql(
+        sql`e.target_date`,
+        sql`e.target_date_resolution`,
+        sql`e.target_date_fiscal_year_start_month`,
+      )}
+    ) end as target_timeframe,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.actor, 'created_by')} as creator,
     e.created_at, e.updated_at,
     e._progress progress, e._task_count::int task_count,

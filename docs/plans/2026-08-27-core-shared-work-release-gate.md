@@ -108,8 +108,8 @@ in this P0. It now describes baseline workspace access rather than paid-feature 
 **Step 2: Run the tests before changing source.**
 
 ```bash
-pnpm --filter @docket/billing test -- tests/application/entitlement.test.ts --maxWorkers=2
-pnpm --filter @docket/api test -- tests/agent/entitlement.test.ts tests/routes/group-d.test.ts tests/routes/billing-http.test.ts tests/routes/billing-lifecycle.test.ts tests/routes/group-b.test.ts --maxWorkers=2
+pnpm --filter @docket/billing exec vitest run tests/application/entitlement.test.ts --maxWorkers=2
+pnpm --filter @docket/api exec vitest run tests/agent/entitlement.test.ts tests/routes/group-d.test.ts tests/routes/billing-http.test.ts tests/routes/billing-lifecycle.test.ts tests/routes/group-b.test.ts --maxWorkers=2
 ```
 
 The capability expectation, parent-router Initiative case, and billing access expectations must

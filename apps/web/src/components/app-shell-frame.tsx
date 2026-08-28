@@ -564,7 +564,7 @@ function AppShellInner({
   const { setContext, setDensity, density } = useContextState();
   const { orgs, skin } = useActiveOrg();
   const { openPalette } = useCommandPalette();
-  const { tabs, activeKey, closeTab } = useOpenDocuments();
+  const { tabs, recentDocuments, activeKey, closeTab } = useOpenDocuments();
 
   // Registration itself lives at the root so it happens on every route; the shell only consumes
   // the result, docking the update card at the bottom of the sidebar.
@@ -670,6 +670,8 @@ function AppShellInner({
       activeHomeKey={homeKey}
       activeWorkspaceKey={workspaceKey}
       unreadCount={unreadCount}
+      recentDocuments={recentDocuments}
+      activeDocumentKey={activeKey}
       hrefForHome={(key) => `/${key}`}
       hrefForWorkspace={(orgId, key) => `/orgs/${orgId}/${key}`}
       renderLink={renderLink}

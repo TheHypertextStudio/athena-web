@@ -93,11 +93,10 @@ export function SidebarNavItem({
   const count = badge && badge > 0 ? badge : 0;
   const accessibleName = count > 0 ? `${label}, ${count} ${badgeLabel}` : label;
   // A dense, edge-to-edge sidebar row: `px-3 gap-2` matches the standard row rhythm, the label
-  // reads at `text-body-large` (one step up the MD3 body scale from the row-title default
-  // `body-medium`, overriding Button `size="sm"`'s `text-xs`), and the inline glyph drops to
-  // `size-4` (overriding the Button's baked-in `[&_svg]:size-4`) so it sits optically balanced
-  // beside the label. `focusRingInset` swaps the Button's standalone 2px ring for the 1px inset
-  // ring so adjacent flush rows never clip an overlapping outline.
+  // reads at `text-body-large`, and the inline glyph stays at `size-4` so it sits optically
+  // balanced beside the label. The 40px control step supplies the minimum target used by the
+  // desktop sidebar and mobile drawer. `focusRingInset` swaps the Button's standalone 2px ring for
+  // the 1px inset ring so adjacent flush rows never clip an overlapping outline.
   const className = cn(
     'text-body-large font-normal [&_svg]:size-4',
     // Collapsed the row is a square the glyph sits in the middle of; expanded it is the full-width
@@ -120,7 +119,7 @@ export function SidebarNavItem({
     <Button
       asChild
       variant="ghost"
-      size="sm"
+      controlSize="xl"
       aria-current={active ? 'page' : undefined}
       aria-label={ariaLabel}
       className={className}
@@ -131,7 +130,7 @@ export function SidebarNavItem({
     <Button
       type="button"
       variant="ghost"
-      size="sm"
+      controlSize="xl"
       aria-current={active ? 'page' : undefined}
       aria-label={ariaLabel}
       onClick={onSelect}

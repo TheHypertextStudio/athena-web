@@ -2,24 +2,16 @@
 
 import * as React from 'react';
 
-import { ChevronRight, Ellipsis } from '../../icons';
+import { ChevronRight } from '../../icons';
 import { cn } from '../../lib/utils';
-import {
-  Button,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '../../primitives';
+import { Button, Tooltip, TooltipContent, TooltipTrigger } from '../../primitives';
 import type { HomeNavKey, Workspace, WorkspaceNavKey } from './workspaces';
 import { type ResolvedNavigationDestination, selectRailDestinations } from './navigation-catalog';
 import {
   NAVIGATION_WORKSPACE_TRANSITION_NAME,
   navigationDestinationTransitionName,
 } from './navigation-transition';
+import { tabLabel, TYPE_ICON, type OpenTab } from './tab-types';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 
 /** Props for the shell's compact, labeled Material 3 navigation rail. */
@@ -28,6 +20,8 @@ export interface NavigationRailProps {
   readonly catalog: readonly ResolvedNavigationDestination[];
   readonly activeOrgId: string | null;
   readonly unreadCount?: number | undefined;
+  readonly recentDocuments: readonly OpenTab[];
+  readonly activeDocumentKey?: string | undefined;
   readonly hrefForHome: (key: Exclude<HomeNavKey, 'search'>) => string;
   readonly hrefForWorkspace: (orgId: string, key: WorkspaceNavKey) => string;
   readonly renderLink: (href: string, children: React.ReactNode) => React.ReactNode;
@@ -71,7 +65,14 @@ function RailDestination({
   loading,
 }: Omit<
   NavigationRailProps,
-  'workspaces' | 'catalog' | 'onSelectWorkspace' | 'onCreateWorkspace' | 'onToggle' | 'footer'
+  | 'workspaces'
+  | 'catalog'
+  | 'recentDocuments'
+  | 'activeDocumentKey'
+  | 'onSelectWorkspace'
+  | 'onCreateWorkspace'
+  | 'onToggle'
+  | 'footer'
 > & {
   readonly destination: ResolvedNavigationDestination;
 }): React.JSX.Element {
@@ -79,7 +80,7 @@ function RailDestination({
   const Icon = destination.icon;
   const label = destinationLabel(destination, unreadCount ?? 0);
   const className = cn(
-    'group text-label-medium focus-visible:ring-ring flex min-h-[3.75rem] w-full flex-col items-center justify-center gap-1 rounded-none px-1 py-1 text-center transition-colors focus-visible:ring-2 focus-visible:outline-none',
+    'group text-label-medium flex min-h-[3.75rem] w-full flex-col items-center justify-center gap-1 rounded-none px-1 py-1 text-center transition-colors hover:bg-transparent focus-visible:ring-0 focus-visible:outline-none',
     destination.active ? 'text-on-surface' : 'text-on-surface-variant hover:text-on-surface',
   );
   const content = (
@@ -87,10 +88,10 @@ function RailDestination({
       <span
         data-slot="navigation-rail-active-indicator"
         className={cn(
-          'flex h-8 w-14 shrink-0 items-center justify-center rounded-full transition-colors',
+          'group-focus-visible:ring-ring flex h-8 w-14 shrink-0 items-center justify-center rounded-full transition-colors group-focus-visible:ring-2',
           destination.active
-            ? 'bg-secondary-container text-on-secondary-container'
-            : 'group-hover:bg-surface-container-high',
+            ? 'bg-secondary-container text-on-secondary-container group-active:bg-secondary-container/80'
+            : 'group-hover:bg-surface-container-high group-active:bg-surface-container-highest',
         )}
       >
         <Icon aria-hidden="true" className="size-6" />
@@ -135,56 +136,14 @@ function RailDestination({
   );
 }
 
-function MoreDestination({
-  destination,
-  activeOrgId,
-  hrefForHome,
-  hrefForWorkspace,
-  renderLink,
-  onOpenSearch,
-}: Pick<
-  NavigationRailProps,
-  'activeOrgId' | 'hrefForHome' | 'hrefForWorkspace' | 'renderLink' | 'onOpenSearch'
-> & {
-  readonly destination: ResolvedNavigationDestination;
-}): React.JSX.Element {
-  const href = destinationHref(destination, activeOrgId, hrefForHome, hrefForWorkspace);
-  const Icon = destination.icon;
-  if (destination.group === 'home' && destination.key === 'search') {
-    return (
-      <DropdownMenuItem onSelect={onOpenSearch} selected={destination.active}>
-        <Icon aria-hidden="true" className="size-4" />
-        {destination.label}
-      </DropdownMenuItem>
-    );
-  }
-  if (!href || destination.disabled) {
-    return (
-      <DropdownMenuItem disabled>
-        <Icon aria-hidden="true" className="size-4" />
-        {destination.label}
-      </DropdownMenuItem>
-    );
-  }
-  return (
-    <DropdownMenuItem asChild selected={destination.active}>
-      {renderLink(
-        href,
-        <>
-          <Icon aria-hidden="true" className="size-4" />
-          {destination.label}
-        </>,
-      )}
-    </DropdownMenuItem>
-  );
-}
-
-/** A persistent rail that exposes daily navigation and groups all secondary destinations in More. */
+/** A persistent rail that exposes daily navigation and expands to the complete destination list. */
 export function NavigationRail({
   workspaces,
   catalog,
   activeOrgId,
   unreadCount = 0,
+  recentDocuments,
+  activeDocumentKey,
   hrefForHome,
   hrefForWorkspace,
   renderLink,
@@ -196,12 +155,6 @@ export function NavigationRail({
   footer,
 }: NavigationRailProps): React.JSX.Element {
   const railDestinations = selectRailDestinations(catalog);
-  const workspaceMore = catalog.filter(
-    (destination) => !destination.rail && destination.moreGroup === 'workspace',
-  );
-  const manageMore = catalog.filter(
-    (destination) => !destination.rail && destination.moreGroup === 'manage',
-  );
 
   return (
     <aside
@@ -221,7 +174,7 @@ export function NavigationRail({
           type="button"
           variant="ghost"
           iconOnly
-          controlSize="sm"
+          controlSize="xl"
           aria-label="Expand navigation"
           aria-pressed
           data-shell-sidebar-toggle="true"
@@ -232,73 +185,66 @@ export function NavigationRail({
         </Button>
       </div>
 
-      <nav aria-label="Primary navigation" className="min-h-0 w-full flex-1 overflow-y-auto pt-2">
-        <div className="flex flex-col gap-0">
-          {railDestinations.map((destination) => (
-            <div
-              key={destination.id}
-              style={{ viewTransitionName: navigationDestinationTransitionName(destination.id) }}
-            >
-              <RailDestination
-                destination={destination}
-                activeOrgId={activeOrgId}
-                unreadCount={unreadCount}
-                hrefForHome={hrefForHome}
-                hrefForWorkspace={hrefForWorkspace}
-                renderLink={renderLink}
-                onOpenSearch={onOpenSearch}
-                loading={loading}
-              />
-            </div>
-          ))}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                aria-label="More navigation"
-                className="group text-label-medium text-on-surface-variant hover:text-on-surface focus-visible:ring-ring flex min-h-[3.75rem] w-full flex-col items-center justify-center gap-1 rounded-none px-1 py-1 text-center transition-colors focus-visible:ring-2 focus-visible:outline-none"
+      <div className="min-h-0 w-full flex-1 overflow-y-auto pt-2">
+        <nav aria-label="Primary navigation" className="w-full">
+          <div className="flex flex-col gap-0">
+            {railDestinations.map((destination) => (
+              <div
+                key={destination.id}
+                style={{ viewTransitionName: navigationDestinationTransitionName(destination.id) }}
               >
-                <span className="group-hover:bg-surface-container-high flex h-8 w-14 shrink-0 items-center justify-center rounded-full transition-colors">
-                  <Ellipsis aria-hidden="true" className="size-6" />
-                </span>
-                <span>More</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent side="right" align="start" width="lg" sections="divider">
-              <DropdownMenuLabel>Workspace</DropdownMenuLabel>
-              <DropdownMenuGroup aria-label="Workspace">
-                {workspaceMore.map((destination) => (
-                  <MoreDestination
-                    key={destination.id}
-                    destination={destination}
-                    activeOrgId={activeOrgId}
-                    hrefForHome={hrefForHome}
-                    hrefForWorkspace={hrefForWorkspace}
-                    renderLink={renderLink}
-                    onOpenSearch={onOpenSearch}
-                  />
-                ))}
-              </DropdownMenuGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel>Manage</DropdownMenuLabel>
-              <DropdownMenuGroup aria-label="Manage">
-                {manageMore.map((destination) => (
-                  <MoreDestination
-                    key={destination.id}
-                    destination={destination}
-                    activeOrgId={activeOrgId}
-                    hrefForHome={hrefForHome}
-                    hrefForWorkspace={hrefForWorkspace}
-                    renderLink={renderLink}
-                    onOpenSearch={onOpenSearch}
-                  />
-                ))}
-              </DropdownMenuGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </nav>
+                <RailDestination
+                  destination={destination}
+                  activeOrgId={activeOrgId}
+                  unreadCount={unreadCount}
+                  hrefForHome={hrefForHome}
+                  hrefForWorkspace={hrefForWorkspace}
+                  renderLink={renderLink}
+                  onOpenSearch={onOpenSearch}
+                  loading={loading}
+                />
+              </div>
+            ))}
+          </div>
+        </nav>
+
+        {recentDocuments.length > 0 ? (
+          <nav
+            aria-label="Recent"
+            className="border-outline-variant mx-2 mt-2 flex flex-col items-center gap-1 border-t pt-2"
+          >
+            {recentDocuments.slice(0, 3).map((document) => {
+              const Icon = TYPE_ICON[document.type];
+              const label = tabLabel(document);
+              const active = document.key === activeDocumentKey;
+              return (
+                <Tooltip key={document.key}>
+                  <TooltipTrigger asChild>
+                    <Button
+                      asChild
+                      variant="ghost"
+                      iconOnly
+                      controlSize="xl"
+                      aria-label={`Recent: ${label}`}
+                      aria-current={active ? 'page' : undefined}
+                      data-slot="recent-navigation-item"
+                      className={cn(
+                        'shrink-0 rounded-lg',
+                        active
+                          ? 'bg-secondary-container text-on-secondary-container hover:bg-secondary-container/80'
+                          : 'text-on-surface-variant hover:text-on-surface',
+                      )}
+                    >
+                      {renderLink(document.href, <Icon aria-hidden="true" />)}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">{label}</TooltipContent>
+                </Tooltip>
+              );
+            })}
+          </nav>
+        ) : null}
+      </div>
 
       {footer ? <div className="w-full shrink-0 pt-2">{footer}</div> : null}
     </aside>

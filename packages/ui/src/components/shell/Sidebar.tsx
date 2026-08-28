@@ -16,6 +16,7 @@ import { useShellSidebar } from './ShellSidebarContext';
 import { ExpandedSidebar } from './ExpandedSidebar';
 import { NavigationRail } from './NavigationRail';
 import { resolveNavigationCatalog } from './navigation-catalog';
+import type { OpenTab } from './tab-types';
 import type { HomeNavKey, Workspace, WorkspaceNavKey } from './workspaces';
 
 /** Props supplied by the application shell to every navigation presentation. */
@@ -24,6 +25,8 @@ export interface SidebarProps {
   readonly activeHomeKey?: HomeNavKey | undefined;
   readonly activeWorkspaceKey?: WorkspaceNavKey | undefined;
   readonly unreadCount?: number | undefined;
+  readonly recentDocuments?: readonly OpenTab[] | undefined;
+  readonly activeDocumentKey?: string | undefined;
   readonly hrefForHome: (key: Exclude<HomeNavKey, 'search'>) => string;
   readonly hrefForWorkspace: (orgId: string, key: WorkspaceNavKey) => string;
   readonly renderLink: (href: string, children: React.ReactNode) => React.ReactNode;
@@ -41,6 +44,8 @@ export function Sidebar({
   activeHomeKey,
   activeWorkspaceKey,
   unreadCount,
+  recentDocuments = [],
+  activeDocumentKey,
   hrefForHome,
   hrefForWorkspace,
   renderLink,
@@ -90,6 +95,8 @@ export function Sidebar({
           catalog={catalog}
           activeOrgId={activeOrgId}
           unreadCount={unreadCount}
+          recentDocuments={recentDocuments}
+          activeDocumentKey={activeDocumentKey}
           hrefForHome={hrefForHome}
           hrefForWorkspace={hrefForWorkspace}
           renderLink={renderLink}

@@ -47,6 +47,8 @@ import { hrefForTab, parseTabRef, type TabRef, tabKey } from './types';
 export interface OpenDocumentsValue {
   /** The open documents, in tab order. */
   readonly tabs: readonly OpenTab[];
+  /** The three most recently visited document routes, newest first. */
+  readonly recentDocuments: readonly OpenTab[];
   /** The active tab's key, or `undefined` when no document is in focus. */
   readonly activeKey: string | undefined;
   /** Close a tab by key (routes to a neighbor / base when the active tab closes). */
@@ -63,6 +65,14 @@ function storageKey(userId: string): string {
   return `docket:open-tabs:${userId}`;
 }
 
+/** The session-scoped MRU key for one account. */
+function recentStorageKey(userId: string): string {
+  return `docket:recent-documents:${userId}`;
+}
+
+/** The collapsed rail has room for three document shortcuts below its daily destinations. */
+const RECENT_DOCUMENT_LIMIT = 3;
+
 type PersistedTab = TabRef & {
   readonly title: string | null;
 };
@@ -77,8 +87,8 @@ const TAB_TYPES = new Set<PersistedTab['type']>([
 ]);
 
 /** Read the persisted tab set for a user, tolerating absent/corrupt storage. */
-function readPersisted(userId: string): readonly OpenTab[] {
-  const parsed = readStoredJson(storageKey(userId), 'session');
+function readPersisted(key: string): readonly OpenTab[] {
+  const parsed = readStoredJson(key, 'session');
   if (!Array.isArray(parsed)) return [];
   // Keep only well-formed entries (defensive against schema drift across sessions). The org
   // and document ids must be real ULIDs, so any junk tab persisted before the route guard
@@ -120,12 +130,12 @@ function parsePersistedTab(value: unknown): PersistedTab | null {
 }
 
 /** Persist the tab set for a user, ignoring storage failures (quota/private mode). */
-function persist(userId: string, tabs: readonly OpenTab[]): void {
+function persist(key: string, tabs: readonly OpenTab[]): void {
   const descriptors: readonly PersistedTab[] = tabs.map(({ type, orgId, id, title }) => ({
     ...parseTabRef(type, orgId, id),
     title,
   }));
-  writeStoredJson(storageKey(userId), descriptors, 'session');
+  writeStoredJson(key, descriptors, 'session');
 }
 
 /** Props for {@link OpenDocumentsProvider}. */
@@ -200,10 +210,12 @@ export function OpenDocumentsProvider({
   const pathname = useAppPathname();
   const queryClient = useQueryClient();
   const [tabs, setTabs] = useState<readonly OpenTab[]>([]);
+  const [recentDocuments, setRecentDocuments] = useState<readonly OpenTab[]>([]);
 
   // Hydrate from session storage when the user resolves (and reset on sign-out / user change).
   useEffect(() => {
-    setTabs(userId ? readPersisted(userId) : []);
+    setTabs(userId ? readPersisted(storageKey(userId)) : []);
+    setRecentDocuments(userId ? readPersisted(recentStorageKey(userId)) : []);
   }, [userId]);
 
   // Persist on every change for the current user, but skip the first persist run for a user.
@@ -219,8 +231,18 @@ export function OpenDocumentsProvider({
       persistGuard.current = userId;
       return;
     }
-    persist(userId, tabs);
+    persist(storageKey(userId), tabs);
   }, [userId, tabs]);
+
+  const recentPersistGuard = useRef<string | null>(null);
+  useEffect(() => {
+    if (!userId) return;
+    if (recentPersistGuard.current !== userId) {
+      recentPersistGuard.current = userId;
+      return;
+    }
+    persist(recentStorageKey(userId), recentDocuments);
+  }, [userId, recentDocuments]);
 
   const activeRef = useMemo(() => (userId ? tabRefFromPath(pathname) : null), [pathname, userId]);
   const activeKey = activeRef ? tabKey(activeRef) : undefined;
@@ -262,12 +284,21 @@ export function OpenDocumentsProvider({
       registeredTitles.current.get(key) ??
       titleFromNavigationSnapshot(ref) ??
       titleFromCache(queryClient, ref);
+    const visited = newTab(ref, cached);
     setTabs((current) => {
       const existing = current.find((t) => t.key === key);
-      if (!existing) return [...current, newTab(ref, cached)];
+      if (!existing) return [...current, visited];
       // A rename can land while the tab is open; adopt a newer cached name over a stale one.
       if (cached === null || existing.title === cached) return current;
       return current.map((t) => (t.key === key ? { ...t, title: cached } : t));
+    });
+    setRecentDocuments((current) => {
+      const existing = current.find((document) => document.key === key);
+      const next = existing && cached === null ? existing : visited;
+      return [next, ...current.filter((document) => document.key !== key)].slice(
+        0,
+        RECENT_DOCUMENT_LIMIT,
+      );
     });
     if (cached !== null) {
       resolvedRef.current.add(key);
@@ -286,6 +317,9 @@ export function OpenDocumentsProvider({
         return;
       }
       setTabs((current) => current.map((t) => (t.key === key ? { ...t, title } : t)));
+      setRecentDocuments((current) =>
+        current.map((document) => (document.key === key ? { ...document, title } : document)),
+      );
     });
   }, [pathname, userId, queryClient]);
 
@@ -304,6 +338,11 @@ export function OpenDocumentsProvider({
     setTabs((current) =>
       current.some((t) => t.key === key && t.title !== title)
         ? current.map((t) => (t.key === key ? { ...t, title } : t))
+        : current,
+    );
+    setRecentDocuments((current) =>
+      current.some((document) => document.key === key && document.title !== title)
+        ? current.map((document) => (document.key === key ? { ...document, title } : document))
         : current,
     );
   }, []);
@@ -368,8 +407,8 @@ export function OpenDocumentsProvider({
   }, [tabs.length, activeKey, closeTab, navigateAdjacentTab]);
 
   const value = useMemo<OpenDocumentsValue>(
-    () => ({ tabs, activeKey, closeTab, registerTitle }),
-    [tabs, activeKey, closeTab, registerTitle],
+    () => ({ tabs, recentDocuments, activeKey, closeTab, registerTitle }),
+    [tabs, recentDocuments, activeKey, closeTab, registerTitle],
   );
 
   return <OpenDocumentsContext.Provider value={value}>{children}</OpenDocumentsContext.Provider>;

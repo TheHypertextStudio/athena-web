@@ -18,7 +18,7 @@ describe('navigation catalog', () => {
     ]);
   });
 
-  it('sends every non-primary destination to a named More group', () => {
+  it('keeps secondary destinations in the full catalog', () => {
     const catalog = resolveNavigationCatalog({
       activeHomeKey: 'today',
       activeWorkspaceKey: 'projects',
@@ -33,27 +33,9 @@ describe('navigation catalog', () => {
       },
     });
 
-    const more = catalog.filter((destination) => !destination.rail);
-    expect(
-      more.filter((destination) => destination.moreGroup === 'workspace').map(({ id }) => id),
-    ).toEqual([
-      'home:tasks',
-      'home:time',
-      'home:stream',
-      'home:portfolio',
-      'workspace:triage',
-      'workspace:tasks',
-      'workspace:stream',
-      'workspace:library',
-      'workspace:initiatives',
-      'workspace:programs',
+    expect(catalog.filter((destination) => !destination.rail).map(({ id }) => id)).toContain(
       'workspace:projects',
-      'workspace:cycles',
-      'workspace:teams',
-    ]);
-    expect(
-      more.filter((destination) => destination.moreGroup === 'manage').map(({ id }) => id),
-    ).toEqual(['workspace:people', 'workspace:views', 'workspace:graph', 'workspace:settings']);
+    );
     expect(catalog.find((destination) => destination.id === 'workspace:projects')).toMatchObject({
       active: true,
       label: 'Projects',

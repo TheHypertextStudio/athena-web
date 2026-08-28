@@ -128,7 +128,7 @@ export function ExpandedSidebar({
                 type="button"
                 variant="ghost"
                 iconOnly
-                controlSize="sm"
+                controlSize="xl"
                 aria-label="Collapse navigation"
                 aria-pressed={false}
                 data-shell-sidebar-toggle="true"

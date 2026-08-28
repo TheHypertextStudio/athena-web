@@ -627,8 +627,8 @@ describe('Sidebar collapse', () => {
     );
   }
 
-  // Collapsing keeps daily routes on the labeled rail and exposes secondary navigation through More.
-  it('keeps daily destinations named and exposes secondary navigation through More', () => {
+  // Collapsing keeps daily routes on the labeled rail. Expansion exposes the complete catalog.
+  it('keeps daily destinations named and leaves the complete catalog to expansion', () => {
     renderSidebar(true);
     expect(screen.getByRole('link', { name: 'Today' })).toHaveAttribute('href', '/today');
     expect(screen.getByRole('link', { name: 'My Work' })).toHaveAttribute(
@@ -636,7 +636,8 @@ describe('Sidebar collapse', () => {
       `/orgs/${ACME.id}/my-work`,
     );
     expect(screen.getByRole('button', { name: 'Search' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'More navigation' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Expand navigation' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'More navigation' })).not.toBeInTheDocument();
   });
 
   it('narrows to the labeled navigation rail, and back', () => {

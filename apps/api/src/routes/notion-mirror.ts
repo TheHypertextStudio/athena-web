@@ -35,6 +35,7 @@ import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
+import { productCapabilityGuard } from '../product-capability';
 
 import { resolveConnectorToken } from './integration-provider';
 import { toSyncRunOut } from './integration-sync';
@@ -135,6 +136,7 @@ async function mirrorToken(
 
 /** The Notion mirror router. */
 export const notionMirrorApp = new Hono<AppEnv>()
+  .use('*', productCapabilityGuard('integrations'))
   .get(
     '/databases',
     capabilityGuard('manage'),

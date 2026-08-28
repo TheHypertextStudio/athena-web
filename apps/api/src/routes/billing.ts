@@ -118,7 +118,11 @@ export const BillingSummaryOut = z.object({
     currency: z.literal('usd'),
     interval: z.literal('month'),
   }),
-  accessMode: z.enum(['writable', 'read_only']),
+  accessMode: z
+    .enum(['writable', 'read_only'])
+    .describe(
+      'Baseline core-work access for this workspace. Paid modules report entitlement through products and enforce their own product capabilities.',
+    ),
   products: z.array(BillingProductOut),
   canManageBilling: z.boolean(),
   effectiveDiscount: z
@@ -173,7 +177,8 @@ export type RedirectOut = z.infer<typeof RedirectOut>;
  * @remarks
  * Billing cancellation and payment failure never mutate these fields. The confirmed Danger Zone
  * account-deletion flow owns retention state. Billing keeps this read response for older clients
- * while customer access comes from {@link BillingSummaryOut.accessMode}.
+ * while {@link BillingSummaryOut.accessMode} reports baseline core-work access only. Paid modules
+ * use product entitlement instead of this lifecycle response or compatibility field.
  */
 export const LifecycleOut = z
   .object({
@@ -181,7 +186,7 @@ export const LifecycleOut = z
     lifecycleState: z
       .enum(['trialing', 'active', 'past_due', 'export_window', 'pending_deletion', 'deleted'])
       .describe(
-        "The organization's legacy account-retention state. Billing does not change this value. Older `export_window` and `pending_deletion` values remain visible for compatibility while access comes from the billing summary.",
+        "The organization's legacy account-retention state. Billing does not change this value. Older `export_window` and `pending_deletion` values remain visible for compatibility but do not determine baseline core-work access or paid-module entitlement.",
       ),
     exportReadyAt: z
       .string()

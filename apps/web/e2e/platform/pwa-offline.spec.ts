@@ -256,7 +256,7 @@ test.describe('offline behaviour', () => {
       await page.goto('/today', { waitUntil: 'domcontentloaded' });
 
       await expect(page.getByRole('heading', { name: /offline|reach Docket/i })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Reload' })).toBeVisible();
       // The requested URL is preserved on purpose: this is a waiting room, so reloading once the
       // connection returns lands on the real route rather than stranding someone.
       expect(new URL(page.url()).pathname).toBe('/today');

@@ -79,14 +79,22 @@ function RailDestination({
   const Icon = destination.icon;
   const label = destinationLabel(destination, unreadCount ?? 0);
   const className = cn(
-    'text-label-medium focus-visible:ring-ring flex min-h-14 w-full flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 text-center transition-colors focus-visible:ring-2 focus-visible:outline-none [&_svg]:size-5',
-    destination.active
-      ? 'bg-secondary-container text-on-secondary-container'
-      : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface',
+    'group text-label-medium focus-visible:ring-ring flex min-h-[3.75rem] w-full flex-col items-center justify-center gap-1 rounded-none px-1 py-1 text-center transition-colors focus-visible:ring-2 focus-visible:outline-none',
+    destination.active ? 'text-on-surface' : 'text-on-surface-variant hover:text-on-surface',
   );
   const content = (
     <>
-      <Icon aria-hidden="true" />
+      <span
+        data-slot="navigation-rail-active-indicator"
+        className={cn(
+          'flex h-8 w-14 shrink-0 items-center justify-center rounded-full transition-colors',
+          destination.active
+            ? 'bg-secondary-container text-on-secondary-container'
+            : 'group-hover:bg-surface-container-high',
+        )}
+      >
+        <Icon aria-hidden="true" className="size-6" />
+      </span>
       <span className="max-w-full truncate">{destination.label}</span>
     </>
   );
@@ -198,7 +206,7 @@ export function NavigationRail({
   return (
     <aside
       aria-label="Navigation"
-      className="text-on-surface flex h-full w-full shrink-0 flex-col items-center p-2 motion-reduce:transition-none lg:w-24 lg:transition-[width] lg:duration-200 lg:ease-out"
+      className="text-on-surface flex h-full w-full shrink-0 flex-col items-center px-0 py-2 motion-reduce:transition-none lg:w-16 lg:transition-[width] lg:duration-200 lg:ease-out"
     >
       <div className="flex w-full shrink-0 flex-col items-center gap-1">
         <WorkspaceSwitcher
@@ -225,7 +233,7 @@ export function NavigationRail({
       </div>
 
       <nav aria-label="Primary navigation" className="min-h-0 w-full flex-1 overflow-y-auto pt-2">
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-0">
           {railDestinations.map((destination) => (
             <div
               key={destination.id}
@@ -249,9 +257,11 @@ export function NavigationRail({
                 type="button"
                 variant="ghost"
                 aria-label="More navigation"
-                className="text-label-medium text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-ring flex min-h-14 w-full flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 text-center transition-colors focus-visible:ring-2 focus-visible:outline-none [&_svg]:size-5"
+                className="group text-label-medium text-on-surface-variant hover:text-on-surface focus-visible:ring-ring flex min-h-[3.75rem] w-full flex-col items-center justify-center gap-1 rounded-none px-1 py-1 text-center transition-colors focus-visible:ring-2 focus-visible:outline-none"
               >
-                <Ellipsis aria-hidden="true" />
+                <span className="group-hover:bg-surface-container-high flex h-8 w-14 shrink-0 items-center justify-center rounded-full transition-colors">
+                  <Ellipsis aria-hidden="true" className="size-6" />
+                </span>
                 <span>More</span>
               </Button>
             </DropdownMenuTrigger>

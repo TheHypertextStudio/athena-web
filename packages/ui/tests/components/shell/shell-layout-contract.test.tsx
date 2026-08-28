@@ -117,9 +117,9 @@ const SHELL_STATES = [
  * geometry read below would measure the *collapsed* column and every arithmetic check would be
  * against a chrome width the contract does not advertise.
  */
-function renderShell(): void {
+function renderShell(sidebarCollapsed = false): void {
   window.localStorage.setItem('docket.rail.collapsed', '0');
-  window.localStorage.setItem('docket.sidebar.collapsed', '0');
+  window.localStorage.setItem('docket.sidebar.collapsed', sidebarCollapsed ? '1' : '0');
   render(
     <ContextProvider initialContext={ACME.id}>
       <AppShell
@@ -140,6 +140,23 @@ function renderShell(): void {
       </AppShell>
     </ContextProvider>,
   );
+}
+
+/** The complete horizontal region consumed before collapsed navigation hands off to `<main>`. */
+function collapsedNavigationRegionPx(): number {
+  const main = screen.getByRole('main');
+  const shell = main.closest('[data-density]');
+  if (!shell) throw new Error('The shell root must carry data-density');
+
+  const padding = /(?:^| )lg:p-(\d+)(?: |$)/.exec(shell.className);
+  const gap = /(?:^| )lg:gap-(\d+)(?: |$)/.exec(shell.className);
+  if (!padding?.[1] || !gap?.[1]) throw new Error('The shell root must declare lg padding and gap');
+
+  const nav = screen.getByRole('complementary', { name: 'Navigation' });
+  const navWidth = columnWidthPx(nav, 'lg:');
+  if (navWidth === null) throw new Error('The collapsed navigation must declare a fixed width');
+
+  return spacingPx(Number(padding[1])) + navWidth + spacingPx(Number(gap[1]));
 }
 
 /** The shell's measured inputs, read out of one render of the real components. */
@@ -217,8 +234,10 @@ const DESKTOP_WIDTHS = Array.from(
 const COMPACT_WIDTHS = Array.from({ length: SHELL_DESKTOP_MIN_PX - 320 }, (_, i) => 320 + i);
 
 describe('AppShell layout contract — geometry read from the rendered shell', () => {
-  it('reserves 96px for the labeled navigation rail when the sidebar is collapsed', () => {
-    expect(SHELL_DESKTOP_CHROME_COLLAPSED_PX).toBe(SHELL_DESKTOP_CHROME_PX - 144);
+  it('keeps the entire collapsed navigation region within the 80px MD3 rail width', () => {
+    renderShell(true);
+
+    expect(collapsedNavigationRegionPx()).toBe(80);
   });
 
   it('sizes the rail as a viewport share, and every other column as a constant', () => {

@@ -641,7 +641,7 @@ describe('Sidebar collapse', () => {
 
   it('narrows to the labeled navigation rail, and back', () => {
     renderSidebar(true);
-    expect(screen.getByRole('complementary', { name: 'Navigation' })).toHaveClass('lg:w-24');
+    expect(screen.getByRole('complementary', { name: 'Navigation' })).toHaveClass('lg:w-16');
     cleanupRender();
     renderSidebar(false);
     expect(screen.getByRole('complementary', { name: 'Navigation' })).toHaveClass('lg:w-60');

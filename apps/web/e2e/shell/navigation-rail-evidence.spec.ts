@@ -24,6 +24,22 @@ async function expectNoHorizontalOverflow(page: Page): Promise<void> {
   expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth + 1);
 }
 
+/** Assert that every collapsed-navigation pixel, including shell spacing, fits the MD3 width. */
+async function expectCollapsedNavigationRegion(page: Page): Promise<void> {
+  const geometry = await page.evaluate(() => {
+    const main = document.querySelector<HTMLElement>('main#main-content');
+    const navigation = document.querySelector<HTMLElement>('aside[aria-label="Navigation"]');
+    if (!main || !navigation) throw new Error('The shell navigation and main content must exist');
+    return {
+      mainStart: main.getBoundingClientRect().left,
+      navigationWidth: navigation.getBoundingClientRect().width,
+    };
+  });
+
+  expect(geometry.mainStart).toBe(80);
+  expect(geometry.navigationWidth).toBe(64);
+}
+
 test('the labeled navigation rail keeps daily work visible at every density', async ({ page }) => {
   test.setTimeout(240_000);
   mkdirSync(SHOT_ROOT, { recursive: true });
@@ -56,6 +72,7 @@ test('the labeled navigation rail keeps daily work visible at every density', as
     /Today[\s\S]*My Work[\s\S]*Calendar[\s\S]*Inbox[\s\S]*Search[\s\S]*Athena[\s\S]*More/,
   );
   await expect(page.getByRole('button', { name: 'Expand navigation' })).toBeFocused();
+  await expectCollapsedNavigationRegion(page);
   await page.screenshot({ path: resolve(SHOT_ROOT, 'rail-1440x900-light.png') });
 
   await page.getByRole('button', { name: 'More navigation' }).click();

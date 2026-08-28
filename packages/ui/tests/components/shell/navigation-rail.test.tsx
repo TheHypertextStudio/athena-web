@@ -18,6 +18,7 @@ function renderRail(unreadCount?: number): void {
       <ShellSidebarProvider value={{ collapsed: true, onToggle: () => undefined }}>
         <Sidebar
           workspaces={[ACME]}
+          activeHomeKey="today"
           unreadCount={unreadCount}
           hrefForHome={(key) => `/${key}`}
           hrefForWorkspace={(orgId, key) => `/orgs/${orgId}/${key}`}
@@ -38,6 +39,21 @@ describe('collapsed sidebar navigation rail', () => {
     expect(screen.getByRole('navigation', { name: 'Primary navigation' })).toHaveTextContent(
       'TodayMy WorkCalendarInboxSearchAthenaMore',
     );
+  });
+
+  it('uses the baseline MD3 item and active-indicator geometry', () => {
+    renderRail();
+
+    const primary = screen.getByRole('navigation', { name: 'Primary navigation' });
+    const destinations = primary.firstElementChild;
+    const today = screen.getByRole('link', { name: 'Today' });
+    const indicator = today.querySelector('[data-slot="navigation-rail-active-indicator"]');
+    const icon = indicator?.querySelector('svg');
+
+    expect(destinations).toHaveClass('gap-0');
+    expect(today).toHaveClass('min-h-[3.75rem]');
+    expect(indicator).toHaveClass('h-8', 'w-14', 'rounded-full');
+    expect(icon).toHaveClass('size-6');
   });
 
   it('gives each persisted navigation identity one unique shared-element name', () => {

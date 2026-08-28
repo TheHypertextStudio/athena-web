@@ -243,6 +243,12 @@
   pre-existing timestamp. Production still rejects both public Checkout and a canary allowlist
   until the timestamp exists. The focused contract test first reproduced the rejection, then
   passed with the production-only boundary.
+- **Public billing policy correction**: The Terms and core MVP plan still claimed that ending Pro
+  scheduled workspace deletion. They now state the implemented contract: one card-required trial,
+  access through the paid period, a fixed seven-day payment-recovery window, read-only shared work,
+  continued export and reactivation, and account deletion only through the separate confirmed
+  Danger Zone flow. A focused public-page test protects those customer promises without depending
+  on layout or provider details.
 - **Founder access gate**: The `Hypertext Studio` production organization remains without a billing
   customer, entitlement, or exemption. The existing Better Auth user now has the supported initial
   superadmin bootstrap row. The production admin passkey ceremony is waiting for completion in the

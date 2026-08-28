@@ -28,7 +28,7 @@ export default function TermsPage(): JSX.Element {
         <h1 className="font-display text-display-large-small text-ink mt-4 tracking-tight">
           Terms of service
         </h1>
-        <p className="text-ink-muted mt-4">Effective August 15, 2026</p>
+        <p className="text-ink-muted mt-4">Effective August 28, 2026</p>
       </header>
 
       <TermsSection title="Agreement and eligibility">
@@ -60,14 +60,31 @@ export default function TermsPage(): JSX.Element {
       <TermsSection title="Docket and Docket Pro">
         <p>
           Docket is available without charge for a personal workspace with planning, scheduling, and
-          time tracking. Docket Pro costs USD $8 per organization each month and adds shared work,
-          integrations, MCP, and current Athena functionality. A Docket Pro subscription renews
-          monthly until an authorized workspace administrator cancels it.
+          time tracking. Docket Pro costs USD $8 per organization each month, plus tax where
+          required. Docket Pro adds shared work, integrations, MCP, and current Athena
+          functionality.
         </p>
         <p>
-          Canceling Docket Pro for a personal workspace removes Docket Pro capabilities but keeps
-          the free workspace and its data. Canceling Docket Pro for a shared workspace begins a
-          14-day period in which its data can be exported before the workspace enters deletion.
+          An eligible organization may receive one 14-day trial that requires a payment method.
+          Unless an authorized workspace administrator cancels before the trial ends, Docket Pro
+          begins monthly billing on the first charge date shown during Checkout. The subscription
+          renews monthly until an authorized workspace administrator cancels it.
+        </p>
+        <p>
+          Pro features remain available through the paid period end shown in Billing settings. After
+          that date, shared work becomes read-only. You can export or reactivate at any time. Docket
+          does not delete workspace data when Pro ends. Confirmed account deletion through the
+          Danger Zone in Settings is a separate action.
+        </p>
+        <p>
+          If payment fails, Pro remains available through the seven-day recovery deadline shown in
+          Billing settings. Shared work becomes read-only after that deadline if the payment remains
+          unpaid.
+        </p>
+        <p>
+          Student, nonprofit, and private partner discounts require approval. Discounts do not
+          stack, and they may end on their stated review or expiration date. Docket shows the
+          effective discount before the next charge.
         </p>
       </TermsSection>
 

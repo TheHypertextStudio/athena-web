@@ -225,6 +225,17 @@
   owns them, assert the saved API effects, and keep provider sync internals out of the calendar
   drawer. The assertions do not add sleeps, provider ids, or compatibility aliases. The OAuth path
   continues through Better Auth's discovery, registration, authorization, and token APIs.
+- **Controlled billing canary gate**: The single public billing flag could not support the approved
+  release sequence because turning it on admitted every eligible customer before the internal
+  canary finished. The API now admits only configured canary accounts while public Checkout stays
+  closed. It resolves the email and verification state from the Better Auth server session and
+  never accepts a billing identity from request input. The same gate controls Checkout status,
+  Checkout creation, new discount applications, and discount renewals. Environment validation
+  requires the canary to carry the same live Stripe identity, webhook, price, redirect attestation,
+  and active reconciliation as public billing. Thirty-nine billing route tests, 62 environment
+  tests, three deployment-policy tests, and 24 bootstrap tests pass. API and environment type
+  checking and lint pass with the API heap bounded to the repository's documented 4 GB command
+  limit.
 - **Founder access gate**: The `Hypertext Studio` production organization remains without a billing
   customer, entitlement, or exemption. The existing Better Auth user now has the supported initial
   superadmin bootstrap row. The production admin passkey ceremony is waiting for completion in the

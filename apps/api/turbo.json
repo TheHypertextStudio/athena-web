@@ -43,6 +43,7 @@
         "SENTRY_DSN",
         "BLOB_READ_WRITE_TOKEN",
         "EXPORT_BUCKET_*",
+        "BILLING_CANARY_EMAILS",
         "BILLING_ENABLED",
         "BILLING_RECONCILIATION_MODE",
         "SMTP_*",

@@ -57,6 +57,7 @@ describe('bootstrap phase flags', () => {
       'utf8',
     );
     expect(bootstrap).toContain('WORK_LOCATION_PROJECTION_ENABLED=false');
+    expect(bootstrap).toContain('BILLING_CANARY_EMAILS=');
     expect(bootstrap).toContain('BILLING_RECONCILIATION_MODE=off');
   });
 });
@@ -379,6 +380,7 @@ describe('production account-creation deployment contract', () => {
   });
 
   it('deploys bootstrap-managed billing without an MCP vendor allowlist', () => {
+    expect(workflow).toContain('BILLING_CANARY_EMAILS: "${{ vars.BILLING_CANARY_EMAILS }}"');
     expect(workflow).toContain('BILLING_ENABLED: "${{ vars.BILLING_ENABLED }}"');
     expect(workflow).toContain(
       'BILLING_RECONCILIATION_MODE: "${{ vars.BILLING_RECONCILIATION_MODE }}"',

@@ -611,6 +611,51 @@ describe('billing router (org-scoped, via the BillingGateway port)', () => {
     }
   });
 
+  it('opens Checkout only to the configured Better Auth canary identity before public launch', async () => {
+    const { env } = await import('../../src/env');
+    const canaryOrgId = await makeOrg('active');
+    const publicOrgId = await makeOrg('active');
+    const canary = billingApp(
+      canaryOrgId,
+      ['manage'],
+      fakeSession('billing-canary', 'Billing Canary', 'canary@example.com'),
+    );
+    const publicCustomer = billingApp(
+      publicOrgId,
+      ['manage'],
+      fakeSession('billing-public', 'Billing Public', 'public@example.com'),
+    );
+    Reflect.set(env, 'BILLING_ENABLED', false);
+    Reflect.set(env, 'BILLING_CANARY_EMAILS', ' CANARY@example.com ');
+    try {
+      const canarySummary = await canary.request('/');
+      await expect(canarySummary.json()).resolves.toMatchObject({ checkoutEnabled: true });
+      const canaryCheckout = await canary.request('/checkout', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      expect(canaryCheckout.status).toBe(200);
+
+      const publicSummary = await publicCustomer.request('/');
+      await expect(publicSummary.json()).resolves.toMatchObject({ checkoutEnabled: false });
+      const publicCheckout = await publicCustomer.request('/checkout', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      expect(publicCheckout.status).toBe(503);
+      const publicAccounts = await db
+        .select()
+        .from(organizationBillingAccount)
+        .where(eq(organizationBillingAccount.organizationId, publicOrgId));
+      expect(publicAccounts).toHaveLength(0);
+    } finally {
+      Reflect.set(env, 'BILLING_CANARY_EMAILS', undefined);
+      Reflect.set(env, 'BILLING_ENABLED', true);
+    }
+  });
+
   it('blocks new discount applications without hiding existing discount status', async () => {
     const { env } = await import('../../src/env');
     const orgId = await makeOrg('active');
@@ -638,6 +683,42 @@ describe('billing router (org-scoped, via the BillingGateway port)', () => {
         .where(eq(billingDiscountApplication.organizationId, orgId));
       expect(applications).toHaveLength(0);
     } finally {
+      Reflect.set(env, 'BILLING_ENABLED', true);
+    }
+  });
+
+  it('opens discount applications to the configured Better Auth canary identity', async () => {
+    const { env } = await import('../../src/env');
+    await db.insert(user).values({
+      id: 'discount-canary',
+      name: 'Discount Canary',
+      email: 'discount-canary@example.com',
+      emailVerified: true,
+    });
+    const orgId = await makeOrg('active');
+    const app = billingApp(
+      orgId,
+      ['manage'],
+      fakeSession('discount-canary', 'Discount Canary', 'discount-canary@example.com'),
+    );
+    Reflect.set(env, 'BILLING_ENABLED', false);
+    Reflect.set(env, 'BILLING_CANARY_EMAILS', 'discount-canary@example.com');
+    try {
+      const status = await app.request('/discounts');
+      await expect(status.json()).resolves.toMatchObject({ applicationsEnabled: true });
+
+      const response = await app.request('/discounts/applications', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          programKey: 'nonprofit',
+          evidenceType: 'irs_registry',
+          ein: '12-3456789',
+        }),
+      });
+      expect(response.status).toBe(201);
+    } finally {
+      Reflect.set(env, 'BILLING_CANARY_EMAILS', undefined);
       Reflect.set(env, 'BILLING_ENABLED', true);
     }
   });

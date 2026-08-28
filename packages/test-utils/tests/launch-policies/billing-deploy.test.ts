@@ -19,4 +19,8 @@ describe('billing deployment policy', () => {
       'BILLING_RECONCILIATION_MODE: "${{ vars.BILLING_RECONCILIATION_MODE }}"',
     );
   });
+
+  it('passes the Better Auth billing canary allowlist into the API revision', () => {
+    expect(workflow).toContain('BILLING_CANARY_EMAILS: "${{ vars.BILLING_CANARY_EMAILS }}"');
+  });
 });

@@ -154,17 +154,26 @@ function assertCrossFieldRules(e: typeof env): void {
     throw new Error(`Invalid environment (cross-field): ${msg}`);
   };
 
-  if (e.BILLING_ENABLED) {
+  const billingCanaryEnabled =
+    e.BILLING_CANARY_EMAILS?.split(',').some((email) => email.trim().length > 0) ?? false;
+  const billingCustomerOperationsEnabled = e.BILLING_ENABLED || billingCanaryEnabled;
+  const billingRolloutSetting = e.BILLING_ENABLED
+    ? 'BILLING_ENABLED=true'
+    : 'BILLING_CANARY_EMAILS';
+
+  if (billingCustomerOperationsEnabled) {
     const secretKey =
-      e.STRIPE_SECRET_KEY ?? fail('BILLING_ENABLED=true requires STRIPE_SECRET_KEY.');
+      e.STRIPE_SECRET_KEY ?? fail(`${billingRolloutSetting} requires STRIPE_SECRET_KEY.`);
     if (!e.STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID) {
-      fail('BILLING_ENABLED=true requires STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID.');
+      fail(`${billingRolloutSetting} requires STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID.`);
     }
     const publishableKey =
-      e.STRIPE_PUBLISHABLE_KEY ?? fail('BILLING_ENABLED=true requires STRIPE_PUBLISHABLE_KEY.');
-    if (!e.STRIPE_WEBHOOK_SECRET) fail('BILLING_ENABLED=true requires STRIPE_WEBHOOK_SECRET.');
+      e.STRIPE_PUBLISHABLE_KEY ?? fail(`${billingRolloutSetting} requires STRIPE_PUBLISHABLE_KEY.`);
+    if (!e.STRIPE_WEBHOOK_SECRET) {
+      fail(`${billingRolloutSetting} requires STRIPE_WEBHOOK_SECRET.`);
+    }
     if (!e.STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT) {
-      fail('BILLING_ENABLED=true requires STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT.');
+      fail(`${billingRolloutSetting} requires STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT.`);
     }
     if (
       !e.STRIPE_PRICE_DOCKET_PRO &&
@@ -175,7 +184,7 @@ function assertCrossFieldRules(e: typeof env): void {
       !e.DOCKET_PRICE_LOOKUP_TEAM
     ) {
       fail(
-        'BILLING_ENABLED=true requires STRIPE_PRICE_DOCKET_PRO or DOCKET_PRICE_LOOKUP_DOCKET_PRO.',
+        `${billingRolloutSetting} requires STRIPE_PRICE_DOCKET_PRO or DOCKET_PRICE_LOOKUP_DOCKET_PRO.`,
       );
     }
     const secretMode = /^(?:sk|rk)_(live|test)_/u.exec(secretKey)?.[1];
@@ -187,7 +196,7 @@ function assertCrossFieldRules(e: typeof env): void {
       fail('non-production billing requires test-mode Stripe keys.');
     }
     if (e.BILLING_RECONCILIATION_MODE !== 'active') {
-      fail('BILLING_ENABLED=true requires BILLING_RECONCILIATION_MODE=active.');
+      fail(`${billingRolloutSetting} requires BILLING_RECONCILIATION_MODE=active.`);
     }
   } else if (e.BILLING_RECONCILIATION_MODE !== 'off') {
     if (!e.STRIPE_SECRET_KEY) {

@@ -60,6 +60,7 @@ import { ok } from '../lib/ok';
 import { apiDoc, describeRoute } from '../lib/openapi-route';
 import { zJson } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
+import { customerBillingEnabled } from '../services/billing-rollout';
 import billingDiscounts from './billing-discounts';
 
 /** Subscription status returned by `GET /` — `null` when the org has no subscription. */
@@ -244,11 +245,6 @@ function defaultPriceKey(): string {
   );
 }
 
-/** Read the rollout flag safely when test-only validation skipping leaves raw env strings. */
-function checkoutRolloutEnabled(value: unknown): boolean {
-  return value === true || value === 'true';
-}
-
 /** Build an absolute app URL for the given path (checkout success/cancel defaults). */
 function appUrl(path: string): string {
   return `${env.WEB_URL}${path}`;
@@ -324,7 +320,11 @@ const billing = new Hono<AppEnv>()
         (pro?.status === 'past_due' && pro.graceEndsAt !== null && pro.graceEndsAt.getTime() > now);
       return ok(c, BillingSummaryOut, {
         organizationId: actorCtx.orgId,
-        checkoutEnabled: checkoutRolloutEnabled(env.BILLING_ENABLED),
+        checkoutEnabled: customerBillingEnabled(
+          env.BILLING_ENABLED,
+          env.BILLING_CANARY_EMAILS,
+          c.get('session')?.user,
+        ),
         listPrice: { amount: 800, currency: 'usd', interval: 'month' },
         accessMode: org.isPersonal || hasWritablePro ? 'writable' : 'read_only',
         canManageBilling: actorCtx.capabilities.includes('manage'),
@@ -379,7 +379,13 @@ Side effect: creates a checkout session. Docket Pro ownership changes only after
     }),
     zJson(CheckoutBody),
     async (c) => {
-      if (!env.BILLING_ENABLED) {
+      if (
+        !customerBillingEnabled(
+          env.BILLING_ENABLED,
+          env.BILLING_CANARY_EMAILS,
+          c.get('session')?.user,
+        )
+      ) {
         throw new BillingUnavailableError('Docket Pro checkout is not open yet');
       }
       const { orgId } = c.get('actorCtx');

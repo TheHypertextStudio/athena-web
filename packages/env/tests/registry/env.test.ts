@@ -565,6 +565,38 @@ describe('api composition', () => {
       expect(mod.env.BILLING_RECONCILIATION_MODE).toBe('shadow');
     });
 
+    it('requires active reconciliation before a Better Auth billing canary can start', async () => {
+      for (const [key, value] of Object.entries({
+        ...validApiEnv(),
+        BILLING_ENABLED: 'false',
+        BILLING_CANARY_EMAILS: 'canary@example.com',
+        ...requiredStripeRuntime,
+        BILLING_RECONCILIATION_MODE: 'shadow',
+        STRIPE_PRICE_DOCKET_PRO: 'price_123',
+      })) {
+        vi.stubEnv(key, value);
+      }
+      await expect(import('../../src/api')).rejects.toThrow(
+        'BILLING_CANARY_EMAILS requires BILLING_RECONCILIATION_MODE=active',
+      );
+    });
+
+    it('admits a configured Better Auth billing canary while public Checkout remains disabled', async () => {
+      for (const [key, value] of Object.entries({
+        ...validApiEnv(),
+        BILLING_ENABLED: 'false',
+        BILLING_CANARY_EMAILS: 'canary@example.com',
+        ...requiredStripeRuntime,
+        STRIPE_PRICE_DOCKET_PRO: 'price_123',
+      })) {
+        vi.stubEnv(key, value);
+      }
+      const mod = await import('../../src/api');
+      expect(mod.env.BILLING_ENABLED).toBe(false);
+      expect(mod.env.BILLING_CANARY_EMAILS).toBe('canary@example.com');
+      expect(mod.env.BILLING_RECONCILIATION_MODE).toBe('active');
+    });
+
     it('requires the Hypertext Studio account pin before public Checkout can start', async () => {
       for (const [key, value] of Object.entries({
         ...validApiEnv(),

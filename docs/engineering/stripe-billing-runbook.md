@@ -30,6 +30,14 @@ change discounts, advance awards, expire applications, or delete evidence. Obser
 at least 24 hours. Resolve every audit finding before setting the mode to `active`.
 `BILLING_ENABLED=true` fails environment validation unless reconciliation is already `active`.
 
+After the 24-hour shadow gate passes, set reconciliation to `active` and add only the controlled
+canary accounts to `BILLING_CANARY_EMAILS`. The API matches that list against the verified email in
+the Better Auth server session. It never accepts a browser-supplied billing identity. Keep
+`BILLING_ENABLED=false` during this stage, so every account outside the canary list still sees
+Checkout and new discount applications as unavailable. A non-empty canary list requires the same
+live Stripe keys, webhook, price, redirect attestation, account pin, and active reconciliation as
+public Checkout.
+
 Stripe exposes its one-subscription redirect only through Dashboard settings. In both test and
 live mode, activate the no-code customer portal, keep its login link enabled, and enable **Redirect
 customers with an active subscription to the customer portal** under Checkout and Payment Links.
@@ -121,8 +129,8 @@ authenticated application route. A customer or staff response must never expose 
 
 ## Rollback
 
-Set `BILLING_ENABLED=false` and disable new discount applications. Keep
-`BILLING_RECONCILIATION_MODE=active`. Do not disable the Stripe portal, webhooks, billing
+Set `BILLING_ENABLED=false`, clear `BILLING_CANARY_EMAILS`, and disable new discount applications.
+Keep `BILLING_RECONCILIATION_MODE=active`. Do not disable the Stripe portal, webhooks, billing
 reconciliation, essential notices, or existing entitlements. Those paths protect customers who
 already paid. Record the rollback time and affected organizations before changing provider state
 or issuing money.

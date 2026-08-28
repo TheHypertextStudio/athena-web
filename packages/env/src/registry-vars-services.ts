@@ -110,13 +110,22 @@ export const SERVICE_VARS: readonly VarSpec[] = [
       'ISO timestamp recorded after an operator verifies Stripe redirects existing subscribers to the portal',
   },
   {
+    name: 'BILLING_CANARY_EMAILS',
+    slice: 'stripe',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: stripeServer.BILLING_CANARY_EMAILS,
+    where: 'CSV of verified Better Auth account emails admitted before public Checkout opens',
+  },
+  {
     name: 'BILLING_ENABLED',
     slice: 'stripe',
     scope: 'server',
     targets: ['api'],
     required: true,
     zod: stripeServer.BILLING_ENABLED,
-    where: 'true|false — gate that requires the Stripe keys when on (default false)',
+    where: 'true|false — public customer Checkout gate (default false)',
   },
   {
     name: 'BILLING_RECONCILIATION_MODE',

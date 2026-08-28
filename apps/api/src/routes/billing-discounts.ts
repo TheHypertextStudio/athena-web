@@ -33,6 +33,7 @@ import { apiDoc } from '../lib/openapi-route';
 import { hasSqlState } from '../lib/sql-state';
 import { zForm, zJson, zParam } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
+import { customerBillingEnabled } from '../services/billing-rollout';
 
 /** Public program details shown before a customer applies. */
 export const DiscountProgramOut = z.object({
@@ -359,7 +360,12 @@ const billingDiscounts = new Hono<AppEnv>()
       const award = awards[0] ?? null;
       const credit = credits[0] ?? null;
       return ok(c, DiscountsOut, {
-        applicationsEnabled: env.BILLING_ENABLED && !complimentary,
+        applicationsEnabled:
+          customerBillingEnabled(
+            env.BILLING_ENABLED,
+            env.BILLING_CANARY_EMAILS,
+            c.get('session')?.user,
+          ) && !complimentary,
         programs: programs.map((program) => ({
           key: program.key,
           name: program.name,
@@ -395,7 +401,13 @@ const billingDiscounts = new Hono<AppEnv>()
     }),
     zJson(SubmitDiscountApplicationBody),
     async (c) => {
-      if (!env.BILLING_ENABLED) {
+      if (
+        !customerBillingEnabled(
+          env.BILLING_ENABLED,
+          env.BILLING_CANARY_EMAILS,
+          c.get('session')?.user,
+        )
+      ) {
         throw new BillingUnavailableError('Discount applications are not open yet');
       }
       const session = c.get('session');
@@ -447,7 +459,13 @@ const billingDiscounts = new Hono<AppEnv>()
     }),
     zJson(SubmitDiscountApplicationBody),
     async (c) => {
-      if (!env.BILLING_ENABLED) {
+      if (
+        !customerBillingEnabled(
+          env.BILLING_ENABLED,
+          env.BILLING_CANARY_EMAILS,
+          c.get('session')?.user,
+        )
+      ) {
         throw new BillingUnavailableError('Discount renewal applications are not open yet');
       }
       const session = c.get('session');

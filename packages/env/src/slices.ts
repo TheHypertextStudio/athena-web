@@ -219,6 +219,8 @@ export const stripeServer = {
   STRIPE_PRICE_TEAM: z.string().optional(),
   STRIPE_BILLING_PORTAL_CONFIG_ID: z.string().optional(),
   STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT: z.iso.datetime({ offset: true }).optional(),
+  /** CSV of verified Better Auth account emails admitted during the controlled billing canary. */
+  BILLING_CANARY_EMAILS: z.string().optional(),
   BILLING_ENABLED: boolFromString(),
   BILLING_RECONCILIATION_MODE: z.enum(['off', 'shadow', 'active']),
 };

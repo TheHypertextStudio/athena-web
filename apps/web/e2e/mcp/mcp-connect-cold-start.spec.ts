@@ -55,19 +55,19 @@ test('an unauthenticated MCP authorize request resumes to consent after sign-in,
   // checks on this button. The click then hangs against a detached element even though the flow
   // succeeded. Both orderings are a correct resume, so race the click against the outcome; the
   // assertion below is what actually gates the test.
-  const authorize = page.getByRole('button', { name: 'Authorize' });
+  const allowAccess = page.getByRole('button', { name: 'Allow access' });
   await Promise.race([
     page
       .getByRole('button', { name: 'Sign in with a passkey' })
       .click({ timeout: TIMEOUTS.ceremony })
       .catch(() => undefined),
-    authorize.waitFor({ state: 'visible', timeout: TIMEOUTS.ceremony }),
+    allowAccess.waitFor({ state: 'visible', timeout: TIMEOUTS.ceremony }),
   ]);
 
   // Must land back on the consent screen for THIS client - never /today, and never left on
   // sign-in with the request abandoned.
-  await expect(authorize).toBeVisible({ timeout: TIMEOUTS.ceremony });
-  await authorize.click();
+  await expect(allowAccess).toBeVisible({ timeout: TIMEOUTS.ceremony });
+  await allowAccess.click();
 
   await page.waitForURL(`${REDIRECT_URI}*`, { timeout: TIMEOUTS.ceremony });
   const redirected = new URL(page.url());

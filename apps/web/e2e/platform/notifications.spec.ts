@@ -42,10 +42,12 @@ test.describe('notification settings', () => {
     const contactCreate = waitForApiResponse(page, /\/v1\/me\/contact-points(\?|$)/, {
       method: 'POST',
     });
-    await page.getByLabel('Phone number').fill(phone);
-    await page.getByRole('button', { name: 'Add phone' }).click();
-    expect((await contactCreate).status()).toBe(200);
-    await expect(page.getByText(`+*******${suffix}`, { exact: true })).toBeVisible({
+    await page.getByRole('button', { name: 'Add phone number' }).click();
+    const phoneForm = page.locator('form').filter({ has: page.getByLabel('Phone number') });
+    await phoneForm.getByLabel('Phone number').fill(phone);
+    await phoneForm.getByRole('button', { name: 'Add', exact: true }).click();
+    expect((await contactCreate).status()).toBe(201);
+    await expect(page.getByText(phone, { exact: true })).toBeVisible({
       timeout: TIMEOUTS.ui,
     });
     await expect(page.getByText('Verification pending')).toBeVisible();

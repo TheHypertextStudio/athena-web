@@ -136,11 +136,11 @@ export async function authorizeInBrowser(
   const authorizePath = authorizationUrl.pathname + authorizationUrl.search;
   await page.goto(authorizePath);
 
-  // A scope set not yet consented to lands on the consent screen; approve it.
-  await expect(page.getByRole('button', { name: 'Authorize' })).toBeVisible({
+  // A scope set not yet consented to lands on the consent screen; allow the requested access.
+  await expect(page.getByRole('button', { name: 'Allow access' })).toBeVisible({
     timeout: TIMEOUTS.ceremony,
   });
-  await page.getByRole('button', { name: 'Authorize' }).click();
+  await page.getByRole('button', { name: 'Allow access' }).click();
 
   await page.waitForURL(`${REDIRECT_URI}*`, { timeout: TIMEOUTS.ceremony });
   const redirected = new URL(page.url());

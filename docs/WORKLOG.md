@@ -218,6 +218,13 @@
   fixed fiscal-year ending labels for periods that start in the prior calendar year. The same
   behavior test now covers exact dates, months, fiscal quarters, halves, fiscal years, and calendar
   years.
+- **Exact-main browser contract correction**: E2E shard 2 on `5e62b5fb7` reached the shipped
+  Calendar, OAuth consent, and Notifications surfaces but still searched for controls and provider
+  internals removed by earlier product changes. The corrected journeys use the visible Create task,
+  Link task, Allow access, and Add phone number actions. They scope repeated actions to the form that
+  owns them, assert the saved API effects, and keep provider sync internals out of the calendar
+  drawer. The assertions do not add sleeps, provider ids, or compatibility aliases. The OAuth path
+  continues through Better Auth's discovery, registration, authorization, and token APIs.
 - **Founder access gate**: The `Hypertext Studio` production organization remains without a billing
   customer, entitlement, or exemption. The existing Better Auth user now has the supported initial
   superadmin bootstrap row. The production admin passkey ceremony is waiting for completion in the

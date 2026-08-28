@@ -1,0 +1,20 @@
+---
+title: Core shared-work test dependency diagram
+---
+flowchart TB
+  BILLING["Billing contract suite<br/>shared_work is not paid<br/>integrations, MCP, Athena, and voice stay paid"]
+  API["API integration suite<br/>Owner: create 201<br/>Member: create 201<br/>Guest: denied<br/>paid feature without grant: 402"]
+  BROWSER["Production-build browser suite<br/>create account<br/>create shared workspace in UI<br/>create Initiative in UI<br/>see it in list<br/>reload persisted detail"]
+
+  VERDICT{"Core product acceptance"}
+  LATEST{"Commit is still latest on main"}
+  DEPLOY["Deploy production"]
+  BLOCK["Block deployment"]
+
+  BILLING --> VERDICT
+  API --> VERDICT
+  BROWSER --> VERDICT
+  VERDICT -->|all pass| LATEST
+  VERDICT -->|any fail| BLOCK
+  LATEST -->|yes| DEPLOY
+  LATEST -->|no| BLOCK

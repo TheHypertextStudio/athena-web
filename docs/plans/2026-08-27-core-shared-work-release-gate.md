@@ -62,6 +62,9 @@ No middleware may infer a paid requirement from `isPersonal`, request method, or
 
 ## Acceptance contract
 
+The [test dependency diagram](2026-08-27-core-shared-work-test-structure.mmd) shows how the three
+test suites combine into the deployment decision.
+
 1. An Owner in an unentitled shared workspace receives HTTP 201 from
    `POST /v1/orgs/:orgId/initiatives`.
 2. A Member with `contribute` can create baseline work. A Guest cannot create it.

@@ -203,7 +203,6 @@ test('Library finds, groups, explains, and downloads a file at desktop and phone
   });
   await expect(page.getByRole('grid', { name: 'Library resources' })).toBeVisible();
   await expect(page.getByRole('row').filter({ hasText: INITIATIVE_NAME })).toBeVisible();
-  await expect(page.getByRole('link', { name: FILE_NAME })).toBeVisible();
   await expect(page.getByRole('link', { name: OFFSCREEN_FILE_NAME })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Display · Work context' })).toBeVisible();
 
@@ -238,9 +237,9 @@ test('Library finds, groups, explains, and downloads a file at desktop and phone
     'href',
     new RegExp(`/orgs/${orgId}/tasks/${task.id}\\?attachmentId=`),
   );
-  await search.fill('');
-  await expect(page).not.toHaveURL(/(?:\?|&)q=/);
-  await expect(page.getByRole('grid', { name: 'Library resources' })).toBeVisible();
+  await search.fill(FILE_NAME);
+  await expect(page.getByRole('grid', { name: 'Library search results' })).toBeVisible();
+  await expect(page.getByRole('link', { name: FILE_NAME })).toBeVisible();
 
   await page.getByRole('button', { name: `Show context for ${FILE_NAME}` }).click();
   const details = page.getByRole('complementary', { name: `Details for ${FILE_NAME}` });
@@ -254,6 +253,8 @@ test('Library finds, groups, explains, and downloads a file at desktop and phone
   await page.getByRole('link', { name: FILE_NAME }).click();
   expect((await download).suggestedFilename()).toBe(FILE_NAME);
 
+  await search.fill('');
+  await expect(page.getByRole('grid', { name: 'Library resources' })).toBeVisible();
   await page.getByRole('button', { name: 'Display · Work context' }).click();
   await page.getByRole('menuitemradio', { name: 'Source' }).click();
   await expect(page).toHaveURL(/(?:\?|&)group=provider(?:&|$)/);

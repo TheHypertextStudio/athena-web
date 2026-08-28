@@ -309,6 +309,8 @@ export interface SchedulingCanvasProps {
   readonly onReachBoundary?: ((direction: 'previous' | 'next') => void) | undefined;
   /** Optional application-owned error copy. The grid remains mounted underneath it. */
   readonly error?: string | null | undefined;
+  /** One recovery control rendered beside {@link error}, so degraded data remains actionable. */
+  readonly errorAction?: ReactNode | undefined;
   /** Application-owned empty copy shown when every lane has no items. */
   readonly emptyMessage?: string | undefined;
   /** One control rendered beside {@link emptyMessage}, so an empty canvas offers a way forward. */

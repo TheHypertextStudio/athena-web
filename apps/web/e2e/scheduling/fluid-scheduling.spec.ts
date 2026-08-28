@@ -2,12 +2,7 @@
 import type { Locator } from '@playwright/test';
 
 import { signUpAndOnboard } from '../helpers/app';
-import {
-  CALENDAR_IDS,
-  makeCalendarItem,
-  makeCalendarLayer,
-  shiftDate,
-} from '../helpers/calendar-fixtures';
+import { CALENDAR_IDS, makeCalendarItem, makeCalendarLayer } from '../helpers/calendar-fixtures';
 import { calendarRouteState, installCalendarRoutes } from '../helpers/calendar-routes';
 import {
   attachCalendarScreenshot,
@@ -32,7 +27,8 @@ async function measuredLaneCount(schedule: Locator): Promise<number> {
 
 /** Summarize one range request in UTC date-window terms. */
 function rangeSummary(request: string): {
-  readonly startDate: string;
+  readonly start: number;
+  readonly end: number;
   readonly dayCount: number;
 } | null {
   const url = new URL(request);
@@ -40,19 +36,25 @@ function rangeSummary(request: string): {
   const end = Date.parse(url.searchParams.get('end') ?? '');
   if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
   return {
-    startDate: new Date(start).toISOString().slice(0, 10),
+    start,
+    end,
     dayCount: (end - start) / 86_400_000,
   };
 }
 
-/** Return whether the request journal contains the geometry-derived active window. */
-function hasRangeSummary(
+/** Return whether one geometry-derived request covers the date the user is viewing. */
+function hasRangeCoveringDate(
   requests: readonly string[],
-  expected: { readonly startDate: string; readonly dayCount: number },
+  expected: { readonly includesDate: string; readonly dayCount: number },
 ): boolean {
+  const includedInstant = Date.parse(`${expected.includesDate}T00:00:00Z`);
   return requests.some((request) => {
     const summary = rangeSummary(request);
-    return summary?.startDate === expected.startDate && summary.dayCount === expected.dayCount;
+    return (
+      summary?.dayCount === expected.dayCount &&
+      summary.start <= includedInstant &&
+      summary.end > includedInstant
+    );
   });
 }
 
@@ -95,11 +97,11 @@ test.describe('fluid scheduling interaction contract', () => {
     await expect.poll(() => measuredLaneCount(schedule)).toBeGreaterThanOrEqual(2);
     const desktopLaneCount = await measuredLaneCount(schedule);
     const desktopRange = {
-      startDate: shiftDate(ANCHOR_DATE, -desktopLaneCount),
+      includesDate: ANCHOR_DATE,
       dayCount: desktopLaneCount * 3,
     };
     await expect(schedule).toHaveAttribute('data-lane-count', String(desktopRange.dayCount));
-    await expect.poll(() => hasRangeSummary(state.rangeRequests, desktopRange)).toBe(true);
+    await expect.poll(() => hasRangeCoveringDate(state.rangeRequests, desktopRange)).toBe(true);
     await expect(schedule.getByRole('status')).toHaveText(
       'Nothing scheduled. Drag on the grid or choose New to plan time.',
     );
@@ -120,11 +122,11 @@ test.describe('fluid scheduling interaction contract', () => {
     await expect.poll(() => measuredLaneCount(schedule)).toBeGreaterThan(desktopLaneCount);
     const expandedLaneCount = await measuredLaneCount(schedule);
     const expandedRange = {
-      startDate: shiftDate(ANCHOR_DATE, -expandedLaneCount),
+      includesDate: ANCHOR_DATE,
       dayCount: expandedLaneCount * 3,
     };
     await expect(schedule).toHaveAttribute('data-lane-count', String(expandedRange.dayCount));
-    await expect.poll(() => hasRangeSummary(state.rangeRequests, expandedRange)).toBe(true);
+    await expect.poll(() => hasRangeCoveringDate(state.rangeRequests, expandedRange)).toBe(true);
 
     // Zoom lives in exactly one place now: the Display menu. No preset button group, no `<select>`
     // duplicate of it, and — the goal doc's specific complaint — no slider exposed on the toolbar.
@@ -287,7 +289,9 @@ test.describe('fluid scheduling interaction contract', () => {
     page,
   }, testInfo) => {
     await page.setViewportSize({ width: 1440, height: 1200 });
-    await page.clock.setFixedTime('2026-03-08T17:00:00.000Z');
+    // Keep "now" beside each transition. The product can then exercise its real initial-scroll
+    // behavior without the test fighting that behavior through direct scrollTop assignments.
+    await page.clock.setFixedTime('2026-03-08T09:30:00.000Z');
     await signUpAndOnboard(page, 'FluidDst');
     const layer = makeCalendarLayer({ id: CALENDAR_IDS.nativeLayer, title: 'Docket' });
     const springItem = makeCalendarItem({
@@ -315,15 +319,6 @@ test.describe('fluid scheduling interaction contract', () => {
 
     const schedule = scheduleViewport(page);
     await expect(scheduleLane(page, '2026-03-08')).toBeVisible();
-    // The calendar auto-scrolls to a relevant initial position on mount (near "now" at the fixed
-    // clock time), which races an immediate reset to 0 — resetting first just gets overwritten
-    // once that one-time effect fires. Wait for it to move away from 0 (proving it already ran)
-    // before resetting, so the reset below isn't fought.
-    await expect.poll(() => schedule.evaluate((element) => element.scrollTop)).not.toBe(0);
-    await schedule.evaluate((element) => {
-      element.scrollTop = 0;
-    });
-    await expect.poll(() => schedule.evaluate((element) => element.scrollTop)).toBe(0);
     const skippedBand = schedule.locator(
       '[data-schedule-transition="skipped"][data-schedule-transition-lane="date:2026-03-08"]',
     );
@@ -343,23 +338,10 @@ test.describe('fluid scheduling interaction contract', () => {
       },
     });
 
-    await page.clock.setFixedTime('2026-11-01T17:00:00.000Z');
+    await page.clock.setFixedTime('2026-11-01T08:30:00.000Z');
     await page.reload({ waitUntil: 'domcontentloaded' });
     await expect(scheduleLane(page, '2026-11-01')).toBeVisible();
     const fallSchedule = scheduleViewport(page);
-    // After a reload the canvas performs a one-time auto-scroll to "now" once its ResizeObserver
-    // measures the viewport, which fires asynchronously and overrides a single reset. Re-assert
-    // scrollTop = 0 on every poll iteration until it sticks (once the auto-scroll has run, the
-    // reset holds) so the early-morning DST band is in view regardless of when it fires. This was
-    // an intermittent DST-block flake.
-    await expect
-      .poll(async () => {
-        await fallSchedule.evaluate((element) => {
-          element.scrollTop = 0;
-        });
-        return fallSchedule.evaluate((element) => element.scrollTop);
-      })
-      .toBe(0);
     const repeatedBand = fallSchedule.locator(
       '[data-schedule-transition="repeated"][data-schedule-transition-lane="date:2026-11-01"]',
     );

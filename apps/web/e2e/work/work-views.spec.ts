@@ -90,9 +90,8 @@ async function applyNestedFilter(
   const builder = page.getByRole('dialog', { name: `Filter ${route}` });
   await builder.getByRole('button', { name: filterLabel, exact: true }).click();
   await builder.getByRole('textbox', { name: 'Filter value' }).fill(value);
-  await expect(builder.getByRole('button', { name: 'Choose property' })).toHaveAttribute(
-    'aria-pressed',
-    'true',
+  await expect(builder.getByRole('combobox', { name: 'Filter field' }).first()).toHaveValue(
+    filterField,
   );
   await builder.getByRole('button', { name: 'Add group to root filter group' }).click();
   await builder.getByRole('combobox', { name: 'Filter field' }).nth(1).selectOption(filterField);

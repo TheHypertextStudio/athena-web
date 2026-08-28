@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SchedulingCanvas, type ScheduleItem, type ScheduleLane } from '@/components/scheduling';
 
@@ -81,6 +81,24 @@ describe('SchedulingCanvas notice', () => {
     expect(screen.getByRole('alert')).toHaveClass('max-w-full', 'text-center');
     // Wraps instead of clamping: a truncated hint is unreadable on the narrowest canvas.
     expect(screen.getByRole('alert').className).not.toContain('truncate');
+  });
+
+  it('keeps an application-owned recovery action operable inside an error notice', () => {
+    const retry = vi.fn();
+    render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[EMPTY_LANE]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+        error="Calendar updates are temporarily unavailable."
+        errorAction={<button onClick={retry}>Retry</button>}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+
+    expect(retry).toHaveBeenCalledOnce();
   });
 
   it('treats a blank error as absent and renders the empty-state message', () => {

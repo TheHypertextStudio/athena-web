@@ -7,7 +7,11 @@ import { type JSX } from 'react';
 
 import { useAthenaPanel } from '@/components/athena/athena-panel-provider';
 
-import { CALENDAR_ITEM_KIND_ICON, CALENDAR_ITEM_KIND_LABEL } from '../calendar-item-card';
+import {
+  CALENDAR_ITEM_KIND_ICON,
+  CALENDAR_ITEM_KIND_LABEL,
+  READ_ONLY_REASON_LABEL,
+} from '../calendar-item-card';
 import { CalendarDrawerClose } from '../calendar-drawer-close';
 import { CalendarItemDuplicateSources } from '../calendar-item-duplicate-sources';
 import { CoreFieldsForm } from './core-fields-form';
@@ -63,6 +67,11 @@ export function CalendarItemWorkspace({
   const KindIcon = CALENDAR_ITEM_KIND_ICON[item.kind];
   const providerLabel = layer?.provider === 'google' ? 'Google Calendar' : 'source calendar';
   const showKind = item.kind !== 'provider_event' && item.kind !== 'native_event';
+  const readOnlyLabel = item.permissions.readOnlyReason
+    ? READ_ONLY_REASON_LABEL[item.permissions.readOnlyReason]
+    : item.permissions.canEditCore
+      ? null
+      : 'Read-only';
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -100,6 +109,7 @@ export function CalendarItemWorkspace({
           {showKind ? (
             <Badge variant="secondary">{CALENDAR_ITEM_KIND_LABEL[item.kind]}</Badge>
           ) : null}
+          {readOnlyLabel ? <Badge variant="secondary">{readOnlyLabel}</Badge> : null}
           {item.htmlLink ? (
             <a
               href={item.htmlLink}

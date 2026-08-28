@@ -37,7 +37,7 @@ test('a task row opens from its prefetched aggregate without an RSC transition',
   await aggregateResponse;
 
   await row.click();
-  await expect(page.getByRole('textbox', { name: 'Task title' })).toHaveValue(title);
+  await expect(page.getByRole('textbox', { name: 'Task title', exact: true })).toHaveValue(title);
   await expect(page.getByRole('status', { name: 'Loading task' })).toHaveCount(0);
   expect(rscRequests).toBe(0);
 });

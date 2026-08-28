@@ -34,6 +34,9 @@ const agendaState = vi.hoisted<{
   clearTimeboxFailure: ReturnType<typeof vi.fn>;
   registerNavigationGuard: ReturnType<typeof vi.fn>;
   timeboxFailed: boolean;
+  error: string | null;
+  retrying: boolean;
+  retry: ReturnType<typeof vi.fn>;
   workLocationComposition: WorkLocationCalendarComposition | undefined;
 }>(() => ({
   date: '2026-07-13',
@@ -45,6 +48,9 @@ const agendaState = vi.hoisted<{
   clearTimeboxFailure: vi.fn(),
   registerNavigationGuard: vi.fn(() => () => undefined),
   timeboxFailed: false,
+  error: null,
+  retrying: false,
+  retry: vi.fn(),
   workLocationComposition: undefined,
 }));
 const mutationState = vi.hoisted(() => ({
@@ -232,6 +238,9 @@ beforeEach(() => {
   agendaState.clearTimeboxFailure.mockReset();
   agendaState.registerNavigationGuard.mockReset().mockImplementation(() => () => undefined);
   agendaState.timeboxFailed = false;
+  agendaState.error = null;
+  agendaState.retrying = false;
+  agendaState.retry.mockReset();
   agendaState.workLocationComposition = undefined;
   router.push.mockReset();
   mutationState.update.mutate.mockReset();
@@ -378,6 +387,17 @@ describe('Agenda scheduling interactions', () => {
     // so the prose only has to state the situation.
     expect(canvasProps().emptyMessage).toBe('Nothing scheduled.');
     expect(canvasProps().emptyAction).not.toBeNull();
+  });
+
+  it('passes degraded agenda reads and their recovery action to the timeline', () => {
+    agendaState.error = 'Calendar updates are temporarily unavailable.';
+    render(<AgendaCanvas />);
+
+    const props = canvasProps();
+    expect(props.error).toBe('Calendar updates are temporarily unavailable.');
+    render(props.errorAction);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(agendaState.retry).toHaveBeenCalledOnce();
   });
 
   it('converts a Jul 13 plan timebox proposal through the LA display timezone', () => {

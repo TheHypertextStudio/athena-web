@@ -1,5 +1,6 @@
 'use client';
 
+import { Button } from '@docket/ui/primitives';
 import { type JSX, useCallback, useEffect } from 'react';
 
 import { useUpdateCalendarItemById } from '@/components/calendar/calendar-mutations';
@@ -135,6 +136,10 @@ export function CalendarSchedulingSurface({
     if (!resized) return;
     persistExactBounds(item.id, resized.startsAt, resized.endsAt);
   };
+  const dateReadFailed = dateAxis.itemsError || dateAxis.layersError;
+  const readFailed = axis === 'dates' ? dateReadFailed : peopleAxis.error;
+  const retrying = axis === 'dates' ? dateAxis.retrying : peopleAxis.retrying;
+  const retry = axis === 'dates' ? dateAxis.retry : peopleAxis.retry;
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -155,9 +160,16 @@ export function CalendarSchedulingSurface({
           error={calendarSchedulingError(
             axis,
             inlineMutationFailed,
-            dateAxis.itemsError || dateAxis.layersError,
+            dateReadFailed,
             peopleAxis.error,
           )}
+          errorAction={
+            readFailed && !inlineMutationFailed ? (
+              <Button type="button" variant="outline" size="sm" disabled={retrying} onClick={retry}>
+                {retrying ? 'Retrying…' : 'Retry'}
+              </Button>
+            ) : null
+          }
           emptyMessage={calendarSchedulingEmptyMessage(
             axis,
             dateAxis.itemsPending,

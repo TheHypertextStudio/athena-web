@@ -62,6 +62,7 @@ export default function SchedulingCanvas({
   onVisibleLaneRange,
   onReachBoundary,
   error,
+  errorAction,
   emptyMessage = 'Nothing scheduled.',
   emptyAction,
   renderItem,
@@ -495,6 +496,7 @@ export default function SchedulingCanvas({
           emptyMessage={emptyMessage}
           emptyAction={emptyAction}
           error={error}
+          errorAction={errorAction}
           isEmpty={lanes.every((lane) => lane.items.length === 0)}
           viewportWidth={viewportWidth ?? observedWidth}
         />

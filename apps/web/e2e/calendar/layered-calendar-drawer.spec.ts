@@ -141,7 +141,7 @@ test.describe('layered calendar drawer', () => {
     await page.keyboard.press('Escape');
 
     await scheduleItem(page, readOnly.id).body.click();
-    await expect(drawer.getByText('Read-only — no calendar write access granted')).toBeVisible();
+    await expect(drawer.getByText(/^Read-only/)).toBeVisible();
     await expect(drawer.getByLabel('Title')).toBeDisabled();
   });
 });

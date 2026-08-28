@@ -68,7 +68,7 @@ async function openGroupedProjects(page: Page, orgId: string): Promise<void> {
     timeout: TIMEOUTS.pageReady,
   });
   await expect(async () => {
-    await page.locator('button').filter({ hasText: 'Display' }).click();
+    await page.getByRole('button', { name: 'Display', exact: true }).click();
     await expect(page.getByRole('menuitemradio', { name: 'Target timeframe' })).toBeVisible({
       timeout: 1000,
     });

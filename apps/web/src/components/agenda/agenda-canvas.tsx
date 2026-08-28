@@ -87,6 +87,9 @@ function TimelineArrangement({
     setTimebox,
     timeboxFailed,
     clearTimeboxFailure,
+    error,
+    retrying,
+    retry,
     workPlaces,
     workLocationComposition,
   } = useAgenda();
@@ -271,6 +274,7 @@ function TimelineArrangement({
   );
 
   const mobileCreateActive = draftSelection !== null && !isDesktop;
+  const hasInlineUpdateFailure = timeboxFailed || updateCalendarItem.isError;
 
   return (
     <div className="relative h-full min-h-0">
@@ -308,7 +312,14 @@ function TimelineArrangement({
             else if (shortcut === 'next') goToNextDay();
             else goToToday();
           }}
-          error={timeboxFailed || updateCalendarItem.isError ? INLINE_UPDATE_FAILURE_COPY : null}
+          error={hasInlineUpdateFailure ? INLINE_UPDATE_FAILURE_COPY : error}
+          errorAction={
+            !hasInlineUpdateFailure && error ? (
+              <Button type="button" variant="outline" size="sm" disabled={retrying} onClick={retry}>
+                {retrying ? 'Retrying…' : 'Retry'}
+              </Button>
+            ) : null
+          }
           emptyMessage={loading ? '' : 'Nothing scheduled.'}
           emptyAction={
             loading ? null : (

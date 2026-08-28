@@ -180,6 +180,18 @@
   `/v1/billing/webhook` path. The live Hypertext Studio custom endpoint currently lacks
   `invoice.paid` and `invoice.payment_action_required`; the exact eight-event contract is staged in
   the Dashboard but remains unsaved pending action-time confirmation.
+- **Exact-main browser correction**: E2E on `27c9cd6c0` passed shards 1 and 3. Shard 4 exposed two
+  product defects and seven stale or timing-sensitive assertions. Calendar and Agenda read failures
+  now keep the scheduling grid mounted, show application-owned copy, and provide a working retry.
+  Provider event drawers now explain why editing is disabled. Browser coverage now follows the
+  shipped dense-overflow disclosure, searches virtualized Library rows before acting on them, uses
+  accessible control names, checks the selected advanced-filter field, accepts any bounded range
+  that covers the active date, and keeps each DST transition beside the real initial-scroll target.
+  It no longer fixes three-column geometry, deleted controls, one exact request start, or direct
+  `scrollTop` timing. Four focused suites pass 75 tests. Web type checking, changed-file ESLint,
+  Prettier, diff validation, and Playwright discovery pass. The full local Web lint process exceeded
+  Node's 2 GB heap without reporting a lint violation; the exact-main Web lint job passed before
+  this changed-file lint completed.
 - **Decisions**: Checkout derives the customer email from the Better Auth server session and
   rejects a browser-supplied email. Stripe's Dashboard-only existing-subscriber redirect requires
   a recorded verification timestamp before `BILLING_ENABLED=true` can pass configuration. Docket

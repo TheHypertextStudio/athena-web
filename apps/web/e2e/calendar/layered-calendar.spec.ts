@@ -130,7 +130,7 @@ test.describe('layered calendar', () => {
     await scheduleItem(page, item.id).body.click();
 
     const drawer = page.getByRole('dialog');
-    await expect(drawer.getByText('Read-only — no calendar write access granted')).toBeVisible();
+    await expect(drawer.getByText(/^Read-only/)).toBeVisible();
     await expect(drawer.getByLabel('Title')).toBeDisabled();
     await expect(drawer.getByLabel('Description')).toBeDisabled();
     await expect(drawer.getByLabel('Location')).toBeDisabled();

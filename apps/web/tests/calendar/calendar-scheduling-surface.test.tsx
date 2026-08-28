@@ -50,6 +50,7 @@ vi.mock('../../src/components/scheduling', async (importOriginal) => {
       return (
         <section aria-label="Schedule">
           {props.error ? <div role="alert">{props.error}</div> : null}
+          {props.errorAction}
           {props.lanes.map((lane) => (
             <div key={lane.id} aria-label={`${lane.label} lane`}>
               {lane.items.map((item) => (
@@ -386,7 +387,8 @@ describe('CalendarSchedulingSurface persistence', () => {
     expect(screen.getByLabelText('Mon, Jul 13 lane')).toBeInTheDocument();
     expect(screen.getByText('Planning session')).toBeInTheDocument();
     expect(document.querySelector('[data-calendar-status-row]')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(axisRetry.dates).toHaveBeenCalledOnce();
     expect(canvasProps().error).toBe(
       'Calendar updates are temporarily unavailable. Showing what we have.',
     );
@@ -398,7 +400,8 @@ describe('CalendarSchedulingSurface persistence', () => {
 
     expect(screen.getByLabelText('Grace lane')).toBeInTheDocument();
     expect(document.querySelector('[data-calendar-status-row]')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(axisRetry.people).toHaveBeenCalledOnce();
     expect(canvasProps().error).toBe(
       'Calendar updates are temporarily unavailable. Showing what we have.',
     );

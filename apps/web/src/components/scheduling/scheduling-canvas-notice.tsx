@@ -8,6 +8,8 @@ interface SchedulingCanvasNoticeProps {
   readonly emptyAction?: ReactNode | undefined;
   /** A read failure to surface instead of the empty-state guidance. */
   readonly error?: string | null | undefined;
+  /** One application-owned recovery control shown with {@link error}. */
+  readonly errorAction?: ReactNode | undefined;
   /** Whether every visible lane has zero items. */
   readonly isEmpty: boolean;
   /** The visible width of the scroll viewport, so the notice centres on what is on screen. */
@@ -36,6 +38,7 @@ export function SchedulingCanvasNotice({
   emptyMessage,
   emptyAction,
   error,
+  errorAction,
   isEmpty,
   viewportWidth,
 }: SchedulingCanvasNoticeProps): JSX.Element | null {
@@ -66,6 +69,7 @@ export function SchedulingCanvasNotice({
         {/* The wrapper is `pointer-events-none` so the notice never blocks a drag on the grid
             underneath it. The action has to opt back in, or it would render as a dead control —
             which is the exact failure an empty state is supposed to fix. */}
+        {hasError && errorAction ? <div className="pointer-events-auto">{errorAction}</div> : null}
         {!hasError && emptyAction ? <div className="pointer-events-auto">{emptyAction}</div> : null}
       </div>
     </div>

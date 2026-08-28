@@ -325,6 +325,28 @@ describe('CalendarItemDrawer', () => {
     expect(screen.getByText('Tasks')).toBeInTheDocument();
   });
 
+  it('explains why a provider event is read-only', async () => {
+    itemGet.mockResolvedValue(
+      okResponse(
+        makeItem({
+          kind: 'provider_event',
+          provider: 'google',
+          permissions: {
+            canEditCore: false,
+            canDelete: false,
+            readOnlyReason: 'provider_scope',
+          },
+        }),
+      ),
+    );
+
+    renderDrawer(ITEM_ID);
+    const dialog = await screen.findByRole('dialog', { name: 'Design review' });
+
+    expect(within(dialog).getByText(/^Read-only/)).toBeVisible();
+    expect(within(dialog).getByLabelText('Title')).toBeDisabled();
+  });
+
   it('keeps a visible close action while item details are loading', () => {
     itemGet.mockReturnValue(new Promise(() => undefined));
     const { onClose } = renderDrawer(ITEM_ID);

@@ -160,6 +160,11 @@ function hostOf(value: string | null): string | null {
   }
 }
 
+/** Whether a callback host refers back to the device running the requesting client. */
+function isLoopbackHost(host: string): boolean {
+  return host === '127.0.0.1' || host === '::1' || host === 'localhost';
+}
+
 /** Up to two initials for a display name, used as the avatar fallback (e.g. "Claude" → "C"). */
 function initials(name: string): string {
   const words = name.trim().split(/\s+/).filter(Boolean);
@@ -432,11 +437,12 @@ function ConsentPage(): JSX.Element {
   // one failed request. Only the account row and the two decision buttons wait.
   const accountEmail = session?.user.email ?? null;
   const sessionSettled = sessionStatus === 'authenticated';
-  const returnTarget = returnHost ?? displayName;
-  const accessSentence =
-    requestedScopes.length > 0
-      ? `${displayName} can use only the access listed here until you revoke it.`
-      : `${displayName} can connect to your Docket account until you revoke it.`;
+  const returnDestination =
+    returnHost === null
+      ? null
+      : isLoopbackHost(returnHost)
+        ? `${displayName} on this device`
+        : returnHost;
   const errorCopy = error ? CONSENT_ERROR_COPY[error] : null;
 
   return (
@@ -455,7 +461,7 @@ function ConsentPage(): JSX.Element {
               value={accountEmail ?? ACCOUNT_PENDING_LABEL}
               muted={accountEmail === null}
             />
-            {returnHost ? <ContextRow label="Returns to" value={returnHost} /> : null}
+            {returnDestination ? <ContextRow label="Returns to" value={returnDestination} /> : null}
           </dl>
         </>
       }
@@ -489,13 +495,6 @@ function ConsentPage(): JSX.Element {
           </div>
         </section>
       ) : null}
-
-      {/* What each button actually does, in the same words a person would use. Two bare verbs on
-          a consent screen ask someone to guess whether Deny cancels the connection or cancels the
-          whole sign-in, and whether Authorize is permanent. */}
-      <p className="text-on-surface-variant text-body-small">
-        {accessSentence} Denying access returns you to {returnTarget} without granting access.
-      </p>
 
       {/* Reversed so the primary lands on the right at width and first when stacked. */}
       {error !== 'expired' && error !== 'missing-return-address' ? (

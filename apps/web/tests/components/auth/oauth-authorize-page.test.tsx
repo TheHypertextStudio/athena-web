@@ -235,7 +235,7 @@ describe('OAuthAuthorizePage', () => {
       expect(screen.getByText('Ongoing access')).toBeInTheDocument();
     });
 
-    it('states the consequence of allowing or denying access, naming the app', async () => {
+    it('does not repeat the decision below the controls', async () => {
       metadataGet.mockResolvedValue({
         ok: true,
         json: async () => ({ name: 'Client Example', icon: null }),
@@ -243,15 +243,56 @@ describe('OAuthAuthorizePage', () => {
 
       renderSignedRequest();
 
-      const explanation = await screen.findByText(
-        /Client Example can use only the access listed here until you revoke it/,
+      await screen.findByRole('heading', {
+        name: 'Client Example is requesting access to Docket',
+      });
+      expect(screen.queryByText(/can use only the access listed here/i)).toBeNull();
+      expect(screen.queryByText(/Denying access returns you to/i)).toBeNull();
+    });
+
+    it('describes a loopback callback as this device', async () => {
+      metadataGet.mockResolvedValue({
+        ok: true,
+        json: async () => ({ name: 'Codex', icon: null }),
+      });
+      window.history.replaceState(
+        null,
+        '',
+        '/oauth/authorize?sig=abc123&client_id=GboxfbkXBGdnIaNfYNOiAAyNhERqLHJW' +
+          '&redirect_uri=http%3A%2F%2F127.0.0.1%3A65056%2Fcallback&scope=work%3Aread',
       );
-      expect(explanation).toBeInTheDocument();
-      // Both halves of the decision, and where denial sends you — the return host the screen
-      // already discloses, not a vague promise that the browser will return somewhere.
-      expect(explanation.textContent).toContain(
-        'Denying access returns you to callback.example without granting access.',
+      useSession.mockReturnValue({
+        data: { user: { email: 'ada@example.com' } },
+        isPending: false,
+        error: null,
+      });
+
+      render(<OAuthAuthorizePage />);
+
+      expect(await screen.findByText('Codex on this device')).toBeInTheDocument();
+      expect(screen.queryByText('127.0.0.1')).toBeNull();
+    });
+
+    it('does not show an opaque client identifier while metadata loads', () => {
+      metadataGet.mockImplementation(() => new Promise<never>(() => undefined));
+      window.history.replaceState(
+        null,
+        '',
+        '/oauth/authorize?sig=abc123&client_id=GboxfbkXBGdnIaNfYNOiAAyNhERqLHJW' +
+          '&redirect_uri=http%3A%2F%2F127.0.0.1%3A65056%2Fcallback&scope=work%3Aread',
       );
+      useSession.mockReturnValue({
+        data: { user: { email: 'ada@example.com' } },
+        isPending: false,
+        error: null,
+      });
+
+      render(<OAuthAuthorizePage />);
+
+      expect(
+        screen.getByRole('heading', { name: 'An app is requesting access to Docket' }),
+      ).toBeInTheDocument();
+      expect(screen.queryByText('GboxfbkXBGdnIaNfYNOiAAyNhERqLHJW')).toBeNull();
     });
 
     it('replaces an expired consent link with Codex recovery instructions', async () => {

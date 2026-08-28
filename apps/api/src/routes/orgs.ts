@@ -41,7 +41,6 @@ import { deleteSettingsImage, storeSettingsImage } from '../lib/settings-image';
 import { zJson } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
 import { orgContextMiddleware } from '../permissions/org-context-middleware';
-import { sharedWorkCapabilityGuard } from '../product-capability';
 import { enqueueSearchUpsert } from '../search/write-through';
 import { initiativeHierarchyDepth } from './initiative-hierarchy';
 import { SYSTEM_ROLES, resolveUniqueSlug, slugify, toOrgOut } from './org-helpers';
@@ -345,7 +344,6 @@ Returns \`OrgCreateResult\` — the new org plus its seeded \`defaultTeam\` and 
   .patch(
     '/:orgId/settings/work-structure',
     orgContextMiddleware,
-    sharedWorkCapabilityGuard,
     capabilityGuard('manage'),
     apiDoc({
       tag: 'Orgs',
@@ -419,7 +417,6 @@ Related: \`GET /\` lists all orgs the caller belongs to; the nested routers unde
   .patch(
     '/:orgId',
     orgContextMiddleware,
-    sharedWorkCapabilityGuard,
     capabilityGuard('manage'),
     apiDoc({
       tag: 'Orgs',
@@ -470,12 +467,8 @@ Related: \`GET /\` lists all orgs the caller belongs to; the nested routers unde
     },
   )
   .use('/:orgId/*', orgContextMiddleware)
-  // Billing and export remain reachable when a shared organization's Docket Pro product lapses.
   .route('/:orgId/billing/export', billingExportDownload)
   .route('/:orgId/billing', billing)
-  // Every other nested route is baseline Docket for a personal workspace and Docket Pro for a
-  // shared organization. Product-specific routes add their narrower capability below this gate.
-  .use('/:orgId/*', sharedWorkCapabilityGuard)
   .route('/:orgId/teams', teams)
   .route('/:orgId/projects', projects)
   .route('/:orgId/object-commands', objectCommands)

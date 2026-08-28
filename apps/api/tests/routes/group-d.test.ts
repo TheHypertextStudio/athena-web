@@ -82,6 +82,18 @@ function orgsApp(session: AuthSession) {
   return app;
 }
 
+/** Mount the organization router at its production API path. */
+function orgsApiApp(session: AuthSession) {
+  const app = new Hono<AppEnv>();
+  app.use('*', async (c, next) => {
+    c.set('session', session);
+    await next();
+  });
+  app.route('/v1/orgs', orgs);
+  app.onError(onError);
+  return app;
+}
+
 /** Insert a user + its hub; returns ids. */
 async function seedUserWithHub(): Promise<{ userId: string; hubId: string }> {
   const [user] = await db
@@ -372,76 +384,35 @@ describe('orgs router', () => {
     expect(tasks.status).toBe(200);
   });
 
-  it('keeps shared billing reachable while Docket Pro gates shared work', async () => {
+  it('creates and reopens an Initiative in a shared workspace without Docket Pro', async () => {
     const { userId } = await seedUserWithHub();
-    const app = orgsApp(fakeSession(userId));
-    const created = await app.request('/', {
+    const app = orgsApiApp(fakeSession(userId));
+    const created = await app.request('/v1/orgs', {
       method: 'POST',
       headers: J,
       body: JSON.stringify({ name: 'Shared work' }),
     });
+    expect(created.status).toBe(201);
     const { organization } = await body<{ organization: { id: string } }>(created);
     await clearDocketPro(db, schema, organization.id);
 
-    const readable = await app.request(`/${organization.id}/tasks`);
-    expect(readable.status).toBe(200);
-
-    const blocked = await app.request(`/${organization.id}/tasks`, {
+    const initiativeResponse = await app.request(`/v1/orgs/${organization.id}/initiatives`, {
       method: 'POST',
       headers: J,
-      body: JSON.stringify({ title: 'Blocked write' }),
+      body: JSON.stringify({ name: 'Baseline initiative' }),
     });
-    expect(blocked.status).toBe(402);
-    expect(await body<{ code: string }>(blocked)).toMatchObject({ code: 'product_required' });
+    expect(initiativeResponse.status).toBe(201);
+    const initiative = await body<{ id: string; name: string }>(initiativeResponse);
 
-    const blockedSettings = await app.request(`/${organization.id}/settings/work-structure`, {
-      method: 'PATCH',
-      headers: J,
-      body: JSON.stringify({ initiativeMaxDepth: 4 }),
-    });
-    expect(blockedSettings.status).toBe(402);
-
-    const hydrated = await app.request(`/${organization.id}/mentions/hydrate`, {
-      method: 'POST',
-      headers: J,
-      body: JSON.stringify({
-        refs: [{ kind: 'entity', entityKind: 'task', entityId: 'missing_task' }],
-      }),
-    });
-    expect(hydrated.status).toBe(200);
-
-    const workViewRead = await app.request(`/${organization.id}/work-views/query`, {
-      method: 'POST',
-      headers: J,
-      body: '{}',
-    });
-    expect(workViewRead.status).toBe(422);
-
-    const rollingCycles = await app.request(`/${organization.id}/cycles?roll=true`);
-    expect(rollingCycles.status).toBe(402);
-    const currentCycles = await app.request(`/${organization.id}/cycles/current`);
-    expect(currentCycles.status).toBe(402);
-
-    const chatSession = await app.request(`/${organization.id}/sessions/chat`);
-    expect(chatSession.status).toBe(402);
-
-    const notionDesigns = await app.request(
-      `/${organization.id}/integrations/missing/notion/databases`,
-    );
-    expect(notionDesigns.status).toBe(402);
-
-    const billing = await app.request(`/${organization.id}/billing`);
-    expect(billing.status).toBe(200);
-    expect(await body<{ products: unknown[] }>(billing)).toMatchObject({ products: [] });
-
-    await db.insert(schema.organizationProductEntitlement).values({
+    const reopened = await app.request(`/v1/orgs/${organization.id}/initiatives/${initiative.id}`);
+    expect(reopened.status).toBe(200);
+    expect(
+      await body<{ id: string; name: string; organizationId: string }>(reopened),
+    ).toMatchObject({
+      id: initiative.id,
+      name: 'Baseline initiative',
       organizationId: organization.id,
-      productKey: 'docket_pro',
-      status: 'active',
-      source: 'stripe',
     });
-    const tasks = await app.request(`/${organization.id}/tasks`);
-    expect(tasks.status).toBe(200);
   });
 
   it('POST / isPersonal:true is idempotent per user: a second call returns the existing personal space', async () => {

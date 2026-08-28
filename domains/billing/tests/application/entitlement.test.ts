@@ -51,6 +51,10 @@ async function seedDocketPro(
 }
 
 describe('Docket Pro capabilities', () => {
+  it('keeps collaborative core work out of the paid capability catalog', () => {
+    expect(PRODUCT_CAPABILITIES).toEqual(['integrations', 'mcp', 'athena', 'voice']);
+  });
+
   it.each(PRODUCT_CAPABILITIES)('grants %s from one active product record', async (capability) => {
     const orgId = await seedOrg();
     await seedDocketPro(orgId, 'active');

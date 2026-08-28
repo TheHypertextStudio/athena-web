@@ -118,7 +118,7 @@ describe('billing: GET /', () => {
     expect(await json(res)).toEqual({
       organizationId: orgId,
       listPrice: { amount: 800, currency: 'usd', interval: 'month' },
-      accessMode: 'read_only',
+      accessMode: 'writable',
       canManageBilling: true,
       checkoutEnabled: false,
       effectiveDiscount: null,
@@ -126,6 +126,22 @@ describe('billing: GET /', () => {
       issuedCredit: null,
       products: [],
     });
+  });
+
+  it('keeps baseline work writable after Docket Pro ends', async () => {
+    const { orgId } = await seedBaseOrg(db, schema, false);
+    await db.insert(schema.organizationProductEntitlement).values({
+      organizationId: orgId,
+      productKey: 'docket_pro',
+      status: 'canceled',
+      source: 'stripe',
+      canceledAt: new Date('2026-08-25T00:00:00.000Z'),
+    });
+
+    const res = await appWithActor(billing, orgId, ['view']).request('/');
+
+    expect(res.status).toBe(200);
+    expect(await json<{ accessMode: string }>(res)).toMatchObject({ accessMode: 'writable' });
   });
 });
 

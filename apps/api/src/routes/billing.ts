@@ -281,7 +281,7 @@ const billing = new Hono<AppEnv>()
     }),
     async (c) => {
       const actorCtx = c.get('actorCtx');
-      const org = await loadOrg(actorCtx.orgId);
+      await loadOrg(actorCtx.orgId);
       const [products, applications, awards, credits] = await Promise.all([
         db
           .select()
@@ -312,12 +312,6 @@ const billing = new Hono<AppEnv>()
           .limit(1),
       ]);
       const now = Date.now();
-      const pro = products.find((product) => product.productKey === 'docket_pro');
-      const hasWritablePro =
-        (pro?.source === 'complimentary' && pro.status === 'active') ||
-        pro?.status === 'trialing' ||
-        pro?.status === 'active' ||
-        (pro?.status === 'past_due' && pro.graceEndsAt !== null && pro.graceEndsAt.getTime() > now);
       return ok(c, BillingSummaryOut, {
         organizationId: actorCtx.orgId,
         checkoutEnabled: customerBillingEnabled(
@@ -326,7 +320,7 @@ const billing = new Hono<AppEnv>()
           c.get('session')?.user,
         ),
         listPrice: { amount: 800, currency: 'usd', interval: 'month' },
-        accessMode: org.isPersonal || hasWritablePro ? 'writable' : 'read_only',
+        accessMode: 'writable',
         canManageBilling: actorCtx.capabilities.includes('manage'),
         effectiveDiscount:
           awards[0] &&

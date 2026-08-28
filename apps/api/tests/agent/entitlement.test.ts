@@ -2,7 +2,6 @@ import { resolve } from 'node:path';
 
 import { eq } from 'drizzle-orm';
 import { migrate } from 'drizzle-orm/pglite/migrator';
-import { Hono } from 'hono';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 const getSession = vi.fn(async () => null);
@@ -14,8 +13,6 @@ import type { resolveProductCapability as ResolveProductCapability } from '@dock
 
 import type { driveSession as DriveSession } from '../../src/agent/loop';
 import type { assertProductCapability as Assert } from '../../src/product-capability';
-import type { sharedWorkCapabilityGuard as SharedWorkGuard } from '../../src/product-capability';
-import type { AppEnv } from '../../src/context';
 import type { ensureDefaultAgent as EnsureDefaultAgent } from '../../src/lib/default-agent';
 import { assertDefined } from '@docket/test-utils';
 
@@ -34,7 +31,6 @@ let db!: typeof DbModule.db;
 let agentRuntime!: typeof AgentRuntimeModule;
 let driveSession!: typeof DriveSession;
 let assertProductCapability!: typeof Assert;
-let sharedWorkCapabilityGuard!: typeof SharedWorkGuard;
 let ensureDefaultAgent!: typeof EnsureDefaultAgent;
 let resolveProductCapability!: typeof ResolveProductCapability;
 
@@ -45,8 +41,7 @@ beforeAll(async () => {
   agentRuntime = await import('@docket/athena/turn');
   ({ resolveProductCapability } = await import('@docket/billing/application/entitlement'));
   ({ driveSession } = await import('../../src/agent/loop'));
-  ({ assertProductCapability, sharedWorkCapabilityGuard } =
-    await import('../../src/product-capability'));
+  ({ assertProductCapability } = await import('../../src/product-capability'));
   ({ ensureDefaultAgent } = await import('../../src/lib/default-agent'));
 });
 
@@ -136,7 +131,7 @@ describe('resolveProductCapability', () => {
 });
 
 describe('assertProductCapability', () => {
-  it.each(['shared_work', 'integrations', 'mcp', 'athena', 'voice'] as const)(
+  it.each(['integrations', 'mcp', 'athena', 'voice'] as const)(
     'requires an active product that grants %s',
     async (capability) => {
       const org = await seedOrg('active');
@@ -173,55 +168,6 @@ describe('assertProductCapability', () => {
       status: 402,
       code: 'billing_grace_expired',
     });
-  });
-});
-
-describe('sharedWorkCapabilityGuard', () => {
-  function guardedApp(orgId: string, isPersonal: boolean): Hono<AppEnv> {
-    const app = new Hono<AppEnv>()
-      .use('*', async (c, next) => {
-        c.set('actorCtx', {
-          orgId,
-          actorId: 'actor_test',
-          roleId: null,
-          capabilities: [],
-          isPersonal,
-        });
-        await next();
-      })
-      .use('*', sharedWorkCapabilityGuard)
-      .get('/', (c) => c.json({ ok: true }))
-      .post('/', (c) => c.json({ ok: true }));
-    app.onError((error, c) => {
-      const productError = error as { status?: number; code?: string };
-      return c.json(
-        { code: productError.code ?? 'internal_error' },
-        productError.status === 402 ? 402 : 500,
-      );
-    });
-    return app;
-  }
-
-  it('keeps baseline work available in a personal workspace without a product record', async () => {
-    const org = await seedOrg('active');
-    const response = await guardedApp(org.orgId, true).request('/');
-    expect(response.status).toBe(200);
-  });
-
-  it('keeps shared work readable but requires Docket Pro for writes', async () => {
-    const org = await seedOrg('active');
-    const app = guardedApp(org.orgId, false);
-    expect((await app.request('/')).status).toBe(200);
-    const write = await app.request('/', { method: 'POST' });
-    expect(write.status).toBe(402);
-    await expect(write.json()).resolves.toMatchObject({ code: 'product_required' });
-  });
-
-  it('allows shared organization work with active Docket Pro', async () => {
-    const org = await seedOrg('active');
-    await grantDocketPro(org.orgId);
-    const response = await guardedApp(org.orgId, false).request('/');
-    expect(response.status).toBe(200);
   });
 });
 

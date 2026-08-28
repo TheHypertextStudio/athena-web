@@ -12,7 +12,6 @@ import {
   clearDocketPro,
   fakeSession,
   getDb,
-  grantDocketPro,
   one,
   seedBaseOrg,
   seedStatuses,
@@ -414,25 +413,6 @@ describe('orgs router', () => {
       name: 'Baseline initiative',
       organizationId: organization.id,
     });
-  });
-
-  it('keeps the separately mounted Notion mirror behind Docket Pro', async () => {
-    const { userId } = await seedUserWithHub();
-    const app = orgsApiApp(fakeSession(userId));
-    const created = await app.request('/v1/orgs', {
-      method: 'POST',
-      headers: J,
-      body: JSON.stringify({ name: 'Paid Notion surface' }),
-    });
-    expect(created.status).toBe(201);
-    const { organization } = await body<{ organization: { id: string } }>(created);
-    await clearDocketPro(db, schema, organization.id);
-    const path = `/v1/orgs/${organization.id}/integrations/missing/notion/databases`;
-
-    expect((await app.request(path)).status).toBe(402);
-
-    await grantDocketPro(db, schema, organization.id);
-    expect((await app.request(path)).status).toBe(404);
   });
 
   it('POST / isPersonal:true is idempotent per user: a second call returns the existing personal space', async () => {

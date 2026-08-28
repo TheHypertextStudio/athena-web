@@ -75,7 +75,7 @@ export const SubscriptionOut = z
     status: z
       .enum(['trialing', 'active', 'past_due', 'canceled'])
       .describe(
-        'Provider subscription status: `trialing` (in a free trial), `active` (paid and current), `past_due` (a payment failed and is being retried), or `canceled` (ended). Drives the derived data-lifecycle state at `GET /lifecycle`.',
+        'Provider subscription status: `trialing` (in a free trial), `active` (paid and current), `past_due` (a payment failed and is being retried), or `canceled` (ended).',
       ),
     currentPeriodEnd: z
       .string()

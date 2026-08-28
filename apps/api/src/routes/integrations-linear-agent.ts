@@ -28,6 +28,7 @@ import { linearAgentConfigFromEnv, signLinearAgentInstallState } from '../lib/li
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { capabilityGuard } from '../permissions/capability-guard';
+import { productCapabilityGuard } from '../product-capability';
 
 /** The response shape of `GET /install`: the browser-redirect target. */
 const linearAgentInstallOut = z.object({ url: z.url() });
@@ -89,39 +90,41 @@ async function findOrCreateLinearAgentIntegration(
 }
 
 /** The Linear Agent install router: a single action, `GET /install`. */
-const integrationsLinearAgent = new Hono<AppEnv>().get(
-  '/install',
-  capabilityGuard('manage'),
-  apiDoc({
-    tag: 'Integrations',
-    summary: 'Get the Linear Agent platform install URL',
-    capability: 'manage',
-    response: linearAgentInstallOut,
-    description: `Return the **install URL** the client redirects the browser to in order to install Docket as a Linear Agent (\`actor=app\`) into the organization's Linear workspace. This is distinct from connecting Linear as a data-sync provider (\`POST /:orgId/integrations\` with \`provider: 'linear'\`): the Agent install is a single, workspace-level admin grant that lets Docket appear as an assignable/mentionable agent inside Linear, not a per-user import/mirror connection.
+const integrationsLinearAgent = new Hono<AppEnv>()
+  .use('*', productCapabilityGuard('integrations'))
+  .get(
+    '/install',
+    capabilityGuard('manage'),
+    apiDoc({
+      tag: 'Integrations',
+      summary: 'Get the Linear Agent platform install URL',
+      capability: 'manage',
+      response: linearAgentInstallOut,
+      description: `Return the **install URL** the client redirects the browser to in order to install Docket as a Linear Agent (\`actor=app\`) into the organization's Linear workspace. This is distinct from connecting Linear as a data-sync provider (\`POST /:orgId/integrations\` with \`provider: 'linear'\`): the Agent install is a single, workspace-level admin grant that lets Docket appear as an assignable/mentionable agent inside Linear, not a per-user import/mirror connection.
 
 Find-or-creates the org's single \`provider: 'linear_agent'\` integration row (\`pending\` until the callback completes), signs a short-lived \`state\` binding this install to the org/integration (CSRF + tamper protection across the redirect round-trip), and returns \`{ url }\`. A 409 (\`The Linear Agent app is not configured…\`) means \`LINEAR_AGENT_CLIENT_ID\`/\`LINEAR_AGENT_CLIENT_SECRET\`/\`LINEAR_AGENT_WEBHOOK_SECRET\` are unset in this deploy.
 
 Requires \`manage\` — installing an app-level agent grant is an administrative trust decision, the same bar as \`GET /:id/connect-url\` for the GitHub App. Related: \`GET /\` (the row appears there once created, like any integration), \`DELETE /:id\` (uninstall).`,
-  }),
-  async (c) => {
-    const { orgId, actorId } = c.get('actorCtx');
+    }),
+    async (c) => {
+      const { orgId, actorId } = c.get('actorCtx');
 
-    const config = linearAgentConfigFromEnv();
-    if (!config) {
-      throw new ConflictError(
-        'The Linear Agent app is not configured (LINEAR_AGENT_CLIENT_ID/LINEAR_AGENT_CLIENT_SECRET/LINEAR_AGENT_WEBHOOK_SECRET are unset)',
-      );
-    }
+      const config = linearAgentConfigFromEnv();
+      if (!config) {
+        throw new ConflictError(
+          'The Linear Agent app is not configured (LINEAR_AGENT_CLIENT_ID/LINEAR_AGENT_CLIENT_SECRET/LINEAR_AGENT_WEBHOOK_SECRET are unset)',
+        );
+      }
 
-    const row = await findOrCreateLinearAgentIntegration(orgId, actorId);
-    const state = signLinearAgentInstallState({ integrationId: row.id, orgId });
-    const url = buildLinearAgentAuthorizeUrl({
-      clientId: config.clientId,
-      redirectUri: config.redirectUri,
-      state,
-    });
-    return ok(c, linearAgentInstallOut, { url });
-  },
-);
+      const row = await findOrCreateLinearAgentIntegration(orgId, actorId);
+      const state = signLinearAgentInstallState({ integrationId: row.id, orgId });
+      const url = buildLinearAgentAuthorizeUrl({
+        clientId: config.clientId,
+        redirectUri: config.redirectUri,
+        state,
+      });
+      return ok(c, linearAgentInstallOut, { url });
+    },
+  );
 
 export default integrationsLinearAgent;

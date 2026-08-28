@@ -1,13 +1,18 @@
+import { Hono } from 'hono';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type { OrgOut } from '@docket/types';
 import { eq } from 'drizzle-orm';
 
+import type { AppEnv, AuthSession } from '../../src/context';
 import {
   addMember,
   appWithSession,
+  clearDocketPro,
   fakeSession,
   getDb,
+  grantDocketPro,
+  one,
   seedOrg,
   seedUserWithHub,
 } from '../support/routes-harness';
@@ -24,6 +29,12 @@ const JSON_HEADERS = { 'content-type': 'application/json' };
 /** Parse a JSON response body as the requested contract type. */
 async function body<T>(response: Response): Promise<T> {
   return (await response.json()) as T;
+}
+
+/** Mount the organization router at its production API path. */
+function orgsApiApp(session: AuthSession) {
+  const router = new Hono<AppEnv>().route('/v1/orgs', orgsRouter as never);
+  return appWithSession(router, session);
 }
 
 describe('workspace general settings', () => {
@@ -123,5 +134,66 @@ describe('workspace general settings', () => {
         })
       ).status,
     ).toBe(403);
+  });
+});
+
+describe('separately mounted paid integration routes', () => {
+  it('keeps the Notion mirror behind Docket Pro and reaches its database handler', async () => {
+    const schema = await getDb();
+    const userId = await seedUserWithHub(schema.db, schema, 'NotionProductBoundary');
+    const app = orgsApiApp(fakeSession(userId));
+    const created = await app.request('/v1/orgs', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ name: 'Paid Notion surface' }),
+    });
+    expect(created.status).toBe(201);
+    const { organization, ownerActorId } = await body<{
+      organization: { id: string };
+      ownerActorId: string;
+    }>(created);
+    await clearDocketPro(schema.db, schema, organization.id);
+    const notion = one(
+      await schema.db
+        .insert(schema.integration)
+        .values({
+          organizationId: organization.id,
+          provider: 'notion',
+          pattern: 'connector',
+          status: 'connected',
+          createdBy: ownerActorId,
+        })
+        .returning({ id: schema.integration.id }),
+    );
+    const path = `/v1/orgs/${organization.id}/integrations/${notion.id}/notion/databases`;
+
+    expect((await app.request(path)).status).toBe(402);
+
+    await grantDocketPro(schema.db, schema, organization.id);
+    const databases = await app.request(path);
+    expect(databases.status).toBe(200);
+    expect(await body<{ items: unknown[] }>(databases)).toMatchObject({
+      items: expect.any(Array),
+    });
+  });
+
+  it('keeps the Linear Agent installer behind Docket Pro and reaches its handler', async () => {
+    const schema = await getDb();
+    const userId = await seedUserWithHub(schema.db, schema, 'LinearAgentProductBoundary');
+    const app = orgsApiApp(fakeSession(userId));
+    const created = await app.request('/v1/orgs', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ name: 'Paid Linear Agent surface' }),
+    });
+    expect(created.status).toBe(201);
+    const { organization } = await body<{ organization: { id: string } }>(created);
+    await clearDocketPro(schema.db, schema, organization.id);
+    const path = `/v1/orgs/${organization.id}/integrations/linear-agent/install`;
+
+    expect((await app.request(path)).status).toBe(402);
+
+    await grantDocketPro(schema.db, schema, organization.id);
+    expect((await app.request(path)).status).toBe(409);
   });
 });

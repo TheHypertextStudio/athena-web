@@ -172,7 +172,7 @@ function assertCrossFieldRules(e: typeof env): void {
     if (!e.STRIPE_WEBHOOK_SECRET) {
       fail(`${billingRolloutSetting} requires STRIPE_WEBHOOK_SECRET.`);
     }
-    if (!e.STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT) {
+    if (e.APP_MODE === 'production' && !e.STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT) {
       fail(`${billingRolloutSetting} requires STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT.`);
     }
     if (

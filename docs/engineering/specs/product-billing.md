@@ -172,19 +172,21 @@ The local implementation is not public-launch proof. The release owner must comp
 1. Run migrations against a production-shaped snapshot. The report must show one Stripe customer
    and no more than one current subscription per billed organization. Every unresolved row blocks
    enablement.
-2. Deploy additive migrations with `BILLING_ENABLED=false`, an empty
+2. Run hosted Checkout, the portal, signed webhook replay, automatic tax, failed-card recovery,
+   authentication-required payment, cancellation, renewal, discount application, credit notes,
+   and the duplicate-subscription redirect in the Hypertext Studio Stripe test account. The
+   non-production Better Auth canary may start without a pre-existing redirect timestamp because it
+   creates the durable subscription used for that proof. Record the timestamp only after the proof
+   succeeds. Evidence from another Stripe account does not satisfy this gate.
+3. Deploy additive migrations with `BILLING_ENABLED=false`, an empty
    `BILLING_CANARY_EMAILS`, and `BILLING_RECONCILIATION_MODE=shadow`. Observe the read-only
    scheduled audit for at least 24 hours. Pin the runtime to the account id from an independently
    verified Hypertext Studio Dashboard session. Resolve every finding before changing the mode to
    `active`.
-3. Set reconciliation to `active` and put only the controlled canary accounts in
+4. Set reconciliation to `active` and put only the controlled canary accounts in
    `BILLING_CANARY_EMAILS`. The API admits those accounts through their verified Better Auth
    server session while `BILLING_ENABLED=false` keeps public Checkout and new discount
    applications closed.
-4. Run hosted Checkout, the portal, signed webhook replay, automatic tax, failed-card recovery,
-   authentication-required payment, cancellation, renewal, discount application, and credit notes
-   in the Hypertext Studio Stripe test account. Evidence from another Stripe account does not
-   satisfy this gate.
 5. Have finance approve US tax registrations, invoices, credits, refunds, and reconciliation.
    Have legal approve trial renewal, cancellation, read-only retention, discount evidence, tax,
    Pricing, Terms, and Privacy copy.

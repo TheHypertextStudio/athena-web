@@ -511,7 +511,10 @@ so the runtime receives a usable secret.
 For sandbox use, the wizard requires explicit Hypertext Studio test keys. It never reads the
 globally selected Stripe CLI profile. Local CLI forwarding requires an explicitly supplied signing
 secret from a named Hypertext Studio profile. For production, the wizard requires explicit live
-credentials and validates that every key matches live mode.
+credentials and validates that every key matches live mode. A non-production sandbox may start its
+Better Auth canary before `STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT` exists because that
+canary creates the durable subscription used to prove the redirect. Production still rejects both
+public Checkout and a canary allowlist until the proof timestamp exists.
 The resulting `STRIPE_SECRET_KEY`, `STRIPE_PUBLISHABLE_KEY`, `STRIPE_WEBHOOK_SECRET`,
 `DOCKET_PRICE_LOOKUP_DOCKET_PRO`, `STRIPE_PRICE_DOCKET_PRO`, optional portal configuration ID, and
 `BILLING_ENABLED=false` and `BILLING_RECONCILIATION_MODE=off` flow through the standard local or

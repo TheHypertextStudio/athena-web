@@ -36,7 +36,10 @@ the Better Auth server session. It never accepts a browser-supplied billing iden
 `BILLING_ENABLED=false` during this stage, so every account outside the canary list still sees
 Checkout and new discount applications as unavailable. A non-empty canary list requires the same
 live Stripe keys, webhook, price, redirect attestation, account pin, and active reconciliation as
-public Checkout.
+public Checkout. The Hypertext Studio test sandbox is the one exception to the attestation
+requirement. It may admit a verified Better Auth canary without a pre-existing timestamp so Docket
+can create the durable subscription that the redirect proof needs. Never carry that exception into
+`APP_MODE=production`.
 
 Stripe exposes its one-subscription redirect only through Dashboard settings. In both test and
 live mode, activate the no-code customer portal, keep its login link enabled, and enable **Redirect
@@ -44,7 +47,8 @@ customers with an active subscription to the customer portal** under Checkout an
 Follow Stripe's [one-subscription Checkout procedure](https://docs.stripe.com/payments/checkout/limit-subscriptions).
 After testing the redirect with the durable Docket customer, record the UTC verification time in
 `STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT`. `BILLING_ENABLED=true` must fail environment
-validation when this evidence is absent. The launch audit must also report
+validation in production when this evidence is absent. A production canary allowlist must fail the
+same way. The launch audit must also report
 `single_subscription_redirect_unverified` until the timestamp is present. Docket's database lease
 and exact subscription checks remain responsible for the trialing state that Stripe's Dashboard
 redirect does not classify as an existing active subscription.

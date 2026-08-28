@@ -597,6 +597,49 @@ describe('api composition', () => {
       expect(mod.env.BILLING_RECONCILIATION_MODE).toBe('active');
     });
 
+    it('lets the test-mode canary create the subscription used to prove the redirect', async () => {
+      for (const [key, value] of Object.entries({
+        ...validApiEnv(),
+        BILLING_ENABLED: 'false',
+        BILLING_CANARY_EMAILS: 'canary@example.com',
+        STRIPE_SECRET_KEY: 'sk_test_123',
+        STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID: 'acct_hypertext',
+        STRIPE_PUBLISHABLE_KEY: 'pk_test_123',
+        STRIPE_WEBHOOK_SECRET: 'whsec_123',
+        STRIPE_PRICE_DOCKET_PRO: 'price_123',
+        BILLING_RECONCILIATION_MODE: 'active',
+      })) {
+        vi.stubEnv(key, value);
+      }
+
+      const mod = await import('../../src/api');
+
+      expect(mod.env.APP_MODE).toBe('test');
+      expect(mod.env.STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT).toBeUndefined();
+      expect(mod.env.BILLING_CANARY_EMAILS).toBe('canary@example.com');
+    });
+
+    it('keeps a production canary closed until the redirect has been proved', async () => {
+      for (const [key, value] of Object.entries({
+        ...validApiEnv(),
+        APP_MODE: 'production',
+        BILLING_ENABLED: 'false',
+        BILLING_CANARY_EMAILS: 'canary@example.com',
+        STRIPE_SECRET_KEY: 'sk_live_123',
+        STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID: 'acct_hypertext',
+        STRIPE_PUBLISHABLE_KEY: 'pk_live_123',
+        STRIPE_WEBHOOK_SECRET: 'whsec_123',
+        STRIPE_PRICE_DOCKET_PRO: 'price_123',
+        BILLING_RECONCILIATION_MODE: 'active',
+      })) {
+        vi.stubEnv(key, value);
+      }
+
+      await expect(import('../../src/api')).rejects.toThrow(
+        'BILLING_CANARY_EMAILS requires STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT',
+      );
+    });
+
     it('requires the Hypertext Studio account pin before public Checkout can start', async () => {
       for (const [key, value] of Object.entries({
         ...validApiEnv(),
@@ -816,11 +859,12 @@ describe('api composition', () => {
     it('throws when Stripe duplicate-subscription redirect has not been verified', async () => {
       for (const [key, value] of Object.entries({
         ...validApiEnv(),
+        APP_MODE: 'production',
         BILLING_ENABLED: 'true',
         BILLING_RECONCILIATION_MODE: 'active',
-        STRIPE_SECRET_KEY: 'sk_test_123',
+        STRIPE_SECRET_KEY: 'sk_live_123',
         STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID: 'acct_hypertext',
-        STRIPE_PUBLISHABLE_KEY: 'pk_test_123',
+        STRIPE_PUBLISHABLE_KEY: 'pk_live_123',
         STRIPE_WEBHOOK_SECRET: 'whsec_123',
         STRIPE_PRICE_DOCKET_PRO: 'price_123',
       })) {

@@ -231,11 +231,18 @@
   closed. It resolves the email and verification state from the Better Auth server session and
   never accepts a billing identity from request input. The same gate controls Checkout status,
   Checkout creation, new discount applications, and discount renewals. Environment validation
-  requires the canary to carry the same live Stripe identity, webhook, price, redirect attestation,
-  and active reconciliation as public billing. Thirty-nine billing route tests, 62 environment
-  tests, three deployment-policy tests, and 24 bootstrap tests pass. API and environment type
-  checking and lint pass with the API heap bounded to the repository's documented 4 GB command
-  limit.
+  requires a production canary to carry the same live Stripe identity, webhook, price, redirect
+  attestation, and active reconciliation as public billing. Thirty-nine billing route tests, 62
+  environment tests, three deployment-policy tests, and 24 bootstrap tests pass. API and
+  environment type checking and lint pass with the API heap bounded to the repository's documented
+  4 GB command limit.
+- **Sandbox redirect bootstrap correction**: The environment contract required the Stripe
+  duplicate-subscription attestation before it would admit the Hypertext Studio test canary. That
+  made the proof circular because Docket could not create the durable subscription that the
+  redirect test needs. Non-production test mode now admits the Better Auth canary without a
+  pre-existing timestamp. Production still rejects both public Checkout and a canary allowlist
+  until the timestamp exists. The focused contract test first reproduced the rejection, then
+  passed with the production-only boundary.
 - **Founder access gate**: The `Hypertext Studio` production organization remains without a billing
   customer, entitlement, or exemption. The existing Better Auth user now has the supported initial
   superadmin bootstrap row. The production admin passkey ceremony is waiting for completion in the

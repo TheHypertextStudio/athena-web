@@ -280,6 +280,15 @@
   customer, entitlement, or exemption. The existing Better Auth user now has the supported initial
   superadmin bootstrap row. The production admin passkey ceremony is waiting for completion in the
   Hypertext Studio Chrome instance. No complimentary grant has been written yet.
+- **Exact-main deployment and provider proof**: Commit `74c998cee` passes every exact-main CI gate,
+  including API coverage and performance, and all four advisory browser shards. The same run
+  applied production migrations and deployed API, Admin, and Scheduler. Vercel built that exact
+  commit and promoted it to `docket.hypertext.studio`. The dedicated Hypertext Studio Chrome
+  profile verified the live and test `$8` monthly Docket Pro products, the one-subscription guard,
+  and the live portal's invoices, payment methods, cancellation-at-period-end, disabled plan
+  switching, and production policy links. The production account pin and redirect attestation are
+  recorded. Checkout remains disabled. The environment now declares shadow reconciliation, but a
+  later API revision must apply that declaration before the 24-hour clock starts.
 - **Decisions**: Checkout derives the customer email from the Better Auth server session and
   rejects a browser-supplied email. Stripe's Dashboard-only existing-subscriber redirect requires
   a recorded verification timestamp before `BILLING_ENABLED=true` can pass configuration. Docket
@@ -290,7 +299,8 @@
   use a personal Chrome profile or personal Stripe account for Docket billing work.
 - **Blockers**: Finance and legal must approve the Docket merchant identity, tax registrations,
   invoice and credit treatment, refund policy, discount eligibility, evidence retention, and
-  customer terms. Production still needs the 24-hour shadow reconciliation, one live full-price
+  customer terms. The local test key must be replaced with a Hypertext Studio test key. Production
+  still needs the repeated billing audit, the 24-hour shadow reconciliation, one live full-price
   canary, one live discounted canary, the Founder complimentary grant, and the 72-hour public
   canary. Whole-product launch sign-off remains independent of this billing slice.
 

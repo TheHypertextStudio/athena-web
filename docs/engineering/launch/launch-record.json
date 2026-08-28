@@ -5361,7 +5361,9 @@
       "evidence": "",
       "verifiedBy": "Boyle",
       "verificationArtifacts": [
-        "docs/engineering/launch/evidence/verification/2026-08-25-billing-launch-review.md"
+        "docs/engineering/launch/evidence/verification/2026-08-25-billing-launch-review.md",
+        "docs/engineering/launch/evidence/verification/2026-08-26-billing-launch-hardening.md",
+        "docs/engineering/launch/evidence/verification/2026-08-28-billing-provider-and-deployment.md"
       ],
       "worklogAnchor": "",
       "blockedReason": null

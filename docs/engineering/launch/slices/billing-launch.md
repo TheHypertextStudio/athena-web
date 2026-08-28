@@ -35,7 +35,8 @@ verifier: Boyle
 verifierArtifacts:
   - docs/engineering/launch/evidence/verification/2026-08-25-billing-launch-review.md
   - docs/engineering/launch/evidence/verification/2026-08-26-billing-launch-hardening.md
-verification: 'Focused billing, API, Web, database, environment, and tooling tests pass; affected package typechecks and lint pass; the commit hook passes its repository package lint gate. The prior production build evidence predates the final hardening commits and must be repeated before deployment.'
+  - docs/engineering/launch/evidence/verification/2026-08-28-billing-provider-and-deployment.md
+verification: 'Exact-main CI, browser shards, migrations, API, Admin, Scheduler, and the Vercel Web deployment pass on commit 74c998c. Hypertext Studio live and test product, duplicate-subscription, and portal controls are verified. Checkout remains disabled while provider canaries, reconciliation, finance, legal, and live canary gates remain open.'
 ---
 
 ## MISS-03 — A working web subscription must gate live phone access
@@ -93,11 +94,12 @@ run used a Stripe account outside Hypertext Studio. Docket cannot use that run a
 evidence. The release owner must repeat the launch audit and every hosted payment path in the
 Hypertext Studio Stripe test account.
 
-**Residual gap:** This requirement remains `partial`. Stripe is exclusively a Hypertext Studio
-provider, and no valid Hypertext Studio test-mode or live-mode evidence exists in this slice. The
-team has not run the migration on a production-shaped snapshot, observed reconciliation for 24
-hours, completed finance and legal approval, or run the live $8 and 72-hour canaries. The Founder
-production grant and one discounted live subscription remain unverified. The repository also lacks
-the required live telephone round trip from a verified number through this entitlement. The release
-owner must keep public Checkout disabled until those checks pass and the whole-product launch
-record reaches sign-off.
+**Residual gap:** This requirement remains `partial`. The Hypertext Studio account now supplies
+valid catalog, duplicate-subscription, portal, and exact-main deployment evidence. The local test
+key still belongs to another Stripe account, so no Hypertext Studio hosted Checkout or webhook
+canary is valid yet. The production-shaped migration needs a repeated post-0107 audit. The team has
+not observed reconciliation for 24 hours, completed finance and legal approval, or run the live $8
+and 72-hour canaries. The Founder production grant and one discounted live subscription remain
+unverified. The repository also lacks the required live telephone round trip from a verified
+number through this entitlement. The release owner must keep public Checkout disabled until those
+checks pass and the whole-product launch record reaches sign-off.

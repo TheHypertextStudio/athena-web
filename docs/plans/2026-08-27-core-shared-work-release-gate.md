@@ -7,7 +7,7 @@ finishing this plan, the maintainer must merge only a change that proves an unen
 workspace can create core work and that a real paid boundary still returns 402.
 
 **Goal:** Keep collaborative work creation in baseline Docket and block a production deployment
-whenever the shared-workspace Initiative journey fails.
+whenever the shared-workspace Initiative acceptance case fails.
 
 **Architecture:** Product ownership is a narrow input to explicit paid features. It must not alter
 the meaning of a workspace, a role, or a core work route. The organization router resolves
@@ -74,94 +74,106 @@ test suites combine into the deployment decision.
    observes HTTP 201, sees it in the UI, and reloads its detail route.
 5. The release suite treats an unexpected 402 on baseline work as a failure. It can allow 402 only
    for one named paid operation that the test intentionally exercises.
-6. `deploy-production` continues to require the release job, so a red creation journey prevents
+6. `deploy-production` continues to require the release job, so a red creation case prevents
    migrations and production deployments.
 
-## Task 1: Remove the global shared-work product capability
+## Task 1: Correct the baseline shared-work authorization and billing API contract
 
 **Files:**
 
 - Modify: `domains/billing/src/contracts.ts`
+- Modify: `domains/billing/tests/application/entitlement.test.ts`
 - Modify: `apps/api/src/product-capability.ts`
 - Modify: `apps/api/src/routes/orgs.ts`
+- Modify: `apps/api/src/routes/billing.ts`
 - Modify: `apps/api/tests/agent/entitlement.test.ts`
-- Test: `domains/billing/tests/application/entitlement.test.ts`
+- Modify: `apps/api/tests/routes/group-d.test.ts`
+- Modify: `apps/api/tests/routes/billing-http.test.ts`
+- Modify: `apps/api/tests/routes/billing-lifecycle.test.ts`
+- Modify: `apps/api/tests/routes/group-b.test.ts`
 
-**Step 1: Write the failing contract tests.**
+**Step 1: Write the failing production contracts.**
 
-Remove `shared_work` from the expected capability list. Assert that Docket Pro still grants
-`integrations`, `mcp`, `athena`, and `voice`. Replace the old global-middleware tests with tests
-that establish no global product guard exists for baseline organization routes.
+Change the billing capability test to expect only `integrations`, `mcp`, `athena`, and `voice`.
+Replace the middleware test that requires Pro for shared writes with a real parent-router case. A
+fresh unentitled shared workspace must create an Initiative through
+`POST /v1/orgs/:orgId/initiatives`, receive HTTP 201, and reopen the saved Initiative. Existing
+Initiative-router tests continue to prove that `contribute` is required, so the parent-router case
+must not bypass membership or role checks.
+
+Change billing-summary expectations so both personal and shared workspaces report core work as
+`writable` without Docket Pro and after Pro ends. Keep the existing response field for compatibility
+in this P0. It now describes baseline workspace access rather than paid-feature access.
 
 **Step 2: Run the tests before changing source.**
 
 ```bash
 pnpm --filter @docket/billing test -- tests/application/entitlement.test.ts --maxWorkers=2
-pnpm --filter @docket/api test -- tests/agent/entitlement.test.ts --maxWorkers=2
+pnpm --filter @docket/api test -- tests/agent/entitlement.test.ts tests/routes/group-d.test.ts tests/routes/billing-http.test.ts tests/routes/billing-lifecycle.test.ts tests/routes/group-b.test.ts --maxWorkers=2
 ```
 
-The old expectations must fail before the implementation changes.
+The capability expectation, parent-router Initiative case, and billing access expectations must
+fail for the old product policy rather than for test setup.
 
-**Step 3: Make the narrow implementation change.**
+**Step 3: Make the narrow authorization change.**
 
-Delete `shared_work` from `PRODUCT_CAPABILITIES`. Delete `sharedWorkCapabilityGuard`. Remove each
-application of that guard from the organization router, including the explicit workspace settings
-uses. Preserve `productCapabilityGuard`, `assertProductCapability`, tenant isolation, and role
-capability checks. Search production source for both deleted names and require zero matches.
+Delete `shared_work` from `PRODUCT_CAPABILITIES`. Delete `sharedWorkCapabilityGuard`. Remove its
+three applications from the organization router, including the explicit workspace-settings uses.
+Preserve `productCapabilityGuard`, `assertProductCapability`, tenant isolation, and role capability
+checks. Integrations, MCP, Athena, and voice keep their explicit guards at their feature boundaries.
+Search production source for both deleted names and require zero matches.
+
+Make billing summary return `accessMode: 'writable'` for an existing workspace regardless of Pro
+state. Do not use this compatibility field to report paid-feature entitlement.
 
 **Step 4: Run the focused tests again and commit the authorization slice.**
 
-Use the `billing` scope. The commit body must state that collaborative core work is baseline and
-that paid modules retain explicit product guards.
+Use the `billing` scope. The commit body must state that collaborative core work is baseline, that
+paid modules retain explicit product guards, and that `accessMode` now reports baseline access.
 
-## Task 2: Make tests opt into paid access
-
-**Files:**
-
-- Modify: `apps/api/tests/support/routes-harness.ts`
-- Modify: API tests that exercise explicit paid capabilities
-- Test: affected billing, integrations, MCP, Athena, and voice suites
-
-**Step 1: Write the fixture expectation.**
-
-Require `seedOrg` to create an unentitled shared workspace by default. A test that needs Docket
-Pro must pass an explicit grant or call `grantDocketPro` itself.
-
-**Step 2: Change the default.**
-
-Set `withDocketPro` to `false`. Do not restore an implicit entitlement to silence an unrelated
-failure. Each exposed failure must either declare a paid capability or prove that its route is
-baseline.
-
-**Step 3: Prove both sides.**
-
-Run the affected suites with no more than two workers. Core routes must pass with no entitlement.
-Paid routes must fail without a grant and pass with an explicit grant.
-
-## Task 3: Add the HTTP-level shared Initiative contract
+## Task 2: Correct customer, operator, and lifecycle product promises
 
 **Files:**
 
-- Create: `apps/api/tests/routes/shared-work-baseline.test.ts`
-- Modify: `apps/api/tests/support/routes-harness.ts` only if it needs an authenticated Owner helper
+- Modify: `apps/web/src/components/settings/billing-settings.tsx`
+- Modify: `apps/web/src/components/billing/billing-recovery.tsx`
+- Modify: `apps/web/src/components/marketing/pricing-products.tsx`
+- Modify: `apps/web/src/app/(marketing)/pricing/page.tsx`
+- Modify: `apps/web/src/app/(marketing)/terms/page.tsx`
+- Modify: `apps/api/src/routes/webhooks.ts`
+- Modify: `apps/api/src/services/billing-reconciliation.ts`
+- Modify: `apps/api/src/routes/admin-billing-routes.ts`
+- Modify: `packages/types/src/errors.ts`
+- Modify: focused Web and API tests for those surfaces
+- Modify: current billing, architecture, reconciliation, API, and MVP documents that promise
+  shared work becomes read-only
 
-**Step 1: Write the failing production-router test.**
+**Step 1: Write the failing user-visible expectations.**
 
-Mount the real organization router through the route harness. Seed a shared workspace, an Owner,
-roles, grants, statuses, and no entitlement. Send the Initiative JSON shape used by the browser to
-the actual `POST /v1/orgs/:orgId/initiatives` route. Assert 201, the returned name and id, then
-GET aggregate detail and assert 200. Add Member success and Guest denial cases.
+Billing Settings must say baseline shared work remains writable without Pro. Docket Pro must list
+only integrations, MCP, Athena, and voice. Cancellation, payment failure, and grace-expiry copy must
+say that Pro features end or pause. The copy must not claim that core shared work becomes read-only.
+Pricing and Terms must state the same product boundary.
 
-**Step 2: Prove it fails against the old guard and passes after Task 1.**
+Webhook, reconciliation, admin, and stable Problem copy must describe Pro-feature access without
+claiming that core work is blocked. Update behavior tests before production copy.
 
-```bash
-pnpm --filter @docket/api test -- tests/routes/shared-work-baseline.test.ts --maxWorkers=2
-```
+**Step 2: Run the focused tests red, then update the implementation and documents.**
 
-The test must include the parent organization router. Testing the Initiatives router in isolation
-would miss the middleware that caused the production outage.
+Use existing billing settings, billing recovery, legal policy, webhook, and reconciliation tests.
+Add an assertion only when it names the customer-visible break that the old policy caused.
 
-## Task 4: Replace screen-only release coverage with core-product acceptance
+**Step 3: Verify and commit the product-promise slice.**
+
+Run the affected API and Web suites with at most two workers. Search production and current product
+documents for claims that shared work becomes read-only and require zero stale matches outside
+historical work logs and incident plans. Use the `billing` scope.
+
+The repository-wide automatic Pro fixture remains unchanged in this emergency slice. Each new P0
+case clears its product grant explicitly. The outcome-catalog redesign will remove the implicit
+fixture and make every paid test opt in after production is repaired.
+
+## Task 3: Replace screen-only release coverage with core-product acceptance
 
 **Files:**
 
@@ -169,12 +181,13 @@ would miss the middleware that caused the production outage.
 - Modify: `apps/web/e2e/release/core-screen-acceptance.spec.ts`
 - Modify: `.github/workflows/ci.yml`
 
-**Step 1: Write the browser-only mutation journey.**
+**Step 1: Write the browser-only mutation case.**
 
 Use `signUp` for a fresh account. Open `/workspaces/new`, enter a unique workspace name, and press
 **Create workspace**. Wait for the new shared workspace id. Open its Initiative list, press **New
 Initiative**, enter a unique name, and press **Create**. Observe the Initiative POST return 201,
-assert that the list shows the new record, reload its detail route, and assert the name remains.
+assert that the resulting detail shows the new record, return to the Initiative list and find it,
+then open a fresh browser context and require the server-backed detail to show the same name.
 
 The test can establish authentication with existing helpers. It must not create the workspace or
 Initiative through API setup. Those browser operations are the contract that production broke.
@@ -182,8 +195,9 @@ Initiative through API setup. Those browser operations are the contract that pro
 **Step 2: Remove the blanket 402 waiver.**
 
 `core-screen-acceptance.spec.ts` currently ignores every 402 while it watches screen responses.
-Replace that exemption with an exact, named allow-list for the one intentional paid request on a
-screen. The core-work creation test must fail on every 4xx and 5xx from either write.
+Remove that exemption. The current release scan does not intentionally exercise a paid operation,
+so it has no legitimate 402 allow-list entry. The core-work creation test must fail on every 4xx
+and 5xx from either write.
 
 **Step 3: Run the same production-build stack as CI.**
 
@@ -197,7 +211,7 @@ Change the workflow command from one filename to `e2e/release`. Rename the visib
 artifact to Core product acceptance. Preserve `core-screen-smoke` in both `still-latest.needs` and
 `deploy-production.needs`, so the new test is a release blocker rather than advisory coverage.
 
-## Task 5: Verify, review, and release safely
+## Task 4: Verify, review, and release safely
 
 **Files:**
 

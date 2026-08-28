@@ -187,7 +187,11 @@
 - **depends on:** DA-shared-01, DA-enums-01, DA-types-jsonb-01
 - **files:** `packages/db/src/schema/identity.ts`, `packages/types/src/org.ts`, `apps/api/src/routes/orgs.ts`
 - **spec:** api-rpc-contract.md §3.1, data-model.md §3.3, RECONCILIATION.md (FROZEN: org.approval_routing column; v1 export contract)
-- **build:** Slice builds POST/GET /orgs and the organization table base. Add: (1) DB column `approvalRouting: jsonb('approval_routing').$type<ApprovalRouting>()` (nullable) on organization per FROZEN three-level approval-routing decision. (2) DTOs in @docket/types: OrgOut{ id, name, slug, avatar?, isPersonal, vocabulary, agentGuidance, lifecycleState }, OrgUpdate{ name?, slug?, avatar?, vocabulary?, agentGuidance?, approvalRouting? }, OrgSummary (for GET /orgs list, attention badge). (3) Routes on the existing chained `orgs` Hono router (do not break the chain): `GET /:orgId` (org:view → OrgOut), `PATCH /:orgId` (org:manage → OrgUpdate→OrgOut), `DELETE /:orgId` (org:manage Owner-only → {id, lifecycleState:'pending_deletion', deleteAfterAt} sets lifecycle pipeline), `GET /:orgId/export?format=json|zip` (org:manage → {downloadUrl, expiresAt}, real work-layer JSON export per FROZEN api decision, signed short-TTL URL, secrets/Stripe/other tenants excluded). Each route: validator(input) + describeRoute(resolver(OutSchema), security:[{bearerAuth:[]}], x-docket-capability) + ok(c,Out,data). POST /orgs accepts optional Idempotency-Key (DA-infra-idem-01).
+- **build:** Slice builds POST/GET /orgs and the organization table base. Add the organization
+  approval-routing field, typed read/update contracts, and authorized organization routes. Keep the
+  explicit confirmed deletion flow separate from billing. Billing cancellation, payment failure,
+  and entitlement expiry must not call or schedule this route. Preserve administrator export
+  access in every non-deleted billing state.
 - **accept:** `pnpm --filter apps/api typecheck` passes; `pnpm --filter @docket/db db:generate` emits a migration adding organization.approval_routing; a scratch `hc<AppType>` consumer autocompletes `client.orgs[':orgId'].$get` and `client.orgs[':orgId'].export.$get`; `GET /v1/openapi.json` lists the new org routes with capability annotations.
 
 ### `DA-members-01` — Membership routes (orgs/:orgId/members) + invitation table + members CRUD + invite _(P6 · parallel)_
@@ -214,13 +218,17 @@
 - **build:** New table + routes (not in slice). (1) DB: single canonical `grant` table per FROZEN decision (delete permission_grant entirely): id, organization_id NOT NULL CASCADE, subject_kind grant_subject_kind {actor,role}, subject_id text (polymorphic, app-enforced), resource_kind resource_kind, resource_id text (polymorphic), capabilities jsonb $type<GrantCapability[]> NOT NULL, effect grant_effect default 'allow', cascades boolean NOT NULL default true, visibility_override visibility (nullable), expires_at timestamptz (nullable), visibility visibility NOT NULL default 'public', created_by→actor SET NULL, created_at default now(). Indexes: grant_org_idx, grant_subject_idx(org,subject_kind,subject_id), grant_resource_idx(org,resource_kind,resource_id), uniqueIndex('grant_subject_resource_effect_uq').on(subject_kind,subject_id,resource_kind,resource_id,effect). (2) DTOs against branded Id: ActorRef={kind:'actor',id:Id}, RoleRef={kind:'role',id:Id}, ResourceRef={kind:ResourceKind,id:Id}, GrantOut{ id, subject, resource, capabilities: Capability[], visibility }, GrantUpsert{ subject: ActorRef|RoleRef, resource: ResourceRef, capabilities: Capability[] (min 1), visibility default 'public', cascades?, expiresAt? } (NO effect field in v1 — server writes allow). (3) Routes (orgs.route('/:orgId/grants', grants)): GET /grants (org:manage, {subjectActorId?, resourceType?, resourceId?}→GrantOut[]), PUT /grants (org:manage→GrantOut upsert; self-escalation guard), DELETE /grants/:grantId (org:manage→{id, removed:true}). Wire into orgs chain.
 - **accept:** `pnpm --filter apps/api typecheck` passes; `db:generate` emits grant with effect/cascades/visibility_override/expires_at and the 5-column unique index, and NO permission_grant table exists; `client.orgs[':orgId'].grants.$put` autocompletes with tagged subject/resource refs; openapi shows grants routes (org:manage).
 
-### `DA-billing-01` — Billing routes (orgs/:orgId/billing + checkout + portal) over Better Auth Stripe subscription _(P6 · parallel)_
+### `DA-billing-01` — Superseded billing route plan _(P6 · parallel)_
 
 - **depends on:** DA-shared-01, DA-enums-01
 - **files:** `packages/types/src/billing.ts`, `apps/api/src/routes/billing.ts`, `apps/api/src/routes/orgs.ts`
-- **spec:** api-rpc-contract.md §3.1 (billing), data-model.md §2 (subscription), §3.3 (lifecycle cols), RECONCILIATION.md (FROZEN env: BILLING_ENABLED gate, no-card trial)
-- **build:** New routes (no new table — subscription is the Better Auth Stripe model table keyed reference_id=organization.id; lifecycle cols live on organization). (1) DTOs: BillingOut{ lifecycleState, plan, status, currentPeriodEnd?, trialEndsAt?, exportReadyAt?, deleteAfterAt? }, CheckoutCreate{ plan, returnUrl }, CheckoutOut{ checkoutClientSecret }, PortalCreate{ returnUrl }, PortalOut{ url }. (2) Routes (orgs.route('/:orgId/billing', billing)): GET /billing (org:manage→BillingOut reading organization lifecycle cols + subscription row), POST /billing/checkout (org:manage→CheckoutOut embedded Checkout), POST /billing/portal (org:manage→PortalOut). All gated by BILLING_ENABLED env (when false, return a typed 402 Problem per FROZEN env decision — never a stub). Use describeRoute + resolver + ok helper. Reads must not invent subscription columns beyond Better Auth's supported model.
-- **accept:** `pnpm --filter apps/api typecheck` passes; `client.orgs[':orgId'].billing.$get` and `.billing.checkout.$post` autocomplete; openapi shows billing routes tagged org:manage; with BILLING_ENABLED unset the checkout route returns a typed Problem (not a thrown stub).
+- **spec:** `specs/product-billing.md` and `stripe-billing-runbook.md` supersede this pre-implementation entry.
+- **build:** Docket owns durable organization billing accounts, Checkout attempts, provider events,
+  entitlements, discounts, credits, and complimentary grants. Billing routes use the Better Auth
+  server session for identity and Docket roles for organization authorization. Hosted Checkout and
+  the portal own payment data.
+- **accept:** Use the billing launch gates in the current specification. Do not use the deleted
+  Better Auth subscription-table or organization-deletion design from the original manifest.
 
 ### `DA-team-ext-01` — team table extension (approval*routing) + team_member join (non-slice routes) + teams sub-routes (members) *(P6 · parallel)\_
 
@@ -568,7 +576,10 @@
 - **depends on:** PAB-AZ-05
 - **files:** `apps/api/src/error.ts`, `packages/types/src/problem.ts`
 - **spec:** api-rpc-contract.md §1.7, permissions.md §0.1, permissions.md §4.5
-- **build:** Define Problem in @docket/types {type,title,status,detail?,code (closed enum),fieldErrors?} with application/problem+json. apps/api onError map: ZodError->422, AuthError->401, CapabilityError->403, NotFoundError->404, ConflictError->409, CycleError->409 (dependency_cycle), IdempotencyConflictError->422 (idempotency_key_reuse), BillingFrozenError->402 (lifecycle pending_deletion/past_due write-block, permissions §0.1), else->500. Closed code enum includes last_owner_guard, self_escalation, personal_org_no_invites, card_required. Shared validator hook flattens z.flattenError into fieldErrors and emits the same 422 Problem so validator and runtime errors are shape-identical. Attach Problem to every route's 4xx/5xx in describeRoute.
+- **build:** Define the shared Problem contract and application-owned error mapping. Billing uses
+  stable product codes for required product, pending Checkout, unresolved customer, conflicting
+  awards, provider synchronization, and expired grace. Access mode comes from the Docket Pro
+  entitlement. It does not come from organization deletion state.
 - **accept:** `pnpm --filter @docket/api typecheck` and `pnpm --filter @docket/api test` pass; tests assert a forbidden write yields application/problem+json with status 403 + code, an invalid body yields 422 with fieldErrors, and a frozen-org write yields 402 BillingFrozen.
 
 ### `PAB-API-08` — Idempotency-Key middleware (Postgres table, replay + request*hash conflict) *(P6 · parallel)\_
@@ -579,12 +590,16 @@
 - **build:** Middleware applied to every POST create route. Header Idempotency-Key (optional). On request with a key: look up (user_id, key); if found AND request_hash (sha256 of method+path+canonical body) matches -> return stored response_status+response_body verbatim (no re-execution); if found AND hash differs -> 422 Problem code idempotency_key_reuse (IdempotencyConflictError); if not found -> execute in the same tx that inserts the row (status in_progress -> completed) storing the final response; expires_at = created_at + 24h. organization_id nullable (cross-org/admin POSTs). Absent header -> normal execution.
 - **accept:** `pnpm --filter @docket/api typecheck` passes; integration tests: replaying a create with the same key+body returns the identical stored response without creating a second row; same key + different body returns 422 idempotency_key_reuse; no header executes normally.
 
-### `PAB-AUTH-01` — @docket/auth full plugin set: passkey + social(Google/GitHub/Linear) + sso + scim + oidcProvider + mcp + stripe _(P6 · sequential)_
+### `PAB-AUTH-01` — @docket/auth identity and OAuth provider set _(P6 · sequential)_
 
 - **files:** `packages/auth/src/index.ts`, `packages/auth/src/plugins.ts`, `packages/auth/package.json`
 - **spec:** docket-engineering-plan.md §2, env-and-bootstrap.md §1.3, RECONCILIATION.md (Decisions: org plugin OFF, mount)
-- **build:** Compose the single betterAuth() with the full plugin array (extending the slice's passkey+nextCookies): passkey({registration:{requireSession:false, resolveUser}}); socialProviders Google+GitHub+native Linear with account.accountLinking.trustedProviders minimal; sso(); scim() (Users only, no Groups); oidcProvider() (PKCE); mcp() built on oidcProvider; stripe() (wiring in PAB-BILL-01); nextCookies() LAST. drizzleAdapter(db,{provider:'pg'}) WITHOUT usePlural and WITHOUT useNumberId; advanced.database.generateId = () => genId() (shared ULID). organization plugin OFF. Pin better-auth + @better-auth/passkey + @better-auth/sso + @better-auth/scim + @better-auth/stripe all =1.6.14 exact via catalog; oidcProvider/mcp from core.
-- **accept:** `pnpm --filter @docket/auth build` produces dist; `pnpm --filter @docket/auth typecheck` passes; a unit test boots the betterAuth() instance and asserts nextCookies is last in the plugin array and advanced.database.generateId returns a 26-char ULID; package.json pins all @better-auth/\* at 1.6.14 via catalog.
+- **build:** Compose one Better Auth instance for users, sessions, passkeys, social identities,
+  account linking, SSO, SCIM, and Docket's OAuth provider. Keep the organization plugin off because
+  Docket owns membership. Keep Stripe out of the plugin array because Docket owns organization
+  billing. Pin Better Auth packages through the workspace catalog.
+- **accept:** `pnpm --filter @docket/auth build` and type checking pass. Boundary tests prove billing
+  receives identity through the supported Better Auth server-session API.
 
 ### `PAB-AUTH-02` — Better Auth schema reconciliation in @docket/db + migration _(P6 · sequential)_
 
@@ -658,45 +673,57 @@
 - **build:** Mount @modelcontextprotocol/sdk StreamableHTTPServerTransport at /mcp with sessionIdGenerator:undefined (stateless, no Redis, no resumable replay). Origin validation BEFORE auth (MCP_ALLOWED_ORIGINS, reject DNS-rebinding). Advertise capabilities: tools{listChanged:true}, resources{subscribe:true,listChanged:true}, completions{}, logging{}; tasks{...} ONLY when MCP_TASKS_ENABLED=true (otherwise omit and set per-tool execution.taskSupport='forbidden'); prompts NOT advertised. Subscribable resources (session/task/hub.inbox/hub.today) fan out notifications/resources/updated from the service-layer event bus (no Redis); subscriptions bound to the live connection, re-read on reconnect. Serve PRM (RFC 9728) at /.well-known/oauth-protected-resource and /.well-known/oauth-protected-resource/mcp.
 - **accept:** `pnpm --filter @docket/api typecheck` and `pnpm --filter @docket/api test` pass: initialize returns protocolVersion 2025-11-25 with tasks omitted when MCP_TASKS_ENABLED=false and present when true; prompts is never advertised; a request with a disallowed Origin is rejected before auth; PRM is served at both well-known paths.
 
-### `PAB-BILL-01` — Stripe plugin wiring: org-keyed subscription, lookup-key price resolver, no-card trial, BILLING*ENABLED gate *(P6 · sequential)\_
+### `PAB-BILL-01` — Superseded Stripe plugin plan *(P6 · sequential)\_
 
 - **depends on:** PAB-AUTH-02
-- **files:** `packages/auth/src/stripe.ts`, `packages/env/src/stripe.ts`, `packages/env/src/registry.ts`
-- **spec:** docket-engineering-plan.md §3, env-and-bootstrap.md §1.4/§3.5, RECONCILIATION.md (Decisions: billing split), data-model.md §3.3
-- **build:** Configure stripe() plugin: referenceId = organization.id, authorizeReference hook asserts the caller's human Actor holds the right capability on that org, createCustomerOnSignUp=false (customer created at first shared-org creation), plan freeTrial.days=14 (no-card trial), enabledEvents = the 4 core + invoice.payment_failed/paid/payment_action_required + customer.subscription.trial_will_end via onEvent. Boot resolver: resolve plan priceId at boot via stripe.prices.list({lookup_keys:[DOCKET_PRICE_LOOKUP_TEAM]}) (and annual), with STRIPE_PRICE_TEAM as a hard override if set; pass resolved id to plans[].priceId/annualDiscountPriceId. env stripe slice superRefine: DOCKET_PRICE_LOOKUP_TEAM required unless STRIPE_PRICE_TEAM set; stripe vars required only when BILLING_ENABLED=true (coerced boolean, default false). Webhook path fixed at ${API_URL}/api/auth/stripe/webhook.
-- **accept:** `pnpm --filter @docket/auth typecheck` and `pnpm --filter @docket/env typecheck` pass; a unit test (stubbed Stripe) proves the boot resolver returns a concrete price\_ id from a lookup key and prefers STRIPE_PRICE_TEAM when present; env:check fails when BILLING_ENABLED=true with no price configured and passes when BILLING_ENABLED=false.
+- **files:** The shipped billing domain lives outside `@docket/auth`.
+- **spec:** `specs/product-billing.md`, `specs/env-and-bootstrap.md`, and
+  `stripe-billing-runbook.md` are authoritative.
+- **build:** Keep the Better Auth server session as the identity boundary. Use Docket's durable
+  billing records and the Stripe SDK for organization billing. Resolve provider resources from
+  configuration. Receive the eight authoritative events at `/internal/billing/webhook`.
+- **accept:** Checkout cannot enable without the complete billing launch audit and provider gates.
 
-### `PAB-BILL-02` — Org billing routes: GET /billing, POST /billing/checkout (embedded), POST /billing/portal _(P6 · parallel)_
+### `PAB-BILL-02` — Organization billing routes _(P6 · parallel)_
 
 - **depends on:** PAB-BILL-01, PAB-API-01
 - **files:** `apps/api/src/routes/billing.ts`
-- **spec:** api-rpc-contract.md §3.1 (billing), docket-engineering-plan.md §3 (embedded Checkout), env-and-bootstrap.md §1.4
-- **build:** Chained Hono router under /orgs/:orgId/billing, all org:manage. GET /billing -> {lifecycleState, plan, status, currentPeriodEnd?, trialEndsAt?, exportReadyAt?, deleteAfterAt?} from the subscription mirror + org lifecycle columns. POST /billing/checkout ({plan,returnUrl}) -> {checkoutClientSecret} via embedded Checkout (ui_mode embedded), customer created/looked-up by org.id. POST /billing/portal ({returnUrl}) -> {url} via Stripe billing portal (STRIPE_BILLING_PORTAL_CONFIG_ID if set). Card-gate for shared-org checkout honors DOCKET_REQUIRE_CARD_FOR_INVITE/BILLING_ENABLED; personal orgs never hit Checkout.
-- **accept:** `pnpm --filter @docket/api typecheck` passes; integration tests (stubbed Stripe): GET /billing returns lifecycleState+plan for a trialing org; checkout returns a client secret for an org:manage caller; a non-manage caller gets 403; portal returns a url.
+- **spec:** `specs/product-billing.md` is authoritative.
+- **build:** The routes return entitlement access, dates, discount status, credit status, and
+  management permissions. Checkout is hosted, card-required, customer-aware, lease-protected, and
+  idempotent. The portal returns to the originating organization's Billing settings.
+- **accept:** The API, database, and browser suites cover the customer states and authorization
+  boundaries in the billing specification.
 
-### `PAB-BILL-03` — Data-lifecycle state machine: onEvent transitions + lifecycle service (trial->past*due->export_window->pending_deletion) *(P6 · sequential)\_
+### `PAB-BILL-03` — Docket Pro entitlement state machine *(P6 · sequential)\_
 
 - **depends on:** PAB-BILL-01
-- **files:** `apps/api/src/services/lifecycle.ts`, `packages/auth/src/stripe.ts`
-- **spec:** docket-engineering-plan.md §3, data-model.md §3.3, permissions.md §0.1, RECONCILIATION.md (Decisions: billing split)
-- **build:** Implement the org lifecycle service over the organization columns lifecycle_state {trialing,active,past_due,export_window,pending_deletion,deleted}, export_ready_at, delete_after_at. Stripe onEvent hooks feed (never solely trust) transitions: invoice.payment_failed -> active->past_due; trial-end without payment / terminal past_due -> export_window (set export_ready_at, delete_after_at = now+14d, enqueue export job, email link); reactivation (paid/restored at any pre-deletion stage) -> active + clear delete_after_at. The lifecycle gate runs UPSTREAM of canActor (frozen org = 402/403 BillingFrozenError before authz). Expose transition functions reused by the cron sweep (PAB-CRON-01).
-- **accept:** `pnpm --filter @docket/api test` passes: invoice.payment_failed moves an active org to past_due; trial expiry moves it to export_window with delete_after_at = +14d; a payment in export_window returns it to active and clears delete_after_at; a write to a pending_deletion org raises BillingFrozenError (402).
+- **files:** `packages/db/src/schema/billing.ts` and the API billing services.
+- **spec:** `specs/product-billing.md` and `billing-state-machine.md` are authoritative.
+- **build:** A failed payment starts one fixed seven-day grace period. Cancellation preserves access
+  through the paid period. The entitlement then makes shared work read-only without changing data
+  retention. Payment recovery restores access. Complimentary grants remain independent of Stripe.
+- **accept:** Tests cover every entitlement transition and prove billing cannot schedule deletion.
 
 ### `PAB-BILL-04` — Org work-layer export route + signed artifact (real v1, no stub) _(P6 · parallel)_
 
 - **depends on:** PAB-BILL-01, PAB-API-01
 - **files:** `apps/api/src/routes/export.ts`, `apps/api/src/services/export.ts`, `packages/env/src/ops.ts`
 - **spec:** api-rpc-contract.md §3.1 (export), env-and-bootstrap.md §1.7, docket-engineering-plan.md §3, AGENTS.md (no-stubs)
-- **build:** GET /orgs/:orgId/export?format=json|zip (org:manage) returns {downloadUrl, expiresAt}. Build a real export of the org work layer as JSON: organization, teams, roles, grants, actors (human+agent, NO credentials), initiatives, programs, projects, milestones, cycles, tasks (+labels, dependencies, comments, updates), integrations (metadata only, NO credentialsRef/tokens), notifications. EXCLUDE Stripe artifacts, secrets, other tenants. zip wraps the JSON + manifest.json (counts + schema version). downloadUrl = signed 1h-TTL URL to Vercel Blob (BLOB_READ_WRITE_TOKEN) or, in dev with no blob, a signed /v1/orgs/:orgId/export/download/:token streaming route. Add BLOB_READ_WRITE_TOKEN (optional) + EXPORT_BUCKET_URL/EXPORT_BUCKET_TOKEN override to the ops env slice. Reused by the lifecycle export_window step.
+- **build:** GET /orgs/:orgId/export?format=json|zip returns a signed administrator export that
+  excludes credentials, Stripe artifacts, secrets, and other tenants. Export stays available in
+  every non-deleted billing state. Billing does not create an export window or deletion deadline.
 - **accept:** `pnpm --filter @docket/api typecheck` and `pnpm --filter @docket/api test` pass: export of a seeded org returns a downloadUrl whose payload contains the org's tasks/projects but no credentialsRef/Stripe fields; zip format includes manifest.json; a non-manage caller gets 403.
 
-### `PAB-CRON-01` — Lifecycle sweep cron: idempotent reconciliation, holds-respecting, Vercel Cron + CRON*SECRET *(P6 · sequential)\_
+### `PAB-CRON-01` — Scheduled billing reconciliation *(P6 · sequential)\_
 
 - **depends on:** PAB-BILL-03
-- **files:** `apps/api/src/routes/lifecycle-sweep.ts`, `apps/api/vercel.json`
-- **spec:** docket-engineering-plan.md §3 (idempotent cron sweep), env-and-bootstrap.md §1.7, data-model.md §3.3, RECONCILIATION.md (Decisions: org deletion CASCADE)
-- **build:** GET /api/lifecycle/sweep guarded by Authorization: Bearer ${CRON_SECRET}. For each org indexed by (lifecycle_state, delete_after_at): load the LIVE Stripe subscription state and reconcile lifecycle_state against that truth (idempotent — running twice yields the same result; lost/out-of-order webhooks cannot corrupt state). SKIP any org with an active (released_at IS NULL) lifecycle_hold. When delete_after_at < now and pending_deletion: advance pending_deletion->deleted relying on ON DELETE CASCADE from organization, plus an app purge job for Stripe customer + external connector state. Reactivation observed at sweep returns org to active. Register a vercel.json crons entry (daily 0 3 \* \* \*) on the api project. Handler is fully idempotent and reconciliation-based (never trusts webhook ordering).
-- **accept:** `pnpm --filter @docket/api typecheck` and `pnpm --filter @docket/api test` pass: an unauthenticated sweep returns 401; running the sweep twice over an export_window org past delete_after_at produces a single deletion; an org under an active lifecycle_hold is skipped; reconciliation flips a paid org back to active even if no webhook fired.
+- **files:** `apps/api/src/services/scheduled-billing-reconciliation.ts` and deployment scheduler configuration.
+- **spec:** `stripe-billing-runbook.md` is authoritative.
+- **build:** Cloud Scheduler compares Stripe customers, subscriptions, discounts, invoices, and
+  Docket entitlements. It repairs safe mirror drift and alerts on duplicate subscriptions or money
+  operations that require finance judgment. It never deletes an organization.
+- **accept:** Shadow and active modes are auditable, idempotent, and gated by the production audit.
 
 ### `PAB-CRON-02` — Idempotency-key TTL sweep (24h hard-delete) on the cron lane _(P6 · parallel)_
 
@@ -1254,7 +1281,11 @@
 - **depends on:** UI-07-listview, UI-08-detail-panel, UI-01-shadcn-primitives
 - **files:** `apps/admin/src/app/layout.tsx`, `apps/admin/src/app/(admin)/page.tsx`, `apps/admin/src/app/(admin)/users/[userId]/page.tsx`, `apps/admin/src/app/(admin)/orgs/[orgId]/page.tsx`, `apps/admin/src/app/(admin)/lifecycle/page.tsx`, `apps/admin/src/lib/admin-rpc.ts`
 - **spec:** mvp-plan.md §8.9, permissions.md §11
-- **build:** Build the operator back-office per mvp-plan §8.9 (consumes the SAME RPC AppType /admin group). Home = split metrics + queues; user-primary navigation (a person spans many orgs; reach orgs from a user). User detail fans out to their orgs. Inline common billing actions (extend trial, credit, change plan, refund, pause dunning) writing back to Stripe via /v1/admin/\* (gated by staffGuard per-route allow-sets per frozen api decision: reads = {support,finance,superadmin}, billing-write/holds = {finance,superadmin}, audit/staff = {superadmin}). Data-lifecycle pipeline (trialing -> export_window -> pending_deletion -> deleted) with first-class holds (place hold stops the clock) and a full audit trail (OperatorAuditEvent). 'View as'/impersonation is banner-wrapped, time-boxed, reason-logged, fully audited (runs canActor as the impersonated Actor — no tenant super-grant). Agent oversight = health signals only (aggregate volume, errors, stuck approvals) — never session contents. Uses ListView for queues, DetailPage for user/org records.
+- **build:** Build the operator back-office with user and organization records, Stripe reconciliation
+  state, discount application and award controls, credit-note previews, and superadmin-only
+  complimentary grants. Finance may reconcile Stripe and extend eligible trials. Staff may not make
+  an unpaid entitlement active by editing a database status. The independent account-deletion flow
+  keeps its own holds and audit trail.
 - **accept:** `pnpm --filter @docket/admin build` succeeds, RPC AppType resolves no `any`. Manual/Playwright (staff session): a non-staff user is 403'd; a support user sees reads but billing-write is gated to finance/superadmin and audit to superadmin; the lifecycle pipeline shows each org's stage and a hold stops the clock; impersonation shows a warning banner, requires a reason, and writes an OperatorAuditEvent.
 
 ## testing-infra-bootstrap (18 tickets)
@@ -1307,8 +1338,11 @@
 
 - **depends on:** BOOT-03-preflight, BOOT-02-env-slices-from-registry
 - **files:** `scripts/bootstrap/oauth.ts`, `scripts/bootstrap/stripe.ts`, `scripts/bootstrap/athena.ts`
-- **spec:** env-and-bootstrap.md §3.4-§3.6, frozen:env-and-bootstrap Stripe lookup-key resolution + eight webhook events + createCustomerOnSignUp=false
-- **build:** OAuth (§3.4): print exact dev+prod redirect URIs from env-and-bootstrap §1.3 for Google/GitHub/Linear and collect id/secret via masked prompts, validating each against the authEnv slice. Stripe (§3.5): list-before-create product `Docket Team`; create prices with stable lookup keys team*monthly (-> DOCKET_PRICE_LOOKUP_TEAM, capture price* id -> STRIPE_PRICE_TEAM fallback) and optional team_annual; per frozen decision resolve concrete priceId at boot via lookup unless STRIPE_PRICE_TEAM override present. Webhooks: DEV prints `stripe listen --forward-to localhost:8787/api/auth/stripe/webhook` + capture via `stripe listen --print-secret`; PROD `stripe webhook_endpoints create --url ${API_URL}/api/auth/stripe/webhook --enabled-events checkout.session.completed,customer.subscription.created,customer.subscription.updated,customer.subscription.deleted,invoice.payment_failed,invoice.paid,invoice.payment_action_required,customer.subscription.trial_will_end --output json` capturing the signing secret. Set createCustomerOnSignUp=false implication note. Athena (§3.6): prompt ATHENA_AGENT_ENDPOINT + ATHENA_AGENT_API_KEY (+ optional ANTHROPIC_API_KEY), skippable with a warning that sessions return 503 until set.
+- **spec:** `specs/env-and-bootstrap.md` and `stripe-billing-runbook.md` are authoritative.
+- **build:** OAuth setup validates provider credentials. Stripe setup selects the Hypertext Studio
+  account explicitly, lists before creating, configures the $8 monthly product through lookup keys,
+  provisions the portal and the exact eight-event `/internal/billing/webhook` endpoint, and never
+  reads a global or personal Stripe CLI profile.
 - **accept:** Colocated vitest with a stubbed Stripe/prompt runner asserts: the prod webhook create call includes exactly the eight enabled-events; Stripe step lists products before creating; OAuth step rejects a pasted GOOGLE_CLIENT_ID of empty string (authEnv min(1)); Athena skip path returns optional vars unset without throwing. `pnpm typecheck` clean.
 
 ### `BOOT-07-write-env-vercel` — Bootstrap Steps 8-9 — per-app .env writing + Vercel env push + Neon preview branching _(P2 · parallel)_
@@ -1402,5 +1436,8 @@
 - **depends on:** BOOT-02-env-slices-from-registry
 - **files:** `apps/api/vercel.json`, `scripts/bootstrap/cron.ts`
 - **spec:** engineering plan §3 'idempotent cron sweep', env-and-bootstrap.md §1.7 CRON_SECRET, frozen:build-sequence cron infra = Vercel Cron
-- **build:** Per frozen decision (cron infra = Vercel Cron): add a `crons` entry to apps/api/vercel.json invoking the lifecycle sweep on a daily schedule (e.g. `0 3 * * *`) at the route the billing lane owns (GET /api/lifecycle/sweep), guarded by `Authorization: Bearer ${CRON_SECRET}`. This ticket owns ONLY the cron wiring + the bootstrap step that ensures CRON_SECRET is generated (openssl rand -hex 32 via registry generate()) and written to Vercel; the sweep HANDLER itself is the Billing lane's responsibility (out of scope — do not implement the sweep logic). scripts/bootstrap/cron.ts ensures the schedule is registered/idempotent and warns when MCP_SESSION_STORE_URL/Fluid-Compute notes apply (informational only).
-- **accept:** apps/api/vercel.json validates as JSON and contains a `crons` array with a daily schedule pointing at the sweep path. `pnpm typecheck` clean for cron.ts. A unit test asserts the cron entry path matches `/api/lifecycle/sweep` and that bootstrap writes CRON_SECRET to the api target. No sweep business logic present in these files (boundary respected).
+- **build:** Cloud Scheduler invokes the authenticated billing reconciliation endpoint at the
+  deployment cadence. The job reconciles provider state and never deletes organizations. The
+  independent account export and deletion sweeps keep their own routes and contracts.
+- **accept:** Deployment validation proves the scheduler target, authentication, mode, and audit
+  output. A billing reconciliation test proves that no path mutates data-retention deadlines.

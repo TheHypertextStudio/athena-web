@@ -58,7 +58,7 @@ The layer boundaries fall where they do because each owns exactly one concern an
 │   • REST + RPC      /v1/orgs/:orgId/…   +   cross-org /v1/hub/{today,…}      │
 │   • MCP server      /mcp   (OAuth 2.1 Resource Server · Streamable HTTP)     │
 │   • OAuth / OIDC    /api/auth/*   (Better Auth = Authorization Server)       │
-│   • Stripe webhook  /api/auth/stripe/webhook   (+ lifecycle reconcile)       │
+│   • Stripe webhook  /internal/billing/webhook   (+ scheduled reconcile)      │
 │   middleware:  CORS → session → orgContext → capabilityGuard                 │
 │   org_id ALWAYS from the verified token / context — never the client body    │
 └──────────────────────────────────────────────────────────────────────────────┘
@@ -578,7 +578,7 @@ The Neon layer is split deliberately into two connection strings because the two
 
 Provisioning is the job of `scripts/bootstrap.ts` (`pnpm bootstrap`), an idempotent, interactive flow that turns the browser/API env contract into real cloud resources. It is built to _list before it creates_ and reuse on match (by Neon project name, Stripe `lookup_key`, or webhook URL), so re-running is safe; secrets like `BETTER_AUTH_SECRET` are generated once per target and never silently regenerated, because rotating that secret invalidates every live session. The flow walks: preflight (CLIs installed and authed), target selection, domain confirmation (from which it derives all the `*_URL`/`BETTER_AUTH_*`/`MCP_*` values), secret generation, Neon branch + connection-string capture + migrate, OAuth app setup (the provider consoles have no creation API, so bootstrap prints the _exact_ dev and prod redirect URIs — `…/api/auth/callback/google`, `…/api/auth/callback/github`, and native Linear `…/api/auth/callback/linear` — and collects ids/secrets via masked prompts), Stripe setup, then the GCP/Cloud Run and Vercel browser deployment configuration, and finally a verification pass that re-runs `@docket/env` plus connection smoke checks. Runner secrets and bindings are provisioned separately through Wrangler, never copied into the browser/API deployment flow. Production secret values reach Cloud Run through Secret Manager bindings rather than shell arguments.
 
-Stripe is where the data-lifecycle cron lives, and it reflects the engineering plan's split of responsibilities. The `@better-auth/stripe` plugin owns the billing subject (per-Organization, `referenceId = organization.id`), the subscription mirror table, and the core webhooks at `${API_URL}/api/auth/stripe/webhook`; webhook secrets are per-endpoint and per-mode (dev uses the `whsec_…` from `stripe listen --forward-to …/api/auth/stripe/webhook`, prod uses the registered endpoint's secret). What Stripe does _not_ do is delete data, so Docket builds the lifecycle itself on three `organization` columns — `lifecycle_state`, `export_ready_at`, `delete_after_at`. On a trial-end or payment-terminal transition the org moves to `export_window` with `delete_after_at = now + 14d` and an export artifact is generated; a Vercel Cron then hits `/lifecycle/sweep` to perform the actual deletion. That cron endpoint is guarded by `CRON_SECRET` sent as `Authorization: Bearer` (the same secret bootstrap generates and writes to Vercel), the sweep is idempotent, and reactivation cancels a pending deletion. Critically, the handler always reconciles against Stripe because webhooks are neither guaranteed nor ordered — the sweep treats Stripe as the source of truth rather than trusting that the right events arrived.
+Stripe owns customers, subscriptions, invoices, taxes, Checkout, and the customer portal. Better Auth owns the authenticated user and session. Docket owns the organization billing account, provider-event ledger, subscription snapshot, entitlement, discounts, credits, grace period, read-only access, and complimentary grants. The API receives the eight billing events at `${API_URL}/internal/billing/webhook`, and Cloud Scheduler runs the installation-wide billing reconciliation job. Both paths retrieve current Stripe state because Stripe can replay or reorder events. Billing never schedules organization deletion. A canceled or unpaid organization moves shared work to read-only only after its paid period or fixed seven-day grace period ends.
 
 Secrets ownership falls out cleanly from the project split and is the property the diagram traces. `docket-api` is the sole holder of every server-only API secret — `DATABASE_URL`/`DATABASE_URL_UNPOOLED`, `BETTER_AUTH_SECRET`, the OAuth client secrets, `STRIPE_SECRET_KEY`/`STRIPE_WEBHOOK_SECRET`, the agent credentials, and `CRON_SECRET` — none of which is ever bundled to a browser. Stripe's browser-safe publishable key is also runtime-owned by the API and returned through the public `/v1/config` contract, avoiding a parallel Vercel build-time value. The Next apps carry only their required `NEXT_PUBLIC_*` origin/passkey values. Runner has its own narrow Cloudflare bindings for signed execution handoff; neither deployment platform inherits the other's secret set.
 
@@ -590,7 +590,7 @@ Docket is a 12-factor, env-var-only deploy: Vercel Web plus Cloud Run Admin/API 
 │ docket-admin operator BO    admin.docket.app    (Cloud Run)                  │
 │ docket-api   work API+auth+MCP   api.docket.app  (Cloud Run · Hono 4.x)      │
 │ docket-web rewrites /api/* → docket-api  (same-origin · first-party cookies) │
-│ Vercel Cron → Bearer CRON_SECRET → api /lifecycle/sweep                      │
+│ Cloud Scheduler → signed billing reconciliation                              │
 └──────────────────────────────────────────────────────────────────────────────┘
                                         │
 ┌─ CLOUDFLARE  ·  additive runner (feature-flagged off in production) ─────────┐
@@ -605,7 +605,7 @@ Docket is a 12-factor, env-var-only deploy: Vercel Web plus Cloud Run Admin/API 
                                         ▼
     apps/api outbound — server-only secrets, per-mode values
 ┌─ EXTERNAL SERVICES ──────────────────────────────────────────────────────────┐
-│ Stripe   billing per Organization · webhook /api/auth/stripe/webhook         │
+│ Stripe   billing per Organization · webhook /internal/billing/webhook        │
 │ OAuth    Google · GitHub · Linear   (login + linking + connector tokens)     │
 │ Agents   Athena · Claude · Codex    (open Session + activity stream)         │
 │ Sentry   deployment-specific monitoring configuration                         │
@@ -613,7 +613,7 @@ Docket is a 12-factor, env-var-only deploy: Vercel Web plus Cloud Run Admin/API 
 
 ┌─ pnpm bootstrap   (scripts/bootstrap.ts · idempotent) ───────────────────────┐
 │ neonctl → branches + DATABASE_URL[_UNPOOLED] → drizzle migrate               │
-│ stripe  → products/prices (lookup_key) + webhook secret                      │
+│ stripe  → products/prices (lookup_key) + portal + webhook secret             │
 │ OAuth   → prints exact redirect URIs → collect client id/secret              │
 │ GCP/Vercel configuration · Wrangler binds runner secrets                      │
 │ └─ @docket/env (t3-oss) validates every var at boot, in dev AND prod         │
@@ -632,13 +632,13 @@ Delegating a task to an agent reuses that exact authorization path and then laye
 
 The two-axis gate is the heart of this flow and the place implementers most often conflate two things that must stay separate. Every `action` (a write the agent attempts) runs through `gateAgentWrite`, which checks the **capability axis first**: `canActor` on the _agent's_ Actor id. If the agent lacks the required capability the outcome is `needs_grant` — not a rejection but a grant-on-request, where a `manage`-holder approves and a new Actor-grant is written, after which the agent's writes pass normally. Only once capability is satisfied does the **approval axis** apply, driven by the agent's `approval_policy`: `autonomous` applies the write directly, `suggest` records a proposal and never auto-applies, and `act_with_approval` creates a `proposed` action and routes it for sign-off. These axes are genuinely independent — an `autonomous` agent still gets blocked if it lacks `contribute`, and a `contribute`-holding agent can still be forced to merely `suggest`. Approver routing resolves in order: an explicit per-Org/Team `approval_routing` override, else the task's assigner or delegator (the Actor who set `assignee_id`/`delegate_id` at this agent), else the agent's `accountable_owner_id`, else org Owners — and a routed approver is filtered out unless they additionally hold `assign` on the target, so routing can never hand approval power to someone without authority over the resource. A pending approval surfaces in two places at once: as the `session_activity` row in the Session view, and mirrored to the approver's cross-org Hub Inbox as a `Notification{type:'approval'}` they can resolve with one tap. On approval the executor re-checks `canActor` for the agent at apply time (grants may have changed), applies the write, and records an `audit_event` with `actor_id = the agent` and `initiator_id = the human` — the literal encoding of "the agent did it, on behalf of you," and the distinction that keeps principal separate from initiator in the audit trail.
 
-The third story runs on a much slower clock and gates the other two. The `organization.lifecycle_state` column (`trialing | active | past_due | export_window | pending_deletion | deleted`) is a state machine that Docket owns, layered on top of what the `@better-auth/stripe` plugin gives us — the plugin manages the customer, the per-org `subscription` table keyed by `reference_id = organization.id`, and the four core webhooks, but it has no concept of an export window or a grace-period delete, so we build that. The unhappy path is the interesting one: a `trialing` org whose 14-day trial ends without payment, or an `active` org whose `invoice.payment_failed` drives it through `past_due` to a terminal failure (`subscription.deleted`/unpaid), lands in `export_window`. Entering that state sets `exportReadyAt`, generates a downloadable export of the org's work layer, emails the link, and stamps `deleteAfterAt = now + 14d`. Reactivation — paying or restoring — at any pre-deletion stage returns the org to `active` and cancels the pending deletion, which is why the transitions can't be naive.
+The third story runs on a slower clock and gates Pro capabilities without changing organization retention. `organization_product_entitlement` records trial, active, past-due, cancellation, read-only, and complimentary access. The first failed invoice starts one seven-day grace period. A later failure cannot extend it. Cancellation preserves writable Pro access through the paid period. When that period ends, shared work becomes read-only while administrators keep read, export, and reactivation access. Personal baseline work remains writable.
 
-What actually performs the deletion is a Vercel Cron call to `/lifecycle/sweep`, guarded by a `Bearer CRON_SECRET`, and two of its properties are non-negotiable. It must be **idempotent**, because Stripe webhooks are neither guaranteed nor ordered — the sweep reconciles each org's `lifecycle_state` against the live Stripe subscription state rather than trusting whatever webhook last arrived, so a dropped or out-of-order `customer.subscription.updated` cannot strand an org in a wrong state or double-delete one. And it must **skip any org under an active `LifecycleHold`**, the operator-plane escape hatch (e.g. a legal hold) that pauses the trial→export→delete pipeline without touching the billing state. When the sweep does delete, it relies on `ON DELETE CASCADE` from `organization` through every `organization_id` FK, plus an application-level purge job for the artifacts that don't live in our Postgres — the Stripe customer and any external connector state. Note finally that this billing gate runs _before_ `canActor`: a frozen org is a 402/403 concern handled upstream of the permission engine, never mixed into it, so the authorization model stays purely about capability and visibility while lifecycle stays purely about whether the tenant is allowed to transact at all.
+Cloud Scheduler runs the installation-wide Stripe reconciliation job. The job compares each durable Docket billing account with the current Stripe customer, subscription, discount, invoice, and entitlement state. It repairs safe mirror drift and alerts on duplicate subscriptions or provider writes that require finance judgment. The authoritative webhook and reconciliation job both use idempotency records. Neither path invokes the confirmed account-deletion flow or mutates its retention deadlines.
 
 Three runtime paths through Docket: a same-origin authorized request, an
 agent session with its two-axis (capability + approval) gate, and the
-billing data-lifecycle state machine on the `organization` row.
+organization-owned Docket Pro entitlement state machine.
 
 ### 1. Request + Permission Flow (same-origin → typed RPC)
 
@@ -752,53 +752,16 @@ routes a `proposed` action to the assigner/delegator (configurable via
 approval the write applies and is audited to the agent with the human as
 `initiator_id`._
 
-### 3. Organization Data-Lifecycle State Machine
+### 3. Docket Pro Entitlement State Machine
 
-```
-                       Stripe webhooks (onEvent) ── reconciled vs Stripe
-                       (webhooks not guaranteed/ordered)
-                                │
-        POST /orgs              ▼
-   (creator=Owner) ┌────────────┐  checkout.session.completed
-   ───────────────►│  trialing  │──────────────────────────┐
-   14-day trial    └─────┬──────┘                           ▼
-                         │ trial_will_end / ends         ┌────────┐
-                         │ no payment                    │ active │◄──┐
-                         ▼                               └───┬────┘   │
-                  ┌────────────┐  invoice.payment_failed     │        │
-                  │  past_due  │◄────────────────────────────┘        │
-                  └─────┬──────┘                                       │
-                        │ trial/payment terminal                      │
-                        │ (subscription.deleted / unpaid)             │
-                        ▼                                             │
-                ┌──────────────────┐  set deleteAfterAt = now + 14d   │
-                │  export_window   │  exportReadyAt set;              │
-                │  (export emailed)│  download work-layer export      │
-                └─────────┬────────┘                                  │
-                          │  REACTIVATION (pay / restore)             │
-                          │  ──────────────────────────────────────► │ cancels
-                          │                                  pending  │ deletion
-                          ▼  deleteAfterAt reached                    │
-                ┌────────────────────┐  REACTIVATION ────────────────┘
-                │  pending_deletion  │
-                └─────────┬──────────┘
-                          │  idempotent CRON sweep (CRON_SECRET-guarded)
-                          │  SKIPS orgs with active lifecycle_hold
-                          ▼  ON DELETE CASCADE + Stripe/external purge
-                ┌────────────┐
-                │  deleted   │   (terminal)
-                └────────────┘
-```
+Billing controls Pro access and never controls data retention. The entitlement moves from free to
+trialing or active. A failed invoice enters one fixed seven-day grace period. Cancellation keeps Pro
+writable through the paid period. An expired grace or paid period makes shared work read-only.
+Payment recovery or reactivation restores writable access. A complimentary grant bypasses Stripe
+while it remains active.
 
-_The `organization.lifecycle_state` column drives billing lifecycle:
-trial → active on payment; a failed payment or trial expiry moves to
-`past_due`, then on terminal failure to `export_window` (which sets
-`deleteAfterAt = now + 14d` and emails a work-layer export). An idempotent
-`CRON_SECRET`-guarded sweep advances `pending_deletion` to `deleted`
-(`ON DELETE CASCADE` plus a Stripe/external purge), skipping any org under
-a `lifecycle_hold`. Paying or restoring at any pre-deletion stage
-reactivates back to `active` and cancels the pending deletion; all
-transitions reconcile against Stripe since webhooks aren't ordered._
+The state machine diagram and transition table live in
+[`billing-state-machine.md`](./billing-state-machine.md).
 
 ---
 

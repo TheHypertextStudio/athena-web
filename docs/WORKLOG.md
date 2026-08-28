@@ -192,6 +192,36 @@
   Prettier, diff validation, and Playwright discovery pass. The full local Web lint process exceeded
   Node's 2 GB heap without reporting a lint violation; the exact-main Web lint job passed before
   this changed-file lint completed.
+- **Better Auth boundary audit**: The workspace pins `better-auth@1.6.19`. The API resolves the
+  authenticated user through `auth.api.getSession()`, and Checkout derives its email from that
+  server session. Docket does not install `@better-auth/stripe` or Better Auth's organization
+  plugin. Docket owns organization billing accounts, entitlements, discounts, credits, grace,
+  read-only access, and complimentary grants. The engineering plan, architecture, decisions,
+  build manifest, and data model now state this shipped boundary and direct operators to the
+  current billing specification and Stripe runbook.
+- **Hypertext Studio provider configuration**: The dedicated Hypertext Studio Chrome instance
+  verified the Hypertext Studio, LLC account. Live and test mode now have active authoritative
+  `/internal/billing/webhook` endpoints with the exact eight-event contract. The obsolete Better
+  Auth webhook is disabled. Live Checkout limits customers to one subscription and redirects an
+  existing subscriber to the portal. Test mode has the $8 monthly Docket Pro product with the
+  expected description and metadata. The duplicate-subscription attestation remains unset until a
+  durable Docket test customer proves the redirect end to end.
+- **Current-main E2E correction**: The API work-view projection now carries semantic planning
+  timeframe keys and customer labels. Shared list, board, and card renderers use those labels.
+  Decorative row identity no longer intercepts checkbox pointer input. Browser coverage now uses
+  the consolidated Display dialog, progressive mobile disclosure, and a real coarse-pointer
+  context for touch targets. Types pass 791 tests. The focused API suites pass 97 tests. The
+  focused Web suites pass 14 tests. Types, API, and Web type checking and lint pass with bounded
+  heaps where needed. The production Web build passes. Calendar, work-view, and planning-timeframe
+  browser journeys pass against a fresh migrated PGlite database. The regenerated mobile and
+  desktop evidence shows the grouped `H2 FY 2027` label. A broader database review case exposed and
+  fixed fiscal-year ending labels for periods that start in the prior calendar year. The same
+  behavior test now covers exact dates, months, fiscal quarters, halves, fiscal years, and calendar
+  years.
+- **Founder access gate**: The `Hypertext Studio` production organization remains without a billing
+  customer, entitlement, or exemption. The existing Better Auth user now has the supported initial
+  superadmin bootstrap row. The production admin passkey ceremony is waiting for completion in the
+  Hypertext Studio Chrome instance. No complimentary grant has been written yet.
 - **Decisions**: Checkout derives the customer email from the Better Auth server session and
   rejects a browser-supplied email. Stripe's Dashboard-only existing-subscriber redirect requires
   a recorded verification timestamp before `BILLING_ENABLED=true` can pass configuration. Docket

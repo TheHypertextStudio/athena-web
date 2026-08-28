@@ -30,9 +30,9 @@ Everything runs on the latest stable release using modern APIs; no deprecated pa
 
 - **Turborepo 2.x `tasks` key**, never the removed 1.x `pipeline` key. The `pipeline` key does not merely warn — it is gone in 2.x, so a config written against it is a non-starter, not a deprecation. We standardize on **turbo 2.9.x** (see §1) and declare `env`/`globalEnv` so the build cache invalidates on value changes.
 - **MCP Streamable HTTP** transport, never the deprecated two-endpoint HTTP+SSE transport. We target spec **2025-11-25**, including **CIMD** (client-id-metadata-documents) as the primary client-registration path, with Dynamic Client Registration `/register` kept only as a **MAY** fallback — DCR was downgraded to MAY in this spec revision, so leaning on it as the primary path would be building on a discouraged mechanism. (The transport's MUST-level guards and the audience-binding rules are detailed in §4 and architecture.md §"MCP".)
-- **Playwright ≥ 1.60**, **Next.js 16** + **React 19** with the React Compiler, **Better Auth 1.6.14** (the latest stable line; the 1.7 beta is on the watchlist but there is _no published 2.0 line yet_, so 1.6.14 is the ceiling, not a conservative floor), and **Drizzle latest**. Pinning to current-stable is what lets us write against the modern API surface (App Router conventions, the `passkey({ requireSession:false, resolveUser })` first-onboarding hook, the 2.x task graph) without carrying compatibility shims for paths that are on their way out.
+- **Playwright ≥ 1.60**, **Next.js 16** + **React 19** with the React Compiler, and the workspace-pinned **Better Auth 1.6.19**. The repository must test each Better Auth upgrade against its session, passkey, account-linking, and OAuth provider boundaries before changing the pin.
 
-There is one important **caveat that is explicitly not a violation** of this constraint. Stripe's `trial_period_days` — surfaced through the Better Auth Stripe plugin as `plan.freeTrial.days` — is _named_ "legacy trial," but it is the **supported, non-deprecated** mechanism and the **only** one compatible with Stripe Checkout and the `@better-auth/stripe` plugin. The newer **Trial Offer API** is still in preview and is **Checkout-incompatible**, so adopting it would break the embedded-Checkout flow Docket depends on (see §3). We therefore keep the supported trial path (`freeTrial.days: 14`) deliberately and on purpose; the word "legacy" in Stripe's naming is misleading and does not make this a deprecated API.
+Docket configures its 14-day trial through hosted Stripe Checkout. Better Auth does not own or configure the trial.
 
 ### 3. Env-var-only deploy (12-factor), dev mirrors prod
 
@@ -73,7 +73,7 @@ The compiled side exists _because of_ the Hono RPC contract, not as a packaging 
 
 ## 2. Auth & Identity (Better Auth)
 
-Authentication is a single `betterAuth()` instance backed by Postgres through the Drizzle adapter, living in `@docket/auth` and mounted by exactly one service. We pin **better-auth 1.6.14** exactly — not a range — because the surface we depend on is broad (eight plugins, several from separate packages) and because the `mcp()` plugin is slated to migrate into a future "OAuth Provider Plugin"; pinning means an upgrade is a deliberate, tested step rather than a silent dependency bump that could shift the OAuth/MCP framing under us. Watch the 1.7 beta, but treat it as a future migration, not a target (there is no published 2.0 line yet, per §0.2).
+Authentication is a single `betterAuth()` instance backed by Postgres through the Drizzle adapter, living in `@docket/auth` and mounted by exactly one service. The repository pins **better-auth 1.6.19** exactly rather than using a range. An upgrade must remain a deliberate, tested change because Docket depends on Better Auth's session, passkey, account-linking, and OAuth provider contracts.
 
 ### The global-User principle
 
@@ -87,12 +87,12 @@ All capabilities are configured as plugins in the **one** `betterAuth()` call. O
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Passkeys (primary)**                  | `passkey({ registration: { requireSession: false, resolveUser } })` → passkey-FIRST onboarding (register _before_ a session exists).                                                       |
 | **Google + GitHub**                     | Core `socialProviders` + `account.accountLinking.trustedProviders` (these are _links_ to one account, not separate accounts). Keep `trustedProviders` minimal — it is a security boundary. |
-| **Linear**                              | Native `socialProviders.linear` entry (Better Auth 1.6.14 built-in; verify the live authorize/token/userinfo URLs + scopes).                                                               |
+| **Linear**                              | Native `socialProviders.linear` entry.                                                                                                                                                     |
 | **Enterprise SSO**                      | `sso()` — ships both **OIDC and SAML 2.0** (Docket as Service Provider).                                                                                                                   |
 | **SCIM provisioning**                   | `scim()` — SCIM 2.0 **Users only (NO Groups)**. If enterprise group→Team sync is needed, map IdP groups via SAML attributes at login instead.                                              |
 | **Docket as OAuth 2.1 / OIDC provider** | `oidcProvider()` — PKCE, tables `oauthApplication`/`oauthAccessToken`/`oauthConsent`, RFC 7591 `/register`.                                                                                |
 | **Remote MCP server**                   | `mcp()` — built on the OIDC provider; `withMcpAuth`, `getMcpSession`, `oAuthDiscoveryMetadata`/`oAuthProtectedResourceMetadata`.                                                           |
-| **Billing**                             | `stripe()` (see §3).                                                                                                                                                                       |
+| **Billing identity**                    | `auth.api.getSession()` supplies the authenticated user and verified email to Docket's organization-owned billing routes.                                                                  |
 
 **Passkey is primary, and "primary" means the onboarding sequence is inverted.** `passkey({ registration: { requireSession: false, resolveUser } })` allows a credential to be registered _before_ any session exists — which is exactly what "sign up with a passkey, no password" requires. The `resolveUser` callback is the seam where global identity is _born_: on first passkey registration with no session it creates the `user` row and its 1:1 `hub` row in one step (the per-User personal command center from §5). Everything else in onboarding hangs off that. The failure mode to design against is a partially-created identity (a `user` with no `hub`), so `resolveUser` must create both transactionally. The build sequence treats this as Phase 3's exit gate: a unit test that registers and verifies a passkey via a virtual authenticator and receives a session cookie — and `passkey` + `nextCookies()` are the _only_ plugins needed to prove the first vertical slice; the rest are added in their own Phase-6 lanes.
 
@@ -104,11 +104,9 @@ All capabilities are configured as plugins in the **one** `betterAuth()` call. O
 
 **`oidcProvider()` and `mcp()` are the same OAuth stack, layered.** `oidcProvider()` turns Docket _itself_ into an OAuth 2.1 / OIDC **Authorization Server**: PKCE, the `oauthApplication`/`oauthAccessToken`/`oauthConsent` tables, and an RFC 7591 `/register` endpoint for dynamic client registration. `mcp()` is built _on top of_ that provider — it does not stand up a second AS. It contributes the MCP-specific glue (`withMcpAuth` to gate the `/mcp` transport, `getMcpSession` to resolve the verified session inside a tool call, and the `oAuthDiscoveryMetadata` / `oAuthProtectedResourceMetadata` documents that satisfy RFC 8414 and RFC 9728). The architectural consequence is in architecture.md §"MCP" / §4 here: Better Auth is the Authorization Server and the `/mcp` endpoint is an OAuth 2.1 Resource Server, both on the same Hono deploy. Note the verification flagged in RECONCILIATION: confirm 1.6.14 actually emits `client_id_metadata_document_supported` (CIMD), honors RFC 8707 `resource→aud` stamping, and surfaces `getMcpSession().scopes`; if any is absent, a thin Resource-Server shim covers the gap.
 
-**`stripe()`** is the eighth plugin; its full treatment (billing subject = Organization, the trial mechanism, the lifecycle pipeline Docket builds on top) is §3.
-
 ### Separate `@better-auth/*` packages vs. core plugins
 
-These plugins do not all ship from the same import, and `@docket/auth`'s `package.json` must reflect that precisely. Three are **distinct npm packages**, each pinned at 1.6.14 alongside core: `@better-auth/passkey`, `@better-auth/sso`, and `@better-auth/scim`. Billing's `stripe()` is also a separate package, `@better-auth/stripe` (paired with `stripe@^22`, see §3). The remaining three — `genericOAuth`, `oidcProvider`, and `mcp` — come from the **core** `better-auth/plugins` export and need no extra dependency entry. The practical hazard is a version skew: if the separate `@better-auth/*` packages drift off 1.6.14 while core stays pinned, plugin internals can mismatch the core runtime in subtle ways, so every one of them is pinned to the identical 1.6.14 and listed explicitly rather than relying on a transitive resolution.
+Better Auth capabilities do not all ship from the same import. `@docket/auth` declares each package it uses, and the workspace catalog pins compatible versions together. Billing does not install `@better-auth/stripe`. The plugin assumes an account-level subscription model, while Docket bills organizations and must preserve its own entitlement, discount, credit, grace-period, read-only, and complimentary-access state.
 
 ### Schema reconciled into `@docket/db`
 
@@ -124,52 +122,39 @@ Four auth questions remain open and are tracked in §7. Most are now resolved in
 
 ## 3. Billing & Data Lifecycle (Stripe)
 
-Docket bills through Stripe Billing subscriptions, mediated by the Better Auth **`@better-auth/stripe`** plugin (SDK pinned `stripe@^22`, API version `2026-03-25.dahlia`). The single most consequential decision here is _who_ gets billed: the billing subject is the **Organization**, not the User. The plugin is configured with `referenceId = Organization.id` and the `authorizeReference` hook gating every billing mutation, so each org owns exactly one Stripe customer and one subscription, and a member can only act on billing for an org they are actually authorized to administer. This falls directly out of the identity model in §2 — a User is a global account that can belong to many orgs or none, so the User is the wrong unit to charge; the Organization is the tenant boundary, the thing that has a subscription, a trial clock, and ultimately a deletion fate. Per RECONCILIATION the Better Auth _organization plugin_ is **off** (Docket owns its custom `organization`/`actor` shape), but the Stripe plugin's `subscription` table is still keyed by `reference_id = organization.id`, and `authorizeReference` is what enforces that a caller may only touch the subscription for an org where their human `Actor` holds the right capability. This is also why every server-only Stripe secret lives in `apps/api` alone (see architecture.md §"Secrets ownership") — there is one place that holds `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET`, and one surface to audit for cross-tenant billing bugs.
+Docket bills the **Organization** rather than the Better Auth User. Each billing route resolves the
+Better Auth server session first. The route then authorizes the user's Docket organization role.
+Checkout derives the customer email from that verified session and rejects browser-supplied billing
+identity.
 
-### The plugin boundary: what Stripe owns vs. what we build
+Docket owns the billing account, Checkout lease, provider-event ledger, subscription snapshot,
+entitlement, discount, credit, grace-period, read-only, and complimentary records. This boundary is
+deliberate. The Better Auth Stripe plugin does not model Docket's organization membership or these
+product states. Docket must not duplicate Better Auth's user, session, account-linking, or passkey
+APIs inside billing.
 
-The clean division of labor is the heart of this section. **The `@better-auth/stripe` plugin owns the Stripe-facing machinery**: it creates the customer on signup, maintains the `subscription` table and its status mirror, processes the four core webhooks (`checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, `customer.subscription.deleted`), exposes upgrade/cancel/restore/`billingPortal` operations, and enforces one-trial-per-account. We do not re-implement any of that.
+Stripe owns customers, subscriptions, payment methods, invoices, taxes, Checkout, and the customer
+portal. The sole authoritative webhook route is `/internal/billing/webhook`. It consumes
+`checkout.session.completed`, `customer.subscription.created`,
+`customer.subscription.updated`, `customer.subscription.deleted`, `invoice.paid`,
+`invoice.payment_failed`, `invoice.payment_action_required`, and
+`customer.subscription.trial_will_end`. Handlers claim each provider event by its Stripe event id
+and reconcile a current provider snapshot because Stripe can replay or reorder delivery.
 
-**What the plugin has no concept of — and what we therefore build ourselves — is the data lifecycle:** what happens to a tenant's _data_ after billing ends. Stripe will tell us a subscription was canceled; it will never grant a grace period, generate an export, or delete a row. So Docket layers a state machine directly on the `organization` row via three columns: `lifecycle_state` (the enum `{trialing | active | past_due | export_window | pending_deletion | deleted}`), `export_ready_at`, and `delete_after_at`. (RECONCILIATION fixes these as the canonical snake_case columns on `organization`, alongside the rule that the Stripe `subscription` table is keyed by `reference_id`; the engineering surface refers to them as `lifecycleState`/`exportReadyAt`/`deleteAfterAt`.) The architecture doc carries the full state diagram and the narrative of the transitions in architecture.md §3 ("Organization Data-Lifecycle State Machine") and §"Runtime & Lifecycle Flows" — this section is the implementation contract, not a re-drawing of it.
+Billing failure never schedules data deletion. A failed payment starts one seven-day grace period.
+A canceled subscription stays writable through its paid period. Shared work becomes read-only when
+the paid period or grace period ends. Administrators retain read and export access. The independent
+confirmed account-deletion flow remains the only billing-adjacent path that may delete data.
 
-The transitions are driven by Stripe events but never _trusted_ from them. When a trial ends without payment, or an `active` org's `invoice.payment_failed` drives it through `past_due` to a terminal failure, the org moves to `export_window`: we set `export_ready_at`, stamp `delete_after_at = now + 14d`, generate a downloadable export of the org's entire work layer, and email the operator the link. The 14-day window is a deliberate grace period, not a courtesy — it is the difference between "billing lapsed" and "data destroyed," and it is the one place reactivation must be able to intervene.
+Docket Pro costs $8 USD per organization each month. Checkout uses a card-required 14-day trial,
+hosted Stripe Checkout, automatic tax, US billing addresses, and a durable Stripe customer. An
+organization can consume the public trial once. Docket resolves product and price references from
+environment configuration and provider lookup keys. Code must not contain Stripe resource ids.
 
-### The idempotent cron sweep, and why it reconciles rather than trusts webhooks
-
-Stripe webhooks are **neither guaranteed to arrive nor guaranteed to arrive in order**. A naive design that flips `lifecycle_state` purely in webhook handlers would strand orgs in wrong states on a dropped event and risk double-deletion on a replayed one. So the actual deletion is performed by an **idempotent cron sweep** — a Vercel Cron call to `/lifecycle/sweep`, guarded by `CRON_SECRET` sent as `Authorization: Bearer` (the secret bootstrap generates with `openssl rand -hex 32` and writes to Vercel; see env-and-bootstrap.md §1.7). The sweep's two non-negotiable properties are:
-
-- **Idempotency by reconciliation.** For each org it loads the _live_ Stripe subscription state and reconciles `lifecycle_state` against that truth, rather than believing whatever webhook last fired. Running it twice produces the same result; a lost or out-of-order `customer.subscription.updated` cannot corrupt the state machine because the sweep recomputes from Stripe each pass.
-- **Holds are respected.** The sweep **skips any org under an active `LifecycleHold`** (the operator-plane escape hatch — e.g. a legal hold — that pauses the trial→export→delete pipeline without touching billing state, per §5 service-admin layer).
-
-When the sweep does delete, it advances `pending_deletion → deleted` and relies on `ON DELETE CASCADE` from `organization` through every `organization_id` FK (the cascade-as-lifecycle-policy described in architecture.md §"containment vs. association"), plus an application-level purge job for artifacts that do not live in our Postgres — the Stripe customer and any external connector state. **Reactivation cancels a pending deletion:** paying or restoring at any pre-deletion stage returns the org to `active` and clears `delete_after_at`, which is precisely why the transitions can't be one-directional. Critically, this lifecycle gate runs _upstream_ of the permission engine — a frozen org is a 402/403 concern resolved before `canActor` is ever consulted, so authorization stays purely about capability while lifecycle stays purely about whether the tenant may transact at all.
-
-Webhooks beyond the plugin's four are handled through the plugin's `onEvent` hook: `customer.subscription.trial_will_end`, `invoice.payment_failed`, `invoice.paid`, and `invoice.payment_action_required`. These feed the state machine (e.g. `trial_will_end` warns ahead of the trial cliff; `invoice.payment_failed` drives `active → past_due`), but the sweep's reconciliation remains the source of truth even for them.
-
-### Trials and the embedded Checkout
-
-The trial uses `plan.freeTrial.days: 14`. As the Hard Constraints (§0) call out explicitly, this is **named** "legacy trial" but is the **supported, non-deprecated** path — and the only one compatible with both Stripe Checkout and the Better Auth plugin. The newer Trial Offer API (preview) is Checkout-incompatible, so adopting it would mean abandoning Checkout entirely; we keep the supported trial path on purpose. The default flow is **embedded Checkout** (rendered in the product app via `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`), not a redirect to a hosted page.
-
-### The tier-dependent card gate
-
-Whether a card is required is a **product decision keyed to tier**, not a global setting. A Personal/solo org requires **no card** — a single user gets a frictionless start with no payment method at all. A card is required only when the user crosses into shared territory: **creating a shared/team org, or inviting members into one.** This is why bootstrap creates no price for the personal tier (env-and-bootstrap.md §1.4 note) — the Team price set is what gates shared orgs and invites, and the personal path never touches Stripe Checkout. The no-card-vs-card-required _default_ at the trial boundary remains an open decision (below).
-
-### Test/live parity, per-mode webhook secrets, and `lookup_key`
-
-Billing obeys the same dev-mirrors-prod contract as everything else (§0, env-and-bootstrap.md §4): **test mode mirrors live mode** with identical variable names and only the values differing. `STRIPE_SECRET_KEY` is `sk_test_…` in dev and `sk_live_…` in prod; `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` is `pk_test_…` vs `pk_live_…`. There is no `DEV_`/`PROD_` branching and no `if (NODE_ENV === 'development')` switch of which webhook or callback is wired — only the value behind each name changes.
-
-Webhook signing secrets are **per-mode and per-endpoint**. The endpoint path is fixed at `${API_URL}/api/auth/stripe/webhook`. In **dev**, `STRIPE_WEBHOOK_SECRET` is the `whsec_…` printed by `stripe listen --forward-to localhost:8787/api/auth/stripe/webhook` (captured via `stripe listen --print-secret`); in **prod** it is the signing secret of the real endpoint that bootstrap registers with `stripe webhook_endpoints create`. A test secret can never verify a live signature and vice versa, so the per-mode separation is a correctness requirement, not a convenience.
-
-Plan→price resolution **never hardcodes price IDs**. The primary mechanism is a stable, mode-agnostic **`lookup_key`**: `DOCKET_PRICE_LOOKUP_TEAM` (set to `team_monthly` when bootstrap creates the price with `--lookup-key team_monthly`) and the optional `DOCKET_PRICE_LOOKUP_TEAM_ANNUAL` (`team_annual`). Because the lookup key is the same string in both modes, the same code resolves it to whichever active price exists in the current mode. The explicit per-env price ID `STRIPE_PRICE_TEAM` (`price_…`) exists only as a fallback/override for when lookup-based resolution is disabled — and even it is sourced from env, never inlined. An optional `STRIPE_BILLING_PORTAL_CONFIG_ID` selects a non-default Customer Portal configuration when one is used.
-
-### Open decisions
-
-Several billing questions remain open and are deferred to the billing phase (consolidated in §7 and RECONCILIATION's "Billing phase"):
-
-- **No-card vs. card-required** as the trial _default_.
-- **`missing_payment_method`** behavior on trial end: cancel the subscription vs. pause it.
-- **`past_due` terminal state:** treat as `unpaid` (recommended) vs. `canceled`.
-- **Cron infrastructure** for the sweep (Vercel Cron is the working assumption).
-- **Export artifact format and scope** — what the downloadable work-layer export contains and how it's stored (`EXPORT_BUCKET_URL`/`EXPORT_BUCKET_TOKEN`, e.g. Vercel Blob).
+The complete shipped contract lives in
+[`product-billing.md`](./specs/product-billing.md). The launch procedures and provider checks live in
+[`stripe-billing-runbook.md`](./stripe-billing-runbook.md). `BILLING_ENABLED` must remain false until
+those documents' migration, shadow-reconciliation, finance, legal, canary, and rollback gates pass.
 
 ## 4. MCP Remote Server (spec 2025‑11‑25)
 
@@ -234,7 +219,7 @@ With those decisions fixed, the entity reference follows. The common "auditable 
 
 - **`user`** (Better Auth core, **global, not org-scoped**): `id, name, email, avatar?, auth`; the account that persists at zero memberships (architecture.md §Auth & Identity Topology); 1:1 with a `hub`. Docket's `actor.user_id` FKs here.
 - **`hub`** (personal command center, 1:1 user): `id, user_id (unique), name?, preferences`. No `organization_id` — it gathers orgs via the user's `actor` rows and owns the Personal space, `daily_plan_item`s, and `notification`s.
-- **`organization`** (shared tenant / context boundary): `id, name, slug (unique), avatar?, is_personal, vocabulary` (the skin), `agent_guidance`, plus the Docket-owned billing-lifecycle columns `lifecycle_state {trialing|active|past_due|export_window|pending_deletion|deleted}`, `export_ready_at`, `delete_after_at` (indexed `(lifecycle_state, delete_after_at)` for the §3 cron sweep). The Better Auth Stripe `subscription` row is keyed by `reference_id = organization.id`. Personal space = `organization{is_personal:true}` with one default team. **The Better Auth organization plugin is OFF** (RECONCILIATION): Docket owns this custom `organization`/`actor` shape, and invitations are a hand-built `invitation {id, organization_id, email, role, token, expires_at, status}` table rather than the plugin's.
+- **`organization`** (shared tenant / context boundary): `id, name, slug (unique), avatar?, is_personal, vocabulary` (the skin), and `agent_guidance`. Personal space = `organization{is_personal:true}` with one default team. Docket keeps billing accounts and product entitlements in the billing schema rather than a Better Auth subscription table. Billing does not use the organization's legacy deletion-lifecycle columns. **The Better Auth organization plugin is OFF** (RECONCILIATION): Docket owns this custom `organization`/`actor` shape, and invitations are a hand-built `invitation {id, organization_id, email, role, token, expires_at, status}` table rather than the plugin's.
 - **`actor`** (org-scoped "who"): `id, organization_id, kind {human, agent, team}, display_name, avatar?, status {active, suspended}`, plus human-only nullable `user_id` (→ `user`) and `role_id` (→ `role`). A human Actor **folds in membership** — there is no separate Membership table — guaranteed one-per-person-per-org by a partial unique index `(organization_id, user_id) WHERE user_id IS NOT NULL`. Assignable iff `kind ∈ {human, agent}`.
 - **`team`** (first-class within-org): `name, key, description?, workflow_states[]` (jsonb; default `{backlog, todo, in_progress, done, canceled}`), `triage_enabled, agent_guidance?`. Owns cycles and triage; explicit (not auto-created beyond the Personal-space default). Agent-guidance resolution layers org → team → per-agent (team overrides `organization.agent_guidance`, agent overrides team). A normalized `team_member {team_id, actor_id, organization_id}` join is the "people in a team" set.
 
@@ -336,9 +321,9 @@ The one flow that cannot use a real external dependency is **connect-integration
 
 ---
 
-## 8. Sources (current docs, fetched 2026‑06‑04/05)
+## 8. Sources
 
-- Better Auth: passkey, generic‑oauth, sso, scim, oidc‑provider, mcp, stripe, drizzle adapter, Hono & Next integration docs (better-auth.com/docs/\*). npm `better-auth` latest 1.6.14.
+- Better Auth: session, passkey, account-linking, OAuth provider, Drizzle adapter, Hono, and Next integration documentation. The implemented workspace pin is `better-auth@1.6.19`.
 - MCP spec **2025‑11‑25**: authorization, transports, lifecycle, tools/resources/prompts, completion/logging, roots/sampling/elicitation, tasks (modelcontextprotocol.io/specification/2025‑11‑25/\*).
 - Stripe: subscriptions/trials, subscription overview/statuses, customer portal, webhook testing, customer delete (docs.stripe.com/\*).
 - Turborepo 2.9: structuring, configuring tasks, env vars, internal packages, package configurations (turborepo.dev/docs/\*, blog/2-9).

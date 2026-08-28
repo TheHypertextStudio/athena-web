@@ -15,6 +15,14 @@
 > and public-network safety rules, never by vendor identity. See
 > [`specs/mcp-surface.md`](./specs/mcp-surface.md) and [`mcp-access.md`](./mcp-access.md).
 
+> **Superseded (2026-08-27).** Every billing decision below that uses
+> `@better-auth/stripe`, starts billing during organization creation, or moves an unpaid
+> organization toward deletion is void. Better Auth owns identity and sessions. Docket owns
+> organization billing and entitlements. See
+> [`specs/product-billing.md`](./specs/product-billing.md),
+> [`billing-state-machine.md`](./billing-state-machine.md), and
+> [`stripe-billing-runbook.md`](./stripe-billing-runbook.md).
+
 _Resolved 105 open items across 7 areas._
 
 ## data-model
@@ -469,17 +477,29 @@ what users see and interact with, not whether a CSS file matches a hand-maintain
 
 **Why.** The two specs flag the same concepts under divergent names; a builder needs exactly one. MCP_RESOURCE_URL already carries the spec's stated semantics ('canonical MCP resource identifier for audience binding' = mcp-surface's 'canonical RS URI'), so it subsumes MCP_CANONICAL_URL with zero loss. The session-store and tasks-flag vars exist only in mcp-surface but are real runtime config, so they must enter @docket/env's mcp slice for the dev-mirrors-prod parity rule (§4.2) to hold.
 
-### §1.4: Stripe price resolution is split between DOCKET_PRICE_LOOKUP_TEAM ('Primary plan→price resolution by lookup_key') and STRIPE_PRICE_TEAM ('Fallback/override explicit price ID, used only if authorize-by-lookup is disabled'). Which is canonical, and what is the actual resolution path given the Better Auth Stripe plugin API?
+### Billing boundary supersession — 2026-08-27
 
-**Decision.** Lookup key is canonical for OPERATOR/bootstrap stability; explicit price ID is canonical for RUNTIME plan config. Concretely: bootstrap creates prices with stable --lookup-key (team*monthly, team_annual) and stores them in DOCKET_PRICE_LOOKUP_TEAM / DOCKET_PRICE_LOOKUP_TEAM_ANNUAL. At @docket/auth BOOT, a small resolver calls stripe.prices.list({ lookup_keys: [env.DOCKET_PRICE_LOOKUP_TEAM], active: true, expand:['data.product'] }) to resolve the concrete price*… id, and passes that id as the Better Auth stripe() subscription.plans[].priceId (and annualDiscountPriceId for the annual price). STRIPE_PRICE_TEAM becomes an OPTIONAL HARD-OVERRIDE: if set, the resolver skips the lookup and uses it verbatim (escape hatch for environments without list permission or for pinning a specific price). The phrase 'authorize-by-lookup disabled' is replaced by this precise rule: STRIPE_PRICE_TEAM present ⇒ use it; else resolve from DOCKET_PRICE_LOOKUP_TEAM. Validation: DOCKET_PRICE_LOOKUP_TEAM required (min length 1) UNLESS STRIPE_PRICE_TEAM is set — enforced with a Zod superRefine on the stripe slice. The plugin has no native lookup-key plan field, so resolution MUST happen in our boot code; this is the documented shim.
+**Decision.** The two Stripe entries below are preserved planning history and no longer govern the
+implementation. Better Auth owns Docket's user, session, passkey, and account-linking APIs. Billing
+routes use `auth.api.getSession()` as the server identity source. Docket owns organization billing
+accounts, Checkout attempts, provider events, entitlements, discounts, credits, grace periods,
+read-only access, and complimentary grants. The implementation does not install
+`@better-auth/stripe` and does not create a second user or session API.
 
-**Why.** Verified against current Better Auth Stripe plugin docs: subscription plans are defined in CODE with priceId (or annualDiscountPriceId), keyed by referenceId=organization.id. The plugin does not resolve lookup keys itself, so the env spec's 'authorize-by-lookup' is not a plugin toggle — it must be a boot-time resolver. Lookup keys survive price re-creation (test↔live, price archival) so they are the durable operator handle; resolving to a concrete id at boot satisfies the plugin's contract. This removes the ambiguous 'fallback/override' wording with a deterministic precedence.
+Stripe price and product references come from environment configuration or provider lookup keys.
+The sole authoritative webhook route is `/internal/billing/webhook`. It accepts the eight events
+listed in the billing specification. Billing failure or cancellation never drives organization
+deletion. The current contract is
+[`product-billing.md`](./specs/product-billing.md), and the provider procedure is
+[`stripe-billing-runbook.md`](./stripe-billing-runbook.md).
 
-### §1.4: Webhook path is asserted as ${API_URL}/api/auth/stripe/webhook and the enabled-events list is given — confirm against the actual Better Auth Stripe plugin route and required events.
+**Why.** Better Auth's Stripe plugin models account-level subscription operations. Docket bills an
+organization and needs product state that the plugin does not represent. Keeping Better Auth at the
+identity boundary avoids session and account API drift without forcing billing into an incompatible
+ownership model.
 
-**Decision.** CONFIRMED canonical and unchanged: webhook path = ${API*URL}/api/auth/stripe/webhook (the plugin's fixed default under the /api/auth mount). STRIPE_WEBHOOK_SECRET is a SINGLE env var (not per-event), per-mode (whsec*… from `stripe listen` in dev; from the created live endpoint in prod). The plugin's REQUIRED minimum events are checkout.session.completed, customer.subscription.created, customer.subscription.updated, customer.subscription.deleted; Docket additionally subscribes invoice.payment_failed, invoice.paid, invoice.payment_action_required, customer.subscription.trial_will_end (handled via the plugin's onEvent hook for dunning/lifecycle, NOT plugin-core). Bootstrap registers all eight on the prod endpoint and relies on `stripe listen` (no explicit endpoint) for dev. createCustomerOnSignUp is set to FALSE (Docket creates the Stripe customer when a non-personal org is created, keyed to organization.id, NOT on user signup) — this is a config decision the env contract depends on (no per-user customer).
-
-**Why.** Verified against current docs: default endpoint is exactly /api/auth/stripe/webhook, secret is one STRIPE_WEBHOOK_SECRET, and the four customer.subscription/checkout events are the plugin's required set; extra events are consumed via onEvent. Billing subject = Organization (RECONCILIATION line 31, data-model §2 subscription.reference_id=organization.id), so customer creation must be org-scoped, which forces createCustomerOnSignUp=false — a load-bearing fact the bootstrap/env wiring must encode.
+The superseded price-resolution and webhook-plugin proposals were removed here because a historical
+route and package name would cause implementation drift. Git history retains the original record.
 
 ### RECONCILIATION (line 38) + mcp-surface §2.5/§2.4: 'verify Better Auth 1.6.14 emits client_id_metadata_document_supported (CIMD), honors RFC 8707 resource→aud stamping, and surfaces getMcpSession().scopes. If any is absent, add a thin RS shim.' Decide the verification outcome and the concrete fallback/shim plan.
 
@@ -511,11 +531,15 @@ what users see and interact with, not whether a CSS file matches a hand-maintain
 
 **Why.** Neon's branch-per-preview is the purpose-built answer and integrates natively with Vercel preview deployments, so it satisfies dev-mirrors-prod (same var names, branched values) with zero schema divergence. Reusing DATABASE_URL/DATABASE_URL_UNPOOLED keeps the §4 parity guarantees intact. Migrating on the branch before e2e ensures the Playwright slice (build-sequence §2.7) runs against a real, schema-current DB — honoring the no-stubs constraint. CLI fallback (neonctl) makes it work in pure-CI without the dashboard integration.
 
-### RECONCILIATION (line 39): 'Billing phase: no-card vs card-required trial default' + §1.4 note 'Personal/solo tier is no-card so no price is required to create a personal org.' Decide whether a Stripe price/customer is REQUIRED at boot, so env validation knows what is mandatory.
+### Superseded billing trial decision
 
-**Decision.** Canonical: NO Stripe price or customer is required to BOOT the service or to create a PERSONAL org. The Team price (DOCKET_PRICE_LOOKUP_TEAM or STRIPE_PRICE_TEAM) gates only the creation of SHARED/TEAM orgs and invites (per §1.4 note + RECONCILIATION personal-space single-Actor decision). Trial default for Team orgs = CARD-REQUIRED trial is NOT the default; v1 ships a NO-CARD trial: organization.lifecycleState starts 'trialing' (data-model §3.3 default), a Stripe customer + subscription with freeTrial is created at first Team-org creation (createCustomerOnSignUp=false), and the trial→export_window→pending_deletion sweep (CRON_SECRET-guarded) handles non-conversion. Env consequence: the stripe slice's price vars stay REQUIRED-for-team-org-creation but are NOT validated as hard-required at process boot when the deployment is a billing-disabled foundation/slice run — but since the slice creates is_personal=false orgs (build-sequence §2.2 'is_personal=false for the user-created org'), and dev-mirrors-prod forbids conditional wiring, the canonical rule is: DOCKET_PRICE_LOOKUP_TEAM (or STRIPE_PRICE_TEAM) and STRIPE_SECRET_KEY ARE required in any environment where the Stripe/billing Phase-6 lane is enabled, and the slice's create-org path is run with billing checks bypassed only while the billing lane is OFF via a single env flag BILLING_ENABLED (z.coerce boolean, default false in foundation, true once the billing lane ships). When BILLING_ENABLED=false, the stripe slice vars become optional; when true, they are required (Zod superRefine keyed off BILLING_ENABLED).
+**Decision.** The public Docket Pro trial is card-required and lasts 14 days. Creating a personal or
+shared organization does not start billing. The customer starts the trial from Billing settings.
+Billing failure never schedules deletion. `BILLING_ENABLED=false` keeps Checkout closed without
+disabling webhooks, portal access, reconciliation, or existing entitlements.
 
-**Why.** build-sequence §2.6 states the first slice needs NO Stripe creds, yet §2.2 has it create a non-personal org — without a flag this contradicts a hard-required Team price. A single BILLING_ENABLED flag resolves it deterministically while preserving §4.3 (no NODE_ENV branching; the switch is an explicit feature flag identical in dev and prod). No-card trial matches the spec's no-card personal tier and RECONCILIATION's 'default proposal' posture (defer card-required), and keeps the lifecycle sweep (CRON_SECRET) as the enforcement mechanism already defined in data-model §3.3.
+**Why.** This keeps organization creation independent from payment state and preserves customer
+data after Pro ends. The current product contract supersedes the original no-card lifecycle plan.
 
 ### §1.3 + RECONCILIATION (web↔api same-origin via Vercel rewrites): given rewrites make the browser see /api as same-origin, what is the canonical value/role of NEXT_PUBLIC_API_URL and BETTER_AUTH_TRUSTED_ORIGINS, and how do redirect URIs resolve?
 

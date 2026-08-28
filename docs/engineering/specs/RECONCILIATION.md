@@ -28,7 +28,7 @@
 - **Idempotency-Key:** a Postgres `idempotency_key` table (24h TTL) for v1 — no Redis.
 - **Session live transport:** **SSE** (`GET /v1/orgs/:orgId/sessions/:id/stream`) for v1; one mechanism.
 - **Personal space:** single-Actor; the owning User is seeded as Owner; invitations/guests rejected (app guard).
-- **Billing split:** lifecycle columns (`lifecycle_state`, `export_ready_at`, `delete_after_at`) live on `organization`; the Stripe plugin's `subscription` table is keyed by `reference_id = organization.id`.
+- **Billing boundary:** Docket owns durable organization billing accounts, Checkout attempts, provider events, product entitlements, discount applications and awards, credits, and provider synchronization. Better Auth supplies the verified server session and user identity. Stripe owns customers, subscriptions, invoices, payment methods, taxes, hosted Checkout, and the customer portal. Legacy organization lifecycle columns belong only to account-retention compatibility and never control billing access.
 - **List engine:** custom virtualized flattened tree (`@tanstack/react-virtual`) for Linear-style grouping/sub-grouping + inline edit + keyboard.
 - **CI passkey login:** Playwright **CDP virtual authenticator** (exercises the real WebAuthn path); no session-seed bypass.
 
@@ -36,7 +36,7 @@
 
 - **MVP SCOPE CUT — product call before the feature fan-out (NOT before foundation).** How much of granular per-resource Grants, multi-org breadth, enterprise SSO/SCIM, and the agent/MCP surface ships in v1. _Default proposal:_ v1 ships the 4 system roles + simple resource sharing (resource-level `grant` present in the backend, minimal UI); SSO/SCIM, DENY grants, and the full capability grid are fast-follows. **Confirm at the fan-out gate.**
 - **MCP phase — verify Better Auth 1.6.14:** that it emits `client_id_metadata_document_supported` (CIMD), honors RFC 8707 `resource→aud` stamping, and surfaces `getMcpSession().scopes`. If any is absent, add a thin RS shim. Adopt MCP **Tasks** behind a feature flag. Stateful resumable MCP sessions need a shared event store (Redis) + a long-lived host (Vercel Fluid Compute) — confirm at the MCP phase.
-- **Billing phase:** export artifact format/scope; no-card vs card-required trial default; dunning terminal state.
+- **Billing launch contract:** one card-required 14-day trial per eligible organization; a fixed seven-day payment-recovery window; shared work becomes read-only after paid access ends; personal baseline work remains writable; billing never schedules deletion. The current contract is detailed in `product-billing.md`.
 - **Approval-routing storage:** the resolver (assigner/delegator → team → org → owners) — pin its storage location (Agent column vs Team settings) at the agents/sessions phase.
 
 ---

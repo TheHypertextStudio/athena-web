@@ -248,7 +248,7 @@ export const ExtendTrialBody = z.object({
     .min(1)
     .max(365)
     .describe(
-      'Number of trial days to grant (1..365), recorded as operator intent in the audit event; the action resets the org to `trialing` and clears the export/delete timers.',
+      'Number of days to add to an eligible current Stripe trial (1..365). The provider-confirmed result updates the product entitlement and the operator audit event. It does not change organization-retention fields.',
     ),
 });
 /** Validated extend-trial body. */

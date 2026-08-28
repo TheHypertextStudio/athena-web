@@ -17,13 +17,13 @@ import { lifecycleLabel } from '@/lib/lifecycle';
 import { isAuthError, userErrorMessage, userProblemMessage } from '@/lib/problem';
 import type { AdminMetrics, AdminOrg } from '@/lib/types';
 
-/** The dashboard's loaded data: headline metrics and the at-risk org queues. */
+/** The dashboard's loaded data: headline metrics and legacy account-retention queues. */
 interface DashboardData {
   /** Totals + per-lifecycle org counts from `GET /admin/metrics`. */
   metrics: AdminMetrics;
-  /** Orgs in the read-only export window (recently lapsed, recoverable). */
+  /** Orgs carrying the legacy export-window marker. Billing does not write this state. */
   exportWindow: readonly AdminOrg[];
-  /** Orgs scheduled for deletion (the most urgent queue). */
+  /** Orgs scheduled for deletion through the separate account-retention flow. */
   pendingDeletion: readonly AdminOrg[];
 }
 
@@ -32,10 +32,10 @@ interface DashboardData {
  *
  * @remarks
  * A Client Component that fetches at runtime (no build-time API dependency). It loads the
- * headline metrics (`GET /admin/metrics`) alongside the two "needs attention" queues —
- * orgs in `export_window` and `pending_deletion` — via filtered `GET /admin/orgs`
- * lookups. The layout splits metrics (left) from the queues (right). A 403 from any call
- * (non-staff session) surfaces inline.
+ * headline metrics (`GET /admin/metrics`) alongside legacy retention diagnostics for
+ * `export_window` and `pending_deletion` via filtered `GET /admin/orgs` lookups. These organization
+ * markers do not represent Docket Pro access. The layout splits metrics from the queues. A 403 from
+ * any call by a non-staff session surfaces inline.
  */
 export default function DashboardPage(): JSX.Element {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -43,7 +43,7 @@ export default function DashboardPage(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [authFailed, setAuthFailed] = useState(false);
 
-  /** Load metrics and the at-risk org queues in parallel. */
+  /** Load metrics and the account-retention queues in parallel. */
   const load = useCallback(async (): Promise<void> => {
     setLoading(true);
     setError(null);
@@ -117,7 +117,7 @@ export default function DashboardPage(): JSX.Element {
               id="queues-heading"
               className="text-on-surface-variant text-body-medium font-medium"
             >
-              Needs attention
+              Account retention
             </h2>
             <OrgQueue
               title="Pending deletion"
@@ -125,9 +125,9 @@ export default function DashboardPage(): JSX.Element {
               emptyMessage="No organizations scheduled for deletion."
             />
             <OrgQueue
-              title="Export window"
+              title="Legacy export marker"
               orgs={data.exportWindow}
-              emptyMessage="No organizations in the export window."
+              emptyMessage="No organizations carry the legacy export marker."
             />
           </section>
         </div>
@@ -150,7 +150,7 @@ function MetricCard({ label, value }: { label: string; value: number }): JSX.Ele
   );
 }
 
-/** A titled queue of at-risk orgs, each linking to its detail screen. */
+/** A titled account-retention queue whose rows link to organization detail. */
 function OrgQueue({
   title,
   orgs,

@@ -119,10 +119,9 @@ Capabilities come straight from the data model: `{ view, comment, contribute, as
 | Method + Path | Input (Zod sketch) | Output (Zod sketch) | Auth | Capability |
 | -------------------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------- | -------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | `GET /orgs` | `query: ListQuery` | `Page<OrgSummary{ id, name, slug, avatar?, isPersonal, vocabulary, role, attention{ unread, pendingApprovals } }>` | authenticated | — (lists only the caller's memberships) |
-| `POST /orgs` | `json: OrgCreate{ name, slug?, vocabulary: "startup"                                      | "nonprofit"                                                                                                        | "agency", isPersonal?:false, intent?: "startup"                                     | "nonprofit"                                          | "personal" }` | `OrgOut` | authenticated | — (creator becomes Owner; triggers Stripe customer + default Team + seeded Roles; card-gate when shared/invited per billing spec) |
+| `POST /orgs` | `json: OrgCreate{ name, slug?, vocabulary: "startup"                                      | "nonprofit"                                                                                                        | "agency", isPersonal?:false, intent?: "startup"                                     | "nonprofit"                                          | "personal" }` | `OrgOut` | authenticated | — (creator becomes Owner and receives the default Team and seeded Roles; billing creates a durable Stripe customer only when an administrator starts Checkout) |
 | `GET /orgs/:orgId` | `param: { orgId }` | `OrgOut{ id, name, slug, avatar?, isPersonal, vocabulary, agentGuidance, lifecycleState }` | org | `org:view` |
 | `PATCH /orgs/:orgId` | `json: OrgUpdate{ name?, slug?, avatar?, vocabulary?, agentGuidance?, approvalRouting? }` | `OrgOut` | org | `org:manage` |
-| `DELETE /orgs/:orgId` | `param: { orgId }` | `{ id, lifecycleState: "pending_deletion", deleteAfterAt }` | org | `org:manage` (Owner only; enters lifecycle pipeline) |
 | `GET /orgs/:orgId/members` | `query: ListQuery & { kind?: "human"                                                      | "agent" }` | `Page<ActorOut{ id, kind, displayName, avatar?, status, role?, userId?, isGuest }>` | org | `org:view` |
 | `POST /orgs/:orgId/members/invite` | `json: { email, role: RoleRef, asGuest?: boolean }` | `{ invitationId, email, role, status: "pending" }` | org | `org:manage` (card-gate may apply) |
 | `PATCH /orgs/:orgId/members/:actorId` | `json: { role?: RoleRef, status?: "active"                                                | "suspended" }` | `ActorOut` | org | `org:manage` |
@@ -134,9 +133,9 @@ Capabilities come straight from the data model: `{ view, comment, contribute, as
 | `GET /orgs/:orgId/grants` | `query: { subjectActorId?, resourceType?, resourceId? }` | `Grant[]{ subject, resource, capabilities[], visibility }` | org | `org:manage` |
 | `PUT /orgs/:orgId/grants` | `json: GrantUpsert{ subject: ActorRef                                                     | RoleRef, resource: ResourceRef, capabilities: Capability[], visibility }` | `Grant` | org | `org:manage` (same system for agent scopes) |
 | `DELETE /orgs/:orgId/grants/:grantId` | `param` | `{ id, removed: true }` | org | `org:manage` |
-| `GET /orgs/:orgId/billing` | `param` | `{ lifecycleState, plan, status, currentPeriodEnd?, trialEndsAt?, exportReadyAt?, deleteAfterAt? }` | org | `org:manage` |
-| `POST /orgs/:orgId/billing/checkout` | `json: { plan, returnUrl }` | `{ checkoutClientSecret }` (embedded Checkout) | org | `org:manage` |
-| `POST /orgs/:orgId/billing/portal` | `json: { returnUrl }` | `{ url }` | org | `org:manage` |
+| `GET /orgs/:orgId/billing` | `param` | `{ organizationId, checkoutEnabled, listPrice, accessMode, products[], canManageBilling, effectiveDiscount?, applicationStatus?, issuedCredit? }` | org | `org:view` |
+| `POST /orgs/:orgId/billing/checkout` | `json: { returnTo? }` | `{ url }` (hosted Checkout) | org | `org:manage` |
+| `POST /orgs/:orgId/billing/portal` | — | `{ url }` (hosted customer portal) | org | `org:manage` |
 | `GET /orgs/:orgId/export` | `query: { format?: "json"                                                                 | "zip" }` | `{ downloadUrl, expiresAt }` | org | `org:manage` (work-layer export) |
 
 > `CapabilityGrid` = `Record<ResourceType, Capability[]>`. `RoleRef`/`ActorRef`/`ResourceRef` are tagged id wrappers.
@@ -438,9 +437,11 @@ Mounted at `/admin` — its **own** non-`/v1` app exporting `AdminAppType`, cons
 | `GET /admin/users/:userId` | `param` | `{ user, orgs: OrgSummary[], billing: BillingSummary[] }` (reach orgs from a user) | staff | `staff:support` |
 | `GET /admin/orgs` | `query: ListQuery & { q?, lifecycleState? }` | `Page<{ orgId, name, lifecycleState, plan, ownerEmail }>` | staff | `staff:support` |
 | `GET /admin/orgs/:orgId` | `param` | `{ org, lifecycle, billing, holds: LifecycleHold[] }` | staff | `staff:support` |
-| `POST /admin/orgs/:orgId/billing/:action` | `json: ActionInput` for `action ∈ extend_trial              | credit                                                                                                             | change_plan     | refund             | pause_dunning` (writes back to Stripe) | `{ ok: true, stripeRef }` | staff | `staff:finance` |
-| `GET /admin/orgs/:orgId/lifecycle` | `param` | `{ state, exportReadyAt?, deleteAfterAt?, holds[] }` (trial→export→grace→delete pipeline) | staff | `staff:support` |
-| `POST /admin/orgs/:orgId/holds` | `json: { reason }` | `LifecycleHold` (pauses the delete pipeline) | staff | `staff:finance` |
+| `GET /admin/orgs/:orgId/billing-state` | `param` | `{ account, entitlement, reconciliation, application, award, credit, exemption }` | staff | `staff:support` |
+| `POST /admin/orgs/:orgId/reconcile` | `param` | safe reconciliation result | staff | `staff:finance` |
+| `POST /admin/orgs/:orgId/extend-trial` | `json: { days }` | provider-confirmed trial state | staff | `staff:finance` |
+| `GET /admin/orgs/:orgId/lifecycle` | `param` | `{ state, exportReadyAt?, deleteAfterAt?, holds[] }` (legacy retention diagnostics; billing ignores these fields) | staff | `staff:support` |
+| `POST /admin/orgs/:orgId/holds` | `json: { reason }` | `LifecycleHold` (compatibility record for explicit account deletion; billing ignores it) | staff | `staff:finance` |
 | `DELETE /admin/orgs/:orgId/holds/:holdId` | `param` | `{ id, removed: true }` | staff | `staff:finance` |
 | `POST /admin/impersonations` | `json: { targetUserId?, targetOrgId?, reason, ttlMinutes }` | `ImpersonationSession{ id, expiresAt, bannerToken }` ("View as"; time-boxed, reason-logged, audited) | staff | `staff:support` |
 | `DELETE /admin/impersonations/:sessionId` | `param` | `{ id, ended: true }` | staff | `staff:support` |

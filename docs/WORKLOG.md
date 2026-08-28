@@ -249,6 +249,13 @@
   continued export and reactivation, and account deletion only through the separate confirmed
   Danger Zone flow. A focused public-page test protects those customer promises without depending
   on layout or provider details.
+- **Billing contract convergence**: The API contract, data model, reconciliation decision record,
+  engineering plan, and admin retention copy still described a Better Auth Stripe subscription
+  table, embedded Checkout, organization creation that created Stripe customers, and a
+  trial-to-deletion pipeline. They now describe the shipped durable billing account, hosted Stripe
+  surfaces, provider-confirmed trial extension, entitlement access, and legacy retention boundary.
+  The engineering plan also removes its retired pull-request workflow language because this
+  repository integrates validated commits directly into `main`.
 - **Founder access gate**: The `Hypertext Studio` production organization remains without a billing
   customer, entitlement, or exemption. The existing Better Auth user now has the supported initial
   superadmin bootstrap row. The production admin passkey ceremony is waiting for completion in the

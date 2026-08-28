@@ -1,13 +1,12 @@
 import type { BadgeProps } from '@docket/ui/primitives';
 
 /**
- * The org data-lifecycle states, in pipeline order.
+ * Legacy organization-retention markers in their stored order.
  *
  * @remarks
- * Mirrors `LifecycleState` from the API's internal `admin-dto` module. The order
- * is the operational pipeline: a trialing org converts to `active`, lapses to `past_due`,
- * enters its read-only `export_window`, is scheduled for `pending_deletion`, and finally
- * becomes `deleted`. Used to lay out the lifecycle board columns and the metrics buckets.
+ * Mirrors `LifecycleState` from the API's internal `admin-dto` module. Billing access does not
+ * advance these values. The admin app keeps the full legacy order for migration diagnostics and
+ * for explicit account-deletion records.
  */
 export const LIFECYCLE_STATES = [
   'trialing',

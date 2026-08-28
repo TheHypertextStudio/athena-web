@@ -205,6 +205,11 @@ export const orgLifecycleState = pgEnum('org_lifecycle_state', [
 export const staffRole = pgEnum('staff_role', ['support', 'finance', 'superadmin']);
 ```
 
+`orgLifecycleState`, `exportReadyAt`, and `deleteAfterAt` are legacy account-retention fields. The
+confirmed account Danger Zone owns deletion state. Billing access comes from
+`organization_product_entitlement`, and subscription cancellation or payment failure never mutates
+these organization columns.
+
 **Superseded:** this block previously declared `initiative_status`, `program_status`
 (`active | paused | archived`, annotated `// NO completed`), and `project_status` as fixed enums,
 one per container. A workspace now names its own statuses for Tasks, Projects, Programs, and
@@ -1182,7 +1187,11 @@ export const impersonationSession = pgTable(
 );
 ```
 
-### 8.3 `lifecycle_hold` (pauses trial→export→delete pipeline)
+### 8.3 `lifecycle_hold` (legacy account-deletion compatibility)
+
+This table preserves operator records tied to explicitly requested account deletion. Billing
+reconciliation and Docket Pro access ignore it. The customer billing UI does not expose lifecycle
+holds.
 
 ```ts
 export const lifecycleHold = pgTable(

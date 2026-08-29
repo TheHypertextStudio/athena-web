@@ -25,6 +25,53 @@ export type ProductCapabilityEntitlement =
   | { readonly kind: 'grace-expired' }
   | { readonly kind: 'product-required' };
 
+/** Provider-neutral entitlement columns required to decide product capability access. */
+export interface ProductCapabilitySnapshotRow {
+  readonly productKey: string | null;
+  readonly status: ProductEntitlementStatus | null;
+  readonly source: ProductEntitlementSource | null;
+  readonly graceEndsAt: Date | null;
+}
+
+/**
+ * Resolve one capability from entitlement rows loaded in the caller's database snapshot.
+ *
+ * @param rows - Entitlement rows for one existing organization.
+ * @param capability - Paid capability required by the action.
+ * @param now - Boundary used for payment-grace evaluation.
+ * @returns The access decision without an organization-existence result.
+ */
+export function resolveProductCapabilitySnapshot(
+  rows: readonly ProductCapabilitySnapshotRow[],
+  capability: ProductCapability,
+  now: Date = new Date(),
+): Exclude<ProductCapabilityEntitlement, { readonly kind: 'organization-not-found' }> {
+  let graceExpired = false;
+  for (const row of rows) {
+    const productKey = row.productKey && isProductKey(row.productKey) ? row.productKey : null;
+    const productGrantsRequestedCapability =
+      productKey !== null && productGrantsCapability(productKey, capability);
+    if (
+      productGrantsRequestedCapability &&
+      row.status === 'past_due' &&
+      row.graceEndsAt !== null &&
+      row.graceEndsAt <= now
+    ) {
+      graceExpired = true;
+    }
+    if (
+      productGrantsRequestedCapability &&
+      row.status &&
+      row.source &&
+      (ACCESS_STATUSES.has(row.status) ||
+        (row.status === 'past_due' && row.graceEndsAt !== null && row.graceEndsAt > now))
+    ) {
+      return { kind: 'entitled', productKey, source: row.source };
+    }
+  }
+  return graceExpired ? { kind: 'grace-expired' } : { kind: 'product-required' };
+}
+
 /**
  * Resolve whether an organization owns an active product granting a capability.
  *
@@ -59,34 +106,5 @@ export async function resolveProductCapability(
     .where(eq(organization.id, organizationId));
 
   if (rows.length === 0) return { kind: 'organization-not-found' };
-  let graceExpired = false;
-  for (const row of rows) {
-    const productKey = row.productKey && isProductKey(row.productKey) ? row.productKey : null;
-    const productGrantsRequestedCapability =
-      productKey !== null && productGrantsCapability(productKey, capability);
-    if (
-      productGrantsRequestedCapability &&
-      row.status === 'past_due' &&
-      row.graceEndsAt !== null &&
-      row.graceEndsAt <= now
-    ) {
-      graceExpired = true;
-    }
-    if (
-      productGrantsRequestedCapability &&
-      row.productKey &&
-      row.status &&
-      row.source &&
-      (ACCESS_STATUSES.has(row.status) ||
-        (row.status === 'past_due' && row.graceEndsAt !== null && row.graceEndsAt > now))
-    ) {
-      return {
-        kind: 'entitled',
-        productKey,
-        source: row.source,
-      };
-    }
-  }
-  if (graceExpired) return { kind: 'grace-expired' };
-  return { kind: 'product-required' };
+  return resolveProductCapabilitySnapshot(rows, capability, now);
 }

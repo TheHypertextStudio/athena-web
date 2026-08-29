@@ -4,19 +4,20 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type * as DbModule from '@docket/db';
 
 import type * as IntegrationSyncModule from '../../src/routes/integration-sync';
-import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
+import { appWithActor, clearDocketPro, getDb, seedBaseOrg } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let integrations!: unknown;
 let sweepConnectorSync!: typeof IntegrationSyncModule.sweepConnectorSync;
+let runSync!: typeof IntegrationSyncModule.runSync;
 
 beforeAll(async () => {
   schema = await getDb();
   db = schema.db;
   integrations = (await import('../../src/routes/integrations')).default;
-  sweepConnectorSync = (await import('../../src/routes/integration-sync')).sweepConnectorSync;
+  ({ runSync, sweepConnectorSync } = await import('../../src/routes/integration-sync'));
 });
 
 const MISSING = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
@@ -704,6 +705,38 @@ describe('integrations connect lifecycle (validate before connected)', () => {
 });
 
 describe('background connector sweep', () => {
+  it('does not pull or write a scheduled connector after shared Docket Pro access ends', async () => {
+    const { orgId, humanActorId } = await seedBaseOrg(db, schema);
+    const id = await seedIntegration(orgId, humanActorId, 'github');
+    await db
+      .update(schema.integration)
+      .set({ status: 'connected', lastSyncedAt: null, syncCadenceMinutes: 60 })
+      .where(eq(schema.integration.id, id));
+    await clearDocketPro(db, schema, orgId);
+    const [integration] = await db
+      .select()
+      .from(schema.integration)
+      .where(eq(schema.integration.id, id));
+
+    const result = await runSync(assertDefined(integration), {
+      actorId: humanActorId,
+      trigger: 'scheduled',
+    });
+
+    expect(result).toBeNull();
+    expect(
+      await db.select().from(schema.syncRun).where(eq(schema.syncRun.integrationId, id)),
+    ).toEqual([]);
+    expect(
+      (
+        await db
+          .select({ lastSyncedAt: schema.integration.lastSyncedAt })
+          .from(schema.integration)
+          .where(eq(schema.integration.id, id))
+      )[0]?.lastSyncedAt,
+    ).toBeNull();
+  });
+
   it('syncs a due mirror integration on the scheduled trigger and records it durably', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const id = await seedIntegration(orgId, humanActorId, 'github');

@@ -1,13 +1,12 @@
 # Product billing
 
-> **Reader:** The engineer who changes Docket billing and the finance owner who configures Stripe.
+> **Reader:** The engineer who changes Docket billing and the company owner who configures Stripe.
 >
 > **Action:** Keep public Checkout disabled until every release gate in this document passes.
 >
-> **Status:** Implemented locally on 2026-08-25. The prior Stripe test-mode run used an account that
-> does not belong to Hypertext Studio, so it is not launch evidence. Hypertext Studio merchant
-> identity, fresh test-mode proof, production-snapshot migration, finance, legal, and live canary
-> proof remain open.
+> **Status:** Implemented locally on 2026-08-25. The owner approved the merchant, tax, invoice,
+> credit, refund, discount, evidence-retention, trial, cancellation, read-only retention, Pricing,
+> Terms, and Privacy policies on 2026-08-28. Provider and live-canary proof remain open.
 
 ## Product contract
 
@@ -49,6 +48,23 @@ period end, cancellation flag, seven-day grace deadline, and last provider obser
 entitlement uses the same capability catalog, so it cannot drift behind the paid product. A paid
 capability failure returns HTTP 402 with stable Problem code `product_required` and an upgrade
 path. Baseline personal features do not require an entitlement row.
+
+Organization mutations enforce `shared_work` after route authorization. Capability middleware
+covers ordinary organization writes. Resource-level assertions cover task and object-command
+writes after they prove the target exists and the actor may change it. Stream linking performs the
+same assertion inside its transaction after validating the event and task. This placement keeps
+semantic reads such as mention hydration available even when they use POST to keep content out of
+the URL. Billing, export, and discount operations never require shared-work write access.
+User-scoped surfaces enforce the same assertion after they resolve the target organization and the
+caller's membership. This covers Today completion, calendar task creation and links, and Athena
+Mail attachments. Athena asserts its own paid capability before it creates a tracking task. A
+personal space bypasses only the shared-work assertion because its baseline planning stays
+writable. A shared space without Pro returns `product_required`; an expired payment grace period
+returns `billing_grace_expired`. The client owns those failures at the control that attempted the
+action. It does not replace the page with a modal or redirect the member away from readable work.
+Scheduled connector and Notion mirror runs also stop before they acquire a provider lease after
+the `integrations` capability ends. Existing mirrored work remains readable, and no background
+pull changes the read-only workspace.
 
 ## Stripe boundary
 
@@ -187,9 +203,9 @@ The local implementation is not public-launch proof. The release owner must comp
    `BILLING_CANARY_EMAILS`. The API admits those accounts through their verified Better Auth
    server session while `BILLING_ENABLED=false` keeps public Checkout and new discount
    applications closed.
-5. Have finance approve US tax registrations, invoices, credits, refunds, and reconciliation.
-   Have legal approve trial renewal, cancellation, read-only retention, discount evidence, tax,
-   Pricing, Terms, and Privacy copy.
+5. Record the company owner's approval of US tax registrations, invoices, credits, refunds,
+   reconciliation, trial renewal, cancellation, read-only retention, discount evidence, tax,
+   Pricing, Terms, and Privacy copy. The owner approved this launch policy on 2026-08-28.
 6. Run one live $8 purchase, portal visit, cancellation, reactivation, invoice, and refund or credit
    check. Verify the Founder complimentary organization and one discounted live subscription.
 7. Hold the canary for 72 hours with no entitlement mismatch, duplicate subscription, failed

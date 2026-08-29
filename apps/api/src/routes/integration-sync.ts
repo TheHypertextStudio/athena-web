@@ -30,6 +30,7 @@ import {
 } from '@docket/integrations';
 import { and, eq, inArray, isNotNull, isNull, lt, notInArray, or } from 'drizzle-orm';
 import type { z } from 'zod';
+import { resolveProductCapability } from '@docket/billing/application/entitlement';
 
 import {
   PROVIDER_DIRECTORY,
@@ -401,6 +402,8 @@ export async function runSync(
   row: IntegrationRow,
   opts: RunSyncOptions,
 ): Promise<SyncRunRow | null> {
+  const access = await resolveProductCapability(db, row.organizationId, 'integrations');
+  if (access.kind !== 'entitled') return null;
   return runLeasedSync(row, { ...opts, purpose: 'task_sync' }, async ({ provider, token, now }) => {
     // Thrown here (no team resolvable) → the spine records a plain failure with the message.
     const teamId = await resolveImportTeam(row.organizationId, row);

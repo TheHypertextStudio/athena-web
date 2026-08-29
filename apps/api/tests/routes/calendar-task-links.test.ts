@@ -1,4 +1,5 @@
 import { and, eq } from 'drizzle-orm';
+import { genId } from '@docket/db';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type {
@@ -134,6 +135,90 @@ async function seedTask(
 }
 
 describe('calendar item <-> task links', () => {
+  it('refuses link creation in a free shared workspace without changing the link set', async () => {
+    const schema = await getDb();
+    const base = await seedBaseOrg(schema.db, schema, false);
+    const ownerUserId = await seedUserWithHub(schema.db, schema, 'ReadOnlyLink');
+    await addMemberWithCapabilities(schema, base.orgId, ownerUserId, ['contribute']);
+    const app = appWithSession(calendarRouter, fakeSession(ownerUserId));
+    const item = await createItem(app, {
+      title: 'Read-only link',
+      startsAt: '2026-07-01T10:00:00.000Z',
+      endsAt: '2026-07-01T11:00:00.000Z',
+    });
+    const task = await seedTask(schema, base.orgId, base.teamId);
+
+    const response = await linkTask(app, item.body.id, {
+      mode: 'link',
+      organizationId: base.orgId,
+      taskId: task.id,
+    });
+
+    expect(response.status).toBe(402);
+    expect(response.body).toMatchObject({ code: 'product_required' });
+    expect(await schema.db.select().from(schema.calendarItemTaskLink)).toEqual([]);
+  });
+
+  it.each([
+    ['missing task', { mode: 'link', taskId: genId() }],
+    ['missing team', { mode: 'create', teamId: genId() }],
+  ] as const)('rejects a %s before offering an upgrade', async (_label, target) => {
+    const schema = await getDb();
+    const base = await seedBaseOrg(schema.db, schema, false);
+    const ownerUserId = await seedUserWithHub(schema.db, schema, `Invalid${_label}`);
+    await addMemberWithCapabilities(schema, base.orgId, ownerUserId, ['contribute']);
+    const app = appWithSession(calendarRouter, fakeSession(ownerUserId));
+    const item = await createItem(app, {
+      title: 'Invalid target',
+      startsAt: '2026-07-01T10:00:00.000Z',
+      endsAt: '2026-07-01T11:00:00.000Z',
+    });
+
+    const response = await linkTask(app, item.body.id, {
+      ...target,
+      organizationId: base.orgId,
+    });
+
+    expect(response.status).toBe(404);
+  });
+
+  it('keeps an existing task link after the shared workspace becomes read-only', async () => {
+    const schema = await getDb();
+    const base = await seedBaseOrg(schema.db, schema);
+    const ownerUserId = await seedUserWithHub(schema.db, schema, 'ReadOnlyDetach');
+    await addMemberWithCapabilities(schema, base.orgId, ownerUserId, ['contribute']);
+    const app = appWithSession(calendarRouter, fakeSession(ownerUserId));
+    const item = await createItem(app, {
+      title: 'Keep this link',
+      startsAt: '2026-07-01T10:00:00.000Z',
+      endsAt: '2026-07-01T11:00:00.000Z',
+    });
+    const task = await seedTask(schema, base.orgId, base.teamId);
+    expect(
+      (
+        await linkTask(app, item.body.id, {
+          mode: 'link',
+          organizationId: base.orgId,
+          taskId: task.id,
+        })
+      ).status,
+    ).toBe(200);
+    await schema.db
+      .delete(schema.organizationProductEntitlement)
+      .where(eq(schema.organizationProductEntitlement.organizationId, base.orgId));
+
+    const response = await detachTask(app, item.body.id, task.id);
+
+    expect(response.status).toBe(402);
+    expect(response.body).toMatchObject({ code: 'product_required' });
+    expect(
+      await schema.db
+        .select({ taskId: schema.calendarItemTaskLink.taskId })
+        .from(schema.calendarItemTaskLink)
+        .where(eq(schema.calendarItemTaskLink.taskId, task.id)),
+    ).toEqual([{ taskId: task.id }]);
+  });
+
   it('links an existing task; a second task to the same item; the same task to a second item', async () => {
     const schema = await getDb();
     const base = await seedBaseOrg(schema.db, schema);

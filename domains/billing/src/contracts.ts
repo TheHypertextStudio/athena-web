@@ -20,7 +20,13 @@ export const PRODUCT_KEYS = ['docket_pro'] as const;
 export type ProductKey = (typeof PRODUCT_KEYS)[number];
 
 /** Capabilities supplied by paid products rather than baseline Docket. */
-export const PRODUCT_CAPABILITIES = ['integrations', 'mcp', 'athena', 'voice'] as const;
+export const PRODUCT_CAPABILITIES = [
+  'shared_work',
+  'integrations',
+  'mcp',
+  'athena',
+  'voice',
+] as const;
 
 /** A capability that can be granted by an organization product. */
 export type ProductCapability = (typeof PRODUCT_CAPABILITIES)[number];

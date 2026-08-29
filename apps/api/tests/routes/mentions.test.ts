@@ -178,6 +178,37 @@ describe('mention picker — local wave', () => {
 });
 
 describe('mention hydrate', () => {
+  it('remains readable for a manager in a free shared workspace', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const orgs = await mountOrgs();
+    const userId = await seedUserWithHub(db, schema, 'FreeHydrateManager');
+    const orgId = await seedOrg(db, schema, false, false);
+    const actorId = await addMember(db, schema, orgId, userId, 'owner');
+    const [membership] = await db
+      .select({ roleId: schema.actor.roleId })
+      .from(schema.actor)
+      .where(eq(schema.actor.id, actorId));
+    await db
+      .update(schema.role)
+      .set({ capabilities: ['manage'] })
+      .where(eq(schema.role.id, membership?.roleId ?? ''));
+
+    const app = appWithSession(orgs, fakeSession(userId));
+    const response = await app.request(`/${orgId}/mentions/hydrate`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        refs: [{ kind: 'entity', entityKind: 'task', entityId: 'missing_task' }],
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      items: [{ kind: 'entity', accessible: false }],
+    });
+  });
+
   it('returns a card for a visible entity', async () => {
     const schema = await getDb();
     const { db } = schema;

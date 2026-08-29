@@ -45,7 +45,7 @@ import {
   sweepNotionMirror,
   type MirrorContext,
 } from '../../src/routes/notion-mirror-reconcile';
-import { getDb, one, seedBaseOrg } from '../support/routes-harness';
+import { clearDocketPro, getDb, one, seedBaseOrg } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
 /**
@@ -252,6 +252,26 @@ function findDesign(
 }
 
 describe('Notion mirror reconciliation', () => {
+  it('does not capture or call Notion after integrations access ends', async () => {
+    const { integration, ctx } = await seedMirror();
+    await clearDocketPro(db, schema, ctx.orgId);
+    const buildMirror = vi.spyOn(container, 'buildNotionMirror');
+
+    const run = await runNotionMirrorSync(integration, {
+      actorId: ctx.actorId,
+      trigger: 'scheduled',
+    });
+
+    expect(run).toBeNull();
+    expect(buildMirror).not.toHaveBeenCalled();
+    expect(
+      await db
+        .select()
+        .from(schema.syncRun)
+        .where(eq(schema.syncRun.integrationId, integration.id)),
+    ).toEqual([]);
+  });
+
   it('adopts an exactly owned database after a lost create response', async () => {
     const { integration, mirror, ctx } = await seedMirror();
     await db

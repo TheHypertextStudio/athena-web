@@ -50,6 +50,7 @@ import { accepted, ok } from '../lib/ok';
 import { declareStreaming } from '../lib/sse-headers';
 import { apiDoc, describeRoute } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
+import { assertProductCapability } from '../product-capability';
 
 import { decideActivity, decideProposalGroup, replyToElicitation } from './agent-session-approval';
 import { subscribeAgentUpdates, type AgentUpdate } from './agent-bus';
@@ -966,6 +967,9 @@ const meAthena = new Hono<AppEnv>()
       const owner = requestOwner(c);
       const body = c.req.valid('json');
       const invocation = await resolveAthenaWorkInvocation(owner, body.context);
+      if (invocation.context?.workspaceId) {
+        await assertProductCapability(invocation.context.workspaceId, 'athena');
+      }
       const conversation = await resolveCanonicalConversation(
         owner,
         invocation.context?.workspaceId ?? null,

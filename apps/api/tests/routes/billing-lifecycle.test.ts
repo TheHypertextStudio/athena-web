@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type * as DbModule from '@docket/db';
 import { eq } from 'drizzle-orm';
 
-import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
+import { appWithActor, getDb, seedBaseOrg, seedOrg } from '../support/routes-harness';
 import type billingRouter from '../../src/routes/billing';
 import type { billingExportDownload as BillingExportDownload } from '../../src/routes/billing';
 import { assertDefined } from '@docket/test-utils';
@@ -118,7 +118,7 @@ describe('billing: GET /', () => {
     expect(await json(res)).toEqual({
       organizationId: orgId,
       listPrice: { amount: 800, currency: 'usd', interval: 'month' },
-      accessMode: 'writable',
+      accessMode: 'read_only',
       canManageBilling: true,
       checkoutEnabled: false,
       effectiveDiscount: null,
@@ -128,7 +128,7 @@ describe('billing: GET /', () => {
     });
   });
 
-  it('keeps baseline work writable after Docket Pro ends', async () => {
+  it('makes shared work read-only after Docket Pro ends', async () => {
     const { orgId } = await seedBaseOrg(db, schema, false);
     await db.insert(schema.organizationProductEntitlement).values({
       organizationId: orgId,
@@ -141,7 +141,32 @@ describe('billing: GET /', () => {
     const res = await appWithActor(billing, orgId, ['view']).request('/');
 
     expect(res.status).toBe(200);
+    expect(await json<{ accessMode: string }>(res)).toMatchObject({ accessMode: 'read_only' });
+  });
+
+  it('keeps personal baseline work writable without Docket Pro', async () => {
+    const orgId = await seedOrg(db, schema, true, false);
+
+    const res = await appWithActor(billing, orgId, ['view']).request('/');
+
+    expect(res.status).toBe(200);
     expect(await json<{ accessMode: string }>(res)).toMatchObject({ accessMode: 'writable' });
+  });
+
+  it('makes shared work read-only when payment grace has expired', async () => {
+    const { orgId } = await seedBaseOrg(db, schema, false);
+    await db.insert(schema.organizationProductEntitlement).values({
+      organizationId: orgId,
+      productKey: 'docket_pro',
+      status: 'past_due',
+      source: 'stripe',
+      graceEndsAt: new Date('2000-01-01T00:00:00.000Z'),
+    });
+
+    const res = await appWithActor(billing, orgId, ['view']).request('/');
+
+    expect(res.status).toBe(200);
+    expect(await json<{ accessMode: string }>(res)).toMatchObject({ accessMode: 'read_only' });
   });
 });
 

@@ -12,12 +12,22 @@ import type { MiddlewareHandler } from 'hono';
 
 import type { AppEnv } from '../context';
 import { CapabilityError } from '../error';
+import { assertSharedWorkWritable } from '../product-capability';
+
+/** Methods that cannot change shared workspace state. */
+const READ_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 /** Guard a route by requiring `required` from the actor's org-level capabilities. */
-export function capabilityGuard(required: Capability): MiddlewareHandler<AppEnv> {
+export function capabilityGuard(
+  required: Capability,
+  options: { readonly sharedWorkMutation?: boolean } = {},
+): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
     const held = c.get('actorCtx').capabilities as Capability[];
     if (!held.some((cap) => satisfies(cap, required))) throw new CapabilityError();
+    if (!READ_METHODS.has(c.req.method) && options.sharedWorkMutation !== false) {
+      await assertSharedWorkWritable(c.get('actorCtx').orgId, c.get('actorCtx').isPersonal);
+    }
     await next();
   };
 }

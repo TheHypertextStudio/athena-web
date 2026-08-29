@@ -691,6 +691,108 @@ describe('hub /today (daily operating projection)', () => {
     ]);
   });
 
+  it.each([
+    ['free', null, 'product_required'],
+    ['canceled', 'canceled', 'product_required'],
+    ['expired grace', 'past_due', 'billing_grace_expired'],
+  ] as const)(
+    'keeps a shared %s workspace readable but refuses Today completion',
+    async (_label, status, expectedCode) => {
+      const { userId, hubId } = await seedUserWithHub();
+      const org = await seedBaseOrg(db, schema, false);
+      await joinContributingOrg(userId, org.orgId);
+      if (status !== null) {
+        await db.insert(schema.organizationProductEntitlement).values({
+          organizationId: org.orgId,
+          productKey: 'docket_pro',
+          status,
+          source: 'stripe',
+          ...(status === 'past_due' ? { graceEndsAt: new Date('2000-01-01T00:00:00.000Z') } : {}),
+        });
+      }
+      const [work] = await db
+        .insert(schema.task)
+        .values({
+          organizationId: org.orgId,
+          title: 'Read only work',
+          teamId: org.teamId,
+          state: 'todo',
+          statusId: org.statusId('task', 'todo'),
+          createdBy: org.humanActorId,
+        })
+        .returning({ id: schema.task.id });
+      const [planItem] = await db
+        .insert(schema.dailyPlanItem)
+        .values({
+          hubId,
+          refOrganizationId: org.orgId,
+          refTaskId: assertDefined(work).id,
+          date: '2026-08-05',
+        })
+        .returning({ id: schema.dailyPlanItem.id });
+
+      const app = appWithSession(hub, fakeSession(userId));
+      const response = await app.request(`/today/items/${assertDefined(planItem).id}/complete`, {
+        method: 'POST',
+      });
+
+      expect(response.status).toBe(402);
+      expect(await body<{ code: string }>(response)).toMatchObject({ code: expectedCode });
+      expect(
+        (
+          await db
+            .select({ state: schema.task.state })
+            .from(schema.task)
+            .where(eq(schema.task.id, assertDefined(work).id))
+        )[0]?.state,
+      ).toBe('todo');
+      expect(
+        (
+          await db
+            .select({ status: schema.dailyPlanItem.status })
+            .from(schema.dailyPlanItem)
+            .where(eq(schema.dailyPlanItem.id, assertDefined(planItem).id))
+        )[0]?.status,
+      ).toBe('planned');
+    },
+  );
+
+  it('keeps Today completion writable in a free personal workspace', async () => {
+    const { userId, hubId } = await seedUserWithHub();
+    const org = await seedBaseOrg(db, schema, false);
+    await db
+      .update(schema.organization)
+      .set({ isPersonal: true })
+      .where(eq(schema.organization.id, org.orgId));
+    await joinContributingOrg(userId, org.orgId);
+    const [work] = await db
+      .insert(schema.task)
+      .values({
+        organizationId: org.orgId,
+        title: 'Personal work',
+        teamId: org.teamId,
+        state: 'todo',
+        statusId: org.statusId('task', 'todo'),
+        createdBy: org.humanActorId,
+      })
+      .returning({ id: schema.task.id });
+    const [planItem] = await db
+      .insert(schema.dailyPlanItem)
+      .values({
+        hubId,
+        refOrganizationId: org.orgId,
+        refTaskId: assertDefined(work).id,
+        date: '2026-08-05',
+      })
+      .returning({ id: schema.dailyPlanItem.id });
+
+    const app = appWithSession(hub, fakeSession(userId));
+    expect(
+      (await app.request(`/today/items/${assertDefined(planItem).id}/complete`, { method: 'POST' }))
+        .status,
+    ).toBe(200);
+  });
+
   it('advances completion-driven process work when Today completes a generated task', async () => {
     const { userId, hubId } = await seedUserWithHub();
     const org = await seedBaseOrg(db, schema);

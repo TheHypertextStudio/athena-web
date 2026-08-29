@@ -25,6 +25,7 @@ import {
   appWithSession,
   fakeSession,
   getDb,
+  grantDocketPro,
   seedStatuses,
   type StatusIdLookup,
 } from '../support/routes-harness';
@@ -75,6 +76,7 @@ async function seedOwner(): Promise<Fixture> {
     .insert(schema.organization)
     .values({ name: `Workspace ${slug}`, slug })
     .returning({ id: schema.organization.id });
+  await grantDocketPro(db, schema, assertDefined(org).id);
   const statusId = await seedStatuses(db, schema, assertDefined(org).id);
   await db.insert(schema.actor).values({
     organizationId: assertDefined(org).id,
@@ -549,6 +551,39 @@ describe('attaching a received message to work', () => {
     });
   });
 
+  it('does not attach a message to free shared work', async () => {
+    const fixture = await seedOwner();
+    await db
+      .delete(schema.organizationProductEntitlement)
+      .where(eq(schema.organizationProductEntitlement.organizationId, fixture.organizationId));
+    await deliver(fixture.address, { subject: 'Do not attach' });
+    const [message] = await db
+      .select()
+      .from(schema.athenaInboundMessage)
+      .where(eq(schema.athenaInboundMessage.ownerUserId, fixture.ownerUserId));
+    const taskId = await seedTask(fixture, 'Read-only task');
+    const app = appWithSession(athenaMail, fakeSession(fixture.ownerUserId));
+
+    const response = await app.request(`/${assertDefined(message).id}/attachments`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        subjectType: 'task',
+        subjectId: taskId,
+        organizationId: fixture.organizationId,
+      }),
+    });
+
+    expect(response.status).toBe(402);
+    await expect(response.json()).resolves.toMatchObject({ code: 'product_required' });
+    expect(
+      await db
+        .select()
+        .from(schema.attachment)
+        .where(eq(schema.attachment.externalId, assertDefined(message).id)),
+    ).toEqual([]);
+  });
+
   it('refuses to attach the same message to the same item twice', async () => {
     const fixture = await seedOwner();
     await deliver(fixture.address);
@@ -642,6 +677,45 @@ describe('attaching a received message to work', () => {
       .from(schema.athenaInboundMessage)
       .where(eq(schema.athenaInboundMessage.id, assertDefined(message).id));
     expect(still).toHaveLength(1);
+  });
+
+  it('keeps an existing message attachment in place after shared work becomes read-only', async () => {
+    const fixture = await seedOwner();
+    await deliver(fixture.address);
+    const [message] = await db
+      .select()
+      .from(schema.athenaInboundMessage)
+      .where(eq(schema.athenaInboundMessage.ownerUserId, fixture.ownerUserId));
+    const taskId = await seedTask(fixture, 'Keep attached');
+    const app = appWithSession(athenaMail, fakeSession(fixture.ownerUserId));
+    const created = (await (
+      await app.request(`/${assertDefined(message).id}/attachments`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          subjectType: 'task',
+          subjectId: taskId,
+          organizationId: fixture.organizationId,
+        }),
+      })
+    ).json()) as { attachmentId: string };
+    await db
+      .delete(schema.organizationProductEntitlement)
+      .where(eq(schema.organizationProductEntitlement.organizationId, fixture.organizationId));
+
+    const removed = await app.request(
+      `/${assertDefined(message).id}/attachments/${created.attachmentId}`,
+      { method: 'DELETE' },
+    );
+
+    expect(removed.status).toBe(402);
+    await expect(removed.json()).resolves.toMatchObject({ code: 'product_required' });
+    expect(
+      await db
+        .select({ id: schema.attachment.id })
+        .from(schema.attachment)
+        .where(eq(schema.attachment.id, created.attachmentId)),
+    ).toEqual([{ id: created.attachmentId }]);
   });
 });
 

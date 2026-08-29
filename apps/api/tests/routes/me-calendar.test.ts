@@ -298,6 +298,62 @@ describe('POST /events/:id/create-task — resolveTaskTarget branches', () => {
       );
     expect(attachments).toHaveLength(1);
   });
+
+  it.each([
+    ['free', null, 'product_required'],
+    ['canceled', 'canceled', 'product_required'],
+    ['expired grace', 'past_due', 'billing_grace_expired'],
+  ] as const)(
+    'does not create task artifacts in a shared %s workspace',
+    async (_label, status, expectedCode) => {
+      const { schema, userId, base, event } = await seedEvent(`ReadOnly${_label}`);
+      await schema.db
+        .delete(schema.organizationProductEntitlement)
+        .where(eq(schema.organizationProductEntitlement.organizationId, base.orgId));
+      if (status !== null) {
+        await schema.db.insert(schema.organizationProductEntitlement).values({
+          organizationId: base.orgId,
+          productKey: 'docket_pro',
+          status,
+          source: 'stripe',
+          ...(status === 'past_due' ? { graceEndsAt: new Date('2000-01-01T00:00:00.000Z') } : {}),
+        });
+      }
+      const app = appWithSession(calendarRouter, fakeSession(userId));
+
+      const res = await app.request(`/events/${event.id}/create-task`, {
+        method: 'POST',
+        headers: jsonHeaders(),
+        body: JSON.stringify({ organizationId: base.orgId, teamId: base.teamId }),
+      });
+
+      expect(res.status).toBe(402);
+      expect(await json<{ code: string }>(res)).toMatchObject({ code: expectedCode });
+      await expectNoCreatedTaskOrAttachment(schema, base.orgId);
+    },
+  );
+
+  it('creates a task in a free personal workspace', async () => {
+    const { schema, userId, base, event } = await seedEvent('PersonalBaseline');
+    await Promise.all([
+      schema.db
+        .delete(schema.organizationProductEntitlement)
+        .where(eq(schema.organizationProductEntitlement.organizationId, base.orgId)),
+      schema.db
+        .update(schema.organization)
+        .set({ isPersonal: true })
+        .where(eq(schema.organization.id, base.orgId)),
+    ]);
+    const app = appWithSession(calendarRouter, fakeSession(userId));
+
+    const res = await app.request(`/events/${event.id}/create-task`, {
+      method: 'POST',
+      headers: jsonHeaders(),
+      body: JSON.stringify({ organizationId: base.orgId, teamId: base.teamId }),
+    });
+
+    expect(res.status).toBe(200);
+  });
 });
 
 describe('GET / — settings passthrough', () => {

@@ -72,6 +72,7 @@ import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 import { landingStatus } from '../lib/work-status';
 import { enqueueSearchUpsert } from '../search/write-through';
+import { assertSharedWorkWritable } from '../product-capability';
 
 import { calendarItemRelationRoutes } from './calendar-item-relation-routes';
 import { calendarLayerShareRoutes } from './calendar-layer-share-routes';
@@ -352,6 +353,7 @@ const meCalendar = new Hono<AppEnv>()
       if (!row) throw new NotFoundError('Calendar event not found');
 
       const target = await resolveTaskTarget(userId, body);
+      await assertSharedWorkWritable(target.organizationId);
       const created = (
         await db
           .insert(task)
@@ -590,6 +592,7 @@ const meCalendar = new Hono<AppEnv>()
         userId,
         itemId: id,
         input: body,
+        assertWritable: assertSharedWorkWritable,
       });
       return ok(c, CalendarItemTaskLinkResultOut, {
         link: toCalendarItemTaskLinkOut(link),
@@ -615,7 +618,12 @@ const meCalendar = new Hono<AppEnv>()
     async (c) => {
       const userId = requireUserId(c);
       const { id, taskId } = c.req.valid('param');
-      const deleted = await detachTaskFromItem(db, { userId, itemId: id, taskId });
+      const deleted = await detachTaskFromItem(db, {
+        userId,
+        itemId: id,
+        taskId,
+        assertWritable: assertSharedWorkWritable,
+      });
       return ok(c, CalendarItemTaskLinkOut, toCalendarItemTaskLinkOut(deleted));
     },
   );

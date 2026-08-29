@@ -66,7 +66,31 @@
   paid period, and keep failed payments writable for one fixed seven-day grace period. Process
   discount applications separately from provider-backed awards. Use Better Auth sessions,
   organization roles, and verified institutional email evidence at the billing boundary. Keep
-  Checkout disabled until the audit, deployment, finance, legal, and canary gates pass.
+  Checkout disabled until the audit, deployment, owner-policy, and canary gates pass.
+- **Shared-work access correction**: The billing summary previously hardcoded every organization as
+  writable, and the product catalog omitted its documented `shared_work` capability. Docket Pro now
+  grants shared work from the same catalog as integrations, MCP, Athena, and voice. The organization
+  router leaves reads, billing, export, reactivation, and personal baseline writes available while
+  one shared boundary rejects unpaid mutations with `product_required` or an expired recovery
+  period with `billing_grace_expired`. Focused domain and API tests cover personal baseline, active
+  Pro, canceled Pro, expired grace, nested work creation, readable existing work, and export access.
+  User-scoped writes now apply the same rule after membership resolution. Today completion,
+  calendar task creation and linking, and Athena Mail attachment changes cannot bypass read-only
+  shared work. Athena checks its paid capability before it creates a tracking task. The billing
+  summary derives access from the same entitlement rows that it returns, so a webhook update cannot
+  split the displayed product state from the access decision across two database reads.
+  Scheduled connector and Notion mirror syncs now stop before provider access or local writes when
+  the workspace no longer has the integrations capability.
+  Commercial checks run after route or resource authorization. They do not classify every POST as
+  a write, so read-only mention hydration stays available. Stream event linking checks the target
+  event and task before it enforces read-only access inside the write transaction.
+- **Shared-work validation**: The billing entitlement suite passes 21 tests. The final Mentions
+  suite passes 10 tests, and the independent Stream and Mentions review passes 26 tests. The
+  broader focused access pass covers 147 cases; its only failure was a schema-invalid empty
+  Mentions request, which the corrected behavior test replaced with a valid missing reference.
+  Billing and API typechecks pass. Changed-file ESLint and Prettier pass. The API production build
+  passes with a package-local 4 GB heap, and the diff check passes. The final code review found no
+  actionable defect.
 - **Files changed**: Added the billing account, Checkout attempt, provider-event, discount,
   evidence, award, provider-sync, and credit records with additive migrations and legacy lifecycle
   repair. Rebuilt the billing domain, API routes, customer settings, admin operations, notices,
@@ -339,14 +363,16 @@
   `main`; agents must not enable or use GitHub pull requests. Operators must use only the
   Hypertext Studio Stripe account through the Hypertext Studio Chrome instance. They must never
   use a personal Chrome profile or personal Stripe account for Docket billing work.
-- **Blockers**: Finance and legal must approve the Docket merchant identity, tax registrations,
-  invoice and credit treatment, refund policy, discount eligibility, evidence retention, and
-  customer terms. The local test key must be replaced with a Hypertext Studio test key. Production
-  still needs the 24-hour shadow observation to elapse, one live full-price canary, one live
-  discounted canary, the Founder complimentary grant, and the 72-hour public canary. The Founder
-  grant is ready in the authenticated Hypertext Studio operator session and awaits the required
-  action-time production entitlement confirmation. Whole-product launch sign-off remains
-  independent of this billing slice.
+- **Owner policy approval**: Hypertext Studio is a one-person company. The owner approved the
+  merchant, tax, invoice, credit, refund, reconciliation, discount, evidence-retention, trial,
+  cancellation, read-only retention, Pricing, Terms, and Privacy policies on 2026-08-28. No
+  separate finance or legal approver exists, so those internal gates are closed. Government tax
+  registrations remain operational requirements rather than internal approval requests.
+- **Blockers**: Production still needs the live full-price canary, live discounted canary, Founder
+  complimentary grant, and 72-hour canary observation. The Founder grant is ready in the
+  authenticated Hypertext Studio operator session and awaits the required action-time production
+  entitlement confirmation. Whole-product launch sign-off remains independent of this billing
+  slice.
 
 ---
 

@@ -61,6 +61,7 @@ import {
 import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 
 import { ConnectorConfig } from '@docket/types';
+import { resolveProductCapability } from '@docket/billing/application/entitlement';
 
 import { buildNotionMirror } from '../container';
 import { externalActorReverseMap, syncExternalActors } from './integration-identity';
@@ -1436,6 +1437,8 @@ export async function runNotionMirrorSync(
   row: IntegrationRow,
   opts: RunSyncOptions,
 ): Promise<SyncRunRow | null> {
+  const access = await resolveProductCapability(db, row.organizationId, 'integrations');
+  if (access.kind !== 'entitled') return null;
   const captured = await captureNotionMirrorGeneration({
     integrationId: row.id,
     organizationId: row.organizationId,

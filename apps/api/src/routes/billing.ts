@@ -34,6 +34,7 @@ import {
   PRODUCT_ENTITLEMENT_STATUSES,
   PRODUCT_KEYS,
 } from '@docket/billing/contracts';
+import { resolveProductCapabilitySnapshot } from '@docket/billing/application/entitlement';
 import { and, desc, eq, gt, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -121,7 +122,7 @@ export const BillingSummaryOut = z.object({
   accessMode: z
     .enum(['writable', 'read_only'])
     .describe(
-      'Baseline core-work access for this workspace. Paid modules report entitlement through products and enforce their own product capabilities.',
+      'Whether this workspace may change shared work. Personal baseline stays writable; a shared workspace requires active, trialing, grace-valid, or complimentary Docket Pro.',
     ),
   products: z.array(BillingProductOut),
   canManageBilling: z.boolean(),
@@ -177,8 +178,8 @@ export type RedirectOut = z.infer<typeof RedirectOut>;
  * @remarks
  * Billing cancellation and payment failure never mutate these fields. The confirmed Danger Zone
  * account-deletion flow owns retention state. Billing keeps this read response for older clients
- * while {@link BillingSummaryOut.accessMode} reports baseline core-work access only. Paid modules
- * use product entitlement instead of this lifecycle response or compatibility field.
+ * while {@link BillingSummaryOut.accessMode} reports shared-work access. Paid modules use product
+ * entitlement instead of this lifecycle response or compatibility field.
  */
 export const LifecycleOut = z
   .object({
@@ -286,7 +287,7 @@ const billing = new Hono<AppEnv>()
     }),
     async (c) => {
       const actorCtx = c.get('actorCtx');
-      await loadOrg(actorCtx.orgId);
+      const org = await loadOrg(actorCtx.orgId);
       const [products, applications, awards, credits] = await Promise.all([
         db
           .select()
@@ -316,6 +317,9 @@ const billing = new Hono<AppEnv>()
           .orderBy(desc(billingCredit.createdAt))
           .limit(1),
       ]);
+      const sharedWorkAccess = org.isPersonal
+        ? ({ kind: 'entitled' } as const)
+        : resolveProductCapabilitySnapshot(products, 'shared_work');
       const now = Date.now();
       return ok(c, BillingSummaryOut, {
         organizationId: actorCtx.orgId,
@@ -325,7 +329,7 @@ const billing = new Hono<AppEnv>()
           c.get('session')?.user,
         ),
         listPrice: { amount: 800, currency: 'usd', interval: 'month' },
-        accessMode: 'writable',
+        accessMode: sharedWorkAccess.kind === 'entitled' ? 'writable' : 'read_only',
         canManageBilling: actorCtx.capabilities.includes('manage'),
         effectiveDiscount:
           awards[0] &&
@@ -366,7 +370,7 @@ const billing = new Hono<AppEnv>()
   )
   .post(
     '/checkout',
-    capabilityGuard('manage'),
+    capabilityGuard('manage', { sharedWorkMutation: false }),
     apiDoc({
       tag: 'Billing',
       summary: 'Open a checkout session',
@@ -466,7 +470,7 @@ Side effect: creates a checkout session. Docket Pro ownership changes only after
   )
   .post(
     '/portal',
-    capabilityGuard('manage'),
+    capabilityGuard('manage', { sharedWorkMutation: false }),
     apiDoc({
       tag: 'Billing',
       summary: 'Open the billing portal',
@@ -518,7 +522,7 @@ Side effect: creates a checkout session. Docket Pro ownership changes only after
   )
   .post(
     '/export',
-    capabilityGuard('manage'),
+    capabilityGuard('manage', { sharedWorkMutation: false }),
     apiDoc({
       tag: 'Billing',
       summary: 'Generate a work-layer export',

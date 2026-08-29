@@ -10,6 +10,7 @@ import { CapabilityError, NotFoundError, ValidationError } from '../error';
 import type { LabelRefRow } from '../lib/labels';
 import { rawResultRowCount, rawResultRows } from '../lib/raw-result';
 import { resolveTaskStatus, type TaskStatusTransition } from '../lib/work-status';
+import { assertSharedWorkWritable } from '../product-capability';
 
 /** TaskRow is the selected database row shape consumed by these API route serializers. */
 export type TaskRow = typeof task.$inferSelect;
@@ -389,7 +390,10 @@ export async function assertTaskCapability(
     { kind: 'task', id: target.id, orgId },
     database,
   );
-  if (result.allow) return;
+  if (result.allow) {
+    await assertSharedWorkWritable(orgId, undefined, database);
+    return;
+  }
   if (result.effectiveCapability === null) {
     // `canActor` intentionally resolves explicit grants only, while task reads also include the
     // documented public, non-guest view baseline. Preserve that distinction in the error shape:

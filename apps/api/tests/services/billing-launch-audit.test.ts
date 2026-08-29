@@ -70,7 +70,7 @@ describe('auditBillingLaunch', () => {
           status: 'active',
           reason,
           sharedWorkWritable: true,
-          capabilities: ['integrations', 'mcp', 'athena', 'voice'],
+          capabilities: ['shared_work', 'integrations', 'mcp', 'athena', 'voice'],
           problems: [],
         },
       ],

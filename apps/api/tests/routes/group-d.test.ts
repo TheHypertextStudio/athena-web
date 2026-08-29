@@ -221,6 +221,147 @@ describe('orgs router', () => {
     expect((await body<{ id: string }>(read)).id).toBe(orgId);
   });
 
+  it('keeps a free shared workspace readable and makes its mutations product-gated', async () => {
+    const { userId } = await seedUserWithHub();
+    const app = orgsApp(fakeSession(userId));
+    const created = await app.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ name: 'Free shared workspace' }),
+    });
+    const { organization } = await body<{ organization: { id: string } }>(created);
+    await clearDocketPro(db, schema, organization.id);
+
+    expect((await app.request(`/${organization.id}`)).status).toBe(200);
+    const update = await app.request(`/${organization.id}`, {
+      method: 'PATCH',
+      headers: J,
+      body: JSON.stringify({ name: 'Must not persist' }),
+    });
+
+    expect(update.status).toBe(402);
+    expect(await body<{ code: string }>(update)).toMatchObject({ code: 'product_required' });
+    const summary = await app.request(`/${organization.id}/billing`);
+    expect(summary.status).toBe(200);
+    expect(await body<{ accessMode: string }>(summary)).toMatchObject({ accessMode: 'read_only' });
+    expect(
+      (await app.request(`/${organization.id}/billing/export`, { method: 'POST' })).status,
+    ).toBe(200);
+  });
+
+  it('rejects an unauthorized free-workspace mutation before offering an upgrade', async () => {
+    const { userId } = await seedUserWithHub();
+    const app = orgsApp(fakeSession(userId));
+    const created = await app.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ name: 'Viewer-only free workspace' }),
+    });
+    const result = await body<{ organization: { id: string }; ownerActorId: string }>(created);
+    const [membership] = await db
+      .select({ roleId: schema.actor.roleId })
+      .from(schema.actor)
+      .where(eq(schema.actor.id, result.ownerActorId));
+    await db
+      .update(schema.role)
+      .set({ capabilities: ['view'] })
+      .where(eq(schema.role.id, assertDefined(membership).roleId ?? ''));
+    await clearDocketPro(db, schema, result.organization.id);
+
+    const response = await app.request(`/${result.organization.id}/initiatives`, {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ name: 'Unauthorized initiative' }),
+    });
+
+    expect(response.status).toBe(403);
+    expect(await body<{ code: string }>(response)).toMatchObject({ code: 'forbidden' });
+  });
+
+  it('keeps a free personal workspace writable', async () => {
+    const { userId } = await seedUserWithHub();
+    const app = orgsApp(fakeSession(userId));
+    const created = await app.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ isPersonal: true }),
+    });
+    const { organization } = await body<{ organization: { id: string } }>(created);
+    await clearDocketPro(db, schema, organization.id);
+
+    const update = await app.request(`/${organization.id}`, {
+      method: 'PATCH',
+      headers: J,
+      body: JSON.stringify({ purpose: 'Personal planning' }),
+    });
+
+    expect(update.status).toBe(200);
+    expect(await body<{ purpose: string }>(update)).toMatchObject({
+      purpose: 'Personal planning',
+    });
+  });
+
+  it('reports an expired payment grace period on shared-work mutations', async () => {
+    const { userId } = await seedUserWithHub();
+    const app = orgsApp(fakeSession(userId));
+    const created = await app.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ name: 'Past-due workspace' }),
+    });
+    const { organization } = await body<{ organization: { id: string } }>(created);
+    await db
+      .update(schema.organizationProductEntitlement)
+      .set({
+        status: 'past_due',
+        source: 'stripe',
+        graceEndsAt: new Date('2000-01-01T00:00:00.000Z'),
+      })
+      .where(eq(schema.organizationProductEntitlement.organizationId, organization.id));
+
+    const update = await app.request(`/${organization.id}`, {
+      method: 'PATCH',
+      headers: J,
+      body: JSON.stringify({ purpose: 'Must stay unchanged' }),
+    });
+
+    expect(update.status).toBe(402);
+    expect(await body<{ code: string }>(update)).toMatchObject({ code: 'billing_grace_expired' });
+  });
+
+  it.each([
+    ['trialing', 'stripe', null],
+    ['active', 'complimentary', null],
+    ['past_due', 'stripe', new Date('2999-01-01T00:00:00.000Z')],
+  ] as const)(
+    'keeps shared work writable for %s access from %s',
+    async (status, source, graceEndsAt) => {
+      const { userId } = await seedUserWithHub();
+      const app = orgsApp(fakeSession(userId));
+      const created = await app.request('/', {
+        method: 'POST',
+        headers: J,
+        body: JSON.stringify({ name: `${status} workspace` }),
+      });
+      const { organization } = await body<{ organization: { id: string } }>(created);
+      await db
+        .update(schema.organizationProductEntitlement)
+        .set({ status, source, graceEndsAt })
+        .where(eq(schema.organizationProductEntitlement.organizationId, organization.id));
+
+      const update = await app.request(`/${organization.id}`, {
+        method: 'PATCH',
+        headers: J,
+        body: JSON.stringify({ purpose: `${status} remains writable` }),
+      });
+
+      expect(update.status).toBe(200);
+      expect(await body<{ purpose: string }>(update)).toMatchObject({
+        purpose: `${status} remains writable`,
+      });
+    },
+  );
+
   it('reads and updates Work structure settings without invalidating existing hierarchy', async () => {
     const { userId } = await seedUserWithHub();
     const app = orgsApp(fakeSession(userId));
@@ -384,7 +525,7 @@ describe('orgs router', () => {
     expect(tasks.status).toBe(200);
   });
 
-  it('creates and reopens an Initiative in a shared workspace without Docket Pro', async () => {
+  it('keeps existing shared work readable while product-gating new work', async () => {
     const { userId } = await seedUserWithHub();
     const app = orgsApiApp(fakeSession(userId));
     const created = await app.request('/v1/orgs', {
@@ -393,16 +534,34 @@ describe('orgs router', () => {
       body: JSON.stringify({ name: 'Shared work' }),
     });
     expect(created.status).toBe(201);
-    const { organization } = await body<{ organization: { id: string } }>(created);
+    const { organization, ownerActorId } = await body<{
+      organization: { id: string };
+      ownerActorId: string;
+    }>(created);
+    const statusId = await seedStatuses(db, schema, organization.id);
+    const initiative = one(
+      await db
+        .insert(schema.initiative)
+        .values({
+          organizationId: organization.id,
+          name: 'Existing initiative',
+          status: 'active',
+          statusId: statusId('initiative', 'active'),
+          createdBy: ownerActorId,
+        })
+        .returning({ id: schema.initiative.id, name: schema.initiative.name }),
+    );
     await clearDocketPro(db, schema, organization.id);
 
     const initiativeResponse = await app.request(`/v1/orgs/${organization.id}/initiatives`, {
       method: 'POST',
       headers: J,
-      body: JSON.stringify({ name: 'Baseline initiative' }),
+      body: JSON.stringify({ name: 'Must not persist' }),
     });
-    expect(initiativeResponse.status).toBe(201);
-    const initiative = await body<{ id: string; name: string }>(initiativeResponse);
+    expect(initiativeResponse.status).toBe(402);
+    expect(await body<{ code: string }>(initiativeResponse)).toMatchObject({
+      code: 'product_required',
+    });
 
     const reopened = await app.request(`/v1/orgs/${organization.id}/initiatives/${initiative.id}`);
     expect(reopened.status).toBe(200);
@@ -410,7 +569,7 @@ describe('orgs router', () => {
       await body<{ id: string; name: string; organizationId: string }>(reopened),
     ).toMatchObject({
       id: initiative.id,
-      name: 'Baseline initiative',
+      name: 'Existing initiative',
       organizationId: organization.id,
     });
   });

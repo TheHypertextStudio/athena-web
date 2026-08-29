@@ -389,7 +389,7 @@ const billingDiscounts = new Hono<AppEnv>()
   )
   .post(
     '/applications',
-    capabilityGuard('manage'),
+    capabilityGuard('manage', { sharedWorkMutation: false }),
     apiDoc({
       status: 201,
       tag: 'Billing',
@@ -447,7 +447,7 @@ const billingDiscounts = new Hono<AppEnv>()
   )
   .post(
     '/renew',
-    capabilityGuard('manage'),
+    capabilityGuard('manage', { sharedWorkMutation: false }),
     apiDoc({
       status: 201,
       tag: 'Billing',
@@ -506,7 +506,7 @@ const billingDiscounts = new Hono<AppEnv>()
   )
   .post(
     '/applications/:applicationId/supplement',
-    capabilityGuard('manage'),
+    capabilityGuard('manage', { sharedWorkMutation: false }),
     apiDoc({
       tag: 'Billing',
       summary: 'Supply requested discount information',
@@ -568,7 +568,7 @@ const billingDiscounts = new Hono<AppEnv>()
   )
   .post(
     '/applications/:applicationId/withdraw',
-    capabilityGuard('manage'),
+    capabilityGuard('manage', { sharedWorkMutation: false }),
     apiDoc({
       tag: 'Billing',
       summary: 'Withdraw a discount application',
@@ -616,7 +616,7 @@ const billingDiscounts = new Hono<AppEnv>()
   )
   .post(
     '/applications/:applicationId/evidence',
-    capabilityGuard('manage'),
+    capabilityGuard('manage', { sharedWorkMutation: false }),
     apiDoc({
       status: 201,
       tag: 'Billing',

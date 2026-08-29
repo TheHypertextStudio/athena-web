@@ -9,6 +9,7 @@ import { onError } from '../../src/error';
 import type streamRouter from '../../src/routes/stream';
 import {
   fakeSession,
+  clearDocketPro,
   getDb,
   one,
   seedBaseOrg,
@@ -29,7 +30,7 @@ beforeAll(async () => {
 let seq = 0;
 
 /** Mount the stream router behind an injected actor context, as the org router does in production. */
-function appFor(orgId: string, actorId: string, userId: string) {
+function appFor(orgId: string, actorId: string, userId: string, isPersonal = false) {
   const app = new Hono<AppEnv>();
   app.use('*', async (c, next) => {
     c.set('session', fakeSession(userId));
@@ -38,6 +39,7 @@ function appFor(orgId: string, actorId: string, userId: string) {
       actorId,
       roleId: 'role_test',
       capabilities: ['view', 'contribute', 'assign'],
+      isPersonal,
     };
     c.set('actorCtx', ctx);
     await next();
@@ -48,8 +50,16 @@ function appFor(orgId: string, actorId: string, userId: string) {
 }
 
 /** An org whose human actor is backed by a real user, plus a mounted app. */
-async function seedWorkspace() {
-  const { orgId, teamId } = await seedBaseOrg(db, schema);
+async function seedWorkspace(options: { withDocketPro?: boolean; isPersonal?: boolean } = {}) {
+  const withDocketPro = options.withDocketPro ?? true;
+  const isPersonal = options.isPersonal ?? false;
+  const { orgId, teamId } = await seedBaseOrg(db, schema, withDocketPro);
+  if (isPersonal) {
+    await db
+      .update(schema.organization)
+      .set({ isPersonal: true })
+      .where(eq(schema.organization.id, orgId));
+  }
   const userId = await seedUserWithHub(db, schema, `Link${String(++seq)}`);
   const actorId = one(
     await db
@@ -57,7 +67,7 @@ async function seedWorkspace() {
       .values({ organizationId: orgId, kind: 'human', displayName: 'Linker', userId })
       .returning({ id: schema.actor.id }),
   ).id;
-  return { orgId, teamId, actorId, userId, app: appFor(orgId, actorId, userId) };
+  return { orgId, teamId, actorId, userId, app: appFor(orgId, actorId, userId, isPersonal) };
 }
 
 /** One activity event whose subject Docket could not resolve on its own. */
@@ -226,6 +236,53 @@ describe('GET / (org firehose visibility)', () => {
 });
 
 describe('POST /:eventId/link', () => {
+  it.each([
+    ['free', null, 'product_required'],
+    ['canceled', 'canceled', 'product_required'],
+    ['expired grace', 'past_due', 'billing_grace_expired'],
+  ] as const)(
+    'does not resolve an event in a shared %s workspace',
+    async (_label, status, expectedCode) => {
+      const workspace = await seedWorkspace({ withDocketPro: false });
+      if (status !== null) {
+        await db.insert(schema.organizationProductEntitlement).values({
+          organizationId: workspace.orgId,
+          productKey: 'docket_pro',
+          status,
+          source: 'stripe',
+          ...(status === 'past_due' ? { graceEndsAt: new Date('2000-01-01T00:00:00.000Z') } : {}),
+        });
+      }
+      const eventId = await seedEvent(workspace.orgId);
+      const taskId = await seedTask(workspace.orgId, workspace.teamId, workspace.actorId);
+
+      const response = await workspace.app.request(`/${eventId}/link`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ taskId }),
+      });
+
+      expect(response.status).toBe(402);
+      await expect(response.json()).resolves.toMatchObject({ code: expectedCode });
+      expect((await eventRow(eventId))?.entityAssociation).toBe('unmatched');
+    },
+  );
+
+  it('resolves an event in a free personal workspace', async () => {
+    const workspace = await seedWorkspace({ withDocketPro: false, isPersonal: true });
+    await clearDocketPro(db, schema, workspace.orgId);
+    const eventId = await seedEvent(workspace.orgId);
+    const taskId = await seedTask(workspace.orgId, workspace.teamId, workspace.actorId);
+
+    const response = await workspace.app.request(`/${eventId}/link`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ taskId }),
+    });
+
+    expect(response.status).toBe(200);
+  });
+
   it('resolves an unmatched subject, which is what a meeting or a thread always is', async () => {
     // `MIRROR_LOOKUP` maps both `calendar_event` and `thread` to null, so these never reach
     // `pending`. Gating the route on `pending` would have made exactly these unlinkable.

@@ -29,6 +29,7 @@ import { CapabilityError, NotFoundError, ValidationError } from '../error';
 import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
+import { assertSharedWorkWritable } from '../product-capability';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 import { emitEvent } from './event-emit';
 import { assertTaskCapability, buildTaskViewFilter, loadTask } from './task-helpers';
@@ -119,6 +120,7 @@ function taskAwareCreateGuard(): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
     const held = c.get('actorCtx').capabilities as Capability[];
     if (held.some((capability) => satisfies(capability, 'comment'))) {
+      await assertSharedWorkWritable(c.get('actorCtx').orgId, c.get('actorCtx').isPersonal);
       await next();
       return;
     }
@@ -328,6 +330,7 @@ Threading is single-level. Omit \`parentCommentId\` for a root comment; supply i
         assertCommentCapability(capabilities as Capability[]);
       }
       assertAuthorOrManage(existing, actorId, capabilities as Capability[]);
+      await assertSharedWorkWritable(orgId, c.get('actorCtx').isPersonal);
 
       const updated = await db
         .update(comment)
@@ -365,6 +368,7 @@ Deleting a root comment must not orphan its replies into a dangling thread. \`pa
         assertCommentCapability(capabilities as Capability[]);
       }
       assertAuthorOrManage(existing, actorId, capabilities as Capability[]);
+      await assertSharedWorkWritable(orgId, c.get('actorCtx').isPersonal);
 
       // Deleting a root comment must not orphan its replies into a dangling thread:
       // `parent_comment_id` carries no FK (it is plain text), so re-parent any replies to

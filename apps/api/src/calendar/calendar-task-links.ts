@@ -213,7 +213,12 @@ async function insertLink(
  */
 export async function linkTaskToItem(
   db: Database,
-  input: { userId: string; itemId: string; input: CalendarItemTaskLinkCreate },
+  input: {
+    userId: string;
+    itemId: string;
+    input: CalendarItemTaskLinkCreate;
+    assertWritable?: (organizationId: string) => Promise<void>;
+  },
 ): Promise<{ link: CalendarItemTaskLinkRow; task: TaskRow }> {
   const { userId, itemId, input: body } = input;
 
@@ -226,6 +231,7 @@ export async function linkTaskToItem(
       taskId: body.taskId,
       actorId: actingActor.id,
     });
+    await input.assertWritable?.(body.organizationId);
 
     const existingLinkRows = await db
       .select({ calendarItemId: calendarItemTaskLink.calendarItemId })
@@ -254,6 +260,7 @@ export async function linkTaskToItem(
 
   // mode === 'create'
   const targetTeam = await resolveTargetTeam(db, body.organizationId, body.teamId);
+  await input.assertWritable?.(body.organizationId);
   // Documented default, not a hidden fallback: the DTO declares `title` as "omitted derives
   // from the calendar item title" — the same derivation the legacy create-task route uses.
   const title = body.title ?? item.title;
@@ -300,7 +307,12 @@ export async function linkTaskToItem(
  */
 export async function detachTaskFromItem(
   db: Database,
-  input: { userId: string; itemId: string; taskId: string },
+  input: {
+    userId: string;
+    itemId: string;
+    taskId: string;
+    assertWritable?: (organizationId: string) => Promise<void>;
+  },
 ): Promise<CalendarItemTaskLinkRow> {
   const { userId, itemId, taskId } = input;
 
@@ -317,6 +329,7 @@ export async function detachTaskFromItem(
   if (link === undefined) throw new NotFoundError('Task link not found');
 
   await requireContributingActor(db, userId, link.organizationId);
+  await input.assertWritable?.(link.organizationId);
 
   const deletedRows = await db
     .delete(calendarItemTaskLink)

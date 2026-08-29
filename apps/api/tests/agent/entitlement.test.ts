@@ -131,7 +131,7 @@ describe('resolveProductCapability', () => {
 });
 
 describe('assertProductCapability', () => {
-  it.each(['integrations', 'mcp', 'athena', 'voice'] as const)(
+  it.each(['shared_work', 'integrations', 'mcp', 'athena', 'voice'] as const)(
     'requires an active product that grants %s',
     async (capability) => {
       const org = await seedOrg('active');

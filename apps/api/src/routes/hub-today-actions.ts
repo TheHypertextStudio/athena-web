@@ -11,6 +11,7 @@ import {
   writeTaskStateTransition,
 } from '../lib/task-state';
 import { resolveResourceAccess, resourceAccessKey } from '../permissions/resource-access';
+import { assertSharedWorkWritable } from '../product-capability';
 import { toTaskItem } from './hub-helpers';
 import { loadStatusSets } from '../lib/work-status';
 
@@ -63,6 +64,7 @@ export async function completeTodayItem(
   if (!capabilities.some((capability) => satisfies(capability, 'contribute'))) {
     throw new CapabilityError();
   }
+  await assertSharedWorkWritable(owned.organizationId);
 
   const result = await db.transaction(async (tx) => {
     const rows = await tx

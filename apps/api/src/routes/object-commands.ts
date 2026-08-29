@@ -64,6 +64,7 @@ import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { MAX_OBJECT_COMMAND_BYTES } from '../lib/http-limits';
 import { rawResultRowCount } from '../lib/raw-result';
+import { assertSharedWorkWritable } from '../product-capability';
 import { serializableTx } from '../lib/serializable-tx';
 import { zJson } from '../lib/validate';
 import {
@@ -1012,6 +1013,7 @@ async function executeForward(
             : 'contribute',
     );
     await validateReferences(tx, orgId, actorId, command, rows);
+    await assertSharedWorkWritable(orgId, undefined, tx);
 
     const entries: CommandEntry[] = [];
     const audit: RecordedChange[] = [];
@@ -2155,6 +2157,9 @@ async function executeReplay(
       .for('update');
     const lockedById = new Map(lockedRows.map((row) => [row.id, row as Record<string, unknown>]));
     const capabilityByTarget = await replayCapabilityByTarget(tx, orgId, actorId, requiredByTarget);
+    if ([...capabilityByTarget.values()].some((result) => result.allow)) {
+      await assertSharedWorkWritable(orgId, undefined, tx);
+    }
     const relationEntries = receipt.entries.filter(
       (entry): entry is ObjectCommandRelationReceiptEntry => entry.kind === 'relation',
     );

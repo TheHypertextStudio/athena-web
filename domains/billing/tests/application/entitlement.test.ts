@@ -9,7 +9,10 @@ import {
   type ProductEntitlementStatus,
 } from '../../src/contracts';
 
-import { resolveProductCapability } from '../../src/application/entitlement';
+import {
+  resolveProductCapability,
+  resolveProductCapabilitySnapshot,
+} from '../../src/application/entitlement';
 import { getMigratedDb } from '../support/db';
 
 let schema!: typeof DbModule;
@@ -51,8 +54,27 @@ async function seedDocketPro(
 }
 
 describe('Docket Pro capabilities', () => {
-  it('keeps collaborative core work out of the paid capability catalog', () => {
-    expect(PRODUCT_CAPABILITIES).toEqual(['integrations', 'mcp', 'athena', 'voice']);
+  it('derives access from one entitlement snapshot at the exact grace boundary', () => {
+    const boundary = new Date('2026-09-01T00:00:00.000Z');
+    const snapshot = [
+      {
+        productKey: 'docket_pro',
+        status: 'past_due',
+        source: 'stripe',
+        graceEndsAt: boundary,
+      },
+    ] as const;
+
+    expect(
+      resolveProductCapabilitySnapshot(snapshot, 'shared_work', new Date(boundary.getTime() - 1)),
+    ).toMatchObject({ kind: 'entitled' });
+    expect(resolveProductCapabilitySnapshot(snapshot, 'shared_work', boundary)).toEqual({
+      kind: 'grace-expired',
+    });
+  });
+
+  it('grants shared work and every paid module from one product catalog', () => {
+    expect(PRODUCT_CAPABILITIES).toEqual(['shared_work', 'integrations', 'mcp', 'athena', 'voice']);
   });
 
   it.each(PRODUCT_CAPABILITIES)('grants %s from one active product record', async (capability) => {

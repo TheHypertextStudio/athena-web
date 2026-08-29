@@ -29,6 +29,7 @@ import {
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zQuery } from '../lib/validate';
+import { assertSharedWorkWritable } from '../product-capability';
 
 import { routeAndWriteRecipients } from '../consumers/routing';
 import { enqueueSearchIndexJobs } from '../search/enqueue';
@@ -201,6 +202,7 @@ The event's own content is never altered. Any event already resolved answers 404
           .where(and(eq(taskTable.id, taskId), eq(taskTable.organizationId, orgId)))
           .limit(1);
         if (!task) throw new NotFoundError('Task not found');
+        await assertSharedWorkWritable(orgId, c.get('actorCtx').isPersonal, tx);
 
         // Both columns together, which is what satisfies the `event_association_id_check` CHECK: the
         // state and the id are one fact and the constraint refuses to let them disagree.

@@ -12,6 +12,7 @@ import type meAthenaRouter from '../../src/routes/me-athena';
 import {
   fakeSession,
   getDb,
+  grantDocketPro,
   one,
   seedStatuses,
   type StatusIdLookup,
@@ -71,6 +72,7 @@ async function seedPeople(): Promise<Seed> {
     ).id;
   const orgA = await makeOrg('Alpha');
   const orgB = await makeOrg('Beta');
+  await Promise.all([grantDocketPro(db, schema, orgA), grantDocketPro(db, schema, orgB)]);
   const statusA = await seedStatuses(db, schema, orgA);
   await seedStatuses(db, schema, orgB);
   const teamA = one(
@@ -164,6 +166,7 @@ async function seedPersonalWorkspace(person: Person): Promise<{
   // A real workspace is given its status set when it is created; this one is inserted straight
   // into the table, so the work the route creates here would have no status to point at.
   await seedStatuses(db, schema, organizationId);
+  await grantDocketPro(db, schema, organizationId);
   await db.insert(schema.team).values({
     organizationId,
     name: 'Personal',
@@ -2005,6 +2008,35 @@ describe('personal Athena routes', () => {
       .from(schema.task)
       .where(eq(schema.task.id, session?.taskId ?? ''));
     expect(createdTask?.organizationId).toBe(seed.orgA);
+  });
+
+  it('does not create tracked Athena work after a shared workspace loses Docket Pro', async () => {
+    const seed = await seedPeople();
+    await db
+      .delete(schema.organizationProductEntitlement)
+      .where(eq(schema.organizationProductEntitlement.organizationId, seed.orgA));
+    const tasksBefore = await db
+      .select({ id: schema.task.id })
+      .from(schema.task)
+      .where(eq(schema.task.organizationId, seed.orgA));
+
+    const response = await appFor(seed.owner).request('/sessions', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        prompt: 'This must remain read only',
+        context: { workspaceId: seed.orgA },
+      }),
+    });
+
+    expect(response.status).toBe(402);
+    await expect(response.json()).resolves.toMatchObject({ code: 'product_required' });
+    expect(
+      await db
+        .select({ id: schema.task.id })
+        .from(schema.task)
+        .where(eq(schema.task.organizationId, seed.orgA)),
+    ).toEqual(tasksBefore);
   });
 
   it('returns a recoverable conflict when context-free work has no Personal workspace', async () => {

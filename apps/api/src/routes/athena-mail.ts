@@ -34,6 +34,7 @@ import { AuthError, ConflictError, NotFoundError } from '../error';
 import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
+import { assertSharedWorkWritable } from '../product-capability';
 
 import {
   ATHENA_MAIL_ATTACHMENT_KIND,
@@ -238,6 +239,7 @@ const athenaMail = new Hono<AppEnv>()
 
       const actorId = await requireMembership(owner, body.organizationId);
       await requireSubject(body.subjectType, body.subjectId, body.organizationId);
+      await assertSharedWorkWritable(body.organizationId);
 
       const [existing] = await db
         .select({ id: attachment.id })
@@ -299,8 +301,9 @@ const athenaMail = new Hono<AppEnv>()
       const message = await loadOwnedMessage(owner, id);
       if (!message) throw new NotFoundError('Message not found');
 
-      const [row] = await db
-        .delete(attachment)
+      const [target] = await db
+        .select({ id: attachment.id, organizationId: attachment.organizationId })
+        .from(attachment)
         .where(
           and(
             eq(attachment.id, attachmentId),
@@ -308,9 +311,18 @@ const athenaMail = new Hono<AppEnv>()
             eq(attachment.externalId, message.id),
           ),
         )
+        .limit(1);
+      if (!target) throw new NotFoundError('Attachment not found');
+      await requireMembership(owner, target.organizationId);
+      await assertSharedWorkWritable(target.organizationId);
+
+      const [removed] = await db
+        .delete(attachment)
+        .where(eq(attachment.id, target.id))
         .returning({ id: attachment.id });
-      if (!row) throw new NotFoundError('Attachment not found');
-      return ok(c, AttachmentRemoved, { id: row.id, removed: true });
+      /* v8 ignore next -- @preserve the attachment was selected immediately before deletion */
+      if (!removed) throw new NotFoundError('Attachment not found');
+      return ok(c, AttachmentRemoved, { id: removed.id, removed: true });
     },
   );
 

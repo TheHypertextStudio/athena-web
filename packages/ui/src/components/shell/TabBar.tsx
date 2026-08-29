@@ -58,6 +58,9 @@ import { TYPE_LABEL, tabLabel } from './tab-types';
 export type { OpenTab, TabDocType, TabRenderLink };
 export { TYPE_LABEL, tabLabel };
 
+/** The shared 40px block occupied by a visible desktop or mobile document-tab row. */
+export const TAB_BAR_BLOCK_SIZE_CLASS = 'h-10';
+
 /** Props for {@link TabBar}. */
 export interface TabBarProps {
   /** The caller's open documents, left-to-right. */
@@ -95,7 +98,9 @@ export function TabBar({
         banner) below instead of floating 8px inside them. Mobile keeps a small inset because the
         panel is full-bleed there and a pill hugging the bezel has no breathing room.
       */}
-      <div className="no-print bg-surface-container flex h-10 shrink-0 items-center overflow-hidden pr-2 lg:pr-0">
+      <div
+        className={`no-print bg-surface-container flex ${TAB_BAR_BLOCK_SIZE_CLASS} shrink-0 items-center overflow-hidden pr-2 lg:pr-0`}
+      >
         <div
           role="tablist"
           aria-label="Open documents"

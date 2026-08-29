@@ -83,14 +83,12 @@ import { Menu, X } from '../../icons';
 import { cn } from '../../lib/utils';
 import { Sheet, SheetClose, SheetContent, SheetTitle } from '../../primitives';
 import { MobilePanelSwitcher } from './MobilePanelSwitcher';
-import { ShellActivityBar } from './ShellActivityBar';
 import { useContextState } from './ContextProvider';
 import {
   RAIL_MAX_INLINE_SIZE_PX,
   RAIL_MIN_INLINE_SIZE_PX,
   RAIL_VIEWPORT_SHARE,
   SHELL_ASIDE_SHEET_ID,
-  ShellAside,
   type AppShellAside,
 } from './ShellAside';
 import { usePageScrollOwner } from './page-scroll';
@@ -98,6 +96,7 @@ import { startNavigationTransition } from './navigation-transition';
 import { ShellDrawerProvider } from './ShellDrawerContext';
 import { ShellSidebarProvider } from './ShellSidebarContext';
 import { ShellOverlayProvider } from './ShellOverlayContext';
+import { ShellRailDock } from './ShellRailDock';
 
 /** localStorage keys for the shell-owned rail state (active panel + collapsed), persisted across sessions. */
 const RAIL_ACTIVE_KEY = 'docket.rail.active';
@@ -429,6 +428,9 @@ export function AppShell({
   const [sidebarCollapsed, setSidebarCollapsed] = React.useState(false);
   const restoreSidebarToggleFocus = React.useRef(false);
   const railCollapsed = rail.collapsed;
+  // A node that happens to render `null` cannot reserve space for its sibling rail. Hosts must
+  // therefore pass `null` for an empty document collection, rather than an always-mounted TabBar.
+  const tabBarPresent = tabBar !== null && tabBar !== undefined && tabBar !== false;
 
   // Adopt the persisted choice once the DOM the server produced is safely hydrated. See
   // {@link readRailState} for why this cannot be `useState`'s initializer.
@@ -689,15 +691,14 @@ export function AppShell({
           flipped, and the panel itself cost 352px more. Collapsed the host is still here, at zero
           width, so collapsing and expanding move exactly one number. */}
         {activePanel ? (
-          <>
-            <ShellAside panel={activePanel} collapsed={railCollapsed} />
-            <ShellActivityBar
-              panels={panels}
-              activeId={activePanelIdResolved}
-              collapsed={railCollapsed}
-              onIconClick={handlePanelIconClick}
-            />
-          </>
+          <ShellRailDock
+            panel={activePanel}
+            panels={panels}
+            activeId={activePanelIdResolved}
+            collapsed={railCollapsed}
+            tabBarPresent={tabBarPresent}
+            onIconClick={handlePanelIconClick}
+          />
         ) : null}
 
         {/* The same panels as one full-window pane below `lg`, opened from the mobile top-bar

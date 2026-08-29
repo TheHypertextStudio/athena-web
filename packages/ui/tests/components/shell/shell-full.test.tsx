@@ -339,7 +339,7 @@ describe('AppShell rail', () => {
   };
 
   /** Render the shell with one rail panel, with `matchMedia` answering per query. */
-  function renderWithRail(matches: (query: string) => boolean): void {
+  function renderWithRail(matches: (query: string) => boolean, tabBar?: React.ReactNode): void {
     vi.stubGlobal('matchMedia', (query: string) => ({
       matches: matches(query),
       media: query,
@@ -361,6 +361,7 @@ describe('AppShell rail', () => {
               onOpenSearch={() => undefined}
             />
           }
+          tabBar={tabBar}
           aside={{ panels: [TASKS_PANEL], defaultPanelId: 'tasks' }}
         >
           <div>Main</div>
@@ -404,6 +405,16 @@ describe('AppShell rail', () => {
     expect(screen.getByRole('complementary', { name: 'Tasks' })).toHaveClass(
       'w-[clamp(17.5rem,17vw,22rem)]',
     );
+  });
+
+  it('keeps the activity-bar interaction intact beside a visible document row', () => {
+    renderWithRail(() => true, <div role="tablist" aria-label="Open documents" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse Tasks' }));
+    expect(screen.getByRole('complementary', { name: 'Tasks' })).toHaveClass('w-0');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tasks' }));
+    expect(screen.getByRole('complementary', { name: 'Tasks' })).not.toHaveClass('w-0');
   });
 
   it('selects and expands a requested panel through the versioned shell interface', () => {

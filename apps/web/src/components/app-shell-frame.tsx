@@ -810,11 +810,13 @@ function AppShellInner({
     />
   );
 
-  // Chrome, not data. An empty tab list renders as an empty bar, which is the truth — withholding
-  // the bar entirely made the whole shell reflow the moment the session resolved.
-  const tabBar = (
-    <TabBar tabs={tabs} activeKey={activeKey} renderLink={renderLink} onClose={closeTab} />
-  );
+  // An empty document collection has no tab row. Passing `null` is intentional: the desktop rail
+  // needs to reserve the shared 40px tab block only when this is a visible row, not when a child
+  // component would eventually return `null`.
+  const tabBar =
+    tabs.length === 0 ? null : (
+      <TabBar tabs={tabs} activeKey={activeKey} renderLink={renderLink} onClose={closeTab} />
+    );
 
   const activeWorkspaceName = useMemo(
     () => workspaces.find((w) => w.id === resolvedOrgId)?.name,

@@ -41,6 +41,7 @@ jobs:
         env:
           GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
           API_SECRET_BINDINGS: ${{ vars.API_SECRET_BINDINGS }}
+          LINEAR_AGENT_ENABLED: ${{ vars.LINEAR_AGENT_ENABLED || 'false' }}
         run: pnpm exec tsx scripts/production-secrets.ts
 
       - name: Configure Docker for Artifact Registry

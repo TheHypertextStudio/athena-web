@@ -39,6 +39,20 @@ export const REQUIRED_PRODUCTION_SECRET_ENV_NAMES = [
   'LINEAR_WEBHOOK_SECRET',
 ] as const;
 
+/** The credentials required before Athena may accept Linear Agent sessions in production. */
+export const LINEAR_AGENT_PRODUCTION_SECRET_ENV_NAMES = [
+  'LINEAR_AGENT_CLIENT_ID',
+  'LINEAR_AGENT_CLIENT_SECRET',
+  'LINEAR_AGENT_WEBHOOK_SECRET',
+] as const;
+
+/** Build the production secret gate for the active feature set. */
+export function requiredProductionSecretEnvNames(linearAgentEnabled: boolean): readonly string[] {
+  return linearAgentEnabled
+    ? [...REQUIRED_PRODUCTION_SECRET_ENV_NAMES, ...LINEAR_AGENT_PRODUCTION_SECRET_ENV_NAMES]
+    : REQUIRED_PRODUCTION_SECRET_ENV_NAMES;
+}
+
 /** Parse the multiline `API_SECRET_BINDINGS` format without accepting shell syntax. */
 export function parseSecretBindings(raw: string): SecretBinding[] {
   const bindings: SecretBinding[] = [];
@@ -127,8 +141,10 @@ function main(): void {
     secretName: 'docket-database-url-unpooled',
     version: 'latest',
   });
-  const issues = validateSecretBindings(bindings, (binding) =>
-    readSecretManagerValue(binding, project),
+  const issues = validateSecretBindings(
+    bindings,
+    (binding) => readSecretManagerValue(binding, project),
+    requiredProductionSecretEnvNames(process.env['LINEAR_AGENT_ENABLED'] === 'true'),
   );
   if (issues.length > 0) {
     console.error('Production secret validation failed:');

@@ -23,6 +23,11 @@ import {
   splitInstructionSteps,
   wrapLines,
 } from '../../scripts/integrations-setup';
+import {
+  LINEAR_AGENT_PRODUCTION_SECRET_ENV_NAMES,
+  requiredProductionSecretEnvNames,
+  validateSecretBindings,
+} from '../../scripts/production-secrets';
 import { findVar } from '../../packages/env/src/registry';
 
 describe('bootstrap phase flags', () => {
@@ -83,6 +88,34 @@ describe('Linear production manifest', () => {
     );
     expect(url.searchParams.getAll('webhook.resourceTypes')).toEqual(['Issue', 'Comment']);
     expect(url.toString()).not.toContain('oauth2%2Fcallback');
+  });
+});
+
+describe('Linear Agent production secret gate', () => {
+  it('requires the agent credentials only when the production feature is enabled', () => {
+    const disabled = requiredProductionSecretEnvNames(false);
+    const enabled = requiredProductionSecretEnvNames(true);
+
+    expect(disabled).not.toEqual(
+      expect.arrayContaining([...LINEAR_AGENT_PRODUCTION_SECRET_ENV_NAMES]),
+    );
+    expect(enabled).toEqual(expect.arrayContaining([...LINEAR_AGENT_PRODUCTION_SECRET_ENV_NAMES]));
+
+    const missingWhenEnabled = validateSecretBindings([], () => '', enabled).map(
+      (issue) => issue.envName,
+    );
+    expect(missingWhenEnabled).toEqual(
+      expect.arrayContaining([...LINEAR_AGENT_PRODUCTION_SECRET_ENV_NAMES]),
+    );
+  });
+
+  it('passes the production feature flag into the deployment secret validator', () => {
+    const workflow = readFileSync(
+      resolve(import.meta.dirname, '../../.github/workflows/deploy.yml'),
+      'utf8',
+    );
+
+    expect(workflow).toContain("LINEAR_AGENT_ENABLED: ${{ vars.LINEAR_AGENT_ENABLED || 'false' }}");
   });
 });
 

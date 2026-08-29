@@ -1,11 +1,43 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-08-27
+> **Last Updated**: 2026-08-29
 
 ---
 
 ## Active Tasks
+
+### [EXTERNAL-AGENT-001] Ship Linear as Athena's first external agent surface
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-08-28
+- **Priority**: P0
+- **Description**: Let a Hypertext Studio Linear member install Athena, link a Docket identity,
+  start and continue a session, approve or stop work, receive persisted progress and results, and
+  synchronize supported issue fields in both directions. Slack, GitHub, and Jira remain disabled
+  typed targets in this product slice.
+- **Approach**: Keep provider wire types inside generic surface adapters. Route verified deliveries
+  through `inbound_event`, execution through `agent_session_run`, activity through
+  `session_activity`, and ordered provider delivery through an independent external-link cursor.
+  Keep the work-graph connector separate from the agent surface. Recheck Docket authorization at
+  every approval and mutation boundary.
+- **Validation**: The repository tooling suite passes 182 tests. Lint, package typechecking, the
+  production build, migration tests, the 441-file Web suite, and the affected Linear API and
+  integration suites pass. The isolated API suite passes 404 files and 4,994 tests with two
+  workers. The authenticated account-link page is in the generated offline route table. The
+  production secret gate now requires all three Linear Agent credentials whenever the feature flag
+  is true, and its focused test passes 27 cases.
+- **Production state**: Hypertext Studio Linear contains one Athena application at
+  `d3447c82-67dc-4482-a10d-3099f76b60ce`. Its callback, Agent-session webhook, public availability,
+  and application metadata match the release design. The production GitHub environment explicitly
+  sets `LINEAR_AGENT_ENABLED=false`.
+- **Blockers for launch**: Google requires `willie@hypertext.studio` to complete its passkey
+  challenge before the three production credentials can be stored in GCP Secret Manager. Copying
+  the Linear client secret and webhook signing secret into GCP also requires action-time
+  confirmation. Deployment, installation, account linking, and the live Linear acceptance matrix
+  remain pending.
+
+---
 
 ### [EDITOR-FOCUS-001] Stop blank editor clicks from moving the caret
 

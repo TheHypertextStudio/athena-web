@@ -15,6 +15,7 @@ describe('external agent control tokens', () => {
       {
         kind: 'approval',
         provider: 'linear',
+        organizationId: 'organization-1',
         sessionId: 'session-1',
         activityId: 'activity-1',
         decision: 'approve',
@@ -25,6 +26,7 @@ describe('external agent control tokens', () => {
     expect(verifyExternalAgentControl(token, 1_001)).toEqual({
       kind: 'approval',
       provider: 'linear',
+      organizationId: 'organization-1',
       sessionId: 'session-1',
       activityId: 'activity-1',
       decision: 'approve',

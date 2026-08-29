@@ -1,30 +1,25 @@
 /** Provider-neutral HTTP edge for external Athena agent surfaces. */
 import { Hono } from 'hono';
 import type { Context } from 'hono';
-import { and, eq } from 'drizzle-orm';
 
-import { agentSessionExternalLink, db } from '@docket/db';
 import {
-  agentSurfaceFor,
+  isAgentSurfaceProvider,
   type AgentSurfaceProvider,
   type RawWebhook,
   type SurfaceTypes,
 } from '@docket/integrations';
 
+import { runExternalAgentFastAcknowledgement } from '../lib/external-agent-fast-ack';
 import { persistExternalAgentWebhook } from '../lib/external-agent-inbox';
 import { linearAgentConfigFromEnv } from '../lib/linear-agent-connect';
-import { relayExternalAgentActivity } from '../lib/external-agent-relay';
-import { processInboundEventById } from './event-sync';
 
 /** App-level verification material configured for any subset of the closed provider registry. */
 export type AgentSurfaceVerificationConfig = Partial<{
   readonly [P in AgentSurfaceProvider]: SurfaceTypes<P>['verification'];
 }>;
 
-const providers = new Set<AgentSurfaceProvider>(['linear', 'slack', 'github', 'jira_a2a']);
-
 function asAgentSurfaceProvider(value: string): AgentSurfaceProvider | null {
-  return providers.has(value as AgentSurfaceProvider) ? (value as AgentSurfaceProvider) : null;
+  return isAgentSurfaceProvider(value) ? value : null;
 }
 
 async function persistByProvider(
@@ -32,16 +27,8 @@ async function persistByProvider(
   raw: RawWebhook,
   config: AgentSurfaceVerificationConfig,
 ) {
-  switch (provider) {
-    case 'linear':
-      return config.linear ? persistExternalAgentWebhook('linear', raw, config.linear) : null;
-    case 'slack':
-      return config.slack ? persistExternalAgentWebhook('slack', raw, config.slack) : null;
-    case 'github':
-      return config.github ? persistExternalAgentWebhook('github', raw, config.github) : null;
-    case 'jira_a2a':
-      return config.jira_a2a ? persistExternalAgentWebhook('jira_a2a', raw, config.jira_a2a) : null;
-  }
+  const verification = config[provider];
+  return verification ? persistExternalAgentWebhook(provider, raw, verification) : null;
 }
 
 /**
@@ -77,40 +64,12 @@ async function ingestProvider(
   }
   if (!result) return c.json({ error: 'provider is not configured' }, 503);
   let sessionId: string | null = null;
-  if (processImmediately && provider === 'linear' && result.routed) {
+  if (processImmediately && result.routed) {
     try {
-      if (result.inboundEventId) {
-        await processInboundEventById(result.inboundEventId, new Date());
-      }
-      const payload = agentSurfaceFor('linear').parse(JSON.parse(raw.body));
-      const [link] = await db
-        .select({ sessionId: agentSessionExternalLink.sessionId })
-        .from(agentSessionExternalLink)
-        .where(
-          and(
-            eq(agentSessionExternalLink.provider, 'linear'),
-            eq(agentSessionExternalLink.externalSessionId, payload.agentSession.id),
-            eq(agentSessionExternalLink.externalWorkspaceId, payload.organizationId),
-          ),
-        )
-        .limit(1);
-      if (link) {
-        sessionId = link.sessionId;
-        let timer: ReturnType<typeof setTimeout> | undefined;
-        try {
-          await Promise.race([
-            relayExternalAgentActivity(link.sessionId, new Date()),
-            new Promise<void>((resolve) => {
-              timer = setTimeout(resolve, 2_000);
-            }),
-          ]);
-        } finally {
-          if (timer) clearTimeout(timer);
-        }
-      }
+      sessionId = await runExternalAgentFastAcknowledgement(provider, raw, result);
     } catch {
-      // The verified inbox row owns retry. The webhook acknowledgement must not ask Linear to
-      // redeliver a payload Docket already persisted.
+      // The verified inbox row owns retry. The webhook acknowledgement must not ask the provider
+      // to redeliver a payload Docket already persisted.
     }
   }
   if (processImmediately) {

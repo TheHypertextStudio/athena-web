@@ -11,6 +11,7 @@ const payloadSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('approval'),
     provider: z.enum(['linear', 'slack', 'github', 'jira_a2a']),
+    organizationId: z.string(),
     sessionId: z.string(),
     activityId: z.string(),
     decision: z.enum(['approve', 'reject']),
@@ -18,11 +19,13 @@ const payloadSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('stop'),
     provider: z.enum(['linear', 'slack', 'github', 'jira_a2a']),
+    organizationId: z.string(),
     sessionId: z.string(),
   }),
   z.object({
     kind: z.literal('authentication'),
     provider: z.enum(['linear', 'slack', 'github', 'jira_a2a']),
+    organizationId: z.string(),
     sessionId: z.string(),
     externalActorId: z.string(),
   }),
@@ -41,7 +44,7 @@ function signature(body: string): string {
   return createHmac('sha256', secret()).update(body).digest('base64url');
 }
 
-/** Sign one provider- and session-scoped external control. */
+/** Sign one provider-, organization-, and session-scoped external control. */
 export function signExternalAgentControl(
   input: ExternalAgentControl,
   nowMs: number = Date.now(),

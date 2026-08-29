@@ -1,6 +1,37 @@
 /** Provider ids supported by Athena's external agent boundary. */
 export type AgentSurfaceProvider = 'linear' | 'slack' | 'github' | 'jira_a2a';
 
+/** Durable inbox keys assigned to external-agent provider adapters. */
+export type AgentSurfaceInboxProvider =
+  'linear_agent' | 'slack_agent' | 'github_agent' | 'jira_a2a';
+
+/** Integration rows that own provider installation and credential routing. */
+export type AgentSurfaceInstallProvider = 'linear_agent' | 'slack' | 'github' | 'jira_a2a';
+
+/** External identity sources understood by Docket's identity resolver. */
+export type AgentSurfaceIdentitySource = 'linear' | 'slack' | 'github';
+
+/** Work-graph connectors that can map an external work item to a Docket task. */
+export type AgentSurfaceWorkGraphProvider = 'linear' | 'github';
+
+/** Transcript provenance applied to provider-authored human input. */
+export type AgentSurfaceTurnProvenance = 'linear' | 'external_agent';
+
+/** Whether a verified provider event or a Docket-signed control authorizes a stop request. */
+export type AgentSurfaceStopAuthority = 'provider_event' | 'signed_control';
+
+/** Provider-owned routing facts consumed by the durable external-agent core. */
+export interface AgentSurfaceRouting {
+  readonly displayName: string;
+  readonly destinationName: string;
+  readonly inboxProvider: AgentSurfaceInboxProvider;
+  readonly installProvider: AgentSurfaceInstallProvider;
+  readonly identitySource: AgentSurfaceIdentitySource | null;
+  readonly workGraphProvider: AgentSurfaceWorkGraphProvider | null;
+  readonly turnProvenance: AgentSurfaceTurnProvenance;
+  readonly stopAuthority: AgentSurfaceStopAuthority;
+}
+
 /** A provider-owned resource reference. */
 export interface ExternalRef {
   readonly id: string;
@@ -84,13 +115,6 @@ export type CanonicalAgentEvent =
       readonly choiceToken: string;
     }
   | {
-      readonly type: 'authentication_requested';
-      readonly externalSessionId: string;
-      readonly externalActivityId: string;
-      readonly actor: CanonicalExternalActor;
-      readonly continuationToken: string;
-    }
-  | {
       readonly type: 'stop_requested';
       readonly externalSessionId: string;
       readonly externalActivityId: string;
@@ -168,6 +192,9 @@ export interface AgentSurfaceAdapter<
 > {
   readonly provider: P;
   readonly capabilities: AgentSurfaceCapabilities;
+  readonly routing: AgentSurfaceRouting;
+  nativeContext(connection: Readonly<Record<string, unknown>>): F['nativeContext'];
+  sessionRef(context: ExternalSessionProjectionContext<P>): F['sessionRef'];
   verify(
     input: RawWebhook,
     verification: F['verification'],

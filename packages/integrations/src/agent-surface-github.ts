@@ -127,6 +127,39 @@ export const githubAgentSurface: AgentSurfaceAdapter<'github', GitHubSurfaceType
     stop: 'reply',
     plans: false,
   },
+  routing: {
+    displayName: 'GitHub Agent',
+    destinationName: 'GitHub',
+    inboxProvider: 'github_agent',
+    installProvider: 'github',
+    identitySource: 'github',
+    workGraphProvider: 'github',
+    turnProvenance: 'external_agent',
+    stopAuthority: 'signed_control',
+  },
+  nativeContext(connection) {
+    return {
+      commandName:
+        typeof connection['commandName'] === 'string' ? connection['commandName'] : 'athena',
+    };
+  },
+  sessionRef(context) {
+    const separator = context.externalSessionId.lastIndexOf('#');
+    const repository = context.externalSessionId.slice(0, separator);
+    const issueNumber = Number(context.externalSessionId.slice(separator + 1));
+    if (separator < 1 || !Number.isInteger(issueNumber)) {
+      throw new Error('GitHub external session id is malformed.');
+    }
+    const pullRequestHeadSha = context.externalWorkItemId?.startsWith('pull:')
+      ? context.externalWorkItemId.split(':')[2]
+      : undefined;
+    return {
+      id: context.externalSessionId,
+      repository,
+      issueNumber,
+      ...(pullRequestHeadSha ? { pullRequestHeadSha } : {}),
+    };
+  },
   async verify(input, verification) {
     const signature = input.headers['x-hub-signature-256'];
     const deliveryId = input.headers['x-github-delivery'];

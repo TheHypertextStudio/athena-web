@@ -196,6 +196,7 @@ describe('POST /me/identities/external-agent/complete', () => {
     const token = signExternalAgentControl({
       kind: 'authentication',
       provider: 'linear',
+      organizationId: seeded.orgId,
       sessionId,
       externalActorId: 'linear-user-auth',
     });
@@ -257,6 +258,7 @@ describe('POST /me/identities/external-agent/complete', () => {
     const token = signExternalAgentControl({
       kind: 'authentication',
       provider: 'linear',
+      organizationId: seeded.orgId,
       sessionId,
       externalActorId: 'linear-user-required',
     });

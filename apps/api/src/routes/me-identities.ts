@@ -134,6 +134,7 @@ The display \`email\`/\`name\`/\`picture\` are **decoded server-side from the st
         : [];
       if (
         linked?.provider !== control.provider ||
+        linked.organizationId !== control.organizationId ||
         !identity ||
         !member ||
         (linked.initiatorId !== null && linked.initiatorId !== member.id)

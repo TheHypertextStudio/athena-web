@@ -308,6 +308,7 @@ describe('external agent inbox processing', () => {
     const token = signExternalAgentControl({
       kind: 'approval',
       provider: 'linear',
+      organizationId: seeded.organizationId,
       sessionId,
       activityId: assertDefined(action).id,
       decision: 'approve',

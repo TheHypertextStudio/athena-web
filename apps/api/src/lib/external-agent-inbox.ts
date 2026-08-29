@@ -9,20 +9,6 @@ import {
   type SurfaceTypes,
 } from '@docket/integrations';
 
-const inboxProvider = {
-  linear: 'linear_agent',
-  slack: 'slack_agent',
-  github: 'github_agent',
-  jira_a2a: 'jira_a2a',
-} as const satisfies Record<AgentSurfaceProvider, string>;
-
-const integrationProvider = {
-  linear: 'linear_agent',
-  slack: 'slack',
-  github: 'github',
-  jira_a2a: 'jira_a2a',
-} as const satisfies Record<AgentSurfaceProvider, string>;
-
 /** Result of persisting one verified external-agent delivery. */
 export interface ExternalAgentInboxResult {
   readonly routed: boolean;
@@ -51,7 +37,7 @@ export async function persistExternalAgentWebhook<P extends AgentSurfaceProvider
     .from(integration)
     .where(
       and(
-        eq(integration.provider, integrationProvider[provider]),
+        eq(integration.provider, adapter.routing.installProvider),
         eq(integration.status, 'connected'),
         sql`${integration.connection}->>'externalWorkspaceId' = ${route.workspaceId}`,
       ),
@@ -63,7 +49,7 @@ export async function persistExternalAgentWebhook<P extends AgentSurfaceProvider
     .values({
       organizationId: installed?.organizationId ?? null,
       integrationId: installed?.id ?? null,
-      provider: inboxProvider[provider],
+      provider: adapter.routing.inboxProvider,
       externalEventId: verified.deliveryId,
       eventType: verified.eventType,
       payload: verified.payload,

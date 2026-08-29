@@ -11,10 +11,12 @@ import {
 } from '@docket/db';
 import {
   agentSurfaceFor,
+  isAgentSurfaceProvider,
+  projectAgentSurface,
+  sessionForAgentSurface,
   type AgentSurfaceProvider,
   type CanonicalAgentActivity,
   type ExternalRef,
-  type ExternalSessionProjectionContext,
   type SurfaceTypes,
 } from '@docket/integrations';
 
@@ -29,16 +31,18 @@ type ActivityRow = typeof sessionActivity.$inferSelect;
 type LinkRow = typeof agentSessionExternalLink.$inferSelect;
 
 /** One type-correlated provider publication request. */
-export type ExternalAgentPublishRequest = {
-  [P in AgentSurfaceProvider]: {
-    readonly provider: P;
-    readonly organizationId: string;
-    readonly session: SurfaceTypes<P>['sessionRef'];
-  } & (
-    | { readonly kind: 'prepare_session'; readonly externalUrl: string }
-    | { readonly kind: 'activity'; readonly output: SurfaceTypes<P>['outbound'] }
-  );
-}[AgentSurfaceProvider];
+type ExternalAgentPublishRequestFor<P extends AgentSurfaceProvider> = {
+  readonly provider: P;
+  readonly organizationId: string;
+  readonly session: SurfaceTypes<P>['sessionRef'];
+} & (
+  | { readonly kind: 'prepare_session'; readonly externalUrl: string }
+  | { readonly kind: 'activity'; readonly output: SurfaceTypes<P>['outbound'] }
+);
+
+/** One publication request whose provider discriminant retains its native session/output types. */
+export type ExternalAgentPublishRequest<P extends AgentSurfaceProvider = AgentSurfaceProvider> =
+  P extends AgentSurfaceProvider ? ExternalAgentPublishRequestFor<P> : never;
 
 /** Provider publication boundary used by the durable relay. */
 export type ExternalAgentPublisher = (request: ExternalAgentPublishRequest) => Promise<ExternalRef>;
@@ -49,10 +53,16 @@ export interface ExternalAgentRelayDependencies {
 }
 
 function provider(value: string): AgentSurfaceProvider {
-  if (value === 'linear' || value === 'slack' || value === 'github' || value === 'jira_a2a') {
-    return value;
-  }
+  if (isAgentSurfaceProvider(value)) return value;
   throw new Error('External agent link has an unsupported provider.');
+}
+
+function projectionContext(link: LinkRow) {
+  return {
+    externalWorkspaceId: link.externalWorkspaceId,
+    externalSessionId: link.externalSessionId,
+    ...(link.externalWorkItemId ? { externalWorkItemId: link.externalWorkItemId } : {}),
+  };
 }
 
 function canonicalActivity(row: ActivityRow, link: LinkRow): CanonicalAgentActivity {
@@ -74,6 +84,7 @@ function canonicalActivity(row: ActivityRow, link: LinkRow): CanonicalAgentActiv
           approveToken: signExternalAgentControl({
             kind: 'approval',
             provider: externalProvider,
+            organizationId: link.organizationId,
             sessionId: link.sessionId,
             activityId: row.id,
             decision: 'approve',
@@ -81,6 +92,7 @@ function canonicalActivity(row: ActivityRow, link: LinkRow): CanonicalAgentActiv
           rejectToken: signExternalAgentControl({
             kind: 'approval',
             provider: externalProvider,
+            organizationId: link.organizationId,
             sessionId: link.sessionId,
             activityId: row.id,
             decision: 'reject',
@@ -93,6 +105,7 @@ function canonicalActivity(row: ActivityRow, link: LinkRow): CanonicalAgentActiv
               token: signExternalAgentControl({
                 kind: 'authentication',
                 provider: externalProvider,
+                organizationId: link.organizationId,
                 sessionId: link.sessionId,
                 externalActorId: authenticationActorId,
               }),
@@ -137,85 +150,13 @@ async function publishActivity(
   link: LinkRow,
   activity: CanonicalAgentActivity,
 ): Promise<ExternalRef> {
-  const externalProvider = provider(link.provider);
-  switch (externalProvider) {
-    case 'linear': {
-      const context: ExternalSessionProjectionContext<'linear'> = {
-        provider: 'linear',
-        externalWorkspaceId: link.externalWorkspaceId,
-        externalSessionId: link.externalSessionId,
-        ...(link.externalWorkItemId ? { externalWorkItemId: link.externalWorkItemId } : {}),
-      };
-      return publisher({
-        provider: 'linear',
-        kind: 'activity',
-        organizationId: link.organizationId,
-        session: { id: link.externalSessionId },
-        output: agentSurfaceFor('linear').render(activity, context),
-      });
-    }
-    case 'slack': {
-      const [channelId, threadTs] = link.externalSessionId.split(':', 2);
-      if (!channelId || !threadTs) throw new Error('Slack external session id is malformed.');
-      const context: ExternalSessionProjectionContext<'slack'> = {
-        provider: 'slack',
-        externalWorkspaceId: link.externalWorkspaceId,
-        externalSessionId: link.externalSessionId,
-        ...(link.externalWorkItemId ? { externalWorkItemId: link.externalWorkItemId } : {}),
-      };
-      return publisher({
-        provider: 'slack',
-        kind: 'activity',
-        organizationId: link.organizationId,
-        session: { id: link.externalSessionId, channelId, threadTs },
-        output: agentSurfaceFor('slack').render(activity, context),
-      });
-    }
-    case 'github': {
-      const separator = link.externalSessionId.lastIndexOf('#');
-      const repository = link.externalSessionId.slice(0, separator);
-      const issueNumber = Number(link.externalSessionId.slice(separator + 1));
-      if (separator < 1 || !Number.isInteger(issueNumber)) {
-        throw new Error('GitHub external session id is malformed.');
-      }
-      const pullRequestHeadSha = link.externalWorkItemId?.startsWith('pull:')
-        ? link.externalWorkItemId.split(':')[2]
-        : undefined;
-      const context: ExternalSessionProjectionContext<'github'> = {
-        provider: 'github',
-        externalWorkspaceId: link.externalWorkspaceId,
-        externalSessionId: link.externalSessionId,
-        ...(link.externalWorkItemId ? { externalWorkItemId: link.externalWorkItemId } : {}),
-      };
-      return publisher({
-        provider: 'github',
-        kind: 'activity',
-        organizationId: link.organizationId,
-        session: {
-          id: link.externalSessionId,
-          repository,
-          issueNumber,
-          ...(pullRequestHeadSha ? { pullRequestHeadSha } : {}),
-        },
-        output: agentSurfaceFor('github').render(activity, context),
-      });
-    }
-    case 'jira_a2a': {
-      const context: ExternalSessionProjectionContext<'jira_a2a'> = {
-        provider: 'jira_a2a',
-        externalWorkspaceId: link.externalWorkspaceId,
-        externalSessionId: link.externalSessionId,
-        ...(link.externalWorkItemId ? { externalWorkItemId: link.externalWorkItemId } : {}),
-      };
-      return publisher({
-        provider: 'jira_a2a',
-        kind: 'activity',
-        organizationId: link.organizationId,
-        session: { id: link.externalSessionId },
-        output: agentSurfaceFor('jira_a2a').render(activity, context),
-      });
-    }
-  }
+  const projection = projectAgentSurface(link.provider, activity, projectionContext(link));
+  if (!projection) throw new Error('External agent link has an unsupported provider.');
+  return publisher({
+    ...projection,
+    kind: 'activity',
+    organizationId: link.organizationId,
+  });
 }
 
 function retryDelay(attempt: number): number {
@@ -223,7 +164,9 @@ function retryDelay(attempt: number): number {
 }
 
 async function markInstallationUnavailable(link: LinkRow): Promise<void> {
-  const message = 'The Linear Agent connection must be reconnected.';
+  const adapter = agentSurfaceFor(provider(link.provider));
+  const name = adapter.routing.displayName;
+  const message = `The ${name} connection must be reconnected.`;
   const transitioned = await db
     .update(agentSessionExternalLink)
     .set({
@@ -245,7 +188,7 @@ async function markInstallationUnavailable(link: LinkRow): Promise<void> {
     .where(
       and(
         eq(integration.organizationId, link.organizationId),
-        eq(integration.provider, 'linear_agent'),
+        eq(integration.provider, adapter.routing.inboxProvider),
       ),
     )
     .returning({ createdBy: integration.createdBy });
@@ -261,8 +204,8 @@ async function markInstallationUnavailable(link: LinkRow): Promise<void> {
     organizationId: link.organizationId,
     type: 'connector_needs_reauth',
     body: {
-      title: 'Reconnect Linear Agent',
-      summary: 'Reconnect Linear Agent so Athena can continue replying in Linear.',
+      title: `Reconnect ${name}`,
+      summary: `Reconnect ${name} so Athena can continue replying in ${adapter.routing.destinationName}.`,
       url: `/orgs/${link.organizationId}/settings/connections`,
     },
   });
@@ -273,54 +216,14 @@ async function prepareExternalSession(
   link: LinkRow,
 ): Promise<void> {
   const externalUrl = `${webAppOrigin()}/orgs/${link.organizationId}/sessions/${link.sessionId}`;
-  const externalProvider = provider(link.provider);
-  switch (externalProvider) {
-    case 'linear':
-      await publisher({
-        provider: 'linear',
-        kind: 'prepare_session',
-        organizationId: link.organizationId,
-        session: { id: link.externalSessionId },
-        externalUrl,
-      });
-      return;
-    case 'slack': {
-      const [channelId, threadTs] = link.externalSessionId.split(':', 2);
-      if (!channelId || !threadTs) throw new Error('Slack external session id is malformed.');
-      await publisher({
-        provider: 'slack',
-        kind: 'prepare_session',
-        organizationId: link.organizationId,
-        session: { id: link.externalSessionId, channelId, threadTs },
-        externalUrl,
-      });
-      return;
-    }
-    case 'github': {
-      const separator = link.externalSessionId.lastIndexOf('#');
-      const repository = link.externalSessionId.slice(0, separator);
-      const issueNumber = Number(link.externalSessionId.slice(separator + 1));
-      if (separator < 1 || !Number.isInteger(issueNumber)) {
-        throw new Error('GitHub external session id is malformed.');
-      }
-      await publisher({
-        provider: 'github',
-        kind: 'prepare_session',
-        organizationId: link.organizationId,
-        session: { id: link.externalSessionId, repository, issueNumber },
-        externalUrl,
-      });
-      return;
-    }
-    case 'jira_a2a':
-      await publisher({
-        provider: 'jira_a2a',
-        kind: 'prepare_session',
-        organizationId: link.organizationId,
-        session: { id: link.externalSessionId },
-        externalUrl,
-      });
-  }
+  const projection = sessionForAgentSurface(link.provider, projectionContext(link));
+  if (!projection) throw new Error('External agent link has an unsupported provider.');
+  await publisher({
+    ...projection,
+    kind: 'prepare_session',
+    organizationId: link.organizationId,
+    externalUrl,
+  });
 }
 
 /** Relay all due activity for one linked external session in cursor order. */

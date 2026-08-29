@@ -98,6 +98,26 @@ export const jiraA2aAgentSurface: AgentSurfaceAdapter<'jira_a2a', JiraA2ASurface
     stop: 'reply',
     plans: false,
   },
+  routing: {
+    displayName: 'Jira Agent',
+    destinationName: 'Jira',
+    inboxProvider: 'jira_a2a',
+    installProvider: 'jira_a2a',
+    identitySource: null,
+    workGraphProvider: null,
+    turnProvenance: 'external_agent',
+    stopAuthority: 'provider_event',
+  },
+  nativeContext(connection) {
+    const contextId = connection['externalWorkspaceId'];
+    if (typeof contextId !== 'string') {
+      throw new Error('Jira A2A install is missing its site id.');
+    }
+    return { contextId };
+  },
+  sessionRef(context) {
+    return { id: context.externalSessionId };
+  },
   async verify(input, verification) {
     const authorization = input.headers['authorization'];
     const expected = `Bearer ${verification.bearerToken}`;

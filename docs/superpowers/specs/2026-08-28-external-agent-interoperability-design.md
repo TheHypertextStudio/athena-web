@@ -222,6 +222,11 @@ export interface VerifiedWebhook<TPayload extends object> {
 export interface AgentSurfaceAdapter<P extends AgentSurfaceProvider> {
   readonly provider: P;
   readonly capabilities: AgentSurfaceCapabilities;
+  readonly routing: AgentSurfaceRouting;
+
+  nativeContext(connection: Readonly<Record<string, unknown>>): SurfaceTypes<P>['nativeContext'];
+
+  sessionRef(context: ExternalSessionProjectionContext<P>): SurfaceTypes<P>['sessionRef'];
 
   verify(
     input: RawWebhook,
@@ -343,6 +348,17 @@ export type AgentSurfaceCapabilities = Readonly<{
   plans: boolean;
 }>;
 
+export interface AgentSurfaceRouting {
+  readonly displayName: string;
+  readonly destinationName: string;
+  readonly inboxProvider: AgentSurfaceInboxProvider;
+  readonly installProvider: AgentSurfaceInstallProvider;
+  readonly identitySource: AgentSurfaceIdentitySource | null;
+  readonly workGraphProvider: AgentSurfaceWorkGraphProvider | null;
+  readonly turnProvenance: 'linear' | 'external_agent';
+  readonly stopAuthority: 'provider_event' | 'signed_control';
+}
+
 export type CanonicalAgentControl =
   | {
       readonly type: 'approval';
@@ -354,6 +370,10 @@ export type CanonicalAgentControl =
       readonly type: 'authentication';
       readonly url: string;
       readonly externalActorId: string;
+    }
+  | {
+      readonly type: 'stop';
+      readonly stopToken: string;
     };
 
 export type CanonicalApprovalStatus =
@@ -377,8 +397,11 @@ export interface CanonicalAgentActivity {
 }
 ```
 
-Capabilities are runtime data because relay must choose fallbacks. Generics enforce wire type
-correctness. They do not pretend that every provider has the same controls.
+Capabilities and routing are runtime data because ingress and relay must choose fallbacks without
+branching on provider names. The adapter owns durable provider keys, native-context validation,
+session-reference parsing, identity mapping, work-graph mapping, transcript provenance, and stop
+authority. Generics enforce wire type correctness. They do not pretend that every provider has the
+same controls.
 
 ## Provider projections
 
@@ -498,6 +521,10 @@ grant workspace access.
 An authentication control carries a short-lived signed continuation containing the provider,
 external actor, Docket session, and return surface. The existing account-link callback consumes the
 continuation and queues the exact waiting session. The design needs no pending-auth table.
+
+Linear's `auth` signal travels from Athena to the person. Linear does not return that signal as a
+human-to-agent continuation. The signed Docket callback verifies the linked Linear account and
+resumes the session. Inbound Linear `auth` activities are ignored.
 
 ## Relay and failure policy
 

@@ -5,6 +5,10 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   agentSurfaceAdapters,
   agentSurfaceFor,
+  agentSurfaceForInboxProvider,
+  normalizeStoredAgentSurface,
+  projectAgentSurface,
+  sessionForAgentSurface,
   type AgentSurfaceProvider,
   type CanonicalAgentActivity,
   type RawWebhook,
@@ -37,6 +41,67 @@ describe('agent surface registry', () => {
   it('keeps provider lookups paired with their generic provider type', () => {
     const provider: AgentSurfaceProvider = 'slack';
     expect(agentSurfaceFor(provider).provider).toBe('slack');
+  });
+
+  it('keeps durable routing and native reference construction inside the registry', () => {
+    expect(agentSurfaceForInboxProvider('linear_agent')?.provider).toBe('linear');
+    expect(agentSurfaceForInboxProvider('unknown')).toBeNull();
+    expect(agentSurfaceFor('linear').routing).toMatchObject({
+      installProvider: 'linear_agent',
+      workGraphProvider: 'linear',
+      stopAuthority: 'provider_event',
+    });
+    expect(
+      sessionForAgentSurface('slack', {
+        externalWorkspaceId: 'T1',
+        externalSessionId: 'C1:1724870000.000100',
+      }),
+    ).toEqual({
+      provider: 'slack',
+      session: {
+        id: 'C1:1724870000.000100',
+        channelId: 'C1',
+        threadTs: '1724870000.000100',
+      },
+    });
+  });
+
+  it('normalizes stored input and projects output without a provider branch in the caller', async () => {
+    const normalized = await normalizeStoredAgentSurface(
+      {
+        inboxProvider: 'linear_agent',
+        deliveryId: 'linear-delivery',
+        eventType: 'created',
+        payload: {
+          action: 'created',
+          organizationId: 'linear-workspace',
+          webhookTimestamp: now.getTime(),
+          agentSession: { id: 'linear-session', promptContext: 'Plan the release.' },
+          actor: { id: 'linear-user' },
+        },
+      },
+      {},
+    );
+
+    expect(normalized).toMatchObject({
+      provider: 'linear',
+      events: [
+        {
+          type: 'session_started',
+          externalSessionId: 'linear-session',
+        },
+      ],
+    });
+    expect(
+      projectAgentSurface('linear', responseActivity, {
+        externalWorkspaceId: 'linear-workspace',
+        externalSessionId: 'linear-session',
+      }),
+    ).toMatchObject({
+      provider: 'linear',
+      session: { id: 'linear-session' },
+      output: { type: 'response', body: 'The work is complete.' },
+    });
   });
 
   it('routes a verified delivery before installation loading', () => {
@@ -108,7 +173,6 @@ describe('agent surface registry', () => {
 
   it.each([
     ['select', 'approval_selected'],
-    ['auth', 'authentication_requested'],
     ['stop', 'stop_requested'],
   ] as const)('normalizes the Linear %s signal', async (signalType, canonicalType) => {
     vi.setSystemTime(now);
@@ -132,6 +196,28 @@ describe('agent surface registry', () => {
     await expect(adapter.normalize(verified, {})).resolves.toEqual([
       expect.objectContaining({ type: canonicalType }),
     ]);
+  });
+
+  it('ignores an inbound Linear auth signal because authentication resumes through Docket', async () => {
+    vi.setSystemTime(now);
+    const body = JSON.stringify({
+      action: 'prompted',
+      organizationId: 'linear-workspace',
+      webhookTimestamp: now.getTime(),
+      agentSession: { id: 'linear-session' },
+      actor: { id: 'linear-user' },
+      agentActivity: {
+        id: 'activity-auth',
+        signal: { type: 'auth', value: 'untrusted-auth-value' },
+      },
+    });
+    const signature = createHmac('sha256', 'linear-secret').update(body).digest('hex');
+    const adapter = agentSurfaceFor('linear');
+    const verified = await adapter.verify(rawWebhook(body, { 'linear-signature': signature }), {
+      signingSecret: 'linear-secret',
+    });
+
+    await expect(adapter.normalize(verified, {})).resolves.toEqual([]);
   });
 
   it('verifies and normalizes a Slack app mention', async () => {

@@ -166,6 +166,28 @@ export const slackAgentSurface: AgentSurfaceAdapter<'slack', SlackSurfaceTypes> 
     stop: 'button',
     plans: false,
   },
+  routing: {
+    displayName: 'Slack Agent',
+    destinationName: 'Slack',
+    inboxProvider: 'slack_agent',
+    installProvider: 'slack',
+    identitySource: 'slack',
+    workGraphProvider: null,
+    turnProvenance: 'external_agent',
+    stopAuthority: 'signed_control',
+  },
+  nativeContext(connection) {
+    const botUserId = connection['botUserId'];
+    if (typeof botUserId !== 'string') {
+      throw new Error('Slack agent install is missing botUserId.');
+    }
+    return { botUserId };
+  },
+  sessionRef(context) {
+    const [channelId, threadTs] = context.externalSessionId.split(':', 2);
+    if (!channelId || !threadTs) throw new Error('Slack external session id is malformed.');
+    return { id: context.externalSessionId, channelId, threadTs };
+  },
   async verify(input, verification) {
     const signature = input.headers['x-slack-signature'];
     const timestamp = input.headers['x-slack-request-timestamp'];

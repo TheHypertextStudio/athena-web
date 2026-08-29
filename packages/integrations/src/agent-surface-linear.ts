@@ -115,6 +115,22 @@ export const linearAgentSurface: AgentSurfaceAdapter<'linear', LinearSurfaceType
     stop: 'signal',
     plans: true,
   },
+  routing: {
+    displayName: 'Linear Agent',
+    destinationName: 'Linear',
+    inboxProvider: 'linear_agent',
+    installProvider: 'linear_agent',
+    identitySource: 'linear',
+    workGraphProvider: 'linear',
+    turnProvenance: 'linear',
+    stopAuthority: 'provider_event',
+  },
+  nativeContext() {
+    return {};
+  },
+  sessionRef(context) {
+    return { id: context.externalSessionId };
+  },
   async verify(input, verification) {
     if (
       !verifyLinearAgentWebhookSignature(
@@ -183,17 +199,7 @@ export const linearAgentSurface: AgentSurfaceAdapter<'linear', LinearSurfaceType
         },
       ];
     }
-    if (activity.signal?.type === 'auth' && activity.signal.value) {
-      return [
-        {
-          type: 'authentication_requested',
-          externalSessionId: payload.agentSession.id,
-          externalActivityId: activity.id,
-          actor: externalActor,
-          continuationToken: activity.signal.value,
-        },
-      ];
-    }
+    if (activity.signal?.type === 'auth') return [];
     if (activity.signal?.type === 'stop') {
       return [
         {

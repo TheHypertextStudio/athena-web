@@ -11,7 +11,8 @@ import {
   task,
 } from '@docket/db';
 import {
-  agentSurfaceFor,
+  normalizeStoredAgentSurface,
+  type AgentSurfaceIdentitySource,
   type AgentSurfaceProvider,
   type CanonicalAgentEvent,
 } from '@docket/integrations';
@@ -32,84 +33,15 @@ export interface ExternalAgentInboxRow {
   readonly integrationId: string | null;
 }
 
-function surfaceProvider(provider: string): AgentSurfaceProvider | null {
-  switch (provider) {
-    case 'linear_agent':
-      return 'linear';
-    case 'slack_agent':
-      return 'slack';
-    case 'github_agent':
-      return 'github';
-    case 'jira_a2a':
-      return 'jira_a2a';
-    default:
-      return null;
-  }
-}
-
 function connectionRecord(value: unknown): Record<string, unknown> {
   return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {};
 }
 
-async function normalizeStored(
-  provider: AgentSurfaceProvider,
-  row: ExternalAgentInboxRow,
-  connection: Record<string, unknown>,
-): Promise<readonly CanonicalAgentEvent[]> {
-  switch (provider) {
-    case 'linear': {
-      const adapter = agentSurfaceFor('linear');
-      const payload = adapter.parse(row.payload);
-      return adapter.normalize(
-        { deliveryId: row.externalEventId, eventType: row.eventType, payload },
-        {},
-      );
-    }
-    case 'slack': {
-      const botUserId = connection['botUserId'];
-      if (typeof botUserId !== 'string')
-        throw new Error('Slack agent install is missing botUserId.');
-      const adapter = agentSurfaceFor('slack');
-      const payload = adapter.parse(row.payload);
-      return adapter.normalize(
-        { deliveryId: row.externalEventId, eventType: row.eventType, payload },
-        { botUserId },
-      );
-    }
-    case 'github': {
-      const adapter = agentSurfaceFor('github');
-      const commandName =
-        typeof connection['commandName'] === 'string' ? connection['commandName'] : 'athena';
-      const payload = adapter.parse(row.payload);
-      return adapter.normalize(
-        { deliveryId: row.externalEventId, eventType: row.eventType, payload },
-        { commandName },
-      );
-    }
-    case 'jira_a2a': {
-      const adapter = agentSurfaceFor('jira_a2a');
-      const contextId = connection['externalWorkspaceId'];
-      if (typeof contextId !== 'string')
-        throw new Error('Jira A2A install is missing its site id.');
-      const payload = adapter.parse(row.payload);
-      return adapter.normalize(
-        { deliveryId: row.externalEventId, eventType: row.eventType, payload },
-        { contextId },
-      );
-    }
-  }
-}
-
-function identitySource(provider: AgentSurfaceProvider): 'linear' | 'slack' | 'github' | null {
-  return provider === 'jira_a2a' ? null : provider;
-}
-
 async function resolvedActorId(
   organizationId: string,
-  provider: AgentSurfaceProvider,
+  source: AgentSurfaceIdentitySource | null,
   event: CanonicalAgentEvent,
 ): Promise<string | null> {
-  const source = identitySource(provider);
   if (!source) return null;
   const resolved = await resolveExternalActor(organizationId, {
     source,
@@ -141,8 +73,7 @@ async function linkedSession(
 
 /** Normalize and apply one verified external-agent inbox row. */
 export async function processExternalAgentInboxEvent(row: ExternalAgentInboxRow): Promise<void> {
-  const provider = surfaceProvider(row.provider);
-  if (!provider || !row.organizationId || !row.integrationId) return;
+  if (!row.organizationId || !row.integrationId) return;
   const [installed] = await db
     .select()
     .from(integration)
@@ -156,22 +87,32 @@ export async function processExternalAgentInboxEvent(row: ExternalAgentInboxRow)
     .limit(1);
   if (!installed) return;
   const connection = connectionRecord(installed.connection);
-  const events = await normalizeStored(provider, row, connection);
+  const normalized = await normalizeStoredAgentSurface(
+    {
+      inboxProvider: row.provider,
+      deliveryId: row.externalEventId,
+      eventType: row.eventType,
+      payload: row.payload,
+    },
+    connection,
+  );
+  if (installed.provider !== normalized?.routing.installProvider) return;
+  const { provider, routing, events } = normalized;
   for (const event of events) {
-    const actorId = await resolvedActorId(row.organizationId, provider, event);
+    const actorId = await resolvedActorId(row.organizationId, routing.identitySource, event);
     if (event.type === 'session_started') {
       const createdByActorId = actorId ?? installed.createdBy;
       if (!createdByActorId) throw new Error('External agent install has no accountable actor.');
       const externalWorkItemId = event.context.workItem?.externalId ?? null;
       let taskId: string | null = null;
-      if (externalWorkItemId) {
+      if (externalWorkItemId && routing.workGraphProvider) {
         const [connector] = await db
           .select({ id: integration.id })
           .from(integration)
           .where(
             and(
               eq(integration.organizationId, row.organizationId),
-              eq(integration.provider, provider === 'linear' ? 'linear' : provider),
+              eq(integration.provider, routing.workGraphProvider),
             ),
           )
           .limit(1);
@@ -218,7 +159,7 @@ export async function processExternalAgentInboxEvent(row: ExternalAgentInboxRow)
         session.id,
         actorId,
         event.body,
-        provider === 'linear' ? 'linear' : 'external_agent',
+        routing.turnProvenance,
         event.actor.displayName,
         `${provider}:${event.externalActivityId}`,
         true,
@@ -232,6 +173,7 @@ export async function processExternalAgentInboxEvent(row: ExternalAgentInboxRow)
         !control ||
         !controlMatchesProvider(control, provider) ||
         control.kind !== 'approval' ||
+        control.organizationId !== row.organizationId ||
         control.sessionId !== session.id
       ) {
         throw new Error('External approval control is invalid or expired.');
@@ -258,47 +200,17 @@ export async function processExternalAgentInboxEvent(row: ExternalAgentInboxRow)
       );
       continue;
     }
-    if (event.type === 'authentication_requested') {
-      if (!actorId) continue;
-      const control = verifyExternalAgentControl(event.continuationToken);
-      if (
-        !control ||
-        !controlMatchesProvider(control, provider) ||
-        control.kind !== 'authentication' ||
-        control.sessionId !== session.id ||
-        control.externalActorId !== event.actor.externalId
-      ) {
-        throw new Error('External authentication control is invalid or expired.');
-      }
-      if (!session.initiatorId) {
-        await db
-          .update(agentSession)
-          .set({ initiatorId: actorId })
-          .where(eq(agentSession.id, session.id));
-      }
-      await recordInboundReply(
-        row.organizationId,
-        session.id,
-        actorId,
-        'Docket account connection completed.',
-        provider === 'linear' ? 'linear' : 'external_agent',
-        event.actor.displayName,
-        `${provider}:${event.externalActivityId}`,
-        true,
-      );
-      continue;
-    }
     {
       if (!actorId) continue;
-      // Linear creates the stop activity itself after the user invokes its native stop command.
-      // The verified webhook and resolved actor are the authority; Linear does not return an
-      // application-supplied token on that signal. Reply-based providers still need one.
-      if (provider !== 'linear' && provider !== 'jira_a2a') {
+      // Native stop transports authenticate the event itself. Reply and button transports must
+      // carry the Docket-signed control that targeted this exact session.
+      if (routing.stopAuthority === 'signed_control') {
         const control = event.stopToken ? verifyExternalAgentControl(event.stopToken) : null;
         if (
           !control ||
           !controlMatchesProvider(control, provider) ||
           control.kind !== 'stop' ||
+          control.organizationId !== row.organizationId ||
           control.sessionId !== session.id
         ) {
           throw new Error('External stop control is invalid or expired.');

@@ -163,6 +163,58 @@ jobs:
             2>"$RUNNER_TEMP/billing-production-audit/billing-launch-audit.log"
           audit_status=$?
           set -e
+
+          if [ "$audit_status" -ne 0 ]; then
+            probe_dir="$(mktemp -d)"
+            trap 'rm -rf "$probe_dir"' EXIT
+
+            probe_stripe_search() {
+              local resource="$1"
+              local raw_file="$probe_dir/$resource-response.json"
+              local sanitized_file="$probe_dir/$resource-sanitized.json"
+              local http_status
+              local curl_status
+              local error_type=null
+              local error_code=null
+
+              set +e
+              http_status="$(curl --silent --show-error \
+                --output "$raw_file" \
+                --write-out '%{http_code}' \
+                --get "https://api.stripe.com/v1/$resource/search" \
+                --header "Authorization: Bearer $STRIPE_SECRET_KEY" \
+                --data-urlencode "query=metadata['referenceId']:'__docket_launch_probe__'" \
+                --data-urlencode 'limit=1')"
+              curl_status=$?
+              set -e
+
+              if [ -s "$raw_file" ] && jq -e . "$raw_file" >/dev/null 2>&1; then
+                error_type="$(jq -r '.error.type // null' "$raw_file")"
+                error_code="$(jq -r '.error.code // null' "$raw_file")"
+              fi
+              jq -n \
+                --arg resource "$resource" \
+                --arg httpStatus "$http_status" \
+                --arg errorType "$error_type" \
+                --arg errorCode "$error_code" \
+                --argjson curlExit "$curl_status" \
+                '{
+                  resource: $resource,
+                  curlExit: $curlExit,
+                  httpStatus: (if $httpStatus == "000" or $httpStatus == "" then null else ($httpStatus | tonumber) end),
+                  errorType: (if $errorType == "null" then null else $errorType end),
+                  errorCode: (if $errorCode == "null" then null else $errorCode end)
+                }' > "$sanitized_file"
+            }
+
+            probe_stripe_search customers
+            probe_stripe_search subscriptions
+            jq -s '.' "$probe_dir"/*-sanitized.json \
+              > "$RUNNER_TEMP/billing-production-audit/billing-provider-read-probe.json"
+          else
+            printf '%s\n' '[]' \
+              > "$RUNNER_TEMP/billing-production-audit/billing-provider-read-probe.json"
+          fi
           echo "status=$audit_status" >> "$GITHUB_OUTPUT"
 
       - name: Extract failed billing-action diagnostics

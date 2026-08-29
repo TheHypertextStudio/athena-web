@@ -53,11 +53,13 @@ describe('production billing audit policy', () => {
   it('publishes sanitized audit and failed-action diagnostics with bounded retention', () => {
     expect(auditWorkflow).toContain('billing-production-audit');
     expect(auditWorkflow).toContain('billing-provider-errors.json');
+    expect(auditWorkflow).toContain('billing-provider-read-probe.json');
     expect(auditWorkflow).toContain('billing-runtime-rollout.json');
     expect(auditWorkflow).toContain('mismatches: $mismatches');
     expect(auditWorkflow).toContain('test "$(jq length <<<"$mismatches_json")" = "0"');
     expect(auditWorkflow).toContain('retention-days: 7');
     expect(auditWorkflow).toContain('if-no-files-found: error');
+    expect(auditWorkflow).not.toContain('error.message //');
   });
 
   it('proves the deployed kill switch, reconciliation mode, and scheduler without printing secrets', () => {

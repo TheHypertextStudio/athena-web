@@ -168,11 +168,12 @@ export default function TeamsListClient(): JSX.Element {
   const toRow = useCallback(
     (team: TeamOut): TeamRow => ({
       team,
+      display: displayByTeam.get(team.id) ?? defaultEntityDisplay('team', team.id),
       projectCount: projectCountByTeam.get(team.id) ?? 0,
       taskCount: taskCountByTeam.get(team.id) ?? 0,
       workflowStateCount: team.workflowStates?.length ?? 0,
     }),
-    [projectCountByTeam, taskCountByTeam],
+    [displayByTeam, projectCountByTeam, taskCountByTeam],
   );
 
   /** Render one group's teams in whichever layout is active. */

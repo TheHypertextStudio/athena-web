@@ -29,7 +29,7 @@
  * {@link usePickerOverlay}) seeded with that row's own labels, since a task row already has them
  * in hand and needs no fetch to show them.
  */
-import type { TaskOut } from '@docket/types';
+import { defaultEntityDisplay, type EntityDisplayOut, type TaskOut } from '@docket/types';
 import {
   ActorAvatar,
   type ActorKind,
@@ -43,6 +43,7 @@ import type { JSX, ReactNode } from 'react';
 import { cn } from '@docket/ui/lib/utils';
 
 import { EditableTitle } from '@/components/editor/editable-title';
+import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
 import {
   type WorkStatusDisplay,
   unknownStatus,
@@ -63,6 +64,8 @@ import { TaskTimerButton } from '@/components/time-tracking';
 import { objectKey, objectTargetProps, type ObjectRef } from '@/lib/actions';
 import { formatEstimate } from '@/lib/format-estimate';
 import { formatCalendarDate } from '@/lib/format-date';
+import { api } from '@/lib/api';
+import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 
 import type { FieldCatalog } from './field-catalog';
 import { findField } from './field-catalog';
@@ -281,6 +284,8 @@ export interface TaskTableProps {
   defaultCollapsed?: Iterable<string> | undefined;
   /** Extra classes merged onto the table's outer container. */
   className?: string | undefined;
+  /** Customized task identities composed through one workspace-wide display read. */
+  displayByTaskId?: ReadonlyMap<string, EntityDisplayOut> | undefined;
 }
 
 /**
@@ -330,6 +335,23 @@ export function TaskTable({
 }: TaskTableProps): JSX.Element {
   const visibleTasks = groups ? groups.flatMap((group) => group.rows) : (tasks ?? []);
   const objects = visibleTasks.map(taskObject);
+  const organizationId = objects[0]?.organizationId ?? null;
+  const displaysQ = useApiQuery(
+    apiQueryOptions(
+      organizationId
+        ? queryKeys.entityDisplays(organizationId, 'task')
+        : ['entity-displays', 'task'],
+      () =>
+        api.v1.orgs[':orgId'].display[':subjectType'].$get({
+          param: { orgId: organizationId ?? '', subjectType: 'task' },
+        }),
+      'Could not load task display settings.',
+      { enabled: organizationId !== null },
+    ),
+  );
+  const displayByTaskId = new Map<string, EntityDisplayOut>(
+    (displaysQ.data?.items ?? []).map((display) => [display.subjectId, display]),
+  );
 
   return (
     <SelectionProvider
@@ -349,6 +371,7 @@ export function TaskTable({
         label={label}
         defaultCollapsed={defaultCollapsed}
         className={className}
+        displayByTaskId={displayByTaskId}
       />
     </SelectionProvider>
   );
@@ -411,6 +434,7 @@ function SelectableTaskTable({
   label,
   defaultCollapsed,
   className,
+  displayByTaskId,
 }: TaskTableProps): JSX.Element {
   const pickerOverlay = usePickerOverlay();
   const selection = useSelection();
@@ -424,7 +448,29 @@ function SelectableTaskTable({
       priority: 'always',
       render: (task) => <SelectionCheckbox object={taskObject(task)} />,
     },
-    ...columns,
+    ...columns.map((column) =>
+      column.key === 'glyph'
+        ? {
+            ...column,
+            width: '3.25rem',
+            render: (task: TaskOut) => {
+              const display =
+                displayByTaskId?.get(task.id) ?? defaultEntityDisplay('task', task.id);
+              return (
+                <span className="flex items-center gap-1.5">
+                  <EntityIconGlyph
+                    iconKey={display.iconKey}
+                    colorKey={display.colorKey}
+                    customColor={display.customColor}
+                    size={20}
+                  />
+                  {column.render(task)}
+                </span>
+              );
+            },
+          }
+        : column,
+    ),
   ];
   const openLabels = (task: TaskOut, anchor: HTMLElement | null): void => {
     const object = taskObject(task);

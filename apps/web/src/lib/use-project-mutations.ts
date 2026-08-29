@@ -9,19 +9,20 @@
 import {
   ActorId,
   type Health,
+  InitiativeId,
+  type ProjectInitiativeReference,
   type ProjectDetailAggregate,
   LabelId,
   type ProjectOut,
   type ProjectStatus,
   type ProjectUpdate,
   ProgramId,
-  ProjectId,
   ProjectStatusKey,
   ProjectSubjectRef,
 } from '@docket/types';
 import type { DateResolution } from '@docket/work/planning-timeframe';
 import { useQueryClient } from '@tanstack/react-query';
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useMemo } from 'react';
 
 import { api } from './api';
 import type { ProjectDetailData } from './fetch-project-detail';
@@ -77,7 +78,10 @@ function toProjectPatchBody(patch: ProjectPatch): ProjectUpdate {
 /** Stable callbacks + pending/error state for all project-detail writes. */
 export interface ProjectMutations {
   patchProject: (patch: ProjectPatch) => void;
-  setInitiatives: (initiativeIds: readonly string[]) => void;
+  setInitiatives: (
+    initiativeIds: readonly string[],
+    options?: readonly { value: string; label: string }[],
+  ) => void;
   /** Post an update; the promise settles with the write so the composer can clear only on success. */
   postUpdate: (body: string) => Promise<void>;
   propsPending: boolean;
@@ -204,14 +208,12 @@ export function useProjectMutations(
     ],
   });
 
-  // The initiative set immediately before the in-flight toggle's optimistic write, so the
-  // mutation diffs against what the server actually has — not the cache, which onMutate has
-  // already overwritten with `nextInitiativeIds` by the time mutationFn runs.
-  const initiativeIdsBeforeMutate = useRef<readonly string[]>([]);
-
   const initiativeM = useApiMutation<
-    undefined,
-    readonly string[],
+    ProjectOut,
+    {
+      initiativeIds: readonly string[];
+      options: readonly { value: string; label: string }[];
+    },
     {
       previous?: {
         aggregate?: ProjectDetailAggregate | undefined;
@@ -219,40 +221,44 @@ export function useProjectMutations(
       };
     }
   >({
-    mutationFn: async (nextInitiativeIds) => {
-      const current = initiativeIdsBeforeMutate.current;
-      const nextSet = new Set(nextInitiativeIds);
-      const currentSet = new Set(current);
-      const removed = current.filter((initiativeId) => !nextSet.has(initiativeId));
-      const added = nextInitiativeIds.filter((initiativeId) => !currentSet.has(initiativeId));
-      for (const initiativeId of removed) {
-        await unwrap(
-          () =>
-            api.v1.orgs[':orgId'].initiatives[':id'].projects[':projectId'].$delete({
-              param: { orgId, id: initiativeId, projectId },
-            }),
-          'Could not update the association.',
-        );
-      }
-      for (const initiativeId of added) {
-        await unwrap(
-          () =>
-            api.v1.orgs[':orgId'].initiatives[':id'].projects.$post({
-              param: { orgId, id: initiativeId },
-              json: { projectId: ProjectId.parse(projectId) },
-            }),
-          'Could not update the association.',
-        );
-      }
-      return undefined;
-    },
-    onMutate: async (nextInitiativeIds) => {
+    mutationFn: ({ initiativeIds }) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].projects[':id'].$patch({
+            param: { orgId, id: projectId },
+            json: {
+              initiativeIds: initiativeIds.map((initiativeId) => InitiativeId.parse(initiativeId)),
+            },
+          }),
+        'Could not update linked Initiatives.',
+      ),
+    onMutate: async ({ initiativeIds, options }) => {
       await queryClient.cancelQueries({ queryKey: aggregateKey });
       const aggregatePrevious = queryClient.getQueryData<ProjectDetailAggregate>(aggregateKey);
       const legacyPrevious = queryClient.getQueryData<ProjectDetailData>(detailKey);
-      initiativeIdsBeforeMutate.current = legacyPrevious?.initiativeIds ?? [];
+      queryClient.setQueryData<ProjectDetailAggregate>(aggregateKey, (current) => {
+        if (!current) return current;
+        const names = new Map<string, ProjectInitiativeReference>(
+          current.references.initiatives.map((initiative) => [initiative.id, initiative]),
+        );
+        for (const option of options) {
+          const id = InitiativeId.parse(option.value);
+          names.set(id, { id, name: option.label });
+        }
+        const selected = initiativeIds
+          .map((initiativeId) => names.get(initiativeId))
+          .flatMap((initiative) => (initiative ? [initiative] : []))
+          .sort((left, right) => left.name.localeCompare(right.name));
+        return {
+          ...current,
+          references: {
+            ...current.references,
+            initiatives: selected,
+          },
+        };
+      });
       queryClient.setQueryData<ProjectDetailData>(detailKey, (current) =>
-        current ? { ...current, initiativeIds: [...nextInitiativeIds].sort() } : current,
+        current ? { ...current, initiativeIds: [...initiativeIds].sort() } : current,
       );
       const previous = { aggregate: aggregatePrevious, legacy: legacyPrevious };
       return { previous };
@@ -260,6 +266,9 @@ export function useProjectMutations(
     onError: (_err, _next, ctx) => {
       if (ctx?.previous?.aggregate) queryClient.setQueryData(aggregateKey, ctx.previous.aggregate);
       if (ctx?.previous?.legacy) queryClient.setQueryData(detailKey, ctx.previous.legacy);
+    },
+    onSuccess: (updated) => {
+      patchCachedProject(() => updated);
     },
     invalidateKeys: [aggregateKey, [...aggregateKey, 'relationships']],
   });
@@ -279,7 +288,9 @@ export function useProjectMutations(
 
   return {
     patchProject: patch.mutate,
-    setInitiatives: initiativeM.mutate,
+    setInitiatives: (initiativeIds, options = []) => {
+      initiativeM.mutate({ initiativeIds, options });
+    },
     postUpdate: async (body) => {
       await updateM.mutateAsync(body);
     },

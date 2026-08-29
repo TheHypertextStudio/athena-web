@@ -7,13 +7,17 @@ local feedback within the limits below, and keep the complete clean-checkout gat
 
 `pnpm lint:staged` reads the Git index. A documentation-only change returns without starting
 ESLint. A workspace change lints the changed package and every dependent package through Turbo.
-Changes to root lint configuration, root TypeScript configuration, the lockfile, the workspace
-manifest, or repository scripts select the full lint path.
+Each reverse-dependency closure has its own 15-minute process limit, so a broad cross-package
+commit cannot spend one package's budget before another package starts. Changes to root lint
+configuration, root TypeScript configuration, the lockfile, the workspace manifest, or repository
+scripts select the full lint path.
 
 `pnpm lint` runs the complete workspace in two phases. The API and the small-package group run
 together. Web and Admin run afterward so the three memory-heavy TypeScript programs never overlap.
-Each Turbo shard runs packages serially. A shard fails after 180 seconds, and the complete command
-fails after 300 seconds.
+Each Turbo shard runs packages serially. A shard fails after 15 minutes, and the complete command
+fails after 30 minutes. The process watchdog remains in place, but the limit accounts for a typed
+API lint that used 285 seconds of CPU and 880 seconds of wall time while another worktree ran its
+own ESLint job on August 29, 2026.
 
 `pnpm lint:diagnose` runs the same schedule through `/usr/bin/time`. It prints Turbo cache hits,
 elapsed time, CPU time, and peak memory for each shard.

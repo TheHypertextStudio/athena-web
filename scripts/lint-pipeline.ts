@@ -313,16 +313,13 @@ export function createFullLintPlan(): LintShard[][] {
 }
 
 /**
- * Builds the one-shard staged lint request that includes every selected package's dependents.
+ * Builds bounded staged lint phases without serializing unrelated reverse-dependency closures.
  *
  * @param packageNames Selected workspace package names.
- * @returns A labeled Turbo shard with reverse-dependency filters.
+ * @returns One reverse-dependency closure per sequential lint phase.
  */
-export function createStagedLintShard(packageNames: readonly string[]): LintShard {
-  return {
-    label: packageNames.join(', '),
-    filters: packageNames.map((name) => `...${name}`),
-  };
+export function createStagedLintPlan(packageNames: readonly string[]): LintShard[][] {
+  return packageNames.map((name) => [{ label: name, filters: [`...${name}`] }]);
 }
 
 /**

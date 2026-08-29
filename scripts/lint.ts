@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import {
   cacheStatus,
   createFullLintPlan,
-  createStagedLintShard,
+  createStagedLintPlan,
   loadWorkspacePackages,
   pruneTurboCache,
   resolveTurboCacheDirectory,
@@ -17,8 +17,10 @@ import {
   type RunCommandResult,
 } from './lint-pipeline.js';
 
-const PACKAGE_TIMEOUT_MS = 3 * 60 * 1_000;
-const FULL_TIMEOUT_MS = 5 * 60 * 1_000;
+// The API's typed lint can use five CPU minutes when the host is sharing cores with another
+// worktree. Retain a process watchdog, but do not mistake scheduler delay for a hung checker.
+const PACKAGE_TIMEOUT_MS = 15 * 60 * 1_000;
+const FULL_TIMEOUT_MS = 30 * 60 * 1_000;
 const CACHE_MAINTENANCE_MS = 30 * 1_000;
 const CACHE_MAX_BYTES = 20 * 1_024 * 1_024 * 1_024;
 const CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1_000;
@@ -139,12 +141,12 @@ async function runFullLint(root: string, diagnose: boolean): Promise<void> {
   await runLintPlan(createFullLintPlan(), async (shard) => {
     const elapsedMs = performance.now() - startedAt;
     const remainingMs = FULL_TIMEOUT_MS - elapsedMs;
-    if (remainingMs <= 0) throw new Error('Full lint exceeded its 300 second limit.');
+    if (remainingMs <= 0) throw new Error('Full lint exceeded its 1800 second limit.');
     const shardTimeout = Math.min(PACKAGE_TIMEOUT_MS, remainingMs);
     await runShard(root, shard, shardTimeout, diagnose);
   });
   const durationMs = performance.now() - startedAt;
-  if (durationMs > FULL_TIMEOUT_MS) throw new Error('Full lint exceeded its 300 second limit.');
+  if (durationMs > FULL_TIMEOUT_MS) throw new Error('Full lint exceeded its 1800 second limit.');
   console.log(`\nFull lint finished in ${(durationMs / 1_000).toFixed(1)} seconds.`);
 }
 
@@ -159,7 +161,9 @@ async function runStagedLint(root: string): Promise<void> {
     await runFullLint(root, false);
     return;
   }
-  await runShard(root, createStagedLintShard(targets.packages), PACKAGE_TIMEOUT_MS, false);
+  await runLintPlan(createStagedLintPlan(targets.packages), async (shard) => {
+    await runShard(root, shard, PACKAGE_TIMEOUT_MS, false);
+  });
 }
 
 async function printCacheStatus(root: string): Promise<void> {

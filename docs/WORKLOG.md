@@ -1,11 +1,45 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-08-25
+> **Last Updated**: 2026-08-28
 
 ---
 
 ## Active Tasks
+
+### [ENTITY-DETAIL-CONSISTENCY-001] Unify native identity and detail-page composition
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-08-28
+- **Priority**: P0
+- **Description**: Give every Docket-owned, user-addressable entity a custom icon and color. Repair
+  the Project–Initiative relationship regression. Align Initiative, Program, and Project detail
+  headers without erasing their intentional domain differences.
+- **Approach**: Keep the decoupled `entity_display` relation and expand it through a total typed
+  registry. Retain `EntityDetailLayout` as the only masthead shell. Add adaptive tabs, shared URL
+  state, hierarchy-only Initiative context, shared print composition, and route-level evidence.
+- **Subtasks**:
+  - [x] Audit current identity coverage and the three detail-page headers at desktop and compact
+        widths.
+  - [x] Write the implementation plan.
+  - [x] Implement the typed identity registry, migration, and generic API validation for every
+        native subject.
+  - [x] Repair Project–Initiative aggregate and mutation state with one atomic replacement PATCH.
+  - [x] Compose custom identity through native detail headers, lists, cards, pickers, settings,
+        search, and the shared Task table. Labels and Work Status retain semantic swatches and
+        badges beside decorative identity.
+  - [x] Repair header navigation, tab overflow, URL state, print parity, and confirmed overview
+        composition.
+  - [x] Pass focused type and component checks.
+  - [ ] Capture local browser screenshots and run the Docket Craft Rubric.
+- **Decisions**: Project ownership remains a separate context row. Entity-specific tabs remain
+  distinct. Root Initiatives receive no generic collection breadcrumb. Labels and statuses retain
+  semantic colors while gaining a separate decorative identity treatment.
+- **Blockers**: Both Turbopack and webpack local servers compiled the first route indefinitely on
+  2026-08-29. Direct HTTP requests reached the listener but received no response after 30 seconds,
+  so the release will use the production deployment for the authenticated visual round trip. The
+  staged-lint timeout was external contention from another worktree and no longer blocks release.
+- **Plan**: `docs/plans/2026-08-28-native-entity-identity-and-detail-header-consistency.md`
 
 ### [TIME-HYDRATION-001] Restore production navigation from Time
 

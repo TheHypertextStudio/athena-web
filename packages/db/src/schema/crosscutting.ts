@@ -11,6 +11,7 @@ import { sql } from 'drizzle-orm';
 import {
   ENTITY_DISPLAY_COLOR_KEYS,
   ENTITY_DISPLAY_ICON_KEYS,
+  ENTITY_DISPLAY_SUBJECT_TYPES,
   type EntityDisplayColorKey,
   type EntityDisplayIconKey,
   type EntityDisplaySubjectType,
@@ -100,6 +101,10 @@ const entityDisplayIconKeyList = sql.raw(
 
 const entityDisplayColorKeyList = sql.raw(
   ENTITY_DISPLAY_COLOR_KEYS.map((key) => `'${key}'`).join(', '),
+);
+
+const entityDisplaySubjectTypeList = sql.raw(
+  ENTITY_DISPLAY_SUBJECT_TYPES.map((key) => `'${key}'`).join(', '),
 );
 
 const defaultTaskViewDefinition: SavedWorkViewOut['definition'] = {
@@ -210,7 +215,7 @@ export const entityDisplay = pgTable(
     uniqueIndex('entity_display_subject_uq').on(t.organizationId, t.subjectType, t.subjectId),
     check(
       'entity_display_subject_type_check',
-      sql`${t.subjectType} in ('initiative', 'project', 'team')`,
+      sql`${t.subjectType} in (${entityDisplaySubjectTypeList})`,
     ),
     check('entity_display_icon_key_check', sql`${t.iconKey} in (${entityDisplayIconKeyList})`),
     check('entity_display_color_key_check', sql`${t.colorKey} in (${entityDisplayColorKeyList})`),

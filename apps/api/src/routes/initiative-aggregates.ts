@@ -24,6 +24,7 @@ import {
   InitiativeRelationshipSections,
 } from '@docket/types';
 import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/pg-core';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -38,7 +39,6 @@ import { accessibleInitiativeOrganizationIds } from './initiative-hierarchy';
 import {
   buildInitiativeDetail,
   buildInitiativeDetailFromSummary,
-  loadInitiative,
   associatedWorkSummary,
   toOut,
 } from './initiative-helpers';
@@ -70,6 +70,52 @@ function requiredRelationshipValue<T>(value: T | undefined, message: string): T 
 const MAX_RELATIONSHIP_LINKS = 200;
 const MAX_RELATIONSHIP_NODES = 100;
 const MAX_CONNECTED_WORK = 100;
+const directParentInitiative = alias(initiative, 'detail_direct_parent_initiative');
+
+/** Resolve one parent for the masthead without paying for deferred hierarchy sections. */
+async function visibleDirectParentFromAggregate(
+  contextOrganizationId: string,
+  parent: {
+    readonly parentLinkId: string | null;
+    readonly id: string | null;
+    readonly organizationId: string | null;
+    readonly name: string | null;
+  },
+  session: AuthSession,
+): Promise<{
+  parent: { id: string; organizationId: string; name: string } | null;
+  parentLinkId: string | null;
+}> {
+  if (!parent.parentLinkId || !parent.id || !parent.organizationId || !parent.name) {
+    return { parent: null, parentLinkId: null };
+  }
+  if (parent.organizationId === contextOrganizationId) {
+    return {
+      parent: { id: parent.id, organizationId: parent.organizationId, name: parent.name },
+      parentLinkId: parent.parentLinkId,
+    };
+  }
+  if (!session?.user) return { parent: null, parentLinkId: null };
+  const membership = await db
+    .select({ id: actor.id })
+    .from(actor)
+    .where(
+      and(
+        eq(actor.userId, session.user.id),
+        eq(actor.organizationId, parent.organizationId),
+        eq(actor.kind, 'human'),
+        eq(actor.status, 'active'),
+      ),
+    )
+    .limit(1);
+  if (!membership[0]) {
+    return { parent: null, parentLinkId: null };
+  }
+  return {
+    parent: { id: parent.id, organizationId: parent.organizationId, name: parent.name },
+    parentLinkId: parent.parentLinkId,
+  };
+}
 
 /** Build only the hierarchy sections a reader asks for after opening a relationship tab. */
 async function loadRelationshipSections(
@@ -508,8 +554,32 @@ const initiativeAggregates = new Hono<AppEnv>()
     async (c) => {
       const { orgId, actorId, capabilities } = c.get('actorCtx');
       const { id } = c.req.valid('param');
-      const row = await loadInitiative(orgId, id);
-      const [summary, ownerRows] = await Promise.all([
+      const aggregateRows = await db
+        .select({
+          row: initiative,
+          parentLinkId: initiativeHierarchyLink.id,
+          parentId: directParentInitiative.id,
+          parentOrganizationId: directParentInitiative.organizationId,
+          parentName: directParentInitiative.name,
+        })
+        .from(initiative)
+        .leftJoin(
+          initiativeHierarchyLink,
+          and(
+            eq(initiativeHierarchyLink.childInitiativeId, initiative.id),
+            eq(initiativeHierarchyLink.contextOrganizationId, orgId),
+          ),
+        )
+        .leftJoin(
+          directParentInitiative,
+          eq(initiativeHierarchyLink.parentInitiativeId, directParentInitiative.id),
+        )
+        .where(and(eq(initiative.id, id), eq(initiative.organizationId, orgId)))
+        .limit(1);
+      const aggregateRow = aggregateRows[0];
+      if (!aggregateRow) throw new NotFoundError('Initiative not found');
+      const { row } = aggregateRow;
+      const [summary, ownerRows, hierarchy] = await Promise.all([
         associatedWorkSummary(orgId, id),
         row.ownerId === null
           ? Promise.resolve([])
@@ -518,6 +588,16 @@ const initiativeAggregates = new Hono<AppEnv>()
               .from(actor)
               .where(and(eq(actor.id, row.ownerId), eq(actor.organizationId, orgId)))
               .limit(1),
+        visibleDirectParentFromAggregate(
+          orgId,
+          {
+            parentLinkId: aggregateRow.parentLinkId,
+            id: aggregateRow.parentId,
+            organizationId: aggregateRow.parentOrganizationId,
+            name: aggregateRow.parentName,
+          },
+          c.get('session'),
+        ),
       ]);
       const owner = ownerRows[0];
 
@@ -535,9 +615,13 @@ const initiativeAggregates = new Hono<AppEnv>()
         },
         viewer: { actorId },
         capabilities: detailCapabilities(capabilities),
-        references: owner
-          ? { owner: { actorId: owner.id, displayName: owner.displayName, avatar: owner.avatar } }
-          : { owner: null },
+        references: {
+          owner: owner
+            ? { actorId: owner.id, displayName: owner.displayName, avatar: owner.avatar }
+            : null,
+          parent: hierarchy.parent,
+          parentLinkId: hierarchy.parentLinkId,
+        },
         defaultView: { initiative: buildInitiativeDetailFromSummary(row, summary) },
       });
     },

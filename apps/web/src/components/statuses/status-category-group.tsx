@@ -16,7 +16,7 @@ import type { WorkStatusCategory } from '@docket/types';
 import { useReorderable } from '@docket/ui/hooks';
 import { Plus } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
-import type { JSX } from 'react';
+import type { JSX, ReactNode } from 'react';
 
 import { CATEGORY_DESCRIPTION, CATEGORY_LABEL } from '@/lib/work-category';
 
@@ -45,6 +45,8 @@ export interface StatusCategoryGroupProps {
   onReorder: (statusId: string, toIndex: number) => void;
   /** Why a status here cannot be deleted, keyed by status id. */
   deleteBlocked: ReadonlyMap<string, string>;
+  /** Render the decorative identity control beside a status's semantic category icon. */
+  renderIdentity?: (status: StatusLike) => ReactNode;
 }
 
 /**
@@ -64,6 +66,7 @@ export function StatusCategoryGroup({
   onDelete,
   onReorder,
   deleteBlocked,
+  renderIdentity,
 }: StatusCategoryGroupProps): JSX.Element {
   const reorderable = canManage && !readOnly && statuses.length > 1;
   const reorder = useReorderable({
@@ -102,6 +105,7 @@ export function StatusCategoryGroup({
                 canManage={canManage}
                 readOnly={readOnly}
                 reorder={reorderable ? reorder : undefined}
+                {...(renderIdentity ? { identity: renderIdentity(status) } : {})}
                 onEdit={() => {
                   onEdit(status);
                 }}

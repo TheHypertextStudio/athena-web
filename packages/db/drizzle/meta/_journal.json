@@ -701,6 +701,20 @@
       "when": 1787614588974,
       "tag": "0099_new_wallow",
       "breakpoints": true
+    },
+    {
+      "idx": 100,
+      "version": "7",
+      "when": 1788028761081,
+      "tag": "0100_fixed_iron_patriot",
+      "breakpoints": true
+    },
+    {
+      "idx": 101,
+      "version": "7",
+      "when": 1788029271989,
+      "tag": "0101_fair_gorgon",
+      "breakpoints": true
     }
   ]
 }

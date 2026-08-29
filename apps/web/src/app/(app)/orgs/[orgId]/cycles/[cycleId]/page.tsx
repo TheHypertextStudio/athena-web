@@ -19,6 +19,8 @@ import { formatWindow, windowProgress, windowRunway } from '@/components/cycles/
 import { GroupByMenu } from '@/components/cycles/group-by-menu';
 import { resolveRelationLabel } from '@/components/views/field-catalog';
 import { useCategoryOf } from '@/components/entity-display/use-work-status';
+import { EntityIconPicker } from '@/components/entity-display/entity-icon-picker';
+import { useEntityDisplay } from '@/components/entity-display/use-entity-display';
 import { useStatusRegistry } from '@/components/statuses/status-registry';
 import { buildTaskCatalog } from '@/components/views/task-catalog';
 import { QuickAddTaskRow } from '@/components/tasks/quick-add-task-row';
@@ -162,6 +164,13 @@ export default function CycleDetailPage(): JSX.Element {
   } = useCycleMutations(orgId, cycleId, cycleNounLower, tasks, otherCycles, detailKey, categoryOf);
 
   const canEditCycle = useOrgCapability(members, roles, 'contribute');
+  const entityDisplay = useEntityDisplay({
+    organizationId: orgId,
+    subjectType: 'cycle',
+    subjectId: cycleId,
+    errorMessage: `Could not load this ${cycleNounLower}'s icon.`,
+    enabled: cycle !== null,
+  });
   const renameCycleTask = useRenameTask(orgId, [detailKey]);
 
   // Inline quick-add: commit a new task to this cycle from just a typed title, on the cycle's own
@@ -308,11 +317,17 @@ export default function CycleDetailPage(): JSX.Element {
         title: cycle.displayName,
       }}
       icon={
-        <span className="flex size-12 shrink-0 items-center justify-center">
-          <span className="bg-surface-container-high text-on-surface-variant flex size-12 items-center justify-center rounded-full">
-            <RefreshCw aria-hidden className="size-6" />
-          </span>
-        </span>
+        <EntityIconPicker
+          display={entityDisplay.display}
+          entityName={cycle.displayName}
+          editable={canEditCycle}
+          pending={entityDisplay.mutation.isPending}
+          loading={entityDisplay.loading}
+          size={48}
+          onChange={(iconKey, colorKey, customColor) => {
+            entityDisplay.mutation.mutate({ iconKey, colorKey, customColor });
+          }}
+        />
       }
       title={
         <EditableTitle

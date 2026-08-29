@@ -1,12 +1,11 @@
 'use client';
 
-import type { ProgramViewRow } from '@docket/types';
+import { defaultEntityDisplay, type ProgramViewRow } from '@docket/types';
 import { cn, relativeTime } from '@docket/ui';
-import { IdentityGlyph } from '@docket/ui/components';
-import { Layers } from '@docket/ui/icons';
 import { Text, toneClass, typeClass } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
+import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
 import { HEALTH_DOT_CLASS, HEALTH_LABEL } from '@/components/programs/health';
 
 /** Props for {@link ProgramWorkCard}. */
@@ -55,12 +54,16 @@ function ActivityPulse({ activity }: Pick<ProgramViewRow, 'activity'>): JSX.Elem
  * view's lifecycle, ownership, and relationship properties.
  */
 export function ProgramWorkCard({ row }: ProgramWorkCardProps): JSX.Element {
+  const display = row.display ?? defaultEntityDisplay('program', row.id);
   return (
     <div className="flex flex-col gap-4">
       <div className="flex min-w-0 items-start gap-3">
-        <IdentityGlyph size={36}>
-          <Layers className="size-4" />
-        </IdentityGlyph>
+        <EntityIconGlyph
+          iconKey={display.iconKey}
+          colorKey={display.colorKey}
+          customColor={display.customColor}
+          size={36}
+        />
         <div className="min-w-0 flex-1">
           <h2 className="text-title-medium truncate">{row.name}</h2>
           {row.summary ? (

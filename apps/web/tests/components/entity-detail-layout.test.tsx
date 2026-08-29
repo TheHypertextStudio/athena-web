@@ -109,6 +109,27 @@ describe('EntityDetailLayout', () => {
     // `.detail-tabs` is the masthead band's next sibling, not its descendant.
     expect(coverWrapper?.closest('.masthead-band')?.nextElementSibling).toBe(tabsRow);
   });
+
+  it('renders a static print brief outside the interactive masthead and active tab panel', () => {
+    const { container } = render(
+      <EntityDetailLayout
+        icon={<button type="button">Edit icon</button>}
+        title="Launch"
+        subtitle="Ship the public beta"
+        actions={<button type="button">Publish</button>}
+        tabs={<div role="tablist">tabs</div>}
+        printSummary={<section data-testid="print-brief">Printable launch brief</section>}
+      >
+        <div role="tabpanel">Interactive overview</div>
+      </EntityDetailLayout>,
+    );
+
+    const printBrief = screen.getByTestId('print-brief');
+    expect(printBrief.closest('.detail-print-summary')).not.toBeNull();
+    expect(printBrief.closest('.detail-body')).not.toBeNull();
+    expect(printBrief.closest('header')).toBeNull();
+    expect(container.querySelector('.detail-header')).toHaveClass('detail-print-hidden');
+  });
 });
 
 describe('EntityMetadataRow', () => {

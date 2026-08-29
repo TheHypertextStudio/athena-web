@@ -1,0 +1,2 @@
+ALTER TABLE "entity_display" DROP CONSTRAINT "entity_display_subject_type_check";--> statement-breakpoint
+ALTER TABLE "entity_display" ADD CONSTRAINT "entity_display_subject_type_check" CHECK ("entity_display"."subject_type" in ('initiative', 'program', 'project', 'task', 'cycle', 'milestone', 'team', 'label', 'workStatus'));

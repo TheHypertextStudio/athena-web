@@ -64,7 +64,7 @@ function actorIdentity(columnName: string): SQL {
 }
 
 /** Read optional customized display metadata without manufacturing domain fields. */
-function entityDisplay(subjectType: 'initiative' | 'project'): SQL {
+function entityDisplay(subjectType: 'initiative' | 'program' | 'project' | 'task'): SQL {
   return sql`(select json_build_object(
       'subjectType', display.subject_type,
       'subjectId', display.subject_id,
@@ -82,6 +82,7 @@ function entityDisplay(subjectType: 'initiative' | 'project'): SQL {
 const projections = {
   task: (): SQL => sql`${base()},
     e.id, e.title, e.description, e.state as status, e.priority,
+    ${entityDisplay('task')} as display,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.actor, 'assignee_id')} as assignee,
     ${actorIdentity('assignee_id')} as assignee_actor,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.actor, 'delegate_id')} as delegate,
@@ -146,6 +147,7 @@ const projections = {
     e.id, e.name, e.summary, e.status, e.health,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.actor, 'owner_id')} as owner,
     ${actorIdentity('owner_id')} as owner_actor,
+    ${entityDisplay('program')} as display,
     ${compileTenantRelationArraySql(
       WORK_VIEW_RELATIONS.programInitiatives,
       sql`e.id`,

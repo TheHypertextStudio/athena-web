@@ -53,7 +53,15 @@
  */
 import * as React from 'react';
 
+import { Ellipsis } from '../icons';
 import { cn } from '../lib/utils';
+import { Button } from './button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from './dropdown-menu';
 import { focusRing } from './focus';
 
 /** The shared selection state threaded from {@link Tabs} down to each {@link Tab}. */
@@ -90,6 +98,14 @@ export interface TabsItem {
   readonly count?: number;
   /** When `true`, the tab is present but not selectable. */
   readonly disabled?: boolean;
+  /** Lower values remain visible first when an overflow-enabled tablist becomes constrained. */
+  readonly priority?: number;
+}
+
+/** Configuration for the opt-in compact section overflow menu. */
+export interface TabsOverflow {
+  /** Accessible name for the menu button, such as `More Initiative sections`. */
+  readonly menuLabel: string;
 }
 
 /** Props for {@link Tabs}. */
@@ -112,6 +128,8 @@ export interface TabsProps {
   readonly children?: React.ReactNode;
   /** Extra classes for the tablist track. Applied to the auto-rendered {@link TabList} in items mode. */
   readonly className?: string;
+  /** Keep detail sections reachable in a named overflow menu when the tab lane is constrained. */
+  readonly overflow?: TabsOverflow;
 }
 
 /**
@@ -127,6 +145,7 @@ export function Tabs({
   items,
   children,
   className,
+  overflow,
 }: TabsProps): React.JSX.Element {
   const context = React.useMemo<TabsContextValue>(
     () => ({ value, onValueChange }),
@@ -136,13 +155,17 @@ export function Tabs({
   return (
     <TabsContext.Provider value={context}>
       {items ? (
-        <TabList label={label} className={className}>
-          {items.map((item) => (
-            <Tab key={item.value} value={item.value} count={item.count} disabled={item.disabled}>
-              {item.label}
-            </Tab>
-          ))}
-        </TabList>
+        overflow ? (
+          <OverflowTabList label={label} className={className} items={items} overflow={overflow} />
+        ) : (
+          <TabList label={label} className={className}>
+            {items.map((item) => (
+              <Tab key={item.value} value={item.value} count={item.count} disabled={item.disabled}>
+                {item.label}
+              </Tab>
+            ))}
+          </TabList>
+        )
       ) : (
         children
       )}
@@ -163,6 +186,38 @@ export interface TabListProps {
 /** The set of keys the tablist handles for roving-tabindex navigation. */
 const NAV_KEYS = new Set(['ArrowRight', 'ArrowLeft', 'Home', 'End']);
 
+function moveTabFocus(
+  list: HTMLDivElement | null,
+  event: React.KeyboardEvent<HTMLDivElement>,
+  onValueChange: (value: string) => void,
+): void {
+  if (!NAV_KEYS.has(event.key) || !list) return;
+  const tabs = Array.from(list.querySelectorAll<HTMLButtonElement>('[role="tab"]:not([disabled])'));
+  if (tabs.length === 0) return;
+  const currentIndex = tabs.findIndex((tab) => tab === document.activeElement);
+  let nextIndex: number;
+  switch (event.key) {
+    case 'ArrowRight':
+      nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % tabs.length;
+      break;
+    case 'ArrowLeft':
+      nextIndex =
+        currentIndex < 0 ? tabs.length - 1 : (currentIndex - 1 + tabs.length) % tabs.length;
+      break;
+    case 'Home':
+      nextIndex = 0;
+      break;
+    default:
+      nextIndex = tabs.length - 1;
+  }
+  const next = tabs[nextIndex];
+  if (!next) return;
+  event.preventDefault();
+  next.focus();
+  const nextValue = next.dataset['value'];
+  if (nextValue !== undefined) onValueChange(nextValue);
+}
+
 /**
  * The tablist track that lays out its {@link Tab} children and wires arrow-key navigation.
  *
@@ -178,40 +233,7 @@ export function TabList({ label, className, children }: TabListProps): React.JSX
   const ref = React.useRef<HTMLDivElement>(null);
 
   function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>): void {
-    if (!NAV_KEYS.has(event.key)) return;
-    const list = ref.current;
-    if (!list) return;
-
-    const tabs = Array.from(
-      list.querySelectorAll<HTMLButtonElement>('[role="tab"]:not([disabled])'),
-    );
-    if (tabs.length === 0) return;
-
-    const currentIndex = tabs.findIndex((tab) => tab === document.activeElement);
-    let nextIndex: number;
-    switch (event.key) {
-      case 'ArrowRight':
-        nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % tabs.length;
-        break;
-      case 'ArrowLeft':
-        nextIndex =
-          currentIndex < 0 ? tabs.length - 1 : (currentIndex - 1 + tabs.length) % tabs.length;
-        break;
-      case 'Home':
-        nextIndex = 0;
-        break;
-      default:
-        nextIndex = tabs.length - 1;
-        break;
-    }
-
-    const next = tabs[nextIndex];
-    if (!next) return;
-    event.preventDefault();
-    next.focus();
-    // Activation follows focus: select the newly focused tab.
-    const nextValue = next.dataset['value'];
-    if (nextValue !== undefined) onValueChange(nextValue);
+    moveTabFocus(ref.current, event, onValueChange);
   }
 
   return (
@@ -227,6 +249,163 @@ export function TabList({ label, className, children }: TabListProps): React.JSX
     >
       {children}
     </div>
+  );
+}
+
+interface OverflowTabListProps {
+  readonly label?: string | undefined;
+  readonly className?: string | undefined;
+  readonly items: readonly TabsItem[];
+  readonly overflow: TabsOverflow;
+}
+
+/** A measured detail-section tab lane that promotes the selected section before hiding others. */
+function OverflowTabList({
+  label,
+  className,
+  items,
+  overflow,
+}: OverflowTabListProps): React.JSX.Element {
+  const { value, onValueChange } = useTabsContext();
+  const laneRef = React.useRef<HTMLDivElement>(null);
+  const moreRef = React.useRef<HTMLButtonElement>(null);
+  const measureRefs = React.useRef(new Map<string, HTMLButtonElement>());
+  const [visibleValues, setVisibleValues] = React.useState<readonly string[]>(() => {
+    const first = items[0]?.value;
+    return first && first !== value ? [first, value] : [value];
+  });
+
+  const visibleSet = React.useMemo(() => new Set(visibleValues), [visibleValues]);
+  const visibleItems = items.filter((item) => visibleSet.has(item.value));
+  const hiddenItems = items.filter((item) => !visibleSet.has(item.value));
+
+  const recompute = React.useCallback(() => {
+    const available = laneRef.current?.clientWidth ?? 0;
+    const moreWidth = moreRef.current?.getBoundingClientRect().width ?? 40;
+    const widths = new Map(
+      items.map((item) => [
+        item.value,
+        measureRefs.current.get(item.value)?.getBoundingClientRect().width ?? 0,
+      ]),
+    );
+    if (available <= 0 || [...widths.values()].some((width) => width <= 0)) return;
+
+    const selected = items.find((item) => item.value === value);
+    const candidates = [...items]
+      .filter((item) => item.value !== selected?.value)
+      .sort(
+        (left, right) =>
+          (left.priority ?? Number.MAX_SAFE_INTEGER) - (right.priority ?? Number.MAX_SAFE_INTEGER),
+      );
+    const next = new Set<string>(selected ? [selected.value] : []);
+    let used = selected ? (widths.get(selected.value) ?? 0) : 0;
+    for (const item of candidates) {
+      const width = widths.get(item.value) ?? 0;
+      const needsMore = next.size + 1 < items.length;
+      if (used + width + (needsMore ? moreWidth : 0) > available) continue;
+      next.add(item.value);
+      used += width;
+    }
+    if (next.size === 0 && items[0]) next.add(items[0].value);
+    const ordered = items.filter((item) => next.has(item.value)).map((item) => item.value);
+    setVisibleValues((current) =>
+      current.length === ordered.length && current.every((item, index) => item === ordered[index])
+        ? current
+        : ordered,
+    );
+  }, [items, value]);
+
+  React.useLayoutEffect(() => {
+    recompute();
+    const lane = laneRef.current;
+    if (!lane || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(recompute);
+    observer.observe(lane);
+    return () => {
+      observer.disconnect();
+    };
+  }, [recompute]);
+
+  React.useLayoutEffect(() => {
+    if (visibleSet.has(value)) return;
+    const first = items[0]?.value;
+    setVisibleValues((current) =>
+      first && first !== value
+        ? [...new Set([first, value, ...current])]
+        : [...new Set([value, ...current])],
+    );
+  }, [items, value, visibleSet]);
+
+  return (
+    <div ref={laneRef} className="flex min-w-0 items-center gap-1">
+      <TabList label={label} className={cn('min-w-0 flex-1 overflow-hidden', className)}>
+        {visibleItems.map((item) => (
+          <Tab
+            key={item.value}
+            value={item.value}
+            count={item.count}
+            disabled={item.disabled}
+            className="max-w-full min-w-0 shrink overflow-hidden whitespace-nowrap"
+          >
+            {item.label}
+          </Tab>
+        ))}
+      </TabList>
+      {hiddenItems.length > 0 ? (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button ref={moreRef} variant="ghost" size="icon" aria-label={overflow.menuLabel}>
+              <Ellipsis className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {hiddenItems.map((item) => (
+              <DropdownMenuItem
+                key={item.value}
+                {...(item.disabled === undefined ? {} : { disabled: item.disabled })}
+                onSelect={() => {
+                  onValueChange(item.value);
+                }}
+              >
+                {item.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : null}
+      <div aria-hidden="true" className="pointer-events-none invisible absolute whitespace-nowrap">
+        {items.map((item) => (
+          <TabMeasurement key={item.value} item={item} refs={measureRefs} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TabMeasurement({
+  item,
+  refs,
+}: {
+  item: TabsItem;
+  refs: React.RefObject<Map<string, HTMLButtonElement>>;
+}): React.JSX.Element {
+  return (
+    <button
+      ref={(element) => {
+        if (element) {
+          refs.current.set(item.value, element);
+        } else {
+          refs.current.delete(item.value);
+        }
+      }}
+      type="button"
+      className="text-label-large inline-flex min-h-10 items-center gap-2 rounded-md px-3 py-1.5"
+    >
+      <span>{item.label}</span>
+      {item.count !== undefined ? (
+        <span className="text-label-small min-w-5 px-1.5">{item.count}</span>
+      ) : null}
+    </button>
   );
 }
 
@@ -279,7 +458,7 @@ export function Tab({ value, count, disabled, className, children }: TabProps): 
         className,
       )}
     >
-      <span>{children}</span>
+      <span className="min-w-0 truncate">{children}</span>
       {count !== undefined ? (
         <span
           className={cn(

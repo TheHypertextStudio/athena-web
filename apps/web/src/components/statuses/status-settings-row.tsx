@@ -30,7 +30,7 @@ import {
   menuDestructiveItem,
 } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
-import type { JSX } from 'react';
+import type { JSX, ReactNode } from 'react';
 
 import type { StatusLike } from './status-registry';
 
@@ -48,6 +48,8 @@ export interface StatusSettingsRowProps {
   reorder?: ReorderableBinding | undefined;
   /** Open the editor on this status. */
   onEdit: () => void;
+  /** Decorative identity control. The status icon remains the semantic category signal. */
+  identity?: ReactNode;
   /** Make this the status new work starts in. */
   onMakeDefault: () => void;
   /** Delete this status, choosing where its work goes. */
@@ -69,6 +71,7 @@ export function StatusSettingsRow({
   readOnly = false,
   reorder,
   onEdit,
+  identity,
   onMakeDefault,
   onDelete,
   deleteBlockedReason,
@@ -97,6 +100,7 @@ export function StatusSettingsRow({
         <DragHandle {...handleProps} />
       )}
 
+      {identity}
       <StatusIcon type={category} label={status.name} />
 
       <div className="flex min-w-0 flex-1 flex-col">

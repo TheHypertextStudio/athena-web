@@ -67,6 +67,75 @@ describe('Tabs (data-driven)', () => {
   });
 });
 
+describe('Tabs (adaptive overflow)', () => {
+  it('keeps each visible section label on one line and truncates it before the lane can wrap', () => {
+    render(
+      <Tabs
+        value="overview"
+        onValueChange={() => undefined}
+        label="Initiative sections"
+        overflow={{ menuLabel: 'More Initiative sections' }}
+        items={[{ value: 'overview', label: 'A deliberately long section label', priority: 0 }]}
+      />,
+    );
+
+    const tab = screen.getByRole('tab', { name: 'A deliberately long section label' });
+    expect(tab).toHaveClass('whitespace-nowrap');
+    expect(tab.querySelector('span')).toHaveClass('truncate');
+  });
+
+  it('keeps the selected section inline and exposes remaining sections in a named menu', () => {
+    render(
+      <Tabs
+        value="resources"
+        onValueChange={() => undefined}
+        label="Initiative sections"
+        overflow={{ menuLabel: 'More Initiative sections' }}
+        items={[
+          { value: 'overview', label: 'Overview', priority: 0 },
+          { value: 'subinitiatives', label: 'Sub-initiatives', priority: 1 },
+          { value: 'work', label: 'Connected work', priority: 2 },
+          { value: 'updates', label: 'Updates', priority: 3 },
+          { value: 'resources', label: 'Resources', priority: 4 },
+        ]}
+      />,
+    );
+
+    expect(screen.getByRole('tab', { name: 'Resources' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'More Initiative sections' })).toBeInTheDocument();
+  });
+
+  it('promotes a section selected from the menu into the tablist', () => {
+    function OverflowHost(): React.JSX.Element {
+      const [value, setValue] = useState('overview');
+      return (
+        <Tabs
+          value={value}
+          onValueChange={setValue}
+          label="Initiative sections"
+          overflow={{ menuLabel: 'More Initiative sections' }}
+          items={[
+            { value: 'overview', label: 'Overview', priority: 0 },
+            { value: 'subinitiatives', label: 'Sub-initiatives', priority: 1 },
+            { value: 'work', label: 'Connected work', priority: 2 },
+            { value: 'updates', label: 'Updates', priority: 3 },
+            { value: 'resources', label: 'Resources', priority: 4 },
+          ]}
+        />
+      );
+    }
+
+    render(<OverflowHost />);
+    expect(screen.queryByRole('tab', { name: 'Resources' })).toBeNull();
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'More Initiative sections' }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Resources' }));
+    expect(screen.getByRole('tab', { name: 'Resources' })).toHaveAttribute('aria-selected', 'true');
+  });
+});
+
 describe('Tabs (composable)', () => {
   function ComposableHost(): React.JSX.Element {
     const [value, setValue] = useState('a');

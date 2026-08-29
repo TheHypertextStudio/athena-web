@@ -1,4 +1,5 @@
 import {
+  type EntityDisplaySubjectType,
   OrganizationId,
   type SearchDocumentKind,
   type SearchOut,
@@ -176,9 +177,12 @@ export async function searchWorkspace(input: SearchWorkspaceInput): Promise<Sear
   // it. Naming the first unreturned row would skip that row at every page boundary.
   const next = surfaced.length > limit ? page.at(-1) : undefined;
   const usedIn = await usedInForPage(page, input.caller);
+  const items = await withSearchDisplays(
+    page.map((row) => toSearchResult(row, usedIn.get(row.row.id) ?? [])),
+  );
   return {
     query,
-    items: page.map((row) => toSearchResult(row, usedIn.get(row.row.id) ?? [])),
+    items,
     facets,
     ...(next ? { nextCursor: encodeCursor(next, rankedAt) } : {}),
   };
@@ -275,13 +279,16 @@ async function browseDocuments(input: BrowseInput): Promise<SearchOut> {
       ? cursor
       : undefined;
   const usedIn = await usedInForPage(page, input.caller);
+  const items = await withSearchDisplays(
+    page.map((row) => toSearchResult(row, usedIn.get(row.row.id) ?? [])),
+  );
   return {
     query: '',
     // These facets summarize the returned page, not the corpus. The Library's filter options come
     // from its field catalog, which reads members, teams, and labels directly, so no surface
     // depends on them being complete.
     facets: buildFacetSummaries(page),
-    items: page.map((row) => toSearchResult(row, usedIn.get(row.row.id) ?? [])),
+    items,
     ...(nextCursor ? { nextCursor } : {}),
   };
 }
@@ -1170,10 +1177,76 @@ function toSearchResult(
     score: scored.score,
     entityId: row.entityId,
     externalUrl: row.externalUrl,
+    display: null,
     // Copied because the DTO's inferred array type is mutable; the resolver hands back a readonly.
     usedIn: [...usedIn],
     updatedAt: (row.sourceUpdatedAt ?? row.updatedAt).toISOString(),
   };
+}
+
+/** Native search kinds that have a user-owned decorative display record. */
+function displaySubjectTypeForSearchKind(
+  kind: SearchDocumentKind,
+): EntityDisplaySubjectType | null {
+  switch (kind) {
+    case 'team':
+    case 'task':
+    case 'project':
+    case 'program':
+    case 'initiative':
+    case 'milestone':
+    case 'cycle':
+    case 'label':
+      return kind;
+    default:
+      return null;
+  }
+}
+
+/** Compose custom display only after search visibility has produced the page. */
+async function withSearchDisplays(items: SearchOut['items']): Promise<SearchOut['items']> {
+  const candidates = items.flatMap((item) => {
+    const subjectType = displaySubjectTypeForSearchKind(item.kind);
+    return item.organizationId && subjectType
+      ? [{ organizationId: item.organizationId, subjectType, subjectId: item.entityId }]
+      : [];
+  });
+  if (candidates.length === 0) return items;
+
+  const { db, entityDisplay } = await import('@docket/db');
+  const conditions = candidates.map((candidate) =>
+    and(
+      eq(entityDisplay.organizationId, candidate.organizationId),
+      eq(entityDisplay.subjectType, candidate.subjectType),
+      eq(entityDisplay.subjectId, candidate.subjectId),
+    ),
+  );
+  const rows = await db
+    .select()
+    .from(entityDisplay)
+    .where(or(...conditions));
+  const displays = new Map(
+    rows.map((row) => [
+      `${row.organizationId}:${row.subjectType}:${row.subjectId}`,
+      {
+        subjectType: row.subjectType,
+        subjectId: row.subjectId,
+        iconKey: row.iconKey,
+        colorKey: row.colorKey,
+        customColor: row.customColor,
+        coverImage: row.coverImage,
+        customized: true,
+      },
+    ]),
+  );
+  return items.map((item) => {
+    const subjectType = displaySubjectTypeForSearchKind(item.kind);
+    if (!item.organizationId || !subjectType) return item;
+    return {
+      ...item,
+      display: displays.get(`${item.organizationId}:${subjectType}:${item.entityId}`) ?? null,
+    };
+  });
 }
 
 function normalizeSearchKind(kind: string): SearchDocumentKind {

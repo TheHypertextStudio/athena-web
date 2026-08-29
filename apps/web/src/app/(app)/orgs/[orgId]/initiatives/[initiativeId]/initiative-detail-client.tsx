@@ -1,18 +1,10 @@
 'use client';
 
-import type {
-  AttachmentOut,
-  EntityDisplayColorKey,
-  EntityDisplayIconKey,
-  EntityDisplayOut,
-  Health,
-  LabelOut,
-  UpdateOut,
-} from '@docket/types';
-import { defaultEntityDisplay, InitiativeSubjectRef } from '@docket/types';
+import type { AttachmentOut, Health, LabelOut, UpdateOut } from '@docket/types';
+import { InitiativeSubjectRef } from '@docket/types';
 import type { PickerOption } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
-import { ChevronLeft, CornerDownLeft, Ellipsis, Trash2 } from '@docket/ui/icons';
+import { CornerDownLeft, Ellipsis, Trash2 } from '@docket/ui/icons';
 import {
   Button,
   ControlGroup,
@@ -25,7 +17,7 @@ import {
 } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import Link from '@/components/docket-link';
-import { useAppSearchParams, useTypedRoute } from '@/lib/app-location';
+import { useTypedRoute } from '@/lib/app-location';
 import { type JSX, useEffect, useMemo, useState } from 'react';
 
 import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
@@ -36,7 +28,10 @@ import { ResourcesTab } from '@/components/entity-detail/resources-tab';
 import { useEntityMentions } from '@/lib/use-entity-mentions';
 import { UpdatesPanel } from '@/components/entity-detail/updates-panel';
 import { EntityIconPicker } from '@/components/entity-display/entity-icon-picker';
+import { useEntityDisplay } from '@/components/entity-display/use-entity-display';
+import { LatestUpdateSummary } from '@/components/entity-detail/latest-update-summary';
 import { useWorkStatus } from '@/components/entity-display/use-work-status';
+import { InitiativeOverviewSummary } from '@/components/initiatives/initiative-overview-summary';
 import { InitiativeRelationshipPanels } from '@/components/initiatives/initiative-relationship-panels';
 import {
   INITIATIVE_CADENCE_LABEL,
@@ -48,6 +43,8 @@ import { memberActorOptions } from '@/components/pickers/options';
 import { usePickerOverlay } from '@/components/pickers/picker-overlay';
 import { PublishAction } from '@/components/publishing/publish-action';
 import { EntityDetailSkeleton } from '@/components/views/entity-detail-skeleton';
+import { DetailPrintSummary } from '@/components/views/detail-print-summary';
+import { useDetailTab } from '@/components/views/use-detail-tab';
 import {
   ENTITY_METADATA_CHIP_CLASS,
   EntityDetailLayout,
@@ -85,6 +82,7 @@ import {
 import { orgMembersDef } from '@/lib/use-org-membership';
 
 type TabId = 'overview' | 'subinitiatives' | 'work' | 'updates' | 'resources';
+const INITIATIVE_TABS = ['overview', 'subinitiatives', 'work', 'updates', 'resources'] as const;
 
 /** Printable, document-first Initiative detail composed from the shared entity-detail shell. */
 export default function InitiativeDetailPage(): JSX.Element {
@@ -98,21 +96,11 @@ export default function InitiativeDetailPage(): JSX.Element {
   const router = useAppRouter();
   const queryClient = useQueryClient();
   const pickerOverlay = usePickerOverlay();
-  const searchParams = useAppSearchParams();
-  const initialTab = searchParams.get('tab');
-  const [tab, setTab] = useState<TabId>(
-    initialTab === 'subinitiatives' ||
-      initialTab === 'work' ||
-      initialTab === 'updates' ||
-      initialTab === 'resources'
-      ? initialTab
-      : 'overview',
-  );
+  const { tab, setTab } = useDetailTab<TabId>(INITIATIVE_TABS);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [ownerPickerOpen, setOwnerPickerOpen] = useState(false);
   const [labelsPickerOpen, setLabelsPickerOpen] = useState(false);
   const [targetPickerOpen, setTargetPickerOpen] = useState(false);
-  const [displayPickerOpen, setDisplayPickerOpen] = useState(false);
   const initiativeNoun = useVocabulary('initiative');
   const initiativePlural = useVocabulary('initiative', { plural: true });
   const programNoun = useVocabulary('program');
@@ -124,6 +112,14 @@ export default function InitiativeDetailPage(): JSX.Element {
   const aggregateQ = useApiQuery({ ...aggregateDef, enabled: aggregateEnabled });
   const terminalFailure = terminalDetailFailure(aggregateQ.error);
   const aggregate = aggregateQ.data ?? null;
+  const initiativeOwner = aggregate?.references.owner ?? null;
+  const entityDisplay = useEntityDisplay({
+    organizationId: orgId,
+    subjectType: 'initiative',
+    subjectId: initiativeId,
+    errorMessage: `Could not customize this ${initiativeNoun.toLowerCase()}.`,
+    enabled: aggregate !== null,
+  });
   const detail = aggregate?.defaultView.initiative ?? null;
   const aggregateState = aggregateLoadState(
     aggregateQ.data,
@@ -155,18 +151,6 @@ export default function InitiativeDetailPage(): JSX.Element {
     ),
   );
   const labelsQ = useApiListQuery({ ...labelsDef(orgId), enabled: labelsPickerOpen });
-  const displayKey = [...aggregateKey, 'display'] as const;
-  const displayQ = useApiQuery(
-    apiQueryOptions(
-      displayKey,
-      () =>
-        api.v1.orgs[':orgId'].display[':subjectType'][':subjectId'].$get({
-          param: { orgId, ...subject },
-        }),
-      'Could not load display settings.',
-      { enabled: displayPickerOpen },
-    ),
-  );
   const resourcesKey = [...aggregateKey, 'resources'] as const;
   const resourcesQ = useApiQuery(
     apiQueryOptions(
@@ -189,11 +173,11 @@ export default function InitiativeDetailPage(): JSX.Element {
           query: subject,
         }),
       'Could not load updates.',
-      { enabled: aggregate !== null && tab === 'updates' },
+      { enabled: aggregate !== null && (tab === 'overview' || tab === 'updates') },
     ),
   );
   const updates = updatesQ.data?.items ?? [];
-  const display = displayQ.data ?? defaultEntityDisplay('initiative', initiativeId);
+  const display = entityDisplay.display;
   const canEdit = aggregate?.capabilities.contribute ?? false;
   const canManage = aggregate?.capabilities.manage ?? false;
   const currentActorId = aggregate?.viewer.actorId ?? null;
@@ -255,44 +239,6 @@ export default function InitiativeDetailPage(): JSX.Element {
         'Could not post the update.',
       ),
     invalidateKeys: [updatesKey, aggregateKey, queryKeys.initiatives(orgId)],
-  });
-  const displayMutation = useApiMutation<
-    EntityDisplayOut,
-    { iconKey: EntityDisplayIconKey; colorKey: EntityDisplayColorKey; customColor: string | null },
-    { previous?: EntityDisplayOut | undefined }
-  >({
-    mutationFn: (json) =>
-      unwrap(
-        () =>
-          api.v1.orgs[':orgId'].display[':subjectType'][':subjectId'].$put({
-            param: { orgId, ...subject },
-            json,
-          }),
-        `Could not customize this ${initiativeNoun.toLowerCase()}.`,
-      ),
-    onMutate: async ({ iconKey, colorKey, customColor }) => {
-      await queryClient.cancelQueries({ queryKey: displayKey });
-      const previous = queryClient.getQueryData<EntityDisplayOut>(displayKey);
-      queryClient.setQueryData<EntityDisplayOut>(displayKey, {
-        ...subject,
-        iconKey,
-        colorKey,
-        customColor,
-        // The icon/color picker never touches the cover, so an optimistic update must carry the
-        // stored one through rather than blanking it until the refetch lands.
-        coverImage: previous?.coverImage ?? null,
-        customized: true,
-      });
-      return { previous };
-    },
-    onError: (_error, _variables, context) => {
-      if (context?.previous) queryClient.setQueryData(displayKey, context.previous);
-    },
-    invalidateKeys: [
-      displayKey,
-      queryKeys.initiatives(orgId),
-      queryKeys.entityDisplays(orgId, 'initiative'),
-    ],
   });
   const addResource = useApiMutation<AttachmentOut, { title: string; url: string }>({
     mutationFn: (json) =>
@@ -389,53 +335,75 @@ export default function InitiativeDetailPage(): JSX.Element {
     organizationId: orgId,
     title: detail.name,
     meta: {
-      parentInitiativeId: relationships?.parent?.id ?? null,
-      parentLinkId: relationships?.parentLinkId ?? null,
+      parentInitiativeId: aggregate?.references.parent?.id ?? null,
+      parentLinkId: aggregate?.references.parentLinkId ?? null,
     },
   };
+  const parent = aggregate?.references.parent ?? null;
 
   return (
     <EntityDetailLayout
-      className="initiative-print"
       object={initiativeObject}
+      printSummary={
+        <DetailPrintSummary
+          title={detail.name}
+          summary={detail.summary}
+          description={detail.description}
+          properties={[
+            { label: 'Status', value: status.name },
+            {
+              label: 'Initiative health',
+              value: detail.health ? detail.health.replace('_', ' ') : '—',
+            },
+            {
+              label: 'Connected-work health',
+              value: detail.rolledUpHealth ? detail.rolledUpHealth.replace('_', ' ') : '—',
+            },
+            { label: 'Priority', value: INITIATIVE_PRIORITY_LABEL[detail.priority] },
+            { label: 'Owner', value: ownerName },
+            {
+              label: 'Target',
+              value:
+                formatPlanningTimeframe(
+                  toPlanningTimeframe(
+                    detail.targetDate,
+                    detail.targetDateResolution,
+                    detail.targetDateFiscalYearStartMonth,
+                  ),
+                ) ?? '—',
+            },
+            { label: 'Update cadence', value: INITIATIVE_CADENCE_LABEL[detail.updateCadence] },
+            { label: 'Labels', value: assignedLabels.map((label) => label.name).join(', ') || '—' },
+          ]}
+        />
+      }
       eyebrow={
-        <nav
-          className="no-print text-on-surface-variant flex items-center gap-2 text-sm"
-          aria-label="Breadcrumb"
-        >
-          <Link
-            href={`/orgs/${orgId}/initiatives`}
-            className="hover:text-on-surface inline-flex items-center gap-1"
+        parent ? (
+          <nav
+            className="no-print text-on-surface-variant flex items-center gap-2 text-sm"
+            aria-label="Breadcrumb"
           >
-            <ChevronLeft className="size-4" />
-            All {initiativePlural.toLowerCase()}
-          </Link>
-          {relationships?.parent ? (
-            <>
-              <span aria-hidden>/</span>
-              <Link
-                href={`/orgs/${relationships.parent.organizationId}/initiatives/${relationships.parent.id}`}
-                className="hover:text-on-surface truncate"
-              >
-                {relationships.parent.name}
-              </Link>
-            </>
-          ) : null}
-        </nav>
+            <Link
+              href={`/orgs/${parent.organizationId}/initiatives/${parent.id}`}
+              className="hover:text-on-surface inline-flex items-center gap-1"
+            >
+              <CornerDownLeft className="size-4" />
+              {parent.name}
+            </Link>
+          </nav>
+        ) : undefined
       }
       icon={
         <EntityIconPicker
           display={display}
           entityName={detail.name}
           editable={canEdit}
-          pending={displayMutation.isPending}
-          loading={displayPickerOpen && displayQ.isPending}
+          pending={entityDisplay.mutation.isPending}
+          loading={entityDisplay.loading}
           size={48}
           onChange={(iconKey, colorKey, customColor) => {
-            if (displayQ.data === undefined) return;
-            displayMutation.mutate({ iconKey, colorKey, customColor });
+            entityDisplay.mutation.mutate({ iconKey, colorKey, customColor });
           }}
-          onOpenChange={setDisplayPickerOpen}
         />
       }
       title={
@@ -565,15 +533,15 @@ export default function InitiativeDetailPage(): JSX.Element {
                   : null)}
             </p>
           ) : null}
-          {displayMutation.error ? (
+          {entityDisplay.mutation.error ? (
             <p role="alert" className="text-error mt-2 text-sm">
               {userErrorMessage(
-                displayMutation.error,
+                entityDisplay.mutation.error,
                 `Could not customize this ${initiativeNoun.toLowerCase()}.`,
               )}
             </p>
           ) : null}
-          {displayPickerOpen && displayQ.isError ? (
+          {entityDisplay.error ? (
             <p role="alert" className="text-error mt-2 text-sm">
               Could not load display settings.
             </p>
@@ -624,12 +592,13 @@ export default function InitiativeDetailPage(): JSX.Element {
             setTab(value as TabId);
           }}
           label={`${initiativeNoun} sections`}
+          overflow={{ menuLabel: `More ${initiativeNoun} sections` }}
           items={[
-            { value: 'overview', label: 'Overview' },
-            { value: 'subinitiatives', label: 'Sub-initiatives' },
-            { value: 'work', label: 'Connected work' },
-            { value: 'updates', label: 'Updates' },
-            { value: 'resources', label: 'Resources' },
+            { value: 'overview', label: 'Overview', priority: 0 },
+            { value: 'subinitiatives', label: 'Sub-initiatives', priority: 1 },
+            { value: 'work', label: 'Connected work', priority: 2 },
+            { value: 'updates', label: 'Updates', priority: 3 },
+            { value: 'resources', label: 'Resources', priority: 4 },
           ]}
         />
       }
@@ -671,55 +640,6 @@ export default function InitiativeDetailPage(): JSX.Element {
           });
         }}
       />
-
-      <section className="print-only border-outline-variant border-y py-4">
-        <dl className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
-          <PrintProperty label="Status" value={status.name} />
-          <PrintProperty
-            label="Initiative health"
-            value={detail.health ? detail.health.replace('_', ' ') : '—'}
-          />
-          <PrintProperty
-            label="Connected-work health"
-            value={detail.rolledUpHealth ? detail.rolledUpHealth.replace('_', ' ') : '—'}
-          />
-          <PrintProperty label="Priority" value={INITIATIVE_PRIORITY_LABEL[detail.priority]} />
-          <PrintProperty label="Owner" value={ownerName} />
-          <PrintProperty
-            label="Target"
-            value={
-              formatPlanningTimeframe(
-                toPlanningTimeframe(
-                  detail.targetDate,
-                  detail.targetDateResolution,
-                  detail.targetDateFiscalYearStartMonth,
-                ),
-              ) ?? '—'
-            }
-          />
-          <PrintProperty
-            label="Update cadence"
-            value={INITIATIVE_CADENCE_LABEL[detail.updateCadence]}
-          />
-          <PrintProperty
-            label="Labels"
-            value={assignedLabels.map((label) => label.name).join(', ') || '—'}
-          />
-        </dl>
-        {(resourcesQ.data?.items ?? []).length ? (
-          <div className="mt-4 text-sm">
-            <p className="font-medium">Resources</p>
-            <ul className="mt-1 list-disc pl-5">
-              {(resourcesQ.data?.items ?? []).map((resource) => (
-                <li key={resource.id}>
-                  {resource.title}
-                  {resource.url ? ` — ${resource.url}` : ''}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-      </section>
 
       {tab === 'updates' ? (
         <div
@@ -841,48 +761,23 @@ export default function InitiativeDetailPage(): JSX.Element {
           }}
           placeholder="Describe this initiative…"
         />
+        <InitiativeOverviewSummary
+          initiative={detail}
+          programNoun={programNoun}
+          projectNoun={projectNoun}
+        />
+        <LatestUpdateSummary
+          updates={updates}
+          loading={updatesQ.isPending}
+          resolveActor={(actorId) => ({
+            name:
+              initiativeOwner !== null && initiativeOwner.actorId === actorId
+                ? initiativeOwner.displayName
+                : 'Unknown',
+            kind: 'human',
+          })}
+        />
       </div>
-
-      <style jsx global>{`
-        .print-only {
-          display: none;
-        }
-        @media print {
-          .print-only {
-            display: block !important;
-          }
-          .no-print,
-          nav:not(.entity-contents) {
-            display: none !important;
-          }
-          .entity-contents-desktop {
-            display: block !important;
-          }
-          .entity-contents-mobile {
-            display: none !important;
-          }
-          .initiative-print {
-            max-width: none !important;
-            padding: 0 !important;
-          }
-          .initiative-overview {
-            display: flex !important;
-          }
-          .entity-document button {
-            border: 0 !important;
-            padding: 0 !important;
-          }
-        }
-      `}</style>
     </EntityDetailLayout>
-  );
-}
-
-function PrintProperty({ label, value }: { label: string; value: string }): JSX.Element {
-  return (
-    <div className="flex justify-between gap-4 border-b py-1">
-      <dt className="text-on-surface-variant">{label}</dt>
-      <dd className="text-right capitalize">{value}</dd>
-    </div>
   );
 }

@@ -17,12 +17,10 @@
  * exception text ever reaches the screen. `unwrap` is the boundary that enforces that, so these
  * writes are exercised through it rather than around it.
  *
- * **The initiative-diff regression.** Selecting an initiative used to appear to "add then
- * immediately unadd" itself: the mutation diffed the toggle against
- * `queryClient.getQueryData(detailKey)` inside `mutationFn`, but by the time `mutationFn` ran,
- * `onMutate` had already optimistically overwritten that same cache entry with the *next* state — so
- * the diff against "current" always computed empty adds/removes, no API call fired, and the later
- * cache invalidation snapped the UI back to the pre-toggle list.
+ * **The Initiative replacement contract.** Selecting or clearing an Initiative updates the full
+ * association set through the Project PATCH route. The server validates every target before the
+ * transaction replaces the join rows, so the client cannot leave a half-applied set behind after a
+ * request fails midway through a sequence of independent link calls.
  */
 import { OrganizationId, ProjectId } from '@docket/types';
 import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
@@ -30,9 +28,7 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { JSX, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { initiativeProjectsPost, initiativeProjectDelete, projectPatch } = vi.hoisted(() => ({
-  initiativeProjectsPost: vi.fn(),
-  initiativeProjectDelete: vi.fn(),
+const { projectPatch } = vi.hoisted(() => ({
   projectPatch: vi.fn(),
 }));
 
@@ -41,14 +37,6 @@ vi.mock('../../src/lib/api', () => ({
     v1: {
       orgs: {
         ':orgId': {
-          initiatives: {
-            ':id': {
-              projects: {
-                $post: initiativeProjectsPost,
-                ':projectId': { $delete: initiativeProjectDelete },
-              },
-            },
-          },
           projects: { ':id': { $patch: projectPatch } },
           updates: { $post: vi.fn() },
         },
@@ -146,9 +134,7 @@ function mountMutations(initiativeIds: readonly string[] = []) {
 }
 
 beforeEach(() => {
-  initiativeProjectsPost.mockReset().mockResolvedValue(okResponse({}));
-  initiativeProjectDelete.mockReset().mockResolvedValue(okResponse({}));
-  projectPatch.mockReset();
+  projectPatch.mockReset().mockResolvedValue(okResponse({}));
 });
 
 afterEach(() => {
@@ -243,7 +229,7 @@ describe('useProjectMutations — project field edits', () => {
 describe('useProjectMutations — initiative field edits', () => {
   it('shows the newly linked initiative before the request settles', async () => {
     const pending = deferred<ReturnType<typeof okResponse>>();
-    initiativeProjectsPost.mockReturnValue(pending.promise);
+    projectPatch.mockReturnValue(pending.promise);
     const { result, read } = mountMutations();
 
     act(() => {
@@ -262,7 +248,7 @@ describe('useProjectMutations — initiative field edits', () => {
   });
 
   it('restores the previous links and surfaces application-owned copy on failure', async () => {
-    initiativeProjectsPost.mockRejectedValue(new Error(LEAKY_REJECTION));
+    projectPatch.mockRejectedValue(new Error(LEAKY_REJECTION));
     const { result, read } = mountMutations([INITIATIVE_ID]);
 
     act(() => {
@@ -276,14 +262,14 @@ describe('useProjectMutations — initiative field edits', () => {
     // `unwrap`'s own fallback wins over the hook's, because the failure is already a
     // `UserFacingError` by the time `propsError` reads it — both strings are application-owned, and
     // the narrower one is the more accurate description of what failed.
-    expect(result.current.propsError).toBe('Could not update the association.');
+    expect(result.current.propsError).toBe('Could not update linked Initiatives.');
     expect(result.current.propsError).not.toContain('ECONNREFUSED');
     expect(result.current.propsError).not.toContain('pg pool');
   });
 });
 
 describe('useProjectMutations.setInitiatives', () => {
-  it('actually calls the link API when an initiative is newly selected, and keeps it selected', async () => {
+  it('replaces the Initiative set through the Project PATCH API and keeps it selected', async () => {
     const { client, wrapper } = makeWrapper();
     const detailKey = queryKeys.project(ORG_ID, PROJECT_ID);
     client.setQueryData<ProjectDetailData>(detailKey, {
@@ -297,13 +283,12 @@ describe('useProjectMutations.setInitiatives', () => {
     });
 
     await waitFor(() => {
-      expect(initiativeProjectsPost).toHaveBeenCalledTimes(1);
+      expect(projectPatch).toHaveBeenCalledTimes(1);
     });
-    expect(initiativeProjectsPost).toHaveBeenCalledWith({
-      param: { orgId: ORG_ID, id: INITIATIVE_ID },
-      json: { projectId: PROJECT_ID },
+    expect(projectPatch).toHaveBeenCalledWith({
+      param: { orgId: ORG_ID, id: PROJECT_ID },
+      json: { initiativeIds: [INITIATIVE_ID] },
     });
-    expect(initiativeProjectDelete).not.toHaveBeenCalled();
 
     // The optimistic cache write must stick — no snap-back to the pre-toggle empty list.
     await waitFor(() => {
@@ -313,7 +298,7 @@ describe('useProjectMutations.setInitiatives', () => {
     });
   });
 
-  it('calls the unlink API when a previously-selected initiative is deselected', async () => {
+  it('clears the Initiative set through the Project PATCH API', async () => {
     const { client, wrapper } = makeWrapper();
     const detailKey = queryKeys.project(ORG_ID, PROJECT_ID);
     client.setQueryData<ProjectDetailData>(detailKey, {
@@ -327,11 +312,11 @@ describe('useProjectMutations.setInitiatives', () => {
     });
 
     await waitFor(() => {
-      expect(initiativeProjectDelete).toHaveBeenCalledTimes(1);
+      expect(projectPatch).toHaveBeenCalledTimes(1);
     });
-    expect(initiativeProjectDelete).toHaveBeenCalledWith({
-      param: { orgId: ORG_ID, id: INITIATIVE_ID, projectId: PROJECT_ID },
+    expect(projectPatch).toHaveBeenCalledWith({
+      param: { orgId: ORG_ID, id: PROJECT_ID },
+      json: { initiativeIds: [] },
     });
-    expect(initiativeProjectsPost).not.toHaveBeenCalled();
   });
 });

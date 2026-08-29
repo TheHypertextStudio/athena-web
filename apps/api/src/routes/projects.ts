@@ -31,7 +31,7 @@ import {
   ProjectUpdate,
 } from '@docket/types';
 import type { ProgramOut, TeamOut } from '@docket/types';
-import { and, count, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -621,6 +621,20 @@ const projects = new Hono<AppEnv>()
       if (!aggregateRow) throw new NotFoundError('Project not found');
       const { row, programRow, teamRow, leadRow } = aggregateRow;
 
+      const initiativeReferences = await db
+        .select({ id: initiative.id, name: initiative.name })
+        .from(initiativeProject)
+        .innerJoin(initiative, eq(initiativeProject.initiativeId, initiative.id))
+        .where(
+          and(
+            eq(initiativeProject.organizationId, orgId),
+            eq(initiativeProject.projectId, row.id),
+            eq(initiative.organizationId, orgId),
+            isNull(initiative.archivedAt),
+          ),
+        )
+        .orderBy(asc(initiative.name), asc(initiative.id));
+
       const taskView = await buildTaskViewCondition(orgId, actorId);
       const [progressRow] = await db
         .select({
@@ -665,6 +679,7 @@ const projects = new Hono<AppEnv>()
           lead: leadRow ? actorReference(leadRow) : null,
           program: programRow ? programToOut(programRow) : null,
           team: teamRow ? teamToOut(teamRow) : null,
+          initiatives: initiativeReferences,
         },
         defaultView: {
           project: toOut(row),
@@ -742,6 +757,10 @@ const projects = new Hono<AppEnv>()
       const labels = await resolveLabelSet(orgId, body.labelIds, {
         teamId: body.teamId ?? existingTeam ?? null,
       });
+      const initiativeIds =
+        body.initiativeIds === undefined
+          ? undefined
+          : await validatedInitiativeIds(orgId, body.initiativeIds);
 
       const nextStatus =
         body.status === undefined
@@ -816,6 +835,22 @@ const projects = new Hono<AppEnv>()
         if (!changed) return undefined;
         if (body.labelIds !== undefined) {
           await replaceLabels(tx, 'project', id, orgId, labels);
+        }
+        if (initiativeIds !== undefined) {
+          await tx
+            .delete(initiativeProject)
+            .where(
+              and(eq(initiativeProject.organizationId, orgId), eq(initiativeProject.projectId, id)),
+            );
+          if (initiativeIds.length > 0) {
+            await tx.insert(initiativeProject).values(
+              initiativeIds.map((initiativeId) => ({
+                organizationId: orgId,
+                initiativeId,
+                projectId: id,
+              })),
+            );
+          }
         }
         return changed;
       });

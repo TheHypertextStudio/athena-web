@@ -1,6 +1,6 @@
 'use client';
 
-import { entityNavigationSnapshotFromWorkViewRow } from '@docket/types';
+import { defaultEntityDisplay, entityNavigationSnapshotFromWorkViewRow } from '@docket/types';
 import { Button, Card, Checkbox } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import type { ViewTarget } from '@docket/work/view-contract';
@@ -11,6 +11,7 @@ import { ObjectSurface } from '@/components/objects/object-surface';
 
 import DocketLink from '@/components/docket-link';
 import { buildEntityHref } from '@/lib/authenticated-route';
+import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
 
 import type { WorkViewDefinitionFor } from './view-state';
 import { workViewDisplayFieldCatalog } from './view-state';
@@ -56,6 +57,19 @@ function WorkObjectCard<TTarget extends ViewTarget>({
         ) : null}
       </Card>
     </ObjectSurface>
+  );
+}
+
+/** Render the stored decorative identity for a projected work row. */
+function CardIdentity({ row }: { row: WorkViewRowFor<ViewTarget> }): JSX.Element {
+  const display = row.display ?? defaultEntityDisplay(row.target, row.id);
+  return (
+    <EntityIconGlyph
+      iconKey={display.iconKey}
+      colorKey={display.colorKey}
+      customColor={display.customColor}
+      size={24}
+    />
   );
 }
 
@@ -149,7 +163,7 @@ export function WorkCards<TTarget extends ViewTarget>({
                 <ProgramWorkCard row={row} />
               ) : (
                 <div className="flex items-start gap-3">
-                  <span aria-hidden className="size-6 shrink-0" />
+                  <CardIdentity row={row} />
                   <div className="min-w-0 flex-1">
                     <h2 className="text-title-medium truncate">{workViewRowTitle(row)}</h2>
                     {properties.length > 0 ? (

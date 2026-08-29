@@ -49,8 +49,9 @@ import {
   type TaskTableActor,
 } from '../../../src/components/views/task-table';
 
-const { activeGet, recordsPost } = vi.hoisted(() => ({
+const { activeGet, displayGet, recordsPost } = vi.hoisted(() => ({
   activeGet: vi.fn(),
+  displayGet: vi.fn(),
   recordsPost: vi.fn(),
 }));
 
@@ -60,6 +61,11 @@ vi.mock('../../../src/lib/api', () => ({
       time: {
         active: { $get: activeGet },
         records: { $post: recordsPost },
+      },
+      orgs: {
+        ':orgId': {
+          display: { ':subjectType': { $get: displayGet } },
+        },
       },
     },
   },
@@ -97,6 +103,7 @@ function withQueryClient(children: ReactNode): ReactNode {
 beforeEach(() => {
   activeGet.mockReset();
   recordsPost.mockReset();
+  displayGet.mockReset();
   open.mockReset();
   activeGet.mockResolvedValue({
     ok: true,
@@ -109,6 +116,7 @@ beforeEach(() => {
         activeAgentExecutions: [],
       }),
   });
+  displayGet.mockResolvedValue(jsonResponse({ items: [] }));
 });
 
 afterEach(cleanup);
@@ -212,6 +220,46 @@ describe('buildTaskColumns', () => {
 });
 
 describe('TaskTable', () => {
+  it('loads all customized task identities with one workspace bulk request', async () => {
+    const first = task({ id: TASK_1, title: 'First' });
+    const second = task({ id: TASK_2, title: 'Second' });
+    displayGet.mockResolvedValue(
+      jsonResponse({
+        items: [
+          {
+            subjectType: 'task',
+            subjectId: TASK_1,
+            iconKey: 'target',
+            colorKey: 'purple',
+            customColor: '#6d28d9',
+            coverImage: null,
+            customized: true,
+          },
+        ],
+      }),
+    );
+    render(
+      withQueryClient(
+        <InteractionProvider registry={createActionRegistry()}>
+          <DragProvider>
+            <TaskTable
+              label="Tasks"
+              columns={columns}
+              tasks={[first, second]}
+              taskHref={(item) => `/orgs/${ORG_ID}/tasks/${item.id}`}
+            />
+          </DragProvider>
+        </InteractionProvider>,
+      ),
+    );
+    await waitFor(() => {
+      expect(displayGet).toHaveBeenCalledTimes(1);
+    });
+    expect(displayGet).toHaveBeenCalledWith({
+      param: { orgId: ORG_ID, subjectType: 'task' },
+    });
+  });
+
   it('selects rows without hijacking title navigation and publishes shared drag identity', () => {
     const registry = createActionRegistry();
     const first = task({ id: TASK_1, title: 'First' });

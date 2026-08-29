@@ -317,9 +317,6 @@
   "apps/web/src/components/stream/athena-plan.tsx": {
     "raw-type-utility": 9
   },
-  "apps/web/src/components/stream/event-drawer.tsx": {
-    "shadow-outside-overlay": 1
-  },
   "apps/web/src/components/stream/provider-badge.tsx": {
     "hardcoded-color": 6,
     "raw-type-utility": 1

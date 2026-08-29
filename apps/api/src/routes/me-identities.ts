@@ -10,7 +10,17 @@
  * get HTTP 401.
  */
 import { canUseGoogleOAuth } from '@docket/auth';
-import { account, db, passkey } from '@docket/db';
+import { workflowIdFor } from '@docket/athena/execution-protocol';
+import {
+  account,
+  actor,
+  agentSession,
+  agentSessionExternalLink,
+  agentSessionRun,
+  db,
+  passkey,
+  sessionActivity,
+} from '@docket/db';
 import { IdentityDeleteOut, IdentityListOut, IdentityProvider } from '@docket/types';
 import { and, eq } from 'drizzle-orm';
 import { type Context, Hono } from 'hono';
@@ -19,9 +29,10 @@ import { z } from 'zod';
 import type { AppEnv, AuthSession } from '../context';
 import { AuthError, ConflictError, NotFoundError, ReauthRequiredError } from '../error';
 import { env } from '../env';
+import { verifyExternalAgentControl } from '../lib/external-agent-control-token';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
-import { zParam } from '../lib/validate';
+import { zJson, zParam } from '../lib/validate';
 
 import { linkedIdentities } from './integration-provider';
 
@@ -42,6 +53,8 @@ function requireFreshSession(session: NonNullable<AuthSession>): void {
 
 /** The exact provider identity addressed by the unlink route. */
 const identityParam = z.object({ provider: IdentityProvider, accountId: z.string().min(1) });
+const externalAgentCompleteInput = z.object({ token: z.string().min(1) });
+const externalAgentCompleteOutput = z.object({ status: z.literal(true), sessionId: z.string() });
 
 const meIdentities = new Hono<AppEnv>()
   .get(
@@ -64,6 +77,105 @@ The display \`email\`/\`name\`/\`picture\` are **decoded server-side from the st
           stage: env.GOOGLE_OAUTH_PUBLIC ? 'public' : 'testing',
         },
       });
+    },
+  )
+  .post(
+    '/external-agent/complete',
+    apiDoc({
+      tag: 'Me',
+      summary: 'Complete an external Athena identity continuation',
+      response: externalAgentCompleteOutput,
+      description: `Consume one signed external-agent authentication continuation after the caller links the exact provider account that opened the Athena session. The continuation binds the provider, external actor, and waiting session. Docket also requires the caller to be an active actor in the session's workspace before it resumes the session and queues one run generation. Replays by the same actor are idempotent.`,
+    }),
+    zJson(externalAgentCompleteInput),
+    async (c) => {
+      const current = requireSession(c);
+      const control = verifyExternalAgentControl(c.req.valid('json').token);
+      if (control?.kind !== 'authentication' || control.provider !== 'linear') {
+        throw new ConflictError(
+          'This account-link request is invalid or expired.',
+          'external_identity_mismatch',
+        );
+      }
+      const [linked] = await db
+        .select({
+          organizationId: agentSessionExternalLink.organizationId,
+          provider: agentSessionExternalLink.provider,
+          initiatorId: agentSession.initiatorId,
+        })
+        .from(agentSessionExternalLink)
+        .innerJoin(agentSession, eq(agentSession.id, agentSessionExternalLink.sessionId))
+        .where(eq(agentSessionExternalLink.sessionId, control.sessionId))
+        .limit(1);
+      const [identity] = await db
+        .select({ id: account.id })
+        .from(account)
+        .where(
+          and(
+            eq(account.userId, current.user.id),
+            eq(account.providerId, 'linear'),
+            eq(account.accountId, control.externalActorId),
+          ),
+        )
+        .limit(1);
+      const [member] = linked
+        ? await db
+            .select({ id: actor.id })
+            .from(actor)
+            .where(
+              and(
+                eq(actor.organizationId, linked.organizationId),
+                eq(actor.userId, current.user.id),
+                eq(actor.kind, 'human'),
+                eq(actor.status, 'active'),
+              ),
+            )
+            .limit(1)
+        : [];
+      if (
+        linked?.provider !== control.provider ||
+        !identity ||
+        !member ||
+        (linked.initiatorId !== null && linked.initiatorId !== member.id)
+      ) {
+        throw new ConflictError(
+          'Link the Linear account that opened this Athena session before continuing.',
+          'external_identity_mismatch',
+        );
+      }
+      if (linked.initiatorId === null) {
+        await db.transaction(async (tx) => {
+          const [resumed] = await tx
+            .update(agentSession)
+            .set({ initiatorId: member.id, status: 'pending' })
+            .where(
+              and(
+                eq(agentSession.id, control.sessionId),
+                eq(agentSession.status, 'awaiting_input'),
+              ),
+            )
+            .returning({ id: agentSession.id });
+          if (!resumed) return;
+          await tx.insert(sessionActivity).values({
+            sessionId: control.sessionId,
+            organizationId: linked.organizationId,
+            type: 'thought',
+            body: { text: 'Account connected. Athena is resuming.' },
+          });
+          await tx
+            .insert(agentSessionRun)
+            .values({
+              sessionId: control.sessionId,
+              organizationId: linked.organizationId,
+              generation: 0,
+              workflowInstanceId: workflowIdFor(control.sessionId, 0),
+              status: 'queued',
+              dispatchOrigin: 'unclassified',
+            })
+            .onConflictDoNothing();
+        });
+      }
+      return ok(c, externalAgentCompleteOutput, { status: true, sessionId: control.sessionId });
     },
   )
   .delete(

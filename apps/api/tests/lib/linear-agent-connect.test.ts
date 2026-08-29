@@ -3,6 +3,7 @@ import { beforeAll, describe, expect, it, vi } from 'vitest';
 import type * as LinearAgentConnect from '../../src/lib/linear-agent-connect';
 
 vi.hoisted(() => {
+  process.env['LINEAR_AGENT_ENABLED'] = 'true';
   process.env['LINEAR_AGENT_CLIENT_ID'] = 'agent-client-id';
   process.env['LINEAR_AGENT_CLIENT_SECRET'] = 'agent-client-secret';
   process.env['LINEAR_AGENT_WEBHOOK_SECRET'] = 'agent-webhook-secret';
@@ -26,6 +27,19 @@ describe('linearAgentConfigFromEnv', () => {
       webhookSecret: 'agent-webhook-secret',
       redirectUri: 'https://api.docket.test/internal/integrations/linear-agent/callback',
     });
+  });
+
+  it('stays disabled when credentials exist but the explicit release gate is false', async () => {
+    const { env } = await import('../../src/env');
+    const parsedEnv = env as unknown as { LINEAR_AGENT_ENABLED: boolean };
+    const originalValue = parsedEnv.LINEAR_AGENT_ENABLED;
+    parsedEnv.LINEAR_AGENT_ENABLED = false;
+
+    try {
+      expect(linearAgentConfigFromEnv()).toBeNull();
+    } finally {
+      parsedEnv.LINEAR_AGENT_ENABLED = originalValue;
+    }
   });
 });
 

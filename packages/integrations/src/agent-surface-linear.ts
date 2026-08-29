@@ -79,7 +79,7 @@ export interface LinearAgentSurfaceOutput {
         readonly type: 'select';
         readonly options: readonly { readonly label: string; readonly value: string }[];
       }
-    | { readonly type: 'auth'; readonly url: string }
+    | { readonly type: 'auth'; readonly url: string; readonly userId: string }
     | { readonly type: 'stop'; readonly value: string };
 }
 
@@ -233,7 +233,13 @@ export const linearAgentSurface: AgentSurfaceAdapter<'linear', LinearSurfaceType
             },
           }
         : control?.type === 'authentication'
-          ? { signal: { type: 'auth' as const, url: control.url } }
+          ? {
+              signal: {
+                type: 'auth' as const,
+                url: control.url,
+                userId: control.externalActorId,
+              },
+            }
           : control?.type === 'stop'
             ? { signal: { type: 'stop' as const, value: control.stopToken } }
             : {}),
@@ -253,7 +259,11 @@ export const linearAgentSurface: AgentSurfaceAdapter<'linear', LinearSurfaceType
         : output.signal?.type === 'auth'
           ? {
               signal: 'auth' as const,
-              signalMetadata: { url: output.signal.url, providerName: 'Docket' },
+              signalMetadata: {
+                url: output.signal.url,
+                userId: output.signal.userId,
+                providerName: 'Docket',
+              },
             }
           : {}),
     });

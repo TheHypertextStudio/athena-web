@@ -379,6 +379,10 @@ describe('production account-creation deployment contract', () => {
     expect(workflow).toContain('WORK_LOCATION_PROJECTION_ENABLED: "false"');
   });
 
+  it('keeps the Linear Agent runtime disabled until its sandbox gate passes', () => {
+    expect(workflow).toContain('LINEAR_AGENT_ENABLED: "false"');
+  });
+
   it('deploys bootstrap-managed billing without an MCP vendor allowlist', () => {
     expect(workflow).toContain('BILLING_CANARY_EMAILS: "${{ vars.BILLING_CANARY_EMAILS }}"');
     expect(workflow).toContain('BILLING_ENABLED: "${{ vars.BILLING_ENABLED }}"');

@@ -7,6 +7,28 @@ import {
   findLinearAgentIntegration,
 } from './linear-agent-credential';
 
+/** Stable failure raised when a provider install cannot publish until a human reconnects it. */
+export class ExternalAgentInstallationError extends Error {
+  readonly code = 'external_agent_installation_unavailable';
+
+  constructor(readonly provider: 'linear') {
+    super('The external agent installation must be reconnected.');
+    this.name = 'ExternalAgentInstallationError';
+  }
+}
+
+/** Whether an outbound failure requires reconnection rather than a timed retry. */
+export function isExternalAgentInstallationError(
+  error: unknown,
+): error is ExternalAgentInstallationError {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    Reflect.get(error, 'code') === 'external_agent_installation_unavailable' &&
+    Reflect.get(error, 'provider') === 'linear'
+  );
+}
+
 /** Publish one rendered provider output with the owning installation credential. */
 export async function publishExternalAgentOutput(
   request: ExternalAgentPublishRequest,
@@ -15,10 +37,10 @@ export async function publishExternalAgentOutput(
     case 'linear': {
       const installed = await findLinearAgentIntegration(request.organizationId);
       if (installed?.status !== 'connected') {
-        throw new Error('Linear Agent installation is unavailable.');
+        throw new ExternalAgentInstallationError('linear');
       }
       const port = await buildLinearAgentPortForIntegration(installed.id);
-      if (!port) throw new Error('Linear Agent credential is unavailable.');
+      if (!port) throw new ExternalAgentInstallationError('linear');
       if (request.kind === 'prepare_session') {
         await port.agentSessionUpdate({
           agentSessionId: request.session.id,
@@ -40,7 +62,11 @@ export async function publishExternalAgentOutput(
           : output.signal?.type === 'auth'
             ? {
                 signal: 'auth',
-                signalMetadata: { url: output.signal.url, providerName: 'Docket' },
+                signalMetadata: {
+                  url: output.signal.url,
+                  userId: output.signal.userId,
+                  providerName: 'Docket',
+                },
               }
             : {}),
       });

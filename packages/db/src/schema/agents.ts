@@ -541,7 +541,7 @@ export const agentSessionExternalLink = pgTable(
      * pagination cursor — `(updatedAt, id) > (watermarkUpdatedAt, watermarkId)` — so the relay
      * catches both newly-inserted rows AND rows whose `updatedAt` was bumped by an in-place
      * update, without ever re-relaying (and duplicating in the Linear thread) a row already
-     * seen at that exact `updatedAt`. See `lib/linear-agent-relay.ts` for the query and the
+     * seen at that exact `updatedAt`. See `lib/external-agent-relay.ts` for the query and the
      * full reasoning.
      */
     lastRelayedActivityId: text('last_relayed_activity_id'),

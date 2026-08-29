@@ -6,6 +6,7 @@ import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
+import { workflowIdFor } from '@docket/athena/execution-protocol';
 import type * as IntegrationsModule from '@docket/integrations';
 import type * as ContainerModule from '../../src/container';
 import type ingestLinearAgentRouter from '../../src/routes/ingest-linear-agent';
@@ -33,6 +34,7 @@ vi.hoisted(() => {
   process.env['AGENT_MAX_TURNS'] = '8';
   process.env['API_URL'] = 'https://api.docket.test';
   process.env['CREDENTIALS_ENCRYPTION_KEY'] = Buffer.from('0'.repeat(32)).toString('base64');
+  process.env['LINEAR_AGENT_ENABLED'] = 'true';
   process.env['LINEAR_AGENT_CLIENT_ID'] = 'agent-client-id';
   process.env['LINEAR_AGENT_CLIENT_SECRET'] = 'agent-client-secret';
   process.env['LINEAR_AGENT_WEBHOOK_SECRET'] = 'agent-webhook-secret';
@@ -182,7 +184,7 @@ describe('POST /internal/ingest/linear-agent', () => {
     expect(rows).toHaveLength(0);
   });
 
-  it('persists and processes an event when outbound publication must wait for a credential', async () => {
+  it('persists the event and marks outbound publication terminal when the install has no credential', async () => {
     const seeded = await seedOrgWithLinearAgent({ withCredential: false });
     const { headers, rawBody } = signed({
       action: 'created',
@@ -205,7 +207,11 @@ describe('POST /internal/ingest/linear-agent', () => {
       .select()
       .from(schema.agentSessionExternalLink)
       .where(eq(schema.agentSessionExternalLink.sessionId, assertDefined(rows[0]).id));
-    expect(link).toMatchObject({ relayStatus: 'retrying', relayAttempts: 1 });
+    expect(link).toMatchObject({
+      relayStatus: 'errored',
+      relayAttempts: 0,
+      lastRelayError: 'The Linear Agent connection must be reconnected.',
+    });
   });
 
   describe('action: created', () => {
@@ -314,7 +320,19 @@ describe('POST /internal/ingest/linear-agent', () => {
         .select()
         .from(schema.sessionActivity)
         .where(eq(schema.sessionActivity.sessionId, sessionId));
-      expect(activities.some((a) => a.type === 'elicitation')).toBe(true);
+      expect(activities).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'elicitation',
+            body: expect.objectContaining({
+              externalAgentControl: {
+                type: 'authentication',
+                externalActorId: 'linear_user_unknown',
+              },
+            }),
+          }),
+        ]),
+      );
 
       const runs = await db
         .select()
@@ -461,6 +479,57 @@ describe('POST /internal/ingest/linear-agent', () => {
   });
 
   describe('action: prompted', () => {
+    it('stops the linked session from Linear native stop signal without requiring an invented token', async () => {
+      const seeded = await seedOrgWithLinearAgent();
+      const port = new MockLinearAgent();
+      buildLinearAgentClient.mockReturnValue(port);
+      const linearActorId = await seedLinkedLinearActor(seeded.orgId, 'linear_user_stop');
+      const sessionId = await createBaseSession(
+        seeded.orgId,
+        seeded.workspaceId,
+        'las_stop',
+        linearActorId,
+      );
+      await db
+        .update(schema.agentSession)
+        .set({ status: 'running' })
+        .where(eq(schema.agentSession.id, sessionId));
+      await db.insert(schema.agentSessionRun).values({
+        sessionId,
+        organizationId: seeded.orgId,
+        generation: 0,
+        workflowInstanceId: workflowIdFor(sessionId, 0),
+        status: 'running',
+        dispatchOrigin: 'unclassified',
+      });
+
+      const { headers, rawBody } = signed({
+        action: 'prompted',
+        organizationId: seeded.workspaceId,
+        agentSession: { id: 'las_stop' },
+        actor: { id: 'linear_user_stop' },
+        agentActivity: { id: 'activity_stop_1', signal: { type: 'stop' } },
+      });
+
+      const response = await ingestLinearAgent.request('/linear-agent', {
+        method: 'POST',
+        headers,
+        body: rawBody,
+      });
+
+      expect(response.status).toBe(200);
+      const [session] = await db
+        .select()
+        .from(schema.agentSession)
+        .where(eq(schema.agentSession.id, sessionId));
+      expect(session).toMatchObject({ status: 'canceled', currentStep: 'Stopped' });
+      const [run] = await db
+        .select()
+        .from(schema.agentSessionRun)
+        .where(eq(schema.agentSessionRun.sessionId, sessionId));
+      expect(run?.status).toBe('canceled');
+    });
+
     async function createBaseSession(
       orgId: string,
       workspaceId: string,

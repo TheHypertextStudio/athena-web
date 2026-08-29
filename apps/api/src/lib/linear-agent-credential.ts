@@ -5,7 +5,7 @@
  * Two callers need to turn an org's `linear_agent` integration into an authenticated
  * {@link LinearAgentPort}: the webhook receiver (`routes/ingest-linear-agent.ts`, which already
  * has the integration row in hand from its workspace-id routing) and the outbound relay
- * (`lib/linear-agent-relay.ts`, which only has an org id). Kept in exactly one place so the
+ * (`lib/external-agent-relay.ts`, which only has an org id). Kept in exactly one place so the
  * OAuth callback that seals the credential (`routes/integrations-linear-agent-oauth.ts`,
  * `sealCredential(JSON.stringify(tokens))`) and every reader agree on the envelope shape — a
  * webhook-side and relay-side copy of this unseal/parse logic that drifted would be a silent
@@ -129,15 +129,12 @@ export async function buildLinearAgentPortForIntegration(
           .set({ ciphertext: sealCredential(JSON.stringify(next)) })
           .where(eq(integrationCredential.integrationId, integrationId));
         return buildLinearAgentClient(next.accessToken);
-      } catch (cause) {
+      } catch {
         await db
           .update(integration)
           .set({
             status: 'error',
-            lastError:
-              cause instanceof Error
-                ? cause.message
-                : 'Linear Agent token refresh failed; reconnect required',
+            lastError: 'The Linear Agent connection must be reconnected.',
             lastErrorAt: new Date(),
           })
           .where(eq(integration.id, integrationId));

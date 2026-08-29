@@ -193,6 +193,7 @@ export async function processExternalAgentInboxEvent(row: ExternalAgentInboxRow)
         provider,
         createdByActorId,
         initiatorActorId: actorId,
+        externalActorId: event.actor.externalId,
         trigger: event.trigger === 'message' ? 'delegation' : event.trigger,
         prompt: event.context.prompt,
         externalSessionId: event.externalSessionId,
@@ -289,7 +290,10 @@ export async function processExternalAgentInboxEvent(row: ExternalAgentInboxRow)
     }
     {
       if (!actorId) continue;
-      if (provider !== 'jira_a2a') {
+      // Linear creates the stop activity itself after the user invokes its native stop command.
+      // The verified webhook and resolved actor are the authority; Linear does not return an
+      // application-supplied token on that signal. Reply-based providers still need one.
+      if (provider !== 'linear' && provider !== 'jira_a2a') {
         const control = event.stopToken ? verifyExternalAgentControl(event.stopToken) : null;
         if (
           !control ||

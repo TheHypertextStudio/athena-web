@@ -36,6 +36,7 @@
     "icons": "pnpm --filter @docket/brand icons",
     "bootstrap": "tsx scripts/bootstrap.ts",
     "integrations": "tsx scripts/integrations-setup.ts",
+    "linear-agent:sandbox-check": "tsx scripts/linear-agent-sandbox-check.ts",
     "env:check": "tsx scripts/env-check.ts",
     "domain:check": "tsx scripts/domain-check.ts",
     "workspaces:provision": "tsx scripts/provision-workspaces.ts",

@@ -50,6 +50,7 @@ function validApiEnv(): Record<string, string> {
     BETTER_AUTH_PASSKEY_RP_NAME: 'Docket',
     GOOGLE_OAUTH_PUBLIC: 'false',
     WORK_LOCATION_PROJECTION_ENABLED: 'false',
+    LINEAR_AGENT_ENABLED: 'false',
     AGENT_MAX_TURNS: '24',
     ATHENA_ASYNC_RUNNER_ENABLED: 'false',
     CRON_SECRET: 'test-cron-secret',
@@ -206,6 +207,9 @@ describe('slices', () => {
     expect(authServer.GOOGLE_OAUTH_PUBLIC.parse('false')).toBe(false);
     expect(() => authServer.WORK_LOCATION_PROJECTION_ENABLED.parse(undefined)).toThrow();
     expect(authServer.WORK_LOCATION_PROJECTION_ENABLED.parse('false')).toBe(false);
+    expect(() => authServer.LINEAR_AGENT_ENABLED.parse(undefined)).toThrow();
+    expect(authServer.LINEAR_AGENT_ENABLED.parse('true')).toBe(true);
+    expect(authServer.LINEAR_AGENT_ENABLED.parse('false')).toBe(false);
   });
 
   it('keeps genuinely-optional vars optional and fails fast on required ops/client vars', () => {
@@ -937,6 +941,47 @@ describe('api composition', () => {
       await expect(import('../../src/api')).rejects.toThrow(
         'MCP_TASKS_ENABLED=true requires MCP_SESSION_STORE_URL',
       );
+    });
+  });
+
+  describe('cross-field: Linear Agent release gate', () => {
+    it('rejects an enabled runtime without all Agent credentials', async () => {
+      for (const [key, value] of Object.entries({
+        ...validApiEnv(),
+        LINEAR_AGENT_ENABLED: 'true',
+      })) {
+        vi.stubEnv(key, value);
+      }
+      await expect(import('../../src/api')).rejects.toThrow(
+        'LINEAR_AGENT_ENABLED=true requires LINEAR_AGENT_CLIENT_ID, LINEAR_AGENT_CLIENT_SECRET, and LINEAR_AGENT_WEBHOOK_SECRET.',
+      );
+    });
+
+    it('accepts an enabled runtime with all Agent credentials', async () => {
+      for (const [key, value] of Object.entries({
+        ...validApiEnv(),
+        LINEAR_AGENT_ENABLED: 'true',
+        LINEAR_AGENT_CLIENT_ID: 'agent-client-id',
+        LINEAR_AGENT_CLIENT_SECRET: 'agent-client-secret',
+        LINEAR_AGENT_WEBHOOK_SECRET: 'agent-webhook-secret',
+      })) {
+        vi.stubEnv(key, value);
+      }
+      const mod = await import('../../src/api');
+      expect(mod.env.LINEAR_AGENT_ENABLED).toBe(true);
+    });
+
+    it('keeps the Agent runtime disabled when credentials exist without the gate', async () => {
+      for (const [key, value] of Object.entries({
+        ...validApiEnv(),
+        LINEAR_AGENT_CLIENT_ID: 'agent-client-id',
+        LINEAR_AGENT_CLIENT_SECRET: 'agent-client-secret',
+        LINEAR_AGENT_WEBHOOK_SECRET: 'agent-webhook-secret',
+      })) {
+        vi.stubEnv(key, value);
+      }
+      const mod = await import('../../src/api');
+      expect(mod.env.LINEAR_AGENT_ENABLED).toBe(false);
     });
   });
 

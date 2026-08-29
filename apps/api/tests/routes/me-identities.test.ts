@@ -4,6 +4,8 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type * as DbModule from '@docket/db';
 
 import type * as ProviderModule from '../../src/routes/integration-provider';
+import { signExternalAgentControl } from '../../src/lib/external-agent-control-token';
+import { ensureDefaultAgent } from '../../src/lib/default-agent';
 import { appWithSession, fakeSession, getDb, seedBaseOrg } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
 
@@ -161,6 +163,113 @@ describe('DELETE /me/identities/:provider/:accountId', () => {
     const res = await app.request('/linear/lin-stale', { method: 'DELETE' });
     expect(res.status).toBe(401);
     expect(await res.json()).toMatchObject({ code: 'reauth_required' });
+  });
+});
+
+describe('POST /me/identities/external-agent/complete', () => {
+  it('binds the linked Linear identity to the waiting session and queues it once', async () => {
+    const seeded = await seedBaseOrg(db, schema);
+    const userId = await seedUser(
+      `agent-auth-${Math.random().toString(36).slice(2)}@x.test`,
+      'Lin',
+    );
+    await db.update(schema.actor).set({ userId }).where(eq(schema.actor.id, seeded.humanActorId));
+    await seedAccount(userId, 'linear', 'linear-user-auth', 'read write');
+    const agent = await ensureDefaultAgent(seeded.orgId, seeded.humanActorId);
+    const [session] = await db
+      .insert(schema.agentSession)
+      .values({
+        organizationId: seeded.orgId,
+        agentId: agent.id,
+        trigger: 'mention',
+        status: 'awaiting_input',
+      })
+      .returning({ id: schema.agentSession.id });
+    const sessionId = assertDefined(session).id;
+    await db.insert(schema.agentSessionExternalLink).values({
+      sessionId,
+      organizationId: seeded.orgId,
+      provider: 'linear',
+      externalWorkspaceId: 'linear-workspace-auth',
+      externalSessionId: 'linear-session-auth',
+    });
+    const token = signExternalAgentControl({
+      kind: 'authentication',
+      provider: 'linear',
+      sessionId,
+      externalActorId: 'linear-user-auth',
+    });
+    const app = appWithSession(meIdentities, fakeSession(userId));
+
+    const first = await app.request('/external-agent/complete', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+    const replay = await app.request('/external-agent/complete', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+
+    expect(first.status).toBe(200);
+    expect(replay.status).toBe(200);
+    expect(await first.json()).toEqual({ status: true, sessionId });
+    const [stored] = await db
+      .select()
+      .from(schema.agentSession)
+      .where(eq(schema.agentSession.id, sessionId));
+    expect(stored).toMatchObject({ status: 'pending', initiatorId: seeded.humanActorId });
+    const runs = await db
+      .select()
+      .from(schema.agentSessionRun)
+      .where(eq(schema.agentSessionRun.sessionId, sessionId));
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toMatchObject({ generation: 0, status: 'queued' });
+  });
+
+  it('rejects a signed continuation when the caller did not link its Linear identity', async () => {
+    const seeded = await seedBaseOrg(db, schema);
+    const userId = await seedUser(
+      `agent-auth-wrong-${Math.random().toString(36).slice(2)}@x.test`,
+      'No',
+    );
+    await db.update(schema.actor).set({ userId }).where(eq(schema.actor.id, seeded.humanActorId));
+    await seedAccount(userId, 'linear', 'different-linear-user', 'read write');
+    const agent = await ensureDefaultAgent(seeded.orgId, seeded.humanActorId);
+    const [session] = await db
+      .insert(schema.agentSession)
+      .values({
+        organizationId: seeded.orgId,
+        agentId: agent.id,
+        trigger: 'mention',
+        status: 'awaiting_input',
+      })
+      .returning({ id: schema.agentSession.id });
+    const sessionId = assertDefined(session).id;
+    await db.insert(schema.agentSessionExternalLink).values({
+      sessionId,
+      organizationId: seeded.orgId,
+      provider: 'linear',
+      externalWorkspaceId: 'linear-workspace-wrong',
+      externalSessionId: 'linear-session-wrong',
+    });
+    const token = signExternalAgentControl({
+      kind: 'authentication',
+      provider: 'linear',
+      sessionId,
+      externalActorId: 'linear-user-required',
+    });
+    const app = appWithSession(meIdentities, fakeSession(userId));
+
+    const response = await app.request('/external-agent/complete', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: 'external_identity_mismatch' });
   });
 });
 

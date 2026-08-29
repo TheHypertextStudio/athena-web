@@ -359,6 +359,16 @@ export const CORE_VARS: readonly VarSpec[] = [
     sensitive: true,
   },
   {
+    name: 'LINEAR_AGENT_ENABLED',
+    slice: 'auth',
+    scope: 'server',
+    targets: ['api'],
+    required: true,
+    zod: authServer.LINEAR_AGENT_ENABLED,
+    where:
+      'Explicit Linear Agent release gate. Keep false until the current provider contract and sandbox round trip pass.',
+  },
+  {
     name: 'LINEAR_AGENT_CLIENT_ID',
     slice: 'auth',
     scope: 'server',

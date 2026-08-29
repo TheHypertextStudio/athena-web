@@ -88,7 +88,9 @@ export interface LinearAgentConfig {
  * relay infrastructure now would be speculative. Revisit if that need ever materializes.
  */
 export function linearAgentConfigFromEnv(): LinearAgentConfig | null {
+  const enabled = env.LINEAR_AGENT_ENABLED as boolean | string;
   if (
+    (enabled !== true && enabled !== 'true') ||
     !env.LINEAR_AGENT_CLIENT_ID ||
     !env.LINEAR_AGENT_CLIENT_SECRET ||
     !env.LINEAR_AGENT_WEBHOOK_SECRET

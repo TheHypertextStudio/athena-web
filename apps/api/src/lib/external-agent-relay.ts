@@ -1,7 +1,14 @@
 /** Durable provider-neutral projection of Athena session activity. */
-import { and, asc, eq, gt, or } from 'drizzle-orm';
+import { and, asc, eq, exists, gt, isNull, lte, ne, or } from 'drizzle-orm';
 
-import { agentSessionExternalLink, db, sessionActivity } from '@docket/db';
+import {
+  actor,
+  agentSessionExternalLink,
+  db,
+  integration,
+  notification,
+  sessionActivity,
+} from '@docket/db';
 import {
   agentSurfaceFor,
   type AgentSurfaceProvider,
@@ -12,7 +19,10 @@ import {
 } from '@docket/integrations';
 
 import { signExternalAgentControl } from './external-agent-control-token';
-import { publishExternalAgentOutput } from './external-agent-publisher';
+import {
+  isExternalAgentInstallationError,
+  publishExternalAgentOutput,
+} from './external-agent-publisher';
 import { webAppOrigin } from './github-app';
 
 type ActivityRow = typeof sessionActivity.$inferSelect;
@@ -47,6 +57,15 @@ function provider(value: string): AgentSurfaceProvider {
 
 function canonicalActivity(row: ActivityRow, link: LinkRow): CanonicalAgentActivity {
   const externalProvider = provider(link.provider);
+  const externalControl = row.body['externalAgentControl'];
+  const authenticationActorId =
+    row.type === 'elicitation' &&
+    typeof externalControl === 'object' &&
+    externalControl !== null &&
+    Reflect.get(externalControl, 'type') === 'authentication' &&
+    typeof Reflect.get(externalControl, 'externalActorId') === 'string'
+      ? (Reflect.get(externalControl, 'externalActorId') as string)
+      : null;
   const control =
     row.type === 'action' && row.approvalStatus === 'proposed'
       ? {
@@ -67,7 +86,20 @@ function canonicalActivity(row: ActivityRow, link: LinkRow): CanonicalAgentActiv
             decision: 'reject',
           }),
         }
-      : undefined;
+      : authenticationActorId
+        ? {
+            type: 'authentication' as const,
+            url: `${webAppOrigin()}/external-agent/connect?${new URLSearchParams({
+              token: signExternalAgentControl({
+                kind: 'authentication',
+                provider: externalProvider,
+                sessionId: link.sessionId,
+                externalActorId: authenticationActorId,
+              }),
+            }).toString()}`,
+            externalActorId: authenticationActorId,
+          }
+        : undefined;
   return {
     id: row.id,
     type: row.type,
@@ -190,6 +222,52 @@ function retryDelay(attempt: number): number {
   return Math.min(60 * 60_000, 30_000 * 2 ** Math.max(0, attempt - 1));
 }
 
+async function markInstallationUnavailable(link: LinkRow): Promise<void> {
+  const message = 'The Linear Agent connection must be reconnected.';
+  const transitioned = await db
+    .update(agentSessionExternalLink)
+    .set({
+      relayStatus: 'errored',
+      nextRelayAt: null,
+      lastRelayError: message,
+    })
+    .where(
+      and(
+        eq(agentSessionExternalLink.sessionId, link.sessionId),
+        ne(agentSessionExternalLink.relayStatus, 'errored'),
+      ),
+    )
+    .returning({ sessionId: agentSessionExternalLink.sessionId });
+  if (!transitioned[0]) return;
+  const [installed] = await db
+    .update(integration)
+    .set({ status: 'error', lastError: message, lastErrorAt: new Date() })
+    .where(
+      and(
+        eq(integration.organizationId, link.organizationId),
+        eq(integration.provider, 'linear_agent'),
+      ),
+    )
+    .returning({ createdBy: integration.createdBy });
+  if (!installed?.createdBy) return;
+  const [owner] = await db
+    .select({ userId: actor.userId })
+    .from(actor)
+    .where(eq(actor.id, installed.createdBy))
+    .limit(1);
+  if (!owner?.userId) return;
+  await db.insert(notification).values({
+    userId: owner.userId,
+    organizationId: link.organizationId,
+    type: 'connector_needs_reauth',
+    body: {
+      title: 'Reconnect Linear Agent',
+      summary: 'Reconnect Linear Agent so Athena can continue replying in Linear.',
+      url: `/orgs/${link.organizationId}/settings/connections`,
+    },
+  });
+}
+
 async function prepareExternalSession(
   publisher: ExternalAgentPublisher,
   link: LinkRow,
@@ -256,11 +334,17 @@ export async function relayExternalAgentActivity(
     .from(agentSessionExternalLink)
     .where(eq(agentSessionExternalLink.sessionId, sessionId))
     .limit(1);
-  if (!link || (link.nextRelayAt && link.nextRelayAt > now)) return;
+  if (!link || link.relayStatus === 'errored' || (link.nextRelayAt && link.nextRelayAt > now)) {
+    return;
+  }
   if (link.relayStatus === 'pending' && !link.lastRelayedActivityUpdatedAt) {
     try {
       await prepareExternalSession(dependencies.publish, link);
-    } catch {
+    } catch (error) {
+      if (isExternalAgentInstallationError(error)) {
+        await markInstallationUnavailable(link);
+        return;
+      }
       const attempts = link.relayAttempts + 1;
       await db
         .update(agentSessionExternalLink)
@@ -294,7 +378,11 @@ export async function relayExternalAgentActivity(
     if (!shouldSkip(row)) {
       try {
         await publishActivity(dependencies.publish, link, canonicalActivity(row, link));
-      } catch {
+      } catch (error) {
+        if (isExternalAgentInstallationError(error)) {
+          await markInstallationUnavailable(link);
+          return;
+        }
         const attempts = link.relayAttempts + 1;
         await db
           .update(agentSessionExternalLink)
@@ -337,9 +425,36 @@ export async function sweepExternalAgentRelays(
   now: Date,
   dependencies: ExternalAgentRelayDependencies = { publish: publishExternalAgentOutput },
 ): Promise<ExternalAgentRelaySweepResult> {
+  const laggedActivity = db
+    .select({ id: sessionActivity.id })
+    .from(sessionActivity)
+    .where(
+      and(
+        eq(sessionActivity.sessionId, agentSessionExternalLink.sessionId),
+        or(
+          isNull(agentSessionExternalLink.lastRelayedActivityUpdatedAt),
+          gt(sessionActivity.updatedAt, agentSessionExternalLink.lastRelayedActivityUpdatedAt),
+          and(
+            eq(sessionActivity.updatedAt, agentSessionExternalLink.lastRelayedActivityUpdatedAt),
+            gt(sessionActivity.id, agentSessionExternalLink.lastRelayedActivityId),
+          ),
+        ),
+      ),
+    )
+    .limit(1);
   const links = await db
     .select({ sessionId: agentSessionExternalLink.sessionId })
     .from(agentSessionExternalLink)
+    .where(
+      or(
+        eq(agentSessionExternalLink.relayStatus, 'pending'),
+        and(
+          eq(agentSessionExternalLink.relayStatus, 'retrying'),
+          lte(agentSessionExternalLink.nextRelayAt, now),
+        ),
+        and(eq(agentSessionExternalLink.relayStatus, 'ready'), exists(laggedActivity)),
+      ),
+    )
     .orderBy(asc(agentSessionExternalLink.updatedAt))
     .limit(100);
   let processed = 0;

@@ -225,6 +225,15 @@ function assertCrossFieldRules(e: typeof env): void {
     fail('MCP_TASKS_ENABLED=true requires MCP_SESSION_STORE_URL.');
   }
 
+  if (
+    e.LINEAR_AGENT_ENABLED &&
+    (!e.LINEAR_AGENT_CLIENT_ID || !e.LINEAR_AGENT_CLIENT_SECRET || !e.LINEAR_AGENT_WEBHOOK_SECRET)
+  ) {
+    fail(
+      'LINEAR_AGENT_ENABLED=true requires LINEAR_AGENT_CLIENT_ID, LINEAR_AGENT_CLIENT_SECRET, and LINEAR_AGENT_WEBHOOK_SECRET.',
+    );
+  }
+
   if (e.ATHENA_ASYNC_RUNNER_ENABLED && e.APP_MODE === 'production') {
     if (!e.CLOUDFLARE_ATHENA_RUNNER_URL) {
       fail('ATHENA_ASYNC_RUNNER_ENABLED=true requires CLOUDFLARE_ATHENA_RUNNER_URL.');

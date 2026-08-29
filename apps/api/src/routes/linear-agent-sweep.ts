@@ -8,7 +8,7 @@
  * instance is CPU-throttled to near-zero the instant the HTTP response is sent. This sweep is
  * the other half: it finds sessions with runnable generations, drives each session's turn to
  * completion, and relays whatever new activity landed back to the Linear thread
- * ({@link relayLinearAgentActivity}).
+ * ({@link relayExternalAgentActivity}).
  *
  * This sweep does NOT lease the run rows itself. `claimRunGeneration` is the single claimer of a
  * generation, and it holds the fencing token every generation-owned write is checked against; a

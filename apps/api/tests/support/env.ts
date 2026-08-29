@@ -24,6 +24,9 @@ export const API_TEST_ENV = {
   SKIP_ENV_VALIDATION: '1',
   AGENT_MAX_TURNS: '8',
   ATHENA_ASYNC_RUNNER_ENABLED: 'false',
+  // Keep the test host eligible to run configured Agent suites. Tests still need to provide the
+  // three Agent credentials, so unconfigured-route coverage continues to exercise the dark path.
+  LINEAR_AGENT_ENABLED: 'true',
   BILLING_ENABLED: 'false',
   BILLING_RECONCILIATION_MODE: 'off',
   // Athena's receiving domain. The host contract deliberately never derives this, so without a

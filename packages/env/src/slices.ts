@@ -143,6 +143,8 @@ export const authServer = {
   NOTION_WEBHOOK_TOKEN: z.string().optional(),
   /** App-level Linear webhook signing secret — verifies inbound ambient-observation events. */
   LINEAR_WEBHOOK_SECRET: z.string().optional(),
+  /** Explicit release gate for the Linear Agent runtime. Credentials alone never enable it. */
+  LINEAR_AGENT_ENABLED: boolFromString(),
   /**
    * Linear **Agent** platform OAuth app client id — funds a distinct, workspace-level
    * `actor=app` install (Settings → API → Agents), separate from the `LINEAR_CLIENT_ID` data-sync

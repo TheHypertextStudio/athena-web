@@ -34,6 +34,7 @@ vi.hoisted(() => {
   process.env['AGENT_MAX_TURNS'] = '8';
   process.env['API_URL'] = 'https://api.docket.test';
   process.env['CREDENTIALS_ENCRYPTION_KEY'] = Buffer.from('0'.repeat(32)).toString('base64');
+  process.env['LINEAR_AGENT_ENABLED'] = 'true';
   process.env['LINEAR_AGENT_CLIENT_ID'] = 'agent-client-id';
   process.env['LINEAR_AGENT_CLIENT_SECRET'] = 'agent-client-secret';
   process.env['LINEAR_AGENT_WEBHOOK_SECRET'] = 'agent-webhook-secret';

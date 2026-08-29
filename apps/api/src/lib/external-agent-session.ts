@@ -18,6 +18,7 @@ export interface CreateExternalAgentSessionInput {
   readonly provider: AgentSurfaceProvider;
   readonly createdByActorId: string;
   readonly initiatorActorId: string | null;
+  readonly externalActorId: string;
   readonly trigger: 'mention' | 'delegation';
   readonly prompt: string;
   readonly externalSessionId: string;
@@ -78,7 +79,13 @@ export async function createExternalAgentSession(
         sessionId: created.id,
         organizationId,
         type: 'elicitation',
-        body: { text: 'Connect this external account to Docket so Athena can continue.' },
+        body: {
+          text: 'Connect this external account to Docket so Athena can continue.',
+          externalAgentControl: {
+            type: 'authentication',
+            externalActorId: input.externalActorId,
+          },
+        },
       });
     }
     await tx.insert(agentSessionExternalLink).values({

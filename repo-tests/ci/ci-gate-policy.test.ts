@@ -365,6 +365,9 @@ describe('the real workflows', () => {
 
   it('parses every file in .github/workflows', () => {
     expect(workflows.map((workflow) => workflow.path)).toEqual([
+      // Runs only on operator dispatch. It reads billing launch evidence through the production
+      // Workload Identity boundary and never participates in a push or deployment gate.
+      '.github/workflows/billing-production-audit.yml',
       // Builds the deploy images. ci.yml invokes it with no `needs` so it overlaps the gates;
       // it runs no tests or checks, so it is not a gate and holds nothing back.
       '.github/workflows/build-images.yml',

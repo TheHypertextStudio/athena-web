@@ -1,9 +1,12 @@
-import type { BrowserContext, Page, Response } from '@playwright/test';
+import type { BrowserContext, Response } from '@playwright/test';
 
 import { signUpAndOnboard } from '../helpers/app';
 import { orgHref, TIMEOUTS } from '../helpers/constants';
 import { expect, test } from '../helpers/fixtures';
-import { apiJson } from '../helpers/net';
+import {
+  createMobileAuditFixture,
+  verifyMobileAuditFixture,
+} from '../helpers/mobile-audit-fixture';
 
 interface ScreenCase {
   readonly name: string;
@@ -37,6 +40,11 @@ function isCriticalFailure(response: Response): boolean {
   );
 }
 
+/** Ignore the browser cancellation that follows a test-driven page navigation during a transition. */
+function isSupersededViewTransition(error: Error): boolean {
+  return error.name === 'AbortError' && error.message === 'Transition was skipped';
+}
+
 /** Require one isolated authenticated screen to settle into a usable, non-empty main surface. */
 async function expectAcceptableScreen(context: BrowserContext, screen: ScreenCase): Promise<void> {
   const page = await context.newPage();
@@ -52,6 +60,7 @@ async function expectAcceptableScreen(context: BrowserContext, screen: ScreenCas
     }
   };
   const onPageError = (error: Error): void => {
+    if (isSupersededViewTransition(error)) return;
     runtimeErrors.push(error.name);
   };
   page.on('response', onResponse);
@@ -136,47 +145,12 @@ async function expectAcceptableScreen(context: BrowserContext, screen: ScreenCas
   }
 }
 
-/** Create one representative record for every local-first detail kind. */
-async function seedDetails(
-  page: Page,
-  orgId: string,
-): Promise<{ initiativeId: string; programId: string; projectId: string; taskId: string }> {
-  const teams = await apiJson<{ items: readonly { id: string }[] }>(
-    page,
-    `/v1/orgs/${orgId}/teams`,
-  );
-  const teamId = teams.items[0]?.id;
-  if (!teamId) throw new Error('Onboarding did not create a Team.');
-
-  const initiative = await apiJson<{ id: string }>(page, `/v1/orgs/${orgId}/initiatives`, {
-    method: 'POST',
-    body: { name: 'Screen acceptance initiative' },
-  });
-  const program = await apiJson<{ id: string }>(page, `/v1/orgs/${orgId}/programs`, {
-    method: 'POST',
-    body: { name: 'Screen acceptance program' },
-  });
-  const project = await apiJson<{ id: string }>(page, `/v1/orgs/${orgId}/projects`, {
-    method: 'POST',
-    body: { name: 'Screen acceptance project', teamId },
-  });
-  const task = await apiJson<{ id: string }>(page, `/v1/orgs/${orgId}/tasks`, {
-    method: 'POST',
-    body: { title: 'Screen acceptance task', teamId, projectId: project.id },
-  });
-
-  return {
-    initiativeId: initiative.id,
-    programId: program.id,
-    projectId: project.id,
-    taskId: task.id,
-  };
-}
-
 test('every primary authenticated screen and local-first detail settles', async ({ page }) => {
   test.setTimeout(300_000);
-  const { orgId } = await signUpAndOnboard(page, 'CoreScreenAcceptance');
-  const ids = await seedDetails(page, orgId);
+  await signUpAndOnboard(page, 'CoreScreenAcceptance');
+  const fixture = await createMobileAuditFixture(page);
+  await verifyMobileAuditFixture(page, fixture);
+  const { orgId } = fixture;
   const context = page.context();
   await page.close();
 
@@ -216,20 +190,20 @@ test('every primary authenticated screen and local-first detail settles', async 
     },
     {
       name: 'Project detail',
-      href: orgHref(orgId, `projects/${ids.projectId}`),
-      aggregatePath: `/v1/orgs/${orgId}/projects/${ids.projectId}/aggregate-detail`,
+      href: orgHref(orgId, `projects/${fixture.projectId}`),
+      aggregatePath: `/v1/orgs/${orgId}/projects/${fixture.projectId}/aggregate-detail`,
       loadedControl: { role: 'textbox', name: 'Project name' },
     },
     {
       name: 'Program detail',
-      href: orgHref(orgId, `programs/${ids.programId}`),
-      aggregatePath: `/v1/orgs/${orgId}/programs/${ids.programId}/aggregate-detail`,
+      href: orgHref(orgId, `programs/${fixture.programId}`),
+      aggregatePath: `/v1/orgs/${orgId}/programs/${fixture.programId}/aggregate-detail`,
       loadedControl: { role: 'textbox', name: 'Program name' },
     },
     {
       name: 'Initiative detail',
-      href: orgHref(orgId, `initiatives/${ids.initiativeId}`),
-      aggregatePath: `/v1/orgs/${orgId}/initiatives/${ids.initiativeId}/aggregate-detail`,
+      href: orgHref(orgId, `initiatives/${fixture.initiativeId}`),
+      aggregatePath: `/v1/orgs/${orgId}/initiatives/${fixture.initiativeId}/aggregate-detail`,
       loadedControl: { role: 'textbox', name: 'Initiative name' },
     },
   ];

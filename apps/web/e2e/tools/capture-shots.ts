@@ -11,9 +11,9 @@
  * persisted, so it drives an already-signed-in session instead of repeating the passkey ceremony
  * per capture.
  *
- * A route may contain `:orgId` (the personal audit workspace) or `:sharedOrgId`. The shared
- * workspace is discovered or created through the authenticated test session, so a complete
- * Settings audit never requires manual setup or another sign-in ceremony.
+ * A route may contain `:orgId` (the personal audit workspace) or `:sharedOrgId`. The tool creates
+ * one complete, entitled local audit workspace through the authenticated test session, so every
+ * shared route has the records its responsive states need.
  *
  * Usage (from `apps/web`):
  *   tsx e2e/tools/capture-shots.ts --session=<path> --out=<dir> <route> [<route> ...]
@@ -27,6 +27,8 @@ import type { BrowserContext, Page } from '@playwright/test';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import { createMobileAuditFixture } from '../helpers/mobile-audit-fixture';
+
 interface SessionMeta {
   email: string;
   orgId: string;
@@ -37,12 +39,6 @@ interface CliArgs {
   session: string;
   outDir: string;
   routes: string[];
-}
-
-interface OrgSummary {
-  readonly id: string;
-  readonly name: string;
-  readonly isPersonal: boolean;
 }
 
 /** The design-review skill's standard shot set: two viewports × two color schemes. */
@@ -171,56 +167,25 @@ async function captureCleanFrame(
   throw new Error(`Could not capture a clean frame after four attempts: ${url}`);
 }
 
-/** Resolve a reusable shared workspace, creating one through the authenticated test session. */
-async function ensureSharedWorkspace(page: Page, baseURL: string): Promise<string> {
-  // Any authenticated same-origin page will do — this only needs a document whose `fetch` carries
-  // the session cookie. `/settings/profile` is the stable one; the workspace list this used to
-  // open no longer has a route of its own, so it 404'd and took every shared-workspace capture
-  // down with it.
-  await openReviewRoute(page, `${baseURL}/settings/profile`);
-  return page.evaluate(async () => {
-    const listResponse = await fetch('/v1/orgs');
-    if (!listResponse.ok) throw new Error('Could not list audit workspaces');
-    const list = (await listResponse.json()) as { items: OrgSummary[] };
-    const existing = list.items.find(
-      (workspace) => !workspace.isPersonal && workspace.name === 'Settings Audit Workspace',
-    );
-    if (existing) return existing.id;
-
-    const createResponse = await fetch('/v1/orgs', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        name: 'Settings Audit Workspace',
-        purpose: 'Visual verification for workspace administration.',
-        vocabulary: 'startup',
-      }),
-    });
-    if (!createResponse.ok) throw new Error('Could not create the shared audit workspace');
-    const created = (await createResponse.json()) as { organization: { id: string } };
-    return created.organization.id;
-  });
-}
-
 async function main(): Promise<void> {
   const { session, outDir, routes } = parseArgs(process.argv.slice(2));
   const meta = JSON.parse(readFileSync(`${session}.meta.json`, 'utf8')) as SessionMeta;
 
   mkdirSync(outDir, { recursive: true });
 
+  const browser = await chromium.launch();
+  const context = await browser.newContext({ storageState: session, ignoreHTTPSErrors: true });
+  const setupPage = await context.newPage();
+  await openReviewRoute(setupPage, `${meta.baseURL}/settings/profile`);
+  const auditFixture = await createMobileAuditFixture(setupPage);
+  await setupPage.close();
+
   for (const route of routes) {
-    // A fresh browser per route avoids Chromium carrying damaged compositor tiles from one
+    // Every capture uses a fresh Page so Chromium cannot carry damaged compositor tiles from one
     // responsive/theme capture set into the next surface.
-    const browser = await chromium.launch();
-    const context = await browser.newContext({ storageState: session, ignoreHTTPSErrors: true });
-    const setupPage = await context.newPage();
-    const sharedOrgId = route.includes(':sharedOrgId')
-      ? await ensureSharedWorkspace(setupPage, meta.baseURL)
-      : null;
-    await setupPage.close();
     const path = route
       .replaceAll(':orgId', meta.orgId)
-      .replaceAll(':sharedOrgId', sharedOrgId ?? meta.orgId);
+      .replaceAll(':sharedOrgId', auditFixture.orgId);
     const slug = routeSlug(route);
     for (const viewport of VIEWPORTS) {
       for (const colorScheme of COLOR_SCHEMES) {
@@ -250,8 +215,8 @@ async function main(): Promise<void> {
     }
     await page.close();
     console.log(`[capture-shots] 320px overflow check passed: ${path}`);
-    await browser.close();
   }
+  await browser.close();
 }
 
 main().catch((error: unknown) => {

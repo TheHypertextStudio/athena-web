@@ -19,6 +19,7 @@ import {
   Button,
   ControlGroup,
   Popover,
+  PopoverBody,
   PopoverContent,
   PopoverTrigger,
 } from '@docket/ui/primitives';
@@ -481,19 +482,21 @@ export function EntityMetadataRow({
               <Ellipsis aria-hidden />
             </Button>
           </PopoverTrigger>
-          <PopoverContent align="end" className="w-80 max-w-[calc(100vw-1.5rem)] p-2">
-            <ControlGroup
-              role="group"
-              aria-label={`More ${ariaLabel}`}
-              controlSize="sm"
-              orientation="vertical"
-              data-entity-metadata-overflow=""
-              className="min-w-0 items-stretch"
-            >
-              <MetadataLaneContext.Provider value={overflowLane}>
-                {children}
-              </MetadataLaneContext.Provider>
-            </ControlGroup>
+          <PopoverContent presentation="panel" width="xl" align="end">
+            <PopoverBody>
+              <ControlGroup
+                role="group"
+                aria-label={`More ${ariaLabel}`}
+                controlSize="sm"
+                orientation="vertical"
+                data-entity-metadata-overflow=""
+                className="min-w-0 items-stretch"
+              >
+                <MetadataLaneContext.Provider value={overflowLane}>
+                  {children}
+                </MetadataLaneContext.Provider>
+              </ControlGroup>
+            </PopoverBody>
           </PopoverContent>
         </Popover>
       ) : null}

@@ -23,6 +23,7 @@ import {
   DropdownMenuTrigger,
   Popover,
   PopoverAnchor,
+  PopoverBody,
   PopoverContent,
   Stack,
   menuDestructiveItem,
@@ -128,24 +129,26 @@ export default function AgendaEntryActions({ entry }: AgendaEntryActionsProps): 
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <PopoverContent align="end" className={editor === 'timebox' ? 'w-80' : 'w-64'}>
-        {editor === 'timebox' ? (
-          <AgendaTimeboxForm
-            entry={entry}
-            date={date}
-            onDone={() => {
-              setEditor(null);
-            }}
-          />
-        ) : editor === 'move' ? (
-          <MoveForm
-            entry={entry}
-            date={date}
-            onDone={() => {
-              setEditor(null);
-            }}
-          />
-        ) : null}
+      <PopoverContent presentation="panel" width="xl" align="end">
+        <PopoverBody>
+          {editor === 'timebox' ? (
+            <AgendaTimeboxForm
+              entry={entry}
+              date={date}
+              onDone={() => {
+                setEditor(null);
+              }}
+            />
+          ) : editor === 'move' ? (
+            <MoveForm
+              entry={entry}
+              date={date}
+              onDone={() => {
+                setEditor(null);
+              }}
+            />
+          ) : null}
+        </PopoverBody>
       </PopoverContent>
     </Popover>
   );

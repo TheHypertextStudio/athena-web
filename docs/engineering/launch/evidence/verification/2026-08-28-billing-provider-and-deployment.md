@@ -31,21 +31,26 @@ not let customers switch plans or change quantity. Its return, Terms, and Privac
 `https://docket.hypertext.studio`. The production environment records the independently verified
 Stripe account pin and the duplicate-subscription verification time.
 
-`BILLING_ENABLED=false` remains the public kill switch. The release owner changed the production
-environment declaration to `BILLING_RECONCILIATION_MODE=shadow` after the exact-main deployment.
-The running API revision was deployed while reconciliation was still `off`, so a later deployment
-must apply the declaration before the 24-hour observation clock starts.
+`BILLING_ENABLED=false` remains the public kill switch. The repository declaration had remained
+`BILLING_RECONCILIATION_MODE=off`; the prior statement that it had changed was wrong. The release
+owner changed the declaration to `shadow` and redeployed exact-main commit `cec124e9e67579889e5f7208e5eae2f592eb82a0`.
+GitHub Actions run `33223511919`, attempt 2, finished the API deployment at
+`2026-08-29T00:55:37Z` and Scheduler reconciliation at `2026-08-29T00:57:23Z`. The 24-hour shadow
+clock starts from that deployment, not from the earlier evidence timestamp.
+
+The login-free production audit on exact `cec124e9e` passed in run `33224721373`. Its report was
+generated at `2026-08-29T00:51:20.637Z` and found zero billed organizations, zero unresolved
+findings, no provider-sync errors, and a verified duplicate-subscription redirect control. The
+audit workflow now checks the running Cloud Run billing flags and billing Scheduler job through
+production Workload Identity. It records only sanitized rollout values in a seven-day artifact and
+runs hourly during the observation window. No personal Google session or Cloud Logging permission
+is required.
 
 ## Open gates
 
 The repository's private local Stripe test key belongs to another Stripe account. The real gateway
 verified the configured account first and rejected the key before it searched customers. A fresh
 Hypertext Studio test key must replace that local value before any sandbox canary runs.
-
-The local Google Cloud session requires a Hypertext Studio passkey before the release owner can
-read the production secret and database. The production audit must then prove that migration 0107
-removed only the orphan legacy billing rows and that every billed organization has one customer,
-at most one current subscription, no entitlement drift, and no unresolved provider write.
 
 Hypertext Studio test mode still needs hosted Checkout, signed webhook, replay, payment failure,
 payment recovery, authentication-required payment, cancellation, renewal, discount, and credit

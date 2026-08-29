@@ -290,6 +290,16 @@
   and granting that broad role would weaken its least-privilege boundary. Complimentary eligibility
   failures now write the original safe gateway message to `billing_provider_sync`; the audit derives
   its diagnostic artifact from that existing ledger instead.
+- **Durable rollout evidence correction**: The repository variable still held
+  `BILLING_RECONCILIATION_MODE=off`, so the earlier evidence did not start the shadow clock. The
+  release owner changed it to `shadow`, then redeployed the exact `cec124e9e` API image. Deployment
+  attempt 2 finished at `2026-08-29T00:55:37Z`, and Scheduler reconciliation finished at
+  `2026-08-29T00:57:23Z`. The production audit now uses Workload Identity to compare the running
+  Cloud Run kill switch, reconciliation mode, Stripe account pin, and billing Scheduler job with
+  the declared rollout. It writes only those sanitized values and runs hourly, so the 24-hour gate
+  no longer depends on a personal Google token or Cloud Logging access. The focused policy suite
+  passes seven tests, the repository tooling suite passes 165 tests, Actionlint passes, and
+  Prettier reports no changed-file drift.
 - **Exact-main deployment and provider proof**: Commit `74c998cee` passes every exact-main CI gate,
   including API coverage and performance, and all four advisory browser shards. The same run
   applied production migrations and deployed API, Admin, and Scheduler. Vercel built that exact
@@ -310,9 +320,11 @@
 - **Blockers**: Finance and legal must approve the Docket merchant identity, tax registrations,
   invoice and credit treatment, refund policy, discount eligibility, evidence retention, and
   customer terms. The local test key must be replaced with a Hypertext Studio test key. Production
-  still needs the repeated billing audit, the 24-hour shadow reconciliation, one live full-price
-  canary, one live discounted canary, the Founder complimentary grant, and the 72-hour public
-  canary. Whole-product launch sign-off remains independent of this billing slice.
+  still needs the 24-hour shadow observation to elapse, one live full-price canary, one live
+  discounted canary, the Founder complimentary grant, and the 72-hour public canary. The Founder
+  grant is ready in the authenticated Hypertext Studio operator session and awaits the required
+  action-time production entitlement confirmation. Whole-product launch sign-off remains
+  independent of this billing slice.
 
 ---
 

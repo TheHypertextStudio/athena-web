@@ -36,6 +36,7 @@ describe('production billing audit policy', () => {
 
   it('uses production Workload Identity instead of a personal Google login', () => {
     expect(auditWorkflow).toContain('workflow_dispatch:');
+    expect(auditWorkflow).toContain("cron: '17 * * * *'");
     expect(auditWorkflow).toContain('id-token: write');
     expect(auditWorkflow).toContain('google-github-actions/auth@v3');
     expect(auditWorkflow).toContain('workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}');
@@ -52,7 +53,20 @@ describe('production billing audit policy', () => {
   it('publishes sanitized audit and failed-action diagnostics with bounded retention', () => {
     expect(auditWorkflow).toContain('billing-production-audit');
     expect(auditWorkflow).toContain('billing-provider-errors.json');
+    expect(auditWorkflow).toContain('billing-runtime-rollout.json');
     expect(auditWorkflow).toContain('retention-days: 7');
     expect(auditWorkflow).toContain('if-no-files-found: error');
+  });
+
+  it('proves the deployed kill switch, reconciliation mode, and scheduler without printing secrets', () => {
+    expect(auditWorkflow).toContain('gcloud run services describe docket-api');
+    expect(auditWorkflow).toContain('gcloud scheduler jobs describe docket-billing-reconciliation');
+    expect(auditWorkflow).toContain(
+      'EXPECTED_RECONCILIATION_MODE: ${{ vars.BILLING_RECONCILIATION_MODE }}',
+    );
+    expect(auditWorkflow).toContain('test "$deployed_checkout" = "false"');
+    expect(auditWorkflow).toContain('test "$deployed_mode" = "$EXPECTED_RECONCILIATION_MODE"');
+    expect(auditWorkflow).toContain('test "$scheduler_state" = "ENABLED"');
+    expect(auditWorkflow).not.toContain('spec.template.spec.containers[0].env.valueFrom');
   });
 });

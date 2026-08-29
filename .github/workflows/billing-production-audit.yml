@@ -2,6 +2,8 @@ name: Billing production audit
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '17 * * * *'
 
 permissions:
   contents: read
@@ -24,6 +26,80 @@ jobs:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
+      - name: Verify deployed billing rollout
+        env:
+          API_URL: ${{ vars.API_URL }}
+          EXPECTED_RECONCILIATION_MODE: ${{ vars.BILLING_RECONCILIATION_MODE }}
+          EXPECTED_STRIPE_ACCOUNT_ID: ${{ vars.STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID }}
+          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          GCP_REGION: ${{ vars.GCP_REGION }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +x
+          mkdir -p "$RUNNER_TEMP/billing-production-audit"
+
+          case "$EXPECTED_RECONCILIATION_MODE" in
+            shadow|active) ;;
+            *) echo "Production billing reconciliation must be shadow or active during launch observation." >&2; exit 1 ;;
+          esac
+
+          service_json="$(gcloud run services describe docket-api \
+            --project="$GCP_PROJECT_ID" \
+            --region="$GCP_REGION" \
+            --format='json(status.latestReadyRevisionName,spec.template.spec.containers[0].env)')"
+          deployed_checkout="$(jq -r '.spec.template.spec.containers[0].env[] | select(.name == "BILLING_ENABLED") | .value' <<<"$service_json")"
+          deployed_mode="$(jq -r '.spec.template.spec.containers[0].env[] | select(.name == "BILLING_RECONCILIATION_MODE") | .value' <<<"$service_json")"
+          deployed_account="$(jq -r '.spec.template.spec.containers[0].env[] | select(.name == "STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID") | .value' <<<"$service_json")"
+          revision="$(jq -r '.status.latestReadyRevisionName' <<<"$service_json")"
+
+          scheduler_json="$(gcloud scheduler jobs describe docket-billing-reconciliation \
+            --project="$GCP_PROJECT_ID" \
+            --location="$GCP_REGION" \
+            --format='json(name,schedule,state,httpTarget.uri,status,lastAttemptTime)')"
+          scheduler_name="$(jq -r '.name' <<<"$scheduler_json")"
+          scheduler_schedule="$(jq -r '.schedule' <<<"$scheduler_json")"
+          scheduler_state="$(jq -r '.state' <<<"$scheduler_json")"
+          scheduler_uri="$(jq -r '.httpTarget.uri' <<<"$scheduler_json")"
+          scheduler_last_attempt="$(jq -r '.lastAttemptTime // null' <<<"$scheduler_json")"
+          scheduler_status_code="$(jq -r '.status.code // 0' <<<"$scheduler_json")"
+
+          test "$deployed_checkout" = "false"
+          test "$deployed_mode" = "$EXPECTED_RECONCILIATION_MODE"
+          test "$deployed_account" = "$EXPECTED_STRIPE_ACCOUNT_ID"
+          test "$scheduler_state" = "ENABLED"
+          test "$scheduler_schedule" = "*/15 * * * *"
+          test "$scheduler_uri" = "$API_URL/internal/cron/billing-reconciliation"
+          test "$scheduler_status_code" = "0"
+
+          jq -n \
+            --arg generatedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg revision "$revision" \
+            --arg checkoutEnabled "$deployed_checkout" \
+            --arg reconciliationMode "$deployed_mode" \
+            --arg stripeAccountId "$deployed_account" \
+            --arg schedulerName "$scheduler_name" \
+            --arg schedulerSchedule "$scheduler_schedule" \
+            --arg schedulerState "$scheduler_state" \
+            --arg schedulerUri "$scheduler_uri" \
+            --arg schedulerLastAttempt "$scheduler_last_attempt" \
+            --arg schedulerStatusCode "$scheduler_status_code" \
+            '{
+              generatedAt: $generatedAt,
+              revision: $revision,
+              checkoutEnabled: ($checkoutEnabled == "true"),
+              reconciliationMode: $reconciliationMode,
+              stripeAccountId: $stripeAccountId,
+              scheduler: {
+                name: $schedulerName,
+                schedule: $schedulerSchedule,
+                state: $schedulerState,
+                uri: $schedulerUri,
+                lastAttemptTime: (if $schedulerLastAttempt == "null" then null else $schedulerLastAttempt end),
+                statusCode: ($schedulerStatusCode | tonumber)
+              }
+            }' > "$RUNNER_TEMP/billing-production-audit/billing-runtime-rollout.json"
+
       - uses: pnpm/action-setup@v6
 
       - uses: actions/setup-node@v7
@@ -39,7 +115,7 @@ jobs:
           API_SECRET_BINDINGS: ${{ vars.API_SECRET_BINDINGS }}
           APP_MODE: production
           BILLING_ENABLED: 'false'
-          BILLING_RECONCILIATION_MODE: shadow
+          BILLING_RECONCILIATION_MODE: ${{ vars.BILLING_RECONCILIATION_MODE }}
           GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
           STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID: ${{ vars.STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID }}
           STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT: ${{ vars.STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT }}

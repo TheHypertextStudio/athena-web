@@ -98,6 +98,9 @@ export const SHADOW_ALLOWED_FILES: ReadonlySet<string> = new Set([
   // focus and this list must leave the caret in the editor so typing keeps filtering. It
   // therefore needs the same elevation as the menus it sits alongside.
   'apps/web/src/components/editor/suggestion-menu.tsx',
+  // The table rail is a portalled contextual overlay anchored to the active table. It sits above
+  // the editor scrollport and must remain legible against document content in either theme.
+  'apps/web/src/components/editor/table-controls.tsx',
   // The two exceptions to "float over content": the sidebar's recovery-codes nudge and its
   // update-ready card. Neither floats — both sit in the footer's normal document flow — so this
   // is a deliberate departure from the rule above, made once and directly rather than eroding it

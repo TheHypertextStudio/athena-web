@@ -168,7 +168,8 @@ describe('editing a Markdown table', () => {
     expect(toolbar).toBeVisible();
     await user.keyboard('{Escape}');
 
-    await user.click(screen.getByRole('button', { name: 'Task title control' }));
+    const taskTitleControl = screen.getByRole('button', { name: 'Task title control' });
+    await user.click(taskTitleControl);
     await waitFor(() => {
       expect(screen.queryByRole('toolbar', { name: 'Table controls' })).toBeNull();
       expect(editor.querySelector('.tableWrapper')).not.toHaveAttribute(

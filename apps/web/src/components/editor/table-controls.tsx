@@ -68,9 +68,11 @@ export function TableControls({ editor, controlsRef }: TableControlsProps): JSX.
     const portalHost = document.createElement('div');
     portalHost.setAttribute('data-table-controls-portal', '');
     portalOwner.append(portalHost);
-    const hideWhenFocusLeaves = (event: FocusEvent): void => {
-      const next = event.relatedTarget;
-      if (next instanceof Node && (portalHost.contains(next) || editor.view.dom.contains(next))) {
+    const hideWhenInteractionMovesOutside = (target: EventTarget | null): void => {
+      if (
+        target instanceof Node &&
+        (portalHost.contains(target) || editor.view.dom.contains(target))
+      ) {
         return;
       }
       if (!editor.isDestroyed) {
@@ -78,14 +80,22 @@ export function TableControls({ editor, controlsRef }: TableControlsProps): JSX.
       }
       clearActivePerimeter();
     };
-    portalHost.addEventListener('focusout', hideWhenFocusLeaves);
+    const hideWhenFocusMovesOutside = (event: FocusEvent): void => {
+      hideWhenInteractionMovesOutside(event.target);
+    };
+    const hideWhenPointerStartsOutside = (event: PointerEvent): void => {
+      hideWhenInteractionMovesOutside(event.target);
+    };
+    document.addEventListener('focusin', hideWhenFocusMovesOutside);
+    document.addEventListener('pointerdown', hideWhenPointerStartsOutside, true);
     setEnvironment({
       portalHost,
       collisionBoundary,
       scrollTarget: nearestScrollTarget(editor),
     });
     return () => {
-      portalHost.removeEventListener('focusout', hideWhenFocusLeaves);
+      document.removeEventListener('focusin', hideWhenFocusMovesOutside);
+      document.removeEventListener('pointerdown', hideWhenPointerStartsOutside, true);
       portalHost.remove();
     };
   }, [clearActivePerimeter, editor]);

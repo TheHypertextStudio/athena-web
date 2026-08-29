@@ -6884,6 +6884,24 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [EDITOR-TABLES-002] Attach Markdown table controls to the table
+
+- **Completed**: 2026-08-29
+- **Priority**: P1
+- **Summary**: Markdown tables keep their GFM document form while the active table exposes an
+  anchored control rail. The rail supports row and column insertion plus copy as HTML, Markdown,
+  CSV, and tab-separated data. It uses row and column icons, a level-two floating shadow, and a
+  4-pixel table perimeter with square cells.
+- **Decision**: The rail anchors to `.tableWrapper` and mounts in a dedicated host under the nearest
+  dialog or the document body. Document-level focus and capture-phase pointer guards hide the rail
+  when interaction moves to a sibling control, while the editor, rail, and its menu retain it. The
+  menu remains inside the dialog collision boundary, and compact widths reserve table clearance
+  rather than letting the rail overlap prose.
+- **Validation**: The focused table suite passes 13 tests. The integrated editor suite first
+  reproduced the sibling-focus failure, then passes after the shared focus-leave guard. UI type
+  checking passes. Full production CI and deployment remain pending this integration.
+- **Evidence**: `docs/design/audits/2026-08-28-editor-markdown-tables.md`
+
 ### [REPO-POLICY-001] Keep agent work out of GitHub pull requests
 
 - **Completed**: 2026-08-25

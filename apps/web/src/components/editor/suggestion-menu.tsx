@@ -21,15 +21,13 @@
  */
 import {
   MENU_METRICS,
-  menuContentClass,
-  menuItemClass,
-  OVERLAY_COLLISION_PADDING,
   Text,
+  type PopoverVirtualAnchor,
+  VirtualMenuSurface,
 } from '@docket/ui/primitives';
-import { cn } from '@docket/ui/lib/utils';
+import { MenuListbox, MenuOption } from '@docket/ui/components';
 import type { LucideIcon } from '@docket/ui/icons';
-import { type JSX, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { type JSX, useLayoutEffect, useRef } from 'react';
 
 /** One row in the menu. */
 export interface SuggestionItem {
@@ -69,7 +67,6 @@ export interface SuggestionMenuProps {
  * {@link MENU_METRICS} so the height estimate below cannot drift from what actually renders. It
  * had: the estimate assumed 40px rows while the rows were 36px.
  */
-const MENU_WIDTH = 288;
 const MAX_HEIGHT = 288;
 
 /**
@@ -89,11 +86,8 @@ export function SuggestionMenu({
   listboxId,
 }: SuggestionMenuProps): JSX.Element | null {
   const listRef = useRef<HTMLUListElement | null>(null);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const virtualAnchor = useRef<PopoverVirtualAnchor | null>(null);
+  virtualAnchor.current = { getBoundingClientRect: () => anchor };
 
   // Keep the highlighted row in view when the keyboard walks past the fold. Guarded because
   // scrolling is a layout operation and environments without layout (jsdom) do not implement it —
@@ -103,33 +97,14 @@ export function SuggestionMenu({
     if (typeof active?.scrollIntoView === 'function') active.scrollIntoView({ block: 'nearest' });
   }, [activeIndex, items]);
 
-  if (!mounted) return null;
-
-  // Prefer below the caret; flip above when there is not room, and never cross an edge.
-  const spaceBelow = window.innerHeight - anchor.bottom - OVERLAY_COLLISION_PADDING;
-  const height = Math.min(
+  const estimatedHeight = Math.min(
     MAX_HEIGHT,
     Math.max(items.length, 1) * MENU_METRICS.minHeightPx + MENU_METRICS.containerPaddingPx * 2,
   );
-  const placeAbove = spaceBelow < height && anchor.top > height + OVERLAY_COLLISION_PADDING;
-  const top = placeAbove ? anchor.top - height - 4 : anchor.bottom + 4;
-  const left = Math.min(
-    Math.max(anchor.left, OVERLAY_COLLISION_PADDING),
-    window.innerWidth - MENU_WIDTH - OVERLAY_COLLISION_PADDING,
-  );
 
-  return createPortal(
-    <div
-      data-suggestion-menu=""
-      style={{ position: 'fixed', top, left, width: MENU_WIDTH, maxHeight: MAX_HEIGHT }}
-      className={cn(
-        // The same surface every other menu renders. This was a private panel —
-        // surface-container-high, a 10px corner, shadow-md, and no enter or exit animation at all.
-        menuContentClass('standard'),
-        'overflow-y-auto',
-      )}
-    >
-      <ul ref={listRef} id={listboxId} role="listbox" aria-label={ariaLabel} className="contents">
+  return (
+    <VirtualMenuSurface anchor={virtualAnchor} estimatedHeight={estimatedHeight} width="lg">
+      <MenuListbox ref={listRef} id={listboxId} ariaLabel={ariaLabel}>
         {items.length === 0 ? (
           <li role="presentation" className="px-4 py-2">
             <Text token="body-small" tone="muted">
@@ -141,40 +116,33 @@ export function SuggestionMenu({
             const Icon = item.icon;
             const active = index === activeIndex;
             return (
-              <li
+              <MenuOption
                 key={item.id}
                 id={`${listboxId}-${item.id}`}
-                role="option"
-                aria-selected={active}
-                data-active={active}
-                onMouseEnter={() => {
+                active={active}
+                onActiveChange={() => {
                   onActiveIndexChange(index);
                 }}
-                onMouseDown={(event) => {
-                  // Keep the caret in the editor: a mousedown that stole focus would collapse
-                  // the run before the click landed.
-                  event.preventDefault();
+                onSelect={() => {
                   onSelect(index);
                 }}
-                className={cn(menuItemClass('standard', { selected: active }), 'cursor-pointer')}
-              >
-                <Icon aria-hidden className="shrink-0" />
-                <span className="flex min-w-0 flex-col">
-                  <Text token="label-large" truncate>
-                    {item.label}
-                  </Text>
-                  {item.hint ? (
+                leading={<Icon aria-hidden className="shrink-0" />}
+                supporting={
+                  item.hint ? (
                     <Text token="body-small" tone="muted" truncate>
                       {item.hint}
                     </Text>
-                  ) : null}
-                </span>
-              </li>
+                  ) : null
+                }
+              >
+                <Text token="label-large" truncate>
+                  {item.label}
+                </Text>
+              </MenuOption>
             );
           })
         )}
-      </ul>
-    </div>,
-    document.body,
+      </MenuListbox>
+    </VirtualMenuSurface>
   );
 }

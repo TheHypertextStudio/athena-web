@@ -96,13 +96,13 @@ export type MenuWidth = 'sm' | 'md' | 'lg' | 'xl';
  */
 export const MENU_WIDTH: Readonly<Record<MenuWidth, string>> = {
   /** 192px — a handful of one-word actions. */
-  sm: 'min-w-48',
+  sm: 'w-48 min-w-0',
   /** 224px — the default: an action list with icons and labels. */
-  md: 'min-w-56',
+  md: 'w-56 min-w-0',
   /** 288px — rows carrying supporting text or a trailing value. */
-  lg: 'min-w-72',
+  lg: 'w-72 min-w-0',
   /** 352px — rows carrying a path, a timestamp, or a workspace name. */
-  xl: 'min-w-88',
+  xl: 'w-88 min-w-0',
 };
 
 /** The default width when a menu does not ask for one. */

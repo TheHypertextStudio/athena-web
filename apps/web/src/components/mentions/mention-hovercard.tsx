@@ -133,12 +133,7 @@ export default function MentionHoverCard({
   return (
     <HoverCard open={open} onOpenChange={onOpenChange} openDelay={180} closeDelay={120}>
       <HoverCardTrigger asChild>{children}</HoverCardTrigger>
-      <HoverCardContent
-        side="top"
-        align="start"
-        sideOffset={6}
-        className="w-80 overflow-hidden p-0"
-      >
+      <HoverCardContent side="top" align="start" sideOffset={6} width="lg" inset="none">
         {entity?.accessible === false ? (
           <div className="text-on-surface-variant text-body-medium p-3">
             You do not have access to this item.

@@ -35,7 +35,7 @@ describe('EntityDetailLayout', () => {
     expect(header).not.toHaveAttribute('draggable');
     expect(header).not.toHaveClass('cursor-grab');
 
-    const primary = header?.querySelector('.detail-primary');
+    const primary = header?.querySelector<HTMLElement>('.detail-primary');
     expect(primary).not.toBeNull();
     const actions = within(assertDefined(primary)).getByRole('group', { name: 'Entity actions' });
     expect(within(actions).getByRole('button', { name: 'Publish' })).toBeVisible();

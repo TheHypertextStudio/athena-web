@@ -24,7 +24,7 @@ function IconTooltip(): React.JSX.Element {
             F
           </Button>
         </TooltipTrigger>
-        <TooltipContent className="tip-x">Filter issues</TooltipContent>
+        <TooltipContent>Filter issues</TooltipContent>
       </Tooltip>
     </TooltipProvider>
   );
@@ -55,14 +55,13 @@ describe('Tooltip family', () => {
     });
   });
 
-  it('merges a custom class and applies the MD3 surface tone onto the content', async () => {
+  it('applies the shared compact tooltip presentation', async () => {
     render(<IconTooltip />);
     fireEvent.focus(screen.getByRole('button', { name: 'Filter' }));
-    // Radix renders the visible content plus a visually-hidden a11y copy; assert on the styled,
-    // class-carrying visible surface.
+    // Radix renders the visible content plus a visually-hidden a11y copy. The visible tooltip
+    // carries the semantic surface role and the fixed compact geometry.
     await waitFor(() => {
-      const styled = document.querySelector('.tip-x');
-      expect(styled).not.toBeNull();
+      const styled = screen.getByRole('tooltip').closest('[data-surface-tone]');
       expect(styled).toHaveAttribute('data-surface-tone', 'prominent');
       expect(styled).toHaveClass('bg-surface-container-highest', 'rounded-lg', 'text-body-small');
     });

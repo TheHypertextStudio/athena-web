@@ -119,7 +119,7 @@ describe('clampDialogPoint', () => {
     act(() => {
       frames.shift()?.(0);
     });
-    expect(result.current.style).toMatchObject({ left: 280, top: 93 });
+    expect(result.current.presentation).toMatchObject({ left: 280, top: 93 });
 
     act(() => {
       result.current.handleKeyDown({
@@ -128,12 +128,12 @@ describe('clampDialogPoint', () => {
         preventDefault: vi.fn(),
       } as never);
     });
-    expect(result.current.style).toMatchObject({ left: 272, top: 93 });
+    expect(result.current.presentation).toMatchObject({ left: 272, top: 93 });
 
     anchorTop = 400;
     act(() => {
       resizeCallbacks[0]?.([], {} as ResizeObserver);
     });
-    expect(result.current.style).toMatchObject({ left: 272, top: 93 });
+    expect(result.current.presentation).toMatchObject({ left: 272, top: 93 });
   });
 });

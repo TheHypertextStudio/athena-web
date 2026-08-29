@@ -73,8 +73,10 @@ export {
 export { DecorativeIcon, type DecorativeIconProps } from './decorative-icon';
 export {
   Dialog,
+  DialogBody,
   DialogClose,
   DialogContent,
+  type DialogContentProps,
   DialogDescription,
   DialogFooter,
   DialogHeader,
@@ -152,23 +154,42 @@ export {
   Popover,
   PopoverAnchor,
   type PopoverAnchorProps,
+  PopoverBody,
   PopoverContent,
+  type PopoverContentProps,
+  PopoverFooter,
+  PopoverHeader,
   PopoverTrigger,
   type PopoverVirtualAnchor,
   type PopoverVirtualAnchorRef,
 } from './popover';
 export {
   Sheet,
+  SheetBody,
   SheetClose,
   SheetContent,
   SheetDescription,
+  SheetFooter,
+  SheetHeader,
   SheetOverlay,
   SheetPortal,
   type SheetSide,
   SheetTitle,
   SheetTrigger,
 } from './sheet';
+export type {
+  DialogHeight,
+  DialogPresentation,
+  DialogSize,
+  HostedDialogPosition,
+  OverlayInset,
+  PanelWidth,
+  PopoverPresentation,
+  SheetPresentation,
+  SheetSize,
+} from './overlay-contract';
 export { SettingsDialogContent } from './settings-dialog';
+export { VirtualMenuSurface, type VirtualMenuSurfaceProps } from './virtual-menu-surface';
 export { Separator } from './separator';
 export { Surface, type SurfaceElement, type SurfaceProps, type SurfaceTone } from './surface';
 export { Skeleton, SkeletonChip, SkeletonGlyph, SkeletonText } from './skeleton';

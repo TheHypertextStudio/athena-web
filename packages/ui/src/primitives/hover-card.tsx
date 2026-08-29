@@ -35,6 +35,7 @@ import * as HoverCardPrimitive from '@radix-ui/react-hover-card';
 import * as React from 'react';
 
 import { cn } from '../lib/utils';
+import type { OverlayInset } from './overlay-contract';
 import { OVERLAY_COLLISION_PADDING } from './overlay-inset';
 
 /**
@@ -57,13 +58,40 @@ export const HoverCardTrigger = HoverCardPrimitive.Trigger;
  * a comfortable `w-64` reading width with `p-4` padding. Holds read-only preview content — for
  * interactive items use a menu instead.
  */
+/** Closed width tiers for non-interactive hover previews. */
+export type HoverCardWidth = 'sm' | 'md' | 'lg';
+
+const HOVER_CARD_WIDTH: Readonly<Record<HoverCardWidth, string>> = {
+  sm: 'w-56',
+  md: 'w-64',
+  lg: 'w-80',
+};
+
+function hoverCardInset(inset: OverlayInset): string {
+  if (inset === 'none') return 'p-0';
+  if (inset === 'compact') return 'p-3';
+  return 'p-4';
+}
+
+/** Props for the closed hover-card presentation. */
+export interface HoverCardContentProps extends Omit<
+  React.ComponentProps<typeof HoverCardPrimitive.Content>,
+  'className' | 'style'
+> {
+  /** Reading width for this preview. */
+  readonly width?: HoverCardWidth | undefined;
+  /** Internal inset for the preview content. */
+  readonly inset?: OverlayInset | undefined;
+}
+
 export function HoverCardContent({
-  className,
   align = 'center',
   sideOffset = 4,
   collisionPadding = OVERLAY_COLLISION_PADDING,
+  width = 'md',
+  inset = 'standard',
   ...props
-}: React.ComponentProps<typeof HoverCardPrimitive.Content>): React.JSX.Element {
+}: HoverCardContentProps): React.JSX.Element {
   return (
     <HoverCardPrimitive.Portal>
       <HoverCardPrimitive.Content
@@ -72,8 +100,9 @@ export function HoverCardContent({
         collisionPadding={collisionPadding}
         data-surface-tone="floating"
         className={cn(
-          'bg-surface-container-high text-on-surface border-outline-variant data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 shadow-level2 z-[120] w-64 origin-[var(--radix-hover-card-content-transform-origin)] rounded-lg border p-4 outline-none',
-          className,
+          'bg-surface-container-high text-on-surface border-outline-variant data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 shadow-level2 z-[120] max-w-[calc(100vw-1.5rem)] origin-[var(--radix-hover-card-content-transform-origin)] rounded-lg border outline-none',
+          HOVER_CARD_WIDTH[width],
+          hoverCardInset(inset),
         )}
         {...props}
       />

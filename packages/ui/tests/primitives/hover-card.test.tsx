@@ -15,7 +15,7 @@ function IssuePreview(): React.JSX.Element {
       <HoverCardTrigger asChild>
         <a href="/issues/DKT-12">DKT-12</a>
       </HoverCardTrigger>
-      <HoverCardContent className="card-x">
+      <HoverCardContent>
         <p>Fix timezone drift</p>
         <p>In Progress</p>
       </HoverCardContent>
@@ -34,13 +34,12 @@ describe('HoverCard family', () => {
     expect(screen.getByText('In Progress')).toBeInTheDocument();
   });
 
-  it('merges a custom class and applies the MD3 surface tone onto the content', async () => {
+  it('applies the shared MD3 preview surface onto the content', async () => {
     render(<IssuePreview />);
     fireEvent.pointerEnter(screen.getByRole('link', { name: 'DKT-12' }));
     await screen.findByText('Fix timezone drift');
 
-    const styled = document.querySelector('.card-x');
-    expect(styled).not.toBeNull();
+    const styled = screen.getByText('Fix timezone drift').closest('[data-surface-tone]');
     expect(styled).toHaveAttribute('data-surface-tone', 'floating');
     expect(styled).toHaveClass('bg-surface-container-high', 'rounded-lg', 'w-64');
   });

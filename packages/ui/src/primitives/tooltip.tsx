@@ -64,11 +64,13 @@ export const TooltipTrigger = TooltipPrimitive.Trigger;
  * or interactive, reach for {@link HoverCard}.
  */
 export function TooltipContent({
-  className,
   sideOffset = 4,
   collisionPadding = OVERLAY_COLLISION_PADDING,
   ...props
-}: React.ComponentProps<typeof TooltipPrimitive.Content>): React.JSX.Element {
+}: Omit<
+  React.ComponentProps<typeof TooltipPrimitive.Content>,
+  'className' | 'style'
+>): React.JSX.Element {
   return (
     <TooltipPrimitive.Portal>
       <TooltipPrimitive.Content
@@ -77,7 +79,6 @@ export function TooltipContent({
         data-surface-tone="prominent"
         className={cn(
           'bg-surface-container-highest text-on-surface border-outline-variant data-[state=delayed-open]:animate-in data-[state=instant-open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=delayed-open]:fade-in-0 data-[state=instant-open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=delayed-open]:zoom-in-95 data-[state=instant-open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 text-body-small shadow-level2 z-[120] w-fit max-w-xs origin-[var(--radix-tooltip-content-transform-origin)] rounded-lg border px-2.5 py-1.5',
-          className,
         )}
         {...props}
       />

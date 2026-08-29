@@ -44,6 +44,8 @@ import * as React from 'react';
 
 import { cn } from '../lib/utils';
 import { focusRing } from './focus';
+import type { OverlayInset, SheetPresentation, SheetSize } from './overlay-contract';
+import { useOverlayFocusRestore } from './use-overlay-focus-restore';
 
 /**
  * Root controller for an open/closed sheet (Radix Dialog passthrough).
@@ -76,8 +78,9 @@ export function SheetOverlay({
 }: React.ComponentProps<typeof DialogPrimitive.Overlay>): React.JSX.Element {
   return (
     <DialogPrimitive.Overlay
+      data-overlay-scrim=""
       className={cn(
-        'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-[100] bg-black/40 duration-(--dur-slow) ease-(--ease-out)',
+        'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 bg-scrim/40 fixed inset-0 z-[100] duration-(--dur-slow) ease-(--ease-out)',
         className,
       )}
       {...props}
@@ -95,6 +98,25 @@ const SIDE_CLASS: Record<SheetSide, string> = {
     'inset-y-0 right-0 h-full data-[state=open]:slide-in-from-right data-[state=closed]:slide-out-to-right border-l',
 };
 
+const SHEET_SIZE: Readonly<Record<SheetSize, string>> = {
+  navigation: 'w-72 max-w-[85vw]',
+  standard: 'w-96 max-w-[calc(100vw-1.5rem)]',
+  wide: 'w-[28rem] max-w-[calc(100vw-1.5rem)]',
+};
+
+function sheetPresentationClass(
+  presentation: SheetPresentation,
+  side: SheetSide,
+  size: SheetSize,
+): string {
+  if (presentation === 'fullscreen') return 'inset-0 h-[100dvh] w-[100vw] border-0';
+  if (presentation === 'responsive-fullscreen')
+    return `inset-0 h-[100dvh] w-[100vw] border-0 sm:inset-y-0 sm:${side}-0 sm:h-full sm:w-auto sm:border-0 ${
+      side === 'left' ? 'sm:border-r' : 'sm:border-l'
+    } ${SHEET_SIZE[size]}`;
+  return `${SIDE_CLASS[side]} ${SHEET_SIZE[size]}`;
+}
+
 /**
  * The edge-anchored, focus-trapped sheet panel (the visible off-canvas surface).
  *
@@ -111,60 +133,98 @@ export function SheetContent({
   className,
   children,
   side = 'left',
+  presentation = 'edge',
+  size = 'navigation',
   onOpenAutoFocus,
   onCloseAutoFocus,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   /** Which window edge the panel anchors to (default `left`). */
   side?: SheetSide;
+  /** The shared sheet presentation that owns viewport geometry. */
+  presentation?: SheetPresentation | undefined;
+  /** The width tier used by an edge presentation. */
+  size?: SheetSize | undefined;
 }): React.JSX.Element {
-  // The element focused when the sheet opened — its opener — so focus can return to it on
-  // close (WAI-ARIA). Radix's own restore only covers a `SheetTrigger`; the shell opens the
-  // drawer from a standalone controlled button, so we capture and restore the opener ourselves.
-  const openerRef = React.useRef<HTMLElement | null>(null);
-
-  /** Capture the opener as `FocusScope` is about to move focus in (activeElement is still it). */
-  const handleOpenAutoFocus = React.useCallback(
-    (event: Event) => {
-      const active = document.activeElement;
-      openerRef.current = active instanceof HTMLElement ? active : null;
-      onOpenAutoFocus?.(event);
-    },
-    [onOpenAutoFocus],
-  );
-
-  /** Return focus to the opener on close (unless a caller already handled it). */
-  const handleCloseAutoFocus = React.useCallback(
-    (event: Event) => {
-      onCloseAutoFocus?.(event);
-      const opener = openerRef.current;
-      openerRef.current = null;
-      if (!event.defaultPrevented && opener?.isConnected) {
-        event.preventDefault();
-        opener.focus();
-      }
-    },
-    [onCloseAutoFocus],
-  );
+  const focusRestore = useOverlayFocusRestore(onOpenAutoFocus, onCloseAutoFocus);
 
   return (
     <SheetPortal>
       <SheetOverlay />
       <DialogPrimitive.Content
         className={cn(
-          'bg-surface text-on-surface border-outline-variant data-[state=open]:animate-in data-[state=closed]:animate-out shadow-level1 fixed z-[100] flex w-72 max-w-[85vw] flex-col ease-(--ease-out) outline-none data-[state=closed]:duration-(--dur-base) data-[state=open]:duration-(--dur-slow)',
+          'bg-surface-container-high text-on-surface border-outline-variant data-[state=open]:animate-in data-[state=closed]:animate-out shadow-level1 fixed z-[100] flex min-h-0 flex-col gap-0 overflow-hidden overscroll-contain p-0 ease-(--ease-out) outline-none data-[state=closed]:duration-(--dur-base) data-[state=open]:duration-(--dur-slow)',
           focusRing,
-          SIDE_CLASS[side],
+          sheetPresentationClass(presentation, side, size),
           className,
         )}
-        onOpenAutoFocus={handleOpenAutoFocus}
-        onCloseAutoFocus={handleCloseAutoFocus}
+        data-surface-tone="floating"
+        onOpenAutoFocus={focusRestore.onOpenAutoFocus}
+        onCloseAutoFocus={focusRestore.onCloseAutoFocus}
         {...props}
       >
         {children}
       </DialogPrimitive.Content>
     </SheetPortal>
   );
+}
+
+/** Fixed header region that shares the sheet body's horizontal inset. */
+export function SheetHeader({
+  className,
+  inset = 'standard',
+  ...props
+}: React.ComponentProps<'div'> & { readonly inset?: OverlayInset | undefined }): React.JSX.Element {
+  return (
+    <div
+      className={cn('flex shrink-0 flex-col gap-1.5', overlayInsetClass(inset), className)}
+      {...props}
+    />
+  );
+}
+
+/** The only Sheet region permitted to own vertical overflow. */
+export function SheetBody({
+  className,
+  inset = 'standard',
+  scroll = 'auto',
+  ...props
+}: React.ComponentProps<'div'> & {
+  readonly inset?: OverlayInset | undefined;
+  readonly scroll?: 'auto' | 'visible' | undefined;
+}): React.JSX.Element {
+  return (
+    <div
+      className={cn(
+        'min-h-0 flex-1',
+        overlayInsetClass(inset),
+        scroll === 'auto' && 'overflow-y-auto overscroll-contain',
+        className,
+      )}
+      {...(scroll === 'auto' ? { 'data-overlay-scroll-owner': '' } : {})}
+      {...props}
+    />
+  );
+}
+
+/** Fixed action region that shares the sheet body's horizontal inset. */
+export function SheetFooter({
+  className,
+  inset = 'standard',
+  ...props
+}: React.ComponentProps<'div'> & { readonly inset?: OverlayInset | undefined }): React.JSX.Element {
+  return (
+    <div
+      className={cn('flex shrink-0 items-center gap-2', overlayInsetClass(inset), className)}
+      {...props}
+    />
+  );
+}
+
+function overlayInsetClass(inset: OverlayInset): string {
+  if (inset === 'none') return '';
+  if (inset === 'compact') return 'px-4 py-3';
+  return 'px-6 py-4';
 }
 
 /**

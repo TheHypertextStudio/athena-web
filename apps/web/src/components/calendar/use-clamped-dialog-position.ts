@@ -1,6 +1,6 @@
 'use client';
 
-import type { CSSProperties, KeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
+import type { KeyboardEvent, PointerEvent as ReactPointerEvent } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface Point {
@@ -14,6 +14,14 @@ export interface DialogRect {
   readonly top: number;
   readonly width: number;
   readonly height: number;
+}
+
+/** Explicit local rectangle owned by the shared hosted-dialog presentation. */
+export interface HostedDialogPosition {
+  readonly left: number;
+  readonly top: number;
+  readonly width: number;
+  readonly maxHeight: number;
 }
 
 interface AnchorPlacementOptions {
@@ -102,7 +110,7 @@ export function useClampedDialogPosition({
   readonly preferredTop?: number | undefined;
 }): {
   readonly dialogRef: React.RefObject<HTMLDivElement | null>;
-  readonly style: CSSProperties;
+  readonly presentation: HostedDialogPosition;
   readonly handlePointerDown: (event: ReactPointerEvent<HTMLElement>) => void;
   readonly handleKeyDown: (event: KeyboardEvent<HTMLElement>) => void;
 } {
@@ -214,7 +222,12 @@ export function useClampedDialogPosition({
 
   return {
     dialogRef,
-    style: { left: point.x, top: point.y, transform: 'none' },
+    presentation: {
+      left: point.x,
+      top: point.y,
+      width: host ? Math.min(544, Math.max(0, host.clientWidth - 32)) : 544,
+      maxHeight: host ? Math.max(0, host.clientHeight - 32) : 768,
+    },
     handlePointerDown,
     handleKeyDown,
   };

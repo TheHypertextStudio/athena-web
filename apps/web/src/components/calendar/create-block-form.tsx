@@ -424,12 +424,6 @@ export default function CreateBlockForm({
 
   const mobileHosted =
     presentation === 'agenda' && !agendaDesktop ? (agendaMobileHost ?? null) : null;
-  const portalHost = desktopHosted ?? mobileHosted ?? null;
-  const overlayClassName = desktopHosted
-    ? 'pointer-events-none absolute inset-0 bg-transparent'
-    : mobileHosted
-      ? 'absolute inset-0 bg-surface'
-      : undefined;
   const desktopPresentation = presentation === 'agenda' ? 'agenda-desktop' : 'calendar-desktop';
   const mobilePresentation = presentation === 'agenda' ? 'agenda-mobile' : 'calendar-mobile';
   return (
@@ -451,22 +445,34 @@ export default function CreateBlockForm({
       <Dialog open={open} modal={desktopHosted === null} onOpenChange={handleOpenChange}>
         <DialogContent
           ref={position.dialogRef}
-          portalContainer={portalHost}
-          overlayClassName={overlayClassName}
+          presentation={
+            desktopHosted
+              ? {
+                  kind: 'hosted',
+                  portalContainer: desktopHosted,
+                  position: position.presentation,
+                  backdrop: 'none',
+                }
+              : mobileHosted
+                ? {
+                    kind: 'hosted',
+                    portalContainer: mobileHosted,
+                    position: {
+                      top: 0,
+                      left: 0,
+                      width: mobileHosted.clientWidth,
+                      maxHeight: mobileHosted.clientHeight,
+                    },
+                    backdrop: 'surface',
+                  }
+                : { kind: 'bottom-sheet', size: 'wide', height: 'tall' }
+          }
           showClose={false}
           onOpenAutoFocus={(event) => {
             event.preventDefault();
             titleInputRef.current?.focus();
           }}
           aria-label="Create calendar item"
-          className={
-            desktopHosted
-              ? 'pointer-events-auto absolute m-0 max-h-[calc(100%-2rem)] w-[min(34rem,calc(100%-2rem))] max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden p-0'
-              : mobileHosted
-                ? 'absolute inset-0 m-0 h-full max-h-none w-full max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none border-0 p-0 shadow-none'
-                : 'inset-x-0 top-auto bottom-0 left-0 max-h-[85dvh] w-full max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-t-xl rounded-b-none p-0'
-          }
-          style={desktopHosted ? position.style : undefined}
           data-create-presentation={desktopHosted ? desktopPresentation : mobilePresentation}
         >
           {desktopHosted ? (

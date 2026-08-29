@@ -78,8 +78,10 @@ describe('Sheet family', () => {
     render(<NavSheet />);
     fireEvent.click(screen.getByText('Open navigation'));
     const sheet = await screen.findByRole('dialog');
-    // Left-anchored geometry + the solid MD3 surface tone so the drawer reads over the scrim.
-    expect(sheet).toHaveClass('bg-surface', 'left-0', 'inset-y-0', 'border-r');
+    // Left-anchored geometry and the shared floating panel treatment make the drawer distinct
+    // from the page that remains behind the scrim.
+    expect(sheet).toHaveAttribute('data-surface-tone', 'floating');
+    expect(sheet).toHaveClass('left-0', 'inset-y-0', 'border-r');
   });
 
   it('anchors to the right edge when side="right"', async () => {
@@ -106,7 +108,7 @@ describe('Sheet family', () => {
       </Sheet>,
     );
     const sheet = await screen.findByRole('dialog');
-    const overlay = baseElement.querySelector('.bg-black\\/40');
+    const overlay = baseElement.querySelector('[data-overlay-scrim]');
     expect(overlay).not.toBeNull();
     expect(overlay).toHaveClass('z-[100]');
     expect(sheet).toHaveClass('z-[100]');

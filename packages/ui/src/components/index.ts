@@ -135,6 +135,14 @@ export {
 export { ListSubGroup, type ListSubGroupProps } from './views/ListSubGroup';
 export { MenuActionRow, type MenuActionRowProps } from './menus/MenuActionRow';
 export {
+  MenuDivider,
+  MenuListbox,
+  type MenuListboxProps,
+  MenuOption,
+  type MenuOptionProps,
+  MenuSectionLabel,
+} from './menus/MenuListbox';
+export {
   AppShell,
   type AppShellProps,
   SHELL_DESKTOP_CHROME_PX,

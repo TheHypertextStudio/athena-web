@@ -22,6 +22,7 @@ import { describe, expect, it } from 'vitest';
 // mirrors the same pre-seeding `tests/builder/auth.test.ts` does before its first import.
 process.env['AGENT_MAX_TURNS'] = '8';
 process.env['ATHENA_ASYNC_RUNNER_ENABLED'] = 'false';
+process.env['LINEAR_AGENT_ENABLED'] = 'false';
 
 const SECRET = 'test-secret-at-least-32-characters-long';
 const MAILER_DEPS = { mailer: { send: async () => undefined } } as const;

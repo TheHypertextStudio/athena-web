@@ -10,6 +10,7 @@ import type { RawWebhook } from '@docket/integrations';
 import { assertDefined } from '@docket/test-utils';
 
 import type * as InboxModule from '../../src/lib/external-agent-inbox';
+import { linearAgentWebhook } from '../support/linear-agent-webhook';
 
 const MIGRATIONS = resolve(import.meta.dirname, '../../../../packages/db/drizzle');
 
@@ -53,17 +54,19 @@ async function seedAgentIntegration(
 }
 
 function signedLinearWebhook(sessionId: string, workspaceId = 'linear-workspace'): RawWebhook {
-  const body = JSON.stringify({
-    action: 'created',
-    organizationId: workspaceId,
-    webhookTimestamp: Date.now(),
-    agentSession: { id: sessionId, promptContext: 'Plan the release.' },
-    actor: { id: 'linear-user' },
-  });
+  const body = JSON.stringify(
+    linearAgentWebhook({
+      action: 'created',
+      organizationId: workspaceId,
+      sessionId,
+      promptContext: 'Plan the release.',
+    }),
+  );
   return {
     body,
     headers: {
       'linear-signature': createHmac('sha256', 'linear-secret').update(body).digest('hex'),
+      'linear-delivery': `${sessionId}:created`,
     },
     receivedAt: new Date(),
   };

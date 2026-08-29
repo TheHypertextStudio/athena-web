@@ -17,6 +17,7 @@ import { describe, expect, it } from 'vitest';
 // imported dynamically, after this runs.
 process.env['AGENT_MAX_TURNS'] = '8';
 process.env['ATHENA_ASYNC_RUNNER_ENABLED'] = 'false';
+process.env['LINEAR_AGENT_ENABLED'] = 'false';
 
 describe('recoveryChallenge rate-limit path matchers', () => {
   it('declares a matcher for the recovery-challenge path', async () => {

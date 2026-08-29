@@ -19,6 +19,7 @@ import { assertDefined } from '@docket/test-utils';
 // suites do, before that import can happen.
 process.env['AGENT_MAX_TURNS'] = '8';
 process.env['ATHENA_ASYNC_RUNNER_ENABLED'] = 'false';
+process.env['LINEAR_AGENT_ENABLED'] = 'false';
 
 /** Swallows verification mail; these flows send, but nothing here reads the outbox. */
 const captureMailer: Mailer = {

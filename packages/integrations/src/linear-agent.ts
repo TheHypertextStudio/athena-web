@@ -17,14 +17,8 @@
  * mirror) — so it gets its own small, self-contained webhook-verification helper here rather
  * than forcing a second shape through the `Observer` interface.
  *
- * Field names in {@link parseLinearAgentWebhook}'s schema are grounded in Linear's public
- * agent-platform docs (`linear.app/developers/agent-interaction`, `linear.app/developers/agents`,
- * `linear.app/developers/webhooks`, `linear.app/developers/oauth-2-0-authentication`) as of this
- * writing, but have not been exercised against a real webhook delivery — no Agent app is
- * registered yet. The schema is deliberately `.loose()`-permissive so an unanticipated
- * extra field never causes a parse failure; only the specific fields this module's functions
- * promise to return are pulled out, and those should be re-verified against a live delivery
- * once the app exists.
+ * The provider-specific webhook schema lives in `agent-surface-linear.ts`. This module owns the
+ * OAuth, signature, and GraphQL transport pieces that the typed surface adapter composes.
  */
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
@@ -336,95 +330,6 @@ export function verifyLinearAgentWebhookSignature(
 }
 
 // ---------------------------------------------------------------------------
-// Webhook payload parsing
-// ---------------------------------------------------------------------------
-
-/** A Linear actor reference (`actor` on the webhook envelope) — the app or human who triggered it. */
-const linearAgentActorSchema = z
-  .object({
-    id: z.string(),
-    type: z.string().optional(),
-    name: z.string().optional(),
-    email: z.string().optional(),
-    url: z.string().optional(),
-  })
-  .loose();
-
-/** A Linear actor reference. */
-export type LinearAgentActor = z.infer<typeof linearAgentActorSchema>;
-
-/**
- * The `agentSession` sub-object common to both webhook actions.
- *
- * @remarks
- * Linear's docs describe `agentSession.issue`, `.comment`, `.previousComments`, and
- * `.guidance` fields carrying the session's work context, but do not publish their exact
- * nested shapes. `.loose()` preserves those fields unparsed rather than dropping them;
- * only `id` (what every downstream caller needs to address the session) is asserted here.
- */
-const linearAgentSessionRefSchema = z
-  .object({
-    id: z.string(),
-  })
-  .loose();
-
-/** The `agentActivity` sub-object on a `prompted` delivery — the human's follow-up message. */
-const linearAgentActivityRefSchema = z
-  .object({
-    id: z.string().optional(),
-    body: z.string(),
-  })
-  .loose();
-
-/** Fields common to every `AgentSessionEvent` delivery, regardless of `action`. */
-const linearAgentWebhookBaseSchema = z.object({
-  type: z.string().optional(),
-  organizationId: z.string().optional(),
-  webhookTimestamp: z.number().optional(),
-  createdAt: z.string().optional(),
-  agentSession: linearAgentSessionRefSchema,
-  actor: linearAgentActorSchema.optional(),
-});
-
-/** A new agent session — the human `@mentioned` or delegated work to the agent for the first time. */
-const linearAgentSessionCreatedSchema = linearAgentWebhookBaseSchema
-  .extend({ action: z.literal('created') })
-  .loose();
-
-/** A follow-up human message on an already-open agent session. */
-const linearAgentSessionPromptedSchema = linearAgentWebhookBaseSchema
-  .extend({ action: z.literal('prompted'), agentActivity: linearAgentActivityRefSchema })
-  .loose();
-
-/** A `created`-action `AgentSessionEvent` webhook delivery. */
-export type LinearAgentSessionCreated = z.infer<typeof linearAgentSessionCreatedSchema>;
-/** A `prompted`-action `AgentSessionEvent` webhook delivery. */
-export type LinearAgentSessionPrompted = z.infer<typeof linearAgentSessionPromptedSchema>;
-
-/**
- * Parse an inbound Linear `AgentSessionEvent` webhook body into a typed union.
- *
- * @remarks
- * Discriminates on `action` (`created` | `prompted`) — the two `AgentSessionEvent` variants
- * Linear's agent-interaction docs currently describe. Any other shape — malformed JSON, a body
- * missing `action`, or a webhook family this module does not model — safely returns `null`
- * rather than throwing, so a caller's route handler can still acknowledge the delivery (Linear
- * retries on a non-2xx response) after logging the unrecognized shape.
- *
- * @param payload - The parsed JSON webhook body.
- * @returns the typed `created`/`prompted` event, or `null` when the shape doesn't match either.
- */
-export function parseLinearAgentWebhook(
-  payload: unknown,
-): LinearAgentSessionCreated | LinearAgentSessionPrompted | null {
-  const created = linearAgentSessionCreatedSchema.safeParse(payload);
-  if (created.success) return created.data;
-  const prompted = linearAgentSessionPromptedSchema.safeParse(payload);
-  if (prompted.success) return prompted.data;
-  return null;
-}
-
-// ---------------------------------------------------------------------------
 // Authenticated GraphQL calls (agentActivityCreate / agentSessionUpdate)
 // ---------------------------------------------------------------------------
 
@@ -539,23 +444,8 @@ export async function resolveLinearAgentInstallation(
  */
 export type LinearAgentActivityType = SessionActivityType;
 
-/** Input to {@link agentActivityCreate}. */
-export interface AgentActivityCreateInput {
+interface AgentActivityCreateBase {
   readonly agentSessionId: string;
-  readonly type: LinearAgentActivityType;
-  /**
-   * The activity's Markdown body.
-   *
-   * @remarks
-   * Linear's real `action`-type content additionally carries `action`/`parameter`/`result`
-   * fields (a structured tool-call shape) distinct from the `body` field used by
-   * `thought`/`elicitation`/`response`/`error`. This slice's callers only ever post text-bodied
-   * activity today, so `body` is the one payload field modeled here; posting a `type: 'action'`
-   * activity sends `content: { type: 'action', body }`, which is schema-valid but omits the
-   * richer `action`/`parameter` fields a real tool-invocation activity would carry — extend
-   * this input if/when Docket starts posting those.
-   */
-  readonly body: string;
   /** Ephemeral activities (e.g. progress ticks) are not persisted in the session's history. */
   readonly ephemeral?: boolean;
   /** Optional provider-native elicitation signal. */
@@ -571,6 +461,25 @@ export interface AgentActivityCreateInput {
         readonly options: readonly { readonly label?: string; readonly value: string }[];
       };
 }
+
+/** Input to {@link agentActivityCreate}, paired to Linear's content union by `type`. */
+export type AgentActivityCreateInput = AgentActivityCreateBase &
+  (
+    | {
+        readonly type: Exclude<LinearAgentActivityType, 'action'>;
+        /** Markdown body for a text-shaped Linear activity. */
+        readonly body: string;
+      }
+    | {
+        readonly type: 'action';
+        /** The action label that Linear shows as the tool operation. */
+        readonly action: string;
+        /** The resource or argument that the action operated on. */
+        readonly parameter: string;
+        /** Optional Markdown result attached after the action completes. */
+        readonly result?: string;
+      }
+  );
 
 /** The `agentActivityCreate` mutation (see {@link AgentActivityCreateInput} for the content-shape caveat). */
 const AGENT_ACTIVITY_CREATE_MUTATION = `
@@ -595,12 +504,21 @@ export async function agentActivityCreate(
   client: LinearAgentClient,
   input: AgentActivityCreateInput,
 ): Promise<{ id: string }> {
+  const content =
+    input.type === 'action'
+      ? {
+          type: input.type,
+          action: input.action,
+          parameter: input.parameter,
+          ...(input.result !== undefined ? { result: input.result } : {}),
+        }
+      : { type: input.type, body: input.body };
   const data = await client.query<{
     agentActivityCreate?: { success?: boolean; agentActivity?: { id?: string } };
   }>(AGENT_ACTIVITY_CREATE_MUTATION, {
     input: {
       agentSessionId: input.agentSessionId,
-      content: { type: input.type, body: input.body },
+      content,
       ...(input.ephemeral !== undefined ? { ephemeral: input.ephemeral } : {}),
       ...(input.signal ? { signal: input.signal } : {}),
       ...(input.signalMetadata ? { signalMetadata: input.signalMetadata } : {}),

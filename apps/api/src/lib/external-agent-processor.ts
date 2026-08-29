@@ -1,5 +1,5 @@
 /** Canonical inbox processing for external Athena agent deliveries. */
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 
 import {
   agentSession,
@@ -69,6 +69,48 @@ async function linkedSession(
     )
     .limit(1);
   return row?.session ?? null;
+}
+
+async function applyApprovalToken(input: {
+  readonly organizationId: string;
+  readonly provider: AgentSurfaceProvider;
+  readonly sessionId: string;
+  readonly actorId: string;
+  readonly token: string;
+  readonly rejectInvalid: boolean;
+}): Promise<boolean> {
+  const control = verifyExternalAgentControl(input.token);
+  if (
+    !control ||
+    !controlMatchesProvider(control, input.provider) ||
+    control.kind !== 'approval' ||
+    control.organizationId !== input.organizationId ||
+    control.sessionId !== input.sessionId
+  ) {
+    if (input.rejectInvalid) throw new Error('External approval control is invalid or expired.');
+    return false;
+  }
+  const [target] = await db
+    .select({ approvalStatus: sessionActivity.approvalStatus })
+    .from(sessionActivity)
+    .where(
+      and(
+        eq(sessionActivity.id, control.activityId),
+        eq(sessionActivity.sessionId, input.sessionId),
+      ),
+    )
+    .limit(1);
+  const decidedStatus = control.decision === 'approve' ? 'approved' : 'rejected';
+  if (target?.approvalStatus === decidedStatus) return true;
+  await decideActivity(
+    input.organizationId,
+    input.actorId,
+    input.sessionId,
+    control.activityId,
+    { decision: control.decision },
+    control.decision === 'approve' ? { queueExternalRun: true } : { cancelSession: true },
+  );
+  return true;
 }
 
 /** Normalize and apply one verified external-agent inbox row. */
@@ -154,6 +196,18 @@ export async function processExternalAgentInboxEvent(row: ExternalAgentInboxRow)
           .where(eq(agentSession.id, session.id));
       }
       if (!actorId) continue;
+      if (
+        await applyApprovalToken({
+          organizationId: row.organizationId,
+          provider,
+          sessionId: session.id,
+          actorId,
+          token: event.body,
+          rejectInvalid: false,
+        })
+      ) {
+        continue;
+      }
       await recordInboundReply(
         row.organizationId,
         session.id,
@@ -168,36 +222,14 @@ export async function processExternalAgentInboxEvent(row: ExternalAgentInboxRow)
     }
     if (event.type === 'approval_selected') {
       if (!actorId) continue;
-      const control = verifyExternalAgentControl(event.choiceToken);
-      if (
-        !control ||
-        !controlMatchesProvider(control, provider) ||
-        control.kind !== 'approval' ||
-        control.organizationId !== row.organizationId ||
-        control.sessionId !== session.id
-      ) {
-        throw new Error('External approval control is invalid or expired.');
-      }
-      const [target] = await db
-        .select({ approvalStatus: sessionActivity.approvalStatus })
-        .from(sessionActivity)
-        .where(
-          and(
-            eq(sessionActivity.id, control.activityId),
-            eq(sessionActivity.sessionId, session.id),
-          ),
-        )
-        .limit(1);
-      const decidedStatus = control.decision === 'approve' ? 'approved' : 'rejected';
-      if (target?.approvalStatus === decidedStatus) continue;
-      await decideActivity(
-        row.organizationId,
+      await applyApprovalToken({
+        organizationId: row.organizationId,
+        provider,
+        sessionId: session.id,
         actorId,
-        session.id,
-        control.activityId,
-        { decision: control.decision },
-        control.decision === 'approve' ? { queueExternalRun: true } : { cancelSession: true },
-      );
+        token: event.choiceToken,
+        rejectInvalid: true,
+      });
       continue;
     }
     {
@@ -217,7 +249,24 @@ export async function processExternalAgentInboxEvent(row: ExternalAgentInboxRow)
         }
       }
       const now = new Date();
+      const sourceActivityId = `${provider}:${event.externalActivityId}`;
       await db.transaction(async (tx) => {
+        await tx
+          .select({ id: agentSession.id })
+          .from(agentSession)
+          .where(eq(agentSession.id, session.id))
+          .for('update');
+        const [existing] = await tx
+          .select({ id: sessionActivity.id })
+          .from(sessionActivity)
+          .where(
+            and(
+              eq(sessionActivity.sessionId, session.id),
+              sql`${sessionActivity.body} ->> 'sourceActivityId' = ${sourceActivityId}`,
+            ),
+          )
+          .limit(1);
+        if (existing) return;
         await tx
           .update(agentSession)
           .set({
@@ -243,7 +292,7 @@ export async function processExternalAgentInboxEvent(row: ExternalAgentInboxRow)
           type: 'response',
           body: {
             text: 'Athena stopped this session at the external user’s request.',
-            sourceActivityId: `${provider}:${event.externalActivityId}`,
+            sourceActivityId,
           },
         });
       });

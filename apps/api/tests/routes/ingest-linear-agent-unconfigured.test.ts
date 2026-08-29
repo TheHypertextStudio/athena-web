@@ -6,6 +6,8 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 import type ingestLinearAgentRouter from '../../src/routes/ingest-linear-agent';
+import { installTestProductFixture } from '../support/db';
+import { linearAgentWebhook } from '../support/linear-agent-webhook';
 
 /**
  * This file deliberately does NOT set `LINEAR_AGENT_CLIENT_ID`/`_SECRET`/`_WEBHOOK_SECRET` — the
@@ -32,12 +34,13 @@ describe('POST /internal/ingest/linear-agent (Linear Agent app not configured)',
     const res = await ingestLinearAgent.request('/linear-agent', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'linear-signature': 'whatever' },
-      body: JSON.stringify({
-        action: 'created',
-        webhookTimestamp: Date.now(),
-        organizationId: 'ws_whatever',
-        agentSession: { id: 'las_unconfigured' },
-      }),
+      body: JSON.stringify(
+        linearAgentWebhook({
+          action: 'created',
+          organizationId: 'ws_whatever',
+          sessionId: 'las_unconfigured',
+        }),
+      ),
     });
     expect(res.status).toBe(404);
 
@@ -48,4 +51,3 @@ describe('POST /internal/ingest/linear-agent (Linear Agent app not configured)',
     expect(rows).toHaveLength(0);
   });
 });
-import { installTestProductFixture } from '../support/db';

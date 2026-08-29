@@ -233,7 +233,12 @@ describe('external agent relay', () => {
     });
     expect(publish.mock.calls[2]?.[0]).toMatchObject({
       kind: 'activity',
-      output: { type: 'action', body: expect.stringContaining('Marked done.') },
+      output: {
+        type: 'action',
+        action: 'Mark "Ship it" done',
+        parameter: 'Docket',
+        result: 'Marked done.',
+      },
     });
   });
 

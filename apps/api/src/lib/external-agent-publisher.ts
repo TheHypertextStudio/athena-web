@@ -57,27 +57,41 @@ async function publishLinear(request: ExternalAgentPublishRequest<'linear'>): Pr
     return { id: request.session.id, url: request.externalUrl };
   }
   const { output } = request;
-  return port.agentActivityCreate({
-    agentSessionId: request.session.id,
-    type: output.type,
-    body: output.body,
-    ...(output.ephemeral !== undefined ? { ephemeral: output.ephemeral } : {}),
-    ...(output.signal?.type === 'select'
+  const signal =
+    output.signal?.type === 'select'
       ? {
-          signal: 'select',
+          signal: 'select' as const,
           signalMetadata: { options: output.signal.options },
         }
       : output.signal?.type === 'auth'
         ? {
-            signal: 'auth',
+            signal: 'auth' as const,
             signalMetadata: {
               url: output.signal.url,
               userId: output.signal.userId,
               providerName: 'Docket',
             },
           }
-        : {}),
-  });
+        : {};
+  return port.agentActivityCreate(
+    output.type === 'action'
+      ? {
+          agentSessionId: request.session.id,
+          type: output.type,
+          action: output.action,
+          parameter: output.parameter,
+          ...(output.result !== undefined ? { result: output.result } : {}),
+          ...(output.ephemeral !== undefined ? { ephemeral: output.ephemeral } : {}),
+          ...signal,
+        }
+      : {
+          agentSessionId: request.session.id,
+          type: output.type,
+          body: output.body,
+          ...(output.ephemeral !== undefined ? { ephemeral: output.ephemeral } : {}),
+          ...signal,
+        },
+  );
 }
 
 function disabledPublisher<P extends Exclude<AgentSurfaceProvider, 'linear'>>(

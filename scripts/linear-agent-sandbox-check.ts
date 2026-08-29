@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto';
+import { createHmac, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 
 const [eventPath] = process.argv.slice(2);
@@ -28,6 +28,7 @@ const response = await fetch(target, {
   headers: {
     'content-type': 'application/json',
     'linear-signature': signature,
+    'linear-delivery': randomUUID(),
   },
   body: rawBody,
 });

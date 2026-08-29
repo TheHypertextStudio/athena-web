@@ -13,45 +13,53 @@ import type {
 } from './agent-surface';
 import { canonicalActivityText } from './agent-surface';
 
-const linearActorSchema = z.object({
+const linearUserSchema = z.object({
   id: z.string(),
-  email: z.string().optional(),
-  name: z.string().optional(),
+  email: z.string(),
+  name: z.string(),
+  url: z.string(),
 });
 
-const linearSessionSchema = z
-  .object({
-    id: z.string(),
-    promptContext: z.string().optional(),
-    guidance: z.array(z.string()).optional(),
-    issue: z
-      .object({ id: z.string(), title: z.string().optional(), url: z.string().optional() })
-      .optional(),
-  })
-  .loose();
+const linearSessionSchema = z.object({
+  id: z.string(),
+  organizationId: z.string(),
+  creator: linearUserSchema.nullish(),
+  creatorId: z.string().nullish(),
+  commentId: z.string().nullish(),
+  sourceCommentId: z.string().nullish(),
+  issue: z
+    .object({ id: z.string(), title: z.string().nullish(), url: z.string().nullish() })
+    .nullish(),
+  issueId: z.string().nullish(),
+});
 
-const linearWebhookSchema = z
-  .object({
-    action: z.enum(['created', 'prompted']),
-    type: z.string().optional(),
-    organizationId: z.string(),
-    webhookTimestamp: z.number(),
-    agentSession: linearSessionSchema,
-    actor: linearActorSchema.optional(),
-    agentActivity: z
-      .object({
-        id: z.string(),
-        body: z.string().optional(),
-        signal: z
-          .object({
-            type: z.enum(['select', 'auth', 'stop']),
-            value: z.string().optional(),
-          })
-          .optional(),
-      })
-      .optional(),
-  })
-  .loose();
+const linearActivitySchema = z.object({
+  agentSessionId: z.string(),
+  content: z.object({ type: z.literal('prompt'), body: z.string() }),
+  createdAt: z.string(),
+  id: z.string(),
+  signal: z.enum(['auth', 'continue', 'select', 'stop']).nullish(),
+  signalMetadata: z.record(z.string(), z.unknown()).nullish(),
+  updatedAt: z.string(),
+  user: linearUserSchema,
+  userId: z.string(),
+});
+
+const linearWebhookSchema = z.object({
+  action: z.enum(['created', 'prompted']),
+  appUserId: z.string(),
+  createdAt: z.string(),
+  guidance: z.array(z.object({ body: z.string(), origin: z.record(z.string(), z.unknown()) })),
+  oauthClientId: z.string(),
+  organizationId: z.string(),
+  previousComments: z.array(z.unknown()).nullish(),
+  promptContext: z.string().nullish(),
+  type: z.literal('AgentSessionEvent'),
+  webhookId: z.string(),
+  webhookTimestamp: z.number(),
+  agentSession: linearSessionSchema,
+  agentActivity: linearActivitySchema.nullish(),
+});
 
 /** Verified Linear Agent webhook. */
 export type LinearAgentSurfaceWebhook = z.infer<typeof linearWebhookSchema>;
@@ -69,19 +77,33 @@ export interface LinearAgentInstall extends LinearAgentVerification {
 /** Linear Agent session reference. */
 export type LinearAgentSessionRef = ExternalRef;
 
-/** Linear Agent outbound activity. */
-export interface LinearAgentSurfaceOutput {
-  readonly type: 'thought' | 'action' | 'response' | 'elicitation' | 'error';
-  readonly body: string;
+type LinearAgentSurfaceSignal =
+  | {
+      readonly type: 'select';
+      readonly options: readonly { readonly label: string; readonly value: string }[];
+    }
+  | { readonly type: 'auth'; readonly url: string; readonly userId: string }
+  | { readonly type: 'stop'; readonly value: string };
+
+interface LinearAgentSurfaceOutputBase {
   readonly ephemeral?: boolean;
-  readonly signal?:
-    | {
-        readonly type: 'select';
-        readonly options: readonly { readonly label: string; readonly value: string }[];
-      }
-    | { readonly type: 'auth'; readonly url: string; readonly userId: string }
-    | { readonly type: 'stop'; readonly value: string };
+  readonly signal?: LinearAgentSurfaceSignal;
 }
+
+/** Linear Agent outbound activity, paired to Linear's content union by `type`. */
+export type LinearAgentSurfaceOutput = LinearAgentSurfaceOutputBase &
+  (
+    | {
+        readonly type: 'thought' | 'response' | 'elicitation' | 'error';
+        readonly body: string;
+      }
+    | {
+        readonly type: 'action';
+        readonly action: string;
+        readonly parameter: string;
+        readonly result?: string;
+      }
+  );
 
 /** Linear's external-agent wire family. */
 export interface LinearSurfaceTypes extends SurfaceTypeFamily<'linear'> {
@@ -97,11 +119,13 @@ export interface LinearSurfaceTypes extends SurfaceTypeFamily<'linear'> {
 }
 
 function actor(payload: LinearAgentSurfaceWebhook): CanonicalExternalActor {
-  if (!payload.actor) return { externalId: `unknown:${payload.agentSession.id}` };
+  const user =
+    payload.action === 'prompted' ? payload.agentActivity?.user : payload.agentSession.creator;
+  if (!user) return { externalId: `unknown:${payload.agentSession.id}` };
   return {
-    externalId: payload.actor.id,
-    ...(payload.actor.email ? { email: payload.actor.email } : {}),
-    ...(payload.actor.name ? { displayName: payload.actor.name } : {}),
+    externalId: user.id,
+    email: user.email,
+    displayName: user.name,
   };
 }
 
@@ -141,9 +165,11 @@ export const linearAgentSurface: AgentSurfaceAdapter<'linear', LinearSurfaceType
     ) {
       throw new Error('Linear Agent webhook signature is invalid or stale.');
     }
+    const deliveryId = input.headers['linear-delivery'];
+    if (!deliveryId) throw new Error('Linear Agent delivery id is missing.');
     const payload = linearAgentSurface.parse(JSON.parse(input.body));
     return {
-      deliveryId: payload.agentActivity?.id ?? `${payload.agentSession.id}:${payload.action}`,
+      deliveryId,
       eventType: payload.action,
       payload,
     };
@@ -165,13 +191,13 @@ export const linearAgentSurface: AgentSurfaceAdapter<'linear', LinearSurfaceType
           workspaceId: payload.organizationId,
           externalSessionId: payload.agentSession.id,
           actor: externalActor,
-          trigger: 'mention',
+          trigger:
+            payload.agentSession.commentId || payload.agentSession.sourceCommentId
+              ? 'mention'
+              : 'delegation',
           context: {
-            prompt:
-              payload.agentSession.promptContext ??
-              issue?.title ??
-              'Help with this Linear work item.',
-            guidance: payload.agentSession.guidance ?? [],
+            prompt: payload.promptContext ?? issue?.title ?? 'Help with this Linear work item.',
+            guidance: payload.guidance.map((rule) => rule.body),
             ...(issue
               ? {
                   workItem: {
@@ -188,76 +214,85 @@ export const linearAgentSurface: AgentSurfaceAdapter<'linear', LinearSurfaceType
     }
     const activity = payload.agentActivity;
     if (!activity) return [];
-    if (activity.signal?.type === 'select' && activity.signal.value) {
+    const body = activity.content.body;
+    if (activity.signal === 'select') {
+      const metadataValue = activity.signalMetadata?.['value'];
       return [
         {
           type: 'approval_selected',
           externalSessionId: payload.agentSession.id,
           externalActivityId: activity.id,
           actor: externalActor,
-          choiceToken: activity.signal.value,
+          choiceToken: typeof metadataValue === 'string' ? metadataValue : body,
         },
       ];
     }
-    if (activity.signal?.type === 'auth') return [];
-    if (activity.signal?.type === 'stop') {
+    if (activity.signal === 'auth') return [];
+    if (activity.signal === 'stop') {
       return [
         {
           type: 'stop_requested',
           externalSessionId: payload.agentSession.id,
           externalActivityId: activity.id,
           actor: externalActor,
-          ...(activity.signal.value ? { stopToken: activity.signal.value } : {}),
         },
       ];
     }
-    if (!activity.body) return [];
     return [
       {
         type: 'prompt_received',
         externalSessionId: payload.agentSession.id,
         externalActivityId: activity.id,
         actor: externalActor,
-        body: activity.body,
+        body,
       },
     ];
   },
   render(activity) {
     const control = activity.control;
-    return {
-      type: activity.type,
-      body: canonicalActivityText(activity),
-      ...(activity.ephemeral ? { ephemeral: true } : {}),
-      ...(control?.type === 'approval'
+    const signal =
+      control?.type === 'approval'
         ? {
-            signal: {
-              type: 'select' as const,
-              options: [
-                { label: 'Approve', value: control.approveToken },
-                { label: 'Reject', value: control.rejectToken },
-              ],
-            },
+            type: 'select' as const,
+            options: [
+              { label: 'Approve', value: control.approveToken },
+              { label: 'Reject', value: control.rejectToken },
+            ],
           }
         : control?.type === 'authentication'
           ? {
-              signal: {
-                type: 'auth' as const,
-                url: control.url,
-                userId: control.externalActorId,
-              },
+              type: 'auth' as const,
+              url: control.url,
+              userId: control.externalActorId,
             }
           : control?.type === 'stop'
-            ? { signal: { type: 'stop' as const, value: control.stopToken } }
-            : {}),
+            ? { type: 'stop' as const, value: control.stopToken }
+            : undefined;
+    const common = {
+      ...(activity.ephemeral ? { ephemeral: true } : {}),
+      ...(signal ? { signal } : {}),
+    };
+    if (activity.type === 'action') {
+      const result = activity.body.action?.result;
+      return {
+        ...common,
+        type: activity.type,
+        action: activity.body.action?.summary ?? 'Action',
+        parameter: activity.body.text ?? 'Docket',
+        ...(result
+          ? { result: result.isError ? `Failed: ${result.content}` : result.content }
+          : {}),
+      };
+    }
+    return {
+      ...common,
+      type: activity.type,
+      body: canonicalActivityText(activity),
     };
   },
   async publish(install, session, output) {
-    const result = await agentActivityCreate(new LinearAgentClient(install.accessToken), {
-      agentSessionId: session.id,
-      type: output.type,
-      body: output.body,
-      ...(output.ephemeral !== undefined ? { ephemeral: output.ephemeral } : {}),
-      ...(output.signal?.type === 'select'
+    const signal =
+      output.signal?.type === 'select'
         ? {
             signal: 'select' as const,
             signalMetadata: { options: output.signal.options },
@@ -271,8 +306,26 @@ export const linearAgentSurface: AgentSurfaceAdapter<'linear', LinearSurfaceType
                 providerName: 'Docket',
               },
             }
-          : {}),
-    });
+          : {};
+    const input =
+      output.type === 'action'
+        ? {
+            agentSessionId: session.id,
+            type: output.type,
+            action: output.action,
+            parameter: output.parameter,
+            ...(output.result !== undefined ? { result: output.result } : {}),
+            ...(output.ephemeral !== undefined ? { ephemeral: output.ephemeral } : {}),
+            ...signal,
+          }
+        : {
+            agentSessionId: session.id,
+            type: output.type,
+            body: output.body,
+            ...(output.ephemeral !== undefined ? { ephemeral: output.ephemeral } : {}),
+            ...signal,
+          };
+    const result = await agentActivityCreate(new LinearAgentClient(install.accessToken), input);
     return result;
   },
 };

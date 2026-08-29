@@ -334,6 +334,12 @@ The canonical prompt carries only content Athena can use across providers. The v
 stays in `inbound_event.payload` for diagnostics and future reprocessing. Provider-specific context
 does not enter the model transcript unless the adapter translates it into the canonical envelope.
 
+Linear returns a selected option as an ordinary `prompted` activity whose body contains the
+option's opaque value. The Linear adapter first emits `prompt_received`. The canonical processor
+promotes that prompt to `approval_selected` only when the body verifies as a current Docket-signed
+approval control for the same provider, organization, and session. Invalid and expired values fail
+closed. Ordinary prompts remain ordinary prompts.
+
 ## Canonical activity and surface capabilities
 
 `session_activity` remains the canonical source. Relay converts each row into a provider-native

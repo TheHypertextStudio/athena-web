@@ -66,7 +66,7 @@ describe('MockLinearAgent.agentActivityCreate', () => {
     const agent = new MockLinearAgent();
     await agent.agentActivityCreate({ agentSessionId: 's1', type: 'thought', body: 'one' });
     await agent.agentActivityCreate({ agentSessionId: 's1', type: 'response', body: 'two' });
-    expect(agent.activityLog.map((a) => a.body)).toEqual(['one', 'two']);
+    expect(agent.activityLog.map((a) => ('body' in a ? a.body : a.result))).toEqual(['one', 'two']);
   });
 });
 

@@ -78,6 +78,7 @@ export type GenerationEffectKind =
   | 'response-activity'
   | 'assistant-turn'
   | 'action-claim'
+  | 'action-dispatch'
   | 'action-result';
 
 /** Injectable dependencies for the loop (tests script the turn runtime). */
@@ -928,6 +929,7 @@ export async function executeApprovedActions(
       let executionFailed = false;
       try {
         if (call && toolbox && claimed.body.action) {
+          await persistGenerationEffect(lease, deps, 'action-dispatch', async () => undefined);
           const name =
             call.connection === DOCKET_CONNECTION ? call.tool : `${call.connection}__${call.tool}`;
           const result = await toolbox.callTool(name, call.input);

@@ -21,9 +21,7 @@ import type {
 } from './linear-agent';
 
 /** One `agentActivityCreate` call recorded by {@link MockLinearAgent}, plus its assigned fake id. */
-export interface RecordedLinearAgentActivity extends AgentActivityCreateInput {
-  readonly id: string;
-}
+export type RecordedLinearAgentActivity = AgentActivityCreateInput & { readonly id: string };
 
 /** One `agentSessionUpdate` call recorded by {@link MockLinearAgent}. */
 export type RecordedLinearAgentSessionUpdate = AgentSessionUpdateInput;

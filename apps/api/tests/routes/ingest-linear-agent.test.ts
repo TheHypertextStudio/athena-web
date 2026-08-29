@@ -13,6 +13,8 @@ import type ingestLinearAgentRouter from '../../src/routes/ingest-linear-agent';
 import type { sealCredential as SealCredential } from '../../src/lib/credentials';
 import { seedStatuses, type StatusIdLookup } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
+import { installTestProductFixture } from '../support/db';
+import { linearAgentWebhook, type LinearAgentWebhookInput } from '../support/linear-agent-webhook';
 
 const { buildLinearAgentClient } = vi.hoisted(() => ({
   buildLinearAgentClient: vi.fn(),
@@ -64,15 +66,18 @@ afterEach(() => {
 });
 
 /** Sign a body the way Linear's Agent platform does: HMAC-SHA256(secret, rawBody). */
-function signed(body: Record<string, unknown>): {
+function signed(input: LinearAgentWebhookInput): {
   headers: Record<string, string>;
   rawBody: string;
 } {
-  const payload = { webhookTimestamp: Date.now(), ...body };
-  const rawBody = JSON.stringify(payload);
+  const rawBody = JSON.stringify(linearAgentWebhook(input));
   const signature = createHmac('sha256', WEBHOOK_SECRET).update(rawBody, 'utf8').digest('hex');
   return {
-    headers: { 'content-type': 'application/json', 'linear-signature': signature },
+    headers: {
+      'content-type': 'application/json',
+      'linear-signature': signature,
+      'linear-delivery': input.webhookId ?? `${input.sessionId}:${input.action}`,
+    },
     rawBody,
   };
 }
@@ -149,12 +154,13 @@ describe('POST /internal/ingest/linear-agent', () => {
     const res = await ingestLinearAgent.request('/linear-agent', {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'linear-signature': 'not-a-real-signature' },
-      body: JSON.stringify({
-        action: 'created',
-        webhookTimestamp: Date.now(),
-        organizationId: seeded.workspaceId,
-        agentSession: { id: 'las_bad_sig' },
-      }),
+      body: JSON.stringify(
+        linearAgentWebhook({
+          action: 'created',
+          organizationId: seeded.workspaceId,
+          sessionId: 'las_bad_sig',
+        }),
+      ),
     });
     expect(res.status).toBe(400);
     const rows = await db
@@ -168,7 +174,7 @@ describe('POST /internal/ingest/linear-agent', () => {
     const { headers, rawBody } = signed({
       action: 'created',
       organizationId: 'ws_unknown',
-      agentSession: { id: 'las_unrouted' },
+      sessionId: 'las_unrouted',
     });
     const res = await ingestLinearAgent.request('/linear-agent', {
       method: 'POST',
@@ -189,7 +195,7 @@ describe('POST /internal/ingest/linear-agent', () => {
     const { headers, rawBody } = signed({
       action: 'created',
       organizationId: seeded.workspaceId,
-      agentSession: { id: 'las_nocred' },
+      sessionId: 'las_nocred',
     });
     const res = await ingestLinearAgent.request('/linear-agent', {
       method: 'POST',
@@ -224,8 +230,8 @@ describe('POST /internal/ingest/linear-agent', () => {
       const { headers, rawBody } = signed({
         action: 'created',
         organizationId: seeded.workspaceId,
-        agentSession: { id: 'las_1' },
-        actor: { id: 'linear_user_1', type: 'user' },
+        sessionId: 'las_1',
+        userId: 'linear_user_1',
       });
 
       const res = await ingestLinearAgent.request('/linear-agent', {
@@ -248,7 +254,7 @@ describe('POST /internal/ingest/linear-agent', () => {
         .where(eq(schema.agentSession.id, sessionId));
       expect(session?.organizationId).toBe(seeded.orgId);
       expect(session?.status).toBe('pending');
-      expect(session?.trigger).toBe('mention');
+      expect(session?.trigger).toBe('delegation');
       expect(session?.initiatorId).toBe(linearActorId);
       expect(session?.externalRunRef).toBe('external-agent:linear:las_1');
 
@@ -296,8 +302,8 @@ describe('POST /internal/ingest/linear-agent', () => {
       const { headers, rawBody } = signed({
         action: 'created',
         organizationId: seeded.workspaceId,
-        agentSession: { id: 'las_unresolved' },
-        actor: { id: 'linear_user_unknown' },
+        sessionId: 'las_unresolved',
+        userId: 'linear_user_unknown',
       });
 
       const res = await ingestLinearAgent.request('/linear-agent', {
@@ -352,7 +358,8 @@ describe('POST /internal/ingest/linear-agent', () => {
       const { headers, rawBody } = signed({
         action: 'created',
         organizationId: seeded.workspaceId,
-        agentSession: { id: 'las_no_actor' },
+        sessionId: 'las_no_actor',
+        userId: null,
       });
 
       const res = await ingestLinearAgent.request('/linear-agent', {
@@ -411,8 +418,9 @@ describe('POST /internal/ingest/linear-agent', () => {
       const { headers, rawBody } = signed({
         action: 'created',
         organizationId: seeded.workspaceId,
-        agentSession: { id: 'las_with_issue', issue: { id: 'issue_42', title: 'Fix the thing' } },
-        actor: { id: 'linear_user_task' },
+        sessionId: 'las_with_issue',
+        userId: 'linear_user_task',
+        issue: { id: 'issue_42', title: 'Fix the thing' },
       });
 
       const res = await ingestLinearAgent.request('/linear-agent', {
@@ -444,8 +452,8 @@ describe('POST /internal/ingest/linear-agent', () => {
       const { headers, rawBody } = signed({
         action: 'created',
         organizationId: seeded.workspaceId,
-        agentSession: { id: 'las_dup' },
-        actor: { id: 'linear_user_dup' },
+        sessionId: 'las_dup',
+        userId: 'linear_user_dup',
       });
 
       const first = await ingestLinearAgent.request('/linear-agent', {
@@ -503,21 +511,29 @@ describe('POST /internal/ingest/linear-agent', () => {
         dispatchOrigin: 'unclassified',
       });
 
-      const { headers, rawBody } = signed({
+      const stopInput = {
         action: 'prompted',
         organizationId: seeded.workspaceId,
-        agentSession: { id: 'las_stop' },
-        actor: { id: 'linear_user_stop' },
-        agentActivity: { id: 'activity_stop_1', signal: { type: 'stop' } },
-      });
+        sessionId: 'las_stop',
+        userId: 'linear_user_stop',
+        activity: { id: 'activity_stop_1', body: 'Stop.', signal: 'stop' },
+      } as const;
+      const { headers, rawBody } = signed({ ...stopInput, webhookId: 'stop-delivery-a' });
 
       const response = await ingestLinearAgent.request('/linear-agent', {
         method: 'POST',
         headers,
         body: rawBody,
       });
+      const replay = signed({ ...stopInput, webhookId: 'stop-delivery-b' });
+      const replayResponse = await ingestLinearAgent.request('/linear-agent', {
+        method: 'POST',
+        headers: replay.headers,
+        body: replay.rawBody,
+      });
 
       expect(response.status).toBe(200);
+      expect(replayResponse.status).toBe(200);
       const [session] = await db
         .select()
         .from(schema.agentSession)
@@ -528,6 +544,18 @@ describe('POST /internal/ingest/linear-agent', () => {
         .from(schema.agentSessionRun)
         .where(eq(schema.agentSessionRun.sessionId, sessionId));
       expect(run?.status).toBe('canceled');
+      const stopResponses = await db
+        .select({ body: schema.sessionActivity.body })
+        .from(schema.sessionActivity)
+        .where(
+          and(
+            eq(schema.sessionActivity.sessionId, sessionId),
+            eq(schema.sessionActivity.type, 'response'),
+          ),
+        );
+      expect(
+        stopResponses.filter((row) => row.body['sourceActivityId'] === 'linear:activity_stop_1'),
+      ).toHaveLength(1);
     });
 
     async function createBaseSession(
@@ -590,9 +618,9 @@ describe('POST /internal/ingest/linear-agent', () => {
       const { headers, rawBody } = signed({
         action: 'prompted',
         organizationId: seeded.workspaceId,
-        agentSession: { id: 'las_p1' },
-        actor: { id: 'linear_user_prompt' },
-        agentActivity: {
+        sessionId: 'las_p1',
+        userId: 'linear_user_prompt',
+        activity: {
           id: 'activity_prompt_1',
           body: 'One more thing — also check the staging config.',
         },
@@ -649,9 +677,9 @@ describe('POST /internal/ingest/linear-agent', () => {
       const { headers, rawBody } = signed({
         action: 'prompted',
         organizationId: seeded.workspaceId,
-        agentSession: { id: 'las_p2' },
-        actor: { id: 'linear_user_late' },
-        agentActivity: { id: 'activity_prompt_2', body: 'I linked my account now.' },
+        sessionId: 'las_p2',
+        userId: 'linear_user_late',
+        activity: { id: 'activity_prompt_2', body: 'I linked my account now.' },
       });
 
       const res = await ingestLinearAgent.request('/linear-agent', {
@@ -686,9 +714,9 @@ describe('POST /internal/ingest/linear-agent', () => {
       const { headers, rawBody } = signed({
         action: 'prompted',
         organizationId: seeded.workspaceId,
-        agentSession: { id: 'las_p3' },
-        actor: { id: 'linear_user_still_unknown' },
-        agentActivity: { id: 'activity_prompt_3', body: 'hello?' },
+        sessionId: 'las_p3',
+        userId: 'linear_user_still_unknown',
+        activity: { id: 'activity_prompt_3', body: 'hello?' },
       });
 
       const res = await ingestLinearAgent.request('/linear-agent', {
@@ -721,9 +749,9 @@ describe('POST /internal/ingest/linear-agent', () => {
       const { headers, rawBody } = signed({
         action: 'prompted',
         organizationId: seeded.workspaceId,
-        agentSession: { id: 'las_never_created' },
-        actor: { id: 'linear_user_x' },
-        agentActivity: { id: 'activity_prompt_4', body: 'hello?' },
+        sessionId: 'las_never_created',
+        userId: 'linear_user_x',
+        activity: { id: 'activity_prompt_4', body: 'hello?' },
       });
 
       const res = await ingestLinearAgent.request('/linear-agent', {
@@ -736,4 +764,3 @@ describe('POST /internal/ingest/linear-agent', () => {
     });
   });
 });
-import { installTestProductFixture } from '../support/db';

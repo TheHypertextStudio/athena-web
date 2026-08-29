@@ -19,7 +19,6 @@ import {
   buildLinearAgentAuthorizeUrl,
   exchangeLinearAgentCode,
   linearAgentTokenNeedsRefresh,
-  parseLinearAgentWebhook,
   refreshLinearAgentToken,
   resolveLinearAgentInstallation,
   verifyLinearAgentWebhookSignature,
@@ -355,44 +354,6 @@ describe('verifyLinearAgentWebhookSignature', () => {
   });
 });
 
-describe('parseLinearAgentWebhook', () => {
-  it('parses a created-action delivery', () => {
-    const payload = {
-      type: 'AgentSessionEvent',
-      action: 'created',
-      agentSession: { id: 'sess_1' },
-    };
-    const parsed = parseLinearAgentWebhook(payload);
-    expect(parsed).toMatchObject({ action: 'created', agentSession: { id: 'sess_1' } });
-  });
-
-  it('parses a prompted-action delivery, requiring agentActivity.body', () => {
-    const payload = {
-      action: 'prompted',
-      agentSession: { id: 'sess_1' },
-      agentActivity: { id: 'act_1', body: 'Please also check the staging env.' },
-    };
-    const parsed = parseLinearAgentWebhook(payload);
-    expect(parsed).toMatchObject({
-      action: 'prompted',
-      agentActivity: { body: 'Please also check the staging env.' },
-    });
-  });
-
-  it('returns null for an unrecognized action', () => {
-    expect(parseLinearAgentWebhook({ action: 'closed', agentSession: { id: 's' } })).toBeNull();
-  });
-
-  it('returns null when required fields are missing (e.g. agentSession.id)', () => {
-    expect(parseLinearAgentWebhook({ action: 'created', agentSession: {} })).toBeNull();
-  });
-
-  it('returns null for a non-object payload', () => {
-    expect(parseLinearAgentWebhook('garbage')).toBeNull();
-    expect(parseLinearAgentWebhook(null)).toBeNull();
-  });
-});
-
 describe('LinearAgentClient.query', () => {
   it('posts a bearer-authenticated GraphQL request and returns data', async () => {
     const calls: { url: string; init?: RequestInit }[] = [];
@@ -497,6 +458,39 @@ describe('agentActivityCreate', () => {
       assertDefined(calls[0]).body as { variables: { input: Record<string, unknown> } }
     ).variables.input;
     expect(variables).toMatchObject({ ephemeral: true });
+  });
+
+  it('posts Linear action content with its required structured fields', async () => {
+    const calls: { body: unknown }[] = [];
+    const http: HttpClient = async (_url, init) => {
+      calls.push({ body: JSON.parse(init?.body as string) });
+      return new Response(
+        JSON.stringify({
+          data: { agentActivityCreate: { success: true, agentActivity: { id: 'act_1' } } },
+        }),
+        { status: 200 },
+      );
+    };
+    const client = new LinearAgentClient('tok', http);
+    await agentActivityCreate(client, {
+      agentSessionId: 'sess_1',
+      type: 'action',
+      action: 'Updated task',
+      parameter: 'Release checklist',
+      result: 'The task is now complete.',
+    });
+    const variables = (
+      assertDefined(calls[0]).body as { variables: { input: Record<string, unknown> } }
+    ).variables.input;
+    expect(variables).toMatchObject({
+      content: {
+        type: 'action',
+        action: 'Updated task',
+        parameter: 'Release checklist',
+        result: 'The task is now complete.',
+      },
+    });
+    expect(variables['content']).not.toHaveProperty('body');
   });
 
   it('carries a native select signal and its options', async () => {

@@ -9,6 +9,7 @@ import type * as DbModule from '@docket/db';
 import { assertDefined } from '@docket/test-utils';
 
 import type * as RouteModule from '../../src/routes/ingest-agent-surface';
+import { linearAgentWebhook } from '../support/linear-agent-webhook';
 
 const MIGRATIONS = resolve(import.meta.dirname, '../../../../packages/db/drizzle');
 let schema!: typeof DbModule;
@@ -43,18 +44,20 @@ async function seedLinearAgent(workspaceId: string): Promise<void> {
 }
 
 function linearRequest(workspaceId: string, sessionId: string): RequestInit {
-  const body = JSON.stringify({
-    action: 'created',
-    organizationId: workspaceId,
-    webhookTimestamp: Date.now(),
-    agentSession: { id: sessionId, promptContext: 'Plan the release.' },
-    actor: { id: 'linear-user' },
-  });
+  const body = JSON.stringify(
+    linearAgentWebhook({
+      action: 'created',
+      organizationId: workspaceId,
+      sessionId,
+      promptContext: 'Plan the release.',
+    }),
+  );
   return {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
       'linear-signature': createHmac('sha256', 'linear-secret').update(body).digest('hex'),
+      'linear-delivery': `${sessionId}:created`,
     },
     body,
   };
@@ -88,7 +91,11 @@ describe('POST /:provider external agent ingestion', () => {
     const request = linearRequest('linear-http-workspace', 'linear-bad-signature');
     const response = await router.request('/linear', {
       ...request,
-      headers: { 'content-type': 'application/json', 'linear-signature': 'invalid' },
+      headers: {
+        'content-type': 'application/json',
+        'linear-signature': 'invalid',
+        'linear-delivery': 'linear-bad-signature:created',
+      },
     });
 
     expect(response.status).toBe(400);

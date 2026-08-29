@@ -648,6 +648,58 @@ describe('executeApprovedActions entry admission', () => {
 });
 
 describe('executeApprovedActions — durable race windows', () => {
+  it('does not dispatch a claimed action after the generation is canceled', async () => {
+    const seed = await seedRegisteredAgentSession({ status: 'awaiting_approval' });
+    const [action] = await db
+      .insert(schema.sessionActivity)
+      .values({
+        sessionId: seed.sessionId,
+        organizationId: seed.orgId,
+        type: 'action',
+        approvalStatus: 'approved',
+        body: {
+          action: {
+            kind: 'find',
+            summary: 'find',
+            toolCall: {
+              connection: 'docket',
+              tool: 'find',
+              input: { orgId: seed.orgId, query: 'must not run' },
+              toolUseId: 'toolu_stopped_before_dispatch',
+            },
+          },
+        },
+      })
+      .returning({ id: schema.sessionActivity.id });
+    const [sessionRow] = await db
+      .select()
+      .from(schema.agentSession)
+      .where(eq(schema.agentSession.id, seed.sessionId));
+    const lease = await claimRunGeneration(assertDefined(sessionRow), {
+      runnableStatuses: ['awaiting_approval'],
+      resumeSession: false,
+    });
+
+    await expect(
+      executeApprovedActions(seed.orgId, seed.sessionId, lease, {
+        async beforeGenerationEffect(kind): Promise<void> {
+          if (kind !== 'action-dispatch') return;
+          await db
+            .update(schema.agentSessionRun)
+            .set({ status: 'canceled', leaseToken: null, leaseExpiresAt: null })
+            .where(eq(schema.agentSessionRun.id, lease.runId));
+        },
+      }),
+    ).rejects.toThrow('Session generation lease was lost');
+
+    const [after] = await db
+      .select({ status: schema.sessionActivity.approvalStatus, body: schema.sessionActivity.body })
+      .from(schema.sessionActivity)
+      .where(eq(schema.sessionActivity.id, assertDefined(action).id));
+    expect(after?.status).toBe('executing');
+    expect(after?.body.action?.result).toBeUndefined();
+  });
+
   it('skips an approved action a competing writer reclaimed before the claim committed', async () => {
     const seed = await seedRegisteredAgentSession({ status: 'awaiting_approval' });
     const [action] = await db

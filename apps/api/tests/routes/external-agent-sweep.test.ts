@@ -9,6 +9,7 @@ import { assertDefined } from '@docket/test-utils';
 
 import type * as SweepModule from '../../src/routes/event-sync';
 import type * as ControlModule from '../../src/lib/external-agent-control-token';
+import { linearAgentWebhook } from '../support/linear-agent-webhook';
 
 const MIGRATIONS = resolve(import.meta.dirname, '../../../../packages/db/drizzle');
 let schema!: typeof DbModule;
@@ -104,13 +105,13 @@ describe('external agent inbox processing', () => {
       );
     await insertLinearDelivery(
       seeded,
-      {
+      linearAgentWebhook({
         action: 'created',
-        organizationId: `linear-workspace-unused`,
-        webhookTimestamp: Date.now(),
-        agentSession: { id: sessionRef, promptContext: 'Use the exact provider prompt.' },
-        actor: { id: assertDefined(account).accountId },
-      },
+        organizationId: 'linear-workspace-unused',
+        sessionId: sessionRef,
+        userId: assertDefined(account).accountId,
+        promptContext: 'Use the exact provider prompt.',
+      }),
       `${sessionRef}:created`,
     );
 
@@ -156,26 +157,25 @@ describe('external agent inbox processing', () => {
     const actorExternalId = assertDefined(account).accountId;
     await insertLinearDelivery(
       seeded,
-      {
+      linearAgentWebhook({
         action: 'created',
         organizationId: 'workspace',
-        webhookTimestamp: Date.now(),
-        agentSession: { id: sessionRef, promptContext: 'Start.' },
-        actor: { id: actorExternalId },
-      },
+        sessionId: sessionRef,
+        userId: actorExternalId,
+        promptContext: 'Start.',
+      }),
       `${sessionRef}:created`,
     );
     await sweepInboundEvents(new Date());
     await insertLinearDelivery(
       seeded,
-      {
+      linearAgentWebhook({
         action: 'prompted',
         organizationId: 'workspace',
-        webhookTimestamp: Date.now(),
-        agentSession: { id: sessionRef },
-        actor: { id: actorExternalId },
-        agentActivity: { id: `activity-${suffix}`, body: 'Continue with this constraint.' },
-      },
+        sessionId: sessionRef,
+        userId: actorExternalId,
+        activity: { id: `activity-${suffix}`, body: 'Continue with this constraint.' },
+      }),
       `activity-${suffix}`,
     );
 
@@ -217,24 +217,23 @@ describe('external agent inbox processing', () => {
     const actorExternalId = assertDefined(account).accountId;
     await insertLinearDelivery(
       seeded,
-      {
+      linearAgentWebhook({
         action: 'created',
         organizationId: 'workspace',
-        webhookTimestamp: Date.now(),
-        agentSession: { id: sessionRef, promptContext: 'Start once.' },
-        actor: { id: actorExternalId },
-      },
+        sessionId: sessionRef,
+        userId: actorExternalId,
+        promptContext: 'Start once.',
+      }),
       `${sessionRef}:created`,
     );
     await sweepInboundEvents(new Date());
-    const repeatedPayload = {
+    const repeatedPayload = linearAgentWebhook({
       action: 'prompted',
       organizationId: 'workspace',
-      webhookTimestamp: Date.now(),
-      agentSession: { id: sessionRef },
-      actor: { id: actorExternalId },
-      agentActivity: { id: `same-activity-${suffix}`, body: 'Do not apply this twice.' },
-    };
+      sessionId: sessionRef,
+      userId: actorExternalId,
+      activity: { id: `same-activity-${suffix}`, body: 'Do not apply this twice.' },
+    });
     await insertLinearDelivery(seeded, repeatedPayload, `delivery-a-${suffix}`);
     await sweepInboundEvents(new Date());
     await insertLinearDelivery(seeded, repeatedPayload, `delivery-b-${suffix}`);
@@ -261,7 +260,7 @@ describe('external agent inbox processing', () => {
     expect(runs.map((run) => run.generation)).toEqual([0, 1]);
   });
 
-  it('applies a signed native approval and queues its execution generation', async () => {
+  it('applies a signed option returned as a regular Linear prompt', async () => {
     process.env['BETTER_AUTH_SECRET'] = 'external-agent-sweep-test-secret';
     const seeded = await seedLinearAgent();
     const suffix = Math.random().toString(36).slice(2, 8);
@@ -276,13 +275,13 @@ describe('external agent inbox processing', () => {
       .where(eq(schema.account.userId, assertDefined(assertDefined(actorRow).userId)));
     await insertLinearDelivery(
       seeded,
-      {
+      linearAgentWebhook({
         action: 'created',
         organizationId: 'workspace',
-        webhookTimestamp: Date.now(),
-        agentSession: { id: sessionRef, promptContext: 'Start.' },
-        actor: { id: assertDefined(account).accountId },
-      },
+        sessionId: sessionRef,
+        userId: assertDefined(account).accountId,
+        promptContext: 'Start.',
+      }),
       `${sessionRef}:created`,
     );
     await sweepInboundEvents(new Date());
@@ -315,17 +314,16 @@ describe('external agent inbox processing', () => {
     });
     await insertLinearDelivery(
       seeded,
-      {
+      linearAgentWebhook({
         action: 'prompted',
         organizationId: 'workspace',
-        webhookTimestamp: Date.now(),
-        agentSession: { id: sessionRef },
-        actor: { id: assertDefined(account).accountId },
-        agentActivity: {
+        sessionId: sessionRef,
+        userId: assertDefined(account).accountId,
+        activity: {
           id: `approval-${suffix}`,
-          signal: { type: 'select', value: token },
+          body: token,
         },
-      },
+      }),
       `approval-delivery-${suffix}`,
     );
 

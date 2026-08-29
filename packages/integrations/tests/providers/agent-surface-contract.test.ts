@@ -20,6 +20,71 @@ function rawWebhook(body: string, headers: RawWebhook['headers']): RawWebhook {
   return { body, headers, receivedAt: now };
 }
 
+function linearUser(id = 'linear-user') {
+  return {
+    id,
+    email: `${id}@example.com`,
+    name: 'Person',
+    url: `https://linear.app/linear/profiles/${id}`,
+  };
+}
+
+function linearSessionEvent(input: {
+  readonly action: 'created' | 'prompted';
+  readonly sessionId?: string;
+  readonly webhookId?: string;
+  readonly promptContext?: string;
+  readonly guidance?: readonly string[];
+  readonly issue?: { readonly id: string; readonly title?: string; readonly url?: string };
+  readonly creator?: ReturnType<typeof linearUser> | null;
+  readonly activity?: {
+    readonly id: string;
+    readonly body: string;
+    readonly signal?: 'auth' | 'select' | 'stop';
+  };
+}) {
+  const sessionId = input.sessionId ?? 'linear-session';
+  const creator = input.creator === undefined ? linearUser() : input.creator;
+  const activityUser = linearUser();
+  return {
+    action: input.action,
+    appUserId: 'athena-app-user',
+    createdAt: now.toISOString(),
+    guidance: (input.guidance ?? []).map((body) => ({ body, origin: { type: 'organization' } })),
+    oauthClientId: 'athena-linear-client',
+    organizationId: 'linear-workspace',
+    previousComments: null,
+    promptContext: input.promptContext ?? null,
+    type: 'AgentSessionEvent' as const,
+    webhookId: input.webhookId ?? `${sessionId}:${input.action}`,
+    webhookTimestamp: now.getTime(),
+    agentSession: {
+      id: sessionId,
+      organizationId: 'linear-workspace',
+      commentId: null,
+      sourceCommentId: null,
+      ...(creator ? { creator, creatorId: creator.id } : {}),
+      issue: input.issue ?? null,
+      issueId: input.issue?.id ?? null,
+    },
+    ...(input.activity
+      ? {
+          agentActivity: {
+            agentSessionId: sessionId,
+            content: { type: 'prompt' as const, body: input.activity.body },
+            createdAt: now.toISOString(),
+            id: input.activity.id,
+            signal: input.activity.signal ?? null,
+            signalMetadata: null,
+            updatedAt: now.toISOString(),
+            user: activityUser,
+            userId: activityUser.id,
+          },
+        }
+      : {}),
+  };
+}
+
 const responseActivity: CanonicalAgentActivity = {
   id: 'activity-1',
   type: 'response',
@@ -72,13 +137,10 @@ describe('agent surface registry', () => {
         inboxProvider: 'linear_agent',
         deliveryId: 'linear-delivery',
         eventType: 'created',
-        payload: {
+        payload: linearSessionEvent({
           action: 'created',
-          organizationId: 'linear-workspace',
-          webhookTimestamp: now.getTime(),
-          agentSession: { id: 'linear-session', promptContext: 'Plan the release.' },
-          actor: { id: 'linear-user' },
-        },
+          promptContext: 'Plan the release.',
+        }),
       },
       {},
     );
@@ -109,13 +171,7 @@ describe('agent surface registry', () => {
       agentSurfaceFor('linear').route({
         deliveryId: 'linear-delivery',
         eventType: 'created',
-        payload: {
-          action: 'created',
-          organizationId: 'linear-workspace',
-          webhookTimestamp: now.getTime(),
-          agentSession: { id: 'linear-session' },
-          actor: { id: 'linear-user' },
-        },
+        payload: linearSessionEvent({ action: 'created' }),
       }),
     ).toEqual({ workspaceId: 'linear-workspace' });
     expect(
@@ -140,32 +196,38 @@ describe('agent surface registry', () => {
 
   it('verifies and normalizes a Linear session start', async () => {
     vi.setSystemTime(now);
-    const body = JSON.stringify({
-      action: 'created',
-      type: 'AgentSessionEvent',
-      organizationId: 'linear-workspace',
-      webhookTimestamp: now.getTime(),
-      agentSession: {
-        id: 'linear-session',
+    const body = JSON.stringify(
+      linearSessionEvent({
+        action: 'created',
         promptContext: 'Fix the failing release.',
         issue: { id: 'issue-1', title: 'Release fails' },
         guidance: ['Do not merge around a failed check.'],
-      },
-      actor: { id: 'linear-user', email: 'person@example.com', name: 'Person' },
-    });
+      }),
+    );
     const signature = createHmac('sha256', 'linear-secret').update(body).digest('hex');
 
     const verified = await agentSurfaceFor('linear').verify(
-      rawWebhook(body, { 'linear-signature': signature }),
+      rawWebhook(body, {
+        'linear-signature': signature,
+        'linear-delivery': 'linear-delivery-created',
+      }),
       { signingSecret: 'linear-secret' },
     );
     const events = await agentSurfaceFor('linear').normalize(verified, {});
+
+    expect(verified.deliveryId).toBe('linear-delivery-created');
 
     expect(events).toEqual([
       expect.objectContaining({
         type: 'session_started',
         workspaceId: 'linear-workspace',
         externalSessionId: 'linear-session',
+        actor: {
+          externalId: 'linear-user',
+          email: 'linear-user@example.com',
+          displayName: 'Person',
+        },
+        trigger: 'delegation',
         context: expect.objectContaining({ prompt: 'Fix the failing release.' }),
       }),
     ]);
@@ -176,22 +238,25 @@ describe('agent surface registry', () => {
     ['stop', 'stop_requested'],
   ] as const)('normalizes the Linear %s signal', async (signalType, canonicalType) => {
     vi.setSystemTime(now);
-    const body = JSON.stringify({
-      action: 'prompted',
-      organizationId: 'linear-workspace',
-      webhookTimestamp: now.getTime(),
-      agentSession: { id: 'linear-session' },
-      actor: { id: 'linear-user' },
-      agentActivity: {
-        id: `activity-${signalType}`,
-        signal: { type: signalType, value: `${signalType}-token` },
-      },
-    });
+    const body = JSON.stringify(
+      linearSessionEvent({
+        action: 'prompted',
+        activity: {
+          id: `activity-${signalType}`,
+          body: signalType === 'select' ? 'select-token' : 'Stop this session.',
+          signal: signalType,
+        },
+      }),
+    );
     const signature = createHmac('sha256', 'linear-secret').update(body).digest('hex');
     const adapter = agentSurfaceFor('linear');
-    const verified = await adapter.verify(rawWebhook(body, { 'linear-signature': signature }), {
-      signingSecret: 'linear-secret',
-    });
+    const verified = await adapter.verify(
+      rawWebhook(body, {
+        'linear-signature': signature,
+        'linear-delivery': `linear-delivery-${signalType}`,
+      }),
+      { signingSecret: 'linear-secret' },
+    );
 
     await expect(adapter.normalize(verified, {})).resolves.toEqual([
       expect.objectContaining({ type: canonicalType }),
@@ -200,24 +265,35 @@ describe('agent surface registry', () => {
 
   it('ignores an inbound Linear auth signal because authentication resumes through Docket', async () => {
     vi.setSystemTime(now);
-    const body = JSON.stringify({
-      action: 'prompted',
-      organizationId: 'linear-workspace',
-      webhookTimestamp: now.getTime(),
-      agentSession: { id: 'linear-session' },
-      actor: { id: 'linear-user' },
-      agentActivity: {
-        id: 'activity-auth',
-        signal: { type: 'auth', value: 'untrusted-auth-value' },
-      },
-    });
+    const body = JSON.stringify(
+      linearSessionEvent({
+        action: 'prompted',
+        activity: { id: 'activity-auth', body: 'Authenticate.', signal: 'auth' },
+      }),
+    );
     const signature = createHmac('sha256', 'linear-secret').update(body).digest('hex');
     const adapter = agentSurfaceFor('linear');
-    const verified = await adapter.verify(rawWebhook(body, { 'linear-signature': signature }), {
-      signingSecret: 'linear-secret',
-    });
+    const verified = await adapter.verify(
+      rawWebhook(body, {
+        'linear-signature': signature,
+        'linear-delivery': 'linear-delivery-auth',
+      }),
+      { signingSecret: 'linear-secret' },
+    );
 
     await expect(adapter.normalize(verified, {})).resolves.toEqual([]);
+  });
+
+  it('rejects a signed Linear payload without its unique delivery header', async () => {
+    vi.setSystemTime(now);
+    const body = JSON.stringify(linearSessionEvent({ action: 'created' }));
+    const signature = createHmac('sha256', 'linear-secret').update(body).digest('hex');
+
+    await expect(
+      agentSurfaceFor('linear').verify(rawWebhook(body, { 'linear-signature': signature }), {
+        signingSecret: 'linear-secret',
+      }),
+    ).rejects.toThrow(/delivery/i);
   });
 
   it('verifies and normalizes a Slack app mention', async () => {
@@ -382,6 +458,34 @@ describe('agent surface registry', () => {
     ).toMatchObject({
       kind: 'comment',
       body: expect.stringContaining('/athena approve approve-token'),
+    });
+  });
+
+  it('renders Linear actions with the provider-required structured content', () => {
+    const activity: CanonicalAgentActivity = {
+      ...responseActivity,
+      type: 'action',
+      body: {
+        text: 'Task DKT-42',
+        action: {
+          summary: 'Updated task',
+          result: { content: 'The task is complete.' },
+        },
+      },
+      approvalStatus: 'applied',
+    };
+
+    expect(
+      agentSurfaceFor('linear').render(activity, {
+        provider: 'linear',
+        externalWorkspaceId: 'workspace',
+        externalSessionId: 'session',
+      }),
+    ).toMatchObject({
+      type: 'action',
+      action: 'Updated task',
+      parameter: 'Task DKT-42',
+      result: 'The task is complete.',
     });
   });
 

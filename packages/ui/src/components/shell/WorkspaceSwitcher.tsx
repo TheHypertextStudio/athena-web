@@ -103,14 +103,21 @@ function AttentionBadge({
 }
 
 /** The workspace avatar: an org's accent-tinted initials avatar (or its image). */
-function WorkspaceAvatar({ workspace }: { readonly workspace: Workspace }): React.JSX.Element {
+function WorkspaceAvatar({
+  workspace,
+  rail = false,
+}: {
+  readonly workspace: Workspace;
+  readonly rail?: boolean;
+}): React.JSX.Element {
   return (
     <Avatar
-      className="h-6 w-6 rounded-md ring-1"
+      data-slot="workspace-avatar"
+      className={rail ? 'size-8 rounded-md ring-1' : 'size-6 rounded-md ring-1'}
       style={{ '--tw-ring-color': getOrgAccent(workspace.id) } as React.CSSProperties}
     >
       {workspace.avatar ? <AvatarImage src={workspace.avatar} alt="" /> : null}
-      <AvatarFallback className="rounded-md text-[10px] font-semibold">
+      <AvatarFallback className="text-label-small rounded-md font-semibold">
         {initialsOf(workspace.name)}
       </AvatarFallback>
     </Avatar>
@@ -207,12 +214,19 @@ export function WorkspaceSwitcher({
           }
         >
           {loading ? (
-            <Skeleton className="size-6 shrink-0 rounded-md" aria-hidden="true" />
+            <Skeleton
+              className={collapsed ? 'size-8 shrink-0 rounded-md' : 'size-6 shrink-0 rounded-md'}
+              aria-hidden="true"
+            />
           ) : active ? (
-            <WorkspaceAvatar workspace={active} />
+            <WorkspaceAvatar workspace={active} rail={collapsed} />
           ) : (
             <span
-              className="bg-surface-container-high size-6 shrink-0 rounded-md"
+              className={
+                collapsed
+                  ? 'bg-surface-container-high size-8 shrink-0 rounded-md'
+                  : 'bg-surface-container-high size-6 shrink-0 rounded-md'
+              }
               aria-hidden="true"
             />
           )}

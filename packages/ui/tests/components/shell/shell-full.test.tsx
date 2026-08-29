@@ -1104,6 +1104,38 @@ describe('WorkspaceSwitcher attention + avatar details', () => {
 });
 
 describe('WorkspaceSwitcher', () => {
+  it('gives the collapsed workspace identity a 32px mark inside its 40px target', () => {
+    render(
+      <ContextProvider initialContext={ACME.id}>
+        <WorkspaceSwitcher
+          collapsed
+          workspaces={WORKSPACES}
+          onSelect={() => undefined}
+          onCreate={() => undefined}
+        />
+      </ContextProvider>,
+    );
+
+    const trigger = screen.getByRole('button', { name: /Workspace: Acme Co/ });
+    expect(trigger).toHaveClass('size-10');
+    expect(trigger.querySelector('[data-slot="workspace-avatar"]')).toHaveClass('size-8');
+  });
+
+  it('keeps the expanded workspace identity at 24px beside its label', () => {
+    render(
+      <ContextProvider initialContext={ACME.id}>
+        <WorkspaceSwitcher
+          workspaces={WORKSPACES}
+          onSelect={() => undefined}
+          onCreate={() => undefined}
+        />
+      </ContextProvider>,
+    );
+
+    const trigger = screen.getByRole('button', { name: /Workspace: Acme Co/ });
+    expect(trigger.querySelector('[data-slot="workspace-avatar"]')).toHaveClass('size-6');
+  });
+
   it('shows the active org as the trigger and switches to another org on selection', async () => {
     const onSelect = vi.fn();
     render(

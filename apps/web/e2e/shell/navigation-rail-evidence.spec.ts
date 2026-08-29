@@ -47,6 +47,7 @@ async function expectRailInteractionGeometry(page: Page): Promise<void> {
   const indicator = destination.locator('[data-slot="navigation-rail-active-indicator"]');
   const expand = page.getByRole('button', { name: 'Expand navigation' });
   const workspace = page.getByRole('button', { name: /Switch workspace/ });
+  const workspaceAvatar = workspace.locator('[data-slot="workspace-avatar"]');
   const account = page.getByRole('button', { name: 'Account menu' });
 
   await expect(destination).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
@@ -81,6 +82,7 @@ async function expectRailInteractionGeometry(page: Page): Promise<void> {
     indicator.boundingBox(),
     expand.boundingBox(),
     workspace.boundingBox(),
+    workspaceAvatar.boundingBox(),
     account.boundingBox(),
   ]);
   expect(boxes).toEqual([
@@ -88,6 +90,7 @@ async function expectRailInteractionGeometry(page: Page): Promise<void> {
     expect.objectContaining({ width: 56, height: 32 }),
     expect.objectContaining({ width: 40, height: 40 }),
     expect.objectContaining({ width: 40, height: 40 }),
+    expect.objectContaining({ width: 32, height: 32 }),
     expect.objectContaining({ width: 40, height: 40 }),
   ]);
 }

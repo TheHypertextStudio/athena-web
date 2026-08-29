@@ -1,6 +1,6 @@
 # Resource mentions
 
-> **Status**: Implemented (rich-text surfaces). Plain-text surfaces pending.
+> **Status**: Implemented across rich-text and plain-text surfaces.
 > **Audience**: Anyone adding a structured source, changing the editor, or touching the
 > `mention` / `external_resource` tables.
 > **Read this before**: adding a provider, changing how prose is stored, or changing the picker.
@@ -162,10 +162,14 @@ one project that also matched. The anti-jump rules — stable active key, extern
 last, highlight pinned once the user has arrowed — live as one pure function in
 `mention-merge.ts` so they are testable rather than aspirational.
 
+Once a valid `@` starts a mention, spaces do not close the picker. The full query reaches both
+search waves through their shared 128-character limit, and a settled query with no results keeps
+the picker open on its no-match state. The attempt ends when the author dismisses it, selects a
+result, leaves the attempt, starts a new line, or exceeds that API limit. Search results never own
+picker visibility.
+
 ## Known gaps
 
-- Plain-text surfaces (comments, updates, Today capture, Athena composers) do not have the picker
-  yet. Rich text does.
 - Drive search needs Google verification plus a CASA Tier-2 assessment before a real account can
   grant `drive.metadata.readonly`. Everything builds and tests on fixtures until then.
 - Thumbnails need content scope, so hovercards show icons only.

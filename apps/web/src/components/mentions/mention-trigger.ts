@@ -8,11 +8,8 @@
  * unusual keystroke, so the rules err toward staying closed.
  */
 
-/** How many characters may follow the `@` before we conclude this is not a mention. */
-const MAX_QUERY = 48;
-
-/** How many spaces the query may contain, so `@design review` works but a sentence does not. */
-const MAX_WORDS = 2;
+/** The longest query both mention-search routes accept. */
+const MAX_QUERY = 128;
 
 /** An open mention attempt. */
 export interface MentionTrigger {
@@ -52,10 +49,6 @@ export function findMentionTrigger(textBeforeCaret: string): MentionTrigger | un
   if (query.length > MAX_QUERY) return undefined;
   // A newline ends the attempt outright: a mention never spans a paragraph.
   if (/[\n\r]/u.test(query)) return undefined;
-  if (query.split(' ').length > MAX_WORDS) return undefined;
-  // A trailing space with nothing after it reads as abandoning the attempt, not as searching for
-  // a two-word name, so `@ ` closes rather than listing everything.
-  if (query.endsWith(' ') && query.trim().split(' ').length >= MAX_WORDS) return undefined;
 
   return { start: at, query };
 }

@@ -203,4 +203,63 @@ describe('composer body editor parity', () => {
     expect(sameBody.textContent).toContain('@road');
     expect(sameBody.textContent).toContain('@next');
   });
+
+  it('keeps the mention picker open through a full name and a settled no-match state', async () => {
+    const user = userEvent.setup();
+    mentionSearch.mockImplementation(({ query }: { query: { q: string } }) =>
+      Promise.resolve(
+        jsonResponse(true, {
+          query: query.q,
+          items:
+            query.q === 'Roadmap in org_1'
+              ? [
+                  {
+                    origin: 'local',
+                    id: 'task_org_1',
+                    ref: { kind: 'entity', entityKind: 'task', entityId: 'task_org_1' },
+                    entityKind: 'task',
+                    title: 'Roadmap in org_1',
+                    subtitle: null,
+                    href: '/orgs/org_1/tasks/task_org_1',
+                    score: 1,
+                  },
+                ]
+              : [],
+        }),
+      ),
+    );
+
+    renderEditor(
+      <ComposerShell
+        open
+        onOpenChange={vi.fn()}
+        heading="New project"
+        title=""
+        onTitleChange={vi.fn()}
+        titlePlaceholder="Project name"
+        body=""
+        onBodyChange={vi.fn()}
+        bodyPlaceholder="Add a description"
+        mentionOrgId="org_1"
+        creating={false}
+        canSubmit={false}
+        onSubmit={vi.fn()}
+        submitLabel="Create project"
+      >
+        <div />
+      </ComposerShell>,
+    );
+
+    const body = await screen.findByRole('textbox', { name: 'Add a description' });
+    await user.click(body);
+    await user.keyboard('@Roadmap in org_1');
+
+    expect(await screen.findByRole('option', { name: /Roadmap in org_1/ })).toBeVisible();
+
+    await user.keyboard(' missing');
+
+    expect(await screen.findByText('No matches for “Roadmap in org_1 missing”')).toBeVisible();
+    expect(screen.getByRole('listbox', { name: 'Mention a resource' })).toBeVisible();
+    expect(screen.getByRole('dialog', { name: 'New project' })).toBeVisible();
+  });
 });

@@ -157,8 +157,8 @@ export default function MentionMenu({
                 <span className="ml-1 opacity-70">searching…</span>
               </p>
               <div className="space-y-0.5 px-2">
-                <Skeleton className="h-9 rounded-md" />
-                <Skeleton className="h-9 rounded-md" />
+                <Skeleton className="h-10 rounded-md" />
+                <Skeleton className="h-10 rounded-md" />
               </div>
             </li>
           ) : null}
@@ -174,9 +174,9 @@ export default function MentionMenu({
 
           {nothingYet && localPending ? (
             <li aria-hidden className="space-y-0.5 px-3 py-1">
-              <Skeleton className="h-9 rounded-md" />
-              <Skeleton className="h-9 rounded-md" />
-              <Skeleton className="h-9 rounded-md" />
+              <Skeleton className="h-10 rounded-md" />
+              <Skeleton className="h-10 rounded-md" />
+              <Skeleton className="h-10 rounded-md" />
             </li>
           ) : null}
 

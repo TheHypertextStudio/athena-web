@@ -75,6 +75,10 @@ describe('MentionMenu group layout', () => {
     expect(screen.getByRole('option', { name: /Braindump all work/ })).toBeVisible();
     expect(screen.getByRole('option', { name: /Bus Buddies Pilot Season/ })).toBeVisible();
     expect(screen.getByRole('option', { name: /Public Engagement/ })).toBeVisible();
+    for (const option of screen.getAllByRole('option')) {
+      expect(option).toHaveClass('min-h-10');
+      expect(option).not.toHaveClass('min-h-11');
+    }
   });
 
   it.each([
@@ -111,5 +115,35 @@ describe('MentionMenu group layout', () => {
     expect(section).not.toBeNull();
     expect(section).not.toHaveClass('h-px');
     expect(section?.querySelector(':scope > [aria-hidden].h-px')).not.toBeNull();
+  });
+
+  it('reserves the same 40px height while local results load', () => {
+    state.current = {
+      groups: [],
+      items: [],
+      localPending: true,
+      externalPending: false,
+      localFailed: false,
+      externalFailed: false,
+    };
+
+    render(
+      <MentionMenu
+        open
+        orgId="org_1"
+        anchorRef={{ current: { getBoundingClientRect: () => new DOMRect(40, 40, 1, 20) } }}
+        activeKey={undefined}
+        hasArrowed={false}
+        listboxId="mention-results"
+        query="bus"
+        onSelect={vi.fn()}
+        onOpenChange={vi.fn()}
+        onRows={vi.fn()}
+      />,
+    );
+
+    const skeletons = document.querySelectorAll('[data-slot="skeleton"]');
+    expect(skeletons).toHaveLength(3);
+    for (const skeleton of skeletons) expect(skeleton).toHaveClass('h-10');
   });
 });

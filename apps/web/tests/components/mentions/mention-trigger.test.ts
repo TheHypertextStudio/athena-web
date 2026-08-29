@@ -19,21 +19,26 @@ describe('findMentionTrigger', () => {
     expect(findMentionTrigger('willie@')).toBeUndefined();
   });
 
-  it('allows a two-word query so a full name can be typed', () => {
-    expect(findMentionTrigger('@design review')).toEqual({ start: 0, query: 'design review' });
+  it('keeps a full multiword entity name open', () => {
+    expect(findMentionTrigger('@Zephyr rollout checklist')).toEqual({
+      start: 0,
+      query: 'Zephyr rollout checklist',
+    });
   });
 
-  it('stays open on the space between two words, or the second word could never be typed', () => {
-    expect(findMentionTrigger('@design ')).toEqual({ start: 0, query: 'design ' });
+  it('keeps a trailing space open while the next search term is being typed', () => {
+    expect(findMentionTrigger('@Zephyr rollout ')).toEqual({
+      start: 0,
+      query: 'Zephyr rollout ',
+    });
   });
 
-  it('closes once the text stops looking like a name', () => {
-    expect(findMentionTrigger('@design review board')).toBeUndefined();
-    expect(findMentionTrigger('@design review ')).toBeUndefined();
-  });
-
-  it('closes when the attempt runs past any plausible name', () => {
-    expect(findMentionTrigger(`@${'a'.repeat(49)}`)).toBeUndefined();
+  it('uses the API query limit rather than a shorter client-only cutoff', () => {
+    expect(findMentionTrigger(`@${'a'.repeat(128)}`)).toEqual({
+      start: 0,
+      query: 'a'.repeat(128),
+    });
+    expect(findMentionTrigger(`@${'a'.repeat(129)}`)).toBeUndefined();
   });
 
   it('closes across a line break', () => {

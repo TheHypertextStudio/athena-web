@@ -11,11 +11,14 @@
  * these are for is a human looking at the result.
  */
 import { signUpAndOnboard } from '../helpers/app';
-import { orgHref, TIMEOUTS } from '../helpers/constants';
+import { myWorkHref, orgHref, TIMEOUTS } from '../helpers/constants';
 import { expect, test } from '../helpers/fixtures';
 import { openMentionMenu, seedMentionFixtures, waitForMentionable } from '../helpers/mentions';
 import { attachShot, setColorScheme } from '../helpers/ui';
 import { descriptionEditor } from '../helpers/editors';
+
+// These captures verify the live picker. The offline suite owns service-worker navigation.
+test.use({ serviceWorkers: 'block' });
 
 /** The two viewports the rest of the suite captures at. */
 const VIEWPORTS = [
@@ -24,6 +27,30 @@ const VIEWPORTS = [
 ] as const;
 
 test.describe('mention visuals', () => {
+  for (const viewport of VIEWPORTS) {
+    test(`full-name menu stays visible (${viewport.name})`, async ({ page }, testInfo) => {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      const { orgId } = await signUpAndOnboard(page, `MentionFullNameShot${viewport.name}`);
+      const { taskTitle } = await seedMentionFixtures(page, orgId);
+      await waitForMentionable(page, orgId, taskTitle, taskTitle);
+
+      await page.goto(myWorkHref(orgId), { waitUntil: 'domcontentloaded' });
+      await expect(page.getByRole('heading', { name: 'My Work' })).toBeVisible({
+        timeout: TIMEOUTS.pageReady,
+      });
+      await page.getByRole('button', { name: 'New task' }).first().click();
+      const prose = page.getByRole('dialog').getByRole('textbox', { name: 'Add a description' });
+      await prose.click();
+      await openMentionMenu(prose, taskTitle);
+      await expect(page.getByRole('option', { name: new RegExp(taskTitle) })).toBeVisible();
+
+      await attachShot(testInfo, page, `mention-menu-full-name-${viewport.name}-light.png`);
+      await setColorScheme(page, 'dark');
+      await page.waitForTimeout(250);
+      await attachShot(testInfo, page, `mention-menu-full-name-${viewport.name}-dark.png`);
+    });
+  }
+
   for (const viewport of VIEWPORTS) {
     test(`menu, chip, and hovercard (${viewport.name})`, async ({ page }, testInfo) => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });

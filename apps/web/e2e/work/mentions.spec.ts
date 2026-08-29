@@ -12,18 +12,51 @@
  * Radix layer, which answers Escape from a capture-phase document listener and so closes the menu
  * before the field's own key handler ever runs.
  *
- * Two tests rather than four, because each sign-up is a full passkey ceremony against the one
- * shared PGlite writer, and four in a file is where this started failing for reasons that had
- * nothing to do with mentions.
+ * The file runs each sign-up against one shared PGlite writer, so Playwright keeps it on one worker
+ * instead of parallelizing passkey ceremonies that have nothing to do with mention behavior.
  */
 import { signUpAndOnboard } from '../helpers/app';
-import { orgHref, TIMEOUTS } from '../helpers/constants';
+import { myWorkHref, orgHref, TIMEOUTS } from '../helpers/constants';
 import { expect, test } from '../helpers/fixtures';
 import { apiFetch } from '../helpers/net';
 import { openMentionMenu, seedMentionFixtures, waitForMentionable } from '../helpers/mentions';
 import { descriptionEditor } from '../helpers/editors';
 
+// This flow verifies live search and selection. The offline suite owns service-worker navigation.
+test.use({ serviceWorkers: 'block' });
+
 test.describe('mentions', () => {
+  test('a full entity name stays selectable in rich and plain editors', async ({ page }) => {
+    const { orgId } = await signUpAndOnboard(page, 'MentionFullName');
+    const { taskTitle } = await seedMentionFixtures(page, orgId);
+    await waitForMentionable(page, orgId, taskTitle, taskTitle);
+
+    await page.goto(myWorkHref(orgId), { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('heading', { name: 'My Work' })).toBeVisible({
+      timeout: TIMEOUTS.pageReady,
+    });
+    await page.getByRole('button', { name: 'New task' }).first().click();
+    const dialog = page.getByRole('dialog');
+    const prose = dialog.getByRole('textbox', { name: 'Add a description' });
+    await prose.click();
+    await openMentionMenu(prose, taskTitle);
+    await expect(page.getByRole('option', { name: new RegExp(taskTitle) })).toBeVisible();
+    await page.keyboard.press('Enter');
+    await expect(dialog.locator('[data-mention-kind]').filter({ hasText: taskTitle })).toHaveCount(
+      1,
+    );
+
+    await page.goto('/today', { waitUntil: 'domcontentloaded' });
+    const capture = page.getByLabel('Ask Athena about today');
+    await expect(capture).toBeVisible({ timeout: TIMEOUTS.pageReady });
+    await capture.click();
+    await capture.pressSequentially('Follow up on ');
+    await openMentionMenu(capture, taskTitle);
+    await expect(page.getByRole('option', { name: new RegExp(taskTitle) })).toBeVisible();
+    await page.keyboard.press('Enter');
+    await expect(capture).toHaveValue(`Follow up on @${taskTitle} `);
+  });
+
   test('a mention in prose persists, reloads as a chip, and lands in Resources', async ({
     page,
   }) => {

@@ -4,10 +4,9 @@
  * One row of the `@` menu.
  *
  * @remarks
- * Reuses the command palette's row grammar verbatim — the same class string, the same trailing
- * pill and kind tag, the same `SEARCH_KIND_ICON` glyphs — so a Project is the same mark in the
- * palette, the search page, and this menu. That consistency is most of what will make the feature
- * feel native rather than bolted on.
+ * Reuses the command palette's row grammar, trailing pill, kind tag, and `SEARCH_KIND_ICON`
+ * glyphs. The mention picker narrows that shared row from 44px to 40px because autocomplete stays
+ * attached to a line of prose and needs a denser scan rhythm than a standalone command menu.
  *
  * Every row is a single line at the same height. A Drive file has more to say than fits, and it is
  * tempting to give it a second line, but mixing row heights destroys the arrow-key rhythm that
@@ -67,9 +66,9 @@ export default function MentionRow({
         onSelect(item);
       }}
       className={cn(
-        // Same row as every other menu in the product.
+        // Keep the shared menu grammar, with the mention picker's denser 40px row contract.
         menuItemClass('standard'),
-        'cursor-pointer',
+        'min-h-10 cursor-pointer',
         // The list is driven by `aria-activedescendant`, not focus, so the active row applies the
         // spec's focus state layer directly.
         { 'bg-on-surface/10': active },

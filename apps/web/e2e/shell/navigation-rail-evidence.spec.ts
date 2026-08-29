@@ -6,6 +6,7 @@ import type { Page } from '@playwright/test';
 import { signUpAndOnboard } from '../helpers/app';
 import { TIMEOUTS } from '../helpers/constants';
 import { expect, test } from '../helpers/fixtures';
+import { apiJson } from '../helpers/net';
 import { setColorScheme } from '../helpers/ui';
 
 const SHOT_ROOT = resolve(
@@ -75,6 +76,7 @@ async function expectRailInteractionGeometry(page: Page): Promise<void> {
   await expect(selectedIndicator).toHaveCSS('background-color', selectionPaint.indicator);
   await expect(selectedIndicator.locator('svg')).toHaveCSS('color', selectionPaint.icon);
   await expect(selectedLabel).toHaveCSS('color', selectionPaint.label);
+  await expect(selectedIndicator).toHaveCSS('outline-style', 'none');
   expect(await selectedLabel.evaluate((element) => getComputedStyle(element).fontWeight)).toBe(
     await label.evaluate((element) => getComputedStyle(element).fontWeight),
   );
@@ -87,8 +89,10 @@ async function expectRailInteractionGeometry(page: Page): Promise<void> {
 
   await page.mouse.down();
   await expect(stateLayer).toHaveCSS('opacity', '0.08');
+  await page.mouse.move(500, 500);
   await page.mouse.up();
 
+  await destination.hover();
   await destination.focus();
   await page.keyboard.press('Shift+Tab');
   await page.keyboard.press('Tab');
@@ -104,11 +108,39 @@ async function expectRailInteractionGeometry(page: Page): Promise<void> {
     if (!link || !stateLayer) throw new Error('Calendar destination must have a state layer');
     return {
       destinationShadow: getComputedStyle(link).boxShadow,
-      indicatorShadow: getComputedStyle(stateLayer).boxShadow,
+      indicatorOutlineColor: getComputedStyle(stateLayer).outlineColor,
+      indicatorOutlineOffset: getComputedStyle(stateLayer).outlineOffset,
+      indicatorOutlineStyle: getComputedStyle(stateLayer).outlineStyle,
+      indicatorOutlineWidth: getComputedStyle(stateLayer).outlineWidth,
     };
   });
   expect(focusPaint.destinationShadow).not.toContain('0px 0px 0px 3px');
-  expect(focusPaint.indicatorShadow).toContain('0px 0px 0px 3px');
+  expect(focusPaint.indicatorOutlineColor).toBe(selectionPaint.label);
+  expect(focusPaint.indicatorOutlineOffset).toBe('2px');
+  expect(focusPaint.indicatorOutlineStyle).toBe('solid');
+  expect(focusPaint.indicatorOutlineWidth).toBe('3px');
+
+  const focusBounds = await page.evaluate(() => {
+    const scrollRegion = document.querySelector<HTMLElement>(
+      '[data-slot="navigation-rail-scroll-region"]',
+    );
+    const indicator = document.querySelector<HTMLElement>(
+      'nav[aria-label="Primary navigation"] a[aria-label="Calendar"] [data-slot="navigation-rail-active-indicator"]',
+    );
+    if (!scrollRegion || !indicator) throw new Error('The focused rail indicator must exist');
+    const scrollRegionBox = scrollRegion.getBoundingClientRect();
+    const indicatorBox = indicator.getBoundingClientRect();
+    const style = getComputedStyle(indicator);
+    const outset = Number.parseFloat(style.outlineWidth) + Number.parseFloat(style.outlineOffset);
+    return {
+      focusLeft: indicatorBox.left - outset,
+      focusRight: indicatorBox.right + outset,
+      scrollRegionLeft: scrollRegionBox.left,
+      scrollRegionRight: scrollRegionBox.right,
+    };
+  });
+  expect(focusBounds.focusLeft).toBeGreaterThanOrEqual(focusBounds.scrollRegionLeft);
+  expect(focusBounds.focusRight).toBeLessThanOrEqual(focusBounds.scrollRegionRight);
 
   await page.mouse.move(500, 500);
   await expect(stateLayer).toHaveCSS('opacity', '0.12');
@@ -124,7 +156,7 @@ async function expectRailInteractionGeometry(page: Page): Promise<void> {
     account.boundingBox(),
   ]);
   expect(boxes.slice(2)).toEqual([
-    expect.objectContaining({ width: 64, height: 64 }),
+    expect.objectContaining({ width: 64, height: 56 }),
     expect.objectContaining({ width: 56, height: 32 }),
     expect.objectContaining({ width: 40, height: 40 }),
     expect.objectContaining({ width: 40, height: 40 }),
@@ -136,40 +168,70 @@ async function expectRailInteractionGeometry(page: Page): Promise<void> {
     throw new Error('The first two rail destinations must have measurable bounds');
   }
   expect(secondDestination.y - (firstDestination.y + firstDestination.height)).toBe(4);
+
+  const labelClearance = await primary
+    .locator('[data-slot="navigation-rail-label"]')
+    .evaluateAll((labels) =>
+      labels.map((label) => {
+        const destination = label.closest<HTMLElement>('a, button');
+        if (!destination) throw new Error('Every rail label must belong to a destination');
+        const destinationBox = destination.getBoundingClientRect();
+        const labelBox = label.getBoundingClientRect();
+        return {
+          top: labelBox.top - destinationBox.top,
+          bottom: destinationBox.bottom - labelBox.bottom,
+          lineHeight: Number.parseFloat(getComputedStyle(label).lineHeight),
+          height: labelBox.height,
+        };
+      }),
+    );
+  for (const clearance of labelClearance) {
+    expect(clearance.height).toBe(clearance.lineHeight);
+    expect(clearance.top).toBeGreaterThanOrEqual(2);
+    expect(clearance.bottom).toBeGreaterThanOrEqual(2);
+  }
 }
 
-/** Seed named recent documents for the visual pass after the real route observer is unit-tested. */
-async function seedRecentDocuments(page: Page): Promise<void> {
-  await page.evaluate(async () => {
-    const response = await fetch('/api/auth/get-session');
-    const session = (await response.json()) as { user?: { id?: string } };
-    const userId = session.user?.id;
-    if (!userId) throw new Error('An authenticated user is required to seed recent documents');
-    const orgId = '01JAAAAAAAAAAAAAAAAAAAAAAA';
-    sessionStorage.setItem(
-      `docket:recent-documents:${userId}`,
-      JSON.stringify([
-        {
-          type: 'project',
-          orgId,
-          id: '01JBBBBBBBBBBBBBBBBBBBBBBB',
-          title: 'Launch the new workspace',
-        },
-        {
-          type: 'task',
-          orgId,
-          id: '01JCCCCCCCCCCCCCCCCCCCCCCC',
-          title: 'Review navigation states',
-        },
-        {
-          type: 'initiative',
-          orgId,
-          id: '01JDDDDDDDDDDDDDDDDDDDDDDD',
-          title: 'Improve Docket craft',
-        },
-      ]),
-    );
+/** Create real recent documents so the visual pass exercises saved identity metadata. */
+async function seedRecentDocuments(page: Page, orgId: string): Promise<void> {
+  const project = await apiJson<{ id: string }>(page, `/v1/orgs/${orgId}/projects`, {
+    method: 'POST',
+    body: { name: 'Launch the new workspace' },
   });
+  const initiative = await apiJson<{ id: string }>(page, `/v1/orgs/${orgId}/initiatives`, {
+    method: 'POST',
+    body: { name: 'Improve Docket craft' },
+  });
+  const program = await apiJson<{ id: string }>(page, `/v1/orgs/${orgId}/programs`, {
+    method: 'POST',
+    body: { name: 'Review navigation states' },
+  });
+  await apiJson(page, `/v1/orgs/${orgId}/display/project/${project.id}`, {
+    method: 'PUT',
+    body: { iconKey: 'bus', colorKey: 'rose', customColor: '#e11d48' },
+  });
+  await apiJson(page, `/v1/orgs/${orgId}/display/initiative/${initiative.id}`, {
+    method: 'PUT',
+    body: { iconKey: 'rocket', colorKey: 'purple', customColor: null },
+  });
+
+  await page.evaluate(
+    async ({ orgId, projectId, programId, initiativeId }) => {
+      const response = await fetch('/api/auth/get-session');
+      const session = (await response.json()) as { user?: { id?: string } };
+      const userId = session.user?.id;
+      if (!userId) throw new Error('An authenticated user is required to seed recent documents');
+      sessionStorage.setItem(
+        `docket:recent-documents:${userId}`,
+        JSON.stringify([
+          { type: 'project', orgId, id: projectId, title: 'Launch the new workspace' },
+          { type: 'program', orgId, id: programId, title: 'Review navigation states' },
+          { type: 'initiative', orgId, id: initiativeId, title: 'Improve Docket craft' },
+        ]),
+      );
+    },
+    { orgId, projectId: project.id, programId: program.id, initiativeId: initiative.id },
+  );
   await page.reload({ waitUntil: 'domcontentloaded', timeout: TIMEOUTS.pageReady });
 }
 
@@ -178,19 +240,19 @@ test('the labeled navigation rail keeps daily work visible at every density', as
   mkdirSync(SHOT_ROOT, { recursive: true });
 
   await page.setViewportSize({ width: 1440, height: 900 });
-  await signUpAndOnboard(page, 'NavigationRailAudit');
+  const { orgId } = await signUpAndOnboard(page, 'NavigationRailAudit');
   await page.goto('/today', {
     waitUntil: 'domcontentloaded',
     timeout: TIMEOUTS.pageReady,
   });
-  await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible({
+  await expect(page.getByRole('heading', { name: 'Today', exact: true })).toBeVisible({
     timeout: TIMEOUTS.pageReady,
   });
   await expect(page.getByRole('heading', { name: 'Plan today with Athena' })).toBeVisible({
     timeout: TIMEOUTS.pageReady,
   });
-  await seedRecentDocuments(page);
-  await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible({
+  await seedRecentDocuments(page, orgId);
+  await expect(page.getByRole('heading', { name: 'Today', exact: true })).toBeVisible({
     timeout: TIMEOUTS.pageReady,
   });
 
@@ -217,6 +279,19 @@ test('the labeled navigation rail keeps daily work visible at every density', as
   await expect(recent.getByRole('link')).toHaveCount(3);
   await expect(recent.getByRole('link').first()).toHaveCSS('width', '40px');
   await expect(recent.getByRole('link').first()).toHaveCSS('height', '40px');
+  await expect(recent.locator('[data-testid="initiative-icon-circle"]')).toHaveCount(3);
+  await expect(recent.getByRole('link').nth(0).locator('[data-icon-key="bus"]')).toHaveCount(1);
+  await expect(recent.getByRole('link').nth(1).locator('[data-icon-key="layers"]')).toHaveCount(1);
+  await expect(recent.getByRole('link').nth(2).locator('[data-icon-key="rocket"]')).toHaveCount(1);
+  await expect(recent.getByRole('link').first().getByTestId('initiative-icon-circle')).toHaveCSS(
+    'background-color',
+    'rgba(225, 29, 72, 0.15)',
+  );
+  await expect(page).toHaveURL(/\/today$/);
+  await expect(primary.getByRole('link', { name: 'Today', exact: true })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
   await page.screenshot({ path: resolve(SHOT_ROOT, 'rail-1440x900-light.png') });
 
   await primary.getByRole('link', { name: 'Calendar', exact: true }).hover();

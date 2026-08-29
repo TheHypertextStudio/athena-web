@@ -5,6 +5,8 @@ import {
   type AppShellAside,
   ContextProvider,
   type HomeNavKey,
+  IdentityGlyph,
+  type OpenTab,
   PageScrollProvider,
   type RailPanel,
   Sidebar,
@@ -14,8 +16,17 @@ import {
   type Workspace,
   type WorkspaceNavKey,
 } from '@docket/ui/components';
+import { defaultEntityDisplay, type EntityDisplaySubjectType } from '@docket/types';
 import { VocabularyProvider } from '@docket/ui/hooks';
-import { Calendar, Search, Sparkles, Timer } from '@docket/ui/icons';
+import {
+  Calendar,
+  GanttChart,
+  RefreshCw,
+  Search,
+  Sparkles,
+  TaskAlt,
+  Timer,
+} from '@docket/ui/icons';
 import { Skeleton, Stack } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
@@ -48,6 +59,7 @@ import {
 } from '@/components/command-palette';
 import { OfflineBanner, OfflineContent } from '@/components/offline-state';
 import { NavigationProgress } from '@/components/navigation-progress';
+import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
 import { OfflineSyncIndicator, OfflineSyncRuntime, useOutboxSummary } from '@/components/pwa';
 import { NavigationSnapshotPersistence } from '@/components/navigation-snapshot-persistence';
 import { ReachabilityProvider } from '@/components/reachability';
@@ -534,6 +546,70 @@ interface AppShellInnerProps {
   children: ReactNode;
 }
 
+interface SavedRecentEntityIdentityProps {
+  readonly subjectType: Extract<EntityDisplaySubjectType, 'initiative' | 'project'>;
+  readonly orgId: string;
+  readonly subjectId: string;
+}
+
+const FIXED_RECENT_DOCUMENT_ICON = {
+  task: TaskAlt,
+  cycle: RefreshCw,
+  session: GanttChart,
+} as const;
+
+/** Render one saved Project or Initiative identity through the same glyph as its detail page. */
+function SavedRecentEntityIdentity({
+  subjectType,
+  orgId,
+  subjectId,
+}: SavedRecentEntityIdentityProps): JSX.Element {
+  const displayQ = useApiQuery(
+    apiQueryOptions(
+      queryKeys.entityDisplay(orgId, subjectType, subjectId),
+      () =>
+        api.v1.orgs[':orgId'].display[':subjectType'][':subjectId'].$get({
+          param: { orgId, subjectType, subjectId },
+        }),
+      'Could not load the recent item icon.',
+      { staleTime: STALE.static },
+    ),
+  );
+  const display = displayQ.data ?? defaultEntityDisplay(subjectType, subjectId);
+
+  return (
+    <EntityIconGlyph
+      iconKey={display.iconKey}
+      colorKey={display.colorKey}
+      customColor={display.customColor}
+      size={32}
+    />
+  );
+}
+
+/** Render the detail-page identity that belongs to one recent document. */
+export function RecentDocumentIdentity({ document }: { readonly document: OpenTab }): JSX.Element {
+  if (document.type === 'initiative' || document.type === 'project') {
+    return (
+      <SavedRecentEntityIdentity
+        subjectType={document.type}
+        orgId={document.orgId}
+        subjectId={document.id}
+      />
+    );
+  }
+  if (document.type === 'program') {
+    return <EntityIconGlyph iconKey="layers" colorKey="primary" customColor={null} size={32} />;
+  }
+
+  const Icon = FIXED_RECENT_DOCUMENT_ICON[document.type];
+  return (
+    <IdentityGlyph size={32} className="[&_svg]:size-4!">
+      <Icon aria-hidden="true" />
+    </IdentityGlyph>
+  );
+}
+
 /**
  * The shell body that lives inside the providers and wires shell selections to navigation.
  *
@@ -672,6 +748,7 @@ function AppShellInner({
       unreadCount={unreadCount}
       recentDocuments={recentDocuments}
       activeDocumentKey={activeKey}
+      renderRecentDocumentIcon={(document) => <RecentDocumentIdentity document={document} />}
       hrefForHome={(key) => `/${key}`}
       hrefForWorkspace={(orgId, key) => `/orgs/${orgId}/${key}`}
       renderLink={renderLink}

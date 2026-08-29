@@ -27,6 +27,8 @@ export interface SidebarProps {
   readonly unreadCount?: number | undefined;
   readonly recentDocuments?: readonly OpenTab[] | undefined;
   readonly activeDocumentKey?: string | undefined;
+  /** Render a document's product-owned identity in the collapsed rail. */
+  readonly renderRecentDocumentIcon?: ((document: OpenTab) => React.ReactNode) | undefined;
   readonly hrefForHome: (key: Exclude<HomeNavKey, 'search'>) => string;
   readonly hrefForWorkspace: (orgId: string, key: WorkspaceNavKey) => string;
   readonly renderLink: (href: string, children: React.ReactNode) => React.ReactNode;
@@ -46,6 +48,7 @@ export function Sidebar({
   unreadCount,
   recentDocuments = [],
   activeDocumentKey,
+  renderRecentDocumentIcon,
   hrefForHome,
   hrefForWorkspace,
   renderLink,
@@ -97,6 +100,7 @@ export function Sidebar({
           unreadCount={unreadCount}
           recentDocuments={recentDocuments}
           activeDocumentKey={activeDocumentKey}
+          renderRecentDocumentIcon={renderRecentDocumentIcon}
           hrefForHome={hrefForHome}
           hrefForWorkspace={hrefForWorkspace}
           renderLink={renderLink}

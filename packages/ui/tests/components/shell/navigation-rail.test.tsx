@@ -16,6 +16,7 @@ function renderRail(
   unreadCount?: number,
   recentDocuments: readonly OpenTab[] = [],
   activeDocumentKey?: string,
+  renderRecentDocumentIcon?: (document: OpenTab) => React.ReactNode,
 ): void {
   render(
     <ContextProvider initialContext={ACME.id}>
@@ -26,6 +27,7 @@ function renderRail(
           unreadCount={unreadCount}
           recentDocuments={recentDocuments}
           activeDocumentKey={activeDocumentKey}
+          renderRecentDocumentIcon={renderRecentDocumentIcon}
           hrefForHome={(key) => `/${key}`}
           hrefForWorkspace={(orgId, key) => `/orgs/${orgId}/${key}`}
           renderLink={(href, content) => <a href={href}>{content}</a>}
@@ -55,17 +57,19 @@ describe('collapsed sidebar navigation rail', () => {
     expect(screen.queryByRole('link', { name: 'Projects' })).not.toBeInTheDocument();
   });
 
-  it('uses the M3 Expressive item and active-indicator geometry', () => {
+  it('uses the compact target and M3 active-indicator geometry', () => {
     renderRail();
 
     const primary = screen.getByRole('navigation', { name: 'Primary navigation' });
     const destinations = primary.firstElementChild;
+    const scrollRegion = primary.closest('[data-slot="navigation-rail-scroll-region"]');
     const today = screen.getByRole('link', { name: 'Today' });
     const indicator = today.querySelector('[data-slot="navigation-rail-active-indicator"]');
     const icon = indicator?.querySelector('svg');
 
     expect(destinations).toHaveClass('gap-1');
-    expect(today).toHaveClass('min-h-16');
+    expect(scrollRegion).toHaveClass('-mx-px', 'w-16.5');
+    expect(today).toHaveClass('mx-auto', 'min-h-14', 'w-16');
     expect(indicator).toHaveClass('h-8', 'w-14', 'rounded-full');
     expect(icon).toHaveClass('size-6');
   });
@@ -93,8 +97,9 @@ describe('collapsed sidebar navigation rail', () => {
     const unselectedLayer = calendar.querySelector('[data-slot="navigation-rail-state-layer"]');
 
     expect(selectedIndicator).toHaveClass(
-      'group-focus-visible:ring-3',
-      'group-focus-visible:ring-secondary',
+      'group-focus-visible:outline-3',
+      'group-focus-visible:outline-secondary',
+      'group-focus-visible:outline-offset-2',
     );
     expect(selectedLayer).toHaveClass(
       'bg-primary',
@@ -174,5 +179,27 @@ describe('collapsed sidebar navigation rail', () => {
     expect(project).toHaveClass('h-10', 'w-10');
     expect(project.querySelector('svg')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Recent: Ship the rail' })).toBeInTheDocument();
+  });
+
+  it('uses the host entity identity renderer for recent document icons', () => {
+    const project: OpenTab = {
+      key: `project:${ACME.id}:01JBBBBBBBBBBBBBBBBBBBBBBB`,
+      type: 'project',
+      orgId: ACME.id,
+      id: '01JBBBBBBBBBBBBBBBBBBBBBBB',
+      title: 'Rewrite onboarding',
+      href: `/orgs/${ACME.id}/projects/01JBBBBBBBBBBBBBBBBBBBBBBB`,
+    };
+
+    renderRail(undefined, [project], undefined, (document) => (
+      <span data-testid="saved-entity-identity" data-document-id={document.id} />
+    ));
+
+    const recent = screen.getByRole('link', { name: 'Recent: Rewrite onboarding' });
+    expect(recent).toContainElement(screen.getByTestId('saved-entity-identity'));
+    expect(screen.getByTestId('saved-entity-identity')).toHaveAttribute(
+      'data-document-id',
+      project.id,
+    );
   });
 });

@@ -192,6 +192,7 @@ export function EntityIconGlyph({
   return (
     <span
       data-testid="initiative-icon-circle"
+      data-icon-key={iconKey}
       className={cn(
         'flex shrink-0 items-center justify-center rounded-full',
         !hasCustomColor && color.circleClass,

@@ -82,8 +82,10 @@ vi.mock('../../src/components/tabs/resolve-title', () => ({
   resolveTabTitle,
 }));
 
-import { AppShellFrame } from '../../src/components/app-shell-frame';
+import { AppShellFrame, RecentDocumentIdentity } from '../../src/components/app-shell-frame';
+import { queryKeys } from '../../src/lib/query';
 import type { ServerSessionUser } from '../../src/lib/server-session';
+import type { OpenTab } from '@docket/ui/components';
 
 /** A server-confirmed identity, as the `(app)` layout resolves it before the document is sent. */
 const SERVER_SESSION: ServerSessionUser = {
@@ -430,5 +432,40 @@ describe('AppShellFrame session loading', () => {
       resolveSecondTitle?.('Grace project');
     });
     expect(await screen.findByText('Grace project')).toBeVisible();
+  });
+});
+
+describe('RecentDocumentIdentity', () => {
+  it('renders a Project saved icon, custom color, and tonal background', () => {
+    const document: OpenTab = {
+      key: 'project:01JAAAAAAAAAAAAAAAAAAAAAAA:01JBBBBBBBBBBBBBBBBBBBBBBB',
+      type: 'project',
+      orgId: '01JAAAAAAAAAAAAAAAAAAAAAAA',
+      id: '01JBBBBBBBBBBBBBBBBBBBBBBB',
+      title: 'Rewrite onboarding',
+      href: '/orgs/01JAAAAAAAAAAAAAAAAAAAAAAA/projects/01JBBBBBBBBBBBBBBBBBBBBBBB',
+    };
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(queryKeys.entityDisplay(document.orgId, document.type, document.id), {
+      subjectType: 'project',
+      subjectId: document.id,
+      iconKey: 'bus',
+      colorKey: 'blue',
+      customColor: '#123456',
+      coverImage: null,
+      customized: true,
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RecentDocumentIdentity document={document} />
+      </QueryClientProvider>,
+    );
+
+    const circle = screen.getByTestId('initiative-icon-circle');
+    const icon = screen.getByTestId('initiative-icon');
+    expect(circle).toHaveAttribute('data-icon-key', 'bus');
+    expect(circle).toHaveStyle({ width: '32px', height: '32px', backgroundColor: '#12345626' });
+    expect(icon).toHaveStyle({ width: '16px', height: '16px', color: '#123456' });
   });
 });

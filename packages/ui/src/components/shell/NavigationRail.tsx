@@ -5,6 +5,7 @@ import * as React from 'react';
 import { ChevronRight } from '../../icons';
 import { cn } from '../../lib/utils';
 import { Button, Tooltip, TooltipContent, TooltipTrigger } from '../../primitives';
+import { IdentityGlyph } from '../atoms/IdentityGlyph';
 import type { HomeNavKey, Workspace, WorkspaceNavKey } from './workspaces';
 import { type ResolvedNavigationDestination, selectRailDestinations } from './navigation-catalog';
 import {
@@ -22,6 +23,8 @@ export interface NavigationRailProps {
   readonly unreadCount?: number | undefined;
   readonly recentDocuments: readonly OpenTab[];
   readonly activeDocumentKey?: string | undefined;
+  /** Render a document's product-owned identity, including its tonal background. */
+  readonly renderRecentDocumentIcon?: ((document: OpenTab) => React.ReactNode) | undefined;
   readonly hrefForHome: (key: Exclude<HomeNavKey, 'search'>) => string;
   readonly hrefForWorkspace: (orgId: string, key: WorkspaceNavKey) => string;
   readonly renderLink: (href: string, children: React.ReactNode) => React.ReactNode;
@@ -69,6 +72,7 @@ function RailDestination({
   | 'catalog'
   | 'recentDocuments'
   | 'activeDocumentKey'
+  | 'renderRecentDocumentIcon'
   | 'onSelectWorkspace'
   | 'onCreateWorkspace'
   | 'onToggle'
@@ -80,14 +84,14 @@ function RailDestination({
   const Icon = destination.icon;
   const label = destinationLabel(destination, unreadCount ?? 0);
   const className = cn(
-    'group text-label-medium flex min-h-16 w-full flex-col items-center justify-center gap-1 rounded-none px-1 py-1 text-center hover:bg-transparent focus-visible:ring-0 focus-visible:outline-none',
+    'group text-label-medium mx-auto flex min-h-14 w-16 flex-col items-center justify-center gap-1 rounded-none px-1 text-center hover:bg-transparent focus-visible:ring-0 focus-visible:outline-none',
   );
   const content = (
     <>
       <span
         data-slot="navigation-rail-active-indicator"
         className={cn(
-          'group-focus-visible:ring-secondary relative flex h-8 w-14 shrink-0 items-center justify-center rounded-full transition-colors duration-(--dur-fast) ease-(--ease-out) group-focus-visible:ring-3',
+          'group-focus-visible:outline-secondary relative flex h-8 w-14 shrink-0 items-center justify-center rounded-full transition-colors duration-(--dur-fast) ease-(--ease-out) group-focus-visible:outline-3 group-focus-visible:outline-offset-2',
           destination.active
             ? 'bg-secondary-container text-on-secondary-container'
             : 'text-on-surface-variant',
@@ -161,6 +165,7 @@ export function NavigationRail({
   unreadCount = 0,
   recentDocuments,
   activeDocumentKey,
+  renderRecentDocumentIcon,
   hrefForHome,
   hrefForWorkspace,
   renderLink,
@@ -202,7 +207,10 @@ export function NavigationRail({
         </Button>
       </div>
 
-      <div className="min-h-0 w-full flex-1 overflow-y-auto pt-2">
+      <div
+        data-slot="navigation-rail-scroll-region"
+        className="-mx-px min-h-0 w-16.5 flex-1 overflow-y-auto pt-2"
+      >
         <nav aria-label="Primary navigation" className="w-full">
           <div className="flex flex-col gap-1">
             {railDestinations.map((destination) => (
@@ -232,6 +240,7 @@ export function NavigationRail({
           >
             {recentDocuments.slice(0, 3).map((document) => {
               const Icon = TYPE_ICON[document.type];
+              const renderedIdentity = renderRecentDocumentIcon?.(document);
               const label = tabLabel(document);
               const active = document.key === activeDocumentKey;
               return (
@@ -252,7 +261,14 @@ export function NavigationRail({
                           : 'text-on-surface-variant hover:text-on-surface',
                       )}
                     >
-                      {renderLink(document.href, <Icon aria-hidden="true" />)}
+                      {renderLink(
+                        document.href,
+                        renderedIdentity ?? (
+                          <IdentityGlyph size={32} className="[&_svg]:size-4!">
+                            <Icon aria-hidden="true" />
+                          </IdentityGlyph>
+                        ),
+                      )}
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="right">{label}</TooltipContent>

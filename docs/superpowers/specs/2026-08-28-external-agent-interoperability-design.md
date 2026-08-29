@@ -124,6 +124,7 @@ export interface ExternalRef {
 
 export interface SurfaceTypeFamily<P extends AgentSurfaceProvider> {
   readonly provider: P;
+  readonly verification: object;
   readonly install: object;
   readonly webhook: object;
   readonly workspaceRef: ExternalRef;
@@ -154,6 +155,7 @@ schema succeeds.
 
 ```ts
 export interface LinearSurfaceTypes extends SurfaceTypeFamily<'linear'> {
+  readonly verification: LinearAgentVerification;
   readonly install: LinearAgentInstall;
   readonly webhook: LinearAgentWebhook;
   readonly workspaceRef: LinearWorkspaceRef;
@@ -165,6 +167,7 @@ export interface LinearSurfaceTypes extends SurfaceTypeFamily<'linear'> {
 }
 
 export interface SlackSurfaceTypes extends SurfaceTypeFamily<'slack'> {
+  readonly verification: SlackAgentVerification;
   readonly install: SlackAgentInstall;
   readonly webhook: SlackAgentEvent;
   readonly workspaceRef: SlackTeamRef;
@@ -176,6 +179,7 @@ export interface SlackSurfaceTypes extends SurfaceTypeFamily<'slack'> {
 }
 
 export interface GitHubSurfaceTypes extends SurfaceTypeFamily<'github'> {
+  readonly verification: GitHubAgentVerification;
   readonly install: GitHubAgentInstall;
   readonly webhook: GitHubAgentWebhook;
   readonly workspaceRef: GitHubInstallationRef;
@@ -187,6 +191,7 @@ export interface GitHubSurfaceTypes extends SurfaceTypeFamily<'github'> {
 }
 
 export interface JiraA2ASurfaceTypes extends SurfaceTypeFamily<'jira_a2a'> {
+  readonly verification: JiraA2AVerification;
   readonly install: JiraA2AInstall;
   readonly webhook: A2ARequest;
   readonly workspaceRef: JiraSiteRef;
@@ -218,7 +223,10 @@ export interface AgentSurfaceAdapter<P extends AgentSurfaceProvider> {
   readonly provider: P;
   readonly capabilities: AgentSurfaceCapabilities;
 
-  verify(input: RawWebhook): Promise<VerifiedWebhook<SurfaceTypes<P>['webhook']>>;
+  verify(
+    input: RawWebhook,
+    verification: SurfaceTypes<P>['verification'],
+  ): Promise<VerifiedWebhook<SurfaceTypes<P>['webhook']>>;
 
   normalize(
     input: VerifiedWebhook<SurfaceTypes<P>['webhook']>,

@@ -8,6 +8,7 @@ import type * as DbModule from '@docket/db';
 import { assertDefined } from '@docket/test-utils';
 
 import type * as RelayModule from '../../src/lib/external-agent-relay';
+import type * as SessionModule from '../../src/lib/external-agent-session';
 import type * as DefaultAgentModule from '../../src/lib/default-agent';
 
 const MIGRATIONS = resolve(import.meta.dirname, '../../../../packages/db/drizzle');
@@ -15,6 +16,7 @@ let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let relayExternalAgentActivity!: typeof RelayModule.relayExternalAgentActivity;
 let sweepExternalAgentRelays!: typeof RelayModule.sweepExternalAgentRelays;
+let createExternalAgentSession!: typeof SessionModule.createExternalAgentSession;
 let ensureDefaultAgent!: typeof DefaultAgentModule.ensureDefaultAgent;
 
 beforeAll(async () => {
@@ -28,6 +30,7 @@ beforeAll(async () => {
   await migrate(db as never, { migrationsFolder: MIGRATIONS });
   ({ relayExternalAgentActivity, sweepExternalAgentRelays } =
     await import('../../src/lib/external-agent-relay'));
+  ({ createExternalAgentSession } = await import('../../src/lib/external-agent-session'));
   ({ ensureDefaultAgent } = await import('../../src/lib/default-agent'));
 });
 
@@ -65,6 +68,37 @@ async function seedRelaySession(): Promise<{ orgId: string; sessionId: string }>
 }
 
 describe('external agent relay', () => {
+  it('does not publish the initial provider prompt back as an Athena response', async () => {
+    const suffix = Math.random().toString(36).slice(2, 9);
+    const [org] = await db
+      .insert(schema.organization)
+      .values({ name: `Initial prompt ${suffix}`, slug: `initial-prompt-${suffix}` })
+      .returning({ id: schema.organization.id });
+    const orgId = assertDefined(org).id;
+    const [human] = await db
+      .insert(schema.actor)
+      .values({ organizationId: orgId, kind: 'human', displayName: 'Ada' })
+      .returning({ id: schema.actor.id });
+    const created = await createExternalAgentSession(orgId, {
+      provider: 'linear',
+      createdByActorId: assertDefined(human).id,
+      initiatorActorId: assertDefined(human).id,
+      externalActorId: 'linear-user-initial',
+      trigger: 'mention',
+      prompt: 'Please plan this issue.',
+      externalSessionId: `external-${suffix}`,
+      externalWorkspaceId: `workspace-${suffix}`,
+      externalWorkItemId: `issue-${suffix}`,
+      taskId: null,
+    });
+    const publish = vi.fn<RelayModule.ExternalAgentPublisher>().mockResolvedValue({ id: 'ok' });
+
+    await relayExternalAgentActivity(created.id, new Date(), { publish });
+
+    expect(publish).toHaveBeenCalledTimes(1);
+    expect(publish).toHaveBeenCalledWith(expect.objectContaining({ kind: 'prepare_session' }));
+  });
+
   it('renders an unresolved Linear identity as a targeted signed authentication control', async () => {
     const seeded = await seedRelaySession();
     const now = new Date('2026-08-28T12:00:00.000Z');

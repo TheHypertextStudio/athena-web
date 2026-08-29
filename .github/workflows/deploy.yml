@@ -112,7 +112,7 @@ jobs:
           flags: >-
             --allow-unauthenticated
             --ingress=all
-            --min-instances=0
+            --min-instances=${{ vars.LINEAR_AGENT_ENABLED == 'true' && '1' || '0' }}
             --max-instances=10
             --memory=512Mi
             --cpu=1

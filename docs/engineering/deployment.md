@@ -17,7 +17,10 @@ after formatting, lint, types, tests, build, and browser E2E are green.
 
 **Passkey RP ID:** `hypertext.studio` — the shared registrable suffix across the production web and admin hosts.
 
-All services: `--min-instances=0` (scale to zero), `--max-instances=10`, `--memory=512Mi`.
+All services use `--max-instances=10` and `--memory=512Mi`. Services scale to zero by default.
+`docket-api` keeps one warm instance while `LINEAR_AGENT_ENABLED=true` so Linear's five-second
+[webhook acknowledgement and first-response deadlines](https://linear.app/developers/agent-interaction)
+do not depend on a cold start.
 
 ---
 

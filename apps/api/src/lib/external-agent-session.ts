@@ -72,7 +72,7 @@ export async function createExternalAgentSession(
       sessionId: created.id,
       organizationId,
       type: 'response',
-      body: { text: input.prompt },
+      body: { text: input.prompt, author: 'user' },
     });
     if (!input.initiatorActorId) {
       await tx.insert(sessionActivity).values({

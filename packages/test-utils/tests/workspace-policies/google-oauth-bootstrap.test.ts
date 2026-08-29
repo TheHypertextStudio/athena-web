@@ -275,6 +275,9 @@ describe('guided integration bootstrap contracts', () => {
     expect(workflow).toContain(
       'LINEAR_AGENT_ENABLED: "${{ vars.LINEAR_AGENT_ENABLED || \'false\' }}"',
     );
+    expect(workflow).toContain(
+      "--min-instances=${{ vars.LINEAR_AGENT_ENABLED == 'true' && '1' || '0' }}",
+    );
     // Every job in deploy.yml reaches production, so every one must be bound to the `production`
     // environment — that binding is what applies the environment's protection rules and scopes the
     // secrets it may read. Counted against the number of jobs rather than pinned to a literal, so

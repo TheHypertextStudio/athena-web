@@ -7,6 +7,7 @@ import {
   type WorkspaceSettingsOut,
 } from '@docket/types';
 import { Field, Select, Skeleton } from '@docket/ui/primitives';
+import { useQueryClient } from '@tanstack/react-query';
 import { LoadFailure } from '@/components/settings/load-failure';
 import { useTypedRoute } from '@/lib/app-location';
 import { useEffect, useState, type JSX } from 'react';
@@ -17,6 +18,7 @@ import { api } from '@/lib/api';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useLiveApiQuery } from '@/lib/query';
 import { SettingsSectionPage } from '@/components/settings/settings-section-page';
+import { invalidateWorkTargetQueries } from '@/lib/work-target-invalidation';
 
 /** The estimation scales offered, in picker order. */
 const ESTIMATION_SCALE_ORDER: readonly EstimationScale[] = [
@@ -45,6 +47,7 @@ export default function WorkStructureSettingsPage(): JSX.Element {
   const {
     params: { orgId },
   } = useTypedRoute('/orgs/[orgId]/settings/work-structure');
+  const queryClient = useQueryClient();
   const { canManage, loading: permissionLoading } = useCanManageOrg(orgId);
   const key = queryKeys.settings(orgId, 'work-structure');
   const settingsQ = useLiveApiQuery(
@@ -81,7 +84,13 @@ export default function WorkStructureSettingsPage(): JSX.Element {
           }),
         'Could not save work structure settings.',
       ),
-    invalidateKeys: [key, queryKeys.initiatives(orgId)],
+    invalidateKeys: [key],
+    onSettled: () => {
+      void invalidateWorkTargetQueries(queryClient, {
+        target: 'initiative',
+        ownerOrganizationId: orgId,
+      });
+    },
   });
 
   const saveScale = useApiMutation<WorkspaceSettingsOut, EstimationScale>({

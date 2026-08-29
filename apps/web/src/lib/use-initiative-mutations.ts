@@ -20,6 +20,7 @@ import { useMemo } from 'react';
 import { api } from './api';
 import { userErrorMessage } from './problem';
 import { queryKeys, unwrap, useApiMutation } from './query';
+import { invalidateWorkTargetQueries } from './work-target-invalidation';
 
 /** InitiativePatch describes the use initiative mutations data contract shared by the hook or component. */
 export interface InitiativePatch {
@@ -119,17 +120,19 @@ export function useInitiativeMutations(
     () => queryKeys.initiativeAggregate(orgId, initiativeId),
     [orgId, initiativeId],
   );
-  const timelineKey = useMemo(() => [...detailKey, 'timeline'] as const, [detailKey]);
-  const labelsKey = useMemo(() => [...detailKey, 'labels'] as const, [detailKey]);
-  const relationshipKey = useMemo(
-    () => [...queryKeys.initiative(orgId, initiativeId), 'relationship-sections'] as const,
-    [orgId, initiativeId],
-  );
-  const overviewKey = useMemo(() => queryKeys.initiatives(orgId), [orgId]);
-  const associationKeys = useMemo(
-    () => [timelineKey, detailKey, relationshipKey, overviewKey] as const,
-    [timelineKey, detailKey, relationshipKey, overviewKey],
-  );
+  const invalidateInitiativeTarget = (): void => {
+    void invalidateWorkTargetQueries(queryClient, {
+      target: 'initiative',
+      ownerOrganizationId: orgId,
+    });
+  };
+  const invalidateAssociationTargets = (target: 'program' | 'project'): void => {
+    invalidateInitiativeTarget();
+    void invalidateWorkTargetQueries(queryClient, {
+      target,
+      ownerOrganizationId: orgId,
+    });
+  };
 
   const patchDetail = (
     apply: (initiative: InitiativeDetail) => InitiativeDetail,
@@ -177,12 +180,8 @@ export function useInitiativeMutations(
     // The Resources tab's derived sections are a projection of this record's prose, and the query
     // cache survives a reload — so without this, adding a mention to the description leaves that
     // tab showing the pre-edit answer until the staleness tier happens to expire.
-    invalidateKeys: [
-      detailKey,
-      labelsKey,
-      overviewKey,
-      queryKeys.entityMentions(orgId, 'initiative', initiativeId),
-    ],
+    invalidateKeys: [queryKeys.entityMentions(orgId, 'initiative', initiativeId)],
+    onSettled: invalidateInitiativeTarget,
   });
 
   const linkProgramM = useApiMutation({
@@ -195,7 +194,9 @@ export function useInitiativeMutations(
           }),
         `Could not link the ${programNounLower}.`,
       ),
-    invalidateKeys: associationKeys,
+    onSettled: () => {
+      invalidateAssociationTargets('program');
+    },
   });
 
   const unlinkProgramM = useApiMutation({
@@ -207,7 +208,9 @@ export function useInitiativeMutations(
           }),
         `Could not unlink the ${programNounLower}.`,
       ),
-    invalidateKeys: associationKeys,
+    onSettled: () => {
+      invalidateAssociationTargets('program');
+    },
   });
 
   const linkProjectM = useApiMutation({
@@ -220,7 +223,9 @@ export function useInitiativeMutations(
           }),
         `Could not link the ${projectNounLower}.`,
       ),
-    invalidateKeys: associationKeys,
+    onSettled: () => {
+      invalidateAssociationTargets('project');
+    },
   });
 
   const unlinkProjectM = useApiMutation({
@@ -232,7 +237,9 @@ export function useInitiativeMutations(
           }),
         `Could not unlink the ${projectNounLower}.`,
       ),
-    invalidateKeys: associationKeys,
+    onSettled: () => {
+      invalidateAssociationTargets('project');
+    },
   });
 
   return {

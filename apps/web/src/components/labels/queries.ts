@@ -9,8 +9,8 @@
  * rule matters here more than usual: each surface imports a definition from this module rather
  * than reaching for `api.v1.*` itself.
  *
- * Every write invalidates both label reads plus the entity lists, because a label rename or merge
- * changes what is rendered on rows that were never themselves edited.
+ * Every write invalidates label metadata plus each work target collection, because a label rename
+ * or merge changes rows that were never themselves edited.
  *
  * @see `docs/engineering/specs/data-layer.md` for the query-definition standard.
  */
@@ -21,9 +21,13 @@ import type {
   LabelOut,
   LabelUpdate,
 } from '@docket/types';
+import { type QueryClient, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, STALE, unwrap, useApiMutation } from '@/lib/query';
+import { invalidateWorkTargetQueries } from '@/lib/work-target-invalidation';
+
+const LABEL_WORK_TARGETS = ['task', 'project', 'program', 'initiative'] as const;
 
 /** Every label in the org — the bare list pickers read. */
 export function labelsDef(orgId: string) {
@@ -63,63 +67,76 @@ export function labelGroupsDef(orgId: string) {
 }
 
 /**
- * Everything a label write can change.
+ * Label and group metadata that every label write can change.
  *
  * @remarks
- * Renaming, recolouring, or merging a label changes how it renders on every task, project,
- * initiative, program, and library resource carrying it — rows nobody edited. Invalidating only
- * the label reads would leave those stale until something else happened to refetch them.
+ * Work target collections refresh through {@link invalidateLabelWorkTargets}; these keys cover the
+ * label pickers, settings counts, and group controls that share the same metadata.
  */
-function labelWriteKeys(orgId: string): readonly (readonly unknown[])[] {
-  return [
-    queryKeys.labels(orgId),
-    queryKeys.labelsWithCounts(orgId),
-    queryKeys.labelGroups(orgId),
-    queryKeys.tasks(orgId),
-    queryKeys.projects(orgId),
-    queryKeys.initiatives(orgId),
-    queryKeys.programs(orgId),
-  ];
+function labelMetadataKeys(orgId: string): readonly (readonly unknown[])[] {
+  return [queryKeys.labels(orgId), queryKeys.labelsWithCounts(orgId), queryKeys.labelGroups(orgId)];
+}
+
+function invalidateLabelWorkTargets(queryClient: QueryClient, orgId: string): void {
+  for (const target of LABEL_WORK_TARGETS) {
+    void invalidateWorkTargetQueries(queryClient, {
+      target,
+      ownerOrganizationId: orgId,
+    });
+  }
 }
 
 /** Create a label. Always workspace-wide; narrowing to a team is a later curation step. */
 export function useCreateLabel(orgId: string) {
+  const queryClient = useQueryClient();
   return useApiMutation({
     mutationFn: (input: LabelCreate) =>
       unwrap(
         () => api.v1.orgs[':orgId'].labels.$post({ param: { orgId }, json: input }),
         'Could not create the label.',
       ),
-    invalidateKeys: labelWriteKeys(orgId),
+    invalidateKeys: labelMetadataKeys(orgId),
+    onSettled: () => {
+      invalidateLabelWorkTargets(queryClient, orgId);
+    },
   });
 }
 
 /** Rename, recolour, regroup, or re-scope a label. Needs `manage`. */
 export function useUpdateLabel(orgId: string) {
+  const queryClient = useQueryClient();
   return useApiMutation({
     mutationFn: ({ id, ...patch }: LabelUpdate & { id: string }) =>
       unwrap(
         () => api.v1.orgs[':orgId'].labels[':id'].$patch({ param: { orgId, id }, json: patch }),
         'Could not save the label.',
       ),
-    invalidateKeys: labelWriteKeys(orgId),
+    invalidateKeys: labelMetadataKeys(orgId),
+    onSettled: () => {
+      invalidateLabelWorkTargets(queryClient, orgId);
+    },
   });
 }
 
 /** Delete a label. Its attachments cascade away; no work is deleted. */
 export function useDeleteLabel(orgId: string) {
+  const queryClient = useQueryClient();
   return useApiMutation({
     mutationFn: (id: string) =>
       unwrap(
         () => api.v1.orgs[':orgId'].labels[':id'].$delete({ param: { orgId, id } }),
         'Could not delete the label.',
       ),
-    invalidateKeys: labelWriteKeys(orgId),
+    invalidateKeys: labelMetadataKeys(orgId),
+    onSettled: () => {
+      invalidateLabelWorkTargets(queryClient, orgId);
+    },
   });
 }
 
 /** Dissolve one label into another, moving every attachment onto the survivor. */
 export function useMergeLabel(orgId: string) {
+  const queryClient = useQueryClient();
   return useApiMutation({
     mutationFn: ({ id, intoId }: { id: string; intoId: string }) =>
       unwrap(
@@ -130,24 +147,32 @@ export function useMergeLabel(orgId: string) {
           }),
         'Could not merge the labels.',
       ),
-    invalidateKeys: labelWriteKeys(orgId),
+    invalidateKeys: labelMetadataKeys(orgId),
+    onSettled: () => {
+      invalidateLabelWorkTargets(queryClient, orgId);
+    },
   });
 }
 
 /** Create a label group — a named dimension whose members may be mutually exclusive. */
 export function useCreateLabelGroup(orgId: string) {
+  const queryClient = useQueryClient();
   return useApiMutation({
     mutationFn: (input: LabelGroupCreate) =>
       unwrap(
         () => api.v1.orgs[':orgId'].labels.groups.$post({ param: { orgId }, json: input }),
         'Could not create the group.',
       ),
-    invalidateKeys: labelWriteKeys(orgId),
+    invalidateKeys: labelMetadataKeys(orgId),
+    onSettled: () => {
+      invalidateLabelWorkTargets(queryClient, orgId);
+    },
   });
 }
 
 /** Rename a group or toggle its exclusivity. */
 export function useUpdateLabelGroup(orgId: string) {
+  const queryClient = useQueryClient();
   return useApiMutation({
     mutationFn: ({ id, ...patch }: LabelGroupUpdate & { id: string }) =>
       unwrap(
@@ -158,19 +183,26 @@ export function useUpdateLabelGroup(orgId: string) {
           }),
         'Could not save the group.',
       ),
-    invalidateKeys: labelWriteKeys(orgId),
+    invalidateKeys: labelMetadataKeys(orgId),
+    onSettled: () => {
+      invalidateLabelWorkTargets(queryClient, orgId);
+    },
   });
 }
 
 /** Dissolve a group. Its labels survive and become ungrouped. */
 export function useDeleteLabelGroup(orgId: string) {
+  const queryClient = useQueryClient();
   return useApiMutation({
     mutationFn: (id: string) =>
       unwrap(
         () => api.v1.orgs[':orgId'].labels.groups[':id'].$delete({ param: { orgId, id } }),
         'Could not delete the group.',
       ),
-    invalidateKeys: labelWriteKeys(orgId),
+    invalidateKeys: labelMetadataKeys(orgId),
+    onSettled: () => {
+      invalidateLabelWorkTargets(queryClient, orgId);
+    },
   });
 }
 

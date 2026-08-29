@@ -1,3 +1,28 @@
+import type { ViewTarget } from '@docket/work/view-contract';
+
+/**
+ * Return the collection key that owns one work target.
+ *
+ * @param orgId - The workspace used to read the collection.
+ * @param target - The work entity whose collection owns the query.
+ * @returns The target's workspace-scoped collection prefix.
+ */
+export function workTargetCollectionKey(
+  orgId: string,
+  target: ViewTarget,
+): readonly ['org', string, 'tasks' | 'projects' | 'programs' | 'initiatives'] {
+  switch (target) {
+    case 'task':
+      return ['org', orgId, 'tasks'];
+    case 'project':
+      return ['org', orgId, 'projects'];
+    case 'program':
+      return ['org', orgId, 'programs'];
+    case 'initiative':
+      return ['org', orgId, 'initiatives'];
+  }
+}
+
 /**
  * Org-scoped, hierarchical TanStack Query key convention.
  *
@@ -120,18 +145,34 @@ export const queryKeys = {
     ['org', orgId, 'work-view-default', target] as const,
   workView: (
     orgId: string,
-    target: string,
+    target: ViewTarget,
     instanceKey: string,
     requestKey: string,
     timezone: string,
-  ) => ['org', orgId, 'work-view', target, instanceKey, timezone, requestKey] as const,
+  ) =>
+    [
+      ...workTargetCollectionKey(orgId, target),
+      'work-view',
+      target,
+      instanceKey,
+      timezone,
+      requestKey,
+    ] as const,
   workViewFacets: (
     orgId: string,
-    target: string,
+    target: ViewTarget,
     instanceKey: string,
     requestKey: string,
     timezone: string,
-  ) => ['org', orgId, 'work-view-facets', target, instanceKey, timezone, requestKey] as const,
+  ) =>
+    [
+      ...workTargetCollectionKey(orgId, target),
+      'work-view-facets',
+      target,
+      instanceKey,
+      timezone,
+      requestKey,
+    ] as const,
   // The settings page reads every kind at once and each composer picker reads one, so the kind is
   // part of the key: the four picker reads cache apart, and the coarse `templates(orgId)` prefix
   // invalidates all of them plus the settings list after any write.

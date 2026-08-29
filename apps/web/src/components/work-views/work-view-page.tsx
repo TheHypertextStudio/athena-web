@@ -195,8 +195,8 @@ export function WorkViewPage<TTarget extends ViewTarget>({
     search,
     savedView: selectedSavedView as Extract<SavedWorkViewOutValue, { target: TTarget }> | null,
   });
-  const orderMutation = useWorkViewOrder(organizationId);
-  const projectTimeline = useProjectTimelineMutations(organizationId);
+  const orderMutation = useWorkViewOrder();
+  const projectTimeline = useProjectTimelineMutations();
   // The target discriminator was validated by `useWorkView`. TypeScript loses that correlation
   // when it indexes the four response variants through a generic target.
   const rows = (controller.response?.rows ?? []) as unknown as readonly WorkViewRowFor<TTarget>[];
@@ -249,6 +249,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
       if (path.length === 0) return;
       orderMutation.mutate({
         target,
+        organizationId,
         itemId,
         groupField: controller.definition.arrangement.groupBy,
         sourceGroupValue: null,
@@ -376,10 +377,13 @@ export function WorkViewPage<TTarget extends ViewTarget>({
         }}
         onActivate={openRow}
         onDrop={(drop) => {
+          const row = rows.find((candidate) => candidate.id === drop.item.id);
+          if (row === undefined) return;
           const groupValue = drop.destinationPath[0] ?? null;
           const sourceGroupValue = drop.sourcePath[0] ?? null;
           orderMutation.mutate({
             target,
+            organizationId: row.organizationId,
             itemId: drop.item.id,
             groupField: controller.definition.arrangement.groupBy,
             sourceGroupValue: sourceGroupValue === '__empty__' ? null : sourceGroupValue,
@@ -413,7 +417,6 @@ export function WorkViewPage<TTarget extends ViewTarget>({
   } else if (target === 'project' && layout === 'timeline') {
     content = (
       <ProjectTimelineAdapter
-        organizationId={organizationId}
         rows={rows as unknown as readonly ProjectViewRow[]}
         density={controller.definition.presentation.density}
         canSchedule
@@ -430,7 +433,6 @@ export function WorkViewPage<TTarget extends ViewTarget>({
   } else if (target === 'initiative' && layout === 'timeline') {
     content = (
       <InitiativeTimeline
-        organizationId={organizationId}
         rows={rows as unknown as readonly InitiativeViewRow[]}
         density={controller.definition.presentation.density}
         onActivate={(id) => {

@@ -12,9 +12,11 @@ import type {
   WorkStatusReorder,
   WorkStatusUpdate,
 } from '@docket/types';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, STALE, unwrap, useApiMutation } from '@/lib/query';
+import { invalidateWorkTargetQueries } from '@/lib/work-target-invalidation';
 
 /**
  * Every status set in the workspace, resolved for a team when one is given.
@@ -42,39 +44,58 @@ export function statusSetsDef(orgId: string, teamId?: string) {
 }
 
 /**
- * Everything a status write can change.
+ * Status metadata that every status write can change.
  *
  * @remarks
- * Renaming or recategorizing a status changes how every task, project, program, and initiative
- * carrying it renders — rows nobody edited. Invalidating only the status read would leave those
- * stale until something else happened to refetch them.
+ * The affected work collection refreshes through {@link useStatusTargetInvalidation}; this key
+ * covers the workspace and team status-set reads that share the metadata.
  */
-function statusWriteKeys(orgId: string): readonly (readonly unknown[])[] {
-  return [
-    queryKeys.statusSets(orgId),
-    queryKeys.tasks(orgId),
-    queryKeys.projects(orgId),
-    queryKeys.programs(orgId),
-    queryKeys.initiatives(orgId),
-  ];
+function statusMetadataKeys(orgId: string): readonly (readonly unknown[])[] {
+  return [queryKeys.statusSets(orgId)];
+}
+
+function useStatusTargetInvalidation(orgId: string): (target: WorkStatusEntityType) => void {
+  const queryClient = useQueryClient();
+  return (target) => {
+    void invalidateWorkTargetQueries(queryClient, {
+      target,
+      ownerOrganizationId: orgId,
+    });
+  };
+}
+
+type StatusUpdateMutation = WorkStatusUpdate & {
+  statusId: string;
+  entityType: WorkStatusEntityType;
+};
+
+interface StatusDeleteMutation {
+  statusId: string;
+  remapTo: string;
+  entityType: WorkStatusEntityType;
 }
 
 /** Add a status to one of the workspace's sets. */
 export function useCreateStatus(orgId: string) {
+  const invalidateTarget = useStatusTargetInvalidation(orgId);
   return useApiMutation({
     mutationFn: (input: WorkStatusCreate) =>
       unwrap(
         () => api.v1.orgs[':orgId'].statuses.$post({ param: { orgId }, json: input }),
         'Could not add the status.',
       ),
-    invalidateKeys: statusWriteKeys(orgId),
+    invalidateKeys: statusMetadataKeys(orgId),
+    onSettled: (_data, _error, input) => {
+      invalidateTarget(input.entityType);
+    },
   });
 }
 
 /** Rename a status, rewrite what it means, move its category, or make it the default. */
 export function useUpdateStatus(orgId: string) {
+  const invalidateTarget = useStatusTargetInvalidation(orgId);
   return useApiMutation({
-    mutationFn: ({ statusId, ...patch }: WorkStatusUpdate & { statusId: string }) =>
+    mutationFn: ({ statusId, entityType: _entityType, ...patch }: StatusUpdateMutation) =>
       unwrap(
         () =>
           api.v1.orgs[':orgId'].statuses[':statusId'].$patch({
@@ -83,26 +104,34 @@ export function useUpdateStatus(orgId: string) {
           }),
         'Could not save the status.',
       ),
-    invalidateKeys: statusWriteKeys(orgId),
+    invalidateKeys: statusMetadataKeys(orgId),
+    onSettled: (_updated, _error, input) => {
+      invalidateTarget(input.entityType);
+    },
   });
 }
 
 /** Set the order a status set reads in. */
 export function useReorderStatuses(orgId: string) {
+  const invalidateTarget = useStatusTargetInvalidation(orgId);
   return useApiMutation({
     mutationFn: (input: WorkStatusReorder) =>
       unwrap(
         () => api.v1.orgs[':orgId'].statuses.reorder.$post({ param: { orgId }, json: input }),
         'Could not reorder the statuses.',
       ),
-    invalidateKeys: statusWriteKeys(orgId),
+    invalidateKeys: statusMetadataKeys(orgId),
+    onSettled: (_data, _error, input) => {
+      invalidateTarget(input.entityType);
+    },
   });
 }
 
 /** Delete a status, moving the work on it to the replacement. */
 export function useDeleteStatus(orgId: string) {
+  const invalidateTarget = useStatusTargetInvalidation(orgId);
   return useApiMutation({
-    mutationFn: ({ statusId, remapTo }: { statusId: string; remapTo: string }) =>
+    mutationFn: ({ statusId, remapTo }: StatusDeleteMutation) =>
       unwrap(
         () =>
           api.v1.orgs[':orgId'].statuses[':statusId'].$delete({
@@ -111,12 +140,16 @@ export function useDeleteStatus(orgId: string) {
           }),
         'Could not delete the status.',
       ),
-    invalidateKeys: statusWriteKeys(orgId),
+    invalidateKeys: statusMetadataKeys(orgId),
+    onSettled: (_deleted, _error, input) => {
+      invalidateTarget(input.entityType);
+    },
   });
 }
 
 /** Give a team its own task statuses, copied from the workspace's. */
 export function useForkTeamStatuses(orgId: string) {
+  const invalidateTarget = useStatusTargetInvalidation(orgId);
   return useApiMutation({
     mutationFn: (teamId: string) =>
       unwrap(
@@ -124,12 +157,16 @@ export function useForkTeamStatuses(orgId: string) {
           api.v1.orgs[':orgId'].teams[':teamId'].statuses.fork.$post({ param: { orgId, teamId } }),
         'Could not customize the statuses for this team.',
       ),
-    invalidateKeys: statusWriteKeys(orgId),
+    invalidateKeys: statusMetadataKeys(orgId),
+    onSettled: () => {
+      invalidateTarget('task');
+    },
   });
 }
 
 /** Return a team to the workspace's task statuses. */
 export function useResetTeamStatuses(orgId: string) {
+  const invalidateTarget = useStatusTargetInvalidation(orgId);
   return useApiMutation({
     mutationFn: (teamId: string) =>
       unwrap(
@@ -139,7 +176,10 @@ export function useResetTeamStatuses(orgId: string) {
           }),
         'Could not return this team to the workspace statuses.',
       ),
-    invalidateKeys: statusWriteKeys(orgId),
+    invalidateKeys: statusMetadataKeys(orgId),
+    onSettled: () => {
+      invalidateTarget('task');
+    },
   });
 }
 

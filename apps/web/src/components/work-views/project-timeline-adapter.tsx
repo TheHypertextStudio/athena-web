@@ -16,6 +16,11 @@ import {
 import { parseDate } from '@/components/timeline/time-scale';
 import { useTimelineViewport } from '@/components/timeline/use-timeline-viewport';
 
+import type {
+  ProjectTimelineScheduleChange,
+  ProjectTimelineSubject,
+} from './use-project-timeline-mutations';
+
 function tint(health: ProjectViewRow['health']): TimelineTint {
   if (health === 'on_track') return 'positive';
   if (health === 'at_risk') return 'caution';
@@ -24,14 +29,12 @@ function tint(health: ProjectViewRow['health']): TimelineTint {
 }
 
 /** Build the shared timeline projection for a typed Project view row. */
-export function buildProjectViewTimelineCatalog(
-  organizationId: string,
-): TimelineCatalog<ProjectViewRow> {
+export function buildProjectViewTimelineCatalog(): TimelineCatalog<ProjectViewRow> {
   return {
     id: (row) => row.id,
     label: (row) => row.name,
     sublabel: () => null,
-    href: (row) => `/orgs/${organizationId}/projects/${row.id}`,
+    href: (row) => `/orgs/${row.organizationId}/projects/${row.id}`,
     span: (row) => resolveSpan(parseDate(row.startDate), parseDate(row.targetDate)),
     markers: (row) =>
       row.milestones.flatMap((milestone) => {
@@ -53,12 +56,11 @@ export function buildProjectViewTimelineCatalog(
 
 /** Props for the Project work-view timeline adapter. */
 export interface ProjectTimelineAdapterProps {
-  readonly organizationId: string;
   readonly rows: readonly ProjectViewRow[];
   readonly density: 'comfortable' | 'compact';
   readonly canSchedule: boolean;
-  readonly onReschedule: (id: string, span: TimelineSpan) => void;
-  readonly onApplyCascade: (changes: readonly ScheduleChange[]) => void;
+  readonly onReschedule: (project: ProjectTimelineSubject, span: TimelineSpan) => void;
+  readonly onApplyCascade: (changes: readonly ProjectTimelineScheduleChange[]) => void;
   readonly applyingCascade: boolean;
   readonly onActivate: (id: string) => void;
   readonly onPrefetch: (id: string) => void;
@@ -66,7 +68,6 @@ export interface ProjectTimelineAdapterProps {
 
 /** Render typed Project rows through the existing timeline engine. */
 export function ProjectTimelineAdapter({
-  organizationId,
   rows,
   density,
   canSchedule,
@@ -76,7 +77,7 @@ export function ProjectTimelineAdapter({
   onActivate,
   onPrefetch,
 }: ProjectTimelineAdapterProps): JSX.Element {
-  const catalog = buildProjectViewTimelineCatalog(organizationId);
+  const catalog = buildProjectViewTimelineCatalog();
   const applied: AppliedView<ProjectViewRow> = { rows, groups: null };
   const spans = rows.flatMap((row) => {
     const span = catalog.span(row);
@@ -94,8 +95,26 @@ export function ProjectTimelineAdapter({
       pluralNoun="Projects"
       canSchedule={canSchedule}
       fullBleed
-      onReschedule={onReschedule}
-      onApplyCascade={onApplyCascade}
+      onReschedule={(id, span) => {
+        const row = rows.find((candidate) => candidate.id === id);
+        if (row !== undefined) {
+          onReschedule({ id, organizationId: row.organizationId }, span);
+        }
+      }}
+      onApplyCascade={(changes: readonly ScheduleChange[]) => {
+        const ownedChanges = changes.flatMap((change) => {
+          const row = rows.find((candidate) => candidate.id === change.id);
+          return row === undefined
+            ? []
+            : [
+                {
+                  ...change,
+                  organizationId: row.organizationId,
+                } satisfies ProjectTimelineScheduleChange,
+              ];
+        });
+        onApplyCascade(ownedChanges);
+      }}
       applyingCascade={applyingCascade}
       onActivate={onActivate}
       onPrefetch={onPrefetch}

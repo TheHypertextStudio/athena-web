@@ -2,11 +2,12 @@
 
 /** Attach/detach mutations for filing Projects under a Program, from the Program's own page. */
 import type { ProjectOut } from '@docket/types';
-import type { QueryKey } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { api } from './api';
 import { userErrorMessage } from './problem';
-import { queryKeys, unwrap, useApiMutation } from './query';
+import { unwrap, useApiMutation } from './query';
+import { invalidateWorkTargetQueries } from './work-target-invalidation';
 
 /** Attach/detach actions exposed to the Program's Projects tab. */
 export interface ProgramProjectsMutations {
@@ -26,14 +27,19 @@ export interface ProgramProjectsMutations {
  *
  * @param orgId - The active org.
  * @param programId - The Program Projects are being filed under/out of.
- * @param programDetailKey - The program-detail query key to invalidate on settle.
  */
-export function useProgramProjects(
-  orgId: string,
-  programId: string,
-  programDetailKey: QueryKey,
-): ProgramProjectsMutations {
-  const invalidateKeys = [queryKeys.projects(orgId), programDetailKey];
+export function useProgramProjects(orgId: string, programId: string): ProgramProjectsMutations {
+  const queryClient = useQueryClient();
+  const invalidateTargets = (): void => {
+    void invalidateWorkTargetQueries(queryClient, {
+      target: 'project',
+      ownerOrganizationId: orgId,
+    });
+    void invalidateWorkTargetQueries(queryClient, {
+      target: 'program',
+      ownerOrganizationId: orgId,
+    });
+  };
 
   const attachMutation = useApiMutation<ProjectOut, string>({
     mutationFn: (projectId) =>
@@ -45,7 +51,7 @@ export function useProgramProjects(
           }),
         'Could not add the project.',
       ),
-    invalidateKeys,
+    onSettled: invalidateTargets,
   });
 
   const detachMutation = useApiMutation<ProjectOut, string>({
@@ -58,7 +64,7 @@ export function useProgramProjects(
           }),
         'Could not remove the project.',
       ),
-    invalidateKeys,
+    onSettled: invalidateTargets,
   });
 
   return {

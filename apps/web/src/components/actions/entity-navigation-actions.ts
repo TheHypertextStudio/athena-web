@@ -4,11 +4,12 @@
 import { ArrowRight, Flag, Layers, Tag, User, Users, Workflow } from '@docket/ui/icons';
 import { ProgramUpdate, ProjectUpdate } from '@docket/types';
 import type { RelationEndpoint } from '@docket/work/relation-contract';
-import { useQueryClient } from '@tanstack/react-query';
+import { type QueryClient, useQueryClient } from '@tanstack/react-query';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useMemo } from 'react';
 
 import { copyObjectAction } from '@/components/actions/copy-object-action';
+import { settleRelationExecution } from '@/components/actions/settle-relation-execution';
 import { useCopyOutcome } from '@/components/clipboard';
 import { usePickerOverlay } from '@/components/pickers/picker-overlay';
 import {
@@ -28,7 +29,8 @@ import {
 } from '@/lib/actions';
 import { api } from '@/lib/api';
 import { UserFacingError } from '@/lib/problem';
-import { queryKeys, unwrap } from '@/lib/query';
+import { unwrap } from '@/lib/query';
+import { invalidateWorkTargetQueries } from '@/lib/work-target-invalidation';
 
 const PROJECT_RELATION_RESPONSIVENESS = {
   // The shared relation adapter owns painted and spoken feedback for these commands.
@@ -38,6 +40,20 @@ const PROJECT_RELATION_RESPONSIVENESS = {
 const PROGRAM_RELATION_RESPONSIVENESS = {
   ownership: 'autonomous',
 } as const;
+
+type InvalidatedWorkTarget = 'project' | 'program' | 'initiative';
+
+function invalidateOwnerTargetPairs(
+  queryClient: QueryClient,
+  pairs: ReadonlyMap<string, { readonly target: InvalidatedWorkTarget; readonly owner: string }>,
+): void {
+  for (const pair of pairs.values()) {
+    void invalidateWorkTargetQueries(queryClient, {
+      target: pair.target,
+      ownerOrganizationId: pair.owner,
+    });
+  }
+}
 
 /**
  * The first object's detail path, only when it is the expected kind.
@@ -49,11 +65,7 @@ const PROGRAM_RELATION_RESPONSIVENESS = {
 function target(context: ActionContext, kind: ObjectKind): string | null {
   const object = context.objects[0];
   if (object?.kind !== kind) return null;
-  return objectHref(
-    object.organizationId === null && context.organizationId !== null
-      ? { ...object, organizationId: context.organizationId }
-      : object,
-  );
+  return objectHref(object);
 }
 
 /** Register the common Open action for Project, Program, Cycle, and Team objects. */
@@ -74,12 +86,6 @@ export function useRegisterEntityNavigationActions(): void {
         throw error;
       }
     };
-    const refreshProject = (organizationId: string, projectId: string): void => {
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.project(organizationId, projectId),
-      });
-      void queryClient.invalidateQueries({ queryKey: queryKeys.projects(organizationId) });
-    };
     const projectPort = createProjectRelationCommandPort({
       patchProject: async (organizationId, projectId, patch) => {
         await unwrap(
@@ -90,7 +96,6 @@ export function useRegisterEntityNavigationActions(): void {
             }),
           'Could not change the project relationship.',
         );
-        refreshProject(organizationId, projectId);
       },
       linkInitiative: (organizationId, projectId, initiativeId) =>
         duplicateAsNoOp(() =>
@@ -112,7 +117,6 @@ export function useRegisterEntityNavigationActions(): void {
             }),
           'Could not add the project label.',
         );
-        refreshProject(organizationId, projectId);
         return 'applied';
       },
       addDependency: (organizationId, blockingProjectId, blockedProjectId) =>
@@ -137,7 +141,6 @@ export function useRegisterEntityNavigationActions(): void {
             }),
           'Could not set the program owner.',
         );
-        void queryClient.invalidateQueries({ queryKey: queryKeys.programs(organizationId) });
       },
       linkInitiative: (organizationId, programId, initiativeId) =>
         duplicateAsNoOp(() =>
@@ -193,25 +196,62 @@ export function useRegisterEntityNavigationActions(): void {
         }
         return;
       }
-      await projectPort.execute({
-        relationId,
-        effect:
-          relationId === 'project.program' ||
-          relationId === 'project.team' ||
-          relationId === 'project.lead'
-            ? 'move'
-            : 'link',
-        subjects: subjects(context, 'project'),
-        target: {
-          kind:
-            context.target.kind === 'calendar_event'
-              ? 'calendar_item'
-              : (context.target.kind as RelationEndpoint['kind']),
-          id: context.target.id,
-          organizationId: context.target.organizationId,
-          ...(context.target.meta ? { meta: context.target.meta } : {}),
+      const target = context.target;
+      const projectSubjects = subjects(context, 'project');
+      const pairs = new Map<
+        string,
+        { target: 'project' | 'program' | 'initiative'; owner: string }
+      >();
+      for (const subject of projectSubjects) {
+        if (subject.organizationId !== null && subject.organizationId === target.organizationId) {
+          pairs.set(`project:${subject.organizationId}`, {
+            target: 'project',
+            owner: subject.organizationId,
+          });
+        }
+      }
+      const targetOrganizationId = target.organizationId;
+      if (targetOrganizationId !== null && relationId === 'project.initiative') {
+        pairs.set(`initiative:${targetOrganizationId}`, {
+          target: 'initiative',
+          owner: targetOrganizationId,
+        });
+      } else if (targetOrganizationId !== null && relationId === 'project.program') {
+        pairs.set(`program:${targetOrganizationId}`, {
+          target: 'program',
+          owner: targetOrganizationId,
+        });
+      } else if (targetOrganizationId !== null && relationId === 'project.blocks') {
+        pairs.set(`project:${targetOrganizationId}`, {
+          target: 'project',
+          owner: targetOrganizationId,
+        });
+      }
+      await settleRelationExecution(
+        () =>
+          projectPort.execute({
+            relationId,
+            effect:
+              relationId === 'project.program' ||
+              relationId === 'project.team' ||
+              relationId === 'project.lead'
+                ? 'move'
+                : 'link',
+            subjects: projectSubjects,
+            target: {
+              kind:
+                target.kind === 'calendar_event'
+                  ? 'calendar_item'
+                  : (target.kind as RelationEndpoint['kind']),
+              id: target.id,
+              organizationId: target.organizationId,
+              ...(target.meta ? { meta: target.meta } : {}),
+            },
+          }),
+        () => {
+          invalidateOwnerTargetPairs(queryClient, pairs);
         },
-      });
+      );
     };
     const executeProgram = async (
       context: ActionContext,
@@ -228,17 +268,41 @@ export function useRegisterEntityNavigationActions(): void {
         }
         return;
       }
-      await programPort.execute({
-        relationId,
-        effect: relationId === 'program.owner' ? 'move' : 'link',
-        subjects: subjects(context, 'program'),
-        target: {
-          kind: context.target.kind as RelationEndpoint['kind'],
-          id: context.target.id,
-          organizationId: context.target.organizationId,
-          ...(context.target.meta ? { meta: context.target.meta } : {}),
+      const target = context.target;
+      const programSubjects = subjects(context, 'program');
+      const pairs = new Map<string, { target: 'program' | 'initiative'; owner: string }>();
+      for (const subject of programSubjects) {
+        if (subject.organizationId !== null && subject.organizationId === target.organizationId) {
+          pairs.set(`program:${subject.organizationId}`, {
+            target: 'program',
+            owner: subject.organizationId,
+          });
+        }
+      }
+      const targetOrganizationId = target.organizationId;
+      if (targetOrganizationId !== null && relationId === 'program.initiative') {
+        pairs.set(`initiative:${targetOrganizationId}`, {
+          target: 'initiative',
+          owner: targetOrganizationId,
+        });
+      }
+      await settleRelationExecution(
+        () =>
+          programPort.execute({
+            relationId,
+            effect: relationId === 'program.owner' ? 'move' : 'link',
+            subjects: programSubjects,
+            target: {
+              kind: target.kind as RelationEndpoint['kind'],
+              id: target.id,
+              organizationId: target.organizationId,
+              ...(target.meta ? { meta: target.meta } : {}),
+            },
+          }),
+        () => {
+          invalidateOwnerTargetPairs(queryClient, pairs);
         },
-      });
+      );
     };
     return {
       project: defineActionDomain('project', [

@@ -15,7 +15,6 @@ import type { ProjectOut } from '@docket/types';
 import { EntityPicker } from '@docket/ui/components';
 import { Plus, X } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
-import type { QueryKey } from '@tanstack/react-query';
 import Link from '@/components/docket-link';
 import { type JSX, useMemo } from 'react';
 
@@ -29,7 +28,6 @@ import { useProgramProjects } from '@/lib/use-program-projects';
 export interface ProgramProjectsPanelProps {
   orgId: string;
   programId: string;
-  programDetailKey: QueryKey;
   /** Vocabulary-skinned singular project noun (e.g. "Project", "Workstream"). */
   projectNoun: string;
   canEdit: boolean;
@@ -41,7 +39,6 @@ export interface ProgramProjectsPanelProps {
 export function ProgramProjectsPanel({
   orgId,
   programId,
-  programDetailKey,
   projectNoun,
   canEdit,
   onOpenProject,
@@ -50,11 +47,7 @@ export function ProgramProjectsPanel({
   const statusOf = useWorkStatusResolver('project');
   const { openCreate } = useCreateObject();
   const options = useComposerOptions(orgId, ['projects'], true);
-  const { attach, detach, pending, mutationError } = useProgramProjects(
-    orgId,
-    programId,
-    programDetailKey,
-  );
+  const { attach, detach, pending, mutationError } = useProgramProjects(orgId, programId);
 
   const filed = useMemo<readonly ProjectOut[]>(
     () => options.projects.filter((project) => project.programId === programId),
@@ -82,7 +75,8 @@ export function ProgramProjectsPanel({
               options={unfiledOptions}
               value={null}
               onChange={(value) => {
-                if (value) attach(value);
+                const project = options.projects.find((candidate) => candidate.id === value);
+                if (project) attach(project.id);
               }}
               placeholder={`Add ${projectNounLower}`}
               searchPlaceholder={`Search ${projectNounLower}s…`}
@@ -133,7 +127,7 @@ export function ProgramProjectsPanel({
                 className="hover:bg-surface-container-high flex items-center gap-3 px-3 py-2.5"
               >
                 <Link
-                  href={`/orgs/${orgId}/projects/${project.id}`}
+                  href={`/orgs/${project.organizationId}/projects/${project.id}`}
                   className="text-on-surface text-body-medium min-w-0 flex-1 truncate"
                   onClick={(event) => {
                     if (

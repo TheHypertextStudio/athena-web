@@ -240,7 +240,11 @@ export default function StatusesSettingsPage(): JSX.Element {
                 setEditing({ status, entityType: section.entityType, category: status.category });
               }}
               onMakeDefault={(status) => {
-                updateStatus.mutate({ statusId: status.id, isDefault: true });
+                updateStatus.mutate({
+                  statusId: status.id,
+                  entityType: section.entityType,
+                  isDefault: true,
+                });
               }}
               onDelete={(status) => {
                 setDeleting({ status, entityType: section.entityType });
@@ -284,6 +288,7 @@ export default function StatusesSettingsPage(): JSX.Element {
               updateStatus.mutate(
                 {
                   statusId: editing.status.id,
+                  entityType: editing.entityType,
                   name: input.name,
                   description: input.description,
                   category: input.category,
@@ -312,7 +317,7 @@ export default function StatusesSettingsPage(): JSX.Element {
           error={deleteStatus.error}
           onConfirm={(remapTo) => {
             deleteStatus.mutate(
-              { statusId: deleting.status.id, remapTo },
+              { statusId: deleting.status.id, remapTo, entityType: deleting.entityType },
               {
                 onSuccess: () => {
                   setDeleting(null);

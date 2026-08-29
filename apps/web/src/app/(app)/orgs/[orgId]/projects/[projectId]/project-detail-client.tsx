@@ -28,8 +28,13 @@ import {
   Tabs,
   menuDestructiveItem,
 } from '@docket/ui/primitives';
-import { useQueryClient } from '@tanstack/react-query';
-import { type JSX, useEffect, useMemo, useState } from 'react';
+import {
+  type FetchQueryOptions,
+  type QueryClient,
+  type QueryKey,
+  useQueryClient,
+} from '@tanstack/react-query';
+import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
 import { useCreateLabel } from '@/components/labels/queries';
@@ -74,8 +79,48 @@ import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
 import { orgMembersDef } from '@/lib/use-org-membership';
 import { useProjectMutations } from '@/lib/use-project-mutations';
+import { invalidateWorkTargetQueries } from '@/lib/work-target-invalidation';
 
 type TabId = 'overview' | 'tasks' | 'updates' | 'resources';
+
+/**
+ * Refresh every Project projection after a successful restore and report whether the detail read
+ * returned authoritative data.
+ *
+ * @typeParam TData - Data returned by the aggregate query.
+ * @typeParam TQueryKey - Cache key carried by the aggregate query definition.
+ * @param input - Cache, aggregate query definition, and owning workspace for the restored Project.
+ * @returns `ready` after a clean refetch, or `cache-error` when the aggregate refetch failed.
+ */
+export async function refreshRestoredProject<TData, TQueryKey extends QueryKey>(input: {
+  readonly queryClient: QueryClient;
+  readonly aggregateQuery: FetchQueryOptions<TData, Error, TData, TQueryKey>;
+  readonly ownerOrganizationId: string;
+}): Promise<'ready' | 'cache-error'> {
+  const aggregateCacheEntry = input.queryClient.getQueryCache().find({
+    queryKey: input.aggregateQuery.queryKey,
+    exact: true,
+  });
+  const requiresFallbackFetch = aggregateCacheEntry?.isActive() !== true;
+
+  try {
+    await invalidateWorkTargetQueries(input.queryClient, {
+      target: 'project',
+      ownerOrganizationId: input.ownerOrganizationId,
+    });
+
+    if (requiresFallbackFetch) {
+      await input.queryClient.fetchQuery(input.aggregateQuery);
+    }
+
+    const aggregateState = input.queryClient.getQueryState(input.aggregateQuery.queryKey);
+    return aggregateState?.status === 'success' && !aggregateState.isInvalidated
+      ? 'ready'
+      : 'cache-error';
+  } catch {
+    return 'cache-error';
+  }
+}
 
 /** Render a Project from its local snapshot before one bounded aggregate reconciles it. */
 export default function ProjectDetailPage(): JSX.Element {
@@ -201,6 +246,12 @@ export default function ProjectDetailPage(): JSX.Element {
   const canDelete = aggregate?.capabilities.manage ?? false;
   const projectTaskCount = aggregate?.defaultView.progress.taskCount ?? 0;
   const display = displayQ.data ?? defaultEntityDisplay('project', projectId);
+  const invalidateProject = useCallback((): void => {
+    void invalidateWorkTargetQueries(queryClient, {
+      target: 'project',
+      ownerOrganizationId: orgId,
+    });
+  }, [orgId, queryClient]);
   const memberOptions = useMemo<readonly PickerOption[]>(() => {
     const options = memberActorOptions(membersQ.data?.items ?? []);
     const lead = aggregate?.references.lead;
@@ -271,11 +322,8 @@ export default function ProjectDetailPage(): JSX.Element {
     onError: (_error, _variables, context) => {
       if (context?.previous) queryClient.setQueryData(displayKey, context.previous);
     },
-    invalidateKeys: [
-      displayKey,
-      queryKeys.projects(orgId),
-      queryKeys.entityDisplays(orgId, 'project'),
-    ],
+    invalidateKeys: [queryKeys.entityDisplays(orgId, 'project')],
+    onSettled: invalidateProject,
   });
   const addResource = useApiMutation<AttachmentOut, { title: string; url: string }>({
     mutationFn: (json) =>
@@ -310,7 +358,7 @@ export default function ProjectDetailPage(): JSX.Element {
           }),
         'Could not post the update.',
       ),
-    invalidateKeys: [updatesKey, aggregateKey],
+    onSettled: invalidateProject,
   });
   const moveProjectToTrash = useApiMutation<ObjectCommandResult, ObjectCommandRequest>({
     mutationFn: (request) =>
@@ -322,7 +370,7 @@ export default function ProjectDetailPage(): JSX.Element {
           ),
         `Could not move this ${projectNoun.toLowerCase()} to trash.`,
       ),
-    invalidateKeys: [queryKeys.projects(orgId)],
+    onSettled: invalidateProject,
     onSuccess: (result) => {
       setTrashedReceipt(result.receipt);
       setRestoreFailure(null);
@@ -339,25 +387,31 @@ export default function ProjectDetailPage(): JSX.Element {
           ),
         `Could not restore this ${projectNoun.toLowerCase()}.`,
       ),
-    onSuccess: async (result) => {
+    onError: invalidateProject,
+    onSuccess: (result) => {
       if (!result.appliedIds.includes(projectId)) {
+        invalidateProject();
         setRestoreFailure(
           `This ${projectNoun.toLowerCase()} could not be restored because it changed elsewhere or you no longer have permission.`,
         );
         return;
       }
       setAggregateEnabled(true);
-      await queryClient.refetchQueries({ queryKey: aggregateKey, exact: true, type: 'active' });
-      if (queryClient.getQueryState(aggregateKey)?.error != null) {
-        setRestoreFailure(
-          `This ${projectNoun.toLowerCase()} was restored, but its page could not refresh. Try again or return to Projects.`,
-        );
-        return;
-      }
-      setTrashedReceipt(null);
-      setRestoreFailure(null);
-      setTerminalState(null);
-      void queryClient.invalidateQueries({ queryKey: queryKeys.projects(orgId) });
+      void refreshRestoredProject({
+        queryClient,
+        aggregateQuery: aggregateDef,
+        ownerOrganizationId: orgId,
+      }).then((status) => {
+        if (status === 'cache-error') {
+          setRestoreFailure(
+            `This ${projectNoun.toLowerCase()} was restored, but its page could not refresh. Try again or return to Projects.`,
+          );
+          return;
+        }
+        setTrashedReceipt(null);
+        setRestoreFailure(null);
+        setTerminalState(null);
+      });
     },
   });
 

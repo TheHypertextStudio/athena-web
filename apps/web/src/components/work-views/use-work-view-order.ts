@@ -6,15 +6,19 @@ import {
   WorkViewOrderResponse,
 } from '@docket/types';
 import type { ViewTarget } from '@docket/work/view-contract';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api';
 import { type RpcResponse, unwrap, useApiMutation } from '@/lib/query';
+import { invalidateWorkTargetQueries } from '@/lib/work-target-invalidation';
 
 import { workViewFieldCatalog } from './view-state';
 
 /** One board move before target-specific Zod validation brands its ids and operand. */
 export interface WorkViewOrderInput {
   readonly target: ViewTarget;
+  /** Organization that owns the row being reordered. */
+  readonly organizationId: string;
   readonly itemId: string;
   readonly groupField: string | null;
   readonly sourceGroupValue: string | null;
@@ -34,7 +38,8 @@ async function orderRpc(
 }
 
 /** Persist shared manual order and any mutable board-group property change. */
-export function useWorkViewOrder(organizationId: string) {
+export function useWorkViewOrder() {
+  const queryClient = useQueryClient();
   return useApiMutation<ReturnType<typeof WorkViewOrderResponse.parse>, WorkViewOrderInput>({
     mutationFn: async (input) => {
       const field = workViewFieldCatalog(input.target).find(
@@ -55,12 +60,17 @@ export function useWorkViewOrder(organizationId: string) {
           : common,
       );
       return unwrap(async () => {
-        const response = await orderRpc(organizationId, request);
+        const response = await orderRpc(input.organizationId, request);
         if (!response.ok) return response as RpcResponse<never>;
         const value = WorkViewOrderResponse.parse(await response.json());
         return { ok: true, status: response.status, json: async () => value };
       }, `Could not move this ${input.target}.`);
     },
-    invalidateKeys: [['org', organizationId, 'work-view']],
+    onSettled: (_data, _error, input) => {
+      void invalidateWorkTargetQueries(queryClient, {
+        target: input.target,
+        ownerOrganizationId: input.organizationId,
+      });
+    },
   });
 }

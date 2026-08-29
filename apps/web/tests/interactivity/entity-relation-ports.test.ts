@@ -48,6 +48,31 @@ describe('Project relation command port', () => {
     expect(dependencies.addLabel).toHaveBeenCalledWith('org-1', 'project-1', 'label-1');
     expect(dependencies.addDependency).toHaveBeenCalledWith('org-1', 'project-1', 'project-2');
   });
+
+  it.each([['project.program', 'program'] as const, ['project.initiative', 'initiative'] as const])(
+    'rejects a cross-organization %s relation before writing',
+    async (relationId, targetKind) => {
+      const dependencies = {
+        patchProject: vi.fn(async () => undefined),
+        linkInitiative: vi.fn(async () => 'applied' as const),
+        addLabel: vi.fn(async () => 'applied' as const),
+        addDependency: vi.fn(async () => 'applied' as const),
+      };
+      const port = createProjectRelationCommandPort(dependencies);
+
+      await expect(
+        port.execute({
+          relationId,
+          effect: 'link',
+          subjects: [{ kind: 'project', id: 'project-1', organizationId: 'org-b' }],
+          target: { kind: targetKind, id: 'target-1', organizationId: 'org-a' },
+        }),
+      ).resolves.toEqual({ status: 'unchanged' });
+
+      expect(dependencies.patchProject).not.toHaveBeenCalled();
+      expect(dependencies.linkInitiative).not.toHaveBeenCalled();
+    },
+  );
 });
 
 describe('Program relation command port', () => {
@@ -82,5 +107,24 @@ describe('Program relation command port', () => {
     expect(dependencies.setOwner).toHaveBeenCalledWith('org-1', 'program-1', 'actor-1');
     expect(dependencies.linkInitiative).toHaveBeenCalledWith('org-1', 'program-1', 'initiative-1');
     expect(dependencies.addLabel).toHaveBeenCalledWith('org-1', 'program-1', 'label-1');
+  });
+
+  it('rejects a cross-organization Initiative relation before writing', async () => {
+    const dependencies = {
+      setOwner: vi.fn(async () => undefined),
+      linkInitiative: vi.fn(async () => 'applied' as const),
+      addLabel: vi.fn(async () => 'applied' as const),
+    };
+    const port = createProgramRelationCommandPort(dependencies);
+
+    await expect(
+      port.execute({
+        relationId: 'program.initiative',
+        effect: 'link',
+        subjects: [{ kind: 'program', id: 'program-1', organizationId: 'org-b' }],
+        target: { kind: 'initiative', id: 'initiative-1', organizationId: 'org-a' },
+      }),
+    ).resolves.toEqual({ status: 'unchanged' });
+    expect(dependencies.linkInitiative).not.toHaveBeenCalled();
   });
 });

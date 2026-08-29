@@ -68,6 +68,7 @@ import { userErrorMessage, readProblemError } from '@/lib/problem';
 import { seedProjectRecord } from '@/lib/entity-records';
 import { queryKeys } from '@/lib/query';
 import { useFiscalYearStartMonth } from '@/lib/use-fiscal-year-start-month';
+import { invalidateWorkTargetQueries } from '@/lib/work-target-invalidation';
 
 import { ProjectComposerPickers } from './project-form-pickers';
 
@@ -574,23 +575,13 @@ function GlobalProjectComposerBody({
         canContribute: creation.permissions.canContribute,
         currentActorId,
         onCreated: (project, references, continueCreating) => {
-          const invalidationKeys: (readonly unknown[])[] = [
-            queryKeys.projects(projectOrgId),
-            queryKeys.portfolio(),
-          ];
-          if (references.programId !== null) {
-            invalidationKeys.push(queryKeys.programs(projectOrgId));
-          }
-          if (references.initiativeIds.length > 0) {
-            invalidationKeys.push(queryKeys.initiatives(projectOrgId));
-          }
           completeCreateObject({
             created: project,
             initialWorkspaceId,
             targetWorkspaceId,
             sameWorkspaceCompletion: request.sameWorkspaceCompletion,
             onCreated: request.onCreated,
-            invalidationKeys,
+            invalidationKeys: [queryKeys.portfolio()],
             invalidate: (queryKey) => {
               void queryClient.invalidateQueries({ queryKey });
             },
@@ -602,6 +593,22 @@ function GlobalProjectComposerBody({
               router.push(`/orgs/${projectOrgId}/projects/${project.id}`);
             },
           });
+          void invalidateWorkTargetQueries(queryClient, {
+            target: 'project',
+            ownerOrganizationId: projectOrgId,
+          });
+          if (references.programId !== null) {
+            void invalidateWorkTargetQueries(queryClient, {
+              target: 'program',
+              ownerOrganizationId: projectOrgId,
+            });
+          }
+          if (references.initiativeIds.length > 0) {
+            void invalidateWorkTargetQueries(queryClient, {
+              target: 'initiative',
+              ownerOrganizationId: projectOrgId,
+            });
+          }
         },
       }}
     />

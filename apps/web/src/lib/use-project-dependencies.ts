@@ -2,12 +2,13 @@
 
 /** Query and mutations for native Project dependency links. */
 import type { ProjectDependencyCreated, ProjectDependencyOut } from '@docket/types';
-import type { QueryKey } from '@tanstack/react-query';
+import { type QueryKey, useQueryClient } from '@tanstack/react-query';
 import { useMemo } from 'react';
 
 import { api } from './api';
 import { userErrorMessage } from './problem';
 import { apiQueryOptions, unwrap, useApiMutation, useApiQuery } from './query';
+import { invalidateWorkTargetQueries } from './work-target-invalidation';
 
 /** Direction relative to the Project currently on screen. */
 export type ProjectDependencyDirection = 'blockedBy' | 'blocking';
@@ -29,6 +30,7 @@ export function useProjectDependencies(
   projectId: string,
   projectDetailKey: QueryKey,
 ): ProjectDependencies {
+  const queryClient = useQueryClient();
   const dependencyKey = useMemo(
     () => [...projectDetailKey, 'dependencies'] as const,
     [projectDetailKey],
@@ -59,7 +61,12 @@ export function useProjectDependencies(
           }),
         'Could not add the project dependency.',
       ),
-    invalidateKeys: [dependencyKey],
+    onSettled: () => {
+      void invalidateWorkTargetQueries(queryClient, {
+        target: 'project',
+        ownerOrganizationId: orgId,
+      });
+    },
   });
   const removeMutation = useApiMutation<unknown, string>({
     mutationFn: (otherProjectId) =>
@@ -70,7 +77,12 @@ export function useProjectDependencies(
           }),
         'Could not remove the project dependency.',
       ),
-    invalidateKeys: [dependencyKey],
+    onSettled: () => {
+      void invalidateWorkTargetQueries(queryClient, {
+        target: 'project',
+        ownerOrganizationId: orgId,
+      });
+    },
   });
 
   return {

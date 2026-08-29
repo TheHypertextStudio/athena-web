@@ -37,14 +37,12 @@ function initiativeSpan(row: InitiativeViewRow): TimelineSpan | null {
 }
 
 /** Build an Initiative timeline whose span and markers come from contributing Projects. */
-export function buildInitiativeTimelineCatalog(
-  organizationId: string,
-): TimelineCatalog<InitiativeViewRow> {
+export function buildInitiativeTimelineCatalog(): TimelineCatalog<InitiativeViewRow> {
   return {
     id: (row) => row.id,
     label: (row) => row.name,
     sublabel: (row) => (row.isContext ? 'Context' : null),
-    href: (row) => `/orgs/${organizationId}/initiatives/${row.id}`,
+    href: (row) => `/orgs/${row.organizationId}/initiatives/${row.id}`,
     span: initiativeSpan,
     markers: (row) =>
       row.contributingProjects.flatMap((project) => {
@@ -76,7 +74,6 @@ export function buildInitiativeTimelineCatalog(
 
 /** Props for the read-only Initiative rollup timeline. */
 export interface InitiativeTimelineProps {
-  readonly organizationId: string;
   readonly rows: readonly InitiativeViewRow[];
   readonly density: 'comfortable' | 'compact';
   readonly onActivate: (id: string) => void;
@@ -85,13 +82,12 @@ export interface InitiativeTimelineProps {
 
 /** Render Initiative rollups without inventing an Initiative start-date mutation. */
 export function InitiativeTimeline({
-  organizationId,
   rows,
   density,
   onActivate,
   onPrefetch,
 }: InitiativeTimelineProps): JSX.Element {
-  const catalog = buildInitiativeTimelineCatalog(organizationId);
+  const catalog = buildInitiativeTimelineCatalog();
   const applied: AppliedView<InitiativeViewRow> = { rows, groups: null };
   const spans = rows.flatMap((row) => {
     const span = catalog.span(row);

@@ -30,6 +30,7 @@ const {
   createObjectState,
   sessionState,
   routerPush,
+  invalidateWorkTargetQueries,
 } = vi.hoisted(() => {
   const creationState: { current: unknown } = { current: null };
   const createObjectState: { current: unknown } = { current: null };
@@ -45,6 +46,7 @@ const {
     createObjectState,
     sessionState: { data: { user: { id: 'user_1' } }, isPending: false },
     routerPush: vi.fn(),
+    invalidateWorkTargetQueries: vi.fn(() => Promise.resolve()),
   };
 });
 
@@ -81,6 +83,8 @@ vi.mock('../../src/lib/auth-client', () => ({
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: routerPush }),
 }));
+
+vi.mock('../../src/lib/work-target-invalidation', () => ({ invalidateWorkTargetQueries }));
 
 import {
   CreateProjectDialog,
@@ -242,6 +246,7 @@ beforeEach(() => {
   };
   creationState.current = null;
   routerPush.mockReset();
+  invalidateWorkTargetQueries.mockClear();
   Element.prototype.scrollIntoView = vi.fn();
   Element.prototype.hasPointerCapture = vi.fn(() => false);
   Element.prototype.setPointerCapture = vi.fn();
@@ -276,7 +281,7 @@ function renderComposer(onCreated = vi.fn()) {
       />
     </QueryClientProvider>,
   );
-  return { onCreated, onOpenChange };
+  return { client, onCreated, onOpenChange };
 }
 
 interface ProjectDestinationOverrides {
@@ -726,7 +731,10 @@ describe('CreateProjectDialog — robust composer', () => {
     await waitFor(() => {
       expect(projectPost).toHaveBeenCalledTimes(1);
     });
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.projects(ORG_ID) });
+    expect(invalidateWorkTargetQueries).toHaveBeenCalledWith(client, {
+      target: 'project',
+      ownerOrganizationId: ORG_ID,
+    });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.portfolio() });
     expect(onCreated).toHaveBeenCalledWith(expect.objectContaining({ id: 'project_stay' }));
     expect(routerPush).not.toHaveBeenCalled();
@@ -792,7 +800,10 @@ describe('CreateProjectDialog — robust composer', () => {
     expect(body).not.toHaveProperty('leadId');
     expect(body).not.toHaveProperty('programId');
     expect(body).not.toHaveProperty('initiativeIds');
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.projects(TARGET_ORG_ID) });
+    expect(invalidateWorkTargetQueries).toHaveBeenCalledWith(client, {
+      target: 'project',
+      ownerOrganizationId: TARGET_ORG_ID,
+    });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.portfolio() });
     expect(routerPush).toHaveBeenCalledWith(`/orgs/${TARGET_ORG_ID}/projects/project_target`);
     expect(closeCreate).toHaveBeenCalledOnce();
@@ -870,7 +881,7 @@ describe('CreateProjectDialog — robust composer', () => {
 
   it('threads a toggled initiative through the create DTO', async () => {
     projectPost.mockResolvedValue(jsonResponse(true, { id: 'proj_3', name: 'Linked' }));
-    renderComposer();
+    const { client } = renderGlobalProject();
 
     await waitFor(() => {
       expect(initiativesGet).toHaveBeenCalled();
@@ -891,6 +902,10 @@ describe('CreateProjectDialog — robust composer', () => {
     expect(firstJson(projectPost.mock.calls)).toMatchObject({
       name: 'Linked',
       initiativeIds: [Q3_ID],
+    });
+    expect(invalidateWorkTargetQueries).toHaveBeenCalledWith(client, {
+      target: 'initiative',
+      ownerOrganizationId: ORG_ID,
     });
   });
 

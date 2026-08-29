@@ -386,7 +386,6 @@ export default function ProgramDetailPage(): JSX.Element {
           <ProgramProjectsPanel
             orgId={orgId}
             programId={programId}
-            programDetailKey={detailKey}
             projectNoun={projectNounCased}
             canEdit={canEdit}
             onOpenProject={(project) => {

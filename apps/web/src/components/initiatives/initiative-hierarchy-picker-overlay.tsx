@@ -27,7 +27,8 @@ import {
 import { api } from '@/lib/api';
 import { initiativeOverviewDef } from '@/lib/fetch-initiative-overview';
 import { userErrorMessage } from '@/lib/problem';
-import { queryKeys, useApiQuery } from '@/lib/query';
+import { useApiQuery } from '@/lib/query';
+import { invalidateWorkTargetQueries } from '@/lib/work-target-invalidation';
 
 /** Props for {@link InitiativeHierarchyPickerOverlay}. */
 export interface InitiativeHierarchyPickerOverlayProps {
@@ -108,7 +109,10 @@ export function InitiativeHierarchyPickerOverlay({
       setWriteError(null);
       try {
         await writeInitiativeHierarchyMutation(orgId, mutation);
-        await queryClient.invalidateQueries({ queryKey: queryKeys.initiatives(orgId) });
+        void invalidateWorkTargetQueries(queryClient, {
+          target: 'initiative',
+          ownerOrganizationId: orgId,
+        });
         onClose();
       } catch (error) {
         setWriteError(userErrorMessage(error, 'Could not change this initiative hierarchy.'));

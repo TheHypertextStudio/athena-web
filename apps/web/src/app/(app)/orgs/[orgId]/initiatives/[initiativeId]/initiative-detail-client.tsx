@@ -26,7 +26,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import Link from '@/components/docket-link';
 import { useAppSearchParams, useTypedRoute } from '@/lib/app-location';
-import { type JSX, useEffect, useMemo, useState } from 'react';
+import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
 import { TemplateAwareEntityDocument } from '@/components/editor/apply-description-template';
@@ -82,6 +82,7 @@ import {
   removeNavigationSnapshot,
   seedNavigationSnapshot,
 } from '@/lib/navigation-snapshot-runtime';
+import { invalidateWorkTargetQueries } from '@/lib/work-target-invalidation';
 import { orgMembersDef } from '@/lib/use-org-membership';
 
 type TabId = 'overview' | 'subinitiatives' | 'work' | 'updates' | 'resources';
@@ -194,6 +195,12 @@ export default function InitiativeDetailPage(): JSX.Element {
   );
   const updates = updatesQ.data?.items ?? [];
   const display = displayQ.data ?? defaultEntityDisplay('initiative', initiativeId);
+  const invalidateInitiative = useCallback((): void => {
+    void invalidateWorkTargetQueries(queryClient, {
+      target: 'initiative',
+      ownerOrganizationId: orgId,
+    });
+  }, [orgId, queryClient]);
   const canEdit = aggregate?.capabilities.contribute ?? false;
   const canManage = aggregate?.capabilities.manage ?? false;
   const currentActorId = aggregate?.viewer.actorId ?? null;
@@ -254,7 +261,7 @@ export default function InitiativeDetailPage(): JSX.Element {
           }),
         'Could not post the update.',
       ),
-    invalidateKeys: [updatesKey, aggregateKey, queryKeys.initiatives(orgId)],
+    onSettled: invalidateInitiative,
   });
   const displayMutation = useApiMutation<
     EntityDisplayOut,
@@ -288,11 +295,8 @@ export default function InitiativeDetailPage(): JSX.Element {
     onError: (_error, _variables, context) => {
       if (context?.previous) queryClient.setQueryData(displayKey, context.previous);
     },
-    invalidateKeys: [
-      displayKey,
-      queryKeys.initiatives(orgId),
-      queryKeys.entityDisplays(orgId, 'initiative'),
-    ],
+    invalidateKeys: [queryKeys.entityDisplays(orgId, 'initiative')],
+    onSettled: invalidateInitiative,
   });
   const addResource = useApiMutation<AttachmentOut, { title: string; url: string }>({
     mutationFn: (json) =>
@@ -326,7 +330,7 @@ export default function InitiativeDetailPage(): JSX.Element {
           }),
         'Could not delete this initiative.',
       ),
-    invalidateKeys: [queryKeys.initiatives(orgId)],
+    onSettled: invalidateInitiative,
     onSuccess: () => {
       router.push(`/orgs/${orgId}/initiatives`);
     },

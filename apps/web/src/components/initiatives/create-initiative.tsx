@@ -64,8 +64,8 @@ import { templatePatch } from '@/components/templates/queries';
 import { useSession } from '@/lib/auth-client';
 import { userErrorMessage, readProblemError } from '@/lib/problem';
 import { seedInitiativeRecord } from '@/lib/entity-records';
-import { queryKeys } from '@/lib/query';
 import { useFiscalYearStartMonth } from '@/lib/use-fiscal-year-start-month';
+import { invalidateWorkTargetQueries } from '@/lib/work-target-invalidation';
 
 import { InitiativeComposerPickers } from './initiative-form-pickers';
 
@@ -497,7 +497,7 @@ function GlobalInitiativeComposerBody({
             targetWorkspaceId,
             sameWorkspaceCompletion: request.sameWorkspaceCompletion,
             onCreated: request.onCreated,
-            invalidationKeys: [queryKeys.initiatives(initiativeOrgId)],
+            invalidationKeys: [],
             invalidate: (queryKey) => {
               void queryClient.invalidateQueries({ queryKey });
             },
@@ -508,6 +508,10 @@ function GlobalInitiativeComposerBody({
             openDestination: () => {
               router.push(`/orgs/${initiativeOrgId}/initiatives/${initiative.id}`);
             },
+          });
+          void invalidateWorkTargetQueries(queryClient, {
+            target: 'initiative',
+            ownerOrganizationId: initiativeOrgId,
           });
         },
       }}

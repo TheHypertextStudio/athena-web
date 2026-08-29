@@ -27,6 +27,7 @@ import { api } from './api';
 import type { ProjectDetailData } from './fetch-project-detail';
 import { userErrorMessage } from './problem';
 import { queryKeys, unwrap, useApiMutation } from './query';
+import { invalidateWorkTargetQueries } from './work-target-invalidation';
 
 /** The unbranded properties-panel patch surface. */
 export interface ProjectPatch {
@@ -197,11 +198,19 @@ export function useProjectMutations(
     // The Resources tab's derived sections are a projection of this record's prose, and the query
     // cache survives a reload — so without this, adding a mention to the description leaves that
     // tab showing the pre-edit answer until the staleness tier happens to expire.
-    invalidateKeys: [
-      aggregateKey,
-      queryKeys.projects(orgId),
-      queryKeys.entityMentions(orgId, 'project', projectId),
-    ],
+    invalidateKeys: [queryKeys.entityMentions(orgId, 'project', projectId)],
+    onSettled: (_updated, _error, patchBody) => {
+      void invalidateWorkTargetQueries(queryClient, {
+        target: 'project',
+        ownerOrganizationId: orgId,
+      });
+      if (patchBody.programId !== undefined) {
+        void invalidateWorkTargetQueries(queryClient, {
+          target: 'program',
+          ownerOrganizationId: orgId,
+        });
+      }
+    },
   });
 
   // The initiative set immediately before the in-flight toggle's optimistic write, so the
@@ -261,7 +270,16 @@ export function useProjectMutations(
       if (ctx?.previous?.aggregate) queryClient.setQueryData(aggregateKey, ctx.previous.aggregate);
       if (ctx?.previous?.legacy) queryClient.setQueryData(detailKey, ctx.previous.legacy);
     },
-    invalidateKeys: [aggregateKey, [...aggregateKey, 'relationships']],
+    onSettled: () => {
+      void invalidateWorkTargetQueries(queryClient, {
+        target: 'project',
+        ownerOrganizationId: orgId,
+      });
+      void invalidateWorkTargetQueries(queryClient, {
+        target: 'initiative',
+        ownerOrganizationId: orgId,
+      });
+    },
   });
 
   const updateM = useApiMutation({

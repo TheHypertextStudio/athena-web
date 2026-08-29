@@ -91,7 +91,7 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
 - Remove raw `['org', organizationId, 'work-view']` invalidation arrays and scattered Initiative
   cache-family lists.
 
-- [ ] **Step 1: Write the failing key-ancestry tests**
+- [x] **Step 1: Write the failing key-ancestry tests**
 
   Construct one roster key and one facet key for each target. Assert that each starts with its
   collection prefix. Assert that an Initiative key does not start with the Projects prefix.
@@ -107,14 +107,14 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
   ]);
   ```
 
-- [ ] **Step 2: Prove collection invalidation reaches the mounted cache family**
+- [x] **Step 2: Prove collection invalidation reaches the mounted cache family**
 
   Use a real `QueryClient`. Seed Initiative overview, work-view, facet, and Project work-view data.
   Subscribe to the Initiative roster and facet queries. Invalidate `queryKeys.initiatives(orgId)`.
   Assert that the Initiative queries become invalid and refetch while the Project work view stays
   valid.
 
-- [ ] **Step 3: Prove cross-workspace target invalidation**
+- [x] **Step 3: Prove cross-workspace target invalidation**
 
   Use a real `QueryClient`. Seed an Initiative owned by workspace B into a mounted Initiative
   work-view and facet under route workspace A. Subscribe to those queries and the owner's
@@ -123,7 +123,7 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
   immediate refetch for A's Initiative roster, A's Initiative facet, and B's Initiative overview.
   Assert zero Project refetches.
 
-- [ ] **Step 4: Prove every Initiative mutation family uses the helper**
+- [x] **Step 4: Prove every Initiative mutation family uses the helper**
 
   Extend the mutation tests with a real `QueryClient` or narrow injected spy. Cover create, patch,
   delete, status, label, display, relation, hierarchy, order, and contributing-Project paths. Assert
@@ -131,7 +131,7 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
   Product controls must start the returned promise without waiting for the refetch to clear their
   pending state.
 
-- [ ] **Step 5: Run the focused tests and verify the old ownership model fails**
+- [x] **Step 5: Run the focused tests and verify the old ownership model fails**
 
   Run:
 
@@ -148,20 +148,20 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
     --maxWorkers=1
   ```
 
-- [ ] **Step 6: Implement the key builder and the centralized invalidation helper**
+- [x] **Step 6: Implement the key builder and the centralized invalidation helper**
 
   Keep the first three tuple members identical to the relevant collection key. Inspect cached
   query keys through the typed target segment so one helper can invalidate every matching route
   workspace without enumerating mounted organizations. Route ordering, Initiative mutation, and
   Project timeline mutations through the helper.
 
-- [ ] **Step 7: Document both invalidation boundaries**
+- [x] **Step 7: Document both invalidation boundaries**
 
   Add one concrete Initiative example to `data-layer.md`. State that every derived roster and facet
   read belongs below its route entity collection. State that writes also use the centralized target
   helper because a foreign-owned Initiative can appear as context in another route workspace.
 
-- [ ] **Step 8: Run focused tests, web typecheck, and lint**
+- [x] **Step 8: Run focused tests, web typecheck, and lint**
 
   Run:
 
@@ -180,7 +180,7 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
   pnpm --filter @docket/web lint
   ```
 
-- [ ] **Step 9: Commit the cache-ownership slice**
+- [x] **Step 9: Commit the cache-ownership slice**
 
   Commit as `fix(web): Refresh work rosters with their entity collections`. The body must explain
   why collection ancestry handles local reads and one target-scoped helper handles foreign-owned

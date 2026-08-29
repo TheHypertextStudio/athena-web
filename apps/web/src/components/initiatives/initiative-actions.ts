@@ -3,11 +3,12 @@
 /** The Initiative action domain shared by lists, relationship tabs, and detail pages. */
 import { ArrowRight, ArrowUp, CornerDownLeft, Plus, Tag, User, Users } from '@docket/ui/icons';
 import { InitiativeUpdate } from '@docket/types';
-import { useQueryClient } from '@tanstack/react-query';
+import { type QueryClient, useQueryClient } from '@tanstack/react-query';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useMemo } from 'react';
 
 import { copyObjectAction } from '@/components/actions/copy-object-action';
+import { settleRelationExecution } from '@/components/actions/settle-relation-execution';
 import { useCopyOutcome } from '@/components/clipboard';
 import { writeInitiativeHierarchyMutation } from '@/components/initiatives/initiative-hierarchy-mutations';
 import {
@@ -24,9 +25,9 @@ import {
   type ObjectRef,
   useRegisterActionDomain,
 } from '@/lib/actions';
-import { queryKeys } from '@/lib/query';
 import { api } from '@/lib/api';
 import { unwrap } from '@/lib/query';
+import { invalidateWorkTargetQueries } from '@/lib/work-target-invalidation';
 
 const RELATION_RESPONSIVENESS = {
   // The shared relation adapter owns painted and spoken feedback for these commands.
@@ -39,6 +40,24 @@ function initiativeFrom(
 ): (ObjectRef & { readonly kind: 'initiative' }) | null {
   const object = context.objects[0];
   return object?.kind === 'initiative' ? { ...object, kind: 'initiative' } : null;
+}
+
+function invalidateInitiativeOwner(
+  queryClient: QueryClient,
+  subjects: readonly { readonly kind: string; readonly organizationId: string | null }[],
+  targetOrganizationId: string | null,
+): void {
+  if (
+    targetOrganizationId === null ||
+    !subjects.some(
+      (subject) => subject.kind === 'initiative' && subject.organizationId === targetOrganizationId,
+    )
+  )
+    return;
+  void invalidateWorkTargetQueries(queryClient, {
+    target: 'initiative',
+    ownerOrganizationId: targetOrganizationId,
+  });
 }
 
 /** Register the complete Initiative domain while the app interaction provider is mounted. */
@@ -63,9 +82,6 @@ export function useRegisterInitiativeActions(): void {
               }),
             'Could not change the initiative relationship.',
           );
-          await queryClient.invalidateQueries({
-            queryKey: queryKeys.initiatives(organizationId),
-          });
         },
         addLabel: async (organizationId, initiativeId, labelId) => {
           await unwrap(
@@ -76,13 +92,10 @@ export function useRegisterInitiativeActions(): void {
               }),
             'Could not add the initiative label.',
           );
-          await queryClient.invalidateQueries({
-            queryKey: queryKeys.initiatives(organizationId),
-          });
           return 'applied';
         },
       }),
-    [queryClient],
+    [],
   );
 
   const definitions = useMemo<readonly ActionDefinition[]>(
@@ -96,9 +109,9 @@ export function useRegisterInitiativeActions(): void {
           section: 'primary',
           run: (context) => {
             const initiative = initiativeFrom(context);
-            if (initiative === null || context.organizationId === null) return;
+            if (initiative === null) return;
             // Through `objectHref` so Open and a copied link can never point at different URLs.
-            const href = objectHref({ ...initiative, organizationId: context.organizationId });
+            const href = objectHref(initiative);
             if (href !== null) router.push(href);
           },
         },
@@ -122,7 +135,7 @@ export function useRegisterInitiativeActions(): void {
                   {
                     kind: 'initiative',
                     id: subject.id,
-                    organizationId: context.organizationId,
+                    organizationId: subject.organizationId,
                     ...(subject.meta === undefined ? {} : { meta: subject.meta }),
                   },
                 ],
@@ -133,8 +146,9 @@ export function useRegisterInitiativeActions(): void {
                   ...(context.target.meta === undefined ? {} : { meta: context.target.meta }),
                 },
               });
-              await queryClient.invalidateQueries({
-                queryKey: queryKeys.initiatives(context.organizationId),
+              void invalidateWorkTargetQueries(queryClient, {
+                target: 'initiative',
+                ownerOrganizationId: context.organizationId,
               });
               return;
             }
@@ -184,24 +198,31 @@ export function useRegisterInitiativeActions(): void {
               return;
             }
             if (context.target.kind !== 'team') return;
+            const target = context.target;
             const subjects = context.objects
               .filter((object) => object.kind === 'initiative')
               .map((object) => ({
                 kind: 'initiative' as const,
                 id: object.id,
-                organizationId: context.organizationId,
+                organizationId: object.organizationId,
                 ...(object.meta ? { meta: object.meta } : {}),
               }));
-            await propertyPort.execute({
-              relationId: 'initiative.lead-team',
-              effect: 'move',
-              subjects,
-              target: {
-                kind: 'team',
-                id: context.target.id,
-                organizationId: context.organizationId,
+            await settleRelationExecution(
+              () =>
+                propertyPort.execute({
+                  relationId: 'initiative.lead-team',
+                  effect: 'move',
+                  subjects,
+                  target: {
+                    kind: 'team',
+                    id: target.id,
+                    organizationId: target.organizationId,
+                  },
+                }),
+              () => {
+                invalidateInitiativeOwner(queryClient, subjects, target.organizationId);
               },
-            });
+            );
           },
         },
         {
@@ -225,23 +246,31 @@ export function useRegisterInitiativeActions(): void {
               return;
             }
             if (context.target.kind !== 'actor') return;
-            await propertyPort.execute({
-              relationId: 'initiative.owner',
-              effect: 'move',
-              subjects: context.objects
-                .filter((object) => object.kind === 'initiative')
-                .map((object) => ({
-                  kind: 'initiative' as const,
-                  id: object.id,
-                  organizationId: context.organizationId,
-                  ...(object.meta ? { meta: object.meta } : {}),
-                })),
-              target: {
-                kind: 'actor',
-                id: context.target.id,
-                organizationId: context.organizationId,
+            const target = context.target;
+            const subjects = context.objects
+              .filter((object) => object.kind === 'initiative')
+              .map((object) => ({
+                kind: 'initiative' as const,
+                id: object.id,
+                organizationId: object.organizationId,
+                ...(object.meta ? { meta: object.meta } : {}),
+              }));
+            await settleRelationExecution(
+              () =>
+                propertyPort.execute({
+                  relationId: 'initiative.owner',
+                  effect: 'move',
+                  subjects,
+                  target: {
+                    kind: 'actor',
+                    id: target.id,
+                    organizationId: target.organizationId,
+                  },
+                }),
+              () => {
+                invalidateInitiativeOwner(queryClient, subjects, target.organizationId);
               },
-            });
+            );
           },
         },
         {
@@ -265,23 +294,31 @@ export function useRegisterInitiativeActions(): void {
               return;
             }
             if (context.target.kind !== 'label') return;
-            await propertyPort.execute({
-              relationId: 'initiative.label',
-              effect: 'link',
-              subjects: context.objects
-                .filter((object) => object.kind === 'initiative')
-                .map((object) => ({
-                  kind: 'initiative' as const,
-                  id: object.id,
-                  organizationId: context.organizationId,
-                  ...(object.meta ? { meta: object.meta } : {}),
-                })),
-              target: {
-                kind: 'label',
-                id: context.target.id,
-                organizationId: context.organizationId,
+            const target = context.target;
+            const subjects = context.objects
+              .filter((object) => object.kind === 'initiative')
+              .map((object) => ({
+                kind: 'initiative' as const,
+                id: object.id,
+                organizationId: object.organizationId,
+                ...(object.meta ? { meta: object.meta } : {}),
+              }));
+            await settleRelationExecution(
+              () =>
+                propertyPort.execute({
+                  relationId: 'initiative.label',
+                  effect: 'link',
+                  subjects,
+                  target: {
+                    kind: 'label',
+                    id: target.id,
+                    organizationId: target.organizationId,
+                  },
+                }),
+              () => {
+                invalidateInitiativeOwner(queryClient, subjects, target.organizationId);
               },
-            });
+            );
           },
         },
         {
@@ -317,7 +354,10 @@ export function useRegisterInitiativeActions(): void {
                 organizationId: orgId,
               },
             });
-            await queryClient.invalidateQueries({ queryKey: queryKeys.initiatives(orgId) });
+            void invalidateWorkTargetQueries(queryClient, {
+              target: 'initiative',
+              ownerOrganizationId: orgId,
+            });
           },
         },
       ]),

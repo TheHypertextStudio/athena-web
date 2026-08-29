@@ -41,7 +41,7 @@ describe('typed work-view timelines', () => {
       manualRank: 'a0',
       isContext: false,
     });
-    const catalog = buildProjectViewTimelineCatalog(project.organizationId);
+    const catalog = buildProjectViewTimelineCatalog();
 
     expect(catalog.markers(project)).toEqual([
       expect.objectContaining({ id: '01ARZ3NDEKTSV4RRFFQ69G5FE1', name: 'Beta' }),
@@ -89,7 +89,7 @@ describe('typed work-view timelines', () => {
       manualRank: 'a0',
       isContext: false,
     });
-    const catalog = buildInitiativeTimelineCatalog(initiative.organizationId);
+    const catalog = buildInitiativeTimelineCatalog();
     const span = catalog.span(initiative);
 
     expect(span?.start).toBe(Date.UTC(2026, 8, 1));
@@ -104,5 +104,34 @@ describe('typed work-view timelines', () => {
       start: Date.UTC(2026, 11, 31),
       end: Date.UTC(2026, 11, 31),
     });
+  });
+
+  it('builds a foreign-owner Initiative link from the row owner', () => {
+    const initiative = InitiativeViewRow.parse({
+      target: 'initiative',
+      organizationId: '01ARZ3NDEKTSV4RRFFQ69G5FB0',
+      organization: '01ARZ3NDEKTSV4RRFFQ69G5FB0',
+      id: '01ARZ3NDEKTSV4RRFFQ69G5FF4',
+      name: 'Foreign context',
+      status: 'started',
+      priority: 'high',
+      health: 'on_track',
+      owner: null,
+      leadTeam: null,
+      labels: [],
+      targetDate: '2026-12-31',
+      updateCadence: 'monthly',
+      latestUpdate: null,
+      updatedAt: '2026-08-21T00:00:00.000Z',
+      parent: null,
+      contributingProjects: [],
+      manualRank: 'a0',
+      isContext: true,
+    });
+    const catalog = buildInitiativeTimelineCatalog();
+
+    expect(catalog.href(initiative)).toBe(
+      '/orgs/01ARZ3NDEKTSV4RRFFQ69G5FB0/initiatives/01ARZ3NDEKTSV4RRFFQ69G5FF4',
+    );
   });
 });

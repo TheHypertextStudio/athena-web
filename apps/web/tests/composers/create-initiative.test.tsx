@@ -14,6 +14,7 @@ const {
   createObjectState,
   sessionState,
   routerPush,
+  invalidateWorkTargetQueries,
 } = vi.hoisted(() => {
   const creationState: { current: unknown } = { current: null };
   const createObjectState: { current: unknown } = { current: null };
@@ -27,6 +28,7 @@ const {
     createObjectState,
     sessionState: { data: { user: { id: 'user_1' } }, isPending: false },
     routerPush: vi.fn(),
+    invalidateWorkTargetQueries: vi.fn(() => Promise.resolve()),
   };
 });
 
@@ -62,8 +64,9 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: routerPush }),
 }));
 
+vi.mock('../../src/lib/work-target-invalidation', () => ({ invalidateWorkTargetQueries }));
+
 import { GlobalInitiativeComposer } from '../../src/components/initiatives/create-initiative';
-import { queryKeys } from '../../src/lib/query';
 import { firstJson, jsonResponse } from '../support/http';
 
 const ORG_ID = '0RG00000000000000000000001';
@@ -120,6 +123,7 @@ beforeEach(() => {
   };
   creationState.current = null;
   routerPush.mockReset();
+  invalidateWorkTargetQueries.mockClear();
   Element.prototype.scrollIntoView = vi.fn();
   Element.prototype.hasPointerCapture = vi.fn(() => false);
   Element.prototype.setPointerCapture = vi.fn();
@@ -309,7 +313,6 @@ describe('GlobalInitiativeComposer', () => {
       jsonResponse(true, { id: 'initiative_target', name: 'Portable initiative' }),
     );
     const { client, closeCreate, onCreated } = renderGlobalInitiative();
-    const invalidate = vi.spyOn(client, 'invalidateQueries');
 
     await waitFor(() => {
       expect(membersGet).toHaveBeenCalled();
@@ -355,7 +358,10 @@ describe('GlobalInitiativeComposer', () => {
       updateCadence: 'monthly',
     });
     expect(body).not.toHaveProperty('ownerId');
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.initiatives(TARGET_ORG_ID) });
+    expect(invalidateWorkTargetQueries).toHaveBeenCalledWith(client, {
+      target: 'initiative',
+      ownerOrganizationId: TARGET_ORG_ID,
+    });
     expect(routerPush).toHaveBeenCalledWith(`/orgs/${TARGET_ORG_ID}/initiatives/initiative_target`);
     expect(closeCreate).toHaveBeenCalledOnce();
     expect(onCreated).not.toHaveBeenCalled();

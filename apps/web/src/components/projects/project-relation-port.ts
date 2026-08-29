@@ -49,10 +49,15 @@ export function createProjectRelationCommandPort(
 ): RelationCommandPort<ProjectRelationIntent> {
   return {
     execute: async (intent) => {
-      const organizationId = intent.target.organizationId;
-      if (organizationId === null) return { status: 'unchanged' };
       let applied = false;
       for (const subject of intent.subjects) {
+        const organizationId = subject.organizationId;
+        if (
+          organizationId === null ||
+          intent.target.organizationId === null ||
+          intent.target.organizationId !== organizationId
+        )
+          continue;
         if (intent.relationId === 'project.program' || intent.relationId === 'project.team') {
           const field = intent.relationId === 'project.program' ? 'programId' : 'teamId';
           if (subject.meta?.[field] === intent.target.id) continue;

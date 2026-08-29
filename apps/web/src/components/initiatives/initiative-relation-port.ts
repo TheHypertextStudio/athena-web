@@ -102,10 +102,15 @@ export function createInitiativePropertyCommandPort(
 ): RelationCommandPort<InitiativePropertyRelationIntent> {
   return {
     execute: async (intent) => {
-      const organizationId = intent.target.organizationId;
-      if (organizationId === null) return { status: 'unchanged' };
       let applied = false;
       for (const subject of intent.subjects) {
+        const organizationId = subject.organizationId;
+        if (
+          organizationId === null ||
+          intent.target.organizationId === null ||
+          intent.target.organizationId !== organizationId
+        )
+          continue;
         if (intent.relationId === 'initiative.label') {
           applied =
             (await dependencies.addLabel(organizationId, subject.id, intent.target.id)) ===

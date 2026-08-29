@@ -34,10 +34,15 @@ export function createProgramRelationCommandPort(
 ): RelationCommandPort<ProgramRelationIntent> {
   return {
     execute: async (intent) => {
-      const organizationId = intent.target.organizationId;
-      if (organizationId === null) return { status: 'unchanged' };
       let applied = false;
       for (const subject of intent.subjects) {
+        const organizationId = subject.organizationId;
+        if (
+          organizationId === null ||
+          intent.target.organizationId === null ||
+          intent.target.organizationId !== organizationId
+        )
+          continue;
         if (intent.relationId === 'program.owner') {
           if (subject.meta?.['ownerId'] === intent.target.id) continue;
           await dependencies.setOwner(organizationId, subject.id, intent.target.id);

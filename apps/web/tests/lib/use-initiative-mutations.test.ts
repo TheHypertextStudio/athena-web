@@ -1,7 +1,45 @@
 import type { InitiativeDetailAggregate } from '@docket/types';
-import { describe, expect, it } from 'vitest';
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { patchInitiativeAggregate } from '@/lib/use-initiative-mutations';
+const {
+  initiativePatch,
+  linkProgram,
+  unlinkProgram,
+  linkProject,
+  unlinkProject,
+  invalidateWorkTargetQueries,
+} = vi.hoisted(() => ({
+  initiativePatch: vi.fn(),
+  linkProgram: vi.fn(),
+  unlinkProgram: vi.fn(),
+  linkProject: vi.fn(),
+  unlinkProject: vi.fn(),
+  invalidateWorkTargetQueries: vi.fn(() => Promise.resolve()),
+}));
+
+vi.mock('../../src/lib/api', () => ({
+  api: {
+    v1: {
+      orgs: {
+        ':orgId': {
+          initiatives: {
+            ':id': {
+              $patch: initiativePatch,
+              programs: { $post: linkProgram, ':programId': { $delete: unlinkProgram } },
+              projects: { $post: linkProject, ':projectId': { $delete: unlinkProject } },
+            },
+          },
+        },
+      },
+    },
+  },
+}));
+
+vi.mock('../../src/lib/work-target-invalidation', () => ({ invalidateWorkTargetQueries }));
+
+import { patchInitiativeAggregate, useInitiativeMutations } from '@/lib/use-initiative-mutations';
+import { makeQueryWrapper, okResponse } from '../support/query';
 
 const aggregate = {
   target: 'initiative',
@@ -43,6 +81,22 @@ const aggregate = {
   },
 } as InitiativeDetailAggregate;
 
+const PROGRAM_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAY';
+const PROJECT_ID = '01ARZ3NDEKTSV4RRFFQ69G5FB0';
+
+beforeEach(() => {
+  invalidateWorkTargetQueries.mockClear();
+  initiativePatch.mockReset().mockResolvedValue(okResponse(aggregate.defaultView.initiative));
+  linkProgram.mockReset().mockResolvedValue(okResponse({}));
+  unlinkProgram.mockReset().mockResolvedValue(okResponse({}));
+  linkProject.mockReset().mockResolvedValue(okResponse({}));
+  unlinkProject.mockReset().mockResolvedValue(okResponse({}));
+});
+
+afterEach(() => {
+  cleanup();
+});
+
 describe('patchInitiativeAggregate', () => {
   it('keeps the cached navigation snapshot aligned with optimistic Initiative changes', () => {
     const patched = patchInitiativeAggregate(aggregate, (initiative) => ({
@@ -61,5 +115,98 @@ describe('patchInitiativeAggregate', () => {
       health: 'at_risk',
     });
     expect(patched?.references.owner).toBeNull();
+  });
+});
+
+describe('useInitiativeMutations invalidation', () => {
+  it('refreshes Initiative projections after property writes', async () => {
+    const { client, wrapper } = makeQueryWrapper();
+    const { result } = renderHook(
+      () =>
+        useInitiativeMutations(
+          aggregate.defaultView.initiative.organizationId,
+          aggregate.defaultView.initiative.id,
+          'initiative',
+          'program',
+          'project',
+        ),
+      { wrapper },
+    );
+
+    act(() => {
+      result.current.patchInitiative({ status: 'completed', labelIds: [] });
+    });
+    await waitFor(() => {
+      expect(invalidateWorkTargetQueries).toHaveBeenCalledTimes(1);
+    });
+    expect(invalidateWorkTargetQueries).toHaveBeenLastCalledWith(client, {
+      target: 'initiative',
+      ownerOrganizationId: aggregate.defaultView.initiative.organizationId,
+    });
+  });
+
+  it.each([
+    ['linkProgram', linkProgram, 'program', PROGRAM_ID],
+    ['unlinkProgram', unlinkProgram, 'program', PROGRAM_ID],
+    ['linkProject', linkProject, 'project', PROJECT_ID],
+    ['unlinkProject', unlinkProject, 'project', PROJECT_ID],
+  ] as const)(
+    'fans out same-owner %s invalidation to both entity collections',
+    async (method, apiWrite, target, id) => {
+      const { client, wrapper } = makeQueryWrapper();
+      const { result } = renderHook(
+        () =>
+          useInitiativeMutations(
+            aggregate.defaultView.initiative.organizationId,
+            aggregate.defaultView.initiative.id,
+            'initiative',
+            'program',
+            'project',
+          ),
+        { wrapper },
+      );
+
+      act(() => {
+        result.current[method](id);
+      });
+
+      await waitFor(() => {
+        expect(apiWrite).toHaveBeenCalledOnce();
+        expect(invalidateWorkTargetQueries).toHaveBeenCalledTimes(2);
+      });
+      expect(invalidateWorkTargetQueries).toHaveBeenCalledWith(client, {
+        target: 'initiative',
+        ownerOrganizationId: aggregate.defaultView.initiative.organizationId,
+      });
+      expect(invalidateWorkTargetQueries).toHaveBeenCalledWith(client, {
+        target,
+        ownerOrganizationId: aggregate.defaultView.initiative.organizationId,
+      });
+    },
+  );
+
+  it('clears mutation pending state before the Initiative refetch settles', async () => {
+    invalidateWorkTargetQueries.mockReturnValueOnce(new Promise(() => undefined));
+    const { wrapper } = makeQueryWrapper();
+    const { result } = renderHook(
+      () =>
+        useInitiativeMutations(
+          aggregate.defaultView.initiative.organizationId,
+          aggregate.defaultView.initiative.id,
+          'initiative',
+          'program',
+          'project',
+        ),
+      { wrapper },
+    );
+
+    act(() => {
+      result.current.patchInitiative({ status: 'completed' });
+    });
+
+    await waitFor(() => {
+      expect(invalidateWorkTargetQueries).toHaveBeenCalledOnce();
+      expect(result.current.propsPending).toBe(false);
+    });
   });
 });

@@ -142,6 +142,11 @@ Every key is a **tuple, org-scoped, hierarchical**:
 - Org-scoped: `['org', orgId, <collection>, <id?>]`.
 - Cross-org (Hub) scope: `['me', <collection>, …]`.
 - Detail keys extend their list key, so invalidating a coarse key (`queryKeys.projects(orgId)`) is a **prefix match** that also refreshes every detail beneath it (`queryKeys.project(orgId, id)`).
+- Work-view rosters and facets extend the collection for their own target. For example,
+  `queryKeys.workView('route-a', 'initiative', ...)` starts with
+  `['org', 'route-a', 'initiatives']`; it never sits under Projects or a shared `work-view`
+  sibling. A local collection invalidation therefore refreshes the overview, roster, facets, and
+  details for that entity type without touching another target.
 
 Rules:
 
@@ -170,6 +175,21 @@ Omitting `staleTime` inherits `standard`. Reserve `realtime` for data you also p
 - Pass `invalidateKeys` for **every surface a write affects**, using the coarsest correct key (prefix match cascades to detail keys).
 - Prefer `optimisticPatch` + a narrow `invalidateKeys` over a broad blast: patch the exact cache the user sees for instant feedback, then invalidate to reconcile. Over-broad invalidation (e.g. invalidating `tasks(orgId)` on a comment write) causes refetch storms — invalidate the comment stream key, not the task list.
 - A successful write should leave the cache matching the server; if the optimistic shape can't fully match, rely on the settle-time invalidation to true it up.
+- Use `invalidateWorkTargetQueries` when a work write can affect a roster. An entity owned by
+  workspace B can appear in a roster projected through route workspace A, so invalidating only
+  `queryKeys.initiatives('owner-b')` cannot find the route-A cache entry. The helper invalidates the
+  owner collection plus every cached roster and facet projection for the same target across route
+  workspaces in one pass:
+
+  ```ts
+  void invalidateWorkTargetQueries(queryClient, {
+    target: 'initiative',
+    ownerOrganizationId: 'owner-b',
+  });
+  ```
+
+  Start this promise from product mutation settlement and do not await it. Active matches refetch
+  while the control leaves its pending state, and inactive matches remain stale for their next use.
 
 ---
 

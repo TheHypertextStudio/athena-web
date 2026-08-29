@@ -70,7 +70,7 @@ test('Project header stays compact and operable across overflow widths', async (
   const { orgId } = await signUpAndOnboard(page, 'ProjectDetailHeader');
   const projectId = await createProject(page, orgId);
   await page.goto(orgHref(orgId, `projects/${projectId}`), {
-    waitUntil: 'domcontentloaded',
+    waitUntil: 'commit',
     timeout: TIMEOUTS.pageReady,
   });
   await expect(page.getByRole('heading', { name: 'Week Without Driving 2026' })).toBeVisible({
@@ -120,10 +120,12 @@ test('Project header stays compact and operable across overflow widths', async (
       const mastheadContent = header.querySelector<HTMLElement>('.masthead-content');
       const glyph = header.querySelector<HTMLElement>('.detail-glyph');
       const title = header.querySelector<HTMLElement>('.detail-title');
+      const actions = header.querySelector<HTMLElement>('.detail-actions');
       const titleField = title?.querySelector<HTMLElement>('textarea, span');
       const subtitle = header.querySelector<HTMLElement>(
         '.detail-secondary textarea, .detail-secondary span',
       );
+      const mastheadContent = header.querySelector<HTMLElement>('.masthead-content');
       const tabs = header.querySelector<HTMLElement>('.detail-tabs');
       const metadataRow = header.querySelector<HTMLElement>('.entity-metadata-row');
       const bounds = (element: HTMLElement | null): DOMRect | null =>
@@ -131,12 +133,15 @@ test('Project header stays compact and operable across overflow widths', async (
       const metadataBounds = bounds(metadataRow);
       const tabBounds = bounds(tabs);
       const glyphBounds = bounds(glyph);
+      const actionsBounds = bounds(actions);
       return {
         mastheadPaddingTop: Number.parseFloat(
           getComputedStyle(mastheadContent ?? header).paddingTop,
         ),
         glyphWidth: glyphBounds?.width ?? 0,
         glyphHeight: glyphBounds?.height ?? 0,
+        glyphTop: glyphBounds?.top ?? 0,
+        actionsTop: actionsBounds?.top ?? 0,
         titleWhiteSpace: title ? getComputedStyle(title).whiteSpace : '',
         titleFullyVisible: titleField
           ? titleField.scrollHeight <= titleField.clientHeight + 1
@@ -148,6 +153,7 @@ test('Project header stays compact and operable across overflow widths', async (
     expect(expanded.mastheadPaddingTop).toBeGreaterThanOrEqual(20);
     expect(expanded.glyphWidth).toBeCloseTo(48, 0);
     expect(expanded.glyphHeight).toBeCloseTo(48, 0);
+    expect(Math.abs(expanded.glyphTop - expanded.actionsTop)).toBeLessThanOrEqual(1);
     expect(expanded.titleWhiteSpace).toBe('normal');
     expect(expanded.titleFullyVisible).toBe(true);
     expect(expanded.subtitleFullyVisible).toBe(true);
@@ -215,8 +221,8 @@ test('Project header stays compact and operable across overflow widths', async (
       height: primary.getBoundingClientRect().height,
     };
   });
-  expect(Math.abs(compactAlignment.glyphTop - compactAlignment.actionsTop)).toBeLessThanOrEqual(8);
-  expect(Math.abs(compactAlignment.titleTop - compactAlignment.actionsTop)).toBeLessThanOrEqual(8);
+  expect(Math.abs(compactAlignment.glyphTop - compactAlignment.actionsTop)).toBeLessThanOrEqual(1);
+  expect(Math.abs(compactAlignment.titleTop - compactAlignment.actionsTop)).toBeLessThanOrEqual(1);
 
   await page.getByRole('button', { name: 'Project actions' }).click();
   await expect(page.getByRole('menuitem', { name: 'Repeat project' })).toBeVisible();

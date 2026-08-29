@@ -37,8 +37,10 @@ describe('EntityDetailLayout', () => {
 
     const primary = header?.querySelector('.detail-primary');
     expect(primary).not.toBeNull();
-    expect(within(primary as HTMLElement).getByRole('button', { name: 'Publish' })).toBeVisible();
+    const actions = within(assertDefined(primary)).getByRole('group', { name: 'Entity actions' });
+    expect(within(actions).getByRole('button', { name: 'Publish' })).toBeVisible();
     expect(primary?.querySelector('.detail-identity')).not.toBeNull();
+    expect(within(assertDefined(header)).getByRole('heading', { name: 'Launch' })).toBeVisible();
   });
 
   it('bleeds the cover to the header/main edges rather than the gutter-inset measure track', () => {

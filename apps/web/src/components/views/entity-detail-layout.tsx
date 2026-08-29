@@ -163,7 +163,13 @@ export function EntityDetailLayout({
                 </h1>
               </div>
               {actions ? (
-                <div className="detail-actions flex shrink-0 items-center gap-1">{actions}</div>
+                <div
+                  aria-label="Entity actions"
+                  className="detail-actions flex shrink-0 items-center gap-1"
+                  role="group"
+                >
+                  {actions}
+                </div>
               ) : null}
             </div>
 

@@ -1001,21 +1001,28 @@
 .detail-primary {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
+  grid-template-rows:
+    [identity] var(--detail-expanded-glyph-size)
+    [title] minmax(0, auto)
+    [meta] minmax(0, 0fr)
+    [content] minmax(0, 0fr);
+  grid-template-areas:
+    'glyph actions'
+    'title .'
+    'meta .'
+    'content .';
+  align-items: start;
   column-gap: 0.75rem;
   min-width: 0;
+  animation-name: detail-primary-collapse;
 }
 
 .detail-identity {
-  position: relative;
-  min-width: 0;
-  min-block-size: 2.5rem;
+  display: contents;
 }
 
 .detail-glyph {
-  position: absolute;
-  inset-block-start: 0;
-  inset-inline-start: 0;
+  grid-area: glyph;
   width: var(--detail-expanded-glyph-size);
   height: var(--detail-expanded-glyph-size);
   /*
@@ -1034,11 +1041,17 @@
 }
 
 .detail-title {
+  grid-area: title;
   min-width: 0;
+  min-height: 0;
   overflow: hidden;
   overflow-wrap: anywhere;
-  padding-block-start: var(--detail-expanded-glyph-row);
   white-space: normal;
+}
+
+.detail-actions {
+  grid-area: actions;
+  align-self: start;
 }
 
 .detail-title textarea {
@@ -1074,6 +1087,7 @@
 .detail-backdrop-space,
 .masthead-content,
 .detail-masthead,
+.detail-primary,
 .detail-glyph,
 .detail-title,
 .detail-secondary,
@@ -1131,6 +1145,16 @@
   }
 }
 
+@keyframes detail-primary-collapse {
+  to {
+    grid-template-rows:
+      [identity] 2.5rem
+      [title] minmax(0, 0fr)
+      [meta] minmax(0, 0fr)
+      [content] minmax(0, 0fr);
+  }
+}
+
 @keyframes detail-masthead-content-collapse {
   to {
     padding-block-start: 0.25rem;
@@ -1151,7 +1175,8 @@
 
 @keyframes detail-title-collapse {
   from {
-    padding-block-start: var(--detail-expanded-glyph-row);
+    transform: translateY(0);
+    padding-block-start: 0;
     padding-block-end: 0;
     padding-inline-start: 0;
     font-size: var(--text-headline-medium);
@@ -1163,6 +1188,7 @@
     white-space: normal;
   }
   to {
+    transform: translateY(-2.5rem);
     padding-block-start: 0.5rem;
     padding-block-end: 0.5rem;
     padding-inline-start: var(--detail-compact-identity-inset);

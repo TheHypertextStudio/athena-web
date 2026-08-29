@@ -31,7 +31,11 @@
  * flag so the UI can surface a retry, and the integration is left `error` with a real reason.
  */
 import { db, integration, integrationCredential } from '@docket/db';
-import { exchangeLinearAgentCode, type StoredLinearAgentTokens } from '@docket/integrations';
+import {
+  exchangeLinearAgentCode,
+  resolveLinearAgentInstallation,
+  type StoredLinearAgentTokens,
+} from '@docket/integrations';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 
@@ -105,6 +109,7 @@ const integrationsLinearAgentOAuth = new Hono().get('/callback', async (c) => {
       redirectUri: config.redirectUri,
       code,
     });
+    const installed = await resolveLinearAgentInstallation(tokens.accessToken);
 
     const stored: StoredLinearAgentTokens = { ...tokens, obtainedAt: new Date().toISOString() };
     const ciphertext = sealCredential(JSON.stringify(stored));
@@ -123,7 +128,14 @@ const integrationsLinearAgentOAuth = new Hono().get('/callback', async (c) => {
           status: 'connected',
           lastError: null,
           lastErrorAt: null,
-          connection: { ...row.connection, credentialsRef: 'integration_credential' },
+          connection: {
+            ...row.connection,
+            credentialsRef: 'integration_credential',
+            externalWorkspaceId: installed.workspaceId,
+            externalWorkspaceName: installed.workspaceName,
+            externalWorkspaceSlug: installed.workspaceUrlKey,
+            appActorId: installed.appActorId,
+          },
         })
         .where(eq(integration.id, row.id));
     });

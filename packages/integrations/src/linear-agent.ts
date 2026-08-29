@@ -488,6 +488,45 @@ export class LinearAgentClient {
   }
 }
 
+/** Installed Linear workspace and app actor resolved from an app OAuth token. */
+export interface LinearAgentInstallation {
+  readonly workspaceId: string;
+  readonly workspaceName: string;
+  readonly workspaceUrlKey: string;
+  readonly appActorId: string;
+}
+
+const LINEAR_AGENT_INSTALLATION_QUERY = `
+  query LinearAgentInstallation {
+    organization { id name urlKey }
+    viewer { id }
+  }
+`;
+
+/** Resolve the workspace and app actor that own one installed Agent token. */
+export async function resolveLinearAgentInstallation(
+  accessToken: string,
+  http: HttpClient = defaultHttpClient,
+): Promise<LinearAgentInstallation> {
+  const data = await new LinearAgentClient(accessToken, http).query<{
+    organization?: { id?: string; name?: string; urlKey?: string };
+    viewer?: { id?: string };
+  }>(LINEAR_AGENT_INSTALLATION_QUERY);
+  const { organization, viewer } = data;
+  if (!organization?.id || !organization.name || !organization.urlKey || !viewer?.id) {
+    throw new ConnectorError('linear-agent installation identity is incomplete', {
+      provider: 'linear',
+      kind: 'provider',
+    });
+  }
+  return {
+    workspaceId: organization.id,
+    workspaceName: organization.name,
+    workspaceUrlKey: organization.urlKey,
+    appActorId: viewer.id,
+  };
+}
+
 /**
  * The Activity-stream entry kind Linear's `agentActivityCreate` accepts.
  *

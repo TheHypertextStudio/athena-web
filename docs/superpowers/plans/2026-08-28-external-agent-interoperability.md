@@ -1,8 +1,9 @@
 # External Agent Interoperability Implementation Plan
 
-> **Reader:** The engineer implementing and reviewing Athena's Linear, Slack, GitHub, and Jira
-> agent surfaces. The reader must complete the tasks in order, preserve the durable-core
-> invariants, and withhold each provider from production until its sandbox gate passes.
+> **Reader:** The engineer implementing and reviewing Athena's external agent boundary. The reader
+> must complete the Linear tasks in order, preserve the durable-core invariants, and withhold
+> Linear from production until its sandbox gate passes. Slack, GitHub, and Jira remain typed
+> architecture targets rather than product implementations in this slice.
 
 **Goal:** Let a person start, continue, approve, authenticate, stop, and receive Athena work from
 Linear, Slack, GitHub, or Jira Rovo without adding a second execution queue or weakening Docket
@@ -168,7 +169,7 @@ The approved design is
    relationship changes without loops.
 5. Run the connector, reconciliation, API, and UI tests.
 
-## Task 7: Add Slack Agents
+## Deferred target: Slack Agents
 
 **Files:**
 
@@ -177,6 +178,10 @@ The approved design is
 - Register the Slack adapter with the shared route and relay.
 - Add Slack agent route, processor, and relay cases to the shared API suites.
 - Modify the Slack connection UI and tests.
+
+The shared generic boundary keeps Slack's wire family and capability declaration type-checked.
+This implementation does not register Slack credentials, routes, or outbound publication. A later
+Slack product slice must do the following work:
 
 1. Write failing tests for Slack URL verification, signature timestamp replay rejection, app
    mentions, direct messages, thread follow-ups, installation routing, channel access checks,
@@ -190,7 +195,7 @@ The approved design is
    stop values. Verify interactive payload signatures through the same inbox.
 5. Run all Slack agent tests and bounded package checks.
 
-## Task 8: Add the GitHub Agent surface
+## Deferred target: GitHub Agent surface
 
 **Files:**
 
@@ -199,6 +204,10 @@ The approved design is
 - Extend `apps/api/src/routes/integrations-github.ts` and its tests.
 - Register the GitHub adapter with the shared route and relay.
 - Add GitHub cases to the shared API suites and connection UI tests.
+
+The shared generic boundary keeps GitHub's wire family and capability declaration type-checked.
+This implementation does not register GitHub agent commands or outbound publication. A later
+GitHub product slice must do the following work:
 
 1. Write failing tests for installation routing, HMAC verification, issue and pull-request command
    parsing, comment follow-ups, bot echo suppression, repository permission boundaries, check-run
@@ -212,7 +221,7 @@ The approved design is
    it does not.
 5. Run all GitHub agent tests and bounded package checks.
 
-## Task 9: Add the Jira Rovo A2A 1.0 adapter
+## Deferred target: Jira Rovo A2A 1.0
 
 **Files:**
 
@@ -220,6 +229,10 @@ The approved design is
 - Add Jira configuration and credential helpers under `apps/api/src/lib/`.
 - Add Jira A2A API and adapter tests.
 - Add the Jira connection surface and tests.
+
+The shared generic boundary keeps Jira's A2A wire family and capability declaration type-checked.
+This implementation does not register Jira credentials, callbacks, or outbound publication. A
+later Jira product slice must do the following work:
 
 1. Write failing tests for authenticated JSON-RPC messages, task creation, follow-up messages,
    input requests, cancellation, streaming/status artifacts, duplicate request ids, tenant
@@ -230,14 +243,14 @@ The approved design is
    the A2A response or configured callback without changing the durable core.
 4. Run Jira contract tests and all shared surface tests.
 
-## Task 10: Release gates and documentation
+## Task 7: Linear release gate and documentation
 
 **Files:**
 
 - Update `.env.local`, environment schemas, deployment manifests, and their tests for required
-  provider configuration. Keep every adapter disabled by default.
+  Linear configuration. Keep Linear disabled by default.
 - Update connection setup documentation and operational runbooks.
-- Add provider sandbox scripts or documented commands under `scripts/`.
+- Add Linear sandbox scripts or documented commands under `scripts/`.
 - Complete `docs/WORKLOG.md`.
 
 1. Add failing environment and deployment-policy tests for per-provider enable flags, webhook

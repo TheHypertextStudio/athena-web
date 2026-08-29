@@ -158,7 +158,7 @@ describe('POST /internal/ingest/linear-agent', () => {
     const rows = await db
       .select()
       .from(schema.agentSession)
-      .where(eq(schema.agentSession.externalRunRef, 'linear-agent-session:las_bad_sig'));
+      .where(eq(schema.agentSession.externalRunRef, 'external-agent:linear:las_bad_sig'));
     expect(rows).toHaveLength(0);
   });
 
@@ -178,11 +178,11 @@ describe('POST /internal/ingest/linear-agent', () => {
     const rows = await db
       .select()
       .from(schema.agentSession)
-      .where(eq(schema.agentSession.externalRunRef, 'linear-agent-session:las_unrouted'));
+      .where(eq(schema.agentSession.externalRunRef, 'external-agent:linear:las_unrouted'));
     expect(rows).toHaveLength(0);
   });
 
-  it('acknowledges an event for an integration with no completed credential (200, no writes)', async () => {
+  it('persists and processes an event when outbound publication must wait for a credential', async () => {
     const seeded = await seedOrgWithLinearAgent({ withCredential: false });
     const { headers, rawBody } = signed({
       action: 'created',
@@ -195,12 +195,17 @@ describe('POST /internal/ingest/linear-agent', () => {
       body: rawBody,
     });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ received: true, processed: false });
+    expect(await res.json()).toMatchObject({ received: true, processed: true });
     const rows = await db
       .select()
       .from(schema.agentSession)
-      .where(eq(schema.agentSession.externalRunRef, 'linear-agent-session:las_nocred'));
-    expect(rows).toHaveLength(0);
+      .where(eq(schema.agentSession.externalRunRef, 'external-agent:linear:las_nocred'));
+    expect(rows).toHaveLength(1);
+    const [link] = await db
+      .select()
+      .from(schema.agentSessionExternalLink)
+      .where(eq(schema.agentSessionExternalLink.sessionId, assertDefined(rows[0]).id));
+    expect(link).toMatchObject({ relayStatus: 'retrying', relayAttempts: 1 });
   });
 
   describe('action: created', () => {
@@ -239,7 +244,7 @@ describe('POST /internal/ingest/linear-agent', () => {
       expect(session?.status).toBe('pending');
       expect(session?.trigger).toBe('mention');
       expect(session?.initiatorId).toBe(linearActorId);
-      expect(session?.externalRunRef).toBe('linear-agent-session:las_1');
+      expect(session?.externalRunRef).toBe('external-agent:linear:las_1');
 
       const [link] = await db
         .select()
@@ -412,7 +417,7 @@ describe('POST /internal/ingest/linear-agent', () => {
       expect(link?.externalWorkItemId).toBe('issue_42');
     });
 
-    it('is idempotent against a retried delivery (no duplicate rows), but still re-issues agentSessionUpdate', async () => {
+    it('is idempotent against a retried delivery without duplicating rows or publication', async () => {
       const seeded = await seedOrgWithLinearAgent();
       await seedLinkedLinearActor(seeded.orgId, 'linear_user_dup');
       const port = new MockLinearAgent();
@@ -444,15 +449,14 @@ describe('POST /internal/ingest/linear-agent', () => {
       const sessions = await db
         .select()
         .from(schema.agentSession)
-        .where(eq(schema.agentSession.externalRunRef, 'linear-agent-session:las_dup'));
+        .where(eq(schema.agentSession.externalRunRef, 'external-agent:linear:las_dup'));
       expect(sessions).toHaveLength(1);
       const runs = await db
         .select()
         .from(schema.agentSessionRun)
         .where(eq(schema.agentSessionRun.sessionId, firstJson.sessionId));
       expect(runs).toHaveLength(1);
-      // agentSessionUpdate is safe (and necessary) to re-issue on every delivery.
-      expect(port.sessionUpdateLog).toHaveLength(2);
+      expect(port.sessionUpdateLog).toHaveLength(1);
     });
   });
 
@@ -472,7 +476,7 @@ describe('POST /internal/ingest/linear-agent', () => {
           trigger: 'mention',
           status: initiatorActorId ? 'pending' : 'awaiting_input',
           initiatorId: initiatorActorId,
-          externalRunRef: `linear-agent-session:${linearSessionId}`,
+          externalRunRef: `external-agent:linear:${linearSessionId}`,
         })
         .returning({ id: schema.agentSession.id });
       await db.insert(schema.agentSessionExternalLink).values({
@@ -519,7 +523,10 @@ describe('POST /internal/ingest/linear-agent', () => {
         organizationId: seeded.workspaceId,
         agentSession: { id: 'las_p1' },
         actor: { id: 'linear_user_prompt' },
-        agentActivity: { body: 'One more thing — also check the staging config.' },
+        agentActivity: {
+          id: 'activity_prompt_1',
+          body: 'One more thing — also check the staging config.',
+        },
       });
 
       const res = await ingestLinearAgent.request('/linear-agent', {
@@ -575,7 +582,7 @@ describe('POST /internal/ingest/linear-agent', () => {
         organizationId: seeded.workspaceId,
         agentSession: { id: 'las_p2' },
         actor: { id: 'linear_user_late' },
-        agentActivity: { body: 'I linked my account now.' },
+        agentActivity: { id: 'activity_prompt_2', body: 'I linked my account now.' },
       });
 
       const res = await ingestLinearAgent.request('/linear-agent', {
@@ -612,7 +619,7 @@ describe('POST /internal/ingest/linear-agent', () => {
         organizationId: seeded.workspaceId,
         agentSession: { id: 'las_p3' },
         actor: { id: 'linear_user_still_unknown' },
-        agentActivity: { body: 'hello?' },
+        agentActivity: { id: 'activity_prompt_3', body: 'hello?' },
       });
 
       const res = await ingestLinearAgent.request('/linear-agent', {
@@ -621,7 +628,7 @@ describe('POST /internal/ingest/linear-agent', () => {
         body: rawBody,
       });
       expect(res.status).toBe(200);
-      expect(await res.json()).toEqual({ received: true, processed: false });
+      expect(await res.json()).toEqual({ received: true, processed: true, sessionId });
 
       const [session] = await db
         .select()
@@ -647,7 +654,7 @@ describe('POST /internal/ingest/linear-agent', () => {
         organizationId: seeded.workspaceId,
         agentSession: { id: 'las_never_created' },
         actor: { id: 'linear_user_x' },
-        agentActivity: { body: 'hello?' },
+        agentActivity: { id: 'activity_prompt_4', body: 'hello?' },
       });
 
       const res = await ingestLinearAgent.request('/linear-agent', {

@@ -8,6 +8,7 @@ import {
   db,
   integration,
   sessionActivity,
+  task,
 } from '@docket/db';
 import {
   agentSurfaceFor,
@@ -161,6 +162,33 @@ export async function processExternalAgentInboxEvent(row: ExternalAgentInboxRow)
     if (event.type === 'session_started') {
       const createdByActorId = actorId ?? installed.createdBy;
       if (!createdByActorId) throw new Error('External agent install has no accountable actor.');
+      const externalWorkItemId = event.context.workItem?.externalId ?? null;
+      let taskId: string | null = null;
+      if (externalWorkItemId) {
+        const [connector] = await db
+          .select({ id: integration.id })
+          .from(integration)
+          .where(
+            and(
+              eq(integration.organizationId, row.organizationId),
+              eq(integration.provider, provider === 'linear' ? 'linear' : provider),
+            ),
+          )
+          .limit(1);
+        if (connector) {
+          const [linkedTask] = await db
+            .select({ id: task.id })
+            .from(task)
+            .where(
+              and(
+                eq(task.sourceIntegrationId, connector.id),
+                eq(task.externalId, externalWorkItemId),
+              ),
+            )
+            .limit(1);
+          taskId = linkedTask?.id ?? null;
+        }
+      }
       await createExternalAgentSession(row.organizationId, {
         provider,
         createdByActorId,
@@ -169,7 +197,8 @@ export async function processExternalAgentInboxEvent(row: ExternalAgentInboxRow)
         prompt: event.context.prompt,
         externalSessionId: event.externalSessionId,
         externalWorkspaceId: event.workspaceId,
-        externalWorkItemId: event.context.workItem?.externalId ?? null,
+        externalWorkItemId,
+        taskId,
       });
       continue;
     }

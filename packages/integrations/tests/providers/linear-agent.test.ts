@@ -21,6 +21,7 @@ import {
   linearAgentTokenNeedsRefresh,
   parseLinearAgentWebhook,
   refreshLinearAgentToken,
+  resolveLinearAgentInstallation,
   verifyLinearAgentWebhookSignature,
   type StoredLinearAgentTokens,
 } from '../../src/linear-agent';
@@ -557,6 +558,32 @@ describe('agentActivityCreate', () => {
     await expect(
       agentActivityCreate(client, { agentSessionId: 's', type: 'thought', body: 'x' }),
     ).rejects.toMatchObject({ kind: 'provider' });
+  });
+});
+
+describe('resolveLinearAgentInstallation', () => {
+  it('returns the installed workspace and app actor', async () => {
+    const calls: { body: unknown }[] = [];
+    const http: HttpClient = async (_url, init) => {
+      calls.push({ body: JSON.parse(init?.body as string) });
+      return new Response(
+        JSON.stringify({
+          data: {
+            organization: { id: 'org_linear', name: 'Acme', urlKey: 'acme' },
+            viewer: { id: 'app_actor' },
+          },
+        }),
+        { status: 200 },
+      );
+    };
+
+    await expect(resolveLinearAgentInstallation('token', http)).resolves.toEqual({
+      workspaceId: 'org_linear',
+      workspaceName: 'Acme',
+      workspaceUrlKey: 'acme',
+      appActorId: 'app_actor',
+    });
+    expect(calls).toHaveLength(1);
   });
 });
 

@@ -12,13 +12,15 @@ import type { unsealCredential as UnsealCredential } from '../../src/lib/credent
 import type { signLinearAgentInstallState as SignInstallState } from '../../src/lib/linear-agent-connect';
 import { assertDefined } from '@docket/test-utils';
 
-const { exchangeLinearAgentCode } = vi.hoisted(() => ({
+const { exchangeLinearAgentCode, resolveLinearAgentInstallation } = vi.hoisted(() => ({
   exchangeLinearAgentCode: vi.fn(),
+  resolveLinearAgentInstallation: vi.fn(),
 }));
 
 vi.mock('@docket/integrations', async (importOriginal) => ({
   ...(await importOriginal<typeof IntegrationsModule>()),
   exchangeLinearAgentCode,
+  resolveLinearAgentInstallation,
 }));
 
 vi.hoisted(() => {
@@ -90,6 +92,12 @@ describe('Linear Agent install callback', () => {
       refreshToken: 'linear-agent-refresh',
     };
     exchangeLinearAgentCode.mockResolvedValue(tokens);
+    resolveLinearAgentInstallation.mockResolvedValue({
+      workspaceId: 'linear-workspace',
+      workspaceName: 'Acme Linear',
+      workspaceUrlKey: 'acme',
+      appActorId: 'linear-app-actor',
+    });
     const state = signLinearAgentInstallState({
       integrationId: seeded.integrationId,
       orgId: seeded.orgId,
@@ -110,6 +118,7 @@ describe('Linear Agent install callback', () => {
         status: schema.integration.status,
         lastError: schema.integration.lastError,
         ciphertext: schema.integrationCredential.ciphertext,
+        connection: schema.integration.connection,
       })
       .from(schema.integration)
       .innerJoin(
@@ -124,6 +133,12 @@ describe('Linear Agent install callback', () => {
       );
     expect(stored?.status).toBe('connected');
     expect(stored?.lastError).toBeNull();
+    expect(stored?.connection).toMatchObject({
+      externalWorkspaceId: 'linear-workspace',
+      externalWorkspaceName: 'Acme Linear',
+      externalWorkspaceSlug: 'acme',
+      appActorId: 'linear-app-actor',
+    });
     expect(JSON.parse(unsealCredential(assertDefined(stored).ciphertext))).toEqual({
       ...tokens,
       obtainedAt: expect.any(String),
@@ -136,6 +151,7 @@ describe('Linear Agent install callback', () => {
         code: 'approval-code',
       }),
     );
+    expect(resolveLinearAgentInstallation).toHaveBeenCalledWith('linear-agent-access');
   });
 
   it('replaying a completed callback is idempotent and does not flip a healthy connection to error', async () => {
@@ -148,6 +164,12 @@ describe('Linear Agent install callback', () => {
       refreshToken: 'linear-agent-refresh',
     };
     exchangeLinearAgentCode.mockResolvedValue(tokens);
+    resolveLinearAgentInstallation.mockResolvedValue({
+      workspaceId: 'linear-workspace',
+      workspaceName: 'Acme Linear',
+      workspaceUrlKey: 'acme',
+      appActorId: 'linear-app-actor',
+    });
     const state = signLinearAgentInstallState({
       integrationId: seeded.integrationId,
       orgId: seeded.orgId,

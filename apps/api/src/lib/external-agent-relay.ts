@@ -12,16 +12,26 @@ import {
 } from '@docket/integrations';
 
 import { signExternalAgentControl } from './external-agent-control-token';
+import { publishExternalAgentOutput } from './external-agent-publisher';
+import { webAppOrigin } from './github-app';
 
 type ActivityRow = typeof sessionActivity.$inferSelect;
 type LinkRow = typeof agentSessionExternalLink.$inferSelect;
 
+/** One type-correlated provider publication request. */
+export type ExternalAgentPublishRequest = {
+  [P in AgentSurfaceProvider]: {
+    readonly provider: P;
+    readonly organizationId: string;
+    readonly session: SurfaceTypes<P>['sessionRef'];
+  } & (
+    | { readonly kind: 'prepare_session'; readonly externalUrl: string }
+    | { readonly kind: 'activity'; readonly output: SurfaceTypes<P>['outbound'] }
+  );
+}[AgentSurfaceProvider];
+
 /** Provider publication boundary used by the durable relay. */
-export type ExternalAgentPublisher = <P extends AgentSurfaceProvider>(
-  provider: P,
-  session: SurfaceTypes<P>['sessionRef'],
-  output: SurfaceTypes<P>['outbound'],
-) => Promise<ExternalRef>;
+export type ExternalAgentPublisher = (request: ExternalAgentPublishRequest) => Promise<ExternalRef>;
 
 /** Injectable outbound relay dependencies. */
 export interface ExternalAgentRelayDependencies {
@@ -104,11 +114,13 @@ async function publishActivity(
         externalSessionId: link.externalSessionId,
         ...(link.externalWorkItemId ? { externalWorkItemId: link.externalWorkItemId } : {}),
       };
-      return publisher(
-        'linear',
-        { id: link.externalSessionId },
-        agentSurfaceFor('linear').render(activity, context),
-      );
+      return publisher({
+        provider: 'linear',
+        kind: 'activity',
+        organizationId: link.organizationId,
+        session: { id: link.externalSessionId },
+        output: agentSurfaceFor('linear').render(activity, context),
+      });
     }
     case 'slack': {
       const [channelId, threadTs] = link.externalSessionId.split(':', 2);
@@ -119,11 +131,13 @@ async function publishActivity(
         externalSessionId: link.externalSessionId,
         ...(link.externalWorkItemId ? { externalWorkItemId: link.externalWorkItemId } : {}),
       };
-      return publisher(
-        'slack',
-        { id: link.externalSessionId, channelId, threadTs },
-        agentSurfaceFor('slack').render(activity, context),
-      );
+      return publisher({
+        provider: 'slack',
+        kind: 'activity',
+        organizationId: link.organizationId,
+        session: { id: link.externalSessionId, channelId, threadTs },
+        output: agentSurfaceFor('slack').render(activity, context),
+      });
     }
     case 'github': {
       const separator = link.externalSessionId.lastIndexOf('#');
@@ -141,16 +155,18 @@ async function publishActivity(
         externalSessionId: link.externalSessionId,
         ...(link.externalWorkItemId ? { externalWorkItemId: link.externalWorkItemId } : {}),
       };
-      return publisher(
-        'github',
-        {
+      return publisher({
+        provider: 'github',
+        kind: 'activity',
+        organizationId: link.organizationId,
+        session: {
           id: link.externalSessionId,
           repository,
           issueNumber,
           ...(pullRequestHeadSha ? { pullRequestHeadSha } : {}),
         },
-        agentSurfaceFor('github').render(activity, context),
-      );
+        output: agentSurfaceFor('github').render(activity, context),
+      });
     }
     case 'jira_a2a': {
       const context: ExternalSessionProjectionContext<'jira_a2a'> = {
@@ -159,11 +175,13 @@ async function publishActivity(
         externalSessionId: link.externalSessionId,
         ...(link.externalWorkItemId ? { externalWorkItemId: link.externalWorkItemId } : {}),
       };
-      return publisher(
-        'jira_a2a',
-        { id: link.externalSessionId },
-        agentSurfaceFor('jira_a2a').render(activity, context),
-      );
+      return publisher({
+        provider: 'jira_a2a',
+        kind: 'activity',
+        organizationId: link.organizationId,
+        session: { id: link.externalSessionId },
+        output: agentSurfaceFor('jira_a2a').render(activity, context),
+      });
     }
   }
 }
@@ -172,11 +190,66 @@ function retryDelay(attempt: number): number {
   return Math.min(60 * 60_000, 30_000 * 2 ** Math.max(0, attempt - 1));
 }
 
+async function prepareExternalSession(
+  publisher: ExternalAgentPublisher,
+  link: LinkRow,
+): Promise<void> {
+  const externalUrl = `${webAppOrigin()}/orgs/${link.organizationId}/sessions/${link.sessionId}`;
+  const externalProvider = provider(link.provider);
+  switch (externalProvider) {
+    case 'linear':
+      await publisher({
+        provider: 'linear',
+        kind: 'prepare_session',
+        organizationId: link.organizationId,
+        session: { id: link.externalSessionId },
+        externalUrl,
+      });
+      return;
+    case 'slack': {
+      const [channelId, threadTs] = link.externalSessionId.split(':', 2);
+      if (!channelId || !threadTs) throw new Error('Slack external session id is malformed.');
+      await publisher({
+        provider: 'slack',
+        kind: 'prepare_session',
+        organizationId: link.organizationId,
+        session: { id: link.externalSessionId, channelId, threadTs },
+        externalUrl,
+      });
+      return;
+    }
+    case 'github': {
+      const separator = link.externalSessionId.lastIndexOf('#');
+      const repository = link.externalSessionId.slice(0, separator);
+      const issueNumber = Number(link.externalSessionId.slice(separator + 1));
+      if (separator < 1 || !Number.isInteger(issueNumber)) {
+        throw new Error('GitHub external session id is malformed.');
+      }
+      await publisher({
+        provider: 'github',
+        kind: 'prepare_session',
+        organizationId: link.organizationId,
+        session: { id: link.externalSessionId, repository, issueNumber },
+        externalUrl,
+      });
+      return;
+    }
+    case 'jira_a2a':
+      await publisher({
+        provider: 'jira_a2a',
+        kind: 'prepare_session',
+        organizationId: link.organizationId,
+        session: { id: link.externalSessionId },
+        externalUrl,
+      });
+  }
+}
+
 /** Relay all due activity for one linked external session in cursor order. */
 export async function relayExternalAgentActivity(
   sessionId: string,
   now: Date,
-  dependencies: ExternalAgentRelayDependencies,
+  dependencies: ExternalAgentRelayDependencies = { publish: publishExternalAgentOutput },
 ): Promise<void> {
   const [link] = await db
     .select()
@@ -184,6 +257,23 @@ export async function relayExternalAgentActivity(
     .where(eq(agentSessionExternalLink.sessionId, sessionId))
     .limit(1);
   if (!link || (link.nextRelayAt && link.nextRelayAt > now)) return;
+  if (link.relayStatus === 'pending' && !link.lastRelayedActivityUpdatedAt) {
+    try {
+      await prepareExternalSession(dependencies.publish, link);
+    } catch {
+      const attempts = link.relayAttempts + 1;
+      await db
+        .update(agentSessionExternalLink)
+        .set({
+          relayStatus: 'retrying',
+          relayAttempts: attempts,
+          nextRelayAt: new Date(now.getTime() + retryDelay(attempts)),
+          lastRelayError: 'External provider session acknowledgement failed.',
+        })
+        .where(eq(agentSessionExternalLink.sessionId, sessionId));
+      return;
+    }
+  }
   const cursor = link.lastRelayedActivityUpdatedAt
     ? or(
         gt(sessionActivity.updatedAt, link.lastRelayedActivityUpdatedAt),
@@ -234,4 +324,28 @@ export async function relayExternalAgentActivity(
       lastRelayError: null,
     })
     .where(eq(agentSessionExternalLink.sessionId, sessionId));
+}
+
+/** Result of one provider-neutral relay sweep. */
+export interface ExternalAgentRelaySweepResult {
+  readonly found: number;
+  readonly processed: number;
+}
+
+/** Sweep linked sessions independently of whether any model run is due. */
+export async function sweepExternalAgentRelays(
+  now: Date,
+  dependencies: ExternalAgentRelayDependencies = { publish: publishExternalAgentOutput },
+): Promise<ExternalAgentRelaySweepResult> {
+  const links = await db
+    .select({ sessionId: agentSessionExternalLink.sessionId })
+    .from(agentSessionExternalLink)
+    .orderBy(asc(agentSessionExternalLink.updatedAt))
+    .limit(100);
+  let processed = 0;
+  for (const link of links) {
+    await relayExternalAgentActivity(link.sessionId, now, dependencies);
+    processed += 1;
+  }
+  return { found: links.length, processed };
 }

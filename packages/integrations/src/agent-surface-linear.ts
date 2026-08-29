@@ -37,7 +37,7 @@ const linearWebhookSchema = z
     organizationId: z.string(),
     webhookTimestamp: z.number(),
     agentSession: linearSessionSchema,
-    actor: linearActorSchema,
+    actor: linearActorSchema.optional(),
     agentActivity: z
       .object({
         id: z.string(),
@@ -97,6 +97,7 @@ export interface LinearSurfaceTypes extends SurfaceTypeFamily<'linear'> {
 }
 
 function actor(payload: LinearAgentSurfaceWebhook): CanonicalExternalActor {
+  if (!payload.actor) return { externalId: `unknown:${payload.agentSession.id}` };
   return {
     externalId: payload.actor.id,
     ...(payload.actor.email ? { email: payload.actor.email } : {}),

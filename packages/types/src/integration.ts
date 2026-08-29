@@ -117,6 +117,10 @@ export const IntegrationConnection = z
       .describe(
         'The provider-side workspace display name, when known. For Linear this is persisted during verification so multiple connected workspaces are distinguishable in Settings.',
       ),
+    appActorId: z
+      .string()
+      .optional()
+      .describe('The provider-side app actor id used for echo suppression and attribution.'),
   })
   .meta({ id: 'IntegrationConnection', description: "An integration's connection metadata." });
 /** Integration-connection value. */

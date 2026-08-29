@@ -86,6 +86,7 @@ describe('external agent relay', () => {
     ]);
     const publish = vi
       .fn<RelayModule.ExternalAgentPublisher>()
+      .mockResolvedValueOnce({ id: 'prepared' })
       .mockResolvedValueOnce({ id: 'first' })
       .mockRejectedValueOnce(new Error('provider outage'));
 
@@ -110,7 +111,7 @@ describe('external agent relay', () => {
       .select()
       .from(schema.agentSessionExternalLink)
       .where(eq(schema.agentSessionExternalLink.sessionId, seeded.sessionId));
-    expect(publish).toHaveBeenCalledTimes(3);
+    expect(publish).toHaveBeenCalledTimes(4);
     expect(link).toMatchObject({ relayStatus: 'ready', relayAttempts: 0, lastRelayError: null });
     expect(link?.lastRelayedActivityUpdatedAt).toEqual(new Date(start.getTime() + 1_000));
   });

@@ -83,6 +83,10 @@ export interface IntegrationConnection {
   readonly externalWorkspaceId?: string | undefined;
   /** External workspace slug/url-key (e.g. Linear's `urlKey`), persisted alongside the id. */
   readonly externalWorkspaceSlug?: string | undefined;
+  /** External workspace display name shown in connection settings. */
+  readonly externalWorkspaceName?: string | undefined;
+  /** Provider-side app actor used to suppress echoes and attribute app-authored events. */
+  readonly appActorId?: string | undefined;
 }
 
 /** Organizer details cached from a Google Calendar event. */

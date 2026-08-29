@@ -97,6 +97,15 @@ interface SweepCtx {
   readonly owners: Map<string, string | null>;
 }
 
+function sweepContext(now: Date): SweepCtx {
+  return {
+    now,
+    env: toAppRuntimeEnv(),
+    observers: new Map(),
+    owners: new Map(),
+  };
+}
+
 /** Resolve (and cache for the sweep) the provider observer. */
 function observerFor(ctx: SweepCtx, provider: ObserverProvider): Observer {
   let observer = ctx.observers.get(provider);
@@ -206,6 +215,24 @@ async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<DraftWrit
   return tally;
 }
 
+/** Claim and process one inbox row immediately through the same durable sweep path. */
+export async function processInboundEventById(id: string, now: Date): Promise<boolean> {
+  const staleBefore = new Date(now.getTime() - LEASE_STALE_MS);
+  const [row] = await db.select().from(inboundEvent).where(eq(inboundEvent.id, id)).limit(1);
+  if (!row || !(await claimEvent(row.id, now, staleBefore))) return false;
+  try {
+    await processOne(row, sweepContext(now));
+    return true;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'event processing error';
+    await db
+      .update(inboundEvent)
+      .set({ status: 'failed', attempts: row.attempts + 1, lastError: message })
+      .where(eq(inboundEvent.id, row.id));
+    throw err;
+  }
+}
+
 /**
  * Drain the inbound-event inbox once: claim each received (or stale-processing) event, normalize
  * it into canonical events, fan them out to recipients, and record the outcome. Idempotent +
@@ -229,12 +256,7 @@ export async function sweepInboundEvents(now: Date): Promise<DrainResult> {
     )
     .limit(SWEEP_BATCH_LIMIT);
 
-  const ctx: SweepCtx = {
-    now,
-    env: toAppRuntimeEnv(),
-    observers: new Map(),
-    owners: new Map(),
-  };
+  const ctx = sweepContext(now);
 
   let processed = 0;
   let events = 0;

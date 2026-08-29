@@ -22,7 +22,11 @@ import { and, asc, eq, isNotNull, isNull, lt, or } from 'drizzle-orm';
 import { agentSessionRun, db } from '@docket/db';
 
 import { driveSession } from '../agent/loop';
-import { relayLinearAgentActivity } from '../lib/linear-agent-relay';
+import {
+  relayExternalAgentActivity,
+  sweepExternalAgentRelays,
+  type ExternalAgentRelaySweepResult,
+} from '../lib/external-agent-relay';
 
 /** A workspace-owned session this tick will try to drive. */
 interface Candidate {
@@ -60,6 +64,8 @@ export interface LinearAgentSweepResult {
   readonly succeeded: number;
   /** Candidates whose `driveSession` call threw after being claimed. */
   readonly failed: number;
+  /** External links inspected independently of runnable model generations. */
+  readonly relay: ExternalAgentRelaySweepResult;
 }
 
 /**
@@ -155,7 +161,7 @@ async function processCandidate(
   // failure (e.g. a revoked Linear install) never masks the outcome above; it is simply retried
   // from its own watermark next tick.
   try {
-    await relayLinearAgentActivity(candidate.organizationId, candidate.sessionId);
+    await relayExternalAgentActivity(candidate.sessionId, new Date());
   } catch (err) {
     console.warn('[linear-agent-sweep] relay failed for session', {
       sessionId: candidate.sessionId,
@@ -205,5 +211,6 @@ export async function sweepLinearAgentSessions(now: Date): Promise<LinearAgentSw
     else failed += 1;
   }
 
-  return { claimed, succeeded, failed };
+  const relay = await sweepExternalAgentRelays(now);
+  return { claimed, succeeded, failed, relay };
 }

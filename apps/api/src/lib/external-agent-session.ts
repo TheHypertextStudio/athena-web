@@ -23,6 +23,7 @@ export interface CreateExternalAgentSessionInput {
   readonly externalSessionId: string;
   readonly externalWorkspaceId: string;
   readonly externalWorkItemId: string | null;
+  readonly taskId: string | null;
 }
 
 /** Created or replay-resolved external session. */
@@ -50,6 +51,7 @@ export async function createExternalAgentSession(
         status,
         initiatorId: input.initiatorActorId,
         externalRunRef,
+        taskId: input.taskId,
       })
       .onConflictDoNothing({
         target: agentSession.externalRunRef,

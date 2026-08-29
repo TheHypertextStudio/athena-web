@@ -30,7 +30,8 @@ import * as React from 'react';
 
 import { Check, Plus, Search, X } from '../../icons';
 import { cn } from '../../lib/utils';
-import { MENU_METRICS, Skeleton, menuItemClass, menuSupporting } from '../../primitives';
+import { Skeleton } from '../../primitives';
+import { MENU_METRICS, menuItemClass, menuSupporting } from '../../primitives/menu-styles';
 
 import { type PickerOption, optionMatches } from './types';
 

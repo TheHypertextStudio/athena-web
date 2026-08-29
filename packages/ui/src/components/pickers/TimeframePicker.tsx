@@ -14,13 +14,13 @@ import {
   Button,
   ControlGroup,
   focusRing,
-  menuItemClass,
-  OVERLAY_COLLISION_PADDING,
   Popover,
   PopoverContent,
   PopoverTrigger,
   Text,
 } from '../../primitives';
+import { menuItemClass } from '../../primitives/menu-styles';
+import { OVERLAY_COLLISION_PADDING } from '../../primitives/overlay-inset';
 
 import { CALENDAR_MAX_DAY, CALENDAR_MIN_DAY, todayIso } from './calendar-date';
 import { CalendarGrid } from './CalendarGrid';

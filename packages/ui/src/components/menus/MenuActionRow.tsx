@@ -3,13 +3,8 @@
 import * as React from 'react';
 
 import { cn } from '../../lib/utils';
-import {
-  menuFocusRing,
-  menuItemClass,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '../../primitives';
+import { Tooltip, TooltipContent, TooltipTrigger } from '../../primitives';
+import { menuFocusRing, menuItemClass } from '../../primitives/menu-styles';
 
 /**
  * Props for {@link MenuActionRow}.

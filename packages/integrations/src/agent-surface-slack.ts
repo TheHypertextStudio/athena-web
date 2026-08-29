@@ -80,7 +80,7 @@ export interface SlackSurfaceTypes extends SurfaceTypeFamily<'slack'> {
   readonly workspaceRef: ExternalRef;
   readonly sessionRef: SlackThreadRef;
   readonly actorRef: ExternalRef;
-  readonly nativeContext: { readonly channelId: string; readonly threadTs: string };
+  readonly nativeContext: { readonly botUserId: string };
   readonly outbound: SlackAgentMessageInput;
   readonly receipt: ExternalRef;
 }
@@ -185,12 +185,15 @@ export const slackAgentSurface: AgentSurfaceAdapter<'slack', SlackSurfaceTypes> 
     const rawPayload: unknown = contentType.includes('application/x-www-form-urlencoded')
       ? JSON.parse(new URLSearchParams(input.body).get('payload') ?? 'null')
       : JSON.parse(input.body);
-    const payload = slackWebhookSchema.parse(rawPayload);
+    const payload = slackAgentSurface.parse(rawPayload);
     const deliveryId =
       payload.type === 'event_callback'
         ? payload.event_id
         : `${payload.message.ts}:${payload.actions[0]?.action_ts ?? 'interaction'}`;
     return { deliveryId, eventType: payload.type, payload };
+  },
+  parse(payload) {
+    return slackWebhookSchema.parse(payload);
   },
   route(input) {
     return {
@@ -198,7 +201,7 @@ export const slackAgentSurface: AgentSurfaceAdapter<'slack', SlackSurfaceTypes> 
         input.payload.type === 'event_callback' ? input.payload.team_id : input.payload.team.id,
     };
   },
-  async normalize(input, install) {
+  async normalize(input, context) {
     const payload = input.payload;
     if (payload.type === 'block_actions') {
       const action = payload.actions[0];
@@ -215,6 +218,7 @@ export const slackAgentSurface: AgentSurfaceAdapter<'slack', SlackSurfaceTypes> 
             externalSessionId,
             externalActivityId: action.action_ts,
             actor,
+            stopToken: action.value,
           },
         ];
       }
@@ -229,11 +233,11 @@ export const slackAgentSurface: AgentSurfaceAdapter<'slack', SlackSurfaceTypes> 
       ];
     }
     const event = payload.event;
-    if (event.bot_id || event.subtype === 'bot_message' || event.user === install.botUserId)
+    if (event.bot_id || event.subtype === 'bot_message' || event.user === context.botUserId)
       return [];
     const threadTs = event.thread_ts ?? event.ts;
     const externalSessionId = `${event.channel}:${threadTs}`;
-    const prompt = event.text.replace(new RegExp(`<@${install.botUserId}>`, 'g'), '').trim();
+    const prompt = event.text.replace(new RegExp(`<@${context.botUserId}>`, 'g'), '').trim();
     const actor = { externalId: event.user };
     if (event.thread_ts) {
       return [

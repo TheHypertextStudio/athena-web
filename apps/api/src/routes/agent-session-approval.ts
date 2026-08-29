@@ -1,4 +1,13 @@
-import { actor, agent, agentSession, auditEvent, db, sessionActivity } from '@docket/db';
+import { workflowIdFor } from '@docket/athena/execution-protocol';
+import {
+  actor,
+  agent,
+  agentSession,
+  agentSessionRun,
+  auditEvent,
+  db,
+  sessionActivity,
+} from '@docket/db';
 import type { SessionApprovalDecision } from '@docket/types';
 import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 
@@ -29,6 +38,7 @@ interface ApprovalAuthorization {
 export interface HumanContinuationOptions {
   readonly queueWake?: boolean;
   readonly cancelSession?: boolean;
+  readonly queueExternalRun?: boolean;
 }
 
 /** Resolve one selected action's current target and audit authorization. */
@@ -322,6 +332,23 @@ export async function decideActivity(
         .where(eq(agentSession.id, sessionId));
     }
     if (continuation.queueWake) await persistWaitingAthenaWake(tx, sessionId);
+    if (continuation.queueExternalRun) {
+      const [last] = await tx
+        .select({ generation: agentSessionRun.generation })
+        .from(agentSessionRun)
+        .where(eq(agentSessionRun.sessionId, sessionId))
+        .orderBy(desc(agentSessionRun.generation))
+        .limit(1);
+      const generation = (last?.generation ?? -1) + 1;
+      await tx.insert(agentSessionRun).values({
+        sessionId,
+        organizationId: orgId,
+        generation,
+        workflowInstanceId: workflowIdFor(sessionId, generation),
+        status: 'queued',
+        dispatchOrigin: 'unclassified',
+      });
+    }
 
     return decidedTarget;
   });

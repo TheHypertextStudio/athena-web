@@ -95,7 +95,7 @@ export interface GitHubSurfaceTypes extends SurfaceTypeFamily<'github'> {
   readonly workspaceRef: ExternalRef;
   readonly sessionRef: GitHubDiscussionRef;
   readonly actorRef: ExternalRef;
-  readonly nativeContext: { readonly repository: string; readonly issueNumber: number };
+  readonly nativeContext: { readonly commandName: string };
   readonly outbound: GitHubAgentOutput;
   readonly receipt: ExternalRef;
 }
@@ -135,12 +135,15 @@ export const githubAgentSurface: AgentSurfaceAdapter<'github', GitHubSurfaceType
     if (!signature || !deliveryId || !eventType || !safeEqual(signature, expected)) {
       throw new Error('GitHub webhook signature or delivery metadata is invalid.');
     }
-    return { deliveryId, eventType, payload: githubWebhookSchema.parse(JSON.parse(input.body)) };
+    return { deliveryId, eventType, payload: githubAgentSurface.parse(JSON.parse(input.body)) };
+  },
+  parse(payload) {
+    return githubWebhookSchema.parse(payload);
   },
   route(input) {
     return { workspaceId: String(input.payload.installation.id) };
   },
-  async normalize(input, install) {
+  async normalize(input, context) {
     const payload = input.payload;
     const workItem = payload.pull_request ?? payload.issue;
     const issueNumber = workItem?.number;
@@ -156,6 +159,7 @@ export const githubAgentSurface: AgentSurfaceAdapter<'github', GitHubSurfaceType
             externalSessionId,
             externalActivityId: String(payload.check_run?.id ?? input.deliveryId),
             actor,
+            stopToken: identifier.slice('stop:'.length),
           },
         ];
       }
@@ -170,7 +174,7 @@ export const githubAgentSurface: AgentSurfaceAdapter<'github', GitHubSurfaceType
       ];
     }
     const rawCommand = payload.comment?.body ?? workItem.body ?? '';
-    const command = new RegExp(`(?:@|/)${install.commandName}\\b`, 'i');
+    const command = new RegExp(`(?:@|/)${context.commandName}\\b`, 'i');
     if (!command.test(rawCommand)) return [];
     const prompt = rawCommand.replace(command, '').trim();
     const activityId = String(payload.comment?.id ?? workItem.id);

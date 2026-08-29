@@ -498,6 +498,44 @@ describe('agentActivityCreate', () => {
     expect(variables).toMatchObject({ ephemeral: true });
   });
 
+  it('carries a native select signal and its options', async () => {
+    const calls: { body: unknown }[] = [];
+    const http: HttpClient = async (_url, init) => {
+      calls.push({ body: JSON.parse(init?.body as string) });
+      return new Response(
+        JSON.stringify({
+          data: { agentActivityCreate: { success: true, agentActivity: { id: 'act_1' } } },
+        }),
+        { status: 200 },
+      );
+    };
+    const client = new LinearAgentClient('tok', http);
+    await agentActivityCreate(client, {
+      agentSessionId: 'sess_1',
+      type: 'elicitation',
+      body: 'Approve this action?',
+      signal: 'select',
+      signalMetadata: {
+        options: [
+          { label: 'Approve', value: 'signed-approve' },
+          { label: 'Reject', value: 'signed-reject' },
+        ],
+      },
+    });
+    const variables = (
+      assertDefined(calls[0]).body as { variables: { input: Record<string, unknown> } }
+    ).variables.input;
+    expect(variables).toMatchObject({
+      signal: 'select',
+      signalMetadata: {
+        options: [
+          { label: 'Approve', value: 'signed-approve' },
+          { label: 'Reject', value: 'signed-reject' },
+        ],
+      },
+    });
+  });
+
   it('throws provider when Linear reports success: false', async () => {
     const http: HttpClient = async () =>
       new Response(JSON.stringify({ data: { agentActivityCreate: { success: false } } }), {

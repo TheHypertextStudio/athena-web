@@ -104,7 +104,7 @@ export const VoiceTurnOut = z
      * means `principal` — every line written before this field existed came from a Docket surface
      * the person had authenticated to.
      */
-    provenance: z.enum(['principal', 'email', 'linear']).optional(),
+    provenance: z.enum(['principal', 'email', 'linear', 'external_agent']).optional(),
     /** Display identity of a non-principal author, e.g. the sending address. */
     origin: z.string().optional(),
   })

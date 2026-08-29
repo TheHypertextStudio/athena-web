@@ -104,17 +104,20 @@ export const jiraA2aAgentSurface: AgentSurfaceAdapter<'jira_a2a', JiraA2ASurface
     if (!authorization || !secureTokenEqual(authorization, expected)) {
       throw new Error('Jira A2A authorization is invalid.');
     }
-    const payload = a2aRequestSchema.parse(JSON.parse(input.body));
+    const payload = jiraA2aAgentSurface.parse(JSON.parse(input.body));
     const headerRequestId = input.headers['x-request-id'];
     const deliveryId = headerRequestId ?? String(payload.id);
     return { deliveryId, eventType: payload.method, payload };
   },
+  parse(payload) {
+    return a2aRequestSchema.parse(payload);
+  },
   route(input) {
     return { workspaceId: input.payload.params.contextId };
   },
-  async normalize(input, install) {
+  async normalize(input, context) {
     const payload = input.payload;
-    if (payload.params.contextId !== install.siteId)
+    if (payload.params.contextId !== context.contextId)
       throw new Error('Jira A2A site does not match the installation.');
     const actor = {
       externalId: payload.params.metadata.actorId,

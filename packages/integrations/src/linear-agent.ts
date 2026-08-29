@@ -519,6 +519,18 @@ export interface AgentActivityCreateInput {
   readonly body: string;
   /** Ephemeral activities (e.g. progress ticks) are not persisted in the session's history. */
   readonly ephemeral?: boolean;
+  /** Optional provider-native elicitation signal. */
+  readonly signal?: 'auth' | 'select';
+  /** Provider-native metadata paired with {@link signal}. */
+  readonly signalMetadata?:
+    | {
+        readonly url: string;
+        readonly userId?: string;
+        readonly providerName?: string;
+      }
+    | {
+        readonly options: readonly { readonly label?: string; readonly value: string }[];
+      };
 }
 
 /** The `agentActivityCreate` mutation (see {@link AgentActivityCreateInput} for the content-shape caveat). */
@@ -551,6 +563,8 @@ export async function agentActivityCreate(
       agentSessionId: input.agentSessionId,
       content: { type: input.type, body: input.body },
       ...(input.ephemeral !== undefined ? { ephemeral: input.ephemeral } : {}),
+      ...(input.signal ? { signal: input.signal } : {}),
+      ...(input.signalMetadata ? { signalMetadata: input.signalMetadata } : {}),
     },
   });
   const id = data.agentActivityCreate?.agentActivity?.id;

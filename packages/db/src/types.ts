@@ -275,7 +275,7 @@ export interface SessionActivityBody {
    * The text stored here stays raw so a person reads what was actually sent; the enveloping
    * happens on the transcript the model reads. See `agent/provenance.ts`.
    */
-  readonly provenance?: 'principal' | 'email' | 'linear' | undefined;
+  readonly provenance?: 'principal' | 'email' | 'linear' | 'external_agent' | undefined;
   /** Display identity of a non-principal author, e.g. the sending email address. */
   readonly origin?: string | undefined;
   /** For `action` activities: the proposed change + its approval linkage. */

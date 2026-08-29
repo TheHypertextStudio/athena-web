@@ -91,7 +91,7 @@ export interface LinearSurfaceTypes extends SurfaceTypeFamily<'linear'> {
   readonly workspaceRef: ExternalRef;
   readonly sessionRef: LinearAgentSessionRef;
   readonly actorRef: ExternalRef;
-  readonly nativeContext: { readonly promptContext?: string };
+  readonly nativeContext: Readonly<Record<string, never>>;
   readonly outbound: LinearAgentSurfaceOutput;
   readonly receipt: ExternalRef;
 }
@@ -124,12 +124,15 @@ export const linearAgentSurface: AgentSurfaceAdapter<'linear', LinearSurfaceType
     ) {
       throw new Error('Linear Agent webhook signature is invalid or stale.');
     }
-    const payload = linearWebhookSchema.parse(JSON.parse(input.body));
+    const payload = linearAgentSurface.parse(JSON.parse(input.body));
     return {
       deliveryId: payload.agentActivity?.id ?? `${payload.agentSession.id}:${payload.action}`,
       eventType: payload.action,
       payload,
     };
+  },
+  parse(payload) {
+    return linearWebhookSchema.parse(payload);
   },
   route(input) {
     return { workspaceId: input.payload.organizationId };
@@ -197,6 +200,7 @@ export const linearAgentSurface: AgentSurfaceAdapter<'linear', LinearSurfaceType
           externalSessionId: payload.agentSession.id,
           externalActivityId: activity.id,
           actor: externalActor,
+          ...(activity.signal.value ? { stopToken: activity.signal.value } : {}),
         },
       ];
     }
@@ -240,6 +244,17 @@ export const linearAgentSurface: AgentSurfaceAdapter<'linear', LinearSurfaceType
       type: output.type,
       body: output.body,
       ...(output.ephemeral !== undefined ? { ephemeral: output.ephemeral } : {}),
+      ...(output.signal?.type === 'select'
+        ? {
+            signal: 'select' as const,
+            signalMetadata: { options: output.signal.options },
+          }
+        : output.signal?.type === 'auth'
+          ? {
+              signal: 'auth' as const,
+              signalMetadata: { url: output.signal.url, providerName: 'Docket' },
+            }
+          : {}),
     });
     return result;
   },

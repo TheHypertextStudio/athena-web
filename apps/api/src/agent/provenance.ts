@@ -26,7 +26,9 @@ export type TurnProvenance =
   /** A message delivered to the user's Athena inbox. The sender is unauthenticated. */
   | 'email'
   /** A comment or agent-session reply relayed from Linear. Authored by a third-party workspace. */
-  | 'linear';
+  | 'linear'
+  /** A message relayed from another provider-native agent surface. */
+  | 'external_agent';
 
 /** The delimiter tag. Kept ASCII and unlikely to occur in prose. */
 const TAG = 'docket:external';

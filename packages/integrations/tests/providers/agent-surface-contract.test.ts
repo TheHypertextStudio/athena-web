@@ -94,10 +94,7 @@ describe('agent surface registry', () => {
       rawWebhook(body, { 'linear-signature': signature }),
       { signingSecret: 'linear-secret' },
     );
-    const events = await agentSurfaceFor('linear').normalize(verified, {
-      signingSecret: 'linear-secret',
-      accessToken: 'linear-token',
-    });
+    const events = await agentSurfaceFor('linear').normalize(verified, {});
 
     expect(events).toEqual([
       expect.objectContaining({
@@ -132,12 +129,9 @@ describe('agent surface registry', () => {
       signingSecret: 'linear-secret',
     });
 
-    await expect(
-      adapter.normalize(verified, {
-        signingSecret: 'linear-secret',
-        accessToken: 'linear-token',
-      }),
-    ).resolves.toEqual([expect.objectContaining({ type: canonicalType })]);
+    await expect(adapter.normalize(verified, {})).resolves.toEqual([
+      expect.objectContaining({ type: canonicalType }),
+    ]);
   });
 
   it('verifies and normalizes a Slack app mention', async () => {
@@ -166,12 +160,7 @@ describe('agent surface registry', () => {
       }),
       { signingSecret: 'slack-secret' },
     );
-    const events = await agentSurfaceFor('slack').normalize(verified, {
-      signingSecret: 'slack-secret',
-      botToken: 'xoxb-token',
-      botUserId: 'B1',
-      teamId: 'T1',
-    });
+    const events = await agentSurfaceFor('slack').normalize(verified, { botUserId: 'B1' });
 
     expect(events[0]).toEqual(
       expect.objectContaining({
@@ -213,9 +202,6 @@ describe('agent surface registry', () => {
       { signingSecret: 'github-secret' },
     );
     const events = await agentSurfaceFor('github').normalize(verified, {
-      signingSecret: 'github-secret',
-      installationId: '42',
-      token: 'github-token',
       commandName: 'athena',
     });
 
@@ -250,9 +236,7 @@ describe('agent surface registry', () => {
       { bearerToken: 'jira-secret', siteId: 'site-1' },
     );
     const events = await agentSurfaceFor('jira_a2a').normalize(verified, {
-      bearerToken: 'jira-secret',
-      siteId: 'site-1',
-      callbackUrl: 'https://jira.test/a2a/callback',
+      contextId: 'site-1',
     });
 
     expect(events[0]).toEqual(

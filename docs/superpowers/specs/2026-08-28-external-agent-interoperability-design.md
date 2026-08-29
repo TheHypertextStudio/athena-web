@@ -228,11 +228,13 @@ export interface AgentSurfaceAdapter<P extends AgentSurfaceProvider> {
     verification: SurfaceTypes<P>['verification'],
   ): Promise<VerifiedWebhook<SurfaceTypes<P>['webhook']>>;
 
+  parse(payload: unknown): SurfaceTypes<P>['webhook'];
+
   route(input: VerifiedWebhook<SurfaceTypes<P>['webhook']>): AgentSurfaceRoute;
 
   normalize(
     input: VerifiedWebhook<SurfaceTypes<P>['webhook']>,
-    install: SurfaceTypes<P>['install'],
+    context: SurfaceTypes<P>['nativeContext'],
   ): Promise<readonly CanonicalAgentEvent[]>;
 
   render(

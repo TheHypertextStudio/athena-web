@@ -95,6 +95,7 @@ export type CanonicalAgentEvent =
       readonly externalSessionId: string;
       readonly externalActivityId: string;
       readonly actor: CanonicalExternalActor;
+      readonly stopToken?: string;
     };
 
 /** Provider-native interaction support declared by an adapter. */
@@ -171,10 +172,11 @@ export interface AgentSurfaceAdapter<
     input: RawWebhook,
     verification: F['verification'],
   ): Promise<VerifiedWebhook<F['webhook']>>;
+  parse(payload: unknown): F['webhook'];
   route(input: VerifiedWebhook<F['webhook']>): AgentSurfaceRoute;
   normalize(
     input: VerifiedWebhook<F['webhook']>,
-    install: F['install'],
+    context: F['nativeContext'],
   ): Promise<readonly CanonicalAgentEvent[]>;
   render(
     activity: CanonicalAgentActivity,

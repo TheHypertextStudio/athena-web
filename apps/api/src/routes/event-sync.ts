@@ -28,6 +28,7 @@ import { and, eq, lt, or } from 'drizzle-orm';
 
 import { buildObserver, toAppRuntimeEnv, type AppRuntimeEnv } from '../container';
 import { EMPTY_DRAFT_TALLY, writeEventDrafts, type DraftWriteTally } from '../events/write-drafts';
+import { processExternalAgentInboxEvent } from '../lib/external-agent-processor';
 import { asObserverProvider } from './integration-provider';
 import { LEASE_STALE_MS, runSync } from './integration-sync';
 
@@ -128,6 +129,26 @@ async function ownerUserId(ctx: SweepCtx, integrationId: string): Promise<string
 /** Normalize + persist one inbound event's canonical events; returns what it produced. */
 async function processOne(ev: InboundEventRow, ctx: SweepCtx): Promise<DraftWriteTally> {
   const now = ctx.now;
+  if (
+    ev.provider === 'linear_agent' ||
+    ev.provider === 'slack_agent' ||
+    ev.provider === 'github_agent' ||
+    ev.provider === 'jira_a2a'
+  ) {
+    if (!ev.organizationId || !ev.integrationId) {
+      await db
+        .update(inboundEvent)
+        .set({ status: 'skipped', processedAt: now })
+        .where(eq(inboundEvent.id, ev.id));
+      return EMPTY_DRAFT_TALLY;
+    }
+    await processExternalAgentInboxEvent(ev);
+    await db
+      .update(inboundEvent)
+      .set({ status: 'processed', processedAt: now })
+      .where(eq(inboundEvent.id, ev.id));
+    return EMPTY_DRAFT_TALLY;
+  }
   const provider = asObserverProvider(ev.provider);
   const orgId = ev.organizationId;
   const source = provider ? providerSourceSystem(provider) : null;

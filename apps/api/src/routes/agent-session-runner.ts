@@ -3,10 +3,12 @@ import {
   agent,
   agentSession,
   agentSessionExternalLink,
+  agentSessionRun,
   db,
   sessionActivity,
 } from '@docket/db';
-import { and, eq, sql } from 'drizzle-orm';
+import { workflowIdFor } from '@docket/athena/execution-protocol';
+import { and, desc, eq, sql } from 'drizzle-orm';
 
 import { NotFoundError } from '../error';
 import {
@@ -294,7 +296,9 @@ async function applyReplyToSession(
   text: string,
   provenance: TurnProvenance,
   origin?: string,
-): Promise<SessionRow> {
+  sourceActivityId?: string,
+  queueRun = false,
+): Promise<SessionRow | null> {
   return db.transaction(async (tx) => {
     // Locked for the whole write: the visible activity, the transcript turn, and the wake
     // marker have to land together, or a crash between them leaves a reply the runner will
@@ -305,6 +309,20 @@ async function applyReplyToSession(
       .where(eq(agentSession.id, sessionId))
       .for('update');
     if (!session) throw new NotFoundError('Session not found');
+
+    if (sourceActivityId) {
+      const [existing] = await tx
+        .select({ id: sessionActivity.id })
+        .from(sessionActivity)
+        .where(
+          and(
+            eq(sessionActivity.sessionId, sessionId),
+            sql`${sessionActivity.body} ->> 'sourceActivityId' = ${sourceActivityId}`,
+          ),
+        )
+        .limit(1);
+      if (existing) return null;
+    }
 
     // User-owned Athena work is never attributed to a workspace: the schema's attribution
     // check requires exactly one of owner/org, so an `athena` session's rows carry the owner
@@ -323,6 +341,7 @@ async function applyReplyToSession(
         author: 'user',
         provenance,
         ...(origin ? { origin } : {}),
+        ...(sourceActivityId ? { sourceActivityId } : {}),
       },
     });
     const messages = await loadTranscript(tx, sessionId);
@@ -340,6 +359,23 @@ async function applyReplyToSession(
       session.status === 'awaiting_input'
     ) {
       await persistWaitingAthenaWake(tx, sessionId);
+    }
+    if (queueRun) {
+      const [last] = await tx
+        .select({ generation: agentSessionRun.generation })
+        .from(agentSessionRun)
+        .where(eq(agentSessionRun.sessionId, sessionId))
+        .orderBy(desc(agentSessionRun.generation))
+        .limit(1);
+      const generation = (last?.generation ?? -1) + 1;
+      await tx.insert(agentSessionRun).values({
+        sessionId,
+        organizationId: orgId,
+        generation,
+        workflowInstanceId: workflowIdFor(sessionId, generation),
+        status: 'queued',
+        dispatchOrigin: 'unclassified',
+      });
     }
     return session;
   });
@@ -376,6 +412,8 @@ export async function postReplyAndResume(
   origin?: string,
 ): Promise<ReplyOutcome> {
   const current = await applyReplyToSession(orgId, sessionId, actorId, text, provenance, origin);
+  /* v8 ignore next -- @preserve defensive: this path never supplies a dedupe id. */
+  if (!current) throw new Error('Principal reply was unexpectedly deduplicated.');
 
   // A parked or cancelled thread takes the message but starts nothing: approval is the only
   // thing that resumes the first, and nothing resumes the second.
@@ -435,8 +473,21 @@ export async function recordInboundReply(
   text: string,
   provenance: TurnProvenance,
   origin?: string,
-): Promise<void> {
-  await applyReplyToSession(orgId, sessionId, actorId, text, provenance, origin);
+  sourceActivityId?: string,
+  queueRun = false,
+): Promise<boolean> {
+  return (
+    (await applyReplyToSession(
+      orgId,
+      sessionId,
+      actorId,
+      text,
+      provenance,
+      origin,
+      sourceActivityId,
+      queueRun,
+    )) !== null
+  );
 }
 
 /** Input to {@link createLinearAgentSession}. */

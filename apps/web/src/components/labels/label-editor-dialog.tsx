@@ -148,7 +148,7 @@ export function LabelEditorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent presentation={{ kind: 'centered', size: 'compact' }}>
         {mergeTarget ? (
           <>
             <DialogHeader>

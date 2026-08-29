@@ -193,7 +193,7 @@ export function TimeRecordDialog({
 
   return (
     <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl">
+      <DialogContent presentation={{ kind: 'centered', size: 'large', height: 'tall' }}>
         <DialogHeader>
           <DialogTitle>{record.title.trim() || 'Unnamed session'}</DialogTitle>
           <DialogDescription>

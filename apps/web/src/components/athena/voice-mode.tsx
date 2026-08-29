@@ -238,7 +238,7 @@ export function VoiceMode({
         else end();
       }}
     >
-      <DialogContent className="max-w-xl" data-voice-panel>
+      <DialogContent presentation={{ kind: 'centered', size: 'large' }} data-voice-panel>
         <DialogHeader>
           <DialogTitle>Talking with Athena</DialogTitle>
           <DialogDescription>

@@ -132,7 +132,7 @@ export function TimeAddPastDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent presentation={{ kind: 'centered', size: 'standard' }}>
         <DialogHeader>
           <DialogTitle>Add past time</DialogTitle>
           <DialogDescription>

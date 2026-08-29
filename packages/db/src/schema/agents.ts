@@ -80,6 +80,18 @@ export type AgentSessionDispatchAction = 'enqueue' | 'wake';
 export type AgentSessionDispatchStatus = 'pending' | 'delivering' | 'delivered' | 'failed';
 /** Delivery lifecycle for an external agent session's activity projection. */
 export type ExternalAgentRelayStatus = 'pending' | 'ready' | 'retrying' | 'errored';
+/** Compute boundary selected for one Athena session. */
+export type AgentSessionExecutionSurface = 'docket' | 'lattice';
+/** Docket-owned lifecycle for one durable Lattice assignment delegation. */
+export type AgentDelegationStatus =
+  'prepared' | 'submitted' | 'proposed' | 'completed' | 'failed' | 'canceled';
+
+/** Decrypted terminal result retained after the one-use reply key is cleared. */
+export interface AgentDelegationTerminalOutcome {
+  readonly outcome: string;
+  readonly report?: string;
+  readonly payload?: unknown;
+}
 
 /** An org-registered agent: the persistent wrapper around an ephemeral external runtime. */
 export const agent = pgTable(
@@ -124,6 +136,11 @@ export const agentSession = pgTable(
      * One open `chat` session per org+agent is enforced at the service layer.
      */
     kind: sessionKind('kind').notNull().default('job'),
+    /** `lattice` forbids cloud fallback for every model turn in this session. */
+    executionSurface: text('execution_surface')
+      .$type<AgentSessionExecutionSurface>()
+      .notNull()
+      .default('docket'),
     status: sessionStatus('status').notNull().default('pending'),
     initiatorId: text('initiator_id').references(() => actor.id, { onDelete: 'set null' }),
     externalRunRef: text('external_run_ref'),
@@ -185,6 +202,10 @@ export const agentSession = pgTable(
       sql`(${t.workLinkage} = 'task' AND ${t.taskId} IS NOT NULL)
         OR (${t.workLinkage} = 'conversation' AND ${t.kind} = 'chat')
         OR ${t.workLinkage} = 'unclassified'`,
+    ),
+    check(
+      'agent_session_execution_surface_check',
+      sql`${t.executionSurface} in ('docket','lattice')`,
     ),
     check(
       'agent_session_no_self_parent_check',
@@ -813,5 +834,96 @@ export const latticeCredential = pgTable(
       foreignColumns: [latticeConnection.id, latticeConnection.ownerUserId],
       name: 'lattice_credential_connection_owner_fk',
     }).onDelete('cascade'),
+  ],
+);
+
+/**
+ * One durable hand-off of a private Athena assignment to the owner's Lattice runtime.
+ *
+ * @remarks
+ * Docket writes `workId`, `logicalSubmissionId`, and the encrypted reply key while the row is
+ * still `prepared`. A network retry therefore reuses the same identities and cannot enqueue a
+ * second remote job. The reply key exists only while Docket may still need to open a sealed
+ * result. Terminal settlement clears it in the same transaction that records the outcome.
+ *
+ * Every foreign key that crosses an owner boundary includes `ownerUserId`. A bug cannot attach
+ * one person's assignment, session, or Lattice connection to another person's delegation.
+ */
+export const agentDelegation = pgTable(
+  'agent_delegation',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    ownerUserId: text('owner_user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    assignmentId: text('assignment_id').notNull(),
+    sessionId: text('session_id').notNull(),
+    taskId: text('task_id').references(() => task.id, { onDelete: 'set null' }),
+    connectionId: text('connection_id').notNull(),
+    runtimeId: text('runtime_id').notNull(),
+    logicalSubmissionId: text('logical_submission_id').notNull(),
+    workId: text('work_id').notNull(),
+    replyKeyCiphertext: text('reply_key_ciphertext'),
+    status: text('status').$type<AgentDelegationStatus>().notNull().default('prepared'),
+    workState: text('work_state'),
+    relayCursor: text('relay_cursor').notNull().default('cursor_0'),
+    nextPollAt: timestamp('next_poll_at'),
+    deadlineAt: timestamp('deadline_at'),
+    failureCode: text('failure_code'),
+    terminalOutcome: jsonb('terminal_outcome').$type<AgentDelegationTerminalOutcome>(),
+    returnedActivityId: text('returned_activity_id').references(() => sessionActivity.id, {
+      onDelete: 'set null',
+    }),
+    submittedAt: timestamp('submitted_at'),
+    settledAt: timestamp('settled_at'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex('agent_delegation_open_assignment_uq')
+      .on(t.assignmentId)
+      .where(sql`${t.status} in ('prepared','submitted','proposed')`),
+    uniqueIndex('agent_delegation_logical_submission_uq').on(t.logicalSubmissionId),
+    uniqueIndex('agent_delegation_work_uq').on(t.workId),
+    index('agent_delegation_due_idx').on(t.status, t.nextPollAt),
+    index('agent_delegation_owner_idx').on(t.ownerUserId, t.status),
+    foreignKey({
+      columns: [t.assignmentId, t.ownerUserId],
+      foreignColumns: [athenaAssignment.id, athenaAssignment.ownerUserId],
+      name: 'agent_delegation_assignment_owner_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [t.sessionId, t.ownerUserId],
+      foreignColumns: [agentSession.id, agentSession.ownerUserId],
+      name: 'agent_delegation_session_owner_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [t.connectionId, t.ownerUserId],
+      foreignColumns: [latticeConnection.id, latticeConnection.ownerUserId],
+      name: 'agent_delegation_connection_owner_fk',
+    }).onDelete('restrict'),
+    check(
+      'agent_delegation_status_check',
+      sql`${t.status} in ('prepared','submitted','proposed','completed','failed','canceled')`,
+    ),
+    check('agent_delegation_cursor_check', sql`char_length(${t.relayCursor}) > 0`),
+    check(
+      'agent_delegation_reply_key_lifecycle_check',
+      sql`(${t.status} in ('prepared','submitted') AND ${t.replyKeyCiphertext} IS NOT NULL)
+        OR (${t.status} in ('proposed','completed','failed','canceled') AND ${t.replyKeyCiphertext} IS NULL)`,
+    ),
+    check(
+      'agent_delegation_terminal_shape_check',
+      sql`${t.status} in ('prepared','submitted')
+        OR (${t.status} in ('proposed','completed') AND ${t.terminalOutcome} IS NOT NULL)
+        OR (${t.status} = 'failed' AND ${t.failureCode} IS NOT NULL)
+        OR ${t.status} = 'canceled'`,
+    ),
   ],
 );

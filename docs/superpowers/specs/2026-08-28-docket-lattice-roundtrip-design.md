@@ -1,9 +1,9 @@
 # Docket-to-Lattice Mac Studio Round Trip
 
-> **Status**: Approved in conversation; awaiting written-spec review
+> **Status**: Approved; implementation in progress
 > **Date**: 2026-08-28
 > **Audience**: Athena and Lovelace maintainers who will implement, deploy, and prove this path
-> **Required action**: Confirm this boundary before implementation starts in Athena and Lovelace
+> **Required action**: Implement and verify each release gate against this boundary
 
 ## Decision
 
@@ -68,9 +68,11 @@ migrations wholesale.
 
 ## Container Design
 
-The Docket API owns the business transaction. It selects an eligible agent-delegated task, records
-one delegation, mints the reply key, submits the work, polls the work id, and creates the Athena
-proposal. The Docket web app only displays that durable state and controls approval.
+The Docket API owns the business transaction. It selects an eligible private
+`athena_assignment`, records one delegation, mints the reply key, submits the work, polls the work
+id, and creates the Athena proposal. The assignment references existing workspace work without
+making Athena a workspace Actor or changing `task.delegate_id`. The Docket web app only displays
+that durable state and controls approval.
 
 The Lattice gateway owns product authorization. It accepts the owner's Lovelace OAuth token. It
 checks the delegation scope and account ownership. It then calls the relay controller with an
@@ -90,16 +92,16 @@ task approval.
 
 ## Docket Delegation Lifecycle
 
-Docket will create one `agent_delegation` row for each attempt. The row will bind the task, owner,
-Athena session, Lattice connection, target runtime, logical submission id, external work id,
-current work state, encrypted reply-key material, polling schedule, failure code, terminal outcome,
-and returned activity id.
+Docket will create one `agent_delegation` row for each attempt. The row will bind the private
+assignment, referenced task when the assignment targets one, owner, Athena session, Lattice
+connection, target runtime, logical submission id, external work id, current work state, encrypted
+reply-key material, polling schedule, failure code, terminal outcome, and returned activity id.
 
 The logical submission id will derive from the immutable Docket delegation id. Retrying a timed-out
 HTTP request will therefore reach the same relay work item. A partial unique index will allow only
-one open delegation for a task. The result claim will require an open status and a null returned
-activity id. Those constraints prevent two scheduler ticks from submitting or posting the same
-work twice.
+one open delegation for an assignment. The result claim will require an open status and a null
+returned activity id. Those constraints prevent two scheduler ticks from submitting or posting
+the same work twice.
 
 The scheduler will run the delegation drain on the existing Athena trigger cadence. One pass will
 perform bounded work in this order:
@@ -107,7 +109,7 @@ perform bounded work in this order:
 1. It will poll previously submitted delegations whose next-poll time has arrived.
 2. It will settle terminal failures with stable codes and retry eligibility.
 3. It will create one proposed task comment for each usable terminal result.
-4. It will submit a bounded number of eligible agent-delegated tasks.
+4. It will submit a bounded number of prepared private Athena assignments.
 
 The scheduler will re-authorize the owner against the workspace and task on every pass. A stale
 session will not preserve access after the owner loses permission. The scheduler will only use an
@@ -228,14 +230,16 @@ The work will proceed through gates that can each fail without hiding the next p
 5. Docket will add the current-schema delegation record, encrypted database session store,
    scheduler drain, proposal return path, and failure UI through behavior-first tests.
 6. Staging will prove the complete Docket-to-Studio round trip before any production task runs.
-7. Production will use one existing real Docket task that the owner explicitly delegates to
-   Athena. The proof will not create a synthetic task, workspace, or account.
+7. Production will use one existing real Docket task and its private personal Athena assignment.
+   The proof will not change `task.delegate_id`, create an Athena Actor, or create a synthetic task,
+   workspace, or account.
 
 ## Proof Of Completion
 
 The feature is complete only when one production run provides all of this evidence:
 
-- The Docket task existed before the proof and shows Athena as its delegate.
+- The Docket task existed before the proof, and one owner-only `athena_assignment` references it.
+- The task's workspace-visible assignee and delegate fields remain unchanged.
 - One Docket delegation id maps to one Lattice logical submission id and one Lattice work id.
 - Lattice records the selected runtime as the owner's Mac Studio.
 - The Mac Studio log records that work id, the managed daemon version, and the selected local model.

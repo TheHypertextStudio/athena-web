@@ -1,21 +1,28 @@
 /** Context-owned Initiative hierarchy mutation routes. */
 import { db, initiative, initiativeHierarchyLink, organization } from '@docket/db';
 import {
+  InitiativeHierarchyCandidateQuery,
+  InitiativeHierarchyCandidatesOut,
   InitiativeHierarchyLinkCreate,
   InitiativeHierarchyLinkMove,
   InitiativeHierarchyLinkOut,
   InitiativeUnlinked,
 } from '@docket/types';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 
 import type { AppEnv } from '../context';
 import { NotFoundError } from '../error';
 import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
-import { zJson, zParam } from '../lib/validate';
+import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
-import { validateInitiativeHierarchyChange } from './initiative-hierarchy';
+import {
+  accessibleInitiativeHierarchyProjection,
+  accessibleInitiativeNodeIds,
+  activeInitiativeOrganizationIds,
+  validateInitiativeHierarchyChange,
+} from './initiative-hierarchy';
 import { hierarchyLinkParam } from './initiative-helpers';
 
 function hierarchyOut(row: typeof initiativeHierarchyLink.$inferSelect) {
@@ -30,6 +37,88 @@ function hierarchyOut(row: typeof initiativeHierarchyLink.$inferSelect) {
 
 /** Initiative hierarchy router, mounted beside the core Initiative routes. */
 const initiativeHierarchyRoutes = new Hono<AppEnv>()
+  .get(
+    '/hierarchy-candidates',
+    apiDoc({
+      tag: 'Initiatives',
+      summary: 'Search Initiative hierarchy candidates',
+      description:
+        'Returns Initiatives in every workspace the viewer can access, projected through the requested route workspace hierarchy. Parent mode excludes foreign roots that the hierarchy validator would reject.',
+      response: InitiativeHierarchyCandidatesOut,
+    }),
+    zQuery(InitiativeHierarchyCandidateQuery),
+    async (c) => {
+      const { orgId } = c.get('actorCtx');
+      const { mode, query } = c.req.valid('query');
+      const queryOrganizationIds = await activeInitiativeOrganizationIds(orgId, c.get('session'));
+      const organizationIds = [...queryOrganizationIds];
+      const [candidateRows, links] = await Promise.all([
+        db
+          .select({
+            id: initiative.id,
+            organizationId: initiative.organizationId,
+            name: initiative.name,
+            summary: initiative.summary,
+            status: initiative.status,
+            health: initiative.health,
+          })
+          .from(initiative)
+          .where(inArray(initiative.organizationId, organizationIds))
+          .orderBy(asc(initiative.name), asc(initiative.id)),
+        db
+          .select()
+          .from(initiativeHierarchyLink)
+          .where(eq(initiativeHierarchyLink.contextOrganizationId, orgId)),
+      ]);
+      const accessibleNodeIds = await accessibleInitiativeNodeIds(c.get('session'), candidateRows);
+      const rows = candidateRows.filter((row) => accessibleNodeIds.has(row.id));
+      const visibleOrganizationIds = [...new Set(rows.map((row) => row.organizationId))];
+      const organizations =
+        visibleOrganizationIds.length === 0
+          ? []
+          : await db
+              .select({ id: organization.id, name: organization.name })
+              .from(organization)
+              .where(inArray(organization.id, visibleOrganizationIds));
+      const organizationNameById = new Map(
+        organizations.map((organizationRow) => [organizationRow.id, organizationRow.name]),
+      );
+      const projection = accessibleInitiativeHierarchyProjection(orgId, rows, links);
+      const parentByChild = new Map(
+        projection.links.map((link) => [link.childInitiativeId, link.parentInitiativeId]),
+      );
+      const parentLinkByChild = new Map(
+        projection.links.map((link) => [link.childInitiativeId, link.id]),
+      );
+      const rawParentByChild = new Set(links.map((link) => link.childInitiativeId));
+      const normalizedQuery = query?.toLocaleLowerCase() ?? '';
+      const items = rows
+        .map((row) => {
+          const organizationName = organizationNameById.get(row.organizationId) ?? '';
+          const appearsInContext = projection.nodeIds.has(row.id);
+          return {
+            ...row,
+            organizationName,
+            crossWorkspace: row.organizationId !== orgId,
+            appearsInContext,
+            parentInitiativeId: parentByChild.get(row.id) ?? null,
+            parentLinkId: parentLinkByChild.get(row.id) ?? null,
+          };
+        })
+        .filter((candidate) =>
+          mode === 'parent'
+            ? candidate.appearsInContext
+            : candidate.appearsInContext || !rawParentByChild.has(candidate.id),
+        )
+        .filter((candidate) => {
+          if (normalizedQuery.length === 0) return true;
+          return [candidate.name, candidate.summary, candidate.organizationName].some((value) =>
+            value?.toLocaleLowerCase().includes(normalizedQuery),
+          );
+        });
+      return ok(c, InitiativeHierarchyCandidatesOut, { items });
+    },
+  )
   .post(
     '/hierarchy-links',
     capabilityGuard('contribute'),
@@ -161,37 +250,62 @@ const initiativeHierarchyRoutes = new Hono<AppEnv>()
           .where(eq(initiativeHierarchyLink.contextOrganizationId, orgId));
         const link = edges.find((edge) => edge.id === linkId);
         if (!link) throw new NotFoundError('Initiative hierarchy link not found');
-        const childRows = await tx
-          .select({ organizationId: initiative.organizationId })
+        const graphNodeIds = [
+          ...new Set(edges.flatMap((edge) => [edge.parentInitiativeId, edge.childInitiativeId])),
+        ];
+        const graphNodes = await tx
+          .select({ id: initiative.id, organizationId: initiative.organizationId })
           .from(initiative)
-          .where(eq(initiative.id, link.childInitiativeId))
-          .limit(1);
-        const child = childRows[0];
+          .where(inArray(initiative.id, graphNodeIds));
+        const nodesById = new Map(graphNodes.map((node) => [node.id, node]));
+        const child = nodesById.get(link.childInitiativeId);
         if (!child) throw new NotFoundError('Initiative not found');
-        if (child.organizationId === orgId) {
-          await tx.delete(initiativeHierarchyLink).where(eq(initiativeHierarchyLink.id, link.id));
-          return;
-        }
-        const descendants = new Set([link.childInitiativeId]);
-        let changed = true;
-        while (changed) {
-          changed = false;
-          for (const edge of edges) {
-            if (
-              descendants.has(edge.parentInitiativeId) &&
-              !descendants.has(edge.childInitiativeId)
-            ) {
-              descendants.add(edge.childInitiativeId);
-              changed = true;
+        const removedEdges = (() => {
+          if (child.organizationId === orgId) return [link];
+          const descendants = new Set([link.childInitiativeId]);
+          let changed = true;
+          while (changed) {
+            changed = false;
+            for (const edge of edges) {
+              if (
+                descendants.has(edge.parentInitiativeId) &&
+                !descendants.has(edge.childInitiativeId)
+              ) {
+                descendants.add(edge.childInitiativeId);
+                changed = true;
+              }
             }
           }
+          return edges.filter(
+            (edge) => edge.id === linkId || descendants.has(edge.parentInitiativeId),
+          );
+        })();
+        const accessibleNodeIds = await accessibleInitiativeNodeIds(
+          c.get('session'),
+          graphNodes,
+          tx,
+        );
+        const projection = accessibleInitiativeHierarchyProjection(
+          orgId,
+          graphNodes.filter((node) => accessibleNodeIds.has(node.id)),
+          edges,
+        );
+        const visibleLinkIds = new Set(projection.links.map((edge) => edge.id));
+        const removalIsVisible = removedEdges.every(
+          (edge) =>
+            visibleLinkIds.has(edge.id) &&
+            accessibleNodeIds.has(edge.parentInitiativeId) &&
+            accessibleNodeIds.has(edge.childInitiativeId),
+        );
+        if (!removalIsVisible) {
+          throw new NotFoundError('Initiative hierarchy link not found');
         }
-        const removedIds = edges
-          .filter((edge) => edge.id === linkId || descendants.has(edge.parentInitiativeId))
-          .map((edge) => edge.id);
-        await tx
-          .delete(initiativeHierarchyLink)
-          .where(inArray(initiativeHierarchyLink.id, removedIds));
+        await tx.delete(initiativeHierarchyLink).where(
+          inArray(
+            initiativeHierarchyLink.id,
+            removedEdges.map((edge) => edge.id),
+          ),
+        );
       });
       return ok(c, InitiativeUnlinked, { unlinked: true });
     },

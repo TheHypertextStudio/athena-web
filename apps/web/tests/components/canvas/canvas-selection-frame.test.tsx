@@ -24,7 +24,12 @@ function Row({ object }: { object: ObjectRef }): React.JSX.Element {
 describe('CanvasSelectionFrame', () => {
   it('registers the tree container so roving focus follows keyboard selection', () => {
     render(
-      <SelectionProvider items={items} surfaceId="task-canvas" organizationId="org-1">
+      <SelectionProvider
+        items={items}
+        surfaceId="task-canvas"
+        organizationId="org-1"
+        actionScope="all"
+      >
         <CanvasSelectionFrame label="Task graph">
           {items.map((item) => (
             <Row key={item.id} object={item} />

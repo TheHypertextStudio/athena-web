@@ -1,10 +1,15 @@
 import '@testing-library/jest-dom/vitest';
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import type { JSX } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { InteractionProvider } from '../../src/lib/actions/interaction-provider';
-import { SelectionProvider } from '../../src/components/selection/selection-context';
+import { createActionRegistry, defineActionDomain } from '../../src/lib/actions/registry';
+import {
+  SelectionProvider,
+  useSelectionActions,
+} from '../../src/components/selection/selection-context';
 
 import { TaskList, taskRef } from './harness';
 
@@ -14,6 +19,17 @@ afterEach(() => {
 
 const ITEMS = [taskRef('1'), taskRef('2'), taskRef('3'), taskRef('4'), taskRef('5')];
 
+/** Render the registry ids allowed for the active selection. */
+function SelectionActionIds(): JSX.Element {
+  return (
+    <output data-testid="selection-actions">
+      {useSelectionActions()
+        .map(({ id }) => id)
+        .join(',')}
+    </output>
+  );
+}
+
 /** Render the documented list surface inside the app's interaction providers. */
 function renderList(options: { onActivate?: (object: ReturnType<typeof taskRef>) => void } = {}) {
   return render(
@@ -22,6 +38,7 @@ function renderList(options: { onActivate?: (object: ReturnType<typeof taskRef>)
         items={ITEMS}
         surfaceId="tasks"
         organizationId="org1"
+        actionScope="all"
         {...(options.onActivate === undefined ? {} : { onActivate: options.onActivate })}
       >
         <TaskList items={ITEMS} />
@@ -155,6 +172,49 @@ describe('selection surface: keyboard', () => {
 });
 
 describe('selection surface: semantics', () => {
+  it('propagates reference scope into bulk action resolution', () => {
+    const registry = createActionRegistry();
+    registry.register(
+      'task',
+      defineActionDomain('task', [
+        { id: 'task.open', label: 'Open', objectKinds: ['task'], run: () => undefined },
+        {
+          id: 'task.copy',
+          label: 'Copy',
+          objectKinds: ['task'],
+          multi: true,
+          run: () => undefined,
+        },
+        {
+          id: 'task.move',
+          label: 'Move',
+          objectKinds: ['task'],
+          multi: true,
+          run: () => undefined,
+        },
+      ]),
+    );
+    render(
+      <InteractionProvider registry={registry}>
+        <SelectionProvider
+          items={ITEMS}
+          surfaceId="reference-tasks"
+          organizationId="org1"
+          actionScope="reference"
+        >
+          <TaskList items={ITEMS} />
+          <SelectionActionIds />
+        </SelectionProvider>
+      </InteractionProvider>,
+    );
+
+    fireEvent.click(screen.getByTestId('row-1'));
+    fireEvent.click(screen.getByTestId('row-2'), { metaKey: true });
+    expect(screen.getByTestId('selection-actions')).toHaveTextContent('task.copy');
+    expect(screen.getByTestId('selection-actions')).not.toHaveTextContent('task.move');
+    expect(screen.getByTestId('selection-actions')).not.toHaveTextContent('task.open');
+  });
+
   it('announces multi-selectability and per-row selected state', () => {
     renderList();
     expect(screen.getByRole('grid')).toHaveAttribute('aria-multiselectable', 'true');

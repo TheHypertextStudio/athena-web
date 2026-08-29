@@ -149,7 +149,12 @@ function AccessControls(): React.JSX.Element {
 function AccessErrorHarness(): React.JSX.Element {
   const history = useCanvasCommandHistory('org-1', 'retained-access-error', []);
   return (
-    <SelectionProvider items={[]} organizationId="org-1" surfaceId="access-error-canvas">
+    <SelectionProvider
+      items={[]}
+      organizationId="org-1"
+      surfaceId="access-error-canvas"
+      actionScope="all"
+    >
       <CanvasCommandProviderWithHistory
         objectKind="task"
         canEdit={false}

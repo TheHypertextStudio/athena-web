@@ -46,13 +46,15 @@ type InvalidatedWorkTarget = 'project' | 'program' | 'initiative';
 function invalidateOwnerTargetPairs(
   queryClient: QueryClient,
   pairs: ReadonlyMap<string, { readonly target: InvalidatedWorkTarget; readonly owner: string }>,
-): void {
-  for (const pair of pairs.values()) {
-    void invalidateWorkTargetQueries(queryClient, {
-      target: pair.target,
-      ownerOrganizationId: pair.owner,
-    });
-  }
+): Promise<void> {
+  return Promise.all(
+    [...pairs.values()].map((pair) =>
+      invalidateWorkTargetQueries(queryClient, {
+        target: pair.target,
+        ownerOrganizationId: pair.owner,
+      }),
+    ),
+  ).then(() => undefined);
 }
 
 /**
@@ -248,9 +250,7 @@ export function useRegisterEntityNavigationActions(): void {
               ...(target.meta ? { meta: target.meta } : {}),
             },
           }),
-        () => {
-          invalidateOwnerTargetPairs(queryClient, pairs);
-        },
+        () => invalidateOwnerTargetPairs(queryClient, pairs),
       );
     };
     const executeProgram = async (
@@ -299,9 +299,7 @@ export function useRegisterEntityNavigationActions(): void {
               ...(target.meta ? { meta: target.meta } : {}),
             },
           }),
-        () => {
-          invalidateOwnerTargetPairs(queryClient, pairs);
-        },
+        () => invalidateOwnerTargetPairs(queryClient, pairs),
       );
     };
     return {

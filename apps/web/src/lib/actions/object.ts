@@ -452,6 +452,9 @@ export function objectHref(object: ObjectRef): string | null {
   return `/orgs/${object.organizationId}/${segment}/${object.id}`;
 }
 
+/** Actions an object surface may expose through the shared action registry. */
+export type ObjectActionScope = 'all' | 'reference';
+
 /** The DOM attributes that mark an element as *being* a core object. */
 export interface ObjectTargetProps {
   /** The object's kind, read by the global context-menu handler. */
@@ -464,6 +467,8 @@ export interface ObjectTargetProps {
   readonly 'data-object-title': string;
   /** JSON-encoded {@link ObjectMeta}, omitted when the object carries none. */
   readonly 'data-object-meta'?: string;
+  /** Restrict this surface to non-writing reference actions such as Open and Copy. */
+  readonly 'data-object-action-scope'?: ObjectActionScope;
 }
 
 /**
@@ -476,6 +481,7 @@ export interface ObjectTargetProps {
  * the object — a list row, a calendar block, a detail-page header.
  *
  * @param object - The object this element represents.
+ * @param actionScope - The actions this surface may expose for the object.
  * @returns Attributes to spread onto the element.
  *
  * @example
@@ -485,18 +491,33 @@ export interface ObjectTargetProps {
  *
  * @see {@link readObjectTarget} for the inverse.
  */
-export function objectTargetProps(object: ObjectRef): ObjectTargetProps {
+export function objectTargetProps(
+  object: ObjectRef,
+  actionScope: ObjectActionScope = 'all',
+): ObjectTargetProps {
   return {
     'data-object-kind': object.kind,
     'data-object-id': object.id,
     ...(object.organizationId === null ? {} : { 'data-object-org': object.organizationId }),
     'data-object-title': object.title,
     ...(object.meta === undefined ? {} : { 'data-object-meta': JSON.stringify(object.meta) }),
+    ...(actionScope === 'all' ? {} : { 'data-object-action-scope': actionScope }),
   };
 }
 
 /** The CSS selector matching any element marked by {@link objectTargetProps}. */
 export const OBJECT_TARGET_SELECTOR = '[data-object-kind][data-object-id]';
+
+/**
+ * Read the action scope attached to one object surface.
+ *
+ * @param element - The object host carrying the optional scope attribute.
+ * @returns The declared scope, or `all` for an ordinary unscoped object host.
+ */
+export function readObjectActionScope(element: Element | null): ObjectActionScope {
+  if (!(element instanceof HTMLElement)) return 'all';
+  return element.dataset['objectActionScope'] === 'reference' ? 'reference' : 'all';
+}
 
 /**
  * Recover the {@link ObjectRef} an element represents.

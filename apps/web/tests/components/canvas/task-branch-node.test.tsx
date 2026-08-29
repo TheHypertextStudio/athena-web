@@ -53,6 +53,7 @@ describe('TaskBranchNode', () => {
           } satisfies ObjectRef,
         ]}
         organizationId="org-1"
+        actionScope="all"
       >
         <ReactFlowProvider>
           <TaskBranchNode {...props} />

@@ -59,7 +59,7 @@ function selectContentsOf(element: Element): void {
 function renderList() {
   return render(
     <InteractionProvider>
-      <SelectionProvider items={ITEMS} surfaceId="tasks" organizationId="org1">
+      <SelectionProvider items={ITEMS} surfaceId="tasks" organizationId="org1" actionScope="all">
         <TaskList items={ITEMS} />
       </SelectionProvider>
     </InteractionProvider>,

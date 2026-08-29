@@ -17,7 +17,8 @@ import {
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import type { JSX } from 'react';
 
-import { signOutAndPurge } from '@/lib/sign-out';
+import { SignOutCleanupError, signOutAndPurge } from '@/lib/sign-out';
+import { useAuthenticationInterlock } from '@/components/authentication-interlock';
 import {
   DEFAULT_PERSONAL_SETTINGS_SECTION,
   personalSectionHref,
@@ -25,6 +26,8 @@ import {
 
 /** The display identity already resolved by the authenticated shell. */
 export interface AccountMenuIdentity {
+  /** Better Auth account id captured by destructive session controls. */
+  readonly userId: string;
   /** The account's display name, which may be empty for legacy accounts. */
   readonly name: string;
   /** The account email and guaranteed fallback label. */
@@ -53,6 +56,7 @@ export default function AccountMenu({
 }): JSX.Element {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { reportSessionCleanupFailure, reportSignOutFailure } = useAuthenticationInterlock();
   // When this menu is rendered inside the mobile off-canvas nav drawer, a selection must both act
   // and close the drawer — otherwise the destination renders behind the still-open drawer. `null`
   // on the static desktop rail (no drawer to close), so every call is a safe no-op there.
@@ -120,7 +124,13 @@ export default function AccountMenu({
             dismissDrawer?.();
             // Centralized: sign-out must also clear the in-memory cache, the offline identity
             // snapshot, and every persisted cache bucket before navigating.
-            void signOutAndPurge(queryClient);
+            void signOutAndPurge(queryClient, identity.userId).catch((error: unknown) => {
+              if (error instanceof SignOutCleanupError) {
+                reportSessionCleanupFailure();
+                return;
+              }
+              reportSignOutFailure();
+            });
           }}
         >
           <LogOut aria-hidden="true" className="size-4" />

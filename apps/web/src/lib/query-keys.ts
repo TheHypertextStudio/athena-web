@@ -76,6 +76,8 @@ export const queryKeys = {
   programAggregate: (orgId: string, programId: string) =>
     ['org', orgId, 'programs', programId, 'aggregate-detail'] as const,
   initiatives: (orgId: string) => ['org', orgId, 'initiatives'] as const,
+  initiativeHierarchyCandidates: (orgId: string, mode: 'parent' | 'child', query: string) =>
+    ['org', orgId, 'initiatives', 'hierarchy-candidates', mode, query] as const,
   initiative: (orgId: string, initiativeId: string) =>
     ['org', orgId, 'initiatives', initiativeId] as const,
   /** The initiative's own row — see {@link queryKeys.projectRecord} for why this is separate. */

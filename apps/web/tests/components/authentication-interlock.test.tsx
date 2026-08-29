@@ -28,6 +28,26 @@ function ProtectedAction(): JSX.Element {
   );
 }
 
+/** A session teardown that could not safely clear durable browser data. */
+function CleanupFailureAction(): JSX.Element {
+  const { reportSessionCleanupFailure } = useAuthenticationInterlock();
+  return (
+    <button type="button" onClick={reportSessionCleanupFailure}>
+      Report cleanup failure
+    </button>
+  );
+}
+
+/** An explicit sign-out whose account-bound network request did not finish. */
+function SignOutFailureAction(): JSX.Element {
+  const { reportSignOutFailure } = useAuthenticationInterlock();
+  return (
+    <button type="button" onClick={reportSignOutFailure}>
+      Report sign-out failure
+    </button>
+  );
+}
+
 /** A user-intent control that requests authentication for an unsafe, cross-origin return path. */
 function ProtectedActionWithUnsafeReturn(): JSX.Element {
   const { requireAuthentication } = useAuthenticationInterlock();
@@ -119,6 +139,36 @@ function restoreLocation(): void {
 afterEach(cleanup);
 
 describe('AuthenticationInterlockProvider', () => {
+  it('shows application-owned recovery when local session cleanup cannot finish', () => {
+    render(
+      <AuthenticationInterlockProvider>
+        <CleanupFailureAction />
+      </AuthenticationInterlockProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Report cleanup failure' }));
+
+    expect(screen.getByRole('heading', { name: 'Sign-out could not finish safely' })).toBeVisible();
+    expect(screen.getByText(/could not clear this browser's offline data/i)).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Sign in to continue' })).not.toBeInTheDocument();
+  });
+
+  it('does not claim browser cleanup failed when the sign-out request itself failed', () => {
+    render(
+      <AuthenticationInterlockProvider>
+        <SignOutFailureAction />
+      </AuthenticationInterlockProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Report sign-out failure' }));
+
+    expect(screen.getByRole('heading', { name: 'Sign-out could not finish' })).toBeVisible();
+    expect(screen.getByText(/could not confirm that your session ended/i)).toBeVisible();
+    expect(
+      screen.queryByText(/could not clear this browser's offline data/i),
+    ).not.toBeInTheDocument();
+  });
+
   it('lets the person dismiss the prompt and stay in the app', () => {
     // Reverses an earlier decision. The prompt used to be a trap — no close button, Escape and
     // outside-clicks suppressed — which took the navigation, the settings surfaces, and every

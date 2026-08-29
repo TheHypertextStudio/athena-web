@@ -55,7 +55,12 @@ describe('CanvasSelectionBridge', () => {
 
   it('registers the complete selected task set for global actions', async () => {
     render(
-      <SelectionProvider items={items} surfaceId="task-graph" organizationId="org-1">
+      <SelectionProvider
+        items={items}
+        surfaceId="task-graph"
+        organizationId="org-1"
+        actionScope="all"
+      >
         <CanvasSelectionBridge />
       </SelectionProvider>,
     );
@@ -82,7 +87,12 @@ describe('CanvasSelectionBridge', () => {
       { kind: 'project', id: 'project-a', title: 'Project A', organizationId: 'org-1' },
     ];
     render(
-      <SelectionProvider items={projects} surfaceId="project-graph" organizationId="org-1">
+      <SelectionProvider
+        items={projects}
+        surfaceId="project-graph"
+        organizationId="org-1"
+        actionScope="all"
+      >
         <CanvasSelectionBridge objectKind="project" nodeTypes={['project']} />
       </SelectionProvider>,
     );
@@ -111,7 +121,12 @@ describe('CanvasSelectionBridge', () => {
     publishFlowNode(node);
     const onRequestedSelectionApplied = vi.fn();
     render(
-      <SelectionProvider items={projects} surfaceId="project-created" organizationId="org-1">
+      <SelectionProvider
+        items={projects}
+        surfaceId="project-created"
+        organizationId="org-1"
+        actionScope="all"
+      >
         <CanvasSelectionBridge
           objectKind="project"
           nodeTypes={['project']}
@@ -141,7 +156,12 @@ describe('CanvasSelectionBridge', () => {
     const onRequestedSelectionApplied = vi.fn();
     const lateNodeTypes = ['project'] as const;
     const renderBridge = (requestedSelectionReady: boolean) => (
-      <SelectionProvider items={projects} surfaceId="project-late" organizationId="org-1">
+      <SelectionProvider
+        items={projects}
+        surfaceId="project-late"
+        organizationId="org-1"
+        actionScope="all"
+      >
         <CanvasSelectionBridge
           objectKind="project"
           nodeTypes={lateNodeTypes}

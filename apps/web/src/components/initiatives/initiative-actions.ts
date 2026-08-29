@@ -2,18 +2,24 @@
 
 /** The Initiative action domain shared by lists, relationship tabs, and detail pages. */
 import { ArrowRight, ArrowUp, CornerDownLeft, Plus, Tag, User, Users } from '@docket/ui/icons';
-import { InitiativeUpdate } from '@docket/types';
+import { type InitiativeOverviewOut, InitiativeUpdate } from '@docket/types';
 import { type QueryClient, useQueryClient } from '@tanstack/react-query';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
-import { useMemo } from 'react';
+import { useCallback, useId, useMemo } from 'react';
 
 import { copyObjectAction } from '@/components/actions/copy-object-action';
 import { settleRelationExecution } from '@/components/actions/settle-relation-execution';
 import { useCopyOutcome } from '@/components/clipboard';
-import { writeInitiativeHierarchyMutation } from '@/components/initiatives/initiative-hierarchy-mutations';
+import {
+  invalidateInitiativeHierarchyRoute,
+  writeInitiativeHierarchyMutation,
+} from '@/components/initiatives/initiative-hierarchy-mutations';
+import { useInitiativeHierarchyWriteCoordinator } from '@/components/initiatives/initiative-hierarchy-write-coordinator';
 import {
   createInitiativeParentCommandPort,
   createInitiativePropertyCommandPort,
+  type InitiativeParentIntent,
+  resolveInitiativeParentIntent,
 } from '@/components/initiatives/initiative-relation-port';
 import { usePickerOverlay } from '@/components/pickers/picker-overlay';
 import {
@@ -26,6 +32,7 @@ import {
   useRegisterActionDomain,
 } from '@/lib/actions';
 import { api } from '@/lib/api';
+import { initiativeOverviewDef } from '@/lib/fetch-initiative-overview';
 import { unwrap } from '@/lib/query';
 import { invalidateWorkTargetQueries } from '@/lib/work-target-invalidation';
 
@@ -42,19 +49,44 @@ function initiativeFrom(
   return object?.kind === 'initiative' ? { ...object, kind: 'initiative' } : null;
 }
 
+/** Replace stale parent-edge facts with the route projection returned by a recovery refresh. */
+function rebaseInitiativeParentIntent(
+  intent: InitiativeParentIntent,
+  overview: InitiativeOverviewOut,
+): InitiativeParentIntent {
+  const subject = intent.subjects[0];
+  if (subject === undefined) return intent;
+  const authoritative = overview.items.find((item) => item.id === subject.id);
+  if (authoritative === undefined) return intent;
+  return {
+    ...intent,
+    subjects: [
+      {
+        ...subject,
+        meta: {
+          ...subject.meta,
+          parentInitiativeId: authoritative.parentInitiativeId,
+          parentLinkId: authoritative.parentLinkId,
+        },
+      },
+      ...intent.subjects.slice(1),
+    ],
+  };
+}
+
 function invalidateInitiativeOwner(
   queryClient: QueryClient,
   subjects: readonly { readonly kind: string; readonly organizationId: string | null }[],
   targetOrganizationId: string | null,
-): void {
+): Promise<void> {
   if (
     targetOrganizationId === null ||
     !subjects.some(
       (subject) => subject.kind === 'initiative' && subject.organizationId === targetOrganizationId,
     )
   )
-    return;
-  void invalidateWorkTargetQueries(queryClient, {
+    return Promise.resolve();
+  return invalidateWorkTargetQueries(queryClient, {
     target: 'initiative',
     ownerOrganizationId: targetOrganizationId,
   });
@@ -66,9 +98,86 @@ export function useRegisterInitiativeActions(): void {
   const queryClient = useQueryClient();
   const pickerOverlay = usePickerOverlay();
   const reportOutcome = useCopyOutcome();
+  const hierarchyCoordinator = useInitiativeHierarchyWriteCoordinator();
+  const hierarchyActionOwnerId = useId();
   const parentPort = useMemo(
     () => createInitiativeParentCommandPort({ write: writeInitiativeHierarchyMutation }),
     [],
+  );
+  const hierarchyDisabledReason = useCallback(
+    (context: ActionContext, allowOwnedRecovery: boolean): string | null => {
+      const initiative = initiativeFrom(context);
+      const organizationId = context.organizationId;
+      if (initiative === null || organizationId === null) return null;
+      const operation = hierarchyCoordinator.operationForChild(organizationId, initiative.id);
+      if (operation === null) return null;
+      if (
+        allowOwnedRecovery &&
+        operation.ownerId === hierarchyActionOwnerId &&
+        operation.phase === 'refresh_failed'
+      ) {
+        return null;
+      }
+      return 'This initiative hierarchy is already being updated.';
+    },
+    [hierarchyActionOwnerId, hierarchyCoordinator],
+  );
+  const settleParentIntent = useCallback(
+    async (intent: InitiativeParentIntent): Promise<void> => {
+      let currentIntent = intent;
+      let resolved = resolveInitiativeParentIntent(currentIntent);
+      if (resolved === null) return;
+      const stalled = hierarchyCoordinator.operationForChild(
+        resolved.organizationId,
+        resolved.mutation.childInitiativeId,
+      );
+      if (stalled?.ownerId === hierarchyActionOwnerId && stalled.phase === 'refresh_failed') {
+        hierarchyCoordinator.transition(stalled.token, 'refreshing');
+        try {
+          await invalidateInitiativeHierarchyRoute(queryClient, resolved.organizationId);
+          const overview = await queryClient.fetchQuery(
+            initiativeOverviewDef(resolved.organizationId, api),
+          );
+          currentIntent = rebaseInitiativeParentIntent(currentIntent, overview);
+          hierarchyCoordinator.release(stalled.token);
+        } catch (error) {
+          hierarchyCoordinator.transition(stalled.token, 'refresh_failed');
+          throw error;
+        }
+        resolved = resolveInitiativeParentIntent(currentIntent);
+        if (resolved === null) return;
+      }
+      const token = hierarchyCoordinator.claim({
+        organizationId: resolved.organizationId,
+        childInitiativeId: resolved.mutation.childInitiativeId,
+        ownerId: hierarchyActionOwnerId,
+        mutation: resolved.mutation,
+      });
+      if (token === null) return;
+      try {
+        await settleRelationExecution(
+          () => parentPort.execute(currentIntent),
+          async () => {
+            hierarchyCoordinator.transition(token, 'refreshing');
+            try {
+              await invalidateInitiativeHierarchyRoute(queryClient, resolved.organizationId);
+            } catch (error) {
+              hierarchyCoordinator.transition(token, 'refresh_failed');
+              throw error;
+            }
+          },
+        );
+      } finally {
+        const operation = hierarchyCoordinator.operationForChild(
+          resolved.organizationId,
+          resolved.mutation.childInitiativeId,
+        );
+        if (operation?.token === token && operation.phase !== 'refresh_failed') {
+          hierarchyCoordinator.release(token);
+        }
+      }
+    },
+    [hierarchyActionOwnerId, hierarchyCoordinator, parentPort, queryClient],
   );
   const propertyPort = useMemo(
     () =>
@@ -124,11 +233,15 @@ export function useRegisterInitiativeActions(): void {
           icon: CornerDownLeft,
           objectKinds: ['initiative'],
           section: 'organize',
+          disabledReason: (context) =>
+            hierarchyDisabledReason(context, context.target?.kind === 'initiative'),
           run: async (context) => {
             const subject = initiativeFrom(context);
-            if (subject === null || context.organizationId === null) return;
-            if (context.target?.kind === 'initiative') {
-              await parentPort.execute({
+            const orgId = context.organizationId;
+            if (subject === null || orgId === null) return;
+            const target = context.target;
+            if (target?.kind === 'initiative') {
+              await settleParentIntent({
                 relationId: 'initiative.parent',
                 effect: 'move',
                 subjects: [
@@ -141,21 +254,17 @@ export function useRegisterInitiativeActions(): void {
                 ],
                 target: {
                   kind: 'initiative',
-                  id: context.target.id,
-                  organizationId: context.organizationId,
-                  ...(context.target.meta === undefined ? {} : { meta: context.target.meta }),
+                  id: target.id,
+                  organizationId: orgId,
+                  ...(target.meta === undefined ? {} : { meta: target.meta }),
                 },
-              });
-              void invalidateWorkTargetQueries(queryClient, {
-                target: 'initiative',
-                ownerOrganizationId: context.organizationId,
               });
               return;
             }
             pickerOverlay.open({
               kind: 'initiative-hierarchy',
               mode: 'parent',
-              organizationId: context.organizationId,
+              organizationId: orgId,
               subject,
             });
           },
@@ -219,9 +328,7 @@ export function useRegisterInitiativeActions(): void {
                     organizationId: target.organizationId,
                   },
                 }),
-              () => {
-                invalidateInitiativeOwner(queryClient, subjects, target.organizationId);
-              },
+              () => invalidateInitiativeOwner(queryClient, subjects, target.organizationId),
             );
           },
         },
@@ -267,9 +374,7 @@ export function useRegisterInitiativeActions(): void {
                     organizationId: target.organizationId,
                   },
                 }),
-              () => {
-                invalidateInitiativeOwner(queryClient, subjects, target.organizationId);
-              },
+              () => invalidateInitiativeOwner(queryClient, subjects, target.organizationId),
             );
           },
         },
@@ -315,9 +420,7 @@ export function useRegisterInitiativeActions(): void {
                     organizationId: target.organizationId,
                   },
                 }),
-              () => {
-                invalidateInitiativeOwner(queryClient, subjects, target.organizationId);
-              },
+              () => invalidateInitiativeOwner(queryClient, subjects, target.organizationId),
             );
           },
         },
@@ -329,6 +432,7 @@ export function useRegisterInitiativeActions(): void {
           icon: ArrowUp,
           objectKinds: ['initiative'],
           section: 'organize',
+          disabledReason: (context) => hierarchyDisabledReason(context, true),
           appliesTo: (context) => {
             const initiative = initiativeFrom(context);
             return initiative !== null && objectMetaString(initiative, 'parentLinkId') !== null;
@@ -337,14 +441,14 @@ export function useRegisterInitiativeActions(): void {
             const initiative = initiativeFrom(context);
             const orgId = context.organizationId;
             if (initiative === null || orgId === null) return;
-            await parentPort.execute({
+            await settleParentIntent({
               relationId: 'initiative.root',
               effect: 'move',
               subjects: [
                 {
                   kind: 'initiative',
                   id: initiative.id,
-                  organizationId: orgId,
+                  organizationId: initiative.organizationId,
                   ...(initiative.meta ? { meta: initiative.meta } : {}),
                 },
               ],
@@ -354,14 +458,18 @@ export function useRegisterInitiativeActions(): void {
                 organizationId: orgId,
               },
             });
-            void invalidateWorkTargetQueries(queryClient, {
-              target: 'initiative',
-              ownerOrganizationId: orgId,
-            });
           },
         },
       ]),
-    [parentPort, pickerOverlay, propertyPort, queryClient, router, reportOutcome],
+    [
+      hierarchyDisabledReason,
+      pickerOverlay,
+      propertyPort,
+      queryClient,
+      reportOutcome,
+      router,
+      settleParentIntent,
+    ],
   );
 
   useRegisterActionDomain('initiative', definitions);

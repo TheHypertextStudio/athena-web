@@ -23,7 +23,7 @@ import {
   InitiativeOverviewOut,
   InitiativeRelationshipSections,
 } from '@docket/types';
-import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -33,12 +33,20 @@ import { detailCapabilities } from '../lib/detail-capabilities';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zParam } from '../lib/validate';
+import {
+  resourceAccessKey,
+  type ResourceAccessRef,
+  viewableResourceKeys,
+} from '../permissions/resource-access';
 import { rankInitiativeAttention } from './initiative-attention';
-import { accessibleInitiativeOrganizationIds } from './initiative-hierarchy';
+import {
+  accessibleInitiativeHierarchyProjection,
+  accessibleInitiativeNodeIds,
+  loadAccessibleInitiativeHierarchyGraph,
+} from './initiative-hierarchy';
 import {
   buildInitiativeDetail,
   buildInitiativeDetailFromSummary,
-  loadInitiative,
   associatedWorkSummary,
   toOut,
 } from './initiative-helpers';
@@ -62,14 +70,256 @@ function toReference(
 
 /** Return a value proven by the relationship filter, or fail loudly if stored data breaks it. */
 function requiredRelationshipValue<T>(value: T | undefined, message: string): T {
-  /* v8 ignore next -- @preserve visibleLinks and rollupIds establish these lookups before use. */
+  /* v8 ignore next -- @preserve authorized hierarchy rows establish these lookups before use. */
   if (value === undefined) throw new Error(message);
   return value;
 }
 
-const MAX_RELATIONSHIP_LINKS = 200;
 const MAX_RELATIONSHIP_NODES = 100;
 const MAX_CONNECTED_WORK = 100;
+const RELATIONSHIP_QUERY_PAGE_SIZE = 64;
+const MAX_INITIATIVE_CHILD_SCAN_ROWS = 512;
+const MAX_PROGRAM_ASSOCIATION_SCAN_ROWS = 512;
+const MAX_PROJECT_ASSOCIATION_SCAN_ROWS = 512;
+const MAX_INITIATIVE_CHILD_PAGE_QUERIES =
+  MAX_RELATIONSHIP_NODES +
+  Math.ceil((MAX_INITIATIVE_CHILD_SCAN_ROWS + 1) / RELATIONSHIP_QUERY_PAGE_SIZE);
+const MAX_PROGRAM_ASSOCIATION_PAGE_QUERIES = Math.ceil(
+  (MAX_PROGRAM_ASSOCIATION_SCAN_ROWS + 1) / RELATIONSHIP_QUERY_PAGE_SIZE,
+);
+const MAX_PROJECT_ASSOCIATION_PAGE_QUERIES = Math.ceil(
+  (MAX_PROJECT_ASSOCIATION_SCAN_ROWS + 1) / RELATIONSHIP_QUERY_PAGE_SIZE,
+);
+/** Matches the database check that caps every workspace's Initiative depth at five nodes. */
+const MAX_CONTEXT_HIERARCHY_DEPTH = 5;
+
+interface RelationshipScanBudget {
+  readonly maximumRows: number;
+  readonly maximumQueries: number;
+  rowsRead: number;
+  queriesRead: number;
+  truncated: boolean;
+}
+
+/** Create one raw-candidate budget, including one overflow probe beyond the row ceiling. */
+function relationshipScanBudget(
+  maximumRows: number,
+  maximumQueries: number,
+): RelationshipScanBudget {
+  return { maximumRows, maximumQueries, rowsRead: 0, queriesRead: 0, truncated: false };
+}
+
+/** Return the next bounded page size, or mark a request partial when its query ceiling is spent. */
+function relationshipScanPageLimit(budget: RelationshipScanBudget): number | null {
+  if (budget.queriesRead >= budget.maximumQueries) {
+    budget.truncated = true;
+    return null;
+  }
+  return Math.min(RELATIONSHIP_QUERY_PAGE_SIZE, budget.maximumRows + 1 - budget.rowsRead);
+}
+
+/** Consume one raw page while reserving its final possible row as an overflow sentinel. */
+function boundedRelationshipCandidates<T>(
+  budget: RelationshipScanBudget,
+  page: readonly T[],
+): { readonly candidates: readonly T[]; readonly truncated: boolean } {
+  budget.queriesRead += 1;
+  const remaining = Math.max(0, budget.maximumRows - budget.rowsRead);
+  const candidates = page.slice(0, remaining);
+  budget.rowsRead += page.length;
+  const truncated = candidates.length < page.length;
+  if (truncated) budget.truncated = true;
+  return { candidates, truncated };
+}
+
+interface VisibleInitiativeChild {
+  readonly child: typeof initiative.$inferSelect;
+  readonly link: typeof initiativeHierarchyLink.$inferSelect;
+}
+
+/** Load at most `maximum` canonically visible children in stable id order. */
+async function loadVisibleInitiativeChildren(
+  contextOrganizationId: string,
+  parentInitiativeId: string,
+  session: AuthSession,
+  maximum: number,
+  scanBudget: RelationshipScanBudget,
+): Promise<VisibleInitiativeChild[]> {
+  const visible: VisibleInitiativeChild[] = [];
+  let offset = 0;
+  while (visible.length < maximum && !scanBudget.truncated) {
+    const pageLimit = relationshipScanPageLimit(scanBudget);
+    if (pageLimit === null) break;
+    const page = await db
+      .select({ link: initiativeHierarchyLink, child: initiative })
+      .from(initiativeHierarchyLink)
+      .innerJoin(initiative, eq(initiative.id, initiativeHierarchyLink.childInitiativeId))
+      .where(
+        and(
+          eq(initiativeHierarchyLink.contextOrganizationId, contextOrganizationId),
+          eq(initiativeHierarchyLink.parentInitiativeId, parentInitiativeId),
+        ),
+      )
+      .orderBy(asc(initiative.id), asc(initiativeHierarchyLink.id))
+      .limit(pageLimit)
+      .offset(offset);
+    const { candidates, truncated: scanTruncated } = boundedRelationshipCandidates(
+      scanBudget,
+      page,
+    );
+    if (page.length === 0 || candidates.length === 0) break;
+    offset += page.length;
+    const accessibleIds = await accessibleInitiativeNodeIds(
+      session,
+      candidates.map(({ child }) => child),
+    );
+    for (const item of candidates) {
+      if (!accessibleIds.has(item.child.id)) continue;
+      visible.push(item);
+      if (visible.length === maximum) break;
+    }
+    if (scanTruncated || page.length < pageLimit) break;
+  }
+  return visible;
+}
+
+/** Load the authorized ancestor chain and a bounded authorized descendant projection. */
+async function loadBoundedRelationshipHierarchy(
+  contextOrganizationId: string,
+  id: string,
+  session: AuthSession,
+): Promise<{
+  readonly rowsById: Map<string, typeof initiative.$inferSelect>;
+  readonly parentLink: typeof initiativeHierarchyLink.$inferSelect | null;
+  readonly childLinks: readonly (typeof initiativeHierarchyLink.$inferSelect)[];
+  readonly descendantIds: readonly string[];
+  readonly inheritedThrough: ReadonlyMap<string, string>;
+  readonly truncated: boolean;
+}> {
+  const ancestorLinks: (typeof initiativeHierarchyLink.$inferSelect)[] = [];
+  const ancestorIds = [id];
+  const seenAncestors = new Set(ancestorIds);
+  let cursor = id;
+  while (ancestorIds.length <= MAX_CONTEXT_HIERARCHY_DEPTH) {
+    const parentRows = await db
+      .select()
+      .from(initiativeHierarchyLink)
+      .where(
+        and(
+          eq(initiativeHierarchyLink.contextOrganizationId, contextOrganizationId),
+          eq(initiativeHierarchyLink.childInitiativeId, cursor),
+        ),
+      )
+      .orderBy(asc(initiativeHierarchyLink.id))
+      .limit(1);
+    const parentLink = parentRows[0];
+    if (!parentLink) break;
+    if (
+      seenAncestors.has(parentLink.parentInitiativeId) ||
+      ancestorIds.length === MAX_CONTEXT_HIERARCHY_DEPTH
+    ) {
+      throw new NotFoundError('Initiative not found');
+    }
+    ancestorLinks.push(parentLink);
+    ancestorIds.push(parentLink.parentInitiativeId);
+    seenAncestors.add(parentLink.parentInitiativeId);
+    cursor = parentLink.parentInitiativeId;
+  }
+  const ancestorRows = await db
+    .select()
+    .from(initiative)
+    .where(inArray(initiative.id, ancestorIds));
+  const accessibleAncestorIds = await accessibleInitiativeNodeIds(session, ancestorRows);
+  const ancestorProjection = accessibleInitiativeHierarchyProjection(
+    contextOrganizationId,
+    ancestorRows.filter((row) => accessibleAncestorIds.has(row.id)),
+    ancestorLinks,
+  );
+  if (!ancestorProjection.nodeIds.has(id)) throw new NotFoundError('Initiative not found');
+
+  const rowsById = new Map(
+    ancestorRows
+      .filter((row) => ancestorProjection.nodeIds.has(row.id))
+      .map((row) => [row.id, row]),
+  );
+  const childScanBudget = relationshipScanBudget(
+    MAX_INITIATIVE_CHILD_SCAN_ROWS,
+    MAX_INITIATIVE_CHILD_PAGE_QUERIES,
+  );
+  const directChildren = await loadVisibleInitiativeChildren(
+    contextOrganizationId,
+    id,
+    session,
+    MAX_RELATIONSHIP_NODES + 1,
+    childScanBudget,
+  );
+  const descendants: string[] = [];
+  const inheritedThrough = new Map<string, string>();
+  const seenDescendants = new Set(ancestorIds);
+  const pending: { readonly id: string; readonly firstHop: string }[] = [];
+  for (const item of directChildren) {
+    if (seenDescendants.has(item.child.id)) throw new NotFoundError('Initiative not found');
+    seenDescendants.add(item.child.id);
+    rowsById.set(item.child.id, item.child);
+    descendants.push(item.child.id);
+    inheritedThrough.set(item.child.id, item.child.id);
+    pending.push({ id: item.child.id, firstHop: item.child.id });
+  }
+  let pendingIndex = 0;
+  while (
+    descendants.length <= MAX_RELATIONSHIP_NODES &&
+    pendingIndex < pending.length &&
+    !childScanBudget.truncated
+  ) {
+    const parent = pending[pendingIndex];
+    pendingIndex += 1;
+    if (!parent) break;
+    const children = await loadVisibleInitiativeChildren(
+      contextOrganizationId,
+      parent.id,
+      session,
+      MAX_RELATIONSHIP_NODES + 1 - descendants.length,
+      childScanBudget,
+    );
+    for (const item of children) {
+      if (seenDescendants.has(item.child.id)) throw new NotFoundError('Initiative not found');
+      seenDescendants.add(item.child.id);
+      rowsById.set(item.child.id, item.child);
+      descendants.push(item.child.id);
+      inheritedThrough.set(item.child.id, parent.firstHop);
+      pending.push({ id: item.child.id, firstHop: parent.firstHop });
+    }
+  }
+  return {
+    rowsById,
+    parentLink: ancestorLinks[0] ?? null,
+    childLinks: directChildren.slice(0, MAX_RELATIONSHIP_NODES).map(({ link }) => link),
+    descendantIds: descendants.slice(0, MAX_RELATIONSHIP_NODES),
+    inheritedThrough,
+    truncated: childScanBudget.truncated || descendants.length > MAX_RELATIONSHIP_NODES,
+  };
+}
+
+async function accessibleConnectedWorkKeys(
+  session: AuthSession,
+  programs: readonly { readonly row: { readonly id: string; readonly organizationId: string } }[],
+  projects: readonly { readonly row: { readonly id: string; readonly organizationId: string } }[],
+): Promise<Set<string>> {
+  if (!session?.user) return new Set();
+  const refs: ResourceAccessRef[] = [
+    ...programs.map(({ row }) => ({
+      organizationId: row.organizationId,
+      kind: 'program',
+      id: row.id,
+    })),
+    ...projects.map(({ row }) => ({
+      organizationId: row.organizationId,
+      kind: 'project',
+      id: row.id,
+    })),
+  ];
+  return new Set(await viewableResourceKeys(session.user.id, refs));
+}
 
 /** Build only the hierarchy sections a reader asks for after opening a relationship tab. */
 async function loadRelationshipSections(
@@ -77,88 +327,16 @@ async function loadRelationshipSections(
   id: string,
   session: AuthSession,
 ): Promise<z.input<typeof InitiativeRelationshipSections>> {
-  const [linkRows, accessibleIds] = await Promise.all([
-    db
-      .select()
-      .from(initiativeHierarchyLink)
-      .where(eq(initiativeHierarchyLink.contextOrganizationId, contextOrganizationId))
-      .orderBy(asc(initiativeHierarchyLink.id))
-      .limit(MAX_RELATIONSHIP_LINKS + 1),
-    accessibleInitiativeOrganizationIds(contextOrganizationId, session),
-  ]);
-  let truncated = linkRows.length > MAX_RELATIONSHIP_LINKS;
-  const links = linkRows.slice(0, MAX_RELATIONSHIP_LINKS);
-  const linkedIds = [
-    ...new Set(links.flatMap((row) => [row.parentInitiativeId, row.childInitiativeId])),
-  ];
-  const candidateRows = await db
-    .select()
-    .from(initiative)
-    .where(inArray(initiative.id, [...new Set([id, ...linkedIds])]));
-  const rowsById = new Map(
-    candidateRows
-      .filter((row) => accessibleIds.has(row.organizationId))
-      .map((row) => [row.id, row]),
-  );
+  const hierarchy = await loadBoundedRelationshipHierarchy(contextOrganizationId, id, session);
+  let truncated = hierarchy.truncated;
+  const rowsById = hierarchy.rowsById;
   const target = rowsById.get(id);
-  const appearsInContext =
-    target?.organizationId === contextOrganizationId ||
-    links.some((row) => row.parentInitiativeId === id || row.childInitiativeId === id);
-  if (!target || !appearsInContext) throw new NotFoundError('Initiative not found');
-
-  const visibleLinks = links.filter(
-    (row) => rowsById.has(row.parentInitiativeId) && rowsById.has(row.childInitiativeId),
-  );
-  const parentLink = visibleLinks.find((row) => row.childInitiativeId === id) ?? null;
-  const childLinks = visibleLinks.filter((row) => row.parentInitiativeId === id);
-  const childrenByParent = new Map<string, string[]>();
-  for (const row of visibleLinks) {
-    const children = childrenByParent.get(row.parentInitiativeId) ?? [];
-    children.push(row.childInitiativeId);
-    childrenByParent.set(row.parentInitiativeId, children);
-  }
-  const descendantIds: string[] = [];
-  const inheritedThrough = new Map<string, string>();
-  const visit = (parentId: string, firstHop: string): void => {
-    for (const childId of childrenByParent.get(parentId) ?? []) {
-      if (descendantIds.includes(childId)) continue;
-      if (descendantIds.length >= MAX_RELATIONSHIP_NODES) {
-        truncated = true;
-        return;
-      }
-      descendantIds.push(childId);
-      inheritedThrough.set(childId, firstHop);
-      visit(childId, firstHop);
-    }
-  };
-  for (const child of childLinks) {
-    if (descendantIds.length >= MAX_RELATIONSHIP_NODES) {
-      truncated = true;
-      break;
-    }
-    descendantIds.push(child.childInitiativeId);
-    inheritedThrough.set(child.childInitiativeId, child.childInitiativeId);
-    visit(child.childInitiativeId, child.childInitiativeId);
-  }
+  if (!target) throw new NotFoundError('Initiative not found');
+  const parentLink = hierarchy.parentLink;
+  const childLinks = hierarchy.childLinks;
+  const descendantIds = hierarchy.descendantIds;
+  const inheritedThrough = hierarchy.inheritedThrough;
   const rollupIds = [id, ...descendantIds];
-  const [programLinks, projectLinks] = await Promise.all([
-    db
-      .select({ initiativeId: initiativeProgram.initiativeId, row: program })
-      .from(initiativeProgram)
-      .innerJoin(program, eq(program.id, initiativeProgram.programId))
-      .where(inArray(initiativeProgram.initiativeId, rollupIds))
-      .orderBy(asc(program.id))
-      .limit(MAX_CONNECTED_WORK + 1),
-    db
-      .select({ initiativeId: initiativeProject.initiativeId, row: project })
-      .from(initiativeProject)
-      .innerJoin(project, eq(project.id, initiativeProject.projectId))
-      .where(and(inArray(initiativeProject.initiativeId, rollupIds), isNull(project.archivedAt)))
-      .orderBy(asc(project.id))
-      .limit(MAX_CONNECTED_WORK + 1),
-  ]);
-  if (programLinks.length > MAX_CONNECTED_WORK || projectLinks.length > MAX_CONNECTED_WORK)
-    truncated = true;
   const connectedByKey = new Map<
     string,
     z.input<typeof InitiativeRelationshipSections>['connectedWork'][number]
@@ -171,51 +349,152 @@ async function loadRelationshipSections(
       'Initiative rollup child is missing its inheritance path',
     );
   };
-  for (const item of programLinks) {
-    if (!accessibleIds.has(item.row.organizationId)) continue;
-    const key = `program:${item.row.id}`;
-    const direct = item.initiativeId === id;
-    const existing = connectedByKey.get(key);
-    if (existing?.direct || (existing && !direct)) continue;
-    connectedByKey.set(key, {
-      kind: 'program',
-      id: item.row.id,
-      organizationId: item.row.organizationId,
-      name: item.row.name,
-      status: item.row.status,
-      health: item.row.health,
-      direct,
-      inheritedThroughInitiativeId: inheritedThroughInitiativeId(item.initiativeId),
-    });
+  const programScanBudget = relationshipScanBudget(
+    MAX_PROGRAM_ASSOCIATION_SCAN_ROWS,
+    MAX_PROGRAM_ASSOCIATION_PAGE_QUERIES,
+  );
+  let programOffset = 0;
+  while (connectedByKey.size <= MAX_CONNECTED_WORK && !programScanBudget.truncated) {
+    const pageLimit = relationshipScanPageLimit(programScanBudget);
+    if (pageLimit === null) break;
+    const page = await db
+      .select({
+        initiativeId: initiativeProgram.initiativeId,
+        associationOrganizationId: initiativeProgram.organizationId,
+        row: program,
+      })
+      .from(initiativeProgram)
+      .innerJoin(program, eq(program.id, initiativeProgram.programId))
+      .where(inArray(initiativeProgram.initiativeId, rollupIds))
+      .orderBy(
+        asc(sql<number>`case when ${initiativeProgram.initiativeId} = ${id} then 0 else 1 end`),
+        asc(program.id),
+        asc(initiativeProgram.initiativeId),
+      )
+      .limit(pageLimit)
+      .offset(programOffset);
+    const { candidates, truncated: scanTruncated } = boundedRelationshipCandidates(
+      programScanBudget,
+      page,
+    );
+    if (page.length === 0 || candidates.length === 0) break;
+    programOffset += page.length;
+    const eligible = candidates.filter(
+      (item) =>
+        item.associationOrganizationId === item.row.organizationId &&
+        rowsById.get(item.initiativeId)?.organizationId === item.row.organizationId,
+    );
+    const accessibleWorkKeys = await accessibleConnectedWorkKeys(session, eligible, []);
+    for (const item of eligible) {
+      if (
+        !accessibleWorkKeys.has(
+          resourceAccessKey({
+            organizationId: item.row.organizationId,
+            kind: 'program',
+            id: item.row.id,
+          }),
+        )
+      ) {
+        continue;
+      }
+      const key = `program:${item.row.id}`;
+      if (connectedByKey.has(key)) continue;
+      const direct = item.initiativeId === id;
+      connectedByKey.set(key, {
+        kind: 'program',
+        id: item.row.id,
+        organizationId: item.row.organizationId,
+        name: item.row.name,
+        status: item.row.status,
+        health: item.row.health,
+        direct,
+        inheritedThroughInitiativeId: inheritedThroughInitiativeId(item.initiativeId),
+      });
+      if (connectedByKey.size > MAX_CONNECTED_WORK) break;
+    }
+    if (scanTruncated || page.length < pageLimit || connectedByKey.size > MAX_CONNECTED_WORK) {
+      break;
+    }
   }
-  for (const item of projectLinks) {
-    if (!accessibleIds.has(item.row.organizationId)) continue;
-    const key = `project:${item.row.id}`;
-    const direct = item.initiativeId === id;
-    const existing = connectedByKey.get(key);
-    if (existing?.direct || (existing && !direct)) continue;
-    connectedByKey.set(key, {
-      kind: 'project',
-      id: item.row.id,
-      organizationId: item.row.organizationId,
-      name: item.row.name,
-      status: item.row.status,
-      health: item.row.health,
-      direct,
-      inheritedThroughInitiativeId: inheritedThroughInitiativeId(item.initiativeId),
-    });
+  if (programScanBudget.truncated) truncated = true;
+  const projectScanBudget = relationshipScanBudget(
+    MAX_PROJECT_ASSOCIATION_SCAN_ROWS,
+    MAX_PROJECT_ASSOCIATION_PAGE_QUERIES,
+  );
+  let projectOffset = 0;
+  while (connectedByKey.size <= MAX_CONNECTED_WORK && !projectScanBudget.truncated) {
+    const pageLimit = relationshipScanPageLimit(projectScanBudget);
+    if (pageLimit === null) break;
+    const page = await db
+      .select({
+        initiativeId: initiativeProject.initiativeId,
+        associationOrganizationId: initiativeProject.organizationId,
+        row: project,
+      })
+      .from(initiativeProject)
+      .innerJoin(project, eq(project.id, initiativeProject.projectId))
+      .where(and(inArray(initiativeProject.initiativeId, rollupIds), isNull(project.archivedAt)))
+      .orderBy(
+        asc(sql<number>`case when ${initiativeProject.initiativeId} = ${id} then 0 else 1 end`),
+        asc(project.id),
+        asc(initiativeProject.initiativeId),
+      )
+      .limit(pageLimit)
+      .offset(projectOffset);
+    const { candidates, truncated: scanTruncated } = boundedRelationshipCandidates(
+      projectScanBudget,
+      page,
+    );
+    if (page.length === 0 || candidates.length === 0) break;
+    projectOffset += page.length;
+    const eligible = candidates.filter(
+      (item) =>
+        item.associationOrganizationId === item.row.organizationId &&
+        rowsById.get(item.initiativeId)?.organizationId === item.row.organizationId,
+    );
+    const accessibleWorkKeys = await accessibleConnectedWorkKeys(session, [], eligible);
+    for (const item of eligible) {
+      if (
+        !accessibleWorkKeys.has(
+          resourceAccessKey({
+            organizationId: item.row.organizationId,
+            kind: 'project',
+            id: item.row.id,
+          }),
+        )
+      ) {
+        continue;
+      }
+      const key = `project:${item.row.id}`;
+      if (connectedByKey.has(key)) continue;
+      const direct = item.initiativeId === id;
+      connectedByKey.set(key, {
+        kind: 'project',
+        id: item.row.id,
+        organizationId: item.row.organizationId,
+        name: item.row.name,
+        status: item.row.status,
+        health: item.row.health,
+        direct,
+        inheritedThroughInitiativeId: inheritedThroughInitiativeId(item.initiativeId),
+      });
+      if (connectedByKey.size > MAX_CONNECTED_WORK) break;
+    }
+    if (scanTruncated || page.length < pageLimit || connectedByKey.size > MAX_CONNECTED_WORK) {
+      break;
+    }
   }
+  if (projectScanBudget.truncated) truncated = true;
   const parentRow = parentLink ? rowsById.get(parentLink.parentInitiativeId) : null;
   const children = childLinks.map((link) => {
-    // `childLinks` comes from `visibleLinks`, whose predicate requires this key in rowsById.
+    // The bounded hierarchy loader includes a row for every authorized child link.
     const child = requiredRelationshipValue(
       rowsById.get(link.childInitiativeId),
       'Visible Initiative child is missing from the relationship index',
     );
     return { child, link };
   });
-  if (children.length > MAX_RELATIONSHIP_NODES) truncated = true;
-  const visibleChildren = children.slice(0, MAX_RELATIONSHIP_NODES);
+  const visibleChildren = children;
   const connectedWork = [...connectedByKey.values()];
   if (connectedWork.length > MAX_CONNECTED_WORK) truncated = true;
   const visibleConnectedWork = connectedWork.slice(0, MAX_CONNECTED_WORK);
@@ -263,28 +542,30 @@ const initiativeAggregates = new Hono<AppEnv>()
     }),
     async (c) => {
       const { orgId } = c.get('actorCtx');
-      const [contextInitiatives, links, accessibleIds] = await Promise.all([
+      const [contextInitiatives, links] = await Promise.all([
         db.select().from(initiative).where(eq(initiative.organizationId, orgId)),
         db
           .select()
           .from(initiativeHierarchyLink)
           .where(eq(initiativeHierarchyLink.contextOrganizationId, orgId)),
-        accessibleInitiativeOrganizationIds(orgId, c.get('session')),
       ]);
       const linkedIds = links.flatMap((link) => [link.parentInitiativeId, link.childInitiativeId]);
       const linkedInitiatives =
         linkedIds.length === 0
           ? []
           : await db.select().from(initiative).where(inArray(initiative.id, linkedIds));
+      const candidateRows = [...contextInitiatives, ...linkedInitiatives];
+      const accessibleNodeIds = await accessibleInitiativeNodeIds(c.get('session'), candidateRows);
       const rowsById = new Map(
-        [...contextInitiatives, ...linkedInitiatives]
-          .filter((row) => accessibleIds.has(row.organizationId))
-          .map((row) => [row.id, row]),
+        candidateRows.filter((row) => accessibleNodeIds.has(row.id)).map((row) => [row.id, row]),
       );
-      const visibleLinks = links.filter(
-        (link) => rowsById.has(link.parentInitiativeId) && rowsById.has(link.childInitiativeId),
+      const projection = accessibleInitiativeHierarchyProjection(
+        orgId,
+        [...rowsById.values()],
+        links,
       );
-      const visibleRows = [...rowsById.values()];
+      const visibleLinks = projection.links;
+      const visibleRows = [...rowsById.values()].filter((row) => projection.nodeIds.has(row.id));
       const visibleIds = visibleRows.map((row) => row.id);
       const organizationIds = [...new Set(visibleRows.map((row) => row.organizationId))];
       const [orgRows, ownerRows, updateRows, displayRows] = await Promise.all([
@@ -389,7 +670,7 @@ const initiativeAggregates = new Hono<AppEnv>()
           });
       };
       contextInitiatives
-        .filter((row) => !parentByChild.has(row.id))
+        .filter((row) => projection.nodeIds.has(row.id) && !parentByChild.has(row.id))
         .sort((a, b) => a.name.localeCompare(b.name))
         .forEach((row) => {
           visit(row.id, 1);
@@ -481,7 +762,7 @@ const initiativeAggregates = new Hono<AppEnv>()
       tag: 'Initiatives',
       summary: 'Get deferred Initiative relationship sections',
       description:
-        'Returns only the selected Initiative hierarchy context and connected work after a reader opens one of those tabs. It excludes labels, resources, updates, and organization rosters.',
+        'Returns only the selected Initiative hierarchy context and connected work after a reader opens one of those tabs. It excludes labels, resources, updates, and organization rosters. Each ordered child, Program-association, and Project-association scan authorizes at most 512 raw candidates. The response sets `truncated` when a scan or the 100-item response cap stops the result.',
       response: InitiativeRelationshipSections,
     }),
     zParam(z.object({ id: InitiativeId })),
@@ -508,9 +789,13 @@ const initiativeAggregates = new Hono<AppEnv>()
     async (c) => {
       const { orgId, actorId, capabilities } = c.get('actorCtx');
       const { id } = c.req.valid('param');
-      const row = await loadInitiative(orgId, id);
+      const graph = await loadAccessibleInitiativeHierarchyGraph(orgId, [id], c.get('session'));
+      const row = graph.nodes.find((node) => node.id === id && node.organizationId === orgId);
+      if (!row || !graph.projection.nodeIds.has(id)) {
+        throw new NotFoundError('Initiative not found');
+      }
       const [summary, ownerRows] = await Promise.all([
-        associatedWorkSummary(orgId, id),
+        associatedWorkSummary(orgId, id, c.get('session')),
         row.ownerId === null
           ? Promise.resolve([])
           : db
@@ -554,13 +839,10 @@ const initiativeAggregates = new Hono<AppEnv>()
     async (c) => {
       const { orgId } = c.get('actorCtx');
       const id = c.req.param('id');
-      const [links, accessibleIds] = await Promise.all([
-        db
-          .select()
-          .from(initiativeHierarchyLink)
-          .where(eq(initiativeHierarchyLink.contextOrganizationId, orgId)),
-        accessibleInitiativeOrganizationIds(orgId, c.get('session')),
-      ]);
+      const links = await db
+        .select()
+        .from(initiativeHierarchyLink)
+        .where(eq(initiativeHierarchyLink.contextOrganizationId, orgId));
       const linkedIds = [
         ...new Set(links.flatMap((row) => [row.parentInitiativeId, row.childInitiativeId])),
       ];
@@ -569,20 +851,19 @@ const initiativeAggregates = new Hono<AppEnv>()
         .select()
         .from(initiative)
         .where(inArray(initiative.id, candidateIds));
+      const accessibleNodeIds = await accessibleInitiativeNodeIds(c.get('session'), candidateRows);
+      const projection = accessibleInitiativeHierarchyProjection(
+        orgId,
+        candidateRows.filter((row) => accessibleNodeIds.has(row.id)),
+        links,
+      );
       const rowsById = new Map(
-        candidateRows
-          .filter((row) => accessibleIds.has(row.organizationId))
-          .map((row) => [row.id, row]),
+        candidateRows.filter((row) => projection.nodeIds.has(row.id)).map((row) => [row.id, row]),
       );
       const target = rowsById.get(id);
-      const appearsInContext =
-        target?.organizationId === orgId ||
-        links.some((row) => row.parentInitiativeId === id || row.childInitiativeId === id);
-      if (!target || !appearsInContext) throw new NotFoundError('Initiative not found');
+      if (!target) throw new NotFoundError('Initiative not found');
 
-      const visibleLinks = links.filter(
-        (row) => rowsById.has(row.parentInitiativeId) && rowsById.has(row.childInitiativeId),
-      );
+      const visibleLinks = projection.links;
       const parentLink = visibleLinks.find((row) => row.childInitiativeId === id) ?? null;
       const childLinks = visibleLinks.filter((row) => row.parentInitiativeId === id);
       const childrenByParent = new Map<string, string[]>();
@@ -613,6 +894,9 @@ const initiativeAggregates = new Hono<AppEnv>()
       }
       const rollupIds = [id, ...descendantIds];
 
+      const visibleOrganizationIds = [
+        ...new Set([...rowsById.values()].map((row) => row.organizationId)),
+      ];
       const [programLinks, projectLinks, labelLinks, resourceRows, updateRows, orgRows] =
         await Promise.all([
           db
@@ -657,8 +941,13 @@ const initiativeAggregates = new Hono<AppEnv>()
           db
             .select({ id: organization.id, name: organization.name })
             .from(organization)
-            .where(inArray(organization.id, [...accessibleIds])),
+            .where(inArray(organization.id, visibleOrganizationIds)),
         ]);
+      const accessibleWorkKeys = await accessibleConnectedWorkKeys(
+        c.get('session'),
+        programLinks,
+        projectLinks,
+      );
       const orgNameById = new Map(orgRows.map((row) => [row.id, row.name]));
       const connectedByKey = new Map<
         string,
@@ -680,7 +969,16 @@ const initiativeAggregates = new Hono<AppEnv>()
         return inheritedThrough.get(initiativeId) ?? null;
       }
       for (const item of programLinks) {
-        if (!accessibleIds.has(item.row.organizationId)) continue;
+        if (
+          !accessibleWorkKeys.has(
+            resourceAccessKey({
+              organizationId: item.row.organizationId,
+              kind: 'program',
+              id: item.row.id,
+            }),
+          )
+        )
+          continue;
         const key = `program:${item.row.id}`;
         const direct = item.initiativeId === id;
         const existing = connectedByKey.get(key);
@@ -697,7 +995,16 @@ const initiativeAggregates = new Hono<AppEnv>()
         });
       }
       for (const item of projectLinks) {
-        if (!accessibleIds.has(item.row.organizationId)) continue;
+        if (
+          !accessibleWorkKeys.has(
+            resourceAccessKey({
+              organizationId: item.row.organizationId,
+              kind: 'project',
+              id: item.row.id,
+            }),
+          )
+        )
+          continue;
         const key = `project:${item.row.id}`;
         const direct = item.initiativeId === id;
         const existing = connectedByKey.get(key);
@@ -723,11 +1030,8 @@ const initiativeAggregates = new Hono<AppEnv>()
       const baseDetail = buildInitiativeDetail(target, projects, programs);
       const latest = updateRows[0] ?? null;
       const parentRow = parentLink ? rowsById.get(parentLink.parentInitiativeId) : null;
-      // `parentRow`'s and every child's `organizationId` is always within `accessibleIds` (both
-      // came from `rowsById`, which is filtered to `accessibleIds.has(row.organizationId)`), and
-      // `orgRows` above was queried for exactly `[...accessibleIds]` — so `orgNameById.get(...)`
-      // always finds a name and `rowsById.get(link.childInitiativeId)` (from `childLinks`, a
-      // subset of `visibleLinks`, whose filter requires both ends in `rowsById`) never misses.
+      // Every parent and child comes from the route-rooted projection, and `orgRows` covers every
+      // organization represented in that projection. The lookups below therefore stay total.
       let parent: z.input<typeof InitiativeAggregateDetail>['parent'] = null;
       if (parentRow) {
         /* v8 ignore next -- @preserve defensive: see the invariant note above */

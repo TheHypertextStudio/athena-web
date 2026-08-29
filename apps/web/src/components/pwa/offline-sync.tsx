@@ -3,13 +3,25 @@
 import { CircleAlert, CloudOff, RefreshCw, Schedule, Trash2 } from '@docket/ui/icons';
 import { Badge, Button, ControlGroup, Text } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
-import { type JSX, useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import {
+  type JSX,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 
+import { useOptionalAuthenticationInterlock } from '@/components/authentication-interlock';
+import { probeSession } from '@/lib/auth-client';
+import { createUnauthorizedConfirmer } from '@/lib/session-recovery';
+import { purgeLocalSessionState } from '@/lib/sign-out';
 import { useOnlineStatus } from '@/lib/use-online-status';
 
-import { type OutboxEntry, pendingCount, stalledCount } from './outbox-model';
+import { type OutboxEntry, isManualRetryable, pendingCount, stalledCount } from './outbox-model';
 import {
   discardEntry,
+  isCurrentOutboxOwner,
   outboxSnapshot,
   retryEntry,
   setOutboxUser,
@@ -65,44 +77,73 @@ export function useOutboxSummary(): OutboxSummary {
  * the one thing the shell knows before any surface renders. The identity is also posted to
  * the service worker here, because the worker keys its offline document cache on it and cannot ask.
  *
- * On a successful sync the whole query cache is invalidated once. That looks blunt, and is
- * deliberate: after an offline session the client's idea of the world is a snapshot plus a pile of
- * local edits the server has just accepted and may have adjusted. Refetching everything is the only
- * way to be sure what is on screen is what the server actually holds, and it happens at most once
- * per reconnection.
+ * After an accepted removal the whole query cache is invalidated. That looks blunt, and is
+ * deliberate: after an offline session the client's idea of the world is a snapshot plus local
+ * edits the server has accepted and may have adjusted. Refetching everything is the only way to be
+ * sure what is on screen is what the server holds. TanStack Query coalesces overlapping refetches.
  *
  * @param props - The resolved user id, or `null` when there is no session.
  */
 export function OfflineSyncRuntime({ userId }: { readonly userId: string | null }): null {
   const queryClient = useQueryClient();
+  const authentication = useOptionalAuthenticationInterlock();
 
-  useEffect(() => {
-    void setOutboxUser(userId);
-    // Truthiness, not `in`: a property that exists but is undefined would otherwise throw out of
-    // this effect. See the same note in `service-worker-provider.tsx`.
-    const container =
-      typeof navigator === 'undefined'
-        ? undefined
-        : (navigator as unknown as { readonly serviceWorker?: ServiceWorkerContainer })
-            .serviceWorker;
-    if (container) {
+  useLayoutEffect(() => {
+    let current = true;
+    void setOutboxUser(userId).then(() => {
+      if (!current) return;
+      // Truthiness, not `in`: a property that exists but is undefined would otherwise throw out of
+      // this effect. See the same note in `service-worker-provider.tsx`.
+      const container =
+        typeof navigator === 'undefined'
+          ? undefined
+          : (navigator as unknown as { readonly serviceWorker?: ServiceWorkerContainer })
+              .serviceWorker;
+      if (!container) return;
       void container.ready
         .then((registration) => {
-          registration.active?.postMessage({ type: 'OFFLINE_IDENTITY', userId });
+          if (current) registration.active?.postMessage({ type: 'OFFLINE_IDENTITY', userId });
         })
         .catch(() => {
           // No worker, or registration failed. Offline documents are an enhancement; the queue
           // itself lives in IndexedDB and is unaffected.
         });
-    }
+    });
+    return () => {
+      current = false;
+    };
   }, [userId]);
 
   useEffect(() => {
     if (!userId) return undefined;
-    return startOutboxDrain(() => {
-      void queryClient.invalidateQueries();
-    });
-  }, [queryClient, userId]);
+    let active = true;
+    const isActive = (): boolean => active;
+    const confirmUnauthorized = createUnauthorizedConfirmer(probeSession);
+    const stop = startOutboxDrain(
+      () => {
+        void queryClient.invalidateQueries();
+      },
+      (owner) => {
+        void (async () => {
+          if ((await confirmUnauthorized()) !== 'session-ended') return;
+          if (!isActive() || owner.userId !== userId || !isCurrentOutboxOwner(owner)) return;
+          const purge = await purgeLocalSessionState(queryClient, owner);
+          if (!isActive() || purge === 'superseded') return;
+          if (purge === 'failed') {
+            authentication?.reportSessionCleanupFailure();
+            return;
+          }
+          authentication?.requireAuthentication(
+            `${window.location.pathname}${window.location.search}`,
+          );
+        })();
+      },
+    );
+    return () => {
+      active = false;
+      stop();
+    };
+  }, [authentication, queryClient, userId]);
 
   return null;
 }
@@ -172,10 +213,9 @@ export function OfflineSyncIndicator(): JSX.Element | null {
  * One queued change, with its own marker.
  *
  * @remarks
- * A blocked or expired row gets real affordances rather than an explanation: "Try again" puts it
- * back in the queue, "Discard" drops it. Neither is destructive by accident — a change that cannot
- * be sent has to end up somewhere, and leaving a person with a permanent notice and no way to act
- * on it is the failure mode this avoids.
+ * A blocked row can be tried again while its stable key remains inside the server's retention
+ * window. An expired row can only be discarded because retrying the same POST after that window
+ * could duplicate an already-committed command.
  */
 function OutboxRow({ entry }: { readonly entry: OutboxEntry }): JSX.Element {
   const onRetry = useCallback(() => {
@@ -185,6 +225,7 @@ function OutboxRow({ entry }: { readonly entry: OutboxEntry }): JSX.Element {
     void discardEntry(entry.id);
   }, [entry.id]);
   const settled = entry.status === 'blocked' || entry.status === 'expired';
+  const retryable = isManualRetryable(entry, Date.now());
 
   return (
     <li>
@@ -202,25 +243,26 @@ function OutboxRow({ entry }: { readonly entry: OutboxEntry }): JSX.Element {
             Pending sync
           </Badge>
         )}
+        {entry.status === 'blocked' ? (
+          <Button
+            variant="ghost"
+            iconOnly
+            aria-label={`Try ${entry.label} again`}
+            onClick={onRetry}
+            disabled={!retryable}
+          >
+            <RefreshCw aria-hidden="true" />
+          </Button>
+        ) : null}
         {settled ? (
-          <>
-            <Button
-              variant="ghost"
-              iconOnly
-              aria-label={`Try ${entry.label} again`}
-              onClick={onRetry}
-            >
-              <RefreshCw aria-hidden="true" />
-            </Button>
-            <Button
-              variant="ghost"
-              iconOnly
-              aria-label={`Discard ${entry.label}`}
-              onClick={onDiscard}
-            >
-              <Trash2 aria-hidden="true" />
-            </Button>
-          </>
+          <Button
+            variant="ghost"
+            iconOnly
+            aria-label={`Discard ${entry.label}`}
+            onClick={onDiscard}
+          >
+            <Trash2 aria-hidden="true" />
+          </Button>
         ) : null}
       </ControlGroup>
     </li>
@@ -253,6 +295,6 @@ export function syncSentence(pending: number, stalled: number, online: boolean):
       : `${changes} waiting here and will sync as soon as you're back online.`;
   }
   return stalled === 1
-    ? '1 change could not be sent. Try it again or discard it.'
-    : `${String(stalled)} changes could not be sent. Try them again or discard them.`;
+    ? '1 change could not be sent. Review or discard it.'
+    : `${String(stalled)} changes could not be sent. Review or discard them.`;
 }

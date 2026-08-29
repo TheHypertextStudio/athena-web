@@ -67,7 +67,7 @@ function actionRelationIds(source: string): readonly string[] {
 
 /** A context for `objects`, defaulting to the surface the tests care least about. */
 function contextFor(objects: readonly ObjectRef[]): ActionContext {
-  return { objects, source: 'context-menu', organizationId: 'org1' };
+  return { objects, source: 'context-menu', organizationId: 'org1', actionScope: 'all' };
 }
 
 describe('action registry: registration', () => {
@@ -337,6 +337,148 @@ describe('action registry: registration', () => {
 });
 
 describe('action registry: applicability', () => {
+  it('enforces reference-only action scope during both resolution and direct invocation', async () => {
+    const open = vi.fn();
+    const move = vi.fn();
+    const registry = createActionRegistry();
+    registry.register(
+      'task',
+      defineActionDomain('task', [
+        {
+          id: 'task.open',
+          label: 'Open task',
+          objectKinds: ['task'],
+          run: open,
+        },
+        {
+          id: 'task.move',
+          label: 'Move task',
+          objectKinds: ['task'],
+          run: move,
+        },
+        {
+          id: 'task.copy',
+          label: 'Copy task',
+          objectKinds: ['task'],
+          multi: true,
+          run: () => undefined,
+        },
+        {
+          id: 'task.copyLink',
+          label: 'Copy task link through a write path',
+          objectKinds: ['task'],
+          run: move,
+        },
+        {
+          id: 'task.malicious.open',
+          label: 'Disguised write',
+          objectKinds: ['task'],
+          run: move,
+        },
+      ]),
+    );
+    const resolveContext = (): ActionContext => ({
+      ...contextFor([task]),
+      actionScope: 'reference',
+    });
+
+    expect(registry.resolve(resolveContext).map((action) => action.id)).toEqual([
+      'task.open',
+      'task.copy',
+    ]);
+    await expect(registry.invoke('task.move', resolveContext)).resolves.toEqual({
+      status: 'skipped',
+      reason: 'not-applicable',
+      detail: null,
+    });
+    expect(move).not.toHaveBeenCalled();
+    await expect(registry.invoke('task.malicious.open', resolveContext)).resolves.toEqual({
+      status: 'skipped',
+      reason: 'not-applicable',
+      detail: null,
+    });
+    await expect(registry.invoke('task.copyLink', resolveContext)).resolves.toEqual({
+      status: 'skipped',
+      reason: 'not-applicable',
+      detail: null,
+    });
+    await expect(registry.invoke('task.open', resolveContext)).resolves.toEqual({ status: 'ran' });
+    expect(open).toHaveBeenCalledOnce();
+  });
+
+  it('allows a same-kind reference selection to copy while ordinary multi rules hide Open', () => {
+    const registry = createActionRegistry();
+    registry.register(
+      'task',
+      defineActionDomain('task', [
+        { id: 'task.open', label: 'Open task', objectKinds: ['task'], run: () => undefined },
+        {
+          id: 'task.copy',
+          label: 'Copy tasks',
+          objectKinds: ['task'],
+          multi: true,
+          run: () => undefined,
+        },
+      ]),
+    );
+
+    expect(
+      registry
+        .resolve(() => ({
+          ...contextFor([task, otherTask]),
+          actionScope: 'reference',
+        }))
+        .map((action) => action.id),
+    ).toEqual(['task.copy']);
+  });
+
+  it('rechecks reference scope before invoking an action resolved under wider authority', async () => {
+    const run = vi.fn();
+    const registry = createActionRegistry();
+    registry.register(
+      'task',
+      defineActionDomain('task', [
+        { id: 'task.move', label: 'Move task', objectKinds: ['task'], run },
+      ]),
+    );
+    let actionScope: ActionContext['actionScope'] = 'all';
+    const [action] = registry.resolve(() => ({ ...contextFor([task]), actionScope }));
+    expect(action).toBeDefined();
+
+    actionScope = 'reference';
+    await expect(action?.invoke()).resolves.toEqual({
+      status: 'skipped',
+      reason: 'not-applicable',
+      detail: null,
+    });
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('fails closed at runtime when untyped code omits the required action scope', async () => {
+    const run = vi.fn();
+    const registry = createActionRegistry();
+    registry.register(
+      'task',
+      defineActionDomain('task', [
+        { id: 'task.open', label: 'Open task', objectKinds: ['task'], run },
+      ]),
+    );
+    // @ts-expect-error ActionContext requires the caller to choose an action scope.
+    const missingScope: ActionContext = {
+      objects: [task],
+      source: 'context-menu',
+      organizationId: 'org1',
+    };
+
+    expect(registry.resolve(() => missingScope)).toEqual([]);
+    await expect(registry.invoke('task.open', () => missingScope)).resolves.toEqual({
+      status: 'skipped',
+      reason: 'not-applicable',
+      detail: null,
+    });
+    expect(run).not.toHaveBeenCalled();
+  });
+
   const registry = createActionRegistry();
   registry.register(
     'task',
@@ -555,16 +697,19 @@ describe('action registry: invocation', () => {
       objects: [task],
       source: 'context-menu',
       organizationId: 'org1',
+      actionScope: 'all',
     }));
     await registry.invoke('task.complete', () => ({
       objects: [otherTask],
       source: 'command-palette',
       organizationId: 'org1',
+      actionScope: 'all',
     }));
     await registry.invoke('task.complete', () => ({
       objects: [task],
       source: 'shortcut',
       organizationId: 'org1',
+      actionScope: 'all',
     }));
 
     // One definition, three call sites, three different injected contexts.

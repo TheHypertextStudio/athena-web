@@ -252,6 +252,17 @@ function strictMode(): boolean {
  * `appliesTo` at all: declaring `objectKinds: ['task']` already means "one task, and only a task".
  */
 function appliesToContext(definition: ActionDefinition, context: ActionContext): boolean {
+  const actionScope: unknown = context.actionScope;
+  if (actionScope !== 'all' && actionScope !== 'reference') return false;
+  if (actionScope === 'reference') {
+    const subject = context.objects[0];
+    if (
+      subject === undefined ||
+      !context.objects.every((object) => object.kind === subject.kind) ||
+      (definition.id !== `${subject.kind}.open` && definition.id !== `${subject.kind}.copy`)
+    )
+      return false;
+  }
   const kinds = definition.objectKinds;
   if (kinds !== undefined) {
     if (context.objects.length === 0) return false;

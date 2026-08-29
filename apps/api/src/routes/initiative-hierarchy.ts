@@ -7,17 +7,98 @@
  * and enforces the workspace's configured total depth.
  */
 import { actor, db, initiative, initiativeHierarchyLink, organization } from '@docket/db';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 
 import type { AuthSession } from '../context';
 import { ConflictError, NotFoundError } from '../error';
+import { resourceAccessKey, viewableResourceKeys } from '../permissions/resource-access';
 
 type HierarchyLinkRow = typeof initiativeHierarchyLink.$inferSelect;
 type HierarchyTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type HierarchyDatabase = typeof db | HierarchyTransaction;
 
-/** Return every organization the current session can independently view. */
-export async function accessibleInitiativeOrganizationIds(
+/** Minimal Initiative identity required to authorize one hierarchy projection. */
+export interface AccessibleInitiativeHierarchyNode {
+  readonly id: string;
+  readonly organizationId: string;
+}
+
+/** Minimal hierarchy edge required to calculate an authorized route projection. */
+export interface AccessibleInitiativeHierarchyLink {
+  readonly parentInitiativeId: string;
+  readonly childInitiativeId: string;
+}
+
+/** Route-rooted Initiative nodes and links whose complete parent chain is accessible. */
+export interface AccessibleInitiativeHierarchyProjection<
+  Link extends AccessibleInitiativeHierarchyLink,
+> {
+  readonly nodeIds: ReadonlySet<string>;
+  readonly links: readonly Link[];
+}
+
+/** An authorized context graph used by Initiative routes that start from one route id. */
+export interface AccessibleInitiativeHierarchyGraph {
+  /** Every context-owned hierarchy edge. */
+  readonly links: readonly HierarchyLinkRow[];
+  /** Every Initiative referenced by the graph plus the explicitly requested route ids. */
+  readonly nodes: readonly (typeof initiative.$inferSelect)[];
+  /** The route-rooted projection after canonical resource authorization. */
+  readonly projection: AccessibleInitiativeHierarchyProjection<HierarchyLinkRow>;
+}
+
+/**
+ * Project raw context edges through accessible nodes rooted in route-owned Initiatives.
+ *
+ * @param contextOrganizationId - Workspace that owns the hierarchy projection.
+ * @param nodes - Every accessible Initiative referenced by the route graph plus local roots.
+ * @param links - Raw route-owned edges. Hidden edges remain here for integrity checks elsewhere.
+ * @returns Reachable node ids and the links whose complete route-rooted chain is accessible.
+ */
+export function accessibleInitiativeHierarchyProjection<
+  Link extends AccessibleInitiativeHierarchyLink,
+>(
+  contextOrganizationId: string,
+  nodes: readonly AccessibleInitiativeHierarchyNode[],
+  links: readonly Link[],
+): AccessibleInitiativeHierarchyProjection<Link> {
+  const nodesById = new Map(nodes.map((node) => [node.id, node]));
+  const parentByChild = new Map(links.map((link) => [link.childInitiativeId, link]));
+  const childrenByParent = new Map<string, Link[]>();
+  for (const link of links) {
+    const children = childrenByParent.get(link.parentInitiativeId) ?? [];
+    children.push(link);
+    childrenByParent.set(link.parentInitiativeId, children);
+  }
+
+  const nodeIds = new Set<string>();
+  const pending = nodes
+    .filter((node) => node.organizationId === contextOrganizationId && !parentByChild.has(node.id))
+    .map((node) => node.id);
+  for (const nodeId of pending) {
+    if (nodeIds.has(nodeId)) continue;
+    nodeIds.add(nodeId);
+    for (const link of childrenByParent.get(nodeId) ?? []) {
+      if (nodesById.has(link.childInitiativeId)) pending.push(link.childInitiativeId);
+    }
+  }
+
+  return {
+    nodeIds,
+    links: links.filter(
+      (link) => nodeIds.has(link.parentInitiativeId) && nodeIds.has(link.childInitiativeId),
+    ),
+  };
+}
+
+/**
+ * Return the organization ids that bound an Initiative candidate query.
+ *
+ * @remarks
+ * This is only a query-size bound. Membership does not authorize any Initiative row. Call
+ * {@link accessibleInitiativeNodeIds} before returning or mutating a candidate.
+ */
+export async function activeInitiativeOrganizationIds(
   contextOrganizationId: string,
   session: AuthSession,
   database: HierarchyDatabase = db,
@@ -28,10 +109,103 @@ export async function accessibleInitiativeOrganizationIds(
     .select({ organizationId: actor.organizationId })
     .from(actor)
     .where(
-      and(eq(actor.userId, session.user.id), eq(actor.kind, 'human'), eq(actor.status, 'active')),
+      and(
+        eq(actor.userId, session.user.id),
+        eq(actor.kind, 'human'),
+        eq(actor.status, 'active'),
+        isNull(actor.archivedAt),
+      ),
     );
   for (const membership of memberships) ids.add(membership.organizationId);
   return ids;
+}
+
+/**
+ * Resolve the Initiative nodes the current session can view through canonical resource grants.
+ *
+ * @param session - Authenticated user whose grants should be resolved.
+ * @param nodes - Candidate Initiative identities from the route-owned graph.
+ * @param database - Optional transaction that owns the hierarchy validation snapshot.
+ * @returns The Initiative ids that passed resource-level authorization.
+ */
+export async function accessibleInitiativeNodeIds(
+  session: AuthSession,
+  nodes: readonly AccessibleInitiativeHierarchyNode[],
+  database?: HierarchyDatabase,
+): Promise<Set<string>> {
+  if (!session?.user || nodes.length === 0) return new Set();
+  const uniqueNodes = [
+    ...new Map(
+      nodes.map((node) => [
+        resourceAccessKey({
+          organizationId: node.organizationId,
+          kind: 'initiative',
+          id: node.id,
+        }),
+        node,
+      ]),
+    ).values(),
+  ];
+  const refs = uniqueNodes.map((node) => ({
+    organizationId: node.organizationId,
+    kind: 'initiative' as const,
+    id: node.id,
+  }));
+  const viewableKeys = await viewableResourceKeys(session.user.id, refs, database);
+  return new Set(
+    uniqueNodes
+      .filter((node) =>
+        viewableKeys.has(
+          resourceAccessKey({
+            organizationId: node.organizationId,
+            kind: 'initiative',
+            id: node.id,
+          }),
+        ),
+      )
+      .map((node) => node.id),
+  );
+}
+
+/**
+ * Load and authorize a complete Initiative context graph for route-rooted reads.
+ *
+ * @param contextOrganizationId - Workspace that owns the hierarchy edges.
+ * @param routeInitiativeIds - Unlinked local route roots that must be considered with linked nodes.
+ * @param session - Authenticated viewer whose resource grants define the projection.
+ * @param database - Optional transaction that owns the read snapshot.
+ * @returns The raw graph, its candidate Initiative rows, and the authorized route projection.
+ */
+export async function loadAccessibleInitiativeHierarchyGraph(
+  contextOrganizationId: string,
+  routeInitiativeIds: readonly string[],
+  session: AuthSession,
+  database: HierarchyDatabase = db,
+): Promise<AccessibleInitiativeHierarchyGraph> {
+  const links = await database
+    .select()
+    .from(initiativeHierarchyLink)
+    .where(eq(initiativeHierarchyLink.contextOrganizationId, contextOrganizationId));
+  const nodeIds = [
+    ...new Set([
+      ...routeInitiativeIds,
+      ...links.flatMap((link) => [link.parentInitiativeId, link.childInitiativeId]),
+    ]),
+  ];
+  const nodes =
+    nodeIds.length === 0
+      ? []
+      : await database.select().from(initiative).where(inArray(initiative.id, nodeIds));
+  const accessibleNodeIds = await accessibleInitiativeNodeIds(session, nodes, database);
+  return {
+    links,
+    nodes,
+    projection: accessibleInitiativeHierarchyProjection(
+      contextOrganizationId,
+      nodes.filter((node) => accessibleNodeIds.has(node.id)),
+      links,
+    ),
+  };
 }
 
 /** Calculate the deepest path in an acyclic hierarchy edge set. */
@@ -75,47 +249,66 @@ export async function validateInitiativeHierarchyChange(
     throw new ConflictError('An Initiative cannot be its own parent');
   }
 
-  const [settingsRows, nodeRows, currentEdges, accessibleIds] = await Promise.all([
+  const [settingsRows, currentEdges] = await Promise.all([
     database
       .select({ initiativeMaxDepth: organization.initiativeMaxDepth })
       .from(organization)
       .where(eq(organization.id, input.contextOrganizationId))
       .limit(1),
     database
-      .select({ id: initiative.id, organizationId: initiative.organizationId })
-      .from(initiative)
-      .where(inArray(initiative.id, [input.parentInitiativeId, input.childInitiativeId])),
-    database
       .select()
       .from(initiativeHierarchyLink)
       .where(eq(initiativeHierarchyLink.contextOrganizationId, input.contextOrganizationId)),
-    accessibleInitiativeOrganizationIds(input.contextOrganizationId, input.session, database),
   ]);
 
   const settings = settingsRows[0];
   if (!settings) throw new NotFoundError('Workspace not found');
+  const graphNodeIds = [
+    ...new Set([
+      input.parentInitiativeId,
+      input.childInitiativeId,
+      ...currentEdges.flatMap((edge) => [edge.parentInitiativeId, edge.childInitiativeId]),
+    ]),
+  ];
+  const nodeRows = await database
+    .select({ id: initiative.id, organizationId: initiative.organizationId })
+    .from(initiative)
+    .where(inArray(initiative.id, graphNodeIds));
+  const accessibleNodeIds = await accessibleInitiativeNodeIds(input.session, nodeRows, database);
   const nodesById = new Map(nodeRows.map((node) => [node.id, node]));
   const parent = nodesById.get(input.parentInitiativeId);
   const child = nodesById.get(input.childInitiativeId);
-  if (
-    !parent ||
-    !child ||
-    !accessibleIds.has(parent.organizationId) ||
-    !accessibleIds.has(child.organizationId)
-  ) {
+  if (!parent || !child || !accessibleNodeIds.has(parent.id) || !accessibleNodeIds.has(child.id)) {
     throw new NotFoundError('Initiative not found');
   }
 
+  const accessibleNodes = nodeRows.filter((node) => accessibleNodeIds.has(node.id));
+  const currentProjection = accessibleInitiativeHierarchyProjection(
+    input.contextOrganizationId,
+    accessibleNodes,
+    currentEdges,
+  );
+  const visibleCurrentLinkIds = new Set(currentProjection.links.map((edge) => edge.id));
+  if (input.excludeLinkId !== undefined && !visibleCurrentLinkIds.has(input.excludeLinkId)) {
+    throw new NotFoundError('Initiative hierarchy link not found');
+  }
+
   const edges = currentEdges.filter((edge) => edge.id !== input.excludeLinkId);
-  if (edges.some((edge) => edge.childInitiativeId === input.childInitiativeId)) {
+  const existingParent = edges.find((edge) => edge.childInitiativeId === input.childInitiativeId);
+  if (existingParent && !visibleCurrentLinkIds.has(existingParent.id)) {
+    throw new NotFoundError('Initiative not found');
+  }
+  if (existingParent) {
     throw new ConflictError('Initiative already has a parent in this workspace');
   }
 
-  const visibleNodeIds = new Set(
-    edges.flatMap((edge) => [edge.parentInitiativeId, edge.childInitiativeId]),
+  const projection = accessibleInitiativeHierarchyProjection(
+    input.contextOrganizationId,
+    accessibleNodes,
+    edges,
   );
-  if (parent.organizationId !== input.contextOrganizationId && !visibleNodeIds.has(parent.id)) {
-    throw new ConflictError('A hierarchy root must belong to the context workspace');
+  if (!projection.nodeIds.has(parent.id)) {
+    throw new ConflictError('A hierarchy parent must be visible in the context workspace');
   }
 
   const candidateEdges = [

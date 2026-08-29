@@ -384,6 +384,56 @@ export const InitiativeHierarchyReference = InitiativeReference.extend({
 /** Initiative child reference with complete hierarchy interaction context. */
 export type InitiativeHierarchyReference = z.infer<typeof InitiativeHierarchyReference>;
 
+/** Picker direction that controls which accessible Initiatives can be selected. */
+export const InitiativeHierarchyCandidateMode = z.enum(['parent', 'child']);
+/** Initiative hierarchy picker direction. */
+export type InitiativeHierarchyCandidateMode = z.infer<typeof InitiativeHierarchyCandidateMode>;
+
+/** Search parameters for the complete cross-workspace Initiative hierarchy candidate set. */
+export const InitiativeHierarchyCandidateQuery = z
+  .object({
+    mode: InitiativeHierarchyCandidateMode,
+    query: z.string().trim().max(200).optional(),
+  })
+  .meta({
+    id: 'InitiativeHierarchyCandidateQuery',
+    description: 'Search one hierarchy-picker direction across accessible Initiatives.',
+  });
+/** Validated Initiative hierarchy candidate search. */
+export type InitiativeHierarchyCandidateQuery = z.infer<typeof InitiativeHierarchyCandidateQuery>;
+
+/** One accessible Initiative with its current relationship in a route workspace hierarchy. */
+export const InitiativeHierarchyCandidate = z
+  .object({
+    id: InitiativeId,
+    organizationId: OrganizationId,
+    organizationName: z.string(),
+    name: z.string(),
+    summary: z.string().nullable(),
+    status: InitiativeStatus,
+    health: Health.nullable(),
+    crossWorkspace: z.boolean(),
+    appearsInContext: z.boolean(),
+    parentInitiativeId: InitiativeId.nullable(),
+    parentLinkId: Id.nullable(),
+  })
+  .meta({
+    id: 'InitiativeHierarchyCandidate',
+    description: 'An accessible Initiative option projected into one route hierarchy context.',
+  });
+/** Initiative hierarchy picker option. */
+export type InitiativeHierarchyCandidate = z.infer<typeof InitiativeHierarchyCandidate>;
+
+/** Complete result for one Initiative hierarchy candidate search. */
+export const InitiativeHierarchyCandidatesOut = z
+  .object({ items: z.array(InitiativeHierarchyCandidate) })
+  .meta({
+    id: 'InitiativeHierarchyCandidatesOut',
+    description: 'Accessible Initiative hierarchy candidates in display order.',
+  });
+/** Initiative hierarchy candidate search result. */
+export type InitiativeHierarchyCandidatesOut = z.infer<typeof InitiativeHierarchyCandidatesOut>;
+
 /** One visible row in the context hierarchy overview. */
 export const InitiativeOverviewItem = InitiativeOut.extend({
   display: EntityDisplayOut,

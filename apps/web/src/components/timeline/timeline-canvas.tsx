@@ -50,7 +50,6 @@ import {
 
 import { CURSOR_DRAGGABLE } from '@/lib/actions/cursor';
 import { ObjectSurface } from '@/components/objects/object-surface';
-import type { ObjectRef } from '@/lib/actions/object';
 import type { AppliedView } from '@/components/views/apply-view';
 import type { ViewDisplayState } from '@/components/views/field-catalog';
 
@@ -67,7 +66,11 @@ import {
   computeCascade,
   findViolations,
 } from './cascade';
-import { type TimelineCatalog, type TimelineSpan } from './timeline-catalog';
+import {
+  type TimelineCatalog,
+  type TimelineRowInteraction,
+  type TimelineSpan,
+} from './timeline-catalog';
 import { buildTimelineLayout, type RowTrack } from './timeline-layout';
 import { TINT_DOT_CLASS, UNSCHEDULED_LANE_CLASS } from './timeline-tint';
 import { BAR_HEIGHT, barInsetFor, rowCenterFor } from './timeline-geometry';
@@ -220,6 +223,24 @@ export default function TimelineCanvas<T>({
     return map;
   }, [catalog, layout.placed]);
 
+  /** Constraint graph restricted to rows this route can write. */
+  const writableGraph = useMemo<CascadeGraph>(() => {
+    const writableIds = new Set(
+      layout.placed
+        .filter((entry) => catalog.schedulable?.(entry.row) ?? true)
+        .map((entry) => entry.id),
+    );
+    const map = new Map<string, CascadeNode>();
+    for (const entry of layout.placed) {
+      if (!writableIds.has(entry.id)) continue;
+      map.set(entry.id, {
+        span: entry.span,
+        blocks: catalog.edges(entry.row).blocks.filter((id) => writableIds.has(id)),
+      });
+    }
+    return map;
+  }, [catalog, layout.placed]);
+
   const allEdges = useMemo<readonly Violation[]>(() => {
     const edges: Violation[] = [];
     for (const [blockerId, node] of graph) {
@@ -266,9 +287,9 @@ export default function TimelineCanvas<T>({
       onReschedule(id, span);
       setLastChange(previous ? { id, from: previous } : null);
       // The ripple is computed against the pre-drag graph and offered, never applied silently.
-      setProposal(computeCascade(id, span, graph));
+      setProposal(computeCascade(id, span, writableGraph));
     },
-    [graph, onReschedule],
+    [graph, onReschedule, writableGraph],
   );
 
   /** Pan the visible window, for the edge-zone auto-pan during a drag. */
@@ -298,15 +319,15 @@ export default function TimelineCanvas<T>({
 
   /** Begin scheduling an undated row from a press anywhere on its empty lane. */
   const handleLanePointerDown = useCallback(
-    (event: ReactPointerEvent<HTMLElement>, id: string): void => {
+    (event: ReactPointerEvent<HTMLElement>, id: string, schedulable: boolean): void => {
       const track = trackRef.current;
-      if (!track || !canSchedule) return;
+      if (!track || !schedulable) return;
       const rect = track.getBoundingClientRect();
       const percent = ((event.clientX - rect.left) / rect.width) * 100;
       const start = dateAtPct(Math.min(Math.max(percent, 0), 100), window);
       startDrag(event, id, 'create', { start, end: start + DAY_MS });
     },
-    [canSchedule, startDrag, window],
+    [startDrag, window],
   );
 
   /** Resize the pinned label column by dragging its divider. */
@@ -440,7 +461,7 @@ export default function TimelineCanvas<T>({
                   top={track.top}
                   height={track.height}
                   hovered={hoveredId === track.id}
-                  object={catalog.object(track.row)}
+                  interaction={catalog.interaction(track.row)}
                   href={catalog.href(track.row)}
                   onEnter={() => {
                     setHoveredId(track.id);
@@ -537,6 +558,7 @@ export default function TimelineCanvas<T>({
                   violationKeys.has(edgeKey(edge.blockerId, edge.blockedId)),
               );
               const live = drag?.id === track.id ? drag.span : track.span;
+              const schedulable = canSchedule && (catalog.schedulable?.(track.row) ?? true);
               return (
                 <div
                   key={`row-${track.id}`}
@@ -556,10 +578,10 @@ export default function TimelineCanvas<T>({
                   {live === null ? (
                     <UnscheduledLane
                       display={display}
-                      schedulable={canSchedule}
+                      schedulable={schedulable}
                       noun={noun}
                       onPointerDown={(event) => {
-                        handleLanePointerDown(event, track.id);
+                        handleLanePointerDown(event, track.id, schedulable);
                       }}
                       onActivate={() => {
                         activate(track.id);
@@ -579,9 +601,9 @@ export default function TimelineCanvas<T>({
                       description={describe(catalog, track.row, live)}
                       violated={violated}
                       dragging={drag?.id === track.id && drag.moved}
-                      schedulable={canSchedule}
+                      schedulable={schedulable}
                       onDragStart={(event, mode) => {
-                        if (canSchedule && track.span) startDrag(event, track.id, mode, track.span);
+                        if (schedulable && track.span) startDrag(event, track.id, mode, track.span);
                       }}
                       onActivate={() => {
                         activate(track.id);
@@ -732,8 +754,8 @@ interface LabelRowProps {
   height: number;
   /** Whether this row is the hovered one (the plot half highlights in step). */
   hovered: boolean;
-  /** Canonical object identity, or `null` for a non-interactive context row. */
-  object: ObjectRef | null;
+  /** Object identity and route-specific interaction limits for this label row. */
+  interaction: TimelineRowInteraction;
   /** Detail route opened from any non-control part of the label row. */
   href: string;
   /** The pointer entered the row. */
@@ -760,7 +782,7 @@ function LabelRow({
   top,
   height,
   hovered,
-  object,
+  interaction,
   href,
   onEnter,
   onLeave,
@@ -782,9 +804,15 @@ function LabelRow({
       {children}
     </div>
   );
-  if (object === null) return row;
+  if (interaction.object === null) return row;
   return (
-    <ObjectSurface object={object} surfaceId="timeline-label" href={href}>
+    <ObjectSurface
+      object={interaction.object}
+      dragDisabled={interaction.dragDisabled}
+      actionScope={interaction.actionScope}
+      surfaceId="timeline-label"
+      href={href}
+    >
       {row}
     </ObjectSurface>
   );

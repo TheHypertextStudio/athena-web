@@ -23,7 +23,7 @@ function snapshot(
   surfaceId: string,
   objects: readonly ObjectRef[] = [task],
 ): SelectionSurfaceSnapshot {
-  return { surfaceId, organizationId: 'org1', selectedObjects: objects };
+  return { surfaceId, organizationId: 'org1', actionScope: 'all', selectedObjects: objects };
 }
 
 const disposers: (() => void)[] = [];

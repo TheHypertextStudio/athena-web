@@ -17,7 +17,7 @@
  * learns what "health" is; a consumer maps its own vocabulary onto the four tones.
  */
 
-import type { ObjectRef } from '@/lib/actions/object';
+import type { ObjectActionScope, ObjectRef } from '@/lib/actions/object';
 
 /** A resolved on-axis span in epoch milliseconds. */
 export interface TimelineSpan {
@@ -55,6 +55,16 @@ export interface TimelineEdges {
  */
 export type TimelineTint = 'positive' | 'caution' | 'critical' | 'neutral';
 
+/** Object-level interactions exposed by one timeline label row. */
+export interface TimelineRowInteraction {
+  /** Canonical object identity, or `null` when the row is context only. */
+  readonly object: ObjectRef | null;
+  /** Whether the label row must suppress whole-object dragging. */
+  readonly dragDisabled: boolean;
+  /** Which context-menu actions the label row may expose. */
+  readonly actionScope: ObjectActionScope;
+}
+
 /**
  * Declares how rows of type `T` project onto a time axis.
  *
@@ -84,6 +94,8 @@ export interface TimelineCatalog<T> {
    * unscheduled tray, where they stay reachable and can be dragged onto the axis.
    */
   span: (row: T) => TimelineSpan | null;
+  /** Whether this row may receive schedule writes in the current route context. */
+  schedulable?: ((row: T) => boolean) | undefined;
   /**
    * Optional semantic span copy for accessible bar descriptions.
    *
@@ -102,8 +114,8 @@ export interface TimelineCatalog<T> {
   edges: (row: T) => TimelineEdges;
   /** A short status word for the row, used in accessible descriptions and tray chips. */
   statusLabel: (row: T) => string;
-  /** Canonical object identity used by the shared interaction adapter, or `null` for context rows. */
-  object: (row: T) => ObjectRef | null;
+  /** Object identity and route-specific interaction limits for the label row. */
+  interaction: (row: T) => TimelineRowInteraction;
 }
 
 /**

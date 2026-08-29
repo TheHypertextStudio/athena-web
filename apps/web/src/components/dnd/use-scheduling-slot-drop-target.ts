@@ -54,7 +54,8 @@ export function useSchedulingSlotDropTarget(
   const operation = useDragOperation<ObjectDragData>();
   const source = isObjectDragData(operation.source?.data) ? operation.source.data : null;
   const target = startMinutes === null ? null : targetAt(startMinutes);
-  const resolution = source && target ? resolveObjectRelation(source.objects, target) : null;
+  const resolution =
+    source?.actionScope === 'all' && target ? resolveObjectRelation(source.objects, target) : null;
   const action = resolution?.accepted
     ? registry?.getByRelation(resolution.intent.relationId)
     : null;
@@ -81,7 +82,7 @@ export function useSchedulingSlotDropTarget(
     onDragEnd: (event) => {
       if (event.operation.target?.id !== droppableId || registry === null) return;
       const dragData = event.operation.source?.data;
-      if (!isObjectDragData(dragData)) return;
+      if (!isObjectDragData(dragData) || dragData.actionScope !== 'all') return;
       const finalTarget = startMinutes === null ? null : targetAt(startMinutes);
       if (!finalTarget) return;
       const finalResolution = resolveObjectRelation(dragData.objects, finalTarget);
@@ -94,6 +95,7 @@ export function useSchedulingSlotDropTarget(
           target: finalTarget,
           source: 'drag',
           organizationId: finalTarget.organizationId ?? dragData.object.organizationId,
+          actionScope: dragData.actionScope,
           ...(dragData.sourceSurfaceId === null ? {} : { surfaceId: dragData.sourceSurfaceId }),
           params: { relationId: finalResolution.intent.relationId },
         }))

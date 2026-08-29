@@ -31,6 +31,7 @@ import type { ObjectRef } from '@/lib/actions';
 import type { RelationId } from '@docket/work/relation-contract';
 
 import { InitiativeHierarchyPickerOverlay } from '../initiatives/initiative-hierarchy-picker-overlay';
+import { InitiativeHierarchyWriteCoordinatorProvider } from '../initiatives/initiative-hierarchy-write-coordinator';
 import { TaskHierarchyPickerOverlay } from '../tasks/task-hierarchy-picker-overlay';
 import { LabelPickerOverlay } from './label-picker-overlay';
 import { RelationTargetPickerOverlay } from './relation-target-picker-overlay';
@@ -150,55 +151,67 @@ export function PickerOverlayProvider({ children }: PickerOverlayProviderProps):
   // Forces a clean remount of LabelPickerOverlay per open() call, so its internal "resolved
   // current, seeded once" state and its anchor ref (captured at mount) never leak across requests.
   const sequenceRef = useRef(0);
+  const activeSequenceRef = useRef(0);
+  const busySequenceRef = useRef<number | null>(null);
 
   const api = useMemo<PickerOverlayApi>(
     () => ({
       open: (next) => {
+        if (busySequenceRef.current === activeSequenceRef.current) return;
         sequenceRef.current += 1;
+        activeSequenceRef.current = sequenceRef.current;
         setRequest(next);
       },
     }),
     [],
   );
+  const requestSequence = sequenceRef.current;
+  const closeRequest = (): void => {
+    if (
+      activeSequenceRef.current !== requestSequence ||
+      busySequenceRef.current === requestSequence
+    ) {
+      return;
+    }
+    activeSequenceRef.current = 0;
+    setRequest(null);
+  };
 
   return (
-    <PickerOverlayContext.Provider value={api}>
-      {children}
-      {request ? (
-        request.kind === 'labels' ? (
-          <LabelPickerOverlay
-            key={sequenceRef.current}
-            request={request}
-            onClose={() => {
-              setRequest(null);
-            }}
-          />
-        ) : request.kind === 'initiative-hierarchy' ? (
-          <InitiativeHierarchyPickerOverlay
-            key={sequenceRef.current}
-            request={request}
-            onClose={() => {
-              setRequest(null);
-            }}
-          />
-        ) : request.kind === 'task-hierarchy' ? (
-          <TaskHierarchyPickerOverlay
-            key={sequenceRef.current}
-            request={request}
-            onClose={() => {
-              setRequest(null);
-            }}
-          />
-        ) : (
-          <RelationTargetPickerOverlay
-            key={sequenceRef.current}
-            request={request}
-            onClose={() => {
-              setRequest(null);
-            }}
-          />
-        )
-      ) : null}
-    </PickerOverlayContext.Provider>
+    <InitiativeHierarchyWriteCoordinatorProvider>
+      <PickerOverlayContext.Provider value={api}>
+        {children}
+        {request ? (
+          request.kind === 'labels' ? (
+            <LabelPickerOverlay key={requestSequence} request={request} onClose={closeRequest} />
+          ) : request.kind === 'initiative-hierarchy' ? (
+            <InitiativeHierarchyPickerOverlay
+              key={requestSequence}
+              request={request}
+              operationOwnerId={`picker-${requestSequence}`}
+              onBusyChange={(busy) => {
+                if (activeSequenceRef.current !== requestSequence) return;
+                if (busy) busySequenceRef.current = requestSequence;
+                else if (busySequenceRef.current === requestSequence)
+                  busySequenceRef.current = null;
+              }}
+              onClose={closeRequest}
+            />
+          ) : request.kind === 'task-hierarchy' ? (
+            <TaskHierarchyPickerOverlay
+              key={requestSequence}
+              request={request}
+              onClose={closeRequest}
+            />
+          ) : (
+            <RelationTargetPickerOverlay
+              key={requestSequence}
+              request={request}
+              onClose={closeRequest}
+            />
+          )
+        ) : null}
+      </PickerOverlayContext.Provider>
+    </InitiativeHierarchyWriteCoordinatorProvider>
   );
 }

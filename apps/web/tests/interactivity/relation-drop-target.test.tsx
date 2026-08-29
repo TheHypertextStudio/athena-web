@@ -64,6 +64,7 @@ beforeEach(() => {
       object: task,
       objects: [task],
       sourceSurfaceId: 'tasks-list',
+      actionScope: 'all',
     },
   };
   isDropTarget = true;
@@ -89,7 +90,6 @@ describe('useRelationDropTarget', () => {
         },
       ]),
     );
-
     render(
       <ActionRegistryProvider registry={registry}>
         <Target />
@@ -142,8 +142,72 @@ describe('useRelationDropTarget', () => {
         target: project,
         source: 'drag',
         organizationId: 'org-1',
+        actionScope: 'all',
       }),
     );
+  });
+
+  it('does not advertise a reference source as an accepted relationship', () => {
+    const run = vi.fn();
+    const registry = createActionRegistry();
+    registry.register(
+      'task',
+      defineActionDomain('task', [
+        {
+          id: 'task.moveToProject',
+          relationId: 'task.project',
+          label: 'Move to project',
+          objectKinds: ['task'],
+          run,
+        },
+      ]),
+    );
+    currentSource = {
+      data: {
+        kind: 'docket-object',
+        object: task,
+        objects: [task],
+        sourceSurfaceId: 'reference-tasks',
+        actionScope: 'reference',
+      },
+    };
+    render(
+      <ActionRegistryProvider registry={registry}>
+        <Target />
+      </ActionRegistryProvider>,
+    );
+
+    expect(screen.getByTestId('target')).toHaveAttribute('data-drop-state', 'reject');
+    expect(screen.getByTestId('target')).not.toHaveTextContent('Move to Launch Athena');
+    expect(droppableInput).toMatchObject({
+      collisionPriority: -1,
+      data: { canDrop: false, effectLabel: null },
+    });
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it('does not send a reference source to a surface-owned executor', () => {
+    const execute = vi.fn<RelationDropExecutor>().mockResolvedValue('applied');
+    currentSource = {
+      data: {
+        kind: 'docket-object',
+        object: task,
+        objects: [task],
+        sourceSurfaceId: 'reference-tasks',
+        actionScope: 'reference',
+      },
+    };
+    render(<Target execute={execute} />);
+
+    const input = droppableInput as { readonly id: string; readonly data: unknown };
+    monitor.onDragEnd?.({
+      operation: {
+        source: currentSource,
+        target: { id: input.id, data: input.data },
+      },
+    });
+
+    expect(execute).not.toHaveBeenCalled();
   });
 
   it('prefers a surface-owned executor so a canvas drop stays in its receipt history', async () => {

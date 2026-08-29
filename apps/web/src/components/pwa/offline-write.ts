@@ -2,17 +2,21 @@
 
 import { UserFacingError } from '@/lib/problem';
 
-import { isQueueableWrite } from './outbox-model';
-import { enqueueWrite } from './outbox';
+import {
+  OUTBOX_MAX_AGE_MS,
+  isQueueableWrite,
+  migrateReplayHeaders,
+  sanitizeReplayHeaders,
+} from './outbox-model';
+import { captureOutboxOwner, captureOutboxRequestOwnerId, enqueueWrite } from './outbox';
 
 /**
  * The seam where an undeliverable write becomes a queued one.
  *
  * @remarks
- * A single wrapper around the API client's `fetch`, which is the only place in the app where every
- * write already passes through one function. Doing it here rather than at each of the ~120 call
- * sites is what makes offline writing a property of the app instead of a feature some screens
- * remembered to implement.
+ * A single wrapper around the API client's `fetch`, which is the one place every typed request
+ * already passes through. The wrapper admits only object commands whose domain change and
+ * idempotency result commit together. Other writes retain normal fetch failure semantics.
  *
  * **It never invents a server response.** The tempting shortcut — answer the queued request with a
  * synthetic `200` and a plausible body — would make every caller believe the server had spoken, and
@@ -71,14 +75,29 @@ export function queuedOfflineWrite(error: unknown): QueuedOfflineWriteError | nu
   return null;
 }
 
-/** Read the path of a request, whatever form the caller passed it in. */
-function pathOf(input: RequestInfo | URL): string {
-  const raw = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+/** Result of resolving a Fetch target before the wrapper delegates it. */
+interface ResolvedRequestTarget {
+  /** Credential-free same-origin path eligible for route admission, or `null` for other targets. */
+  readonly queuePath: string | null;
+  /** Whether embedded credentials make the target invalid before any network attempt. */
+  readonly rejected: boolean;
+}
+
+/** Resolve every Fetch input form under the same origin and credential rules. */
+function resolveRequestTarget(input: RequestInfo | URL): ResolvedRequestTarget {
   try {
+    const raw = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
     const url = new URL(raw, globalThis.location.origin);
-    return `${url.pathname}${url.search}`;
+    const sameOrigin = url.origin === globalThis.location.origin;
+    if (sameOrigin && (url.username.length > 0 || url.password.length > 0)) {
+      return { queuePath: null, rejected: true };
+    }
+    return {
+      queuePath: sameOrigin ? `${url.pathname}${url.search}` : null,
+      rejected: false,
+    };
   } catch {
-    return raw;
+    return { queuePath: null, rejected: false };
   }
 }
 
@@ -89,20 +108,45 @@ function methodOf(input: RequestInfo | URL, init: RequestInit | undefined): stri
   return 'GET';
 }
 
-/** Read a header from whatever `HeadersInit` shape the caller used. */
-function headerOf(init: RequestInit | undefined, name: string): string | null {
-  const headers = init?.headers;
-  if (!headers) return null;
-  if (headers instanceof Headers) return headers.get(name);
-  if (Array.isArray(headers)) {
-    const found = headers.find(([key]) => key.toLowerCase() === name.toLowerCase());
-    return found?.[1] ?? null;
-  }
-  const record = headers;
-  const key = Object.keys(record).find(
-    (candidate) => candidate.toLowerCase() === name.toLowerCase(),
-  );
-  return key === undefined ? null : (record[key] ?? null);
+/** Read the effective headers from either `init` or a caller-provided `Request`. */
+function headersOf(input: RequestInfo | URL, init: RequestInit | undefined): HeadersInit | null {
+  if (init?.headers !== undefined) return init.headers;
+  if (typeof input !== 'string' && !(input instanceof URL)) return input.headers;
+  return null;
+}
+
+/** Build a browser request without letting Node-style fetch reject a relative string URL. */
+function requestForLiveAttempt(input: RequestInfo | URL, init: RequestInit | undefined): Request {
+  const source =
+    typeof input === 'string'
+      ? new URL(input, globalThis.location.origin)
+      : input instanceof Request
+        ? input.clone()
+        : input;
+  return new Request(source, init);
+}
+
+/** Prepare a queueable POST so the live attempt and any replay share one request identity. */
+async function preparePostAttempt(
+  input: RequestInfo | URL,
+  init: RequestInit | undefined,
+  path: string,
+  ownerId: string,
+): Promise<{ readonly request: Request; readonly spare: Request; readonly headers: Headers }> {
+  const prepared = requestForLiveAttempt(input, init);
+  const bodyText = await prepared.clone().text();
+  const headers = new Headers(prepared.headers);
+  const migrated = migrateReplayHeaders({
+    method: 'POST',
+    path,
+    body: bodyText.length > 0 ? bodyText : null,
+    headers,
+    legacyContentType: null,
+  });
+  if (migrated['Idempotency-Key']) headers.set('Idempotency-Key', migrated['Idempotency-Key']);
+  headers.set('X-Docket-Replay-Owner', ownerId);
+  const request = new Request(prepared, { headers });
+  return { request, spare: request.clone(), headers };
 }
 
 /**
@@ -113,9 +157,8 @@ function headerOf(init: RequestInit | undefined, name: string): string | null {
  * means the server spoke, and the caller's own error handling is the right place for that. So this
  * wrapper cannot mask a server error as an offline one.
  *
- * Only string and `URL` bodies are queued. A `ReadableStream` or a `FormData` body cannot be
- * serialized to IndexedDB and replayed faithfully, and pretending otherwise would produce a replay
- * that quietly sent something different from what the person did; those rethrow unchanged.
+ * Only string bodies are queued. A `ReadableStream` or a `FormData` body cannot be serialized to
+ * IndexedDB and replayed faithfully. Those requests retain their original failure.
  *
  * @param inner - The `fetch` to delegate to.
  * @returns A `fetch` with the same signature.
@@ -123,10 +166,17 @@ function headerOf(init: RequestInit | undefined, name: string): string | null {
 export function withOfflineOutbox(inner: typeof fetch): typeof fetch {
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const method = methodOf(input, init);
-    const path = pathOf(input);
-    const pathOnly = path.split('?')[0] ?? path;
-    const queueable = isQueueableWrite(method, pathOnly);
+    const target = resolveRequestTarget(input);
+    if (target.rejected) throw new TypeError('Credential-bearing request targets are not allowed.');
+    const path = target.queuePath;
+    const queueable = path !== null && isQueueableWrite(method, path);
     const asRequest = typeof input === 'string' || input instanceof URL ? null : input;
+    const queueOwner = queueable ? captureOutboxOwner() : null;
+    const requestOwnerId = queueable ? captureOutboxRequestOwnerId() : null;
+    const liveAttemptStartedAt = queueable ? Date.now() : null;
+    let liveInput = input;
+    let liveInit = init;
+    let replayHeaders = sanitizeReplayHeaders(headersOf(input, init));
 
     // Cloned BEFORE the attempt, and this ordering is the whole reason it is here rather than in the
     // catch. A `fetch` client may put the body on a `Request` instead of in `init` — Hono's does —
@@ -134,24 +184,45 @@ export function withOfflineOutbox(inner: typeof fetch): typeof fetch {
     // from the catch block therefore produced entries with no body at all: they replayed, the server
     // answered 200, and nothing changed. Caught by e2e/platform/pwa-offline-sync.spec.ts, which
     // checks the server's copy of the record rather than trusting the queue to have emptied.
-    const spare = queueable && asRequest && init?.body === undefined ? asRequest.clone() : null;
+    let spare = queueable && asRequest && init?.body === undefined ? asRequest.clone() : null;
+    if (queueable) {
+      if (requestOwnerId === null)
+        throw new TypeError('Cannot send a queueable write without an active outbox owner.');
+      const prepared = await preparePostAttempt(input, init, path, requestOwnerId);
+      liveInput = prepared.request;
+      liveInit = undefined;
+      spare = prepared.spare;
+      replayHeaders = sanitizeReplayHeaders(prepared.headers);
+    }
 
     try {
-      return await inner(input, init);
+      return await inner(liveInput, liveInit);
     } catch (caught) {
       if (!queueable) throw caught;
+      const failedAt = Date.now();
+      if (
+        liveAttemptStartedAt === null ||
+        failedAt < liveAttemptStartedAt ||
+        failedAt - liveAttemptStartedAt >= OUTBOX_MAX_AGE_MS
+      )
+        throw caught;
 
       const written = await readReplayBody(init, spare);
       // A body this queue cannot serialize and re-send byte-for-byte. Replaying an approximation of
       // what someone did is worse than not replaying it, so the original failure stands.
       if (written === null) throw caught;
 
-      const entry = await enqueueWrite({
-        method,
-        path,
-        body: written.body,
-        contentType: written.contentType ?? asRequest?.headers.get('content-type') ?? null,
-      });
+      const entry = await enqueueWrite(
+        {
+          method,
+          path,
+          body: written.body,
+          headers: replayHeaders,
+        },
+        liveAttemptStartedAt,
+        queueOwner,
+        failedAt,
+      );
       // No signed-in account, or storage refused the entry. Nothing took responsibility for the
       // change, so the original failure is the truth and must reach the caller unchanged.
       if (entry === null) throw caught;
@@ -164,19 +235,16 @@ export function withOfflineOutbox(inner: typeof fetch): typeof fetch {
 async function readReplayBody(
   init: RequestInit | undefined,
   spare: Request | null,
-): Promise<{ body: string | null; contentType: string | null } | null> {
+): Promise<{ body: string | null } | null> {
   const inline = init?.body;
   if (inline !== undefined && inline !== null) {
     if (typeof inline !== 'string') return null;
-    return { body: inline, contentType: headerOf(init, 'content-type') };
+    return { body: inline };
   }
-  if (!spare) return { body: null, contentType: headerOf(init, 'content-type') };
+  if (!spare) return { body: null };
   try {
     const text = await spare.text();
-    return {
-      body: text.length > 0 ? text : null,
-      contentType: spare.headers.get('content-type'),
-    };
+    return { body: text.length > 0 ? text : null };
   } catch {
     return null;
   }

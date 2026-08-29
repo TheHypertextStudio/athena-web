@@ -5,6 +5,8 @@ import { auth } from '@docket/auth';
 import type { Context, MiddlewareHandler } from 'hono';
 
 import type { AppEnv, AuthSession } from '../context';
+import { AuthError } from '../error';
+import { isReplayOwnerRequest, REPLAY_OWNER_HEADER } from '../replay-owner-contract';
 
 /**
  * Better Auth's own mount. Requests here resolve and re-issue their session cookies inside the
@@ -17,14 +19,10 @@ const AUTH_ROUTE_PREFIX = '/api/auth/';
  * Resolve the Better Auth session from request headers into `c.var.session`.
  *
  * @remarks
- * The session is served from a signed cookie rather than a database row on every request (see
- * `SESSION_COOKIE_CACHE_MAX_AGE_S` in `packages/auth/src/auth-builder.ts`). That cache is only
- * worth having if it stays warm, which is why this asks for the response headers and forwards
- * them: when Better Auth falls back to the database it hands back a refreshed cookie, and
- * dropping it would mean the cache expires once and every subsequent request pays the read again.
- *
- * Anything that must not be answered by a cached copy — revoking a session, deleting an account,
- * minting recovery codes — calls {@link readAuthoritativeSession} instead of reading `c.var`.
+ * Better Auth resolves the live database session on every request. The session-data cookie cache
+ * and sliding refresh are disabled, so account changes cannot leave an independently valid browser
+ * identity behind. Response headers are still forwarded because Better Auth owns its cookie
+ * protocol and may issue cleanup headers while resolving an expired session.
  */
 export const sessionMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
   if (c.req.path.startsWith(AUTH_ROUTE_PREFIX)) {
@@ -43,17 +41,15 @@ export const sessionMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
 };
 
 /**
- * Re-resolve the session against the database, ignoring the cookie cache.
+ * Re-resolve the session against the database for a destructive or validity-sensitive operation.
  *
  * @param c - The request context.
  * @returns The live session, or `null` when it has been revoked or expired.
  *
  * @remarks
- * `c.var.session` is fast because it may come from a signed cookie that outlives the session row
- * by up to the cache window. For an operation whose whole purpose is to act on session validity —
- * revoking a device, deleting the account, issuing recovery codes — that window is the difference
- * between honoring a revocation and ignoring it, so those handlers ask for the authoritative
- * answer and accept the extra read.
+ * The global session cache is disabled, but these call sites retain the explicit
+ * `disableCookieCache` option as a local invariant. A future cache policy change therefore cannot
+ * weaken device revocation, account deletion, recovery-code issuance, or replay-owner binding.
  */
 export async function readAuthoritativeSession(c: Context<AppEnv>): Promise<AuthSession> {
   return await auth.api.getSession({
@@ -68,10 +64,33 @@ export async function readAuthoritativeSession(c: Context<AppEnv>): Promise<Auth
  * @remarks
  * Mounted on the surfaces where acting on a revoked session would be the bug rather than a
  * momentary staleness — the device list and its revoke actions, account deletion, recovery-code
- * minting. Handlers below it read `c.var.session` exactly as they always have; only the value
- * they get is guaranteed to reflect the database rather than a cached cookie.
+ * minting. Handlers below it read `c.var.session` exactly as they always have while this middleware
+ * preserves an explicit database-backed boundary.
  */
 export const authoritativeSessionMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
   c.set('session', await readAuthoritativeSession(c));
+  await next();
+};
+
+/**
+ * Bind an offline-capable live attempt or replay to its captured account.
+ *
+ * @remarks
+ * Every ordinary session read is database-backed. The replay-owner header adds a separate claim:
+ * the live session must still belong to the account that captured the queued write. Only the
+ * atomically idempotent object-command POST route may carry {@link REPLAY_OWNER_HEADER}.
+ */
+export const replayOwnerSessionMiddleware: MiddlewareHandler<AppEnv> = async (c, next) => {
+  const replayOwnerId = c.req.header(REPLAY_OWNER_HEADER);
+  if (replayOwnerId === undefined) {
+    await next();
+    return;
+  }
+  if (!isReplayOwnerRequest(c.req.method, c.req.path)) throw new AuthError();
+
+  const liveSession = await readAuthoritativeSession(c);
+  c.set('session', liveSession);
+  if (liveSession?.user.id !== replayOwnerId) throw new AuthError();
+
   await next();
 };

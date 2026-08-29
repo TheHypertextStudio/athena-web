@@ -105,6 +105,7 @@ export function useSchedulingRelationshipMode({
         target: targetObject,
         source: 'shortcut',
         organizationId: source.object.organizationId,
+        actionScope: 'all',
         params: { relationId: resolution.intent.relationId },
       }));
       setSource(null);

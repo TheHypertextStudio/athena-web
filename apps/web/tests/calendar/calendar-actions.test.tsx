@@ -64,6 +64,7 @@ describe('Calendar relation actions', () => {
       objects,
       source: 'command-palette',
       organizationId: null,
+      actionScope: 'all',
     }));
 
     expect(open).toHaveBeenCalledWith({
@@ -105,6 +106,7 @@ describe('Calendar relation actions', () => {
         },
         source,
         organizationId: null,
+        actionScope: 'all',
       }));
 
       expect(relationsPost).toHaveBeenCalledWith({
@@ -143,6 +145,7 @@ describe('Calendar relation actions', () => {
       },
       source: 'button',
       organizationId: null,
+      actionScope: 'all',
     }));
 
     expect(relationsPost).toHaveBeenCalledWith({

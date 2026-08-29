@@ -42,6 +42,8 @@ export interface CommandPaletteHostProps {
   readonly panelsAvailable: boolean;
   /** Ask the shell to reveal one of its persistent utility panels. */
   readonly onOpenPanel: (panelId: 'agenda' | 'focus' | 'athena') => void;
+  /** Account id captured by the shell for destructive session commands. */
+  readonly sessionOwnerUserId: string | null;
 }
 
 /**
@@ -123,6 +125,7 @@ export function CommandPaletteProvider({
 export function CommandPaletteHost({
   panelsAvailable,
   onOpenPanel,
+  sessionOwnerUserId,
 }: CommandPaletteHostProps): JSX.Element {
   const { open, closePalette } = useCommandPalette();
 
@@ -132,6 +135,7 @@ export function CommandPaletteHost({
       onClose={closePalette}
       panelsAvailable={panelsAvailable}
       onOpenPanel={onOpenPanel}
+      sessionOwnerUserId={sessionOwnerUserId}
     />
   );
 }

@@ -52,6 +52,7 @@ vi.mock('next/link', () => ({
 
 vi.mock('../../src/lib/auth-client', () => ({
   authClient: { useSession: () => sessionState },
+  probeSession: vi.fn(() => Promise.resolve({ hasSession: true, failed: false })),
   useSession: () => sessionState,
   signOut: vi.fn(),
 }));
@@ -68,6 +69,7 @@ vi.mock('../../src/lib/api', () => ({
 
 vi.mock('../../src/components/authentication-interlock', () => ({
   useAuthenticationInterlock: () => ({ requireAuthentication }),
+  useOptionalAuthenticationInterlock: () => null,
   useOptionalAuthenticationRecovery:
     () =>
     async <T,>(action: () => Promise<T>) =>
@@ -86,6 +88,7 @@ import { AppShellFrame, RecentDocumentIdentity } from '../../src/components/app-
 import { queryKeys } from '../../src/lib/query';
 import type { ServerSessionUser } from '../../src/lib/server-session';
 import type { OpenTab } from '@docket/ui/components';
+import { writeSessionSnapshot } from '../../src/lib/session-snapshot';
 
 /** A server-confirmed identity, as the `(app)` layout resolves it before the document is sent. */
 const SERVER_SESSION: ServerSessionUser = {
@@ -100,10 +103,14 @@ const SERVER_SESSION: ServerSessionUser = {
  *
  * @param initialSession - The server-confirmed identity, or `null` for a server read of `'unknown'`.
  */
-function renderFrame(initialSession: ServerSessionUser | null = null) {
+function renderFrame(
+  initialSession: ServerSessionUser | null = null,
+  configureQueryClient?: (queryClient: QueryClient) => void,
+) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
+  configureQueryClient?.(queryClient);
   const frame = () => (
     <QueryClientProvider client={queryClient}>
       <AppShellFrame initialSession={initialSession}>
@@ -114,6 +121,7 @@ function renderFrame(initialSession: ServerSessionUser | null = null) {
   const rendered = render(frame());
   return {
     ...rendered,
+    queryClient,
     rerenderFrame: () => {
       rendered.rerender(frame());
     },
@@ -432,6 +440,70 @@ describe('AppShellFrame session loading', () => {
       resolveSecondTitle?.('Grace project');
     });
     expect(await screen.findByText('Grace project')).toBeVisible();
+  });
+
+  it('clears account-neutral query data before a replacement account can use it', async () => {
+    sessionState.data = {
+      user: { id: 'user_1', name: 'Ada Lovelace', email: 'ada@example.com' },
+    };
+    sessionState.isPending = false;
+    orgsGet.mockResolvedValue(
+      new Response(JSON.stringify({ items: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    const { queryClient, rerenderFrame } = renderFrame();
+    queryClient.setQueryData(['me', 'profile'], { name: 'Ada private profile' });
+    const cleared = vi.spyOn(queryClient, 'clear');
+
+    sessionState.data = {
+      user: { id: 'user_2', name: 'Grace Hopper', email: 'grace@example.com' },
+    };
+    rerenderFrame();
+
+    await waitFor(() => {
+      expect(cleared).toHaveBeenCalledOnce();
+      expect(queryClient.getQueryData(['me', 'profile'])).toBeUndefined();
+    });
+  });
+
+  it('clears cached account data when the disk snapshot names the previous account', async () => {
+    writeSessionSnapshot(
+      {
+        userId: 'user_1',
+        name: 'Ada Lovelace',
+        email: 'ada@example.com',
+        image: null,
+      },
+      Date.now(),
+    );
+    sessionState.data = {
+      user: { id: 'user_2', name: 'Grace Hopper', email: 'grace@example.com' },
+    };
+    sessionState.isPending = false;
+    orgsGet.mockResolvedValue(
+      new Response(JSON.stringify({ items: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    let clearCalls = 0;
+
+    const { queryClient } = renderFrame(null, (client) => {
+      client.setQueryData(['me', 'profile'], { name: 'Ada private profile' });
+      const clear = client.clear.bind(client);
+      vi.spyOn(client, 'clear').mockImplementation(() => {
+        clearCalls += 1;
+        clear();
+      });
+    });
+
+    await waitFor(() => {
+      expect(clearCalls).toBe(1);
+      expect(queryClient.getQueryData(['me', 'profile'])).toBeUndefined();
+      expect(screen.getByText('Private route content')).toBeVisible();
+    });
   });
 });
 

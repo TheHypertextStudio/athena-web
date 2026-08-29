@@ -56,6 +56,7 @@ describe('task.label registration', () => {
     const context = {
       objects: [{ kind: 'task' as const, id: 't1', organizationId: 'org_1', title: 'Ship it' }],
       source: 'context-menu' as const,
+      actionScope: 'all' as const,
       organizationId: 'org_1',
     };
     await registry.invoke('task.label', () => context);
@@ -80,6 +81,7 @@ describe('task.label registration', () => {
     const context = {
       objects: [{ kind: 'task' as const, id: 't1', organizationId: null, title: 'Ship it' }],
       source: 'context-menu' as const,
+      actionScope: 'all' as const,
       organizationId: null,
     };
     await registry.invoke('task.label', () => context);
@@ -124,6 +126,7 @@ describe('task hierarchy action registration', () => {
     await registry.invoke('task.makeSubtaskOf', () => ({
       objects: subjects,
       source: 'context-menu',
+      actionScope: 'all',
       organizationId: 'org_1',
     }));
 
@@ -145,7 +148,11 @@ describe('task hierarchy action registration', () => {
       </QueryClientProvider>,
     );
     const action = registry.get('task.moveToTopLevel');
-    const base = { source: 'context-menu' as const, organizationId: 'org_1' };
+    const base = {
+      source: 'context-menu' as const,
+      actionScope: 'all' as const,
+      organizationId: 'org_1',
+    };
 
     expect(
       action?.appliesTo?.({
@@ -195,6 +202,7 @@ describe('task placement relation actions', () => {
     await registry.invoke('task.moveToProject', () => ({
       objects: subjects,
       source: 'context-menu',
+      actionScope: 'all',
       organizationId: 'org_1',
     }));
 

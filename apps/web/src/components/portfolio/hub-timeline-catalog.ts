@@ -116,11 +116,15 @@ export function buildHubTimelineCatalog(): TimelineCatalog<HubTimelineRow> {
     // Dependency edges are an org-scoped concept; the cross-org read does not resolve them.
     edges: () => ({ blockedBy: [], blocks: [] }),
     statusLabel: (row) => statusLabel(row.bar.status),
-    object: (row) => ({
-      kind: 'project',
-      id: row.bar.id,
-      organizationId: row.bar.organizationId,
-      title: row.bar.name,
+    interaction: (row) => ({
+      object: {
+        kind: 'project',
+        id: row.bar.id,
+        organizationId: row.bar.organizationId,
+        title: row.bar.name,
+      },
+      dragDisabled: true,
+      actionScope: 'reference',
     }),
   };
 }

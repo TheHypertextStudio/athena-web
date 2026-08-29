@@ -56,6 +56,7 @@ function renderNode(overrides: Partial<ProjectNodeData> = {}): { container: HTML
         },
       ]}
       organizationId={data.orgId}
+      actionScope="all"
     >
       <ReactFlowProvider>
         <Node id="p-1" data={data} selected={false} />

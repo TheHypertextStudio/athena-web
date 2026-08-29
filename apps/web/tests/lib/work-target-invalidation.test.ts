@@ -89,6 +89,7 @@ describe('work target invalidation', () => {
     const ownerOverview = vi.fn(async () => ({ source: 'owner-overview' }));
     const routeRoster = vi.fn(async () => ({ source: 'route-roster' }));
     const routeFacets = vi.fn(async () => ({ source: 'route-facets' }));
+    const routeCandidates = vi.fn(async () => ({ source: 'route-candidates' }));
     const projectRoster = vi.fn(async () => ({ source: 'project-roster' }));
     const definitions = [
       {
@@ -116,6 +117,10 @@ describe('work target invalidation', () => {
         queryFn: routeFacets,
       },
       {
+        queryKey: queryKeys.initiativeHierarchyCandidates('route-a', 'parent', ''),
+        queryFn: routeCandidates,
+      },
+      {
         queryKey: queryKeys.workView(
           'route-a',
           'project',
@@ -138,7 +143,58 @@ describe('work target invalidation', () => {
     expect(ownerOverview).toHaveBeenCalledTimes(1);
     expect(routeRoster).toHaveBeenCalledTimes(1);
     expect(routeFacets).toHaveBeenCalledTimes(1);
+    expect(routeCandidates).toHaveBeenCalledTimes(1);
     expect(projectRoster).not.toHaveBeenCalled();
     for (const unsubscribe of unsubscribes) unsubscribe();
+  });
+
+  it('does not refresh Initiative hierarchy candidates for another target', async () => {
+    const queryClient = testClient();
+    const routeCandidates = vi.fn(async () => ({ source: 'route-candidates' }));
+    const unsubscribes = observeSeededQueries(queryClient, [
+      {
+        queryKey: queryKeys.initiativeHierarchyCandidates('route-a', 'child', ''),
+        queryFn: routeCandidates,
+      },
+    ]);
+
+    await invalidateWorkTargetQueries(queryClient, {
+      target: 'project',
+      ownerOrganizationId: 'owner-b',
+    });
+
+    expect(routeCandidates).not.toHaveBeenCalled();
+    for (const unsubscribe of unsubscribes) unsubscribe();
+  });
+
+  it('marks an inactive cached roster stale without fetching it or creating missing projections', async () => {
+    const queryClient = testClient();
+    const inactiveRosterKey = queryKeys.workView(
+      'route-a',
+      'initiative',
+      'builtin:initiative:route-a',
+      'request',
+      'America/Los_Angeles',
+    );
+    const missingFacetsKey = queryKeys.workViewFacets(
+      'route-b',
+      'initiative',
+      'builtin:initiative:route-b',
+      'facets',
+      'America/Los_Angeles',
+    );
+    const inactiveRoster = vi.fn(async () => ({ source: 'inactive-roster' }));
+    queryClient.setQueryDefaults(inactiveRosterKey, { queryFn: inactiveRoster });
+    queryClient.setQueryData(inactiveRosterKey, { source: 'seed' });
+
+    await invalidateWorkTargetQueries(queryClient, {
+      target: 'initiative',
+      ownerOrganizationId: 'owner-b',
+    });
+
+    expect(inactiveRoster).not.toHaveBeenCalled();
+    expect(queryClient.getQueryState(inactiveRosterKey)?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryData(inactiveRosterKey)).toEqual({ source: 'seed' });
+    expect(queryClient.getQueryState(missingFacetsKey)).toBeUndefined();
   });
 });

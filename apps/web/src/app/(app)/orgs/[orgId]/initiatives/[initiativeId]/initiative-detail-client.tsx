@@ -810,6 +810,7 @@ export default function InitiativeDetailPage(): JSX.Element {
           ) : null}
           <InitiativeRelationshipPanels
             tab={tab}
+            routeOrganizationId={orgId}
             children={relationships?.children ?? []}
             connectedWork={relationships?.connectedWork ?? []}
             loading={relationshipsQ.isPending}

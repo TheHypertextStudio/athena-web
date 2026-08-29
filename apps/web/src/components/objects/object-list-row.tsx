@@ -14,7 +14,7 @@ import type { JSX, ReactNode } from 'react';
 
 import { ObjectSurface } from '@/components/objects/object-surface';
 import { CURSOR_CLICKABLE } from '@/lib/actions/cursor';
-import { describeObject, type ObjectRef } from '@/lib/actions/object';
+import { describeObject, type ObjectActionScope, type ObjectRef } from '@/lib/actions/object';
 
 /** Props for {@link ObjectListRow}. */
 export interface ObjectListRowProps {
@@ -30,6 +30,8 @@ export interface ObjectListRowProps {
   readonly trailing?: ReactNode;
   /** Prevent movement for read-only or cross-workspace projections. */
   readonly dragDisabled?: boolean;
+  /** Restrict the row menu to owner-safe reference actions when this is a foreign projection. */
+  readonly actionScope?: ObjectActionScope;
   /** Selection/list surface recorded as the drag origin. */
   readonly surfaceId?: string;
   /** Additional layout classes for the row root. */
@@ -49,13 +51,20 @@ export function ObjectListRow({
   description,
   trailing,
   dragDisabled = false,
+  actionScope = 'all',
   surfaceId,
   className,
 }: ObjectListRowProps): JSX.Element {
   const DescriptorIcon = describeObject(object.kind).icon;
 
   return (
-    <ObjectSurface object={object} dragDisabled={dragDisabled} surfaceId={surfaceId} href={href}>
+    <ObjectSurface
+      object={object}
+      dragDisabled={dragDisabled}
+      actionScope={actionScope}
+      surfaceId={surfaceId}
+      href={href}
+    >
       <div
         data-testid="object-list-row"
         className={cn(

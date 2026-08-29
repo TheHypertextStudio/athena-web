@@ -22,11 +22,12 @@ import {
   type CapabilityTarget,
 } from '@/components/app-catalog';
 import { useCreateObject } from '@/components/create-object/create-object-provider';
+import { useOptionalAuthenticationInterlock } from '@/components/authentication-interlock';
 import { SETTINGS_CAPABILITIES } from '@/components/settings/settings-capabilities';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { withRouteFragmentFocusHint } from '@/lib/interactions/route-fragment-focus';
-import { signOutAndPurge } from '@/lib/sign-out';
+import { SignOutCleanupError, signOutAndPurge } from '@/lib/sign-out';
 import { CREATE_WORKSPACE_PATH } from '@/lib/workspace-creation';
 
 import type { PaletteItem, PaletteSection } from './types';
@@ -83,6 +84,7 @@ interface CapabilityItemsInput {
   readonly close: () => void;
   readonly panelsAvailable: boolean;
   readonly onOpenPanel: (panelId: 'agenda' | 'focus' | 'athena') => void;
+  readonly sessionOwnerUserId: string | null;
 }
 
 /** Resolve feature-owned application capabilities into executable palette rows. */
@@ -91,9 +93,11 @@ export function useCapabilityItems({
   close,
   panelsAvailable,
   onOpenPanel,
+  sessionOwnerUserId,
 }: CapabilityItemsInput): readonly PaletteItem[] {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const authentication = useOptionalAuthenticationInterlock();
   const { activeOrgId, density, setDensity } = useContextState();
   const { orgs, orgName } = useActiveOrg();
   const { openCreate } = useCreateObject();
@@ -138,7 +142,17 @@ export function useCapabilityItems({
         setDensity(DENSITIES[(index + 1) % DENSITIES.length] ?? 'comfortable');
       },
       signOut: () => {
-        void signOutAndPurge(queryClient);
+        if (sessionOwnerUserId === null) {
+          authentication?.reportSignOutFailure();
+          return;
+        }
+        void signOutAndPurge(queryClient, sessionOwnerUserId).catch((error: unknown) => {
+          if (error instanceof SignOutCleanupError) {
+            authentication?.reportSessionCleanupFailure();
+            return;
+          }
+          authentication?.reportSignOutFailure();
+        });
       },
     };
 
@@ -173,6 +187,8 @@ export function useCapabilityItems({
     program,
     project,
     queryClient,
+    authentication,
+    sessionOwnerUserId,
     router,
     setDensity,
     task,

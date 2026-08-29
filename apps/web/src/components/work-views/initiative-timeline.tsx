@@ -14,6 +14,8 @@ import {
 import { parseDate } from '@/components/timeline/time-scale';
 import { useTimelineViewport } from '@/components/timeline/use-timeline-viewport';
 
+import { workViewRowInteractionPolicy } from './work-view-object';
+
 function tint(health: InitiativeViewRow['health']): TimelineTint {
   if (health === 'on_track') return 'positive';
   if (health === 'at_risk') return 'caution';
@@ -37,7 +39,9 @@ function initiativeSpan(row: InitiativeViewRow): TimelineSpan | null {
 }
 
 /** Build an Initiative timeline whose span and markers come from contributing Projects. */
-export function buildInitiativeTimelineCatalog(): TimelineCatalog<InitiativeViewRow> {
+export function buildInitiativeTimelineCatalog(
+  routeOrganizationId: string,
+): TimelineCatalog<InitiativeViewRow> {
   return {
     id: (row) => row.id,
     label: (row) => row.name,
@@ -59,21 +63,13 @@ export function buildInitiativeTimelineCatalog(): TimelineCatalog<InitiativeView
     },
     edges: () => ({ blockedBy: [], blocks: [] }),
     statusLabel: (row) => row.status.replaceAll('_', ' '),
-    object: (row) =>
-      row.isContext
-        ? null
-        : ({
-            kind: 'initiative',
-            id: row.id,
-            organizationId: row.organizationId,
-            title: row.name,
-            meta: { parentInitiativeId: row.parent, parentLinkId: null },
-          } as const),
+    interaction: (row) => workViewRowInteractionPolicy(row, routeOrganizationId),
   };
 }
 
 /** Props for the read-only Initiative rollup timeline. */
 export interface InitiativeTimelineProps {
+  readonly organizationId: string;
   readonly rows: readonly InitiativeViewRow[];
   readonly density: 'comfortable' | 'compact';
   readonly onActivate: (id: string) => void;
@@ -82,12 +78,13 @@ export interface InitiativeTimelineProps {
 
 /** Render Initiative rollups without inventing an Initiative start-date mutation. */
 export function InitiativeTimeline({
+  organizationId,
   rows,
   density,
   onActivate,
   onPrefetch,
 }: InitiativeTimelineProps): JSX.Element {
-  const catalog = buildInitiativeTimelineCatalog();
+  const catalog = buildInitiativeTimelineCatalog(organizationId);
   const applied: AppliedView<InitiativeViewRow> = { rows, groups: null };
   const spans = rows.flatMap((row) => {
     const span = catalog.span(row);

@@ -10,10 +10,12 @@ import {
 } from '@docket/db';
 import type { Health } from '@docket/types';
 import type { InitiativeDetail, InitiativeOut } from '@docket/types';
-import { and, count, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
 
+import type { AuthSession } from '../context';
 import { NotFoundError } from '../error';
+import { resourceAccessKey, viewableResourceKeys } from '../permissions/resource-access';
 
 /** InitiativeRow is the selected database row shape consumed by these API route serializers. */
 export type InitiativeRow = typeof initiative.$inferSelect;
@@ -138,6 +140,7 @@ export async function associatedProjects(
       and(
         eq(initiativeProject.initiativeId, initiativeId),
         eq(initiativeProject.organizationId, orgId),
+        eq(project.organizationId, orgId),
         isNull(project.archivedAt),
       ),
     )
@@ -157,6 +160,7 @@ export async function associatedPrograms(
       and(
         eq(initiativeProgram.initiativeId, initiativeId),
         eq(initiativeProgram.organizationId, orgId),
+        eq(program.organizationId, orgId),
       ),
     )
     .then((rows) => rows.map((r) => r.p));
@@ -173,54 +177,75 @@ export interface InitiativeWorkSummary {
 }
 
 /**
- * Count associated work in SQL without returning a child roster.
+ * Count only canonically visible associated work without returning a full child roster.
  *
- * The initial detail route needs only counts and health distribution. Returning every Project and
- * Program made a large Initiative's first paint scale with its entire hierarchy.
+ * The initial detail route needs only ids, ownership, health, and visibility. Loading those compact
+ * fields lets the canonical resource resolver remove private work before counts and health roll up.
+ * The organization predicates also suppress corrupt cross-tenant associations.
  */
 export async function associatedWorkSummary(
   orgId: string,
   initiativeId: string,
+  session: AuthSession = null,
 ): Promise<InitiativeWorkSummary> {
-  const aggregate = (column: typeof project.health | typeof program.health) => ({
-    total: count(),
-    onTrack: sql<number>`count(*) filter (where ${column} = 'on_track')`.mapWith(Number),
-    atRisk: sql<number>`count(*) filter (where ${column} = 'at_risk')`.mapWith(Number),
-    offTrack: sql<number>`count(*) filter (where ${column} = 'off_track')`.mapWith(Number),
-    unknown: sql<number>`count(*) filter (where ${column} is null)`.mapWith(Number),
-  });
   const [projectRows, programRows] = await Promise.all([
     db
-      .select(aggregate(project.health))
+      .select({ id: project.id, organizationId: project.organizationId, health: project.health })
       .from(initiativeProject)
       .innerJoin(project, eq(initiativeProject.projectId, project.id))
       .where(
         and(
           eq(initiativeProject.initiativeId, initiativeId),
           eq(initiativeProject.organizationId, orgId),
+          eq(project.organizationId, orgId),
           isNull(project.archivedAt),
         ),
       ),
     db
-      .select(aggregate(program.health))
+      .select({ id: program.id, organizationId: program.organizationId, health: program.health })
       .from(initiativeProgram)
       .innerJoin(program, eq(initiativeProgram.programId, program.id))
       .where(
         and(
           eq(initiativeProgram.initiativeId, initiativeId),
           eq(initiativeProgram.organizationId, orgId),
+          eq(program.organizationId, orgId),
         ),
       ),
   ]);
-  const projectSummary = projectRows[0];
-  const programSummary = programRows[0];
+  const refs = [
+    ...projectRows.map((row) => ({
+      organizationId: row.organizationId,
+      kind: 'project' as const,
+      id: row.id,
+    })),
+    ...programRows.map((row) => ({
+      organizationId: row.organizationId,
+      kind: 'program' as const,
+      id: row.id,
+    })),
+  ];
+  const visibleKeys = session?.user
+    ? await viewableResourceKeys(session.user.id, refs)
+    : new Set<string>();
+  const visibleProjects = projectRows.filter((row) =>
+    visibleKeys.has(
+      resourceAccessKey({ organizationId: row.organizationId, kind: 'project', id: row.id }),
+    ),
+  );
+  const visiblePrograms = programRows.filter((row) =>
+    visibleKeys.has(
+      resourceAccessKey({ organizationId: row.organizationId, kind: 'program', id: row.id }),
+    ),
+  );
+  const healths = [...visibleProjects, ...visiblePrograms].map((row) => row.health);
   return {
-    projects: projectSummary?.total ?? 0,
-    programs: programSummary?.total ?? 0,
-    onTrack: (projectSummary?.onTrack ?? 0) + (programSummary?.onTrack ?? 0),
-    atRisk: (projectSummary?.atRisk ?? 0) + (programSummary?.atRisk ?? 0),
-    offTrack: (projectSummary?.offTrack ?? 0) + (programSummary?.offTrack ?? 0),
-    unknown: (projectSummary?.unknown ?? 0) + (programSummary?.unknown ?? 0),
+    projects: visibleProjects.length,
+    programs: visiblePrograms.length,
+    onTrack: healths.filter((health) => health === 'on_track').length,
+    atRisk: healths.filter((health) => health === 'at_risk').length,
+    offTrack: healths.filter((health) => health === 'off_track').length,
+    unknown: healths.filter((health) => health === null).length,
   };
 }
 

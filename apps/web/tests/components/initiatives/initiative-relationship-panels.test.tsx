@@ -1,11 +1,14 @@
 import '@testing-library/jest-dom/vitest';
 
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Id, InitiativeId, OrganizationId } from '@docket/types';
 
 import { InitiativeRelationshipPanels } from '../../../src/components/initiatives/initiative-relationship-panels';
+import { InteractionProvider } from '../../../src/lib/actions/interaction-provider';
+import { createActionRegistry, defineActionDomain } from '../../../src/lib/actions/registry';
+import type { ActionContext } from '../../../src/lib/actions/types';
 
 const childId = InitiativeId.parse('01ARZ3NDEKTSV4RRFFQ69G5FAV');
 const organizationId = OrganizationId.parse('01ARZ3NDEKTSV4RRFFQ69G5FAW');
@@ -43,6 +46,7 @@ describe('InitiativeRelationshipPanels', () => {
     render(
       <InitiativeRelationshipPanels
         tab="subinitiatives"
+        routeOrganizationId={organizationId}
         children={[child]}
         connectedWork={[project]}
         initiativeNoun="Initiative"
@@ -72,6 +76,7 @@ describe('InitiativeRelationshipPanels', () => {
     render(
       <InitiativeRelationshipPanels
         tab="work"
+        routeOrganizationId={organizationId}
         children={[child]}
         connectedWork={[project]}
         initiativeNoun="Initiative"
@@ -89,5 +94,140 @@ describe('InitiativeRelationshipPanels', () => {
     );
     expect(screen.getByText('Project · inherited')).toBeVisible();
     expect(screen.queryByText('Membership portal')).not.toBeInTheDocument();
+  });
+
+  it('keeps a foreign hierarchy row owner-scoped and reference-only through the context-menu provider', async () => {
+    const seen: ActionContext[] = [];
+    const registry = createActionRegistry();
+    registry.register(
+      'initiative',
+      defineActionDomain('initiative', [
+        {
+          id: 'initiative.open',
+          label: 'Open initiative',
+          objectKinds: ['initiative'],
+          run: (context) => {
+            seen.push(context);
+          },
+        },
+        {
+          id: 'initiative.copy',
+          label: 'Copy initiative link',
+          objectKinds: ['initiative'],
+          run: () => undefined,
+        },
+        {
+          id: 'initiative.changeParent',
+          label: 'Change parent…',
+          objectKinds: ['initiative'],
+          run: () => undefined,
+        },
+      ]),
+    );
+    const foreignOrganizationId = OrganizationId.parse('01ARZ3NDEKTSV4RRFFQ69G5FAZ');
+
+    render(
+      <InteractionProvider registry={registry}>
+        <InitiativeRelationshipPanels
+          tab="subinitiatives"
+          routeOrganizationId={organizationId}
+          children={[
+            {
+              ...child,
+              organizationId: foreignOrganizationId,
+              organizationName: 'Partner workspace',
+              crossWorkspace: true,
+            },
+          ]}
+          connectedWork={[]}
+          initiativeNoun="Initiative"
+          programNoun="Program"
+          projectNoun="Project"
+          onAddSubinitiative={vi.fn()}
+        />
+      </InteractionProvider>,
+    );
+
+    const row = screen.getByTestId('object-list-row');
+    fireEvent.contextMenu(row, { clientX: 120, clientY: 80 });
+
+    expect(await screen.findByRole('menuitem', { name: 'Open initiative' })).toBeVisible();
+    expect(screen.getByRole('menuitem', { name: 'Copy initiative link' })).toBeVisible();
+    expect(screen.queryByRole('menuitem', { name: 'Change parent…' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Open initiative' }));
+    await waitFor(() => {
+      expect(seen).toHaveLength(1);
+    });
+    expect(seen[0]).toMatchObject({
+      organizationId: foreignOrganizationId,
+      actionScope: 'reference',
+      objects: [{ id: childId, organizationId: foreignOrganizationId }],
+    });
+  });
+
+  it('keeps foreign connected work owner-scoped, reference-only, and non-draggable', async () => {
+    const seen: ActionContext[] = [];
+    const registry = createActionRegistry();
+    registry.register(
+      'project',
+      defineActionDomain('project', [
+        {
+          id: 'project.open',
+          label: 'Open project',
+          objectKinds: ['project'],
+          run: (context) => {
+            seen.push(context);
+          },
+        },
+        {
+          id: 'project.copy',
+          label: 'Copy project link',
+          objectKinds: ['project'],
+          run: () => undefined,
+        },
+        {
+          id: 'project.changeStatus',
+          label: 'Change project status',
+          objectKinds: ['project'],
+          run: () => undefined,
+        },
+      ]),
+    );
+    const foreignOrganizationId = OrganizationId.parse('01ARZ3NDEKTSV4RRFFQ69G5FAZ');
+
+    render(
+      <InteractionProvider registry={registry}>
+        <InitiativeRelationshipPanels
+          tab="work"
+          routeOrganizationId={organizationId}
+          children={[]}
+          connectedWork={[{ ...project, organizationId: foreignOrganizationId }]}
+          initiativeNoun="Initiative"
+          programNoun="Program"
+          projectNoun="Project"
+          onAddSubinitiative={vi.fn()}
+        />
+      </InteractionProvider>,
+    );
+
+    const row = screen.getByTestId('object-list-row');
+    expect(row).toHaveAttribute('data-object-action-scope', 'reference');
+    expect(row).not.toHaveClass('cursor-grab');
+    fireEvent.contextMenu(row, { clientX: 120, clientY: 80 });
+
+    expect(await screen.findByRole('menuitem', { name: 'Open project' })).toBeVisible();
+    expect(screen.getByRole('menuitem', { name: 'Copy project link' })).toBeVisible();
+    expect(screen.queryByRole('menuitem', { name: 'Change project status' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Open project' }));
+    await waitFor(() => {
+      expect(seen).toHaveLength(1);
+    });
+    expect(seen[0]).toMatchObject({
+      organizationId: foreignOrganizationId,
+      actionScope: 'reference',
+      objects: [{ id: project.id, organizationId: foreignOrganizationId }],
+    });
   });
 });

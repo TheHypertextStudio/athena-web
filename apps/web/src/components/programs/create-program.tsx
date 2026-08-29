@@ -58,7 +58,7 @@ import { templatePatch } from '@/components/templates/queries';
 import { useSession } from '@/lib/auth-client';
 import { userErrorMessage, readProblemError } from '@/lib/problem';
 import { seedProgramRecord } from '@/lib/entity-records';
-import { queryKeys } from '@/lib/query';
+import { invalidateWorkTargetQueries } from '@/lib/work-target-invalidation';
 
 import { ProgramComposerPickers } from './program-form-pickers';
 
@@ -446,16 +446,18 @@ function GlobalProgramComposerBody({
         canManage: creation.permissions.canManage,
         currentActorId,
         onCreated: (program, continueCreating) => {
+          void invalidateWorkTargetQueries(queryClient, {
+            target: 'program',
+            ownerOrganizationId: programOrgId,
+          });
           completeCreateObject({
             created: program,
             initialWorkspaceId,
             targetWorkspaceId,
             sameWorkspaceCompletion: request.sameWorkspaceCompletion,
             onCreated: request.onCreated,
-            invalidationKeys: [queryKeys.programs(programOrgId)],
-            invalidate: (queryKey) => {
-              void queryClient.invalidateQueries({ queryKey });
-            },
+            invalidationKeys: [],
+            invalidate: () => undefined,
             navigationEnabled: !continueCreating,
             seed: () => {
               seedProgramRecord(queryClient, programOrgId, program);

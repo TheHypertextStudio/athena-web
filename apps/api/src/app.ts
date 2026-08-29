@@ -63,7 +63,11 @@ import { createNotificationPreferenceRoutes } from './routes/notification-prefer
 import { createNotificationsRoutes } from './routes/notifications';
 import oauthClients from './routes/oauth-clients';
 import orgs from './routes/orgs';
-import { authoritativeSessionMiddleware, sessionMiddleware } from './auth/session-middleware';
+import {
+  authoritativeSessionMiddleware,
+  replayOwnerSessionMiddleware,
+  sessionMiddleware,
+} from './auth/session-middleware';
 import { requireAuth } from './permissions/require-auth';
 import { AdminNotificationService } from './services/notifications/admin-service';
 import { NotificationContactPointService } from './services/notifications/contact-point-service';
@@ -118,6 +122,11 @@ app.use('*', mediaTypes);
 // — `private, no-cache` plus a `Vary` naming the credentials — is what stops a cache from
 // applying a heuristic lifetime to a validator-bearing response and reusing it for someone else.
 app.use('*', cachePolicy);
+
+// A queue-eligible live attempt or replay names its captured account. Resolve that claim against
+// the live session before authentication, idempotency, or route authorization can use a cached identity.
+// Headerless traffic stays on the normal signed-cookie cache path.
+app.use('*', replayOwnerSessionMiddleware);
 
 // Defense-in-depth authentication: gate EVERY `/v1` route on a session (except the public
 // allowlist) before the route chain, so auth is opt-out, not opt-in. Registered before the

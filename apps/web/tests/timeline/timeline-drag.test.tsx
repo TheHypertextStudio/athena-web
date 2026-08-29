@@ -16,7 +16,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { TimelineSpan } from '@/components/timeline/timeline-catalog';
 
-import { DAY, DEFAULT_WINDOW, EPOCH, Fixture, controlFrames, row, stubLayout } from './harness';
+import {
+  DAY,
+  DEFAULT_WINDOW,
+  EPOCH,
+  Fixture,
+  catalog,
+  controlFrames,
+  row,
+  stubLayout,
+} from './harness';
 
 afterEach(cleanup);
 
@@ -85,6 +94,68 @@ describe('a schedule drag carries the object', () => {
 });
 
 describe('a schedule drag says where the object will land', () => {
+  it('applies the route interaction policy to foreign and context label rows', () => {
+    const restore = stubLayout(PLOT);
+    const activations: string[] = [];
+    const routeCatalog = {
+      ...catalog,
+      object: (candidate: { readonly id: string; readonly name: string }) => ({
+        kind: 'project' as const,
+        id: candidate.id,
+        organizationId: 'org-route',
+        title: candidate.name,
+      }),
+      interaction: (candidate: { readonly id: string; readonly name: string }) => {
+        if (candidate.id === 'context') {
+          return { object: null, dragDisabled: true, actionScope: 'reference' as const };
+        }
+        return {
+          object: {
+            kind: 'project' as const,
+            id: candidate.id,
+            organizationId: candidate.id === 'foreign' ? 'org-foreign' : 'org-route',
+            title: candidate.name,
+          },
+          dragDisabled: candidate.id === 'foreign',
+          actionScope: candidate.id === 'foreign' ? ('reference' as const) : ('all' as const),
+        };
+      },
+    };
+
+    try {
+      render(
+        <Fixture
+          rows={[row('local', 0, 5), row('foreign', 10, 15), row('context', 20, 25)]}
+          catalogOverride={routeCatalog}
+          onActivate={(id) => activations.push(id)}
+        />,
+      );
+
+      const localLabel = screen
+        .getByRole('gridcell', { name: 'Project local' })
+        .closest('[role="row"]');
+      const foreignLabel = screen
+        .getByRole('gridcell', { name: 'Project foreign' })
+        .closest('[role="row"]');
+      const contextLabel = screen
+        .getByRole('gridcell', { name: 'Project context' })
+        .closest('[role="row"]');
+
+      expect(localLabel).toHaveAttribute('data-object-id', 'local');
+      expect(localLabel).toHaveClass('cursor-grab');
+      expect(foreignLabel).toHaveAttribute('data-object-id', 'foreign');
+      expect(foreignLabel).toHaveAttribute('data-object-action-scope', 'reference');
+      expect(foreignLabel).not.toHaveClass('cursor-grab');
+      expect(contextLabel).not.toHaveAttribute('data-object-id');
+
+      fireEvent.click(screen.getByRole('gridcell', { name: 'Project foreign' }));
+      fireEvent.click(screen.getByRole('gridcell', { name: 'Project context' }));
+      expect(activations).toEqual(['foreign', 'context']);
+    } finally {
+      restore();
+    }
+  });
+
   it('marks the target row and states the snapped dates, and commits exactly those', () => {
     const restore = stubLayout(PLOT);
     const commits: { id: string; span: TimelineSpan }[] = [];
@@ -145,6 +216,117 @@ describe('a schedule drag says where the object will land', () => {
       // trailing edge, so four days of travel yields a five-day project.
       expect(committed.span.start).toBe(EPOCH + 30 * DAY);
       expect(committed.span.end).toBe(EPOCH + 35 * DAY);
+    } finally {
+      restore();
+    }
+  });
+
+  it('does not drag a dated row that its catalog marks read-only', () => {
+    const restore = stubLayout(PLOT);
+    const commits: { id: string; span: TimelineSpan }[] = [];
+    const activations: string[] = [];
+    const routeCatalog = {
+      ...catalog,
+      schedulable: (candidate: { readonly id: string }) => candidate.id !== 'foreign',
+    };
+    try {
+      render(
+        <Fixture
+          rows={[row('local', 0, 5), row('foreign', 10, 20)]}
+          catalogOverride={routeCatalog}
+          onReschedule={(id, span) => commits.push({ id, span })}
+          onActivate={(id) => activations.push(id)}
+        />,
+      );
+      const bar = screen.getByRole('button', { name: /Project foreign — Planned/ });
+      const track = bar.closest('[data-timeline-track="row"]');
+      expect(track?.querySelectorAll('.cursor-ew-resize')).toHaveLength(0);
+
+      fireEvent.click(bar);
+      expect(activations).toEqual(['foreign']);
+
+      dragBy(bar, PLOT.left + 200, PX_PER_DAY * 7);
+      release(bar);
+
+      expect(commits).toEqual([]);
+      expect(document.querySelector('[data-timeline-drag-preview]')).toBeNull();
+    } finally {
+      restore();
+    }
+  });
+
+  it('does not place an undated row that its catalog marks read-only', () => {
+    const restore = stubLayout(PLOT);
+    const commits: { id: string; span: TimelineSpan }[] = [];
+    const routeCatalog = {
+      ...catalog,
+      schedulable: (candidate: { readonly id: string }) => candidate.id !== 'foreign',
+    };
+    try {
+      render(
+        <Fixture
+          rows={[row('local', 0, 5), row('foreign', null, null)]}
+          catalogOverride={routeCatalog}
+          onReschedule={(id, span) => commits.push({ id, span })}
+        />,
+      );
+      const lane = screen.getByRole('button', {
+        name: 'Project foreign — not scheduled.',
+      });
+      dragBy(lane, PLOT.left + PX_PER_DAY * 30, PX_PER_DAY * 4);
+      release(lane);
+
+      expect(commits).toEqual([]);
+    } finally {
+      restore();
+    }
+  });
+
+  it('does not propose cascade writes for rows that the catalog marks read-only', () => {
+    const restore = stubLayout(PLOT);
+    const routeCatalog = {
+      ...catalog,
+      schedulable: (candidate: { readonly id: string }) => candidate.id !== 'foreign',
+    };
+    try {
+      render(
+        <Fixture
+          rows={[row('local', 0, 10, ['foreign']), row('foreign', 20, 30)]}
+          catalogOverride={routeCatalog}
+        />,
+      );
+      const bar = screen.getByRole('button', { name: /Project local — Planned/ });
+      dragBy(bar, PLOT.left + 100, PX_PER_DAY * 20);
+      release(bar);
+
+      expect(screen.queryByText(/That pushes/)).toBeNull();
+    } finally {
+      restore();
+    }
+  });
+
+  it('does not propagate a cascade through a read-only dependency', () => {
+    const restore = stubLayout(PLOT);
+    const routeCatalog = {
+      ...catalog,
+      schedulable: (candidate: { readonly id: string }) => candidate.id !== 'foreign',
+    };
+    try {
+      render(
+        <Fixture
+          rows={[
+            row('local', 0, 10, ['foreign']),
+            row('foreign', 20, 30, ['local-after']),
+            row('local-after', 40, 50),
+          ]}
+          catalogOverride={routeCatalog}
+        />,
+      );
+      const bar = screen.getByRole('button', { name: /Project local — Planned/ });
+      dragBy(bar, PLOT.left + 100, PX_PER_DAY * 30);
+      release(bar);
+
+      expect(screen.queryByText(/That pushes/)).toBeNull();
     } finally {
       restore();
     }

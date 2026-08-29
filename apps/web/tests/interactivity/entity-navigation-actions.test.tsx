@@ -59,6 +59,7 @@ function setup() {
 
 afterEach(() => {
   vi.clearAllMocks();
+  invalidateWorkTargetQueries.mockReset().mockResolvedValue(undefined);
 });
 
 describe('Project navigation actions', () => {
@@ -82,6 +83,7 @@ describe('Project navigation actions', () => {
         title: 'Same-owner initiative',
       },
       source: 'drag',
+      actionScope: 'all',
       organizationId: 'org-a',
     }));
 
@@ -99,6 +101,49 @@ describe('Project navigation actions', () => {
     });
   });
 
+  it('does not report a Project link complete until both projection repairs finish', async () => {
+    linkProjectToInitiative.mockResolvedValue(okResponse({}));
+    let finishRepairs: (() => void) | undefined;
+    const repairs = new Promise<void>((resolve) => {
+      finishRepairs = resolve;
+    });
+    invalidateWorkTargetQueries.mockReturnValue(repairs);
+    const { registry } = setup();
+    let settled = false;
+
+    const invocation = registry
+      .invoke('project.linkInitiative', () => ({
+        objects: [
+          {
+            kind: 'project',
+            id: 'project-1',
+            organizationId: 'org-b',
+            title: 'Project',
+          },
+        ],
+        target: {
+          kind: 'initiative',
+          id: 'initiative-1',
+          organizationId: 'org-b',
+          title: 'Initiative',
+        },
+        source: 'drag',
+        actionScope: 'all',
+        organizationId: 'org-b',
+      }))
+      .then((result) => {
+        settled = true;
+        return result;
+      });
+
+    await vi.waitFor(() => {
+      expect(invalidateWorkTargetQueries).toHaveBeenCalledTimes(2);
+    });
+    expect(settled).toBe(false);
+    finishRepairs?.();
+    await expect(invocation).resolves.toMatchObject({ status: 'ran' });
+  });
+
   it('rejects a cross-organization Initiative link before the API write', async () => {
     const { registry } = setup();
 
@@ -111,6 +156,7 @@ describe('Project navigation actions', () => {
         title: 'Foreign initiative',
       },
       source: 'drag',
+      actionScope: 'all',
       organizationId: 'org-a',
     }));
 
@@ -138,6 +184,7 @@ describe('Project navigation actions', () => {
         title: 'Initiative',
       },
       source: 'drag',
+      actionScope: 'all',
       organizationId: 'org-a',
     }));
 
@@ -163,6 +210,7 @@ describe('Project navigation actions', () => {
         title: 'Initiative',
       },
       source: 'drag',
+      actionScope: 'all',
       organizationId: 'org-a',
     }));
 
@@ -194,6 +242,7 @@ describe('Program navigation actions', () => {
         title: 'Initiative',
       },
       source: 'drag',
+      actionScope: 'all',
       organizationId: 'org-a',
     }));
 
@@ -229,6 +278,7 @@ describe('Program navigation actions', () => {
         title: 'Initiative',
       },
       source: 'drag',
+      actionScope: 'all',
       organizationId: 'org-a',
     }));
 

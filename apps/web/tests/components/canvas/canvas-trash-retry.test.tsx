@@ -96,7 +96,7 @@ function Controls(): React.JSX.Element {
 
 function Wrapper({ children }: { children: ReactNode }): React.JSX.Element {
   return (
-    <SelectionProvider items={[project]} organizationId="org-1">
+    <SelectionProvider items={[project]} organizationId="org-1" actionScope="all">
       <CanvasCommandProvider
         orgId="org-1"
         scopeKey="project:retry"
@@ -114,7 +114,7 @@ function Wrapper({ children }: { children: ReactNode }): React.JSX.Element {
 
 function ContributorWrapper({ children }: { children: ReactNode }): React.JSX.Element {
   return (
-    <SelectionProvider items={[project]} organizationId="org-1">
+    <SelectionProvider items={[project]} organizationId="org-1" actionScope="all">
       <CanvasCommandProvider
         orgId="org-1"
         scopeKey="project:contributor"

@@ -47,6 +47,7 @@ describe('ProjectNode selection semantics', () => {
           },
         ]}
         organizationId="org-1"
+        actionScope="all"
       >
         <ReactFlowProvider>
           <ProjectNode {...props} />

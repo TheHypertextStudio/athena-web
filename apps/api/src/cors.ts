@@ -3,8 +3,10 @@
  */
 import type { MiddlewareHandler } from 'hono';
 import { cors } from 'hono/cors';
+import { SESSION_OWNER_HEADER } from '@docket/types';
 
 import type { AppEnv } from './context';
+import { isReplayOwnerRequest, REPLAY_OWNER_HEADER } from './replay-owner-contract';
 
 /**
  * The public half of the OAuth 2.0 Authorization Server surface: dynamic client
@@ -56,11 +58,6 @@ const SHARE_TOKEN_HEADER = 'X-Docket-Share-Token';
 const PUBLIC_SHARE_PATHS: ReadonlySet<string> = new Set(['/v1/public/time/status']);
 
 /**
- * Build the root server's CORS middleware: a strict, credentialed allowlist
- * ({@link trustedOrigins}) for every session-cookie route, and an open, credential-free
- * policy for {@link PUBLIC_OAUTH_PATHS} and {@link PUBLIC_SHARE_PATHS}.
- */
-/**
  * Request headers a browser client is allowed to send.
  *
  * @remarks
@@ -79,6 +76,17 @@ const ALLOWED_REQUEST_HEADERS = [
   // Retry safety on POST.
   'Idempotency-Key',
 ];
+
+/** Object-command POSTs may bind an offline-capable write to its captured account. */
+const OBJECT_COMMAND_ALLOWED_REQUEST_HEADERS = [...ALLOWED_REQUEST_HEADERS, REPLAY_OWNER_HEADER];
+
+/** Sign-out POSTs may bind the destructive request to the account that started it. */
+const SIGN_OUT_ALLOWED_REQUEST_HEADERS = [...ALLOWED_REQUEST_HEADERS, SESSION_OWNER_HEADER];
+
+/** Return whether this request can consume the captured sign-out account header. */
+function isSessionOwnerRequest(method: string | undefined, path: string): boolean {
+  return method === 'POST' && path === '/api/auth/sign-out';
+}
 
 /**
  * Response headers a browser client is allowed to read.
@@ -100,7 +108,7 @@ const EXPOSED_RESPONSE_HEADERS = [
   'Allow',
   // Whether a 202/201 was computed or replayed from an earlier attempt under the same key.
   'Idempotency-Replayed',
-  // How long to wait before retrying a 429 or 503.
+  // How long to wait before retrying an in-progress idempotency claim, a 429, or a 503.
   'Retry-After',
 ];
 
@@ -114,8 +122,10 @@ const EXPOSED_RESPONSE_HEADERS = [
  * `If-Match` and `Idempotency-Key`, which a preflight rejects unless `allowHeaders` names them.
  *
  * The OAuth discovery documents are public and unauthenticated, so they answer `*` rather than
- * the trusted-origin list; a wildcard origin and `credentials: true` are mutually exclusive per
- * the Fetch standard, which is why these are two middlewares rather than one.
+ * the trusted-origin list. A wildcard origin and `credentials: true` are mutually exclusive per
+ * the Fetch standard, so the public and credentialed policies use separate middleware.
+ * Credentialed object-command POSTs use a third policy because no other route may receive the
+ * replay-owner account binding.
  *
  * @param trustedOrigins - Origins allowed to send credentialed requests.
  * @returns middleware that dispatches to the credentialed or public policy per request.
@@ -127,13 +137,32 @@ export function buildCorsMiddleware(trustedOrigins: readonly string[]): Middlewa
     allowHeaders: ALLOWED_REQUEST_HEADERS,
     exposeHeaders: EXPOSED_RESPONSE_HEADERS,
   });
+  const objectCommandCors = cors({
+    origin: [...trustedOrigins],
+    credentials: true,
+    allowHeaders: OBJECT_COMMAND_ALLOWED_REQUEST_HEADERS,
+    exposeHeaders: EXPOSED_RESPONSE_HEADERS,
+  });
+  const signOutCors = cors({
+    origin: [...trustedOrigins],
+    credentials: true,
+    allowHeaders: SIGN_OUT_ALLOWED_REQUEST_HEADERS,
+    exposeHeaders: EXPOSED_RESPONSE_HEADERS,
+  });
   const publicOAuthCors = cors({
     origin: '*',
     allowHeaders: [...ALLOWED_REQUEST_HEADERS, SHARE_TOKEN_HEADER],
     exposeHeaders: EXPOSED_RESPONSE_HEADERS,
   });
-  return (c, next) =>
-    PUBLIC_OAUTH_PATHS.has(c.req.path) || PUBLIC_SHARE_PATHS.has(c.req.path)
-      ? publicOAuthCors(c, next)
-      : sessionCors(c, next);
+  return (c, next) => {
+    if (PUBLIC_OAUTH_PATHS.has(c.req.path) || PUBLIC_SHARE_PATHS.has(c.req.path)) {
+      return publicOAuthCors(c, next);
+    }
+
+    const method =
+      c.req.method === 'OPTIONS' ? c.req.header('Access-Control-Request-Method') : c.req.method;
+    if (isReplayOwnerRequest(method, c.req.path)) return objectCommandCors(c, next);
+    if (isSessionOwnerRequest(method, c.req.path)) return signOutCors(c, next);
+    return sessionCors(c, next);
+  };
 }

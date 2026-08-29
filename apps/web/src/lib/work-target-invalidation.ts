@@ -18,6 +18,7 @@ function isTargetProjection(queryKey: QueryKey, target: ViewTarget): boolean {
   const collection = workTargetCollectionKey(queryKey[1], target);
   if (!beginsWith(queryKey, collection)) return false;
   const projection = queryKey[collection.length];
+  if (target === 'initiative' && projection === 'hierarchy-candidates') return true;
   return (
     (projection === 'work-view' || projection === 'work-view-facets') &&
     queryKey[collection.length + 1] === target

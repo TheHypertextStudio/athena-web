@@ -16,7 +16,7 @@
  * Registration is scoped to a mounted surface: unmounting removes it, so a stale reader can never
  * answer for a list that is gone.
  */
-import type { ObjectRef } from '@/lib/actions/object';
+import type { ObjectActionScope, ObjectRef } from '@/lib/actions/object';
 
 /** What a selection surface reports about itself on demand. */
 export interface SelectionSurfaceSnapshot {
@@ -24,6 +24,8 @@ export interface SelectionSurfaceSnapshot {
   readonly surfaceId: string;
   /** The workspace the surface's items belong to, or `null` when it spans workspaces. */
   readonly organizationId: string | null;
+  /** The action authority shared by this surface's selectable objects. */
+  readonly actionScope: ObjectActionScope;
   /** The currently selected objects, in view order. */
   readonly selectedObjects: readonly ObjectRef[];
 }

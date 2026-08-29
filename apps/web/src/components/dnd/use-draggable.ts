@@ -17,7 +17,7 @@ import { useDraggable as useDndKitDraggable } from '@dnd-kit/react';
 import { useEffect, useId, useMemo, useRef } from 'react';
 
 import { CURSOR_DRAGGABLE } from '@/lib/actions/cursor';
-import { describeObject, type ObjectRef } from '@/lib/actions/object';
+import { describeObject, type ObjectActionScope, type ObjectRef } from '@/lib/actions/object';
 
 import type { ObjectDragData } from './object-drag-data';
 import { OBJECT_POINTER_SENSOR } from './object-pointer-sensor';
@@ -32,6 +32,8 @@ export interface UseDraggableOptions {
    * branching around a hook call.
    */
   readonly object: ObjectRef | null;
+  /** Action authority carried into any relation or scheduling invocation. */
+  readonly actionScope: ObjectActionScope;
   /**
    * Suppress dragging for this instance.
    *
@@ -68,7 +70,7 @@ export interface DraggableBinding {
  *
  * @example
  * ```tsx
- * const drag = useDraggable({ object: task, surfaceId });
+ * const drag = useDraggable({ object: task, actionScope: 'all', surfaceId });
  * return (
  *   <div
  *     {...objectTargetProps(task)}
@@ -84,7 +86,15 @@ export interface DraggableBinding {
  * reports `pointer`.
  */
 export function useDraggable(options: UseDraggableOptions): DraggableBinding {
-  const { object, objects, disabled = false, surfaceId, onDragStart, onDragEnd } = options;
+  const {
+    object,
+    objects,
+    disabled = false,
+    actionScope,
+    surfaceId,
+    onDragStart,
+    onDragEnd,
+  } = options;
   const instanceId = useId();
   const canDrag = object !== null && !disabled && describeObject(object.kind).draggable;
   const data = useMemo<ObjectDragData | undefined>(
@@ -96,8 +106,9 @@ export function useDraggable(options: UseDraggableOptions): DraggableBinding {
             object,
             objects: objects && objects.length > 0 ? objects : [object],
             sourceSurfaceId: surfaceId ?? null,
+            actionScope,
           },
-    [object, objects, surfaceId],
+    [actionScope, object, objects, surfaceId],
   );
   const drag = useDndKitDraggable<ObjectDragData>({
     id: `docket-object:${surfaceId ?? 'surface'}:${object?.kind ?? 'none'}:${object?.id ?? 'none'}:${instanceId}`,

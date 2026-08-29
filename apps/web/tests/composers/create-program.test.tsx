@@ -26,6 +26,7 @@ const {
   createObjectState,
   sessionState,
   routerPush,
+  invalidateWorkTargetQueries,
 } = vi.hoisted(() => {
   const creationState: { current: unknown } = { current: null };
   const createObjectState: { current: unknown } = { current: null };
@@ -38,6 +39,7 @@ const {
     createObjectState,
     sessionState: { data: { user: { id: 'user_1' } }, isPending: false },
     routerPush: vi.fn(),
+    invalidateWorkTargetQueries: vi.fn(() => Promise.resolve()),
   };
 });
 
@@ -68,6 +70,8 @@ vi.mock('../../src/lib/auth-client', () => ({
   useSession: () => sessionState,
 }));
 
+vi.mock('../../src/lib/work-target-invalidation', () => ({ invalidateWorkTargetQueries }));
+
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: routerPush }),
 }));
@@ -76,7 +80,6 @@ import {
   CreateProgramDialog,
   GlobalProgramComposer,
 } from '../../src/components/programs/create-program';
-import { queryKeys } from '../../src/lib/query';
 import { firstJson, jsonResponse } from '../support/http';
 import { choosePickerOption } from '../support/pickers';
 
@@ -127,6 +130,7 @@ beforeEach(() => {
   };
   creationState.current = null;
   routerPush.mockReset();
+  invalidateWorkTargetQueries.mockClear();
   Element.prototype.scrollIntoView = vi.fn();
   Element.prototype.hasPointerCapture = vi.fn(() => false);
   Element.prototype.setPointerCapture = vi.fn();
@@ -333,8 +337,7 @@ describe('CreateProgramDialog — visibility picker', () => {
     programPost.mockResolvedValue(
       jsonResponse(true, { id: 'program_target', name: 'Portable program' }),
     );
-    const { client, closeCreate, onCreated } = renderGlobalProgram();
-    const invalidate = vi.spyOn(client, 'invalidateQueries');
+    const { closeCreate, onCreated } = renderGlobalProgram();
 
     await waitFor(() => {
       expect(membersGet).toHaveBeenCalled();
@@ -379,7 +382,10 @@ describe('CreateProgramDialog — visibility picker', () => {
       visibility: 'private',
     });
     expect(body).not.toHaveProperty('ownerId');
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.programs(TARGET_ORG_ID) });
+    expect(invalidateWorkTargetQueries).toHaveBeenCalledExactlyOnceWith(expect.any(QueryClient), {
+      target: 'program',
+      ownerOrganizationId: TARGET_ORG_ID,
+    });
     expect(routerPush).toHaveBeenCalledWith(`/orgs/${TARGET_ORG_ID}/programs/program_target`);
     expect(closeCreate).toHaveBeenCalledOnce();
     expect(onCreated).not.toHaveBeenCalled();

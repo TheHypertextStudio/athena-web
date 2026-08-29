@@ -38,6 +38,8 @@ export interface CommandPaletteProps {
   panelsAvailable?: boolean;
   /** Ask the shell to reveal one of its persistent utility panels. */
   onOpenPanel?: (panelId: 'agenda' | 'focus' | 'athena') => void;
+  /** Account id captured by the shell for destructive session commands. */
+  sessionOwnerUserId: string | null;
 }
 
 const IGNORE_PANEL_REQUEST = (): undefined => undefined;
@@ -68,6 +70,7 @@ export function CommandPalette({
   onClose,
   panelsAvailable = true,
   onOpenPanel = IGNORE_PANEL_REQUEST,
+  sessionOwnerUserId,
 }: CommandPaletteProps): JSX.Element | null {
   const { activeOrgId, orgName } = useActiveOrg();
   const [query, setQuery] = useState('');
@@ -136,6 +139,7 @@ export function CommandPalette({
     close: onClose,
     panelsAvailable,
     onOpenPanel,
+    sessionOwnerUserId,
   });
   const { results, loading, error, hasQuery } = useHubSearch({
     query,

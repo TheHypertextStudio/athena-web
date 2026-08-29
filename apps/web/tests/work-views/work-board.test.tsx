@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { TaskViewDefinition, TaskViewRow } from '@docket/types';
 
 import { WorkBoard } from '../../src/components/work-views/work-board';
+import { workViewRowInteractionPolicy } from '../../src/components/work-views/work-view-object';
 
 const definition = TaskViewDefinition.parse({
   version: 2,
@@ -54,6 +55,38 @@ function task(id: string, title: string) {
 }
 
 describe('WorkBoard', () => {
+  it('shows the authoritative root total while an ungrouped page is still partial', () => {
+    const ungroupedDefinition = TaskViewDefinition.parse({
+      ...definition,
+      arrangement: { groupBy: null, subGroupBy: null, orderBy: [] },
+    });
+    render(
+      <WorkBoard
+        target="task"
+        definition={ungroupedDefinition}
+        totalCount={101}
+        rows={[
+          task('01ARZ3NDEKTSV4RRFFQ69G5A01', 'Loaded task one'),
+          task('01ARZ3NDEKTSV4RRFFQ69G5A02', 'Loaded task two'),
+        ]}
+        groups={[]}
+        groupPages={[]}
+        hiddenColumns={new Set()}
+        selectedIds={new Set()}
+        rowInteraction={(row) => workViewRowInteractionPolicy(row, '01ARZ3NDEKTSV4RRFFQ69G5FA0')}
+        onSelectionChange={vi.fn()}
+        onCreate={vi.fn()}
+        onActivate={vi.fn()}
+        onDrop={vi.fn()}
+        onLoadMore={vi.fn()}
+      />,
+    );
+
+    expect(
+      within(screen.getByRole('region', { name: 'All tasks column' })).getByText('101'),
+    ).toBeVisible();
+  });
+
   it('renders root rows in one column when the view has no grouping', () => {
     const rootRows = Array.from({ length: 101 }, (_, index) =>
       task(
@@ -73,11 +106,14 @@ describe('WorkBoard', () => {
     const props = {
       target: 'task' as const,
       definition: ungroupedDefinition,
+      totalCount: rootRows.length,
       rows: rootRows,
       groups: [],
       groupPages: [],
       hiddenColumns: new Set<string>(),
       selectedIds: new Set<string>(),
+      rowInteraction: (row: ReturnType<typeof task>) =>
+        workViewRowInteractionPolicy(row, '01ARZ3NDEKTSV4RRFFQ69G5FA0'),
       onSelectionChange: vi.fn(),
       onCreate: vi.fn(),
       onActivate: vi.fn(),
@@ -106,6 +142,7 @@ describe('WorkBoard', () => {
       <WorkBoard
         target="task"
         definition={definition}
+        totalCount={1}
         groups={[
           { path: ['todo'], key: 'todo', label: 'Todo', count: 1 },
           { path: ['done'], key: 'done', label: 'Done', count: 0 },
@@ -121,6 +158,7 @@ describe('WorkBoard', () => {
         ]}
         hiddenColumns={new Set(['done'])}
         selectedIds={new Set()}
+        rowInteraction={(row) => workViewRowInteractionPolicy(row, '01ARZ3NDEKTSV4RRFFQ69G5FA0')}
         onSelectionChange={vi.fn()}
         onCreate={onCreate}
         onActivate={onActivate}
@@ -167,6 +205,7 @@ describe('WorkBoard', () => {
       <WorkBoard
         target="task"
         definition={definition}
+        totalCount={1}
         groups={[
           { path: ['todo'], key: 'todo', label: 'Todo', count: 1 },
           { path: ['started'], key: 'started', label: 'Started', count: 0 },
@@ -179,6 +218,9 @@ describe('WorkBoard', () => {
         ]}
         hiddenColumns={new Set()}
         selectedIds={new Set()}
+        rowInteraction={(candidate) =>
+          workViewRowInteractionPolicy(candidate, '01ARZ3NDEKTSV4RRFFQ69G5FA0')
+        }
         onSelectionChange={vi.fn()}
         onCreate={vi.fn()}
         onActivate={onActivate}
@@ -219,10 +261,14 @@ describe('WorkBoard', () => {
       <WorkBoard
         target="task"
         definition={assigneeDefinition}
+        totalCount={1}
         groups={[{ path: ['todo'], key: 'todo', label: 'Todo', count: 1 }]}
         groupPages={[{ path: ['todo'], rows: [row], nextCursor: null, loading: false }]}
         hiddenColumns={new Set()}
         selectedIds={new Set()}
+        rowInteraction={(candidate) =>
+          workViewRowInteractionPolicy(candidate, '01ARZ3NDEKTSV4RRFFQ69G5FA0')
+        }
         onSelectionChange={vi.fn()}
         onCreate={vi.fn()}
         onActivate={vi.fn()}

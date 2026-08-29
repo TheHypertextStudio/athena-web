@@ -58,6 +58,7 @@ import { WorkBoard } from './work-board';
 import { WorkCards } from './work-cards';
 import { WorkList } from './work-list';
 import { WorkViewLoadFailure } from './work-view-load-failure';
+import { isRouteOwnedDirectWorkViewRow, workViewRowInteractionPolicy } from './work-view-object';
 import { supportsWorkViewRenderer } from './work-view-renderers';
 import { WorkViewToolbar } from './work-view-toolbar';
 
@@ -366,24 +367,25 @@ export function WorkViewPage<TTarget extends ViewTarget>({
       <WorkBoard
         target={target}
         definition={controller.definition}
+        totalCount={controller.response?.totalCount ?? 0}
         rows={rows}
         groups={controller.response?.groups ?? []}
         groupPages={controller.groupPages}
         hiddenColumns={controller.hiddenBoardColumns}
         selectedIds={selectedIds}
+        rowInteraction={(row) => workViewRowInteractionPolicy(row, organizationId)}
         onSelectionChange={setSelectedIds}
         onCreate={(path) => {
           create(path);
         }}
         onActivate={openRow}
         onDrop={(drop) => {
-          const row = rows.find((candidate) => candidate.id === drop.item.id);
-          if (row === undefined) return;
+          if (!isRouteOwnedDirectWorkViewRow(drop.item, organizationId)) return;
           const groupValue = drop.destinationPath[0] ?? null;
           const sourceGroupValue = drop.sourcePath[0] ?? null;
           orderMutation.mutate({
             target,
-            organizationId: row.organizationId,
+            organizationId,
             itemId: drop.item.id,
             groupField: controller.definition.arrangement.groupBy,
             sourceGroupValue: sourceGroupValue === '__empty__' ? null : sourceGroupValue,
@@ -417,6 +419,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
   } else if (target === 'project' && layout === 'timeline') {
     content = (
       <ProjectTimelineAdapter
+        organizationId={organizationId}
         rows={rows as unknown as readonly ProjectViewRow[]}
         density={controller.definition.presentation.density}
         canSchedule
@@ -433,6 +436,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
   } else if (target === 'initiative' && layout === 'timeline') {
     content = (
       <InitiativeTimeline
+        organizationId={organizationId}
         rows={rows as unknown as readonly InitiativeViewRow[]}
         density={controller.definition.presentation.density}
         onActivate={(id) => {

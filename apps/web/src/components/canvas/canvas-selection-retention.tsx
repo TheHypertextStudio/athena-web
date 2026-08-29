@@ -136,7 +136,12 @@ function ScopedCanvasSelectionRetention({
   );
 
   return (
-    <SelectionProvider items={selectionItems} surfaceId={surfaceId} organizationId={organizationId}>
+    <SelectionProvider
+      items={selectionItems}
+      surfaceId={surfaceId}
+      organizationId={organizationId}
+      actionScope="all"
+    >
       <RetentionTracker currentSnapshots={propertySnapshots} onSelection={retainSelection} />
       <CanvasPropertySnapshotsContext.Provider value={snapshotContext}>
         {children}

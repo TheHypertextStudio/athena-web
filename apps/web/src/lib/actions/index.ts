@@ -32,6 +32,7 @@ export {
   type CanvasPropertySnapshot,
   type CanvasTaskPropertySnapshot,
   type ObjectKind,
+  type ObjectActionScope,
   type ObjectMeta,
   type ObjectRef,
   type ObjectTargetProps,
@@ -41,6 +42,7 @@ export {
   objectTargetProps,
   parseObjectKey,
   readObjectTarget,
+  readObjectActionScope,
 } from './object';
 export {
   type ActionRegistry,

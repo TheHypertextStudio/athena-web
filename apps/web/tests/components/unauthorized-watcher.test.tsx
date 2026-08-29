@@ -21,20 +21,44 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { type JSX, useRef, useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { probeSession, purgeLocalSessionState, signOutAndPurge, requireAuthentication } = vi.hoisted(
-  () => ({
-    probeSession: vi.fn(),
-    purgeLocalSessionState: vi.fn(() => Promise.resolve()),
-    signOutAndPurge: vi.fn(() => Promise.resolve()),
-    requireAuthentication: vi.fn(),
-  }),
-);
+const {
+  probeSession,
+  purgeLocalSessionState,
+  signOutAndPurge,
+  requireAuthentication,
+  reportSessionCleanupFailure,
+} = vi.hoisted(() => ({
+  probeSession: vi.fn(),
+  purgeLocalSessionState: vi.fn(() => Promise.resolve('cleared')),
+  signOutAndPurge: vi.fn(() => Promise.resolve()),
+  requireAuthentication: vi.fn(),
+  reportSessionCleanupFailure: vi.fn(),
+}));
+const outboxMocks = vi.hoisted(() => {
+  const listeners = new Set<() => void>();
+  return {
+    captureOutboxOwner: vi.fn(),
+    isCurrentOutboxOwner: vi.fn(),
+    listeners,
+    subscribeOutbox: vi.fn((listener: () => void) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    }),
+  };
+});
+const storageMocks = vi.hoisted(() => ({ canQueueWrites: vi.fn(() => true) }));
+
+const ownerA = { userId: 'user-a', generation: 1, epoch: 'epoch-a' } as const;
 
 vi.mock('../../src/lib/auth-client', () => ({ probeSession }));
 vi.mock('../../src/lib/sign-out', () => ({ purgeLocalSessionState, signOutAndPurge }));
+vi.mock('../../src/components/pwa/outbox', () => outboxMocks);
+vi.mock('../../src/components/pwa/outbox-store', () => storageMocks);
 vi.mock('../../src/components/authentication-interlock', () => ({
   AuthenticationInterlockProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  useAuthenticationInterlock: () => ({ requireAuthentication }),
+  useAuthenticationInterlock: () => ({ requireAuthentication, reportSessionCleanupFailure }),
 }));
 
 import { UnauthorizedWatcher } from '../../src/components/providers';
@@ -72,8 +96,24 @@ function Harness(): JSX.Element {
 beforeEach(() => {
   probeSession.mockReset();
   purgeLocalSessionState.mockClear();
+  purgeLocalSessionState.mockResolvedValue('cleared');
   signOutAndPurge.mockClear();
   requireAuthentication.mockClear();
+  reportSessionCleanupFailure.mockClear();
+  outboxMocks.captureOutboxOwner.mockReset();
+  outboxMocks.captureOutboxOwner.mockReturnValue(ownerA);
+  outboxMocks.isCurrentOutboxOwner.mockReset();
+  outboxMocks.isCurrentOutboxOwner.mockReturnValue(true);
+  outboxMocks.listeners.clear();
+  outboxMocks.subscribeOutbox.mockReset();
+  outboxMocks.subscribeOutbox.mockImplementation((listener: () => void) => {
+    outboxMocks.listeners.add(listener);
+    return () => {
+      outboxMocks.listeners.delete(listener);
+    };
+  });
+  storageMocks.canQueueWrites.mockReset();
+  storageMocks.canQueueWrites.mockReturnValue(true);
 });
 
 afterEach(cleanup);
@@ -145,6 +185,154 @@ describe('UnauthorizedWatcher', () => {
     await waitFor(() => {
       expect(requireAuthentication).toHaveBeenCalled();
     });
+  });
+
+  it('does not ask for sign-in when durable queue revocation fails', async () => {
+    probeSession.mockResolvedValue({ hasSession: false, failed: false });
+    purgeLocalSessionState.mockResolvedValue('failed');
+
+    render(<Harness />);
+
+    await waitFor(() => {
+      expect(purgeLocalSessionState).toHaveBeenCalled();
+      expect(reportSessionCleanupFailure).toHaveBeenCalledOnce();
+    });
+    expect(requireAuthentication).not.toHaveBeenCalled();
+  });
+
+  it('discards a delayed user A verdict after the outbox generation changes', async () => {
+    let resolveProbe!: (probe: { readonly hasSession: boolean; readonly failed: boolean }) => void;
+    probeSession.mockReturnValue(
+      new Promise((resolve) => {
+        resolveProbe = resolve;
+      }),
+    );
+
+    render(<Harness />);
+    await waitFor(() => {
+      expect(probeSession).toHaveBeenCalledOnce();
+    });
+
+    outboxMocks.isCurrentOutboxOwner.mockReturnValue(false);
+    resolveProbe({ hasSession: false, failed: false });
+
+    await waitFor(() => {
+      expect(outboxMocks.isCurrentOutboxOwner).toHaveBeenCalledWith(ownerA);
+    });
+    expect(purgeLocalSessionState).not.toHaveBeenCalled();
+    expect(requireAuthentication).not.toHaveBeenCalled();
+  });
+
+  it('does not apply user A cleanup after revocation waits across a generation change', async () => {
+    probeSession.mockResolvedValue({ hasSession: false, failed: false });
+    let resolvePurge!: (result: 'cleared' | 'superseded' | 'failed') => void;
+    purgeLocalSessionState.mockReturnValue(
+      new Promise((resolve) => {
+        resolvePurge = resolve;
+      }),
+    );
+
+    render(<Harness />);
+    await waitFor(() => {
+      expect(purgeLocalSessionState).toHaveBeenCalledWith(expect.anything(), ownerA);
+    });
+
+    outboxMocks.isCurrentOutboxOwner.mockReturnValue(false);
+    resolvePurge('superseded');
+
+    await waitFor(() => {
+      expect(purgeLocalSessionState).toHaveResolved();
+    });
+    expect(requireAuthentication).not.toHaveBeenCalled();
+  });
+
+  it('confirms and cleans up an ownerless session when no durable store exists', async () => {
+    outboxMocks.captureOutboxOwner.mockReturnValue(null);
+    storageMocks.canQueueWrites.mockReturnValue(false);
+    probeSession.mockResolvedValue({ hasSession: false, failed: false });
+
+    render(<Harness />);
+
+    await waitFor(() => {
+      expect(probeSession).toHaveBeenCalledOnce();
+      expect(purgeLocalSessionState).toHaveBeenCalledWith(expect.anything(), null);
+      expect(requireAuthentication).toHaveBeenCalled();
+    });
+  });
+
+  it('reprobes after an owner binds instead of applying an ownerless verdict', async () => {
+    let resolveOwnerlessProbe!: (probe: {
+      readonly hasSession: boolean;
+      readonly failed: boolean;
+    }) => void;
+    outboxMocks.captureOutboxOwner.mockReturnValue(null);
+    probeSession
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveOwnerlessProbe = resolve;
+        }),
+      )
+      .mockResolvedValueOnce({ hasSession: false, failed: false });
+
+    render(<Harness />);
+    await waitFor(() => {
+      expect(probeSession).toHaveBeenCalledOnce();
+    });
+
+    resolveOwnerlessProbe({ hasSession: false, failed: false });
+    await waitFor(() => {
+      expect(outboxMocks.subscribeOutbox).toHaveBeenCalledOnce();
+    });
+    expect(purgeLocalSessionState).not.toHaveBeenCalled();
+
+    outboxMocks.captureOutboxOwner.mockReturnValue(ownerA);
+    for (const listener of outboxMocks.listeners) listener();
+
+    await waitFor(() => {
+      expect(probeSession).toHaveBeenCalledTimes(2);
+      expect(purgeLocalSessionState).toHaveBeenCalledWith(expect.anything(), ownerA);
+      expect(requireAuthentication).toHaveBeenCalled();
+    });
+  });
+
+  it('recaptures immediately after subscribing so a bind in that interval is not missed', async () => {
+    outboxMocks.captureOutboxOwner.mockReturnValue(null);
+    outboxMocks.subscribeOutbox.mockImplementation((listener: () => void) => {
+      outboxMocks.captureOutboxOwner.mockReturnValue(ownerA);
+      outboxMocks.listeners.add(listener);
+      return () => {
+        outboxMocks.listeners.delete(listener);
+      };
+    });
+    probeSession.mockResolvedValue({ hasSession: false, failed: false });
+
+    render(<Harness />);
+
+    await waitFor(() => {
+      expect(probeSession).toHaveBeenCalledTimes(2);
+      expect(purgeLocalSessionState).toHaveBeenCalledWith(expect.anything(), ownerA);
+      expect(requireAuthentication).toHaveBeenCalled();
+    });
+  });
+
+  it('cancels a pending owner wait when the watcher unmounts', async () => {
+    outboxMocks.captureOutboxOwner.mockReturnValue(null);
+    probeSession.mockResolvedValue({ hasSession: false, failed: false });
+
+    const view = render(<Harness />);
+    await waitFor(() => {
+      expect(outboxMocks.subscribeOutbox).toHaveBeenCalledOnce();
+    });
+
+    view.unmount();
+    expect(outboxMocks.listeners.size).toBe(0);
+    outboxMocks.captureOutboxOwner.mockReturnValue(ownerA);
+    for (const listener of outboxMocks.listeners) listener();
+    await Promise.resolve();
+
+    expect(probeSession).toHaveBeenCalledOnce();
+    expect(purgeLocalSessionState).not.toHaveBeenCalled();
+    expect(requireAuthentication).not.toHaveBeenCalled();
   });
 
   it('offers to return the person to where they were', async () => {

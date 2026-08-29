@@ -13,6 +13,7 @@ import {
 } from '../../src/lib/actions/registry';
 import type { ActionContext } from '../../src/lib/actions/types';
 import { SelectionProvider } from '../../src/components/selection/selection-context';
+import { useObjectContextMenu } from '../../src/components/context-menu/object-context-menu';
 
 import { TaskList, taskRef } from './harness';
 
@@ -77,12 +78,70 @@ function menuRegistry(seen: ActionContext[]): ActionRegistry {
   return registry;
 }
 
+/** A registry that makes the reference boundary visible in one menu. */
+function referenceRegistry(): ActionRegistry {
+  const registry = createActionRegistry();
+  registry.register(
+    'task',
+    defineActionDomain('task', [
+      { id: 'task.open', label: 'Open task', objectKinds: ['task'], run: () => undefined },
+      {
+        id: 'task.copy',
+        label: (context) => `Copy ${context.objects.length} tasks`,
+        objectKinds: ['task'],
+        multi: true,
+        run: () => undefined,
+      },
+      {
+        id: 'task.move',
+        label: 'Move tasks',
+        objectKinds: ['task'],
+        multi: true,
+        run: () => undefined,
+      },
+    ]),
+  );
+  return registry;
+}
+
+/** Open the shared menu from a button inside a stamped reference host. */
+function ReferenceMenuButton(): JSX.Element {
+  const menu = useObjectContextMenu();
+  return (
+    <div {...objectTargetProps(taskRef('9'), 'reference')}>
+      <button
+        type="button"
+        onClick={(event) => {
+          menu?.openFor(event.currentTarget);
+        }}
+      >
+        More task actions
+      </button>
+    </div>
+  );
+}
+
+/** Try the programmatic API without an object host. */
+function OutsideMenuButton(): JSX.Element {
+  const menu = useObjectContextMenu();
+  return (
+    <button
+      type="button"
+      onClick={(event) => {
+        menu?.openFor(event.currentTarget);
+      }}
+    >
+      Outside actions
+    </button>
+  );
+}
+
 /** A page with a task list, a bare project row, and a text field. */
 function Page({ registry }: { readonly registry: ActionRegistry }): JSX.Element {
   const items = [taskRef('1'), taskRef('2'), taskRef('3')];
   return (
     <InteractionProvider registry={registry}>
-      <SelectionProvider items={items} surfaceId="tasks" organizationId="org1">
+      <SelectionProvider items={items} surfaceId="tasks" organizationId="org1" actionScope="all">
         <TaskList items={items} />
       </SelectionProvider>
       <div data-testid="project-row" {...objectTargetProps(project)}>
@@ -142,6 +201,116 @@ describe('object context menu: claiming the right-click', () => {
 });
 
 describe('object context menu: contents come from the object', () => {
+  it('derives the same reference action set for programmatic openFor', async () => {
+    render(
+      <InteractionProvider registry={referenceRegistry()}>
+        <ReferenceMenuButton />
+      </InteractionProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'More task actions' }));
+    expect(await screen.findByRole('menuitem', { name: 'Open task' })).toBeVisible();
+    expect(screen.getByRole('menuitem', { name: 'Copy 1 tasks' })).toBeVisible();
+    expect(screen.queryByRole('menuitem', { name: 'Move tasks' })).toBeNull();
+  });
+
+  it('rechecks a row action scope when an already-open menu invokes a write', async () => {
+    const move = vi.fn();
+    const registry = createActionRegistry();
+    registry.register(
+      'task',
+      defineActionDomain('task', [
+        { id: 'task.open', label: 'Open task', objectKinds: ['task'], run: () => undefined },
+        { id: 'task.copy', label: 'Copy task', objectKinds: ['task'], run: () => undefined },
+        { id: 'task.move', label: 'Move task', objectKinds: ['task'], run: move },
+      ]),
+    );
+    render(
+      <InteractionProvider registry={registry}>
+        <div data-testid="changing-scope-row" {...objectTargetProps(taskRef('scope'))}>
+          Scoped task
+        </div>
+      </InteractionProvider>,
+    );
+
+    const row = screen.getByTestId('changing-scope-row');
+    rightClick(row);
+    const moveItem = await screen.findByRole('menuitem', { name: 'Move task' });
+    row.setAttribute('data-object-action-scope', 'reference');
+    fireEvent.click(moveItem);
+
+    await waitFor(() => {
+      expect(screen.queryByRole('menu')).toBeNull();
+    });
+    expect(move).not.toHaveBeenCalled();
+  });
+
+  it('refuses a write when virtualization recycles the open menu host for another object', async () => {
+    const move = vi.fn();
+    const registry = createActionRegistry();
+    registry.register(
+      'task',
+      defineActionDomain('task', [
+        { id: 'task.open', label: 'Open task', objectKinds: ['task'], run: () => undefined },
+        { id: 'task.copy', label: 'Copy task', objectKinds: ['task'], run: () => undefined },
+        { id: 'task.move', label: 'Move task', objectKinds: ['task'], run: move },
+      ]),
+    );
+    render(
+      <InteractionProvider registry={registry}>
+        <div data-testid="recycled-row" {...objectTargetProps(taskRef('before'))}>
+          Original task
+        </div>
+      </InteractionProvider>,
+    );
+
+    const row = screen.getByTestId('recycled-row');
+    rightClick(row);
+    const moveItem = await screen.findByRole('menuitem', { name: 'Move task' });
+    row.setAttribute('data-object-id', 'after');
+    row.setAttribute('data-object-title', 'Replacement task');
+    fireEvent.click(moveItem);
+
+    await waitFor(() => {
+      expect(screen.queryByRole('menu')).toBeNull();
+    });
+    expect(move).not.toHaveBeenCalled();
+  });
+
+  it('refuses programmatic openFor outside a stamped object surface', () => {
+    render(
+      <InteractionProvider registry={referenceRegistry()}>
+        <OutsideMenuButton />
+      </InteractionProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Outside actions' }));
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('inherits a reference selection and offers multi-Copy without Open or writes', async () => {
+    const items = [taskRef('1'), taskRef('2')];
+    render(
+      <InteractionProvider registry={referenceRegistry()}>
+        <SelectionProvider
+          items={items}
+          surfaceId="reference-tasks"
+          organizationId="org1"
+          actionScope="reference"
+        >
+          <TaskList items={items} />
+        </SelectionProvider>
+      </InteractionProvider>,
+    );
+    fireEvent.click(screen.getByTestId('row-1'));
+    fireEvent.click(screen.getByTestId('row-2'), { metaKey: true });
+
+    expect(rightClick(screen.getByTestId('row-1')).defaultPrevented).toBe(true);
+    expect(await screen.findByRole('menuitem', { name: 'Copy 2 tasks' })).toBeVisible();
+    expect(screen.queryByRole('menuitem', { name: 'Open task' })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: 'Move tasks' })).toBeNull();
+  });
+
   it('offers different items for a task and for a project', async () => {
     render(<Page registry={menuRegistry([])} />);
 

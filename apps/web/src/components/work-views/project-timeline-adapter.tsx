@@ -16,6 +16,7 @@ import {
 import { parseDate } from '@/components/timeline/time-scale';
 import { useTimelineViewport } from '@/components/timeline/use-timeline-viewport';
 
+import { isRouteOwnedDirectWorkViewRow, workViewRowInteractionPolicy } from './work-view-object';
 import type {
   ProjectTimelineScheduleChange,
   ProjectTimelineSubject,
@@ -28,14 +29,17 @@ function tint(health: ProjectViewRow['health']): TimelineTint {
   return 'neutral';
 }
 
-/** Build the shared timeline projection for a typed Project view row. */
-export function buildProjectViewTimelineCatalog(): TimelineCatalog<ProjectViewRow> {
+/** Build the shared timeline projection for Project rows in one route organization. */
+export function buildProjectViewTimelineCatalog(
+  routeOrganizationId: string,
+): TimelineCatalog<ProjectViewRow> {
   return {
     id: (row) => row.id,
     label: (row) => row.name,
     sublabel: () => null,
     href: (row) => `/orgs/${row.organizationId}/projects/${row.id}`,
     span: (row) => resolveSpan(parseDate(row.startDate), parseDate(row.targetDate)),
+    schedulable: (row) => isRouteOwnedDirectWorkViewRow(row, routeOrganizationId),
     markers: (row) =>
       row.milestones.flatMap((milestone) => {
         const at = parseDate(milestone.targetDate);
@@ -45,17 +49,36 @@ export function buildProjectViewTimelineCatalog(): TimelineCatalog<ProjectViewRo
     progress: (row) => row.progress,
     edges: (row) => ({ blockedBy: row.blockedByIds, blocks: row.blocksIds }),
     statusLabel: (row) => row.status.replaceAll('_', ' '),
-    object: (row) => ({
-      kind: 'project',
-      id: row.id,
-      organizationId: row.organizationId,
-      title: row.name,
-    }),
+    interaction: (row) => workViewRowInteractionPolicy(row, routeOrganizationId),
   };
+}
+
+/**
+ * Attach the route owner to writable Project cascade changes and discard context rows.
+ *
+ * @param rows - Project rows rendered in the route timeline.
+ * @param routeOrganizationId - The organization whose schedule may be edited.
+ * @param changes - Generic changes proposed by the shared timeline engine.
+ * @returns only changes for direct Projects owned by the route organization.
+ */
+export function routeOwnedProjectScheduleChanges(
+  rows: readonly ProjectViewRow[],
+  routeOrganizationId: string,
+  changes: readonly ScheduleChange[],
+): readonly ProjectTimelineScheduleChange[] {
+  const rowsById = new Map<string, ProjectViewRow>(rows.map((row) => [row.id, row]));
+  return changes.flatMap((change) => {
+    const row = rowsById.get(change.id);
+    return row !== undefined && isRouteOwnedDirectWorkViewRow(row, routeOrganizationId)
+      ? [{ ...change, organizationId: routeOrganizationId }]
+      : [];
+  });
 }
 
 /** Props for the Project work-view timeline adapter. */
 export interface ProjectTimelineAdapterProps {
+  /** Organization whose timeline route owns schedule writes. */
+  readonly organizationId: string;
   readonly rows: readonly ProjectViewRow[];
   readonly density: 'comfortable' | 'compact';
   readonly canSchedule: boolean;
@@ -68,6 +91,7 @@ export interface ProjectTimelineAdapterProps {
 
 /** Render typed Project rows through the existing timeline engine. */
 export function ProjectTimelineAdapter({
+  organizationId,
   rows,
   density,
   canSchedule,
@@ -77,7 +101,7 @@ export function ProjectTimelineAdapter({
   onActivate,
   onPrefetch,
 }: ProjectTimelineAdapterProps): JSX.Element {
-  const catalog = buildProjectViewTimelineCatalog();
+  const catalog = buildProjectViewTimelineCatalog(organizationId);
   const applied: AppliedView<ProjectViewRow> = { rows, groups: null };
   const spans = rows.flatMap((row) => {
     const span = catalog.span(row);
@@ -97,23 +121,12 @@ export function ProjectTimelineAdapter({
       fullBleed
       onReschedule={(id, span) => {
         const row = rows.find((candidate) => candidate.id === id);
-        if (row !== undefined) {
-          onReschedule({ id, organizationId: row.organizationId }, span);
+        if (row !== undefined && isRouteOwnedDirectWorkViewRow(row, organizationId)) {
+          onReschedule({ id, organizationId }, span);
         }
       }}
       onApplyCascade={(changes: readonly ScheduleChange[]) => {
-        const ownedChanges = changes.flatMap((change) => {
-          const row = rows.find((candidate) => candidate.id === change.id);
-          return row === undefined
-            ? []
-            : [
-                {
-                  ...change,
-                  organizationId: row.organizationId,
-                } satisfies ProjectTimelineScheduleChange,
-              ];
-        });
-        onApplyCascade(ownedChanges);
+        onApplyCascade(routeOwnedProjectScheduleChanges(rows, organizationId, changes));
       }}
       applyingCascade={applyingCascade}
       onActivate={onActivate}

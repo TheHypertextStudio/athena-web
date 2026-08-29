@@ -17,7 +17,7 @@ import { workViewFieldCatalog } from './view-state';
 /** One board move before target-specific Zod validation brands its ids and operand. */
 export interface WorkViewOrderInput {
   readonly target: ViewTarget;
-  /** Organization that owns the row being reordered. */
+  /** Route organization whose roster owns the manual ordering context. */
   readonly organizationId: string;
   readonly itemId: string;
   readonly groupField: string | null;

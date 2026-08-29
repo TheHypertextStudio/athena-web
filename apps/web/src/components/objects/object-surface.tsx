@@ -23,7 +23,7 @@ import {
 } from 'react';
 
 import { useDraggable } from '@/components/dnd/use-draggable';
-import { objectTargetProps, type ObjectRef } from '@/lib/actions/object';
+import { objectTargetProps, type ObjectActionScope, type ObjectRef } from '@/lib/actions/object';
 
 /** The root props an {@link ObjectSurface} can safely compose. */
 type ObjectSurfaceChildProps = HTMLAttributes<HTMLElement> & {
@@ -68,6 +68,8 @@ export interface ObjectSurfaceProps {
   readonly object: ObjectRef;
   /** Suppress movement while retaining object identity and right-click actions. */
   readonly dragDisabled?: boolean | undefined;
+  /** Restrict the context menu to actions that do not write the object. */
+  readonly actionScope?: ObjectActionScope | undefined;
   /** The selection/list surface recorded as the drag origin. */
   readonly surfaceId?: string | undefined;
   /** Require Option/Alt for mouse or pen association drags on a spatially movable object. */
@@ -94,6 +96,7 @@ export interface ObjectSurfaceProps {
 export function ObjectSurface({
   object,
   dragDisabled = false,
+  actionScope = 'all',
   surfaceId,
   associationModifier,
   href,
@@ -106,7 +109,8 @@ export function ObjectSurface({
   const surfaceElementRef = useRef<HTMLElement | null>(null);
   const drag = useDraggable({
     object,
-    disabled: dragDisabled,
+    actionScope,
+    disabled: dragDisabled || actionScope === 'reference',
     surfaceId,
     onDragStart: () => {
       suppressActivationRef.current = true;
@@ -129,7 +133,7 @@ export function ObjectSurface({
   }, [associationModifier]);
 
   return cloneElement(children, {
-    ...objectTargetProps(object),
+    ...objectTargetProps(object, actionScope),
     ref: (element: HTMLElement | null) => {
       drag.ref(element);
       assignRef(childProps.ref, element);

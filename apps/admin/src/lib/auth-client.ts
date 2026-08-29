@@ -1,4 +1,5 @@
 import { passkeyClient } from '@better-auth/passkey/client';
+import { SESSION_OWNER_HEADER } from '@docket/types';
 import { createAuthClient } from 'better-auth/react';
 
 /**
@@ -51,11 +52,16 @@ export const authClient = createAuthClient({ baseURL: AUTH_BASE_URL, plugins: [p
 export const signIn = authClient.signIn;
 
 /**
- * Sign the current operator out, clearing the session cookie.
+ * Sign the captured operator out, clearing the session cookie.
  *
- * @remarks Convenience re-export of {@link authClient.signOut}.
+ * @param expectedUserId - Operator account rendered by the control that started sign-out.
  */
-export const signOut = authClient.signOut;
+export async function signOut(expectedUserId: string): Promise<void> {
+  const { error } = await authClient.signOut({
+    fetchOptions: { headers: { [SESSION_OWNER_HEADER]: expectedUserId } },
+  });
+  if (error) throw new Error('Could not sign out the current operator.');
+}
 
 /**
  * React hook returning the reactive session state (`{ data, isPending, error }`).

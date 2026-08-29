@@ -151,6 +151,7 @@ function CompleteButton({
         void dispatch('task.complete', () => ({
           objects: [task],
           source: 'button',
+          actionScope: 'all',
           organizationId: 'org1',
         }));
       }}
@@ -167,6 +168,7 @@ function PaletteList(): JSX.Element {
     (): ActionContext => ({
       objects: [task],
       source: 'command-palette',
+      actionScope: 'all',
       organizationId: 'org1',
     }),
     [task],

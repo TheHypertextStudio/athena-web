@@ -7,9 +7,11 @@
  * and detail invalidation do not have to reconstruct it differently.
  */
 import { InitiativeId } from '@docket/types';
+import type { QueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api';
 import { unwrap } from '@/lib/query';
+import { queryKeys } from '@/lib/query-keys';
 
 import { type InitiativeDragObject, planReparent, type PlanReparentArgs } from './hierarchy-dnd';
 
@@ -28,6 +30,23 @@ export type InitiativeHierarchyMutation =
       readonly childInitiativeId: string;
     }
   | { readonly kind: 'detach'; readonly linkId: string; readonly childInitiativeId: string };
+
+/**
+ * Refresh the Initiative hierarchy projected by one route workspace.
+ *
+ * @param queryClient - The cache that owns the route projection.
+ * @param organizationId - The route workspace whose hierarchy changed.
+ * @returns A promise that settles after active route queries finish refetching.
+ */
+export function invalidateInitiativeHierarchyRoute(
+  queryClient: QueryClient,
+  organizationId: string,
+): Promise<void> {
+  return queryClient.invalidateQueries(
+    { queryKey: queryKeys.initiatives(organizationId) },
+    { throwOnError: true },
+  );
+}
 
 /**
  * Resolve a hierarchy intent into the complete mutation every presentation consumes.

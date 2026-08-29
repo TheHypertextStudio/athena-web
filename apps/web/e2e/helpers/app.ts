@@ -4,6 +4,7 @@
  * relative to `baseURL`.
  */
 import type { Page } from '@playwright/test';
+import { SESSION_OWNER_HEADER } from '@docket/types';
 
 import { TIMEOUTS } from './constants';
 import { expect } from './fixtures';
@@ -25,7 +26,26 @@ export function newUser(label: string): TestUser {
 
 /** Sign out of the current session server-side, then clear any residual browser cookies. */
 export async function signOut(page: Page): Promise<void> {
-  const result = await apiFetch(page, '/api/auth/sign-out', { method: 'POST', body: {} });
+  const session = await apiFetch(page, '/api/auth/get-session');
+  const userId =
+    typeof session.body === 'object' &&
+    session.body !== null &&
+    'user' in session.body &&
+    typeof session.body.user === 'object' &&
+    session.body.user !== null &&
+    'id' in session.body.user &&
+    typeof session.body.user.id === 'string'
+      ? session.body.user.id
+      : null;
+  if (userId === null) {
+    await page.context().clearCookies();
+    return;
+  }
+  const result = await apiFetch(page, '/api/auth/sign-out', {
+    method: 'POST',
+    body: {},
+    headers: { [SESSION_OWNER_HEADER]: userId },
+  });
   expect(result.status, 'Better Auth sign-out should succeed').toBe(200);
   await page.context().clearCookies();
 }

@@ -31,7 +31,16 @@ import { Skeleton, Stack } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useAppPathname } from '@/lib/app-location';
-import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type JSX,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import AccountMenu, { type AccountMenuIdentity } from '@/components/account-menu';
 import { ActiveOrgContext, useActiveOrg } from '@/components/active-org';
@@ -61,9 +70,13 @@ import { OfflineBanner, OfflineContent } from '@/components/offline-state';
 import { NavigationProgress } from '@/components/navigation-progress';
 import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
 import { OfflineSyncIndicator, OfflineSyncRuntime, useOutboxSummary } from '@/components/pwa';
+import { waitForOutboxSessionTransition } from '@/components/pwa/outbox';
+import { purgeOfflineDocuments } from '@/components/pwa/purge-offline-documents';
 import { NavigationSnapshotPersistence } from '@/components/navigation-snapshot-persistence';
 import { ReachabilityProvider } from '@/components/reachability';
 import { RecoveryNudgeBanner } from '@/components/recovery-nudge-banner';
+import { ResolvedAccountProvider } from '@/components/resolved-account';
+import { SessionSnapshotPersistence } from '@/components/session-snapshot-persistence';
 import { SettingsShell } from '@/components/settings/settings-shell';
 import { UpdateCard, useServiceWorkerUpdate } from '@/components/service-worker-provider';
 import { OpenDocumentsProvider, useOpenDocuments } from '@/components/tabs';
@@ -78,11 +91,7 @@ import { authClient } from '@/lib/auth-client';
 import { userErrorMessage } from '@/lib/problem';
 import { purgeAllNavigationSnapshots } from '@/lib/navigation-snapshot-runtime';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery, useLiveApiQuery } from '@/lib/query';
-import {
-  clearSessionSnapshot,
-  readSessionSnapshot,
-  writeSessionSnapshot,
-} from '@/lib/session-snapshot';
+import { clearSessionSnapshot, readSessionSnapshot } from '@/lib/session-snapshot';
 // Type-only: `server-session.ts` reaches for `next/headers`, so a value import would drag a
 // server-only module into this `'use client'` boundary. The type is erased at compile time.
 import type { ServerSessionUser } from '@/lib/server-session';
@@ -205,35 +214,40 @@ export function AppShellFrame({ children, initialSession }: AppShellFrameProps):
     }
   }, [status, pathname, requireAuthentication]);
 
-  // Keep the offline identity fresh while the server is answering.
-  useEffect(() => {
-    if (status !== 'authenticated' || !session) return;
-    writeSessionSnapshot(
-      {
-        userId: session.user.id,
-        name: session.user.name,
-        email: session.user.email,
-        image: session.user.image ?? null,
-      },
-      Date.now(),
-    );
-  }, [status, session]);
-
   // Read once per unreachable episode rather than on every render, so the offline shell does not
   // re-resolve identity mid-session.
   const [snapshot] = useState(() => readSessionSnapshot(Date.now()));
 
-  // If the snapshot named a different person than the session that just resolved, everything
-  // restored from the persisted cache belongs to that other account. Drop it before any of it can
-  // be rendered — this is the shared-device case, where B signs in on a device A used last.
+  // The snapshot stands in for the live session ONLY while the server is unreachable. Every other
+  // status ignores it, so it can never keep a signed-out person inside the shell.
+  const offlineIdentity = status === 'unreachable' ? snapshot : null;
+  const userId = session?.user.id ?? initialSession?.userId ?? offlineIdentity?.userId ?? null;
+
+  // A QueryClient key does not contain the account id. Hold private rendering when the resolved
+  // identity changes, clear every account-neutral memory entry before paint, and release the next
+  // account only after all persisted identity artifacts have finished deleting. The initial value
+  // includes the disk snapshot so a cold B entry on a browser last used by A is gated too.
   const queryClient = useQueryClient();
-  useEffect(() => {
-    if (status !== 'authenticated' || !session || !snapshot) return;
-    if (snapshot.userId !== session.user.id) {
-      queryClient.clear();
-      void purgeAllNavigationSnapshots();
-    }
-  }, [status, session, snapshot, queryClient]);
+  const [renderedUserId, setRenderedUserId] = useState<string | null>(
+    () => snapshot?.userId ?? userId,
+  );
+  const identitySwitching = renderedUserId !== userId;
+  useLayoutEffect(() => {
+    if (!identitySwitching) return undefined;
+    let current = true;
+    queryClient.clear();
+    clearSessionSnapshot();
+    void Promise.all([
+      waitForOutboxSessionTransition(),
+      purgeAllNavigationSnapshots(),
+      purgeOfflineDocuments(),
+    ]).then(() => {
+      if (current) setRenderedUserId(userId);
+    });
+    return () => {
+      current = false;
+    };
+  }, [identitySwitching, queryClient, userId]);
 
   // Re-ask ONLY on the offline -> online edge, never on `status`.
   //
@@ -266,32 +280,39 @@ export function AppShellFrame({ children, initialSession }: AppShellFrameProps):
       queryKeys.orgs(),
       () => api.v1.orgs.$get(),
       'Could not load your organizations.',
-      { enabled: Boolean(session) || Boolean(initialSession), staleTime: STALE.static },
+      {
+        enabled: !identitySwitching && (Boolean(session) || Boolean(initialSession)),
+        staleTime: STALE.static,
+      },
     ),
   );
-  const orgs = useMemo(() => orgsQ.data?.items ?? [], [orgsQ.data]);
+  const orgs = useMemo(
+    () => (identitySwitching ? [] : (orgsQ.data?.items ?? [])),
+    [identitySwitching, orgsQ.data],
+  );
   const orgsError = orgsQ.error
     ? userErrorMessage(orgsQ.error, 'Could not load your workspaces.')
     : null;
-
-  // The snapshot stands in for the live session ONLY while the server is unreachable. Every other
-  // status ignores it, so it can never keep a signed-out person inside the shell.
-  const offlineIdentity = status === 'unreachable' ? snapshot : null;
 
   // One identity source feeds every identity-bound shell region, including the account row. The
   // old account row started its own Better Auth hook, so a server-confirmed initial session could
   // render no row on the server and a populated row on the first client pass. That duplicate read
   // was the Account menu hydration mismatch captured during the switcher audit.
-  const accountIdentity = session?.user ?? initialSession ?? offlineIdentity;
+  const accountIdentity: AccountMenuIdentity | null = session
+    ? {
+        userId: session.user.id,
+        name: session.user.name,
+        email: session.user.email,
+      }
+    : (initialSession ?? offlineIdentity);
 
-  const userId = session?.user.id ?? initialSession?.userId ?? offlineIdentity?.userId ?? null;
   const routeOrgId = orgIdFromPath(pathname);
 
   // We do not know who this is: no live session, no server-confirmed identity, no cached snapshot.
   // The ONLY thing this may gate is identity-bound chrome (the account row and the rail's
   // identity-bound panels). With the layout's server-side guard in place it is false on essentially
   // every real entry, so those fallbacks are now genuinely-unknown-only rather than the default.
-  const identityUnknown = !session && !initialSession && !offlineIdentity;
+  const identityUnknown = identitySwitching || (!session && !initialSession && !offlineIdentity);
 
   // The workspace list has not arrived. The ONLY thing this may gate is the switcher's workspace
   // name and its list — never a nav label, which is a compile-time constant.
@@ -299,13 +320,13 @@ export function AppShellFrame({ children, initialSession }: AppShellFrameProps):
   // Offline, `orgsQ` is disabled and will never settle, so gating on it would pin the switcher to
   // its loading treatment forever. Anything the query layer has cached still renders; the rest
   // degrades to empty, with the offline banner explaining why.
-  const workspacesUnknown = offlineIdentity ? false : orgsQ.isPending;
+  const workspacesUnknown = identitySwitching || (offlineIdentity ? false : orgsQ.isPending);
 
   // The server answered, definitively, that there is no session. This is an authorization decision,
   // not a loading state: the interlock is opening over the shell, and painting a page's private
   // content behind it would show data the viewer is no longer entitled to. Distinct from every
   // "still resolving" case, all of which now render the page.
-  const sessionRejected = status === 'signed-out';
+  const sessionRejected = status === 'signed-out' || identitySwitching;
 
   // Unreachable with no cached identity: there is no workspace to populate, but that is NOT a
   // reason to replace the application with an error page. The shell's chrome — navigation, the
@@ -335,6 +356,8 @@ export function AppShellFrame({ children, initialSession }: AppShellFrameProps):
   // disagree about every Workspace href — a hydration mismatch. The persisted preference is a
   // refinement, and `AppShellInner`'s effect applies it.
   const initialOrgId = routeOrgId ?? resolveActiveOrg(null, orgs, null);
+  const renderedAccountIdentity = identitySwitching ? null : accountIdentity;
+  const renderedStorageUserId = identitySwitching ? null : userId;
 
   return (
     <ContextProvider initialContext={initialOrgId} initialDensity={readDensity(userId)}>
@@ -357,34 +380,48 @@ export function AppShellFrame({ children, initialSession }: AppShellFrameProps):
               <NavigationSnapshotPersistence userId={userId} />
               {/* This is the first place that durable local state can bind to a resolved account. */}
               <OfflineSyncRuntime userId={userId} />
-              <OpenDocumentsProvider userId={userId}>
-                <AppShellInner
-                  accountIdentity={accountIdentity}
-                  identityUnknown={identityUnknown}
-                  workspacesUnknown={workspacesUnknown}
-                  sessionRejected={sessionRejected}
-                  settingsSurface={settingsSurface}
-                  calendarSurface={calendarSurface}
-                  locationKey={pathname}
-                  routeOrgId={routeOrgId}
-                  userId={userId}
-                  offline={
-                    status === 'unreachable'
-                      ? {
-                          online,
-                          onRetry: () => {
-                            void refetch();
-                          },
-                        }
-                      : null
-                  }
-                  unavailable={unavailable}
-                  workspaceKey={workspaceKeyFromPath(pathname)}
-                  homeKey={homeKeyFromPath(pathname)}
-                >
-                  {children}
-                </AppShellInner>
-              </OpenDocumentsProvider>
+              <SessionSnapshotPersistence
+                identity={
+                  status === 'authenticated' && session
+                    ? {
+                        userId: session.user.id,
+                        name: session.user.name,
+                        email: session.user.email,
+                        image: session.user.image ?? null,
+                      }
+                    : null
+                }
+              />
+              <ResolvedAccountProvider userId={renderedStorageUserId}>
+                <OpenDocumentsProvider userId={renderedStorageUserId}>
+                  <AppShellInner
+                    accountIdentity={renderedAccountIdentity}
+                    identityUnknown={identityUnknown}
+                    workspacesUnknown={workspacesUnknown}
+                    sessionRejected={sessionRejected}
+                    settingsSurface={settingsSurface}
+                    calendarSurface={calendarSurface}
+                    locationKey={pathname}
+                    routeOrgId={routeOrgId}
+                    userId={renderedStorageUserId}
+                    offline={
+                      status === 'unreachable'
+                        ? {
+                            online,
+                            onRetry: () => {
+                              void refetch();
+                            },
+                          }
+                        : null
+                    }
+                    unavailable={unavailable}
+                    workspaceKey={workspaceKeyFromPath(pathname)}
+                    homeKey={homeKeyFromPath(pathname)}
+                  >
+                    {children}
+                  </AppShellInner>
+                </OpenDocumentsProvider>
+              </ResolvedAccountProvider>
             </CommandPaletteProvider>
           </CreateObjectProvider>
         </ActiveOrgContext>
@@ -824,6 +861,7 @@ function AppShellInner({
           settingsSurface={settingsSurface}
           calendarSurface={calendarSurface}
           locationKey={locationKey}
+          sessionOwnerUserId={userId}
           context={
             resolvedOrgId
               ? { workspaceId: resolvedOrgId, workspaceName: activeWorkspaceName }
@@ -852,6 +890,8 @@ interface AthenaShellProps {
   readonly settingsSurface: boolean;
   readonly calendarSurface: boolean;
   readonly locationKey: string;
+  /** Account id captured by the shell for destructive session commands. */
+  readonly sessionOwnerUserId: string | null;
   readonly context: PersonalAthenaContext | null;
   readonly standingNotice: ReactNode;
   readonly hasQueuedWork: boolean;
@@ -867,6 +907,7 @@ function AthenaShell({
   calendarSurface,
   context,
   locationKey,
+  sessionOwnerUserId,
   ...props
 }: AthenaShellProps): JSX.Element {
   const router = useRouter();
@@ -909,12 +950,16 @@ function AthenaShell({
       <CommandPaletteHost
         panelsAvailable={!settingsSurface && !calendarSurface}
         onOpenPanel={revealRailPanel}
+        sessionOwnerUserId={sessionOwnerUserId}
       />
     </AthenaPanelProvider>
   );
 }
 
-interface AthenaShellChromeProps extends Omit<AthenaShellProps, 'context' | 'locationKey'> {
+interface AthenaShellChromeProps extends Omit<
+  AthenaShellProps,
+  'context' | 'locationKey' | 'sessionOwnerUserId'
+> {
   readonly railRequest: { readonly panelId: string; readonly version: number } | undefined;
   readonly onAthenaRailVisibilityChange: (visible: boolean) => void;
 }

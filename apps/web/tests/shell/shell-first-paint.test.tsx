@@ -63,6 +63,7 @@ vi.mock('next/link', () => ({
 
 vi.mock('../../src/lib/auth-client', () => ({
   authClient: { useSession: () => sessionState },
+  probeSession: vi.fn(),
   useSession: () => sessionState,
   signOut: vi.fn(),
 }));
@@ -73,6 +74,7 @@ vi.mock('../../src/lib/api', () => ({
 
 vi.mock('../../src/components/authentication-interlock', () => ({
   useAuthenticationInterlock: () => ({ requireAuthentication }),
+  useOptionalAuthenticationInterlock: () => null,
   useOptionalAuthenticationRecovery:
     () =>
     async <T,>(action: () => Promise<T>) =>

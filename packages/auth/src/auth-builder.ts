@@ -25,7 +25,11 @@ import {
   dispatchNotificationIntent,
   ensureAccountEmailContactPoint,
 } from '@docket/notifications/dispatch';
-import { OAUTH_ISSUABLE_SCOPES, PREVIOUSLY_REGISTERED_CODE } from '@docket/types';
+import {
+  OAUTH_ISSUABLE_SCOPES,
+  PREVIOUSLY_REGISTERED_CODE,
+  SESSION_OWNER_HEADER,
+} from '@docket/types';
 import { type BetterAuthOptions, type BetterAuthPlugin } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { APIError, createAuthMiddleware, getSessionFromCtx } from 'better-auth/api';
@@ -320,38 +324,12 @@ export function configuredSocialProviders(e: AuthEnv): SocialProvider[] {
 const SESSION_EXPIRES_IN_S = 60 * 60 * 24 * 30;
 
 /**
- * How often an active session's expiry slides forward (1 day). A session used within any 24-hour
- * window keeps renewing; `updatedAt`/`expiresAt` move but `createdAt` does not, so the custom
- * `requireFreshSession` step-up gate (which reads `createdAt`) is unaffected by sliding refresh.
- */
-const SESSION_UPDATE_AGE_S = 60 * 60 * 24;
-
-/**
  * How long a session is considered "fresh" for Better Auth's own fresh-session middleware (5
  * minutes). Kept in lockstep with the app-level `requireFreshSession` window in
  * `apps/api/src/routes/me-account.ts` / `me-recovery.ts` so high-risk actions demand a recent
  * re-auth consistently on both the framework and application gates.
  */
 const SESSION_FRESH_AGE_S = 60 * 5;
-
-/**
- * How long a signed session payload stays servable from its own cookie (1 minute).
- *
- * @remarks
- * Without this, resolving the session is a database read on **every** authenticated request — a
- * cost that multiplies by a screen's request fan-out rather than being paid once, since a single
- * entity detail page issues a dozen parallel reads and therefore a dozen session lookups before
- * any handler runs.
- *
- * The trade is that a session revoked from another device keeps validating from the cookie until
- * the cached copy expires, so this window is deliberately short. One minute already collapses a
- * page's simultaneous fan-out onto a single lookup — the whole point — while keeping the interval
- * in which a revoked device still works down to something a person would read as immediate.
- * Operations where that is still too long (account deletion, recovery-code minting, revoking a
- * session) re-read authoritatively via `disableCookieCache`; see `readAuthoritativeSession` in
- * `apps/api/src/auth/session-middleware.ts`.
- */
-const SESSION_COOKIE_CACHE_MAX_AGE_S = 60;
 
 /**
  * Connector rows funded by each Better Auth identity provider.
@@ -684,6 +662,23 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
     disabledPaths: ['/unlink-account'],
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
+        if (ctx.path === '/sign-out') {
+          const expectedUserId = ctx.getHeader(SESSION_OWNER_HEADER);
+          if (!expectedUserId) {
+            throw new APIError('BAD_REQUEST', {
+              code: 'session_owner_required',
+              message: 'Sign-out requires the account that started the action.',
+            });
+          }
+          const currentSession = await getSessionFromCtx(ctx);
+          if (currentSession?.user.id !== expectedUserId) {
+            throw new APIError('CONFLICT', {
+              code: 'session_owner_changed',
+              message: 'The active account changed before sign-out completed.',
+            });
+          }
+          return;
+        }
         if (ctx.path === '/passkey/delete-passkey') {
           const currentSession = await getSessionFromCtx(ctx);
           if (!currentSession) return;
@@ -726,6 +721,14 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
         }
       }),
       after: createAuthMiddleware(async (ctx) => {
+        if (ctx.path === '/get-session' || ctx.path === '/sign-out') {
+          // Browsers apply Set-Cookie before client code can inspect the response. A response that
+          // started under account A may therefore arrive after account B signs in and must not
+          // mutate the shared cookie names. Sign-out already revoked A's server row, so retaining
+          // its inert token until expiry or the next sign-in does not retain access.
+          ctx.context.responseHeaders?.delete('set-cookie');
+          return;
+        }
         if (ctx.path !== '/two-factor/verify-backup-code') return;
         // `ctx.context.newSession` is only populated when this call actually MINTED a session —
         // i.e. the real recovery path, not an already-authenticated session doing step-up 2FA (the
@@ -836,9 +839,12 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
     plugins,
     session: {
       expiresIn: SESSION_EXPIRES_IN_S,
-      updateAge: SESSION_UPDATE_AGE_S,
       freshAge: SESSION_FRESH_AGE_S,
-      cookieCache: { enabled: true, maxAge: SESSION_COOKIE_CACHE_MAX_AGE_S },
+      // Better Auth 1.6.19 does not bind `session_data` to the current `session_token`. A late
+      // account-A response can otherwise pair A's signed cache with B's token and report A as the
+      // active user. Reads stay authoritative until the framework provides a bound cache format.
+      disableSessionRefresh: true,
+      cookieCache: { enabled: false },
     },
     // Every Docket user is created with `emailVerified: true` (signup proves inbox ownership
     // before an account ever exists — see `resolvePasskeyUser` above), so this callback is not

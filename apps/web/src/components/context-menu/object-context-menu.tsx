@@ -11,9 +11,10 @@
  *
  * That indirection is the entire design. Per-surface menus are how apps end up with a rename item
  * on the project row and not on the project header, or a delete that skips confirmation in one
- * place. Here a surface contributes an *object*, a domain contributes *actions*, and the menu is
- * derived — so any object gets the full, identical menu everywhere it appears, and a new action
- * appears in every menu it applies to without touching a single surface.
+ * place. Here a surface contributes an object and an action scope, a domain contributes actions,
+ * and the registry derives the menu. Ordinary object surfaces get their complete applicable
+ * action set. Read-only reference surfaces get only exact Open and Copy actions for their object
+ * kind. A new action still appears everywhere its scope allows without changing each surface.
  *
  * ## What it deliberately does not take over
  *
@@ -27,8 +28,8 @@
  * ## Selection awareness
  *
  * Right-clicking one of several selected rows acts on the whole selection. The handler reads it
- * from {@link ../selection/selection-registry}, which is why a surface only has to stamp its
- * container with `data-selection-surface` for this to work.
+ * from {@link ../selection/selection-registry}. The narrower scope between the host and selection
+ * surface controls which actions the registry may resolve for that selection.
  *
  * ## Keyboard
  *
@@ -62,8 +63,10 @@ import {
 import {
   describeObject,
   OBJECT_TARGET_SELECTOR,
+  type ObjectActionScope,
   type ObjectRef,
   objectKey,
+  readObjectActionScope,
   readObjectTarget,
 } from '@/lib/actions/object';
 import { useActionRegistry } from '@/lib/actions/registry-context';
@@ -75,20 +78,98 @@ import { readSelectionSurfaceFor } from '@/components/selection/selection-regist
 const NATIVE_MENU_SELECTOR =
   '[data-native-context-menu="true"], input, textarea, select, [contenteditable=""], [contenteditable="true"]';
 
-/** An open menu's anchor and subject. */
-interface OpenMenu {
-  /** Viewport x to anchor at. */
-  readonly x: number;
-  /** Viewport y to anchor at. */
-  readonly y: number;
+/** Object subjects and scope derived from one marked DOM host. */
+interface ObjectMenuSubject {
+  /** Stable identity of the marked host, even when that host belongs to a multi-selection. */
+  readonly hostObjectIdentity: string;
   /** The objects the menu acts on — one, or the whole selection it belongs to. */
   readonly objects: readonly ObjectRef[];
   /** The workspace the invocation happened in. */
   readonly organizationId: string | null;
   /** The surface the object belongs to, when it belongs to one. */
   readonly surfaceId: string | undefined;
+  /** The actions this particular object surface may expose. */
+  readonly actionScope: ObjectActionScope;
+}
+
+/** An open menu's anchor and resolved subject. */
+interface OpenMenu extends ObjectMenuSubject {
+  /** Viewport x to anchor at. */
+  readonly x: number;
+  /** Viewport y to anchor at. */
+  readonly y: number;
   /** The element focus returns to when the menu closes. */
   readonly origin: HTMLElement | null;
+  /** The marked object host that remains the invocation-time authority. */
+  readonly host: HTMLElement;
+}
+
+/** Include ownership because the same record id must never authorize a different workspace. */
+function objectMenuIdentity(object: ObjectRef): string {
+  return `${objectKey(object)}\u0000${object.organizationId ?? ''}`;
+}
+
+/** Whether a live host still names the exact subject shown when the menu opened. */
+function sameMenuSubject(left: ObjectMenuSubject, right: ObjectMenuSubject): boolean {
+  if (
+    left.hostObjectIdentity !== right.hostObjectIdentity ||
+    left.organizationId !== right.organizationId ||
+    left.surfaceId !== right.surfaceId ||
+    left.objects.length !== right.objects.length
+  )
+    return false;
+  const leftObjects = left.objects.map(objectMenuIdentity).sort();
+  const rightObjects = right.objects.map(objectMenuIdentity).sort();
+  return leftObjects.every((identity, index) => identity === rightObjects[index]);
+}
+
+/** Fail closed when an open menu no longer has the DOM subject that produced it. */
+function emptyReferenceContext(): ActionContext {
+  return {
+    objects: [],
+    source: 'context-menu',
+    organizationId: null,
+    actionScope: 'reference',
+  };
+}
+
+/** Resolve selection and action scope from the same marked object host. */
+function subjectForObjectHost(host: HTMLElement): ObjectMenuSubject | null {
+  const object = readObjectTarget(host);
+  if (object === null) return null;
+  const hostActionScope = readObjectActionScope(host);
+  const surface = readSelectionSurfaceFor(host);
+  const inSelection =
+    surface?.selectedObjects.some((selected) => objectKey(selected) === objectKey(object)) ?? false;
+  const actionScope =
+    hostActionScope === 'reference' || surface?.actionScope === 'reference' ? 'reference' : 'all';
+  return {
+    hostObjectIdentity: objectMenuIdentity(object),
+    objects: inSelection && surface !== null ? surface.selectedObjects : [object],
+    organizationId: object.organizationId ?? surface?.organizationId ?? null,
+    surfaceId: surface?.surfaceId,
+    actionScope,
+  };
+}
+
+/** Build the registry context shared by pointer and explicit menu invocation. */
+function contextForSubject(subject: ObjectMenuSubject): ActionContext {
+  return {
+    objects: subject.objects,
+    source: 'context-menu',
+    organizationId: subject.organizationId,
+    actionScope: subject.actionScope,
+    ...(subject.surfaceId === undefined ? {} : { surfaceId: subject.surfaceId }),
+  };
+}
+
+/** Re-read an open menu's object and scope so a stale item cannot invoke a newly-forbidden write. */
+function contextForOpenMenu(menu: OpenMenu): ActionContext {
+  if (!menu.host.isConnected) return emptyReferenceContext();
+  const subject = subjectForObjectHost(menu.host);
+  return subject === null || !sameMenuSubject(menu, subject)
+    ? emptyReferenceContext()
+    : contextForSubject(subject);
 }
 
 /** What {@link useObjectContextMenu} exposes. */
@@ -102,7 +183,7 @@ export interface ObjectContextMenuControls {
    * Using this rather than building a second menu is what keeps the overflow button and the
    * right-click menu permanently identical.
    */
-  readonly openFor: (objects: readonly ObjectRef[], anchor: HTMLElement) => void;
+  readonly openFor: (anchor: HTMLElement) => void;
   /** Close whatever is open. */
   readonly close: () => void;
 }
@@ -134,17 +215,20 @@ export function ObjectContextMenuProvider({
     setMenu(null);
   }, []);
 
-  const openFor = useCallback((objects: readonly ObjectRef[], anchor: HTMLElement) => {
-    if (objects.length === 0) return;
+  const openFor = useCallback((anchor: HTMLElement) => {
+    const host = anchor.closest<HTMLElement>(OBJECT_TARGET_SELECTOR);
+    if (host === null) return;
+    const subject = subjectForObjectHost(host);
+    if (subject === null) return;
+    const context = contextForSubject(subject);
+    if (registryRef.current.resolve(() => context).length === 0) return;
     const rect = anchor.getBoundingClientRect();
-    const surface = readSelectionSurfaceFor(anchor);
     setMenu({
       x: rect.left,
       y: rect.bottom,
-      objects,
-      organizationId: objects[0]?.organizationId ?? null,
-      surfaceId: surface?.surfaceId,
+      ...subject,
       origin: anchor,
+      host,
     });
   }, []);
 
@@ -156,23 +240,10 @@ export function ObjectContextMenuProvider({
       if (target.closest(NATIVE_MENU_SELECTOR) !== null) return;
 
       const host = target.closest(OBJECT_TARGET_SELECTOR);
-      const object = readObjectTarget(host);
-      if (object === null || !(host instanceof HTMLElement)) return;
-
-      // Right-clicking inside a selection acts on the selection; outside one, on the single row.
-      const surface = readSelectionSurfaceFor(host);
-      const inSelection =
-        surface?.selectedObjects.some((selected) => objectKey(selected) === objectKey(object)) ??
-        false;
-      const objects = inSelection && surface !== null ? surface.selectedObjects : [object];
-      const organizationId = object.organizationId ?? surface?.organizationId ?? null;
-
-      const context: ActionContext = {
-        objects,
-        source: 'context-menu',
-        organizationId,
-        ...(surface === null ? {} : { surfaceId: surface.surfaceId }),
-      };
+      if (!(host instanceof HTMLElement)) return;
+      const subject = subjectForObjectHost(host);
+      if (subject === null) return;
+      const context = contextForSubject(subject);
       // An empty menu is worse than the browser's, so the app only claims the event when it has
       // something to offer.
       if (registryRef.current.resolve(() => context).length === 0) return;
@@ -185,10 +256,9 @@ export function ObjectContextMenuProvider({
       setMenu({
         x: keyboardInvoked ? rect.left : event.clientX,
         y: keyboardInvoked ? rect.bottom : event.clientY,
-        objects,
-        organizationId,
-        surfaceId: surface?.surfaceId,
+        ...subject,
         origin: host,
+        host,
       });
     }
 
@@ -236,15 +306,7 @@ interface ObjectContextMenuSurfaceProps {
  * that was right-clicked rather than to the invisible stand-in.
  */
 function ObjectContextMenuSurface({ menu, onClose }: ObjectContextMenuSurfaceProps): JSX.Element {
-  const resolveContext = useCallback(
-    (): ActionContext => ({
-      objects: menu.objects,
-      source: 'context-menu',
-      organizationId: menu.organizationId,
-      ...(menu.surfaceId === undefined ? {} : { surfaceId: menu.surfaceId }),
-    }),
-    [menu],
-  );
+  const resolveContext = useCallback((): ActionContext => contextForOpenMenu(menu), [menu]);
   const actions = useResolvedActions(resolveContext);
   const heading = describeMenuSubject(menu.objects);
 

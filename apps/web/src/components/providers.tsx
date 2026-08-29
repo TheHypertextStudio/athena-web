@@ -4,10 +4,17 @@ import { ContextProvider } from '@docket/ui/components';
 import { VocabularyProvider } from '@docket/ui/hooks';
 import { TooltipProvider } from '@docket/ui/primitives';
 import { QueryClientProvider, useQueryClient } from '@tanstack/react-query';
-import { type JSX, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type JSX, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 
 import ActionDomainsProvider from '@/components/actions/action-domains-provider';
 import { PickerOverlayProvider } from '@/components/pickers/picker-overlay';
+import {
+  type OutboxOwnerToken,
+  captureOutboxOwner,
+  isCurrentOutboxOwner,
+  subscribeOutbox,
+} from '@/components/pwa/outbox';
+import { canQueueWrites } from '@/components/pwa/outbox-store';
 import { InteractionProvider } from '@/lib/actions';
 import { InteractionReceiptProvider } from '@/lib/interactions/receipt-context';
 import { probeSession } from '@/lib/auth-client';
@@ -143,30 +150,121 @@ export interface UnauthorizedWatcherProps {
  */
 export function UnauthorizedWatcher({ handlerRef }: UnauthorizedWatcherProps): null {
   const queryClient = useQueryClient();
-  const { requireAuthentication } = useAuthenticationInterlock();
+  const { requireAuthentication, reportSessionCleanupFailure } = useAuthenticationInterlock();
+  const active = useRef(true);
+  const cancelOwnerWait = useRef<(() => void) | null>(null);
+  const confirmation = useRef<{
+    readonly owner: OutboxOwnerToken | null;
+    readonly confirm: ReturnType<typeof createUnauthorizedConfirmer>;
+  } | null>(null);
 
-  // One confirmer for the component's lifetime, so a burst of simultaneous 401s from several mounted
-  // surfaces collapses into a single `/get-session` question.
-  const confirmUnauthorized = useMemo(() => createUnauthorizedConfirmer(probeSession), []);
+  const completeSessionEnd = useCallback(
+    async (owner: OutboxOwnerToken | null): Promise<void> => {
+      if (!watcherIsActive(active)) return;
+      if (owner !== null && !isCurrentOutboxOwner(owner)) return;
+      const purge = await purgeLocalSessionState(queryClient, owner);
+      if (!watcherIsActive(active) || purge === 'superseded') return;
+      if (purge === 'failed') {
+        reportSessionCleanupFailure();
+        return;
+      }
+      requireAuthentication(`${window.location.pathname}${window.location.search}`);
+    },
+    [queryClient, reportSessionCleanupFailure, requireAuthentication],
+  );
+
+  const confirmBoundOwner = useCallback(
+    (owner: OutboxOwnerToken): void => {
+      const confirm = createUnauthorizedConfirmer(probeSession);
+      confirmation.current = { owner, confirm };
+      void (async () => {
+        if ((await confirm()) !== 'session-ended' || !active.current) return;
+        await completeSessionEnd(owner);
+      })();
+    },
+    [completeSessionEnd],
+  );
+
+  const waitForBoundOwner = useCallback((): void => {
+    if (!active.current || cancelOwnerWait.current !== null) return;
+    let waiting = true;
+    const isWaiting = (): boolean => waiting;
+    let unsubscribe = (): void => undefined;
+    const cancel = (): void => {
+      if (!waiting) return;
+      waiting = false;
+      unsubscribe();
+      if (cancelOwnerWait.current === cancel) cancelOwnerWait.current = null;
+    };
+    const onChange = (): void => {
+      if (!waiting || !active.current) return;
+      const owner = captureOutboxOwner();
+      if (owner === null) return;
+      cancel();
+      confirmBoundOwner(owner);
+    };
+    unsubscribe = subscribeOutbox(onChange);
+    if (!isWaiting()) {
+      unsubscribe();
+      return;
+    }
+    cancelOwnerWait.current = cancel;
+    onChange();
+  }, [confirmBoundOwner]);
 
   const onCacheError = useCallback(
     (error: unknown): void => {
       if (!(error instanceof SessionExpiredError)) return;
+      const owner = captureOutboxOwner();
+      if (owner !== null) cancelOwnerWait.current?.();
+      if (confirmation.current === null || !sameOutboxOwner(confirmation.current.owner, owner)) {
+        confirmation.current = { owner, confirm: createUnauthorizedConfirmer(probeSession) };
+      }
+      const confirmUnauthorized = confirmation.current.confirm;
       void (async () => {
-        if ((await confirmUnauthorized()) !== 'session-ended') return;
-        await purgeLocalSessionState(queryClient);
-        requireAuthentication(`${window.location.pathname}${window.location.search}`);
+        if ((await confirmUnauthorized()) !== 'session-ended' || !active.current) return;
+        const confirmedOwner = owner;
+        if (confirmedOwner === null && canQueueWrites()) {
+          const reboundOwner = captureOutboxOwner();
+          if (reboundOwner === null) {
+            waitForBoundOwner();
+            return;
+          }
+          confirmBoundOwner(reboundOwner);
+          return;
+        }
+        await completeSessionEnd(confirmedOwner);
       })();
     },
-    [confirmUnauthorized, queryClient, requireAuthentication],
+    [completeSessionEnd, confirmBoundOwner, waitForBoundOwner],
   );
 
   useEffect(() => {
+    active.current = true;
     handlerRef.current = onCacheError;
     return () => {
+      active.current = false;
+      cancelOwnerWait.current?.();
+      cancelOwnerWait.current = null;
+      confirmation.current = null;
       handlerRef.current = null;
     };
   }, [handlerRef, onCacheError]);
 
   return null;
+}
+
+/** Compare owner values because each capture returns a new token object. */
+function sameOutboxOwner(left: OutboxOwnerToken | null, right: OutboxOwnerToken | null): boolean {
+  if (left === null || right === null) return left === right;
+  return (
+    left.userId === right.userId &&
+    left.generation === right.generation &&
+    left.epoch === right.epoch
+  );
+}
+
+/** Read watcher liveness again after an asynchronous boundary. */
+function watcherIsActive(active: Readonly<{ current: boolean }>): boolean {
+  return active.current;
 }

@@ -36,14 +36,14 @@ import { PublishAction } from '@/components/publishing/publish-action';
 import { useDocumentTitle } from '@/components/tabs/use-document-title';
 import { useRegisterTabTitle } from '@/components/tabs/use-register-tab-title';
 import { api } from '@/lib/api';
-import { apiQueryOptions, queryKeys, unwrap, useApiMutation, useApiQuery } from '@/lib/query';
+import { apiQueryOptions, useApiQuery } from '@/lib/query';
 import {
   aggregateLoadState,
   programDetailAggregateDef,
   terminalDetailFailure,
 } from '@/lib/detail-aggregate';
 import { orgMembersDef } from '@/lib/use-org-membership';
-import { useProgramMutations } from '@/lib/use-program-mutations';
+import { useProgramDeleteMutation, useProgramMutations } from '@/lib/use-program-mutations';
 import { userErrorMessage } from '@/lib/problem';
 import { useNavigationSnapshot } from '@/lib/use-navigation-snapshot';
 import {
@@ -141,22 +141,13 @@ export default function ProgramDetailPage(): JSX.Element {
     programId,
     programLabel,
     detailKey,
-    updatesKey,
   );
 
   const canEdit = aggregate?.capabilities.manage ?? false;
 
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
-  const deleteProgram = useApiMutation({
-    mutationFn: () =>
-      unwrap(
-        () => api.v1.orgs[':orgId'].programs[':id'].$delete({ param: { orgId, id: programId } }),
-        `Could not delete this ${programLabel.toLowerCase()}.`,
-      ),
-    invalidateKeys: [queryKeys.programs(orgId)],
-    onSuccess: () => {
-      router.push(`/orgs/${orgId}/programs`);
-    },
+  const deleteProgram = useProgramDeleteMutation(orgId, programId, programLabel, () => {
+    router.push(`/orgs/${orgId}/programs`);
   });
 
   const memberOptions = useMemo<readonly PickerOption[]>(() => {
@@ -430,21 +421,12 @@ export default function ProgramDetailPage(): JSX.Element {
         }}
         title={`Delete this ${programLabel.toLowerCase()}?`}
         description={`This permanently removes "${program.name}" and unlinks its projects and work. This can't be undone.`}
-        error={
-          deleteProgram.error
-            ? userErrorMessage(
-                deleteProgram.error,
-                `Could not delete this ${programLabel.toLowerCase()}.`,
-              )
-            : null
-        }
+        error={deleteProgram.error}
         confirmLabel={`Delete ${programLabel.toLowerCase()}`}
-        pending={deleteProgram.isPending}
+        pending={deleteProgram.pending}
         onConfirm={() => {
-          deleteProgram.mutate(undefined, {
-            onSuccess: () => {
-              setConfirmDeleteOpen(false);
-            },
+          deleteProgram.deleteProgram(() => {
+            setConfirmDeleteOpen(false);
           });
         }}
       />

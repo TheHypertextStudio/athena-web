@@ -4,7 +4,7 @@ import {
   type RelationResolution,
 } from '@docket/work/relation-contract';
 
-import type { ObjectRef } from '@/lib/actions/object';
+import type { ObjectActionScope, ObjectRef } from '@/lib/actions/object';
 
 /** Data carried by the in-document drag manager for one object gesture. */
 export interface ObjectDragData {
@@ -16,13 +16,19 @@ export interface ObjectDragData {
   readonly objects: readonly ObjectRef[];
   /** Selection surface where the gesture began. */
   readonly sourceSurfaceId: string | null;
+  /** Action authority carried from the source surface into every drop invocation. */
+  readonly actionScope: ObjectActionScope;
 }
 
 /** Narrow drag-manager data to the canonical Docket object payload. */
 export function isObjectDragData(value: unknown): value is ObjectDragData {
   if (typeof value !== 'object' || value === null) return false;
   const candidate = value as Partial<ObjectDragData>;
-  return candidate.kind === 'docket-object' && candidate.object !== undefined;
+  return (
+    candidate.kind === 'docket-object' &&
+    candidate.object !== undefined &&
+    (candidate.actionScope === 'all' || candidate.actionScope === 'reference')
+  );
 }
 
 /** Project presentation identity into the dependency-free relation endpoint. */

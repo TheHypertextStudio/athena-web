@@ -6,6 +6,12 @@ import type {
 
 import type { InitiativeHierarchyMutation } from './initiative-hierarchy-mutations';
 
+/** A non-noop Initiative hierarchy command resolved from one relation intent. */
+export interface ResolvedInitiativeParentIntent {
+  readonly organizationId: string;
+  readonly mutation: Exclude<InitiativeHierarchyMutation, { readonly kind: 'noop' }>;
+}
+
 /** Initiative-parent intent accepted by the Initiative application domain. */
 export interface InitiativeParentIntent extends Omit<
   RelationIntent,
@@ -25,6 +31,50 @@ export interface InitiativeParentCommandDependencies {
 }
 
 /**
+ * Resolve one Initiative parent intent before a caller claims its shared child lock.
+ *
+ * @param intent - The Initiative parent or top-level relation request.
+ * @returns The route-scoped write, or null when the request cannot change the hierarchy.
+ */
+export function resolveInitiativeParentIntent(
+  intent: InitiativeParentIntent,
+): ResolvedInitiativeParentIntent | null {
+  const subject = intent.subjects[0];
+  const organizationId = intent.target.organizationId;
+  if (subject === undefined || organizationId === null) return null;
+  const parentLinkId = subject.meta?.['parentLinkId'];
+  if (intent.relationId === 'initiative.root') {
+    if (typeof parentLinkId !== 'string') return null;
+    return {
+      organizationId,
+      mutation: {
+        kind: 'detach',
+        linkId: parentLinkId,
+        childInitiativeId: subject.id,
+      },
+    };
+  }
+  const parentInitiativeId = subject.meta?.['parentInitiativeId'];
+  if (parentInitiativeId === intent.target.id) return null;
+  return {
+    organizationId,
+    mutation:
+      typeof parentLinkId === 'string'
+        ? {
+            kind: 'move',
+            linkId: parentLinkId,
+            parentInitiativeId: intent.target.id,
+            childInitiativeId: subject.id,
+          }
+        : {
+            kind: 'create',
+            parentInitiativeId: intent.target.id,
+            childInitiativeId: subject.id,
+          },
+  };
+}
+
+/**
  * Build the Initiative-owned command port used by every `initiative.parent` action entry point.
  *
  * @param dependencies - Typed Initiative persistence adapter.
@@ -35,35 +85,9 @@ export function createInitiativeParentCommandPort(
 ): RelationCommandPort<InitiativeParentIntent> {
   return {
     execute: async (intent) => {
-      const subject = intent.subjects[0];
-      const organizationId = intent.target.organizationId;
-      if (subject === undefined || organizationId === null) return { status: 'unchanged' };
-      const parentLinkId = subject.meta?.['parentLinkId'];
-      if (intent.relationId === 'initiative.root') {
-        if (typeof parentLinkId !== 'string') return { status: 'unchanged' };
-        await dependencies.write(organizationId, {
-          kind: 'detach',
-          linkId: parentLinkId,
-          childInitiativeId: subject.id,
-        });
-        return { status: 'applied' };
-      }
-      const parentInitiativeId = subject.meta?.['parentInitiativeId'];
-      if (parentInitiativeId === intent.target.id) return { status: 'unchanged' };
-      const mutation: InitiativeHierarchyMutation =
-        typeof parentLinkId === 'string'
-          ? {
-              kind: 'move',
-              linkId: parentLinkId,
-              parentInitiativeId: intent.target.id,
-              childInitiativeId: subject.id,
-            }
-          : {
-              kind: 'create',
-              parentInitiativeId: intent.target.id,
-              childInitiativeId: subject.id,
-            };
-      await dependencies.write(organizationId, mutation);
+      const resolved = resolveInitiativeParentIntent(intent);
+      if (resolved === null) return { status: 'unchanged' };
+      await dependencies.write(resolved.organizationId, resolved.mutation);
       return { status: 'applied' };
     },
   };

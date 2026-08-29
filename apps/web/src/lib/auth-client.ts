@@ -1,4 +1,5 @@
 import { passkeyClient } from '@better-auth/passkey/client';
+import { SESSION_OWNER_HEADER } from '@docket/types';
 import { createAuthClient } from 'better-auth/react';
 import { twoFactorClient } from 'better-auth/client/plugins';
 
@@ -87,12 +88,26 @@ export const passkey = authClient.passkey;
  */
 export const twoFactor = authClient.twoFactor;
 
+/** Outcome of an account-bound network sign-out request. */
+export type SignOutOutcome = 'signed-out' | 'owner-changed' | 'failed';
+
 /**
- * Sign the current user out, clearing the session cookie.
+ * Sign out only the account under which the browser action began.
  *
- * @remarks Convenience re-export of {@link authClient.signOut}.
+ * @param expectedUserId - The captured account id required by the server contract.
+ * @returns Whether sign-out completed, the cookie changed accounts, or the request failed.
  */
-export const signOut = authClient.signOut;
+export async function signOut(expectedUserId: string): Promise<SignOutOutcome> {
+  try {
+    const { error } = await authClient.signOut({
+      fetchOptions: { headers: { [SESSION_OWNER_HEADER]: expectedUserId } },
+    });
+    if (!error) return 'signed-out';
+    return error.status === 409 ? 'owner-changed' : 'failed';
+  } catch {
+    return 'failed';
+  }
+}
 
 /**
  * Request an account email change: `{ newEmail, callbackURL }`.

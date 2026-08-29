@@ -1,16 +1,11 @@
 /**
- * Session cookie cache — the read path every authenticated API request pays.
+ * Session cookie response safety for requests that can race an account replacement.
  *
  * @remarks
- * Without the cache, `auth.api.getSession` hits the database on *every* request. That cost is
- * paid per-request, so it multiplies by a page's request fan-out: one entity detail screen issues
- * a dozen parallel reads and therefore a dozen session lookups before any handler runs.
- *
- * Caching the session in a signed cookie removes those lookups, and the trade it makes is
- * explicit and bounded: a session revoked elsewhere keeps validating from the cookie until the
- * cache expires. These tests pin both halves — that the cache serves reads without the
- * row, and that the authoritative path still refuses a revoked session — so the window is a
- * decision the suite protects rather than an accident.
+ * Better Auth 1.6.19 caches user data under a cookie name shared by every account, but it does not
+ * bind that payload to the current session-token cookie. These tests keep session reads
+ * authoritative and keep read responses from mutating the browser's identity after a newer
+ * sign-in response has arrived.
  */
 import { resolve } from 'node:path';
 
@@ -88,19 +83,103 @@ async function signIn(email: string): Promise<{ userId: string; cookie: string }
   };
 }
 
-describe('session cookie cache', () => {
-  it('issues a cached session payload alongside the session token at sign-in', async () => {
+/**
+ * Apply response cookies to a browser-style cookie header in response-arrival order.
+ *
+ * @param currentCookie - The cookie jar before the response arrives.
+ * @param setCookies - The response's individual `Set-Cookie` values.
+ * @returns The cookie header after the response has been applied.
+ */
+function applySetCookieHeaders(currentCookie: string, setCookies: readonly string[]): string {
+  const jar = new Map<string, string>();
+  for (const pair of currentCookie.split('; ')) {
+    const separator = pair.indexOf('=');
+    if (separator < 1) continue;
+    jar.set(pair.slice(0, separator), pair.slice(separator + 1));
+  }
+  for (const setCookie of setCookies) {
+    const pair = setCookie.split(';', 1)[0] ?? '';
+    const separator = pair.indexOf('=');
+    if (separator < 1) continue;
+    const name = pair.slice(0, separator);
+    if (/;\s*max-age=0(?:;|$)/i.test(setCookie)) jar.delete(name);
+    else jar.set(name, pair.slice(separator + 1));
+  }
+  return [...jar].map(([name, value]) => `${name}=${value}`).join('; ');
+}
+
+/** Return only the signed session-token pair from an auth cookie header. */
+function sessionTokenCookie(cookie: string): string {
+  return (
+    cookie.split('; ').find((pair) => pair.slice(0, pair.indexOf('=')).endsWith('session_token')) ??
+    ''
+  );
+}
+
+describe('session cookie response safety', () => {
+  it('does not let a late session payload overwrite a replacement account', async () => {
+    const { auth } = await import('../../src/index');
+    const accountA = await signIn('late-session-owner-a@example.com');
+    const accountB = await signIn('late-session-owner-b@example.com');
+
+    const staleResponse = await auth.handler(
+      new Request('http://localhost:4000/api/auth/get-session', {
+        headers: { cookie: sessionTokenCookie(accountA.cookie) },
+      }),
+    );
+    expect(staleResponse.status).toBe(200);
+
+    const replacementCookie = applySetCookieHeaders(
+      accountB.cookie,
+      staleResponse.headers.getSetCookie(),
+    );
+    const observed = await auth.handler(
+      new Request('http://localhost:4000/api/auth/get-session', {
+        headers: { cookie: replacementCookie },
+      }),
+    );
+
+    await expect(observed.json()).resolves.toMatchObject({ user: { id: accountB.userId } });
+  });
+
+  it('does not let a late missing-session response delete a replacement account', async () => {
+    const { auth } = await import('../../src/index');
+    const { db, session: sessionTable } = await import('@docket/db');
+    const { eq } = await import('drizzle-orm');
+    const accountA = await signIn('late-missing-session-owner-a@example.com');
+    const accountB = await signIn('late-missing-session-owner-b@example.com');
+    await db.delete(sessionTable).where(eq(sessionTable.userId, accountA.userId));
+
+    const staleResponse = await auth.handler(
+      new Request('http://localhost:4000/api/auth/get-session?disableCookieCache=true', {
+        headers: { cookie: accountA.cookie },
+      }),
+    );
+    await expect(staleResponse.json()).resolves.toBeNull();
+
+    const replacementCookie = applySetCookieHeaders(
+      accountB.cookie,
+      staleResponse.headers.getSetCookie(),
+    );
+    await expect(
+      auth.api.getSession({
+        headers: new Headers({ cookie: replacementCookie }),
+        query: { disableCookieCache: true },
+      }),
+    ).resolves.toMatchObject({ user: { id: accountB.userId } });
+  });
+
+  it('issues no independently replaceable session payload at sign-in', async () => {
     const { auth } = await import('../../src/index');
     const { cookie } = await signIn('cache-issued@example.com');
 
-    // The cached payload rides its own cookie; without it every read falls back to the database.
-    expect(cookie).toContain('session_data');
+    expect(cookie).not.toContain('session_data');
 
     const session = await auth.api.getSession({ headers: new Headers({ cookie }) });
     expect(session?.user.email).toBe('cache-issued@example.com');
   });
 
-  it('serves a read from the cookie after the session row is gone', async () => {
+  it('does not authenticate from a cookie after the session row is gone', async () => {
     const { auth } = await import('../../src/index');
     const { db, session: sessionTable, user } = await import('@docket/db');
     const { eq } = await import('drizzle-orm');
@@ -112,8 +191,7 @@ describe('session cookie cache', () => {
 
     const session = await auth.api.getSession({ headers: new Headers({ cookie }) });
 
-    expect(session?.user.id).toBe(userId);
-    // Proving the row is absent, so the read above cannot have come from it.
+    expect(session).toBeNull();
     const rows = await db.select().from(sessionTable).where(eq(sessionTable.userId, userId));
     expect(rows).toHaveLength(0);
     await db.delete(user).where(eq(user.id, userId));
@@ -136,7 +214,7 @@ describe('session cookie cache', () => {
     expect(session).toBeNull();
   });
 
-  it('bounds the cache window so a revocation cannot go unnoticed for long', async () => {
+  it('keeps session reads authoritative and free of sliding cookie refreshes', async () => {
     const { buildAuthOptions } = await import('../../src/auth-builder');
     const options = buildAuthOptions(
       {
@@ -151,9 +229,7 @@ describe('session cookie cache', () => {
     );
 
     const cookieCache = options.session?.cookieCache;
-    expect(cookieCache?.enabled).toBe(true);
-    // A revoked device keeps working for at most this long. Kept tight deliberately: the win is
-    // collapsing a page's parallel fan-out onto one lookup, which a short window already achieves.
-    expect(cookieCache?.maxAge).toBeLessThanOrEqual(60);
+    expect(cookieCache?.enabled).toBe(false);
+    expect(options.session?.disableSessionRefresh).toBe(true);
   });
 });

@@ -19,7 +19,7 @@
 import type { LucideIcon } from '@docket/ui/icons';
 import type { RelationId } from '@docket/work/relation-contract';
 
-import type { ObjectKind, ObjectMeta, ObjectRef } from './object';
+import type { ObjectActionScope, ObjectKind, ObjectMeta, ObjectRef } from './object';
 import type { InteractionCategory, InteractionId, RouteTemplateId } from '../interactions';
 
 /**
@@ -87,6 +87,8 @@ export interface ActionContext {
   readonly source: ActionSource;
   /** The workspace the invocation happened in, or `null` outside a workspace. */
   readonly organizationId: string | null;
+  /** State whether the calling surface exposes all actions or only read-only reference actions. */
+  readonly actionScope: ObjectActionScope;
   /** The selection surface the invocation came from, when it came from one. */
   readonly surfaceId?: string;
   /**

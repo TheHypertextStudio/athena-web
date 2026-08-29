@@ -153,6 +153,18 @@ describe('ObjectSurface', () => {
     expect(row).not.toHaveClass('cursor-grab');
   });
 
+  it('makes every reference surface non-draggable without trusting its caller', () => {
+    render(
+      <ObjectSurface object={initiative} actionScope="reference">
+        <div data-testid="reference-initiative" />
+      </ObjectSurface>,
+    );
+
+    const row = screen.getByTestId('reference-initiative');
+    expect(row).toHaveAttribute('data-object-action-scope', 'reference');
+    expect(row).not.toHaveClass('cursor-grab');
+  });
+
   it('lets the object sensor see Alt presses while shielding the spatial parent', () => {
     const parentPointerDown = vi.fn();
     const objectPointerDown = vi.fn();

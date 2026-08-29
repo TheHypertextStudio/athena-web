@@ -71,7 +71,7 @@ export interface RelationDropTargetBinding {
 
 /** Resolve one source payload against a destination object. */
 function resolutionFor(data: unknown, target: ObjectRef): RelationResolution | null {
-  if (!isObjectDragData(data)) return null;
+  if (!isObjectDragData(data) || data.actionScope !== 'all') return null;
   return resolveObjectRelation(data.objects, target);
 }
 
@@ -143,7 +143,7 @@ export function useRelationDropTarget(
   const relationId = resolution?.accepted === true ? resolution.intent.relationId : null;
   const action = relationId === null ? undefined : registry?.getByRelation(relationId);
   const hasExecutor = execute !== undefined || action !== undefined;
-  const canDrop = !disabled && hasExecutor;
+  const canDrop = !disabled && resolution?.accepted === true && hasExecutor;
   const previewLabel =
     resolution?.accepted === true && hasExecutor
       ? acceptedLabel(resolution.intent.relationId, target)
@@ -207,6 +207,7 @@ export function useRelationDropTarget(
           target,
           source: 'drag',
           organizationId: target.organizationId ?? source.object.organizationId,
+          actionScope: source.actionScope,
           ...(source.sourceSurfaceId === null ? {} : { surfaceId: source.sourceSurfaceId }),
           params: { relationId: dropped.intent.relationId },
         }))

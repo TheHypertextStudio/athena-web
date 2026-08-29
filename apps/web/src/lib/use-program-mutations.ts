@@ -11,11 +11,12 @@ import {
   type Visibility,
 } from '@docket/types';
 import { useQueryClient } from '@tanstack/react-query';
-import { useCallback, useMemo } from 'react';
+import { useCallback } from 'react';
 
 import { api } from './api';
 import { userErrorMessage } from './problem';
 import { queryKeys, unwrap, useApiMutation } from './query';
+import { invalidateWorkTargetQueries } from './work-target-invalidation';
 
 /** ProgramPatch describes the use program mutations data contract shared by the hook or component. */
 export interface ProgramPatch {
@@ -59,6 +60,18 @@ export interface ProgramMutations {
   updateError: string | null;
 }
 
+/** The delete controls exposed to a Program detail surface. */
+export interface ProgramDeleteMutation {
+  /** Delete the Program and run a caller-owned dialog completion after success. */
+  deleteProgram: (onSuccess?: () => void) => void;
+  /** Clear a prior delete error before the confirmation dialog reopens. */
+  reset: () => void;
+  /** Application-owned delete error copy, or `null` before and after a successful write. */
+  error: string | null;
+  /** Whether the delete request is still unsettled. */
+  pending: boolean;
+}
+
 /**
  * Apply one Program change to the aggregate cache without letting the local navigation identity
  * diverge from the default document.
@@ -91,11 +104,15 @@ export function useProgramMutations(
   programId: string,
   programLabel: string,
   aggregateKey: readonly unknown[],
-  updatesKey: readonly unknown[],
 ): ProgramMutations {
   const queryClient = useQueryClient();
   const subject = ProgramSubjectRef.parse({ subjectType: 'program', subjectId: programId });
-  const programsKey = useMemo(() => queryKeys.programs(orgId), [orgId]);
+  const invalidateProgram = useCallback((): void => {
+    void invalidateWorkTargetQueries(queryClient, {
+      target: 'program',
+      ownerOrganizationId: orgId,
+    });
+  }, [orgId, queryClient]);
 
   const patchCachedProgram = useCallback(
     (apply: (program: ProgramDetail) => ProgramDetail): ProgramDetailAggregate | undefined => {
@@ -125,7 +142,7 @@ export function useProgramMutations(
     onSuccess: (_created, { health }) => {
       if (health) patchCachedProgram((cur) => ({ ...cur, health }));
     },
-    invalidateKeys: [updatesKey, aggregateKey],
+    onSettled: invalidateProgram,
   });
 
   const patch = useApiMutation<
@@ -157,11 +174,8 @@ export function useProgramMutations(
     // The Resources tab's derived sections are a projection of this record's prose, and the query
     // cache survives a reload — so without this, adding a mention to the description leaves that
     // tab showing the pre-edit answer until the staleness tier happens to expire.
-    invalidateKeys: [
-      aggregateKey,
-      programsKey,
-      queryKeys.entityMentions(orgId, 'program', programId),
-    ],
+    invalidateKeys: [queryKeys.entityMentions(orgId, 'program', programId)],
+    onSettled: invalidateProgram,
   });
 
   return {
@@ -177,5 +191,48 @@ export function useProgramMutations(
     updateError: postUpdateM.error
       ? userErrorMessage(postUpdateM.error, 'Could not post that update.')
       : null,
+  };
+}
+
+/**
+ * Delete one Program and reconcile every route that can project it.
+ *
+ * @param orgId - Workspace that owns the Program.
+ * @param programId - Program being deleted.
+ * @param programLabel - Active vocabulary label used in application-owned errors.
+ * @param onDeleted - Navigation or other page-owned work after confirmed deletion.
+ * @returns Confirmation-dialog controls backed by the shared mutation layer.
+ */
+export function useProgramDeleteMutation(
+  orgId: string,
+  programId: string,
+  programLabel: string,
+  onDeleted: () => void,
+): ProgramDeleteMutation {
+  const queryClient = useQueryClient();
+  const deletion = useApiMutation({
+    mutationFn: () =>
+      unwrap(
+        () => api.v1.orgs[':orgId'].programs[':id'].$delete({ param: { orgId, id: programId } }),
+        `Could not delete this ${programLabel.toLowerCase()}.`,
+      ),
+    onSuccess: onDeleted,
+    onSettled: () => {
+      void invalidateWorkTargetQueries(queryClient, {
+        target: 'program',
+        ownerOrganizationId: orgId,
+      });
+    },
+  });
+
+  return {
+    deleteProgram: (onSuccess) => {
+      deletion.mutate(undefined, onSuccess === undefined ? undefined : { onSuccess });
+    },
+    reset: deletion.reset,
+    error: deletion.error
+      ? userErrorMessage(deletion.error, `Could not delete this ${programLabel.toLowerCase()}.`)
+      : null,
+    pending: deletion.isPending,
   };
 }

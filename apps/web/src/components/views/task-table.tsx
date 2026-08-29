@@ -335,6 +335,7 @@ export function TaskTable({
     <SelectionProvider
       items={objects}
       organizationId={objects[0]?.organizationId ?? null}
+      actionScope="all"
       onActivate={(object) => {
         const task = visibleTasks.find(({ id }) => id === object.id);
         if (task) onOpenTask?.(task);
@@ -371,6 +372,7 @@ function TaskRowInteraction({
   const selection = useSelection();
   const drag = useDraggable({
     object,
+    actionScope: selection.actionScope,
     surfaceId: selection.surfaceId,
     objects: selection.isSelected(objectKey(object)) ? selection.selectedObjects : [object],
   });

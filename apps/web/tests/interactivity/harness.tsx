@@ -103,7 +103,7 @@ function TaskRow({
   readonly draggable: boolean;
 }): JSX.Element {
   const { rowProps, selected } = useSelectableRow(object);
-  const drag = useDraggable({ object, disabled: !draggable });
+  const drag = useDraggable({ object, actionScope: 'all', disabled: !draggable });
   return (
     <div
       role="row"

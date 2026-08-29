@@ -39,7 +39,7 @@ import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import type { z } from 'zod';
 
-import type { AppEnv } from '../context';
+import type { AppEnv, AuthSession } from '../context';
 import { ConflictError, NotFoundError } from '../error';
 import { clearableTextPatch } from '../lib/clearable-text';
 import { planningDatePatch } from '../lib/planning-timeframe';
@@ -57,6 +57,7 @@ import { pageResult, seekAfter } from '../lib/list-cursor';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam, zQuery } from '../lib/validate';
 import { capabilityGuard } from '../permissions/capability-guard';
+import { resourceAccessKey, viewableResourceKeys } from '../permissions/resource-access';
 import { enqueueSearchDelete, enqueueSearchUpsert } from '../search/write-through';
 
 import {
@@ -74,8 +75,32 @@ import {
 import { emitEvent } from './event-emit';
 import initiativeAggregates from './initiative-aggregates';
 import initiativeHierarchyRoutes from './initiative-hierarchy-routes';
-import { accessibleInitiativeOrganizationIds } from './initiative-hierarchy';
+import {
+  accessibleInitiativeHierarchyProjection,
+  accessibleInitiativeNodeIds,
+  loadAccessibleInitiativeHierarchyGraph,
+} from './initiative-hierarchy';
 import initiativeResources from './initiative-resources';
+
+async function accessibleInitiativeWorkKeys(
+  session: AuthSession,
+  projects: readonly { readonly id: string; readonly organizationId: string }[],
+  programs: readonly { readonly id: string; readonly organizationId: string }[],
+): Promise<ReadonlySet<string>> {
+  if (!session?.user) return new Set();
+  return viewableResourceKeys(session.user.id, [
+    ...projects.map((row) => ({
+      organizationId: row.organizationId,
+      kind: 'project',
+      id: row.id,
+    })),
+    ...programs.map((row) => ({
+      organizationId: row.organizationId,
+      kind: 'program',
+      id: row.id,
+    })),
+  ]);
+}
 
 /** Initiatives router: org-scoped CRUD + child associations + roadmap roll-up. */
 const initiatives = new Hono<AppEnv>()
@@ -209,15 +234,9 @@ const initiatives = new Hono<AppEnv>()
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const row = await loadInitiative(orgId, id);
-      const [hierarchyLinks, accessibleIds] = await Promise.all([
-        db
-          .select()
-          .from(initiativeHierarchyLink)
-          .where(eq(initiativeHierarchyLink.contextOrganizationId, orgId)),
-        accessibleInitiativeOrganizationIds(orgId, c.get('session')),
-      ]);
+      const graph = await loadAccessibleInitiativeHierarchyGraph(orgId, [id], c.get('session'));
       const childrenByParent = new Map<string, string[]>();
-      for (const link of hierarchyLinks) {
+      for (const link of graph.projection.links) {
         const children = childrenByParent.get(link.parentInitiativeId) ?? [];
         children.push(link.childInitiativeId);
         childrenByParent.set(link.parentInitiativeId, children);
@@ -231,11 +250,11 @@ const initiatives = new Hono<AppEnv>()
         }
       };
       visit(id);
-      const initiativeRows = await db
-        .select({ id: initiative.id, organizationId: initiative.organizationId })
-        .from(initiative)
-        .where(inArray(initiative.id, rollupIds));
-      const visibleNodes = initiativeRows.filter((row) => accessibleIds.has(row.organizationId));
+      if (!graph.projection.nodeIds.has(id)) throw new NotFoundError('Initiative not found');
+      const rollupIdSet = new Set(rollupIds);
+      const visibleNodes = graph.nodes.filter(
+        (node) => graph.projection.nodeIds.has(node.id) && rollupIdSet.has(node.id),
+      );
       const associated = await Promise.all(
         visibleNodes.map(async (node) => ({
           projects: await associatedProjects(node.organizationId, node.id),
@@ -252,7 +271,36 @@ const initiatives = new Hono<AppEnv>()
           associated.flatMap((entry) => entry.programs).map((row) => [row.id, row]),
         ).values(),
       ];
-      return ok(c, InitiativeDetail, buildInitiativeDetail(row, projects, programs));
+      const accessibleWorkKeys = await accessibleInitiativeWorkKeys(
+        c.get('session'),
+        projects,
+        programs,
+      );
+      return ok(
+        c,
+        InitiativeDetail,
+        buildInitiativeDetail(
+          row,
+          projects.filter((projectRow) =>
+            accessibleWorkKeys.has(
+              resourceAccessKey({
+                organizationId: projectRow.organizationId,
+                kind: 'project',
+                id: projectRow.id,
+              }),
+            ),
+          ),
+          programs.filter((programRow) =>
+            accessibleWorkKeys.has(
+              resourceAccessKey({
+                organizationId: programRow.organizationId,
+                kind: 'program',
+                id: programRow.id,
+              }),
+            ),
+          ),
+        ),
+      );
     },
   )
   .patch(
@@ -685,15 +733,12 @@ const initiatives = new Hono<AppEnv>()
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const { from, to } = c.req.valid('query');
-      await loadInitiative(orgId, id);
+      const target = await loadInitiative(orgId, id);
 
-      const [links, accessibleOrganizationIds] = await Promise.all([
-        db
-          .select()
-          .from(initiativeHierarchyLink)
-          .where(eq(initiativeHierarchyLink.contextOrganizationId, orgId)),
-        accessibleInitiativeOrganizationIds(orgId, c.get('session')),
-      ]);
+      const links = await db
+        .select()
+        .from(initiativeHierarchyLink)
+        .where(eq(initiativeHierarchyLink.contextOrganizationId, orgId));
       const linkedIds = [
         ...new Set(links.flatMap((link) => [link.parentInitiativeId, link.childInitiativeId])),
       ];
@@ -704,17 +749,22 @@ const initiatives = new Hono<AppEnv>()
               .select({ id: initiative.id, organizationId: initiative.organizationId })
               .from(initiative)
               .where(inArray(initiative.id, linkedIds));
-      const visibleIds = new Set(
-        linkedInitiatives
-          .filter((row) => accessibleOrganizationIds.has(row.organizationId))
-          .map((row) => row.id),
+      const candidateNodes = [
+        ...new Map(
+          [{ id: target.id, organizationId: target.organizationId }, ...linkedInitiatives].map(
+            (node) => [node.id, node],
+          ),
+        ).values(),
+      ];
+      const accessibleNodeIds = await accessibleInitiativeNodeIds(c.get('session'), candidateNodes);
+      const projection = accessibleInitiativeHierarchyProjection(
+        orgId,
+        candidateNodes.filter((node) => accessibleNodeIds.has(node.id)),
+        links,
       );
-      visibleIds.add(id);
+      if (!projection.nodeIds.has(id)) throw new NotFoundError('Initiative not found');
       const childrenByParent = new Map<string, string[]>();
-      for (const link of links) {
-        if (!visibleIds.has(link.parentInitiativeId) || !visibleIds.has(link.childInitiativeId)) {
-          continue;
-        }
+      for (const link of projection.links) {
         const children = childrenByParent.get(link.parentInitiativeId) ?? [];
         children.push(link.childInitiativeId);
         childrenByParent.set(link.parentInitiativeId, children);
@@ -739,29 +789,41 @@ const initiatives = new Hono<AppEnv>()
           .innerJoin(program, eq(program.id, initiativeProgram.programId))
           .where(inArray(initiativeProgram.initiativeId, rollupIds)),
       ]);
-      const projects = [
-        ...new Map(
-          projectRows
-            .filter(({ row }) => accessibleOrganizationIds.has(row.organizationId))
-            .map(({ row }) => [row.id, row]),
-        ).values(),
-      ];
-      const programs = [
-        ...new Map(
-          programRows
-            .filter(({ row }) => accessibleOrganizationIds.has(row.organizationId))
-            .map(({ row }) => [row.id, row]),
-        ).values(),
-      ];
+      const projects = [...new Map(projectRows.map(({ row }) => [row.id, row])).values()];
+      const programs = [...new Map(programRows.map(({ row }) => [row.id, row])).values()];
+      const accessibleWorkKeys = await accessibleInitiativeWorkKeys(
+        c.get('session'),
+        projects,
+        programs,
+      );
 
       const payload: z.input<typeof InitiativeTimelineOut> = {
-        programs: programs.map((p) => ({
-          id: p.id,
-          name: p.name,
-          status: p.status,
-          health: p.health,
-        })),
+        programs: programs
+          .filter((programRow) =>
+            accessibleWorkKeys.has(
+              resourceAccessKey({
+                organizationId: programRow.organizationId,
+                kind: 'program',
+                id: programRow.id,
+              }),
+            ),
+          )
+          .map((p) => ({
+            id: p.id,
+            name: p.name,
+            status: p.status,
+            health: p.health,
+          })),
         projects: projects
+          .filter((projectRow) =>
+            accessibleWorkKeys.has(
+              resourceAccessKey({
+                organizationId: projectRow.organizationId,
+                kind: 'project',
+                id: projectRow.id,
+              }),
+            ),
+          )
           .filter((p) => projectOverlapsWindow(p, from, to))
           .map((p) => ({
             id: p.id,

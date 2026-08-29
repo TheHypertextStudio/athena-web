@@ -15,6 +15,8 @@ export type InitiativeRelationshipTab = 'subinitiatives' | 'work';
 /** Props for {@link InitiativeRelationshipPanels}. */
 export interface InitiativeRelationshipPanelsProps {
   readonly tab: string;
+  /** Workspace whose detail route projects the relationship rows. */
+  readonly routeOrganizationId: string;
   readonly children: readonly InitiativeHierarchyReference[];
   readonly connectedWork: readonly InitiativeConnectedWork[];
   /** True while the selected relationship section is loading. */
@@ -28,6 +30,7 @@ export interface InitiativeRelationshipPanelsProps {
 /** Render the active relationship collection as standard interactive objects. */
 export function InitiativeRelationshipPanels({
   tab,
+  routeOrganizationId,
   children,
   connectedWork,
   loading = false,
@@ -75,6 +78,7 @@ export function InitiativeRelationshipPanels({
                 description={child.crossWorkspace ? child.organizationName : undefined}
                 trailing={statusOf(child.status).name}
                 dragDisabled={child.crossWorkspace}
+                actionScope={child.crossWorkspace ? 'reference' : 'all'}
                 surfaceId="initiative-subinitiatives"
               />
             ))}
@@ -103,6 +107,7 @@ export function InitiativeRelationshipPanels({
         ) : connectedWork.length ? (
           connectedWork.map((item) => {
             const noun = item.kind === 'program' ? programNoun : projectNoun;
+            const crossWorkspace = item.organizationId !== routeOrganizationId;
             return (
               <ObjectListRow
                 key={`${item.kind}-${item.id}`}
@@ -115,6 +120,8 @@ export function InitiativeRelationshipPanels({
                 href={`/orgs/${item.organizationId}/${item.kind === 'program' ? 'programs' : 'projects'}/${item.id}`}
                 description={`${noun}${item.direct ? '' : ' · inherited'}`}
                 trailing={item.status.replaceAll('_', ' ')}
+                dragDisabled={crossWorkspace}
+                actionScope={crossWorkspace ? 'reference' : 'all'}
                 surfaceId="initiative-connected-work"
               />
             );

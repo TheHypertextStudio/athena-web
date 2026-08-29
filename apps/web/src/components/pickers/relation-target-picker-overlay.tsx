@@ -217,6 +217,7 @@ export function RelationTargetPickerOverlay({
                 },
                 source: 'button',
                 organizationId: request.organizationId,
+                actionScope: 'all',
               })).then(close);
             }}
           >
@@ -289,6 +290,7 @@ export function RelationTargetPickerOverlay({
                 },
                 source: 'button',
                 organizationId,
+                actionScope: 'all',
               })).then(close);
             }}
             searchPlaceholder={`Choose a ${targetNoun}…`}

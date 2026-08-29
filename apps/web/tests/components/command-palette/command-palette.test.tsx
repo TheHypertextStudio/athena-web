@@ -6,7 +6,9 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AuthenticationInterlockProvider } from '@/components/authentication-interlock';
 import { CommandPalette } from '@/components/command-palette/command-palette';
+import { SignOutCleanupError } from '@/lib/sign-out';
 import { makeQueryWrapper } from '../../support/query';
 
 afterEach(() => {
@@ -19,8 +21,13 @@ afterEach(() => {
 Element.prototype.scrollIntoView = vi.fn();
 
 const push = vi.fn();
+const signOutAndPurge = vi.hoisted(() => vi.fn(() => Promise.resolve()));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
+}));
+vi.mock('@/lib/sign-out', () => ({
+  signOutAndPurge,
+  SignOutCleanupError: class SignOutCleanupError extends Error {},
 }));
 
 const ORG = OrganizationId.parse('01HZX5K3QJ9F8B7C6D5E4F3G2H');
@@ -107,6 +114,7 @@ beforeEach(() => {
   SEARCH_GET.mockReset().mockResolvedValue(EMPTY_SEARCH_RESPONSE);
   LABELS_GET.mockClear();
   push.mockClear();
+  signOutAndPurge.mockReset().mockResolvedValue();
 });
 
 function renderPalette() {
@@ -115,12 +123,28 @@ function renderPalette() {
   const onClose = vi.fn();
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryWrapper>
-      <ContextProvider initialContext={ORG}>{children}</ContextProvider>
+      <AuthenticationInterlockProvider>
+        <ContextProvider initialContext={ORG}>{children}</ContextProvider>
+      </AuthenticationInterlockProvider>
     </QueryWrapper>
   );
-  render(<CommandPalette open onClose={onClose} />, { wrapper });
+  render(<CommandPalette open onClose={onClose} sessionOwnerUserId="user-1" />, { wrapper });
   return { onClose };
 }
+
+describe('CommandPalette — sign-out recovery', () => {
+  it('shows the cleanup recovery message when revoked data cannot be committed', async () => {
+    signOutAndPurge.mockRejectedValue(new SignOutCleanupError());
+    renderPalette();
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'sign out' } });
+    fireEvent.click(await screen.findByRole('option', { name: /Sign out/ }));
+
+    expect(
+      await screen.findByRole('heading', { name: 'Sign-out could not finish safely' }),
+    ).toBeVisible();
+    expect(screen.getByText(/could not clear this browser's offline data/i)).toBeVisible();
+  });
+});
 
 describe('CommandPalette — # label sub-mode', () => {
   it('finds a Settings section through its catalog metadata', async () => {
@@ -191,14 +215,16 @@ describe('CommandPalette — # label sub-mode', () => {
       </QueryWrapper>
     );
     const onClose = vi.fn();
-    const view = render(<CommandPalette open onClose={onClose} />, { wrapper });
+    const view = render(<CommandPalette open onClose={onClose} sessionOwnerUserId="user-1" />, {
+      wrapper,
+    });
     const input = screen.getByRole('combobox');
     await waitFor(() => {
       expect(input).toHaveFocus();
     });
     fireEvent.change(input, { target: { value: 'passkeys' } });
     fireEvent.click(await screen.findByRole('option', { name: /Passkeys/ }));
-    view.rerender(<CommandPalette open={false} onClose={onClose} />);
+    view.rerender(<CommandPalette open={false} onClose={onClose} sessionOwnerUserId="user-1" />);
 
     expect(opener).not.toHaveFocus();
     opener.remove();
@@ -299,7 +325,7 @@ describe('CommandPalette — # with no bound organization', () => {
         <ContextProvider initialContext={null}>{children}</ContextProvider>
       </QueryWrapper>
     );
-    render(<CommandPalette open onClose={vi.fn()} />, { wrapper });
+    render(<CommandPalette open onClose={vi.fn()} sessionOwnerUserId="user-1" />, { wrapper });
     fireEvent.change(screen.getByRole('combobox'), { target: { value: '#' } });
 
     expect(await screen.findByText(/open a workspace/i)).toBeInTheDocument();

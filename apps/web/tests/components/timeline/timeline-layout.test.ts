@@ -52,7 +52,7 @@ const catalog: TimelineCatalog<Row> = {
   progress: () => null,
   edges: () => ({ blockedBy: [], blocks: [] }),
   statusLabel: () => 'Active',
-  object: () => null,
+  interaction: () => ({ object: null, dragDisabled: true, actionScope: 'reference' }),
 };
 
 const row = (id: string, start: number | null, end: number | null): Row => ({

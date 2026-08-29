@@ -1,5 +1,8 @@
 import { type Capability, CAPABILITY_RANK } from '@docket/authz';
+import type * as DbModule from '@docket/db';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
+
+type ResourceAccessDatabase = Pick<typeof DbModule.db, 'select'>;
 
 /** A resource kind whose visibility can be resolved through grants. */
 export type GrantableResourceKind =
@@ -68,12 +71,14 @@ export function resourceAccessKey(ref: ResourceAccessRef): string {
  *
  * @param userId - The user whose active, unarchived organization memberships should be resolved.
  * @param refs - Resource references to resolve in one batch.
+ * @param database - Optional transaction or database that owns the authorization snapshot.
  * @returns A map containing an entry for every input reference, keyed by
  * {@link resourceAccessKey}.
  */
 export async function resolveResourceAccess(
   userId: string,
   refs: readonly ResourceAccessRef[],
+  database?: ResourceAccessDatabase,
 ): Promise<Map<string, ResourceAccessResult>> {
   const result = new Map<string, ResourceAccessResult>();
   for (const ref of refs) {
@@ -82,9 +87,12 @@ export async function resolveResourceAccess(
   if (refs.length === 0) return result;
 
   const organizationIds = [...new Set(refs.map((ref) => ref.organizationId))];
-  const accesses = await loadCallerOrgAccess(userId, organizationIds);
+  const accesses = await loadCallerOrgAccess(userId, organizationIds, database);
   const accessByOrg = new Map(accesses.map((access) => [access.organizationId, access]));
-  const [facts, grants] = await Promise.all([loadResourceFacts(refs), loadCallerGrants(accesses)]);
+  const [facts, grants] = await Promise.all([
+    loadResourceFacts(refs, database),
+    loadCallerGrants(accesses, database),
+  ]);
 
   for (const ref of refs) {
     const key = resourceAccessKey(ref);
@@ -105,12 +113,35 @@ export async function resolveResourceAccess(
   return result;
 }
 
+/**
+ * Resolve a batch and return the stable keys for resources the user can view.
+ *
+ * @param userId - The user whose resource access should be resolved.
+ * @param refs - Resource references that may contain duplicate keys.
+ * @param database - Optional transaction or database that owns the authorization snapshot.
+ * @returns The unique {@link resourceAccessKey} values whose resolved access includes view.
+ */
+export async function viewableResourceKeys(
+  userId: string,
+  refs: readonly ResourceAccessRef[],
+  database?: ResourceAccessDatabase,
+): Promise<ReadonlySet<string>> {
+  const uniqueRefs = [...new Map(refs.map((ref) => [resourceAccessKey(ref), ref])).values()];
+  const accessByResource = await resolveResourceAccess(userId, uniqueRefs, database);
+  return new Set(
+    uniqueRefs
+      .filter((ref) => accessByResource.get(resourceAccessKey(ref))?.canView === true)
+      .map(resourceAccessKey),
+  );
+}
+
 async function loadCallerOrgAccess(
   userId: string,
   organizationIds: readonly string[],
+  database?: ResourceAccessDatabase,
 ): Promise<CallerOrgAccess[]> {
   const schema = await import('@docket/db');
-  const rows = await schema.db
+  const rows = await (database ?? schema.db)
     .select({
       organizationId: schema.actor.organizationId,
       actorId: schema.actor.id,
@@ -145,8 +176,10 @@ async function loadCallerOrgAccess(
 
 async function loadResourceFacts(
   refs: readonly ResourceAccessRef[],
+  database?: ResourceAccessDatabase,
 ): Promise<Map<string, ResourceFacts>> {
   const schema = await import('@docket/db');
+  const queryDatabase = database ?? schema.db;
   const facts = new Map<string, ResourceFacts>();
   const refsByKind = new Map<string, ResourceAccessRef[]>();
   for (const ref of refs) {
@@ -157,7 +190,7 @@ async function loadResourceFacts(
 
   const taskRefs = refsByKind.get('task') ?? [];
   if (taskRefs.length > 0) {
-    const rows = await schema.db
+    const rows = await queryDatabase
       .select({
         id: schema.task.id,
         organizationId: schema.task.organizationId,
@@ -192,7 +225,7 @@ async function loadResourceFacts(
 
   const projectRefs = refsByKind.get('project') ?? [];
   if (projectRefs.length > 0) {
-    const rows = await schema.db
+    const rows = await queryDatabase
       .select({
         id: schema.project.id,
         organizationId: schema.project.organizationId,
@@ -225,7 +258,7 @@ async function loadResourceFacts(
 
   const programRefs = refsByKind.get('program') ?? [];
   if (programRefs.length > 0) {
-    const rows = await schema.db
+    const rows = await queryDatabase
       .select({
         id: schema.program.id,
         organizationId: schema.program.organizationId,
@@ -254,7 +287,7 @@ async function loadResourceFacts(
 
   const initiativeRefs = refsByKind.get('initiative') ?? [];
   if (initiativeRefs.length > 0) {
-    const rows = await schema.db
+    const rows = await queryDatabase
       .select({
         id: schema.initiative.id,
         organizationId: schema.initiative.organizationId,
@@ -282,7 +315,7 @@ async function loadResourceFacts(
 
   const teamRefs = refsByKind.get('team') ?? [];
   if (teamRefs.length > 0) {
-    const rows = await schema.db
+    const rows = await queryDatabase
       .select({
         id: schema.team.id,
         organizationId: schema.team.organizationId,
@@ -311,7 +344,7 @@ async function loadResourceFacts(
 
   const cycleRefs = refsByKind.get('cycle') ?? [];
   if (cycleRefs.length > 0) {
-    const rows = await schema.db
+    const rows = await queryDatabase
       .select({
         id: schema.cycle.id,
         organizationId: schema.cycle.organizationId,
@@ -341,7 +374,7 @@ async function loadResourceFacts(
 
   const orgRefs = refsByKind.get('organization') ?? [];
   if (orgRefs.length > 0) {
-    const rows = await schema.db
+    const rows = await queryDatabase
       .select({ id: schema.organization.id })
       .from(schema.organization)
       .where(
@@ -376,7 +409,10 @@ function matchingRef(
   );
 }
 
-async function loadCallerGrants(accesses: readonly CallerOrgAccess[]): Promise<CallerGrant[]> {
+async function loadCallerGrants(
+  accesses: readonly CallerOrgAccess[],
+  database?: ResourceAccessDatabase,
+): Promise<CallerGrant[]> {
   if (accesses.length === 0) return [];
   const schema = await import('@docket/db');
   const organizationIds = [...new Set(accesses.map((access) => access.organizationId))];
@@ -388,7 +424,7 @@ async function loadCallerGrants(accesses: readonly CallerOrgAccess[]): Promise<C
     ),
   ];
   if (subjectIds.length === 0) return [];
-  return schema.db
+  return (database ?? schema.db)
     .select({
       organizationId: schema.grant.organizationId,
       subjectKind: schema.grant.subjectKind,

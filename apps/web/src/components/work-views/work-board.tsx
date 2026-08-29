@@ -13,7 +13,7 @@ import {
 import { entityNavigationSnapshotFromWorkViewRow } from '@docket/types';
 import type { ViewTarget } from '@docket/work/view-contract';
 import { useDragDropMonitor, useDragOperation, useDroppable } from '@dnd-kit/react';
-import { type JSX, type ReactNode, useMemo } from 'react';
+import { type JSX, type ReactNode, useCallback, useMemo } from 'react';
 
 import { isObjectDragData } from '@/components/dnd/object-drag-data';
 import { useRelationDropTarget } from '@/components/dnd/use-relation-drop-target';
@@ -33,7 +33,7 @@ import {
   workViewRowDisplayValue,
   workViewRowTitle,
 } from './renderer-types';
-import { objectForWorkViewRow } from './work-view-object';
+import { objectForWorkViewRow, type WorkViewRowInteractionPolicy } from './work-view-object';
 
 const MAX_MOUNTED_CARDS_PER_CELL = 100;
 
@@ -50,11 +50,15 @@ export interface WorkBoardDrop<TTarget extends ViewTarget> {
 export interface WorkBoardProps<TTarget extends ViewTarget> {
   readonly target: TTarget;
   readonly definition: WorkViewDefinitionFor<TTarget>;
+  /** Server-owned total for the root result set, which excludes context rows by contract. */
+  readonly totalCount: number;
   readonly rows?: readonly WorkViewRowFor<TTarget>[];
   readonly groups: readonly WorkViewGroupSummary[];
   readonly groupPages: readonly WorkViewGroupPage<TTarget>[];
   readonly hiddenColumns: ReadonlySet<string>;
   readonly selectedIds: ReadonlySet<string>;
+  /** Resolve route-owned write and object capabilities for each rendered row. */
+  readonly rowInteraction: (row: WorkViewRowFor<TTarget>) => WorkViewRowInteractionPolicy;
   readonly onSelectionChange: (ids: ReadonlySet<string>) => void;
   readonly onCreate: (path: readonly string[]) => void;
   readonly onActivate: (row: WorkViewRowFor<TTarget>) => void;
@@ -70,7 +74,7 @@ export interface WorkBoardProps<TTarget extends ViewTarget> {
 interface BoardCellData {
   readonly kind: 'work-board-cell';
   readonly path: readonly string[];
-  readonly effectLabel: string;
+  readonly effectLabel: string | null;
   readonly canDrop: boolean;
 }
 
@@ -85,6 +89,10 @@ function isBoardCellData(value: unknown): value is BoardCellData {
 
 function boardSurfaceId(path: readonly string[]): string {
   return `work-board:${JSON.stringify(path)}`;
+}
+
+function boardMembershipKey(path: readonly string[], rowId: string): string {
+  return `${workViewGroupPathKey(path)}:${rowId}`;
 }
 
 function boardSourcePath(surfaceId: string | null): readonly string[] | null {
@@ -103,32 +111,38 @@ function WorkBoardCell({
   path,
   label,
   mutable,
+  canAcceptSource,
   children,
 }: {
   readonly path: readonly string[];
   readonly label: string;
   readonly mutable: boolean;
+  readonly canAcceptSource: (data: unknown) => boolean;
   readonly children: ReactNode;
 }): JSX.Element {
   const operation = useDragOperation();
-  const carriesObject = isObjectDragData(operation.source?.data);
+  const canAccept = mutable && canAcceptSource(operation.source?.data);
   const drop = useDroppable<BoardCellData>({
     id: `work-board-cell:${workViewGroupPathKey(path)}`,
     type: 'work-board-cell',
-    collisionPriority: mutable ? 2 : -2,
-    data: { kind: 'work-board-cell', path, effectLabel: `Move to ${label}`, canDrop: mutable },
-    disabled: !mutable,
+    collisionPriority: canAccept ? 2 : -2,
+    data: {
+      kind: 'work-board-cell',
+      path,
+      effectLabel: canAccept ? `Move to ${label}` : null,
+      canDrop: canAccept,
+    },
+    disabled: !canAccept,
   });
-  const accepting = drop.isDropTarget && mutable && carriesObject;
+  const accepting = drop.isDropTarget && canAccept;
   return (
     <section
       ref={drop.ref}
       data-testid={`board-cell-${path.join('-')}`}
-      data-drop-state={drop.isDropTarget ? (accepting ? 'accept' : 'reject') : 'idle'}
+      data-drop-state={accepting ? 'accept' : 'idle'}
       className={cn(
         'min-h-20 rounded-lg',
         accepting && 'ring-primary bg-primary/8 ring-2 ring-inset',
-        drop.isDropTarget && !accepting && 'ring-error/60 bg-error/5 ring-1 ring-inset',
       )}
     >
       {accepting ? (
@@ -146,6 +160,7 @@ function WorkBoardCard<TTarget extends ViewTarget>({
   sourcePath,
   selected,
   selectionActive,
+  interaction,
   onToggle,
   onActivate,
   children,
@@ -154,27 +169,30 @@ function WorkBoardCard<TTarget extends ViewTarget>({
   readonly sourcePath: readonly string[];
   readonly selected: boolean;
   readonly selectionActive: boolean;
+  readonly interaction: WorkViewRowInteractionPolicy;
   readonly onToggle: () => void;
   readonly onActivate: () => void;
   readonly children: ReactNode;
 }): JSX.Element {
-  const object = objectForWorkViewRow(row);
-  const relation = useRelationDropTarget({ target: object });
-  return (
-    <ObjectSurface object={object} surfaceId={boardSurfaceId(sourcePath)} onActivate={onActivate}>
-      <article
-        ref={relation.dropProps.ref}
-        role="article"
-        aria-label={workViewRowTitle(row)}
-        data-drop-state={relation.dropState}
-        className={cn(
-          'group/card border-outline-variant bg-surface text-on-surface hover:bg-surface-container-high relative rounded-lg border p-3',
-          relation.dropProps.className,
-          relation.dropState === 'accept' && 'ring-primary bg-primary/8 ring-2',
-          relation.dropState === 'reject' && 'ring-error/60 bg-error/5 ring-1',
-        )}
-      >
-        <div className="flex items-start gap-2">
+  const relation = useRelationDropTarget({
+    target: objectForWorkViewRow(row),
+    disabled: !interaction.writable,
+  });
+  const card = (
+    <article
+      ref={relation.dropProps.ref}
+      role="article"
+      aria-label={workViewRowTitle(row)}
+      data-drop-state={relation.dropState}
+      className={cn(
+        'group/card border-outline-variant bg-surface text-on-surface hover:bg-surface-container-high relative rounded-lg border p-3',
+        relation.dropProps.className,
+        relation.dropState === 'accept' && 'ring-primary bg-primary/8 ring-2',
+        relation.dropState === 'reject' && 'ring-error/60 bg-error/5 ring-1',
+      )}
+    >
+      <div className="flex items-start gap-2">
+        {interaction.writable ? (
           <span
             className={`${selectionActive || selected ? 'opacity-100' : 'opacity-0 group-focus-within/card:opacity-100 group-hover/card:opacity-100'} transition-opacity`}
           >
@@ -184,32 +202,44 @@ function WorkBoardCard<TTarget extends ViewTarget>({
               onChange={onToggle}
             />
           </span>
-          <DocketLink
-            href={buildEntityHref(entityNavigationSnapshotFromWorkViewRow(row))}
-            className="focus-visible:ring-primary text-body-medium min-w-0 flex-1 rounded-sm outline-none focus-visible:ring-2"
-            onClick={(event) => {
-              if (
-                event.button !== 0 ||
-                event.metaKey ||
-                event.ctrlKey ||
-                event.shiftKey ||
-                event.altKey
-              )
-                return;
-              event.preventDefault();
-              onActivate();
-            }}
-          >
-            {workViewRowTitle(row)}
-          </DocketLink>
-        </div>
-        {children}
-        {relation.effectLabel ? (
-          <span className="bg-primary-container text-on-primary-container text-label-small mt-2 block rounded-md px-2 py-1">
-            {relation.effectLabel}
-          </span>
         ) : null}
-      </article>
+        <DocketLink
+          href={buildEntityHref(entityNavigationSnapshotFromWorkViewRow(row))}
+          className="focus-visible:ring-primary text-body-medium min-w-0 flex-1 rounded-sm outline-none focus-visible:ring-2"
+          onClick={(event) => {
+            if (
+              event.button !== 0 ||
+              event.metaKey ||
+              event.ctrlKey ||
+              event.shiftKey ||
+              event.altKey
+            )
+              return;
+            event.preventDefault();
+            onActivate();
+          }}
+        >
+          {workViewRowTitle(row)}
+        </DocketLink>
+      </div>
+      {children}
+      {relation.effectLabel ? (
+        <span className="bg-primary-container text-on-primary-container text-label-small mt-2 block rounded-md px-2 py-1">
+          {relation.effectLabel}
+        </span>
+      ) : null}
+    </article>
+  );
+  if (interaction.object === null) return card;
+  return (
+    <ObjectSurface
+      object={interaction.object}
+      dragDisabled={interaction.dragDisabled}
+      actionScope={interaction.actionScope}
+      surfaceId={boardSurfaceId(sourcePath)}
+      onActivate={onActivate}
+    >
+      {card}
     </ObjectSurface>
   );
 }
@@ -218,11 +248,13 @@ function WorkBoardCard<TTarget extends ViewTarget>({
 export function WorkBoard<TTarget extends ViewTarget>({
   target,
   definition,
+  totalCount,
   rows: rootRows = [],
   groups,
   groupPages,
   hiddenColumns,
   selectedIds,
+  rowInteraction,
   onSelectionChange,
   onCreate,
   onActivate,
@@ -241,7 +273,7 @@ export function WorkBoard<TTarget extends ViewTarget>({
           path: [] as readonly string[],
           key: '__all__',
           label: `All ${target}s`,
-          count: rootRows.length,
+          count: totalCount,
         },
       ]
     : groups.filter((group) => group.path.length === 1 && !hiddenColumns.has(group.key));
@@ -252,15 +284,39 @@ export function WorkBoard<TTarget extends ViewTarget>({
     ),
   ];
   const lanes = laneKeys.length === 0 ? [null] : laneKeys;
-  const rows = useMemo(
+  const memberships = useMemo(() => {
+    const entries: [
+      string,
+      {
+        readonly row: WorkViewRowFor<TTarget>;
+        readonly interaction: WorkViewRowInteractionPolicy;
+      },
+    ][] = [];
+    if (ungrouped) {
+      for (const row of rootRows.filter((candidate) => !candidate.isContext)) {
+        entries.push([boardMembershipKey([], row.id), { row, interaction: rowInteraction(row) }]);
+      }
+    }
+    for (const page of groupPages) {
+      for (const row of page.rows.filter((candidate) => !candidate.isContext)) {
+        entries.push([
+          boardMembershipKey(page.path, row.id),
+          { row, interaction: rowInteraction(row) },
+        ]);
+      }
+    }
+    return new Map(entries);
+  }, [groupPages, rootRows, rowInteraction, ungrouped]);
+  const writableIds = useMemo(
     () =>
-      new Map<string, WorkViewRowFor<TTarget>>(
-        [...rootRows, ...groupPages.flatMap((page) => page.rows)].map(
-          (row) => [row.id, row] as const,
-        ),
+      new Set<string>(
+        [...memberships.values()]
+          .filter((membership) => membership.interaction.writable)
+          .map((membership) => membership.row.id),
       ),
-    [groupPages, rootRows],
+    [memberships],
   );
+  const selectionActive = [...selectedIds].some((id) => writableIds.has(id));
   const groupField = definition.arrangement.groupBy as string | null;
   const mutable =
     groupField !== null &&
@@ -270,22 +326,45 @@ export function WorkBoard<TTarget extends ViewTarget>({
   );
 
   const toggle = (id: string): void => {
-    const next = new Set(selectedIds);
+    if (!writableIds.has(id)) return;
+    const next = new Set([...selectedIds].filter((selectedId) => writableIds.has(selectedId)));
     if (next.has(id)) next.delete(id);
     else next.add(id);
     onSelectionChange(next);
   };
 
+  const canAcceptBoardSource = useCallback(
+    (data: unknown): boolean => {
+      if (!mutable || !isObjectDragData(data)) return false;
+      if (data.actionScope !== 'all') return false;
+      const sourcePath = boardSourcePath(data.sourceSurfaceId);
+      if (sourcePath === null) return false;
+      return (
+        memberships.get(boardMembershipKey(sourcePath, data.object.id))?.interaction.writable ===
+        true
+      );
+    },
+    [memberships, mutable],
+  );
+
   useDragDropMonitor({
     onDragEnd: (event) => {
       const source = event.operation.source?.data;
       const destination = event.operation.target?.data;
-      if (!mutable || !isObjectDragData(source) || !isBoardCellData(destination)) return;
+      if (
+        !mutable ||
+        !isObjectDragData(source) ||
+        !isBoardCellData(destination) ||
+        !destination.canDrop ||
+        !canAcceptBoardSource(source)
+      )
+        return;
       const sourcePath = boardSourcePath(source.sourceSurfaceId);
-      const item = rows.get(source.object.id);
-      if (sourcePath === null || item === undefined) return;
+      if (sourcePath === null) return;
+      const membership = memberships.get(boardMembershipKey(sourcePath, source.object.id));
+      if (membership?.interaction.writable !== true) return;
       onDrop({
-        item,
+        item: membership.row,
         sourcePath,
         destinationPath: destination.path,
         beforeId: null,
@@ -382,14 +461,17 @@ export function WorkBoard<TTarget extends ViewTarget>({
                           workViewGroupPathKey(candidate.path) === workViewGroupPathKey(path),
                       );
                 const mountedRows = ungrouped
-                  ? (page?.rows ?? [])
-                  : (page?.rows ?? []).slice(-MAX_MOUNTED_CARDS_PER_CELL);
+                  ? (page?.rows ?? []).filter((row) => !row.isContext)
+                  : (page?.rows ?? [])
+                      .filter((row) => !row.isContext)
+                      .slice(-MAX_MOUNTED_CARDS_PER_CELL);
                 return (
                   <WorkBoardCell
                     key={workViewGroupPathKey(path)}
                     path={path}
                     label={lane?.label ?? column.label}
                     mutable={mutable}
+                    canAcceptSource={canAcceptBoardSource}
                   >
                     {lane ? (
                       <h3 className="text-on-surface-variant text-label-medium mb-2 flex items-center justify-between px-1">
@@ -398,40 +480,47 @@ export function WorkBoard<TTarget extends ViewTarget>({
                       </h3>
                     ) : null}
                     <div className="flex flex-col gap-2">
-                      {mountedRows.map((row) => (
-                        <WorkBoardCard
-                          key={row.id}
-                          row={row}
-                          sourcePath={page?.path ?? path}
-                          selected={selectedIds.has(row.id)}
-                          selectionActive={selectedIds.size > 0}
-                          onToggle={() => {
-                            toggle(row.id);
-                          }}
-                          onActivate={() => {
-                            onActivate(row);
-                          }}
-                        >
-                          {properties.length > 0 ? (
-                            <dl className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
-                              {properties.map((field) => (
-                                <div
-                                  key={field.key}
-                                  className="text-on-surface-variant text-label-small flex min-w-0 gap-1"
-                                >
-                                  <dt className="sr-only">{field.label}</dt>
-                                  <dd className="max-w-36 truncate">
-                                    {formatWorkViewValue(
-                                      workViewRowDisplayValue(row, field.key),
-                                      field.kind,
-                                    )}
-                                  </dd>
-                                </div>
-                              ))}
-                            </dl>
-                          ) : null}
-                        </WorkBoardCard>
-                      ))}
+                      {mountedRows.map((row) => {
+                        const sourcePath = page?.path ?? path;
+                        const interaction =
+                          memberships.get(boardMembershipKey(sourcePath, row.id))?.interaction ??
+                          rowInteraction(row);
+                        return (
+                          <WorkBoardCard
+                            key={row.id}
+                            row={row}
+                            sourcePath={sourcePath}
+                            selected={interaction.writable && selectedIds.has(row.id)}
+                            selectionActive={selectionActive}
+                            interaction={interaction}
+                            onToggle={() => {
+                              toggle(row.id);
+                            }}
+                            onActivate={() => {
+                              onActivate(row);
+                            }}
+                          >
+                            {properties.length > 0 ? (
+                              <dl className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+                                {properties.map((field) => (
+                                  <div
+                                    key={field.key}
+                                    className="text-on-surface-variant text-label-small flex min-w-0 gap-1"
+                                  >
+                                    <dt className="sr-only">{field.label}</dt>
+                                    <dd className="max-w-36 truncate">
+                                      {formatWorkViewValue(
+                                        workViewRowDisplayValue(row, field.key),
+                                        field.kind,
+                                      )}
+                                    </dd>
+                                  </div>
+                                ))}
+                              </dl>
+                            ) : null}
+                          </WorkBoardCard>
+                        );
+                      })}
                     </div>
                     {ungrouped && hasMoreRows && onLoadMoreRows ? (
                       <Button

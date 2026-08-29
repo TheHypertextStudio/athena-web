@@ -4,29 +4,44 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { act, type JSX, type ReactNode, useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { controller, createState, lensState, navigateAuthenticatedMock } = vi.hoisted(() => ({
-  controller: {
-    definition: {
-      version: 2,
-      target: 'project',
-      filter: { field: 'status', operator: 'eq', value: 'active' },
-      arrangement: { groupBy: null, subGroupBy: null, orderBy: [] },
-      presentation: {
-        layout: 'list',
-        properties: ['status'],
-        density: 'compact',
-        showEmptyGroups: false,
+const { boardState, controller, createState, lensState, navigateAuthenticatedMock, orderState } =
+  vi.hoisted(() => ({
+    boardState: {
+      drop: null as null | {
+        readonly item: {
+          readonly id: string;
+          readonly organizationId: string;
+          readonly isContext: boolean;
+        };
+        readonly sourcePath: readonly string[];
+        readonly destinationPath: readonly string[];
+        readonly beforeId: string | null;
+        readonly afterId: string | null;
       },
     },
-    setDefinition: vi.fn(),
-  },
-  createState: {
-    request: null as null | Record<string, unknown>,
-    returnFocusTo: null as HTMLElement | null,
-  },
-  lensState: { props: null as null | Record<string, unknown>, refetches: vi.fn() },
-  navigateAuthenticatedMock: vi.fn(),
-}));
+    controller: {
+      definition: {
+        version: 2,
+        target: 'project',
+        filter: { field: 'status', operator: 'eq', value: 'active' },
+        arrangement: { groupBy: null as string | null, subGroupBy: null, orderBy: [] },
+        presentation: {
+          layout: 'list',
+          properties: ['status'],
+          density: 'compact',
+          showEmptyGroups: false,
+        },
+      },
+      setDefinition: vi.fn(),
+    },
+    createState: {
+      request: null as null | Record<string, unknown>,
+      returnFocusTo: null as HTMLElement | null,
+    },
+    lensState: { props: null as null | Record<string, unknown>, refetches: vi.fn() },
+    navigateAuthenticatedMock: vi.fn(),
+    orderState: { mutate: vi.fn() },
+  }));
 
 vi.mock('../../src/lib/app-location', () => ({
   navigateAuthenticated: navigateAuthenticatedMock,
@@ -165,7 +180,24 @@ vi.mock('../../src/components/work-views/use-work-view', () => ({
 }));
 
 vi.mock('../../src/components/work-views/use-work-view-order', () => ({
-  useWorkViewOrder: () => ({ mutate: vi.fn(), error: null }),
+  useWorkViewOrder: () => ({ mutate: orderState.mutate, error: null }),
+}));
+
+vi.mock('../../src/components/work-views/work-board', () => ({
+  WorkBoard: ({
+    onDrop,
+  }: {
+    onDrop: (drop: NonNullable<typeof boardState.drop>) => void;
+  }): JSX.Element => (
+    <button
+      type="button"
+      onClick={() => {
+        if (boardState.drop !== null) onDrop(boardState.drop);
+      }}
+    >
+      Drop grouped row
+    </button>
+  ),
 }));
 
 vi.mock('../../src/components/work-views/use-initiative-hierarchy', () => ({
@@ -210,15 +242,60 @@ function openDependencyCreation(): { onCreated: (project: { id: string }) => voi
 }
 
 beforeEach(() => {
+  boardState.drop = null;
   createState.request = null;
   createState.returnFocusTo = null;
+  controller.definition.arrangement.groupBy = null;
+  controller.definition.presentation.layout = 'list';
   controller.setDefinition.mockReset();
   lensState.props = null;
   lensState.refetches.mockReset();
   navigateAuthenticatedMock.mockReset();
+  orderState.mutate.mockReset();
 });
 
 describe('WorkViewPage creation continuity', () => {
+  it('orders a grouped row that is supplied by the board page', () => {
+    controller.definition.arrangement.groupBy = 'status';
+    controller.definition.presentation.layout = 'board';
+    boardState.drop = {
+      item: { id: PROJECT_ID, organizationId: ALPHA_ID, isContext: false },
+      sourcePath: ['started'],
+      destinationPath: ['completed'],
+      beforeId: null,
+      afterId: null,
+    };
+
+    render(<WorkViewPage organizationId={ALPHA_ID} target="project" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Drop grouped row' }));
+
+    expect(orderState.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        organizationId: ALPHA_ID,
+        itemId: PROJECT_ID,
+        sourceGroupValue: 'started',
+        groupValue: 'completed',
+      }),
+    );
+  });
+
+  it('does not order a grouped row owned by another organization', () => {
+    controller.definition.arrangement.groupBy = 'status';
+    controller.definition.presentation.layout = 'board';
+    boardState.drop = {
+      item: { id: PROJECT_ID, organizationId: BRAVO_ID, isContext: false },
+      sourcePath: ['started'],
+      destinationPath: ['completed'],
+      beforeId: null,
+      afterId: null,
+    };
+
+    render(<WorkViewPage organizationId={ALPHA_ID} target="project" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Drop grouped row' }));
+
+    expect(orderState.mutate).not.toHaveBeenCalled();
+  });
+
   it('stays mounted, reports delayed visibility, retries, and opens the refreshed peek', () => {
     render(<WorkViewPage organizationId={ALPHA_ID} target="project" />);
     const request = openDependencyCreation();

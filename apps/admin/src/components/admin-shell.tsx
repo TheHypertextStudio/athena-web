@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { type JSX, type ReactNode, useEffect, useState } from 'react';
 
 import { ViewingAsBanner } from '@/components/viewing-as-banner';
+import { ErrorBanner } from '@/components/ui-bits';
 import { signOut, useSession } from '@/lib/auth-client';
 
 /** A single primary navigation entry in the admin shell. */
@@ -62,6 +63,7 @@ export function AdminShell({ children }: AdminShellProps): JSX.Element {
   const router = useRouter();
   const { data: session, isPending } = useSession();
   const [signingOut, setSigningOut] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
 
   // Redirect to sign-in once the session resolves to "signed out" — an unauthenticated visitor
   // has no usable destination in the shell, so surface the sign-in screen instead of inert chrome.
@@ -71,9 +73,17 @@ export function AdminShell({ children }: AdminShellProps): JSX.Element {
 
   /** Sign the operator out and return to the sign-in screen. */
   async function handleSignOut(): Promise<void> {
+    if (!session || signingOut) return;
+    setSignOutError(null);
     setSigningOut(true);
-    await signOut();
-    router.push('/sign-in');
+    try {
+      await signOut(session.user.id);
+      router.push('/sign-in');
+    } catch {
+      setSignOutError('Could not sign out. Check your connection and try again.');
+    } finally {
+      setSigningOut(false);
+    }
   }
 
   return (
@@ -113,6 +123,7 @@ export function AdminShell({ children }: AdminShellProps): JSX.Element {
             </Link>
           ))}
         </nav>
+        <ErrorBanner message={signOutError} />
         <div className="mt-auto hidden flex-col gap-2 px-1 md:flex">
           {session?.user.email ? (
             <p className="text-on-surface-variant truncate text-xs" title={session.user.email}>

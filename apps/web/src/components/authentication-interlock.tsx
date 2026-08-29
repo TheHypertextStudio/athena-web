@@ -18,6 +18,10 @@ import { safeSameOriginPath, signInReturnPath } from './app-shell-utils';
 interface AuthenticationInterlockValue {
   /** Block the current surface until the person explicitly continues to sign-in. */
   readonly requireAuthentication: (returnPath?: string) => void;
+  /** Explain that session cleanup stopped because private browser data could not be cleared. */
+  readonly reportSessionCleanupFailure: () => void;
+  /** Explain that an explicit account-bound sign-out request did not finish. */
+  readonly reportSignOutFailure: () => void;
 }
 
 const AuthenticationInterlockContext = createContext<AuthenticationInterlockValue | null>(null);
@@ -53,9 +57,23 @@ export function AuthenticationInterlockProvider({
 }): JSX.Element {
   const [returnPath, setReturnPath] = useState('/today');
   const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState<'authentication' | 'cleanup-failed' | 'sign-out-failed'>(
+    'authentication',
+  );
 
   const requireAuthentication = useCallback((nextPath?: string): void => {
     setReturnPath(safeSameOriginPath(nextPath ?? currentReturnPath()) ?? '/today');
+    setReason('authentication');
+    setOpen(true);
+  }, []);
+
+  const reportSessionCleanupFailure = useCallback((): void => {
+    setReason('cleanup-failed');
+    setOpen(true);
+  }, []);
+
+  const reportSignOutFailure = useCallback((): void => {
+    setReason('sign-out-failed');
     setOpen(true);
   }, []);
 
@@ -64,30 +82,54 @@ export function AuthenticationInterlockProvider({
   }
 
   return (
-    <AuthenticationInterlockContext.Provider value={{ requireAuthentication }}>
+    <AuthenticationInterlockContext.Provider
+      value={{ requireAuthentication, reportSessionCleanupFailure, reportSignOutFailure }}
+    >
       {children}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Sign in to continue</DialogTitle>
+            <DialogTitle>
+              {reason === 'authentication'
+                ? 'Sign in to continue'
+                : reason === 'cleanup-failed'
+                  ? 'Sign-out could not finish safely'
+                  : 'Sign-out could not finish'}
+            </DialogTitle>
             <DialogDescription>
-              Your session is no longer available for this action. Sign in to continue from this
-              exact place, or close this to keep looking around.
+              {reason === 'authentication'
+                ? 'Your session is no longer available for this action. Sign in to continue from this exact place, or close this to keep looking around.'
+                : reason === 'cleanup-failed'
+                  ? "Docket could not clear this browser's offline data, so it stopped before another account could be affected. Close other Docket tabs and try again."
+                  : 'Docket could not confirm that your session ended. Your account remains available in this tab. Check your connection and try again.'}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setOpen(false);
-              }}
-            >
-              Not now
-            </Button>
-            <Button type="button" onClick={continueToSignIn}>
-              Sign in to continue
-            </Button>
+            {reason === 'authentication' ? (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setOpen(false);
+                  }}
+                >
+                  Not now
+                </Button>
+                <Button type="button" onClick={continueToSignIn}>
+                  Sign in to continue
+                </Button>
+              </>
+            ) : (
+              <Button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                }}
+              >
+                Close
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

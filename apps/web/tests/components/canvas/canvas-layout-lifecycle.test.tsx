@@ -389,7 +389,7 @@ describe('Canvas measured layout lifecycle', () => {
   it('deletes a selected dependency edge before the gentle node-trash boundary handles the key', () => {
     const onDeleteEdge = vi.fn();
     render(
-      <SelectionProvider items={[]} surfaceId="project-keyboard">
+      <SelectionProvider items={[]} surfaceId="project-keyboard" actionScope="all">
         <CanvasSelectionFrame label="Project dependency graph">
           <Canvas
             nodes={[
@@ -425,7 +425,7 @@ describe('Canvas measured layout lifecycle', () => {
   it('lets selected nodes reach SelectionFrame gentle trash without local React Flow deletion', () => {
     const onDeleteEdge = vi.fn();
     render(
-      <SelectionProvider items={[]} surfaceId="task-keyboard">
+      <SelectionProvider items={[]} surfaceId="task-keyboard" actionScope="all">
         <CanvasSelectionFrame label="Task graph">
           <Canvas
             nodes={[{ id: 'task-a', position: { x: 0, y: 0 }, selected: true, data: {} }]}

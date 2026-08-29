@@ -11,6 +11,9 @@
  */
 import { z } from 'zod';
 
+/** The account id a destructive session request was started under. */
+export const SESSION_OWNER_HEADER = 'X-Docket-Session-Owner';
+
 /** A signed-in device/browser session. */
 export const SessionOut = z
   .object({

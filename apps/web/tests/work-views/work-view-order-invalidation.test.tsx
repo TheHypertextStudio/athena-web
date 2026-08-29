@@ -24,6 +24,7 @@ vi.mock('../../src/lib/api', () => ({
 vi.mock('../../src/lib/work-target-invalidation', () => ({ invalidateWorkTargetQueries }));
 
 const OWNER_ORGANIZATION_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAX';
+const ROUTE_ORGANIZATION_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 const PROJECT_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAW';
 
 beforeEach(() => {
@@ -34,14 +35,14 @@ beforeEach(() => {
 });
 
 describe('useWorkViewOrder', () => {
-  it('writes and invalidates through a foreign row owner instead of the route organization', async () => {
+  it('writes and invalidates manual order through the route organization', async () => {
     const { client, wrapper } = makeQueryWrapper();
     const { result } = renderHook(() => useWorkViewOrder(), { wrapper });
 
     act(() => {
       result.current.mutate({
         target: 'project',
-        organizationId: OWNER_ORGANIZATION_ID,
+        organizationId: ROUTE_ORGANIZATION_ID,
         itemId: PROJECT_ID,
         groupField: null,
         sourceGroupValue: null,
@@ -53,13 +54,13 @@ describe('useWorkViewOrder', () => {
 
     await waitFor(() => {
       expect(order).toHaveBeenCalledWith({
-        param: { orgId: OWNER_ORGANIZATION_ID },
+        param: { orgId: ROUTE_ORGANIZATION_ID },
         json: expect.objectContaining({ target: 'project', itemId: PROJECT_ID }),
       });
     });
     expect(invalidateWorkTargetQueries).toHaveBeenCalledWith(client, {
       target: 'project',
-      ownerOrganizationId: OWNER_ORGANIZATION_ID,
+      ownerOrganizationId: ROUTE_ORGANIZATION_ID,
     });
   });
 

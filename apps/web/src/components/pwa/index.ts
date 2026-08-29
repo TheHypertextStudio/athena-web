@@ -28,26 +28,24 @@ export {
   describeWrite,
   expireAged,
   isQueueableWrite,
+  isManualRetryable,
   isReplayable,
   pendingCount,
   stalledCount,
 } from './outbox-model';
+export { canQueueWrites, outboxKeyFor, purgeAllOutboxes, readOutbox } from './outbox-store';
 export {
-  canQueueWrites,
-  outboxKeyFor,
-  purgeAllOutboxes,
-  readOutbox,
-  writeOutbox,
-} from './outbox-store';
-export {
+  clearOutboxOwnerForSignOut,
   discardEntry,
   drainOutbox,
   enqueueWrite,
   outboxSnapshot,
   outboxUserId,
   retryEntry,
+  restoreOutboxUserAfterFailedSignOut,
   setOutboxUser,
   startOutboxDrain,
   subscribeOutbox,
+  waitForOutboxSessionTransition,
 } from './outbox';
 export { purgeOfflineDocuments } from './purge-offline-documents';

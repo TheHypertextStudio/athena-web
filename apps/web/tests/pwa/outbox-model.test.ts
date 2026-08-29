@@ -8,9 +8,13 @@ import {
   classifyReplay,
   describeWrite,
   expireAged,
+  hasCompleteReplayContract,
   isQueueableWrite,
+  isManualRetryable,
   isReplayable,
   pendingCount,
+  retryAfterTimestamp,
+  sanitizeReplayHeaders,
   stalledCount,
 } from '@/components/pwa/outbox-model';
 
@@ -27,15 +31,18 @@ import {
 const NOW = 1_800_000_000_000;
 
 function entry(overrides: Partial<OutboxEntry> = {}): OutboxEntry {
+  const commandId = 'command-1';
   return {
     id: 'e1',
     userId: 'u1',
-    method: 'PATCH',
-    path: '/v1/orgs/o1/tasks/t1',
-    body: '{"title":"x"}',
-    contentType: 'application/json',
-    label: 'Task change',
+    epoch: 'legacy',
+    method: 'POST',
+    path: '/v1/orgs/o1/object-commands',
+    body: JSON.stringify({ commandId }),
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': commandId },
+    label: 'Object change',
     createdAt: NOW,
+    notBeforeAt: null,
     attempts: 0,
     status: 'queued',
     ...overrides,
@@ -43,10 +50,17 @@ function entry(overrides: Partial<OutboxEntry> = {}): OutboxEntry {
 }
 
 describe('isQueueableWrite', () => {
-  it('takes responsibility for API writes only', () => {
-    expect(isQueueableWrite('POST', '/v1/orgs/o1/tasks')).toBe(true);
-    expect(isQueueableWrite('patch', '/v1/orgs/o1/tasks/t1')).toBe(true);
-    expect(isQueueableWrite('DELETE', '/v1/orgs/o1/tasks/t1')).toBe(true);
+  it('takes responsibility only for atomically idempotent object commands', () => {
+    expect(isQueueableWrite('POST', '/v1/orgs/o1/object-commands')).toBe(true);
+    expect(isQueueableWrite('POST', '/v1/orgs/o1/tasks')).toBe(false);
+    expect(isQueueableWrite('PATCH', '/v1/orgs/o1/tasks/t1')).toBe(false);
+    expect(isQueueableWrite('DELETE', '/v1/orgs/o1/tasks/t1')).toBe(false);
+    expect(isQueueableWrite('POST', '/v1/orgs/o1/comments')).toBe(false);
+    expect(isQueueableWrite('POST', '/v1/orgs/o1/projects')).toBe(false);
+    expect(isQueueableWrite('PATCH', '/v1/orgs/o1/projects/p1')).toBe(false);
+    expect(isQueueableWrite('POST', '/v1/orgs/o1/initiatives/hierarchy-links')).toBe(false);
+    expect(isQueueableWrite('PATCH', '/v1/orgs/o1/initiatives/hierarchy-links/l1')).toBe(false);
+    expect(isQueueableWrite('DELETE', '/v1/orgs/o1/initiatives/hierarchy-links/l1')).toBe(false);
   });
 
   it('never queues a read — a failed read has nothing to replay', () => {
@@ -61,20 +75,32 @@ describe('isQueueableWrite', () => {
     expect(isQueueableWrite('POST', '/api/auth')).toBe(false);
   });
 
+  it('rejects sensitive and response-dependent writes before the live attempt', () => {
+    expect(isQueueableWrite('POST', '/v1/me/recovery-codes')).toBe(false);
+    expect(isQueueableWrite('DELETE', '/v1/me')).toBe(false);
+    expect(isQueueableWrite('POST', '/v1/account/delete')).toBe(false);
+    expect(isQueueableWrite('POST', '/v1/orgs/o1/billing/checkout')).toBe(false);
+    expect(isQueueableWrite('POST', '/v1/billing/checkout')).toBe(false);
+    expect(isQueueableWrite('POST', '/v1/orgs/o1/object-commands/replay-access')).toBe(false);
+    expect(isQueueableWrite('POST', '/v1/orgs/o1/labels')).toBe(false);
+    expect(isQueueableWrite('PUT', '/v1/orgs/o1/tasks/t1')).toBe(false);
+    expect(isQueueableWrite('CONNECT', '/v1/orgs/o1/tasks/t1')).toBe(false);
+  });
+
   it('ignores anything outside the typed API', () => {
     expect(isQueueableWrite('POST', '/some/other/thing')).toBe(false);
     expect(isQueueableWrite('POST', '/v1x/orgs')).toBe(false);
+    expect(isQueueableWrite('POST', '')).toBe(false);
+    expect(isQueueableWrite('POST', 'https://outside.test/v1/orgs/o1/tasks')).toBe(false);
+    expect(isQueueableWrite('POST', '//outside.test/v1/orgs/o1/tasks')).toBe(false);
+    expect(isQueueableWrite('POST', '/v1/../api/auth/sign-out')).toBe(false);
+    expect(isQueueableWrite('POST', '/v1/orgs/o1/tasks#fragment')).toBe(false);
   });
 });
 
 describe('describeWrite', () => {
   it('names the change in the product’s own words', () => {
-    expect(describeWrite('POST', '/v1/orgs/o1/tasks')).toBe('New task');
-    expect(describeWrite('PATCH', '/v1/orgs/o1/tasks/t1')).toBe('Task change');
-    expect(describeWrite('DELETE', '/v1/orgs/o1/tasks/t1')).toBe('Archived task');
-    expect(describeWrite('POST', '/v1/orgs/o1/tasks/t1/comments')).toBe('Comment');
-    expect(describeWrite('POST', '/v1/orgs/o1/projects')).toBe('New project');
-    expect(describeWrite('PATCH', '/v1/orgs/o1/projects/p1')).toBe('Project change');
+    expect(describeWrite('POST', '/v1/orgs/o1/object-commands')).toBe('Object change');
   });
 
   it('still says something human for a write it has no rule for', () => {
@@ -83,6 +109,47 @@ describe('describeWrite', () => {
     expect(describeWrite('PUT', '/v1/orgs/o1/anything')).toBe('Change');
     expect(describeWrite('DELETE', '/v1/orgs/o1/anything')).toBe('Removal');
     expect(describeWrite('REPORT', '/v1/orgs/o1/anything')).toBe('Change');
+  });
+});
+
+describe('replay contract headers', () => {
+  it('keeps only the object-command contract and rejects unsafe values and secrets', () => {
+    expect(
+      sanitizeReplayHeaders({
+        Authorization: 'Bearer private',
+        Cookie: 'private=1',
+        'Content-Type': 'application/json',
+        'Idempotency-Key': 'stable-key',
+        'If-Match': '"must-not-persist"',
+        'X-Docket-Replay-Owner': 'must-not-persist',
+        'X-Secret': 'private',
+      }),
+    ).toEqual({
+      'Content-Type': 'application/json',
+      'Idempotency-Key': 'stable-key',
+    });
+    expect(sanitizeReplayHeaders({ 'If-Match': 'bad\r\nInjected: yes' })).toEqual({});
+  });
+
+  it('requires an object command key that matches the stable command id', () => {
+    expect(
+      hasCompleteReplayContract(
+        entry({
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      hasCompleteReplayContract(
+        entry({
+          headers: {
+            'Content-Type': 'application/json',
+            'Idempotency-Key': 'wrong-command',
+          },
+        }),
+      ),
+    ).toBe(false);
+    expect(hasCompleteReplayContract(entry())).toBe(true);
   });
 });
 
@@ -106,34 +173,55 @@ describe('isReplayable', () => {
     expect(isReplayable(entry({ attempts: OUTBOX_MAX_ATTEMPTS - 1 }), NOW)).toBe(true);
     expect(isReplayable(entry({ attempts: OUTBOX_MAX_ATTEMPTS }), NOW)).toBe(false);
   });
+
+  it('does not spend another attempt before the persisted server deadline', () => {
+    expect(isReplayable(entry({ notBeforeAt: NOW + 60_000 }), NOW + 59_999)).toBe(false);
+    expect(isReplayable(entry({ notBeforeAt: NOW + 60_000 }), NOW + 60_000)).toBe(true);
+  });
+});
+
+describe('retryAfterTimestamp', () => {
+  it('parses delta seconds and an HTTP date into a bounded deadline', () => {
+    expect(retryAfterTimestamp('120', NOW)).toBe(NOW + 120_000);
+    expect(retryAfterTimestamp(new Date(NOW + 120_000).toUTCString(), NOW)).toBe(NOW + 120_000);
+    expect(retryAfterTimestamp(new Date(NOW - 60_000).toUTCString(), NOW)).toBe(NOW);
+  });
+
+  it('rejects malformed, negative, injected, and overflowing values', () => {
+    expect(retryAfterTimestamp('', NOW)).toBeNull();
+    expect(retryAfterTimestamp('-1', NOW)).toBeNull();
+    expect(retryAfterTimestamp('tomorrow', NOW)).toBeNull();
+    expect(retryAfterTimestamp('1\r\nX-Injected: yes', NOW)).toBeNull();
+    expect(retryAfterTimestamp('999999999999999999999999', NOW)).toBeNull();
+  });
 });
 
 describe('classifyReplay', () => {
   it('treats any 2xx as accepted', () => {
-    expect(classifyReplay(200)).toBe('accepted');
-    expect(classifyReplay(201)).toBe('accepted');
-    expect(classifyReplay(204)).toBe('accepted');
+    expect(classifyReplay('POST', 200)).toBe('accepted');
+    expect(classifyReplay('POST', 201)).toBe('accepted');
+    expect(classifyReplay('POST', 204)).toBe('accepted');
   });
 
-  it('treats "nothing answered" as still owed', () => {
-    expect(classifyReplay(null)).toBe('retry');
+  it('pauses when nothing answered or the session needs confirmation', () => {
+    expect(classifyReplay('POST', null)).toBe('pause');
+    expect(classifyReplay('POST', 401)).toBe('pause');
   });
 
-  it('retries a server that is temporarily unable, and a rotated session', () => {
-    expect(classifyReplay(500)).toBe('retry');
-    expect(classifyReplay(503)).toBe('retry');
-    expect(classifyReplay(429)).toBe('retry');
-    expect(classifyReplay(408)).toBe('retry');
-    expect(classifyReplay(425)).toBe('retry');
-    // A cookie that rotated while someone was on a train must not destroy their work.
-    expect(classifyReplay(401)).toBe('retry');
+  it('distinguishes transient server failures from in-progress contention', () => {
+    expect(classifyReplay('POST', 500)).toBe('retry');
+    expect(classifyReplay('POST', 503)).toBe('retry');
+    expect(classifyReplay('POST', 429)).toBe('retry');
+    expect(classifyReplay('POST', 408)).toBe('retry');
+    expect(classifyReplay('POST', 425)).toBe('retry');
+    expect(classifyReplay('POST', 409, NOW + 1_000)).toBe('deferred');
   });
 
   it('gives up when the server understood and refused', () => {
-    expect(classifyReplay(409)).toBe('refused');
-    expect(classifyReplay(422)).toBe('refused');
-    expect(classifyReplay(404)).toBe('refused');
-    expect(classifyReplay(403)).toBe('refused');
+    expect(classifyReplay('POST', 409)).toBe('refused');
+    expect(classifyReplay('POST', 422)).toBe('refused');
+    expect(classifyReplay('POST', 403)).toBe('refused');
+    expect(classifyReplay('PATCH', 200)).toBe('refused');
   });
 });
 
@@ -143,8 +231,18 @@ describe('afterReplay', () => {
   });
 
   it('keeps a retryable entry waiting, counting the attempt', () => {
-    const next = afterReplay(entry(), 'retry', NOW);
-    expect(next).toMatchObject({ status: 'queued', attempts: 1 });
+    const next = afterReplay(entry(), 'retry', NOW, NOW + 120_000);
+    expect(next).toMatchObject({ status: 'queued', attempts: 1, notBeforeAt: NOW + 120_000 });
+  });
+
+  it('defers an in-progress key without spending an attempt', () => {
+    const next = afterReplay(entry({ attempts: 4 }), 'deferred', NOW, NOW + 1_000);
+    expect(next).toMatchObject({ status: 'queued', attempts: 4, notBeforeAt: NOW + 1_000 });
+  });
+
+  it('keeps a paused entry waiting without spending an attempt', () => {
+    const next = afterReplay(entry({ status: 'sending', attempts: 4 }), 'pause', NOW + 1);
+    expect(next).toMatchObject({ status: 'queued', attempts: 4 });
   });
 
   it('blocks a refused entry immediately — retrying cannot change a refusal', () => {
@@ -152,13 +250,37 @@ describe('afterReplay', () => {
   });
 
   it('blocks an entry that has spent its attempts', () => {
-    const next = afterReplay(entry({ attempts: OUTBOX_MAX_ATTEMPTS - 1 }), 'retry', NOW);
-    expect(next).toMatchObject({ status: 'blocked', attempts: OUTBOX_MAX_ATTEMPTS });
+    const next = afterReplay(
+      entry({ attempts: OUTBOX_MAX_ATTEMPTS - 1 }),
+      'retry',
+      NOW,
+      NOW + 60_000,
+    );
+    expect(next).toMatchObject({
+      status: 'blocked',
+      attempts: OUTBOX_MAX_ATTEMPTS,
+      notBeforeAt: NOW + 60_000,
+    });
   });
 
   it('expires an entry whose window closed while it was retrying', () => {
     const next = afterReplay(entry(), 'retry', NOW + OUTBOX_MAX_AGE_MS + 1);
     expect(next).toMatchObject({ status: 'expired' });
+  });
+});
+
+describe('isManualRetryable', () => {
+  it('keeps a blocked entry paced until the server deadline passes', () => {
+    const blocked = entry({ status: 'blocked', notBeforeAt: NOW + 60_000 });
+    expect(isManualRetryable(blocked, NOW + 59_999)).toBe(false);
+    expect(isManualRetryable(blocked, NOW + 60_000)).toBe(true);
+  });
+
+  it('rejects expired and non-blocked entries', () => {
+    expect(isManualRetryable(entry({ status: 'queued' }), NOW)).toBe(false);
+    expect(
+      isManualRetryable(entry({ status: 'blocked', createdAt: NOW - OUTBOX_MAX_AGE_MS - 1 }), NOW),
+    ).toBe(false);
   });
 });
 
@@ -175,7 +297,15 @@ describe('expireAged', () => {
     expect(restored[0]?.status).toBe('queued');
   });
 
-  it('leaves settled entries alone', () => {
+  it('expires a blocked POST once its stable key passes the retention deadline', () => {
+    const restored = expireAged(
+      [entry({ status: 'blocked', createdAt: NOW - OUTBOX_MAX_AGE_MS - 1 })],
+      NOW,
+    );
+    expect(restored[0]?.status).toBe('expired');
+  });
+
+  it('leaves still-young settled entries alone', () => {
     const restored = expireAged([entry({ status: 'blocked' }), entry({ id: 'e2' })], NOW);
     expect(restored.map((item) => item.status)).toEqual(['blocked', 'queued']);
   });

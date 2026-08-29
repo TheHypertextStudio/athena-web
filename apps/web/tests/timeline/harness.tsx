@@ -121,7 +121,7 @@ export const catalog: TimelineCatalog<Row> = {
   progress: () => null,
   edges: (r) => ({ blockedBy: [], blocks: r.blocks ?? [] }),
   statusLabel: () => 'Planned',
-  object: () => null,
+  interaction: () => ({ object: null, dragDisabled: true, actionScope: 'reference' }),
 };
 
 /** An ungrouped applied view over the given rows. */
@@ -153,8 +153,12 @@ export interface FixtureProps {
   readonly viewport?: TimelineViewport;
   /** Whether the viewer may reschedule. */
   readonly canSchedule?: boolean;
+  /** Catalog override for row-specific projection behavior. */
+  readonly catalogOverride?: TimelineCatalog<Row>;
   /** Commit handler, so a drag test can assert what was persisted. */
   readonly onReschedule?: (id: string, span: TimelineSpan) => void;
+  /** Activation handler, so read-only rows remain navigable. */
+  readonly onActivate?: (id: string) => void;
 }
 
 /** The default fixture window: 120 days opening at {@link EPOCH}. */
@@ -166,12 +170,14 @@ export function Fixture({
   display = DEFAULT_VIEW_DISPLAY,
   viewport,
   canSchedule = true,
+  catalogOverride = catalog,
   onReschedule = () => undefined,
+  onActivate = () => undefined,
 }: FixtureProps): JSX.Element {
   return (
     <TimelineCanvas
       applied={flat(rows)}
-      catalog={catalog}
+      catalog={catalogOverride}
       display={display}
       viewport={viewport ?? fixedViewport(DEFAULT_WINDOW)}
       noun="Project"
@@ -181,7 +187,7 @@ export function Fixture({
       onReschedule={onReschedule}
       onApplyCascade={() => undefined}
       applyingCascade={false}
-      onActivate={() => undefined}
+      onActivate={onActivate}
       onPrefetch={() => undefined}
     />
   );

@@ -85,7 +85,12 @@ function PermissionWrapper({
   readonly historyControls: CanvasCommandHistoryControls;
 }): React.JSX.Element {
   return (
-    <SelectionProvider items={[]} organizationId="org-1" surfaceId="permission-canvas">
+    <SelectionProvider
+      items={[]}
+      organizationId="org-1"
+      surfaceId="permission-canvas"
+      actionScope="all"
+    >
       <CanvasCommandProviderWithHistory
         objectKind={objectKind}
         canEdit={false}
@@ -101,7 +106,12 @@ function PermissionWrapper({
 
 function Wrapper({ children }: { children: ReactNode }): React.JSX.Element {
   return (
-    <SelectionProvider items={[]} organizationId="org-1" surfaceId="read-only-canvas">
+    <SelectionProvider
+      items={[]}
+      organizationId="org-1"
+      surfaceId="read-only-canvas"
+      actionScope="all"
+    >
       <CanvasCommandProvider
         orgId="org-1"
         scopeKey="projects"

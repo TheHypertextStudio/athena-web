@@ -179,23 +179,27 @@ export default function TimelineBar({
         <span className="relative truncate">{label}</span>
       </button>
 
-      {/* Invisible resize zones straddling each boundary — hit geometry, not visual geometry. */}
-      <span
-        role="presentation"
-        onPointerDown={(event) => {
-          onDragStart(event, 'resize-start');
-        }}
-        className="absolute inset-y-0 z-[2] cursor-ew-resize"
-        style={{ left: `${-EDGE_HANDLE_WIDTH / 2}px`, width: `${EDGE_HANDLE_WIDTH}px` }}
-      />
-      <span
-        role="presentation"
-        onPointerDown={(event) => {
-          onDragStart(event, 'resize-end');
-        }}
-        className="absolute inset-y-0 z-[2] cursor-ew-resize"
-        style={{ right: `${-EDGE_HANDLE_WIDTH / 2}px`, width: `${EDGE_HANDLE_WIDTH}px` }}
-      />
+      {schedulable ? (
+        <>
+          {/* Invisible resize zones straddling each boundary — hit geometry, not visual geometry. */}
+          <span
+            role="presentation"
+            onPointerDown={(event) => {
+              onDragStart(event, 'resize-start');
+            }}
+            className="absolute inset-y-0 z-[2] cursor-ew-resize"
+            style={{ left: `${-EDGE_HANDLE_WIDTH / 2}px`, width: `${EDGE_HANDLE_WIDTH}px` }}
+          />
+          <span
+            role="presentation"
+            onPointerDown={(event) => {
+              onDragStart(event, 'resize-end');
+            }}
+            className="absolute inset-y-0 z-[2] cursor-ew-resize"
+            style={{ right: `${-EDGE_HANDLE_WIDTH / 2}px`, width: `${EDGE_HANDLE_WIDTH}px` }}
+          />
+        </>
+      ) : null}
 
       {/*
         Checkpoint markers straddle the bar's *baseline* rather than its centre. Centred diamonds

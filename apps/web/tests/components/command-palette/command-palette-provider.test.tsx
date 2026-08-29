@@ -49,7 +49,11 @@ describe('CommandPaletteHost', () => {
     render(
       <CommandPaletteProvider>
         <OpenPalette>
-          <CommandPaletteHost panelsAvailable onOpenPanel={onOpenPanel} />
+          <CommandPaletteHost
+            panelsAvailable
+            onOpenPanel={onOpenPanel}
+            sessionOwnerUserId="user-1"
+          />
         </OpenPalette>
       </CommandPaletteProvider>,
     );

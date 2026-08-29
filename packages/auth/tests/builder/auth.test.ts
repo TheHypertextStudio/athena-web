@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 
 import type * as DocketMail from '@docket/mail';
 import type { Mailer, OutboundMessage } from '@docket/mail';
+import { SESSION_OWNER_HEADER } from '@docket/types';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { assertDefined } from '@docket/test-utils';
@@ -1106,7 +1107,12 @@ describe('passkey lockout guard (hooks.before on /passkey/delete-passkey)', () =
       })
       .returning();
 
-    const post = (path: string, body: unknown, cookie?: string): Promise<Response> =>
+    const post = (
+      path: string,
+      body: unknown,
+      cookie?: string,
+      extraHeaders: Readonly<Record<string, string>> = {},
+    ): Promise<Response> =>
       auth.handler(
         new Request(`http://localhost:4000/api/auth${path}`, {
           method: 'POST',
@@ -1114,6 +1120,7 @@ describe('passkey lockout guard (hooks.before on /passkey/delete-passkey)', () =
             'content-type': 'application/json',
             origin: 'http://localhost:4000',
             ...(cookie ? { cookie } : {}),
+            ...extraHeaders,
           },
           body: JSON.stringify(body),
         }),
@@ -1212,7 +1219,99 @@ describe('passkey lockout guard (hooks.before on /passkey/delete-passkey)', () =
     const body = (await res.json()) as { message?: string };
     expect(body.message ?? '').not.toContain('recovery code');
   });
+
+  it('refuses to sign out a different account than the one the browser action captured', async () => {
+    const { auth } = await import('../../src/index');
+    const accountA = await signedInUserWithOnePasskey('sign-out-owner-a@example.com');
+    const accountB = await signedInUserWithOnePasskey('sign-out-owner-b@example.com');
+
+    const rejected = await accountA.post('/sign-out', {}, accountB.sessionCookie, {
+      [SESSION_OWNER_HEADER]: accountA.userId,
+    });
+
+    expect(rejected.status).toBe(409);
+    await expect(
+      auth.api.getSession({
+        headers: new Headers({ cookie: accountB.sessionCookie }),
+        query: { disableCookieCache: true },
+      }),
+    ).resolves.toMatchObject({ user: { id: accountB.userId } });
+
+    const accepted = await accountB.post('/sign-out', {}, accountB.sessionCookie, {
+      [SESSION_OWNER_HEADER]: accountB.userId,
+    });
+    expect(accepted.status).toBe(200);
+    await expect(
+      auth.api.getSession({
+        headers: new Headers({ cookie: accountB.sessionCookie }),
+        query: { disableCookieCache: true },
+      }),
+    ).resolves.toBeNull();
+  });
+
+  it('refuses a sign-out request that omits the captured account contract', async () => {
+    const { auth } = await import('../../src/index');
+    const account = await signedInUserWithOnePasskey('sign-out-owner-required@example.com');
+
+    const rejected = await account.post('/sign-out', {}, account.sessionCookie);
+
+    expect(rejected.status).toBe(400);
+    await expect(
+      auth.api.getSession({
+        headers: new Headers({ cookie: account.sessionCookie }),
+        query: { disableCookieCache: true },
+      }),
+    ).resolves.toMatchObject({ user: { id: account.userId } });
+  });
+
+  it('does not let a late sign-out response clear a replacement account cookie', async () => {
+    const { auth } = await import('../../src/index');
+    const accountA = await signedInUserWithOnePasskey('late-sign-out-owner-a@example.com');
+    const accountB = await signedInUserWithOnePasskey('late-sign-out-owner-b@example.com');
+
+    const staleResponse = await accountA.post('/sign-out', {}, accountA.sessionCookie, {
+      [SESSION_OWNER_HEADER]: accountA.userId,
+    });
+    expect(staleResponse.status).toBe(200);
+
+    const replacementCookie = applySetCookieHeaders(
+      accountB.sessionCookie,
+      staleResponse.headers.getSetCookie(),
+    );
+
+    await expect(
+      auth.api.getSession({
+        headers: new Headers({ cookie: replacementCookie }),
+        query: { disableCookieCache: true },
+      }),
+    ).resolves.toMatchObject({ user: { id: accountB.userId } });
+  });
 });
+
+/**
+ * Apply response cookies to a browser-style cookie header in response-arrival order.
+ *
+ * @param currentCookie - The cookie jar before the response arrives.
+ * @param setCookies - The response's individual `Set-Cookie` values.
+ * @returns The cookie header after the response has been applied.
+ */
+function applySetCookieHeaders(currentCookie: string, setCookies: readonly string[]): string {
+  const jar = new Map<string, string>();
+  for (const pair of currentCookie.split('; ')) {
+    const separator = pair.indexOf('=');
+    if (separator < 1) continue;
+    jar.set(pair.slice(0, separator), pair.slice(separator + 1));
+  }
+  for (const setCookie of setCookies) {
+    const pair = setCookie.split(';', 1)[0] ?? '';
+    const separator = pair.indexOf('=');
+    if (separator < 1) continue;
+    const name = pair.slice(0, separator);
+    if (/;\s*max-age=0(?:;|$)/i.test(setCookie)) jar.delete(name);
+    else jar.set(name, pair.slice(separator + 1));
+  }
+  return [...jar].map(([name, value]) => `${name}=${value}`).join('; ');
+}
 
 describe('buildAuthOptions env-gating', () => {
   /** A minimal env: every OPTIONAL gate closed (mirrors the local passwordless build). */

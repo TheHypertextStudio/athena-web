@@ -32,7 +32,7 @@ import {
   useState,
 } from 'react';
 
-import { describeObject, type ObjectRef } from '@/lib/actions/object';
+import { describeObject, type ObjectActionScope, type ObjectRef } from '@/lib/actions/object';
 
 import { isObjectDragData } from './object-drag-data';
 import { OBJECT_POINTER_SENSOR } from './object-pointer-sensor';
@@ -47,6 +47,8 @@ export interface DragState {
   readonly objects: readonly ObjectRef[];
   /** The selection surface the drag started from, when it started in one. */
   readonly sourceSurfaceId: string | null;
+  /** Action authority inherited from the source surface. */
+  readonly actionScope: ObjectActionScope;
 }
 
 /** Imperative control over the in-flight drag, used by {@link ./use-draggable}. */
@@ -56,6 +58,7 @@ export interface DragController {
     object: ObjectRef,
     sourceSurfaceId: string | null,
     objects?: readonly ObjectRef[],
+    actionScope?: ObjectActionScope,
   ) => void;
   /** Record the end of a gesture, whether it dropped or was cancelled. */
   readonly end: () => void;
@@ -63,7 +66,12 @@ export interface DragController {
   readonly announce: (message: string) => void;
 }
 
-const IDLE: DragState = { object: null, objects: [], sourceSurfaceId: null };
+const IDLE: DragState = {
+  object: null,
+  objects: [],
+  sourceSurfaceId: null,
+  actionScope: 'reference',
+};
 
 const DragStateContext = createContext<DragState>(IDLE);
 const DragControllerContext = createContext<DragController | null>(null);
@@ -126,8 +134,8 @@ export function DragProvider({ children }: DragProviderProps): JSX.Element {
 
   const controller = useMemo<DragController>(
     () => ({
-      begin: (object, sourceSurfaceId, objects = [object]) => {
-        setState({ object, objects, sourceSurfaceId });
+      begin: (object, sourceSurfaceId, objects = [object], actionScope = 'reference') => {
+        setState({ object, objects, sourceSurfaceId, actionScope });
       },
       end: () => {
         setState(IDLE);
@@ -157,6 +165,7 @@ export function DragProvider({ children }: DragProviderProps): JSX.Element {
       object: data.object,
       objects: data.objects,
       sourceSurfaceId: data.sourceSurfaceId,
+      actionScope: data.actionScope,
     });
     setAnnouncement(`Dragging ${data.object.title}`);
   }, []);

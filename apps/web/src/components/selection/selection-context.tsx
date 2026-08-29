@@ -39,7 +39,7 @@ import {
   useState,
 } from 'react';
 
-import { objectKey, type ObjectRef } from '@/lib/actions/object';
+import { objectKey, type ObjectActionScope, type ObjectRef } from '@/lib/actions/object';
 import { useResolvedActions } from '@/lib/actions/registry-context';
 import type { ActionSource, ResolvedAction } from '@/lib/actions/types';
 
@@ -68,6 +68,8 @@ export interface SelectionContainerProps {
 export interface SelectionContextValue {
   /** This surface's id. */
   readonly surfaceId: string;
+  /** The action authority shared by this surface's selectable objects. */
+  readonly actionScope: ObjectActionScope;
   /** Every selectable object the surface renders, in view order. */
   readonly items: readonly ObjectRef[];
   /** The selected object keys. */
@@ -110,6 +112,8 @@ export interface SelectionProviderProps {
   readonly surfaceId?: string;
   /** The workspace these items belong to, or `null` for a cross-workspace view. */
   readonly organizationId?: string | null;
+  /** The action authority shared by every selectable item in this surface. */
+  readonly actionScope: ObjectActionScope;
   /** Open a row — invoked on Enter, and on click when `activateOnClick` is set. */
   readonly onActivate?: (object: ObjectRef) => void;
   /**
@@ -133,7 +137,7 @@ export interface SelectionProviderProps {
  *
  * @example
  * ```tsx
- * <SelectionProvider items={taskRefs} organizationId={orgId} onActivate={open}>
+ * <SelectionProvider items={taskRefs} organizationId={orgId} actionScope="all" onActivate={open}>
  *   <TaskRows />
  * </SelectionProvider>
  *
@@ -146,6 +150,7 @@ export function SelectionProvider({
   items,
   surfaceId,
   organizationId = null,
+  actionScope,
   onActivate,
   activateOnClick = false,
   children,
@@ -179,10 +184,11 @@ export function SelectionProvider({
   const snapshotRef = useRef<SelectionSurfaceSnapshot>({
     surfaceId: id,
     organizationId,
+    actionScope,
     selectedObjects,
   });
   useEffect(() => {
-    snapshotRef.current = { surfaceId: id, organizationId, selectedObjects };
+    snapshotRef.current = { surfaceId: id, organizationId, actionScope, selectedObjects };
   });
   useEffect(() => registerSelectionSurface(id, () => snapshotRef.current), [id]);
 
@@ -233,6 +239,7 @@ export function SelectionProvider({
   const value = useMemo<SelectionContextValue>(
     () => ({
       surfaceId: id,
+      actionScope,
       items,
       selectedKeys: state.selected,
       selectedObjects,
@@ -252,7 +259,7 @@ export function SelectionProvider({
         onKeyDown,
       },
     }),
-    [id, items, state.selected, state.activeKey, selectedObjects, dispatch, onKeyDown],
+    [id, actionScope, items, state.selected, state.activeKey, selectedObjects, dispatch, onKeyDown],
   );
 
   const internals = useMemo<SelectionInternals>(
@@ -385,7 +392,7 @@ export interface SelectableRowBinding {
  * @example
  * ```tsx
  * const { rowProps, selected } = useSelectableRow(task);
- * const drag = useDraggable({ object: task });
+ * const drag = useDraggable({ object: task, actionScope: selection.actionScope });
  * <div role="row" {...objectTargetProps(task)} {...rowProps} {...drag}
  *      className={cn('flex h-10 items-center', drag.className, selected && 'bg-secondary-container')}>
  *   <SelectionCheckbox object={task} />
@@ -467,14 +474,16 @@ export function useSelectionActions(source: ActionSource = 'bulk-bar'): readonly
   const selection = useOptionalSelection();
   const objects = selection?.selectedObjects ?? NO_OBJECTS;
   const surfaceId = selection?.surfaceId;
+  const actionScope = selection?.actionScope ?? 'reference';
   const resolveContext = useCallback(
     () => ({
       objects,
       source,
       organizationId: objects[0]?.organizationId ?? null,
+      actionScope,
       ...(surfaceId === undefined ? {} : { surfaceId }),
     }),
-    [objects, source, surfaceId],
+    [actionScope, objects, source, surfaceId],
   );
   return useResolvedActions(resolveContext);
 }

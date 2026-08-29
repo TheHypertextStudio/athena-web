@@ -1091,8 +1091,8 @@ describe('Slice 2: Linear on the Connections surface (directory pattern flip)', 
     // Falls out of the `integration.sync_mode` column's DB default ('mirror'), not a
     // pattern→syncMode branch in the create route — confirmed here rather than assumed.
     expect(created.syncMode).toBe('mirror');
-    // Linear is deliberately excluded from WRITE_BACK_PROVIDERS this slice (its `write` OAuth
-    // scope doesn't ship until Slice 3), so a directory-driven create still lands read-only.
+    // Linear stays out of the generic task-push defaults. A directory-driven create therefore
+    // lands read-only until the person configures and enables work-graph write-back explicitly.
     expect(created.writeBack).toBe(false);
 
     const verified = await body<IntegrationStateRes>(

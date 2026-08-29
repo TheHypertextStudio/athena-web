@@ -21,7 +21,7 @@ export default function ExternalAgentConnectPage(): JSX.Element {
     mutationFn: (continuation: string) =>
       unwrap(
         () =>
-          api.v1.me.identities['external-agent'].complete.$post({
+          api.v1.me.identities['external-agent-links'].$post({
             json: { token: continuation },
           }),
         'Could not continue Athena from this link.',

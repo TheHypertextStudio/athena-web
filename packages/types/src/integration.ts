@@ -687,7 +687,7 @@ export type ExternalActorPatch = z.infer<typeof ExternalActorPatch>;
  * The user-facing reason a Linear two-way (`writeBack`) update is blocked on OAuth scope.
  *
  * @remarks
- * Linear's OAuth grant only carries `read` scope until the actor reconnects and approves
+ * Legacy Linear OAuth grants may carry only `read` until the actor reconnects and approves
  * `write`. Lives here (rather than in `@docket/api`) so it is one string shared verbatim by
  * BOTH ends of the check without either side importing the other's runtime: the API uses it as
  * internal diagnostic copy for a 409 `linear_write_scope_required` failure (and records it as an integration's

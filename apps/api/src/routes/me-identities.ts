@@ -80,7 +80,7 @@ The display \`email\`/\`name\`/\`picture\` are **decoded server-side from the st
     },
   )
   .post(
-    '/external-agent/complete',
+    '/external-agent-links',
     apiDoc({
       tag: 'Me',
       summary: 'Complete an external Athena identity continuation',

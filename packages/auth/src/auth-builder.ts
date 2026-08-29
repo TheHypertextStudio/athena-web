@@ -391,9 +391,9 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
     };
   }
   if (isRealValue(e.LINEAR_CLIENT_ID) && isRealValue(e.LINEAR_CLIENT_SECRET)) {
-    // `read` is required for the Linear connector to query the GraphQL API — without it the
-    // grant carries no scope and every connector call 400s. (Existing Linear-linked users
-    // predating this scope must re-consent; they surface as `error`/needs-reauth, not silent.)
+    // `read` funds imports and `write` funds opted-in issue synchronization. Existing Linear
+    // accounts that predate `write` must re-consent and surface as needs-reauth, never as a
+    // write-capable connection.
     socialProviders.linear = {
       clientId: e.LINEAR_CLIENT_ID,
       clientSecret: e.LINEAR_CLIENT_SECRET,

@@ -37,17 +37,11 @@ export const CONNECTOR_PROVIDERS: readonly ConnectorProvider[] = [...CONNECTOR_P
  *
  * @remarks
  * Re-exports the boundary manifest (`WRITE_BACK_CAPABLE_PROVIDERS`) so capability
- * membership has one source of truth: only Google Tasks (`gtasks`) defaults on here — it needs
- * no extra OAuth scope, so a UI connect verifies two-way out of the box. Linear is deliberately
- * EXCLUDED this slice — it is write-*capable*, but exercising write-back requires the actor's
- * linked identity to carry the `write` OAuth scope (see {@link hasLinearWriteScope}), which
- * Better Auth's Linear config does not grant until Slice 3. Default-seeding `writeBack` on for
- * Linear would make every UI-created integration verify straight into `error` with an
- * unsatisfiable reconnect message, so Linear connects read-only by default and write-back is
- * opted into later via `PATCH /:id` (which enforces the scope). The scope enforcement at
- * verify/PATCH keys off the row's ACTUAL `writeBack` flag and an explicit `provider === 'linear'`
- * check, NOT this set — so Linear's absence here does not weaken enforcement, it only changes
- * the connect-time default.
+ * membership has one source of truth for the generic task-push seam. Linear writes through its
+ * separate work-graph client, so it does not join that manifest. Linear also stays read-only by
+ * default even though new OAuth grants request `write`: the person must opt into write-back and
+ * native task publication after configuring the intended team mapping. The verify/PATCH gates
+ * still check the row's actual `writeBack` flag and the selected identity's current scope.
  */
 export const WRITE_BACK_PROVIDERS: ReadonlySet<string> = WRITE_BACK_CAPABLE_PROVIDERS;
 
@@ -230,14 +224,15 @@ export async function resolveLiveConnectorToken(
   if (!userId) return needsReauth;
 
   const linked = await db
-    .select({ accountId: account.accountId })
+    .select({ accountId: account.accountId, scope: account.scope })
     .from(account)
     .where(and(eq(account.userId, userId), eq(account.providerId, providerId)));
-  const selectedAccountId =
-    externalAccountId ?? (linked.length === 1 ? linked[0]?.accountId : null);
-  if (externalAccountId && !linked.some((row) => row.accountId === externalAccountId)) {
-    return needsReauth;
-  }
+  const selected = externalAccountId
+    ? linked.find((row) => row.accountId === externalAccountId)
+    : linked.length === 1
+      ? linked[0]
+      : null;
+  if (externalAccountId && !selected) return needsReauth;
   if (!externalAccountId && linked.length > 1) {
     return {
       ok: false,
@@ -245,13 +240,16 @@ export async function resolveLiveConnectorToken(
       message: `Choose which ${providerId} account this integration should use.`,
     };
   }
-  if (!selectedAccountId) return needsReauth;
+  if (!selected) return needsReauth;
+  if (provider === 'linear' && !parseOAuthScopes(selected.scope).includes('write')) {
+    return needsReauth;
+  }
 
   try {
     const result = await fetchAccessToken({
       providerId,
       userId,
-      accountId: selectedAccountId,
+      accountId: selected.accountId,
     });
     if (!result.accessToken) return needsReauth;
     return { ok: true, token: result.accessToken };
@@ -341,14 +339,17 @@ export async function linkedIdentities(userId: string): Promise<IdentityOut[]> {
   return rows.map((row) => {
     const claims = decodeIdTokenClaims(row.idToken);
     const key = `${row.providerId}:${row.accountId}`;
+    const scopes = parseOAuthScopes(row.scope);
     return {
       accountId: row.accountId,
       provider: row.providerId as IdentityProvider,
       email: claims.email,
       name: claims.name,
       picture: claims.picture,
-      scopes: parseOAuthScopes(row.scope),
-      reauthorizationRequired: row.accessToken === null && row.refreshToken === null,
+      scopes,
+      reauthorizationRequired:
+        (row.accessToken === null && row.refreshToken === null) ||
+        (row.providerId === 'linear' && !scopes.includes('write')),
       linkedAt: row.createdAt.toISOString(),
       connectionCount: connectionCounts.get(key) ?? 0,
     };
@@ -370,14 +371,11 @@ export { LINEAR_WRITE_SCOPE_MESSAGE } from '@docket/types';
  * Whether the actor's linked Linear identity carries the `write` OAuth scope.
  *
  * @remarks
- * Two-way sync (`integration.writeBack`) needs more than Better Auth's current Linear scope
- * config (`['read']` this slice — the upgrade to read/write/admin ships with Slice 3): this
- * reads whatever scope the actor's linked `linear` `account` row ACTUALLY carries, via
- * {@link linkedIdentities}, and is honest either way — a real `write` grant passes, a
- * `read`-only (or absent) one fails. Deliberately carries NO `APP_MODE` short-circuit (unlike
- * {@link resolveConnectorToken}): in `test`/`local` it reads whatever identity fixtures a test
- * seeded, exactly as in production, so route tests can exercise both the granted and ungranted
- * outcome by seeding a scope string rather than relying on a bypass.
+ * Two-way sync (`integration.writeBack`) requires the selected Linear account to carry `write`.
+ * New grants request it, but legacy accounts may still carry only `read`. This reads the stored
+ * grant through {@link linkedIdentities} and fails closed when the scope is absent. It deliberately
+ * carries no `APP_MODE` short-circuit, so test and local fixtures exercise the same scope decision
+ * as production.
  *
  * @param actorId - The actor whose linked Linear identity to check.
  */

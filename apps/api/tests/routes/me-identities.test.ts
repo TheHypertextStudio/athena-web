@@ -102,6 +102,30 @@ describe('linkedIdentities', () => {
     const [identity] = await linkedIdentities(userId);
     expect(identity?.scopes).toEqual(['read:user', 'repo', 'user:email']);
   });
+
+  it.each([
+    { scope: 'read', reauthorizationRequired: true },
+    { scope: 'read write', reauthorizationRequired: false },
+  ])(
+    'reports Linear reauthorization=$reauthorizationRequired for a $scope grant',
+    async ({ scope, reauthorizationRequired }) => {
+      const userId = await seedUser(
+        `linear-scope-${scope.replaceAll(' ', '-')}-${Math.random().toString(36).slice(2)}@x.test`,
+        'Linear Scope',
+      );
+      await db.insert(schema.account).values({
+        userId,
+        providerId: 'linear',
+        accountId: `linear-${scope.replaceAll(' ', '-')}`,
+        scope,
+        accessToken: 'sealed-token',
+      });
+
+      const [identity] = await linkedIdentities(userId);
+
+      expect(identity?.reauthorizationRequired).toBe(reauthorizationRequired);
+    },
+  );
 });
 
 describe('DELETE /me/identities/:provider/:accountId', () => {
@@ -166,7 +190,7 @@ describe('DELETE /me/identities/:provider/:accountId', () => {
   });
 });
 
-describe('POST /me/identities/external-agent/complete', () => {
+describe('POST /me/identities/external-agent-links', () => {
   it('binds the linked Linear identity to the waiting session and queues it once', async () => {
     const seeded = await seedBaseOrg(db, schema);
     const userId = await seedUser(
@@ -202,12 +226,12 @@ describe('POST /me/identities/external-agent/complete', () => {
     });
     const app = appWithSession(meIdentities, fakeSession(userId));
 
-    const first = await app.request('/external-agent/complete', {
+    const first = await app.request('/external-agent-links', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ token }),
     });
-    const replay = await app.request('/external-agent/complete', {
+    const replay = await app.request('/external-agent-links', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ token }),
@@ -264,7 +288,7 @@ describe('POST /me/identities/external-agent/complete', () => {
     });
     const app = appWithSession(meIdentities, fakeSession(userId));
 
-    const response = await app.request('/external-agent/complete', {
+    const response = await app.request('/external-agent-links', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ token }),

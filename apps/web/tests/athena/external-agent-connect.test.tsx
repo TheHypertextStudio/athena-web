@@ -16,7 +16,7 @@ vi.mock('../../src/lib/api', () => ({
     v1: {
       me: {
         identities: {
-          'external-agent': { complete: { $post: completePost } },
+          'external-agent-links': { $post: completePost },
         },
       },
     },

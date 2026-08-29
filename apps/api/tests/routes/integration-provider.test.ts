@@ -49,8 +49,9 @@ async function seedProviderAccount(
   userId: string,
   providerId: string,
   accountId = `${providerId}-${Math.random().toString(36).slice(2)}`,
+  scope = providerId === 'linear' ? 'read write' : null,
 ): Promise<string> {
-  await db.insert(schema.account).values({ userId, providerId, accountId });
+  await db.insert(schema.account).values({ userId, providerId, accountId, scope });
   return accountId;
 }
 
@@ -121,6 +122,18 @@ describe('resolveLiveConnectorToken', () => {
     expect(res.ok).toBe(false);
     // The user-facing remediation names the provider to reconnect.
     if (!res.ok) expect(res.message).toContain('linear');
+  });
+
+  it('asks for re-auth before fetching a read-only Linear grant', async () => {
+    const { orgId } = await seedBaseOrg(db, schema);
+    const { actorId, userId } = await seedLinkedActor(orgId);
+    const accountId = await seedProviderAccount(userId, 'linear', 'linear-read-only', 'read');
+    const fetcher = vi.fn(async () => ({ accessToken: 'read-only-token' }));
+
+    const result = await resolveLiveConnectorToken(actorId, 'linear', fetcher, accountId);
+
+    expect(result).toMatchObject({ ok: false, reason: 'needs_reauth' });
+    expect(fetcher).not.toHaveBeenCalled();
   });
 
   it('asks for re-auth when the token fetch throws (revoked / refresh failure)', async () => {

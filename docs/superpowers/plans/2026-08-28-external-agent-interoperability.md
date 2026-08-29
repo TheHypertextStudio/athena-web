@@ -6,8 +6,9 @@
 > architecture targets rather than product implementations in this slice.
 
 **Goal:** Let a person start, continue, approve, authenticate, stop, and receive Athena work from
-Linear, Slack, GitHub, or Jira Rovo without adding a second execution queue or weakening Docket
-authorization.
+Linear without adding a second execution queue or weakening Docket authorization. Keep Slack,
+GitHub, and Jira Rovo in the typed registry as disabled architecture targets for later product
+slices.
 
 **Architecture:** Provider adapters own signature verification, strict wire schemas, canonical
 normalization, native rendering, and publishing. `inbound_event` owns webhook deduplication and
@@ -135,15 +136,17 @@ The approved design is
 - Modify `apps/web/src/components/settings/linear-agent-install-card.tsx` and its tests.
 
 1. Add failing tests for installed organization discovery, workspace id/name/app actor persistence,
-   `promptContext` extraction, `created`, `prompted`, `select`, `auth`, and `stop` signals, missing
-   identity continuation, native selection rendering, and an independent relay retry after a
-   terminal run.
+   `promptContext` extraction, `created`, `prompted`, `select`, and `stop` signals, outbound `auth`,
+   missing identity continuation, native selection rendering, and an independent relay retry after
+   a terminal run. Ignore inbound Linear `auth` signals because Linear defines them as
+   agent-to-human metadata.
 2. Implement Linear's organization/viewer discovery after OAuth exchange. Store the workspace and
    app actor reference on `integration.connection`. Route webhooks by that verified workspace.
 3. Normalize the documented `promptContext` into the canonical prompt and guidance. Remove the
    generic mention prompt.
-4. Translate Linear signals into canonical approval, authentication, and stop events. Render
-   native `select` and `auth` controls with signed opaque values.
+4. Translate Linear selections and stop signals into canonical approval and stop events. Render
+   native `select` and `auth` controls with signed opaque values. Resume authentication only from
+   the signed Docket account-link callback.
 5. Keep the external URL update as a strict fast acknowledgement with a timeout. Let the durable
    relay recover its failure.
 6. Run all Linear Agent tests and bounded package checks.
@@ -258,11 +261,12 @@ later Jira product slice must do the following work:
 2. Add provider contract drift tests that replay recorded, redacted sandbox fixtures.
 3. Run package typechecks, lint, unit/integration tests, migration tests, and production builds with
    concurrency capped at two.
-4. Install each provider in a disposable sandbox. Prove start, follow-up, approval, authentication,
-   stop, result, duplicate delivery, provider outage, and retry recovery. Capture provider-native
-   screenshots where the surface is visual.
-5. Enable Linear only after its sandbox proof. Repeat the gate for Slack, GitHub, and Jira in that
-   order. Do not enable a preview API in production without a current successful contract probe.
+4. Install Linear in a disposable sandbox. Prove start, follow-up, approval, authentication, stop,
+   result, duplicate delivery, provider outage, and retry recovery. Capture provider-native
+   screenshots.
+5. Enable Linear only after its sandbox proof. Future Slack, GitHub, and Jira product slices must
+   repeat this gate before enabling their adapters. Do not enable a preview API in production
+   without a current successful contract probe.
 6. Verify the deployed SHA, health, cron execution, inbox drain, relay retries, and one real
    provider round trip. Record blockers when credentials or provider access prevent a gate.
 7. Update the worklog with validation, deployment state, live state, open constraints, and

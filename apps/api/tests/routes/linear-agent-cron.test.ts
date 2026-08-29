@@ -140,7 +140,13 @@ describe('POST /internal/cron/run-linear-agent-sessions', () => {
 
     const res = await cron.request('/run-linear-agent-sessions', { method: 'POST', headers: AUTH });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ swept: true, claimed: 1, succeeded: 1, failed: 0 });
+    expect(await res.json()).toEqual({
+      swept: true,
+      claimed: 1,
+      succeeded: 1,
+      failed: 0,
+      relay: { found: 0, processed: 0 },
+    });
 
     const [run] = await db
       .select()
@@ -182,7 +188,13 @@ describe('POST /internal/cron/run-linear-agent-sessions', () => {
     );
 
     const res = await cron.request('/run-linear-agent-sessions', { method: 'POST', headers: AUTH });
-    expect(await res.json()).toEqual({ swept: true, claimed: 1, succeeded: 1, failed: 0 });
+    expect(await res.json()).toEqual({
+      swept: true,
+      claimed: 1,
+      succeeded: 1,
+      failed: 0,
+      relay: { found: 0, processed: 0 },
+    });
 
     const [run] = await db
       .select()
@@ -204,7 +216,13 @@ describe('POST /internal/cron/run-linear-agent-sessions', () => {
 
     const res = await cron.request('/run-linear-agent-sessions', { method: 'POST', headers: AUTH });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ swept: true, claimed: 1, succeeded: 0, failed: 1 });
+    expect(await res.json()).toEqual({
+      swept: true,
+      claimed: 1,
+      succeeded: 0,
+      failed: 1,
+      relay: { found: 0, processed: 0 },
+    });
 
     const [run] = await db
       .select()
@@ -225,7 +243,13 @@ describe('POST /internal/cron/run-linear-agent-sessions', () => {
       method: 'POST',
       headers: AUTH,
     });
-    expect(await untouched.json()).toEqual({ swept: true, claimed: 0, succeeded: 0, failed: 0 });
+    expect(await untouched.json()).toEqual({
+      swept: true,
+      claimed: 0,
+      succeeded: 0,
+      failed: 0,
+      relay: { found: 0, processed: 0 },
+    });
     const [stillRunning] = await db
       .select()
       .from(schema.agentSessionRun)
@@ -250,7 +274,13 @@ describe('POST /internal/cron/run-linear-agent-sessions', () => {
       method: 'POST',
       headers: AUTH,
     });
-    expect(await reclaimed.json()).toEqual({ swept: true, claimed: 1, succeeded: 1, failed: 0 });
+    expect(await reclaimed.json()).toEqual({
+      swept: true,
+      claimed: 1,
+      succeeded: 1,
+      failed: 0,
+      relay: { found: 0, processed: 0 },
+    });
     const [after] = await db
       .select()
       .from(schema.agentSessionRun)
@@ -268,7 +298,13 @@ describe('POST /internal/cron/run-linear-agent-sessions', () => {
     );
 
     const res = await cron.request('/run-linear-agent-sessions', { method: 'POST', headers: AUTH });
-    expect(await res.json()).toEqual({ swept: true, claimed: 2, succeeded: 2, failed: 0 });
+    expect(await res.json()).toEqual({
+      swept: true,
+      claimed: 2,
+      succeeded: 2,
+      failed: 0,
+      relay: { found: 0, processed: 0 },
+    });
 
     for (const seeded of [a, b]) {
       const [run] = await db

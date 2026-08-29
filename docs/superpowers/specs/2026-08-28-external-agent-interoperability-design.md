@@ -573,7 +573,8 @@ by the Rovo installation and A2A task. Linear remains bounded by the installed w
 ## Rollout order
 
 The first slice extracts the typed registry and provider-neutral relay while keeping Linear as the
-only registered adapter. Its tests prove that the refactor preserves existing behavior.
+only enabled adapter. Slack, GitHub, and Jira remain registered but fail closed. The tests prove
+that the refactor preserves existing behavior.
 
 The second slice closes Linear installation, workspace routing, prompt ingestion, identity,
 approval, stop, retry, OAuth write scope, and live round-trip blockers.

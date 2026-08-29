@@ -92,6 +92,7 @@ describe('mandatory production provider catalog', () => {
       'google',
       'github',
       'linear',
+      'linear-agent',
       'notion',
       'apple',
       'stripe',
@@ -379,8 +380,13 @@ describe('production account-creation deployment contract', () => {
     expect(workflow).toContain('WORK_LOCATION_PROJECTION_ENABLED: "false"');
   });
 
-  it('keeps the Linear Agent runtime disabled until its sandbox gate passes', () => {
-    expect(workflow).toContain('LINEAR_AGENT_ENABLED: "false"');
+  it('keeps the Linear Agent runtime disabled until its protected release gate is enabled', () => {
+    expect(workflow).toContain(
+      'LINEAR_AGENT_ENABLED: "${{ vars.LINEAR_AGENT_ENABLED || \'false\' }}"',
+    );
+    expect(workflow).toContain(
+      "--min-instances=${{ vars.LINEAR_AGENT_ENABLED == 'true' && '1' || '0' }}",
+    );
   });
 
   it('deploys bootstrap-managed billing without an MCP vendor allowlist', () => {

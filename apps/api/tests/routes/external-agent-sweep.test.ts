@@ -133,7 +133,9 @@ describe('external agent inbox processing', () => {
       .from(schema.sessionActivity)
       .where(eq(schema.sessionActivity.sessionId, assertDefined(session).id));
     expect(activities).toEqual([
-      expect.objectContaining({ body: { text: 'Use the exact provider prompt.' } }),
+      expect.objectContaining({
+        body: { text: 'Use the exact provider prompt.', author: 'user' },
+      }),
     ]);
     const runs = await db
       .select()

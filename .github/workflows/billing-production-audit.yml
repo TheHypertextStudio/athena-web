@@ -28,7 +28,6 @@ jobs:
 
       - name: Verify deployed billing rollout
         env:
-          API_URL: ${{ vars.API_URL }}
           EXPECTED_RECONCILIATION_MODE: ${{ vars.BILLING_RECONCILIATION_MODE }}
           EXPECTED_STRIPE_ACCOUNT_ID: ${{ vars.STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID }}
           GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
@@ -47,11 +46,12 @@ jobs:
           service_json="$(gcloud run services describe docket-api \
             --project="$GCP_PROJECT_ID" \
             --region="$GCP_REGION" \
-            --format='json(status.latestReadyRevisionName,spec.template.spec.containers[0].env)')"
+            --format='json(status.latestReadyRevisionName,status.url,spec.template.spec.containers[0].env)')"
           deployed_checkout="$(jq -r '.spec.template.spec.containers[0].env[] | select(.name == "BILLING_ENABLED") | .value' <<<"$service_json")"
           deployed_mode="$(jq -r '.spec.template.spec.containers[0].env[] | select(.name == "BILLING_RECONCILIATION_MODE") | .value' <<<"$service_json")"
           deployed_account="$(jq -r '.spec.template.spec.containers[0].env[] | select(.name == "STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID") | .value' <<<"$service_json")"
           revision="$(jq -r '.status.latestReadyRevisionName' <<<"$service_json")"
+          service_url="$(jq -r '.status.url' <<<"$service_json")"
 
           scheduler_json="$(gcloud scheduler jobs describe docket-billing-reconciliation \
             --project="$GCP_PROJECT_ID" \
@@ -70,13 +70,14 @@ jobs:
           test "$deployed_account" = "$EXPECTED_STRIPE_ACCOUNT_ID" || mismatches+=("stripe_account")
           test "$scheduler_state" = "ENABLED" || mismatches+=("scheduler_state")
           test "$scheduler_schedule" = "*/15 * * * *" || mismatches+=("scheduler_schedule")
-          test "$scheduler_uri" = "$API_URL/internal/cron/billing-reconciliation" || mismatches+=("scheduler_uri")
+          test "$scheduler_uri" = "$service_url/internal/cron/billing-reconciliation" || mismatches+=("scheduler_uri")
           test "$scheduler_status_code" = "0" || mismatches+=("scheduler_status")
           mismatches_json="$(printf '%s\n' "${mismatches[@]-}" | jq -Rsc 'split("\n") | map(select(length > 0))')"
 
           jq -n \
             --arg generatedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             --arg revision "$revision" \
+            --arg serviceUrl "$service_url" \
             --arg checkoutEnabled "$deployed_checkout" \
             --arg reconciliationMode "$deployed_mode" \
             --arg stripeAccountId "$deployed_account" \
@@ -92,6 +93,7 @@ jobs:
               passed: ($mismatches | length == 0),
               mismatches: $mismatches,
               revision: $revision,
+              serviceUrl: $serviceUrl,
               checkoutEnabled: ($checkoutEnabled == "true"),
               reconciliationMode: $reconciliationMode,
               stripeAccountId: $stripeAccountId,

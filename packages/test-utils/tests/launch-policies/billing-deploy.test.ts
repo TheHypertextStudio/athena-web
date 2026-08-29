@@ -69,6 +69,12 @@ describe('production billing audit policy', () => {
     expect(auditWorkflow).toContain('test "$deployed_checkout" = "false"');
     expect(auditWorkflow).toContain('test "$deployed_mode" = "$EXPECTED_RECONCILIATION_MODE"');
     expect(auditWorkflow).toContain('test "$scheduler_state" = "ENABLED"');
+    expect(auditWorkflow).toContain(
+      'test "$scheduler_uri" = "$service_url/internal/cron/billing-reconciliation"',
+    );
+    expect(auditWorkflow).not.toContain(
+      'test "$scheduler_uri" = "$API_URL/internal/cron/billing-reconciliation"',
+    );
     expect(auditWorkflow).not.toContain('spec.template.spec.containers[0].env.valueFrom');
   });
 });

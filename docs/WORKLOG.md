@@ -299,7 +299,11 @@
   the declared rollout. It writes only those sanitized values and runs hourly, so the 24-hour gate
   no longer depends on a personal Google token or Cloud Logging access. The focused policy suite
   passes seven tests, the repository tooling suite passes 165 tests, Actionlint passes, and
-  Prettier reports no changed-file drift.
+  Prettier reports no changed-file drift. Exact-main audit run `33225654510` passed at
+  `2026-08-29T01:10:52.163Z`. Its runtime artifact proves revision `docket-api-00209-fkl` has
+  Checkout disabled, `shadow` reconciliation, the Hypertext Studio account pin, and an enabled
+  15-minute Scheduler job whose last attempt returned status code zero. Its billing report found
+  zero billed organizations, zero unresolved findings, and zero provider errors.
 - **Exact-main deployment and provider proof**: Commit `74c998cee` passes every exact-main CI gate,
   including API coverage and performance, and all four advisory browser shards. The same run
   applied production migrations and deployed API, Admin, and Scheduler. Vercel built that exact
@@ -307,8 +311,8 @@
   profile verified the live and test `$8` monthly Docket Pro products, the one-subscription guard,
   and the live portal's invoices, payment methods, cancellation-at-period-end, disabled plan
   switching, and production policy links. The production account pin and redirect attestation are
-  recorded. Checkout remains disabled. The environment now declares shadow reconciliation, but a
-  later API revision must apply that declaration before the 24-hour clock starts.
+  recorded. Checkout remains disabled. Cloud Run now reports shadow reconciliation, so the
+  24-hour observation started with the deployment at `2026-08-29T00:55:37Z`.
 - **Decisions**: Checkout derives the customer email from the Better Auth server session and
   rejects a browser-supplied email. Stripe's Dashboard-only existing-subscriber redirect requires
   a recorded verification timestamp before `BILLING_ENABLED=true` can pass configuration. Docket

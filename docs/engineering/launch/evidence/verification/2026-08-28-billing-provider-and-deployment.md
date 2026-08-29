@@ -38,13 +38,15 @@ GitHub Actions run `33223511919`, attempt 2, finished the API deployment at
 `2026-08-29T00:55:37Z` and Scheduler reconciliation at `2026-08-29T00:57:23Z`. The 24-hour shadow
 clock starts from that deployment, not from the earlier evidence timestamp.
 
-The login-free production audit on exact `cec124e9e` passed in run `33224721373`. Its report was
-generated at `2026-08-29T00:51:20.637Z` and found zero billed organizations, zero unresolved
-findings, no provider-sync errors, and a verified duplicate-subscription redirect control. The
-audit workflow now checks the running Cloud Run billing flags and billing Scheduler job through
-production Workload Identity. It records only sanitized rollout values in a seven-day artifact and
-runs hourly during the observation window. No personal Google session or Cloud Logging permission
-is required.
+The login-free production audit on exact `a02da3fd087c4ab0d3a32b12133196f11bfa8d83` passed in run
+`33225654510`. Its report was generated at `2026-08-29T01:10:52.163Z` and found zero billed
+organizations, zero unresolved findings, no provider-sync errors, and a verified
+duplicate-subscription redirect control. Its runtime artifact proves Cloud Run revision
+`docket-api-00209-fkl` has Checkout disabled, `shadow` reconciliation, and Stripe account
+`acct_1TTQ9DAREPz33Avb`. The billing Scheduler job is enabled on its 15-minute schedule, targets the
+Cloud Run API service, and returned status code zero for its `2026-08-29T01:00:00.998268Z` attempt.
+The workflow records only sanitized rollout values in a seven-day artifact and runs hourly during
+the observation window. No personal Google session or Cloud Logging permission is required.
 
 ## Open gates
 

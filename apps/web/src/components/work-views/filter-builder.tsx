@@ -7,7 +7,10 @@ import {
   ControlGroup,
   Input,
   Popover,
+  PopoverBody,
   PopoverContent,
+  PopoverFooter,
+  PopoverHeader,
   PopoverTrigger,
   Row,
   Select,
@@ -29,7 +32,6 @@ import {
   type WorkViewFilterShape,
   workViewFilterFieldCatalog,
 } from './view-state';
-import { workViewPopoverItem, workViewPopoverSeparator } from './work-view-popover-styles';
 
 type DraftGroup<TTarget extends ViewTarget> = Extract<
   WorkViewFilterDraftFor<TTarget>,
@@ -1018,9 +1020,15 @@ export function FilterBuilder<TTarget extends ViewTarget>({
   return (
     <Popover open={actualOpen} onOpenChange={setOpen}>
       {trigger ? <PopoverTrigger asChild>{trigger}</PopoverTrigger> : null}
-      <PopoverContent align="end" role="dialog" aria-label={`Filter ${labelTarget(target)}`}>
-        <Stack gap={1}>
-          {!advanced ? (
+      <PopoverContent
+        presentation="panel"
+        width="xl"
+        align="end"
+        role="dialog"
+        aria-label={`Filter ${labelTarget(target)}`}
+      >
+        {!advanced ? (
+          <PopoverHeader inset="compact">
             <Input
               variant="filled"
               controlSize="lg"
@@ -1039,18 +1047,21 @@ export function FilterBuilder<TTarget extends ViewTarget>({
                 fieldButtons.current[index]?.focus();
               }}
             />
-          ) : null}
+          </PopoverHeader>
+        ) : null}
 
+        <PopoverBody inset="compact">
           {!advanced ? (
             <Stack as="ul" aria-label="Filter properties" gap={0}>
               {fields.map((field, index) => (
                 <li key={field.key}>
-                  <button
+                  <Button
                     type="button"
                     ref={(element) => {
                       fieldButtons.current[index] = element;
                     }}
-                    className={workViewPopoverItem()}
+                    variant="ghost"
+                    className="w-full justify-start"
                     onKeyDown={(event) => {
                       if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
                       event.preventDefault();
@@ -1080,7 +1091,7 @@ export function FilterBuilder<TTarget extends ViewTarget>({
                     }}
                   >
                     {field.label}
-                  </button>
+                  </Button>
                 </li>
               ))}
             </Stack>
@@ -1122,20 +1133,22 @@ export function FilterBuilder<TTarget extends ViewTarget>({
               }}
             />
           )}
+        </PopoverBody>
 
-          <div role="separator" className={workViewPopoverSeparator} />
+        <PopoverFooter inset="compact" className="border-outline-variant border-t">
           {!advanced ? (
-            <button
+            <Button
               type="button"
-              className={workViewPopoverItem()}
+              variant="ghost"
+              className="w-full justify-start"
               onClick={() => {
                 setAdvanced(true);
               }}
             >
               Advanced filter
-            </button>
+            </Button>
           ) : (
-            <ControlGroup controlSize="lg" className="justify-between px-2 py-1">
+            <ControlGroup controlSize="lg" className="w-full justify-between">
               <Button
                 variant="ghost"
                 onClick={() => {
@@ -1157,7 +1170,7 @@ export function FilterBuilder<TTarget extends ViewTarget>({
               </Button>
             </ControlGroup>
           )}
-        </Stack>
+        </PopoverFooter>
       </PopoverContent>
     </Popover>
   );

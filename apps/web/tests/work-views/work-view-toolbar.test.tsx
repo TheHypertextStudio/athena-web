@@ -313,7 +313,7 @@ describe('WorkViewToolbar', () => {
     expect(onReset).toHaveBeenCalledOnce();
   });
 
-  it('changes grouping and display options from one display menu', async () => {
+  it('keeps layout immediate and opens organize and properties as focused display panels', async () => {
     const user = userEvent.setup();
     const onDefinitionChange = vi.fn();
     render(
@@ -329,12 +329,15 @@ describe('WorkViewToolbar', () => {
     await user.click(screen.getByRole('button', { name: 'Display' }));
     const dialog = await screen.findByRole('dialog', { name: 'Display view' });
     expect(within(dialog).getByRole('heading', { name: 'Layout' })).toBeVisible();
+    expect(within(dialog).getByRole('button', { name: 'Organize' })).toBeVisible();
+    expect(within(dialog).getByRole('button', { name: 'Properties' })).toBeVisible();
+    await user.click(within(dialog).getByRole('button', { name: 'Organize' }));
     expect(within(dialog).getByRole('heading', { name: 'Organize' })).toBeVisible();
-    expect(within(dialog).getByRole('heading', { name: 'Properties' })).toBeVisible();
     await user.selectOptions(within(dialog).getByRole('combobox', { name: 'Group by' }), 'status');
     expect(onDefinitionChange).toHaveBeenLastCalledWith(
       expect.objectContaining({ arrangement: expect.objectContaining({ groupBy: 'status' }) }),
     );
+    await user.click(within(dialog).getByRole('button', { name: 'Back' }));
     await user.click(within(dialog).getByRole('radio', { name: 'Board' }));
     expect(onDefinitionChange).toHaveBeenLastCalledWith(
       expect.objectContaining({ presentation: expect.objectContaining({ layout: 'board' }) }),
@@ -343,6 +346,8 @@ describe('WorkViewToolbar', () => {
     expect(onDefinitionChange).toHaveBeenLastCalledWith(
       expect.objectContaining({ presentation: expect.objectContaining({ layout: 'cards' }) }),
     );
+    await user.click(within(dialog).getByRole('button', { name: 'Properties' }));
+    expect(within(dialog).getByRole('heading', { name: 'Properties' })).toBeVisible();
     await user.click(within(dialog).getByRole('checkbox', { name: 'Due date' }));
     expect(onDefinitionChange).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -557,6 +562,7 @@ describe('WorkViewToolbar', () => {
     renderToolbar();
 
     await user.click(screen.getByRole('button', { name: 'Display' }));
+    await user.click(screen.getByRole('button', { name: 'Organize' }));
 
     expect(screen.getByRole('list', { name: 'Ordered sort terms' })).toBeVisible();
   });

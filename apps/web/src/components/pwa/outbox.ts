@@ -437,6 +437,13 @@ async function activateOutboxUser(
   return request === identityTransitionRequest;
 }
 
+/**
+ * Bind the offline outbox to the current authenticated account.
+ *
+ * @param userId - The current account, or `null` after sign-out.
+ * @param now - The timestamp used to refresh the account's queue projection.
+ * @returns A promise that resolves after the account transition finishes.
+ */
 export async function setOutboxUser(userId: string | null, now = Date.now()): Promise<void> {
   await activateOutboxUser(userId, now, false);
 }

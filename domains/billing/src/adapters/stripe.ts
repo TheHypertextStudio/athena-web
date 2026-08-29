@@ -75,7 +75,7 @@ function safeStripeFailureContext(cause: unknown): string {
     type?: unknown;
     code?: unknown;
     statusCode?: unknown;
-    raw?: { type?: unknown; code?: unknown };
+    raw?: { type?: unknown; code?: unknown; detail?: unknown };
   };
   const type =
     typeof error.raw?.type === 'string'
@@ -90,9 +90,18 @@ function safeStripeFailureContext(cause: unknown): string {
         ? error.code
         : null;
   const statusCode = typeof error.statusCode === 'number' ? error.statusCode : null;
+  const detail =
+    typeof error.raw?.detail === 'object' && error.raw.detail !== null
+      ? (error.raw.detail as { name?: unknown; code?: unknown })
+      : null;
+  const detailName = typeof detail?.name === 'string' ? detail.name : null;
+  const detailCode = typeof detail?.code === 'string' ? detail.code : null;
   const providerCode = [type, code].filter((value): value is string => value !== null).join('/');
-  if (!providerCode && statusCode === null) return '';
-  return ` (Stripe${providerCode ? ` ${providerCode}` : ''}${statusCode === null ? '' : `, HTTP ${String(statusCode)}`})`;
+  const transportCode = [detailName, detailCode]
+    .filter((value): value is string => value !== null)
+    .join('/');
+  if (!providerCode && statusCode === null && !transportCode) return '';
+  return ` (Stripe${providerCode ? ` ${providerCode}` : ''}${statusCode === null ? '' : `, HTTP ${String(statusCode)}`}${transportCode ? `, transport ${transportCode}` : ''})`;
 }
 
 /** Validated configuration for {@link RealStripeGateway} (sourced from env). */

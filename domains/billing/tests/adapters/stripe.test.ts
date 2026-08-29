@@ -533,6 +533,24 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
     expect((failure as Error).message).not.toContain('Provider prose');
   });
 
+  it('reports a safe nested transport code without copying its message', async () => {
+    const http: HttpClient = async (url) => {
+      if (url.includes('/v1/account')) {
+        return Response.json({ id: TEST_STRIPE_ACCOUNT_ID, object: 'account' });
+      }
+      throw Object.assign(new Error('Transport prose must remain private.'), {
+        code: 'ECONNRESET',
+      });
+    };
+    const gateway = createGateway({ secretKey: 'sk_test_x' }, http);
+
+    const failure = await gateway.listCustomers('org_1').catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).toContain('ECONNRESET');
+    expect((failure as Error).message).not.toContain('Transport prose');
+  });
+
   it('reads the hosted Checkout billing country from the durable customer', async () => {
     const { http } = scriptedHttp([
       { id: 'cus_1', object: 'customer', address: { country: 'US' } },

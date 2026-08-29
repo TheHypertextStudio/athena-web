@@ -30,6 +30,7 @@ export function Card({ className, ...props }: React.ComponentProps<'div'>): Reac
   return (
     <div
       className={cn('bg-surface-container-low text-on-surface rounded-xl', className)}
+      data-surface-tone="card"
       {...props}
     />
   );

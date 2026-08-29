@@ -51,8 +51,8 @@ export default function BulkActionsBar({
     <>
       <CanvasOverlayPanel position="top-center">
         <Surface
-          tone="raised"
-          shape="pill"
+          tone="floating"
+          shape="medium"
           className="text-on-surface flex max-w-[calc(100vw-1rem)] flex-nowrap items-center gap-1 overflow-x-auto px-2 py-1.5"
           aria-label={`${String(count)} selected`}
           data-testid="canvas-selection-bar"

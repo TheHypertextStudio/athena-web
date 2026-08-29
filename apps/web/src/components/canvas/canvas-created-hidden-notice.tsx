@@ -25,7 +25,7 @@ export default function CanvasCreatedHiddenNotice({
     <CanvasOverlayPanel position="top-center">
       <Surface
         tone="prominent"
-        shape="pill"
+        shape="medium"
         role="status"
         className="text-body-medium flex items-center gap-2 py-1.5 pr-2 pl-4"
       >

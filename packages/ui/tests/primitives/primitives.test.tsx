@@ -166,6 +166,10 @@ describe('Card family', () => {
     expect(screen.getByText('Description')).toHaveClass('text-on-surface-variant', 'desc-x');
     expect(screen.getByText('Body')).toHaveClass('content-x');
     expect(screen.getByText('Footer')).toHaveClass('footer-x');
+    expect(screen.getByText('Title').closest('.card-x')).toHaveAttribute(
+      'data-surface-tone',
+      'card',
+    );
   });
 });
 

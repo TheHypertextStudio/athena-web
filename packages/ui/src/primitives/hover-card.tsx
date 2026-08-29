@@ -70,8 +70,9 @@ export function HoverCardContent({
         align={align}
         sideOffset={sideOffset}
         collisionPadding={collisionPadding}
+        data-surface-tone="floating"
         className={cn(
-          'bg-surface text-on-surface border-outline-variant data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 shadow-level2 z-[120] w-64 origin-[var(--radix-hover-card-content-transform-origin)] rounded-lg border p-4 outline-none',
+          'bg-surface-container-high text-on-surface border-outline-variant data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 shadow-level2 z-[120] w-64 origin-[var(--radix-hover-card-content-transform-origin)] rounded-lg border p-4 outline-none',
           className,
         )}
         {...props}

@@ -41,7 +41,8 @@ describe('HoverCard family', () => {
 
     const styled = document.querySelector('.card-x');
     expect(styled).not.toBeNull();
-    expect(styled).toHaveClass('bg-surface', 'rounded-lg', 'w-64');
+    expect(styled).toHaveAttribute('data-surface-tone', 'floating');
+    expect(styled).toHaveClass('bg-surface-container-high', 'rounded-lg', 'w-64');
   });
 
   it('closes again when the pointer leaves the trigger', async () => {

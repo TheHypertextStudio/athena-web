@@ -21,6 +21,10 @@ The short version:
 - **Shadows** exist only on overlays. **Borders** are the exception, not the separator of choice.
 - **Nothing changes size** when you hover, focus, press, or select it.
 
+Resting regions use the closed `Surface` role map. See
+[semantic surface roles](references/semantic-surfaces.md) before adding a page, card, well, or
+floating surface.
+
 ---
 
 ## 1. Control heights

@@ -22,8 +22,8 @@ export default function CanvasViewportToolbar({
   const hasSelection = useStore((state) => state.nodes.some(({ selected }) => selected));
   return (
     <Surface
-      tone="raised"
-      shape="pill"
+      tone="floating"
+      shape="medium"
       className="pointer-events-auto flex shrink-0 items-center gap-1 p-1"
       role="toolbar"
       aria-label="Canvas view controls"

@@ -571,7 +571,7 @@ function DraftEditor<TTarget extends ViewTarget>({
       path.length === 0 ? 'root filter group' : `filter group ${String(groupNumber)}`;
     return (
       <Surface
-        tone="sunken"
+        tone="well"
         shape="small"
         pad="tight"
         as="section"

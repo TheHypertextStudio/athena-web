@@ -116,7 +116,7 @@ export default function NodePeek({
     data.assignee;
 
   return (
-    <Surface tone="raised" pad="comfortable" className="flex w-72 flex-col gap-3">
+    <Surface tone="floating" pad="comfortable" className="flex w-72 flex-col gap-3">
       <div className="flex items-start gap-2">
         <StatusIcon type={data.stateType} label={data.statusName} className="mt-0.5" />
         <span className="text-on-surface text-body-medium flex-1 font-medium">{data.title}</span>

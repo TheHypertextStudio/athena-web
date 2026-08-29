@@ -11,8 +11,8 @@
  * ramp existed as a convention that each screen re-implemented, and reading a component told you
  * *which colour* it used rather than *what it was*.
  *
- * `Surface` is that step as a component. A caller names the role — a `card`, a `sunken` well, a
- * floating `overlay` — and the component owns the token, the radius, and the fact that none of
+ * `Surface` is that step as a component. A caller names the role — a `card`, a `well`, or a
+ * floating region — and the component owns the token, the radius, and the fact that none of
  * them draw a border. Changing what "card" means then happens here rather than in ninety files.
  *
  * It is polymorphic through `as`, so a surface can be the `header`, `aside`, `li`, or `section`
@@ -22,7 +22,7 @@
  * ```tsx
  * <Surface tone="card" as="header">…</Surface>
  * <Surface tone="card" pad="comfortable">…</Surface>
- * <Surface tone="prominent" pad="tight" shape="pill">Dependency removed</Surface>
+ * <Surface tone="prominent" pad="tight">Dependency removed</Surface>
  * ```
  */
 import { type VariantProps, cva } from 'class-variance-authority';
@@ -34,12 +34,9 @@ import { cn } from '../lib/utils';
  * The tonal steps a surface can take, in ramp order.
  *
  * @remarks
- * Each name is one step on the ramp, and no two names share a step — a duplicate would be the
- * thing that quietly drifts apart later. `page` is the surface a route's content sits on; `card`
- * is a region raised off it, which covers both a discrete card and a band of furniture such as an
- * app bar; `raised` is a card that has to separate itself from a `card` behind it; `prominent` is
- * the top of the ramp, for a floating strip over content; `sunken` is a well *below* the page, for
- * an inset region such as a code block or a drop target.
+ * Each name is one step on the ramp, and no two names share a step. `canvas` frames the workspace,
+ * `page` holds route content, `well` recedes beneath a page, `card` raises inset furniture one
+ * step, `floating` owns a dialog or panel, and `prominent` clears another floating surface.
  *
  * ## Why an app bar is `card`, one step from `page`, and not two
  *
@@ -51,15 +48,37 @@ import { cn } from '../lib/utils';
  * bar from the content below it without colliding with the frame around it.
  */
 const SURFACE_TONE = {
+  canvas: 'bg-surface-container text-on-surface',
   page: 'bg-surface text-on-surface',
-  sunken: 'bg-surface-container-lowest text-on-surface',
+  well: 'bg-surface-container-lowest text-on-surface',
   card: 'bg-surface-container-low text-on-surface',
-  raised: 'bg-surface-container-high text-on-surface',
+  floating: 'bg-surface-container-high text-on-surface',
   prominent: 'bg-surface-container-highest text-on-surface',
 } as const;
 
+/** The closed semantic roles for resting surface regions. */
+export const SURFACE_TONES = ['canvas', 'page', 'well', 'card', 'floating', 'prominent'] as const;
+
 /** A surface's tonal step. */
-export type SurfaceTone = keyof typeof SURFACE_TONE;
+export type SurfaceTone = (typeof SURFACE_TONES)[number];
+
+/** Return the utility classes assigned to one documented surface role. */
+export function surfaceToneColor(tone: SurfaceTone): string {
+  return SURFACE_TONE[tone];
+}
+
+/** Return the CSS custom property that supplies one documented surface role. */
+export function surfaceToneVariable(tone: SurfaceTone): string {
+  const variables: Readonly<Record<SurfaceTone, string>> = {
+    canvas: '--surface-container',
+    page: '--surface',
+    well: '--surface-container-lowest',
+    card: '--surface-container-low',
+    floating: '--surface-container-high',
+    prominent: '--surface-container-highest',
+  };
+  return variables[tone];
+}
 
 const surfaceVariants = cva('min-w-0', {
   variants: {
@@ -69,8 +88,6 @@ const surfaceVariants = cva('min-w-0', {
       none: 'rounded-none',
       small: 'rounded-lg',
       medium: 'rounded-xl',
-      large: 'rounded-2xl',
-      pill: 'rounded-full',
     },
     /** Internal inset. Kept to three steps so surfaces do not each invent their own padding. */
     pad: {
@@ -115,5 +132,12 @@ export function Surface({
   ...props
 }: SurfaceProps): React.JSX.Element {
   const Component = Element as React.ElementType;
-  return <Component className={cn(surfaceVariants({ tone, shape, pad }), className)} {...props} />;
+  const resolvedTone = tone ?? 'card';
+  return (
+    <Component
+      className={cn(surfaceVariants({ tone: resolvedTone, shape, pad }), className)}
+      data-surface-tone={resolvedTone}
+      {...props}
+    />
+  );
 }

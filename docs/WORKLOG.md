@@ -28,7 +28,9 @@
   production secret gate now requires all three Linear Agent credentials whenever the feature flag
   is true, and its focused test passes 27 cases. Three Web behavior tests prove that one admin
   install button opens the signed Linear URL, non-managers cannot install the workspace app, and an
-  installed Hypertext Studio workspace does not offer a duplicate install.
+  installed Hypertext Studio workspace does not offer a duplicate install. The seven-case relay
+  suite proves that two sessions sharing one revoked installation mark both links errored while the
+  integration status transition sends the installer one reconnect notice.
 - **Production state**: Hypertext Studio Linear contains one Athena application at
   `d3447c82-67dc-4482-a10d-3099f76b60ce`. Its callback, Agent-session webhook, public availability,
   and application metadata match the release design. The production GitHub environment explicitly

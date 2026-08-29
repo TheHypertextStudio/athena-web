@@ -189,6 +189,11 @@ async function markInstallationUnavailable(link: LinkRow): Promise<void> {
       and(
         eq(integration.organizationId, link.organizationId),
         eq(integration.provider, adapter.routing.inboxProvider),
+        or(
+          ne(integration.status, 'error'),
+          isNull(integration.lastError),
+          ne(integration.lastError, message),
+        ),
       ),
     )
     .returning({ createdBy: integration.createdBy });

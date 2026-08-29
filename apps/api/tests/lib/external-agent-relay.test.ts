@@ -276,7 +276,7 @@ describe('external agent relay', () => {
     });
   });
 
-  it('marks a revoked installation and its link errored and notifies the integration owner once', async () => {
+  it('marks every link for a revoked installation errored and notifies its owner once', async () => {
     const seeded = await seedRelaySession();
     const [owner] = await db
       .select()
@@ -298,15 +298,47 @@ describe('external agent relay', () => {
       status: 'connected',
       createdBy: assertDefined(owner).id,
     });
-    const now = new Date('2026-08-28T12:00:00.000Z');
-    await db.insert(schema.sessionActivity).values({
-      sessionId: seeded.sessionId,
+    const [firstSession] = await db
+      .select()
+      .from(schema.agentSession)
+      .where(eq(schema.agentSession.id, seeded.sessionId));
+    const [secondSession] = await db
+      .insert(schema.agentSession)
+      .values({
+        organizationId: seeded.orgId,
+        agentId: assertDefined(firstSession).agentId,
+        trigger: 'mention',
+        status: 'completed',
+        initiatorId: assertDefined(firstSession).initiatorId,
+      })
+      .returning({ id: schema.agentSession.id });
+    const secondSessionId = assertDefined(secondSession).id;
+    await db.insert(schema.agentSessionExternalLink).values({
+      sessionId: secondSessionId,
       organizationId: seeded.orgId,
-      type: 'response',
-      body: { text: 'Needs a credential.' },
-      createdAt: now,
-      updatedAt: now,
+      provider: 'linear',
+      externalWorkspaceId: `workspace-${secondSessionId}`,
+      externalSessionId: `external-${secondSessionId}`,
     });
+    const now = new Date('2026-08-28T12:00:00.000Z');
+    await db.insert(schema.sessionActivity).values([
+      {
+        sessionId: seeded.sessionId,
+        organizationId: seeded.orgId,
+        type: 'response',
+        body: { text: 'Needs a credential.' },
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        sessionId: secondSessionId,
+        organizationId: seeded.orgId,
+        type: 'response',
+        body: { text: 'Also needs the same credential.' },
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
     const publish = vi.fn<RelayModule.ExternalAgentPublisher>().mockRejectedValue(
       Object.assign(new Error('provider credential text that must not reach the user'), {
         code: 'external_agent_installation_unavailable',
@@ -315,6 +347,7 @@ describe('external agent relay', () => {
     );
 
     await relayExternalAgentActivity(seeded.sessionId, now, { publish });
+    await relayExternalAgentActivity(secondSessionId, now, { publish });
     await relayExternalAgentActivity(seeded.sessionId, new Date(now.getTime() + 60_000), {
       publish,
     });
@@ -335,6 +368,15 @@ describe('external agent relay', () => {
     expect(installed).toMatchObject({
       status: 'error',
       lastError: 'The Linear Agent connection must be reconnected.',
+    });
+    const [secondLink] = await db
+      .select()
+      .from(schema.agentSessionExternalLink)
+      .where(eq(schema.agentSessionExternalLink.sessionId, secondSessionId));
+    expect(secondLink).toMatchObject({
+      relayStatus: 'errored',
+      nextRelayAt: null,
+      lastRelayError: 'The Linear Agent connection must be reconnected.',
     });
     const notices = await db
       .select()

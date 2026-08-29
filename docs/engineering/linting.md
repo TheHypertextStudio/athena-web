@@ -5,22 +5,9 @@ local feedback within the limits below, and keep the complete clean-checkout gat
 
 ## Local commands
 
-`pnpm lint:staged` reads the Git index. A documentation-only change returns without starting
-ESLint. A workspace change lints the changed package and every dependent package through Turbo.
-Each reverse-dependency closure has its own 15-minute process limit, so a broad cross-package
-commit cannot spend one package's budget before another package starts. Changes to root lint
-configuration, root TypeScript configuration, the lockfile, the workspace manifest, or repository
-scripts select the full lint path.
-
-`pnpm lint` runs the complete workspace in two phases. The API and the small-package group run
-together. Web and Admin run afterward so the three memory-heavy TypeScript programs never overlap.
-Each Turbo shard runs packages serially. A shard fails after 15 minutes, and the complete command
-fails after 30 minutes. The process watchdog remains in place, but the limit accounts for a typed
-API lint that used 285 seconds of CPU and 880 seconds of wall time while another worktree ran its
-own ESLint job on August 29, 2026.
-
-`pnpm lint:diagnose` runs the same schedule through `/usr/bin/time`. It prints Turbo cache hits,
-elapsed time, CPU time, and peak memory for each shard.
+`pnpm lint` runs every package through Turbo serially. `pnpm lint:staged`
+uses Turbo's affected-package mode, which compares the current branch to `main`. Turbo owns the
+task graph, caching, and package selection. Do not add a second scheduler around it.
 
 The pre-commit hook runs `pnpm lint-staged` for formatting and then `pnpm lint:staged` for behavior.
 CI still lints every package from a clean checkout. Do not move the complete gate out of CI.
@@ -28,18 +15,14 @@ The installer writes generated hooks below the current worktree's Git directory 
 `core.hooksPath` in worktree config. Do not move them back to the shared common Git directory. An
 older linked checkout can otherwise replace the staged hook with its own policy during install.
 
-The component diagram shows how the local commands share one bounded execution path.
+The component diagram shows the direct Turbo paths.
 
 ```mermaid
 flowchart LR
   Hook[Pre-commit hook] --> Staged[pnpm lint:staged]
   Full[pnpm lint] --> Driver[Lint driver]
-  Staged --> Driver
-  Driver --> Selector[Staged package selector]
-  Driver --> Scheduler[Bounded shard scheduler]
-  Driver --> Cache[Turbo cache maintenance]
-  Selector --> Turbo[Turbo lint tasks]
-  Scheduler --> Turbo
+  Staged --> Turbo[Turbo lint tasks]
+  Full --> Turbo
 ```
 
 ## Type-aware lint
@@ -54,10 +37,6 @@ finished in 55.6 seconds on the 8-core development machine. The former 3 GiB lim
 RSS because the project service retained the complete typed program and both lint target trees.
 Keep this limit on the API command. Do not raise `NODE_OPTIONS` for the workspace or shell.
 
-## Turbo cache
-
-Turbo owns package-level lint caching. `pnpm cache:status` reports the cache shared by all worktrees.
-`pnpm cache:prune` removes artifacts older than 30 days first and then removes the oldest remaining
-artifacts until the cache uses at most 20 GiB. The full lint command performs the same maintenance
-with a 30-second budget before it starts linting. Cache deletion cannot remove source or generated
-state that lacks another source of truth. Turbo recomputes every deleted artifact.
+The Web command receives a 3 GiB old-space limit. Its type-aware lint reaches Node's default 2 GiB
+heap limit even when Turbo runs serially. Keep this limit in `apps/web/package.json`; it is a Web
+resource requirement, not a root scheduler setting.

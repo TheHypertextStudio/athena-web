@@ -373,6 +373,30 @@
   authenticated Hypertext Studio operator session and awaits the required action-time production
   entitlement confirmation. Whole-product launch sign-off remains independent of this billing
   slice.
+- **Post-provider review plan**: Reproduce and fix the Stripe gateway behavior that caches a
+  transient account-verification failure for the lifetime of the API process. Make the production
+  audit reject a missing or stale Scheduler attempt instead of treating an absent status as
+  success. Cover both fixes with behavior tests, then update the billing launch slice and regenerate
+  the launch record from current evidence. Keep Checkout disabled and do not restart the shadow
+  clock until the Founder grant succeeds and one production audit passes.
+- **Post-provider review result**: `RealStripeGateway` now shares only a successful account check or
+  an immutable account-id mismatch. A transport or permission failure clears the cached promise, so
+  a later provider call can recover without an API restart. The production workflow now delegates
+  its runtime decision to a tested verifier. The verifier rejects a Scheduler that never ran, has a
+  nonzero result, or has no successful attempt within two 15-minute intervals. The billing launch
+  slice and generated launch record now distinguish completed migration and owner-policy evidence
+  from the still-open provider and canary gates.
+- **Post-provider review validation**: The billing package passes 157 tests, type checking, and
+  lint. The runtime-verifier suite passes ten behavior tests, and the two launch-policy suites
+  pass 24 tests. The affected API passes type checking and its production build with the documented
+  package-local 4 GB heap. Changed-file ESLint, Prettier, Actionlint, and the diff check pass. The
+  first combined ESLint process exhausted Node's default 2 GB heap before reporting a violation;
+  the bounded 4 GB changed-file rerun passed. The launch generator reports 399 requirements, 12
+  closed, 387 open, and sign-off withheld.
+- **Post-provider review**: The final bounded review found no code-path defect. It required explicit
+  proof for the HTTP 403 permission-recovery path, permanent mismatch reuse across later provider
+  operations, and every runtime rollout invariant. Those behavior cases now pass without timing
+  sleeps, provider ids, or workflow-source assertions.
 
 ---
 

@@ -439,12 +439,15 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
     expect(requestAt(reqs, 1).url).toContain('/v1/customers');
   });
 
-  it('blocks the provider request when the configured account does not match', async () => {
+  it('keeps every provider request blocked after the configured account does not match', async () => {
     const { http, reqs } = scriptedHttp([], 'acct_personal', true);
     const gw = createGateway({ secretKey: 'sk_test_x' }, http);
 
     await expect(gw.createCustomer('org_1')).rejects.toThrow(
       'RealStripeGateway: failed to create customer.',
+    );
+    await expect(gw.listCustomers('org_1')).rejects.toThrow(
+      'RealStripeGateway: failed to list organization customers',
     );
     expect(reqs).toHaveLength(1);
     expect(requestAt(reqs, 0).url).toContain('/v1/account');
@@ -468,6 +471,58 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
 
     expect(accountReads).toBe(1);
     expect(customerCreates).toBe(2);
+  });
+
+  it('retries account verification after a transient transport failure', async () => {
+    let accountHealthy = false;
+    let accountReads = 0;
+    let customerSearches = 0;
+    const http: HttpClient = async (url) => {
+      if (url.includes('/v1/account')) {
+        accountReads += 1;
+        if (!accountHealthy) throw new TypeError('temporary transport failure');
+        return Response.json({ id: TEST_STRIPE_ACCOUNT_ID, object: 'account' });
+      }
+      customerSearches += 1;
+      return Response.json(searchResult([]));
+    };
+    const gw = createGateway({ secretKey: 'sk_test_x' }, http);
+
+    await expect(gw.listCustomers('org_1')).rejects.toThrow(
+      'RealStripeGateway: failed to list organization customers',
+    );
+
+    accountHealthy = true;
+    await expect(gw.listCustomers('org_1')).resolves.toEqual([]);
+    expect(accountReads).toBeGreaterThan(1);
+    expect(customerSearches).toBe(1);
+  });
+
+  it('retries account verification after provider permissions change', async () => {
+    let accountReadable = false;
+    let accountReads = 0;
+    let customerSearches = 0;
+    const http: HttpClient = async (url) => {
+      if (url.includes('/v1/account')) {
+        accountReads += 1;
+        if (!accountReadable) {
+          return Response.json({ error: { type: 'invalid_request_error' } }, { status: 403 });
+        }
+        return Response.json({ id: TEST_STRIPE_ACCOUNT_ID, object: 'account' });
+      }
+      customerSearches += 1;
+      return Response.json(searchResult([]));
+    };
+    const gw = createGateway({ secretKey: 'sk_test_x' }, http);
+
+    await expect(gw.listCustomers('org_1')).rejects.toThrow(
+      'RealStripeGateway: failed to list organization customers',
+    );
+
+    accountReadable = true;
+    await expect(gw.listCustomers('org_1')).resolves.toEqual([]);
+    expect(accountReads).toBeGreaterThan(1);
+    expect(customerSearches).toBe(1);
   });
 
   it('creates one organization customer with an idempotent provider request', async () => {

@@ -26,6 +26,15 @@ jobs:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: '.node-version'
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile --filter @docket/root --filter @docket/api...
+
       - name: Verify deployed billing rollout
         env:
           EXPECTED_RECONCILIATION_MODE: ${{ vars.BILLING_RECONCILIATION_MODE }}
@@ -62,61 +71,24 @@ jobs:
           scheduler_state="$(jq -r '.state' <<<"$scheduler_json")"
           scheduler_uri="$(jq -r '.httpTarget.uri' <<<"$scheduler_json")"
           scheduler_last_attempt="$(jq -r '.lastAttemptTime // null' <<<"$scheduler_json")"
-          scheduler_status_code="$(jq -r '.status.code // 0' <<<"$scheduler_json")"
+          scheduler_status_code="$(jq -r 'if .lastAttemptTime == null then "null" else (.status.code // 0) end' <<<"$scheduler_json")"
 
-          mismatches=()
-          test "$deployed_checkout" = "false" || mismatches+=("checkout_enabled")
-          test "$deployed_mode" = "$EXPECTED_RECONCILIATION_MODE" || mismatches+=("reconciliation_mode")
-          test "$deployed_account" = "$EXPECTED_STRIPE_ACCOUNT_ID" || mismatches+=("stripe_account")
-          test "$scheduler_state" = "ENABLED" || mismatches+=("scheduler_state")
-          test "$scheduler_schedule" = "*/15 * * * *" || mismatches+=("scheduler_schedule")
-          test "$scheduler_uri" = "$service_url/internal/cron/billing-reconciliation" || mismatches+=("scheduler_uri")
-          test "$scheduler_status_code" = "0" || mismatches+=("scheduler_status")
-          mismatches_json="$(printf '%s\n' "${mismatches[@]-}" | jq -Rsc 'split("\n") | map(select(length > 0))')"
-
-          jq -n \
-            --arg generatedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            --arg revision "$revision" \
-            --arg serviceUrl "$service_url" \
-            --arg checkoutEnabled "$deployed_checkout" \
-            --arg reconciliationMode "$deployed_mode" \
-            --arg stripeAccountId "$deployed_account" \
-            --arg schedulerName "$scheduler_name" \
-            --arg schedulerSchedule "$scheduler_schedule" \
-            --arg schedulerState "$scheduler_state" \
-            --arg schedulerUri "$scheduler_uri" \
-            --arg schedulerLastAttempt "$scheduler_last_attempt" \
-            --arg schedulerStatusCode "$scheduler_status_code" \
-            --argjson mismatches "$mismatches_json" \
-            '{
-              generatedAt: $generatedAt,
-              passed: ($mismatches | length == 0),
-              mismatches: $mismatches,
-              revision: $revision,
-              serviceUrl: $serviceUrl,
-              checkoutEnabled: ($checkoutEnabled == "true"),
-              reconciliationMode: $reconciliationMode,
-              stripeAccountId: $stripeAccountId,
-              scheduler: {
-                name: $schedulerName,
-                schedule: $schedulerSchedule,
-                state: $schedulerState,
-                uri: $schedulerUri,
-                lastAttemptTime: (if $schedulerLastAttempt == "null" then null else $schedulerLastAttempt end),
-                statusCode: ($schedulerStatusCode | tonumber)
-              }
-            }' > "$RUNNER_TEMP/billing-production-audit/billing-runtime-rollout.json"
-
-          test "$(jq length <<<"$mismatches_json")" = "0"
-
-      - uses: pnpm/action-setup@v6
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: '.node-version'
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile --filter @docket/root --filter @docket/api...
+          pnpm exec tsx scripts/billing-runtime-rollout.ts \
+            --out "$RUNNER_TEMP/billing-production-audit/billing-runtime-rollout.json" \
+            --generated-at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --revision "$revision" \
+            --service-url "$service_url" \
+            --checkout-enabled "$deployed_checkout" \
+            --reconciliation-mode "$deployed_mode" \
+            --expected-reconciliation-mode "$EXPECTED_RECONCILIATION_MODE" \
+            --stripe-account-id "$deployed_account" \
+            --expected-stripe-account-id "$EXPECTED_STRIPE_ACCOUNT_ID" \
+            --scheduler-name "$scheduler_name" \
+            --scheduler-schedule "$scheduler_schedule" \
+            --scheduler-state "$scheduler_state" \
+            --scheduler-uri "$scheduler_uri" \
+            --scheduler-last-attempt "$scheduler_last_attempt" \
+            --scheduler-status-code "$scheduler_status_code"
 
       - name: Read production billing state
         id: billing-audit

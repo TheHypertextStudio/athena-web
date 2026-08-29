@@ -73,8 +73,10 @@ Stripe customer or subscription to reconcile. Stripe customer search is eventual
 retry once after a newly created customer becomes searchable. Repeated failure is a blocker, not a
 reason to create another customer.
 
-Deploy the reconciliation endpoint and Cloud Scheduler job before enabling Checkout. Inspect
-the mode-tagged Cloud Scheduler results during the shadow period. A shadow result with
+Deploy the reconciliation endpoint and Cloud Scheduler job before enabling Checkout. Inspect the
+mode-tagged Cloud Scheduler results during the shadow period. The production audit requires a
+successful attempt no older than two 15-minute Scheduler intervals. A missing or stale attempt
+blocks the observation window. A shadow result with
 `audit.passed=false` blocks active reconciliation and public enablement. After the shadow period,
 set `BILLING_RECONCILIATION_MODE=active` and inspect `billing_provider_sync` rows where
 `operation = 'reconcile_billing'`. A `failed` row blocks public enablement.
@@ -83,6 +85,11 @@ The setup wizard never reads the globally selected Stripe CLI profile. For local
 forwarding, obtain `STRIPE_WEBHOOK_SECRET` from an explicitly selected Hypertext Studio Stripe CLI
 profile and supply it before running the Stripe provisioner. Never let the wizard infer credentials
 from a personal or unnamed profile.
+
+A successful Stripe account-pin check remains cached because the configured key cannot change in a
+running API process. A transport or permission failure does not remain cached. The next provider
+operation retries the account check. An account-id mismatch remains blocked until the process
+restarts with the correct Hypertext Studio key and independently configured account pin.
 
 ## Duplicate subscriptions
 

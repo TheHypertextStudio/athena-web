@@ -48,6 +48,29 @@ Cloud Run API service, and returned status code zero for its `2026-08-29T01:00:0
 The workflow records only sanitized rollout values in a seven-day artifact and runs hourly during
 the observation window. No personal Google session or Cloud Logging permission is required.
 
+## August 29 correction
+
+The restricted live key now returns HTTP 200 for the pinned account, customer search, and
+subscription search. Audit run `33265548191` generated its report at
+`2026-08-29T17:25:18.857Z`. It found one production organization, no Stripe customer, no Stripe
+subscription, no complimentary entitlement, and one unresolved
+`verify_complimentary_eligibility` operation. The Founder grant did not commit.
+
+The failed provider operation persisted because `RealStripeGateway` cached a rejected account-check
+promise for the API process lifetime. The direct probes succeeded after the restricted-key
+permission changed, but the deployed gateway could not recover without a restart. The corrected
+gateway keeps a successful verification shared, keeps an immutable account mismatch blocked, and
+clears transport or permission failures so the next provider operation can retry. Deployment and a
+passing production audit remain required before the 24-hour shadow clock starts again.
+
+The audit workflow also treated a missing Scheduler status as success and did not reject a stale
+`lastAttemptTime`. The corrected workflow uses the tested runtime verifier. It now requires an
+attempt no older than two 15-minute reconciliation intervals and rejects a Scheduler that has never
+run.
+
+The production-shaped post-0107 audit and the sole owner's finance and legal policy approval are
+complete. They are not open launch gates.
+
 ## Open gates
 
 The repository's private local Stripe test key belongs to another Stripe account. The real gateway
@@ -56,7 +79,7 @@ Hypertext Studio test key must replace that local value before any sandbox canar
 
 Hypertext Studio test mode still needs hosted Checkout, signed webhook, replay, payment failure,
 payment recovery, authentication-required payment, cancellation, renewal, discount, and credit
-note evidence. Production still needs the Founder complimentary grant, one real `$8` subscription,
-one discounted subscription, the 24-hour shadow period, active reconciliation, and the 72-hour
-canary. Finance and legal approval remain external gates. Checkout must remain disabled until all
-of those checks pass.
+note evidence. Production still needs the fixed gateway deployment, the Founder complimentary
+grant, one clean 24-hour shadow period, active reconciliation, one real `$8` subscription, one
+discounted subscription, the verified-phone entitlement round trip, and the 72-hour canary.
+Checkout must remain disabled until all of those checks pass.

@@ -69,6 +69,8 @@ export const DEFAULT_TRIAL_DAYS = 14;
  */
 export const STRIPE_API_VERSION = '2026-03-25.dahlia';
 
+class ProviderAccountMismatchError extends Error {}
+
 function safeStripeFailureContext(cause: unknown): string {
   if (typeof cause !== 'object' || cause === null) return '';
   const error = cause as {
@@ -186,8 +188,20 @@ export class RealStripeGateway implements BillingGateway {
     requestUrl: string,
     requestInit: RequestInit | undefined,
   ): Promise<void> {
-    this.accountVerification ??= this.readProviderAccount(http, requestUrl, requestInit);
-    await this.accountVerification;
+    const verification =
+      this.accountVerification ?? this.readProviderAccount(http, requestUrl, requestInit);
+    this.accountVerification = verification;
+    try {
+      await verification;
+    } catch (error) {
+      if (
+        !(error instanceof ProviderAccountMismatchError) &&
+        this.accountVerification === verification
+      ) {
+        this.accountVerification = undefined;
+      }
+      throw error;
+    }
   }
 
   /** Read the Stripe account through the same authenticated HTTP edge as the pending request. */
@@ -215,7 +229,9 @@ export class RealStripeGateway implements BillingGateway {
         ? (account as { id?: unknown }).id
         : null;
     if (accountId !== this.config.expectedAccountId) {
-      throw new Error('RealStripeGateway: configured Stripe account is not Hypertext Studio.');
+      throw new ProviderAccountMismatchError(
+        'RealStripeGateway: configured Stripe account is not Hypertext Studio.',
+      );
     }
   }
 

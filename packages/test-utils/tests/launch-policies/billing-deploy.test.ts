@@ -56,8 +56,7 @@ describe('production billing audit policy', () => {
     expect(auditWorkflow).toContain('billing-provider-read-probe.json');
     expect(auditWorkflow).toContain('accountMatchesExpected:');
     expect(auditWorkflow).toContain('billing-runtime-rollout.json');
-    expect(auditWorkflow).toContain('mismatches: $mismatches');
-    expect(auditWorkflow).toContain('test "$(jq length <<<"$mismatches_json")" = "0"');
+    expect(auditWorkflow).toContain('pnpm exec tsx scripts/billing-runtime-rollout.ts');
     expect(auditWorkflow).toContain('retention-days: 7');
     expect(auditWorkflow).toContain('if-no-files-found: error');
     expect(auditWorkflow).not.toContain('error.message //');
@@ -69,12 +68,10 @@ describe('production billing audit policy', () => {
     expect(auditWorkflow).toContain(
       'EXPECTED_RECONCILIATION_MODE: ${{ vars.BILLING_RECONCILIATION_MODE }}',
     );
-    expect(auditWorkflow).toContain('test "$deployed_checkout" = "false"');
-    expect(auditWorkflow).toContain('test "$deployed_mode" = "$EXPECTED_RECONCILIATION_MODE"');
-    expect(auditWorkflow).toContain('test "$scheduler_state" = "ENABLED"');
-    expect(auditWorkflow).toContain(
-      'test "$scheduler_uri" = "$service_url/internal/cron/billing-reconciliation"',
-    );
+    expect(auditWorkflow).toContain('--checkout-enabled "$deployed_checkout"');
+    expect(auditWorkflow).toContain('--reconciliation-mode "$deployed_mode"');
+    expect(auditWorkflow).toContain('--scheduler-state "$scheduler_state"');
+    expect(auditWorkflow).toContain('--scheduler-uri "$scheduler_uri"');
     expect(auditWorkflow).not.toContain(
       'test "$scheduler_uri" = "$API_URL/internal/cron/billing-reconciliation"',
     );

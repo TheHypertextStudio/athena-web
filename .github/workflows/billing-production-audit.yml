@@ -168,6 +168,47 @@ jobs:
             probe_dir="$(mktemp -d)"
             trap 'rm -rf "$probe_dir"' EXIT
 
+            probe_stripe_account() {
+              local raw_file="$probe_dir/account-response.json"
+              local sanitized_file="$probe_dir/account-sanitized.json"
+              local http_status
+              local curl_status
+              local account_id=null
+              local error_type=null
+              local error_code=null
+
+              set +e
+              http_status="$(curl --silent --show-error \
+                --output "$raw_file" \
+                --write-out '%{http_code}' \
+                --get 'https://api.stripe.com/v1/account' \
+                --header "Authorization: Bearer $STRIPE_SECRET_KEY")"
+              curl_status=$?
+              set -e
+
+              if [ -s "$raw_file" ] && jq -e . "$raw_file" >/dev/null 2>&1; then
+                account_id="$(jq -r '.id // null' "$raw_file")"
+                error_type="$(jq -r '.error.type // null' "$raw_file")"
+                error_code="$(jq -r '.error.code // null' "$raw_file")"
+              fi
+              jq -n \
+                --arg accountId "$account_id" \
+                --arg expectedAccountId "$STRIPE_HYPERTEXT_STUDIO_ACCOUNT_ID" \
+                --arg httpStatus "$http_status" \
+                --arg errorType "$error_type" \
+                --arg errorCode "$error_code" \
+                --argjson curlExit "$curl_status" \
+                '{
+                  resource: "account",
+                  curlExit: $curlExit,
+                  httpStatus: (if $httpStatus == "000" or $httpStatus == "" then null else ($httpStatus | tonumber) end),
+                  accountId: (if $accountId == "null" then null else $accountId end),
+                  accountMatchesExpected: ($accountId == $expectedAccountId),
+                  errorType: (if $errorType == "null" then null else $errorType end),
+                  errorCode: (if $errorCode == "null" then null else $errorCode end)
+                }' > "$sanitized_file"
+            }
+
             probe_stripe_search() {
               local resource="$1"
               local raw_file="$probe_dir/$resource-response.json"
@@ -207,6 +248,7 @@ jobs:
                 }' > "$sanitized_file"
             }
 
+            probe_stripe_account
             probe_stripe_search customers
             probe_stripe_search subscriptions
             jq -s '.' "$probe_dir"/*-sanitized.json \

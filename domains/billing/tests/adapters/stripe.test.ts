@@ -505,6 +505,34 @@ describe('RealStripeGateway methods (driven through the SDK over a scripted http
     expect(decodeURIComponent(req.url)).toContain("metadata['referenceId']:'org_1'");
   });
 
+  it('reports safe provider diagnostics without copying Stripe prose', async () => {
+    const http: HttpClient = async (url) => {
+      if (url.includes('/v1/account')) {
+        return Response.json({ id: TEST_STRIPE_ACCOUNT_ID, object: 'account' });
+      }
+      return new Response(
+        JSON.stringify({
+          error: {
+            type: 'invalid_request_error',
+            code: 'permission_denied',
+            message: 'Provider prose must not enter application-owned errors.',
+          },
+        }),
+        {
+          status: 403,
+          headers: { 'Content-Type': 'application/json', 'Request-Id': 'req_denied' },
+        },
+      );
+    };
+    const gateway = createGateway({ secretKey: 'sk_test_x' }, http);
+
+    const failure = await gateway.listCustomers('org_1').catch((error: unknown) => error);
+
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).toMatch(/Stripe .*permission.*HTTP 403/);
+    expect((failure as Error).message).not.toContain('Provider prose');
+  });
+
   it('reads the hosted Checkout billing country from the durable customer', async () => {
     const { http } = scriptedHttp([
       { id: 'cus_1', object: 'customer', address: { country: 'US' } },

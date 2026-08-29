@@ -69,6 +69,32 @@ export const DEFAULT_TRIAL_DAYS = 14;
  */
 export const STRIPE_API_VERSION = '2026-03-25.dahlia';
 
+function safeStripeFailureContext(cause: unknown): string {
+  if (typeof cause !== 'object' || cause === null) return '';
+  const error = cause as {
+    type?: unknown;
+    code?: unknown;
+    statusCode?: unknown;
+    raw?: { type?: unknown; code?: unknown };
+  };
+  const type =
+    typeof error.raw?.type === 'string'
+      ? error.raw.type
+      : typeof error.type === 'string'
+        ? error.type
+        : null;
+  const code =
+    typeof error.raw?.code === 'string'
+      ? error.raw.code
+      : typeof error.code === 'string'
+        ? error.code
+        : null;
+  const statusCode = typeof error.statusCode === 'number' ? error.statusCode : null;
+  const providerCode = [type, code].filter((value): value is string => value !== null).join('/');
+  if (!providerCode && statusCode === null) return '';
+  return ` (Stripe${providerCode ? ` ${providerCode}` : ''}${statusCode === null ? '' : `, HTTP ${String(statusCode)}`})`;
+}
+
 /** Validated configuration for {@link RealStripeGateway} (sourced from env). */
 export interface RealStripeGatewayConfig {
   /** Stripe secret key (`sk_...`). Never logged. */
@@ -217,7 +243,10 @@ export class RealStripeGateway implements BillingGateway {
         limit: 100,
       });
     } catch (cause) {
-      throw new Error('RealStripeGateway: failed to list organization customers.', { cause });
+      throw new Error(
+        `RealStripeGateway: failed to list organization customers${safeStripeFailureContext(cause)}.`,
+        { cause },
+      );
     }
     return result.data.map((customer) => ({ id: customer.id, referenceId }));
     /* v8 ignore stop */
@@ -379,7 +408,10 @@ export class RealStripeGateway implements BillingGateway {
         expand: ['data.items', 'data.discounts'],
       });
     } catch (cause) {
-      throw new Error('RealStripeGateway: failed to list organization subscriptions.', { cause });
+      throw new Error(
+        `RealStripeGateway: failed to list organization subscriptions${safeStripeFailureContext(cause)}.`,
+        { cause },
+      );
     }
     return result.data.map((subscription) => toSubscription(subscription, referenceId));
     /* v8 ignore stop */

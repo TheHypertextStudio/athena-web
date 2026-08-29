@@ -284,6 +284,13 @@
   entitlement mirrors separately from Stripe ownership. It proves the grant reason, shared-work
   write state, and every paid-module capability without depending on the Admin browser. It blocks
   launch when either side of the grant is missing or the entitlement is not active.
+  Production audit run `33226725509` proved that the uncertain browser request did not commit. A
+  confirmed retry failed during the provider eligibility read. Run `33226824170` records the first
+  non-empty production audit and shows that the deployed Stripe key can verify account ownership
+  but cannot search customers or subscriptions. Provider reads now include only Stripe's stable
+  error type, code, and HTTP status in operator diagnostics. They never copy Stripe's prose into
+  application-owned errors. This distinguishes a restricted-key permission gap from a bad key
+  without exposing credentials.
 - **Authentication-loop correction**: Production billing inspection must not depend on a personal
   Google Cloud CLI refresh token. A manual, read-only GitHub Actions audit will use the same
   production Workload Identity Federation boundary as deployment. It will run the existing billing

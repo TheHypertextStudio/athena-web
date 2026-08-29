@@ -3,6 +3,20 @@ import type { BillingGateway, Subscription } from '@docket/billing/contracts';
 
 import { ConflictError } from '../error';
 
+/** Stable customer-facing provider failure with its private diagnostic cause retained. */
+export class ProviderSubscriptionReadError extends ConflictError {
+  /** Original provider failure retained for the operator synchronization ledger. */
+  readonly providerCause: unknown;
+
+  constructor(cause: unknown) {
+    super(
+      'Stripe did not confirm the current subscription state. Retry after provider reconciliation.',
+      'billing_provider_sync_failed',
+    );
+    this.providerCause = cause;
+  }
+}
+
 /**
  * Load the only current provider subscription for one organization.
  *
@@ -15,11 +29,8 @@ export async function loadSingleCurrentSubscription(
   let subscriptions: readonly Subscription[];
   try {
     subscriptions = await gateway.listSubscriptions(organizationId);
-  } catch {
-    throw new ConflictError(
-      'Stripe did not confirm the current subscription state. Retry after provider reconciliation.',
-      'billing_provider_sync_failed',
-    );
+  } catch (cause) {
+    throw new ProviderSubscriptionReadError(cause);
   }
   const current = subscriptions.filter((subscription) => subscription.status !== 'canceled');
   if (current.length > 1) {

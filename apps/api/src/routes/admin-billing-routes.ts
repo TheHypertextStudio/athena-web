@@ -38,7 +38,10 @@ import { zJson, zParam } from '../lib/validate';
 import { requireStaffRole } from '../permissions/staff-guard';
 import { dispatchEssentialBillingNotice } from '../services/billing-notifications';
 import { assertSubscriptionDiscountOwnership } from '../services/billing-discount-ownership';
-import { loadSingleCurrentSubscription } from '../services/billing-provider-state';
+import {
+  loadSingleCurrentSubscription,
+  ProviderSubscriptionReadError,
+} from '../services/billing-provider-state';
 import { reconcileBilling } from '../services/billing-reconciliation';
 
 import {
@@ -843,7 +846,46 @@ export const adminBillingRoutes = new Hono<AppEnv>()
           'Resolve the active Stripe subscription before granting complimentary Docket Pro',
         );
       }
-      const providerSubscription = await loadSingleCurrentSubscription(getContainer().billing, id);
+      const providerCheckKey = `billing:complimentary:${id}:eligibility`;
+      await db
+        .insert(billingProviderSync)
+        .values({
+          organizationId: id,
+          operation: 'verify_complimentary_eligibility',
+          status: 'running',
+          idempotencyKey: providerCheckKey,
+          attempts: 1,
+        })
+        .onConflictDoUpdate({
+          target: billingProviderSync.idempotencyKey,
+          set: {
+            status: 'running',
+            attempts: sql`${billingProviderSync.attempts} + 1`,
+            lastError: null,
+            completedAt: null,
+            updatedAt: new Date(),
+          },
+        });
+      let providerSubscription: Subscription | null;
+      try {
+        providerSubscription = await loadSingleCurrentSubscription(getContainer().billing, id);
+      } catch (error) {
+        const providerCause =
+          error instanceof ProviderSubscriptionReadError ? error.providerCause : error;
+        const message =
+          providerCause instanceof Error
+            ? providerCause.message
+            : 'Provider subscription verification failed';
+        await db
+          .update(billingProviderSync)
+          .set({ status: 'failed', lastError: message, nextAttemptAt: new Date() })
+          .where(eq(billingProviderSync.idempotencyKey, providerCheckKey));
+        throw error;
+      }
+      await db
+        .update(billingProviderSync)
+        .set({ status: 'succeeded', lastError: null, completedAt: new Date(), nextAttemptAt: null })
+        .where(eq(billingProviderSync.idempotencyKey, providerCheckKey));
       if (providerSubscription) {
         throw new ConflictError(
           'Resolve the active Stripe subscription before granting complimentary Docket Pro',

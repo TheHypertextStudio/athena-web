@@ -80,32 +80,26 @@ jobs:
           set -e
           echo "status=$audit_status" >> "$GITHUB_OUTPUT"
 
-      - name: Read failed billing-action diagnostics
+      - name: Extract failed billing-action diagnostics
         if: always()
-        env:
-          GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/billing-production-audit"
-          filter='resource.type="cloud_run_revision" AND resource.labels.service_name="docket-api" AND (jsonPayload.path:"billing-exemption" OR textPayload:"billing-exemption")'
-          gcloud logging read "$filter" \
-            --project="$GCP_PROJECT_ID" \
-            --freshness=24h \
-            --limit=100 \
-            --order=desc \
-            --format=json \
-            | jq '[.[] | {
-                timestamp,
-                severity,
-                requestId: (.jsonPayload.requestId // .labels."run.googleapis.com/execution_name" // null),
-                event: (.jsonPayload.event // null),
-                method: (.jsonPayload.method // .httpRequest.requestMethod // null),
-                path: (.jsonPayload.path // null),
-                status: (.httpRequest.status // null),
-                message: (.jsonPayload.message // null)
-              }]' \
-            > "$RUNNER_TEMP/billing-production-audit/billing-provider-errors.json"
+          report="$RUNNER_TEMP/billing-production-audit/billing-launch-audit.json"
+          if [ -f "$report" ]; then
+            jq '[
+                .organizations[]
+                | .organizationId as $organizationId
+                | .problems[]
+                | select(.code == "provider_sync_unresolved" or .code == "provider_query_failed")
+                | { organizationId: $organizationId, code, message }
+              ]' "$report" \
+              > "$RUNNER_TEMP/billing-production-audit/billing-provider-errors.json"
+          else
+            printf '%s\n' '[]' \
+              > "$RUNNER_TEMP/billing-production-audit/billing-provider-errors.json"
+          fi
 
       - uses: actions/upload-artifact@v6
         if: always()

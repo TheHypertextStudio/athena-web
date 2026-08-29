@@ -1142,6 +1142,42 @@ describe('lifecycle holds', () => {
 });
 
 describe('billing exemptions', () => {
+  it('records a failed provider eligibility check without writing complimentary access', async () => {
+    const { userId } = await makeStaff('superadmin');
+    const orgId = await makeOrg('active');
+    await clearDocketPro(db, schema, orgId);
+    const providerRead = vi
+      .spyOn(getContainer().billing, 'listSubscriptions')
+      .mockRejectedValueOnce(new Error('provider transport failed'));
+    const app = appWithSession(admin, fakeSession(userId));
+
+    const response = await app.request(`/orgs/${orgId}/billing-exemption`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reason: 'Founder production access' }),
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({
+      code: 'billing_provider_sync_failed',
+    });
+    const [providerSync] = await db
+      .select()
+      .from(schema.billingProviderSync)
+      .where(eq(schema.billingProviderSync.organizationId, orgId));
+    expect(providerSync).toMatchObject({
+      operation: 'verify_complimentary_eligibility',
+      status: 'failed',
+      lastError: 'provider transport failed',
+    });
+    const [grant] = await db
+      .select()
+      .from(schema.organizationProductEntitlement)
+      .where(eq(schema.organizationProductEntitlement.organizationId, orgId));
+    expect(grant).toBeUndefined();
+    providerRead.mockRestore();
+  });
+
   it('grants (audited), then revokes (audited); double-revoke 404s', async () => {
     const { userId } = await makeStaff('superadmin');
     const orgId = await makeOrg('export_window');

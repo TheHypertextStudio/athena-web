@@ -283,8 +283,13 @@
 - **Authentication-loop correction**: Production billing inspection must not depend on a personal
   Google Cloud CLI refresh token. A manual, read-only GitHub Actions audit will use the same
   production Workload Identity Federation boundary as deployment. It will run the existing billing
-  audit against production, capture sanitized Cloud Run diagnostics for failed billing actions, and
-  publish short-lived artifacts without enabling Checkout or mutating Stripe or Docket records.
+  audit against production and publish short-lived artifacts without enabling Checkout or mutating
+  Stripe or Docket records. The first run authenticated without a personal session and produced a
+  passing report at `2026-08-29T00:13:38.547Z`: zero billed organizations, zero unresolved findings,
+  and a verified duplicate-subscription control. The deployment identity cannot read Cloud Logging,
+  and granting that broad role would weaken its least-privilege boundary. Complimentary eligibility
+  failures now write the original safe gateway message to `billing_provider_sync`; the audit derives
+  its diagnostic artifact from that existing ledger instead.
 - **Exact-main deployment and provider proof**: Commit `74c998cee` passes every exact-main CI gate,
   including API coverage and performance, and all four advisory browser shards. The same run
   applied production migrations and deployed API, Admin, and Scheduler. Vercel built that exact

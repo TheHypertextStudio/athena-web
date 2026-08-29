@@ -248,7 +248,7 @@ describe('POST /internal/ingest/linear-agent', () => {
       expect(link?.provider).toBe('linear');
       expect(link?.externalSessionId).toBe('las_1');
       expect(link?.externalWorkspaceId).toBe(seeded.workspaceId);
-      expect(link?.externalIssueId).toBeNull();
+      expect(link?.externalWorkItemId).toBeNull();
 
       const activities = await db
         .select()
@@ -409,7 +409,7 @@ describe('POST /internal/ingest/linear-agent', () => {
         .select()
         .from(schema.agentSessionExternalLink)
         .where(eq(schema.agentSessionExternalLink.sessionId, assertDefined(json.sessionId)));
-      expect(link?.externalIssueId).toBe('issue_42');
+      expect(link?.externalWorkItemId).toBe('issue_42');
     });
 
     it('is idempotent against a retried delivery (no duplicate rows), but still re-issues agentSessionUpdate', async () => {

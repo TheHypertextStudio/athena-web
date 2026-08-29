@@ -462,7 +462,7 @@ export interface CreateLinearAgentSessionInput {
   /** The Linear workspace id this session's provider-side calls route through. */
   readonly externalWorkspaceId: string;
   /** The mentioned issue's Linear id, when the webhook payload exposes one. */
-  readonly externalIssueId: string | null;
+  readonly externalWorkItemId: string | null;
 }
 
 /** A created-or-found Linear Agent session, as returned by {@link createLinearAgentSession}. */
@@ -566,7 +566,7 @@ export async function createLinearAgentSession(
       provider: 'linear',
       externalSessionId: input.externalSessionId,
       externalWorkspaceId: input.externalWorkspaceId,
-      externalIssueId: input.externalIssueId,
+      externalWorkItemId: input.externalWorkItemId,
     });
 
     return { id: created.id, status: created.status, isNew: true };

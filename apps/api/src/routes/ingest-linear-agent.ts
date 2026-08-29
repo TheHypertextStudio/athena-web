@@ -188,7 +188,7 @@ async function handleSessionCreated(
     taskId,
     externalSessionId: event.agentSession.id,
     externalWorkspaceId,
-    externalIssueId: issueId,
+    externalWorkItemId: issueId,
   });
 
   // Idempotent-replay-safe: `agentSessionUpdate` just replaces the session's external-url list,

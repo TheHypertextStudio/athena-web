@@ -78,6 +78,8 @@ export type AgentRunDispatchOrigin =
 export type AgentSessionDispatchAction = 'enqueue' | 'wake';
 /** Delivery lifecycle for a Docket-owned execution outbox intent. */
 export type AgentSessionDispatchStatus = 'pending' | 'delivering' | 'delivered' | 'failed';
+/** Delivery lifecycle for an external agent session's activity projection. */
+export type ExternalAgentRelayStatus = 'pending' | 'ready' | 'retrying' | 'errored';
 
 /** An org-registered agent: the persistent wrapper around an ephemeral external runtime. */
 export const agent = pgTable(
@@ -508,48 +510,79 @@ export const agentSessionTranscript = pgTable(
  * to `agent_session` the same way {@link agentSessionTranscript} is, never woven into the
  * core row or the event substrate.
  */
-export const agentSessionExternalLink = pgTable('agent_session_external_link', {
-  sessionId: text('session_id')
-    .primaryKey()
-    .references(() => agentSession.id, { onDelete: 'cascade' }),
-  organizationId: text('organization_id')
-    .notNull()
-    .references(() => organization.id, { onDelete: 'cascade' }),
-  /** The external front-door provider this session is mirrored to (`'linear'` today). */
-  provider: text('provider').notNull(),
-  /** The provider's own session id (Linear's `AgentSession.id`). */
-  externalSessionId: text('external_session_id').notNull(),
-  /** The provider workspace this session belongs to, for routing outbound calls. */
-  externalWorkspaceId: text('external_workspace_id').notNull(),
-  /** The issue/thread the session was opened on, if any. */
-  externalIssueId: text('external_issue_id'),
-  /**
-   * Outbound-relay watermark, part 1 of 2: the `session_activity.id` of the last row this
-   * relay pass successfully pushed (or deliberately skipped — see
-   * {@link agentSessionExternalLink.lastRelayedActivityUpdatedAt}) to the provider.
-   *
-   * @remarks
-   * `id` alone is NOT a sufficient "what's new" cursor: `session_activity.updatedAt` exists
-   * specifically because `executeApprovedActions` updates an existing `action` row in place
-   * (its `approvalStatus`/`body`) rather than inserting a new one, so an `id > watermark`
-   * query would silently miss that transition forever. This column is paired with
-   * {@link agentSessionExternalLink.lastRelayedActivityUpdatedAt} into a single keyset-
-   * pagination cursor — `(updatedAt, id) > (watermarkUpdatedAt, watermarkId)` — so the relay
-   * catches both newly-inserted rows AND rows whose `updatedAt` was bumped by an in-place
-   * update, without ever re-relaying (and duplicating in the Linear thread) a row already
-   * seen at that exact `updatedAt`. See `lib/linear-agent-relay.ts` for the query and the
-   * full reasoning.
-   */
-  lastRelayedActivityId: text('last_relayed_activity_id'),
-  /**
-   * Outbound-relay watermark, part 2 of 2: the `session_activity.updatedAt` of the row
-   * {@link agentSessionExternalLink.lastRelayedActivityId} refers to — the timestamp half of
-   * the compound cursor described there. Null exactly when `lastRelayedActivityId` is (no
-   * relay pass has run yet for this session).
-   */
-  lastRelayedActivityUpdatedAt: timestamp('last_relayed_activity_updated_at'),
-  createdAt: timestamp('created_at').notNull().defaultNow(),
-});
+export const agentSessionExternalLink = pgTable(
+  'agent_session_external_link',
+  {
+    sessionId: text('session_id')
+      .primaryKey()
+      .references(() => agentSession.id, { onDelete: 'cascade' }),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    /** The external front-door provider this session is mirrored to. */
+    provider: text('provider').notNull(),
+    /** The provider's own session or thread id. */
+    externalSessionId: text('external_session_id').notNull(),
+    /** The provider workspace or installation used to route outbound calls. */
+    externalWorkspaceId: text('external_workspace_id').notNull(),
+    /** The issue, pull request, or other work item the session was opened on, if any. */
+    externalWorkItemId: text('external_work_item_id'),
+    /**
+     * Outbound-relay watermark, part 1 of 2: the `session_activity.id` of the last row this
+     * relay pass successfully pushed (or deliberately skipped — see
+     * {@link agentSessionExternalLink.lastRelayedActivityUpdatedAt}) to the provider.
+     *
+     * @remarks
+     * `id` alone is NOT a sufficient "what's new" cursor: `session_activity.updatedAt` exists
+     * specifically because `executeApprovedActions` updates an existing `action` row in place
+     * (its `approvalStatus`/`body`) rather than inserting a new one, so an `id > watermark`
+     * query would silently miss that transition forever. This column is paired with
+     * {@link agentSessionExternalLink.lastRelayedActivityUpdatedAt} into a single keyset-
+     * pagination cursor — `(updatedAt, id) > (watermarkUpdatedAt, watermarkId)` — so the relay
+     * catches both newly-inserted rows AND rows whose `updatedAt` was bumped by an in-place
+     * update, without ever re-relaying (and duplicating in the Linear thread) a row already
+     * seen at that exact `updatedAt`. See `lib/linear-agent-relay.ts` for the query and the
+     * full reasoning.
+     */
+    lastRelayedActivityId: text('last_relayed_activity_id'),
+    /**
+     * Outbound-relay watermark, part 2 of 2: the `session_activity.updatedAt` of the row
+     * {@link agentSessionExternalLink.lastRelayedActivityId} refers to — the timestamp half of
+     * the compound cursor described there. Null exactly when `lastRelayedActivityId` is (no
+     * relay pass has run yet for this session).
+     */
+    lastRelayedActivityUpdatedAt: timestamp('last_relayed_activity_updated_at'),
+    /** Current delivery state for the independent provider relay. */
+    relayStatus: text('relay_status')
+      .$type<ExternalAgentRelayStatus>()
+      .notNull()
+      .default('pending'),
+    /** Consecutive provider delivery failures since the last successful pass. */
+    relayAttempts: integer('relay_attempts').notNull().default(0),
+    /** Earliest time the relay may retry after a provider failure. */
+    nextRelayAt: timestamp('next_relay_at'),
+    /** Application-owned diagnostic from the last relay failure. */
+    lastRelayError: text('last_relay_error'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex('agent_session_external_link_provider_session_uq').on(
+      t.provider,
+      t.externalWorkspaceId,
+      t.externalSessionId,
+    ),
+    index('agent_session_external_link_relay_due_idx').on(t.relayStatus, t.nextRelayAt),
+    check(
+      'agent_session_external_link_relay_status_check',
+      sql`${t.relayStatus} in ('pending', 'ready', 'retrying', 'errored')`,
+    ),
+    check('agent_session_external_link_relay_attempts_check', sql`${t.relayAttempts} >= 0`),
+  ],
+);
 
 /** One remote MCP server connected once for one Better Auth user's Athena. */
 export const personalMcpConnection = pgTable(

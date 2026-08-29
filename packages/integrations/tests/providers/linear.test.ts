@@ -332,6 +332,7 @@ describe('LinearProviderClient — pushWorkItem', () => {
         description: 'New description',
         priority: 'high',
         stateExternalId: 's2',
+        parentExternalId: 'parent-1',
       },
     });
     expect(result).toEqual({ externalId: 'i1', externalUpdatedAt: 'T2' });
@@ -342,7 +343,48 @@ describe('LinearProviderClient — pushWorkItem', () => {
         description: 'New description',
         priority: 2,
         stateId: 's2',
+        parentId: 'parent-1',
       },
+    });
+  });
+
+  it('replaces only the outgoing blocking relations owned by the issue', async () => {
+    const { client, calls } = fakeHttp([
+      gql({ issueUpdate: { success: true, issue: { id: 'i1', updatedAt: 'T2' } } }),
+      gql({
+        issue: {
+          relations: {
+            nodes: [
+              { id: 'rel-keep', type: 'blocks', relatedIssue: { id: 'i2' } },
+              { id: 'rel-related', type: 'related', relatedIssue: { id: 'i9' } },
+            ],
+            pageInfo: { hasNextPage: true, endCursor: 'REL-CURSOR' },
+          },
+        },
+      }),
+      gql({
+        issue: {
+          relations: {
+            nodes: [{ id: 'rel-remove', type: 'blocks', relatedIssue: { id: 'i3' } }],
+            pageInfo: { hasNextPage: false },
+          },
+        },
+      }),
+      gql({ issueRelationDelete: { success: true } }),
+      gql({ issueRelationCreate: { success: true, issueRelation: { id: 'rel-new' } } }),
+    ]);
+
+    await client.pushWorkItem({
+      kind: 'update',
+      externalId: 'i1',
+      fields: { blockingExternalIds: ['i2', 'i4'] },
+    });
+
+    expect(calls).toHaveLength(5);
+    expect(assertDefined(calls[2]).body.variables).toEqual({ id: 'i1', after: 'REL-CURSOR' });
+    expect(assertDefined(calls[3]).body.variables).toEqual({ id: 'rel-remove' });
+    expect(assertDefined(calls[4]).body.variables).toEqual({
+      input: { issueId: 'i1', relatedIssueId: 'i4', type: 'blocks' },
     });
   });
 
@@ -370,11 +412,17 @@ describe('LinearProviderClient — pushWorkItem', () => {
     const result = await client.pushWorkItem({
       kind: 'create',
       externalTeamId: 't1',
+      idempotencyKey: '9bdf0524-a06d-5dbf-8b18-69aeeea3c9f4',
       fields: { title: 'Fresh', labelExternalIds: ['l1', 'l2'] },
     });
-    expect(result).toEqual({ externalId: 'new-1', externalUpdatedAt: 'T1' });
+    expect(result).toEqual({ externalId: 'new-1', externalUpdatedAt: 'T1', externalUrl: 'u' });
     expect(assertDefined(calls[0]).body.variables).toEqual({
-      input: { teamId: 't1', title: 'Fresh', labelIds: ['l1', 'l2'] },
+      input: {
+        id: '9bdf0524-a06d-5dbf-8b18-69aeeea3c9f4',
+        teamId: 't1',
+        title: 'Fresh',
+        labelIds: ['l1', 'l2'],
+      },
     });
   });
 
@@ -676,6 +724,12 @@ describe('edge mapping — work item', () => {
     project: { id: 'p1' },
     cycle: { id: 'cy1' },
     parent: { id: 'i0' },
+    relations: {
+      nodes: [
+        { id: 'r1', type: 'blocks', relatedIssue: { id: 'i2' } },
+        { id: 'r2', type: 'related', relatedIssue: { id: 'i3' } },
+      ],
+    },
     team: { id: 't1' },
   };
 
@@ -693,6 +747,7 @@ describe('edge mapping — work item', () => {
       projectExternalId: 'p1',
       cycleExternalId: 'cy1',
       parentExternalId: 'i0',
+      blockingExternalIds: ['i2'],
       externalTeamId: 't1',
       estimate: 5,
       dueDate: '2026-07-01',
@@ -733,6 +788,15 @@ describe('edge mapping — work item', () => {
 
   it('throws when an issue has no team', () => {
     expect(() => toExternalWorkItem({ ...richNode, team: null })).toThrow(ConnectorError);
+  });
+
+  it('rejects a silently truncated nested relation set', () => {
+    expect(() =>
+      toExternalWorkItem({
+        ...richNode,
+        relations: { nodes: [], pageInfo: { hasNextPage: true } },
+      }),
+    ).toThrow(ConnectorError);
   });
 
   it('carries a real canceledAt through', () => {

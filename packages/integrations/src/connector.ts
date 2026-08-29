@@ -293,6 +293,8 @@ export interface ExternalWriteResult {
   readonly externalUpdatedAt: string;
   /** The provider's post-write entity tag, when available. */
   readonly externalEtag?: string;
+  /** The provider's canonical URL for a newly created or updated item, when returned. */
+  readonly externalUrl?: string;
 }
 
 /** Input to push one task change to a writable provider. */

@@ -883,6 +883,177 @@ describe('reconcileWorkGraph', () => {
     expect(again.tasks.pushed).toBe(0);
   });
 
+  it('pushes a dirty task parent and outgoing blocking relationships by external id', async () => {
+    const { orgId, humanActorId, row } = await scaffold(true);
+    const first = await pull();
+    await reconcileWorkGraph({
+      orgId,
+      actorId: humanActorId,
+      row,
+      snapshot: first.snapshot,
+      connector: first.connector,
+      now: NOW,
+    });
+
+    const parent = assertDefined(await taskByExternal(row.id, 'lin-issue-3'));
+    const child = assertDefined(await taskByExternal(row.id, 'lin-issue-4'));
+    const blocked = assertDefined(await taskByExternal(row.id, 'lin-issue-2'));
+    expect(child.parentTaskId).toBe(parent.id);
+    await db.insert(schema.taskDependency).values({
+      organizationId: orgId,
+      blockingTaskId: child.id,
+      blockedTaskId: blocked.id,
+    });
+    await db
+      .update(schema.task)
+      .set({ title: 'Dirty relationship owner', updatedAt: new Date('2030-01-01T00:00:00.000Z') })
+      .where(eq(schema.task.id, child.id));
+
+    const second = await pull();
+    await reconcileWorkGraph({
+      orgId,
+      actorId: humanActorId,
+      row,
+      snapshot: second.snapshot,
+      connector: second.connector,
+      now: NOW,
+    });
+
+    const pushed = second.mock.workItemPushLog.find(
+      (op) => op.kind === 'update' && op.externalId === 'lin-issue-4',
+    );
+    expect(pushed?.fields).toMatchObject({
+      parentExternalId: 'lin-issue-3',
+      blockingExternalIds: ['lin-issue-2'],
+    });
+  });
+
+  it('reconciles Linear blocking relationships into directed task dependencies', async () => {
+    const { orgId, humanActorId, row } = await scaffold(false);
+    const pulled = await pull();
+    const snapshot: WorkGraphSnapshot = {
+      ...pulled.snapshot,
+      items: pulled.snapshot.items.map((item) =>
+        item.externalId === 'lin-issue-4'
+          ? { ...item, blockingExternalIds: ['lin-issue-2'] }
+          : item,
+      ),
+    };
+    await reconcileWorkGraph({
+      orgId,
+      actorId: humanActorId,
+      row,
+      snapshot,
+      connector: pulled.connector,
+      now: NOW,
+    });
+
+    const blocker = assertDefined(await taskByExternal(row.id, 'lin-issue-4'));
+    const blocked = assertDefined(await taskByExternal(row.id, 'lin-issue-2'));
+    const dependencies = await db
+      .select()
+      .from(schema.taskDependency)
+      .where(eq(schema.taskDependency.blockingTaskId, blocker.id));
+    expect(dependencies).toEqual([
+      {
+        organizationId: orgId,
+        blockingTaskId: blocker.id,
+        blockedTaskId: blocked.id,
+      },
+    ]);
+  });
+
+  it('creates an outbound Linear issue for an opted-in native task and links the local row', async () => {
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    await addMatchableMember(orgId);
+    const seeded = await seedIntegration(
+      orgId,
+      humanActorId,
+      [{ externalTeamId: 'lin-team-eng', teamId }],
+      true,
+    );
+    const row = {
+      ...seeded,
+      config: { teamMappings: [{ externalTeamId: 'lin-team-eng', teamId }], pushNativeTasks: true },
+    };
+    const native = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          teamId,
+          title: 'Create me in Linear',
+          description: 'Native task body',
+          state: 'todo',
+          statusId: statusId('task', 'todo'),
+          priority: 'high',
+          source: 'native',
+          createdBy: humanActorId,
+        })
+        .returning(),
+    );
+    const child = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          teamId,
+          title: 'Native child',
+          state: 'todo',
+          statusId: statusId('task', 'todo'),
+          source: 'native',
+          parentTaskId: native.id,
+          createdBy: humanActorId,
+        })
+        .returning(),
+    );
+    await db.insert(schema.taskDependency).values({
+      organizationId: orgId,
+      blockingTaskId: child.id,
+      blockedTaskId: native.id,
+    });
+    const pulled = await pull();
+
+    await reconcileWorkGraph({
+      orgId,
+      actorId: humanActorId,
+      row,
+      snapshot: pulled.snapshot,
+      connector: pulled.connector,
+      now: NOW,
+    });
+
+    expect(pulled.mock.workItemPushLog).toContainEqual({
+      kind: 'create',
+      externalTeamId: 'lin-team-eng',
+      idempotencyKey: expect.stringMatching(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+      ),
+      fields: expect.objectContaining({
+        title: 'Create me in Linear',
+        description: 'Native task body',
+        priority: 'high',
+      }),
+    });
+    const [linked] = await db.select().from(schema.task).where(eq(schema.task.id, native.id));
+    expect(linked).toMatchObject({
+      source: 'linked',
+      sourceIntegrationId: row.id,
+      sourceSyncMode: 'mirror',
+    });
+    expect(linked?.externalId).toMatch(/^lin-issue-created_/);
+    expect(linked?.externalUpdatedAt?.getTime()).toBe(linked?.updatedAt.getTime());
+    const [linkedChild] = await db.select().from(schema.task).where(eq(schema.task.id, child.id));
+    const relationUpdate = pulled.mock.workItemPushLog.find(
+      (operation) =>
+        operation.kind === 'update' && operation.externalId === linkedChild?.externalId,
+    );
+    expect(relationUpdate?.fields).toEqual({
+      parentExternalId: linked?.externalId,
+      blockingExternalIds: [linked?.externalId],
+    });
+  });
+
   it('skips items belonging to an unmapped external team entirely', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     await addMatchableMember(orgId);

@@ -397,7 +397,7 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
     socialProviders.linear = {
       clientId: e.LINEAR_CLIENT_ID,
       clientSecret: e.LINEAR_CLIENT_SECRET,
-      scope: ['read'],
+      scope: ['read', 'write'],
     };
   }
   if (isRealValue(e.NOTION_CLIENT_ID) && isRealValue(e.NOTION_CLIENT_SECRET)) {

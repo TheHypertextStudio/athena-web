@@ -24,7 +24,7 @@ import type {
   SyncRunOut,
   TeamOut,
 } from '@docket/types';
-import { googleScopesForConnector } from '@docket/types';
+import { oauthScopesForConnector } from '@docket/types';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { useAppSearchParams } from '@/lib/app-location';
@@ -212,7 +212,7 @@ export function useIntegrationsData(orgId: string): IntegrationsData {
         await authClient.linkSocial({
           provider: socialProviderForConnector(provider),
           callbackURL: `${window.location.pathname}?verify=${id}`,
-          scopes: [...googleScopesForConnector(provider)],
+          scopes: [...oauthScopesForConnector(provider)],
         });
         return; // the browser redirects to the provider's consent screen
       }

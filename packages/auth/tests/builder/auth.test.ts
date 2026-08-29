@@ -1548,7 +1548,7 @@ describe('buildAuthOptions env-gating', () => {
       clientId: 'lin-id',
       clientSecret: 'lin-secret',
       // The Linear connector needs `read` to query the GraphQL API.
-      scope: ['read'],
+      scope: ['read', 'write'],
     });
     expect(opts.account?.accountLinking?.enabled).toBe(true);
     expect(opts.account?.accountLinking?.allowDifferentEmails).toBe(true);

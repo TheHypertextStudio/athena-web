@@ -49,6 +49,7 @@ interface LinearIssueInputBody {
   dueDate?: string | null;
   estimate?: number | null;
   labelIds?: readonly string[];
+  parentId?: string | null;
 }
 
 /** Raise a typed mapping failure so an unrecognized provider value fails the sync, never silently. */
@@ -244,6 +245,11 @@ interface RawIssueNode {
   readonly project?: RawIdRef | null;
   readonly cycle?: RawIdRef | null;
   readonly parent?: RawIdRef | null;
+  readonly relations?: RawNodeList<{
+    readonly id: string;
+    readonly type: string;
+    readonly relatedIssue: RawIdRef;
+  }> & { readonly pageInfo?: { readonly hasNextPage: boolean } };
   readonly team?: RawIdRef | null;
 }
 
@@ -343,6 +349,9 @@ export function toExternalWorkflowState(node: RawStateNode): ExternalWorkflowSta
 export function toExternalWorkItem(node: RawIssueNode): ExternalWorkItem {
   const externalTeamId = node.team?.id;
   if (externalTeamId === undefined) throw mappingError(`issue ${node.id} has no team`);
+  if (node.relations?.pageInfo?.hasNextPage) {
+    throw mappingError(`issue ${node.id} has more than 250 relations`);
+  }
   const removed = node.archivedAt != null || node.trashed === true;
   return {
     externalId: node.id,
@@ -357,6 +366,9 @@ export function toExternalWorkItem(node: RawIssueNode): ExternalWorkItem {
     ...(node.project != null ? { projectExternalId: node.project.id } : {}),
     ...(node.cycle != null ? { cycleExternalId: node.cycle.id } : {}),
     ...(node.parent != null ? { parentExternalId: node.parent.id } : {}),
+    blockingExternalIds: (node.relations?.nodes ?? [])
+      .filter((relation) => relation.type === 'blocks')
+      .map((relation) => relation.relatedIssue.id),
     externalTeamId,
     ...(node.estimate != null ? { estimate: node.estimate } : {}),
     ...(node.dueDate != null ? { dueDate: node.dueDate } : {}),
@@ -411,6 +423,7 @@ const ISSUES_QUERY = `query($after: String, $filter: IssueFilter) {
       assignee { id }
       labels(first: 50) { nodes { id } }
       project { id } cycle { id } parent { id } team { id }
+      relations(first: 250) { nodes { id type relatedIssue { id } } pageInfo { hasNextPage } }
     }
     pageInfo { hasNextPage endCursor }
   }
@@ -712,7 +725,91 @@ export class LinearProviderClient implements WorkGraphProviderClient {
     if (fields.dueDate !== undefined) input.dueDate = fields.dueDate;
     if (fields.estimate !== undefined) input.estimate = fields.estimate;
     if (fields.labelExternalIds !== undefined) input.labelIds = fields.labelExternalIds;
+    if (fields.parentExternalId !== undefined) input.parentId = fields.parentExternalId;
     return input;
+  }
+
+  /** Replace one issue's outgoing `blocks` relations without touching other relation types. */
+  private async replaceBlockingRelations(
+    issueId: string,
+    desiredExternalIds: readonly string[],
+  ): Promise<void> {
+    const current = new Map<string, string>();
+    let after: string | undefined;
+    let complete = false;
+    for (let page = 0; page < MAX_IMPORT_PAGES; page++) {
+      const data = await this.query<{
+        issue?: {
+          relations?: RawNodeList<{
+            id: string;
+            type: string;
+            relatedIssue: RawIdRef;
+          }> & { pageInfo?: { hasNextPage: boolean; endCursor?: string } };
+        };
+      }>(
+        'query($id: String!, $after: String) { issue(id: $id) { relations(first: 100, after: $after) { nodes { id type relatedIssue { id } } pageInfo { hasNextPage endCursor } } } }',
+        { id: issueId, ...(after ? { after } : {}) },
+      );
+      if (!data.issue) {
+        throw new ConnectorError('linear issue relation lookup did not return the issue', {
+          provider: 'linear',
+          kind: 'provider',
+        });
+      }
+      for (const relation of data.issue.relations?.nodes ?? []) {
+        if (relation.type === 'blocks') current.set(relation.relatedIssue.id, relation.id);
+      }
+      const pageInfo = data.issue.relations?.pageInfo;
+      if (!pageInfo?.hasNextPage) {
+        complete = true;
+        break;
+      }
+      if (!pageInfo.endCursor) {
+        throw new ConnectorError('linear issue relation page omitted its cursor', {
+          provider: 'linear',
+          kind: 'provider',
+        });
+      }
+      after = pageInfo.endCursor;
+    }
+    if (!complete) {
+      throw new ConnectorError('linear issue relations exceeded the pagination safety bound', {
+        provider: 'linear',
+        kind: 'provider',
+      });
+    }
+    const desired = new Set(desiredExternalIds);
+    for (const [relatedIssueId, relationId] of current) {
+      if (desired.has(relatedIssueId)) continue;
+      const deleted = await this.query<{ issueRelationDelete?: { success?: boolean } }>(
+        'mutation($id: String!) { issueRelationDelete(id: $id) { success } }',
+        { id: relationId },
+      );
+      if (deleted.issueRelationDelete?.success !== true) {
+        throw new ConnectorError('linear issueRelationDelete did not succeed', {
+          provider: 'linear',
+          kind: 'provider',
+        });
+      }
+    }
+    for (const relatedIssueId of desired) {
+      if (current.has(relatedIssueId)) continue;
+      const created = await this.query<{
+        issueRelationCreate?: { success?: boolean; issueRelation?: { id: string } };
+      }>(
+        'mutation($input: IssueRelationCreateInput!) { issueRelationCreate(input: $input) { success issueRelation { id } } }',
+        { input: { issueId, relatedIssueId, type: 'blocks' } },
+      );
+      if (
+        created.issueRelationCreate?.success !== true ||
+        !created.issueRelationCreate.issueRelation
+      ) {
+        throw new ConnectorError('linear issueRelationCreate did not succeed', {
+          provider: 'linear',
+          kind: 'provider',
+        });
+      }
+    }
   }
 
   /** Interpret a mutation payload, turning a `success: false`/missing issue into a typed failure. */
@@ -730,6 +827,7 @@ export class LinearProviderClient implements WorkGraphProviderClient {
     return {
       externalId: payload.issue.id,
       externalUpdatedAt: payload.issue.updatedAt,
+      ...(payload.issue.url ? { externalUrl: payload.issue.url } : {}),
     };
   }
 
@@ -742,14 +840,28 @@ export class LinearProviderClient implements WorkGraphProviderClient {
         'mutation($id: String!, $input: IssueUpdateInput!) { issueUpdate(id: $id, input: $input) { success issue { id updatedAt } } }',
         { id: op.externalId, input: this.buildIssueInput(op.fields) },
       );
-      return this.toWriteResult('issueUpdate', data.issueUpdate);
+      const result = this.toWriteResult('issueUpdate', data.issueUpdate);
+      if (op.fields.blockingExternalIds !== undefined) {
+        await this.replaceBlockingRelations(result.externalId, op.fields.blockingExternalIds);
+      }
+      return result;
     }
     const data = await this.query<{
       issueCreate?: { success?: boolean; issue?: { id: string; updatedAt: string; url: string } };
     }>(
       'mutation($input: IssueCreateInput!) { issueCreate(input: $input) { success issue { id updatedAt url } } }',
-      { input: { teamId: op.externalTeamId, ...this.buildIssueInput(op.fields) } },
+      {
+        input: {
+          ...(op.idempotencyKey ? { id: op.idempotencyKey } : {}),
+          teamId: op.externalTeamId,
+          ...this.buildIssueInput(op.fields),
+        },
+      },
     );
-    return this.toWriteResult('issueCreate', data.issueCreate);
+    const result = this.toWriteResult('issueCreate', data.issueCreate);
+    if (op.fields.blockingExternalIds !== undefined) {
+      await this.replaceBlockingRelations(result.externalId, op.fields.blockingExternalIds);
+    }
+    return result;
   }
 }

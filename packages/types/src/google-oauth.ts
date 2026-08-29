@@ -31,3 +31,9 @@ export function googleScopesForConnector(provider: string): readonly string[] {
   if (!(provider in GOOGLE_CONNECTOR_SCOPES)) return [];
   return GOOGLE_CONNECTOR_SCOPES[provider as keyof typeof GOOGLE_CONNECTOR_SCOPES];
 }
+
+/** Return every incremental OAuth scope one connector needs during account linking. */
+export function oauthScopesForConnector(provider: string): readonly string[] {
+  if (provider === 'linear') return ['read', 'write'];
+  return googleScopesForConnector(provider);
+}

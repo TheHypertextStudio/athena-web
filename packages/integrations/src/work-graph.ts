@@ -147,6 +147,8 @@ export interface ExternalWorkItem {
   readonly cycleExternalId?: string | undefined;
   /** The parent work item's external id, when this item is a sub-issue. */
   readonly parentExternalId?: string | undefined;
+  /** External ids of the work items this item blocks. */
+  readonly blockingExternalIds?: readonly string[] | undefined;
   /** The owning team's external id. */
   readonly externalTeamId: string;
   /** The item's point/size estimate, when set. */
@@ -236,6 +238,10 @@ export interface WorkItemPushFields {
   readonly estimate?: number | null;
   /** The full replacement set of label external ids, when changed. */
   readonly labelExternalIds?: readonly string[];
+  /** New parent issue external id, when changed; `null` removes the parent. */
+  readonly parentExternalId?: string | null;
+  /** The full replacement set of issues this item blocks, when changed. */
+  readonly blockingExternalIds?: readonly string[];
 }
 
 /**
@@ -252,6 +258,8 @@ export type WorkItemPushOp =
   | {
       readonly kind: 'create';
       readonly externalTeamId: string;
+      /** Stable provider entity id used to make a retried create idempotent, when supported. */
+      readonly idempotencyKey?: string;
       readonly fields: WorkItemPushFields & { readonly title: string };
     };
 

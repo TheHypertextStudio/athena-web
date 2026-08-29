@@ -1,7 +1,7 @@
 # Integration Sync — the leased spine
 
 > **Status**: Shipped (M4 of the email-to-task productization).
-> **Last Updated**: 2026-07-10
+> **Last Updated**: 2026-08-28
 > **Owners**: Platform
 
 One spine runs every background pull against an external provider. Both purposes — the
@@ -73,6 +73,32 @@ Linear connections are account-specific and org-scoped:
   scheduled sweep remains the missed/out-of-order webhook backstop. Provider-triggered repair uses
   the existing `scheduled` trigger discriminator to avoid a database-enum migration for an
   operational source distinction that does not change sync semantics.
+
+### 2.2 Linear write boundary
+
+Linear is the only external work provider with an enabled write path. Operators choose whether a
+connection imports existing Linear issues only or also publishes native Docket tasks by setting
+`config.pushNativeTasks`. Publishing requires a Linear OAuth grant with both `read` and `write`;
+connections created with an older read-only grant must reauthorize before their first write.
+
+The shared work-item contract carries provider-neutral fields. The Linear adapter maps those fields
+to issue creation and updates for title, description, state, priority, assignee, due date, estimate,
+parent, mirrored labels, and outgoing `blocks` relations. Docket sends a deterministic issue UUID
+when it creates a native task in Linear, so a retry cannot create a second issue. The reconciler
+creates every issue before it sends parent and blocker links, which lets two tasks created in the
+same run refer to one another.
+
+Linear projects, cycles, and label definitions remain inbound-only. Docket may assign an existing
+mirrored label, but it does not create or edit Linear label definitions. The adapter replaces only
+`blocks` relations and preserves every other Linear relation type. It paginates existing outgoing
+relations before replacement. It rejects a pulled issue whose nested relation set exceeds the
+bounded 250-edge response, since applying a truncated dependency set would delete valid local
+edges.
+
+Slack, GitHub, and Jira Rovo implement only the generic adapter type families in this release. The
+runtime registry does not enable them, and the publisher rejects attempts to execute them. A future
+provider must satisfy the same typed ingress, session, signal, activity, and publication contracts
+before its transport can be enabled.
 
 ## 3. Cursor storage (`integration.sync_state`)
 

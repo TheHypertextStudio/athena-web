@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   GOOGLE_CONNECTOR_SCOPES,
   googleScopesForConnector,
+  oauthScopesForConnector,
   parseOAuthScopes,
 } from '../../src/google-oauth';
 
@@ -22,6 +23,6 @@ describe('Google OAuth scope helpers', () => {
     expect(googleScopesForConnector('gmail')).toEqual([
       'https://www.googleapis.com/auth/gmail.modify',
     ]);
-    expect(googleScopesForConnector('linear')).toEqual([]);
+    expect(oauthScopesForConnector('linear')).toEqual(['read', 'write']);
   });
 });

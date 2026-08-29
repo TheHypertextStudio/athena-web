@@ -100,6 +100,11 @@ const GTASKS_DIRECTORY: IntegrationDirectoryProvider = {
   name: 'Google Tasks',
   roles: ['work'],
 } as IntegrationDirectoryProvider;
+const LINEAR_DIRECTORY: IntegrationDirectoryProvider = {
+  provider: 'linear',
+  name: 'Linear',
+  roles: ['work'],
+} as IntegrationDirectoryProvider;
 const NOTION_DIRECTORY: IntegrationDirectoryProvider = {
   provider: 'notion',
   name: 'Notion',
@@ -239,6 +244,28 @@ describe('useIntegrationsData — connect ceremony routing', () => {
     });
     expect(connectUrlGet).not.toHaveBeenCalled();
     expect(assignMock).not.toHaveBeenCalled();
+  });
+
+  it('requests Linear read and write scopes when linking a connector account', async () => {
+    configGet.mockResolvedValue(
+      okJson({ appMode: 'production', oauthProviders: ['google', 'linear'] }),
+    );
+    integrationsPost.mockResolvedValueOnce(okJson({ id: 'intg_linear', provider: 'linear' }));
+    const wrapper = makeWrapper();
+    const { result } = renderHook(() => useIntegrationsData(ORG_ID), { wrapper });
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+    });
+    act(() => {
+      result.current.rowActions(LINEAR_DIRECTORY, undefined, CONNECTOR_PATTERN).connect();
+    });
+
+    await waitFor(() => {
+      expect(linkSocial).toHaveBeenCalledWith(
+        expect.objectContaining({ provider: 'linear', scopes: ['read', 'write'] }),
+      );
+    });
   });
 
   it('refetches integrations and strips the marker when the URL carries ?github=error', async () => {

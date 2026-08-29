@@ -34,8 +34,19 @@
  * orchestrator (a phase here, the webhook applier there) is responsible for preloading the
  * integration's existing rows — this keeps existence checks batched, never per-item selects.
  */
+import { createHash } from 'node:crypto';
+
 import { and, eq, gt, inArray, isNotNull } from 'drizzle-orm';
-import { cycle, db, label, organization, project, task, taskLabel } from '@docket/db';
+import {
+  cycle,
+  db,
+  label,
+  organization,
+  project,
+  task,
+  taskDependency,
+  taskLabel,
+} from '@docket/db';
 import { ConnectorConfig, type WorkStatusCategory } from '@docket/types';
 import type {
   ExternalCycle,
@@ -64,7 +75,7 @@ import { loadStatusSets, type ResolvedStatus } from '../lib/work-status';
 import { externalActorReverseMap, syncExternalActors } from './integration-identity';
 import { resolveImportTeam } from './integration-import';
 import { type IntegrationRow } from './integration-provider';
-import { wouldCreateSubtaskCycle } from './task-helpers';
+import { wouldCreateCycle, wouldCreateSubtaskCycle } from './task-helpers';
 
 /** Selected row shapes reconciliation reads. */
 type LabelRow = typeof label.$inferSelect;
@@ -957,10 +968,14 @@ export async function reconcileWorkGraph(input: {
 
   // Phase 6 — pass B: parent linkage + task-label join diff.
   await linkParents(ctx, snapshot.items);
+  await linkBlockingRelationships(ctx, snapshot.items);
   await diffTaskLabels(ctx, snapshot.items);
 
   // Phase 7 — push dirty local edits back to the provider.
-  if (row.writeBack) await pushDirtyTasks(ctx, connector);
+  if (row.writeBack) {
+    await pushNewNativeTasks(ctx, connector, row);
+    await pushDirtyTasks(ctx, connector);
+  }
 
   return result;
 }
@@ -1176,6 +1191,89 @@ async function linkParents(
   }
 }
 
+/** Reconcile Linear `blocks` relations into Docket's directed task dependency edges. */
+async function linkBlockingRelationships(
+  ctx: GraphApplyContext,
+  items: readonly ExternalWorkItem[],
+): Promise<void> {
+  const desiredByBlockingTask = new Map<string, Set<string>>();
+  for (const item of items) {
+    if (item.removed || item.blockingExternalIds === undefined) continue;
+    const blockingTaskId = ctx.taskIdByExternal.get(item.externalId);
+    if (!blockingTaskId) continue;
+    const desired = new Set<string>();
+    for (const blockedExternalId of item.blockingExternalIds) {
+      const blockedTaskId = ctx.taskIdByExternal.get(blockedExternalId);
+      if (blockedTaskId && blockedTaskId !== blockingTaskId) desired.add(blockedTaskId);
+    }
+    desiredByBlockingTask.set(blockingTaskId, desired);
+  }
+  if (desiredByBlockingTask.size === 0) return;
+
+  const blockingTaskIds = [...desiredByBlockingTask.keys()];
+  const affectedTaskIds = new Set(blockingTaskIds);
+  for (const desired of desiredByBlockingTask.values()) {
+    for (const blockedTaskId of desired) affectedTaskIds.add(blockedTaskId);
+  }
+  await serializableTx(async (tx) => {
+    const lockedTasks = await tx
+      .select({
+        id: task.id,
+        updatedAt: task.updatedAt,
+        externalUpdatedAt: task.externalUpdatedAt,
+      })
+      .from(task)
+      .where(and(eq(task.organizationId, ctx.orgId), inArray(task.id, [...affectedTaskIds])))
+      .orderBy(task.id)
+      .for('update');
+    const cleanBlockingTasks = new Set(
+      lockedTasks
+        .filter(
+          (row) =>
+            desiredByBlockingTask.has(row.id) && !isDirty(row.updatedAt, row.externalUpdatedAt),
+        )
+        .map((row) => row.id),
+    );
+    if (cleanBlockingTasks.size === 0) return;
+
+    const current = await tx
+      .select({
+        blockingTaskId: taskDependency.blockingTaskId,
+        blockedTaskId: taskDependency.blockedTaskId,
+        blockedSourceIntegrationId: task.sourceIntegrationId,
+      })
+      .from(taskDependency)
+      .innerJoin(task, eq(taskDependency.blockedTaskId, task.id))
+      .where(inArray(taskDependency.blockingTaskId, [...cleanBlockingTasks]));
+    const currentOwn = new Set<string>();
+    for (const edge of current) {
+      if (edge.blockedSourceIntegrationId !== ctx.integrationId) continue;
+      const key = `${edge.blockingTaskId}:${edge.blockedTaskId}`;
+      currentOwn.add(key);
+      if (!desiredByBlockingTask.get(edge.blockingTaskId)?.has(edge.blockedTaskId)) {
+        await tx
+          .delete(taskDependency)
+          .where(
+            and(
+              eq(taskDependency.blockingTaskId, edge.blockingTaskId),
+              eq(taskDependency.blockedTaskId, edge.blockedTaskId),
+            ),
+          );
+      }
+    }
+    for (const blockingTaskId of cleanBlockingTasks) {
+      for (const blockedTaskId of desiredByBlockingTask.get(blockingTaskId) ?? []) {
+        if (currentOwn.has(`${blockingTaskId}:${blockedTaskId}`)) continue;
+        if (await wouldCreateCycle(tx, ctx.orgId, blockingTaskId, blockedTaskId)) continue;
+        await tx
+          .insert(taskDependency)
+          .values({ organizationId: ctx.orgId, blockingTaskId, blockedTaskId })
+          .onConflictDoNothing();
+      }
+    }
+  });
+}
+
 /**
  * Diff each linked task's label set against the snapshot, touching only this integration's labels.
  *
@@ -1247,6 +1345,181 @@ async function diffTaskLabels(
  * suppressed. A locally canceled task pushes the external canceled-type state id (never a delete);
  * an assignee with no reverse identity mapping OMITS the assignee field (never nulls it out).
  */
+function stableExternalIssueId(integrationId: string, taskId: string): string {
+  const bytes = createHash('sha256').update(`${integrationId}:${taskId}`).digest().subarray(0, 16);
+  bytes.writeUInt8((bytes.readUInt8(6) & 0x0f) | 0x50, 6);
+  bytes.writeUInt8((bytes.readUInt8(8) & 0x3f) | 0x80, 8);
+  const hex = bytes.toString('hex');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+/** Create opted-in native tasks in Linear before normal linked-task write-back. */
+async function pushNewNativeTasks(
+  ctx: GraphApplyContext,
+  connector: WorkGraphConnector,
+  row: IntegrationRow,
+): Promise<void> {
+  const config = ConnectorConfig.safeParse(row.config).data ?? {};
+  if (!config.pushNativeTasks) return;
+  const externalTeamByTeam = new Map<string, string | null>();
+  if (config.teamMappings && config.teamMappings.length > 0) {
+    for (const mapping of config.teamMappings) {
+      const existing = externalTeamByTeam.get(mapping.teamId);
+      externalTeamByTeam.set(
+        mapping.teamId,
+        existing === undefined || existing === mapping.externalTeamId
+          ? mapping.externalTeamId
+          : null,
+      );
+    }
+  } else if (config.defaultListId) {
+    const teamId = ctx.resolveTeam(config.defaultListId);
+    if (teamId) externalTeamByTeam.set(teamId, config.defaultListId);
+  }
+  const teamIds = [...externalTeamByTeam]
+    .filter((entry): entry is [string, string] => entry[1] !== null)
+    .map(([teamId]) => teamId);
+  if (teamIds.length === 0) return;
+
+  const nativeTasks = await db
+    .select()
+    .from(task)
+    .where(
+      and(
+        eq(task.organizationId, ctx.orgId),
+        eq(task.source, 'native'),
+        inArray(task.teamId, teamIds),
+      ),
+    )
+    .orderBy(task.id);
+  if (nativeTasks.length === 0) return;
+  const taskIds = nativeTasks.map((nativeTask) => nativeTask.id);
+  const reverseActors = await externalActorReverseMap(ctx.integrationId);
+  const nativeLabels = await db
+    .select({ taskId: taskLabel.taskId, externalId: label.externalId })
+    .from(taskLabel)
+    .innerJoin(label, eq(taskLabel.labelId, label.id))
+    .where(
+      and(inArray(taskLabel.taskId, taskIds), eq(label.sourceIntegrationId, ctx.integrationId)),
+    );
+  const labelsByTask = new Map<string, string[]>();
+  for (const linkedLabel of nativeLabels) {
+    if (!linkedLabel.externalId) continue;
+    const values = labelsByTask.get(linkedLabel.taskId) ?? [];
+    values.push(linkedLabel.externalId);
+    labelsByTask.set(linkedLabel.taskId, values);
+  }
+  const externalStates = new Map<string, readonly ExternalWorkflowState[]>();
+  const createdExternalByTask = new Map<string, string>();
+  for (const nativeTask of nativeTasks) {
+    const externalTeamId = externalTeamByTeam.get(nativeTask.teamId);
+    if (!externalTeamId) continue;
+    let states = externalStates.get(externalTeamId);
+    if (!states) {
+      states = await connector.listTeamStates(externalTeamId);
+      externalStates.set(externalTeamId, states);
+    }
+    const statuses =
+      ctx.statesByTeam.get(nativeTask.teamId) ?? (await teamStatuses(ctx.orgId, nativeTask.teamId));
+    const stateExternalId = states.find(
+      (state) => state.type === categoryOfKey(statuses, nativeTask.state),
+    )?.externalId;
+    const assigneeExternalId = nativeTask.assigneeId
+      ? reverseActors.get(nativeTask.assigneeId)
+      : undefined;
+    const push = await connector.pushWorkItem({
+      kind: 'create',
+      externalTeamId,
+      idempotencyKey: stableExternalIssueId(ctx.integrationId, nativeTask.id),
+      fields: {
+        title: nativeTask.title,
+        description: nativeTask.description,
+        priority: nativeTask.priority,
+        dueDate: nativeTask.dueDate ? nativeTask.dueDate.toISOString().slice(0, 10) : null,
+        estimate: nativeTask.estimate,
+        labelExternalIds: labelsByTask.get(nativeTask.id) ?? [],
+        ...(stateExternalId ? { stateExternalId } : {}),
+        ...(assigneeExternalId ? { assigneeExternalId } : {}),
+      },
+    });
+    const anchor = new Date(push.externalUpdatedAt);
+    await db
+      .update(task)
+      .set({
+        source: 'linked',
+        sourceIntegrationId: ctx.integrationId,
+        sourceSyncMode: 'mirror',
+        externalId: push.externalId,
+        externalUrl: push.externalUrl ?? null,
+        lastPushedAt: anchor,
+        externalUpdatedAt: anchor,
+        updatedAt: anchor,
+      })
+      .where(and(eq(task.id, nativeTask.id), eq(task.source, 'native')));
+    createdExternalByTask.set(nativeTask.id, push.externalId);
+    ctx.result.tasks.pushed += 1;
+  }
+
+  if (createdExternalByTask.size === 0) return;
+  const linkedTasks = await db
+    .select({ id: task.id, externalId: task.externalId })
+    .from(task)
+    .where(
+      and(
+        eq(task.organizationId, ctx.orgId),
+        eq(task.sourceIntegrationId, ctx.integrationId),
+        eq(task.source, 'linked'),
+      ),
+    );
+  const externalByTask = new Map(
+    linkedTasks.flatMap((linkedTask) =>
+      linkedTask.externalId ? ([[linkedTask.id, linkedTask.externalId]] as const) : [],
+    ),
+  );
+  const dependencyRows = await db
+    .select({
+      blockingTaskId: taskDependency.blockingTaskId,
+      blockedTaskId: taskDependency.blockedTaskId,
+    })
+    .from(taskDependency)
+    .where(inArray(taskDependency.blockingTaskId, [...createdExternalByTask.keys()]));
+  const dependenciesByTask = new Map<string, string[]>();
+  const unresolvedDependencies = new Set<string>();
+  for (const dependency of dependencyRows) {
+    const blockedExternalId = externalByTask.get(dependency.blockedTaskId);
+    if (!blockedExternalId) {
+      unresolvedDependencies.add(dependency.blockingTaskId);
+      continue;
+    }
+    const values = dependenciesByTask.get(dependency.blockingTaskId) ?? [];
+    values.push(blockedExternalId);
+    dependenciesByTask.set(dependency.blockingTaskId, values);
+  }
+  for (const nativeTask of nativeTasks) {
+    const externalId = createdExternalByTask.get(nativeTask.id);
+    if (!externalId) continue;
+    const parentExternalId = nativeTask.parentTaskId
+      ? externalByTask.get(nativeTask.parentTaskId)
+      : undefined;
+    const hasDependencies = dependencyRows.some(
+      (dependency) => dependency.blockingTaskId === nativeTask.id,
+    );
+    const fields: WorkItemPushFields = {
+      ...(parentExternalId ? { parentExternalId } : {}),
+      ...(hasDependencies && !unresolvedDependencies.has(nativeTask.id)
+        ? { blockingExternalIds: dependenciesByTask.get(nativeTask.id) ?? [] }
+        : {}),
+    };
+    if (Object.keys(fields).length === 0) continue;
+    const push = await connector.pushWorkItem({ kind: 'update', externalId, fields });
+    const anchor = new Date(push.externalUpdatedAt);
+    await db
+      .update(task)
+      .set({ lastPushedAt: anchor, externalUpdatedAt: anchor, updatedAt: anchor })
+      .where(eq(task.id, nativeTask.id));
+  }
+}
+
 async function pushDirtyTasks(
   ctx: GraphApplyContext,
   connector: WorkGraphConnector,
@@ -1269,6 +1542,48 @@ async function pushDirtyTasks(
   for (const [extId, docketId] of ctx.labelIdByExternal) labelExternalById.set(docketId, extId);
   // The dirty tasks may reference mirrored labels not seen in this snapshot's map; backfill from db.
   const dirtyIds = dirty.map((t) => t.id);
+  const parentIds = dirty.flatMap((t) => (t.parentTaskId ? [t.parentTaskId] : []));
+  const parentRows =
+    parentIds.length === 0
+      ? []
+      : await db
+          .select({
+            id: task.id,
+            externalId: task.externalId,
+            sourceIntegrationId: task.sourceIntegrationId,
+          })
+          .from(task)
+          .where(inArray(task.id, parentIds));
+  const parentExternalById = new Map(
+    parentRows.flatMap((parent) =>
+      parent.externalId && parent.sourceIntegrationId === ctx.integrationId
+        ? ([[parent.id, parent.externalId]] as const)
+        : [],
+    ),
+  );
+  const dependencyRows = await db
+    .select({
+      blockingTaskId: taskDependency.blockingTaskId,
+      blockedExternalId: task.externalId,
+      blockedSourceIntegrationId: task.sourceIntegrationId,
+    })
+    .from(taskDependency)
+    .leftJoin(task, eq(taskDependency.blockedTaskId, task.id))
+    .where(inArray(taskDependency.blockingTaskId, dirtyIds));
+  const blockingExternalByTask = new Map<string, string[]>();
+  const unresolvedBlockingTasks = new Set<string>();
+  for (const dependency of dependencyRows) {
+    if (
+      !dependency.blockedExternalId ||
+      dependency.blockedSourceIntegrationId !== ctx.integrationId
+    ) {
+      unresolvedBlockingTasks.add(dependency.blockingTaskId);
+      continue;
+    }
+    const list = blockingExternalByTask.get(dependency.blockingTaskId) ?? [];
+    list.push(dependency.blockedExternalId);
+    blockingExternalByTask.set(dependency.blockingTaskId, list);
+  }
   const links = await db
     .select({ taskId: taskLabel.taskId, labelId: taskLabel.labelId, externalId: label.externalId })
     .from(taskLabel)
@@ -1306,6 +1621,7 @@ async function pushDirtyTasks(
     const stateExternalId = extStates.find((s) => s.type === wantCategory)?.externalId;
 
     const assigneeExternalId = t.assigneeId ? reverseActors.get(t.assigneeId) : undefined;
+    const parentExternalId = t.parentTaskId ? parentExternalById.get(t.parentTaskId) : null;
     const fields: WorkItemPushFields = {
       title: t.title,
       description: t.description,
@@ -1315,6 +1631,10 @@ async function pushDirtyTasks(
       labelExternalIds: labelsByTask.get(t.id) ?? [],
       ...(stateExternalId ? { stateExternalId } : {}),
       ...(assigneeExternalId ? { assigneeExternalId } : {}),
+      ...(parentExternalId !== undefined ? { parentExternalId } : {}),
+      ...(!unresolvedBlockingTasks.has(t.id)
+        ? { blockingExternalIds: blockingExternalByTask.get(t.id) ?? [] }
+        : {}),
     };
     const push = await connector.pushWorkItem({ kind: 'update', externalId: t.externalId, fields });
     const anchor = new Date(push.externalUpdatedAt);

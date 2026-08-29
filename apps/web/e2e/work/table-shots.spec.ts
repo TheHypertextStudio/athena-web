@@ -59,6 +59,9 @@ test.describe('Markdown table visuals', () => {
 
       const editor = dialog.locator('[contenteditable="true"][aria-label="Add a description"]');
       await expect(editor).toBeVisible({ timeout: TIMEOUTS.pageReady });
+      await editor.click();
+      await page.keyboard.type('Exchange support by format.');
+      await page.keyboard.press('Enter');
       await editor.evaluate((node, text) => {
         const clipboardData = new DataTransfer();
         clipboardData.setData('text/plain', text);
@@ -71,6 +74,51 @@ test.describe('Markdown table visuals', () => {
 
       const toolbar = page.getByRole('toolbar', { name: 'Table controls' });
       await expect(toolbar).toBeVisible();
+      expect(await toolbar.evaluate((node) => getComputedStyle(node).boxShadow)).not.toBe('none');
+      const table = editor.locator('table');
+      const tableWrapper = editor.locator('.tableWrapper');
+      const intro = editor.getByText('Exchange support by format.');
+      const [toolbarBox, tableBox, titleBox, editorSurfaceBox, introBox] = await Promise.all([
+        toolbar.boundingBox(),
+        table.boundingBox(),
+        dialog.getByPlaceholder('Task title').boundingBox(),
+        dialog.locator('[data-editor-surface]').boundingBox(),
+        intro.boundingBox(),
+      ]);
+      expect(toolbarBox).not.toBeNull();
+      expect(tableBox).not.toBeNull();
+      expect(titleBox).not.toBeNull();
+      expect(editorSurfaceBox).not.toBeNull();
+      expect(introBox).not.toBeNull();
+      expect(toolbarBox?.x ?? -1).toBeCloseTo(tableBox?.x ?? -2, 0);
+      expect((titleBox?.y ?? 0) + (titleBox?.height ?? 0)).toBeLessThanOrEqual(toolbarBox?.y ?? 0);
+      expect((introBox?.y ?? 0) + (introBox?.height ?? 0)).toBeLessThanOrEqual(
+        (toolbarBox?.y ?? 0) - 4,
+      );
+      expect((toolbarBox?.y ?? 0) + (toolbarBox?.height ?? 0)).toBeLessThanOrEqual(
+        (tableBox?.y ?? 0) - 7,
+      );
+      expect(
+        (editorSurfaceBox?.y ?? 0) +
+          (editorSurfaceBox?.height ?? 0) -
+          ((tableBox?.y ?? 0) + (tableBox?.height ?? 0)),
+      ).toBeGreaterThanOrEqual(11);
+      await expect(toolbar).toHaveCSS('position', 'absolute');
+      expect(
+        await toolbar.evaluate((node) =>
+          node.parentElement?.hasAttribute('data-table-controls-portal'),
+        ),
+      ).toBe(true);
+      expect(
+        await toolbar.evaluate((node) => node.parentElement?.parentElement?.getAttribute('role')),
+      ).toBe('dialog');
+      await expect(table).toHaveCSS('border-radius', '4px');
+      await expect(tableWrapper).toHaveCSS('border-radius', '4px');
+      await expect(tableWrapper).toHaveCSS(
+        'margin-top',
+        viewport.name === 'mobile' ? '64px' : '56px',
+      );
+      await expect(editor.locator('th').first()).toHaveCSS('border-radius', '0px');
       const tableOptions = toolbar.getByRole('button', { name: 'Table options' });
       await expect(tableOptions).toBeVisible();
       const tableOptionsBox = await tableOptions.boundingBox();
@@ -110,6 +158,18 @@ test.describe('Markdown table visuals', () => {
         expect(optionsCanReceivePointer).toBe(true);
         await tableOptions.click();
         await expect(page.getByRole('menuitem', { name: 'Add column' })).toBeVisible();
+        const deleteTable = page.getByRole('menuitem', { name: 'Delete table' });
+        await deleteTable.scrollIntoViewIfNeeded();
+        await expect(deleteTable).toBeVisible();
+        const deleteCanReceivePointer = await deleteTable.evaluate((item) => {
+          const box = item.getBoundingClientRect();
+          const target = document.elementFromPoint(
+            box.left + box.width / 2,
+            box.top + box.height / 2,
+          );
+          return target === item || item.contains(target);
+        });
+        expect(deleteCanReceivePointer).toBe(true);
         await page.keyboard.press('Escape');
         await expect(page.getByRole('menuitem', { name: 'Add column' })).toBeHidden();
         await expect(page.getByText('Discard this draft?')).toBeHidden();

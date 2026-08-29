@@ -2,7 +2,7 @@
 
 import type { Editor } from '@tiptap/core';
 import { BubbleMenu } from '@tiptap/react/menus';
-import { Copy, Ellipsis, Plus } from '@docket/ui/icons';
+import { Copy, Ellipsis, TableRows, ViewColumn } from '@docket/ui/icons';
 import {
   Button,
   DropdownMenu,
@@ -12,7 +12,8 @@ import {
   DropdownMenuTrigger,
   menuDestructiveItem,
 } from '@docket/ui/primitives';
-import type { JSX } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import type { JSX, Ref } from 'react';
 
 import { useCopyFeedback } from '@/lib/use-copy-feedback';
 
@@ -22,10 +23,80 @@ import { tableClipboardPayload } from './table-clipboard';
 export interface TableControlsProps {
   /** The shared editor whose current table receives each command. */
   readonly editor: Editor;
+  /** The owning editor uses this handle for its Alt+F10 focus transfer. */
+  readonly controlsRef?: Ref<HTMLDivElement> | undefined;
+}
+
+/** DOM owners that keep the table rail visible, positioned, and inside its modal boundary. */
+interface TableControlsEnvironment {
+  readonly portalHost: HTMLElement;
+  readonly collisionBoundary: HTMLElement | undefined;
+  readonly scrollTarget: HTMLElement | Window;
+}
+
+/** Resolve the visible perimeter of the table that owns the current caret. */
+function activeTablePerimeter(editor: Editor): HTMLElement | null {
+  const { node } = editor.view.domAtPos(editor.state.selection.from);
+  const element = node instanceof Element ? node : node.parentElement;
+  const table = element?.closest<HTMLTableElement>('table');
+  return table?.closest<HTMLElement>('.tableWrapper') ?? table ?? null;
+}
+
+/** Find the closest ancestor whose vertical scrolling moves the editor. */
+function nearestScrollTarget(editor: Editor): HTMLElement | Window {
+  let ancestor = editor.view.dom.parentElement;
+  while (ancestor !== null) {
+    const style = window.getComputedStyle(ancestor);
+    if (/auto|scroll|overlay/.test(`${style.overflow} ${style.overflowY}`)) return ancestor;
+    ancestor = ancestor.parentElement;
+  }
+  return window;
 }
 
 /** Render the small action rail shown while the caret sits in a table. */
-export function TableControls({ editor }: TableControlsProps): JSX.Element {
+export function TableControls({ editor, controlsRef }: TableControlsProps): JSX.Element | null {
+  const [environment, setEnvironment] = useState<TableControlsEnvironment | null>(null);
+  const activePerimeterRef = useRef<HTMLElement | null>(null);
+  const tableMenuId = useId();
+  const clearActivePerimeter = useCallback((): void => {
+    activePerimeterRef.current?.removeAttribute('data-table-controls-visible');
+    activePerimeterRef.current = null;
+  }, []);
+  useEffect(() => {
+    const collisionBoundary = editor.view.dom.closest<HTMLElement>('[role="dialog"]') ?? undefined;
+    const portalOwner = collisionBoundary ?? document.body;
+    const portalHost = document.createElement('div');
+    portalHost.setAttribute('data-table-controls-portal', '');
+    portalOwner.append(portalHost);
+    const hideWhenFocusLeaves = (event: FocusEvent): void => {
+      const next = event.relatedTarget;
+      if (next instanceof Node && (portalHost.contains(next) || editor.view.dom.contains(next))) {
+        return;
+      }
+      if (!editor.isDestroyed) {
+        editor.view.dispatch(editor.state.tr.setMeta('docketTableControls', 'hide'));
+      }
+      clearActivePerimeter();
+    };
+    portalHost.addEventListener('focusout', hideWhenFocusLeaves);
+    setEnvironment({
+      portalHost,
+      collisionBoundary,
+      scrollTarget: nearestScrollTarget(editor),
+    });
+    return () => {
+      portalHost.removeEventListener('focusout', hideWhenFocusLeaves);
+      portalHost.remove();
+    };
+  }, [clearActivePerimeter, editor]);
+  const resolveActivePerimeter = (): HTMLElement | null => {
+    const perimeter = activeTablePerimeter(editor);
+    if (perimeter === activePerimeterRef.current) return perimeter;
+    clearActivePerimeter();
+    perimeter?.setAttribute('data-table-controls-visible', '');
+    activePerimeterRef.current = perimeter;
+    return perimeter;
+  };
   const {
     state: copyState,
     announcement,
@@ -63,23 +134,40 @@ export function TableControls({ editor }: TableControlsProps): JSX.Element {
     void copyText(value.csv);
   };
 
+  if (environment === null) return null;
+
   return (
     <BubbleMenu
+      ref={controlsRef}
       editor={editor}
       pluginKey="docketTableControls"
       updateDelay={0}
       shouldShow={({ editor: current, element, view }) =>
         current.isEditable &&
         current.isActive('table') &&
-        (view.hasFocus() || element.contains(document.activeElement))
+        (view.hasFocus() ||
+          element.contains(document.activeElement) ||
+          (document.activeElement instanceof Element &&
+            document.activeElement
+              .closest('[data-editor-table-menu]')
+              ?.getAttribute('data-editor-table-menu') === tableMenuId))
       }
-      options={{ placement: 'top-start', offset: 8 }}
+      appendTo={environment.portalHost}
+      getReferencedVirtualElement={resolveActivePerimeter}
+      options={{
+        placement: 'top-start',
+        offset: 8,
+        strategy: 'absolute',
+        scrollTarget: environment.scrollTarget,
+        onHide: clearActivePerimeter,
+        onDestroy: clearActivePerimeter,
+      }}
       role="toolbar"
       aria-label="Table controls"
       aria-keyshortcuts="Alt+F10"
       data-table-controls=""
       contentEditable={false}
-      className="border-outline-variant bg-surface-container-high flex max-w-[calc(100vw-2rem)] flex-nowrap items-center gap-0.5 rounded-xl border p-1"
+      className="border-outline-variant bg-surface-container-high shadow-level2 z-[120] flex max-w-[calc(100vw-2rem)] flex-nowrap items-center gap-0.5 rounded-xl border p-1"
     >
       <div
         onKeyDownCapture={(event) => {
@@ -99,7 +187,7 @@ export function TableControls({ editor }: TableControlsProps): JSX.Element {
             editor.chain().focus().addRowAfter().run();
           }}
         >
-          <Plus aria-hidden="true" className="size-4" />
+          <TableRows aria-hidden="true" className="size-4" />
           Add row
         </Button>
         <Button
@@ -111,7 +199,7 @@ export function TableControls({ editor }: TableControlsProps): JSX.Element {
             editor.chain().focus().addColumnAfter().run();
           }}
         >
-          <Plus aria-hidden="true" className="size-4" />
+          <ViewColumn aria-hidden="true" className="size-4" />
           Add column
         </Button>
         <Button
@@ -138,12 +226,20 @@ export function TableControls({ editor }: TableControlsProps): JSX.Element {
               <Ellipsis aria-hidden="true" className="size-4" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" data-editor-table-menu="">
+          <DropdownMenuContent
+            align="end"
+            {...(environment.collisionBoundary === undefined
+              ? {}
+              : { collisionBoundary: environment.collisionBoundary })}
+            portalContainer={environment.portalHost}
+            data-editor-table-menu={tableMenuId}
+          >
             <DropdownMenuItem
               onSelect={() => {
                 editor.chain().focus().addRowAfter().run();
               }}
             >
+              <TableRows aria-hidden="true" />
               Add row
             </DropdownMenuItem>
             <DropdownMenuItem
@@ -151,6 +247,7 @@ export function TableControls({ editor }: TableControlsProps): JSX.Element {
                 editor.chain().focus().addColumnAfter().run();
               }}
             >
+              <ViewColumn aria-hidden="true" />
               Add column
             </DropdownMenuItem>
             <DropdownMenuSeparator />

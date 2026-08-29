@@ -190,6 +190,7 @@ export function DropdownMenuContent({
   width = 'md',
   sections = 'divider',
   variant = 'standard',
+  portalContainer,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Content> & {
   /** Tonal family for this menu and all its rows. Defaults to the surface-based `'standard'`. */
@@ -205,11 +206,13 @@ export function DropdownMenuContent({
    * a `min-w-*`/`w-*` class: the open set produced seven different widths across the product.
    */
   width?: MenuWidth | undefined;
+  /** Optional owner that keeps a menu inside a modal focus and pointer boundary. */
+  portalContainer?: HTMLElement | null | undefined;
 }): React.JSX.Element {
   return (
     <DropdownMenuVariantContext.Provider value={variant}>
       <DropdownMenuSectionsContext.Provider value={sections}>
-        <DropdownMenuPrimitive.Portal>
+        <DropdownMenuPrimitive.Portal container={portalContainer ?? undefined}>
           <DropdownMenuPrimitive.Content
             sideOffset={sideOffset}
             collisionPadding={collisionPadding}

@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 
+import { Dialog, DialogContent, DialogTitle } from '@docket/ui/primitives';
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -79,6 +80,101 @@ describe('editing a Markdown table', () => {
     await focusTable(editor, user);
 
     expect(await screen.findByRole('toolbar', { name: 'Table controls' })).toBeVisible();
+    expect(editor.querySelector('.tableWrapper')).toHaveAttribute('data-table-controls-visible');
+  });
+
+  it('mounts table controls outside the editor surface so scrolling cannot clip them', async () => {
+    const { user } = renderTable();
+    const editor = await screen.findByRole('textbox', { name: 'Description' });
+    await focusTable(editor, user);
+
+    const toolbar = await screen.findByRole('toolbar', { name: 'Table controls' });
+
+    expect(toolbar.parentElement).toHaveAttribute('data-table-controls-portal');
+    expect(toolbar.parentElement?.parentElement).toBe(document.body);
+  });
+
+  it('tracks the nearest scrolling ancestor outside a composer', async () => {
+    const scrollOwner = document.createElement('div');
+    scrollOwner.style.overflowY = 'auto';
+    document.body.append(scrollOwner);
+    const addScrollListener = vi.spyOn(scrollOwner, 'addEventListener');
+    const { wrapper: Wrapper } = makeQueryWrapper();
+
+    render(
+      <Wrapper>
+        <FreeformTextEditor
+          value={TABLE}
+          onChange={vi.fn()}
+          placeholder="Write something"
+          ariaLabel="Description"
+        />
+      </Wrapper>,
+      { container: scrollOwner },
+    );
+
+    await screen.findByRole('textbox', { name: 'Description' });
+    await waitFor(() => {
+      const pluginListeners = addScrollListener.mock.calls
+        .filter(([type]) => type === 'scroll')
+        .map(([, listener]) => listener)
+        .filter(
+          (listener) =>
+            typeof listener === 'function' && listener.name !== 'bound dispatchContinuousEvent',
+        );
+      expect(pluginListeners).toHaveLength(1);
+    });
+  });
+
+  it('keeps portaled table controls inside a modal focus and pointer boundary', async () => {
+    const onChange = vi.fn<(next: string) => void>();
+    const { wrapper: Wrapper } = makeQueryWrapper();
+    render(
+      <Wrapper>
+        <Dialog open onOpenChange={vi.fn()}>
+          <DialogContent aria-describedby={undefined}>
+            <DialogTitle>Edit task</DialogTitle>
+            <button type="button">Task title control</button>
+            <div data-testid="editor-scrollport">
+              <FreeformTextEditor
+                value={TABLE}
+                onChange={onChange}
+                placeholder="Write something"
+                ariaLabel="Description"
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
+      </Wrapper>,
+    );
+    const user = userEvent.setup();
+    const editor = await screen.findByRole('textbox', { name: 'Description' });
+    await focusTable(editor, user);
+
+    const toolbar = await screen.findByRole('toolbar', { name: 'Table controls' });
+    const dialog = screen.getByRole('dialog', { name: 'Edit task' });
+
+    expect(toolbar.parentElement).toHaveAttribute('data-table-controls-portal');
+    expect(toolbar.parentElement?.parentElement).toBe(dialog);
+    expect(screen.getByTestId('editor-scrollport')).not.toContainElement(toolbar);
+
+    await user.keyboard('{Alt>}{F10}{/Alt}');
+    expect(within(toolbar).getByRole('button', { name: 'Add row' })).toHaveFocus();
+    await user.keyboard('{Escape}');
+
+    await user.click(within(toolbar).getByRole('button', { name: 'Table options' }));
+    const addColumnItem = await screen.findByRole('menuitem', { name: 'Add column' });
+    expect(dialog).toContainElement(addColumnItem);
+    expect(toolbar).toBeVisible();
+    await user.keyboard('{Escape}');
+
+    await user.click(screen.getByRole('button', { name: 'Task title control' }));
+    await waitFor(() => {
+      expect(screen.queryByRole('toolbar', { name: 'Table controls' })).toBeNull();
+      expect(editor.querySelector('.tableWrapper')).not.toHaveAttribute(
+        'data-table-controls-visible',
+      );
+    });
   });
 
   it('moves keyboard focus into and back out of the table controls', async () => {
@@ -196,6 +292,34 @@ describe('editing a Markdown table', () => {
     await user.click(within(toolbar).getByRole('button', { name: 'Table options' }));
     await user.click(await screen.findByRole('menuitem', { name: 'Copy as CSV' }));
 
+    expect(onSave).not.toHaveBeenCalled();
+    expect(onEditStart).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a portaled table action inside one autosave session', async () => {
+    const onSave = vi.fn<(next: string | null) => void>();
+    const onEditStart = vi.fn<() => void>();
+    const { wrapper: Wrapper } = makeQueryWrapper();
+    render(
+      <Wrapper>
+        <EditableFreeformText
+          value={TABLE}
+          placeholder="Write something"
+          canEdit
+          onSave={onSave}
+          onEditStart={onEditStart}
+        />
+      </Wrapper>,
+    );
+    const user = userEvent.setup();
+    const editor = await screen.findByRole('textbox', { name: 'Description' });
+    await focusTable(editor, user);
+    await user.keyboard('X');
+    const toolbar = await screen.findByRole('toolbar', { name: 'Table controls' });
+
+    await user.click(within(toolbar).getByRole('button', { name: 'Add row' }));
+
+    expect(within(editor).getAllByRole('row')).toHaveLength(3);
     expect(onSave).not.toHaveBeenCalled();
     expect(onEditStart).toHaveBeenCalledTimes(1);
   });

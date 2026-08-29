@@ -46,7 +46,7 @@
 
 ### [BILLING-LAUNCH-001] Make Docket Pro safe for real customer payments
 
-- **Status**: REVIEW
+- **Status**: IN_PROGRESS
 - **Started**: 2026-08-25
 - **Priority**: P0
 - **Description**: Replace the trial-only billing shell with a customer, finance, and operator
@@ -280,6 +280,11 @@
   customer, entitlement, or exemption. The existing Better Auth user now has the supported initial
   superadmin bootstrap row. The production admin passkey ceremony is waiting for completion in the
   Hypertext Studio Chrome instance. No complimentary grant has been written yet.
+- **Authentication-loop correction**: Production billing inspection must not depend on a personal
+  Google Cloud CLI refresh token. A manual, read-only GitHub Actions audit will use the same
+  production Workload Identity Federation boundary as deployment. It will run the existing billing
+  audit against production, capture sanitized Cloud Run diagnostics for failed billing actions, and
+  publish short-lived artifacts without enabling Checkout or mutating Stripe or Docket records.
 - **Exact-main deployment and provider proof**: Commit `74c998cee` passes every exact-main CI gate,
   including API coverage and performance, and all four advisory browser shards. The same run
   applied production migrations and deployed API, Admin, and Scheduler. Vercel built that exact

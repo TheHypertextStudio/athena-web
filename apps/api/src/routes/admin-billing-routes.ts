@@ -843,8 +843,8 @@ export const adminBillingRoutes = new Hono<AppEnv>()
           'Resolve the active Stripe subscription before granting complimentary Docket Pro',
         );
       }
-      const providerSubscriptions = await getContainer().billing.listSubscriptions(id);
-      if (providerSubscriptions.some((subscription) => subscription.status !== 'canceled')) {
+      const providerSubscription = await loadSingleCurrentSubscription(getContainer().billing, id);
+      if (providerSubscription) {
         throw new ConflictError(
           'Resolve the active Stripe subscription before granting complimentary Docket Pro',
         );

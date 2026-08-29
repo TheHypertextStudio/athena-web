@@ -5,6 +5,21 @@ import { describe, expect, it } from 'vitest';
 import { loadSingleCurrentSubscription } from '../../src/services/billing-provider-state';
 
 describe('loadSingleCurrentSubscription', () => {
+  it('maps a provider read failure to the stable billing synchronization problem', async () => {
+    class FailingGateway extends InMemoryBillingGateway {
+      override async listSubscriptions(): Promise<readonly Subscription[]> {
+        throw new Error('provider transport failed');
+      }
+    }
+
+    await expect(
+      loadSingleCurrentSubscription(new FailingGateway(), 'org_1'),
+    ).rejects.toMatchObject({
+      status: 409,
+      code: 'billing_provider_sync_failed',
+    });
+  });
+
   it('refuses an ambiguous provider state before a finance action can mutate it', async () => {
     const subscriptions: readonly Subscription[] = [
       {

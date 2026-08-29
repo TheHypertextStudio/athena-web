@@ -12,7 +12,15 @@ export async function loadSingleCurrentSubscription(
   gateway: BillingGateway,
   organizationId: string,
 ): Promise<Subscription | null> {
-  const subscriptions = await gateway.listSubscriptions(organizationId);
+  let subscriptions: readonly Subscription[];
+  try {
+    subscriptions = await gateway.listSubscriptions(organizationId);
+  } catch {
+    throw new ConflictError(
+      'Stripe did not confirm the current subscription state. Retry after provider reconciliation.',
+      'billing_provider_sync_failed',
+    );
+  }
   const current = subscriptions.filter((subscription) => subscription.status !== 'canceled');
   if (current.length > 1) {
     throw new ConflictError(

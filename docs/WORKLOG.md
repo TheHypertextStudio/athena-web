@@ -397,6 +397,17 @@
   proof for the HTTP 403 permission-recovery path, permanent mismatch reuse across later provider
   operations, and every runtime rollout invariant. Those behavior cases now pass without timing
   sleeps, provider ids, or workflow-source assertions.
+- **Founder grant transaction incident**: The authenticated Hypertext Studio operator retried the
+  confirmed production grant after revision `docket-api-00213-fmj` passed its runtime audit. Stripe
+  eligibility verification succeeded, but the grant returned HTTP 500 with request id
+  `c964ac2f-9a76-40f9-b970-963dcf9f4ab7` and left the organization Free. The route had already
+  marked its provider check succeeded before it entered the database transaction, so the launch
+  audit then reported zero unresolved rows and could not name the failed write. The correction
+  records any post-provider transaction failure in the existing provider-sync ledger, refreshes
+  the admin billing state after a rejected action, and reapplies the nullable Stripe-customer
+  invariant through an idempotent migration. A behavior test forces the transaction boundary to
+  fail after provider success, and a migration test proves that a complimentary-only billing
+  account can store `NULL` without creating a Stripe customer.
 
 ---
 

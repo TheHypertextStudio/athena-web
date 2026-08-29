@@ -11,6 +11,35 @@ type PartnerPreview = InferResponseType<
   (typeof api.admin.orgs)[':id']['discount-awards']['preview']['$post']
 >;
 
+/**
+ * Settle one complimentary-access request and always refresh the authoritative billing state.
+ *
+ * @param request - The grant or revoke request.
+ * @param load - Reloads organization and billing state after the request settles.
+ * @param failureMessage - Application-owned copy for a rejected request.
+ * @returns Application-owned error copy, or `null` after a confirmed success.
+ */
+export async function settleComplimentaryChange(
+  request: () => Promise<Response>,
+  load: () => Promise<void>,
+  failureMessage: string,
+): Promise<string | null> {
+  try {
+    const response = await request();
+    if (!response.ok) {
+      const message = await userProblemMessage(response, failureMessage);
+      await load();
+      return message;
+    }
+    await load();
+    return null;
+  } catch (caught) {
+    const message = userErrorMessage(caught, failureMessage);
+    await load();
+    return message;
+  }
+}
+
 /** All state + actions for the org detail screen. */
 export interface OrgDetailData {
   org: AdminOrg | null;
@@ -158,21 +187,19 @@ export function useOrgDetail(orgId: string): OrgDetailData {
           param: { id: orgId },
           json: { reason: complimentaryReason },
         };
-        const res = grant
-          ? await api.admin.orgs[':id']['billing-exemption'].$post(request)
-          : await api.admin.orgs[':id']['billing-exemption'].$delete(request);
-        if (!res.ok) {
-          setActionError(
-            await userProblemMessage(
-              res,
+        const failureMessage = grant
+          ? 'Could not grant complimentary Docket Pro.'
+          : 'Could not revoke complimentary Docket Pro.';
+        setActionError(
+          await settleComplimentaryChange(
+            () =>
               grant
-                ? 'Could not grant complimentary Docket Pro.'
-                : 'Could not revoke complimentary Docket Pro.',
-            ),
-          );
-          return;
-        }
-        await load();
+                ? api.admin.orgs[':id']['billing-exemption'].$post(request)
+                : api.admin.orgs[':id']['billing-exemption'].$delete(request),
+            load,
+            failureMessage,
+          ),
+        );
       } catch (caught) {
         setActionError(
           userErrorMessage(

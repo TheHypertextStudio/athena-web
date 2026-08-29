@@ -947,6 +947,17 @@ export const adminBillingRoutes = new Hono<AppEnv>()
             'An active billing exemption already exists for this organization',
           );
         }
+        const message =
+          err instanceof Error ? err.message : 'Complimentary entitlement transaction failed';
+        await db
+          .update(billingProviderSync)
+          .set({
+            status: 'failed',
+            lastError: message,
+            completedAt: null,
+            nextAttemptAt: new Date(),
+          })
+          .where(eq(billingProviderSync.idempotencyKey, providerCheckKey));
         throw err;
       }
       await dispatchEssentialBillingNotice(db, {

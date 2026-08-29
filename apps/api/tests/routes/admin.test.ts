@@ -1178,6 +1178,54 @@ describe('billing exemptions', () => {
     providerRead.mockRestore();
   });
 
+  it('records a failed complimentary transaction after provider eligibility succeeds', async () => {
+    const { userId } = await makeStaff('superadmin');
+    const orgId = await makeOrg('active');
+    await clearDocketPro(db, schema, orgId);
+    const app = appWithSession(admin, fakeSession(userId));
+    const client = Reflect.get(db, '$client') as {
+      exec: (statement: string) => Promise<void>;
+    };
+    await client.exec(
+      'ALTER TABLE organization_billing_account ALTER COLUMN stripe_customer_id SET NOT NULL',
+    );
+
+    const response = await (async (): Promise<Response> => {
+      try {
+        return await app.request(`/orgs/${orgId}/billing-exemption`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ reason: 'Founder production access' }),
+        });
+      } finally {
+        await client.exec(
+          'ALTER TABLE organization_billing_account ALTER COLUMN stripe_customer_id DROP NOT NULL',
+        );
+      }
+    })();
+
+    expect(response.status).toBe(500);
+    const problem = await response.json();
+    expect(problem).toMatchObject({ status: 500, code: 'internal' });
+    expect(JSON.stringify(problem)).not.toContain('stripe_customer_id');
+    const [providerSync] = await db
+      .select()
+      .from(schema.billingProviderSync)
+      .where(eq(schema.billingProviderSync.organizationId, orgId));
+    expect(providerSync).toMatchObject({
+      operation: 'verify_complimentary_eligibility',
+      status: 'failed',
+      lastError: expect.any(String),
+      completedAt: null,
+    });
+    expect(providerSync?.lastError?.length).toBeGreaterThan(0);
+    const [grant] = await db
+      .select()
+      .from(schema.organizationProductEntitlement)
+      .where(eq(schema.organizationProductEntitlement.organizationId, orgId));
+    expect(grant).toBeUndefined();
+  });
+
   it('grants (audited), then revokes (audited); double-revoke 404s', async () => {
     const { userId } = await makeStaff('superadmin');
     const orgId = await makeOrg('export_window');

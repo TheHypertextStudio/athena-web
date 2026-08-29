@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 const migrationPath = resolve(
   import.meta.dirname,
-  '../../drizzle/0108_external_agent_interoperability.sql',
+  '../../drizzle/0109_external_agent_interoperability.sql',
 );
 const clients: PGlite[] = [];
 

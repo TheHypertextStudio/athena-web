@@ -255,7 +255,7 @@ export function NavigationRail({
                       aria-current={active ? 'page' : undefined}
                       data-slot="recent-navigation-item"
                       className={cn(
-                        'shrink-0 rounded-lg',
+                        'h-12 w-14 shrink-0 rounded-xl',
                         active
                           ? 'bg-secondary-container text-on-secondary-container hover:bg-secondary-container/80'
                           : 'text-on-surface-variant hover:text-on-surface',

@@ -176,7 +176,7 @@ describe('collapsed sidebar navigation rail', () => {
     expect(recent).toContainElement(project);
     expect(project).toHaveAttribute('href', recentDocuments[0]?.href);
     expect(project).toHaveAttribute('aria-current', 'page');
-    expect(project).toHaveClass('h-10', 'w-10');
+    expect(project).toHaveClass('h-12', 'w-14');
     expect(project.querySelector('svg')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Recent: Ship the rail' })).toBeInTheDocument();
   });

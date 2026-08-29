@@ -127,8 +127,8 @@ export function EntityDocument({
     // the first place, so this is inert for them: the body still sizes to its own text.
     <div
       className={cn(
-        'grid min-w-0 flex-1 gap-8',
-        hasContents && '@4xl:grid-cols-[minmax(0,1fr)_11rem]',
+        'grid min-w-0 flex-1 gap-4',
+        hasContents && '@4xl:grid-cols-[minmax(0,calc(75ch+2rem))_11rem]',
       )}
     >
       {/*
@@ -151,7 +151,7 @@ export function EntityDocument({
         ) : null}
         <div
           ref={rootRef}
-          className="entity-document bg-surface-container-low flex min-h-56 flex-1 flex-col rounded-xl p-4 sm:min-w-[32rem] print:bg-transparent print:p-0"
+          className="entity-document bg-surface-container-low flex min-h-56 w-full max-w-[calc(75ch+2rem)] flex-1 flex-col rounded-xl p-4 sm:min-w-[32rem] print:bg-transparent print:p-0"
         >
           <EditableFreeformText
             value={value}
@@ -159,7 +159,7 @@ export function EntityDocument({
             canEdit={canEdit}
             onSave={onSave}
             {...(onEditStart ? { onEditStart } : {})}
-            className="flex min-h-0 max-w-none flex-1 flex-col"
+            className="flex min-h-0 max-w-[75ch] flex-1 flex-col"
             contributions={contributions}
           />
         </div>

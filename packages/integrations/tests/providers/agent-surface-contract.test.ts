@@ -131,6 +131,46 @@ describe('agent surface registry', () => {
     });
   });
 
+  it('keeps unknown providers outside every closed-registry operation', async () => {
+    const context = {
+      externalWorkspaceId: 'workspace',
+      externalSessionId: 'session',
+    };
+
+    await expect(
+      normalizeStoredAgentSurface(
+        {
+          inboxProvider: 'unknown',
+          deliveryId: 'unknown-delivery',
+          eventType: 'unknown-event',
+          payload: {},
+        },
+        {},
+      ),
+    ).resolves.toBeNull();
+    expect(sessionForAgentSurface('unknown', context)).toBeNull();
+    expect(projectAgentSurface('unknown', responseActivity, context)).toBeNull();
+  });
+
+  it('rejects malformed native context for every disabled provider adapter', () => {
+    expect(() => agentSurfaceFor('slack').nativeContext({})).toThrow(/botUserId/);
+    expect(() =>
+      agentSurfaceFor('slack').sessionRef({
+        provider: 'slack',
+        externalWorkspaceId: 'workspace',
+        externalSessionId: 'missing-thread',
+      }),
+    ).toThrow(/malformed/);
+    expect(() =>
+      agentSurfaceFor('github').sessionRef({
+        provider: 'github',
+        externalWorkspaceId: 'workspace',
+        externalSessionId: 'missing-issue-number',
+      }),
+    ).toThrow(/malformed/);
+    expect(() => agentSurfaceFor('jira_a2a').nativeContext({})).toThrow(/site id/);
+  });
+
   it('normalizes stored input and projects output without a provider branch in the caller', async () => {
     const normalized = await normalizeStoredAgentSurface(
       {
@@ -334,6 +374,51 @@ describe('agent surface registry', () => {
     );
   });
 
+  it.each([
+    ['athena_stop', 'stop_requested', undefined],
+    ['athena_approve', 'approval_selected', 'Person'],
+  ] as const)(
+    'normalizes the Slack %s block action as %s',
+    async (actionId, canonicalType, displayName) => {
+      const payload = {
+        type: 'block_actions' as const,
+        team: { id: 'T1' },
+        user: { id: 'U1', ...(displayName ? { name: displayName } : {}) },
+        channel: { id: 'C1' },
+        message: { ts: '1724870000.000100' },
+        actions: [{ action_id: actionId, action_ts: '1724870001.000200', value: 'signed-token' }],
+      };
+      const adapter = agentSurfaceFor('slack');
+
+      expect(
+        adapter.route({
+          deliveryId: 'interaction-delivery',
+          eventType: 'block_actions',
+          payload,
+        }),
+      ).toEqual({ workspaceId: 'T1' });
+      await expect(
+        adapter.normalize(
+          {
+            deliveryId: 'interaction-delivery',
+            eventType: 'block_actions',
+            payload,
+          },
+          { botUserId: 'B1' },
+        ),
+      ).resolves.toEqual([
+        expect.objectContaining({
+          type: canonicalType,
+          externalSessionId: 'C1:1724870000.000100',
+          actor: {
+            externalId: 'U1',
+            ...(displayName ? { displayName } : {}),
+          },
+        }),
+      ]);
+    },
+  );
+
   it('verifies and normalizes a GitHub issue command', async () => {
     const body = JSON.stringify({
       action: 'created',
@@ -488,6 +573,35 @@ describe('agent surface registry', () => {
       result: 'The task is complete.',
     });
   });
+
+  it.each([
+    [undefined, 'Updated task'],
+    [{ content: 'The task is complete.' }, 'Updated task\n\nThe task is complete.'],
+    [{ content: 'The task failed.', isError: true }, 'Updated task\n\nFailed: The task failed.'],
+  ] as const)(
+    'renders canonical action result %# without losing its outcome',
+    (result, expected) => {
+      const activity: CanonicalAgentActivity = {
+        ...responseActivity,
+        type: 'action',
+        body: {
+          text: 'Task DKT-42',
+          action: {
+            summary: 'Updated task',
+            ...(result ? { result } : {}),
+          },
+        },
+      };
+
+      expect(
+        agentSurfaceFor('slack').render(activity, {
+          provider: 'slack',
+          externalWorkspaceId: 'workspace',
+          externalSessionId: 'session',
+        }).text,
+      ).toBe(expected);
+    },
+  );
 
   it('renders authentication and stop controls on every provider', () => {
     const context = { externalWorkspaceId: 'workspace', externalSessionId: 'session' };

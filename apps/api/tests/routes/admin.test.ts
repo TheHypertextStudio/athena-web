@@ -1142,6 +1142,32 @@ describe('lifecycle holds', () => {
 });
 
 describe('billing exemptions', () => {
+  it('preserves a consumed trial when complimentary access updates the billing account', async () => {
+    const { userId } = await makeStaff('superadmin');
+    const orgId = await makeOrg('active');
+    await clearDocketPro(db, schema, orgId);
+    const consumedAt = new Date('2026-08-01T12:00:00.000Z');
+    await db.insert(schema.organizationBillingAccount).values({
+      organizationId: orgId,
+      stripeCustomerId: `cus_${orgId}`,
+      trialConsumedAt: consumedAt,
+    });
+    const app = appWithSession(admin, fakeSession(userId));
+
+    const response = await app.request(`/orgs/${orgId}/billing-exemption`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reason: 'Founder production access' }),
+    });
+
+    expect(response.status).toBe(200);
+    const [billingAccount] = await db
+      .select({ trialConsumedAt: schema.organizationBillingAccount.trialConsumedAt })
+      .from(schema.organizationBillingAccount)
+      .where(eq(schema.organizationBillingAccount.organizationId, orgId));
+    expect(billingAccount?.trialConsumedAt).toEqual(consumedAt);
+  });
+
   it('records a failed provider eligibility check without writing complimentary access', async () => {
     const { userId } = await makeStaff('superadmin');
     const orgId = await makeOrg('active');

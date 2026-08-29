@@ -911,7 +911,9 @@ export const adminBillingRoutes = new Hono<AppEnv>()
             .onConflictDoUpdate({
               target: organizationBillingAccount.organizationId,
               set: {
-                trialConsumedAt: sql`coalesce(${organizationBillingAccount.trialConsumedAt}, ${accessStartedAt})`,
+                // The inserted timestamp already carries the column encoder. A raw Date bound
+                // inside `sql` bypasses that encoder and breaks the production postgres driver.
+                trialConsumedAt: sql`coalesce(${organizationBillingAccount.trialConsumedAt}, excluded.trial_consumed_at)`,
                 updatedAt: accessStartedAt,
               },
             });

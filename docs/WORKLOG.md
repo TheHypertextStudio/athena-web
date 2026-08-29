@@ -416,6 +416,14 @@
   now retain the deepest driver message plus SQLSTATE, table, column, and constraint metadata. They
   omit wrapper SQL and parameters. Focused tests cover nested driver errors, fallback copy, private
   diagnostic redaction, and the complete grant transaction failure path.
+- **Founder grant serialization correction**: Revision `docket-api-00215-plz` exposed the next
+  confirmed grant failure as `ERR_INVALID_ARG_TYPE`. The conflict-update SQL bound a JavaScript
+  `Date` directly instead of using the timestamp column encoder, so the production Postgres driver
+  rejected the query before PostgreSQL received it. The upsert now reads the encoded timestamp from
+  `excluded.trial_consumed_at`. A regression test grants complimentary access through an existing
+  billing account and proves that Docket preserves its consumed-trial timestamp. The focused admin
+  route suite passes 57 tests. API type checking, changed-file ESLint, Prettier, and the diff check
+  pass. Checkout remains disabled while this correction moves through exact-main CI and deployment.
 
 ---
 

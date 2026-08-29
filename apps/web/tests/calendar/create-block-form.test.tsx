@@ -87,8 +87,9 @@ describe('CreateBlockForm progressive quick create', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Create calendar item' });
 
     expect(dialog).toHaveAttribute('data-create-presentation', 'calendar-desktop');
-    expect(dialog).toHaveClass('overflow-hidden');
-    expect(screen.getByTestId('calendar-dialog-scroll')).toHaveClass('min-h-0', 'overflow-y-auto');
+    const scrollBody = screen.getByTestId('calendar-dialog-scroll');
+    expect(scrollBody).toHaveAttribute('data-overlay-scroll-owner', '');
+    expect(scrollBody).not.toContainElement(screen.getByRole('button', { name: 'Save' }));
     expect(screen.getByRole('button', { name: 'Move create-event dialog' })).toBeVisible();
   });
 

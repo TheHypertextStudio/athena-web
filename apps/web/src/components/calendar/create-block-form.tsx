@@ -15,8 +15,11 @@ import { useMediaQuery } from '@docket/ui/hooks';
 import {
   Button,
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
+  DialogFooter,
+  DialogHeader,
   DialogTitle,
   Input,
   type PopoverVirtualAnchorRef,
@@ -280,8 +283,8 @@ export default function CreateBlockForm({
     });
   };
 
-  const form = (
-    <form onSubmit={submit} className="flex flex-col gap-4">
+  const fields = (
+    <>
       <label className="block">
         <span className="sr-only">Title</span>
         <Input
@@ -388,36 +391,7 @@ export default function CreateBlockForm({
           </label>
         </div>
       ) : null}
-
-      <div className="flex items-center justify-end gap-2">
-        {!showDetails ? (
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="mr-auto"
-            onClick={() => {
-              setShowDetails(true);
-            }}
-          >
-            More options
-          </Button>
-        ) : null}
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          onClick={() => {
-            handleOpenChange(false);
-          }}
-        >
-          Cancel
-        </Button>
-        <Button type="submit" size="sm" className="h-9" disabled={!canSave || create.isPending}>
-          {create.isPending ? 'Saving…' : 'Save'}
-        </Button>
-      </div>
-    </form>
+    </>
   );
 
   const notice = <CalendarCreateFailureNotice visible={create.isError} />;
@@ -475,41 +449,82 @@ export default function CreateBlockForm({
           aria-label="Create calendar item"
           data-create-presentation={desktopHosted ? desktopPresentation : mobilePresentation}
         >
-          {desktopHosted ? (
-            <div className="flex h-10 shrink-0 items-center justify-center px-12">
-              <button
+          <form onSubmit={submit} className="contents">
+            <DialogHeader inset="none">
+              <DialogTitle className="sr-only">Create calendar item</DialogTitle>
+              <DialogDescription className="sr-only">
+                Add a title, adjust the schedule, and save the selected calendar region.
+              </DialogDescription>
+              {desktopHosted ? (
+                <div className="flex h-10 shrink-0 items-center justify-center px-12">
+                  <button
+                    type="button"
+                    aria-label="Move create-event dialog"
+                    onPointerDown={position.handlePointerDown}
+                    onKeyDown={position.handleKeyDown}
+                    className="group focus-visible:ring-ring flex h-8 w-16 cursor-grab touch-none items-center justify-center rounded-md select-none focus-visible:ring-2 focus-visible:outline-none active:cursor-grabbing"
+                  >
+                    <span className="bg-outline-variant group-hover:bg-outline h-1 w-10 rounded-full" />
+                  </button>
+                </div>
+              ) : null}
+            </DialogHeader>
+            <Button
+              type="button"
+              variant="ghost"
+              iconOnly
+              aria-label="Close"
+              className="absolute top-2 right-2 z-10"
+              onClick={() => {
+                handleOpenChange(false);
+              }}
+            >
+              <X aria-hidden="true" />
+            </Button>
+            <DialogBody
+              data-testid="calendar-dialog-scroll"
+              inset="compact"
+              className="flex flex-col gap-4"
+            >
+              {fields}
+            </DialogBody>
+            <DialogFooter
+              inset="compact"
+              className="border-outline-variant flex-row items-center border-t"
+            >
+              {!showDetails ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  className="mr-auto"
+                  onClick={() => {
+                    setShowDetails(true);
+                  }}
+                >
+                  More options
+                </Button>
+              ) : null}
+              <Button
                 type="button"
-                aria-label="Move create-event dialog"
-                onPointerDown={position.handlePointerDown}
-                onKeyDown={position.handleKeyDown}
-                className="group focus-visible:ring-ring flex h-8 w-16 cursor-grab touch-none items-center justify-center rounded-md select-none focus-visible:ring-2 focus-visible:outline-none active:cursor-grabbing"
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  handleOpenChange(false);
+                }}
               >
-                <span className="bg-outline-variant group-hover:bg-outline h-1 w-10 rounded-full" />
-              </button>
-            </div>
-          ) : null}
-          <Button
-            type="button"
-            variant="ghost"
-            iconOnly
-            aria-label="Close"
-            className="absolute top-2 right-2 z-10"
-            onClick={() => {
-              handleOpenChange(false);
-            }}
-          >
-            <X aria-hidden="true" />
-          </Button>
-          <div
-            data-testid="calendar-dialog-scroll"
-            className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 @sm:p-5"
-          >
-            <DialogTitle className="sr-only">Create calendar item</DialogTitle>
-            <DialogDescription className="sr-only">
-              Add a title, adjust the schedule, and save the selected calendar region.
-            </DialogDescription>
-            {form}
-          </div>
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                className="h-9"
+                disabled={!canSave || create.isPending}
+              >
+                {create.isPending ? 'Saving…' : 'Save'}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
       {notice}

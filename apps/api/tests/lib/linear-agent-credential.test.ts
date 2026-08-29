@@ -6,6 +6,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 import type * as IntegrationsModule from '@docket/integrations';
+import { ConnectorError } from '@docket/integrations';
 import type * as ContainerModule from '../../src/container';
 import type { buildLinearAgentPortForIntegration as BuildLinearAgentPortForIntegration } from '../../src/lib/linear-agent-credential';
 import type { sealCredential as SealCredential } from '../../src/lib/credentials';
@@ -154,7 +155,7 @@ describe('buildLinearAgentPortForIntegration', () => {
     expect(stored.refreshToken).toBe('refresh-token-2');
   });
 
-  it('degrades the integration to error (not a thrown exception) when refresh fails', async () => {
+  it('propagates a rejected refresh without preempting the relay error transition', async () => {
     const obtainedAt = new Date(Date.now() - 86_400_000).toISOString();
     const seeded = await seedLinearAgentIntegration({
       accessToken: 'stale-token',
@@ -164,18 +165,24 @@ describe('buildLinearAgentPortForIntegration', () => {
       expiresIn: 86_400,
       obtainedAt,
     });
-    refreshLinearAgentToken.mockRejectedValue(new Error('invalid_grant'));
+    refreshLinearAgentToken.mockRejectedValue(
+      new ConnectorError('invalid_grant', {
+        provider: 'linear',
+        kind: 'auth',
+      }),
+    );
 
-    const port = await buildLinearAgentPortForIntegration(seeded.integrationId);
+    await expect(buildLinearAgentPortForIntegration(seeded.integrationId)).rejects.toMatchObject({
+      kind: 'auth',
+    });
 
-    expect(port).toBeNull();
     expect(buildLinearAgentClient).not.toHaveBeenCalled();
     const [row] = await db
       .select({ status: schema.integration.status, lastError: schema.integration.lastError })
       .from(schema.integration)
       .where(eq(schema.integration.id, seeded.integrationId));
-    expect(row?.status).toBe('error');
-    expect(row?.lastError).toBe('The Linear Agent connection must be reconnected.');
+    expect(row?.status).toBe('connected');
+    expect(row?.lastError).toBeNull();
   });
 });
 import { installTestProductFixture } from '../support/db';

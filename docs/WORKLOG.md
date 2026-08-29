@@ -32,7 +32,9 @@
   suite proves that two sessions sharing one revoked installation mark both links errored while the
   integration status transition sends the installer one reconnect notice. The real publisher now
   converts Linear's typed authentication rejection into that terminal installation path while
-  leaving provider outages retryable; the combined publisher and relay run passes nine tests.
+  leaving provider outages retryable. A rejected refresh no longer preemptively marks the
+  integration and suppresses the relay's notification fence. The credential, publisher, and relay
+  run passes 14 tests.
 - **Production state**: Hypertext Studio Linear contains one Athena application at
   `d3447c82-67dc-4482-a10d-3099f76b60ce`. Its callback, Agent-session webhook, public availability,
   and application metadata match the release design. The production GitHub environment explicitly

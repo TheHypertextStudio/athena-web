@@ -77,12 +77,11 @@ export async function findLinearAgentIntegration(
  * throws out of {@link unsealCredential} — that is a genuine fault worth surfacing, not silently
  * swallowed.
  *
- * Refreshes the access token before use when it's due (mirrors the remote-MCP toolbox's
- * refresh-before-use in `agent/toolbox.ts`) — Linear's Agent access tokens expire in 24h, so
- * without this every install would silently start failing a day after connecting. A refresh
- * failure (revoked grant, app reconfigured) degrades the integration to `status: 'error'` with a
- * clear reason, same as a first-connect failure, and this still returns `null` rather than
- * throwing into the caller's sweep/webhook path.
+ * Refreshes the access token before use when it is due (mirrors the remote-MCP toolbox's
+ * refresh-before-use in `agent/toolbox.ts`) because Linear's Agent access tokens expire in 24h.
+ * A refresh failure propagates its typed connector classification. The provider-neutral relay
+ * owns the durable integration/link error transition and installer notification, so marking the
+ * integration here would preempt that single notification fence.
  *
  * @param integrationId - The `linear_agent` integration's id.
  */
@@ -114,32 +113,20 @@ export async function buildLinearAgentPortForIntegration(
     if (linearAgentTokenNeedsRefresh(stored)) {
       const config = linearAgentConfigFromEnv();
       if (!config) return null;
-      try {
-        const refreshed = await refreshLinearAgentToken({
-          clientId: config.clientId,
-          clientSecret: config.clientSecret,
-          refreshToken: stored.refreshToken,
-        });
-        const next: StoredLinearAgentTokens = {
-          ...refreshed,
-          obtainedAt: new Date().toISOString(),
-        };
-        await db
-          .update(integrationCredential)
-          .set({ ciphertext: sealCredential(JSON.stringify(next)) })
-          .where(eq(integrationCredential.integrationId, integrationId));
-        return buildLinearAgentClient(next.accessToken);
-      } catch {
-        await db
-          .update(integration)
-          .set({
-            status: 'error',
-            lastError: 'The Linear Agent connection must be reconnected.',
-            lastErrorAt: new Date(),
-          })
-          .where(eq(integration.id, integrationId));
-        return null;
-      }
+      const refreshed = await refreshLinearAgentToken({
+        clientId: config.clientId,
+        clientSecret: config.clientSecret,
+        refreshToken: stored.refreshToken,
+      });
+      const next: StoredLinearAgentTokens = {
+        ...refreshed,
+        obtainedAt: new Date().toISOString(),
+      };
+      await db
+        .update(integrationCredential)
+        .set({ ciphertext: sealCredential(JSON.stringify(next)) })
+        .where(eq(integrationCredential.integrationId, integrationId));
+      return buildLinearAgentClient(next.accessToken);
     }
   }
   return buildLinearAgentClient(accessToken);

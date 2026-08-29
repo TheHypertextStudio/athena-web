@@ -43,6 +43,19 @@ beforeEach(() => {
 });
 
 describe('Linear external agent publisher', () => {
+  it('turns a rejected token refresh into a terminal installation error', async () => {
+    buildLinearAgentPortForIntegration.mockRejectedValue(
+      new ConnectorError('Linear rejected the refresh token.', {
+        provider: 'linear',
+        kind: 'auth',
+      }),
+    );
+
+    await expect(publishExternalAgentOutput(request)).rejects.toBeInstanceOf(
+      ExternalAgentInstallationError,
+    );
+  });
+
   it('turns a revoked live token into a terminal installation error', async () => {
     agentActivityCreate.mockRejectedValue(
       new ConnectorError('Linear rejected the token.', { provider: 'linear', kind: 'auth' }),

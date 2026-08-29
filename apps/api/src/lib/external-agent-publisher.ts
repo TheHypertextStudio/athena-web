@@ -48,9 +48,9 @@ async function publishLinear(request: ExternalAgentPublishRequest<'linear'>): Pr
   if (installed?.status !== 'connected') {
     throw new ExternalAgentInstallationError('linear');
   }
-  const port = await buildLinearAgentPortForIntegration(installed.id);
-  if (!port) throw new ExternalAgentInstallationError('linear');
   try {
+    const port = await buildLinearAgentPortForIntegration(installed.id);
+    if (!port) throw new ExternalAgentInstallationError('linear');
     if (request.kind === 'prepare_session') {
       await port.agentSessionUpdate({
         agentSessionId: request.session.id,

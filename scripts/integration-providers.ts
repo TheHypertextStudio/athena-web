@@ -73,6 +73,7 @@ export type ProviderId =
   | 'google'
   | 'github'
   | 'linear'
+  | 'linear-agent'
   | 'notion'
   | 'apple'
   | 'stripe'
@@ -196,6 +197,28 @@ export function linearOAuthAppManifestUrl(env: Environment, urls: SetupUrls): st
   params.append('oauth.grant_types', 'authorization_code');
   params.append('webhook.resourceTypes', 'Issue');
   params.append('webhook.resourceTypes', 'Comment');
+  return `https://linear.app/settings/api/applications/new?${params.toString()}`;
+}
+
+/** Build the pre-populated OAuth application URL for Athena's Linear Agent installation. */
+export function linearAgentOAuthAppManifestUrl(env: Environment, urls: SetupUrls): string {
+  const productUrl = urls.webBases[0] ?? urls.apiBase;
+  const clientName = env === 'production' ? 'Athena' : `Athena (${env})`;
+  const params = new URLSearchParams({
+    distribution: env === 'production' ? 'public' : 'private',
+    'display.description': 'Use Athena from Linear to plan and complete work in Docket.',
+    'developer.name': 'Hypertext Studio',
+    'oauth.client_name': clientName,
+    'oauth.client_uri': productUrl,
+    'webhook.enabled': 'true',
+    'webhook.url': `${urls.apiBase}/internal/ingest/linear-agent`,
+  });
+  params.append(
+    'oauth.redirect_uris',
+    `${urls.apiBase}/internal/integrations/linear-agent/callback`,
+  );
+  params.append('oauth.grant_types', 'authorization_code');
+  params.append('webhook.resourceTypes', 'AgentSessionEvent');
   return `https://linear.app/settings/api/applications/new?${params.toString()}`;
 }
 
@@ -615,6 +638,42 @@ export const PROVIDER_GROUPS: readonly ProviderGroup[] = [
       '       and OAuth-authorization events off.',
       '     • Linear shows a separate webhook signing secret on the application detail page.',
       `6) Set Public ${env === 'production' ? 'ON for production' : 'OFF for this non-production app'}, then create the app.`,
+    ],
+  },
+  {
+    id: 'linear-agent',
+    title: 'Linear Agent Set-up',
+    label: 'Athena in Linear',
+    consoleUrl: 'https://linear.app/settings/api/applications/new',
+    launchUrl: linearAgentOAuthAppManifestUrl,
+    vars: [
+      'LINEAR_AGENT_CLIENT_ID',
+      'LINEAR_AGENT_CLIENT_SECRET',
+      'LINEAR_AGENT_WEBHOOK_SECRET',
+      'LINEAR_AGENT_ENABLED',
+    ],
+    requiredVars: [
+      'LINEAR_AGENT_CLIENT_ID',
+      'LINEAR_AGENT_CLIENT_SECRET',
+      'LINEAR_AGENT_WEBHOOK_SECRET',
+    ],
+    policyVars: ['LINEAR_AGENT_ENABLED'],
+    cloudVariables: ['LINEAR_AGENT_ENABLED'],
+    instructions: (env, urls) => [
+      'Creates the separate OAuth application that makes Athena an app actor inside Linear.',
+      'You need a Linear workspace administrator. Do not reuse the ordinary Linear sync app.',
+      '',
+      '1) Open the prefilled Linear application form offered by this wizard.',
+      `2) Confirm the application name is "${env === 'production' ? 'Athena' : `Athena (${env})`}" and review the prefilled fields.`,
+      '3) Keep Authorization Code as the only grant type and confirm this callback exactly:',
+      `     ${urls.apiBase}/internal/integrations/linear-agent/callback`,
+      '4) Keep Webhooks enabled and confirm this endpoint exactly:',
+      `     ${urls.apiBase}/internal/ingest/linear-agent`,
+      '5) Select Agent session events. Leave other webhook categories off for this first slice.',
+      '6) Create the app, then copy its client id, client secret, and webhook signing secret.',
+      '7) Keep LINEAR_AGENT_ENABLED=false until a signed sandbox delivery and the complete',
+      '   interaction matrix pass. Change it to true only for the release that mounts all three',
+      '   credentials.',
     ],
   },
   {

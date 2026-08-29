@@ -97,8 +97,9 @@ jobs:
           # reads, edits, and inbound bootstrap stay active.
           WORK_LOCATION_PROJECTION_ENABLED: "false"
           # Linear Agent stays dark until its dedicated sandbox acceptance run passes and the
-          # production secrets are mounted. Standard Linear task sync does not use this flag.
-          LINEAR_AGENT_ENABLED: "false"
+          # production secrets are mounted. A missing variable remains fail-closed. Standard
+          # Linear task sync does not use this flag.
+          LINEAR_AGENT_ENABLED: "${{ vars.LINEAR_AGENT_ENABLED || 'false' }}"
           MCP_TASKS_ENABLED: "false"
           EOF
 

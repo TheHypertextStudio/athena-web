@@ -16,16 +16,9 @@
  * future consumer reads it the same way: `JSON.parse(unsealCredential(ciphertext))` yields a
  * {@link LinearAgentOAuthTokens}.
  *
- * **Known gap**: this callback does NOT stamp `connection.externalWorkspaceId`/
- * `externalWorkspaceName` the way the generic `integrations.ts` verify path does for the
- * `provider: 'linear'` connector. Linear's Agent-platform boundary adapter
- * (`packages/integrations/src/linear-agent.ts`) exposes only `agentActivityCreate` and
- * `agentSessionUpdate` today — no GraphQL query for the installed workspace's id/name — so
- * resolving those fields here would mean inventing an unverified call against a real Agent app
- * that has never been registered. The integration is still correctly promoted to `connected` on
- * a successful token exchange (the credential is real and proven); a follow-up should add a
- * `resolveInstalledWorkspace`-shaped export to `linear-agent.ts` (e.g. `query { organization { id
- * urlKey name } }` via `LinearAgentClient.query`) once that can be verified against a live app.
+ * After token exchange, the callback resolves the installed workspace and app actor with the
+ * installation token. It stores those provider references on `integration.connection` before it
+ * marks the integration connected, so webhook routing never depends on an operator-entered id.
  *
  * Failures never 500 a browser redirect: they bounce back to settings with a `?linear_agent=error`
  * flag so the UI can surface a retry, and the integration is left `error` with a real reason.

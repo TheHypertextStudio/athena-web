@@ -9,6 +9,11 @@ type ParseGoogleOAuthClientBundle = (
   urls: { readonly apiBase: string; readonly webBases: readonly string[] },
 ) => Record<'GOOGLE_CLIENT_ID' | 'GOOGLE_CLIENT_SECRET', string>;
 
+type LinearAgentOAuthAppManifestUrl = (
+  env: 'local' | 'staging' | 'production',
+  urls: { readonly apiBase: string; readonly webBases: readonly string[] },
+) => string;
+
 interface ProviderFixture {
   readonly id: string;
   readonly label: string;
@@ -24,14 +29,16 @@ const scriptModule: string = new URL(
   '../../../../scripts/integration-providers.ts',
   import.meta.url,
 ).href;
-const { parseGoogleOAuthClientBundle, PROVIDER_GROUPS } = (await import(scriptModule)) as {
-  readonly parseGoogleOAuthClientBundle: ParseGoogleOAuthClientBundle;
-  readonly PROVIDER_GROUPS: readonly (ProviderFixture & {
-    readonly consoleUrl?: string;
-    readonly instructions?: (...args: never[]) => readonly string[];
-    readonly steps?: (...args: never[]) => readonly unknown[];
-  })[];
-};
+const { linearAgentOAuthAppManifestUrl, parseGoogleOAuthClientBundle, PROVIDER_GROUPS } =
+  (await import(scriptModule)) as {
+    readonly linearAgentOAuthAppManifestUrl: LinearAgentOAuthAppManifestUrl;
+    readonly parseGoogleOAuthClientBundle: ParseGoogleOAuthClientBundle;
+    readonly PROVIDER_GROUPS: readonly (ProviderFixture & {
+      readonly consoleUrl?: string;
+      readonly instructions?: (...args: never[]) => readonly string[];
+      readonly steps?: (...args: never[]) => readonly unknown[];
+    })[];
+  };
 const setupModule: string = new URL('../../../../scripts/integrations-setup.ts', import.meta.url)
   .href;
 const {
@@ -130,6 +137,20 @@ describe('Google OAuth bootstrap credential import', () => {
 });
 
 describe('guided integration bootstrap contracts', () => {
+  it('pre-populates a separate Linear Agent app with only its callback and session webhook', () => {
+    const url = new URL(linearAgentOAuthAppManifestUrl('production', urls));
+
+    expect(url.origin + url.pathname).toBe('https://linear.app/settings/api/applications/new');
+    expect(url.searchParams.get('oauth.client_name')).toBe('Athena');
+    expect(url.searchParams.getAll('oauth.redirect_uris')).toEqual([
+      'https://docket-api.hypertext.studio/internal/integrations/linear-agent/callback',
+    ]);
+    expect(url.searchParams.get('webhook.url')).toBe(
+      'https://docket-api.hypertext.studio/internal/ingest/linear-agent',
+    );
+    expect(url.searchParams.getAll('webhook.resourceTypes')).toEqual(['AgentSessionEvent']);
+  });
+
   it('splits numbered guides into one operator-sized checkpoint per action', () => {
     expect(
       splitInstructionSteps([
@@ -207,11 +228,33 @@ describe('guided integration bootstrap contracts', () => {
     expect(bindings.some((binding) => binding.startsWith('SLACK_CLIENT_ID='))).toBe(false);
   });
 
+  it('mounts Linear Agent credentials without treating its release flag as a secret', () => {
+    const bindings = buildApiSecretBindings(
+      'production',
+      new Set([
+        'docket-linear-agent-client-id',
+        'docket-linear-agent-client-secret',
+        'docket-linear-agent-webhook-secret',
+        'docket-linear-agent-enabled',
+      ]),
+    );
+
+    expect(bindings).toEqual(
+      expect.arrayContaining([
+        'LINEAR_AGENT_CLIENT_ID=docket-linear-agent-client-id:latest',
+        'LINEAR_AGENT_CLIENT_SECRET=docket-linear-agent-client-secret:latest',
+        'LINEAR_AGENT_WEBHOOK_SECRET=docket-linear-agent-webhook-secret:latest',
+      ]),
+    );
+    expect(bindings.some((binding) => binding.startsWith('LINEAR_AGENT_ENABLED='))).toBe(false);
+  });
+
   it('keeps every provider in the guided catalog and deploys through the generated manifest', () => {
     expect(PROVIDER_GROUPS.map((group) => group.id)).toEqual([
       'google',
       'github',
       'linear',
+      'linear-agent',
       'notion',
       'apple',
       'stripe',
@@ -229,6 +272,9 @@ describe('guided integration bootstrap contracts', () => {
       'utf8',
     );
     expect(workflow).toContain('secrets: ${{ vars.API_SECRET_BINDINGS }}');
+    expect(workflow).toContain(
+      'LINEAR_AGENT_ENABLED: "${{ vars.LINEAR_AGENT_ENABLED || \'false\' }}"',
+    );
     // Every job in deploy.yml reaches production, so every one must be bound to the `production`
     // environment — that binding is what applies the environment's protection rules and scopes the
     // secrets it may read. Counted against the number of jobs rather than pinned to a literal, so

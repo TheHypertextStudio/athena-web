@@ -123,6 +123,7 @@ Set by `pnpm bootstrap`. Add missing ones with `gh variable set NAME --body "VAL
 | `GOOGLE_OAUTH_PUBLIC`              | manual               | `false` during review; `true` only after Google approval                                                                 |
 | `GOOGLE_OAUTH_TEST_EMAILS`         | manual               | Staged Docket user allowlist, initially `willieechalmers@gmail.com`                                                      |
 | `WORK_LOCATION_PROJECTION_ENABLED` | manual               | `false` during canonical bootstrap; `true` enables outbound linked-account projection                                    |
+| `LINEAR_AGENT_ENABLED`             | manual               | `false` until the signed Linear Agent sandbox matrix passes; `true` enables install, webhook, and relay surfaces         |
 | `API_SECRET_BINDINGS`              | bootstrap            | Non-secret multiline Cloud Run env-to-Secret Manager mapping; includes only configured providers                         |
 
 ### Secrets (`secrets.*`)

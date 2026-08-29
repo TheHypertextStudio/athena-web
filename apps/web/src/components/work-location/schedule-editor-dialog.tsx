@@ -10,6 +10,7 @@ import type {
 import {
   Button,
   Dialog,
+  DialogBody,
   DialogClose,
   DialogContent,
   DialogDescription,
@@ -182,132 +183,137 @@ export function ScheduleEditorDialog({
         if (!pending) onOpenChange(next);
       }}
     >
-      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl">
+      <DialogContent
+        presentation={{ kind: 'centered', size: 'large', height: 'tall' }}
+        containerQuery
+      >
         <DialogHeader>
           <DialogTitle>{assertion ? 'Edit schedule' : 'Add schedule'}</DialogTitle>
           <DialogDescription>Choose where you expect to work and when.</DialogDescription>
         </DialogHeader>
-        <form className="grid gap-4 @2xl:grid-cols-2" onSubmit={submit}>
-          <label className="text-on-surface-variant text-label-medium flex flex-col gap-1">
-            Place
-            <Select
-              value={placeId}
-              onChange={(event) => {
-                setPlaceId(event.target.value);
-              }}
-            >
-              {places.map((place) => (
-                <option key={place.id} value={place.id}>
-                  {place.name}
-                </option>
-              ))}
-            </Select>
-          </label>
-          <label className="text-on-surface-variant text-label-medium flex flex-col gap-1">
-            Schedule
-            <Select
-              value={mode}
-              onChange={(event) => {
-                setMode(event.target.value as ScheduleMode);
-                setError(null);
-              }}
-            >
-              <option value="one_off_all_day">One day · all day</option>
-              <option value="one_off_timed">One day · part day</option>
-              <option value="weekly_all_day">Weekly · all day</option>
-              <option value="weekly_timed">Weekly · part day</option>
-            </Select>
-          </label>
-          <div className="text-on-surface-variant text-label-medium flex flex-col gap-1">
-            <span>{mode.startsWith('weekly') ? 'Effective from' : 'Date'}</span>
-            <DatePicker
-              ariaLabel={mode.startsWith('weekly') ? 'Effective from' : 'Date'}
-              placeholder="Pick a day"
-              triggerVariant="outline"
-              value={date || null}
-              max={effectiveUntil || undefined}
-              onChange={(nextDate) => {
-                setDate(nextDate ?? '');
-                setStartOccurrence(null);
-                setEndOccurrence(null);
-              }}
-            />
-          </div>
-          {mode.startsWith('weekly') ? (
+        <form className="contents" onSubmit={submit}>
+          <DialogBody className="grid gap-4 @2xl:grid-cols-2">
+            <label className="text-on-surface-variant text-label-medium flex flex-col gap-1">
+              Place
+              <Select
+                value={placeId}
+                onChange={(event) => {
+                  setPlaceId(event.target.value);
+                }}
+              >
+                {places.map((place) => (
+                  <option key={place.id} value={place.id}>
+                    {place.name}
+                  </option>
+                ))}
+              </Select>
+            </label>
+            <label className="text-on-surface-variant text-label-medium flex flex-col gap-1">
+              Schedule
+              <Select
+                value={mode}
+                onChange={(event) => {
+                  setMode(event.target.value as ScheduleMode);
+                  setError(null);
+                }}
+              >
+                <option value="one_off_all_day">One day · all day</option>
+                <option value="one_off_timed">One day · part day</option>
+                <option value="weekly_all_day">Weekly · all day</option>
+                <option value="weekly_timed">Weekly · part day</option>
+              </Select>
+            </label>
             <div className="text-on-surface-variant text-label-medium flex flex-col gap-1">
-              <span>Ends</span>
+              <span>{mode.startsWith('weekly') ? 'Effective from' : 'Date'}</span>
               <DatePicker
-                ariaLabel="End date"
-                placeholder="No end date"
+                ariaLabel={mode.startsWith('weekly') ? 'Effective from' : 'Date'}
+                placeholder="Pick a day"
                 triggerVariant="outline"
-                value={effectiveUntil || null}
-                min={date || undefined}
+                value={date || null}
+                max={effectiveUntil || undefined}
                 onChange={(nextDate) => {
-                  setEffectiveUntil(nextDate ?? '');
+                  setDate(nextDate ?? '');
+                  setStartOccurrence(null);
+                  setEndOccurrence(null);
                 }}
               />
             </div>
-          ) : null}
-          {mode.endsWith('timed') ? (
-            <>
-              <CalendarTimeField
-                label="Start"
-                inputType="time"
-                date={date}
-                value={startTime}
-                displayTimezone={timezone}
-                occurrence={startOccurrence}
-                onValueChange={(value) => {
-                  setStartTime(value);
-                  setStartOccurrence(null);
-                }}
-                onOccurrenceChange={setStartOccurrence}
-              />
-              <CalendarTimeField
-                label="End"
-                inputType="time"
-                date={date}
-                value={endTime}
-                displayTimezone={timezone}
-                occurrence={endOccurrence}
-                onValueChange={(value) => {
-                  setEndTime(value);
-                  setEndOccurrence(null);
-                }}
-                onOccurrenceChange={setEndOccurrence}
-              />
-            </>
-          ) : null}
-          {mode.startsWith('weekly') ? (
-            <fieldset className="flex flex-wrap gap-3 @2xl:col-span-2">
-              <legend className="text-on-surface-variant text-label-medium mb-1">Weekdays</legend>
-              {WEEKDAYS.map((label, day) => (
-                <label
-                  key={label}
-                  className="text-on-surface text-label-large flex min-h-10 items-center gap-1"
-                >
-                  <input
-                    type="checkbox"
-                    checked={weekdays.includes(day)}
-                    onChange={(event) => {
-                      setWeekdays((current) =>
-                        event.target.checked
-                          ? [...current, day].sort()
-                          : current.filter((value) => value !== day),
-                      );
-                    }}
-                  />
-                  {label}
-                </label>
-              ))}
-            </fieldset>
-          ) : null}
-          {error ? (
-            <p role="alert" className="text-error text-body-small @2xl:col-span-2">
-              {error}
-            </p>
-          ) : null}
-          <DialogFooter className="@2xl:col-span-2">
+            {mode.startsWith('weekly') ? (
+              <div className="text-on-surface-variant text-label-medium flex flex-col gap-1">
+                <span>Ends</span>
+                <DatePicker
+                  ariaLabel="End date"
+                  placeholder="No end date"
+                  triggerVariant="outline"
+                  value={effectiveUntil || null}
+                  min={date || undefined}
+                  onChange={(nextDate) => {
+                    setEffectiveUntil(nextDate ?? '');
+                  }}
+                />
+              </div>
+            ) : null}
+            {mode.endsWith('timed') ? (
+              <>
+                <CalendarTimeField
+                  label="Start"
+                  inputType="time"
+                  date={date}
+                  value={startTime}
+                  displayTimezone={timezone}
+                  occurrence={startOccurrence}
+                  onValueChange={(value) => {
+                    setStartTime(value);
+                    setStartOccurrence(null);
+                  }}
+                  onOccurrenceChange={setStartOccurrence}
+                />
+                <CalendarTimeField
+                  label="End"
+                  inputType="time"
+                  date={date}
+                  value={endTime}
+                  displayTimezone={timezone}
+                  occurrence={endOccurrence}
+                  onValueChange={(value) => {
+                    setEndTime(value);
+                    setEndOccurrence(null);
+                  }}
+                  onOccurrenceChange={setEndOccurrence}
+                />
+              </>
+            ) : null}
+            {mode.startsWith('weekly') ? (
+              <fieldset className="flex flex-wrap gap-3 @2xl:col-span-2">
+                <legend className="text-on-surface-variant text-label-medium mb-1">Weekdays</legend>
+                {WEEKDAYS.map((label, day) => (
+                  <label
+                    key={label}
+                    className="text-on-surface text-label-large flex min-h-10 items-center gap-1"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={weekdays.includes(day)}
+                      onChange={(event) => {
+                        setWeekdays((current) =>
+                          event.target.checked
+                            ? [...current, day].sort()
+                            : current.filter((value) => value !== day),
+                        );
+                      }}
+                    />
+                    {label}
+                  </label>
+                ))}
+              </fieldset>
+            ) : null}
+            {error ? (
+              <p role="alert" className="text-error text-body-small @2xl:col-span-2">
+                {error}
+              </p>
+            ) : null}
+          </DialogBody>
+          <DialogFooter>
             <DialogClose asChild>
               <Button type="button" variant="ghost" disabled={pending}>
                 Cancel

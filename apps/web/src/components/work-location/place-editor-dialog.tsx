@@ -6,6 +6,7 @@ import { MapPin } from '@docket/ui/icons';
 import {
   Button,
   Dialog,
+  DialogBody,
   DialogClose,
   DialogContent,
   DialogDescription,
@@ -84,51 +85,53 @@ export function PlaceEditorDialog({
         if (!pending) onOpenChange(next);
       }}
     >
-      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-xl">
+      <DialogContent presentation={{ kind: 'centered', size: 'large', height: 'tall' }}>
         <DialogHeader>
           <DialogTitle>{place ? 'Edit place' : 'Add place'}</DialogTitle>
           <DialogDescription>
             A name is enough. Add an address or map location when it helps you recognize the place.
           </DialogDescription>
         </DialogHeader>
-        <form className="flex flex-col gap-4" onSubmit={submit}>
-          <label className="text-on-surface-variant text-label-medium flex flex-col gap-1">
-            Name
-            <Input
-              autoFocus
-              maxLength={120}
-              value={name}
-              placeholder="Main library"
-              onChange={(event) => {
-                setName(event.target.value);
-              }}
-            />
-          </label>
-          <label className="text-on-surface-variant text-label-medium flex flex-col gap-1">
-            Address (optional)
-            <Input
-              maxLength={240}
-              value={address}
-              placeholder="10 Library Lane"
-              onChange={(event) => {
-                setAddress(event.target.value);
-              }}
-            />
-          </label>
-          <div className="flex flex-col gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              className="self-start"
-              onClick={() => {
-                setMapOpen((current) => !current);
-              }}
-            >
-              <MapPin aria-hidden="true" />
-              {mapOpen ? 'Hide map' : point ? 'Change map location' : 'Choose on map'}
-            </Button>
-            {mapOpen ? <PlaceMapPicker value={point} onChange={setPoint} /> : null}
-          </div>
+        <form className="contents" onSubmit={submit}>
+          <DialogBody className="flex flex-col gap-4">
+            <label className="text-on-surface-variant text-label-medium flex flex-col gap-1">
+              Name
+              <Input
+                autoFocus
+                maxLength={120}
+                value={name}
+                placeholder="Main library"
+                onChange={(event) => {
+                  setName(event.target.value);
+                }}
+              />
+            </label>
+            <label className="text-on-surface-variant text-label-medium flex flex-col gap-1">
+              Address (optional)
+              <Input
+                maxLength={240}
+                value={address}
+                placeholder="10 Library Lane"
+                onChange={(event) => {
+                  setAddress(event.target.value);
+                }}
+              />
+            </label>
+            <div className="flex flex-col gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                className="self-start"
+                onClick={() => {
+                  setMapOpen((current) => !current);
+                }}
+              >
+                <MapPin aria-hidden="true" />
+                {mapOpen ? 'Hide map' : point ? 'Change map location' : 'Choose on map'}
+              </Button>
+              {mapOpen ? <PlaceMapPicker value={point} onChange={setPoint} /> : null}
+            </div>
+          </DialogBody>
           <DialogFooter>
             <DialogClose asChild>
               <Button type="button" variant="ghost" disabled={pending}>

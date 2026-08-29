@@ -228,6 +228,8 @@ export interface AgentSurfaceAdapter<P extends AgentSurfaceProvider> {
     verification: SurfaceTypes<P>['verification'],
   ): Promise<VerifiedWebhook<SurfaceTypes<P>['webhook']>>;
 
+  route(input: VerifiedWebhook<SurfaceTypes<P>['webhook']>): AgentSurfaceRoute;
+
   normalize(
     input: VerifiedWebhook<SurfaceTypes<P>['webhook']>,
     install: SurfaceTypes<P>['install'],

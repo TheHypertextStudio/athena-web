@@ -35,6 +35,11 @@ export interface VerifiedWebhook<TPayload extends object> {
   readonly payload: TPayload;
 }
 
+/** Installation-routing key extracted from a verified provider delivery. */
+export interface AgentSurfaceRoute {
+  readonly workspaceId: string;
+}
+
 /** An external person reference that can be mapped to a Docket actor. */
 export interface CanonicalExternalActor {
   readonly externalId: string;
@@ -166,6 +171,7 @@ export interface AgentSurfaceAdapter<
     input: RawWebhook,
     verification: F['verification'],
   ): Promise<VerifiedWebhook<F['webhook']>>;
+  route(input: VerifiedWebhook<F['webhook']>): AgentSurfaceRoute;
   normalize(
     input: VerifiedWebhook<F['webhook']>,
     install: F['install'],

@@ -137,6 +137,9 @@ export const githubAgentSurface: AgentSurfaceAdapter<'github', GitHubSurfaceType
     }
     return { deliveryId, eventType, payload: githubWebhookSchema.parse(JSON.parse(input.body)) };
   },
+  route(input) {
+    return { workspaceId: String(input.payload.installation.id) };
+  },
   async normalize(input, install) {
     const payload = input.payload;
     const workItem = payload.pull_request ?? payload.issue;

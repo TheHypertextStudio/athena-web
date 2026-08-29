@@ -36,6 +36,7 @@ import cron from './routes/cron';
 import inboundMail from './routes/inbound-mail';
 import ingest from './routes/ingest';
 import ingestLinearAgent from './routes/ingest-linear-agent';
+import ingestAgentSurface from './routes/ingest-agent-surface';
 import twilioVoice from './routes/twilio-voice';
 import internalNotifications from './routes/internal-notifications';
 import internalAthenaExecution from './routes/internal-athena-execution';
@@ -147,6 +148,7 @@ server.get('/.well-known/mcp-client.json', (c) =>
 // session-gated by `requireAuth` (which only guards the `/v1` app).
 server.route('/internal/billing', webhooks);
 server.route('/internal/ingest', ingest);
+server.route('/internal/ingest/agents', ingestAgentSurface);
 // A separate Hono sub-app mounted at the same `/internal/ingest` prefix as `ingest` above (its
 // own dedicated handler, not a third case bolted onto `ingest.ts`'s Observer pipeline — see
 // `ingest-linear-agent.ts`'s module remarks): together they cover `/linear`, `/github`, and

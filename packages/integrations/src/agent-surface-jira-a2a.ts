@@ -109,6 +109,9 @@ export const jiraA2aAgentSurface: AgentSurfaceAdapter<'jira_a2a', JiraA2ASurface
     const deliveryId = headerRequestId ?? String(payload.id);
     return { deliveryId, eventType: payload.method, payload };
   },
+  route(input) {
+    return { workspaceId: input.payload.params.contextId };
+  },
   async normalize(input, install) {
     const payload = input.payload;
     if (payload.params.contextId !== install.siteId)

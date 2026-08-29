@@ -39,6 +39,40 @@ describe('agent surface registry', () => {
     expect(agentSurfaceFor(provider).provider).toBe('slack');
   });
 
+  it('routes a verified delivery before installation loading', () => {
+    expect(
+      agentSurfaceFor('linear').route({
+        deliveryId: 'linear-delivery',
+        eventType: 'created',
+        payload: {
+          action: 'created',
+          organizationId: 'linear-workspace',
+          webhookTimestamp: now.getTime(),
+          agentSession: { id: 'linear-session' },
+          actor: { id: 'linear-user' },
+        },
+      }),
+    ).toEqual({ workspaceId: 'linear-workspace' });
+    expect(
+      agentSurfaceFor('slack').route({
+        deliveryId: 'slack-delivery',
+        eventType: 'event_callback',
+        payload: {
+          type: 'event_callback',
+          team_id: 'slack-team',
+          event_id: 'slack-delivery',
+          event: {
+            type: 'app_mention',
+            user: 'U1',
+            text: '<@B1> help',
+            channel: 'C1',
+            ts: '1.1',
+          },
+        },
+      }),
+    ).toEqual({ workspaceId: 'slack-team' });
+  });
+
   it('verifies and normalizes a Linear session start', async () => {
     vi.setSystemTime(now);
     const body = JSON.stringify({

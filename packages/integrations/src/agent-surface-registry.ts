@@ -19,7 +19,10 @@ export type AgentSurfaceRegistry = DefineSurfaceRegistry<{
 }>;
 
 /** The provider-specific wire family associated with `P`. */
-export type SurfaceTypes<P extends AgentSurfaceProvider> = AgentSurfaceRegistry[P];
+export type SurfaceTypes<P extends AgentSurfaceProvider> = Extract<
+  AgentSurfaceRegistry[P],
+  SurfaceTypeFamily<P>
+>;
 
 type SurfaceAdapterRegistry = {
   readonly [P in AgentSurfaceProvider]: AgentSurfaceAdapter<
@@ -27,6 +30,12 @@ type SurfaceAdapterRegistry = {
     Extract<SurfaceTypes<P>, SurfaceTypeFamily<P>>
   >;
 };
+
+/** The adapter type associated with one provider key. */
+export type SurfaceAdapterFor<P extends AgentSurfaceProvider> = AgentSurfaceAdapter<
+  P,
+  SurfaceTypes<P>
+>;
 
 /** Closed runtime registry for every supported external agent surface. */
 export const agentSurfaceAdapters = {
@@ -37,8 +46,9 @@ export const agentSurfaceAdapters = {
 } satisfies SurfaceAdapterRegistry;
 
 /** Return the adapter associated with one provider while preserving its generic key. */
-export function agentSurfaceFor<P extends AgentSurfaceProvider>(
-  provider: P,
-): (typeof agentSurfaceAdapters)[P] {
-  return agentSurfaceAdapters[provider];
+export function agentSurfaceFor<P extends AgentSurfaceProvider>(provider: P): SurfaceAdapterFor<P> {
+  // TypeScript loses the mapped key/value correlation when a generic key indexes a concrete
+  // object. The registry's `satisfies SurfaceAdapterRegistry` check above proves the association;
+  // this one cast restores that already-checked fact for generic callers.
+  return agentSurfaceAdapters[provider] as SurfaceAdapterFor<P>;
 }

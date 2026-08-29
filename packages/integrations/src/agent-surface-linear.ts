@@ -126,12 +126,13 @@ export const linearAgentSurface: AgentSurfaceAdapter<'linear', LinearSurfaceType
     }
     const payload = linearWebhookSchema.parse(JSON.parse(input.body));
     return {
-      deliveryId:
-        payload.agentActivity?.id ??
-        `${payload.agentSession.id}:${payload.action}:${payload.webhookTimestamp}`,
+      deliveryId: payload.agentActivity?.id ?? `${payload.agentSession.id}:${payload.action}`,
       eventType: payload.action,
       payload,
     };
+  },
+  route(input) {
+    return { workspaceId: input.payload.organizationId };
   },
   async normalize(input) {
     const payload = input.payload;

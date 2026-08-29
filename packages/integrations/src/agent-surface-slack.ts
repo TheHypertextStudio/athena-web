@@ -192,6 +192,12 @@ export const slackAgentSurface: AgentSurfaceAdapter<'slack', SlackSurfaceTypes> 
         : `${payload.message.ts}:${payload.actions[0]?.action_ts ?? 'interaction'}`;
     return { deliveryId, eventType: payload.type, payload };
   },
+  route(input) {
+    return {
+      workspaceId:
+        input.payload.type === 'event_callback' ? input.payload.team_id : input.payload.team.id,
+    };
+  },
   async normalize(input, install) {
     const payload = input.payload;
     if (payload.type === 'block_actions') {

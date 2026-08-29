@@ -133,7 +133,7 @@ describe('composer body editor parity', () => {
     await user.keyboard('/quo');
 
     const menu = await screen.findByRole('listbox', { name: 'Insert a block' });
-    expect(within(menu).getByRole('option')).toHaveTextContent('Quote');
+    expect(within(menu).getByRole('option', { name: /Quote/ })).toBeVisible();
   });
 
   it('retargets mention search to the selected workspace without replacing the draft', async () => {

@@ -553,7 +553,7 @@ describe('CreateTaskDialog — robust composer', () => {
       expect(templatesGet).toHaveBeenCalled();
     });
 
-    expect(screen.getByLabelText('Task title').closest('form')).toHaveClass('pt-5');
+    expect(document.querySelector('[data-composer-context-row]')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Start from template' })).toBeNull();
   });
 
@@ -566,15 +566,12 @@ describe('CreateTaskDialog — robust composer', () => {
 
     const team = screen.getByRole('button', { name: /Team — currently General/ });
     const title = screen.getByLabelText('Task title');
-    const contextRow = team.closest('div.flex.items-center.gap-2');
 
     expect(team).toBeVisible();
-    expect(contextRow).not.toHaveClass('has-[>div:empty]:hidden');
     expect(team.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(title.closest('form')).toHaveClass('pt-3');
   });
 
-  it('keeps compact title spacing for a legacy template-only composer with a template', async () => {
+  it('does not add a legacy context row to a template-only composer', async () => {
     templatesGet.mockResolvedValue(
       jsonResponse(true, {
         items: [taskTemplate('My template', 'personal', ADA_ID, null)],
@@ -586,7 +583,7 @@ describe('CreateTaskDialog — robust composer', () => {
     const title = screen.getByLabelText('Task title');
 
     expect(title.compareDocumentPosition(template) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(title.closest('form')).toHaveClass('pt-5');
+    expect(document.querySelector('[data-composer-context-row]')).toBeNull();
   });
 
   it.each(BLOCKED_DESTINATIONS)('disables submission when %s', async (_reason, destination) => {

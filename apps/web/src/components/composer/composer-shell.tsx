@@ -24,7 +24,15 @@
  * is a single flat surface (`surface-container-high`); structure comes from the borderless tonal
  * property pills, not from extra surfaces or outlines.
  */
-import { Button, Dialog, DialogContent, DialogTitle } from '@docket/ui/primitives';
+import {
+  Button,
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@docket/ui/primitives';
 import { Maximize } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { type JSX, type ReactNode, type RefObject, useId, useState } from 'react';
@@ -219,7 +227,7 @@ export function ComposerShell({
         onSubmit={() => {
           if (canSubmit && !creating) onSubmit();
         }}
-        className="bg-surface-container-low mt-3 flex min-h-28 flex-1 flex-col overflow-y-auto overscroll-contain rounded-lg p-3 [&>div]:flex-1"
+        className="bg-surface-container-low mt-3 flex min-h-28 flex-1 flex-col rounded-lg p-3 [&>div]:flex-1"
       />
     );
 
@@ -248,10 +256,7 @@ export function ComposerShell({
       }}
     >
       <DialogContent
-        className={cn(
-          'h-[min(34rem,75dvh)] max-w-2xl gap-0 overflow-hidden p-0 transition-[height] duration-(--dur-slow) ease-(--ease-in-out) motion-reduce:transition-none',
-          expanded && 'h-[min(48rem,85dvh)]',
-        )}
+        presentation={{ kind: 'centered', size: 'wide', height: expanded ? 'tall' : 'medium' }}
         aria-describedby={undefined}
         // The whole form goes inert while a create is in flight. Without this, assistive tech has
         // no way to tell that apart from a form that is simply not editable.
@@ -309,171 +314,180 @@ export function ComposerShell({
         ) : null}
 
         {/* A composer owns its destination context. Template actions belong inside the editor. */}
-        {contextRow !== undefined ? (
-          <div data-composer-context-row="" className="min-w-0 px-6 pt-5">
-            <EntityMetadataRow ariaLabel="Composer context" className="text-label-large min-w-0">
-              {contextRow}
-            </EntityMetadataRow>
-          </div>
-        ) : icon || context ? (
-          <div
-            className={cn(
-              'flex items-center gap-2 px-6 pt-5 pr-16 text-sm has-[>div:only-child:empty]:hidden',
-              !legacyContextVisible && 'hidden',
-            )}
-          >
-            {icon ? (
-              <span className="border-outline-variant text-on-surface-variant flex size-5 shrink-0 items-center justify-center rounded-md border [&_svg]:size-4">
-                {icon}
-              </span>
-            ) : null}
-            {context ? (
-              <span className="text-on-surface-variant min-w-0 truncate">{context}</span>
-            ) : null}
-          </div>
-        ) : null}
-
-        {/* Content: the title + description own the bulk of the dialog. */}
         <form
           id={formId}
           onSubmit={(event) => {
             event.preventDefault();
             if (canSubmit && !creating) onSubmit();
           }}
-          className={cn(
-            'flex min-h-0 flex-1 flex-col px-6',
-            contextRow !== undefined || legacyContextVisible ? 'pt-3' : 'pt-5',
-          )}
+          className="contents"
         >
-          {leadingFields ? (
-            <fieldset disabled={editDisabled} className="flex flex-col gap-3 pb-4">
-              {leadingFields}
-            </fieldset>
-          ) : null}
-
-          {/* Header block: the title, and — when opted in — an inline subtitle, read as one document. */}
-          <div className="flex flex-col gap-1 pb-3">
-            <input
-              aria-label={titlePlaceholder}
-              placeholder={titlePlaceholder}
-              value={title}
-              ref={titleInputRef}
-              disabled={editDisabled}
-              autoFocus
-              onChange={(event) => {
-                onTitleChange(event.target.value);
-              }}
-              className="placeholder:text-on-surface-variant text-on-surface w-full bg-transparent text-lg font-medium tracking-tight outline-none disabled:opacity-50"
-            />
-            {onSummaryChange ? (
-              <input
-                aria-label={summaryPlaceholder ?? 'Summary'}
-                placeholder={summaryPlaceholder}
-                maxLength={summaryMaxLength}
-                value={summary ?? ''}
-                disabled={editDisabled}
-                onChange={(event) => {
-                  onSummaryChange(event.target.value);
-                }}
-                className="placeholder:text-on-surface-variant text-on-surface-variant w-full bg-transparent text-base outline-none disabled:opacity-50"
-              />
-            ) : null}
-          </div>
-
-          {bodyEditor !== null ? (
-            <>
-              {/*
-               * The background/padding lives on the editor's own surface, not a wrapping div —
-               * that surface is what already turns a click anywhere inside it (including the
-               * padding) into a focus. A separate padded wrapper would look identical but leave
-               * its own inset dead: clicking there would land on this div instead of the editor,
-               * and nothing would happen. `p-3`, not `px-3 py-2`, so the inset reads the same on
-               * every side.
-               */}
-              {mentionOrgId === undefined ? (
-                bodyEditor
-              ) : (
-                <MentionHydrationProvider orgId={mentionOrgId}>
-                  {bodyEditor}
-                </MentionHydrationProvider>
-              )}
-            </>
-          ) : null}
-        </form>
-
-        {/* Properties: one compact row of Linear-style pills. */}
-        <div className="flex flex-col gap-2 px-6 pt-2 pb-4">
-          {propertyLayout === 'compact' ? (
-            <PropertyStrip ariaLabel={propertyAriaLabel}>{children}</PropertyStrip>
-          ) : (
-            children
-          )}
-          {error ? (
-            <p role="alert" className="text-error text-body-medium">
-              {error}
-            </p>
-          ) : null}
-        </div>
-
-        {/* Action row: flat with the panel — a single primary action, or the discard confirmation. */}
-        <div className="flex items-center gap-2 px-6 py-3">
-          {confirmingDiscard ? (
-            <>
-              <span className="text-on-surface-variant text-body-medium mr-auto">
-                Discard this draft?
-              </span>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => {
-                  setConfirmingDiscard(false);
-                }}
-              >
-                Keep editing
-              </Button>
-              <Button type="button" variant="destructive" onClick={discard}>
-                Discard
-              </Button>
-            </>
-          ) : (
-            <>
-              {continuation ? (
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={continuation.checked}
-                  disabled={editDisabled}
-                  onClick={() => {
-                    continuation.onCheckedChange(!continuation.checked);
-                  }}
-                  className="text-on-surface-variant hover:bg-surface-container-high text-label-large mr-auto inline-flex h-8 items-center gap-2 rounded-md px-2 disabled:opacity-50"
+          <DialogHeader inset="standard" className="relative min-w-0 pb-3">
+            {contextRow !== undefined ? (
+              <div data-composer-context-row="" className="min-w-0">
+                <EntityMetadataRow
+                  ariaLabel="Composer context"
+                  className="text-label-large min-w-0"
                 >
-                  <span
-                    aria-hidden="true"
-                    className={cn(
-                      'bg-outline-variant inline-flex h-4 w-7 shrink-0 items-center rounded-full p-0.5 transition-colors',
-                      continuation.checked && 'bg-primary justify-end',
-                    )}
-                  >
-                    <span className="bg-surface h-3 w-3 rounded-full" />
-                  </span>
-                  Create more
-                </button>
-              ) : null}
-              <Button
-                type="submit"
-                form={formId}
-                // Blocked only against submitting the same draft twice; `aria-busy` is what says
-                // the first one is under way, so the state is announced rather than merely drawn.
-                disabled={creating || !canSubmit}
-                aria-busy={creating}
-                className={continuation ? undefined : 'ml-auto'}
+                  {contextRow}
+                </EntityMetadataRow>
+              </div>
+            ) : icon || context ? (
+              <div
+                className={cn(
+                  'flex items-center gap-2 pr-16 text-sm has-[>div:only-child:empty]:hidden',
+                  !legacyContextVisible && 'hidden',
+                )}
               >
-                {creating ? 'Creating…' : submitLabel}
-              </Button>
-            </>
-          )}
-        </div>
+                {icon ? (
+                  <span className="border-outline-variant text-on-surface-variant flex size-5 shrink-0 items-center justify-center rounded-md border [&_svg]:size-4">
+                    {icon}
+                  </span>
+                ) : null}
+                {context ? (
+                  <span className="text-on-surface-variant min-w-0 truncate">{context}</span>
+                ) : null}
+              </div>
+            ) : null}
+
+            {/* Content: the title + description own the bulk of the dialog. */}
+            <div
+              className={cn(
+                'flex min-h-0 flex-col',
+                contextRow !== undefined || legacyContextVisible ? 'pt-3' : '',
+              )}
+            >
+              {leadingFields ? (
+                <fieldset disabled={editDisabled} className="flex flex-col gap-3 pb-4">
+                  {leadingFields}
+                </fieldset>
+              ) : null}
+
+              {/* Header block: the title, and — when opted in — an inline subtitle, read as one document. */}
+              <div className="flex flex-col gap-1 pb-3">
+                <input
+                  aria-label={titlePlaceholder}
+                  placeholder={titlePlaceholder}
+                  value={title}
+                  ref={titleInputRef}
+                  disabled={editDisabled}
+                  autoFocus
+                  onChange={(event) => {
+                    onTitleChange(event.target.value);
+                  }}
+                  className="placeholder:text-on-surface-variant text-on-surface w-full bg-transparent text-lg font-medium tracking-tight outline-none disabled:opacity-50"
+                />
+                {onSummaryChange ? (
+                  <input
+                    aria-label={summaryPlaceholder ?? 'Summary'}
+                    placeholder={summaryPlaceholder}
+                    maxLength={summaryMaxLength}
+                    value={summary ?? ''}
+                    disabled={editDisabled}
+                    onChange={(event) => {
+                      onSummaryChange(event.target.value);
+                    }}
+                    className="placeholder:text-on-surface-variant text-on-surface-variant w-full bg-transparent text-base outline-none disabled:opacity-50"
+                  />
+                ) : null}
+              </div>
+            </div>
+          </DialogHeader>
+
+          <DialogBody inset="standard" className="flex flex-col gap-2 pt-2">
+            {bodyEditor !== null ? (
+              <>
+                {/*
+                 * The background/padding lives on the editor's own surface, not a wrapping div —
+                 * that surface is what already turns a click anywhere inside it (including the
+                 * padding) into a focus. A separate padded wrapper would look identical but leave
+                 * its own inset dead: clicking there would land on this div instead of the editor,
+                 * and nothing would happen. `p-3`, not `px-3 py-2`, so the inset reads the same on
+                 * every side.
+                 */}
+                {mentionOrgId === undefined ? (
+                  bodyEditor
+                ) : (
+                  <MentionHydrationProvider orgId={mentionOrgId}>
+                    {bodyEditor}
+                  </MentionHydrationProvider>
+                )}
+              </>
+            ) : null}
+
+            {/* Properties: one compact row of Linear-style pills. */}
+            {propertyLayout === 'compact' ? (
+              <PropertyStrip ariaLabel={propertyAriaLabel}>{children}</PropertyStrip>
+            ) : (
+              children
+            )}
+            {error ? (
+              <p role="alert" className="text-error text-body-medium">
+                {error}
+              </p>
+            ) : null}
+          </DialogBody>
+
+          {/* Action row: flat with the panel — a single primary action, or the discard confirmation. */}
+          <DialogFooter inset="standard" className="flex-row items-center gap-2">
+            {confirmingDiscard ? (
+              <>
+                <span className="text-on-surface-variant text-body-medium mr-auto">
+                  Discard this draft?
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    setConfirmingDiscard(false);
+                  }}
+                >
+                  Keep editing
+                </Button>
+                <Button type="button" variant="destructive" onClick={discard}>
+                  Discard
+                </Button>
+              </>
+            ) : (
+              <>
+                {continuation ? (
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={continuation.checked}
+                    disabled={editDisabled}
+                    onClick={() => {
+                      continuation.onCheckedChange(!continuation.checked);
+                    }}
+                    className="text-on-surface-variant hover:bg-surface-container-high text-label-large mr-auto inline-flex h-8 items-center gap-2 rounded-md px-2 disabled:opacity-50"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        'bg-outline-variant inline-flex h-4 w-7 shrink-0 items-center rounded-full p-0.5 transition-colors',
+                        continuation.checked && 'bg-primary justify-end',
+                      )}
+                    >
+                      <span className="bg-surface h-3 w-3 rounded-full" />
+                    </span>
+                    Create more
+                  </button>
+                ) : null}
+                <Button
+                  type="submit"
+                  form={formId}
+                  // Blocked only against submitting the same draft twice; `aria-busy` is what says
+                  // the first one is under way, so the state is announced rather than merely drawn.
+                  disabled={creating || !canSubmit}
+                  aria-busy={creating}
+                  className={continuation ? undefined : 'ml-auto'}
+                >
+                  {creating ? 'Creating…' : submitLabel}
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

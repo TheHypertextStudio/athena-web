@@ -80,23 +80,40 @@ function RailDestination({
   const Icon = destination.icon;
   const label = destinationLabel(destination, unreadCount ?? 0);
   const className = cn(
-    'group text-label-medium flex min-h-[3.75rem] w-full flex-col items-center justify-center gap-1 rounded-none px-1 py-1 text-center transition-colors hover:bg-transparent focus-visible:ring-0 focus-visible:outline-none',
-    destination.active ? 'text-on-surface' : 'text-on-surface-variant hover:text-on-surface',
+    'group text-label-medium flex min-h-16 w-full flex-col items-center justify-center gap-1 rounded-none px-1 py-1 text-center hover:bg-transparent focus-visible:ring-0 focus-visible:outline-none',
   );
   const content = (
     <>
       <span
         data-slot="navigation-rail-active-indicator"
         className={cn(
-          'group-focus-visible:ring-ring flex h-8 w-14 shrink-0 items-center justify-center rounded-full transition-colors group-focus-visible:ring-2',
+          'group-focus-visible:ring-secondary relative flex h-8 w-14 shrink-0 items-center justify-center rounded-full transition-colors duration-(--dur-fast) ease-(--ease-out) group-focus-visible:ring-3',
           destination.active
-            ? 'bg-secondary-container text-on-secondary-container group-active:bg-secondary-container/80'
-            : 'group-hover:bg-surface-container-high group-active:bg-surface-container-highest',
+            ? 'bg-secondary-container text-on-secondary-container'
+            : 'text-on-surface-variant',
         )}
       >
-        <Icon aria-hidden="true" className="size-6" />
+        <span
+          data-slot="navigation-rail-state-layer"
+          aria-hidden="true"
+          className={cn(
+            'pointer-events-none absolute inset-0 rounded-full transition-opacity duration-(--dur-fast) ease-(--ease-out)',
+            destination.active
+              ? 'bg-primary opacity-0 group-hover:opacity-4 group-focus-visible:opacity-12 group-hover:group-focus-visible:opacity-16 group-active:opacity-8'
+              : 'bg-on-surface opacity-0 group-hover:opacity-4 group-focus-visible:opacity-12 group-hover:group-focus-visible:opacity-16 group-active:opacity-8',
+          )}
+        />
+        <Icon aria-hidden="true" className="relative size-6" />
       </span>
-      <span className="max-w-full truncate">{destination.label}</span>
+      <span
+        data-slot="navigation-rail-label"
+        className={cn(
+          'max-w-full truncate',
+          destination.active ? 'text-secondary' : 'text-on-surface-variant',
+        )}
+      >
+        {destination.label}
+      </span>
     </>
   );
 
@@ -187,7 +204,7 @@ export function NavigationRail({
 
       <div className="min-h-0 w-full flex-1 overflow-y-auto pt-2">
         <nav aria-label="Primary navigation" className="w-full">
-          <div className="flex flex-col gap-0">
+          <div className="flex flex-col gap-1">
             {railDestinations.map((destination) => (
               <div
                 key={destination.id}

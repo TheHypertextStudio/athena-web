@@ -24,7 +24,7 @@ async function expectNoHorizontalOverflow(page: Page): Promise<void> {
   expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth + 1);
 }
 
-/** Assert that every collapsed-navigation pixel, including shell spacing, fits the MD3 width. */
+/** Assert that every collapsed-navigation pixel fits Docket's approved compact-width override. */
 async function expectCollapsedNavigationRegion(page: Page): Promise<void> {
   const geometry = await page.evaluate(() => {
     const main = document.querySelector<HTMLElement>('main#main-content');
@@ -43,24 +43,57 @@ async function expectCollapsedNavigationRegion(page: Page): Promise<void> {
 /** Assert the role-specific hit boxes and the one visual state layer used by each rail destination. */
 async function expectRailInteractionGeometry(page: Page): Promise<void> {
   const primary = page.getByRole('navigation', { name: 'Primary navigation' });
+  const selectedDestination = primary.getByRole('link', { name: 'Today', exact: true });
+  const selectedIndicator = selectedDestination.locator(
+    '[data-slot="navigation-rail-active-indicator"]',
+  );
+  const selectedLabel = selectedDestination.locator('[data-slot="navigation-rail-label"]');
   const destination = primary.getByRole('link', { name: 'Calendar', exact: true });
   const indicator = destination.locator('[data-slot="navigation-rail-active-indicator"]');
+  const stateLayer = destination.locator('[data-slot="navigation-rail-state-layer"]');
+  const label = destination.locator('[data-slot="navigation-rail-label"]');
   const expand = page.getByRole('button', { name: 'Expand navigation' });
   const workspace = page.getByRole('button', { name: /Switch workspace/ });
   const workspaceAvatar = workspace.locator('[data-slot="workspace-avatar"]');
   const account = page.getByRole('button', { name: 'Account menu' });
 
-  await expect(destination).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-  const restIndicatorColor = await indicator.evaluate(
-    (element) => getComputedStyle(element).backgroundColor,
+  const selectionPaint = await page.evaluate(() => {
+    const resolveColor = (property: string): string => {
+      const probe = document.createElement('span');
+      probe.style.color = `var(${property})`;
+      document.body.append(probe);
+      const color = getComputedStyle(probe).color;
+      probe.remove();
+      return color;
+    };
+    return {
+      indicator: resolveColor('--color-secondary-container'),
+      icon: resolveColor('--color-on-secondary-container'),
+      label: resolveColor('--color-secondary'),
+    };
+  });
+  await expect(selectedIndicator).toHaveCSS('background-color', selectionPaint.indicator);
+  await expect(selectedIndicator.locator('svg')).toHaveCSS('color', selectionPaint.icon);
+  await expect(selectedLabel).toHaveCSS('color', selectionPaint.label);
+  expect(await selectedLabel.evaluate((element) => getComputedStyle(element).fontWeight)).toBe(
+    await label.evaluate((element) => getComputedStyle(element).fontWeight),
   );
+
+  await expect(destination).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  await expect(stateLayer).toHaveCSS('opacity', '0');
   await destination.hover();
   await expect(destination).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-  await expect
-    .poll(() => indicator.evaluate((element) => getComputedStyle(element).backgroundColor))
-    .not.toBe(restIndicatorColor);
+  await expect(stateLayer).toHaveCSS('opacity', '0.04');
+
+  await page.mouse.down();
+  await expect(stateLayer).toHaveCSS('opacity', '0.08');
+  await page.mouse.up();
 
   await destination.focus();
+  await page.keyboard.press('Shift+Tab');
+  await page.keyboard.press('Tab');
+  await expect(destination).toBeFocused();
+  await expect(stateLayer).toHaveCSS('opacity', '0.16');
   const focusPaint = await page.evaluate(() => {
     const link = document.querySelector<HTMLElement>(
       'nav[aria-label="Primary navigation"] a[aria-label="Calendar"]',
@@ -74,10 +107,15 @@ async function expectRailInteractionGeometry(page: Page): Promise<void> {
       indicatorShadow: getComputedStyle(stateLayer).boxShadow,
     };
   });
-  expect(focusPaint.destinationShadow).not.toContain('0px 0px 0px 2px');
-  expect(focusPaint.indicatorShadow).toContain('0px 0px 0px 2px');
+  expect(focusPaint.destinationShadow).not.toContain('0px 0px 0px 3px');
+  expect(focusPaint.indicatorShadow).toContain('0px 0px 0px 3px');
+
+  await page.mouse.move(500, 500);
+  await expect(stateLayer).toHaveCSS('opacity', '0.12');
 
   const boxes = await Promise.all([
+    selectedDestination.boundingBox(),
+    primary.getByRole('link', { name: 'My Work', exact: true }).boundingBox(),
     destination.boundingBox(),
     indicator.boundingBox(),
     expand.boundingBox(),
@@ -85,14 +123,19 @@ async function expectRailInteractionGeometry(page: Page): Promise<void> {
     workspaceAvatar.boundingBox(),
     account.boundingBox(),
   ]);
-  expect(boxes).toEqual([
-    expect.objectContaining({ width: 64, height: 60 }),
+  expect(boxes.slice(2)).toEqual([
+    expect.objectContaining({ width: 64, height: 64 }),
     expect.objectContaining({ width: 56, height: 32 }),
     expect.objectContaining({ width: 40, height: 40 }),
     expect.objectContaining({ width: 40, height: 40 }),
     expect.objectContaining({ width: 32, height: 32 }),
     expect.objectContaining({ width: 40, height: 40 }),
   ]);
+  const [firstDestination, secondDestination] = boxes;
+  if (!firstDestination || !secondDestination) {
+    throw new Error('The first two rail destinations must have measurable bounds');
+  }
+  expect(secondDestination.y - (firstDestination.y + firstDestination.height)).toBe(4);
 }
 
 /** Seed named recent documents for the visual pass after the real route observer is unit-tested. */

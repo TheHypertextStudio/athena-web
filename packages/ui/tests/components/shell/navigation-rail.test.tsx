@@ -55,7 +55,7 @@ describe('collapsed sidebar navigation rail', () => {
     expect(screen.queryByRole('link', { name: 'Projects' })).not.toBeInTheDocument();
   });
 
-  it('uses the baseline MD3 item and active-indicator geometry', () => {
+  it('uses the M3 Expressive item and active-indicator geometry', () => {
     renderRail();
 
     const primary = screen.getByRole('navigation', { name: 'Primary navigation' });
@@ -64,20 +64,54 @@ describe('collapsed sidebar navigation rail', () => {
     const indicator = today.querySelector('[data-slot="navigation-rail-active-indicator"]');
     const icon = indicator?.querySelector('svg');
 
-    expect(destinations).toHaveClass('gap-0');
-    expect(today).toHaveClass('min-h-[3.75rem]');
+    expect(destinations).toHaveClass('gap-1');
+    expect(today).toHaveClass('min-h-16');
     expect(indicator).toHaveClass('h-8', 'w-14', 'rounded-full');
     expect(icon).toHaveClass('size-6');
   });
 
-  it('paints destination interaction states on the indicator instead of the hit box', () => {
+  it('keeps selection on the indicator and selected label', () => {
     renderRail();
 
     const today = screen.getByRole('link', { name: 'Today' });
     const indicator = today.querySelector('[data-slot="navigation-rail-active-indicator"]');
+    const label = today.querySelector('[data-slot="navigation-rail-label"]');
 
     expect(today).toHaveClass('hover:bg-transparent', 'focus-visible:ring-0');
-    expect(indicator).toHaveClass('group-focus-visible:ring-2', 'group-focus-visible:ring-ring');
+    expect(indicator).toHaveClass('bg-secondary-container', 'text-on-secondary-container');
+    expect(label).toHaveClass('text-secondary');
+    expect(label).not.toHaveClass('font-semibold', 'font-bold');
+  });
+
+  it('paints M3 interaction layers and the focus ring on the indicator pill', () => {
+    renderRail();
+
+    const today = screen.getByRole('link', { name: 'Today' });
+    const calendar = screen.getByRole('link', { name: 'Calendar' });
+    const selectedIndicator = today.querySelector('[data-slot="navigation-rail-active-indicator"]');
+    const selectedLayer = today.querySelector('[data-slot="navigation-rail-state-layer"]');
+    const unselectedLayer = calendar.querySelector('[data-slot="navigation-rail-state-layer"]');
+
+    expect(selectedIndicator).toHaveClass(
+      'group-focus-visible:ring-3',
+      'group-focus-visible:ring-secondary',
+    );
+    expect(selectedLayer).toHaveClass(
+      'bg-primary',
+      'opacity-0',
+      'group-hover:opacity-4',
+      'group-active:opacity-8',
+      'group-focus-visible:opacity-12',
+      'group-hover:group-focus-visible:opacity-16',
+    );
+    expect(unselectedLayer).toHaveClass(
+      'bg-on-surface',
+      'opacity-0',
+      'group-hover:opacity-4',
+      'group-active:opacity-8',
+      'group-focus-visible:opacity-12',
+      'group-hover:group-focus-visible:opacity-16',
+    );
   });
 
   it('keeps the expand control at the 40px auxiliary-control target', () => {

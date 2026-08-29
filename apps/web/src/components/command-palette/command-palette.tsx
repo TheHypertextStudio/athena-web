@@ -1,9 +1,26 @@
 'use client';
 
 import { Command, Search, Tag, X } from '@docket/ui/icons';
-import { menuContentClass, menuLabel, Skeleton } from '@docket/ui/primitives';
-import { cn } from '@docket/ui/lib/utils';
-import { type JSX, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { MenuListbox, MenuSectionLabel } from '@docket/ui/components';
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  Skeleton,
+} from '@docket/ui/primitives';
+import {
+  Fragment,
+  type JSX,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 
@@ -48,9 +65,7 @@ const IGNORE_PANEL_REQUEST = (): undefined => undefined;
  * The unified Cmd/Ctrl+K command palette: search · navigate · actions · org switch.
  *
  * @remarks
- * A composed, accessible modal (no Dialog primitive exists in `@docket/ui`, so this is a
- * focus-trapped overlay built from primitives) that fuses four command kinds into one
- * keyboard-first list:
+ * A shared accessible dialog that fuses four command kinds into one keyboard-first list:
  *
  * - **Search** — debounced cross-org entity search via {@link useHubSearch}, each hit
  *   org-chipped and deep-linked into its originating org.
@@ -104,23 +119,16 @@ export function CommandPalette({
   const listboxId = useId();
   const baseRowId = useId();
 
-  // Whether the panel is mid-close (kept mounted briefly so its exit animation can play before
-  // unmount), matching the open/close motion the Dialog/Sheet/Dropdown primitives already use.
-  const [closing, setClosing] = useState(false);
-
-  // Reset transient state each time the palette opens, capture the opener, and focus the input.
+  // Reset transient state each time the palette opens and move focus to the input.
   // Keyed only on `open` so an `activeOrgId` change mid-session never re-runs this and steals
   // focus back to the input; the scope fallback below reads `activeOrgId` without depending on it.
   useEffect(() => {
     if (!open) return;
-    setClosing(false);
     setQuery('');
     setActiveId(null);
     restoreFocusOnCloseRef.current = true;
     // org-local is meaningless without a bound org → fall back to hub on the Hub.
     setScope((prev) => (activeOrgIdRef.current ? prev : 'hub'));
-    const active = document.activeElement;
-    openerRef.current = active instanceof HTMLElement ? active : null;
     const frame = requestAnimationFrame(() => inputRef.current?.focus());
     return () => {
       cancelAnimationFrame(frame);
@@ -215,10 +223,9 @@ export function CommandPalette({
     setActiveId,
     runItem,
     onClose: handlePaletteClose,
-    dialogRef,
   });
 
-  if (!open && !closing) return null;
+  if (!open) return null;
 
   /** Flat index of an item within `items`, for the row id + active marker. */
   const indexOf = (item: PaletteItem): number => items.indexOf(item);
@@ -246,47 +253,34 @@ export function CommandPalette({
   const showEmpty =
     !showNoOrgForMode && items.length === 0 && !showResultsSkeleton && !effectiveError;
 
-  // While closing, run the same `tw-animate-css` exit motion the Dialog/Sheet/Dropdown primitives
-  // use; on the panel's `animationend` we fully unmount by clearing the closing flag.
-  const motionState = open ? 'open' : 'closed';
-
   return (
-    <div
-      className="fixed inset-0 z-[120] flex items-start justify-center p-4 pt-[12vh]"
-      role="presentation"
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) onClose();
+      }}
     >
-      {/* Backdrop — `bg-black/40` (no blur) to match the Dialog/Sheet overlay treatment. */}
-      <button
-        type="button"
-        aria-label="Close command palette"
-        tabIndex={-1}
-        onClick={onClose}
-        data-state={motionState}
-        className="data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 absolute inset-0 bg-black/40"
-      />
-
-      {/* Dialog */}
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
+      <DialogContent
+        presentation={{ kind: 'top', size: 'large', height: 'tall' }}
+        showClose={false}
         aria-label="Command palette"
         onKeyDown={onKeyDown}
-        data-state={motionState}
-        onAnimationEnd={() => {
-          if (!open) setClosing(false);
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+          requestAnimationFrame(() => inputRef.current?.focus());
         }}
-        className={cn(
-          // The palette is a menu: same surface, corner, elevation, and motion as every other one.
-          menuContentClass('standard'),
-          // `gap-0` because the menu's 2dp row rhythm is for rows: the palette's three children
-          // are a bordered header, the scrolling list, and a bordered footer, and a gap between
-          // them would float those rules off the panel edges.
-          'relative flex max-h-[70vh] w-full max-w-xl flex-col gap-0 p-0',
-        )}
+        onEscapeKeyDown={(event) => {
+          if (mode === null) return;
+          event.preventDefault();
+          setQuery('');
+        }}
       >
         {/* Search input + scope toggle */}
-        <div className="border-outline-variant flex items-center gap-3 border-b px-4">
+        <DialogHeader
+          inset="compact"
+          className="border-outline-variant flex-row items-center gap-3 border-b"
+        >
+          <DialogTitle className="sr-only">Command palette</DialogTitle>
           {mode !== null ? (
             <button
               type="button"
@@ -337,10 +331,10 @@ export function CommandPalette({
               setActiveId(null);
             }}
           />
-        </div>
+        </DialogHeader>
 
         {/* Results list */}
-        <div className="min-h-0 flex-1 overflow-y-auto p-1">
+        <DialogBody inset="compact" className="flex flex-col gap-1">
           {effectiveError ? (
             <div
               role="alert"
@@ -386,10 +380,10 @@ export function CommandPalette({
           ) : null}
 
           {items.length > 0 ? (
-            <ul ref={listRef} role="listbox" id={listboxId} aria-label="Commands">
+            <MenuListbox ref={listRef} id={listboxId} ariaLabel="Commands">
               {grouped.map((group) => (
-                <li key={group.section} role="presentation">
-                  <p className={menuLabel('standard')}>
+                <Fragment key={group.section}>
+                  <MenuSectionLabel>
                     {group.label}
                     {group.section === 'results' && (modeResult ? modeResult.loading : loading)
                       ? ` · ${mode !== null ? 'loading…' : 'searching…'}`
@@ -416,12 +410,15 @@ export function CommandPalette({
                   </ul>
                 </li>
               ))}
-            </ul>
+            </MenuListbox>
           ) : null}
-        </div>
+        </DialogBody>
 
         {/* Footer hint bar */}
-        <div className="border-outline-variant text-on-surface-variant text-label-small flex items-center justify-between gap-3 border-t px-4 py-2">
+        <DialogFooter
+          inset="compact"
+          className="border-outline-variant flex-row justify-between gap-3 border-t sm:justify-between"
+        >
           <span className="flex items-center gap-1.5">
             <Command aria-hidden="true" className="size-5" />K to toggle
           </span>
@@ -430,8 +427,8 @@ export function CommandPalette({
             <span>↵ select</span>
             <span>esc close</span>
           </span>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

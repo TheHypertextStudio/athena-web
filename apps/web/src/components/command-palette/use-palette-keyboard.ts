@@ -1,4 +1,4 @@
-import { type KeyboardEvent, type RefObject, useCallback } from 'react';
+import { type KeyboardEvent, useCallback } from 'react';
 
 import type { PaletteItem } from './types';
 
@@ -8,7 +8,6 @@ interface UsePaletteKeyboardInput {
   setActiveId: (next: string | null) => void;
   runItem: (item: PaletteItem) => void;
   onClose: () => void;
-  dialogRef: RefObject<HTMLDivElement | null>;
 }
 
 interface UsePaletteKeyboardOutput {
@@ -23,7 +22,6 @@ export function usePaletteKeyboard({
   setActiveId,
   runItem,
   onClose,
-  dialogRef,
 }: UsePaletteKeyboardInput): UsePaletteKeyboardOutput {
   const runActive = useCallback(() => {
     const item = items.find((candidate) => candidate.id === activeId);
@@ -76,23 +74,6 @@ export function usePaletteKeyboard({
           event.preventDefault();
           onClose();
           break;
-        case 'Tab': {
-          const dialog = dialogRef.current;
-          if (!dialog) break;
-          const tabbables = Array.from(
-            dialog.querySelectorAll<HTMLElement>(
-              'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
-            ),
-          ).filter((el) => el.offsetParent !== null || el === document.activeElement);
-          if (tabbables.length === 0) break;
-          event.preventDefault();
-          const current = document.activeElement as HTMLElement | null;
-          const index = current ? tabbables.indexOf(current) : -1;
-          const delta = event.shiftKey ? -1 : 1;
-          const next = tabbables[(index + delta + tabbables.length) % tabbables.length];
-          next?.focus();
-          break;
-        }
         default:
           break;
       }

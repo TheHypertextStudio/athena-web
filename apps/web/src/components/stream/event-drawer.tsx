@@ -2,7 +2,16 @@
 
 /** `stream` — auditable exact-event inspection without timeline repetition. */
 import { OpenInNew, X } from '@docket/ui/icons';
-import { focusRing } from '@docket/ui/primitives';
+import {
+  Sheet,
+  SheetBody,
+  SheetClose,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  focusRing,
+} from '@docket/ui/primitives';
 import { cn } from '@docket/ui';
 import type { JSX } from 'react';
 
@@ -40,31 +49,35 @@ export function EventDrawer({ row, onClose }: EventDrawerProps): JSX.Element | n
   const href = streamHref(row);
   const detail = streamEventDetailLabel(row);
   return (
-    <div className="fixed inset-0 z-40" role="dialog" aria-modal="true" aria-label="Event details">
-      <button
-        type="button"
-        aria-label="Dismiss event details"
-        className="absolute inset-0 bg-black/25"
-        onClick={onClose}
-      />
-      <aside className="bg-surface border-outline-variant absolute top-0 right-0 flex h-full w-[420px] max-w-[92vw] flex-col border-l shadow-xl">
-        <header className="border-outline-variant flex min-h-14 items-center gap-2 border-b px-4 py-3">
+    <Sheet
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <SheetContent presentation="responsive-fullscreen" size="standard" side="right">
+        <SheetHeader className="border-outline-variant flex-row items-center gap-2 border-b">
+          <div className="min-w-0 flex-1">
+            <SheetTitle className="sr-only">Event details</SheetTitle>
+            <SheetDescription className="sr-only">Inspect the selected event.</SheetDescription>
+          </div>
           <ProviderBadge system={row.system} />
           <span className="text-on-surface-variant text-label-small">{KIND_LABEL[row.kind]}</span>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close event details"
-            className={cn(
-              'text-on-surface-variant hover:bg-surface-container ml-auto flex size-10 items-center justify-center rounded-full outline-none',
-              focusRing,
-            )}
-          >
-            <X className="size-4" aria-hidden="true" />
-          </button>
-        </header>
+          <SheetClose asChild>
+            <button
+              type="button"
+              aria-label="Close event details"
+              className={cn(
+                'text-on-surface-variant hover:bg-surface-container ml-auto flex size-10 items-center justify-center rounded-full outline-none',
+                focusRing,
+              )}
+            >
+              <X className="size-4" aria-hidden="true" />
+            </button>
+          </SheetClose>
+        </SheetHeader>
 
-        <div className="flex-1 overflow-auto p-5">
+        <SheetBody className="p-5">
           <h2 className="text-on-surface text-title-medium">{streamDescription(row)}</h2>
           <time
             dateTime={row.occurredAt}
@@ -102,8 +115,8 @@ export function EventDrawer({ row, onClose }: EventDrawerProps): JSX.Element | n
           <div className="border-outline-variant mt-5 border-t pt-5">
             <AthenaPlan orgId={row.organizationId} prompt={planPrompt(row)} />
           </div>
-        </div>
-      </aside>
-    </div>
+        </SheetBody>
+      </SheetContent>
+    </Sheet>
   );
 }

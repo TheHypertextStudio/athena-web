@@ -28,10 +28,7 @@ function paletteIcon(icon: PaletteItem['icon']): JSX.Element {
     return <Icon aria-hidden="true" className="shrink-0" />;
   }
   return (
-    <span
-      aria-hidden="true"
-      className={cn('flex shrink-0 items-center justify-center', MENU_METRICS.iconBox)}
-    >
+    <span aria-hidden="true" className="flex size-5 shrink-0 items-center justify-center">
       {icon}
     </span>
   );
@@ -68,20 +65,37 @@ export function PaletteRow({
   onHover,
 }: PaletteRowProps): JSX.Element {
   return (
-    <li
+    <MenuOption
       id={rowId}
-      role="option"
-      aria-selected={active}
-      onClick={onSelect}
-      onMouseMove={onHover}
-      className={cn(
-        // A palette row is a menu row.
-        menuItemClass('standard'),
-        'cursor-pointer',
-        // The palette drives its own highlight from `aria-activedescendant`, not from focus, so
-        // the active row applies the spec's focus layer directly.
-        { 'bg-on-surface/10': active },
-      )}
+      active={active}
+      leading={paletteIcon(item.icon)}
+      onSelect={onSelect}
+      onActiveChange={onHover}
+      trailing={
+        <span className="flex shrink-0 items-center gap-2">
+          {item.org ? <OrgChip orgId={item.org.id} name={item.org.name} /> : null}
+
+          {item.source ? (
+            <span className="bg-surface-container text-label-medium ml-0 rounded-full px-2 py-0.5">
+              {item.source}
+            </span>
+          ) : null}
+
+          {item.hitType ? (
+            <span className="border-outline-variant text-label-medium ml-0 rounded-full border px-2 py-0.5">
+              {SEARCH_KIND_LABEL[item.hitType]}
+            </span>
+          ) : item.hint ? (
+            <span className="text-on-surface-variant text-label-medium ml-0 shrink-0">
+              {item.hint}
+            </span>
+          ) : null}
+
+          {active ? (
+            <CornerDownLeft aria-hidden="true" className="text-on-surface-variant shrink-0" />
+          ) : null}
+        </span>
+      }
     >
       {paletteIcon(item.icon)}
       <span className="flex min-w-0 flex-1 flex-col items-start py-0.5">

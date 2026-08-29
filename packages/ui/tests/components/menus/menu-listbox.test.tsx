@@ -24,4 +24,16 @@ describe('MenuListbox', () => {
     expect(onSelect).toHaveBeenCalledOnce();
     expect(input).toHaveFocus();
   });
+
+  it('activates an option selected by a synthetic click once', () => {
+    const onSelect = vi.fn();
+    render(
+      <MenuListbox ariaLabel="Results">
+        <MenuOption onSelect={onSelect}>Ada Lovelace</MenuOption>
+      </MenuListbox>,
+    );
+
+    fireEvent.click(screen.getByRole('option', { name: 'Ada Lovelace' }));
+    expect(onSelect).toHaveBeenCalledOnce();
+  });
 });

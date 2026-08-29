@@ -58,6 +58,7 @@ export function MenuOption({
   onPointerDown,
   ...props
 }: MenuOptionProps): React.JSX.Element {
+  const pointerSelected = React.useRef(false);
   return (
     <li
       role="option"
@@ -73,6 +74,14 @@ export function MenuOption({
         if (event.defaultPrevented) return;
         // The associated editor or search field owns focus through aria-activedescendant.
         event.preventDefault();
+        pointerSelected.current = true;
+        onSelect?.();
+      }}
+      onClick={() => {
+        if (pointerSelected.current) {
+          pointerSelected.current = false;
+          return;
+        }
         onSelect?.();
       }}
       {...props}
@@ -91,22 +100,28 @@ export function MenuOption({
 }
 
 /** A quiet section label for a listbox menu. */
-export function MenuSectionLabel(props: React.ComponentProps<'li'>): React.JSX.Element {
+export function MenuSectionLabel({
+  className,
+  ...props
+}: React.ComponentProps<'li'>): React.JSX.Element {
   return (
     <li
       role="presentation"
-      className={cn('text-label-medium text-on-surface-variant px-4 py-2', props.className)}
+      className={cn('text-label-medium text-on-surface-variant px-4 py-2', className)}
       {...props}
     />
   );
 }
 
 /** Divider between related listbox option groups. */
-export function MenuDivider(props: React.ComponentProps<'li'>): React.JSX.Element {
+export function MenuDivider({
+  className,
+  ...props
+}: React.ComponentProps<'li'>): React.JSX.Element {
   return (
     <li
       role="separator"
-      className={cn('bg-outline-variant mx-1 my-1 h-px', props.className)}
+      className={cn('bg-outline-variant mx-1 my-1 h-px', className)}
       {...props}
     />
   );

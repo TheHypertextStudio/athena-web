@@ -1,6 +1,7 @@
 /** Credential-aware provider publication for Athena's external relay. */
 import {
   isAgentSurfaceProvider,
+  isConnectorError,
   type AgentSurfaceProvider,
   type ExternalRef,
 } from '@docket/integrations';
@@ -49,49 +50,56 @@ async function publishLinear(request: ExternalAgentPublishRequest<'linear'>): Pr
   }
   const port = await buildLinearAgentPortForIntegration(installed.id);
   if (!port) throw new ExternalAgentInstallationError('linear');
-  if (request.kind === 'prepare_session') {
-    await port.agentSessionUpdate({
-      agentSessionId: request.session.id,
-      externalUrls: [{ label: 'Open in Docket', url: request.externalUrl }],
-    });
-    return { id: request.session.id, url: request.externalUrl };
-  }
-  const { output } = request;
-  const signal =
-    output.signal?.type === 'select'
-      ? {
-          signal: 'select' as const,
-          signalMetadata: { options: output.signal.options },
-        }
-      : output.signal?.type === 'auth'
+  try {
+    if (request.kind === 'prepare_session') {
+      await port.agentSessionUpdate({
+        agentSessionId: request.session.id,
+        externalUrls: [{ label: 'Open in Docket', url: request.externalUrl }],
+      });
+      return { id: request.session.id, url: request.externalUrl };
+    }
+    const { output } = request;
+    const signal =
+      output.signal?.type === 'select'
         ? {
-            signal: 'auth' as const,
-            signalMetadata: {
-              url: output.signal.url,
-              userId: output.signal.userId,
-              providerName: 'Docket',
-            },
+            signal: 'select' as const,
+            signalMetadata: { options: output.signal.options },
           }
-        : {};
-  return port.agentActivityCreate(
-    output.type === 'action'
-      ? {
-          agentSessionId: request.session.id,
-          type: output.type,
-          action: output.action,
-          parameter: output.parameter,
-          ...(output.result !== undefined ? { result: output.result } : {}),
-          ...(output.ephemeral !== undefined ? { ephemeral: output.ephemeral } : {}),
-          ...signal,
-        }
-      : {
-          agentSessionId: request.session.id,
-          type: output.type,
-          body: output.body,
-          ...(output.ephemeral !== undefined ? { ephemeral: output.ephemeral } : {}),
-          ...signal,
-        },
-  );
+        : output.signal?.type === 'auth'
+          ? {
+              signal: 'auth' as const,
+              signalMetadata: {
+                url: output.signal.url,
+                userId: output.signal.userId,
+                providerName: 'Docket',
+              },
+            }
+          : {};
+    return await port.agentActivityCreate(
+      output.type === 'action'
+        ? {
+            agentSessionId: request.session.id,
+            type: output.type,
+            action: output.action,
+            parameter: output.parameter,
+            ...(output.result !== undefined ? { result: output.result } : {}),
+            ...(output.ephemeral !== undefined ? { ephemeral: output.ephemeral } : {}),
+            ...signal,
+          }
+        : {
+            agentSessionId: request.session.id,
+            type: output.type,
+            body: output.body,
+            ...(output.ephemeral !== undefined ? { ephemeral: output.ephemeral } : {}),
+            ...signal,
+          },
+    );
+  } catch (error) {
+    if (isConnectorError(error) && error.kind === 'auth') {
+      throw new ExternalAgentInstallationError('linear');
+    }
+    throw error;
+  }
 }
 
 function disabledPublisher<P extends Exclude<AgentSurfaceProvider, 'linear'>>(

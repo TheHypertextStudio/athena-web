@@ -30,7 +30,9 @@
   install button opens the signed Linear URL, non-managers cannot install the workspace app, and an
   installed Hypertext Studio workspace does not offer a duplicate install. The seven-case relay
   suite proves that two sessions sharing one revoked installation mark both links errored while the
-  integration status transition sends the installer one reconnect notice.
+  integration status transition sends the installer one reconnect notice. The real publisher now
+  converts Linear's typed authentication rejection into that terminal installation path while
+  leaving provider outages retryable; the combined publisher and relay run passes nine tests.
 - **Production state**: Hypertext Studio Linear contains one Athena application at
   `d3447c82-67dc-4482-a10d-3099f76b60ce`. Its callback, Agent-session webhook, public availability,
   and application metadata match the release design. The production GitHub environment explicitly

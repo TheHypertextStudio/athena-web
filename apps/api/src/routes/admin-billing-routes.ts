@@ -33,7 +33,7 @@ import { env } from '../env';
 import { ConflictError, NotFoundError, PreconditionFailedError } from '../error';
 import { created, ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
-import { hasSqlState } from '../lib/sql-state';
+import { hasSqlState, sqlErrorSummary } from '../lib/sql-state';
 import { zJson, zParam } from '../lib/validate';
 import { requireStaffRole } from '../permissions/staff-guard';
 import { dispatchEssentialBillingNotice } from '../services/billing-notifications';
@@ -947,8 +947,7 @@ export const adminBillingRoutes = new Hono<AppEnv>()
             'An active billing exemption already exists for this organization',
           );
         }
-        const message =
-          err instanceof Error ? err.message : 'Complimentary entitlement transaction failed';
+        const message = sqlErrorSummary(err, 'Complimentary entitlement transaction failed');
         await db
           .update(billingProviderSync)
           .set({

@@ -1219,6 +1219,8 @@ describe('billing exemptions', () => {
       completedAt: null,
     });
     expect(providerSync?.lastError?.length).toBeGreaterThan(0);
+    expect(providerSync?.lastError).not.toContain('params:');
+    expect(providerSync?.lastError).not.toContain(orgId);
     const [grant] = await db
       .select()
       .from(schema.organizationProductEntitlement)

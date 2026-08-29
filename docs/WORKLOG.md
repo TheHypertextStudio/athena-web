@@ -408,6 +408,14 @@
   invariant through an idempotent migration. A behavior test forces the transaction boundary to
   fail after provider success, and a migration test proves that a complimentary-only billing
   account can store `NULL` without creating a Stripe customer.
+- **Founder grant follow-up**: Revision `docket-api-00214-9dm` applied migration `0108`, but the
+  confirmed grant still failed at the billing-account upsert. The corrected provider-sync ledger
+  made the organization visible to the production audit with two blockers instead of silently
+  skipping it. Drizzle still stored only its wrapper query and bound parameters, which hid the
+  PostgreSQL cause and copied the organization id into an operator artifact. Provider-sync failures
+  now retain the deepest driver message plus SQLSTATE, table, column, and constraint metadata. They
+  omit wrapper SQL and parameters. Focused tests cover nested driver errors, fallback copy, private
+  diagnostic redaction, and the complete grant transaction failure path.
 
 ---
 

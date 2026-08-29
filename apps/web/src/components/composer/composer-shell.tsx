@@ -259,6 +259,14 @@ export function ComposerShell({
         onOpenAutoFocus={() => {
           setExpanded(false);
         }}
+        onEscapeKeyDown={(event) => {
+          const active = document.activeElement;
+          // Radix sees Escape at the document before the portaled table toolbar can return focus
+          // to its editor. Keep that first Escape inside the table editing interaction.
+          if (active instanceof HTMLElement && active.closest('[data-table-controls]') !== null) {
+            event.preventDefault();
+          }
+        }}
         onKeyDownCapture={(event) => {
           if (
             !continuation ||

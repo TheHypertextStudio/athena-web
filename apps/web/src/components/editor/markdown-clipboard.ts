@@ -33,6 +33,12 @@ const CODE_BLOCK_NODE = 'codeBlock';
 /** The node name the image extension registers under. */
 const IMAGE_NODE = 'image';
 
+/** Node names supplied by {@link TableKit}. */
+const TABLE_NODE = 'table';
+const TABLE_ROW_NODE = 'tableRow';
+const TABLE_HEADER_NODE = 'tableHeader';
+const TABLE_CELL_NODE = 'tableCell';
+
 /** Uploads one pasted image and resolves the URL it became addressable at. */
 export type PastedImageUploader = (file: File) => Promise<string | null>;
 
@@ -141,6 +147,104 @@ function inCodeBlock(state: EditorState): boolean {
 }
 
 /**
+ * Parse one rectangular delimited-text payload.
+ *
+ * @remarks
+ * Spreadsheet clipboard data uses tabs. An explicit `text/csv` flavor uses commas. Quoted fields
+ * may contain delimiters, quotes, or line breaks. Ragged rows are padded because GFM tables are
+ * rectangular, while malformed quoted input is left to the browser as ordinary text.
+ */
+function delimitedRows(text: string, delimiter: '\t' | ','): readonly (readonly string[])[] | null {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = '';
+  let quoted = false;
+  let afterQuote = false;
+  let hasQuotedLineBreak = false;
+
+  const pushField = (): void => {
+    row.push(field);
+    field = '';
+  };
+  const pushRow = (): void => {
+    pushField();
+    rows.push(row);
+    row = [];
+  };
+
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index] ?? '';
+    if (quoted) {
+      if (character === '"') {
+        if (text[index + 1] === '"') {
+          field += '"';
+          index += 1;
+        } else {
+          quoted = false;
+          afterQuote = true;
+        }
+      } else {
+        if (character === '\r' || character === '\n') hasQuotedLineBreak = true;
+        field += character;
+      }
+      continue;
+    }
+
+    if (afterQuote) {
+      if (character === delimiter) {
+        pushField();
+        afterQuote = false;
+      } else if (character === '\n') {
+        pushRow();
+        afterQuote = false;
+      } else if (character !== '\r') {
+        return null;
+      }
+      continue;
+    }
+
+    if (character === '"' && field === '') {
+      quoted = true;
+    } else if (character === '"') {
+      return null;
+    } else if (character === delimiter) {
+      pushField();
+    } else if (character === '\n') {
+      pushRow();
+    } else if (character !== '\r') {
+      field += character;
+    }
+  }
+
+  if (quoted || hasQuotedLineBreak) return null;
+  if (field !== '' || row.length > 0 || afterQuote) pushRow();
+  if (rows.length === 0) return null;
+
+  const width = Math.max(...rows.map((cells) => cells.length));
+  if (width < 2) return null;
+  return rows.map((cells) => [...cells, ...Array.from({ length: width - cells.length }, () => '')]);
+}
+
+/** Build a Tiptap table from plain cells, treating its first row as the GFM header. */
+function tableContent(rows: readonly (readonly string[])[]): JSONContent {
+  return {
+    type: TABLE_NODE,
+    content: rows.map((cells, rowIndex) => ({
+      type: TABLE_ROW_NODE,
+      content: cells.map((cell) => ({
+        type: rowIndex === 0 ? TABLE_HEADER_NODE : TABLE_CELL_NODE,
+        content: [
+          {
+            type: 'paragraph',
+            ...(cell === '' ? {} : { content: [{ type: 'text', text: cell }] }),
+          },
+        ],
+      })),
+    })),
+  };
+}
+
+/**
  * The single image on the clipboard, when the clipboard is carrying an image and nothing else.
  *
  * @remarks
@@ -237,6 +341,18 @@ export function createMarkdownClipboardExtension(
               if (clipboardData.getData('text/html') !== '') return false;
 
               const text = clipboardData.getData('text/plain');
+              const explicitCsv = clipboardData.getData('text/csv');
+              const delimited =
+                explicitCsv !== ''
+                  ? delimitedRows(explicitCsv, ',')
+                  : text.includes('\t')
+                    ? delimitedRows(text, '\t')
+                    : null;
+              if (delimited !== null && !editor.isActive(TABLE_NODE)) {
+                event.preventDefault();
+                editor.commands.insertContent(tableContent(delimited));
+                return true;
+              }
               if (text === '' || !looksLikeMarkdown(text)) return false;
 
               try {

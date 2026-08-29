@@ -122,6 +122,7 @@ describe('the slash insert menu', () => {
       'Checklist',
       'Quote',
       'Code block',
+      'Table',
       'Divider',
     ]) {
       expect(labels.some((label) => label.startsWith(required))).toBe(true);
@@ -229,6 +230,20 @@ describe('the slash insert menu', () => {
     });
     expect(surface.querySelector('input[type="checkbox"]')).not.toBeNull();
     expect(surface.textContent).not.toContain('[ ]');
+  });
+
+  it('replaces `/table` with a three-column table and puts the caret in its header', async () => {
+    const { user, surface } = await openEditor();
+    await user.keyboard('/table');
+    await screen.findByRole('listbox', { name: 'Insert a block' });
+    await user.keyboard('{Enter}');
+
+    await waitFor(() => {
+      expect(surface.querySelector('table')).not.toBeNull();
+    });
+    expect(surface.querySelectorAll('th')).toHaveLength(3);
+    expect(surface.querySelectorAll('tr')).toHaveLength(3);
+    expect(surface.textContent).not.toContain('/table');
   });
 
   it('closes on Escape and leaves the typed text exactly where it was', async () => {

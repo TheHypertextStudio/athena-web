@@ -1,7 +1,6 @@
-import { Editor } from '@tiptap/core';
+import { Editor, Node } from '@tiptap/core';
 import Image from '@tiptap/extension-image';
 import { TaskItem, TaskList } from '@tiptap/extension-list';
-import { TableKit } from '@tiptap/extension-table';
 import { Markdown } from '@tiptap/markdown';
 import StarterKit from '@tiptap/starter-kit';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -11,12 +10,30 @@ import {
   looksLikeMarkdown,
   serializeSliceToMarkdown,
 } from '@/components/editor/markdown-clipboard';
+import { MarkdownTableKit } from '@/components/editor/markdown-table-extension';
+import { tableToCsv } from '@/components/editor/table-clipboard';
 
 import { installProseMirrorLayoutShims } from './prosemirror-jsdom';
 
 installProseMirrorLayoutShims();
 
 let editor: Editor | null = null;
+
+const TestMention = Node.create({
+  name: 'mention',
+  group: 'inline',
+  inline: true,
+  atom: true,
+  addAttributes() {
+    return { label: { default: '' } };
+  },
+  renderHTML({ node }) {
+    return ['span', { 'data-test-mention': '' }, String(node.attrs['label'] ?? '')];
+  },
+  renderMarkdown(node) {
+    return typeof node.attrs?.['label'] === 'string' ? node.attrs['label'] : '';
+  },
+});
 
 afterEach(() => {
   editor?.destroy();
@@ -28,9 +45,10 @@ function editorWith(value: string): Editor {
   editor = new Editor({
     extensions: [
       StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
+      TestMention,
       TaskList,
       TaskItem.configure({ nested: true }),
-      TableKit,
+      MarkdownTableKit,
       Image,
       Markdown.configure({ markedOptions: { gfm: true, breaks: false } }),
       createMarkdownClipboardExtension({ resolveUploader: () => null }),
@@ -98,6 +116,112 @@ describe('copying out of the editor', () => {
     expect(divider).toMatch(/^\|[\s-]+\|[\s-]+\|$/);
     expect(row).toContain('Tasks');
     expect(row).toContain('3');
+  });
+
+  it('escapes table-cell pipes so saved Markdown keeps every cell', () => {
+    const copied = copyAll('| Label | Rule |\n| --- | --- |\n| Pipe | a \\| b |');
+
+    expect(copied).toContain('a \\| b');
+    const roundTrip = editorWith(copied);
+    const cells: string[] = [];
+    roundTrip.state.doc.descendants((node) => {
+      if (node.type.name === 'tableCell') cells.push(node.textContent);
+    });
+    expect(cells).toContain('a | b');
+  });
+
+  it('escapes pipes in table-cell link destinations without changing the destination', () => {
+    const value = '| Label | Link |\n| --- | --- |\n| Rule | [docs](https://docket.test/a\\|b) |';
+    const source = editorWith(value);
+    let sourceHref: unknown;
+    source.state.doc.descendants((node) => {
+      sourceHref ??= node.marks.find((mark) => mark.type.name === 'link')?.attrs['href'];
+    });
+    expect(sourceHref).toBe('https://docket.test/a|b');
+
+    const copied = serializeSliceToMarkdown(
+      source,
+      source.state.doc.slice(0, source.state.doc.content.size),
+    );
+    expect(copied).toContain('https://docket.test/a\\|b');
+
+    const roundTrip = editorWith(copied);
+    let roundTripHref: unknown;
+    roundTrip.state.doc.descendants((node) => {
+      roundTripHref ??= node.marks.find((mark) => mark.type.name === 'link')?.attrs['href'];
+    });
+    expect(roundTripHref).toBe(sourceHref);
+  });
+
+  it('keeps hard breaks and block boundaries inside table cells without control bytes', () => {
+    const instance = editorWith('| Name | Notes |\n| --- | --- |\n| Plan | Initial |');
+    instance.commands.setContent({
+      type: 'doc',
+      content: [
+        {
+          type: 'table',
+          content: [
+            {
+              type: 'tableRow',
+              content: [
+                {
+                  type: 'tableHeader',
+                  content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Name' }] }],
+                },
+                {
+                  type: 'tableHeader',
+                  content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Notes' }] }],
+                },
+              ],
+            },
+            {
+              type: 'tableRow',
+              content: [
+                {
+                  type: 'tableCell',
+                  content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Plan' }] }],
+                },
+                {
+                  type: 'tableCell',
+                  content: [
+                    {
+                      type: 'paragraph',
+                      content: [
+                        { type: 'text', text: 'alpha' },
+                        { type: 'hardBreak' },
+                        { type: 'text', text: 'beta' },
+                        { type: 'text', text: ' ' },
+                        { type: 'mention', attrs: { label: 'Ada' } },
+                      ],
+                    },
+                    { type: 'paragraph', content: [{ type: 'text', text: 'gamma' }] },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    const table = instance.state.doc.firstChild;
+    if (table === null) throw new Error('Expected a table document.');
+    expect(tableToCsv(table)).toContain('Plan,"alpha\nbeta Ada\ngamma"');
+
+    const copied = serializeSliceToMarkdown(
+      instance,
+      instance.state.doc.slice(0, instance.state.doc.content.size),
+    );
+    expect(copied).not.toContain('\u001F');
+    expect(copied).toContain('alpha<br>beta Ada<br>gamma');
+
+    const roundTrip = editorWith(copied);
+    const cells: string[] = [];
+    roundTrip.state.doc.descendants((node) => {
+      if (node.type.name === 'tableCell') {
+        cells.push(node.textBetween(0, node.content.size, '\n', '\n'));
+      }
+    });
+    expect(cells).toContain('alpha\nbeta Ada\ngamma');
   });
 
   it('leaves no blank line at either edge of a copied block', () => {

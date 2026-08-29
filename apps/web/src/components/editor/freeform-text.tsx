@@ -11,7 +11,6 @@ import Image from '@tiptap/extension-image';
 import Link from '@tiptap/extension-link';
 import { TaskItem, TaskList } from '@tiptap/extension-list';
 import Placeholder from '@tiptap/extension-placeholder';
-import { TableKit } from '@tiptap/extension-table';
 import { Markdown } from '@tiptap/markdown';
 import { EditorContent, useEditor } from '@tiptap/react';
 import type { Editor } from '@tiptap/core';
@@ -45,7 +44,9 @@ import { createCodeBlockExtension } from './code-block-extension';
 import CodeBlockNodeView from './code-block-node-view';
 import type { EditorContribution } from './editor-contribution';
 import { createMarkdownClipboardExtension } from './markdown-clipboard';
+import { MarkdownTableKit } from './markdown-table-extension';
 import { createTaskListShortcutExtension } from './task-list-shortcut';
+import { TableControls } from './table-controls';
 
 /** Props for {@link FreeformTextEditor}. */
 export interface FreeformTextEditorProps {
@@ -93,6 +94,7 @@ export function FreeformTextEditor({
   mentionOrgId,
   contributions = [],
 }: FreeformTextEditorProps): JSX.Element | null {
+  const isEditingEnabled = !disabled && !readOnly;
   const onChangeRef = useRef(onChange);
   const onSubmitRef = useRef(onSubmit);
   const onCancelRef = useRef(onCancel);
@@ -211,7 +213,7 @@ export function FreeformTextEditor({
       // Registered so content arriving from another editor keeps its shape. All three ship their
       // own Markdown hooks, so a pasted table, image, or underline survives the round trip through
       // the Markdown the body is stored as rather than being dropped by the schema.
-      TableKit,
+      MarkdownTableKit,
       Image,
       Markdown.configure({ markedOptions: { gfm: true, breaks: false } }),
       // After Markdown: the clipboard extension reads the manager that extension installs.
@@ -229,21 +231,37 @@ export function FreeformTextEditor({
     extensions,
     content: value,
     contentType: 'markdown',
-    editable: !disabled && !readOnly,
+    editable: isEditingEnabled,
     immediatelyRender: false,
     editorProps: {
       attributes: {
         ...(readOnly
           ? { role: 'document' }
-          : { 'aria-label': ariaLabel, 'aria-multiline': 'true', role: 'textbox' }),
+          : {
+              ...(!disabled ? { 'aria-keyshortcuts': 'Alt+F10' } : {}),
+              'aria-label': ariaLabel,
+              'aria-multiline': 'true',
+              role: 'textbox',
+            }),
         class:
-          "text-on-surface text-body-medium min-h-10 w-full flex-1 cursor-text font-normal outline-none [&_a:not([data-mention-kind])]:text-primary [&_a:not([data-mention-kind])]:underline [&_blockquote]:border-outline-variant [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:pl-3 [&_[data-inline-code]]:border-outline-variant [&_[data-inline-code]]:bg-surface-container-high [&_[data-inline-code]]:rounded [&_[data-inline-code]]:border [&_[data-inline-code]]:px-1.5 [&_[data-inline-code]]:py-0.5 [&_[data-inline-code]]:font-mono [&_.hljs-keyword]:text-primary [&_.hljs-built_in]:text-primary [&_.hljs-type]:text-primary [&_.hljs-selector-tag]:text-primary [&_.hljs-title]:text-secondary [&_.hljs-function]:text-secondary [&_.hljs-section]:text-secondary [&_.hljs-string]:text-tertiary [&_.hljs-attr]:text-tertiary [&_.hljs-addition]:text-tertiary [&_.hljs-number]:text-secondary [&_.hljs-literal]:text-secondary [&_.hljs-symbol]:text-secondary [&_.hljs-comment]:text-on-surface-variant [&_.hljs-quote]:text-on-surface-variant [&_.hljs-meta]:text-on-surface-variant [&_.hljs-deletion]:text-error [&_h1]:text-title-large [&_h1]:mt-6 [&_h1]:font-medium [&_h2]:text-title-large [&_h2]:mt-5 [&_h3]:text-title-medium [&_h3]:mt-4 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-2 [&_img]:my-3 [&_img]:h-auto [&_img]:max-w-full [&_img]:rounded-lg [&_table]:my-3 [&_table]:min-w-full [&_td]:border-outline-variant [&_td]:border [&_td]:p-2 [&_th]:border-outline-variant [&_th]:border [&_th]:p-2 [&_th]:text-left [&_th]:text-label-large [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ul[data-type='taskList']]:my-2 [&_ul[data-type='taskList']]:list-none [&_ul[data-type='taskList']]:pl-0 [&_ul[data-type='taskList']_ul[data-type='taskList']]:my-0 [&_ul[data-type='taskList']_ul[data-type='taskList']]:pl-6 [&_ul[data-type='taskList']_li[data-checked]]:flex [&_ul[data-type='taskList']_li[data-checked]]:items-start [&_ul[data-type='taskList']_li[data-checked]]:gap-2 [&_ul[data-type='taskList']_li[data-checked]]:my-1 [&_ul[data-type='taskList']_li[data-checked]>label]:relative [&_ul[data-type='taskList']_li[data-checked]>label]:mt-0.5 [&_ul[data-type='taskList']_li[data-checked]>label]:flex [&_ul[data-type='taskList']_li[data-checked]>label]:shrink-0 [&_ul[data-type='taskList']_li[data-checked]>label]:cursor-pointer [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:border-outline [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:size-4 [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:shrink-0 [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:cursor-pointer [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:appearance-none [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:rounded-[0.1875rem] [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:border-2 [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:bg-transparent [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:transition-colors [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']:checked]:border-primary [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']:checked]:bg-primary [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:border-on-primary [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:pointer-events-none [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:absolute [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:top-[2px] [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:left-[5px] [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:h-[7px] [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:w-[3px] [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:rotate-45 [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:border-r-2 [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:border-b-2 [&_ul[data-type='taskList']_li[data-checked]>div]:min-w-0 [&_ul[data-type='taskList']_li[data-checked]>div]:flex-1 [&_ul[data-type='taskList']_li[data-checked]>div_p]:my-0 [&_ul[data-type='taskList']_li[data-checked][data-checked='true']>div]:text-on-surface-variant [&_ul[data-type='taskList']_li[data-checked][data-checked='true']>div]:line-through [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
+          "text-on-surface text-body-medium min-h-10 w-full flex-1 cursor-text font-normal outline-none [&_a:not([data-mention-kind])]:text-primary [&_a:not([data-mention-kind])]:underline [&_blockquote]:border-outline-variant [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:pl-3 [&_[data-inline-code]]:border-outline-variant [&_[data-inline-code]]:bg-surface-container-high [&_[data-inline-code]]:rounded [&_[data-inline-code]]:border [&_[data-inline-code]]:px-1.5 [&_[data-inline-code]]:py-0.5 [&_[data-inline-code]]:font-mono [&_.hljs-keyword]:text-primary [&_.hljs-built_in]:text-primary [&_.hljs-type]:text-primary [&_.hljs-selector-tag]:text-primary [&_.hljs-title]:text-secondary [&_.hljs-function]:text-secondary [&_.hljs-section]:text-secondary [&_.hljs-string]:text-tertiary [&_.hljs-attr]:text-tertiary [&_.hljs-addition]:text-tertiary [&_.hljs-number]:text-secondary [&_.hljs-literal]:text-secondary [&_.hljs-symbol]:text-secondary [&_.hljs-comment]:text-on-surface-variant [&_.hljs-quote]:text-on-surface-variant [&_.hljs-meta]:text-on-surface-variant [&_.hljs-deletion]:text-error [&_h1]:text-title-large [&_h1]:mt-6 [&_h1]:font-medium [&_h2]:text-title-large [&_h2]:mt-5 [&_h3]:text-title-medium [&_h3]:mt-4 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:my-2 [&_img]:my-3 [&_img]:h-auto [&_img]:max-w-full [&_img]:rounded-lg [&_.tableWrapper]:max-w-full [&_.tableWrapper]:overflow-x-auto [&_table]:my-3 [&_table]:min-w-full [&_td]:border-outline-variant [&_td]:border [&_td]:p-2 [&_th]:border-outline-variant [&_th]:border [&_th]:p-2 [&_th]:text-left [&_th]:text-label-large [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ul[data-type='taskList']]:my-2 [&_ul[data-type='taskList']]:list-none [&_ul[data-type='taskList']]:pl-0 [&_ul[data-type='taskList']_ul[data-type='taskList']]:my-0 [&_ul[data-type='taskList']_ul[data-type='taskList']]:pl-6 [&_ul[data-type='taskList']_li[data-checked]]:flex [&_ul[data-type='taskList']_li[data-checked]]:items-start [&_ul[data-type='taskList']_li[data-checked]]:gap-2 [&_ul[data-type='taskList']_li[data-checked]]:my-1 [&_ul[data-type='taskList']_li[data-checked]>label]:relative [&_ul[data-type='taskList']_li[data-checked]>label]:mt-0.5 [&_ul[data-type='taskList']_li[data-checked]>label]:flex [&_ul[data-type='taskList']_li[data-checked]>label]:shrink-0 [&_ul[data-type='taskList']_li[data-checked]>label]:cursor-pointer [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:border-outline [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:size-4 [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:shrink-0 [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:cursor-pointer [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:appearance-none [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:rounded-[0.1875rem] [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:border-2 [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:bg-transparent [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']]:transition-colors [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']:checked]:border-primary [&_ul[data-type='taskList']_li[data-checked]_input[type='checkbox']:checked]:bg-primary [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:border-on-primary [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:pointer-events-none [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:absolute [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:top-[2px] [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:left-[5px] [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:h-[7px] [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:w-[3px] [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:rotate-45 [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:border-r-2 [&_ul[data-type='taskList']_li[data-checked]_input:checked+span]:border-b-2 [&_ul[data-type='taskList']_li[data-checked]>div]:min-w-0 [&_ul[data-type='taskList']_li[data-checked]>div]:flex-1 [&_ul[data-type='taskList']_li[data-checked]>div_p]:my-0 [&_ul[data-type='taskList']_li[data-checked][data-checked='true']>div]:text-on-surface-variant [&_ul[data-type='taskList']_li[data-checked][data-checked='true']>div]:line-through [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",
       },
       handleKeyDown: (view, event) => {
         // First, because ProseMirror consults `editorProps.handleKeyDown` before any plugin
         // keymap: if the menu's Escape did not run here it would never run at all, and Escape
         // would discard the draft instead of dismissing the menu.
         if (mentionsRef.current.handleKeyDown(view, event)) return true;
+        if (event.altKey && event.key === 'F10' && editorRef.current?.isActive('table')) {
+          const surface = view.dom.closest('[data-editor-surface]');
+          const firstTableControl = surface?.querySelector<HTMLElement>(
+            '[data-table-controls] button:not(:disabled)',
+          );
+          if (firstTableControl !== undefined && firstTableControl !== null) {
+            event.preventDefault();
+            firstTableControl.focus();
+            return true;
+          }
+        }
         if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && onSubmitRef.current) {
           event.preventDefault();
           onSubmitRef.current();
@@ -280,8 +298,10 @@ export function FreeformTextEditor({
 
   useEffect(() => {
     if (!editor) return;
-    editor.setEditable(!disabled && !readOnly);
-  }, [editor, disabled, readOnly]);
+    editor.setEditable(isEditingEnabled);
+    if (isEditingEnabled) editor.view.dom.setAttribute('aria-keyshortcuts', 'Alt+F10');
+    else editor.view.dom.removeAttribute('aria-keyshortcuts');
+  }, [editor, isEditingEnabled]);
 
   useEffect(() => {
     if (!editor) return;
@@ -335,7 +355,7 @@ export function FreeformTextEditor({
       data-editor-surface=""
       className={cn(
         'relative flex min-h-0 max-w-[75ch] flex-1 flex-col [&_.ProseMirror]:min-h-10 [&_.ProseMirror]:flex-1 [&_.ProseMirror]:outline-none [&_.ProseMirror_.is-editor-empty:first-child::before]:hidden',
-        editor.isEditable ? 'cursor-text' : '',
+        isEditingEnabled ? 'cursor-text' : '',
         disabled ? 'cursor-default opacity-60' : '',
         className,
       )}
@@ -344,7 +364,8 @@ export function FreeformTextEditor({
         editor={editor}
         className="flex min-h-0 flex-1 flex-col [&>.ProseMirror]:flex-1"
       />
-      {editor.isEditable && isEmpty ? (
+      {isEditingEnabled ? <TableControls editor={editor} /> : null}
+      {isEditingEnabled && isEmpty ? (
         <div
           data-editor-empty-actions=""
           className="text-on-surface-variant text-body-medium absolute top-4 left-4 z-10 inline-flex flex-nowrap items-center gap-1.5 whitespace-nowrap"
@@ -469,6 +490,7 @@ export function EditableFreeformText({
   const activeOrgId = useActiveOrgIdOptional();
   const [draft, setDraft] = useState(value ?? '');
   const [focused, setFocused] = useState(false);
+  const focusedRef = useRef(false);
   const draftRef = useRef(draft);
   draftRef.current = draft;
   const updateDraft = useCallback((next: string): void => {
@@ -508,8 +530,9 @@ export function EditableFreeformText({
     <div
       className={cn('flex min-h-0 flex-col', className)}
       onFocus={() => {
+        if (!focusedRef.current) onEditStart?.();
+        focusedRef.current = true;
         setFocused(true);
-        onEditStart?.();
       }}
       onBlur={(event) => {
         if (
@@ -518,6 +541,13 @@ export function EditableFreeformText({
         ) {
           return;
         }
+        if (
+          event.relatedTarget instanceof Element &&
+          event.relatedTarget.closest('[data-editor-table-menu]') !== null
+        ) {
+          return;
+        }
+        focusedRef.current = false;
         setFocused(false);
         flush(draftRef.current);
       }}

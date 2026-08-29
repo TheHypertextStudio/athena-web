@@ -116,6 +116,102 @@ describe('pasting into the editor', () => {
     expect(editor.querySelector('ul')).not.toBeNull();
   });
 
+  it('keeps a rich HTML table as a table', async () => {
+    const { user } = renderEditor();
+    const editor = await screen.findByRole('textbox', { name: 'Description' });
+
+    await user.click(editor);
+    paste(editor, {
+      'text/html':
+        '<table><thead><tr><th>Name</th><th>Count</th></tr></thead><tbody><tr><td>Tasks</td><td>3</td></tr></tbody></table>',
+      'text/plain': 'Name\tCount\nTasks\t3',
+    });
+
+    await waitFor(() => {
+      expect(editor.querySelectorAll('tr')).toHaveLength(2);
+    });
+    expect(editor.querySelectorAll('th')).toHaveLength(2);
+    expect(editor.querySelectorAll('td')).toHaveLength(2);
+  });
+
+  it('turns a tab-separated spreadsheet range into a table', async () => {
+    const { user, onChange } = renderEditor();
+    const editor = await screen.findByRole('textbox', { name: 'Description' });
+
+    await user.click(editor);
+    paste(editor, { 'text/plain': 'Name\tCount\nTasks\t3\nProjects\t2' });
+
+    await waitFor(() => {
+      expect(editor.querySelectorAll('tr')).toHaveLength(3);
+    });
+    expect(editor.querySelectorAll('th')).toHaveLength(2);
+    expect(editor).toHaveTextContent('Projects');
+    await waitFor(() => {
+      expect(onChange.mock.calls.at(-1)?.[0] ?? '').toContain('| Name');
+    });
+  });
+
+  it('turns an explicit CSV clipboard flavor into a table without splitting quoted commas', async () => {
+    const { user } = renderEditor();
+    const editor = await screen.findByRole('textbox', { name: 'Description' });
+
+    await user.click(editor);
+    paste(editor, {
+      'text/csv': 'Name,Owner\n"Launch, phase one",Ada',
+      'text/plain': 'Name,Owner\n"Launch, phase one",Ada',
+    });
+
+    await waitFor(() => {
+      expect(editor.querySelector('table')).not.toBeNull();
+    });
+    expect(editor.querySelectorAll('th')).toHaveLength(2);
+    expect(editor.querySelectorAll('td')).toHaveLength(2);
+    expect(editor.querySelector('tbody')).toHaveTextContent('Launch, phase one');
+  });
+
+  it('leaves multiline CSV literal because GFM cells cannot preserve its line breaks', async () => {
+    const { user } = renderEditor();
+    const editor = await screen.findByRole('textbox', { name: 'Description' });
+
+    await user.click(editor);
+    const csv = 'Name,Owner\n"Launch\nphase one",Ada';
+    paste(editor, { 'text/csv': csv, 'text/plain': csv });
+
+    await waitFor(() => {
+      expect(editor).toHaveTextContent('phase one');
+    });
+    expect(editor.querySelector('table')).toBeNull();
+    expect(editor).toHaveTextContent('Name,Owner');
+    expect(editor.querySelectorAll('p')).toHaveLength(3);
+  });
+
+  it('leaves malformed quoted CSV literal instead of dropping characters', async () => {
+    const { user } = renderEditor();
+    const editor = await screen.findByRole('textbox', { name: 'Description' });
+
+    await user.click(editor);
+    const csv = 'Name,Owner\n"Launch"x,Ada';
+    paste(editor, { 'text/csv': csv, 'text/plain': csv });
+
+    await waitFor(() => {
+      expect(editor).toHaveTextContent('"Launch"x,Ada');
+    });
+    expect(editor.querySelector('table')).toBeNull();
+  });
+
+  it('keeps comma-delimited plain text as prose when the clipboard does not identify it as CSV', async () => {
+    const { user } = renderEditor();
+    const editor = await screen.findByRole('textbox', { name: 'Description' });
+
+    await user.click(editor);
+    paste(editor, { 'text/plain': 'Smith, John\nDoe, Jane' });
+
+    await waitFor(() => {
+      expect(editor).toHaveTextContent('Smith, John');
+    });
+    expect(editor.querySelector('table')).toBeNull();
+  });
+
   it('keeps Markdown literal inside a code block', async () => {
     const { user } = renderEditor();
     const editor = await screen.findByRole('textbox', { name: 'Description' });
@@ -133,5 +229,23 @@ describe('pasting into the editor', () => {
     });
     // A fence is the one place the syntax is the content.
     expect(editor.querySelector('h1')).toBeNull();
+  });
+
+  it('keeps a tab-separated range literal inside a code block', async () => {
+    const { user } = renderEditor();
+    const editor = await screen.findByRole('textbox', { name: 'Description' });
+
+    await user.click(editor);
+    await user.keyboard('```');
+    await waitFor(() => {
+      expect(editor.querySelector('pre')).not.toBeNull();
+    });
+
+    paste(editor, { 'text/plain': 'Name\tCount\nTasks\t3' });
+
+    await waitFor(() => {
+      expect(editor.querySelector('pre')).toHaveTextContent('Name Count Tasks 3');
+    });
+    expect(editor.querySelector('table')).toBeNull();
   });
 });

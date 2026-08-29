@@ -19,6 +19,7 @@ import type { Editor } from '@tiptap/react';
 import {
   Code,
   Divider,
+  FileSpreadsheet,
   FormatQuote,
   Heading,
   ListBulleted,
@@ -139,6 +140,16 @@ export const SLASH_COMMANDS: readonly SlashCommand[] = [
     icon: Code,
     run: (editor, range) => {
       replacing(editor, range).setNode('codeBlock').run();
+    },
+  },
+  {
+    id: 'table',
+    label: 'Table',
+    hint: 'Rows and columns for structured content',
+    keywords: ['grid', 'spreadsheet', 'columns', 'rows'],
+    icon: FileSpreadsheet,
+    run: (editor, range) => {
+      replacing(editor, range).insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
     },
   },
   {

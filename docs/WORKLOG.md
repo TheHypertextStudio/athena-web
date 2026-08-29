@@ -291,6 +291,13 @@
   error type, code, and HTTP status in operator diagnostics. They never copy Stripe's prose into
   application-owned errors. This distinguishes a restricted-key permission gap from a bad key
   without exposing credentials.
+  Run `33227911333` isolated the exact boundary. The production key returns HTTP 200 for customer
+  and subscription searches, but `/v1/account` returns HTTP 403 with
+  `more_permissions_required`. Docket therefore blocks the key at its independent account pin
+  before any provider read or mutation. Finance must grant the live restricted key account-read
+  permission or replace it with an approved Hypertext Studio key. During test-key preparation,
+  Stripe rendered the full existing test secret in the page accessibility tree. The operator did
+  not copy or store it and must rotate it before sandbox use.
 - **Authentication-loop correction**: Production billing inspection must not depend on a personal
   Google Cloud CLI refresh token. A manual, read-only GitHub Actions audit will use the same
   production Workload Identity Federation boundary as deployment. It will run the existing billing

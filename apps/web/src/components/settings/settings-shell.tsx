@@ -217,7 +217,7 @@ export function SettingsShell({ active, children }: SettingsShellProps): JSX.Ele
         >
           {children}
         </SettingsPane>
-      </SettingsDialogContent>
+      </DialogContent>
     </Dialog>
   );
 }

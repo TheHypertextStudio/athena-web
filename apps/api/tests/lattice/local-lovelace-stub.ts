@@ -120,7 +120,8 @@ const accounts = createServer((req, res) => {
           access_token: `at_${randomUUID()}`,
           refresh_token: 'rt_local',
           expires_in: 3600,
-          scope: 'lattice:compute:inference lattice:compute:catalog:read',
+          scope:
+            'openid profile email offline_access lattice:compute:inference lattice:compute:catalog:read',
         });
         return;
       }
@@ -135,7 +136,8 @@ const accounts = createServer((req, res) => {
         access_token: `at_${randomUUID()}`,
         refresh_token: 'rt_local',
         expires_in: 3600,
-        scope: 'lattice:compute:inference lattice:compute:catalog:read',
+        scope:
+          'openid profile email offline_access lattice:compute:inference lattice:compute:catalog:read',
       });
       return;
     }

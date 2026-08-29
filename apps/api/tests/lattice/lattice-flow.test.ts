@@ -121,7 +121,8 @@ function accountsStub(): { server: Server; issuedCodes: Map<string, string> } {
             access_token: 'at_refreshed',
             refresh_token: 'rt_2',
             expires_in: 3600,
-            scope: 'lattice:compute:inference lattice:compute:catalog:read',
+            scope:
+              'openid profile email offline_access lattice:compute:inference lattice:compute:catalog:read',
           });
           return;
         }
@@ -136,7 +137,8 @@ function accountsStub(): { server: Server; issuedCodes: Map<string, string> } {
           access_token: 'at_1',
           refresh_token: 'rt_1',
           expires_in: 3600,
-          scope: 'lattice:compute:inference lattice:compute:catalog:read',
+          scope:
+            'openid profile email offline_access lattice:compute:inference lattice:compute:catalog:read',
         });
         return;
       }
@@ -319,7 +321,14 @@ describe('the bring-your-own-Lattice flow', () => {
     const body = (await response.json()) as Record<string, unknown>;
     expect(body).toMatchObject({ available: true, connected: false, enabled: false });
     // The permission ask is visible before anyone clicks Connect.
-    expect(body['scopes']).toEqual(['lattice:compute:inference', 'lattice:compute:catalog:read']);
+    expect(body['scopes']).toEqual([
+      'openid',
+      'profile',
+      'email',
+      'offline_access',
+      'lattice:compute:inference',
+      'lattice:compute:catalog:read',
+    ]);
   });
 
   it('sends the browser to Lovelace with PKCE and the exact scopes', async () => {
@@ -331,7 +340,7 @@ describe('the bring-your-own-Lattice flow', () => {
     expect(url.pathname).toBe('/oauth/authorize');
     expect(url.searchParams.get('code_challenge_method')).toBe('S256');
     expect(url.searchParams.get('scope')).toBe(
-      'lattice:compute:inference lattice:compute:catalog:read',
+      'openid profile email offline_access lattice:compute:inference lattice:compute:catalog:read',
     );
     expect(url.searchParams.get('client_id')).toBe('client_docket');
 

@@ -116,7 +116,7 @@ export const authServer = {
   /** Lovelace OAuth app client secret — paired with `LATTICE_CLIENT_ID`. */
   LATTICE_CLIENT_SECRET: z.string().optional(),
   /**
-   * Lovelace accounts issuer origin. Defaults to `https://accounts.uselovelace.com`; set only to
+   * Lovelace accounts issuer origin. Defaults to `https://auth.uselovelace.com`; set only to
    * point a non-production Docket at a staging Lovelace.
    */
   LATTICE_ACCOUNTS_ISSUER: z.string().optional(),

@@ -58,8 +58,12 @@ function tokenFetch(
 }
 
 describe('the requested scopes', () => {
-  it('asks for exactly inference and catalog read', () => {
+  it('asks for identity, durable access, inference, and catalog read', () => {
     expect([...LATTICE_SCOPES]).toEqual([
+      'openid',
+      'profile',
+      'email',
+      'offline_access',
       'lattice:compute:inference',
       'lattice:compute:catalog:read',
     ]);
@@ -75,6 +79,10 @@ describe('the requested scopes', () => {
 
   it('treats a narrowed grant as missing scopes, and a silent issuer as sufficient', () => {
     expect(missingLatticeScopes('lattice:compute:inference')).toEqual([
+      'openid',
+      'profile',
+      'email',
+      'offline_access',
       'lattice:compute:catalog:read',
     ]);
     expect(missingLatticeScopes(LATTICE_SCOPES.join(' '))).toEqual([]);

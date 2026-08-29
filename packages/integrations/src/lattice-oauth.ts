@@ -35,7 +35,7 @@ import { createHash, randomBytes } from 'node:crypto';
  * `lovelace:docs/platform/lattice-cloud/guides/personal-runtime-relay.md` §1. Overridable per
  * deployment so a staging Lovelace can be pointed at without a code change.
  */
-export const LOVELACE_ACCOUNTS_ISSUER = 'https://accounts.uselovelace.com';
+export const LOVELACE_ACCOUNTS_ISSUER = 'https://auth.uselovelace.com';
 
 /** Authorization endpoint path on the accounts issuer. */
 export const LOVELACE_AUTHORIZE_PATH = '/oauth/authorize';
@@ -50,6 +50,9 @@ export const LOVELACE_TOKEN_PATH = '/oauth/token';
  * This list is the whole of the permission ask, and each entry is here because a specific Athena
  * behaviour cannot work without it:
  *
+ * - `openid`, `profile`, and `email` — bind the Lovelace grant to the person who connected it.
+ * - `offline_access` — issue the refresh token that keeps scheduled assignments usable after the
+ *   browser session ends.
  * - `lattice:compute:inference` — submit the model turn, and read the person's device records.
  *   Reading runtime records is deliberately covered by this scope upstream rather than by the
  *   management scope, so device discovery costs no extra authority.
@@ -71,6 +74,10 @@ export const LOVELACE_TOKEN_PATH = '/oauth/token';
  * @see `lovelace:docs/platform/lattice-cloud/reference/auth-scopes.md` for the scope vocabulary.
  */
 export const LATTICE_SCOPES: readonly string[] = [
+  'openid',
+  'profile',
+  'email',
+  'offline_access',
   'lattice:compute:inference',
   'lattice:compute:catalog:read',
 ];

@@ -317,7 +317,7 @@ export const CORE_VARS: readonly VarSpec[] = [
     required: false,
     zod: authServer.LATTICE_ACCOUNTS_ISSUER,
     where:
-      'Lovelace accounts issuer origin; defaults to https://accounts.uselovelace.com. Set only to target a staging Lovelace.',
+      'Lovelace accounts issuer origin; defaults to https://auth.uselovelace.com. Set only to target a staging Lovelace.',
   },
   {
     name: 'LATTICE_GATEWAY_URL',

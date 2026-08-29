@@ -927,17 +927,16 @@
  * scroll range; the resulting circular percentage can stop before its endpoint. Paused keyframes
  * preserve CSS interpolation while an absolute offset keeps progress invariant.
  *
- * The nested detail body provides enough overflow to reach both endpoints, and scroll anchoring is
- * disabled because the header's height change is intentional rather than content drift.
+ * Detail content owns the scroll range only when it is longer than its pane. Scroll anchoring stays
+ * disabled because the header's intentional height change is not content drift.
  */
 [data-detail-cover] {
   --detail-collapse-range: 4rem;
   --detail-collapse-progress: 0;
   --detail-collapse-delay: 0s;
   --detail-expanded-glyph-size: 3rem;
-  --detail-expanded-glyph-row: 3.75rem;
   --detail-compact-identity-inset: 3rem;
-  container-type: size;
+  container-type: inline-size;
   overflow-anchor: none;
 }
 
@@ -950,18 +949,8 @@
 }
 
 /*
- * Short panels still need enough overflow to consume the collapse range. The compact header is
- * always taller than four rem (identity plus tabs), so this minimum makes the final scroll range at
- * least the requested collapse distance without adding space above the active panel.
- */
-.detail-body {
-  min-block-size: calc(100cqb - 4rem + var(--detail-collapse-range));
-}
-
-/*
- * One identity tree serves both states. The glyph is independently positioned; expanded title
- * padding gives it a row of its own, then the title sheds that block padding and gains an inline
- * inset as the full-size glyph moves into the compact row.
+ * One identity tree serves both states. The named rows keep the action lane anchored to identity
+ * while the title moves from its own expanded row into that row at the compact endpoint.
  */
 .detail-masthead {
   display: grid;

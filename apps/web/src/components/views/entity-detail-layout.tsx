@@ -198,7 +198,7 @@ export function EntityDetailLayout({
       className={cn(
         // Sections are rows of this grid, so the rhythm between them is declared once here rather
         // than by each section spacing itself against its neighbours.
-        'page-grid h-full min-h-0 w-full gap-y-4 overflow-y-auto pb-24 lg:pb-6 @2xl:gap-y-5',
+        'page-grid h-full min-h-0 w-full gap-y-4 overflow-y-auto pb-[max(1rem,env(safe-area-inset-bottom))] lg:pb-6 @2xl:gap-y-5',
         className,
       )}
     >

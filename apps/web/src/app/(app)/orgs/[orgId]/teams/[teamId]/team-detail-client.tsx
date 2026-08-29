@@ -206,17 +206,7 @@ export default function TeamDetailClient(): JSX.Element {
       }
     >
       {tab === 'overview' ? (
-        // The same `min-block-size` formula `.detail-body` itself uses (globals.css) — `100%`
-        // doesn't work here: it needs a *definite* parent height to resolve against, and
-        // `.detail-body`'s own height comes from a `min-block-size`, not a definite value, so a
-        // percentage on this section silently computes to nothing. `cqb` reads the actual
-        // scroll-container size directly, sidestepping that. Overview is the whole tab today, with
-        // no milestones or roster panel stacked below it the way a project's Overview has — so the
-        // document below is free to grow into all the height this section reserves, rather than
-        // reading as a business-card-sized box floating over an otherwise-empty panel.
-        // EntityDocument's own flex chain is inert until a wrapper like this one actually has
-        // spare height to give it.
-        <section className="flex min-h-[calc(100cqb-4rem+var(--detail-collapse-range))] flex-col gap-6">
+        <section className="flex flex-col gap-6">
           <EntityDocument
             value={team.description}
             canEdit

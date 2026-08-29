@@ -1,13 +1,18 @@
 /** Read-only launch audit for Docket's durable billing mirror and Stripe ownership. */
-import type { BillingGateway } from '@docket/billing/contracts';
 import {
+  PRODUCT_CAPABILITY_GRANTS,
+  type BillingGateway,
+  type ProductCapability,
+} from '@docket/billing/contracts';
+import {
+  billingExemption,
   billingProviderSync,
   type Database,
   organization,
   organizationBillingAccount,
   organizationProductEntitlement,
 } from '@docket/db';
-import { and, eq, inArray, notLike } from 'drizzle-orm';
+import { and, eq, inArray, isNull, notLike } from 'drizzle-orm';
 
 /** A machine-stable reason that blocks public billing enablement. */
 export type BillingLaunchAuditProblemCode =
@@ -24,7 +29,11 @@ export type BillingLaunchAuditProblemCode =
   | 'entitlement_cancellation_mismatch'
   | 'provider_sync_unresolved'
   | 'provider_query_failed'
-  | 'single_subscription_redirect_unverified';
+  | 'single_subscription_redirect_unverified'
+  | 'complimentary_exemption_missing'
+  | 'complimentary_entitlement_missing'
+  | 'complimentary_entitlement_inactive'
+  | 'complimentary_product_invalid';
 
 /** One actionable launch-audit finding. */
 export interface BillingLaunchAuditProblem {
@@ -50,6 +59,24 @@ export interface BillingLaunchAuditOrganization {
   readonly problems: readonly BillingLaunchAuditProblem[];
 }
 
+/** Complimentary Docket Pro state observed for one organization. */
+export interface BillingLaunchAuditComplimentaryOrganization {
+  /** Docket organization id. */
+  readonly organizationId: string;
+  /** Customer-facing organization name. */
+  readonly organizationName: string;
+  /** Current entitlement status, or null when the entitlement mirror is missing. */
+  readonly status: 'trialing' | 'active' | 'past_due' | 'canceled' | null;
+  /** Audited staff reason for the active exemption, or null when the grant row is missing. */
+  readonly reason: string | null;
+  /** Whether the active complimentary entitlement keeps shared work writable. */
+  readonly sharedWorkWritable: boolean;
+  /** Paid-module capabilities granted through the same Docket Pro catalog. */
+  readonly capabilities: readonly ProductCapability[];
+  /** Every mismatch that blocks launch. */
+  readonly problems: readonly BillingLaunchAuditProblem[];
+}
+
 /** Complete machine-readable billing enablement report. */
 export interface BillingLaunchAuditReport {
   /** Stable report format version. */
@@ -60,6 +87,8 @@ export interface BillingLaunchAuditReport {
   readonly passed: boolean;
   /** Organizations included in the audit. */
   readonly organizationCount: number;
+  /** Organizations with an active exemption or complimentary entitlement record. */
+  readonly complimentaryOrganizationCount: number;
   /** Total actionable findings. */
   readonly unresolvedCount: number;
   /** Stripe account controls that cannot be read through the provider API. */
@@ -76,6 +105,8 @@ export interface BillingLaunchAuditReport {
   };
   /** Per-organization evidence and findings. */
   readonly organizations: readonly BillingLaunchAuditOrganization[];
+  /** Complimentary grant evidence and findings, kept separate from Stripe ownership checks. */
+  readonly complimentaryOrganizations: readonly BillingLaunchAuditComplimentaryOrganization[];
 }
 
 /** Operator attestations for Stripe controls that Stripe does not expose through its API. */
@@ -116,12 +147,24 @@ export async function auditBillingLaunch(
         message:
           'Stripe Checkout is not attested to redirect existing subscribers to the customer portal.',
       };
-  const [accounts, entitlements, unresolvedSyncs, organizations] = await Promise.all([
+  const [
+    accounts,
+    entitlements,
+    complimentaryEntitlements,
+    activeExemptions,
+    unresolvedSyncs,
+    organizations,
+  ] = await Promise.all([
     database.select().from(organizationBillingAccount),
     database
       .select()
       .from(organizationProductEntitlement)
       .where(eq(organizationProductEntitlement.source, 'stripe')),
+    database
+      .select()
+      .from(organizationProductEntitlement)
+      .where(eq(organizationProductEntitlement.source, 'complimentary')),
+    database.select().from(billingExemption).where(isNull(billingExemption.revokedAt)),
     database
       .select()
       .from(billingProviderSync)
@@ -137,6 +180,10 @@ export async function auditBillingLaunch(
   const providerAccounts = accounts.filter((row) => row.stripeCustomerId !== null);
   const entitlementByOrg = new Map(entitlements.map((row) => [row.organizationId, row]));
   const organizationNameById = new Map(organizations.map((row) => [row.id, row.name]));
+  const complimentaryEntitlementByOrg = new Map(
+    complimentaryEntitlements.map((row) => [row.organizationId, row]),
+  );
+  const activeExemptionByOrg = new Map(activeExemptions.map((row) => [row.organizationId, row]));
   const syncsByOrg = new Map<string, typeof unresolvedSyncs>();
   for (const sync of unresolvedSyncs) {
     syncsByOrg.set(sync.organizationId, [...(syncsByOrg.get(sync.organizationId) ?? []), sync]);
@@ -262,13 +309,64 @@ export async function auditBillingLaunch(
       problems,
     });
   }
+
+  const complimentaryOrganizationIds = [
+    ...new Set([
+      ...complimentaryEntitlements.map((row) => row.organizationId),
+      ...activeExemptions.map((row) => row.organizationId),
+    ]),
+  ].sort();
+  const complimentaryRows: BillingLaunchAuditComplimentaryOrganization[] =
+    complimentaryOrganizationIds.map((organizationId) => {
+      const entitlement = complimentaryEntitlementByOrg.get(organizationId);
+      const exemption = activeExemptionByOrg.get(organizationId);
+      const problems: BillingLaunchAuditProblem[] = [];
+      if (entitlement && !exemption) {
+        problems.push({
+          code: 'complimentary_exemption_missing',
+          message: 'A complimentary entitlement has no active audited exemption.',
+        });
+      }
+      if (exemption && !entitlement) {
+        problems.push({
+          code: 'complimentary_entitlement_missing',
+          message: 'An active billing exemption has no complimentary entitlement mirror.',
+        });
+      }
+      if (entitlement && entitlement.status !== 'active') {
+        problems.push({
+          code: 'complimentary_entitlement_inactive',
+          message: `The complimentary Docket Pro entitlement is ${entitlement.status}.`,
+        });
+      }
+      if (entitlement && entitlement.productKey !== 'docket_pro') {
+        problems.push({
+          code: 'complimentary_product_invalid',
+          message: `The complimentary entitlement grants ${entitlement.productKey} instead of Docket Pro.`,
+        });
+      }
+      const grantsDocketPro =
+        entitlement?.status === 'active' && entitlement.productKey === 'docket_pro';
+      return {
+        organizationId,
+        organizationName: organizationNameById.get(organizationId) ?? 'Unknown organization',
+        status: entitlement?.status ?? null,
+        reason: exemption?.reason ?? null,
+        sharedWorkWritable: grantsDocketPro,
+        capabilities: grantsDocketPro ? PRODUCT_CAPABILITY_GRANTS.docket_pro : [],
+        problems,
+      };
+    });
   const unresolvedCount =
-    rows.reduce((count, row) => count + row.problems.length, 0) + (redirectProblem ? 1 : 0);
+    rows.reduce((count, row) => count + row.problems.length, 0) +
+    complimentaryRows.reduce((count, row) => count + row.problems.length, 0) +
+    (redirectProblem ? 1 : 0);
   return {
     schemaVersion: 2,
     generatedAt: now.toISOString(),
     passed: unresolvedCount === 0,
     organizationCount: rows.length,
+    complimentaryOrganizationCount: complimentaryRows.length,
     unresolvedCount,
     providerControls: {
       singleSubscriptionRedirect: {
@@ -278,5 +376,6 @@ export async function auditBillingLaunch(
       },
     },
     organizations: rows,
+    complimentaryOrganizations: complimentaryRows,
   };
 }

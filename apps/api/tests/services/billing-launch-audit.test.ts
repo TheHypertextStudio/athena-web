@@ -42,6 +42,11 @@ describe('auditBillingLaunch', () => {
       stripeCustomerId: null,
       trialConsumedAt: new Date('2026-08-25T00:00:00.000Z'),
     });
+    const reason = 'Founder production access';
+    await db.insert(schema.billingExemption).values({
+      organizationId: orgId,
+      reason,
+    });
     await db.insert(schema.organizationProductEntitlement).values({
       organizationId: orgId,
       productKey: 'docket_pro',
@@ -55,9 +60,58 @@ describe('auditBillingLaunch', () => {
       singleSubscriptionRedirectVerifiedAt: '2026-08-25T00:00:00.000Z',
     });
 
-    expect(report).toMatchObject({ passed: true, organizationCount: 0, unresolvedCount: 0 });
+    expect(report).toMatchObject({
+      passed: true,
+      organizationCount: 0,
+      unresolvedCount: 0,
+      complimentaryOrganizations: [
+        {
+          organizationId: orgId,
+          status: 'active',
+          reason,
+          sharedWorkWritable: true,
+          capabilities: ['integrations', 'mcp', 'athena', 'voice'],
+          problems: [],
+        },
+      ],
+    });
     expect(listCustomers).not.toHaveBeenCalled();
     expect(listSubscriptions).not.toHaveBeenCalled();
+  });
+
+  it('blocks an orphaned complimentary entitlement or exemption', async () => {
+    const gateway = new AuditGateway();
+    const { orgId: entitlementOnlyOrg } = await seedBaseOrg(db, schema, false);
+    await db.insert(schema.organizationProductEntitlement).values({
+      organizationId: entitlementOnlyOrg,
+      productKey: 'docket_pro',
+      source: 'complimentary',
+      status: 'active',
+    });
+    const { orgId: exemptionOnlyOrg } = await seedBaseOrg(db, schema, false);
+    await db.insert(schema.billingExemption).values({
+      organizationId: exemptionOnlyOrg,
+      reason: 'Missing entitlement mirror',
+    });
+
+    const report = await auditBillingLaunch(db, gateway, new Date('2026-08-25T01:00:00.000Z'), {
+      singleSubscriptionRedirectVerifiedAt: '2026-08-25T00:00:00.000Z',
+    });
+
+    expect(report.passed).toBe(false);
+    expect(report.unresolvedCount).toBe(2);
+    expect(report.complimentaryOrganizations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          organizationId: entitlementOnlyOrg,
+          problems: [expect.objectContaining({ code: 'complimentary_exemption_missing' })],
+        }),
+        expect.objectContaining({
+          organizationId: exemptionOnlyOrg,
+          problems: [expect.objectContaining({ code: 'complimentary_entitlement_missing' })],
+        }),
+      ]),
+    );
   });
 
   it('passes a coherent mirror and blocks duplicate provider ownership', async () => {

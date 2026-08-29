@@ -277,9 +277,13 @@
   The engineering plan also removes its retired pull-request workflow language because this
   repository integrates validated commits directly into `main`.
 - **Founder access gate**: The `Hypertext Studio` production organization remains without a billing
-  customer, entitlement, or exemption. The existing Better Auth user now has the supported initial
-  superadmin bootstrap row. The production admin passkey ceremony is waiting for completion in the
-  Hypertext Studio Chrome instance. No complimentary grant has been written yet.
+  customer. The existing Better Auth user has the supported initial superadmin bootstrap row. The
+  release owner confirmed the production grant and the authenticated Hypertext Studio operator
+  submitted it. The browser disconnected before it returned a result, so the operator must not
+  submit the action twice. The production audit now reports active exemptions and complimentary
+  entitlement mirrors separately from Stripe ownership. It proves the grant reason, shared-work
+  write state, and every paid-module capability without depending on the Admin browser. It blocks
+  launch when either side of the grant is missing or the entitlement is not active.
 - **Authentication-loop correction**: Production billing inspection must not depend on a personal
   Google Cloud CLI refresh token. A manual, read-only GitHub Actions audit will use the same
   production Workload Identity Federation boundary as deployment. It will run the existing billing

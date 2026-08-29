@@ -54,6 +54,8 @@ describe('production billing audit policy', () => {
     expect(auditWorkflow).toContain('billing-production-audit');
     expect(auditWorkflow).toContain('billing-provider-errors.json');
     expect(auditWorkflow).toContain('billing-runtime-rollout.json');
+    expect(auditWorkflow).toContain('mismatches: $mismatches');
+    expect(auditWorkflow).toContain('test "$(jq length <<<"$mismatches_json")" = "0"');
     expect(auditWorkflow).toContain('retention-days: 7');
     expect(auditWorkflow).toContain('if-no-files-found: error');
   });

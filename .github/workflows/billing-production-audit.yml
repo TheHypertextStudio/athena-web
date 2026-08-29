@@ -64,13 +64,15 @@ jobs:
           scheduler_last_attempt="$(jq -r '.lastAttemptTime // null' <<<"$scheduler_json")"
           scheduler_status_code="$(jq -r '.status.code // 0' <<<"$scheduler_json")"
 
-          test "$deployed_checkout" = "false"
-          test "$deployed_mode" = "$EXPECTED_RECONCILIATION_MODE"
-          test "$deployed_account" = "$EXPECTED_STRIPE_ACCOUNT_ID"
-          test "$scheduler_state" = "ENABLED"
-          test "$scheduler_schedule" = "*/15 * * * *"
-          test "$scheduler_uri" = "$API_URL/internal/cron/billing-reconciliation"
-          test "$scheduler_status_code" = "0"
+          mismatches=()
+          test "$deployed_checkout" = "false" || mismatches+=("checkout_enabled")
+          test "$deployed_mode" = "$EXPECTED_RECONCILIATION_MODE" || mismatches+=("reconciliation_mode")
+          test "$deployed_account" = "$EXPECTED_STRIPE_ACCOUNT_ID" || mismatches+=("stripe_account")
+          test "$scheduler_state" = "ENABLED" || mismatches+=("scheduler_state")
+          test "$scheduler_schedule" = "*/15 * * * *" || mismatches+=("scheduler_schedule")
+          test "$scheduler_uri" = "$API_URL/internal/cron/billing-reconciliation" || mismatches+=("scheduler_uri")
+          test "$scheduler_status_code" = "0" || mismatches+=("scheduler_status")
+          mismatches_json="$(printf '%s\n' "${mismatches[@]-}" | jq -Rsc 'split("\n") | map(select(length > 0))')"
 
           jq -n \
             --arg generatedAt "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
@@ -84,8 +86,11 @@ jobs:
             --arg schedulerUri "$scheduler_uri" \
             --arg schedulerLastAttempt "$scheduler_last_attempt" \
             --arg schedulerStatusCode "$scheduler_status_code" \
+            --argjson mismatches "$mismatches_json" \
             '{
               generatedAt: $generatedAt,
+              passed: ($mismatches | length == 0),
+              mismatches: $mismatches,
               revision: $revision,
               checkoutEnabled: ($checkoutEnabled == "true"),
               reconciliationMode: $reconciliationMode,
@@ -99,6 +104,8 @@ jobs:
                 statusCode: ($schedulerStatusCode | tonumber)
               }
             }' > "$RUNNER_TEMP/billing-production-audit/billing-runtime-rollout.json"
+
+          test "$(jq length <<<"$mismatches_json")" = "0"
 
       - uses: pnpm/action-setup@v6
 

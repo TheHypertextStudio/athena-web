@@ -1,9 +1,27 @@
 'use client';
 
-import type { HubTodayFocus, HubTodayPlanItem } from '@docket/types';
+/**
+ * `today/focus-card` — the one plan item you are on, rendered above the rest of the day.
+ *
+ * @remarks
+ * This was `focus-sequence`, a standalone section rendering two cards labelled "Now" and "After
+ * this" — the only two of the day's tasks the page showed at all. The rest of `plan[]` was fetched
+ * and dropped, so a fifteen-item day and a two-item day drew the identical surface.
+ *
+ * The day is now one list (`todays-work.tsx`), and this is its promoted first entry: the same task
+ * the sequence called "Now", carrying the inline actions that only make sense for the thing you are
+ * actually doing — the timer, complete, the timebox popover, defer. "After this" is no longer a
+ * second card; it is simply the next row.
+ *
+ * The card is a filled surface rather than an outlined one. It needs to read as *more* than the
+ * rows beneath it, and a tonal step does that without spending a border on a page that is trying to
+ * lose them.
+ */
+import type { HubTodayPlanItem } from '@docket/types';
 import { AlarmClock, ArrowRight, Check, Ellipsis } from '@docket/ui/icons';
 import {
   Button,
+  Card,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -12,6 +30,8 @@ import {
   Popover,
   PopoverAnchor,
   PopoverContent,
+  Row,
+  Stack,
 } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
 import { type JSX, useRef, useState } from 'react';
@@ -20,16 +40,20 @@ import { TimeboxForm } from '@/components/agenda/agenda-timebox-form';
 import { OrgChip } from '@/components/org-chip';
 import { TaskTimerButton } from '@/components/time-tracking/task-timer-button';
 
-/** Inline mutations supported by the finite Today sequence. */
-export interface FocusSequenceProps {
-  readonly focus: HubTodayFocus;
+/** Props for {@link FocusCard}. */
+export interface FocusCardProps {
+  /** The plan item being worked on now. */
+  readonly item: HubTodayPlanItem;
+  /** Resolve a workspace's display name. */
   readonly orgName: (organizationId: string) => string;
+  /** Whether a completion is in flight. */
   readonly completing: boolean;
   readonly onComplete: (item: HubTodayPlanItem) => void;
   readonly onDefer: (item: HubTodayPlanItem) => void;
-  readonly onPromote: (item: HubTodayPlanItem, beforeSort: number) => void;
   readonly onTimebox: (item: HubTodayPlanItem, startsAt: string, endsAt: string) => void;
+  /** The day this card belongs to, for the timebox form. */
   readonly date: string;
+  /** The timezone times are read in. */
   readonly displayTimezone: string;
 }
 
@@ -44,58 +68,33 @@ function timing(item: HubTodayPlanItem, displayTimezone: string): string | null 
   return item.estimateMinutes ? `${String(item.estimateMinutes)} min` : null;
 }
 
-function FocusCard({
+/** The single item you are on now: a filled surface carrying its own inline actions. */
+export function FocusCard({
   item,
-  label,
-  primary,
   orgName,
   completing,
   onComplete,
   onDefer,
-  onPromote,
   onTimebox,
-  beforeSort,
   date,
   displayTimezone,
-}: {
-  readonly item: HubTodayPlanItem;
-  readonly label: 'Now' | 'After this';
-  readonly primary: boolean;
-  readonly orgName: (organizationId: string) => string;
-  readonly completing: boolean;
-  readonly onComplete: (item: HubTodayPlanItem) => void;
-  readonly onDefer: (item: HubTodayPlanItem) => void;
-  readonly onPromote: (item: HubTodayPlanItem, beforeSort: number) => void;
-  readonly onTimebox: (item: HubTodayPlanItem, startsAt: string, endsAt: string) => void;
-  readonly beforeSort: number | null;
-  readonly date: string;
-  readonly displayTimezone: string;
-}): JSX.Element {
+}: FocusCardProps): JSX.Element {
   const time = timing(item, displayTimezone);
   return (
-    <article
-      aria-label={`${label}: ${item.title}`}
-      className={
-        primary
-          ? 'border-primary/25 bg-surface-container-lowest rounded-2xl border p-5 @xl:p-6'
-          : 'border-outline-variant bg-surface-container-low/55 rounded-xl border p-4 @xl:ml-8'
-      }
-    >
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p className={`${primary ? 'text-primary' : 'text-on-surface-variant'} text-label-large`}>
-            {label}
-          </p>
+    <Card role="article" aria-label={`Now: ${item.title}`} className="p-4 @xl:p-5">
+      <Row gap={4} align="start" justify="between">
+        <Stack className="min-w-0">
+          <p className="text-primary text-label-large">Now</p>
           <Link
             href={`/orgs/${item.organizationId}/tasks/${item.id}`}
-            className="text-on-surface text-title-large focus-visible:ring-ring mt-1 block text-balance hover:underline focus-visible:rounded focus-visible:ring-2 focus-visible:outline-none"
+            className="text-on-surface text-title-medium focus-visible:ring-ring mt-1 block text-balance hover:underline focus-visible:rounded focus-visible:ring-2 focus-visible:outline-none"
           >
             {item.title}
           </Link>
-        </div>
+        </Stack>
         <OrgChip orgId={item.organizationId} name={orgName(item.organizationId)} />
-      </div>
-      <div className="text-on-surface-variant text-body-small mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+      </Row>
+      <Row gap={3} className="text-on-surface-variant text-body-small mt-2 flex-wrap">
         <span>{item.reason}</span>
         {time ? (
           <span className="inline-flex items-center gap-1">
@@ -103,46 +102,39 @@ function FocusCard({
           </span>
         ) : null}
         <span className="capitalize">{item.state.replaceAll('_', ' ')}</span>
-      </div>
+      </Row>
       <FocusActions
         item={item}
         completing={completing}
-        beforeSort={beforeSort}
         date={date}
         displayTimezone={displayTimezone}
         onComplete={onComplete}
         onDefer={onDefer}
-        onPromote={onPromote}
         onTimebox={onTimebox}
       />
-    </article>
+    </Card>
   );
 }
 
 function FocusActions({
   item,
   completing,
-  beforeSort,
   date,
   displayTimezone,
   onComplete,
   onDefer,
-  onPromote,
   onTimebox,
 }: {
   readonly item: HubTodayPlanItem;
   readonly completing: boolean;
-  readonly beforeSort: number | null;
   readonly date: string;
   readonly displayTimezone: string;
   readonly onComplete: (item: HubTodayPlanItem) => void;
   readonly onDefer: (item: HubTodayPlanItem) => void;
-  readonly onPromote: (item: HubTodayPlanItem, beforeSort: number) => void;
   readonly onTimebox: (item: HubTodayPlanItem, startsAt: string, endsAt: string) => void;
 }): JSX.Element {
   const [timeboxOpen, setTimeboxOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [announcement, setAnnouncement] = useState('');
   const openingTimebox = useRef(false);
   const timeboxLabel = item.timeboxStartsAt ? 'Adjust timebox' : 'Set timebox';
   const taskHref = `/orgs/${item.organizationId}/tasks/${item.id}`;
@@ -156,7 +148,7 @@ function FocusActions({
     <Popover open={timeboxOpen} onOpenChange={setTimeboxOpen}>
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <PopoverAnchor asChild>
-          <div className="mt-4 flex min-h-11 items-center gap-2">
+          <Row gap={2} className="mt-4 min-h-11">
             <TaskTimerButton taskId={item.id} title={item.title} />
             <Button
               type="button"
@@ -169,20 +161,7 @@ function FocusActions({
             >
               <Check aria-hidden="true" /> Mark complete
             </Button>
-            <div className="ml-auto hidden min-w-0 items-center gap-1 @lg:flex">
-              {beforeSort !== null ? (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="min-h-11"
-                  onClick={() => {
-                    onPromote(item, beforeSort);
-                    setAnnouncement(`${item.title} is now first in your plan.`);
-                  }}
-                >
-                  Make next
-                </Button>
-              ) : null}
+            <Row gap={1} className="ml-auto hidden @lg:flex">
               <Button type="button" variant="ghost" className="min-h-11" onClick={openTimebox}>
                 {timeboxLabel}
               </Button>
@@ -201,13 +180,13 @@ function FocusActions({
                   Open <ArrowRight aria-hidden="true" />
                 </Link>
               </Button>
-            </div>
+            </Row>
             <DropdownMenuTrigger asChild>
               <Button type="button" variant="ghost" className="ml-auto min-h-11 @lg:hidden">
                 <Ellipsis aria-hidden="true" /> More
               </Button>
             </DropdownMenuTrigger>
-          </div>
+          </Row>
         </PopoverAnchor>
         <DropdownMenuContent
           align="end"
@@ -218,16 +197,6 @@ function FocusActions({
             event.preventDefault();
           }}
         >
-          {beforeSort !== null ? (
-            <DropdownMenuItem
-              onSelect={() => {
-                onPromote(item, beforeSort);
-                setAnnouncement(`${item.title} is now first in your plan.`);
-              }}
-            >
-              Make next
-            </DropdownMenuItem>
-          ) : null}
           <DropdownMenuItem
             disabled={completing}
             onSelect={() => {
@@ -264,69 +233,6 @@ function FocusActions({
           }}
         />
       </PopoverContent>
-      <span className="sr-only" aria-live="polite">
-        {announcement}
-      </span>
     </Popover>
-  );
-}
-
-/** Render the single current action and the single action immediately following it. */
-export default function FocusSequence({
-  focus,
-  orgName,
-  completing,
-  onComplete,
-  onDefer,
-  onPromote,
-  onTimebox,
-  date,
-  displayTimezone,
-}: FocusSequenceProps): JSX.Element | null {
-  if (!focus.now && !focus.after) return null;
-  return (
-    <section aria-labelledby="whats-next-heading" className="flex flex-col gap-3">
-      <h2 id="whats-next-heading" className="text-on-surface text-title-large">
-        What’s next
-      </h2>
-      {focus.now ? (
-        <FocusCard
-          item={focus.now}
-          label="Now"
-          primary
-          orgName={orgName}
-          completing={completing}
-          onComplete={onComplete}
-          onDefer={onDefer}
-          onPromote={onPromote}
-          onTimebox={onTimebox}
-          beforeSort={null}
-          date={date}
-          displayTimezone={displayTimezone}
-        />
-      ) : null}
-      {focus.after ? (
-        <FocusCard
-          item={focus.after}
-          label="After this"
-          primary={false}
-          orgName={orgName}
-          completing={completing}
-          onComplete={onComplete}
-          onDefer={onDefer}
-          onPromote={onPromote}
-          onTimebox={onTimebox}
-          beforeSort={
-            focus.now &&
-            focus.now.reason !== 'Focus timer is running' &&
-            focus.now.reason !== 'Scheduled now'
-              ? focus.now.sort
-              : null
-          }
-          date={date}
-          displayTimezone={displayTimezone}
-        />
-      ) : null}
-    </section>
   );
 }

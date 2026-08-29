@@ -7077,6 +7077,64 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [TODAY-SURFACE-001] Show the day's work on the daily surface
+
+- **Completed**: 2026-08-29
+- **Priority**: P1
+- **Summary**: Today renders the accepted plan, the approvals and blockers waiting on the person,
+  and the outcomes that work moves — in that order. The page previously opened on a text box, a
+  sentence counting four unrelated things into one number, and a banner advertising Athena, then
+  four status cards. It showed no tasks at all unless a plan was already active, and even then only
+  two of them.
+- **Decisions**: The attention sentence is replaced by its parts. `GET /v1/hub/today` computes
+  `attentionCount = approvals + blocked + dueToday + inbox`, so an account with a hundred unread
+  notifications read as a hundred things due today; the strip prints each part and holds the
+  mailbox separate, since unread notifications are the one item not already rendered further down
+  the page. `brief.text` survives for the genuinely-clear case, where the server's copy is good.
+
+  The day is one list with its first entry promoted, replacing a "Now / After this" pair that
+  rendered two of however many tasks the day held. Row actions sit beside each row rather than
+  inside it, because a row is an anchor and a button nested in an anchor is invalid HTML.
+
+  A blocked task already on the plan is dropped from "Needs you": the plan row carries its own
+  Blocked marker, and listing it twice made the day look busier than it was. Approvals are never
+  deduplicated, because a plan row says nothing about an agent waiting on a signature.
+
+  Work in motion became rows on the shared `EntityListRow` primitive. A zero-of-zero project says
+  it has no tasks instead of drawing an empty progress track, which had been visually identical to
+  "no progress made". A health chip is spent only on `at_risk` and `off_track`; a chip on every row
+  is a column, not a signal.
+
+  The composer keeps both destinations and its position. Only the affordance changed: the chevron
+  that hid which mode was armed became a visible toggle with Athena selected, so the same Enter key
+  no longer inserts a row or starts an agent depending on state a person had to infer.
+
+- **Files changed**: Added `today-section.tsx` (one section shell replacing five container
+  recipes), `today-attention.tsx`. Rewrote `todays-work.tsx`, `work-in-motion.tsx`,
+  `hub-task-row.tsx`, `needs-you.tsx` onto `EntityList`/`EntityListRow`/`EmptyState`/`Row`/`Stack`.
+  Renamed `focus-sequence.tsx` to `focus-card.tsx`, keeping `FocusCard` and its inline actions and
+  dropping the two-card section. Retoned `keep-the-momentum.tsx`. Deleted `plan-today-card.tsx`
+  (its action moved into the day's empty state) and `ghost-proposals.tsx` (no references anywhere,
+  tests included). Rewired `app/(app)/today/page.tsx`. Added a `docket-web-localhost` launch
+  configuration so the passkey ceremony can run headlessly for visual audits.
+- **Validation**: `pnpm lint`, `pnpm typecheck`, and `pnpm format:check` pass. The web suite passes
+  3580 tests across 459 files, including 40 in `tests/today`. Screenshots captured from a seeded
+  account at 1440px and 900px in both themes, in the unplanned and active plan states, with zero
+  horizontal overflow at both widths. The design-token scan passes: the debt ledger lost its
+  `ghost-proposals.tsx` entry and gained none.
+- **Blockers**: `apps/api/tests/routes/initiatives-detail.test.ts` fails 19 assertions on this
+  branch, before and after a `pnpm db:reset`. This change touches no API, database, or shared
+  package source, so the failures are pre-existing and unrelated. The `cleared` plan state was not
+  screenshotted; only `unplanned` and `active` were seeded.
+- **Learnings**: The page was not missing a feature. `plan[]`, `needsAttention.approvals`, and
+  `.blocked` were all fetched on every load — the server paid for an approval join and a
+  dependency-graph walk — and then discarded, while `needs-you.tsx`, `todays-work.tsx`, and
+  `hub-task-row.tsx` sat built and tested with no caller. Checking what the payload already carries
+  before designing new surface is worth doing first.
+
+  `.env.local` points at a file-backed PGlite database shared by the dev stack and the API test
+  suite, so seeding a dev account for screenshots corrupts test runs until `pnpm db:reset`.
+
 ### [EDITOR-TABLES-002] Attach Markdown table controls to the table
 
 - **Completed**: 2026-08-29

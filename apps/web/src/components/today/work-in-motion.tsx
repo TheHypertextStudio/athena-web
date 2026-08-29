@@ -1,11 +1,35 @@
+/**
+ * `today/work-in-motion` — the larger outcomes today's work is moving, as rows.
+ *
+ * @remarks
+ * This was a two-column grid of four ~230px cards that consumed the entire fold to carry about five
+ * facts each — and on a young workspace three of those five were "No update yet", "0 of 0 tasks
+ * complete", and a progress bar sitting at zero. The same four items are four rows.
+ *
+ * Three specific things the cards got wrong, fixed here rather than restyled:
+ *
+ * 1. **A zero-of-zero progress bar is a lie.** An empty track reads as "no progress made" when it
+ *    actually means "this project has no tasks". A project with nothing in it says so in words.
+ * 2. **A health chip on healthy work is noise.** Every card carried one, so the four "At Risk"
+ *    chips in a row had nothing to contrast against and the signal died. `on_track` is the
+ *    expected state and spends no chip; only `at_risk` and `off_track` do.
+ * 3. **"No update yet" is not an update.** The card reserved two lines (`min-h-10`) for a sentence
+ *    that was not there, four times over. An absent update renders nothing at all.
+ *
+ * The trailing "Open project →" link is gone too: the whole row is the link, so the affordance was
+ * a second control pointing where the first one already went.
+ */
 import type { HubTodayStatusCard } from '@docket/types';
-import { ArrowRight, Flag, Layers } from '@docket/ui/icons';
+import { EntityList, EntityListRow, RowMeta, RowProgress } from '@docket/ui/components';
+import { Flag, Layers } from '@docket/ui/icons';
+import { Badge } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
 import type { JSX } from 'react';
 
 import { OrgChip } from '@/components/org-chip';
-import { relativeTime } from '@/components/project-detail/format-time';
 import { formatCalendarDate } from '@/lib/format-date';
+
+import { TodaySection } from './today-section';
 
 /** Props for grounded Project and Initiative status stories. */
 export interface WorkInMotionProps {
@@ -13,124 +37,95 @@ export interface WorkInMotionProps {
   readonly orgName: (organizationId: string) => string;
 }
 
-function healthLabel(health: HubTodayStatusCard['health']): string {
-  if (!health) return 'No health set';
-  return health.replaceAll('_', ' ');
-}
-
 function calendarDate(date: string): string {
   return formatCalendarDate(date, { month: 'short', day: 'numeric' }) ?? date;
+}
+
+/**
+ * The health chip, or nothing.
+ *
+ * @remarks
+ * Returns null for `on_track` and for unset health. A chip that appears on every row is a column,
+ * and a column of identical values is not a signal.
+ */
+function HealthChip({
+  health,
+}: {
+  readonly health: HubTodayStatusCard['health'];
+}): JSX.Element | null {
+  if (health !== 'at_risk' && health !== 'off_track') return null;
+  return (
+    <Badge variant={health === 'off_track' ? 'destructive' : 'secondary'}>
+      {health === 'off_track' ? 'Off track' : 'At risk'}
+    </Badge>
+  );
 }
 
 /** Connect today's execution to at most four visible larger outcomes. */
 export default function WorkInMotion({ cards, orgName }: WorkInMotionProps): JSX.Element | null {
   if (cards.length === 0) return null;
+  const visible = cards.slice(0, 4);
   return (
-    <section aria-labelledby="work-in-motion-heading">
-      <div className="mb-3 flex items-end justify-between gap-4">
-        <div>
-          <h2 id="work-in-motion-heading" className="text-on-surface text-title-large">
-            Work in motion
-          </h2>
-          <p className="text-on-surface-variant text-body-small mt-0.5">
-            The outcomes today’s work is moving.
-          </p>
-        </div>
-      </div>
-      <div className="grid grid-cols-1 gap-3 @2xl:grid-cols-2">
-        {cards.slice(0, 4).map((card) => {
+    <TodaySection id="work-in-motion-heading" heading="Work in motion" count={visible.length}>
+      <EntityList aria-label="Work in motion" tone="tonal">
+        {visible.map((card) => {
           const href = `/orgs/${card.organizationId}/${card.kind === 'project' ? 'projects' : 'initiatives'}/${card.id}`;
-          const healthTone =
-            card.health === 'off_track'
-              ? 'text-error bg-error/8'
-              : card.health === 'at_risk'
-                ? 'text-warning bg-warning/10'
-                : 'text-on-surface-variant bg-surface-container-high';
           return (
-            <article
+            <EntityListRow
               key={`${card.kind}:${card.id}`}
-              className="border-outline-variant bg-surface-container-lowest group relative overflow-hidden rounded-xl border p-4"
-            >
-              <div className="bg-primary/65 absolute inset-y-0 left-0 w-1" aria-hidden />
-              <div className="flex items-start justify-between gap-3 pl-1">
-                <div className="min-w-0">
-                  <p className="text-on-surface-variant text-label-small flex items-center gap-1.5">
-                    {card.kind === 'project' ? (
-                      <Flag className="size-3.5" />
-                    ) : (
-                      <Layers className="size-3.5" />
-                    )}
-                    {card.kind}
-                  </p>
-                  <Link
-                    href={href}
-                    className="text-on-surface text-title-small focus-visible:ring-ring mt-1 block hover:underline focus-visible:rounded focus-visible:ring-2 focus-visible:outline-none"
-                  >
-                    {card.name}
-                  </Link>
-                </div>
-                <OrgChip orgId={card.organizationId} name={orgName(card.organizationId)} />
-              </div>
-              <div className="mt-3 flex items-center gap-2 pl-1">
-                <span
-                  className={`text-label-small rounded-full px-2 py-1 capitalize ${healthTone}`}
-                >
-                  {healthLabel(card.health)}
-                </span>
-                <span className="text-on-surface-variant text-label-small capitalize">
-                  {card.status.replaceAll('_', ' ')}
-                </span>
-              </div>
-              <p className="text-on-surface text-body-medium mt-3 min-h-10 pl-1">
-                {card.latestUpdate?.excerpt ?? 'No update yet'}
-              </p>
-              {card.latestUpdate ? (
-                <p className="text-on-surface-variant text-label-small mt-1 pl-1">
-                  Updated {relativeTime(card.latestUpdate.createdAt)}
-                </p>
-              ) : null}
-              {card.kind === 'project' ? (
-                <div className="mt-3 pl-1">
-                  <div className="text-on-surface-variant text-body-small mb-1 flex justify-between">
-                    <span>
-                      {String(card.progress.completed)} of {String(card.progress.total)} tasks
-                      complete
-                    </span>
-                    {card.nextMilestone ? (
-                      <span>
-                        {card.nextMilestone.name} · {calendarDate(card.nextMilestone.targetDate)}
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="bg-surface-container-high h-1.5 overflow-hidden rounded-full">
-                    <div
-                      className="bg-primary h-full rounded-full"
-                      style={{
-                        width: `${String(card.progress.total > 0 ? Math.round((card.progress.completed / card.progress.total) * 100) : 0)}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-              ) : (
-                <div className="text-on-surface-variant text-body-small mt-3 flex justify-between gap-3 pl-1">
-                  <span>
-                    {String(card.connectedWork.onTrack)} on track ·{' '}
-                    {String(card.connectedWork.atRisk)} at risk
-                  </span>
-                  {card.targetDate ? <span>Target {calendarDate(card.targetDate)}</span> : null}
-                </div>
+              href={href}
+              render={(props) => (
+                <Link {...props} href={href}>
+                  {props.children}
+                </Link>
               )}
-              <Link
-                href={href}
-                aria-label={`Open ${card.name}`}
-                className="text-primary text-label-large focus-visible:ring-ring mt-3 flex min-h-11 items-center justify-end gap-1 focus-visible:rounded focus-visible:ring-2 focus-visible:outline-none"
-              >
-                Open {card.kind} <ArrowRight className="size-4" />
-              </Link>
-            </article>
+              leading={
+                card.kind === 'project' ? (
+                  <Flag aria-hidden="true" className="text-on-surface-variant size-4" />
+                ) : (
+                  <Layers aria-hidden="true" className="text-on-surface-variant size-4" />
+                )
+              }
+              title={card.name}
+              {...(card.latestUpdate ? { subtitle: card.latestUpdate.excerpt, wrap: true } : {})}
+              meta={
+                <>
+                  <HealthChip health={card.health} />
+                  {card.kind === 'project' ? (
+                    card.progress.total === 0 ? (
+                      <RowMeta>No tasks yet</RowMeta>
+                    ) : (
+                      <RowMeta tabular>
+                        <RowProgress
+                          value={(card.progress.completed / card.progress.total) * 100}
+                          label={`${card.name} task completion`}
+                        />
+                        {String(card.progress.completed)}/{String(card.progress.total)}
+                      </RowMeta>
+                    )
+                  ) : (
+                    <RowMeta tabular>
+                      {String(card.connectedWork.onTrack)} on track ·{' '}
+                      {String(card.connectedWork.atRisk)} at risk
+                    </RowMeta>
+                  )}
+                  {card.kind === 'project' && card.nextMilestone ? (
+                    <RowMeta tabular>
+                      {card.nextMilestone.name} · {calendarDate(card.nextMilestone.targetDate)}
+                    </RowMeta>
+                  ) : null}
+                  {card.kind === 'initiative' && card.targetDate ? (
+                    <RowMeta tabular>Target {calendarDate(card.targetDate)}</RowMeta>
+                  ) : null}
+                  <RowMeta>
+                    <OrgChip orgId={card.organizationId} name={orgName(card.organizationId)} />
+                  </RowMeta>
+                </>
+              }
+            />
           );
         })}
-      </div>
-    </section>
+      </EntityList>
+    </TodaySection>
   );
 }

@@ -22,13 +22,19 @@
  * That is also why the placeholder no longer says "paste a plan". In Task mode a twelve-line
  * braindump becomes *one* task titled by line one; only Athena decomposes it.
  *
+ * **The destination is a visible toggle, not a hidden one.** It used to be a bare chevron beside
+ * the send button: the armed mode lived in that button's label and in the placeholder, so the same
+ * `Enter` keystroke inserted a row or started an agent depending on state you had to infer. Both
+ * destinations are now on screen at once with the active one selected, which is the difference
+ * between choosing and discovering. Athena is the resting choice and stays so across visits.
+ *
  * A line, not a card. The bordered box with a toolbar along its bottom edge made the page's first
  * element a form, and its inner text sat inset from the column every other line on the page aligns
  * to. This shares the page's left edge, so it lines up by construction rather than by a negative
  * margin.
  */
-import { ChevronDown, ListChecks, Sparkles } from '@docket/ui/icons';
-import { Button } from '@docket/ui/primitives';
+import { ListChecks, Sparkles } from '@docket/ui/icons';
+import { Button, Chip, ControlGroup } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
 import { type JSX, type KeyboardEvent, useCallback, useState } from 'react';
 
@@ -166,9 +172,6 @@ export function TodayPrompt({
     [canSubmit, submit],
   );
 
-  const nextMode: CaptureMode = mode === 'task' ? 'athena' : 'task';
-  const modeLabel = mode === 'task' ? 'Task' : 'Athena';
-
   return (
     <div className="flex flex-col gap-2">
       {/* No heading and no explainer above the box. What used to sit here — a rhetorical
@@ -197,34 +200,42 @@ export function TodayPrompt({
           disabled={orgId === null}
           className="placeholder:text-on-surface-variant text-on-surface w-full resize-none bg-transparent text-base leading-relaxed outline-none disabled:opacity-50 @2xl:text-lg"
         />
-        {/* One control, and it says what it will do. The arrow it replaces meant nothing on a
-            surface where "send" can mean "insert a row" or "start an agent", and the separate
-            destination pill beside it was a second thing to decode before the first made sense.
-            The label is the destination; the chevron changes it. */}
-        <div className="flex items-center justify-end gap-1">
+        {/* Both destinations on screen, the armed one selected. Selecting is not sending: the
+            toggle only points the draft somewhere, and the button beside it still names the
+            consequence, because "insert a row" and "start an agent" are not the same promise. */}
+        <div className="flex items-center gap-2">
+          <ControlGroup controlSize="sm" role="group" aria-label="Send this to">
+            <Chip
+              variant="filter"
+              icon={<Sparkles />}
+              selected={mode === 'athena'}
+              onClick={() => {
+                setMode('athena');
+              }}
+            >
+              Athena
+            </Chip>
+            <Chip
+              variant="filter"
+              icon={<ListChecks />}
+              selected={mode === 'task'}
+              onClick={() => {
+                setMode('task');
+              }}
+            >
+              Task
+            </Chip>
+          </ControlGroup>
           <Button
             type="button"
             variant={canSubmit ? 'default' : 'ghost'}
             controlSize="sm"
             disabled={!canSubmit}
             onClick={submit}
-            className="min-h-11"
+            className="ml-auto min-h-11"
           >
             {mode === 'task' ? <ListChecks /> : <Sparkles />}
             {busy === 'capture' ? 'Adding…' : mode === 'task' ? 'Add task' : 'Ask Athena'}
-          </Button>
-          <Button
-            type="button"
-            iconOnly
-            variant="ghost"
-            controlSize="sm"
-            aria-label={`Send to ${modeLabel}. Switch to ${nextMode === 'task' ? 'Add a task' : 'Ask Athena'}.`}
-            className="min-h-11 min-w-11"
-            onClick={() => {
-              setMode(nextMode);
-            }}
-          >
-            <ChevronDown />
           </Button>
         </div>
       </div>

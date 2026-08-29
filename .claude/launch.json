@@ -10,6 +10,15 @@
       ],
       "port": 4000,
       "autoPort": true
+    },
+    {
+      "name": "docket-web-localhost",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "pnpm exec dotenv -e .env.local -- bash -c \"export WEB_PORT=4200 API_PORT=4300; export API_URL=http://localhost:4300 NEXT_PUBLIC_API_URL=http://localhost:4300 NEXT_PUBLIC_APP_URL=http://localhost:4200 WEB_URL=http://localhost:4200 BETTER_AUTH_URL=http://localhost:4300 BETTER_AUTH_PASSKEY_RP_ID=localhost NEXT_PUBLIC_PASSKEY_RP_ID=localhost BETTER_AUTH_TRUSTED_ORIGINS=http://localhost:4200,http://localhost:4300 BETTER_AUTH_ALLOWED_HOSTS=localhost MCP_ISSUER_URL=http://localhost:4300 MCP_RESOURCE_URL=http://localhost:4300 OIDC_LOGIN_PAGE_URL=http://localhost:4200/sign-in; unset BETTER_AUTH_COOKIE_DOMAIN NODE_EXTRA_CA_CERTS; echo \\\"[launch] web=$NEXT_PUBLIC_APP_URL api=$NEXT_PUBLIC_API_URL\\\"; ( cd apps/api && PORT=4300 HOST=127.0.0.1 pnpm exec tsx watch src/server.ts 2>&1 | sed \\\"s/^/[api] /\\\" ) & ( cd apps/web && pnpm exec next dev --port 4200 2>&1 | sed \\\"s/^/[web] /\\\" ) & wait\""
+      ],
+      "port": 4200
     }
   ]
 }

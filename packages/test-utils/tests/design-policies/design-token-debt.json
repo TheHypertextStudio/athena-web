@@ -348,9 +348,6 @@
   "apps/web/src/components/teams/team-picker.tsx": {
     "raw-type-utility": 1
   },
-  "apps/web/src/components/today/ghost-proposals.tsx": {
-    "raw-type-utility": 4
-  },
   "apps/web/src/components/today/today-prompt.tsx": {
     "raw-type-utility": 7
   },

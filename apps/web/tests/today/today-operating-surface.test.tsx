@@ -12,9 +12,8 @@ import {
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import FocusSequence from '../../src/components/today/focus-sequence';
+import { FocusCard } from '../../src/components/today/focus-card';
 import KeepTheMomentum from '../../src/components/today/keep-the-momentum';
-import PlanTodayCard from '../../src/components/today/plan-today-card';
 import WorkInMotion from '../../src/components/today/work-in-motion';
 import { assertDefined } from '@docket/test-utils';
 
@@ -48,51 +47,38 @@ const ORG = OrganizationId.parse('01JQ000000000000000000000A');
 
 afterEach(cleanup);
 
-describe('PlanTodayCard', () => {
-  it('makes planning with Athena the prominent empty-day action', () => {
-    const onPlan = vi.fn();
-    render(<PlanTodayCard onPlan={onPlan} />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Plan today with Athena' }));
-
-    expect(onPlan).toHaveBeenCalledOnce();
-    expect(screen.getByText(/time you actually have/i)).toBeInTheDocument();
-  });
-});
-
-describe('FocusSequence', () => {
-  it('renders exactly Now and After this with semantic inline actions', () => {
+describe('FocusCard', () => {
+  it('carries the inline actions that only make sense for the item in hand', () => {
     const complete = vi.fn();
     const defer = vi.fn();
-    const promote = vi.fn();
     const timebox = vi.fn();
     render(
-      <FocusSequence
-        focus={{ now: item('now', 0), after: item('after', 1) }}
+      <FocusCard
+        item={item('now', 0)}
         orgName={() => 'Acme'}
         completing={false}
         onComplete={complete}
         onDefer={defer}
-        onPromote={promote}
         onTimebox={timebox}
         date="2026-08-13"
         displayTimezone="UTC"
       />,
     );
 
-    const now = screen.getByRole('article', { name: 'Now: Task now' });
-    const after = screen.getByRole('article', { name: 'After this: Task after' });
-    expect(within(now).getByText('You chose this first')).toBeInTheDocument();
-    expect(within(after).getByText('Next in your plan')).toBeInTheDocument();
+    // One promoted card, not a two-card sequence: "After this" is an ordinary row in the day's
+    // list now, so a second article here would be the old shape leaking back in.
+    const cards = screen.getAllByRole('article');
+    expect(cards).toHaveLength(1);
+    const now = assertDefined(cards[0]);
+
     fireEvent.click(within(now).getByRole('button', { name: 'Mark complete' }));
-    fireEvent.click(within(after).getByRole('button', { name: 'Defer' }));
-    fireEvent.click(within(after).getByRole('button', { name: 'Make next' }));
+    fireEvent.click(within(now).getByRole('button', { name: 'Defer' }));
     expect(complete).toHaveBeenCalledWith(expect.objectContaining({ id: 'now' }));
-    expect(defer).toHaveBeenCalledWith(expect.objectContaining({ id: 'after' }));
-    expect(promote).toHaveBeenCalledWith(expect.objectContaining({ id: 'after' }), 0);
-    expect(screen.getByText('Task after is now first in your plan.')).toBeInTheDocument();
+    expect(defer).toHaveBeenCalledWith(expect.objectContaining({ id: 'now' }));
     expect(within(now).getByRole('button', { name: /timebox/i })).toBeInTheDocument();
-    expect(screen.getAllByRole('article')).toHaveLength(2);
+
+    // Promotion is not offered on the item you are already on — there is nothing ahead of it.
+    expect(within(now).queryByRole('button', { name: 'Make next' })).not.toBeInTheDocument();
   });
 });
 
@@ -131,13 +117,50 @@ describe('WorkInMotion', () => {
     ];
     render(<WorkInMotion cards={cards} orgName={() => 'Acme'} />);
 
-    expect(screen.getByText('3 of 5 tasks complete')).toBeInTheDocument();
-    expect(screen.getByText('2 on track · 1 at risk')).toBeInTheDocument();
+    // Each card is one row that links to its entity — not a tile with a separate "Open" affordance.
+    const rows = screen.getAllByRole('link');
+    expect(rows).toHaveLength(2);
+    expect(assertDefined(rows[0])).toHaveAttribute(
+      'href',
+      `/orgs/${ORG}/projects/01JQ000000000000000000000P`,
+    );
+    expect(assertDefined(rows[1])).toHaveAttribute(
+      'href',
+      `/orgs/${ORG}/initiatives/01JQ000000000000000000000H`,
+    );
+
+    // A project reports completion as a progress bar; an initiative reports connected-work health.
+    expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '60');
+    expect(within(assertDefined(rows[1])).queryByRole('progressbar')).not.toBeInTheDocument();
+
+    // An update that exists is shown; one that does not leaves no placeholder behind.
     expect(screen.getByText('Final review is underway.')).toBeInTheDocument();
-    expect(screen.getByText(/Updated/)).toBeInTheDocument();
-    expect(screen.getByText(/Launch review/)).toBeInTheDocument();
-    expect(screen.getByText(/Target/)).toBeInTheDocument();
-    expect(screen.getByText('No update yet')).toBeInTheDocument();
+    expect(screen.queryByText(/no update/i)).not.toBeInTheDocument();
+
+    // A health chip is spent only on off-nominal health: `on_track` is the expected state, and a
+    // chip on every row is a column rather than a signal.
+    expect(within(assertDefined(rows[0])).getByText(/at risk/i)).toBeInTheDocument();
+    expect(within(assertDefined(rows[1])).queryByText(/on track$/i)).not.toBeInTheDocument();
+  });
+
+  it('says a project has no tasks rather than drawing an empty progress bar', () => {
+    const cards: HubTodayStatusCard[] = [
+      {
+        kind: 'project',
+        id: ProjectId.parse('01JQ000000000000000000000P'),
+        organizationId: ORG,
+        name: 'Nothing started',
+        status: 'active',
+        health: 'on_track',
+        latestUpdate: null,
+        nextMilestone: null,
+        progress: { completed: 0, total: 0 },
+      },
+    ];
+    render(<WorkInMotion cards={cards} orgName={() => 'Acme'} />);
+
+    // A 0% track and a 0-of-0 project look identical, and mean opposite things.
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
   });
 });
 

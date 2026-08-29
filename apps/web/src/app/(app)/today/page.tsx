@@ -1,14 +1,14 @@
 'use client';
 
 import { Button } from '@docket/ui/primitives';
-import Link from '@/components/docket-link';
 import { type JSX } from 'react';
 
 import { DayRecapEntry } from '@/components/today/day-recap-entry';
-import FocusSequence from '@/components/today/focus-sequence';
 import KeepTheMomentum from '@/components/today/keep-the-momentum';
-import PlanTodayCard from '@/components/today/plan-today-card';
+import NeedsYou from '@/components/today/needs-you';
+import { TodayAttention } from '@/components/today/today-attention';
 import { TodayPrompt } from '@/components/today/today-prompt';
+import TodaysWork from '@/components/today/todays-work';
 import WorkInMotion from '@/components/today/work-in-motion';
 import { useAthenaPanel } from '@/components/athena/athena-panel-provider';
 
@@ -20,10 +20,10 @@ import { useTodayActions } from './use-today-actions';
  *
  * @remarks
  * **At rest** it answers where things stand in a deliberately finite hierarchy: the standing
- * Athena field, a prominent planning action when the day is untouched, Now and After this for an
- * accepted plan, grounded Project/Initiative status stories, and feasible extra work only after
- * the accepted plan is clear. Inline actions cover quick execution; entity links defer detailed
- * workflows to their canonical pages.
+ * Athena field, what is outstanding today broken into its parts, whatever is waiting on this
+ * person's own decision, the day's accepted plan, and the larger outcomes that work is moving.
+ * Inline actions cover quick execution; entity links defer detailed workflows to their canonical
+ * pages.
  *
  * **Engaged**, it keeps the plan visible and reveals Athena in the shared utility rail. The rail
  * receives the workspace and draft while Today remains the planning surface, so a person can return
@@ -31,6 +31,13 @@ import { useTodayActions } from './use-today-actions';
  *
  * It is still only **one** conversation. The session rendered here is the same persistent thread
  * the ⌘J rail and `/athena` open; Today is another door onto it, not a place that grows its own.
+ *
+ * **What this ordering fixes.** The page previously opened on a text box, a sentence counting
+ * `approvals + blocked + dueToday + inbox` into one number, and a banner advertising Athena — then
+ * four status cards. It rendered *no tasks* unless a plan was already active, and even then only
+ * two of them, while `plan[]`, `needsAttention.approvals`, and `.blocked` were all fetched and
+ * dropped. Work now precedes portfolio, and the count is broken back into the parts it was summed
+ * from.
  *
  * **Not a three-pane cockpit.** `docs/core/mvp-plan.md` §8.1 specifies Plan · Calendar ·
  * Needs-Attention side by side. The calendar pane is gone because the shell's agenda rail renders
@@ -42,6 +49,7 @@ export default function TodayPage(): JSX.Element {
     useTodayData();
   const actions = useTodayActions(date);
   const { openAthena } = useAthenaPanel();
+  const plannedTaskIds = new Set((data?.plan ?? []).map((item) => item.id));
   const openTodayAthena = (draft: string): void => {
     if (!activeOrgId) return;
     openAthena({ workspaceId: activeOrgId, workspaceName: orgName(activeOrgId) }, draft);
@@ -59,100 +67,91 @@ export default function TodayPage(): JSX.Element {
         <span className="text-on-surface-variant ml-2 font-normal">{heading}</span>
       </h1>
 
-      <>
-        <TodayPrompt
-          orgId={activeOrgId}
-          orgLabel={activeOrgId ? orgName(activeOrgId) : 'your workspace'}
-          onCaptured={refetch}
+      <TodayPrompt
+        orgId={activeOrgId}
+        orgLabel={activeOrgId ? orgName(activeOrgId) : 'your workspace'}
+        onCaptured={refetch}
+      />
+
+      <TodayAttention needsAttention={data?.needsAttention} brief={data?.brief} />
+
+      {error ? (
+        <div
+          role="alert"
+          className="border-error/40 bg-error-container text-on-error-container text-body-medium flex items-center justify-between gap-4 rounded-xl border p-4"
+        >
+          <span>{error}</span>
+          <Button variant="outline" size="sm" onClick={refetch}>
+            Try again
+          </Button>
+        </div>
+      ) : null}
+
+      {actions.error ? (
+        <p role="alert" className="text-error text-body-small -mt-4">
+          {actions.error}
+        </p>
+      ) : null}
+
+      {/* Approvals outrank anything you planned: an agent that paused for your go-ahead is
+          blocked on you personally, and so is a task waiting on a dependency.
+
+          Blocked items already on the plan are dropped here, because the plan row below carries
+          its own Blocked marker — listing them in both places puts one task on screen twice and
+          makes "Needs you" look busier than the day actually is. Approvals are never deduped: a
+          plan row says nothing about an agent waiting on a signature, so that one is not a
+          repeat. */}
+      {data ? (
+        <NeedsYou
+          approvals={data.needsAttention.approvals}
+          blocked={data.needsAttention.blocked.filter((item) => !plannedTaskIds.has(item.id))}
+          orgName={orgName}
         />
+      ) : null}
 
-        {data?.brief ? (
-          data.brief.href ? (
-            <Link
-              href={data.brief.href}
-              className="text-on-surface-variant hover:text-primary focus-visible:ring-ring -mt-5 w-fit text-sm underline-offset-4 hover:underline focus-visible:rounded focus-visible:ring-2 focus-visible:outline-none"
-            >
-              {data.brief.text}
-            </Link>
-          ) : (
-            <p className="text-on-surface-variant -mt-5 text-sm">{data.brief.text}</p>
-          )
-        ) : null}
+      <TodaysWork
+        plan={data?.plan ?? []}
+        now={data?.focus.now ?? null}
+        orgName={orgName}
+        loading={loading}
+        unplanned={data?.planState === 'unplanned'}
+        onPlan={() => {
+          openTodayAthena('Plan today');
+        }}
+        completing={actions.completing}
+        onComplete={actions.complete}
+        onDefer={actions.defer}
+        onPromote={actions.promote}
+        onTimebox={(item, startsAt, endsAt) => {
+          void actions.timebox(item, startsAt, endsAt);
+        }}
+        date={date}
+        displayTimezone={displayTimezone}
+      />
 
-        {error ? (
-          <div
-            role="alert"
-            className="border-error/40 bg-error/5 text-error text-body-medium flex items-center justify-between gap-4 rounded-lg border p-4"
-          >
-            <span>{error}</span>
-            <Button variant="outline" size="sm" onClick={refetch}>
-              Try again
-            </Button>
-          </div>
-        ) : null}
+      <WorkInMotion cards={data?.statusCards ?? []} orgName={orgName} />
 
-        {actions.error ? (
-          <p role="alert" className="text-error text-body-small -mt-4">
-            {actions.error}
-          </p>
-        ) : null}
+      {data &&
+      (data.planState === 'cleared' || (data.planState === 'active' && data.focus.now === null)) ? (
+        <KeepTheMomentum
+          suggestions={data.suggestions}
+          orgName={orgName}
+          blockedPlan={data.planState === 'active'}
+          onAdd={actions.add}
+          onStart={actions.start}
+          busy={actions.suggestionBusy}
+          onAskAthena={() => {
+            openTodayAthena('What else can I move today?');
+          }}
+        />
+      ) : null}
 
-        {loading ? (
-          <div className="flex flex-col gap-3" aria-label="Loading today">
-            <div className="bg-surface-container-high h-36 animate-pulse rounded-2xl" />
-            <div className="bg-surface-container-high h-24 animate-pulse rounded-xl" />
-          </div>
-        ) : null}
-
-        {data?.planState === 'unplanned' ? (
-          <PlanTodayCard
-            onPlan={() => {
-              openTodayAthena('Plan today');
-            }}
-          />
-        ) : null}
-
-        {data?.planState === 'active' ? (
-          <FocusSequence
-            focus={data.focus}
-            orgName={orgName}
-            completing={actions.completing}
-            onComplete={actions.complete}
-            onDefer={actions.defer}
-            onPromote={actions.promote}
-            onTimebox={(item, startsAt, endsAt) => {
-              void actions.timebox(item, startsAt, endsAt);
-            }}
-            date={date}
-            displayTimezone={displayTimezone}
-          />
-        ) : null}
-
-        <WorkInMotion cards={data?.statusCards ?? []} orgName={orgName} />
-
-        {data &&
-        (data.planState === 'cleared' ||
-          (data.planState === 'active' && data.focus.now === null)) ? (
-          <KeepTheMomentum
-            suggestions={data.suggestions}
-            orgName={orgName}
-            blockedPlan={data.planState === 'active'}
-            onAdd={actions.add}
-            onStart={actions.start}
-            busy={actions.suggestionBusy}
-            onAskAthena={() => {
-              openTodayAthena('What else can I move today?');
-            }}
-          />
-        ) : null}
-
-        {/* Last, and only from mid-afternoon: this is the one backward-looking thing on a
-              forward-looking page, so it must not open the day on the past. */}
-        {/* No date: which day it is now is the server's to say, from the Hub timezone. The browser's
-              clock disagrees whenever somebody travels, and asking for its today from a zone behind
-              it asks for a day that has not happened. */}
-        <DayRecapEntry />
-      </>
+      {/* Last, and only from mid-afternoon: this is the one backward-looking thing on a
+            forward-looking page, so it must not open the day on the past. */}
+      {/* No date: which day it is now is the server's to say, from the Hub timezone. The browser's
+            clock disagrees whenever somebody travels, and asking for its today from a zone behind
+            it asks for a day that has not happened. */}
+      <DayRecapEntry />
     </div>
   );
 }

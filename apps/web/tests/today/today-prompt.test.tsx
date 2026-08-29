@@ -70,11 +70,15 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('TodayPrompt', () => {
-  it('starts with Athena as the clearly named destination', () => {
+  it('shows both destinations at once, with Athena the armed one', () => {
     render(<TodayPrompt orgId={ORG} orgLabel="Space" />);
     expect(screen.getByLabelText('Ask Athena about today')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Ask Athena' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /Switch to Add a task/ })).toBeInTheDocument();
+
+    // The chevron this replaces kept the armed destination off-screen, so the same Enter key
+    // inserted a row or started an agent depending on state you had to infer.
+    expect(screen.getByRole('button', { name: 'Athena' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Task' })).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('routes the default draft to Athena and resets an explicit task-capture switch on revisit', async () => {
@@ -86,7 +90,7 @@ describe('TodayPrompt', () => {
     expect(openAthena).toHaveBeenCalledOnce();
     expect(capturePost).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: /Switch to Add a task/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Task' }));
     first.unmount();
     render(<TodayPrompt orgId={ORG} orgLabel="Space" />);
     await waitFor(() => {

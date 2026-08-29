@@ -8,6 +8,8 @@ import { type JSX, useMemo, useState } from 'react';
 
 import { OrgChip } from '@/components/org-chip';
 
+import { TodaySection } from './today-section';
+
 /** Props for the cleared-day Athena suggestions. */
 export interface KeepTheMomentumProps {
   readonly suggestions: readonly HubTodaySuggestion[];
@@ -35,27 +37,21 @@ export default function KeepTheMomentum({
     [suggestions, dismissed],
   );
   return (
-    <section
-      aria-labelledby="momentum-heading"
-      className="border-primary/20 bg-primary/4 rounded-2xl border p-5"
+    <TodaySection
+      id="momentum-heading"
+      heading="Keep the momentum"
+      count={visible.length > 0 ? visible.length : undefined}
     >
-      <div className="flex items-start gap-3">
-        <span className="bg-primary/12 text-primary flex size-9 shrink-0 items-center justify-center rounded-full">
-          <Sparkles aria-hidden="true" className="size-4" />
-        </span>
-        <div>
-          <h2 id="momentum-heading" className="text-on-surface text-title-large">
-            Keep the momentum
-          </h2>
-          <p className="text-on-surface-variant text-body-medium mt-0.5">
-            {blockedPlan
-              ? 'Your remaining plan is blocked. Athena found work that can genuinely fit while you wait.'
-              : 'Your plan is clear. Athena found work that can genuinely fit the time left.'}
-          </p>
-        </div>
-      </div>
+      {/* The one line of narration kept anywhere on this page, because it is the only section whose
+          contents need a *reason* to be trusted: these are suggestions, and which of two situations
+          produced them changes what they mean. */}
+      <p className="text-on-surface-variant text-body-small">
+        {blockedPlan
+          ? 'Your remaining plan is blocked. This is work that fits while you wait.'
+          : 'Your plan is clear. This is work that fits the time left.'}
+      </p>
       {visible.length > 0 ? (
-        <ul className="divide-outline-variant/70 mt-4 divide-y">
+        <ul className="bg-surface-container-low divide-outline-variant mt-1 divide-y rounded-xl px-4">
           {visible.map((suggestion) => (
             <li key={suggestion.id} className="py-4 first:pt-2 last:pb-0">
               <div className="flex flex-col gap-3 @xl:flex-row @xl:items-center">
@@ -131,7 +127,7 @@ export default function KeepTheMomentum({
           ))}
         </ul>
       ) : (
-        <div className="mt-4 pl-12">
+        <div className="bg-surface-container-low mt-1 rounded-xl p-4">
           <p className="text-on-surface text-body-medium">
             {blockedPlan ? 'Nothing else fits around the block.' : 'You’re clear.'}
           </p>
@@ -147,6 +143,6 @@ export default function KeepTheMomentum({
           ) : null}
         </div>
       )}
-    </section>
+    </TodaySection>
   );
 }

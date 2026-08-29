@@ -1,0 +1,16 @@
+%% Container diagram. Every node is a deployable process or service.
+flowchart LR
+  docket[Docket API\nAthena scheduler and proposal owner]
+  gateway[Lovelace Lattice gateway\nOAuth and controller API]
+  relay[Lovelace signaling relay\nDurable work and result transport]
+  daemon[Mac Studio Lattice daemon\nLease and agent execution]
+  lmstudio[Mac Studio LM Studio\nLocal model inference]
+
+  docket -->|1. OAuth-authorized encrypted agent_task| gateway
+  gateway -->|2. Account-bound controller request| relay
+  relay -->|3. Runtime claims encrypted work| daemon
+  daemon -->|4. Local inference| lmstudio
+  lmstudio -->|5. Model output| daemon
+  daemon -->|6. Sealed terminal result| relay
+  relay -->|7. Durable status and ciphertext| gateway
+  gateway -->|8. Authorized result response| docket

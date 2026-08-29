@@ -51,6 +51,10 @@ export const OFFLINE_ROUTES = [
     load: async () => (await import('@/app/(app)/exports/[exportId]/page')).default,
   },
   {
+    pattern: '/external-agent/connect',
+    load: async () => (await import('@/app/(app)/external-agent/connect/page')).default,
+  },
+  {
     pattern: '/inbox',
     load: async () => (await import('@/app/(app)/inbox/inbox-client')).default,
   },

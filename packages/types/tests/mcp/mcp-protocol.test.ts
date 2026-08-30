@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   isUiResourceUri,
+  MCP_APP_PRESENTATION_MAX_BYTES,
   MCP_CLIENT_CAPABILITIES_META_KEY,
   MCP_TASKS_EXTENSION,
   MCP_TASKS_REQUIRED_CAPABILITY_DATA,
@@ -19,11 +20,42 @@ import {
   MCP_TERMINAL_TASK_STATUSES,
   MCP_UI_DISPLAY_MODES,
   MCP_UI_EXTENSION,
+  MCP_UI_MIME_TYPE,
   MCP_UI_PROXIED_METHODS,
   declaresTasksExtension,
   isLiveTaskStatus,
   isTerminalTaskStatus,
+  parseMcpAppPresentation,
 } from '../../src';
+
+function validPresentation(): Record<string, unknown> {
+  return {
+    connectionId: 'connection-1',
+    serverName: 'Official map server',
+    tool: 'show_map',
+    arguments: {
+      location: 'Las Vegas',
+      filters: ['open', { limit: 2 }],
+    },
+    result: {
+      content: [{ type: 'text', text: 'Map ready' }],
+      structuredContent: { center: [-115.1398, 36.1699] },
+    },
+    resource: {
+      uri: 'ui://map/main',
+      mimeType: MCP_UI_MIME_TYPE,
+      text: '<main>Map</main>',
+      meta: {
+        prefersBorder: true,
+        csp: {
+          connectDomains: ['https://api.example.com'],
+          resourceDomains: ['https://cdn.example.com'],
+        },
+        permissions: { clipboardWrite: {} },
+      },
+    },
+  };
+}
 
 describe('MCP Apps protocol', () => {
   it('recognises the reserved resource scheme and nothing else', () => {
@@ -44,6 +76,134 @@ describe('MCP Apps protocol', () => {
 
   it('lists the display modes in the published order', () => {
     expect(MCP_UI_DISPLAY_MODES).toEqual(['inline', 'fullscreen', 'pip']);
+  });
+
+  it('retains a valid presentation as a detached JSON-safe snapshot', () => {
+    // Catches accepting an object by reference, which would let later activity mutation alter history.
+    const input = validPresentation();
+
+    const parsed = parseMcpAppPresentation(input);
+
+    expect(parsed).toEqual(input);
+    expect(parsed).not.toBe(input);
+    expect(parsed?.arguments).not.toBe(input['arguments']);
+    expect(parsed?.resource.meta).toEqual({
+      prefersBorder: true,
+      csp: {
+        connectDomains: ['https://api.example.com'],
+        resourceDomains: ['https://cdn.example.com'],
+      },
+      permissions: { clipboardWrite: {} },
+    });
+  });
+
+  it('omits empty resource metadata from a retained presentation', () => {
+    // Catches manufacturing metadata that the remote MCP App did not declare.
+    const input = validPresentation();
+    (input['resource'] as Record<string, unknown>)['meta'] = undefined;
+
+    expect(parseMcpAppPresentation(input)?.resource).toEqual({
+      uri: 'ui://map/main',
+      mimeType: MCP_UI_MIME_TYPE,
+      text: '<main>Map</main>',
+    });
+  });
+
+  it.each([
+    ['a null presentation', null],
+    ['an array presentation', []],
+    ['a missing connection id', { ...validPresentation(), connectionId: undefined }],
+    ['a blank connection id', { ...validPresentation(), connectionId: '' }],
+    ['a missing server name', { ...validPresentation(), serverName: undefined }],
+    ['a blank server name', { ...validPresentation(), serverName: '' }],
+    ['a missing tool name', { ...validPresentation(), tool: undefined }],
+    ['a blank tool name', { ...validPresentation(), tool: '' }],
+    ['array arguments', { ...validPresentation(), arguments: [] }],
+    ['an invalid tool result', { ...validPresentation(), result: { content: 'Map ready' } }],
+    ['a missing resource', { ...validPresentation(), resource: null }],
+    [
+      'a non-string resource URI',
+      { ...validPresentation(), resource: { uri: 7, mimeType: MCP_UI_MIME_TYPE, text: 'Map' } },
+    ],
+    [
+      'a non-ui resource URI',
+      {
+        ...validPresentation(),
+        resource: { uri: 'https://example.com/map', mimeType: MCP_UI_MIME_TYPE, text: 'Map' },
+      },
+    ],
+    [
+      'the wrong resource MIME type',
+      {
+        ...validPresentation(),
+        resource: { uri: 'ui://map/main', mimeType: 'text/html', text: 'Map' },
+      },
+    ],
+    [
+      'non-string resource text',
+      {
+        ...validPresentation(),
+        resource: { uri: 'ui://map/main', mimeType: MCP_UI_MIME_TYPE, text: 7 },
+      },
+    ],
+    [
+      'invalid resource metadata',
+      {
+        ...validPresentation(),
+        resource: {
+          uri: 'ui://map/main',
+          mimeType: MCP_UI_MIME_TYPE,
+          text: 'Map',
+          meta: { csp: { connectDomains: [7] } },
+        },
+      },
+    ],
+  ])('rejects %s at the persistence boundary', (_label, input) => {
+    // Catches any malformed identity, result, or resource crossing from JSONB into the sandbox.
+    expect(parseMcpAppPresentation(input)).toBeNull();
+  });
+
+  it('rejects credential-shaped keys anywhere in nested arguments', () => {
+    // Catches credential leakage when key punctuation or array nesting changes.
+    const input = validPresentation();
+    input['arguments'] = { layers: [{ private_key: 'do-not-persist' }] };
+
+    expect(parseMcpAppPresentation(input)).toBeNull();
+  });
+
+  it.each([
+    ['undefined', undefined],
+    ['bigint', 1n],
+    ['function', () => 'unsafe'],
+    ['symbol', Symbol('unsafe')],
+    ['infinity', Number.POSITIVE_INFINITY],
+    ['NaN', Number.NaN],
+  ])('rejects a JSON-unsafe %s in presentation arguments', (_label, unsafeValue) => {
+    // Catches JSONB coercion silently changing a persisted tool invocation.
+    const input = validPresentation();
+    input['arguments'] = { unsafeValue };
+
+    expect(parseMcpAppPresentation(input)).toBeNull();
+  });
+
+  it('rejects cyclic presentation arguments', () => {
+    // Catches cyclic objects escaping credential traversal and crashing JSON serialization.
+    const cyclic: Record<string, unknown> = { label: 'cycle' };
+    cyclic['self'] = cyclic;
+    const input = validPresentation();
+    input['arguments'] = { cyclic };
+
+    expect(parseMcpAppPresentation(input)).toBeNull();
+  });
+
+  it('rejects a presentation whose serialized snapshot exceeds the storage boundary', () => {
+    // Catches oversized HTML crossing the bounded JSONB/activity contract.
+    const input = validPresentation();
+    (input['resource'] as Record<string, unknown>)['text'] = 'x'.repeat(
+      MCP_APP_PRESENTATION_MAX_BYTES,
+    );
+
+    expect(parseMcpAppPresentation(input)).toBeNull();
   });
 });
 

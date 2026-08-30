@@ -65,6 +65,8 @@
   - [x] Exact-pin the official SDK and make the protocol/sandbox layer conformant.
   - [x] Persist and render model-invoked MCP App presentations in Athena.
   - [x] Replace the surface inventory with normative conformance evidence.
+  - [x] Restore the shared-types 100% coverage gate for presentation revalidation.
+  - [ ] Make personal MCP Apps an unmistakable Athena destination.
   - [ ] Validate packages, production build, and an upstream reference app.
 - **Layer 1 implementation**: Pinned `@modelcontextprotocol/ext-apps@1.7.5` in the workspace
   catalog and replaced Athena's copied protocol types and handwritten browser host engine with
@@ -172,6 +174,16 @@
   `setOutboxUser` in `apps/web/src/components/pwa/outbox.ts:440`; that declaration is unchanged
   from base commit `aced6a7a` and this branch has no diff in that file. The task's focused and
   affected suites remain green.
+- **Current-main revalidation**: Rebasing all 11 MCP Apps commits onto current `origin/main`
+  resolved only the additive worklog entry; product code applied without conflict. The shared
+  types gate initially exposed an MCP-specific regression because the persisted presentation
+  parser had no direct behavioral coverage. Its focused boundary tests now prove valid detached
+  snapshots, absent metadata, malformed identity/result/resource rejection, recursive credential
+  rejection, JSON safety, cyclic-input rejection, and the two-MiB limit. The complete types suite
+  passes 823 tests with 100% statements, branches, functions, and lines. Root `pnpm test` reached
+  3,636 passing Web tests and 5,089 passing API tests before the production-size performance test
+  exceeded its p95 budget under concurrent full-suite load and the API worker exhausted its heap;
+  the CI-equivalent isolated `pnpm --filter @docket/api test:performance` run passes both tests.
 - **Layer 3 decisions and retrospective**: The official stable prose and exact npm package source
   were the authority because Context7 remained quota-blocked. Counting normative vocabulary
   occurrences rather than methods/capabilities prevents a stable protocol symbol list from

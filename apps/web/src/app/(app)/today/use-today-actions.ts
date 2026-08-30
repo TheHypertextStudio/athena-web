@@ -34,7 +34,7 @@ function withPromotedItem(previous: HubTodayOut, planItemId: string): HubTodayOu
     .map((item, index) => ({
       ...item,
       position: index,
-      reason: index === 0 ? 'You chose this first' : 'Next in your plan',
+      reason: null,
     }));
   const planned = plan.filter((item) => item.planStatus === 'planned');
   const actionable = planned.filter((item) => !item.blocked);

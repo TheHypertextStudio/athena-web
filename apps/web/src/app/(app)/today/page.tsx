@@ -4,12 +4,11 @@ import { Button } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
 import { DayRecapEntry } from '@/components/today/day-recap-entry';
-import KeepTheMomentum from '@/components/today/keep-the-momentum';
-import NeedsYou from '@/components/today/needs-you';
-import { TodayAttention } from '@/components/today/today-attention';
+import SuggestedTasks from '@/components/today/suggested-tasks';
+import NeedsAttention from '@/components/today/needs-attention';
 import { TodayPrompt } from '@/components/today/today-prompt';
-import TodaysWork from '@/components/today/todays-work';
-import WorkInMotion from '@/components/today/work-in-motion';
+import DayPlan from '@/components/today/day-plan';
+import ProjectStatus from '@/components/today/project-status';
 import { useAthenaPanel } from '@/components/athena/athena-panel-provider';
 
 import { useTodayData } from './use-today-data';
@@ -19,11 +18,10 @@ import { useTodayActions } from './use-today-actions';
  * TodayPage — the daily operating surface, with Athena as its first interaction.
  *
  * @remarks
- * **At rest** it answers where things stand in a deliberately finite hierarchy: the standing
- * Athena field, what is outstanding today broken into its parts, whatever is waiting on this
- * person's own decision, the day's accepted plan, and the larger outcomes that work is moving.
- * Inline actions cover quick execution; entity links defer detailed workflows to their canonical
- * pages.
+ * **At rest** it answers where things stand in a fixed order: the Athena field, work that needs a
+ * decision and is not on the plan, the accepted plan itself, and the Projects and Initiatives that
+ * work belongs to. Inline actions cover quick execution; entity links defer detailed workflows to
+ * their canonical pages.
  *
  * **Engaged**, it keeps the plan visible and reveals Athena in the shared utility rail. The rail
  * receives the workspace and draft while Today remains the planning surface, so a person can return
@@ -36,8 +34,8 @@ import { useTodayActions } from './use-today-actions';
  * `approvals + blocked + dueToday + inbox` into one number, and a banner advertising Athena — then
  * four status cards. It rendered *no tasks* unless a plan was already active, and even then only
  * two of them, while `plan[]`, `needsAttention.approvals`, and `.blocked` were all fetched and
- * dropped. Work now precedes portfolio, and the count is broken back into the parts it was summed
- * from.
+ * dropped. Work now precedes portfolio, and the summed count is gone entirely: every task it
+ * counted is now a row somebody can act on.
  *
  * **Not a three-pane cockpit.** `docs/core/mvp-plan.md` §8.1 specifies Plan · Calendar ·
  * Needs-Attention side by side. The calendar pane is gone because the shell's agenda rail renders
@@ -73,8 +71,6 @@ export default function TodayPage(): JSX.Element {
         onCaptured={refetch}
       />
 
-      <TodayAttention needsAttention={data?.needsAttention} brief={data?.brief} />
-
       {error ? (
         <div
           role="alert"
@@ -93,23 +89,24 @@ export default function TodayPage(): JSX.Element {
         </p>
       ) : null}
 
-      {/* Approvals outrank anything you planned: an agent that paused for your go-ahead is
-          blocked on you personally, and so is a task waiting on a dependency.
+      {/* Approvals outrank anything self-scheduled: an agent that paused for a signature is
+          blocked on this person, and so is a task waiting on a dependency. A deadline landing on a
+          task that never made it onto the plan is the third, and the only one the plan below
+          cannot show.
 
-          Blocked items already on the plan are dropped here, because the plan row below carries
-          its own Blocked marker — listing them in both places puts one task on screen twice and
-          makes "Needs you" look busier than the day actually is. Approvals are never deduped: a
-          plan row says nothing about an agent waiting on a signature, so that one is not a
-          repeat. */}
+          Everything already on the plan is filtered out. The plan row carries its own Blocked
+          marker and its own due date, so repeating it here would put one task on screen twice and
+          make the day look busier than it is. */}
       {data ? (
-        <NeedsYou
-          approvals={data.needsAttention.approvals}
-          blocked={data.needsAttention.blocked.filter((item) => !plannedTaskIds.has(item.id))}
+        <NeedsAttention
+          approvals={data.needsAttention.approvals.filter((t) => !plannedTaskIds.has(t.id))}
+          blocked={data.needsAttention.blocked.filter((t) => !plannedTaskIds.has(t.id))}
+          dueToday={data.needsAttention.dueToday.filter((t) => !plannedTaskIds.has(t.id))}
           orgName={orgName}
         />
       ) : null}
 
-      <TodaysWork
+      <DayPlan
         plan={data?.plan ?? []}
         now={data?.focus.now ?? null}
         orgName={orgName}
@@ -129,11 +126,11 @@ export default function TodayPage(): JSX.Element {
         displayTimezone={displayTimezone}
       />
 
-      <WorkInMotion cards={data?.statusCards ?? []} orgName={orgName} />
+      <ProjectStatus cards={data?.statusCards ?? []} orgName={orgName} />
 
       {data &&
       (data.planState === 'cleared' || (data.planState === 'active' && data.focus.now === null)) ? (
-        <KeepTheMomentum
+        <SuggestedTasks
           suggestions={data.suggestions}
           orgName={orgName}
           blockedPlan={data.planState === 'active'}

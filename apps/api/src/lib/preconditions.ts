@@ -58,7 +58,7 @@ function unconditional(headers: Headers): Headers {
  * the `W/` prefix is stripped before comparing, matching how Hono's `etag` middleware compares
  * `If-None-Match`, so the two halves of the contract agree on what "the same tag" means.
  */
-function tagListMatches(header: string, tag: string): boolean {
+export function tagListMatches(header: string, tag: string): boolean {
   const normalize = (value: string) => value.trim().replace(/^W\//, '');
   if (normalize(header) === '*') return true;
   const wanted = normalize(tag);

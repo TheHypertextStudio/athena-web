@@ -67,4 +67,17 @@ describe('event-bus', () => {
       publish('user_nobody', mkEvent('o4'));
     }).not.toThrow();
   });
+
+  it('tolerates unsubscribing twice', () => {
+    // The returned unsubscribe closure guards `if (!current) return;` for exactly this case — the
+    // user's subscriber set is already gone by the second call, and only calling it once ever
+    // exercised the "set still exists" side.
+    const fn = vi.fn();
+    const off = subscribe('user_z', fn);
+    off();
+    expect(() => {
+      off();
+    }).not.toThrow();
+    expect(listenerCount('user_z')).toBe(0);
+  });
 });

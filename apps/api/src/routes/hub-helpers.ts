@@ -138,7 +138,7 @@ const MARKDOWN_NOISE: readonly (readonly [RegExp, string])[] = [
  * @param description - The stored description, which may be Markdown and may be absent.
  * @returns one plain-text line, or null when the description holds no prose.
  */
-function taskSummary(description: string | null): string | null {
+export function taskSummary(description: string | null): string | null {
   if (!description) return null;
   let text = description.slice(0, SUMMARY_SCAN_MAX);
   for (const [pattern, replacement] of MARKDOWN_NOISE) text = text.replace(pattern, replacement);

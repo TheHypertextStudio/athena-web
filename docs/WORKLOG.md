@@ -34,8 +34,11 @@
   tests. It preserves editor focus while suggestion menus open, keeps schedule scrollbars visible,
   and aligns stale source contracts with the shared mobile overlay geometry. The release browser
   fixture now binds its mock Checkout customer before applying a mock subscription, and the full
-  16-test billing webhook suite passes. Four Settings screenshots cover 390px and 1280px in light
-  and dark themes.
+  16-test billing webhook suite passes. The PostgreSQL core-screen gate exposed an untyped `Date`
+  inside a billing SQL fragment. The lifecycle now uses a typed conditional update that preserves
+  the first-access timestamp across PostgreSQL and PGlite. The 12 focused billing lifecycle tests
+  and 22 API lifecycle and webhook tests pass. Four Settings screenshots cover 390px and 1280px in
+  light and dark themes.
 - **Blockers**: Production Twilio resources and configuration remain unchanged. Enabling phone
   access still requires explicit authorization to provision the Verify service and voice webhooks,
   followed by the real-handset canary matrix. The deployed code must keep phone access unavailable

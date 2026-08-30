@@ -13,7 +13,7 @@ import {
   organizationProductEntitlement,
 } from '@docket/db';
 import type { organization } from '@docket/db';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 
 import type { BillingEvent } from '../contracts';
 
@@ -126,12 +126,15 @@ async function syncDocketProEntitlement(
     await db
       .update(organizationBillingAccount)
       .set({
-        trialConsumedAt: sql`coalesce(${organizationBillingAccount.trialConsumedAt}, ${new Date(
-          now,
-        )})`,
+        trialConsumedAt: new Date(now),
         updatedAt: new Date(now),
       })
-      .where(eq(organizationBillingAccount.organizationId, event.referenceId));
+      .where(
+        and(
+          eq(organizationBillingAccount.organizationId, event.referenceId),
+          isNull(organizationBillingAccount.trialConsumedAt),
+        ),
+      );
   }
   return status;
 }

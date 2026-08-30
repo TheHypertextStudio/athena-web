@@ -24,8 +24,8 @@
 - **Validation**: The focused API phone suites pass 62 tests. The focused Settings and call-summary
   suites pass 27 tests. The post-rebase migration smoke passes 8 tests. UI and Web type checks,
   touched-file ESLint, 33 interaction tests for the repaired shared surfaces, and the dotenv-wrapped
-  Web production build pass. Four Settings screenshots cover 390px and 1280px in light and dark
-  themes.
+  Web production build pass. The repaired UI package passes all 707 tests and its 90.15% branch
+  coverage gate. Four Settings screenshots cover 390px and 1280px in light and dark themes.
 - **Blockers**: Production Twilio resources and configuration remain unchanged. Enabling phone
   access still requires explicit authorization to provision the Verify service and voice webhooks,
   followed by the real-handset canary matrix. The deployed code must keep phone access unavailable

@@ -190,7 +190,9 @@ function readGeometry(): ShellGeometry {
   const bar = screen.getByRole('navigation', { name: 'Panels' });
   const navWidth = columnWidthPx(nav, 'lg:');
   const barWidth = columnWidthPx(bar, '');
-  if (navWidth === null || barWidth === null) {
+  const dockRow = bar.parentElement;
+  const dockGap = dockRow ? /(?:^| )gap-(\d+)(?: |$)/.exec(dockRow.className) : null;
+  if (navWidth === null || barWidth === null || !dockGap?.[1]) {
     throw new Error('The sidebar and the activity bar must each declare a fixed column width');
   }
 
@@ -199,6 +201,7 @@ function readGeometry(): ShellGeometry {
     chromePx:
       spacingPx(Number(padding[1])) * 2 +
       spacingPx(Number(gap[1])) * (desktopColumns.length - 1) +
+      spacingPx(Number(dockGap[1])) +
       navWidth +
       barWidth,
     railShare: rail.share,

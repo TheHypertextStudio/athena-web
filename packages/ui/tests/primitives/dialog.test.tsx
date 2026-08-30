@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Button } from '../../src/primitives/button';
 import {
   Dialog,
+  DialogBody,
   DialogClose,
   DialogContent,
   DialogDescription,
@@ -144,7 +145,7 @@ describe('Dialog family', () => {
     expect(dialog).toHaveAccessibleName('New project');
     expect(dialog).toHaveAccessibleDescription('Give it a name to get started.');
     expect(dialog).toHaveClass('bg-surface-container-high', 'rounded-xl');
-    expect(dialog).toHaveClass('max-h-[85vh]', 'min-h-0', 'overflow-y-auto', 'overscroll-contain');
+    expect(dialog).toHaveClass('max-h-[85vh]', 'min-h-0', 'overflow-hidden', 'overscroll-contain');
     expect(dialog).not.toHaveClass('touch-pan-y');
   });
 
@@ -244,10 +245,110 @@ describe('Dialog family', () => {
     );
     await screen.findByRole('dialog');
     // The overlay is a portalled sibling carrying the dimmed-scrim token classes.
-    const overlay = baseElement.querySelector('.bg-black\\/40');
+    const overlay = baseElement.querySelector('[data-overlay-scrim]');
     expect(overlay).not.toBeNull();
-    expect(overlay).toHaveClass('z-[110]');
+    expect(overlay).toHaveClass('bg-scrim/40', 'z-[110]');
     expect(screen.getByRole('dialog')).toHaveClass('z-[110]');
+  });
+
+  it.each([
+    {
+      kind: 'fullscreen' as const,
+      size: 'standard' as const,
+      height: 'content' as const,
+      expected: ['inset-0', 'h-[100dvh]', 'w-[100vw]'],
+    },
+    {
+      kind: 'bottom-sheet' as const,
+      size: 'standard' as const,
+      height: 'medium' as const,
+      expected: ['inset-x-0', 'bottom-0', 'h-[min(60dvh,36rem)]'],
+    },
+    {
+      kind: 'responsive-fullscreen' as const,
+      size: 'wide' as const,
+      height: 'tall' as const,
+      expected: ['inset-0', 'max-w-4xl', 'h-[min(80dvh,48rem)]'],
+    },
+    {
+      kind: 'top' as const,
+      size: 'compact' as const,
+      height: 'viewport' as const,
+      expected: ['top-3', 'max-w-sm', 'h-[calc(100dvh-1.5rem)]'],
+    },
+  ])('renders the $kind presentation through the shared geometry contract', async (testCase) => {
+    render(
+      <Dialog defaultOpen>
+        <DialogContent
+          presentation={{ kind: testCase.kind, size: testCase.size, height: testCase.height }}
+        >
+          <DialogTitle>{testCase.kind}</DialogTitle>
+          <DialogDescription>Presentation test</DialogDescription>
+        </DialogContent>
+      </Dialog>,
+    );
+
+    expect(await screen.findByRole('dialog')).toHaveClass(...testCase.expected);
+  });
+
+  it('renders a hosted dialog in its supplied portal without a backdrop', async () => {
+    const portal = document.createElement('div');
+    document.body.append(portal);
+    render(
+      <Dialog defaultOpen>
+        <DialogContent
+          presentation={{
+            kind: 'hosted',
+            portalContainer: portal,
+            backdrop: 'none',
+            size: 'detail',
+            height: 'content',
+            position: { top: 12, left: 20, width: 480, maxHeight: 600 },
+          }}
+        >
+          <DialogTitle>Hosted</DialogTitle>
+          <DialogDescription>Hosted presentation test</DialogDescription>
+        </DialogContent>
+      </Dialog>,
+    );
+
+    const dialog = await screen.findByRole('dialog', { name: 'Hosted' });
+    expect(portal).toContainElement(dialog);
+    expect(dialog).toHaveClass('max-w-5xl', 'max-h-[min(85dvh,48rem)]');
+    expect(dialog).toHaveStyle({ top: '12px', left: '20px', width: '480px', maxHeight: '600px' });
+    expect(portal.querySelector('[data-overlay-scrim]')).toBeNull();
+    portal.remove();
+  });
+
+  it('uses the hosted surface backdrop and permits a visible non-scrolling body', async () => {
+    const portal = document.createElement('div');
+    document.body.append(portal);
+    render(
+      <Dialog defaultOpen>
+        <DialogContent
+          presentation={{
+            kind: 'hosted',
+            portalContainer: portal,
+            backdrop: 'surface',
+            position: { top: 0, left: 0, width: 320, maxHeight: 480 },
+          }}
+        >
+          <DialogTitle>Hosted surface</DialogTitle>
+          <DialogDescription>Hosted backdrop test</DialogDescription>
+          <DialogBody inset="none" scroll="visible" data-testid="visible-dialog-body">
+            Body
+          </DialogBody>
+        </DialogContent>
+      </Dialog>,
+    );
+
+    await screen.findByRole('dialog', { name: 'Hosted surface' });
+    expect(portal.querySelector('[data-overlay-scrim]')).toHaveClass('bg-surface');
+    expect(screen.getByTestId('visible-dialog-body')).not.toHaveAttribute(
+      'data-overlay-scroll-owner',
+    );
+    expect(screen.getByTestId('visible-dialog-body')).not.toHaveClass('overflow-y-auto');
+    portal.remove();
   });
 
   it('keeps a confirmation dialog and its scrim above the sheet that opened it', async () => {
@@ -259,7 +360,7 @@ describe('Dialog family', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Delete item' }));
 
     const confirmation = await screen.findByRole('dialog', { name: 'Delete calendar item?' });
-    const overlays = baseElement.querySelectorAll('.bg-black\\/40');
+    const overlays = baseElement.querySelectorAll('[data-overlay-scrim]');
     const confirmationOverlay = overlays.item(overlays.length - 1);
     expect(confirmationOverlay).toHaveClass('z-[110]');
     expect(confirmation).toHaveClass('z-[110]');

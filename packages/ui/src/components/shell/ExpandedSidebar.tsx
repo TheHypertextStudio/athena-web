@@ -143,7 +143,7 @@ export function ExpandedSidebar({
         ) : null}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div data-testid="sidebar-scroll-region" className="min-h-0 flex-1 overflow-y-auto">
         <nav
           aria-label="Home"
           className="flex flex-col space-y-0.5 pt-2"
@@ -240,9 +240,11 @@ export function ExpandedSidebar({
         ) : (
           <WorkspaceEmpty />
         )}
+
+        {dismissDrawer !== null && footer ? <div className="pt-2">{footer}</div> : null}
       </div>
 
-      {footer ? <div className="shrink-0 pt-2">{footer}</div> : null}
+      {dismissDrawer === null && footer ? <div className="shrink-0 pt-2">{footer}</div> : null}
     </aside>
   );
 }

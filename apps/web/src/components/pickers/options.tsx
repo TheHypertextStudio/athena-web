@@ -325,7 +325,12 @@ export function cycleOptions(
 ): readonly PickerOption[] {
   const displayById = new Map(displays.map((display) => [display.subjectId, display]));
   return cycles.map((cycle) => {
-    const window = formatWindow(cycle.startsAt, cycle.endsAt);
+    // The API contract requires both dates. This guard keeps cached or fixture-shaped records
+    // from taking down an unrelated picker while they are refreshed.
+    const window =
+      typeof cycle.startsAt === 'string' && typeof cycle.endsAt === 'string'
+        ? formatWindow(cycle.startsAt, cycle.endsAt)
+        : cycle.displayName;
     const display = displayById.get(cycle.id) ?? defaultEntityDisplay('cycle', cycle.id);
     return {
       value: cycle.id,

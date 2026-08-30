@@ -60,6 +60,29 @@ export function TeamPicker({
   disabled,
   className,
 }: TeamPickerProps): JSX.Element | null {
+  // Avoid mounting the display query when there is no choice to render. Several lightweight
+  // composer hosts intentionally omit a QueryClient when a lone team is implied.
+  if (teams.length <= 1) return null;
+
+  return (
+    <TeamPickerControl
+      teams={teams}
+      value={value}
+      onChange={onChange}
+      disabled={disabled}
+      className={className}
+    />
+  );
+}
+
+/** Renders the query-backed team selector once a workspace exposes a real choice. */
+function TeamPickerControl({
+  teams,
+  value,
+  onChange,
+  disabled,
+  className,
+}: TeamPickerProps): JSX.Element {
   const organizationId = teams[0]?.organizationId ?? '';
   const teamDisplaysQ = useApiListQuery(
     apiQueryOptions(
@@ -75,9 +98,6 @@ export function TeamPicker({
   const displayById = new Map(
     (teamDisplaysQ.data?.items ?? []).map((display) => [display.subjectId, display]),
   );
-  // With one (or no) team the choice is implied; rendering a picker would only add noise.
-  if (teams.length <= 1) return null;
-
   const selected = teams.find((t) => t.id === value) ?? null;
   const selectedDisplay =
     selected === null

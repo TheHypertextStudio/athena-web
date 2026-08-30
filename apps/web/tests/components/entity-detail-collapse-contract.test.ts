@@ -37,7 +37,7 @@ describe('entity detail collapse contract', () => {
     expect(layout).toContain('className="detail-identity"');
     expect(layout).toContain('className="detail-primary"');
     expect(layout).toContain('className="detail-masthead"');
-    expect(layout).toContain('className="detail-tabs"');
+    expect(layout).toContain('className="detail-tabs min-w-0"');
     expect(layout.match(/className="detail-glyph/g)).toHaveLength(1);
     expect(layout.indexOf('detail-glyph')).toBeLessThan(layout.indexOf('detail-title'));
     expect(css).toContain('padding-block-start: var(--detail-expanded-glyph-row)');
@@ -67,7 +67,7 @@ describe('entity detail collapse contract', () => {
     expect(css).toContain('--detail-compact-identity-inset: 3rem');
     expect(css).toContain('animation-name: detail-masthead-collapse');
     expect(css).toMatch(/@keyframes detail-masthead-collapse[\s\S]*row-gap:\s*0/);
-    expect(layout).toContain('className="detail-header');
+    expect(layout).toContain("'detail-header page-bleed");
     // `padding-block-start` moved off `.detail-header` onto `.masthead-content` — a sibling of the
     // cover rather than an ancestor of it, so the cover's `inset-0` against `.masthead-band` isn't
     // pushed down by the same padding that indents the eyebrow/title text.

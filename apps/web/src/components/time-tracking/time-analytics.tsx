@@ -15,6 +15,8 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
+  Surface,
+  surfaceToneColor,
   Text,
 } from '@docket/ui/primitives';
 import { ResponsiveControlGroup, type ResponsiveControlItem } from '@docket/ui/components';
@@ -261,7 +263,11 @@ export function TimeAnalytics(): JSX.Element {
         ) : null}
       </div>
 
-      <div className="bg-surface-container-low flex min-w-0 items-baseline justify-between gap-3 rounded-xl px-5 py-4">
+      <Surface
+        tone="card"
+        shape="medium"
+        className="flex min-w-0 items-baseline justify-between gap-3 px-5 py-4"
+      >
         <div className="min-w-0">
           <Text token="display-small" numeric aria-label={spokenDuration(total)}>
             {formatDuration(total)}
@@ -270,7 +276,10 @@ export function TimeAnalytics(): JSX.Element {
             {MEASURES.find(([id]) => id === state.measure)?.[1]} · {range.label}
           </Text>
         </div>
-        <div className="bg-surface-container flex shrink-0 rounded-lg p-1" aria-label="Time view">
+        <div
+          className={`${surfaceToneColor('canvas')} flex shrink-0 rounded-lg p-1`}
+          aria-label="Time view"
+        >
           {(['sessions', 'breakdown', 'now'] as const).map((view) => (
             <Button
               key={view}
@@ -284,7 +293,7 @@ export function TimeAnalytics(): JSX.Element {
             </Button>
           ))}
         </div>
-      </div>
+      </Surface>
 
       {error ? (
         <div role="alert" className="bg-error-container text-on-error-container rounded-xl p-4">
@@ -383,123 +392,123 @@ function TimeFilterItems({
 }: TimeFilterProps): JSX.Element {
   return (
     <>
-        <DropdownMenuLabel>Show</DropdownMenuLabel>
-        {MEASURES.map(([id, label]) => (
-          <DropdownMenuItem
-            key={id}
-            onSelect={() => {
-              onPatch({ measure: id });
-            }}
-          >
-            {state.measure === id ? '✓ ' : ''}
-            {label}
-          </DropdownMenuItem>
-        ))}
-        <DropdownMenuSeparator />
+      <DropdownMenuLabel>Show</DropdownMenuLabel>
+      {MEASURES.map(([id, label]) => (
+        <DropdownMenuItem
+          key={id}
+          onSelect={() => {
+            onPatch({ measure: id });
+          }}
+        >
+          {state.measure === id ? '✓ ' : ''}
+          {label}
+        </DropdownMenuItem>
+      ))}
+      <DropdownMenuSeparator />
+      <DropdownMenuSub>
+        <DropdownMenuSubTrigger>Workspace</DropdownMenuSubTrigger>
+        <DropdownMenuSubContent>
+          {workspaces.map((workspace) => (
+            <DropdownMenuItem
+              key={workspace.id}
+              onSelect={() => {
+                onPatch({ workspaceId: workspace.id });
+              }}
+            >
+              {state.workspaceId === workspace.id ? '✓ ' : ''}
+              {workspace.name}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+      {state.workspaceId ? (
         <DropdownMenuSub>
-          <DropdownMenuSubTrigger>Workspace</DropdownMenuSubTrigger>
+          <DropdownMenuSubTrigger>Project</DropdownMenuSubTrigger>
           <DropdownMenuSubContent>
-            {workspaces.map((workspace) => (
+            {projects.map((project) => (
               <DropdownMenuItem
-                key={workspace.id}
+                key={project.id}
                 onSelect={() => {
-                  onPatch({ workspaceId: workspace.id });
+                  onPatch({ projectId: project.id });
                 }}
               >
-                {state.workspaceId === workspace.id ? '✓ ' : ''}
-                {workspace.name}
+                {state.projectId === project.id ? '✓ ' : ''}
+                {project.name}
               </DropdownMenuItem>
             ))}
           </DropdownMenuSubContent>
         </DropdownMenuSub>
-        {state.workspaceId ? (
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>Project</DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              {projects.map((project) => (
+      ) : null}
+      {state.projectId ? (
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>Task</DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            {tasks
+              .filter((task) => task.projectId === state.projectId)
+              .map((task) => (
                 <DropdownMenuItem
-                  key={project.id}
+                  key={task.id}
                   onSelect={() => {
-                    onPatch({ projectId: project.id });
+                    onPatch({ taskId: task.id });
                   }}
                 >
-                  {state.projectId === project.id ? '✓ ' : ''}
-                  {project.name}
+                  {state.taskId === task.id ? '✓ ' : ''}
+                  {task.title}
                 </DropdownMenuItem>
               ))}
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-        ) : null}
-        {state.projectId ? (
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>Task</DropdownMenuSubTrigger>
-            <DropdownMenuSubContent>
-              {tasks
-                .filter((task) => task.projectId === state.projectId)
-                .map((task) => (
-                  <DropdownMenuItem
-                    key={task.id}
-                    onSelect={() => {
-                      onPatch({ taskId: task.id });
-                    }}
-                  >
-                    {state.taskId === task.id ? '✓ ' : ''}
-                    {task.title}
-                  </DropdownMenuItem>
-                ))}
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-        ) : null}
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>Category</DropdownMenuSubTrigger>
-          <DropdownMenuSubContent>
-            {categories.map((category) => (
-              <DropdownMenuItem
-                key={category.id}
-                onSelect={() => {
-                  onPatch({ categoryId: category.id });
-                }}
-              >
-                {state.categoryId === category.id ? '✓ ' : ''}
-                {category.name}
-              </DropdownMenuItem>
-            ))}
           </DropdownMenuSubContent>
         </DropdownMenuSub>
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>Capture source</DropdownMenuSubTrigger>
-          <DropdownMenuSubContent>
-            {(['live', 'manual', 'reconstructed', 'agent'] as const).map((source) => (
-              <DropdownMenuItem
-                key={source}
-                onSelect={() => {
-                  onPatch({ captureSource: source });
-                }}
-              >
-                {state.captureSource === source ? '✓ ' : ''}
-                {`${source[0]?.toUpperCase()}${source.slice(1)}`}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-        <DropdownMenuSeparator />
-        <DropdownMenuLabel>Cycle period</DropdownMenuLabel>
-        {cycles.map((cycle) => (
-          <DropdownMenuItem
-            key={cycle.id}
-            onSelect={() => {
-              onState(
-                applyTimeReviewPatch(state, {
-                  period: 'cycle',
-                  cycleId: cycle.id,
-                  workspaceId: cycle.workspaceId,
-                }),
-              );
-            }}
-          >
-            {cycle.workspaceName} · {cycle.name}
-          </DropdownMenuItem>
-        ))}
+      ) : null}
+      <DropdownMenuSub>
+        <DropdownMenuSubTrigger>Category</DropdownMenuSubTrigger>
+        <DropdownMenuSubContent>
+          {categories.map((category) => (
+            <DropdownMenuItem
+              key={category.id}
+              onSelect={() => {
+                onPatch({ categoryId: category.id });
+              }}
+            >
+              {state.categoryId === category.id ? '✓ ' : ''}
+              {category.name}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+      <DropdownMenuSub>
+        <DropdownMenuSubTrigger>Capture source</DropdownMenuSubTrigger>
+        <DropdownMenuSubContent>
+          {(['live', 'manual', 'reconstructed', 'agent'] as const).map((source) => (
+            <DropdownMenuItem
+              key={source}
+              onSelect={() => {
+                onPatch({ captureSource: source });
+              }}
+            >
+              {state.captureSource === source ? '✓ ' : ''}
+              {`${source[0]?.toUpperCase()}${source.slice(1)}`}
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuSubContent>
+      </DropdownMenuSub>
+      <DropdownMenuSeparator />
+      <DropdownMenuLabel>Cycle period</DropdownMenuLabel>
+      {cycles.map((cycle) => (
+        <DropdownMenuItem
+          key={cycle.id}
+          onSelect={() => {
+            onState(
+              applyTimeReviewPatch(state, {
+                period: 'cycle',
+                cycleId: cycle.id,
+                workspaceId: cycle.workspaceId,
+              }),
+            );
+          }}
+        >
+          {cycle.workspaceName} · {cycle.name}
+        </DropdownMenuItem>
+      ))}
     </>
   );
 }
@@ -719,7 +728,7 @@ function CustomRangeControls({
   const end = state.end ?? Temporal.PlainDate.from(state.anchor).add({ days: 1 }).toString();
   const through = Temporal.PlainDate.from(end).subtract({ days: 1 }).toString();
   return (
-    <div className="bg-surface-container-low flex min-w-0 items-end gap-3 rounded-xl p-3">
+    <Surface tone="card" shape="medium" pad="comfortable" className="flex min-w-0 items-end gap-3">
       <DateRangePicker
         value={{ start: state.start ?? state.anchor, end: through }}
         startPlaceholder="From"
@@ -737,7 +746,7 @@ function CustomRangeControls({
           });
         }}
       />
-    </div>
+    </Surface>
   );
 }
 
@@ -886,7 +895,7 @@ function Breakdown({
                     </Text>
                     <span
                       aria-hidden="true"
-                      className="bg-surface-container-high mt-1 block h-1 overflow-hidden rounded-full"
+                      className={`${surfaceToneColor('floating')} mt-1 block h-1 overflow-hidden rounded-full`}
                     >
                       <span
                         className="bg-primary block h-full rounded-full"
@@ -910,7 +919,7 @@ function Breakdown({
 function NowView({ records }: { readonly records: readonly TimeRecordOut[] }): JSX.Element {
   const active = records.find((record) => record.status === 'open' || record.status === 'paused');
   return (
-    <div className="bg-surface-container-low flex flex-col items-start gap-3 rounded-xl p-5">
+    <Surface tone="card" shape="medium" className="flex flex-col items-start gap-3 p-5">
       <Text token="title-medium">
         {active ? active.title || 'Tracking now' : 'No timer running'}
       </Text>
@@ -922,7 +931,7 @@ function NowView({ records }: { readonly records: readonly TimeRecordOut[] }): J
       <Button variant="secondary" asChild>
         <Link href="/today">Go find something to work on</Link>
       </Button>
-    </div>
+    </Surface>
   );
 }
 
@@ -934,7 +943,11 @@ function EmptyState({
   readonly onAdd: () => void;
 }): JSX.Element {
   return (
-    <div className="bg-surface-container-low flex min-w-0 flex-col items-start gap-3 rounded-xl px-6 py-10">
+    <Surface
+      tone="card"
+      shape="medium"
+      className="flex min-w-0 flex-col items-start gap-3 px-6 py-10"
+    >
       <Schedule aria-hidden="true" className="text-on-surface-variant size-6" />
       <Text token="title-medium">No time tracked for {rangeLabel}</Text>
       <Text as="p" token="body-medium" tone="muted" className="max-w-prose">
@@ -944,6 +957,6 @@ function EmptyState({
       <Button variant="secondary" onClick={onAdd}>
         <Plus aria-hidden="true" /> Add past time
       </Button>
-    </div>
+    </Surface>
   );
 }

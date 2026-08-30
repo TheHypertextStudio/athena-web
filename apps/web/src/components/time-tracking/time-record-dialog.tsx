@@ -6,6 +6,7 @@ import type { TimeRecordOut } from '@docket/types';
 import {
   Button,
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -14,6 +15,7 @@ import {
   Field,
   Input,
   Select,
+  Surface,
   Text,
 } from '@docket/ui/primitives';
 import { Trash2 } from '@docket/ui/icons';
@@ -203,8 +205,13 @@ export function TimeRecordDialog({
               : 'You can update session details, but these recorded intervals are read-only.'}
           </DialogDescription>
         </DialogHeader>
-        <div className="flex max-h-[50vh] flex-col gap-3 overflow-y-auto">
-          <div className="bg-surface-container-low grid grid-cols-1 gap-3 rounded-xl p-4 sm:grid-cols-2">
+        <DialogBody className="flex flex-col gap-3">
+          <Surface
+            tone="card"
+            shape="medium"
+            pad="roomy"
+            className="grid grid-cols-1 gap-3 sm:grid-cols-2"
+          >
             <Field label="Session name">
               <Input
                 value={title}
@@ -240,13 +247,16 @@ export function TimeRecordDialog({
                 This session has no linked task.
               </Text>
             )}
-          </div>
+          </Surface>
           {record.intervals
             .filter((interval) => interval.supersededById === null)
             .map((interval) => (
-              <div
+              <Surface
                 key={interval.id}
-                className="bg-surface-container-low flex min-w-0 flex-col gap-3 rounded-xl p-4"
+                tone="card"
+                shape="medium"
+                pad="roomy"
+                className="flex min-w-0 flex-col gap-3"
               >
                 <div className="flex min-w-0 items-center justify-between gap-3">
                   <Text token="body-medium">
@@ -321,7 +331,7 @@ export function TimeRecordDialog({
                     </Button>
                   )
                 ) : null}
-              </div>
+              </Surface>
             ))}
           {error ? (
             <Text role="alert" token="body-small" className="text-error">
@@ -349,7 +359,7 @@ export function TimeRecordDialog({
               </div>
             </div>
           ) : null}
-        </div>
+        </DialogBody>
         <DialogFooter>
           <Button variant="secondary" onClick={saveRecord} disabled={updateRecord.isPending}>
             {updateRecord.isPending ? 'Saving…' : 'Save details'}

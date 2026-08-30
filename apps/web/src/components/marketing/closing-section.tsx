@@ -39,7 +39,8 @@ export function ClosingSection({ pricing }: ClosingSectionProps): JSX.Element {
               tone="inherit"
               className="font-display text-paper max-w-3xl text-balance"
             >
-              Docket is free. Docket Pro is $8 per organization each month.
+              Docket is free to use on your own, and $8 a month for each organization you share work
+              in.
             </Text>
             <Text as="p" token="title-medium" tone="inherit">
               <Link

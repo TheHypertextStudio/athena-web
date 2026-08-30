@@ -7555,6 +7555,42 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
   `.env.local` points at a file-backed PGlite database shared by the dev stack and the API test
   suite, so seeding a dev account for screenshots corrupts test runs until `pnpm db:reset`.
+### [MARKETING-COPY-002] Let the marketing page show the product without a disclaimer
+
+- **Completed**: 2026-08-29
+- **Summary**: Removed the "Example data" caption stamped on every product capture on the marketing
+  site, and rewrote the price sentence that stood as the headline on both the home page's closing
+  band and the pricing page. The pricing headline now renders in the marketing display face like
+  every other heading on the site.
+- **Approach**: The caption lived in one component, `marketing/product-screenshot.tsx`, so every
+  frame on the site carried it. The craft rubric's no-placeholder gate asks that demo data be
+  labeled as such, which is about a product surface presenting invented records as a reader's own —
+  a marketing page showing a picture of the app is not that, and a running disclaimer on each frame
+  read as a hedge on the product's own screenshots.
+- **The copy**: "Docket is free. Docket Pro is $8 per organization each month." failed four
+  properties of `docs/design/copy-rubric.md` at once. Naturalness — a symmetrical two-clause slogan.
+  Economy — on the pricing page it was the H1, restated by the subtitle beneath it and again by the
+  two product cards below that, three times on one screen. Distinctiveness — a price recital that
+  could belong to any product. Hierarchy — it promoted a price sheet into the position that should
+  carry a claim. The pricing page now leads with the mechanic that is actually distinctive ("One
+  price for an organization of any size"), the subtitle carries the one fact the cards cannot say
+  (each organization bills on its own), and the cards keep the numbers. The home page's closing band
+  states both facts in one sentence, since a reader there has not seen the cards.
+- **Files changed**: `apps/web/src/components/marketing/product-screenshot.tsx`,
+  `apps/web/src/components/marketing/pricing-products.tsx`,
+  `apps/web/src/components/marketing/closing-section.tsx`,
+  `apps/web/src/app/(marketing)/pricing/page.tsx`,
+  `apps/web/tests/components/marketing-product-screenshots.test.tsx`.
+- **Validation**: Root typecheck, lint, and format pass; `pnpm test` passes 25 of 26 tasks with
+  `@docket/api`'s 19 pre-existing `initiatives-detail` and `programs` CRUD failures unchanged. The
+  home and pricing pages were captured at 1440×900 and walked top to bottom so every lazily loaded
+  capture was requested — all nine product frames load, and no image on the page fails.
+- **Learnings**: A full-page screenshot does not scroll, so `loading="lazy"` captures below the fold
+  render as empty bordered boxes in it. Three frames looked like unfilled placeholders until the page
+  was walked before capturing. `marketing/placeholder-surface.tsx` — a real stand-in for uncaptured
+  surfaces — has no call sites left and is a candidate for deletion.
+
+---
 
 ### [PROGRAMS-CARDS-001] Make the Programs roster read as a portfolio
 

@@ -32,13 +32,16 @@ describe('marketing product screenshots', () => {
     expect([...bytes.subarray(0, 3)]).toEqual([0xff, 0xd8, 0xff]);
   });
 
-  it('shows a real Today capture in the hero and labels its example data', () => {
-    render(<Hero />);
+  it('loads the hero capture eagerly, because it is the page first paint', () => {
+    const { container } = render(<Hero />);
 
     expect(
       screen.getByRole('img', { name: 'Today with estimated, scheduled, and tracked tasks' }),
     ).toHaveAttribute('loading', 'eager');
-    expect(screen.getByText('Example data')).toBeInTheDocument();
+
+    // The frame is the capture and its border. A caption stamped over every screenshot on the
+    // marketing site read as a disclaimer on a picture of the product.
+    expect(container.querySelector('figcaption')).toBeNull();
   });
 
   it('renders split and band media as product screenshots', () => {

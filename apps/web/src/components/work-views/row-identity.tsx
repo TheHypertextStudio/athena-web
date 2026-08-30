@@ -27,6 +27,14 @@ export interface RowIdentityProps {
   readonly row: WorkViewRowFor<ViewTarget>;
   /** The workspace's status resolver, which names a Task's ring. */
   readonly statusOf: ReturnType<typeof useWorkStatusResolver>;
+  /**
+   * The mark's diameter in pixels. Defaults to the 32px a dense roster row uses.
+   *
+   * @remarks
+   * A card is not a row: it has room for a larger mark, and needs one to balance a title set two
+   * steps up the scale. One rule — rows at 32, cards at 40 — rather than a size per target.
+   */
+  readonly size?: number | undefined;
 }
 
 /**
@@ -41,7 +49,7 @@ export interface RowIdentityProps {
  *
  * @param props - The {@link RowIdentityProps}.
  */
-export function RowIdentity({ row, statusOf }: RowIdentityProps): JSX.Element {
+export function RowIdentity({ row, statusOf, size = 32 }: RowIdentityProps): JSX.Element {
   if (row.target === 'project' || row.target === 'initiative') {
     const display = row.display ?? defaultEntityDisplay(row.target, row.id);
     return (
@@ -49,20 +57,20 @@ export function RowIdentity({ row, statusOf }: RowIdentityProps): JSX.Element {
         iconKey={display.iconKey}
         colorKey={display.colorKey}
         customColor={display.customColor}
-        size={32}
+        size={size}
       />
     );
   }
   if (row.target === 'program') {
     return (
-      <IdentityGlyph size={32}>
+      <IdentityGlyph size={size}>
         <Layers className="size-4" />
       </IdentityGlyph>
     );
   }
   const status = statusOf(row.status);
   return (
-    <IdentityGlyph size={32}>
+    <IdentityGlyph size={size}>
       <WorkStatusIcon name={status.name} category={status.category} />
     </IdentityGlyph>
   );

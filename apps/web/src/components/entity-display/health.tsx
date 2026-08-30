@@ -39,6 +39,22 @@ export const HEALTH_DOT_CLASS: Record<Health, string> = {
   off_track: 'bg-error',
 };
 
+/**
+ * The tonal fill and foreground an {@link IdentityGlyph} takes for each verdict.
+ *
+ * @remarks
+ * A roster's job is to answer "which of these needs me?" before anything is read, and a verdict
+ * spelled only in a label and a 6px dot cannot answer it at a glance across a grid. Tinting the
+ * entity's own identity mark makes the verdict the largest coloured thing on a card without
+ * spending colour on anything new — the mark was already there, in neutral. The label stays, so
+ * the meaning never rests on colour alone.
+ */
+export const HEALTH_GLYPH_CLASS: Record<Health, string> = {
+  on_track: 'bg-state-completed/15 text-state-completed',
+  at_risk: 'bg-state-canceled/15 text-state-canceled',
+  off_track: 'bg-error/15 text-error',
+};
+
 /** The label colour paired with each {@link HEALTH_DOT_CLASS} fill. */
 export const HEALTH_TEXT_CLASS: Record<Health, string> = {
   on_track: 'text-state-completed',

@@ -242,6 +242,24 @@ describe('WorkCards', () => {
     expect(slot).not.toHaveClass('right-4');
   });
 
+  it('says nothing at all about a Program nobody owns', () => {
+    render(
+      <WorkCards
+        target="program"
+        definition={programDefinition}
+        rows={[ProgramViewRow.parse({ ...program, owner: null, ownerActor: null })]}
+        selectedIds={new Set()}
+        onSelectionChange={vi.fn()}
+        onActivate={vi.fn()}
+      />,
+    );
+
+    // On a roster where most Programs are unassigned, a placeholder is the most repeated words on
+    // the screen. The counts keep their place in the roll-up without it.
+    expect(screen.queryByText(/unowned/i)).not.toBeInTheDocument();
+    expect(screen.getByText(String(program.projectCount))).toBeVisible();
+  });
+
   it('shows only the properties the view has switched on', () => {
     const bareDefinition = ProgramViewDefinition.parse({
       ...programDefinition,

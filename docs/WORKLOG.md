@@ -7616,6 +7616,25 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   `BETTER_AUTH_COOKIE_DOMAIN` has to be empty there rather than `docket.localhost`. Separately,
   `TaskCreate` has no `programId` — a task joins a Program through its Project — so seeding a roster
   with non-zero task counts means creating tasks under the Program's projects.
+- **Second pass (2026-08-29)**: The first pass was structurally right and still read as bland, and
+  it stamped "Unowned" under every card without an owner. Removed that placeholder and the em dash
+  for an unset verdict — a table column needs a placeholder to hold its rows in line, a card does
+  not, and on a roster where most Programs are unassigned the placeholder becomes the most repeated
+  words on the screen. Then pushed the card toward MD3 Expressive within the token system: the
+  health verdict now tints the identity mark (`HEALTH_GLYPH_CLASS`), which turns the card's largest
+  element into its most useful one and makes the grid answer "which of these needs me?" at a squint;
+  the title moved to `title-large` and the summary to `body-medium`, because everything below the
+  title had been sitting at 11–12px with no middle register; and the roll-up moved into a tonal
+  container so it is one object in the same place on every card. Two defects surfaced while
+  reviewing: the card was a clickable surface with no hover treatment at all, and the taller card
+  had outgrown the skeleton built for the shorter one. Both fixed. Scorecard:
+  `docs/design/audits/2026-08-29-programs-cards.md` — SHIP, typography/hierarchy/colour at 4.
+- **Open findings**: `--state-canceled` (`oklch(0.5 0.03 25)`, chroma 0.03) is a near-grey, correct
+  for cancelled work and wrong for "at risk" — the middle health verdict, the one worth catching
+  early, reads as beige in both themes while on-track and off-track read instantly. All four health
+  modules borrow it, so fixing it means a `--health-at-risk` token and a product-wide palette
+  decision. The shared work-view empty state also names itself without teaching, and its CTA
+  duplicates the header's primary button.
 - **Retrospective**: The ledger was the fastest way in. `program-list-ui.tsx` carried 28 raw type
   utilities, which read as the file to fix; it was dead code, and the file actually on screen was
   three directories away. Checking what the route renders before trusting the debt ranking would have

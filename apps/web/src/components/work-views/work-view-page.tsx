@@ -348,18 +348,27 @@ export function WorkViewPage<TTarget extends ViewTarget>({
               CARD_MIN_HEIGHT,
             )}
           >
+            {/* Built from the loaded card's own parts — a 40px mark, a two-line title, a
+                two-line summary, the signal row, and the roll-up — so the placeholder's height
+                lands where the card's does and the grid does not resize under the reader. */}
             <div className="flex items-start gap-3">
-              <Skeleton className="size-8 shrink-0 rounded-full" />
-              <Skeleton className="h-4 flex-1 rounded" />
-            </div>
-            <Skeleton className="h-3 w-full rounded" />
-            <Skeleton className="h-3 w-2/3 rounded" />
-            <div className="mt-auto flex items-end justify-between gap-3">
-              <div className="flex flex-col gap-1">
-                <Skeleton className="h-3 w-20 rounded" />
-                <Skeleton className="h-3 w-24 rounded" />
+              <Skeleton className="size-10 shrink-0 rounded-full" />
+              <div className="flex flex-1 flex-col gap-2">
+                <Skeleton className="h-5 w-full rounded" />
+                <Skeleton className="h-5 w-1/2 rounded" />
               </div>
-              <Skeleton className="h-8 w-24 rounded" />
+            </div>
+            <Skeleton className="h-4 w-full rounded" />
+            <Skeleton className="h-4 w-2/3 rounded" />
+            <div className="mt-auto flex flex-col gap-3">
+              <div className="flex items-end justify-between gap-3">
+                <Skeleton className="h-4 w-40 rounded" />
+                <Skeleton className="h-8 w-24 rounded" />
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <Skeleton className="h-5 w-28 rounded" />
+                <Skeleton className="h-6 w-20 rounded-full" />
+              </div>
             </div>
           </div>
         ))}

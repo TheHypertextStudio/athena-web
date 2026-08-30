@@ -48,7 +48,7 @@ function WorkObjectCard<TTarget extends ViewTarget>({
         data-drop-state={drop.dropState}
         data-selecting={selecting}
         className={cn(
-          'group/card focus-visible:ring-primary relative cursor-pointer outline-none focus-visible:ring-2',
+          'group/card focus-visible:ring-primary hover:bg-surface-container-high relative cursor-pointer transition-colors outline-none focus-visible:ring-2',
           CARD_MIN_HEIGHT,
           drop.dropProps.className,
           // The accept/reject treatment the List lens draws on a row, so a drop target reads the
@@ -146,7 +146,7 @@ export function WorkCards<TTarget extends ViewTarget>({
                 selecting || selectedIds.has(row.id)
                   ? 'opacity-100'
                   : 'opacity-0 group-focus-within/card:opacity-100 group-hover/card:opacity-100',
-                'absolute top-4 left-4 z-10 flex size-8 items-center justify-center transition-opacity',
+                'absolute top-4 left-4 z-10 flex size-10 items-center justify-center transition-opacity',
               )}
             >
               <Checkbox
@@ -187,7 +187,10 @@ export function WorkCards<TTarget extends ViewTarget>({
                     <span className={CARD_GLYPH_FADE_CLASS}>
                       <CardIdentity row={row} />
                     </span>
-                    <h2 className="text-title-medium line-clamp-2 min-w-0 flex-1">
+                    <h2
+                      title={workViewRowTitle(row)}
+                      className="text-title-medium line-clamp-2 min-w-0 flex-1"
+                    >
                       {workViewRowTitle(row)}
                     </h2>
                   </div>

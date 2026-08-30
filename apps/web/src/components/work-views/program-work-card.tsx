@@ -1,6 +1,6 @@
 'use client';
 
-import { defaultEntityDisplay, type ProgramViewRow } from '@docket/types';
+import { defaultEntityDisplay, type ProgramViewRow, type WorkViewActor } from '@docket/types';
 import { cn, relativeTime } from '@docket/ui';
 import { ActorAvatar } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
@@ -131,15 +131,17 @@ function ActivityPulse({ activity }: Pick<ProgramViewRow, 'activity'>): JSX.Elem
   );
 }
 
-/** The owner's avatar and name, or the fact that nobody holds this Program. */
-function ProgramOwner({ ownerActor }: Pick<ProgramViewRow, 'ownerActor'>): JSX.Element {
-  if (!ownerActor) {
-    return (
-      <Text token="label-medium" tone="muted">
-        Unowned
-      </Text>
-    );
-  }
+/**
+ * The owner's avatar and name.
+ *
+ * @remarks
+ * A Program nobody owns renders nothing here rather than the word "Unowned". A table column needs
+ * a placeholder to keep its rows aligned; a card does not, and on a roster where most Programs are
+ * unassigned the placeholder becomes the most repeated words on the screen — the absence of
+ * information, set in type, nine times over. The same reasoning drops the em dash for an unset
+ * verdict.
+ */
+function ProgramOwner({ ownerActor }: { ownerActor: WorkViewActor }): JSX.Element {
   return (
     <span className="flex min-w-0 items-center gap-2">
       <ActorAvatar
@@ -179,6 +181,18 @@ function ProgramCount({ icon: Icon, value, singular, plural }: ProgramCountProps
 }
 
 /**
+ * The tonal container the rolled-up counts sit in.
+ *
+ * @remarks
+ * The counts used to be two runs of small text floating against the card's right edge with
+ * nothing holding them. A tonal container makes the roll-up one object you can find in the same
+ * place on every card, which is the whole reason to read a grid rather than a list. It sits a
+ * step above the card's own hover fill so it stays a distinct object while the card is hovered.
+ */
+const ROLLUP_CONTAINER_CLASS =
+  'bg-surface-container-highest ml-auto flex shrink-0 items-center gap-3 rounded-full px-3 py-1';
+
+/**
  * Render the Programs card lens as a calm portfolio summary.
  *
  * @remarks
@@ -202,11 +216,13 @@ export function ProgramWorkCard({ row, properties }: ProgramWorkCardProps): JSX.
   const taskNounPlural = useVocabulary('task', { plural: true }).toLowerCase();
 
   const showStatus = properties.has('status');
-  const showHealth = properties.has('health');
-  const showOwner = properties.has('owner');
   const showProjectCount = properties.has('projectCount');
   const showTaskCount = properties.has('taskCount');
-  const showRollup = showOwner || showProjectCount || showTaskCount;
+  // Health names itself on the signal line. It does not tint the identity mark: a Program's mark
+  // now carries the icon and colour its owner chose, and that choice outranks a derived signal.
+  const verdict = properties.has('health') ? (row.health ?? null) : null;
+  const owner = properties.has('owner') ? row.ownerActor : null;
+  const showRollup = owner !== null || showProjectCount || showTaskCount;
 
   return (
     <div className="flex h-full flex-col gap-3">
@@ -220,7 +236,8 @@ export function ProgramWorkCard({ row, properties }: ProgramWorkCardProps): JSX.
             size={40}
           />
         </span>
-        <Text as="h2" token="title-medium" className="line-clamp-2 min-w-0 flex-1">
+        {/* `title` so a name the two-line clamp cuts is still readable on hover. */}
+        <Text as="h2" token="title-large" title={row.name} className="line-clamp-2 min-w-0 flex-1">
           {row.name}
         </Text>
         {showStatus ? (
@@ -231,7 +248,7 @@ export function ProgramWorkCard({ row, properties }: ProgramWorkCardProps): JSX.
       </div>
 
       {row.summary ? (
-        <Text as="p" token="body-small" tone="muted" className="line-clamp-2">
+        <Text as="p" token="body-medium" tone="muted" className="line-clamp-2">
           {row.summary}
         </Text>
       ) : null}
@@ -250,9 +267,9 @@ export function ProgramWorkCard({ row, properties }: ProgramWorkCardProps): JSX.
          */}
         <div className="flex items-end justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
-            {showHealth && row.health ? (
+            {verdict ? (
               <>
-                <HealthLabel health={row.health} />
+                <HealthLabel health={verdict} />
                 <span
                   aria-hidden="true"
                   className={cn(typeClass('label-small'), toneClass('muted'))}
@@ -273,8 +290,8 @@ export function ProgramWorkCard({ row, properties }: ProgramWorkCardProps): JSX.
 
         {showRollup ? (
           <div className="flex items-center gap-3">
-            {showOwner ? <ProgramOwner ownerActor={row.ownerActor} /> : null}
-            <span className="ml-auto flex shrink-0 items-center gap-4">
+            {owner ? <ProgramOwner ownerActor={owner} /> : null}
+            <span className={ROLLUP_CONTAINER_CLASS}>
               {showProjectCount ? (
                 <ProgramCount
                   icon={FolderKanban}

@@ -41,6 +41,7 @@ describe('SchedulingCanvas item presentation', () => {
     const viewport = screen.getByRole('region', { name: 'Schedule' });
     expect(viewport).toHaveStyle({ height: '100%' });
     expect(viewport).not.toHaveClass('h-[clamp(20rem,68dvh,48rem)]');
+    expect(viewport).toHaveAttribute('data-scroll-owner', 'schedule');
   });
 
   it('opens near the live time when today is visible and no scroll target is provided', () => {

@@ -175,7 +175,7 @@ export function ListPageLayout({
   return (
     <PageContainer
       fill={fill}
-      className={fullBleedBody ? 'gap-0 p-0 @2xl:p-0 @4xl:p-0' : undefined}
+      {...(fullBleedBody ? { className: 'gap-0 p-0 @2xl:p-0 @4xl:p-0' } : {})}
     >
       <div
         className={

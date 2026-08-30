@@ -16,9 +16,20 @@
  * rendered here in the segment's content so the actionable queue (`emphasis`) can escalate to the
  * `destructive` token while quiet segments track the primitive's selected-aware surface tint.
  */
+import { useResponsiveControlLayout, type ResponsiveControlItem } from '@docket/ui/components';
 import { cn } from '@docket/ui/lib/utils';
-import { Tab, TabList, Tabs } from '@docket/ui/primitives';
-import { type JSX } from 'react';
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  Tab,
+  TabList,
+  Tabs,
+} from '@docket/ui/primitives';
+import { MoreHorizontal } from '@docket/ui/icons';
+import { type JSX, useMemo } from 'react';
 
 /** One segment in the {@link SegmentedTabs} control. */
 export interface SegmentDef<TId extends string> {
@@ -69,6 +80,20 @@ export function SegmentedTabs<TId extends string>({
   value,
   onChange,
 }: SegmentedTabsProps<TId>): JSX.Element {
+  const responsiveItems = useMemo<readonly ResponsiveControlItem[]>(
+    () =>
+      segments.map((segment, index) => ({
+        id: segment.id,
+        priority: segment.id === value ? 0 : index + 1,
+        alwaysVisible: segment.id === value,
+        inline: null,
+        overflow: null,
+      })),
+    [segments, value],
+  );
+  const layout = useResponsiveControlLayout(responsiveItems);
+  const overflowSegments = segments.filter((segment) => !layout.inlineIds.has(segment.id));
+
   return (
     <Tabs
       value={value}
@@ -76,33 +101,94 @@ export function SegmentedTabs<TId extends string>({
         onChange(next as TId);
       }}
     >
-      <TabList label={label} className="max-w-full overflow-x-auto">
-        {segments.map((segment) => {
-          const selected = segment.id === value;
-          const showCount = typeof segment.count === 'number' && segment.count > 0;
-          return (
-            <Tab key={segment.id} value={segment.id}>
-              <span className="inline-flex items-center gap-2">
-                {segment.label}
-                {showCount ? (
-                  <span
-                    className={cn(
-                      'inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-medium tabular-nums',
-                      segment.emphasis
-                        ? 'bg-error/10 text-error'
-                        : selected
-                          ? 'bg-surface-container text-on-surface'
-                          : 'bg-surface-container-high text-on-surface-variant',
-                    )}
-                  >
-                    {segment.count}
-                  </span>
-                ) : null}
+      <div ref={layout.containerRef} data-testid="segmented-tabs" className="relative min-w-0 max-w-full">
+        <TabList label={label} className="max-w-full overflow-hidden">
+          {segments.map((segment) => {
+            const selected = segment.id === value;
+            const inline = layout.inlineIds.has(segment.id);
+            return (
+              <span
+                key={segment.id}
+                ref={(node) => layout.setItemRef(segment.id, node)}
+                data-responsive-item={segment.id}
+                hidden={!inline}
+                className="shrink-0"
+              >
+                <Tab value={segment.id} disabled={!inline}>
+                  <SegmentLabel segment={segment} selected={selected} />
+                </Tab>
               </span>
-            </Tab>
-          );
-        })}
-      </TabList>
+            );
+          })}
+          {overflowSegments.length > 0 ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  controlSize="md"
+                  aria-label="More inbox feeds"
+                  className="shrink-0"
+                >
+                  <MoreHorizontal aria-hidden="true" />
+                  <span className="sr-only">More inbox feeds</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" width="lg" aria-label="More inbox feeds">
+                {overflowSegments.map((segment) => (
+                  <DropdownMenuItem
+                    key={segment.id}
+                    onSelect={() => {
+                      onChange(segment.id);
+                    }}
+                  >
+                    <SegmentLabel segment={segment} selected={segment.id === value} />
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
+        </TabList>
+        <span
+          ref={layout.overflowMeasurementRef}
+          aria-hidden="true"
+          className="pointer-events-none invisible absolute"
+        >
+          <Button type="button" variant="ghost" controlSize="md">
+            <MoreHorizontal aria-hidden="true" />
+            <span className="sr-only">More inbox feeds</span>
+          </Button>
+        </span>
+      </div>
     </Tabs>
+  );
+}
+
+function SegmentLabel<TId extends string>({
+  segment,
+  selected,
+}: {
+  readonly segment: SegmentDef<TId>;
+  readonly selected: boolean;
+}): JSX.Element {
+  const showCount = typeof segment.count === 'number' && segment.count > 0;
+  return (
+    <span className="inline-flex items-center gap-2">
+      {segment.label}
+      {showCount ? (
+        <span
+          className={cn(
+            'inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-medium tabular-nums',
+            segment.emphasis
+              ? 'bg-error/10 text-error'
+              : selected
+                ? 'bg-surface-container text-on-surface'
+                : 'bg-surface-container-high text-on-surface-variant',
+          )}
+        >
+          {segment.count}
+        </span>
+      ) : null}
+    </span>
   );
 }

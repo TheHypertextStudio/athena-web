@@ -53,18 +53,21 @@ export default function InboxClient(): JSX.Element {
         </div>
       </header>
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <SegmentedTabs
-          label="Inbox feeds"
-          segments={segments}
-          value={tab}
-          onChange={setTab}
-          panelId={panelId}
-        />
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <SegmentedTabs
+            label="Inbox feeds"
+            segments={segments}
+            value={tab}
+            onChange={setTab}
+            panelId={panelId}
+          />
+        </div>
         {tab !== 'activity' && !loading && visibleUnreadCount > 0 ? (
           <Button
             variant="ghost"
             size="sm"
+            className="shrink-0"
             disabled={markingAll}
             onClick={() => {
               void onMarkAllRead();

@@ -186,7 +186,7 @@ test('every primary authenticated screen and local-first detail settles', async 
       name: 'Task detail',
       href: orgHref(orgId, `tasks/${fixture.taskId}`),
       aggregatePath: `/v1/orgs/${orgId}/tasks/${fixture.taskId}/aggregate-detail`,
-      loadedControl: { role: 'heading', name: 'Screen acceptance task' },
+      loadedControl: { role: 'textbox', name: 'Task title' },
     },
     {
       name: 'Project detail',

@@ -145,7 +145,12 @@ export interface ListPageLayoutProps {
    * Set by surfaces whose content is a chart rather than prose — see {@link PageContainerProps.fill}.
    */
   fill?: boolean;
+  /** Whether the body is a readable inset document or reaches the route frame edge to edge. */
+  bodyPresentation?: ListPageBodyPresentation;
 }
+
+/** The body edge contract for a list page. Headers and toolbars remain inset in both modes. */
+export type ListPageBodyPresentation = 'inset' | 'full-bleed';
 
 /**
  * The standard list-page arrangement: container → header (title + subtitle + actions) → toolbar →
@@ -164,18 +169,40 @@ export function ListPageLayout({
   toolbar,
   children,
   fill = false,
+  bodyPresentation = 'inset',
 }: ListPageLayoutProps): JSX.Element {
+  const fullBleedBody = bodyPresentation === 'full-bleed';
   return (
-    <PageContainer fill={fill}>
-      <PageHeader>
-        <PageHeading>
-          <PageTitle>{title}</PageTitle>
-          {subtitle ? <PageSubtitle>{subtitle}</PageSubtitle> : null}
-        </PageHeading>
-        {actions}
-      </PageHeader>
-      {toolbar}
-      {fill ? <div className="flex min-h-0 flex-1 flex-col">{children}</div> : children}
+    <PageContainer
+      fill={fill}
+      className={fullBleedBody ? 'gap-0 p-0 @2xl:p-0 @4xl:p-0' : undefined}
+    >
+      <div
+        className={
+          fullBleedBody
+            ? 'flex shrink-0 flex-col gap-4 px-3 pt-4 @2xl:gap-5 @2xl:px-6 @2xl:pt-6 @4xl:px-8 @4xl:pt-8'
+            : undefined
+        }
+      >
+        <PageHeader>
+          <PageHeading>
+            <PageTitle>{title}</PageTitle>
+            {subtitle ? <PageSubtitle>{subtitle}</PageSubtitle> : null}
+          </PageHeading>
+          {actions}
+        </PageHeader>
+        {toolbar}
+      </div>
+      {fill ? (
+        <div
+          data-page-body-presentation={bodyPresentation}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          {children}
+        </div>
+      ) : (
+        children
+      )}
     </PageContainer>
   );
 }

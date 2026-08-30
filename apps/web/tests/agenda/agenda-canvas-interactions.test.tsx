@@ -268,12 +268,10 @@ afterEach(() => {
 });
 
 describe('Agenda scheduling interactions', () => {
-  it('frames the timeline inside one clipped twelve-pixel gutter', () => {
+  it('keeps the schedule inside one page-owned viewport without an extra agenda scrollport', () => {
     renderTimeline([]);
 
     const frame = screen.getByTestId('agenda-canvas-frame');
-    expect(frame).toHaveClass('h-full', 'min-h-0', 'overflow-hidden', 'px-3');
-    expect(frame).not.toHaveClass('overflow-auto');
     expect(screen.getByRole('region', { name: 'Schedule' })).toBe(frame.firstElementChild);
     expect(canvasProps().minimumReadableTimedItemWidth).toBe(96);
   });

@@ -326,10 +326,8 @@ export function ProjectGraphPanel({
   );
 
   return (
-    // Fills the content panel and runs to its bottom edge. The page container's closing gutter is
-    // cancelled because a scrolling list does not show it either — its rows are simply clipped by
-    // the panel — so leaving it in place is what made this lens sit 24px shorter than the list it
-    // is meant to match pixel for pixel.
+    // The full-bleed page body owns the canvas edge. This panel fills its parent and no longer
+    // cancels a document gutter with negative margins.
     <CanvasSelectionRetentionProvider
       scopeKey={commandScopeKey}
       items={selectionItems}
@@ -348,7 +346,7 @@ export function ProjectGraphPanel({
         }}
       >
         <CanvasSelectionFrame label="Project dependency graph">
-          <div ref={containerRef} className="-mb-4 size-full min-h-0 flex-1 @2xl:-mb-6 @4xl:-mb-8">
+          <div ref={containerRef} className="size-full min-h-0 flex-1">
             <Canvas
               nodes={positioned}
               edges={edges}

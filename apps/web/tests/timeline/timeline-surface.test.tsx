@@ -62,10 +62,6 @@ describe('the timeline is the page, not a card in it', () => {
     }
   });
 
-  it('bleeds past the page container gutters only when asked to', () => {
-    const { container } = render(<Fixture rows={MIXED} />);
-    expect(container.firstElementChild?.className).toContain('-mx-3');
-  });
 });
 
 describe('the sticky header is opaque', () => {

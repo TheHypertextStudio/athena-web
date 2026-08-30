@@ -97,17 +97,6 @@ const MAX_LABEL_WIDTH = 480;
 /** Zoom step applied per wheel notch / button press. */
 const ZOOM_STEP = 0.8;
 
-/**
- * Cancel the page container's gutters so the chart runs to the content panel's edges.
- *
- * @remarks
- * Mirrors `PageContainer`'s `px-3 py-4 @2xl:p-6 @4xl:p-8` exactly. A chart is not a document: every
- * pixel of width is more time on screen, and a gutter around it reads as the frame of a card that
- * is not there. Opt-in (see {@link TimelineCanvasProps.fullBleed}) because a timeline embedded
- * among siblings — the Hub roadmap — must keep the rhythm of the stack it sits in.
- */
-const FULL_BLEED_CLASS = '-mx-3 -mb-4 @2xl:-mx-6 @2xl:-mb-6 @4xl:-mx-8 @4xl:-mb-8';
-
 /** Horizontal padding inside the label column, aligned to the page's own gutters. */
 const LABEL_PAD_CLASS = 'px-3 @2xl:px-6';
 
@@ -392,7 +381,7 @@ export default function TimelineCanvas<T>({
   };
 
   return (
-    <div className={cn('flex min-h-0 flex-1 flex-col gap-2', fullBleed && FULL_BLEED_CLASS)}>
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
       <div
         ref={scrollRef}
         data-timeline-scroll=""

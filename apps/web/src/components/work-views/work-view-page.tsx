@@ -684,6 +684,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
       <ListPageLayout
         title={copy.title}
         fill
+        bodyPresentation={dependencyMode || layout === 'timeline' ? 'full-bleed' : 'inset'}
         actions={
           <Button
             className="min-h-10 gap-1.5"

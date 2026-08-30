@@ -44,6 +44,7 @@ import {
   notificationPreference,
   organization,
   personalMcpConnection,
+  phoneCallAuthorization,
   phoneNumber,
   schedulingPreference,
   searchDocument,
@@ -391,12 +392,26 @@ beforeAll(async () => {
   });
 
   // --- phone binding ---
-  await db.insert(phoneNumber).values({
+  ids['phoneNumber'] = assertDefined(
+    (
+      await db
+        .insert(phoneNumber)
+        .values({
+          userId: ids['user'],
+          e164: '+15550000001',
+          dialCode: '1',
+          country: 'US',
+          nationalNumber: '5550000001',
+        })
+        .returning()
+    )[0],
+  ).id;
+  await db.insert(phoneCallAuthorization).values({
     userId: ids['user'],
-    e164: '+15550000001',
-    dialCode: '1',
-    country: 'US',
-    nationalNumber: '5550000001',
+    phoneNumberId: ids['phoneNumber'],
+    destinationE164: '+15550000001',
+    source: 'docket',
+    expiresAt: new Date(Date.now() + 60_000),
   });
 
   // --- weekly scheduling + daily-directive loop ---
@@ -709,6 +724,16 @@ describe('phone binding updates ($onUpdate coverage)', () => {
       .where(eq(phoneNumber.userId, assertDefined(ids['user'])))
       .returning();
     expect(row?.status).toBe('verified');
+    expect(row?.updatedAt).toBeInstanceOf(Date);
+  });
+
+  it('bumps updatedAt when a callback authorization fails', async () => {
+    const [row] = await db
+      .update(phoneCallAuthorization)
+      .set({ state: 'failed', failureReason: 'test_failure' })
+      .where(eq(phoneCallAuthorization.phoneNumberId, assertDefined(ids['phoneNumber'])))
+      .returning();
+    expect(row?.state).toBe('failed');
     expect(row?.updatedAt).toBeInstanceOf(Date);
   });
 });

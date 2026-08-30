@@ -28,8 +28,9 @@
   coverage gate. The exact formatter and app-lint CI commands pass after repairing stale surface,
   overlay, menu, and test-harness violations exposed by the integrated mobile work. The affected
   Web tests pass 4 cases, the design-token and exported-documentation policies pass, and the Web
-  type check passes with its repository-sized 3 GB heap. Four Settings screenshots cover 390px and
-  1280px in light and dark themes.
+  type check passes with its repository-sized 3 GB heap. The database package passes 38 files and
+  223 tests with 90.17% function coverage, including callback-authorization foreign keys and its
+  update lifecycle. Four Settings screenshots cover 390px and 1280px in light and dark themes.
 - **Blockers**: Production Twilio resources and configuration remain unchanged. Enabling phone
   access still requires explicit authorization to provision the Verify service and voice webhooks,
   followed by the real-handset canary matrix. The deployed code must keep phone access unavailable

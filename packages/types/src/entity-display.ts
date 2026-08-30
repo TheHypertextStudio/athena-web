@@ -7,16 +7,21 @@
  */
 import { z } from 'zod';
 
-/**
- * Entities that may carry separately stored display metadata.
- *
- * @remarks
- * A Team is here because it is a thing people look at and pick out of a grid, not because it is a
- * work item — it owns work rather than being work. Sharing the catalog with initiatives and
- * projects is the point: one icon set and one color set across every surface that names something,
- * rather than a second, drifting vocabulary for teams alone.
- */
-export const EntityDisplaySubjectType = z.enum(['initiative', 'project', 'team']);
+/** Every persisted Docket entity that may carry separately stored display metadata. */
+export const ENTITY_DISPLAY_SUBJECT_TYPES = [
+  'initiative',
+  'program',
+  'project',
+  'task',
+  'cycle',
+  'milestone',
+  'team',
+  'label',
+  'workStatus',
+] as const;
+
+/** Entity kind validated by the decoupled display relation. */
+export const EntityDisplaySubjectType = z.enum(ENTITY_DISPLAY_SUBJECT_TYPES);
 /** Supported display-metadata subject type. */
 export type EntityDisplaySubjectType = z.infer<typeof EntityDisplaySubjectType>;
 
@@ -178,6 +183,34 @@ export const EntityDisplayColorKey = z.enum(ENTITY_DISPLAY_COLOR_KEYS);
 /** Supported entity-display color key. */
 export type EntityDisplayColorKey = z.infer<typeof EntityDisplayColorKey>;
 
+/** One stable default presentation before a person customizes an entity. */
+export interface EntityDisplaySubjectDefinition {
+  /** The glyph shown until the entity has a stored display row. */
+  readonly iconKey: EntityDisplayIconKey;
+  /** The default decorative color, derived from the stable subject identifier when required. */
+  readonly colorKey: EntityDisplayColorKey | ((subjectId: string) => EntityDisplayColorKey);
+}
+
+/**
+ * The default presentation for every persisted display subject.
+ *
+ * @remarks
+ * This registry intentionally names display subjects rather than database tables. The API owns
+ * table and visibility mappings, while this package remains safe for clients and projections that
+ * need a default without importing persistence.
+ */
+export const ENTITY_DISPLAY_SUBJECTS = {
+  initiative: { iconKey: 'target', colorKey: 'neutral' },
+  program: { iconKey: 'layers', colorKey: 'primary' },
+  project: { iconKey: 'folder', colorKey: 'neutral' },
+  task: { iconKey: 'clipboard', colorKey: 'neutral' },
+  cycle: { iconKey: 'timeline', colorKey: 'primary' },
+  milestone: { iconKey: 'flag', colorKey: 'neutral' },
+  team: { iconKey: 'users', colorKey: hashTeamColorKey },
+  label: { iconKey: 'badge', colorKey: 'neutral' },
+  workStatus: { iconKey: 'workflow', colorKey: 'neutral' },
+} as const satisfies Record<EntityDisplaySubjectType, EntityDisplaySubjectDefinition>;
+
 /**
  * A lowercase six-digit hex color (e.g. `#3b82f6`).
  *
@@ -232,20 +265,16 @@ export function defaultEntityDisplay(
   return {
     subjectType,
     subjectId,
-    iconKey: DEFAULT_SUBJECT_ICON[subjectType],
-    colorKey: subjectType === 'team' ? hashTeamColorKey(subjectId) : 'neutral',
+    iconKey: ENTITY_DISPLAY_SUBJECTS[subjectType].iconKey,
+    colorKey:
+      typeof ENTITY_DISPLAY_SUBJECTS[subjectType].colorKey === 'function'
+        ? ENTITY_DISPLAY_SUBJECTS[subjectType].colorKey(subjectId)
+        : ENTITY_DISPLAY_SUBJECTS[subjectType].colorKey,
     customColor: null,
     coverImage: null,
     customized: false,
   };
 }
-
-/** The starting icon for each subject type, before anyone customizes it. */
-const DEFAULT_SUBJECT_ICON: Record<EntityDisplaySubjectType, EntityDisplayIconKey> = {
-  initiative: 'target',
-  project: 'folder',
-  team: 'users',
-};
 
 /**
  * The colors an uncustomized team's default may land on.

@@ -6,8 +6,8 @@ import {
   type Health,
   type WorkViewActor,
 } from '@docket/types';
-import { ActorAvatar, IdentityGlyph, ListCell, ListRow, ListView } from '@docket/ui/components';
-import { Calendar, Layers } from '@docket/ui/icons';
+import { ActorAvatar, ListCell, ListRow, ListView } from '@docket/ui/components';
+import { Calendar } from '@docket/ui/icons';
 import { STRETCHED_LINK } from '@docket/ui/lib/stretched-link';
 import { cn } from '@docket/ui/lib/utils';
 import { Button, Checkbox } from '@docket/ui/primitives';
@@ -308,36 +308,15 @@ function rowActor(row: WorkViewRowFor<ViewTarget>, field: string): WorkViewActor
   return null;
 }
 
-function Identity({
-  row,
-  statusOf,
-}: {
-  row: WorkViewRowFor<ViewTarget>;
-  statusOf: ReturnType<typeof useWorkStatusResolver>;
-}): JSX.Element {
-  if (row.target === 'project' || row.target === 'initiative') {
-    const display = row.display ?? defaultEntityDisplay(row.target, row.id);
-    return (
-      <EntityIconGlyph
-        iconKey={display.iconKey}
-        colorKey={display.colorKey}
-        customColor={display.customColor}
-        size={32}
-      />
-    );
-  }
-  if (row.target === 'program') {
-    return (
-      <IdentityGlyph size={32}>
-        <Layers className="size-4" />
-      </IdentityGlyph>
-    );
-  }
-  const status = statusOf(row.status);
+function Identity({ row }: { row: WorkViewRowFor<ViewTarget> }): JSX.Element {
+  const display = row.display ?? defaultEntityDisplay(row.target, row.id);
   return (
-    <IdentityGlyph size={32}>
-      <WorkStatusIcon name={status.name} category={status.category} />
-    </IdentityGlyph>
+    <EntityIconGlyph
+      iconKey={display.iconKey}
+      colorKey={display.colorKey}
+      customColor={display.customColor}
+      size={32}
+    />
   );
 }
 
@@ -345,13 +324,11 @@ function SelectionIdentity({
   row,
   selected,
   selectionActive,
-  statusOf,
   onToggle,
 }: {
   row: WorkViewRowFor<ViewTarget>;
   selected: boolean;
   selectionActive: boolean;
-  statusOf: ReturnType<typeof useWorkStatusResolver>;
   onToggle: () => void;
 }): JSX.Element {
   return (
@@ -376,7 +353,7 @@ function SelectionIdentity({
         aria-hidden={selected || selectionActive}
         className={`pointer-events-none transition-opacity ${selected || selectionActive ? 'opacity-0' : 'opacity-100 group-focus-within/roster:opacity-0 group-hover/roster:opacity-0'}`}
       >
-        <Identity row={row} statusOf={statusOf} />
+        <Identity row={row} />
       </span>
     </span>
   );
@@ -645,7 +622,6 @@ export function WorkList<TTarget extends ViewTarget>({
                     row={row}
                     selected={selected}
                     selectionActive={selectionActive}
-                    statusOf={statusOf}
                     onToggle={() => {
                       toggle(row.id);
                     }}

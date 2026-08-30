@@ -19,7 +19,7 @@
     "pretypecheck": "pnpm --filter @docket/api build",
     "typecheck": "tsc --noEmit",
     "prelint": "pnpm --filter @docket/api build",
-    "lint": "eslint .",
+    "lint": "NODE_OPTIONS=--max-old-space-size=3072 eslint .",
     "test": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--no-experimental-webstorage\" vitest run",
     "test:watch": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--no-experimental-webstorage\" vitest",
     "test:coverage": "NODE_OPTIONS=\"${NODE_OPTIONS:+$NODE_OPTIONS }--no-experimental-webstorage\" vitest run --coverage --exclude tests/components/canvas/graph-layout-performance.test.ts",

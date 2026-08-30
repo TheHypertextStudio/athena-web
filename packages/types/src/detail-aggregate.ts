@@ -18,7 +18,7 @@ import {
 import { InitiativeDetail } from './initiative';
 import { ProgramDetail, ProgramOut } from './program';
 import { ProjectOut, ProjectProgress } from './project';
-import { ActorId } from './primitives';
+import { ActorId, InitiativeId, OrganizationId } from './primitives';
 import { TaskDetail } from './task';
 import { TeamOut, WorkflowState } from './team';
 
@@ -61,6 +61,28 @@ export const DetailActorReference = z
 /** One actor referenced by an aggregate detail response. */
 export type DetailActorReference = z.infer<typeof DetailActorReference>;
 
+/** One Initiative linked to a Project without loading its entire detail document. */
+export const ProjectInitiativeReference = z
+  .object({ id: InitiativeId, name: z.string() })
+  .strict()
+  .meta({
+    id: 'ProjectInitiativeReference',
+    description: 'A linked Initiative named by a Project detail aggregate.',
+  });
+/** A linked Initiative named by a Project detail aggregate. */
+export type ProjectInitiativeReference = z.infer<typeof ProjectInitiativeReference>;
+
+/** The one hierarchy parent the Initiative detail masthead may name on first paint. */
+export const InitiativeDirectParentReference = z
+  .object({ id: InitiativeId, organizationId: OrganizationId, name: z.string() })
+  .strict()
+  .meta({
+    id: 'InitiativeDirectParentReference',
+    description: 'The visible direct parent named by an Initiative detail aggregate.',
+  });
+/** The visible direct parent named by an Initiative detail aggregate. */
+export type InitiativeDirectParentReference = z.infer<typeof InitiativeDirectParentReference>;
+
 /** One aggregate Task detail response. */
 export const TaskDetailAggregate = z
   .object({
@@ -88,6 +110,7 @@ export const ProjectDetailAggregate = z
         lead: DetailActorReference.nullable(),
         program: ProgramOut.nullable(),
         team: TeamOut.nullable(),
+        initiatives: z.array(ProjectInitiativeReference),
       })
       .strict(),
     defaultView: z.object({ project: ProjectOut, progress: ProjectProgress }).strict(),
@@ -119,7 +142,13 @@ export const InitiativeDetailAggregate = z
     snapshot: InitiativeNavigationSnapshot,
     viewer: DetailViewer,
     capabilities: DetailCapabilities,
-    references: z.object({ owner: DetailActorReference.nullable() }).strict(),
+    references: z
+      .object({
+        owner: DetailActorReference.nullable(),
+        parent: InitiativeDirectParentReference.nullable(),
+        parentLinkId: z.string().nullable(),
+      })
+      .strict(),
     defaultView: z.object({ initiative: InitiativeDetail }).strict(),
   })
   .strict()

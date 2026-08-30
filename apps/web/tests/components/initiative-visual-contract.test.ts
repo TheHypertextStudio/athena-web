@@ -89,6 +89,16 @@ describe('Initiative visual contract', () => {
     expect(detail).not.toContain('variant="secondary"');
   });
 
+  it('keeps Initiative overview document-first with connected work and a latest update', () => {
+    const detail = source(detailPath);
+    expect(detail).toContain('<InitiativeOverviewSummary');
+    expect(detail).toContain('<LatestUpdateSummary');
+    expect(detail.indexOf('<TemplateAwareEntityDocument')).toBeLessThan(
+      detail.indexOf('<InitiativeOverviewSummary'),
+    );
+    expect(detail).toContain("tab === 'overview' || tab === 'updates'");
+  });
+
   it('gives the Initiative overview a restrained canonical MD3 headline scale', () => {
     const typography = source(typographyPath);
     const overview = source(overviewPath);

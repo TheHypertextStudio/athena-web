@@ -28,7 +28,7 @@ import {
   menuDestructiveItem,
 } from '@docket/ui/primitives';
 import { Ellipsis } from '@docket/ui/icons';
-import type { JSX } from 'react';
+import type { JSX, ReactNode } from 'react';
 
 /** Props for {@link LabelSettingsRow}. */
 export interface LabelSettingsRowProps {
@@ -42,6 +42,8 @@ export interface LabelSettingsRowProps {
   hideScope?: boolean;
   /** Open the editor on this label. */
   onEdit: () => void;
+  /** Decorative identity control. The Label chip remains the semantic color signal. */
+  identity?: ReactNode;
   /** Limit this label to a team, or null to promote it back to workspace-wide. */
   onScope: (teamId: string | null) => void;
   /** Delete this label. */
@@ -67,6 +69,7 @@ export function LabelSettingsRow({
   canManage,
   hideScope = false,
   onEdit,
+  identity,
   onScope,
   onDelete,
 }: LabelSettingsRowProps): JSX.Element {
@@ -77,6 +80,7 @@ export function LabelSettingsRow({
     // its own fill and radius, so a set of five labels read as five cards with gaps between them
     // instead of one list you can scan down.
     <li className={cn(ROW_BASE, ROW_INTERACTIVE)}>
+      {identity}
       <LabelChip name={label.name} color={label.color} className="max-w-56" />
 
       <span className="text-on-surface-variant text-body-small ml-auto shrink-0 tabular-nums">

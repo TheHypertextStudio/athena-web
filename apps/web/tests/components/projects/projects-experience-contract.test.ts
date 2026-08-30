@@ -107,7 +107,21 @@ describe('Projects experience contract', () => {
     expect(detail).not.toContain('Contributor');
     expect(detail).not.toContain('No people yet');
     expect(detail).not.toContain('Project info');
-    expect(detail).not.toContain('Print');
+    expect(detail).toContain('<DetailPrintSummary');
+  });
+
+  it('composes a document-first operating overview without duplicating operational tabs', () => {
+    const detail = source(detailPath);
+    expect(detail).toContain('<LatestUpdateSummary');
+    expect(detail).toContain('<OverviewSummary');
+    expect(detail).toContain('<ProjectMilestonesPanel');
+    expect(detail).toContain('<AgentsStrip');
+    expect(detail).toContain('<AgentActivityFeed');
+    expect(detail).toContain('<ProjectDependenciesPanel');
+    expect(detail.indexOf('<LatestUpdateSummary')).toBeLessThan(
+      detail.indexOf('<TemplateAwareEntityDocument'),
+    );
+    expect(detail).toContain("tab === 'overview' || tab === 'tasks'");
   });
 
   it('keeps Repeat project inside the Project actions menu', () => {

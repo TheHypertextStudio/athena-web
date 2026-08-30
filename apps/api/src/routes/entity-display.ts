@@ -1,5 +1,17 @@
 /** Workspace-scoped presentation metadata for supported work entities. */
-import { db, entityDisplay, initiative, project, team } from '@docket/db';
+import {
+  cycle,
+  db,
+  entityDisplay,
+  initiative,
+  label,
+  milestone,
+  program,
+  project,
+  task,
+  team,
+  workStatus,
+} from '@docket/db';
 import {
   defaultEntityDisplay,
   EntityDisplayOut,
@@ -35,8 +47,26 @@ const displayParam = z.object({
  */
 const SUBJECT_TABLE: Record<
   EntityDisplaySubjectType,
-  typeof initiative | typeof project | typeof team
-> = { initiative, project, team };
+  | typeof initiative
+  | typeof program
+  | typeof project
+  | typeof task
+  | typeof cycle
+  | typeof milestone
+  | typeof team
+  | typeof label
+  | typeof workStatus
+> = {
+  initiative,
+  program,
+  project,
+  task,
+  cycle,
+  milestone,
+  team,
+  label,
+  workStatus,
+};
 
 async function assertSubjectInWorkspace(
   organizationId: string,
@@ -60,7 +90,7 @@ const entityDisplayRouter = new Hono<AppEnv>()
       tag: 'Display',
       summary: 'Get work-item display metadata',
       description:
-        'Returns decoupled icon and semantic color metadata for an Initiative or Project, falling back to stable defaults when the work item has not been customized.',
+        'Returns decoupled icon and semantic color metadata for a native Docket entity, falling back to stable defaults when the item has not been customized.',
       response: EntityDisplayOut,
     }),
     zParam(displayParam),
@@ -103,7 +133,7 @@ const entityDisplayRouter = new Hono<AppEnv>()
       tag: 'Display',
       summary: 'Customize work-item display metadata',
       description:
-        'Creates or replaces decoupled icon and semantic color metadata for an Initiative or Project without changing the work item domain record itself.',
+        'Creates or replaces decoupled icon and semantic color metadata for a native Docket entity without changing the domain record itself.',
       capability: 'contribute',
       response: EntityDisplayOut,
     }),
@@ -195,7 +225,7 @@ const entityDisplayRouter = new Hono<AppEnv>()
       tag: 'Display',
       summary: 'Reset work-item display metadata',
       description:
-        'Deletes customized icon and semantic color metadata for an Initiative or Project and returns the stable default presentation for that work item type.',
+        'Deletes customized icon and semantic color metadata for a native Docket entity and returns the stable default presentation for that item type.',
       capability: 'contribute',
       response: EntityDisplayOut,
     }),

@@ -24,7 +24,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@docket/ui/primitives';
-import type { JSX } from 'react';
+import type { JSX, ReactNode } from 'react';
 
 import { StatusCategoryGroup } from './status-category-group';
 import type { StatusLike } from './status-registry';
@@ -70,6 +70,8 @@ export interface StatusEntitySectionProps {
   onDelete: (status: StatusLike) => void;
   /** Commit a new order within one category. */
   onReorder: (category: WorkStatusCategory, statusId: string, toIndex: number) => void;
+  /** Render a status's decorative identity beside its semantic category icon. */
+  renderIdentity?: (status: StatusLike) => ReactNode;
 }
 
 /**
@@ -128,6 +130,7 @@ export function StatusEntitySection({
   onMakeDefault,
   onDelete,
   onReorder,
+  renderIdentity,
 }: StatusEntitySectionProps): JSX.Element {
   const inherited = scopeTeamId !== null && !scopeForked;
   const blocked = deleteBlockers(statuses);
@@ -224,6 +227,7 @@ export function StatusEntitySection({
               onReorder(category, statusId, toIndex);
             }}
             deleteBlocked={blocked}
+            {...(renderIdentity ? { renderIdentity } : {})}
           />
         ))}
       </div>

@@ -23,11 +23,18 @@ import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialo
 import { TemplateAwareEntityDocument } from '@/components/editor/apply-description-template';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { EditableSubtitle } from '@/components/editor/editable-subtitle';
-import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
+import { EntityIconPicker } from '@/components/entity-display/entity-icon-picker';
+import { useEntityDisplay } from '@/components/entity-display/use-entity-display';
+import { useCategoryOf } from '@/components/entity-display/use-work-status';
+import { LatestUpdateSummary } from '@/components/entity-detail/latest-update-summary';
 import { PageContainer } from '@/components/views/page-layout';
+import { DetailPrintSummary } from '@/components/views/detail-print-summary';
 import { EntityDetailSkeleton } from '@/components/views/entity-detail-skeleton';
+import { useDetailTab } from '@/components/views/use-detail-tab';
 import { EntityDetailLayout, EntityMetadataRow } from '@/components/views/entity-detail-layout';
 import { ProgramProjectsPanel } from '@/components/programs/program-projects-panel';
+import { FlowSnapshot } from '@/components/programs/flow-snapshot';
+import { programFlowMetrics } from '@/components/programs/flow-metrics';
 import { ProgramPropertiesPanel } from '@/components/programs/properties-panel';
 import { ProgramWorkView } from '@/components/programs/program-work-view';
 import { type ResolveActor, UpdatesPanel } from '@/components/entity-detail/updates-panel';
@@ -54,6 +61,7 @@ import { useAppRouter } from '@/lib/interactions/navigation';
 import { openProjectRecord } from '@/lib/local-first-navigation';
 
 type TabId = 'overview' | 'projects' | 'work' | 'updates';
+const PROGRAM_TABS = ['overview', 'projects', 'work', 'updates'] as const;
 
 /** ProgramDetailPage renders the authenticated program page. */
 export default function ProgramDetailPage(): JSX.Element {
@@ -64,13 +72,14 @@ export default function ProgramDetailPage(): JSX.Element {
   const navigationSnapshot = useNavigationSnapshot('program', programId);
 
   const programLabel = useVocabulary('program');
+  const cyclesLabel = useVocabulary('cycle', { plural: true });
   const projectNounCased = useVocabulary('project');
 
   const aggregateDef = programDetailAggregateDef(orgId, programId);
   const detailKey = aggregateDef.queryKey;
   const updatesKey = useMemo(() => [...detailKey, 'updates'] as const, [detailKey]);
 
-  const [tab, setTab] = useState<TabId>('overview');
+  const { tab, setTab } = useDetailTab<TabId>(PROGRAM_TABS);
   const [ownerPickerOpen, setOwnerPickerOpen] = useState(false);
 
   const [aggregateEnabled, setAggregateEnabled] = useState(true);
@@ -84,6 +93,12 @@ export default function ProgramDetailPage(): JSX.Element {
     aggregateQ.isPending,
     aggregateQ.isError,
   );
+  const entityDisplay = useEntityDisplay({
+    organizationId: orgId,
+    subjectType: 'program',
+    subjectId: programId,
+    errorMessage: 'Could not load this program’s icon.',
+  });
 
   useEffect(() => {
     setTerminalState(null);
@@ -116,10 +131,31 @@ export default function ProgramDetailPage(): JSX.Element {
       updatesKey,
       () => api.v1.orgs[':orgId'].programs[':id'].updates.$get({ param: { orgId, id: programId } }),
       'Could not load updates.',
-      { enabled: tab === 'updates' },
+      { enabled: tab === 'overview' || tab === 'updates' },
     ),
   );
   const updates = useMemo<readonly UpdateOut[]>(() => updatesQ.data?.items ?? [], [updatesQ.data]);
+  const programWorkQ = useApiQuery(
+    apiQueryOptions(
+      [...detailKey, 'overview-work'] as const,
+      () =>
+        api.v1.orgs[':orgId'].programs[':id'].work.$get({
+          param: { orgId, id: programId },
+          query: {},
+        }),
+      'Could not load Program flow.',
+      { enabled: aggregate !== null && tab === 'overview' },
+    ),
+  );
+  const categoryOfTask = useCategoryOf('task');
+  const flowMetrics = useMemo(
+    () => programFlowMetrics(programWorkQ.data, categoryOfTask),
+    [categoryOfTask, programWorkQ.data],
+  );
+  const healthAsOf = useMemo(
+    () => updates.find((update) => update.health !== null)?.createdAt ?? null,
+    [updates],
+  );
 
   const resolveActor = useMemo<ResolveActor>(() => {
     const byId = new Map<string, { name: string; kind: 'human' | 'agent' | 'team' }>();
@@ -144,6 +180,7 @@ export default function ProgramDetailPage(): JSX.Element {
   );
 
   const canEdit = aggregate?.capabilities.manage ?? false;
+  const canCustomizeIdentity = aggregate?.capabilities.contribute ?? false;
 
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const deleteProgram = useProgramDeleteMutation(orgId, programId, programLabel, () => {
@@ -167,10 +204,10 @@ export default function ProgramDetailPage(): JSX.Element {
   }, [aggregate?.references.owner, members]);
 
   const tabs: readonly TabsItem[] = [
-    { value: 'overview', label: 'Overview' },
-    { value: 'projects', label: 'Projects' },
-    { value: 'work', label: 'Work' },
-    { value: 'updates', label: 'Updates' },
+    { value: 'overview', label: 'Overview', priority: 0 },
+    { value: 'projects', label: 'Projects', priority: 1 },
+    { value: 'work', label: 'Work', priority: 2 },
+    { value: 'updates', label: 'Updates', priority: 3 },
   ];
 
   if (terminalState !== null) {
@@ -243,10 +280,31 @@ export default function ProgramDetailPage(): JSX.Element {
         organizationId: orgId,
         title: program.name,
       }}
+      printSummary={
+        <DetailPrintSummary
+          title={program.name}
+          summary={program.summary}
+          description={program.description}
+          properties={[
+            { label: 'Status', value: program.status.replace('_', ' ') },
+            { label: 'Health', value: health ? health.replace('_', ' ') : '—' },
+            { label: 'Owner', value: aggregate?.references.owner?.displayName ?? '—' },
+            { label: 'Visibility', value: program.visibility },
+          ]}
+        />
+      }
       icon={
-        <span className="flex size-12 shrink-0 items-center justify-center">
-          <EntityIconGlyph iconKey="layers" colorKey="primary" customColor={null} size={48} />
-        </span>
+        <EntityIconPicker
+          display={entityDisplay.display}
+          entityName={program.name}
+          editable={canCustomizeIdentity}
+          pending={entityDisplay.mutation.isPending}
+          loading={entityDisplay.loading}
+          size={48}
+          onChange={(iconKey, colorKey, customColor) => {
+            entityDisplay.mutation.mutate({ iconKey, colorKey, customColor });
+          }}
+        />
       }
       title={
         <EditableTitle
@@ -347,6 +405,7 @@ export default function ProgramDetailPage(): JSX.Element {
             setTab(value as TabId);
           }}
           label={`${programLabel} sections`}
+          overflow={{ menuLabel: `More ${programLabel} sections` }}
           items={tabs}
         />
       }
@@ -357,7 +416,29 @@ export default function ProgramDetailPage(): JSX.Element {
         </p>
       ) : null}
       {tab === 'overview' ? (
-        <div role="tabpanel" id="tabpanel-overview" aria-labelledby="tab-overview">
+        <div
+          role="tabpanel"
+          id="tabpanel-overview"
+          aria-labelledby="tab-overview"
+          className="flex min-w-0 flex-col gap-8"
+        >
+          {programWorkQ.isError ? (
+            <p role="alert" className="text-error text-body-medium">
+              Could not load Program flow.
+            </p>
+          ) : null}
+          <FlowSnapshot
+            health={health}
+            healthAsOf={healthAsOf}
+            metrics={{ ...flowMetrics, projects: program.rollup.projects }}
+            projectsLabel={projectNounCased}
+            cyclesLabel={cyclesLabel}
+          />
+          <LatestUpdateSummary
+            updates={updates}
+            loading={updatesQ.isPending}
+            resolveActor={resolveActor}
+          />
           <TemplateAwareEntityDocument
             orgId={orgId}
             kind="program"

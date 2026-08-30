@@ -1154,3 +1154,35 @@
     opacity: 0;
   }
 }
+
+.detail-print-summary {
+  display: none;
+}
+
+@media print {
+  [data-detail-print] {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+
+  [data-detail-print] .detail-print-hidden,
+  [data-detail-print] .detail-tabs,
+  [data-detail-print] .no-print,
+  [data-detail-print] [role='tabpanel'] {
+    display: none !important;
+  }
+
+  [data-detail-print] .detail-body {
+    display: block !important;
+  }
+
+  [data-detail-print] .detail-print-summary {
+    display: block !important;
+  }
+
+  [data-detail-print] .detail-print-properties {
+    break-inside: avoid;
+  }
+}

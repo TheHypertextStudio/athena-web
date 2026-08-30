@@ -77,6 +77,38 @@ function requiredRelationshipValue<T>(value: T | undefined, message: string): T 
 
 const MAX_RELATIONSHIP_NODES = 100;
 const MAX_CONNECTED_WORK = 100;
+
+async function visibleDirectParent(
+  contextOrganizationId: string,
+  parentLink: { id: string; parentInitiativeId: string } | undefined,
+  parent: typeof initiative.$inferSelect | undefined,
+  session: AuthSession,
+): Promise<{
+  parent: { id: string; organizationId: string; name: string } | null;
+  parentLinkId: string | null;
+}> {
+  if (!parentLink || !parent) return { parent: null, parentLinkId: null };
+  if (parent.organizationId !== contextOrganizationId) {
+    if (!session?.user) return { parent: null, parentLinkId: null };
+    const membership = await db
+      .select({ id: actor.id })
+      .from(actor)
+      .where(
+        and(
+          eq(actor.userId, session.user.id),
+          eq(actor.organizationId, parent.organizationId),
+          eq(actor.kind, 'human'),
+          eq(actor.status, 'active'),
+        ),
+      )
+      .limit(1);
+    if (!membership[0]) return { parent: null, parentLinkId: null };
+  }
+  return {
+    parent: { id: parent.id, organizationId: parent.organizationId, name: parent.name },
+    parentLinkId: parentLink.id,
+  };
+}
 const RELATIONSHIP_QUERY_PAGE_SIZE = 64;
 const MAX_INITIATIVE_CHILD_SCAN_ROWS = 512;
 const MAX_PROGRAM_ASSOCIATION_SCAN_ROWS = 512;
@@ -791,7 +823,16 @@ const initiativeAggregates = new Hono<AppEnv>()
       const { id } = c.req.valid('param');
       const graph = await loadAccessibleInitiativeHierarchyGraph(orgId, [id], c.get('session'));
       const row = graph.nodes.find((node) => node.id === id && node.organizationId === orgId);
-      if (!row || !graph.projection.nodeIds.has(id)) {
+      const parentLink = graph.links.find((link) => link.childInitiativeId === id);
+      const parentRow = parentLink
+        ? graph.nodes.find((node) => node.id === parentLink.parentInitiativeId)
+        : undefined;
+      const hierarchy = await visibleDirectParent(orgId, parentLink, parentRow, c.get('session'));
+      const isLocalRoot = parentLink === undefined && row?.organizationId === orgId;
+      if (
+        !row ||
+        (!graph.projection.nodeIds.has(id) && hierarchy.parent === null && !isLocalRoot)
+      ) {
         throw new NotFoundError('Initiative not found');
       }
       const [summary, ownerRows] = await Promise.all([
@@ -820,9 +861,13 @@ const initiativeAggregates = new Hono<AppEnv>()
         },
         viewer: { actorId },
         capabilities: detailCapabilities(capabilities),
-        references: owner
-          ? { owner: { actorId: owner.id, displayName: owner.displayName, avatar: owner.avatar } }
-          : { owner: null },
+        references: {
+          owner: owner
+            ? { actorId: owner.id, displayName: owner.displayName, avatar: owner.avatar }
+            : null,
+          parent: hierarchy.parent,
+          parentLinkId: hierarchy.parentLinkId,
+        },
         defaultView: { initiative: buildInitiativeDetailFromSummary(row, summary) },
       });
     },

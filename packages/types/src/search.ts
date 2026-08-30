@@ -9,6 +9,7 @@
 import { z } from 'zod';
 
 import { SourceSystemKind } from './event';
+import { EntityDisplayOut } from './entity-display';
 import { OrganizationId } from './primitives';
 
 /** Broad information architecture family for one search result. */
@@ -195,6 +196,8 @@ export const SearchResult = z
      * `actions`, which turns a presentation detail into a wire contract.
      */
     externalUrl: z.string().nullable(),
+    /** Optional persisted decorative identity for a native entity result. */
+    display: EntityDisplayOut.nullable().optional(),
     /** The work containers referencing this result, most-referencing first; empty when none do. */
     usedIn: z.array(SearchUsedIn).default([]),
     /**

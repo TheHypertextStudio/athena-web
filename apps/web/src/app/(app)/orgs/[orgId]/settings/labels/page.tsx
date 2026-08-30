@@ -19,7 +19,16 @@
  * Sections run: groups (the closest thing to a custom field), then loose labels, then anything
  * limited to a team, then the unused. That order is "most structured first, most disposable last".
  */
-import type { LabelGroupOut, LabelOut, LabelUpdate, TeamOut } from '@docket/types';
+import {
+  defaultEntityDisplay,
+  type EntityDisplayColorKey,
+  type EntityDisplayIconKey,
+  type EntityDisplayOut,
+  type LabelGroupOut,
+  type LabelOut,
+  type LabelUpdate,
+  type TeamOut,
+} from '@docket/types';
 import { Button, Checkbox, Skeleton } from '@docket/ui/primitives';
 import { EmptyState } from '@docket/ui/components';
 import { Plus, Tag } from '@docket/ui/icons';
@@ -31,6 +40,7 @@ import { useActiveOrg } from '@/components/active-org';
 import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
 import { LabelEditorDialog } from '@/components/labels/label-editor-dialog';
 import { LabelSettingsRow } from '@/components/labels/label-settings-row';
+import { EntityIconPicker } from '@/components/entity-display/entity-icon-picker';
 import {
   labelGroupsDef,
   labelsWithCountsDef,
@@ -44,7 +54,14 @@ import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
 import { api } from '@/lib/api';
 import { useTypedRoute } from '@/lib/app-location';
 import { userErrorMessage } from '@/lib/problem';
-import { apiQueryOptions, queryKeys, STALE, useApiListQuery } from '@/lib/query';
+import {
+  apiQueryOptions,
+  queryKeys,
+  STALE,
+  unwrap,
+  useApiListQuery,
+  useApiMutation,
+} from '@/lib/query';
 import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 import { SettingRow } from '@/components/settings/setting-row';
 import { SettingsGroup } from '@/components/settings/settings-group';
@@ -86,6 +103,37 @@ export default function LabelsSettingsPage(): JSX.Element {
       { enabled: !hideScope, staleTime: STALE.static },
     ),
   );
+  const displaysQ = useApiListQuery(
+    apiQueryOptions(
+      queryKeys.entityDisplays(orgId, 'label'),
+      () =>
+        api.v1.orgs[':orgId'].display[':subjectType'].$get({
+          param: { orgId, subjectType: 'label' },
+        }),
+      'Could not load label icons.',
+      { staleTime: STALE.static },
+    ),
+  );
+  const updateDisplay = useApiMutation<
+    EntityDisplayOut,
+    {
+      readonly id: string;
+      readonly iconKey: EntityDisplayIconKey;
+      readonly colorKey: EntityDisplayColorKey;
+      readonly customColor: string | null;
+    }
+  >({
+    mutationFn: ({ id, ...json }) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].display[':subjectType'][':subjectId'].$put({
+            param: { orgId, subjectType: 'label', subjectId: id },
+            json,
+          }),
+        'Could not customize this label.',
+      ),
+    invalidateKeys: [queryKeys.entityDisplays(orgId, 'label')],
+  });
 
   const updateLabel = useUpdateLabel(orgId);
   const removeLabel = useDeleteLabel(orgId);
@@ -111,6 +159,9 @@ export default function LabelsSettingsPage(): JSX.Element {
   const labels: readonly LabelOut[] = labelsQ.data?.items ?? [];
   const groups: readonly LabelGroupOut[] = groupsQ.data?.items ?? [];
   const teams: readonly TeamOut[] = teamsQ.data?.items ?? [];
+  const displayById = new Map(
+    (displaysQ.data?.items ?? []).map((display) => [display.subjectId, display]),
+  );
 
   const byName = (a: LabelOut, b: LabelOut): number => a.name.localeCompare(b.name);
   const groupIds = new Set(groups.map((g) => g.id));
@@ -132,6 +183,19 @@ export default function LabelsSettingsPage(): JSX.Element {
     teams,
     canManage,
     hideScope,
+    identity: (
+      <EntityIconPicker
+        display={displayById.get(label.id) ?? defaultEntityDisplay('label', label.id)}
+        entityName={label.name}
+        editable={canManage}
+        pending={updateDisplay.isPending}
+        loading={displaysQ.isPending}
+        size={32}
+        onChange={(iconKey, colorKey, customColor) => {
+          updateDisplay.mutate({ id: label.id, iconKey, colorKey, customColor });
+        }}
+      />
+    ),
     onEdit: () => {
       setEditing({ label, groupId: label.groupId ?? null });
     },

@@ -23,19 +23,18 @@
  * empty sections, not about kinds of team: a committee that meets monthly has cycles and tasks like
  * anyone else, and nothing here treats it as a lesser sort of team.
  */
-import type { EntityDisplayColorKey, EntityDisplayIconKey, EntityDisplayOut } from '@docket/types';
-import { defaultEntityDisplay, TeamId } from '@docket/types';
+import { TeamId } from '@docket/types';
 import { EmptyState } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { ChevronLeft, Folder } from '@docket/ui/icons';
 import { Button, Skeleton, Tabs } from '@docket/ui/primitives';
-import { useQueryClient } from '@tanstack/react-query';
 import Link from '@/components/docket-link';
 import { type JSX, useMemo, useState } from 'react';
 
 import { EntityDocument } from '@/components/editor/entity-document';
 import MentionedResources from '@/components/entity-detail/mentioned-resources';
 import { EntityIconPicker } from '@/components/entity-display/entity-icon-picker';
+import { useEntityDisplay } from '@/components/entity-display/use-entity-display';
 import { CapacityChart } from '@/components/team-detail/capacity-chart';
 import { ThroughputChart } from '@/components/team-detail/throughput-chart';
 import { TeamPeople, TeamPeopleSkeleton } from '@/components/team-detail/team-people';
@@ -71,7 +70,6 @@ export default function TeamDetailClient(): JSX.Element {
   const {
     params: { orgId, teamId },
   } = useTypedRoute('/orgs/[orgId]/teams/[teamId]');
-  const queryClient = useQueryClient();
   const [tab, setTab] = useState<TabId>('overview');
   const [lens, setLens] = useState<ActivityLens>('capacity');
   const [weightByEstimate, setWeightByEstimate] = useState(false);
@@ -91,16 +89,13 @@ export default function TeamDetailClient(): JSX.Element {
       'Could not load this team.',
     ),
   );
-  const displayQ = useApiQuery(
-    apiQueryOptions(
-      queryKeys.entityDisplay(orgId, 'team', teamId),
-      () =>
-        api.v1.orgs[':orgId'].display[':subjectType'][':subjectId'].$get({
-          param: { orgId, subjectType: 'team', subjectId: teamId },
-        }),
-      'Could not load this team’s icon.',
-    ),
-  );
+  const entityDisplay = useEntityDisplay({
+    organizationId: orgId,
+    subjectType: 'team',
+    subjectId: teamId,
+    errorMessage: 'Could not customize this team.',
+    enabled: teamQ.data !== undefined,
+  });
   const membersQ = useApiListQuery(
     apiQueryOptions(
       queryKeys.teamMembers(orgId, teamId),
@@ -118,42 +113,7 @@ export default function TeamDetailClient(): JSX.Element {
 
   const team = teamQ.data;
   const members = useMemo(() => membersQ.data?.items ?? [], [membersQ.data]);
-  const display: EntityDisplayOut = displayQ.data ?? defaultEntityDisplay('team', teamId);
-
-  const displayKey = queryKeys.entityDisplay(orgId, 'team', teamId);
-  const displayMutation = useApiMutation<
-    EntityDisplayOut,
-    { iconKey: EntityDisplayIconKey; colorKey: EntityDisplayColorKey; customColor: string | null },
-    { previous?: EntityDisplayOut | undefined }
-  >({
-    mutationFn: (json) =>
-      unwrap(
-        () =>
-          api.v1.orgs[':orgId'].display[':subjectType'][':subjectId'].$put({
-            param: { orgId, subjectType: 'team', subjectId: teamId },
-            json,
-          }),
-        'Could not customize this team.',
-      ),
-    onMutate: async ({ iconKey, colorKey, customColor }) => {
-      await queryClient.cancelQueries({ queryKey: displayKey });
-      const previous = queryClient.getQueryData<EntityDisplayOut>(displayKey);
-      queryClient.setQueryData<EntityDisplayOut>(displayKey, {
-        subjectType: 'team',
-        subjectId: teamId,
-        iconKey,
-        colorKey,
-        customColor,
-        coverImage: previous?.coverImage ?? null,
-        customized: true,
-      });
-      return { previous };
-    },
-    onError: (_error, _variables, context) => {
-      if (context?.previous) queryClient.setQueryData(displayKey, context.previous);
-    },
-    invalidateKeys: [displayKey, queryKeys.entityDisplays(orgId, 'team')],
-  });
+  const display = entityDisplay.display;
 
   const saveDescription = useApiMutation({
     mutationFn: (value: string | null) =>
@@ -213,10 +173,10 @@ export default function TeamDetailClient(): JSX.Element {
           display={display}
           entityName={team.name}
           editable={canEdit}
-          pending={displayMutation.isPending}
+          pending={entityDisplay.mutation.isPending}
           size={48}
           onChange={(iconKey, colorKey, customColor) => {
-            displayMutation.mutate({ iconKey, colorKey, customColor });
+            entityDisplay.mutation.mutate({ iconKey, colorKey, customColor });
           }}
         />
       }
@@ -362,9 +322,9 @@ export default function TeamDetailClient(): JSX.Element {
         </section>
       ) : null}
 
-      {displayMutation.error ? (
+      {entityDisplay.mutation.error ? (
         <p role="alert" className="text-error text-body-medium">
-          {userErrorMessage(displayMutation.error, 'Could not customize this team.')}
+          {userErrorMessage(entityDisplay.mutation.error, 'Could not customize this team.')}
         </p>
       ) : null}
     </EntityDetailLayout>

@@ -69,17 +69,12 @@ fi
 
 # Git snapshots the index after pre-commit but before commit-msg. Formatting any later leaves the
 # rewritten files staged for a second commit while the first commit records the unformatted input.
-pnpm lint-staged
-
-# ESLint cannot detect raw visual utilities. Run the focused design-policy gate before the slower
-# workspace lint so a typography, spacing, color, or shadow regression fails at the commit that
-# introduced it instead of reaching CI.
-pnpm --filter @docket/test-utils exec vitest run tests/design-policies/design-token-policy.test.ts --maxWorkers=1
-
-# Keep commit feedback scoped to what the commit can change. The staged driver expands workspace
-# packages through their dependents, while root lint and TypeScript configuration changes still
-# select the bounded full-workspace path. CI remains the authoritative clean-checkout gate.
 pnpm lint:staged
+
+# ESLint cannot detect raw visual utilities. Run the focused design-policy gate so a typography,
+# spacing, color, or shadow regression fails at the commit that introduced it instead of reaching
+# CI.
+pnpm --filter @docket/test-utils exec vitest run tests/design-policies/design-token-policy.test.ts --maxWorkers=1
 HOOK
 
 cat > "$hooks_dir/commit-msg" <<'HOOK'

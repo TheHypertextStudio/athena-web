@@ -254,9 +254,27 @@ export function projectOptions(
   });
 }
 
-/** Map the org's programs into entity options. */
-export function programOptions(programs: readonly ProgramOut[]): readonly PickerOption[] {
-  return programs.map((program) => ({ value: program.id, label: program.name }));
+/** Map the org's programs into entity options with their configured display glyphs. */
+export function programOptions(
+  programs: readonly ProgramOut[],
+  displays: readonly EntityDisplayOut[] = [],
+): readonly PickerOption[] {
+  const displayById = new Map(displays.map((display) => [display.subjectId, display]));
+  return programs.map((program) => {
+    const display = displayById.get(program.id) ?? defaultEntityDisplay('program', program.id);
+    return {
+      value: program.id,
+      label: program.name,
+      icon: (
+        <EntityIconGlyph
+          iconKey={display.iconKey}
+          colorKey={display.colorKey}
+          customColor={display.customColor}
+          size={20}
+        />
+      ),
+    };
+  });
 }
 
 /** Map the org's initiatives into entity options with their configured display glyphs. */

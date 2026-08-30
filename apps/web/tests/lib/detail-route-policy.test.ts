@@ -27,7 +27,7 @@ describe('detail route ownership', () => {
     expect(source).not.toContain('programRecordDef');
     expect(source).not.toContain('useOrgMembership');
     expect(source).toContain('enabled: ownerPickerOpen');
-    expect(source).toContain("enabled: tab === 'updates'");
+    expect(source).toContain("enabled: tab === 'overview' || tab === 'updates'");
     expect(source).toContain('seedNavigationSnapshot(aggregate.snapshot)');
   });
 
@@ -36,7 +36,7 @@ describe('detail route ownership', () => {
 
     expect(source).toContain('initiativeDetailAggregateDef');
     expect(source).not.toContain('initiativeDetailDef');
-    expect(source).toContain("tab === 'updates'");
+    expect(source).toContain("tab === 'overview' || tab === 'updates'");
     expect(source).toContain("tab === 'resources'");
     expect(source).toContain('enabled: aggregate !== null');
     expect(source).toContain('enabled: ownerPickerOpen');
@@ -54,10 +54,12 @@ describe('detail route ownership', () => {
     expect(source).not.toContain('useProjectDetailPage');
     expect(source).not.toContain('fetchProjectDetail');
     expect(source).toContain('enabled: ownerPickerOpen');
-    expect(source).toContain("enabled: aggregate !== null && tab === 'updates'");
+    expect(source).toContain(
+      "enabled: aggregate !== null && (tab === 'overview' || tab === 'updates')",
+    );
     expect(source).toContain("enabled: aggregate !== null && tab === 'resources'");
     expect(source).toContain(
-      "enabled: aggregate !== null && (tab === 'tasks' || repeatProjectOpen)",
+      "enabled: aggregate !== null && (tab === 'overview' || tab === 'tasks' || repeatProjectOpen)",
     );
     expect(source).toContain('seedNavigationSnapshot(aggregate.snapshot)');
   });

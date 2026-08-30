@@ -91,6 +91,106 @@ describe('entity display routes', () => {
     expect(hidden.status).toBe(404);
   });
 
+  it('upserts display metadata through every native entity table', async () => {
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const [program] = await db
+      .insert(schema.program)
+      .values({
+        organizationId: orgId,
+        name: 'Community outreach',
+        createdBy: humanActorId,
+        status: 'active',
+        statusId: statusId('program', 'active'),
+      })
+      .returning();
+    const [project] = await db
+      .insert(schema.project)
+      .values({
+        organizationId: orgId,
+        name: 'Street safety plan',
+        createdBy: humanActorId,
+        status: 'planned',
+        statusId: statusId('project', 'planned'),
+      })
+      .returning();
+    const [initiative] = await db
+      .insert(schema.initiative)
+      .values({
+        organizationId: orgId,
+        name: 'Safer streets',
+        createdBy: humanActorId,
+        status: 'active',
+        statusId: statusId('initiative', 'active'),
+      })
+      .returning();
+    const [milestone] = await db
+      .insert(schema.milestone)
+      .values({
+        organizationId: orgId,
+        projectId: assertDefined(project).id,
+        name: 'Publish the plan',
+        createdBy: humanActorId,
+      })
+      .returning();
+    const [cycle] = await db
+      .insert(schema.cycle)
+      .values({
+        organizationId: orgId,
+        teamId,
+        number: 1,
+        startsAt: new Date('2026-08-03T00:00:00.000Z'),
+        endsAt: new Date('2026-08-10T00:00:00.000Z'),
+        createdBy: humanActorId,
+      })
+      .returning();
+    const [task] = await db
+      .insert(schema.task)
+      .values({
+        organizationId: orgId,
+        teamId,
+        title: 'Review transit data',
+        state: 'todo',
+        statusId: statusId('task', 'todo'),
+        createdBy: humanActorId,
+      })
+      .returning();
+    const [label] = await db
+      .insert(schema.label)
+      .values({ organizationId: orgId, name: 'Research', color: 'blue' })
+      .returning();
+
+    const app = appWithActor(entityDisplay, orgId, ['contribute'], humanActorId);
+    const subjects = [
+      ['initiative', assertDefined(initiative).id],
+      ['program', assertDefined(program).id],
+      ['project', assertDefined(project).id],
+      ['task', assertDefined(task).id],
+      ['cycle', assertDefined(cycle).id],
+      ['milestone', assertDefined(milestone).id],
+      ['team', teamId],
+      ['label', assertDefined(label).id],
+      ['workStatus', statusId('task', 'todo')],
+    ] as const;
+
+    for (const [subjectType, subjectId] of subjects) {
+      const updated = await app.request(`/${subjectType}/${subjectId}`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ iconKey: 'layers', colorKey: 'indigo', customColor: '#4f46e5' }),
+      });
+
+      expect(updated.status).toBe(200);
+      expect(await updated.json()).toMatchObject({
+        subjectType,
+        subjectId,
+        iconKey: 'layers',
+        colorKey: 'indigo',
+        customColor: '#4f46e5',
+        customized: true,
+      });
+    }
+  });
+
   it('requires contribute capability for display writes', async () => {
     const { orgId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const [initiative] = await db

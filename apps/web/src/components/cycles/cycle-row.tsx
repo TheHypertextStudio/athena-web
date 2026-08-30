@@ -11,14 +11,19 @@
  * {@link CycleRows} owns the frame + column header (mirroring `ProgramRows`); {@link CycleRow} is
  * one row, still a link to the cycle detail and a drag source for the cycle itself.
  */
-import type { CycleOut, CycleStats } from '@docket/types';
-import { StatusGlyph } from '@docket/ui/components';
+import {
+  defaultEntityDisplay,
+  type CycleOut,
+  type CycleStats,
+  type EntityDisplayOut,
+} from '@docket/types';
 import { cn } from '@docket/ui/lib/utils';
 import { Skeleton } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
 import type { ComponentPropsWithoutRef, JSX } from 'react';
 
 import { EditableTitle } from '@/components/editor/editable-title';
+import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
 import { ObjectSurface } from '@/components/objects/object-surface';
 
 import { formatWindow } from './format-window';
@@ -33,6 +38,8 @@ const ROW_GRID = 'grid-cols-[minmax(20rem,1fr)_7rem_10rem_8rem]';
 export interface CycleRowProps {
   /** The cycle to summarize. */
   cycle: CycleOut;
+  /** Decorative identity, composed through the bulk display read. */
+  display?: EntityDisplayOut | undefined;
   /** The cycle's rolled-up stats, or `null` while they load (or if they failed). */
   stats: CycleStats | null;
   /**
@@ -70,6 +77,7 @@ export interface CycleRowProps {
  */
 export function CycleRow({
   cycle,
+  display,
   stats,
   teamName,
   cycleNoun,
@@ -100,6 +108,7 @@ export function CycleRow({
   };
 
   const status = CYCLE_STATUS[cycle.status];
+  const identity = display ?? defaultEntityDisplay('cycle', cycle.id);
 
   return (
     <ObjectSurface object={object} surfaceId="cycles">
@@ -114,7 +123,12 @@ export function CycleRow({
         )}
       >
         <div className="flex min-w-0 items-center gap-3 px-2 py-2">
-          <StatusGlyph type={status.category} label={status.name} />
+          <EntityIconGlyph
+            iconKey={identity.iconKey}
+            colorKey={identity.colorKey}
+            customColor={identity.customColor}
+            size={32}
+          />
           <div className="min-w-0">
             <span className="flex min-w-0 items-center gap-2">
               {canRename && onRename ? (

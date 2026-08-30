@@ -15,7 +15,13 @@
  * framing of deletion as lightweight (a milestone's tasks just lose the reference, they
  * aren't touched) and the dependency panel's precedent.
  */
-import type { MilestoneOut } from '@docket/types';
+import {
+  defaultEntityDisplay,
+  type EntityDisplayColorKey,
+  type EntityDisplayIconKey,
+  type EntityDisplayOut,
+  type MilestoneOut,
+} from '@docket/types';
 import { DatePicker } from '@docket/ui/components';
 import { Flag, Plus, X } from '@docket/ui/icons';
 import { Button, DecorativeIcon, Textarea } from '@docket/ui/primitives';
@@ -24,11 +30,14 @@ import { type JSX, useMemo, useState } from 'react';
 
 import { EditableFreeformText } from '@/components/editor/freeform-text';
 import { EditableTitle } from '@/components/editor/editable-title';
+import { EntityIconPicker } from '@/components/entity-display/entity-icon-picker';
 import type { MilestoneTask } from '@/components/project-detail/milestone-tasks';
+import { api } from '@/lib/api';
 import { formatCalendarDate } from '@/lib/format-date';
 import { useCategoryOf } from '@/components/entity-display/use-work-status';
 import { countTasksByMilestone } from '@/lib/milestone-progress';
 import { useProjectMilestones } from '@/lib/use-project-milestones';
+import { apiQueryOptions, queryKeys, unwrap, useApiListQuery, useApiMutation } from '@/lib/query';
 
 /** The synthesized bucket id for tasks with no milestone (mirrors the Tasks tab). */
 const UNSCHEDULED_KEY = '__unscheduled__';
@@ -66,12 +75,46 @@ export function ProjectMilestonesPanel({
   );
 
   const categoryOf = useCategoryOf('task');
+  const displaysQ = useApiListQuery(
+    apiQueryOptions(
+      queryKeys.entityDisplays(orgId, 'milestone'),
+      () =>
+        api.v1.orgs[':orgId'].display[':subjectType'].$get({
+          param: { orgId, subjectType: 'milestone' },
+        }),
+      'Could not load milestone icons.',
+    ),
+  );
+  const updateDisplay = useApiMutation<
+    EntityDisplayOut,
+    {
+      readonly id: string;
+      readonly iconKey: EntityDisplayIconKey;
+      readonly colorKey: EntityDisplayColorKey;
+      readonly customColor: string | null;
+    }
+  >({
+    mutationFn: ({ id, ...json }) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].display[':subjectType'][':subjectId'].$put({
+            param: { orgId, subjectType: 'milestone', subjectId: id },
+            json,
+          }),
+        'Could not customize this milestone.',
+      ),
+    invalidateKeys: [queryKeys.entityDisplays(orgId, 'milestone')],
+  });
   const progressByMilestone = useMemo(
     () => countTasksByMilestone(milestoneTasks, UNSCHEDULED_KEY, categoryOf),
     [milestoneTasks, categoryOf],
   );
 
   const ordered = useMemo(() => [...milestones].sort((a, b) => a.sort - b.sort), [milestones]);
+  const displayById = useMemo(
+    () => new Map((displaysQ.data?.items ?? []).map((display) => [display.subjectId, display])),
+    [displaysQ.data?.items],
+  );
 
   return (
     <section aria-label="Milestones" className="flex flex-col gap-4">
@@ -98,15 +141,36 @@ export function ProjectMilestonesPanel({
                 className="border-outline-variant data-[highlighted=true]:ring-primary flex flex-col gap-2 rounded-lg border p-3 transition-shadow data-[highlighted=true]:ring-2"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <EditableTitle
-                    value={milestone.name}
-                    onSave={(name) => {
-                      update(milestone.id, { name });
-                    }}
-                    canEdit={canEdit}
-                    ariaLabel="Milestone name"
-                    className="text-on-surface text-title-small"
-                  />
+                  <div className="flex min-w-0 items-center gap-2">
+                    <EntityIconPicker
+                      display={
+                        displayById.get(milestone.id) ??
+                        defaultEntityDisplay('milestone', milestone.id)
+                      }
+                      entityName={milestone.name}
+                      editable={canEdit}
+                      pending={updateDisplay.isPending}
+                      loading={displaysQ.isPending}
+                      size={32}
+                      onChange={(iconKey, colorKey, customColor) => {
+                        updateDisplay.mutate({
+                          id: milestone.id,
+                          iconKey,
+                          colorKey,
+                          customColor,
+                        });
+                      }}
+                    />
+                    <EditableTitle
+                      value={milestone.name}
+                      onSave={(name) => {
+                        update(milestone.id, { name });
+                      }}
+                      canEdit={canEdit}
+                      ariaLabel="Milestone name"
+                      className="text-on-surface text-title-small"
+                    />
+                  </div>
                   <div className="flex shrink-0 items-center gap-1">
                     <DatePicker
                       value={milestone.targetDate ? milestone.targetDate.slice(0, 10) : null}

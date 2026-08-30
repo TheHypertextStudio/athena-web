@@ -32,7 +32,12 @@
  * now and how is it going" without a click. The active cycle *also* stays in the roster below —
  * subordination is by weight, not by hiding, so a filter never lies about what it matched.
  */
-import type { CycleOut, CycleStats } from '@docket/types';
+import {
+  defaultEntityDisplay,
+  type CycleOut,
+  type CycleStats,
+  type EntityDisplayOut,
+} from '@docket/types';
 import { EmptyState, StatusIcon } from '@docket/ui/components';
 import type { WorkflowStateType } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
@@ -110,6 +115,16 @@ export default function CyclesClient(): JSX.Element {
       'Could not load your cycles.',
     ),
   );
+  const displaysQ = useApiListQuery(
+    apiQueryOptions(
+      queryKeys.entityDisplays(orgId, 'cycle'),
+      () =>
+        api.v1.orgs[':orgId'].display[':subjectType'].$get({
+          param: { orgId, subjectType: 'cycle' },
+        }),
+      'Could not load cycle icons.',
+    ),
+  );
 
   // Members + roles resolve whether the caller can rename a cycle inline. A Cycle PATCH requires
   // `contribute` server-side, so the affordance is gated on that same capability (the server still
@@ -149,6 +164,13 @@ export default function CyclesClient(): JSX.Element {
   const loadError = cyclesQ.isError
     ? userErrorMessage(cyclesQ.error, 'Could not load cycles.')
     : null;
+  const displayByCycleId = useMemo(
+    () =>
+      new Map<string, EntityDisplayOut>(
+        (displaysQ.data?.items ?? []).map((item) => [item.subjectId, item]),
+      ),
+    [displaysQ.data?.items],
+  );
 
   /** Team display name by id (for the team filter labels + group headers). */
   const teamNameById = useMemo(
@@ -183,6 +205,7 @@ export default function CyclesClient(): JSX.Element {
   const toRowProps = useCallback(
     (cycle: CycleOut): CycleRowProps => ({
       cycle,
+      display: displayByCycleId.get(cycle.id) ?? defaultEntityDisplay('cycle', cycle.id),
       stats: statsById[cycle.id] ?? null,
       teamName: resolveRelationLabel(cycle.teamId, teamsLoading, (i) => teamNameById.get(i)),
       cycleNoun,

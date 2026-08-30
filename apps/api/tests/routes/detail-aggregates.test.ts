@@ -813,6 +813,44 @@ describe('detail aggregate routes', () => {
     expect(await aggregate.json()).toMatchObject({ references: { owner: null } });
   });
 
+  it('includes only a visible direct parent in the initial Initiative aggregate', async () => {
+    const { orgId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const reader = appWithActor(initiatives, orgId, ['view'], humanActorId);
+    const parent = await seedInitiative(db, schema, statusId, {
+      organizationId: orgId,
+      name: 'Transit access',
+      createdBy: humanActorId,
+    });
+    const child = await seedInitiative(db, schema, statusId, {
+      organizationId: orgId,
+      name: 'Bus lanes',
+      createdBy: humanActorId,
+    });
+    const [link] = await db
+      .insert(schema.initiativeHierarchyLink)
+      .values({
+        contextOrganizationId: orgId,
+        parentInitiativeId: parent.id,
+        childInitiativeId: child.id,
+        createdBy: humanActorId,
+      })
+      .returning({ id: schema.initiativeHierarchyLink.id });
+
+    const childAggregate = await reader.request(`/${child.id}/aggregate-detail`);
+    expect(childAggregate.status).toBe(200);
+    expect(await childAggregate.json()).toMatchObject({
+      references: {
+        parent: { id: parent.id, organizationId: orgId, name: 'Transit access' },
+        parentLinkId: link?.id,
+      },
+    });
+
+    const rootAggregate = await reader.request(`/${parent.id}/aggregate-detail`);
+    expect(await rootAggregate.json()).toMatchObject({
+      references: { parent: null, parentLinkId: null },
+    });
+  });
+
   it('serializes Initiative health counts when postgres-js returns numerics as text', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
     const session = await authenticatedSessionFor([humanActorId]);

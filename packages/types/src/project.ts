@@ -179,6 +179,12 @@ export const ProjectUpdate = z
       .array(LabelId)
       .optional()
       .describe('Replace the Project’s organization-global Label associations when supplied.'),
+    initiativeIds: z
+      .array(InitiativeId)
+      .optional()
+      .describe(
+        'Replace the Project’s Initiative associations when supplied. Each id must belong to the caller’s organization; duplicates are de-duplicated.',
+      ),
   })
   .meta({ id: 'ProjectUpdate', description: 'Partially update a project.' });
 /** Validated project-update body. */

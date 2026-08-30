@@ -67,6 +67,8 @@ export interface EntityDetailLayoutProps {
   tabs: ReactNode;
   /** The active tab panel's content. */
   children: ReactNode;
+  /** Static, document-first content rendered only for print media. */
+  printSummary?: ReactNode;
   /** Extra container classes (e.g. a page print scope). */
   className?: string;
   /** Canonical object identity for the shared right-click action surface. */
@@ -95,6 +97,7 @@ export function EntityDetailLayout({
   actions,
   tabs,
   children,
+  printSummary,
   className,
   object,
 }: EntityDetailLayoutProps): JSX.Element {
@@ -110,7 +113,10 @@ export function EntityDetailLayout({
   const header = (
     <header
       {...(object ? objectTargetProps(object) : {})}
-      className="detail-header page-bleed page-grid bg-surface sticky top-0 isolate z-10 gap-y-0"
+      className={cn(
+        'detail-header page-bleed page-grid bg-surface sticky top-0 isolate z-10 gap-y-0',
+        printSummary ? 'detail-print-hidden' : undefined,
+      )}
     >
       {/* The masthead band: the cover, eyebrow, and identity live inside this one wrapper, and
           nothing else does. `.detail-tabs` is this wrapper's sibling, not its descendant, so the
@@ -173,7 +179,7 @@ export function EntityDetailLayout({
         </div>
       </div>
 
-      <div className="detail-tabs">{tabs}</div>
+      <div className="detail-tabs min-w-0">{tabs}</div>
     </header>
   );
 
@@ -182,6 +188,7 @@ export function EntityDetailLayout({
       ref={scrollRef}
       data-detail-panel-scroll=""
       data-detail-cover={cover ? 'present' : 'absent'}
+      data-detail-print={printSummary ? '' : undefined}
       className={cn(
         // Sections are rows of this grid, so the rhythm between them is declared once here rather
         // than by each section spacing itself against its neighbours.
@@ -196,7 +203,10 @@ export function EntityDetailLayout({
 
       {/* This nested grid preserves the page measure while guaranteeing enough stable block-size
           for the scroll-linked header to reach its compact endpoint on short panels. */}
-      <div className="detail-body page-bleed page-grid gap-y-4 @2xl:gap-y-5">{children}</div>
+      <div className="detail-body page-bleed page-grid gap-y-4 @2xl:gap-y-5">
+        {printSummary ? <div className="detail-print-summary">{printSummary}</div> : null}
+        {children}
+      </div>
     </div>
   );
 }

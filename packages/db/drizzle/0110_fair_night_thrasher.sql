@@ -1,0 +1,3 @@
+ALTER TABLE "entity_display" DROP CONSTRAINT "entity_display_subject_type_check";--> statement-breakpoint
+CREATE INDEX "initiative_project_project_idx" ON "initiative_project" USING btree ("organization_id","project_id","initiative_id");--> statement-breakpoint
+ALTER TABLE "entity_display" ADD CONSTRAINT "entity_display_subject_type_check" CHECK ("entity_display"."subject_type" in ('initiative', 'program', 'project', 'task', 'cycle', 'milestone', 'team', 'label', 'workStatus'));

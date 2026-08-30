@@ -15,6 +15,8 @@ import TaskGraphPanel from '@/components/canvas/task-graph-panel';
 import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
 import { ResourcesTab } from '@/components/entity-detail/resources-tab';
 import { EditableTitle } from '@/components/editor/editable-title';
+import { EntityIconPicker } from '@/components/entity-display/entity-icon-picker';
+import { useEntityDisplay } from '@/components/entity-display/use-entity-display';
 import { formatWindow } from '@/components/cycles/format-window';
 import { Dependencies } from '@/components/task-detail/Dependencies';
 import { TaskActivityFeed } from '@/components/task-detail/task-activity-feed';
@@ -160,6 +162,13 @@ export default function TaskDetailPage(): JSX.Element {
   const canEdit = capabilities?.contribute ?? false;
   const canComment = capabilities?.comment ?? false;
   const canManage = capabilities?.manage ?? false;
+  const entityDisplay = useEntityDisplay({
+    organizationId: orgId,
+    subjectType: 'task',
+    subjectId: taskId,
+    errorMessage: 'Could not load this task’s icon.',
+    enabled: terminalState === null,
+  });
   // Rename any subtask in place (an arbitrary task by id), then re-read this task's detail so the
   // refreshed subtask titles flow back in.
   const renameSubtask = useRenameTask(orgId, [detailKey]);
@@ -293,17 +302,30 @@ export default function TaskDetailPage(): JSX.Element {
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 @2xl:p-6 @4xl:p-8">
       <header className="flex flex-col gap-4">
-        <h1 className="leading-tight">
-          <EditableTitle
-            value={task.title}
-            onSave={(title) => {
-              patchTask({ title });
+        <div className="flex min-w-0 items-start gap-3">
+          <EntityIconPicker
+            display={entityDisplay.display}
+            entityName={task.title}
+            editable={canEdit}
+            pending={entityDisplay.mutation.isPending}
+            loading={entityDisplay.loading}
+            size={40}
+            onChange={(iconKey, colorKey, customColor) => {
+              entityDisplay.mutation.mutate({ iconKey, colorKey, customColor });
             }}
-            canEdit={canEdit}
-            ariaLabel="Task title"
-            className="text-on-surface text-title-large leading-tight"
           />
-        </h1>
+          <h1 className="min-w-0 leading-tight">
+            <EditableTitle
+              value={task.title}
+              onSave={(title) => {
+                patchTask({ title });
+              }}
+              canEdit={canEdit}
+              ariaLabel="Task title"
+              className="text-on-surface text-title-large leading-tight"
+            />
+          </h1>
+        </div>
 
         <TaskHeaderControls
           status={

@@ -82,7 +82,10 @@ export const initiativeProject = pgTable(
       .notNull()
       .references(() => organization.id, { onDelete: 'cascade' }),
   },
-  (t) => [primaryKey({ columns: [t.initiativeId, t.projectId] })],
+  (t) => [
+    primaryKey({ columns: [t.initiativeId, t.projectId] }),
+    index('initiative_project_project_idx').on(t.organizationId, t.projectId, t.initiativeId),
+  ],
 );
 
 /** Many-to-many: an Initiative spans ongoing Programs. */

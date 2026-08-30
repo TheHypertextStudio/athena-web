@@ -149,6 +149,17 @@ export function useComposerOptions(
       { enabled: on('programs'), staleTime: STALE.static },
     ),
   );
+  const programDisplaysQ = useApiQuery(
+    apiQueryOptions(
+      queryKeys.entityDisplays(orgId, 'program'),
+      () =>
+        api.v1.orgs[':orgId'].display[':subjectType'].$get({
+          param: { orgId, subjectType: 'program' },
+        }),
+      'Could not load program icons.',
+      { enabled: on('programs'), staleTime: STALE.static },
+    ),
+  );
   const initiativesQ = useApiQuery(
     apiQueryOptions(
       queryKeys.initiatives(orgId),
@@ -208,6 +219,7 @@ export function useComposerOptions(
     projectsQ.isLoading ||
     projectDisplaysQ.isLoading ||
     programsQ.isLoading ||
+    programDisplaysQ.isLoading ||
     initiativesQ.isLoading ||
     initiativeDisplaysQ.isLoading ||
     labelsQ.isLoading ||
@@ -218,7 +230,7 @@ export function useComposerOptions(
     const failed = new Set<ComposerOptionKind>();
     if (membersQ.isError || agentsQ.isError) failed.add('actors');
     if (projectsQ.isError || projectDisplaysQ.isError) failed.add('projects');
-    if (programsQ.isError) failed.add('programs');
+    if (programsQ.isError || programDisplaysQ.isError) failed.add('programs');
     if (initiativesQ.isError || initiativeDisplaysQ.isError) failed.add('initiatives');
     if (labelsQ.isError) failed.add('labels');
     if (cyclesQ.isError) failed.add('cycles');
@@ -233,6 +245,7 @@ export function useComposerOptions(
     labelsQ.isError,
     membersQ.isError,
     milestonesQ.isError,
+    programDisplaysQ.isError,
     programsQ.isError,
     projectDisplaysQ.isError,
     projectsQ.isError,
@@ -245,6 +258,7 @@ export function useComposerOptions(
     if (projectsQ.isError) requests.push(projectsQ.refetch());
     if (projectDisplaysQ.isError) requests.push(projectDisplaysQ.refetch());
     if (programsQ.isError) requests.push(programsQ.refetch());
+    if (programDisplaysQ.isError) requests.push(programDisplaysQ.refetch());
     if (initiativesQ.isError) requests.push(initiativesQ.refetch());
     if (initiativeDisplaysQ.isError) requests.push(initiativeDisplaysQ.refetch());
     if (labelsQ.isError) requests.push(labelsQ.refetch());
@@ -260,6 +274,7 @@ export function useComposerOptions(
     labelsQ,
     membersQ,
     milestonesQ,
+    programDisplaysQ,
     programsQ,
     projectDisplaysQ,
     projectsQ,
@@ -304,7 +319,7 @@ export function useComposerOptions(
       memberOptions: memberActorOptions(members.filter(({ status }) => status === 'active')),
       projectOptions: projectOptions(projects, projectDisplays),
       projects,
-      programOptions: programOptions(programs),
+      programOptions: programOptions(programs, programDisplaysQ.data?.items ?? []),
       initiativeOptions: initiativeOptions(initiatives, initiativeDisplays),
       labelOptions: labelOptions(labels),
       labels,

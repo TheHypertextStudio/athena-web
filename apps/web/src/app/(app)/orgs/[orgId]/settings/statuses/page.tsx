@@ -12,6 +12,9 @@
  * are the only work a team owns.
  */
 import type {
+  EntityDisplayColorKey,
+  EntityDisplayIconKey,
+  EntityDisplayOut,
   TeamOut,
   WorkStatusCategory,
   WorkStatusCreate,
@@ -37,11 +40,21 @@ import {
   useUpdateStatus,
 } from '@/components/statuses/queries';
 import { StatusEditorDialog } from '@/components/statuses/status-editor-dialog';
+import { EntityIconPicker } from '@/components/entity-display/entity-icon-picker';
 import { StatusEntitySection, type TeamChoice } from '@/components/statuses/status-entity-section';
 import type { StatusLike } from '@/components/statuses/status-registry';
 import { api } from '@/lib/api';
 import { useTypedRoute } from '@/lib/app-location';
-import { apiQueryOptions, queryKeys, STALE, useApiListQuery, useApiQuery } from '@/lib/query';
+import {
+  apiQueryOptions,
+  queryKeys,
+  STALE,
+  unwrap,
+  useApiListQuery,
+  useApiMutation,
+  useApiQuery,
+} from '@/lib/query';
+import { defaultEntityDisplay } from '@docket/types';
 import { SettingsSectionPage } from '@/components/settings/settings-section-page';
 
 /** Which status the editor is open on, and which set and category it would be created into. */
@@ -96,6 +109,37 @@ export default function StatusesSettingsPage(): JSX.Element {
       { enabled: !isPersonal, staleTime: STALE.static },
     ),
   );
+  const displaysQ = useApiListQuery(
+    apiQueryOptions(
+      queryKeys.entityDisplays(orgId, 'workStatus'),
+      () =>
+        api.v1.orgs[':orgId'].display[':subjectType'].$get({
+          param: { orgId, subjectType: 'workStatus' },
+        }),
+      'Could not load status icons.',
+      { staleTime: STALE.static },
+    ),
+  );
+  const updateDisplay = useApiMutation<
+    EntityDisplayOut,
+    {
+      readonly id: string;
+      readonly iconKey: EntityDisplayIconKey;
+      readonly colorKey: EntityDisplayColorKey;
+      readonly customColor: string | null;
+    }
+  >({
+    mutationFn: ({ id, ...json }) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId'].display[':subjectType'][':subjectId'].$put({
+            param: { orgId, subjectType: 'workStatus', subjectId: id },
+            json,
+          }),
+        'Could not customize this status.',
+      ),
+    invalidateKeys: [queryKeys.entityDisplays(orgId, 'workStatus')],
+  });
 
   const createStatus = useCreateStatus(orgId);
   const updateStatus = useUpdateStatus(orgId);
@@ -127,6 +171,9 @@ export default function StatusesSettingsPage(): JSX.Element {
   const forkedTeamIds = new Set(sets.filter((set) => set.teamId !== null).map((set) => set.teamId));
 
   const teams: readonly TeamOut[] = teamsQ.data?.items ?? [];
+  const displayById = new Map(
+    (displaysQ.data?.items ?? []).map((display) => [display.subjectId, display]),
+  );
   // Forking away from a set nobody else holds is a decision with no meaning, so the selector needs
   // a second team before it earns its place.
   const teamChoices: readonly TeamChoice[] =
@@ -217,6 +264,21 @@ export default function StatusesSettingsPage(): JSX.Element {
                   : setFor(section.entityType)
               }
               canManage={canManage}
+              renderIdentity={(status) => (
+                <EntityIconPicker
+                  display={
+                    displayById.get(status.id) ?? defaultEntityDisplay('workStatus', status.id)
+                  }
+                  entityName={status.name}
+                  editable={canManage && status.id !== ''}
+                  pending={updateDisplay.isPending}
+                  loading={displaysQ.isPending}
+                  size={32}
+                  onChange={(iconKey, colorKey, customColor) => {
+                    updateDisplay.mutate({ id: status.id, iconKey, colorKey, customColor });
+                  }}
+                />
+              )}
               {...(section.entityType === 'task'
                 ? {
                     teams: teamChoices,

@@ -162,6 +162,48 @@ describe('projects detail router', () => {
     expect(body.status).toBe('planned');
   });
 
+  it('includes linked Initiative references in the Project detail aggregate', async () => {
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const reader = appWithActor(projects, orgId, ['view'], humanActorId);
+    const id = await seedProject(orgId, teamId, humanActorId);
+    const initiatives = await db
+      .insert(schema.initiative)
+      .values([
+        {
+          organizationId: orgId,
+          name: 'Accessibility',
+          createdBy: humanActorId,
+          status: 'active',
+          statusId: statusId('initiative', 'active'),
+        },
+        {
+          organizationId: orgId,
+          name: 'Bus lanes',
+          createdBy: humanActorId,
+          status: 'active',
+          statusId: statusId('initiative', 'active'),
+        },
+      ])
+      .returning({ id: schema.initiative.id, name: schema.initiative.name });
+    await db.insert(schema.initiativeProject).values(
+      initiatives.map((initiative) => ({
+        organizationId: orgId,
+        projectId: id,
+        initiativeId: initiative.id,
+      })),
+    );
+
+    const aggregate = await json<{
+      references: { initiatives: { id: string; name: string }[] };
+    }>(await reader.request(`/${id}/aggregate-detail`));
+
+    expect(aggregate.references.initiatives).toEqual(
+      initiatives
+        .map((initiative) => ({ id: initiative.id, name: initiative.name }))
+        .sort((left, right) => left.name.localeCompare(right.name)),
+    );
+  });
+
   it('hides archived Projects from the authoritative detail aggregate', async () => {
     const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
     const reader = appWithActor(projects, orgId, ['view'], humanActorId);
@@ -743,6 +785,38 @@ describe('projects create with initiative associations', () => {
     expect(res.status).toBe(201);
     const created = await json<{ id: string }>(res);
     expect(await linkedInitiatives(created.id)).toEqual([init]);
+  });
+
+  it('atomically replaces Project Initiative associations on patch', async () => {
+    const { orgId, teamId, humanActorId } = await seedBaseOrg(db, schema);
+    const writer = appWithActor(projects, orgId, ['contribute'], humanActorId);
+    const initial = await seedInitiative(orgId, humanActorId, 'Initial');
+    const replacement = await seedInitiative(orgId, humanActorId, 'Replacement');
+    const foreignOrg = await seedBaseOrg(db, schema);
+    const foreign = await seedInitiative(foreignOrg.orgId, foreignOrg.humanActorId, 'Foreign');
+    const created = await json<{ id: string }>(
+      await writer.request('/', {
+        method: 'POST',
+        headers: J,
+        body: JSON.stringify({ name: 'Linked', teamId, initiativeIds: [initial] }),
+      }),
+    );
+
+    const replaced = await writer.request(`/${created.id}`, {
+      method: 'PATCH',
+      headers: J,
+      body: JSON.stringify({ initiativeIds: [replacement, replacement] }),
+    });
+    expect(replaced.status).toBe(200);
+    expect(await linkedInitiatives(created.id)).toEqual([replacement]);
+
+    const rejected = await writer.request(`/${created.id}`, {
+      method: 'PATCH',
+      headers: J,
+      body: JSON.stringify({ initiativeIds: [foreign] }),
+    });
+    expect(rejected.status).toBe(404);
+    expect(await linkedInitiatives(created.id)).toEqual([replacement]);
   });
 
   it('creates with no links when initiativeIds is omitted or empty', async () => {

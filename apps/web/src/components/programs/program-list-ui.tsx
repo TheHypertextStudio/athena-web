@@ -11,14 +11,8 @@
  * grid Initiatives and Projects use (leading glyph + name + summary, then aligned status/health/
  * owner/count columns), so all three read as one product at the same visual weight.
  *
- * Programs have no per-entity customizable icon (unlike Initiatives/Projects/Teams'
- * {@link EntityDisplayOut}-backed {@link EntityIconPicker}) — a Program's identity is its
- * ongoing liveness, not a chosen glyph. Rather than fake a picker over a field that doesn't
- * exist, {@link ProgramGlyph} renders the same fixed mark everywhere: a neutral tonal circle
- * around `Layers` (the icon already used for Programs in the nav and empty state), sized to
- * match the customizable glyphs so the row reads at the same weight while staying honest that
- * this is a fixed, not a chosen, mark. That fixed identity is itself the "these are programs, not
- * projects" signal the roster needs.
+ * The display registry supplies each Program's chosen icon and color. The semantic status and
+ * health columns remain separate, so decorative identity never replaces operating state.
  *
  * Both {@link ProgramRows} (List) and {@link ProgramCards} (Cards — Programs are discrete ongoing
  * units, closer to a portfolio of cards than a flat backlog) take the identical prop shape, so the
@@ -28,15 +22,21 @@
  * the item unless the click landed on a nested `a`/`button` — so EditableTitle's own single/double
  * click handling, or a fallback inline `Link` when the viewer can't rename, both still win).
  */
-import type { Health, ProgramOut } from '@docket/types';
-import { ActorAvatar, IdentityGlyph } from '@docket/ui/components';
-import { FolderKanban, Layers, ListChecks } from '@docket/ui/icons';
+import {
+  defaultEntityDisplay,
+  type EntityDisplayOut,
+  type Health,
+  type ProgramOut,
+} from '@docket/types';
+import { ActorAvatar } from '@docket/ui/components';
+import { FolderKanban, ListChecks } from '@docket/ui/icons';
 import { Card, Skeleton } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import Link from '@/components/docket-link';
 import { type ComponentPropsWithoutRef, type JSX } from 'react';
 
 import { EditableTitle } from '@/components/editor/editable-title';
+import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
 import { ObjectSurface } from '@/components/objects/object-surface';
 import { HEALTH_DOT_CLASS, HEALTH_LABEL } from '@/components/programs/health';
 import { useWorkStatus } from '@/components/entity-display/use-work-status';
@@ -46,6 +46,8 @@ import { ROSTER_DATA_CELL_CLASS, ROSTER_HEADER_CELL_CLASS } from '@/components/v
 /** The row view-model derived for one Program (owner + child-work roll-up). */
 export interface ProgramRow {
   program: ProgramOut;
+  /** Optional display read supplied by a roster-level bulk query. */
+  display?: EntityDisplayOut | undefined;
   ownerName: string | null;
   projectCount: number;
   taskCount: number;
@@ -79,18 +81,18 @@ function HealthLabel({ health }: { health: Health | null }): JSX.Element {
 }
 
 /**
- * The fixed Program identity glyph — a neutral {@link IdentityGlyph} circle around `Layers`.
- *
- * @remarks
- * Sized to match {@link EntityIconGlyph}'s default (40px) so a Programs roster reads at the same
- * visual weight as Initiatives/Projects, without implying a customization affordance that has no
- * backing field.
+ * Render a Program's stored display identity, with the shared default while a bulk display read
+ * is still loading.
  */
-function ProgramGlyph(): JSX.Element {
+function ProgramGlyph({ program, display }: Pick<ProgramRow, 'program' | 'display'>): JSX.Element {
+  const identity = display ?? defaultEntityDisplay('program', program.id);
   return (
-    <IdentityGlyph>
-      <Layers className="size-5" />
-    </IdentityGlyph>
+    <EntityIconGlyph
+      iconKey={identity.iconKey}
+      colorKey={identity.colorKey}
+      customColor={identity.customColor}
+      size={40}
+    />
   );
 }
 
@@ -149,7 +151,7 @@ function ProgramName({
 
 /** One 56px identity row: glyph + name/summary, then aligned status/health/owner/count columns. */
 function ProgramGridRow({
-  row: { program, ownerName, projectCount, taskCount },
+  row: { program, display, ownerName, projectCount, taskCount },
   projectNoun,
   projectNounPlural,
   taskNoun,
@@ -181,7 +183,7 @@ function ProgramGridRow({
         className="hover:bg-surface-container-high relative grid min-h-14 cursor-pointer grid-cols-[minmax(24rem,1fr)_8rem_8rem_12rem_7rem_7rem] items-center rounded-lg transition-colors"
       >
         <div role="gridcell" className={`${ROSTER_DATA_CELL_CLASS} gap-3 py-2`}>
-          <ProgramGlyph />
+          <ProgramGlyph program={program} display={display} />
           <div className="min-w-0">
             <ProgramName
               program={program}
@@ -321,7 +323,7 @@ export function ProgramRows({
 
 /** One Program card: glyph + name + status up top, summary, then owner/health and the work roll-up. */
 function ProgramCard({
-  row: { program, ownerName, projectCount, taskCount },
+  row: { program, display, ownerName, projectCount, taskCount },
   projectNoun,
   projectNounPlural,
   taskNoun,
@@ -354,7 +356,7 @@ function ProgramCard({
       >
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 flex-1 items-center gap-3">
-            <ProgramGlyph />
+            <ProgramGlyph program={program} display={display} />
             <ProgramName
               program={program}
               canRename={canRename}

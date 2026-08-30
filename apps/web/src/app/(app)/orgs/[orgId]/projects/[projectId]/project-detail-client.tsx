@@ -2,9 +2,6 @@
 
 import type {
   AttachmentOut,
-  EntityDisplayColorKey,
-  EntityDisplayIconKey,
-  EntityDisplayOut,
   Health,
   LabelOut,
   ObjectCommandReceipt,
@@ -12,7 +9,7 @@ import type {
   ObjectCommandResult,
   UpdateOut,
 } from '@docket/types';
-import { defaultEntityDisplay, ProjectSubjectRef } from '@docket/types';
+import { ProjectSubjectRef } from '@docket/types';
 import type { PickerOption } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { Ellipsis, RefreshCw, Trash2, Undo } from '@docket/ui/icons';
@@ -34,7 +31,7 @@ import {
   type QueryKey,
   useQueryClient,
 } from '@tanstack/react-query';
-import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
+import { type JSX, useEffect, useMemo, useState } from 'react';
 
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
 import { useCreateLabel } from '@/components/labels/queries';
@@ -43,13 +40,17 @@ import { TemplateAwareEntityDocument } from '@/components/editor/apply-descripti
 import { EditableSubtitle } from '@/components/editor/editable-subtitle';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { EntityIconPicker } from '@/components/entity-display/entity-icon-picker';
-import { MilestoneTasks } from '@/components/project-detail/milestone-tasks';
+import { useEntityDisplay } from '@/components/entity-display/use-entity-display';
+import { LatestUpdateSummary } from '@/components/entity-detail/latest-update-summary';
 import {
-  type ProjectRestoreRefreshState,
-  useProjectRestoreController,
-} from '@/components/project-detail/project-restore-controller';
+  AgentActivityFeed,
+  type AgentActivityEntry,
+} from '@/components/project-detail/agent-activity-feed';
+import { AgentsStrip, type AgentHere } from '@/components/project-detail/agents-strip';
+import { MilestoneTasks } from '@/components/project-detail/milestone-tasks';
 import { ProjectMilestonesPanel } from '@/components/project-detail/project-milestones';
 import { ProjectDependenciesPanel } from '@/components/project-detail/project-dependencies';
+import { OverviewSummary } from '@/components/project-detail/overview-summary';
 import { ResourcesTab } from '@/components/entity-detail/resources-tab';
 import { UpdatesPanel } from '@/components/entity-detail/updates-panel';
 import { memberActorOptions } from '@/components/pickers/options';
@@ -57,8 +58,9 @@ import { ProjectPeopleRow } from '@/components/project-detail/project-people-row
 import { PropertiesPanel } from '@/components/project-detail/properties-panel';
 import { PublishAction } from '@/components/publishing/publish-action';
 import { RepeatProjectDialog } from '@/components/recurrence/repeat-project-dialog';
-import { useResolvedAccountId } from '@/components/resolved-account';
 import { EntityDetailSkeleton } from '@/components/views/entity-detail-skeleton';
+import { DetailPrintSummary } from '@/components/views/detail-print-summary';
+import { useDetailTab } from '@/components/views/use-detail-tab';
 import { EntityDetailLayout, EntityMetadataRow } from '@/components/views/entity-detail-layout';
 import { useDocumentTitle } from '@/components/tabs/use-document-title';
 import { useRegisterTabTitle } from '@/components/tabs/use-register-tab-title';
@@ -87,35 +89,31 @@ import { useProjectMutations } from '@/lib/use-project-mutations';
 import { invalidateWorkTargetQueries } from '@/lib/work-target-invalidation';
 
 type TabId = 'overview' | 'tasks' | 'updates' | 'resources';
+const PROJECT_TABS = ['overview', 'tasks', 'updates', 'resources'] as const;
 
-/** Render the only safe primary action for the current Project restore state. */
 export function ProjectRestorePrimaryAction({
   refreshState,
   restorePending,
   onRetryRefresh,
   onUndo,
 }: {
-  readonly refreshState: ProjectRestoreRefreshState;
+  readonly refreshState: 'ready' | 'pending' | 'error';
   readonly restorePending: boolean;
   readonly onRetryRefresh: () => void;
   readonly onUndo: () => void;
 }): JSX.Element {
-  if (refreshState === 'error') {
+  if (refreshState === 'error')
     return (
       <Button type="button" variant="default" onClick={onRetryRefresh}>
         <RefreshCw className="size-4" /> Retry refresh
       </Button>
     );
-  }
-
-  if (refreshState === 'pending') {
+  if (refreshState === 'pending')
     return (
       <Button type="button" variant="default" aria-label="Refreshing project" disabled>
         <RefreshCw className="size-4 animate-spin" /> Refreshing…
       </Button>
     );
-  }
-
   return (
     <Button type="button" variant="default" disabled={restorePending} onClick={onUndo}>
       <Undo className="size-4" /> Undo
@@ -123,15 +121,6 @@ export function ProjectRestorePrimaryAction({
   );
 }
 
-/**
- * Refresh every Project projection after a successful restore and report whether the detail read
- * returned authoritative data.
- *
- * @typeParam TData - Data returned by the aggregate query.
- * @typeParam TQueryKey - Cache key carried by the aggregate query definition.
- * @param input - Cache, aggregate query definition, and owning workspace for the restored Project.
- * @returns `ready` after a clean refetch, `not-found` after a confirmed 404, or `cache-error`.
- */
 export async function refreshRestoredProject<TData, TQueryKey extends QueryKey>(input: {
   readonly queryClient: QueryClient;
   readonly aggregateQuery: FetchQueryOptions<TData, Error, TData, TQueryKey>;
@@ -141,19 +130,23 @@ export async function refreshRestoredProject<TData, TQueryKey extends QueryKey>(
     target: 'project',
     ownerOrganizationId: input.ownerOrganizationId,
   }).catch(() => undefined);
-  void input.queryClient
-    .invalidateQueries({ queryKey: queryKeys.portfolio() })
-    .catch(() => undefined);
-
   try {
-    await input.queryClient.fetchQuery({
-      ...input.aggregateQuery,
-      staleTime: 0,
-    });
+    await input.queryClient.fetchQuery({ ...input.aggregateQuery, staleTime: 0 });
     return 'ready';
   } catch (error) {
     return terminalDetailFailure(error) === 'not-found' ? 'not-found' : 'cache-error';
   }
+}
+
+/** Convert an agent activity payload into its one-line project activity summary. */
+function activitySummary(activity: { body: Record<string, unknown>; type: string }): string {
+  const action = activity.body['action'];
+  if (action && typeof action === 'object' && 'summary' in action) {
+    const summary = (action as { summary?: unknown }).summary;
+    if (typeof summary === 'string') return summary;
+  }
+  const text = activity.body['text'];
+  return typeof text === 'string' ? text : activity.type;
 }
 
 /** Render a Project from its local snapshot before one bounded aggregate reconciles it. */
@@ -162,8 +155,8 @@ export default function ProjectDetailPage(): JSX.Element {
   const { orgId, projectId } = params;
   const router = useAppRouter();
   const queryClient = useQueryClient();
-  const accountId = useResolvedAccountId();
   const projectNoun = useVocabulary('project');
+  const taskNounPlural = useVocabulary('task', { plural: true }).toLowerCase();
   const subject = ProjectSubjectRef.parse({ subjectType: 'project', subjectId: projectId });
   const navigationSnapshot = useNavigationSnapshot('project', projectId);
   const aggregateDef = projectDetailAggregateDef(orgId, projectId);
@@ -173,27 +166,38 @@ export default function ProjectDetailPage(): JSX.Element {
   const aggregateQ = useApiQuery({ ...aggregateDef, enabled: aggregateEnabled });
   const terminalFailure = terminalDetailFailure(aggregateQ.error);
   const aggregate = aggregateQ.data ?? null;
+  const projectLead = aggregate?.references.lead ?? null;
+  const initiativeNames =
+    aggregate?.references.initiatives.map((initiative) => initiative.name) ?? [];
+  const entityDisplay = useEntityDisplay({
+    organizationId: orgId,
+    subjectType: 'project',
+    subjectId: projectId,
+    errorMessage: `Could not customize this ${projectNoun.toLowerCase()}.`,
+    enabled: aggregate !== null,
+  });
   const project = aggregate?.defaultView.project ?? null;
   const aggregateState = aggregateLoadState(
     aggregateQ.data,
     aggregateQ.isPending,
     aggregateQ.isError,
   );
-  const [tab, setTab] = useState<TabId>('overview');
+  const { tab, setTab } = useDetailTab<TabId>(PROJECT_TABS);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [trashedReceipt, setTrashedReceipt] = useState<ObjectCommandReceipt | null>(null);
+  const [restoreFailure, setRestoreFailure] = useState<string | null>(null);
   const [repeatProjectOpen, setRepeatProjectOpen] = useState(false);
   const [ownerPickerOpen, setOwnerPickerOpen] = useState(false);
   const [timelinePickerOpen, setTimelinePickerOpen] = useState(false);
   const [programPickerOpen, setProgramPickerOpen] = useState(false);
   const [initiativesPickerOpen, setInitiativesPickerOpen] = useState(false);
   const [labelsPickerOpen, setLabelsPickerOpen] = useState(false);
-  const [displayPickerOpen, setDisplayPickerOpen] = useState(false);
 
   useEffect(() => {
     setTerminalState(null);
     setTrashedReceipt(null);
-  }, [accountId, orgId, projectId]);
+    setRestoreFailure(null);
+  }, [projectId]);
 
   useEffect(() => {
     if (trashedReceipt !== null || terminalFailure === null) return;
@@ -230,25 +234,13 @@ export default function ProjectDetailPage(): JSX.Element {
     ),
   );
   const planningCalendar = useFiscalYearStartMonth(orgId, timelinePickerOpen);
-  const displayKey = [...aggregateKey, 'display'] as const;
-  const displayQ = useApiQuery(
-    apiQueryOptions(
-      displayKey,
-      () =>
-        api.v1.orgs[':orgId'].display[':subjectType'][':subjectId'].$get({
-          param: { orgId, ...subject },
-        }),
-      'Could not load display settings.',
-      { enabled: displayPickerOpen },
-    ),
-  );
   const updatesKey = [...aggregateKey, 'updates'] as const;
   const updatesQ = useApiQuery(
     apiQueryOptions(
       updatesKey,
       () => api.v1.orgs[':orgId'].updates.$get({ param: { orgId }, query: subject }),
       'Could not load updates.',
-      { enabled: aggregate !== null && tab === 'updates' },
+      { enabled: aggregate !== null && (tab === 'overview' || tab === 'updates') },
     ),
   );
   const resourcesKey = [...aggregateKey, 'resources'] as const;
@@ -266,8 +258,24 @@ export default function ProjectDetailPage(): JSX.Element {
   const workDef = projectWorkSectionsDef(orgId, projectId);
   const workQ = useApiQuery({
     ...workDef,
-    enabled: aggregate !== null && (tab === 'tasks' || repeatProjectOpen),
+    enabled: aggregate !== null && (tab === 'overview' || tab === 'tasks' || repeatProjectOpen),
   });
+  const overviewRollupQ = useApiQuery(
+    apiQueryOptions(
+      [...aggregateKey, 'overview-rollup'] as const,
+      () => api.v1.orgs[':orgId'].projects[':id'].rollup.$get({ param: { orgId, id: projectId } }),
+      'Could not load Project agent activity.',
+      { enabled: aggregate !== null && tab === 'overview' },
+    ),
+  );
+  const sessionsQ = useApiQuery(
+    apiQueryOptions(
+      queryKeys.sessions(orgId),
+      () => api.v1.orgs[':orgId'].sessions.$get({ param: { orgId }, query: {} }),
+      'Could not load Project agent sessions.',
+      { enabled: aggregate !== null && tab === 'overview' },
+    ),
+  );
   const entityMentions = useEntityMentions(
     orgId,
     subject,
@@ -278,13 +286,9 @@ export default function ProjectDetailPage(): JSX.Element {
   const canEdit = aggregate?.capabilities.contribute ?? false;
   const canDelete = aggregate?.capabilities.manage ?? false;
   const projectTaskCount = aggregate?.defaultView.progress.taskCount ?? 0;
-  const display = displayQ.data ?? defaultEntityDisplay('project', projectId);
-  const invalidateProject = useCallback((): void => {
-    void invalidateWorkTargetQueries(queryClient, {
-      target: 'project',
-      ownerOrganizationId: orgId,
-    });
-  }, [orgId, queryClient]);
+  const linkedInitiativeIds =
+    aggregate?.references.initiatives.map((initiative) => initiative.id) ?? [];
+  const display = entityDisplay.display;
   const memberOptions = useMemo<readonly PickerOption[]>(() => {
     const options = memberActorOptions(membersQ.data?.items ?? []);
     const lead = aggregate?.references.lead;
@@ -296,14 +300,20 @@ export default function ProjectDetailPage(): JSX.Element {
       (programsQ.data?.items ?? []).map((program) => ({ value: program.id, label: program.name })),
     [programsQ.data?.items],
   );
-  const initiativeOptions = useMemo<readonly PickerOption[]>(
-    () =>
-      (initiativesQ.data?.items ?? []).map((initiative) => ({
-        value: initiative.id,
-        label: initiative.name,
-      })),
-    [initiativesQ.data?.items],
-  );
+  const initiativeOptions = useMemo<readonly PickerOption[]>(() => {
+    const current = aggregate?.references.initiatives ?? [];
+    const fetched = (initiativesQ.data?.items ?? []).map((initiative) => ({
+      value: initiative.id,
+      label: initiative.name,
+    }));
+    const known = new Set(fetched.map((initiative) => initiative.value));
+    return [
+      ...current
+        .filter((initiative) => !known.has(initiative.id))
+        .map((initiative) => ({ value: initiative.id, label: initiative.name })),
+      ...fetched,
+    ];
+  }, [aggregate?.references.initiatives, initiativesQ.data?.items]);
   const labels = selectedLabelsQ.data?.labels ?? [];
   const availableLabels = useMemo<readonly LabelOut[]>(
     () => (labelsQ.data?.items ?? []).filter((label) => label.teamId === null),
@@ -318,6 +328,38 @@ export default function ProjectDetailPage(): JSX.Element {
       })),
     [workQ.data],
   );
+  const taskTitleById = useMemo(
+    () => new Map((workQ.data?.tasks ?? []).map((task) => [task.id, task.title])),
+    [workQ.data?.tasks],
+  );
+  const agentsHere = useMemo<readonly AgentHere[]>(
+    () =>
+      (sessionsQ.data?.items ?? []).flatMap((session) => {
+        if (session.executorKind !== 'registered_agent' || !session.taskId) return [];
+        const taskTitle = taskTitleById.get(session.taskId);
+        if (!taskTitle) return [];
+        return [
+          {
+            sessionId: session.id,
+            agentName: `Agent ${session.agentId.slice(0, 6)}`,
+            taskTitle,
+            status: session.status,
+          },
+        ];
+      }),
+    [sessionsQ.data?.items, taskTitleById],
+  );
+  const agentActivity = useMemo<readonly AgentActivityEntry[]>(
+    () =>
+      (overviewRollupQ.data?.recentActivity ?? []).map((activity) => ({
+        id: activity.id,
+        agentName: `Agent ${activity.agentId.slice(0, 6)}`,
+        type: activity.type,
+        summary: activitySummary(activity),
+        createdAt: activity.createdAt,
+      })),
+    [overviewRollupQ.data?.recentActivity],
+  );
 
   useEffect(() => {
     if (aggregate) seedNavigationSnapshot(aggregate.snapshot);
@@ -325,39 +367,6 @@ export default function ProjectDetailPage(): JSX.Element {
   useRegisterTabTitle('project', orgId, projectId, project?.name ?? navigationSnapshot?.name);
   useDocumentTitle(project?.name ?? navigationSnapshot?.name);
 
-  const displayMutation = useApiMutation<
-    EntityDisplayOut,
-    { iconKey: EntityDisplayIconKey; colorKey: EntityDisplayColorKey; customColor: string | null },
-    { previous?: EntityDisplayOut | undefined }
-  >({
-    mutationFn: (json) =>
-      unwrap(
-        () =>
-          api.v1.orgs[':orgId'].display[':subjectType'][':subjectId'].$put({
-            param: { orgId, ...subject },
-            json,
-          }),
-        `Could not customize this ${projectNoun.toLowerCase()}.`,
-      ),
-    onMutate: async ({ iconKey, colorKey, customColor }) => {
-      await queryClient.cancelQueries({ queryKey: displayKey });
-      const previous = queryClient.getQueryData<EntityDisplayOut>(displayKey);
-      queryClient.setQueryData<EntityDisplayOut>(displayKey, {
-        ...subject,
-        iconKey,
-        colorKey,
-        customColor,
-        coverImage: previous?.coverImage ?? null,
-        customized: true,
-      });
-      return { previous };
-    },
-    onError: (_error, _variables, context) => {
-      if (context?.previous) queryClient.setQueryData(displayKey, context.previous);
-    },
-    invalidateKeys: [queryKeys.entityDisplays(orgId, 'project')],
-    onSettled: invalidateProject,
-  });
   const addResource = useApiMutation<AttachmentOut, { title: string; url: string }>({
     mutationFn: (json) =>
       unwrap(
@@ -391,33 +400,7 @@ export default function ProjectDetailPage(): JSX.Element {
           }),
         'Could not post the update.',
       ),
-    onSettled: invalidateProject,
-  });
-  const restoreController = useProjectRestoreController({
-    scope: { accountId, organizationId: orgId, projectId },
-    executeRestore: (request) =>
-      unwrap(
-        () =>
-          api.v1.orgs[':orgId']['object-commands'].$post(
-            { param: { orgId }, json: request },
-            { headers: { 'Idempotency-Key': request.commandId } },
-          ),
-        `Could not restore this ${projectNoun.toLowerCase()}.`,
-      ),
-    reconcile: () =>
-      refreshRestoredProject({
-        queryClient,
-        aggregateQuery: projectDetailAggregateDef(orgId, projectId),
-        ownerOrganizationId: orgId,
-      }),
-    onReconcileStart: () => {
-      setAggregateEnabled(true);
-    },
-    onRestored: () => {
-      setTrashedReceipt(null);
-      setTerminalState(null);
-    },
-    onNotApplied: invalidateProject,
+    invalidateKeys: [updatesKey, aggregateKey],
   });
   const moveProjectToTrash = useApiMutation<ObjectCommandResult, ObjectCommandRequest>({
     mutationFn: (request) =>
@@ -429,25 +412,44 @@ export default function ProjectDetailPage(): JSX.Element {
           ),
         `Could not move this ${projectNoun.toLowerCase()} to trash.`,
       ),
-    onSettled: invalidateProject,
+    invalidateKeys: [queryKeys.projects(orgId)],
     onSuccess: (result) => {
-      restoreController.reset();
       setTrashedReceipt(result.receipt);
+      setRestoreFailure(null);
       setConfirmDeleteOpen(false);
     },
   });
-  const restoreFailure =
-    restoreController.failure === 'not-applied'
-      ? `This ${projectNoun.toLowerCase()} could not be restored because it changed elsewhere or you no longer have permission.`
-      : restoreController.failure === 'confirmed-read'
-        ? `This ${projectNoun.toLowerCase()} was restored, but its page could not refresh. Retry refresh or return to Projects.`
-        : restoreController.failure === 'indeterminate-read'
-          ? `Docket could not confirm whether this ${projectNoun.toLowerCase()} was restored because its page could not refresh. Retry refresh before trying Undo again.`
-          : restoreController.failure === 'queued-read'
-            ? `This ${projectNoun.toLowerCase()} restore is saved on this device and will sync when you're back online. Retry refresh after it syncs; Undo cannot be sent again.`
-            : null;
-  const restoreMutationError =
-    restoreController.refreshState === 'idle' ? restoreController.restoreMutation.error : null;
+  const restoreProject = useApiMutation<ObjectCommandResult, ObjectCommandRequest>({
+    mutationFn: (request) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId']['object-commands'].$post(
+            { param: { orgId }, json: request },
+            { headers: { 'Idempotency-Key': request.commandId } },
+          ),
+        `Could not restore this ${projectNoun.toLowerCase()}.`,
+      ),
+    onSuccess: async (result) => {
+      if (!result.appliedIds.includes(projectId)) {
+        setRestoreFailure(
+          `This ${projectNoun.toLowerCase()} could not be restored because it changed elsewhere or you no longer have permission.`,
+        );
+        return;
+      }
+      setAggregateEnabled(true);
+      await queryClient.refetchQueries({ queryKey: aggregateKey, exact: true, type: 'active' });
+      if (queryClient.getQueryState(aggregateKey)?.error != null) {
+        setRestoreFailure(
+          `This ${projectNoun.toLowerCase()} was restored, but its page could not refresh. Try again or return to Projects.`,
+        );
+        return;
+      }
+      setTrashedReceipt(null);
+      setRestoreFailure(null);
+      setTerminalState(null);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projects(orgId) });
+    },
+  });
 
   if (trashedReceipt !== null) {
     return (
@@ -461,28 +463,31 @@ export default function ProjectDetailPage(): JSX.Element {
                 : `This ${projectNoun.toLowerCase()} is hidden from active views and can be restored.`}
             </p>
           </div>
-          {(restoreFailure ?? restoreMutationError) ? (
+          {(restoreFailure ?? restoreProject.error) ? (
             <p role="alert" className="text-error text-body-medium">
               {restoreFailure ??
                 userErrorMessage(
-                  restoreMutationError,
+                  restoreProject.error,
                   `Could not restore this ${projectNoun.toLowerCase()}.`,
                 )}
             </p>
           ) : null}
           <div className="flex flex-wrap gap-2">
-            <ProjectRestorePrimaryAction
-              refreshState={restoreController.refreshState}
-              restorePending={restoreController.restoreMutation.isPending}
-              onRetryRefresh={restoreController.retryRefresh}
-              onUndo={() => {
-                restoreController.restoreMutation.mutate({
+            <Button
+              type="button"
+              variant="default"
+              disabled={restoreProject.isPending}
+              onClick={() => {
+                setRestoreFailure(null);
+                restoreProject.mutate({
                   commandId: crypto.randomUUID(),
                   direction: 'undo',
                   receipt: trashedReceipt,
                 });
               }}
-            />
+            >
+              <Undo className="size-4" /> Undo
+            </Button>
             <Button
               type="button"
               variant="outline"
@@ -540,19 +545,35 @@ export default function ProjectDetailPage(): JSX.Element {
   return (
     <EntityDetailLayout
       object={{ kind: 'project', id: projectId, organizationId: orgId, title: project.name }}
+      printSummary={
+        <DetailPrintSummary
+          title={project.name}
+          summary={project.summary}
+          description={project.description}
+          properties={[
+            { label: 'Status', value: project.status.replace('_', ' ') },
+            { label: 'Health', value: project.health ? project.health.replace('_', ' ') : '—' },
+            { label: 'Owner', value: aggregate?.references.lead?.displayName ?? '—' },
+            { label: 'Program', value: aggregate?.references.program?.name ?? '—' },
+            {
+              label: 'Initiatives',
+              value: initiativeNames.length === 0 ? '—' : initiativeNames.join(', '),
+            },
+            { label: 'Tasks', value: String(aggregate?.defaultView.progress.taskCount ?? 0) },
+          ]}
+        />
+      }
       icon={
         <EntityIconPicker
           display={display}
           entityName={project.name}
           editable={canEdit}
-          pending={displayMutation.isPending}
-          loading={displayPickerOpen && displayQ.isPending}
+          pending={entityDisplay.mutation.isPending}
+          loading={entityDisplay.loading}
           size={48}
           onChange={(iconKey, colorKey, customColor) => {
-            if (displayQ.data === undefined) return;
-            displayMutation.mutate({ iconKey, colorKey, customColor });
+            entityDisplay.mutation.mutate({ iconKey, colorKey, customColor });
           }}
-          onOpenChange={setDisplayPickerOpen}
         />
       }
       title={
@@ -607,7 +628,7 @@ export default function ProjectDetailPage(): JSX.Element {
               programOptions={programOptions}
               programLoading={programPickerOpen && programsQ.isPending}
               onProgramPickerOpenChange={setProgramPickerOpen}
-              initiativeIds={[]}
+              initiativeIds={linkedInitiativeIds}
               initiativeOptions={initiativeOptions}
               initiativesLoading={initiativesPickerOpen && initiativesQ.isPending}
               onInitiativesPickerOpenChange={setInitiativesPickerOpen}
@@ -633,7 +654,9 @@ export default function ProjectDetailPage(): JSX.Element {
               onProgramChange={(programId) => {
                 mutations.patchProject({ programId });
               }}
-              onInitiativesChange={mutations.setInitiatives}
+              onInitiativesChange={(initiativeIds) => {
+                mutations.setInitiatives(initiativeIds, initiativeOptions);
+              }}
               onLabelsChange={(labelIds) => {
                 mutations.patchProject({ labelIds });
               }}
@@ -711,11 +734,12 @@ export default function ProjectDetailPage(): JSX.Element {
             setTab(value as TabId);
           }}
           label="Project sections"
+          overflow={{ menuLabel: 'More Project sections' }}
           items={[
-            { value: 'overview', label: 'Overview' },
-            { value: 'tasks', label: 'Tasks' },
-            { value: 'updates', label: 'Updates' },
-            { value: 'resources', label: 'Resources' },
+            { value: 'overview', label: 'Overview', priority: 0 },
+            { value: 'tasks', label: 'Tasks', priority: 1 },
+            { value: 'updates', label: 'Updates', priority: 2 },
+            { value: 'resources', label: 'Resources', priority: 3 },
           ]}
         />
       }
@@ -726,7 +750,23 @@ export default function ProjectDetailPage(): JSX.Element {
         </p>
       ) : null}
       {tab === 'overview' ? (
-        <section role="tabpanel" id="tabpanel-overview" aria-labelledby="tab-overview">
+        <section
+          role="tabpanel"
+          id="tabpanel-overview"
+          aria-labelledby="tab-overview"
+          className="flex min-w-0 flex-col gap-8"
+        >
+          <LatestUpdateSummary
+            updates={updatesQ.data?.items ?? []}
+            loading={updatesQ.isPending}
+            resolveActor={(actorId) => ({
+              name:
+                projectLead !== null && projectLead.actorId === actorId
+                  ? projectLead.displayName
+                  : 'Unknown',
+              kind: 'human',
+            })}
+          />
           <TemplateAwareEntityDocument
             orgId={orgId}
             kind="project"
@@ -739,6 +779,35 @@ export default function ProjectDetailPage(): JSX.Element {
             }}
             placeholder="Add the Project brief…"
           />
+          {workQ.isError ? (
+            <p role="alert" className="text-error text-sm">
+              Could not load Project work.
+            </p>
+          ) : null}
+          <OverviewSummary
+            tasks={milestoneTasks}
+            milestones={(workQ.data?.milestones ?? []).map((milestone) => ({
+              id: milestone.id,
+              name: milestone.name,
+            }))}
+            taskNounPlural={taskNounPlural}
+          />
+          <ProjectMilestonesPanel
+            orgId={orgId}
+            projectId={projectId}
+            projectDetailKey={workDef.queryKey}
+            milestones={workQ.data?.milestones ?? []}
+            milestoneTasks={milestoneTasks}
+            canEdit={canEdit}
+          />
+          <AgentsStrip agents={agentsHere} />
+          <AgentActivityFeed activities={agentActivity} />
+          <ProjectDependenciesPanel
+            orgId={orgId}
+            projectId={projectId}
+            projectDetailKey={workDef.queryKey}
+            canEdit={canEdit}
+          />
         </section>
       ) : null}
       {tab === 'tasks' ? (
@@ -748,7 +817,6 @@ export default function ProjectDetailPage(): JSX.Element {
           aria-labelledby="tab-tasks"
           className="flex flex-col gap-2"
         >
-          <h2 className="text-on-surface text-title-small font-medium">Task dependencies</h2>
           {workQ.isError ? (
             <p role="alert" className="text-error text-sm">
               Could not load Project work.
@@ -773,20 +841,6 @@ export default function ProjectDetailPage(): JSX.Element {
             onQuickAdd={async () => undefined}
             onRename={() => undefined}
             canEdit={false}
-          />
-          <ProjectMilestonesPanel
-            orgId={orgId}
-            projectId={projectId}
-            projectDetailKey={workDef.queryKey}
-            milestones={workQ.data?.milestones ?? []}
-            milestoneTasks={milestoneTasks}
-            canEdit={canEdit}
-          />
-          <ProjectDependenciesPanel
-            orgId={orgId}
-            projectId={projectId}
-            projectDetailKey={workDef.queryKey}
-            canEdit={canEdit}
           />
           <div className="bg-surface-container h-96 overflow-hidden rounded-xl">
             <TaskGraphPanel

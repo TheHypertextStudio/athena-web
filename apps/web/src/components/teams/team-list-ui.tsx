@@ -13,11 +13,10 @@
  * put nowhere. Now that a team has a page, the row is a link to it and the drag has a meaning, so
  * both halves of that contradiction are gone.
  *
- * A team's identity is its short `key` (`ENG`, `OPS`, …), so the leading glyph is that key set
- * inside an {@link IdentityGlyph} circle at the same 40px weight `StatusGlyph`/`ProgramGlyph` use.
+ * The display registry supplies each team's icon and color. The short team key remains available
+ * to assistive technology without becoming the only visual identity.
  */
-import type { TeamOut } from '@docket/types';
-import { IdentityGlyph } from '@docket/ui/components';
+import { defaultEntityDisplay, type EntityDisplayOut, type TeamOut } from '@docket/types';
 import { FolderKanban, ListChecks, Workflow } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { Badge, Skeleton } from '@docket/ui/primitives';
@@ -25,11 +24,13 @@ import Link from '@/components/docket-link';
 import type { ComponentPropsWithoutRef, JSX } from 'react';
 
 import { ObjectSurface } from '@/components/objects/object-surface';
+import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
 import { ROSTER_DATA_CELL_CLASS, ROSTER_HEADER_CELL_CLASS } from '@/components/views/roster-grid';
 
 /** The row view-model derived for one Team (scope + workflow roll-up). */
 export interface TeamRow {
   team: TeamOut;
+  display?: EntityDisplayOut | undefined;
   projectCount: number;
   taskCount: number;
   workflowStateCount: number;
@@ -59,6 +60,7 @@ const ROW_GRID = 'grid-cols-[minmax(22rem,1fr)_8rem_8rem_12rem]';
 /** One 56px team row: a link to the team's page, and a drag source for the team itself. */
 function TeamGridRow({
   team,
+  display,
   projectCount,
   taskCount,
   workflowStateCount,
@@ -75,6 +77,7 @@ function TeamGridRow({
   const projectWord = projectCount === 1 ? projectNoun : projectNounPlural;
   const taskWord = taskCount === 1 ? taskNoun : taskNounPlural;
   const href = `/orgs/${orgId}/teams/${team.id}`;
+  const identity = display ?? defaultEntityDisplay('team', team.id);
 
   return (
     <ObjectSurface
@@ -98,9 +101,12 @@ function TeamGridRow({
         )}
       >
         <div className={`${ROSTER_DATA_CELL_CLASS} gap-3 py-2`}>
-          <IdentityGlyph>
-            <span className="text-xs font-semibold">{team.key}</span>
-          </IdentityGlyph>
+          <EntityIconGlyph
+            iconKey={identity.iconKey}
+            colorKey={identity.colorKey}
+            customColor={identity.customColor}
+            size={40}
+          />
           <span className="text-on-surface line-clamp-1 text-sm leading-5 font-semibold">
             {team.name}
           </span>

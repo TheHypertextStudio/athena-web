@@ -737,14 +737,26 @@ describe('queryWorkView', () => {
       projectResponse.groups.some((group) => group.path.length === 2 && group.label !== 'planned'),
     ).toBe(true);
 
-    await schema.db.insert(schema.program).values({
+    const [program] = await schema.db
+      .insert(schema.program)
+      .values({
+        organizationId: orgId,
+        name: 'Program output',
+        summary: 'Ongoing work area',
+        ownerId: humanActorId,
+        status: 'active',
+        statusId: statusId('program', 'active'),
+        visibility: 'public',
+      })
+      .returning({ id: schema.program.id });
+    if (!program) throw new Error('program was not seeded');
+    await schema.db.insert(schema.entityDisplay).values({
       organizationId: orgId,
-      name: 'Program output',
-      summary: 'Ongoing work area',
-      ownerId: humanActorId,
-      status: 'active',
-      statusId: statusId('program', 'active'),
-      visibility: 'public',
+      subjectType: 'program',
+      subjectId: program.id,
+      iconKey: 'layers',
+      colorKey: 'purple',
+      createdBy: humanActorId,
     });
     const programResponse = await queryWorkView({
       database: schema.db,
@@ -757,6 +769,7 @@ describe('queryWorkView', () => {
     expect(programResponse.rows[0]).toMatchObject({
       summary: 'Ongoing work area',
       ownerActor: { id: humanActorId, kind: 'human', displayName: 'Ada', avatar: null },
+      display: { iconKey: 'layers', colorKey: 'purple', customized: true },
     });
   });
 

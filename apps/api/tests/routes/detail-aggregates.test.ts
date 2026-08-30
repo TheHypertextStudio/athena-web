@@ -630,6 +630,7 @@ describe('detail aggregate routes', () => {
     const local = await seedBaseOrg(db, schema);
     const hidden = await seedBaseOrg(db, schema);
     const session = await authenticatedSessionFor([local.humanActorId]);
+    if (!session) throw new Error('detail aggregate viewer session was not created');
     const reader = appWithActor(initiatives, local.orgId, ['view'], local.humanActorId, session);
     const [hiddenParent, localChild] = await Promise.all([
       seedInitiative(db, schema, hidden.statusId, {

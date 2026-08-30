@@ -65,7 +65,9 @@ export default function FocusImmersive({ userId = null }: FocusImmersiveProps): 
       navigation={
         <Button
           variant="ghost"
-          controlSize="xl"
+          controlSize="md"
+          iconOnly
+          aria-label="Return to workspace"
           onClick={() => {
             returnFromFocus({
               popout: new URLSearchParams(window.location.search).get('mode') === 'popout',
@@ -82,7 +84,6 @@ export default function FocusImmersive({ userId = null }: FocusImmersiveProps): 
           }}
         >
           <ChevronLeft aria-hidden="true" />
-          Return to workspace
         </Button>
       }
       title={

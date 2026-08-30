@@ -72,8 +72,8 @@ const INITIAL_HEIGHT = 96;
 /** The widest a card may grow before it gets its own scroll region. */
 const MAX_HEIGHT = 640;
 
-/** Maximum time a sandbox proxy may remain loaded without announcing readiness. */
-const SANDBOX_PROXY_READY_TIMEOUT_MS = 5_000;
+/** Maximum time a sandboxed app may take to complete its official initialization handshake. */
+const MCP_APP_INITIALIZATION_TIMEOUT_MS = 5_000;
 
 /**
  * Docket token → the style variable the extension standardizes.
@@ -259,15 +259,15 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
     }
 
     let proxyWindow: Window | null = frame.contentWindow;
-    let readyDeadline: number | undefined;
-    const clearReadyDeadline = (): void => {
-      if (readyDeadline !== undefined) {
-        window.clearTimeout(readyDeadline);
-        readyDeadline = undefined;
+    let initializationDeadline: number | undefined;
+    const clearInitializationDeadline = (): void => {
+      if (initializationDeadline !== undefined) {
+        window.clearTimeout(initializationDeadline);
+        initializationDeadline = undefined;
       }
     };
     const fail = (): void => {
-      clearReadyDeadline();
+      clearInitializationDeadline();
       setFailure('Interactive view unavailable.');
     };
     const onFrameError = (): void => {
@@ -355,7 +355,6 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
       }
       const method: unknown = Reflect.get(data, 'method');
       if (method === MCP_UI_METHODS.sandboxProxyReady) {
-        clearReadyDeadline();
         // The proxy is up. Hand it the document plus the policy computed from what the resource
         // declared — the host decides the CSP, never a script running on the sandbox origin.
         post({
@@ -365,13 +364,20 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
         });
         return;
       }
-      void host.receive(data);
+      void host
+        .receive(data)
+        .then(() => {
+          if (host.initialized) clearInitializationDeadline();
+        })
+        .catch(() => {
+          fail();
+        });
     };
     window.addEventListener('message', onWindowMessage);
-    readyDeadline = window.setTimeout(fail, SANDBOX_PROXY_READY_TIMEOUT_MS);
+    initializationDeadline = window.setTimeout(fail, MCP_APP_INITIALIZATION_TIMEOUT_MS);
 
     return () => {
-      clearReadyDeadline();
+      clearInitializationDeadline();
       hostRef.current = null;
       void host.requestTeardown().finally(() => {
         window.removeEventListener('message', onWindowMessage);

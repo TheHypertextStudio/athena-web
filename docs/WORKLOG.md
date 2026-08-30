@@ -135,6 +135,14 @@
   the silent frame visible after ten seconds, then passed after the fixes. Final focused validation
   passes 10 connector tests and 28 view/workbench tests; affected integrations and Web typechecks
   and ESLint pass.
+- **Layer 2 review fix 2**: Kept the bounded readiness deadline active after
+  `sandbox/proxy-ready` until the inner app completes the official initialize/initialized
+  handshake. The regression first proved that a proxy could receive its resource and then leave a
+  blank card indefinitely by keeping its inner app silent; after the fix, the same ten-second
+  fake-time advance reaches exact owned fallback copy. Completed initialization clears the timer,
+  while protocol receive failure, frame failure, deadline expiry, and unmount share the bounded
+  cleanup path. Focused view/workbench validation passes 29 tests, and Web TypeScript and ESLint
+  pass.
 - **Blockers**: Production acceptance needs an authenticated live Athena account and a publicly
   reachable pinned upstream reference server; local and CI evidence cannot substitute for it.
 

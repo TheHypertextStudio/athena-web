@@ -235,6 +235,35 @@ describe('McpAppView frames', () => {
       vi.useRealTimers();
     }
   });
+
+  it('falls back when the proxy is ready but its inner app never initializes', async () => {
+    vi.useFakeTimers();
+    const harness = mount();
+    try {
+      harness.fromProxy({
+        jsonrpc: '2.0',
+        method: MCP_UI_METHODS.sandboxProxyReady,
+        params: {},
+      });
+      expect(
+        harness.posted.some(
+          (entry) => entry.message['method'] === MCP_UI_METHODS.sandboxResourceReady,
+        ),
+      ).toBe(true);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10_000);
+      });
+
+      expect(screen.getByTestId('mcp-app-view-failure')).toHaveTextContent(
+        'Interactive view unavailable.',
+      );
+    } finally {
+      harness.view.unmount();
+      await vi.runAllTimersAsync();
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('McpAppView bridge', () => {

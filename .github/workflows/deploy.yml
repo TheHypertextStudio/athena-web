@@ -37,10 +37,28 @@ jobs:
       # package.json — so the production secret gate ran on whatever version npm served that day.
       - run: pnpm install --frozen-lockfile --filter @docket/root
 
+      - name: Select active production secrets
+        id: active-secrets
+        env:
+          API_SECRET_BINDINGS: ${{ vars.API_SECRET_BINDINGS }}
+          LINEAR_AGENT_ENABLED: ${{ vars.LINEAR_AGENT_ENABLED || 'false' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bindings="$API_SECRET_BINDINGS"
+          if [[ "$LINEAR_AGENT_ENABLED" != 'true' ]]; then
+            bindings="$(printf '%s\n' "$bindings" | awk -F= '$1 !~ /^LINEAR_AGENT_(CLIENT_ID|CLIENT_SECRET|WEBHOOK_SECRET)$/')"
+          fi
+          {
+            printf '%s\n' 'bindings<<EOF'
+            printf '%s\n' "$bindings"
+            printf '%s\n' EOF
+          } >> "$GITHUB_OUTPUT"
+
       - name: Validate production Secret Manager bindings
         env:
           GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
-          API_SECRET_BINDINGS: ${{ vars.API_SECRET_BINDINGS }}
+          API_SECRET_BINDINGS: ${{ steps.active-secrets.outputs.bindings }}
           LINEAR_AGENT_ENABLED: ${{ vars.LINEAR_AGENT_ENABLED || 'false' }}
         run: pnpm exec tsx scripts/production-secrets.ts
 
@@ -121,7 +139,7 @@ jobs:
             --env-vars-file=${{ runner.temp }}/docket-api-env.yaml
           # Bootstrap owns this non-secret env→Secret Manager mapping. Optional providers are
           # mounted only after their secrets exist. Overwrite keeps retired mounts from surviving.
-          secrets: ${{ vars.API_SECRET_BINDINGS }}
+          secrets: ${{ steps.active-secrets.outputs.bindings }}
           secrets_update_strategy: overwrite
 
       - name: Show Cloud Run URL

@@ -271,7 +271,12 @@ describe('guided integration bootstrap contracts', () => {
       new URL('../../../../.github/workflows/deploy.yml', import.meta.url),
       'utf8',
     );
-    expect(workflow).toContain('secrets: ${{ vars.API_SECRET_BINDINGS }}');
+    expect(workflow).toContain('id: active-secrets');
+    expect(workflow).toContain("LINEAR_AGENT_ENABLED: ${{ vars.LINEAR_AGENT_ENABLED || 'false' }}");
+    expect(workflow).toContain(
+      "awk -F= '$1 !~ /^LINEAR_AGENT_(CLIENT_ID|CLIENT_SECRET|WEBHOOK_SECRET)$/'",
+    );
+    expect(workflow).toContain('secrets: ${{ steps.active-secrets.outputs.bindings }}');
     expect(workflow).toContain(
       'LINEAR_AGENT_ENABLED: "${{ vars.LINEAR_AGENT_ENABLED || \'false\' }}"',
     );

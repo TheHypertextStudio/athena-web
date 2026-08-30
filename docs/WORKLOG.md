@@ -41,7 +41,8 @@
   contains enabled version 1 values for the existing application's client ID, client secret, and
   webhook signing secret. The production `API_SECRET_BINDINGS` variable maps all three runtime
   names to those secrets. The production GitHub environment explicitly sets
-  `LINEAR_AGENT_ENABLED=false`.
+  `LINEAR_AGENT_ENABLED=false`. The deploy job now preserves those bindings but excludes their
+  runtime mounts and validation reads until the release flag becomes `true`.
 - **Blockers for launch**: Deployment, a signed event fixture captured from Linear, the disabled-flag
   sandbox check, installation, account linking, and the live Linear acceptance matrix remain
   pending. The feature flag must remain false until the sandbox check passes. Exact-tip E2E run

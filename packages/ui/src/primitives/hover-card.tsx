@@ -84,6 +84,7 @@ export interface HoverCardContentProps extends Omit<
   readonly inset?: OverlayInset | undefined;
 }
 
+/** Render a non-interactive hover preview at a named width and inset. */
 export function HoverCardContent({
   align = 'center',
   sideOffset = 4,

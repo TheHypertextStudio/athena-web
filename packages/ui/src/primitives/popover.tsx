@@ -96,6 +96,7 @@ export interface PopoverContentProps extends Omit<
   readonly className?: string | undefined;
 }
 
+/** Render a menu or floating panel with shared collision and width rules. */
 export function PopoverContent({
   className,
   align = 'start',

@@ -177,6 +177,7 @@ export interface DialogContentProps extends Omit<
   readonly className?: string | undefined;
 }
 
+/** Render a focus-trapped dialog panel with one shared presentation contract. */
 export function DialogContent({
   className,
   children,

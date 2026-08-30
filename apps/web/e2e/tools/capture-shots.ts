@@ -118,6 +118,13 @@ async function openReviewRoute(page: Page, url: string): Promise<void> {
     await page.locator('[role="dialog"]').waitFor({ state: 'visible', timeout: 20_000 });
   }
   await waitForSettledPage(page);
+  const failure = await page.evaluate(() => {
+    const visibleText = document.body.innerText;
+    return /(?:this page doesn['’]t exist|page unavailable|application error)/i.test(visibleText);
+  });
+  if (failure) {
+    throw new Error(`Could not capture ${url}: the route rendered an application failure state`);
+  }
 }
 
 /** Measure exact-black pixels in a PNG so damaged Chromium compositor tiles can be rejected. */

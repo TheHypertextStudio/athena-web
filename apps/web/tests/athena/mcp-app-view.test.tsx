@@ -741,6 +741,14 @@ describe('McpAppView bridge', () => {
       fireEvent.focusIn(outside);
 
       expect(close).toHaveFocus();
+
+      fireEvent.click(close);
+      await waitFor(() =>
+        expect(
+          screen.queryByRole('dialog', { name: 'Acme Release Tracker: release_checklist' }),
+        ).not.toBeInTheDocument(),
+      );
+      expect(screen.getByTitle('Acme Release Tracker: release_checklist')).toBe(harness.frame);
     } finally {
       outside.remove();
     }

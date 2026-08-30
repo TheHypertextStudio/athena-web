@@ -17,7 +17,16 @@ import {
   type McpUiHostStyles,
   type McpUiTheme,
 } from '@docket/types';
-import { Text } from '@docket/ui/primitives';
+import {
+  Button,
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  Surface,
+  Text,
+} from '@docket/ui/primitives';
 
 import { UserFacingError } from '@/lib/problem';
 
@@ -229,8 +238,9 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
   const { instanceId, resource, tool, result, serverName, onCallTool, onMessage, sandboxOrigin } =
     props;
   const frameRef = useRef<HTMLIFrameElement | null>(null);
-  const containerRef = useRef<HTMLElement | null>(null);
-  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const frameHostRef = useRef<HTMLDivElement | null>(null);
+  const inlineContainerRef = useRef<HTMLDivElement | null>(null);
+  const fullscreenContainerRef = useRef<HTMLDivElement | null>(null);
   const hostRef = useRef<McpAppHost | null>(null);
   const presentationIdentity = `${instanceId}\u0000${resource.uri}\u0000${tool.name}`;
   const callbackLifecycleRef = useRef<{
@@ -319,7 +329,7 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
       hostInfo: { name: 'docket-athena', version: '1.0.0' },
       resource,
       tool: { name: tool.name, ...(tool.arguments ? { arguments: tool.arguments } : {}) },
-      hostContext: buildHostContext(containerRef.current?.clientWidth),
+      hostContext: buildHostContext(inlineContainerRef.current?.clientWidth),
       post,
       callTool: (name, args) => lifecycleCallbacks.onCallTool(name, args),
       // Scope: the API decides. The browser holds no credential for the connected server, so an
@@ -443,7 +453,8 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
   // itself against whatever width it was first given and reports a height for a layout that no
   // longer exists, which shows up as a card with a strip of dead space under it.
   useEffect(() => {
-    const container = containerRef.current;
+    const container =
+      displayMode === 'fullscreen' ? fullscreenContainerRef.current : inlineContainerRef.current;
     if (!container || !('ResizeObserver' in window)) {
       return;
     }
@@ -608,20 +619,50 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
         // A card grows into its measured height rather than snapping. The global reduced-motion
         // rule in `globals.css` collapses this to nothing for anyone who asked for that.
         className={
-          displayMode === 'fullscreen'
-            ? 'block w-full flex-1 border-0 bg-transparent'
-            : 'block w-full border-0 bg-transparent transition-[height]'
+          displayMode === 'fullscreen' ? 'm-0 hidden overflow-hidden' : 'm-0 overflow-hidden'
         }
-        // Fullscreen takes the frame it is given; only an inline card sizes itself from what the
-        // view reported, because only an inline card is sitting in someone else's flow.
-        style={displayMode === 'fullscreen' ? undefined : { height: `${String(height)}px` }}
-      />
-      <figcaption className="px-4 pb-2">
-        <Text token="label-small" tone="muted">
-          {serverName}
-        </Text>
-      </figcaption>
-    </figure>
+        data-testid="mcp-app-view"
+        data-display-mode={displayMode}
+        data-resource-uri={resource.uri}
+        data-prefers-border={String(resource.meta?.prefersBorder ?? false)}
+      >
+        <div ref={inlineContainerRef} className="min-h-0 w-full">
+          <McpIframeHost
+            ref={frameHostRef}
+            proxyUrl={proxyUrl}
+            title={`${serverName}: ${tool.name}`}
+            frameRef={frameRef}
+          />
+        </div>
+        <figcaption className="px-4 pb-2">
+          <Text token="label-small" tone="muted">
+            {serverName}
+          </Text>
+        </figcaption>
+      </Surface>
+      <Dialog
+        open={displayMode === 'fullscreen'}
+        onOpenChange={(open) => {
+          if (!open) closeFullscreen();
+        }}
+      >
+        <DialogContent
+          presentation={{ kind: 'fullscreen' }}
+          showClose={false}
+          aria-describedby={undefined}
+        >
+          <DialogHeader className="flex-row items-center justify-between" inset="compact">
+            <DialogTitle>{`${serverName}: ${tool.name}`}</DialogTitle>
+            <Button type="button" variant="ghost" onClick={closeFullscreen}>
+              Close
+            </Button>
+          </DialogHeader>
+          <DialogBody inset="none">
+            <div ref={fullscreenContainerRef} className="flex min-h-0 flex-1" />
+          </DialogBody>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

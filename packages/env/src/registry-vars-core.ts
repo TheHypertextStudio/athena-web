@@ -143,6 +143,17 @@ export const CORE_VARS: readonly VarSpec[] = [
     where: "WebAuthn relying-party display name (default 'Docket')",
   },
   {
+    name: 'BETTER_AUTH_PASSKEY_NATIVE_ORIGINS',
+    slice: 'auth',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: authServer.BETTER_AUTH_PASSKEY_NATIVE_ORIGINS,
+    where:
+      'CSV of associated Android application origins accepted by the passkey verifier; unset keeps browser-only origin resolution',
+    sensitive: false,
+  },
+  {
     name: 'GOOGLE_CLIENT_ID',
     slice: 'auth',
     scope: 'server',

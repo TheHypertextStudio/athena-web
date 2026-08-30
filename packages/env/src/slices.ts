@@ -58,6 +58,8 @@ export const authServer = {
   BETTER_AUTH_COOKIE_DOMAIN: z.string().optional(),
   BETTER_AUTH_PASSKEY_RP_ID: z.string().min(1),
   BETTER_AUTH_PASSKEY_RP_NAME: z.string().min(1),
+  /** CSV of Android application origins accepted by the passkey verifier. */
+  BETTER_AUTH_PASSKEY_NATIVE_ORIGINS: z.string().optional(),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   /** Whether Google OAuth is open to every production user; false keeps it test-user-only. */

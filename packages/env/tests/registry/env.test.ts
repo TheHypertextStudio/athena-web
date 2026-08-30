@@ -86,6 +86,17 @@ describe('registry', () => {
     expect(spec?.sensitive).toBe(true);
   });
 
+  it('registers the optional native passkey origin allowlist for the API', () => {
+    const spec = findVar('BETTER_AUTH_PASSKEY_NATIVE_ORIGINS');
+    expect(spec).toMatchObject({
+      slice: 'auth',
+      scope: 'server',
+      targets: ['api'],
+      required: false,
+      sensitive: false,
+    });
+  });
+
   it('returns undefined for an unknown var', () => {
     expect(findVar('DEFINITELY_NOT_A_REAL_VAR')).toBeUndefined();
   });
@@ -175,6 +186,12 @@ describe('slices', () => {
     expect(authServer.BETTER_AUTH_PASSKEY_RP_ID.parse('localhost')).toBe('localhost');
     expect(() => authServer.BETTER_AUTH_PASSKEY_RP_NAME.parse(undefined)).toThrow();
     expect(authServer.BETTER_AUTH_PASSKEY_RP_NAME.parse('Docket')).toBe('Docket');
+    expect(authServer.BETTER_AUTH_PASSKEY_NATIVE_ORIGINS.parse(undefined)).toBeUndefined();
+    expect(
+      authServer.BETTER_AUTH_PASSKEY_NATIVE_ORIGINS.parse(
+        'android:apk-key-hash:debug,android:apk-key-hash:release',
+      ),
+    ).toBe('android:apk-key-hash:debug,android:apk-key-hash:release');
   });
 
   it('requires and coerces boolean-from-string vars across both branches (no default)', () => {

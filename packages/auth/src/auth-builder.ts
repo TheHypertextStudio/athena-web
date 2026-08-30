@@ -73,6 +73,7 @@ export interface AuthEnv {
   readonly BETTER_AUTH_COOKIE_DOMAIN?: string | undefined;
   readonly BETTER_AUTH_PASSKEY_RP_ID: string;
   readonly BETTER_AUTH_PASSKEY_RP_NAME: string;
+  readonly BETTER_AUTH_PASSKEY_NATIVE_ORIGINS?: string | undefined;
   readonly GOOGLE_CLIENT_ID?: string | undefined;
   readonly GOOGLE_CLIENT_SECRET?: string | undefined;
   readonly GOOGLE_OAUTH_PUBLIC?: boolean | undefined;
@@ -463,10 +464,22 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
 
   const hasSocial = Object.keys(socialProviders).length > 0;
 
+  const nativePasskeyOrigins = parseTrustedOrigins(e.BETTER_AUTH_PASSKEY_NATIVE_ORIGINS);
+  const passkeyOrigins =
+    nativePasskeyOrigins.length > 0
+      ? [
+          ...new Set([
+            ...parseTrustedOrigins(e.BETTER_AUTH_TRUSTED_ORIGINS),
+            ...nativePasskeyOrigins,
+          ]),
+        ]
+      : undefined;
+
   const plugins: BetterAuthPlugin[] = [
     passkey({
       rpID: e.BETTER_AUTH_PASSKEY_RP_ID,
       rpName: e.BETTER_AUTH_PASSKEY_RP_NAME,
+      ...(passkeyOrigins ? { origin: passkeyOrigins } : {}),
       registration: {
         requireSession: false,
         resolveUser: ({ ctx, context }) =>

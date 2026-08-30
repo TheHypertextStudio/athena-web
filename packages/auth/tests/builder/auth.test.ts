@@ -1364,6 +1364,42 @@ describe('buildAuthOptions env-gating', () => {
     expect(typeof registration?.['resolveUser']).toBe('function');
   });
 
+  it('allows the explicit Android origin without changing browser passkey origins', async () => {
+    const { buildAuthOptions } = await import('../../src/index');
+    const nativeOrigin = 'android:apk-key-hash:3zJp1NzJxP5y_mFioPTp7l8EFEfcs472qSV2_DiQ28c';
+    const mobileEnv = {
+      ...baseEnv,
+      BETTER_AUTH_TRUSTED_ORIGINS:
+        'https://docket.hypertext.studio, https://admin.hypertext.studio',
+      BETTER_AUTH_PASSKEY_NATIVE_ORIGINS: ` ${nativeOrigin} `,
+    };
+
+    const opts = buildAuthOptions(mobileEnv, MAILER_DEPS);
+    const pk = (opts.plugins ?? []).find((plugin) => plugin.id === 'passkey');
+    const pkOptions = (pk as { options?: Record<string, unknown> }).options ?? {};
+
+    expect(pkOptions['origin']).toEqual([
+      'https://docket.hypertext.studio',
+      'https://admin.hypertext.studio',
+      nativeOrigin,
+    ]);
+  });
+
+  it('leaves passkey origin unset when no native application origin is configured', async () => {
+    const { buildAuthOptions } = await import('../../src/index');
+    const opts = buildAuthOptions(
+      {
+        ...baseEnv,
+        BETTER_AUTH_TRUSTED_ORIGINS: 'https://docket.hypertext.studio',
+      },
+      MAILER_DEPS,
+    );
+    const pk = (opts.plugins ?? []).find((plugin) => plugin.id === 'passkey');
+    const pkOptions = (pk as { options?: Record<string, unknown> }).options ?? {};
+
+    expect(pkOptions['origin']).toBeUndefined();
+  });
+
   it("passkey's resolveUser wiring consumes the verified intent from ctx.context.internalAdapter", async () => {
     // Invoke the configured `resolveUser` arrow directly so its forwarding into
     // `resolvePasskeyUser` is exercised end-to-end: a proven-email intent resolved against the

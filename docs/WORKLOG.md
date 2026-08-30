@@ -7,6 +7,39 @@
 
 ## Active Tasks
 
+### [ANDROID-FOUNDATION-001] Establish Docket's native Android floor
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-08-30
+- **Priority**: P0
+- **Description**: Prove production-compatible native passkey sign-in on Android, register Docket
+  as a real system account, render a minimal authenticated Compose shell, and retain deterministic
+  incoming shares offline without turning the first release into a web port.
+- **Approach**: Extend Better Auth with an explicit Android WebAuthn-origin allowlist while
+  preserving existing browser origins; publish the matching Digital Asset Links statement at the
+  relying-party apex; and build the greenfield Android app with Hilt, Credential Manager,
+  AccountManager, Room, and an explicit offline-first app state. Keep the on-device Athena boundary
+  limited to a truthful unavailable capability whose future input is cached work and agenda state.
+- **Subtasks**:
+  - [x] Add native passkey origin configuration and regression coverage.
+  - [ ] Publish and verify the debug application's Digital Asset Links statement (file is on the
+        website's `main`; the apex Cloudflare binding still returns 522).
+  - [x] Establish the Hilt-based Android shell and account authenticator.
+  - [x] Implement the native passkey ceremony and offline session recovery.
+  - [x] Implement bounded, owner-isolated offline share capture.
+  - [x] Add the read-only on-device Athena capability boundary.
+  - [ ] Validate production web auth, Android tests/build, and the emulator journey.
+- **Blockers**: The validated asset-links commit is on `website/main`, but
+  `https://hypertext.studio/.well-known/assetlinks.json` still returns Cloudflare 522. The Pages
+  workflow has no `CLOUDFLARE_API_TOKEN`, and the local Wrangler login belongs to a different
+  account with no `hypertext-studio` Pages project. Production passkey acceptance also remains
+  unproven until the API deployment, apex asset statement, and a Credential Manager ceremony
+  succeed together on an unlocked debug emulator.
+- **Notes**: The user explicitly replaced the planned manual application container with a modern DI
+  library. Hilt 2.60.1 is required for AGP 9's current extension model, and KSP 2.3.9 is required
+  for AGP's built-in Kotlin source integration; the older compiler-coupled KSP line fails during
+  project configuration. No Navigation library or legacy SyncAdapter belongs in this slice.
+
 ### [EXTERNAL-AGENT-001] Ship Linear as Athena's first external agent surface
 
 - **Status**: IN_PROGRESS

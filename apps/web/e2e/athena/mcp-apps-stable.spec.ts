@@ -421,11 +421,11 @@ test('canonical Athena invocation creates and restores a fully interactive stabl
 
   // The failed app retains the safe text and reaches owned fallback rather than a blank card.
   await expect(page.getByText('Fallback survived', { exact: true })).toBeVisible();
+  const failedFrame = page.locator('iframe[title="Broken Service: broken_card"]');
+  await expect(failedFrame).toBeVisible();
+  await failedFrame.evaluate((frame) => frame.dispatchEvent(new Event('error')));
   await expect(page.getByTestId('mcp-app-view-failure')).toContainText(
     'Interactive view unavailable.',
-    {
-      timeout: 8_000,
-    },
   );
 
   await page.reload();

@@ -241,6 +241,12 @@
   the production policy now loads Cesium and emits `ui/initialize` with protocol `2026-01-26`
   without a console or request failure. Focused host, sandbox, and conformance validation passes
   78 tests; integrations TypeScript and ESLint pass.
+- **Exact-tip browser-gate correction**: E2E run `33302882787` proved the interactive journey
+  through tool invocation, scoped app-only calls, text messaging, link opening, sizing, theme,
+  fullscreen, and focus containment, then failed only because its deliberately silent fallback
+  fixture still expected the former five-second initialization deadline. The journey now triggers
+  the browser adapter's frame-load failure boundary directly, preserving the same application-text
+  fallback assertion without waiting for the new 30-second official-app startup allowance.
 - **Layer 3 decisions and retrospective**: The official stable prose and exact npm package source
   were the authority because Context7 remained quota-blocked. Counting normative vocabulary
   occurrences rather than methods/capabilities prevents a stable protocol symbol list from

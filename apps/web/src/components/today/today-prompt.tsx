@@ -60,7 +60,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  Row,
   Stack,
   Tab,
   TabList,
@@ -144,55 +143,83 @@ export function TodayPrompt({
   // Enter target — four behaviours diverging on a network read, so the same keystroke did
   // different things depending on a count the person typing could not see. One box, one
   // behaviour, one fewer request.
-  const canSubmit = orgId !== null && text.trim().length > 0 && busy === null;
+  // Athena needs words to act on; a task does not. Dropping a file and pressing send is a complete
+  // request, so requiring text as well left the button dead with nothing on screen saying why.
+  const canSubmit =
+    orgId !== null &&
+    busy === null &&
+    (text.trim().length > 0 || (mode === 'task' && files.length > 0));
 
   const capture = useCallback(async (): Promise<void> => {
-    if (!orgId || !text.trim()) return;
+    if (!orgId) return;
+    const draft = text.trim();
+    // Capture derives the title from its text, so a files-only submission still needs one. The
+    // first filename is the honest default — it is what the person actually handed over.
+    const captureText = draft.length > 0 ? draft : (files[0]?.name ?? '');
+    if (captureText.length === 0) return;
+
     setBusy('capture');
     setError(null);
     setNotice(null);
     try {
-      const res = await api.v1.orgs[':orgId'].capture.$post({
-        param: { orgId },
-        json: { text: text.trim() },
-      });
-      if (!res.ok) {
-        setError(
-          userErrorMessage(
-            await readProblemError(res, 'Could not capture that.'),
-            'Could not capture that.',
-          ),
-        );
-        return;
-      }
-      const created = await res.json();
-      // Attachments hang off a task, so they can only be sent once the task exists. A failure here
-      // must not read as a failed capture — the task is already saved either way.
-      for (const file of files) {
-        const body = new FormData();
-        body.append('file', file);
-        // Relative, like `api` itself — the web app proxies `/v1/*` to the API, and the typed
-        // client cannot express a multipart body.
-        const upload = await fetch(`/v1/orgs/${orgId}/tasks/${created.id}/attachments/upload`, {
-          method: 'POST',
-          body,
-          credentials: 'include',
-        });
-        if (!upload.ok) setError('Task saved, but a file could not be attached.');
-      }
-      setFiles([]);
+      // Only the capture request is guarded here. Anything after it runs with the task already
+      // saved, and must never be able to report the capture as failed.
+      const created = await (async () => {
+        try {
+          const res = await api.v1.orgs[':orgId'].capture.$post({
+            param: { orgId },
+            json: { text: captureText },
+          });
+          if (!res.ok) {
+            setError(
+              userErrorMessage(
+                await readProblemError(res, 'Could not capture that.'),
+                'Could not capture that.',
+              ),
+            );
+            return null;
+          }
+          return await res.json();
+        } catch (caught) {
+          setError(userErrorMessage(caught, 'Could not capture that.'));
+          return null;
+        }
+      })();
+      if (!created) return;
+
       setText('');
-      setNotice({
-        title: created.title,
-        href: `/orgs/${orgId}/tasks/${created.id}`,
-      });
+      setNotice({ title: created.title, href: `/orgs/${orgId}/tasks/${created.id}` });
       onCaptured?.();
-    } catch (caught) {
-      setError(userErrorMessage(caught, 'Could not capture that.'));
+
+      if (files.length === 0) return;
+      // Independent requests, so they go together rather than one round trip after another.
+      const results = await Promise.allSettled(
+        files.map(async (file) => {
+          const body = new FormData();
+          body.append('file', file);
+          // Relative, like `api` itself — the web app proxies `/v1/*` to the API, and the typed
+          // client cannot express a multipart body.
+          const upload = await fetch(`/v1/orgs/${orgId}/tasks/${created.id}/attachments/upload`, {
+            method: 'POST',
+            body,
+            credentials: 'include',
+          });
+          if (!upload.ok) throw new Error(file.name);
+        }),
+      );
+      // Only the ones that failed stay staged, so they can be retried against the saved task
+      // instead of being cleared along with the ones that landed.
+      const failed = files.filter((_, index) => results[index]?.status === 'rejected');
+      setFiles(failed);
+      if (failed.length > 0) {
+        setError(
+          `Task saved. ${failed.map((file) => file.name).join(', ')} could not be attached.`,
+        );
+      }
     } finally {
       setBusy(null);
     }
-  }, [orgId, orgLabel, text, files, onCaptured]);
+  }, [orgId, text, files, onCaptured]);
 
   const askAthena = useCallback((): void => {
     if (!orgId || !text.trim()) return;
@@ -291,6 +318,7 @@ export function TodayPrompt({
         )}
         style={{ viewTransitionName: 'today-composer' }}
         onDragOver={(event) => {
+          if (orgId === null) return;
           if (![...event.dataTransfer.types].includes('Files')) return;
           event.preventDefault();
           event.dataTransfer.dropEffect = 'copy';
@@ -302,6 +330,10 @@ export function TodayPrompt({
           setDropping(false);
         }}
         onDrop={(event) => {
+          // The same precondition the attach button carries. Without it a file could be staged
+          // before a workspace resolved, where capture returns early and pressing send does
+          // nothing at all.
+          if (orgId === null) return;
           if (![...event.dataTransfer.types].includes('Files')) return;
           event.preventDefault();
           setDropping(false);
@@ -333,45 +365,43 @@ export function TodayPrompt({
             the message rather than as a property of the send button. Past three they collapse into
             a count, and the row never grows tall enough to push the bar off-screen. */}
         {files.length > 0 ? (
-          <Row gap={2} className="flex-wrap px-1">
-            <ControlGroup controlSize="sm" wrap>
-              {shownFiles.map((file, index) => (
-                <Chip
-                  key={`${file.name}:${String(index)}`}
-                  variant="input"
-                  icon={<Paperclip />}
-                  removeLabel={`Remove ${file.name}`}
-                  onRemove={() => {
-                    removeFile(index);
-                  }}
-                  className="max-w-52"
-                >
-                  {file.name}
-                </Chip>
-              ))}
-              {hiddenFiles.length > 0 ? (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Chip variant="assist" leadingNone="overflow-count">
-                      +{hiddenFiles.length}
-                    </Chip>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start" width="sm">
-                    {hiddenFiles.map((file, index) => (
-                      <DropdownMenuItem
-                        key={`${file.name}:${String(index)}`}
-                        onSelect={() => {
-                          removeFile(VISIBLE_FILES + index);
-                        }}
-                      >
-                        Remove {file.name}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              ) : null}
-            </ControlGroup>
-          </Row>
+          <ControlGroup controlSize="sm" wrap className="px-1">
+            {shownFiles.map((file, index) => (
+              <Chip
+                key={`${file.name}:${String(index)}`}
+                variant="input"
+                icon={<Paperclip />}
+                removeLabel={`Remove ${file.name}`}
+                onRemove={() => {
+                  removeFile(index);
+                }}
+                className="max-w-52"
+              >
+                {file.name}
+              </Chip>
+            ))}
+            {hiddenFiles.length > 0 ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Chip variant="assist" leadingNone="overflow-count">
+                    +{hiddenFiles.length}
+                  </Chip>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" width="sm">
+                  {hiddenFiles.map((file, index) => (
+                    <DropdownMenuItem
+                      key={`${file.name}:${String(index)}`}
+                      onSelect={() => {
+                        removeFile(VISIBLE_FILES + index);
+                      }}
+                    >
+                      Remove {file.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
+          </ControlGroup>
         ) : null}
 
         {/* One group, one height, one 8px rhythm. */}

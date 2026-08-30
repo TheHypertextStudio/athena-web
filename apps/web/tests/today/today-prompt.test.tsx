@@ -192,4 +192,29 @@ describe('TodayPrompt', () => {
     expect(screen.getByRole('tab', { name: 'Athena' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByRole('button', { name: /^Remove / })).not.toBeInTheDocument();
   });
+
+  it('lets a dropped file be sent with no text typed', () => {
+    render(<TodayPrompt orgId={ORG} orgLabel="Space" />);
+    const box = screen.getByLabelText('Ask Athena about today').closest('div[style]');
+
+    // Athena still needs words; a task does not, and the composer already accepted the file.
+    expect(screen.getByRole('button', { name: 'Ask Athena' })).toBeDisabled();
+    fireEvent.drop(assertDefined(box), {
+      dataTransfer: { files: [new File(['x'], 'brief.pdf')], types: ['Files'] },
+    });
+    expect(screen.getByRole('button', { name: 'Add task' })).toBeEnabled();
+  });
+
+  it('refuses a drop before a workspace has resolved', () => {
+    render(<TodayPrompt orgId={null} orgLabel="Space" />);
+    const box = screen.getByLabelText('Ask Athena about today').closest('div[style]');
+
+    // The attach button is disabled in this state; staging a file by drag instead would leave it
+    // in a composer whose capture returns early, so send would do nothing and say nothing.
+    expect(screen.getByRole('button', { name: 'Add files' })).toBeDisabled();
+    fireEvent.drop(assertDefined(box), {
+      dataTransfer: { files: [new File(['x'], 'brief.pdf')], types: ['Files'] },
+    });
+    expect(screen.queryByRole('button', { name: /^Remove / })).not.toBeInTheDocument();
+  });
 });

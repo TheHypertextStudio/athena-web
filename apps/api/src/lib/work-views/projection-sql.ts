@@ -64,26 +64,23 @@ function actorIdentity(columnName: string): SQL {
       and related.organization_id=e.organization_id)`;
 }
 
-/** Read optional customized display metadata without manufacturing domain fields. */
-function entityDisplay(subjectType: 'initiative' | 'program' | 'project' | 'task'): SQL {
-  return sql`(select json_build_object(
-      'subjectType', display.subject_type,
-      'subjectId', display.subject_id,
-      'iconKey', display.icon_key,
-      'colorKey', display.color_key,
-      'customColor', display.custom_color,
-      'coverImage', display.cover_image,
+/** Read optional customized display metadata joined onto the bounded page once. */
+function entityDisplay(): SQL {
+  return sql`case when e._display_subject_id is null then null else json_build_object(
+      'subjectType', e._display_subject_type,
+      'subjectId', e._display_subject_id,
+      'iconKey', e._display_icon_key,
+      'colorKey', e._display_color_key,
+      'customColor', e._display_custom_color,
+      'coverImage', e._display_cover_image,
       'customized', true
-    ) from entity_display display
-    where display.organization_id=e.organization_id
-      and display.subject_type=${subjectType}
-      and display.subject_id=e.id)`;
+    ) end`;
 }
 
 const projections = {
   task: (): SQL => sql`${base()},
     e.id, e.title, e.description, e.state as status, e.priority,
-    ${entityDisplay('task')} as display,
+    ${entityDisplay()} as display,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.actor, 'assignee_id')} as assignee,
     ${actorIdentity('assignee_id')} as assignee_actor,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.actor, 'delegate_id')} as delegate,
@@ -105,7 +102,7 @@ const projections = {
     e.id, e.name, e.summary, e.status, e.priority, e.health,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.actor, 'lead_id')} as lead,
     ${actorIdentity('lead_id')} as lead_actor,
-    ${entityDisplay('project')} as display,
+    ${entityDisplay()} as display,
     ${compileTenantRelationArraySql(
       WORK_VIEW_RELATIONS.projectMembers,
       sql`e.id`,
@@ -160,7 +157,7 @@ const projections = {
     e.id, e.name, e.summary, e.status, e.health,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.actor, 'owner_id')} as owner,
     ${actorIdentity('owner_id')} as owner_actor,
-    ${entityDisplay('program')} as display,
+    ${entityDisplay()} as display,
     ${compileTenantRelationArraySql(
       WORK_VIEW_RELATIONS.programInitiatives,
       sql`e.id`,
@@ -178,7 +175,7 @@ const projections = {
     e.id, e.name, e.summary, e.status, e.priority, e.health,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.actor, 'owner_id')} as owner,
     ${actorIdentity('owner_id')} as owner_actor,
-    ${entityDisplay('initiative')} as display,
+    ${entityDisplay()} as display,
     ${scalarRelation(WORK_VIEW_SCALAR_RELATIONS.team, 'lead_team_id')} as lead_team,
     ${compileTenantRelationArraySql(
       WORK_VIEW_RELATIONS.initiativeLabels,

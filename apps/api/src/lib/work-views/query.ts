@@ -276,8 +276,18 @@ export async function queryWorkView(input: QueryWorkViewInput): Promise<WorkView
       order by ${sql.join(order, sql`, `)} limit ${pageLimit + 1}
     ), projectable as not materialized (
       select e.*, selected._is_context, selected._manual_rank,
-        selected._cursor_sort_tuple, selected._page_order
-      from authorized e join page_selection selected on selected.id=e.id
+        selected._cursor_sort_tuple, selected._page_order,
+        display.subject_type as _display_subject_type,
+        display.subject_id as _display_subject_id,
+        display.icon_key as _display_icon_key,
+        display.color_key as _display_color_key,
+        display.custom_color as _display_custom_color,
+        display.cover_image as _display_cover_image
+      from authorized e
+      join page_selection selected on selected.id=e.id
+      left join entity_display display on display.organization_id=e.organization_id
+        and display.subject_type=${request.target}
+        and display.subject_id=e.id
     ), page_data as materialized (
       select ${contract.projection(request.context, execution)},
         e._cursor_sort_tuple, e._page_order from projectable e

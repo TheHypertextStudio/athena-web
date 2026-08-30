@@ -14,6 +14,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  Surface,
 } from '@docket/ui/primitives';
 import { type JSX, useMemo, useState } from 'react';
 
@@ -139,7 +140,7 @@ export function RepeatProjectDialog({
                 <Check className="size-4" />
               </span>
             </div>
-            <div className="bg-surface-container-low max-h-48 overflow-y-auto rounded-xl p-3">
+            <Surface tone="card" shape="medium" pad="comfortable">
               <div className="text-body-medium text-on-surface flex items-center gap-2">
                 <FolderKanban className="text-on-surface-variant size-4" />
                 {project.name}
@@ -157,7 +158,7 @@ export function RepeatProjectDialog({
                   </li>
                 ))}
               </ul>
-            </div>
+            </Surface>
           </section>
 
           <fieldset className="flex flex-col gap-2">

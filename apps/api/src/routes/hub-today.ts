@@ -50,18 +50,36 @@ import {
 } from './hub-helpers';
 import type { WorkStatusCategory } from '@docket/types';
 
-/** Select the caller's tasks blocked by at least one incomplete blocking task. */
+/**
+ * Select the caller's live tasks blocked by at least one blocker that is still open.
+ *
+ * @remarks
+ * Both sides are filtered to live work, which the surrounding queries have always done and this one
+ * did not. Without it an archived, completed, or canceled task stayed in "Blocked" forever, and a
+ * blocker that was itself canceled or archived went on blocking something it could no longer
+ * affect. Neither was visible while Today rendered this list as a number.
+ */
 async function selectBlockedTasks(orgIds: string[], actorIds: string[]): Promise<TaskRow[]> {
   const mine = await db
     .select()
     .from(task)
-    .where(and(inArray(task.organizationId, orgIds), inArray(task.assigneeId, actorIds)));
+    .where(
+      and(
+        inArray(task.organizationId, orgIds),
+        inArray(task.assigneeId, actorIds),
+        isNull(task.archivedAt),
+        isNull(task.completedAt),
+        isNull(task.canceledAt),
+      ),
+    );
   if (mine.length === 0) return [];
 
   const edges = await db
     .select({
       blockedTaskId: taskDependency.blockedTaskId,
       blockingCompletedAt: task.completedAt,
+      blockingCanceledAt: task.canceledAt,
+      blockingArchivedAt: task.archivedAt,
     })
     .from(taskDependency)
     .innerJoin(task, eq(task.id, taskDependency.blockingTaskId))
@@ -72,7 +90,14 @@ async function selectBlockedTasks(orgIds: string[], actorIds: string[]): Promise
       ),
     );
   const blockedIds = new Set(
-    edges.filter((edge) => edge.blockingCompletedAt === null).map((edge) => edge.blockedTaskId),
+    edges
+      .filter(
+        (edge) =>
+          edge.blockingCompletedAt === null &&
+          edge.blockingCanceledAt === null &&
+          edge.blockingArchivedAt === null,
+      )
+      .map((edge) => edge.blockedTaskId),
   );
   return mine.filter((row) => blockedIds.has(row.id));
 }
@@ -401,7 +426,7 @@ export async function buildHubTodayPayload(
         timeboxEndsAt: planRow.timeboxEndsAt?.toISOString() ?? null,
         blocked: dependencyFacts.blockedTaskIds.has(row.id),
         dependencyImpact: impact,
-        reason: planReason(row, planRow, position, activeTaskId, now, impact),
+        reason: planReason(row, planRow, activeTaskId, now, impact),
       };
     });
   const planState = derivePlanState({ readiness: context.readiness, items: planCandidates });
@@ -591,12 +616,11 @@ async function loadDependencyFacts(
 function planReason(
   row: TaskRow,
   planRow: typeof dailyPlanItem.$inferSelect,
-  position: number,
   activeTaskId: string | null,
   now: Date,
   dependencyImpact: number,
-): string {
-  if (row.id === activeTaskId) return 'Focus timer is running';
+): string | null {
+  if (row.id === activeTaskId) return 'Timer running';
   if (
     planRow.timeboxStartsAt &&
     planRow.timeboxEndsAt &&
@@ -609,7 +633,9 @@ function planReason(
   if (dependencyImpact > 0) {
     return `Unblocks ${String(dependencyImpact)} ${dependencyImpact === 1 ? 'task' : 'tasks'}`;
   }
-  return position === 0 ? 'You chose this first' : 'Next in your plan';
+  // No reason. Position 0 is where the caller put it, and "You chose this first" restated the
+  // person's own action back at them under a card already labelled "Now".
+  return null;
 }
 
 function suggestionReason(row: TaskRow, date: string, dependencyImpact: number): string {

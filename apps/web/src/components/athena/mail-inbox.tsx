@@ -19,7 +19,16 @@
  */
 import { Inbox, Link as LinkIcon, Mail, Plus, Trash2 } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
-import { Badge, Button, ControlGroup, Skeleton, Text, Toolbar } from '@docket/ui/primitives';
+import {
+  Badge,
+  Button,
+  ControlGroup,
+  Skeleton,
+  Surface,
+  surfaceToneColor,
+  Text,
+  Toolbar,
+} from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
 import { type JSX, useState } from 'react';
 
@@ -79,7 +88,7 @@ function AddressCard(): JSX.Element {
   const address = mailbox?.address ?? null;
 
   return (
-    <div className="bg-surface-container-low flex flex-col gap-2 rounded-xl px-4 py-4">
+    <Surface tone="card" shape="medium" pad="roomy" className="flex flex-col gap-2">
       <ControlGroup controlSize="sm">
         <Mail aria-hidden="true" className="text-on-surface-variant" />
         <Text token="title-small">Athena’s address</Text>
@@ -113,7 +122,7 @@ function AddressCard(): JSX.Element {
           is configured, your address appears here.
         </Text>
       )}
-    </div>
+    </Surface>
   );
 }
 
@@ -135,7 +144,7 @@ function AttachedTargets({ messageId }: { readonly messageId: string }): JSX.Ele
         <li key={target.attachmentId}>
           <ControlGroup
             controlSize="xs"
-            className="bg-surface-container-high h-6 rounded-md px-2 py-0"
+            className={cn(surfaceToneColor('prominent'), 'h-6 rounded-md px-2 py-0')}
           >
             <LinkIcon aria-hidden="true" className="text-on-surface-variant" />
             <Text token="label-small" truncate className="max-w-52">
@@ -266,15 +275,15 @@ export function MailInbox(): JSX.Element {
           <Skeleton className="h-16 w-full rounded-xl" />
         </div>
       ) : messages.length === 0 ? (
-        <div className="bg-surface-container-low flex flex-col gap-1 rounded-xl px-4 py-6">
+        <Surface tone="card" shape="medium" pad="roomy" className="flex flex-col gap-1 py-6">
           <Text token="title-small">Nothing has arrived yet</Text>
           <Text as="p" token="body-small" tone="muted">
             Forward something to the address above and it will show up here, in your activity
             stream, and in Athena’s conversation.
           </Text>
-        </div>
+        </Surface>
       ) : (
-        <ul className="bg-surface-container-low min-h-0 flex-1 overflow-auto rounded-xl">
+        <Surface as="ul" tone="card" shape="medium" className="min-h-0 flex-1 overflow-auto">
           {messages.map((message) => (
             <MailRowView
               key={message.id}
@@ -284,7 +293,7 @@ export function MailInbox(): JSX.Element {
               }}
             />
           ))}
-        </ul>
+        </Surface>
       )}
 
       {attaching ? (

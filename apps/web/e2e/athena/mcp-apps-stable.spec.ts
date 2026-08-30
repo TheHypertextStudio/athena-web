@@ -377,6 +377,13 @@ test('canonical Athena invocation creates and restores a fully interactive stabl
   await appFrame(page).getByRole('button', { name: 'Post text to Athena' }).click();
   await expect.poll(() => fixture.appMessages).toEqual([{ body: 'Message from the app' }]);
 
+  await page.context().route('https://example.test/from-app', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/html',
+      body: '<title>Safe target</title>',
+    });
+  });
   const popupPromise = page.waitForEvent('popup');
   await appFrame(page).getByRole('button', { name: 'Open safe link' }).click();
   const popup = await popupPromise;

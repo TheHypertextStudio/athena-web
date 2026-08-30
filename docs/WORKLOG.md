@@ -523,6 +523,15 @@
   route harness now links a seeded human actor to a Better Auth user and mounts that user's
   session. The affected tests use that authenticated fixture instead of weakening the production
   route or trusting actor context as identity. The two failed files now pass all 57 tests.
+- **Latest-main release corrections**: Exact-main run `33287226003` exposed a branch-coverage drop
+  in the shared adaptive Tabs primitive after the concurrent entity-identity release. A measured
+  resize behavior test now proves that priority sections stay inline, lower-priority sections move
+  into overflow, every section returns when the lane grows, and the observer disconnects. The UI
+  package passes 678 tests with 90.23% branch coverage against its 90% gate. E2E run `33287225871`
+  also reproduced Chromium aborting the provider-availability test's controlled sign-in reload on
+  both attempts while the service worker owned navigation. The OAuth provider suite now blocks the
+  unrelated service worker for every case, matching the existing real-ceremony boundary instead
+  of retrying a known navigation conflict.
 
 ---
 

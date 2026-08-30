@@ -85,6 +85,11 @@ async function stubConfig(page: Page, oauthProviders: readonly string[]): Promis
 }
 
 test.describe('signing in with an identity provider', () => {
+  // These tests exercise Better Auth provider discovery and OAuth redirects, not offline
+  // navigation. Chromium can abort a controlled sign-in reload when the service worker re-fetches
+  // that top-level request, so keep the unrelated worker outside this suite's boundary.
+  test.use({ serviceWorkers: 'block' });
+
   test('offers exactly the providers the deployment has credentials for', async ({ page }) => {
     // The real local stack: every OAuth credential is blank, so the honest screen is passkey-only.
     await page.goto('/sign-in', { waitUntil: 'domcontentloaded' });
@@ -117,11 +122,9 @@ test.describe('signing in with an identity provider', () => {
     // session cookie is set and a follow-up request confirms it) — confirmed by hand against the
     // dev stack and out of scope to fix here (`apps/web/src`/`service-worker` are not in this
     // spec's remit). Blocking service-worker registration for just this describe sidesteps the
-    // interference without touching what it's testing: this spec cares whether Better Auth mints a
-    // real session, not whether the offline-navigation fallback tolerates this specific shape of
-    // redirect-terminated navigation.
-    test.use({ serviceWorkers: 'block' });
-
+    // interference without touching what the provider suite tests: these cases care whether Better
+    // Auth mints a real session, not whether the offline-navigation fallback tolerates this specific
+    // shape of redirect-terminated navigation.
     test('completes a real OAuth2 ceremony against the local fake identity provider and mints a real session', async ({
       page,
     }) => {

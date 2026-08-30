@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -133,6 +133,73 @@ describe('Tabs (adaptive overflow)', () => {
     });
     fireEvent.click(screen.getByRole('menuitem', { name: 'Resources' }));
     expect(screen.getByRole('tab', { name: 'Resources' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('keeps priority sections inline and restores every section when the lane grows', () => {
+    let resize: ResizeObserverCallback | undefined;
+    const observe = vi.fn();
+    const disconnect = vi.fn();
+    class TestResizeObserver implements ResizeObserver {
+      constructor(callback: ResizeObserverCallback) {
+        resize = callback;
+      }
+
+      readonly observe = observe;
+      readonly unobserve = vi.fn();
+      readonly disconnect = disconnect;
+    }
+    vi.stubGlobal('ResizeObserver', TestResizeObserver);
+
+    const { container, unmount } = render(
+      <Tabs
+        value="overview"
+        onValueChange={() => undefined}
+        label="Project sections"
+        overflow={{ menuLabel: 'More Project sections' }}
+        items={[
+          { value: 'overview', label: 'Overview', priority: 0 },
+          { value: 'tasks', label: 'Tasks' },
+          { value: 'resources', label: 'Resources', count: 2, priority: 1 },
+        ]}
+      />,
+    );
+
+    const lane = screen.getByRole('tablist').parentElement;
+    if (!lane) throw new Error('expected the overflow lane');
+    let laneWidth = 210;
+    Object.defineProperty(lane, 'clientWidth', {
+      configurable: true,
+      get: () => laneWidth,
+    });
+    const measurements = container.querySelectorAll<HTMLButtonElement>(
+      '[aria-hidden="true"] button',
+    );
+    expect(measurements).toHaveLength(3);
+    for (const measurement of measurements) {
+      vi.spyOn(measurement, 'getBoundingClientRect').mockReturnValue({
+        width: 80,
+      } as DOMRect);
+    }
+    vi.spyOn(
+      screen.getByRole('button', { name: 'More Project sections' }),
+      'getBoundingClientRect',
+    ).mockReturnValue({ width: 40 } as DOMRect);
+
+    if (!resize) throw new Error('expected the overflow lane to register a resize observer');
+    act(() => resize?.([], {} as ResizeObserver));
+    expect(screen.getByRole('tab', { name: 'Overview' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Resources/ })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Tasks' })).toBeNull();
+
+    laneWidth = 300;
+    act(() => resize?.([], {} as ResizeObserver));
+    expect(screen.getAllByRole('tab')).toHaveLength(3);
+    expect(screen.queryByRole('button', { name: 'More Project sections' })).toBeNull();
+
+    unmount();
+    expect(observe).toHaveBeenCalledWith(lane);
+    expect(disconnect).toHaveBeenCalledOnce();
+    vi.unstubAllGlobals();
   });
 });
 

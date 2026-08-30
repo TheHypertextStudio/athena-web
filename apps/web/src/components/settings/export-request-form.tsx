@@ -2,7 +2,7 @@
 
 import type { AccountExportOptionsOut } from '@docket/types';
 import { WriteError } from './write-error';
-import { Checkbox, Button } from '@docket/ui/primitives';
+import { Button, Checkbox, Surface } from '@docket/ui/primitives';
 import { SettingsGroup } from './settings-group';
 import { SETTINGS_NODES } from './settings-capabilities';
 import { type JSX, useState } from 'react';
@@ -78,10 +78,14 @@ export function ExportRequestForm({
             const copy = EXPORT_CATEGORY_COPY[category];
             const inputId = `export-category-${category}`;
             return (
-              <label
+              <Surface
+                as="label"
                 key={category}
                 htmlFor={inputId}
-                className="bg-surface-container hover:bg-surface-container-high flex cursor-pointer gap-3 rounded-xl p-3"
+                tone="canvas"
+                shape="large"
+                pad="comfortable"
+                className="hover:bg-surface-container-high flex cursor-pointer gap-3"
               >
                 <Checkbox
                   id={inputId}
@@ -97,7 +101,7 @@ export function ExportRequestForm({
                     {copy.description}
                   </span>
                 </span>
-              </label>
+              </Surface>
             );
           })}
         </fieldset>
@@ -119,7 +123,7 @@ export function ExportRequestForm({
             <p className="text-on-surface-variant text-body-medium">
               Select the workspaces whose Docket work you want in this export.
             </p>
-            <div className="bg-surface-container-low flex max-h-72 flex-col overflow-y-auto rounded-xl">
+            <Surface as="div" tone="card" shape="large" pad="none" className="flex flex-col">
               {options.workspaces.map((workspace) => {
                 const inputId = `export-workspace-${workspace.id}`;
                 return (
@@ -142,7 +146,7 @@ export function ExportRequestForm({
                   </label>
                 );
               })}
-            </div>
+            </Surface>
             {workspaceIds.length === 0 ? (
               <p role="alert" className="text-error text-body-medium">
                 Select at least one workspace or remove Workspace data from this export.

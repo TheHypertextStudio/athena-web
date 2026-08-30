@@ -16,6 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
   Select,
+  Surface,
 } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import { type JSX, useState } from 'react';
@@ -239,7 +240,12 @@ function LinkedTaskRow({ itemId, link, onOpenTask }: LinkedTaskRowProps): JSX.El
   );
 
   return (
-    <div className="border-outline-variant bg-surface-container-low flex items-center justify-between gap-2 rounded-md border px-2.5 py-1.5">
+    <Surface
+      tone="card"
+      shape="small"
+      pad="none"
+      className="border-outline-variant flex items-center justify-between gap-2 border px-2.5 py-1.5"
+    >
       {canEdit ? (
         <EditableTitle
           value={link.title}
@@ -302,6 +308,6 @@ function LinkedTaskRow({ itemId, link, onOpenTask }: LinkedTaskRowProps): JSX.El
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </Surface>
   );
 }

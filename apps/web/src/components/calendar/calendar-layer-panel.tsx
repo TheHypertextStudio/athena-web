@@ -27,7 +27,8 @@
  */
 import type { CalendarLayerOut } from '@docket/types';
 import { Globe, Layers } from '@docket/ui/icons';
-import { Badge, Button, Checkbox } from '@docket/ui/primitives';
+import { cn } from '@docket/ui/lib/utils';
+import { Badge, Button, Checkbox, surfaceToneColor } from '@docket/ui/primitives';
 import { type JSX, useCallback, useMemo, useState } from 'react';
 
 import { relativeTime } from '@/components/settings/format-time';
@@ -305,7 +306,12 @@ export default function CalendarLayerPanel({ layers }: CalendarLayerPanelProps):
   return (
     <div className="flex flex-col gap-2">
       {foldedIds.size > 0 ? (
-        <div className="bg-surface-container-high flex items-center gap-2 rounded-md px-1.5 py-1.5">
+        <div
+          className={cn(
+            surfaceToneColor('floating'),
+            'flex items-center gap-2 rounded-md px-1.5 py-1.5',
+          )}
+        >
           <p className="text-on-surface-variant text-body-medium min-w-0 flex-1">
             {foldedIds.size === 1
               ? '1 calendar arrives on more than one account. It is listed once.'

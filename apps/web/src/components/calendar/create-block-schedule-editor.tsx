@@ -1,7 +1,7 @@
 'use client';
 
 import { Schedule } from '@docket/ui/icons';
-import { Button, Checkbox, Select } from '@docket/ui/primitives';
+import { Button, Checkbox, Select, Surface } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
 
 import { DatePicker } from '@/components/date-picker';
@@ -113,7 +113,7 @@ export function CreateBlockScheduleEditor({
   const inclusiveAllDayEnd = allDayDraft ? shiftDate(allDayDraft.end, -1) : '';
 
   return (
-    <div className="bg-surface-container-low flex flex-col gap-3 rounded-lg p-3">
+    <Surface tone="card" shape="medium" pad="comfortable" className="flex flex-col gap-3">
       {allDayDraft ? (
         <div className="grid grid-cols-2 gap-2">
           <div className="flex min-w-0 flex-col gap-1">
@@ -279,6 +279,6 @@ export function CreateBlockScheduleEditor({
           Done
         </Button>
       </div>
-    </div>
+    </Surface>
   );
 }

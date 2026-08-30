@@ -1,7 +1,7 @@
 'use client';
 
 import { cn } from '@docket/ui/lib/utils';
-import { focusRingInset, Input } from '@docket/ui/primitives';
+import { focusRingInset, Input, surfaceToneColor } from '@docket/ui/primitives';
 import { type JSX, useId } from 'react';
 
 import { type LocalInputOccurrence, resolveLocalInputValue } from './datetime-input';
@@ -68,7 +68,7 @@ export function CalendarTimeField({
         <div
           role="group"
           aria-label={`${label} occurrence`}
-          className="bg-surface-container grid grid-cols-2 gap-0.5 rounded-md p-0.5"
+          className={cn(surfaceToneColor('canvas'), 'grid grid-cols-2 gap-0.5 rounded-md p-0.5')}
         >
           {candidates.map((candidate) => {
             const selected = occurrence === candidate.occurrence;
@@ -85,7 +85,7 @@ export function CalendarTimeField({
                 className={cn(
                   'text-label-large min-h-10 min-w-0 truncate rounded-md px-1 transition-colors motion-reduce:transition-none',
                   selected
-                    ? 'bg-surface-container-highest text-on-surface'
+                    ? surfaceToneColor('prominent')
                     : 'text-on-surface-variant hover:bg-surface-container-high',
                   focusRingInset,
                 )}

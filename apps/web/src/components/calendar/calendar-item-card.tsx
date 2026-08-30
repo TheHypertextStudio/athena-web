@@ -41,6 +41,7 @@ import {
 } from '@docket/ui/icons';
 import { DRAGGABLE } from '@docket/ui/lib/draggable';
 import { cn } from '@docket/ui/lib/utils';
+import { surfaceToneColor } from '@docket/ui/primitives';
 import { type JSX, type PointerEvent as ReactPointerEvent } from 'react';
 
 import { TaskTimerButton } from '@/components/time-tracking';
@@ -182,7 +183,8 @@ export default function CalendarItemCard({
           DRAGGABLE,
           relationTarget.dropProps.className,
           relationTarget.isOver && 'ring-primary bg-primary-container/30 ring-2',
-          'border-outline-variant bg-surface-container-low hover:bg-surface-container relative flex h-full w-full items-start gap-2 overflow-hidden rounded-lg border pr-2 pl-3 transition-[opacity,background-color]',
+          surfaceToneColor('card'),
+          'border-outline-variant hover:bg-surface-container relative flex h-full w-full items-start gap-2 overflow-hidden rounded-lg border pr-2 pl-3 transition-[opacity,background-color]',
           block ? 'py-2' : 'py-1.5',
         )}
       >

@@ -1,7 +1,7 @@
 'use client';
 
 import type { CalendarItemRelationOut } from '@docket/types';
-import { Badge, Button, Skeleton } from '@docket/ui/primitives';
+import { Badge, Button, Skeleton, Surface } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
 import { useApiListQuery } from '@/lib/query';
@@ -107,7 +107,12 @@ function RelationRow({ relation, sourceItemId, onOpenItem }: RelationRowProps): 
         : null;
 
   return (
-    <div className="border-outline-variant bg-surface-container-low flex flex-col gap-1 rounded-md border px-2.5 py-1.5">
+    <Surface
+      tone="card"
+      shape="small"
+      pad="none"
+      className="border-outline-variant flex flex-col gap-1 border px-2.5 py-1.5"
+    >
       <div className="flex items-center justify-between gap-2">
         <button
           type="button"
@@ -140,6 +145,6 @@ function RelationRow({ relation, sourceItemId, onOpenItem }: RelationRowProps): 
           We couldn&apos;t remove this relationship. Please try again.
         </p>
       ) : null}
-    </div>
+    </Surface>
   );
 }

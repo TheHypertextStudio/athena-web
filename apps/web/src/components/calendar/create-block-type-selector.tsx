@@ -13,7 +13,7 @@
 import type { CalendarItemCreateIntent } from '@docket/types';
 import { Calendar, Schedule } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
-import { focusRingInset } from '@docket/ui/primitives';
+import { focusRingInset, surfaceToneColor } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
 /** Props for the event-or-timebox choice in quick create. */
@@ -31,7 +31,7 @@ export function CreateBlockTypeSelector({
     <div
       role="group"
       aria-label="Calendar item type"
-      className="bg-surface-container grid grid-cols-2 gap-0.5 rounded-md p-0.5"
+      className={cn(surfaceToneColor('canvas'), 'grid grid-cols-2 gap-0.5 rounded-md p-0.5')}
     >
       {(['event', 'timebox'] as const).map((value) => {
         const selected = intent === value;
@@ -46,7 +46,7 @@ export function CreateBlockTypeSelector({
             className={cn(
               'text-label-large flex min-h-9 items-center justify-center gap-1.5 rounded-md px-2 capitalize transition-colors motion-reduce:transition-none',
               selected
-                ? 'bg-surface-container-highest text-on-surface'
+                ? surfaceToneColor('prominent')
                 : 'text-on-surface-variant hover:bg-surface-container-high',
               focusRingInset,
             )}

@@ -101,7 +101,11 @@ export function SegmentedTabs<TId extends string>({
         onChange(next as TId);
       }}
     >
-      <div ref={layout.containerRef} data-testid="segmented-tabs" className="relative min-w-0 max-w-full">
+      <div
+        ref={layout.containerRef}
+        data-testid="segmented-tabs"
+        className="relative max-w-full min-w-0"
+      >
         <TabList label={label} className="max-w-full overflow-hidden">
           {segments.map((segment) => {
             const selected = segment.id === value;
@@ -109,7 +113,9 @@ export function SegmentedTabs<TId extends string>({
             return (
               <span
                 key={segment.id}
-                ref={(node) => layout.setItemRef(segment.id, node)}
+                ref={(node) => {
+                  layout.setItemRef(segment.id, node);
+                }}
                 data-responsive-item={segment.id}
                 hidden={!inline}
                 className="shrink-0"

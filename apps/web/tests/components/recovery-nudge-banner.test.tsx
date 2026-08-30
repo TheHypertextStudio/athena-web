@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { apiQueryOptions } from '@/lib/query';
 
 const { push, useApiQueryMock } = vi.hoisted(() => ({
   push: vi.fn(),
@@ -11,7 +12,7 @@ const { push, useApiQueryMock } = vi.hoisted(() => ({
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
 
 vi.mock('@/lib/query', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/query')>('@/lib/query');
+  const actual = await vi.importActual<{ apiQueryOptions: typeof apiQueryOptions }>('@/lib/query');
   return { ...actual, apiQueryOptions: () => ({}), useApiQuery: useApiQueryMock };
 });
 

@@ -14,7 +14,9 @@ describe('InlineBanner', () => {
     );
 
     expect(screen.getByRole('status')).toHaveTextContent('Recovery codes needed');
-    expect(screen.getByRole('status')).toHaveTextContent('Keep a second way back into your account.');
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Keep a second way back into your account.',
+    );
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 

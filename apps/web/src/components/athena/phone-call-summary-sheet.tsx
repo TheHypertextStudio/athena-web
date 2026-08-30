@@ -6,11 +6,14 @@ import { X } from '@docket/ui/icons';
 import {
   Button,
   Sheet,
+  SheetBody,
   SheetClose,
   SheetContent,
   SheetDescription,
+  SheetHeader,
   SheetTitle,
   Skeleton,
+  Surface,
   Text,
 } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
@@ -76,8 +79,8 @@ export function PhoneCallSummarySheet({ voiceSessionId }: PhoneCallSummarySheetP
         if (!open) close();
       }}
     >
-      <SheetContent side="right" className="w-full max-w-md gap-4 p-4" data-phone-call-summary>
-        <div className="flex min-w-0 items-start justify-between gap-3">
+      <SheetContent side="right" size="wide" data-phone-call-summary>
+        <SheetHeader inset="compact" className="flex-row items-start justify-between gap-3">
           <div className="min-w-0">
             <SheetTitle>Athena phone call</SheetTitle>
             <SheetDescription>
@@ -91,51 +94,57 @@ export function PhoneCallSummarySheet({ voiceSessionId }: PhoneCallSummarySheetP
               <X aria-hidden="true" />
             </Button>
           </SheetClose>
-        </div>
+        </SheetHeader>
 
-        {summary.isPending ? (
-          <div className="flex flex-col gap-2" aria-label="Loading call summary">
-            <Skeleton className="h-16 w-full" />
-            <Skeleton className="h-16 w-full" />
-          </div>
-        ) : summary.isError ? (
-          <p role="alert" className="text-error">
-            Could not load that phone call.
-          </p>
-        ) : changes.length === 0 ? (
-          <Text token="body-medium" tone="muted">
-            This call did not change any tasks.
-          </Text>
-        ) : (
-          <ul className="flex min-w-0 flex-col gap-2">
-            {changes.map((change) => (
-              <li
-                key={change.changeSetId}
-                className="bg-surface-container flex min-w-0 items-center gap-3 rounded-lg p-3"
-              >
-                <Text token="body-medium" className="min-w-0 flex-1">
-                  {change.summary}
-                </Text>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="shrink-0 whitespace-nowrap"
-                  disabled={!change.undoAvailable || undo.isPending}
-                  onClick={() => {
-                    undo.mutate(change.changeSetId);
-                  }}
+        <SheetBody inset="compact" className="flex flex-col gap-4">
+          {summary.isPending ? (
+            <div className="flex flex-col gap-2" aria-label="Loading call summary">
+              <Skeleton className="h-16 w-full" />
+              <Skeleton className="h-16 w-full" />
+            </div>
+          ) : summary.isError ? (
+            <p role="alert" className="text-error">
+              Could not load that phone call.
+            </p>
+          ) : changes.length === 0 ? (
+            <Text token="body-medium" tone="muted">
+              This call did not change any tasks.
+            </Text>
+          ) : (
+            <ul className="flex min-w-0 flex-col gap-2">
+              {changes.map((change) => (
+                <Surface
+                  as="li"
+                  tone="canvas"
+                  shape="small"
+                  pad="comfortable"
+                  key={change.changeSetId}
+                  className="flex min-w-0 items-center gap-3"
                 >
-                  {change.undoneAt ? 'Undone' : 'Undo'}
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
-        {notice ? (
-          <p role="alert" className="text-error">
-            {notice}
-          </p>
-        ) : null}
+                  <Text token="body-medium" className="min-w-0 flex-1">
+                    {change.summary}
+                  </Text>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="shrink-0 whitespace-nowrap"
+                    disabled={!change.undoAvailable || undo.isPending}
+                    onClick={() => {
+                      undo.mutate(change.changeSetId);
+                    }}
+                  >
+                    {change.undoneAt ? 'Undone' : 'Undo'}
+                  </Button>
+                </Surface>
+              ))}
+            </ul>
+          )}
+          {notice ? (
+            <p role="alert" className="text-error">
+              {notice}
+            </p>
+          ) : null}
+        </SheetBody>
       </SheetContent>
     </Sheet>
   );

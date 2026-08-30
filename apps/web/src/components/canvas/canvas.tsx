@@ -464,7 +464,11 @@ function CanvasInner({
             graph sat on a visibly darker slab than the panel around it and read as a widget
             embedded in the page rather than as the page.
           */}
-            <Background variant={BackgroundVariant.Dots} gap={20} className="!bg-surface" />
+            <Background
+              variant={BackgroundVariant.Dots}
+              gap={20}
+              className={surfaceToneColor('page')}
+            />
             {/*
             Canvas navigation stays tonal and stroke-free. The minimap disappears on mobile,
             where its reduced graph is unreadable and takes space from direct commands.
@@ -493,7 +497,15 @@ function CanvasInner({
             <div className="col-start-1 row-start-2 self-end sm:row-span-2 sm:row-start-1">
               <Controls
                 showInteractive={false}
-                className="[&_button]:!bg-surface-container-high [&_button]:!fill-on-surface-variant [&_button:hover]:!bg-surface-container-highest pointer-events-auto !static !m-0 shrink-0 overflow-hidden !rounded-lg !shadow-none [&_button]:!border-0"
+                className={cn(
+                  surfaceToneColor('floating'),
+                  '[&_button]:!fill-on-surface-variant pointer-events-auto !static !m-0 shrink-0 overflow-hidden !rounded-lg !shadow-none [&_button]:!border-0 [&_button]:!bg-inherit [&_button:hover]:!bg-(--canvas-control-hover)',
+                )}
+                style={
+                  {
+                    '--canvas-control-hover': `var(${surfaceToneVariable('prominent')})`,
+                  } as CSSProperties
+                }
               />
             </div>
             <div
@@ -530,7 +542,15 @@ function CanvasInner({
             type="button"
             onClick={onExpand}
             aria-label="Expand graph"
-            className="bg-surface-container-high hover:bg-surface-container-highest text-on-surface-variant hover:text-on-surface absolute top-2 right-2 z-[2000] inline-flex size-9 items-center justify-center rounded-full transition-colors"
+            className={cn(
+              surfaceToneColor('floating'),
+              'text-on-surface-variant hover:text-on-surface absolute top-2 right-2 z-[2000] inline-flex size-9 items-center justify-center rounded-full transition-colors hover:bg-(--canvas-control-hover)',
+            )}
+            style={
+              {
+                '--canvas-control-hover': `var(${surfaceToneVariable('prominent')})`,
+              } as CSSProperties
+            }
           >
             <Maximize className="size-4" />
           </button>

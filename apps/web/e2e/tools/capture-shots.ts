@@ -33,7 +33,6 @@ import {
   MOBILE_LAYOUT_ROUTE_CASES,
   type MobileLayoutRouteCase,
 } from '../helpers/mobile-layout-audit-cases';
-import { TIMEOUTS } from '../helpers/constants';
 
 interface SessionMeta {
   email: string;

@@ -17,7 +17,16 @@
 import type { ElicitationControl, ElicitationFileAnswer } from '@docket/athena/elicitation';
 import { Check, Paperclip, Plus, X } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
-import { Button, Chip, ControlGroup, Field, Input, Text, Textarea } from '@docket/ui/primitives';
+import {
+  Button,
+  Chip,
+  ControlGroup,
+  Field,
+  Input,
+  surfaceToneColor,
+  Text,
+  Textarea,
+} from '@docket/ui/primitives';
 import { type JSX, useCallback, useId, useRef, useState } from 'react';
 
 import { api } from '@/lib/api';
@@ -459,7 +468,7 @@ function FileControl({
         }}
         className={cn(
           'border-outline-variant flex flex-col items-center gap-2 rounded-xl border border-dashed px-4 py-6 text-center',
-          dragging && 'bg-surface-container-high',
+          dragging && surfaceToneColor('floating'),
         )}
       >
         <Paperclip aria-hidden="true" className="text-on-surface-variant size-5" />

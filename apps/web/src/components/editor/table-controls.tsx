@@ -10,7 +10,6 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  menuDestructiveItem,
 } from '@docket/ui/primitives';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { JSX, Ref } from 'react';
@@ -266,7 +265,7 @@ export function TableControls({ editor, controlsRef }: TableControlsProps): JSX.
             <DropdownMenuItem onSelect={copyCsv}>Copy as CSV</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              className={menuDestructiveItem()}
+              destructive
               onSelect={() => {
                 editor.chain().focus().deleteRow().run();
               }}
@@ -274,7 +273,7 @@ export function TableControls({ editor, controlsRef }: TableControlsProps): JSX.
               Delete row
             </DropdownMenuItem>
             <DropdownMenuItem
-              className={menuDestructiveItem()}
+              destructive
               onSelect={() => {
                 editor.chain().focus().deleteColumn().run();
               }}
@@ -282,7 +281,7 @@ export function TableControls({ editor, controlsRef }: TableControlsProps): JSX.
               Delete column
             </DropdownMenuItem>
             <DropdownMenuItem
-              className={menuDestructiveItem()}
+              destructive
               onSelect={() => {
                 editor.chain().focus().deleteTable().run();
               }}

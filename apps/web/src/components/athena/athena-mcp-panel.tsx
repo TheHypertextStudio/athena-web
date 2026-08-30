@@ -3,6 +3,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { type JSX, useCallback, useEffect, useId, useState } from 'react';
 import { Cable, RefreshCw } from '@docket/ui/icons';
+import { cn } from '@docket/ui/lib/utils';
 import {
   Button,
   ControlGroup,
@@ -14,6 +15,7 @@ import {
   Field,
   Input,
   Select,
+  surfaceToneColor,
   Text,
 } from '@docket/ui/primitives';
 
@@ -197,7 +199,7 @@ function ConnectForm({ onConnected }: { readonly onConnected: () => void }): JSX
           controlSize="lg"
         />
       </Field>
-      <details className="bg-surface-container rounded-xl px-4 py-3">
+      <details className={cn(surfaceToneColor('canvas'), 'rounded-xl px-4 py-3')}>
         <summary className="text-on-surface text-label-large cursor-pointer">
           Advanced options
         </summary>
@@ -217,7 +219,7 @@ function ConnectForm({ onConnected }: { readonly onConnected: () => void }): JSX
           />
         </div>
       </details>
-      <details className="bg-surface-container rounded-xl px-4 py-3">
+      <details className={cn(surfaceToneColor('canvas'), 'rounded-xl px-4 py-3')}>
         <summary className="text-on-surface text-label-large cursor-pointer">
           Other connection methods
         </summary>

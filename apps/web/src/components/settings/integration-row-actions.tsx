@@ -9,7 +9,6 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  menuDestructiveItem,
 } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
@@ -144,7 +143,7 @@ export function IntegrationRowActions({
           ) : null}
           {canSync ? <DropdownMenuSeparator /> : null}
           <DropdownMenuItem
-            className={menuDestructiveItem()}
+            destructive
             disabled={disabled || busyDisconnect}
             onSelect={onDisconnect}
           >

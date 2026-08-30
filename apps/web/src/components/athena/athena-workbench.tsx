@@ -270,7 +270,12 @@ export function AthenaWorkbench({
                           <summary className="focus-visible:ring-ring min-h-10 w-fit cursor-pointer py-2 focus-visible:ring-2 focus-visible:outline-none">
                             Technical details
                           </summary>
-                          <pre className="bg-surface-container-high mt-1 max-w-full overflow-x-auto rounded-md p-3 text-[0.7rem] leading-5">
+                          <pre
+                            className={cn(
+                              surfaceToneColor('floating'),
+                              'mt-1 max-w-full overflow-x-auto rounded-md p-3 text-[0.7rem] leading-5',
+                            )}
+                          >
                             {JSON.stringify(entry.technical, null, 2)}
                           </pre>
                         </details>

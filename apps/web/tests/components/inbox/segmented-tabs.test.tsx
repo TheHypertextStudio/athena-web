@@ -8,16 +8,22 @@ import { SegmentedTabs } from '@/components/inbox/segmented-tabs';
 
 let resize: (() => void) | undefined;
 
-class ResizeObserverMock {
+class ResizeObserverMock implements ResizeObserver {
   constructor(private readonly callback: ResizeObserverCallback) {}
 
   observe(): void {
-    resize = () => this.callback([], this as unknown as ResizeObserver);
+    resize = () => {
+      this.callback([], this);
+    };
   }
 
-  unobserve(): void {}
+  unobserve(): void {
+    resize = undefined;
+  }
 
-  disconnect(): void {}
+  disconnect(): void {
+    resize = undefined;
+  }
 }
 
 beforeEach(() => {
@@ -37,7 +43,7 @@ beforeEach(() => {
       x: 0,
       y: 0,
       toJSON: () => ({}),
-    } as DOMRect;
+    };
   });
 });
 

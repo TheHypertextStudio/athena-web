@@ -61,7 +61,6 @@ describe('the timeline is the page, not a card in it', () => {
       expect(node.className).not.toMatch(/\bborder(-|\b)/);
     }
   });
-
 });
 
 describe('the sticky header is opaque', () => {

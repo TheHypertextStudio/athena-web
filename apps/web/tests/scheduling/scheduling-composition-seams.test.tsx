@@ -67,14 +67,12 @@ describe('SchedulingCanvas composition seams', () => {
   });
 
   it('uses the cluster inset when choosing readable collision columns', () => {
-    const collisions = ['a', 'b', 'c'].map(
-      (id): ScheduleItem => ({
-        id,
-        title: id,
-        startsAt: '2026-07-01T09:00:00.000Z',
-        endsAt: '2026-07-01T10:00:00.000Z',
-      }),
-    );
+    const collisions = ['a', 'b', 'c'].map((id): ScheduleItem => ({
+      id,
+      title: id,
+      startsAt: '2026-07-01T09:00:00.000Z',
+      endsAt: '2026-07-01T10:00:00.000Z',
+    }));
     render(
       <SchedulingCanvas
         presentation="agenda"

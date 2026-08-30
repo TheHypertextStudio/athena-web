@@ -25,7 +25,10 @@
   suites pass 27 tests. The post-rebase migration smoke passes 8 tests. UI and Web type checks,
   touched-file ESLint, 33 interaction tests for the repaired shared surfaces, and the dotenv-wrapped
   Web production build pass. The repaired UI package passes all 707 tests and its 90.15% branch
-  coverage gate. Four Settings screenshots cover 390px and 1280px in light and dark themes.
+  coverage gate. The exact formatter and app-lint CI commands pass after repairing stale surface,
+  overlay, menu, and test-harness violations exposed by the integrated mobile work. The affected
+  Web tests pass 4 cases, and the Web type check passes with its repository-sized 3 GB heap. Four
+  Settings screenshots cover 390px and 1280px in light and dark themes.
 - **Blockers**: Production Twilio resources and configuration remain unchanged. Enabling phone
   access still requires explicit authorization to provision the Verify service and voice webhooks,
   followed by the real-handset canary matrix. The deployed code must keep phone access unavailable

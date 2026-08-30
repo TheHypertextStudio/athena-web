@@ -151,7 +151,7 @@ export default function MentionMenu({
                     <Skeleton className="h-10 rounded-md" />
                   </div>
                 ) : (
-                  <p className="text-on-surface-variant px-3 py-2 text-sm">
+                  <p className="text-on-surface-variant text-body-medium px-3 py-2">
                     File search is unavailable.
                   </p>
                 )}

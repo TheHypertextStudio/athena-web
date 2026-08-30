@@ -211,7 +211,7 @@ function FocusActions({
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <PopoverContent align="end" className="w-80">
+      <PopoverContent align="end" presentation="panel" width="xl">
         <TimeboxForm
           startsAt={item.timeboxStartsAt}
           endsAt={item.timeboxEndsAt}

@@ -117,7 +117,6 @@ test('Project header stays compact and operable across overflow widths', async (
     expect(layout.primaryColumns.split(' ').length).toBeGreaterThanOrEqual(2);
 
     const expanded = await page.locator('header.detail-header').evaluate((header) => {
-      const mastheadContent = header.querySelector<HTMLElement>('.masthead-content');
       const glyph = header.querySelector<HTMLElement>('.detail-glyph');
       const title = header.querySelector<HTMLElement>('.detail-title');
       const actions = header.querySelector<HTMLElement>('.detail-actions');

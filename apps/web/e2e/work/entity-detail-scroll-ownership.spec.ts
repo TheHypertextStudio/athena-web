@@ -41,10 +41,7 @@ async function scrollingAncestors(detail: Locator): Promise<string[]> {
     const owners: string[] = [];
     for (let parent = element.parentElement; parent; parent = parent.parentElement) {
       const style = getComputedStyle(parent);
-      if (
-        /(auto|scroll)/.test(style.overflowY) &&
-        parent.scrollHeight > parent.clientHeight + 1
-      ) {
+      if (/(auto|scroll)/.test(style.overflowY) && parent.scrollHeight > parent.clientHeight + 1) {
         owners.push(parent.dataset.detailPanelScroll === '' ? 'entity-detail' : parent.tagName);
       }
     }
@@ -85,10 +82,7 @@ test('short detail pages do not scroll while long Project work owns the only det
   const fixture = await createMobileAuditFixture(page);
   const longProjectId = await createLongProject(page, fixture.orgId, fixture.teamId);
 
-  const shortRoutes = [
-    `projects/${fixture.blockingProjectId}`,
-    `teams/${fixture.teamId}`,
-  ] as const;
+  const shortRoutes = [`projects/${fixture.blockingProjectId}`, `teams/${fixture.teamId}`] as const;
 
   for (const viewport of VIEWPORTS) {
     await page.setViewportSize(viewport);

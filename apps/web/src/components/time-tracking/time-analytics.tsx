@@ -930,11 +930,7 @@ function NowView({ records }: { readonly records: readonly TimeRecordOut[] }): J
   );
 }
 
-function EmptyState({
-  rangeLabel,
-}: {
-  readonly rangeLabel: string;
-}): JSX.Element {
+function EmptyState({ rangeLabel }: { readonly rangeLabel: string }): JSX.Element {
   return (
     <Surface
       tone="card"

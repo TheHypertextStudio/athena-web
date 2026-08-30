@@ -50,12 +50,17 @@
  * to. This shares the page's left edge, so it lines up by construction rather than by a negative
  * margin.
  */
-import { ArrowUp, Paperclip } from '@docket/ui/icons';
+import { ArrowUp, Paperclip, Plus } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import {
   Button,
   Chip,
   ControlGroup,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  Row,
   Stack,
   Tab,
   TabList,
@@ -76,6 +81,7 @@ import { useAthenaPanel } from '@/components/athena/athena-panel-provider';
 import { useMentionOrgId } from '@/components/mentions/use-mention-org';
 import { api } from '@/lib/api';
 import { userErrorMessage, readProblemError } from '@/lib/problem';
+import { startViewTransition } from '@/lib/view-transition';
 import MentionTextarea from '@/components/mentions/mention-textarea';
 
 /** A successful capture: enough to confirm AND point at the created task. */
@@ -130,6 +136,7 @@ export function TodayPrompt({
   const [error, setError] = useState<string | null>(null);
   const [mode, setModeState] = useState<CaptureMode>('athena');
   const [files, setFiles] = useState<readonly File[]>([]);
+  const [dropping, setDropping] = useState(false);
   const filePicker = useRef<HTMLInputElement>(null);
 
   // No empty-workspace fork. This box used to run a `tasks` probe purely to decide whether to
@@ -196,8 +203,12 @@ export function TodayPrompt({
     // Exactly one surface, never both. A host that shows the conversation itself takes the draft
     // and expands in place; without one, the ⌘J rail is the door. Doing both put the rail on top of
     // the page that had just become the same conversation.
-    if (onStartSession) onStartSession(draft);
-    else openAthena({ workspaceId: orgId, workspaceName: orgLabel }, draft);
+    // The composer and the session it becomes share `today-composer`, so the box a person typed
+    // into morphs into the conversation rather than being replaced by it.
+    startViewTransition(() => {
+      if (onStartSession) onStartSession(draft);
+      else openAthena({ workspaceId: orgId, workspaceName: orgLabel }, draft);
+    });
   }, [openAthena, orgId, orgLabel, text, onStartSession]);
 
   /** Send the draft wherever the active mode points. */
@@ -218,12 +229,22 @@ export function TodayPrompt({
    * and has nowhere to put one. Switching automatically beats disabling the control half the time
    * or accepting a file the armed destination would silently drop.
    */
-  const pickFiles = useCallback((event: ChangeEvent<HTMLInputElement>): void => {
-    const picked = [...(event.target.files ?? [])];
+  const acceptFiles = useCallback((picked: readonly File[]): void => {
     if (picked.length === 0) return;
     setFiles((current) => [...current, ...picked]);
     setModeState('task');
-    event.target.value = '';
+  }, []);
+
+  const pickFiles = useCallback(
+    (event: ChangeEvent<HTMLInputElement>): void => {
+      acceptFiles([...(event.target.files ?? [])]);
+      event.target.value = '';
+    },
+    [acceptFiles],
+  );
+
+  const removeFile = useCallback((at: number): void => {
+    setFiles((current) => current.filter((_, index) => index !== at));
   }, []);
 
   const onKeyDown = useCallback(
@@ -239,8 +260,16 @@ export function TodayPrompt({
     [canSubmit, submit],
   );
 
+  /** The first few attachments stay visible; the rest collapse behind a count. */
+  const VISIBLE_FILES = 3;
+  const shownFiles = files.slice(0, VISIBLE_FILES);
+  const hiddenFiles = files.slice(VISIBLE_FILES);
+
   return (
-    <Stack gap={2}>
+    // 600px, centred. This is the entry point to every kind of work the page can start — a task, a
+    // scheduling request, an interactive planning session — so it sits on the page's axis at a
+    // width you can read a sentence in, rather than stretching to whatever the column happens to be.
+    <Stack gap={2} className="mx-auto w-full max-w-[600px]">
       {/* No heading and no explainer above the box. What used to sit here — a rhetorical
           "What's on your plate?" over two sentences describing what pasting does — was the field
           narrating itself to the person already using it. */}
@@ -252,13 +281,31 @@ export function TodayPrompt({
             multiline: true,
             ringOn: 'within',
           }),
-          // `fieldSurface` pads for a form field — `py-2` around a 40px control. A composer is
-          // the primary thing on this page and has to invite writing, so it takes a composition
-          // field's inset instead. Height comes from padding, never from phantom rows: a reserved
-          // second line the field has nothing to put in is slack, not generosity.
-          'flex flex-col gap-3 px-4 py-3.5',
+          // `fieldSurface` pads for a form field — `py-2` around a 40px control. A composer is the
+          // primary thing on this page and has to invite writing, so it takes a composition field's
+          // inset instead. Height comes from padding, never from phantom rows.
+          'flex flex-col gap-2 rounded-xl px-3 py-3',
+          // Files can be dropped anywhere on the box, not just onto a button.
+          dropping && 'ring-primary bg-surface-container-highest ring-2',
         )}
         style={{ viewTransitionName: 'today-composer' }}
+        onDragOver={(event) => {
+          if (![...event.dataTransfer.types].includes('Files')) return;
+          event.preventDefault();
+          event.dataTransfer.dropEffect = 'copy';
+          setDropping(true);
+        }}
+        onDragLeave={(event) => {
+          // Only when the pointer leaves the box itself, not on every child boundary it crosses.
+          if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+          setDropping(false);
+        }}
+        onDrop={(event) => {
+          if (![...event.dataTransfer.types].includes('Files')) return;
+          event.preventDefault();
+          setDropping(false);
+          acceptFiles([...event.dataTransfer.files]);
+        }}
       >
         <MentionTextarea
           value={text}
@@ -269,40 +316,63 @@ export function TodayPrompt({
           {...(mentionOrgId === undefined ? {} : { orgId: mentionOrgId })}
           insertMode="context"
           onKeyDown={onKeyDown}
-          // One line at rest, growing with what is typed.
+          // One line at rest, growing to fit whatever is pasted in.
           rows={1}
           autoGrow
-          maxRows={10}
+          maxRows={16}
           placeholder={mode === 'athena' ? 'Ask Athena about today…' : 'What task needs capturing?'}
           aria-label={mode === 'athena' ? 'Ask Athena about today' : 'Add a task'}
           disabled={orgId === null}
-          // Type, placeholder colour, and the ring all come from the wrapper; a textarea does not
-          // inherit font from its parent, so `font-[inherit]` takes the wrapper's resolved token
-          // instead of naming a size here.
-          className="placeholder:text-on-surface-variant text-body-large w-full resize-none bg-transparent outline-none disabled:opacity-50"
+          className="placeholder:text-on-surface-variant text-body-large w-full resize-none bg-transparent px-1 outline-none disabled:opacity-50"
         />
 
+        {/* Attachments sit under the prompt and above the bar, so what you dropped reads as part of
+            the message rather than as a property of the send button. Past three they collapse into
+            a count, and the row never grows tall enough to push the bar off-screen. */}
         {files.length > 0 ? (
-          <ControlGroup controlSize="sm" wrap>
-            {files.map((file, index) => (
-              <Chip
-                key={`${file.name}:${String(index)}`}
-                variant="input"
-                icon={<Paperclip />}
-                removeLabel={`Remove ${file.name}`}
-                onRemove={() => {
-                  setFiles((current) => current.filter((_, at) => at !== index));
-                }}
-              >
-                {file.name}
-              </Chip>
-            ))}
-          </ControlGroup>
+          <Row gap={2} className="flex-wrap px-1">
+            <ControlGroup controlSize="sm" wrap>
+              {shownFiles.map((file, index) => (
+                <Chip
+                  key={`${file.name}:${String(index)}`}
+                  variant="input"
+                  icon={<Paperclip />}
+                  removeLabel={`Remove ${file.name}`}
+                  onRemove={() => {
+                    removeFile(index);
+                  }}
+                  className="max-w-52"
+                >
+                  {file.name}
+                </Chip>
+              ))}
+              {hiddenFiles.length > 0 ? (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Chip variant="assist" leadingNone="overflow-count">
+                      +{hiddenFiles.length}
+                    </Chip>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" width="sm">
+                    {hiddenFiles.map((file, index) => (
+                      <DropdownMenuItem
+                        key={`${file.name}:${String(index)}`}
+                        onSelect={() => {
+                          removeFile(VISIBLE_FILES + index);
+                        }}
+                      >
+                        Remove {file.name}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
+            </ControlGroup>
+          </Row>
         ) : null}
 
-        {/* One group, one height: the attach control, the destination toggle, and send all
-              resolve through the same control step instead of each carrying a `min-h` override. */}
-        <ControlGroup controlSize="sm">
+        {/* One group, one height, one 8px rhythm. */}
+        <ControlGroup controlSize="sm" className="gap-2">
           <input
             ref={filePicker}
             type="file"
@@ -316,16 +386,17 @@ export function TodayPrompt({
             type="button"
             variant="ghost"
             iconOnly
-            aria-label="Attach files"
+            aria-label="Add files"
             disabled={orgId === null}
             onClick={() => {
               filePicker.current?.click();
             }}
           >
-            <Paperclip aria-hidden="true" />
+            <Plus aria-hidden="true" />
           </Button>
           <Tabs
             value={mode}
+            tone="accent"
             onValueChange={(next) => {
               setMode(next as CaptureMode);
             }}
@@ -341,7 +412,8 @@ export function TodayPrompt({
             disabled={!canSubmit}
             onClick={submit}
             aria-label={mode === 'task' ? 'Add task' : 'Ask Athena'}
-            className="ml-auto"
+            // Same corner as the box it sits in, so the control reads as part of the field.
+            className="ml-auto rounded-xl"
           >
             <ArrowUp aria-hidden="true" />
           </Button>

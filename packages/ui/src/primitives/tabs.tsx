@@ -66,12 +66,27 @@ import {
 import { focusRing } from './focus';
 import { typeClass } from './text';
 
+/**
+ * How a selected tab is coloured.
+ *
+ * @remarks
+ * - `neutral` (default) — the selected segment takes a surface step. Right for a tab bar that
+ *   switches what a page is showing, where the tabs are navigation and should not compete with the
+ *   content under them.
+ * - `accent` — the selected segment takes the MD3 secondary-container role. Right for a segmented
+ *   control that sets *what an action will do*, where the current setting is a decision the person
+ *   made and needs to read as one at a glance.
+ */
+export type TabsTone = 'neutral' | 'accent';
+
 /** The shared selection state threaded from {@link Tabs} down to each {@link Tab}. */
 interface TabsContextValue {
   /** The currently selected tab value. */
   readonly value: string;
   /** Select a tab by value. */
   readonly onValueChange: (value: string) => void;
+  /** How the selected segment is coloured. */
+  readonly tone: TabsTone;
 }
 
 const TabsContext = React.createContext<TabsContextValue | null>(null);
@@ -132,6 +147,8 @@ export interface TabsProps {
   readonly className?: string;
   /** Keep detail sections reachable in a named overflow menu when the tab lane is constrained. */
   readonly overflow?: TabsOverflow;
+  /** How the selected segment is coloured. Defaults to `neutral`. */
+  readonly tone?: TabsTone;
 }
 
 /**
@@ -145,13 +162,14 @@ export function Tabs({
   onValueChange,
   label,
   items,
+  tone = 'neutral',
   children,
   className,
   overflow,
 }: TabsProps): React.JSX.Element {
   const context = React.useMemo<TabsContextValue>(
-    () => ({ value, onValueChange }),
-    [value, onValueChange],
+    () => ({ value, onValueChange, tone }),
+    [value, onValueChange, tone],
   );
 
   return (
@@ -437,7 +455,7 @@ export interface TabProps {
  * @returns the rendered `role="tab"` button.
  */
 export function Tab({ value, count, disabled, className, children }: TabProps): React.JSX.Element {
-  const { value: selectedValue, onValueChange } = useTabsContext();
+  const { value: selectedValue, onValueChange, tone } = useTabsContext();
   const selected = value === selectedValue;
   const metrics = CONTROL[useControlSize(undefined, 'xl')];
 
@@ -466,7 +484,9 @@ export function Tab({ value, count, disabled, className, children }: TabProps): 
         typeClass(metrics.labelToken),
         CONTROL_RADIUS,
         selected
-          ? 'bg-surface-container-highest text-on-surface'
+          ? tone === 'accent'
+            ? 'bg-secondary-container text-on-secondary-container'
+            : 'bg-surface-container-highest text-on-surface'
           : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface',
         focusRing,
         className,
@@ -477,9 +497,11 @@ export function Tab({ value, count, disabled, className, children }: TabProps): 
         <span
           className={cn(
             'text-label-small inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 tabular-nums',
-            selected
-              ? 'bg-surface-container text-on-surface'
-              : 'bg-surface-container-high text-on-surface-variant',
+            selected && tone === 'accent'
+              ? 'bg-on-secondary-container/12 text-on-secondary-container'
+              : selected
+                ? 'bg-surface-container text-on-surface'
+                : 'bg-surface-container-high text-on-surface-variant',
           )}
         >
           {count}

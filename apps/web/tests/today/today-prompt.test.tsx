@@ -3,6 +3,8 @@ import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { assertDefined } from '@docket/test-utils';
+
 import { TodayPrompt } from '../../src/components/today/today-prompt';
 
 const openAthena = vi.hoisted(() => vi.fn());
@@ -158,5 +160,36 @@ describe('TodayPrompt', () => {
 
     typeDraft('Real work');
     expect(screen.getByRole('button', { name: 'Ask Athena' })).toBeEnabled();
+  });
+
+  it('accepts dropped files, arms Task mode, and collapses past three behind a count', () => {
+    render(<TodayPrompt orgId={ORG} orgLabel="Space" />);
+
+    const box = screen.getByLabelText('Ask Athena about today').closest('div[style]');
+
+    const file = (name: string): File => new File(['x'], name, { type: 'text/plain' });
+    const dropped = [file('a.txt'), file('b.txt'), file('c.txt'), file('d.txt')];
+    fireEvent.drop(assertDefined(box), {
+      dataTransfer: { files: dropped, types: ['Files'] },
+    });
+
+    // A file can only hang off a task, so dropping one picks the destination that can hold it
+    // rather than letting the armed destination silently drop it.
+    expect(screen.getByRole('tab', { name: 'Task' })).toHaveAttribute('aria-selected', 'true');
+
+    // Three stay visible; the rest collapse so the row cannot push the action bar off screen.
+    expect(screen.getAllByRole('button', { name: /^Remove / })).toHaveLength(3);
+    expect(screen.getByRole('button', { name: '+1' })).toBeInTheDocument();
+  });
+
+  it('ignores a drag that carries no files', () => {
+    render(<TodayPrompt orgId={ORG} orgLabel="Space" />);
+    const box = screen.getByLabelText('Ask Athena about today').closest('div[style]');
+
+    fireEvent.drop(assertDefined(box), { dataTransfer: { files: [], types: ['text/plain'] } });
+
+    // Dragging selected text over the composer must not switch what Enter does.
+    expect(screen.getByRole('tab', { name: 'Athena' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('button', { name: /^Remove / })).not.toBeInTheDocument();
   });
 });

@@ -176,6 +176,7 @@ export type { SkeletonTextProps, SkeletonTextScale } from './skeleton';
 export {
   Tab,
   TabList,
+  type TabsTone,
   type TabListProps,
   type TabProps,
   Tabs,

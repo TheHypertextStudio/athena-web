@@ -215,6 +215,26 @@ describe('McpAppView frames', () => {
       );
     });
   });
+
+  it('falls back when a loaded sandbox never announces proxy readiness', async () => {
+    vi.useFakeTimers();
+    const harness = mount();
+    try {
+      fireEvent.load(harness.frame);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10_000);
+      });
+
+      expect(screen.getByTestId('mcp-app-view-failure')).toHaveTextContent(
+        'Interactive view unavailable.',
+      );
+    } finally {
+      harness.view.unmount();
+      await vi.runAllTimersAsync();
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('McpAppView bridge', () => {

@@ -126,6 +126,15 @@
   helpers are unreachable from model and manual call paths, registered-agent calls cannot persist
   a personal connection id, presentation DTOs contain no credentials, no migration was added, and
   `ui/update-model-context` survives only in negative conformance tests/protocol accounting.
+- **Layer 2 review fix 1**: Made UI-resource capture best-effort after a successful remote tool
+  result: a timeout, network error, or other read rejection now preserves the flattened text,
+  records `presentationUnavailable`, and never repeats the model call. Added a five-second
+  sandbox-proxy-ready deadline so a loaded but silent iframe cannot remain a blank conversation
+  card; readiness, frame failure, and unmount all clear the timer, and expiry shows the exact owned
+  fallback. The regressions first failed by rejecting the successful connector result and leaving
+  the silent frame visible after ten seconds, then passed after the fixes. Final focused validation
+  passes 10 connector tests and 28 view/workbench tests; affected integrations and Web typechecks
+  and ESLint pass.
 - **Blockers**: Production acceptance needs an authenticated live Athena account and a publicly
   reachable pinned upstream reference server; local and CI evidence cannot substitute for it.
 

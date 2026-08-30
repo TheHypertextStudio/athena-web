@@ -14,11 +14,13 @@ const sdkState = vi.hoisted<{
   contents: unknown[];
   tools: unknown[];
   result: Record<string, unknown>;
+  resourceError: Error | null;
   calls: number;
 }>(() => ({
   contents: [],
   tools: [],
   result: { content: [] },
+  resourceError: null,
   calls: 0,
 }));
 
@@ -42,6 +44,7 @@ vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
     }
 
     readResource(): Promise<{ contents: unknown[] }> {
+      if (sdkState.resourceError) return Promise.reject(sdkState.resourceError);
       return Promise.resolve({ contents: sdkState.contents });
     }
 
@@ -85,6 +88,7 @@ beforeEach(() => {
   sdkState.contents = [];
   sdkState.tools = [];
   sdkState.result = { content: [] };
+  sdkState.resourceError = null;
   sdkState.calls = 0;
 });
 
@@ -243,6 +247,30 @@ describe('RealMcpConnector MCP App resources', () => {
       presentationUnavailable: true,
     });
     expect(result.presentation).toBeUndefined();
+    expect(sdkState.calls).toBe(1);
+    await session.close();
+  });
+
+  it('preserves a successful textual result when its app resource cannot be read', async () => {
+    sdkState.tools = [
+      {
+        name: 'weather_card',
+        description: 'Show the weather.',
+        inputSchema: { type: 'object' },
+        _meta: { ui: { resourceUri: 'ui://external/weather' } },
+      },
+    ];
+    sdkState.result = { content: [{ type: 'text', text: '72 degrees' }], isError: false };
+    sdkState.resourceError = new Error('resource read timed out');
+    const session = await new RealMcpConnector().open({ url: 'https://external.example/mcp' });
+
+    await expect(
+      session.callTool('weather_card', { city: 'Las Vegas' }, PRESENTATION_INPUT.context),
+    ).resolves.toEqual({
+      content: '72 degrees',
+      isError: false,
+      presentationUnavailable: true,
+    });
     expect(sdkState.calls).toBe(1);
     await session.close();
   });

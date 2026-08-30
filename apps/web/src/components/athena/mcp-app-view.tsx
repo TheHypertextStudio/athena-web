@@ -72,6 +72,9 @@ const INITIAL_HEIGHT = 96;
 /** The widest a card may grow before it gets its own scroll region. */
 const MAX_HEIGHT = 640;
 
+/** Maximum time a sandbox proxy may remain loaded without announcing readiness. */
+const SANDBOX_PROXY_READY_TIMEOUT_MS = 5_000;
+
 /**
  * Docket token → the style variable the extension standardizes.
  *
@@ -251,13 +254,24 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
   // cannot race a passive effect and leave the widget waiting forever for its resource document.
   useLayoutEffect(() => {
     const frame = frameRef.current;
-    if (!frame) {
+    if (!frame || !proxyOrigin) {
       return;
     }
 
     let proxyWindow: Window | null = frame.contentWindow;
-    const onFrameError = (): void => {
+    let readyDeadline: number | undefined;
+    const clearReadyDeadline = (): void => {
+      if (readyDeadline !== undefined) {
+        window.clearTimeout(readyDeadline);
+        readyDeadline = undefined;
+      }
+    };
+    const fail = (): void => {
+      clearReadyDeadline();
       setFailure('Interactive view unavailable.');
+    };
+    const onFrameError = (): void => {
+      fail();
     };
     frame.addEventListener('error', onFrameError);
     const post = (message: JsonRpcMessage): void => {
@@ -341,6 +355,7 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
       }
       const method: unknown = Reflect.get(data, 'method');
       if (method === MCP_UI_METHODS.sandboxProxyReady) {
+        clearReadyDeadline();
         // The proxy is up. Hand it the document plus the policy computed from what the resource
         // declared — the host decides the CSP, never a script running on the sandbox origin.
         post({
@@ -353,8 +368,10 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
       void host.receive(data);
     };
     window.addEventListener('message', onWindowMessage);
+    readyDeadline = window.setTimeout(fail, SANDBOX_PROXY_READY_TIMEOUT_MS);
 
     return () => {
+      clearReadyDeadline();
       hostRef.current = null;
       void host.requestTeardown().finally(() => {
         window.removeEventListener('message', onWindowMessage);

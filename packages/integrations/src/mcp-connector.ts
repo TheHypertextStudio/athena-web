@@ -776,7 +776,7 @@ export class RealMcpConnector implements McpConnector {
         if (!presentationContext) return flattened;
         const tool = (await listTools()).find((candidate) => candidate.name === name);
         const resourceUri = tool?.ui?.resourceUri;
-        const resource = resourceUri ? await readUiResource(resourceUri) : null;
+        const resource = resourceUri ? await readUiResource(resourceUri).catch(() => null) : null;
         const presentation = tool
           ? normalizeMcpAppPresentation({
               context: presentationContext,

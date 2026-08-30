@@ -127,4 +127,20 @@ export const MOBILE_LAYOUT_ROUTE_CASES: readonly MobileLayoutRouteCase[] = [
       await display.getByRole('heading', { name: 'Properties' }).waitFor();
     },
   },
+  {
+    id: 'overlay-calendar-create',
+    route: '/calendar',
+    setup: async (page) => {
+      await page.getByRole('button', { name: 'New' }).click();
+      await page.getByRole('dialog', { name: 'Create calendar item' }).waitFor();
+    },
+  },
+  {
+    id: 'overlay-command-palette',
+    route: '/today',
+    setup: async (page) => {
+      await page.keyboard.press('Control+k');
+      await page.getByRole('dialog', { name: 'Command palette' }).waitFor();
+    },
+  },
 ];

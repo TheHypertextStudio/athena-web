@@ -1,7 +1,7 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-08-29
+> **Last Updated**: 2026-08-30
 
 ---
 
@@ -193,6 +193,16 @@
   branches, 96.48% functions, and 95.20% lines. The isolated current branch also passes all 3,639
   Web tests and all 5,091 API tests with an eight-GiB Node heap; this preserves the production-size
   benchmark while avoiding the earlier cross-package resource contention.
+- **Current-main API coverage repair**: The rebased branch initially missed the API branch gate at
+  87.93% against the configured 88% floor even though all functional tests passed. Behavioral
+  coverage now exercises every stable and legacy UI linkage shape, meaningful success/error text
+  fallback, persisted unavailable presentations, MCP list metadata, JSON-safe error constraints,
+  synchronous task fallback, subscription-before-session rejection, and signed-cursor failure
+  boundaries. The final API coverage run passes 412 files and 5,098 tests at 93.53% statements,
+  88.00% branches, 96.00% functions, and 95.44% lines. No threshold was changed. The separate
+  production-size performance gate remains green in its isolated release configuration; running
+  it inside the already resource-saturated package suite exceeded its p95 budget and is not used
+  as substitute evidence for the isolated performance command.
 - **Layer 3 decisions and retrospective**: The official stable prose and exact npm package source
   were the authority because Context7 remained quota-blocked. Counting normative vocabulary
   occurrences rather than methods/capabilities prevents a stable protocol symbol list from

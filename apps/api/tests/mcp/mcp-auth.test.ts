@@ -180,6 +180,13 @@ describe('result helpers', () => {
     expect((res.content[0] as { text: string }).text).toContain('"a": 1');
   });
 
+  it('jsonResult keeps non-object JSON values out of structuredContent', () => {
+    for (const value of [null, ['one'], 'plain text']) {
+      const res = resultMod.jsonResult(value);
+      expect(res.structuredContent).toBeUndefined();
+    }
+  });
+
   it('errorResult flags isError', () => {
     const res = resultMod.errorResult('boom');
     expect(res.isError).toBe(true);
@@ -193,6 +200,31 @@ describe('result helpers', () => {
     expect((res.content[0] as { text: string }).text).toBe(
       'not_found: That item could not be found.',
     );
+  });
+
+  it('runTool renders every machine-readable field constraint without exposing diagnostics', async () => {
+    const res = await resultMod.runTool(async () => {
+      throw new ApiError(422, 'validation_error', 'secret validator diagnostic', {
+        input: [
+          {
+            code: 'invalid_value',
+            expected: 'string',
+            format: 'email',
+            minimum: 2,
+            maximum: 20,
+            inclusive: false,
+            options: ['personal', 'work'],
+          },
+        ],
+      });
+    });
+    const text = (res.content[0] as { text: string }).text;
+    expect(text).toContain('allowed values: personal, work');
+    expect(text).toContain('expected type: string');
+    expect(text).toContain('expected format: email');
+    expect(text).toContain('minimum: 2 (exclusive)');
+    expect(text).toContain('maximum: 20 (exclusive)');
+    expect(text).not.toContain('secret validator diagnostic');
   });
 
   it('runTool maps an unexpected error to a generic Internal error', async () => {

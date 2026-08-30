@@ -805,7 +805,7 @@ describe('user-owned Athena loop', () => {
     expect(claimed?.body.action?.result).toBeUndefined();
   });
 
-  it('persists a model-invoked presentation atomically and reloads it without rerunning the tool', async () => {
+  it('persists model-invoked presentation outcomes atomically and reloads without rerunning tools', async () => {
     const seed = await seedAthenaSession('routine_autonomy');
     await db
       .update(schema.agentSession)
@@ -847,23 +847,56 @@ describe('user-owned Athena loop', () => {
         },
       })
       .returning({ id: schema.sessionActivity.id });
-    const callTool = vi.fn(async () => ({
-      content: '72 degrees',
-      isError: false,
-      presentation: {
-        connectionId: 'connection-1',
-        serverName: 'Weather Service',
-        tool: 'weather_card',
-        arguments: { city: 'Las Vegas' },
-        result: { content: [{ type: 'text' as const, text: '72 degrees' }], isError: false },
-        resource: {
-          uri: 'ui://weather/card',
-          mimeType: 'text/html;profile=mcp-app',
-          text: '<!doctype html><title>Weather</title>',
-          meta: { prefersBorder: true },
+    const [unavailableAction] = await db
+      .insert(schema.sessionActivity)
+      .values({
+        sessionId: seed.sessionId,
+        organizationId: null,
+        type: 'action',
+        approvalStatus: 'approved',
+        body: {
+          action: {
+            kind: 'weather_map',
+            summary: 'Show the unavailable map as text',
+            mode: 'proposal',
+            toolCall: {
+              connection: 'weather',
+              tool: 'weather_map',
+              input: { city: 'Las Vegas' },
+              toolUseId: 'toolu_weather_map',
+            },
+          },
         },
-      },
-    }));
+      })
+      .returning({ id: schema.sessionActivity.id });
+    const callTool = vi.fn(async (name: string) =>
+      name.endsWith('__weather_card')
+        ? {
+            content: '72 degrees',
+            isError: false,
+            presentation: {
+              connectionId: 'connection-1',
+              serverName: 'Weather Service',
+              tool: 'weather_card',
+              arguments: { city: 'Las Vegas' },
+              result: {
+                content: [{ type: 'text' as const, text: '72 degrees' }],
+                isError: false,
+              },
+              resource: {
+                uri: 'ui://weather/card',
+                mimeType: 'text/html;profile=mcp-app',
+                text: '<!doctype html><title>Weather</title>',
+                meta: { prefersBorder: true },
+              },
+            },
+          }
+        : {
+            content: 'Map data as text',
+            isError: false,
+            presentationUnavailable: true,
+          },
+    );
     const toolbox = vi.spyOn(toolboxModule, 'openToolbox').mockResolvedValue({
       tools: [],
       annotations: () => undefined,
@@ -894,11 +927,20 @@ describe('user-owned Athena loop', () => {
           tool: 'weather_card',
         }),
       );
+      const [persistedUnavailable] = await db
+        .select({ body: schema.sessionActivity.body })
+        .from(schema.sessionActivity)
+        .where(eq(schema.sessionActivity.id, assertDefined(unavailableAction).id));
+      expect(
+        (persistedUnavailable?.body.action?.result as Record<string, unknown>)[
+          'presentationUnavailable'
+        ],
+      ).toBe(true);
 
       await expect(executeApprovedActions(seed.orgId, seed.sessionId, lease)).resolves.toBe(
         'settled',
       );
-      expect(callTool).toHaveBeenCalledOnce();
+      expect(callTool).toHaveBeenCalledTimes(2);
     } finally {
       toolbox.mockRestore();
     }

@@ -291,7 +291,7 @@ export function AthenaWorkspace({
         </div>
         <div className="flex items-center justify-between gap-3 @sm:justify-end">
           {queue.data ? (
-            <div className="text-on-surface-variant hidden items-center gap-3 text-xs tabular-nums @sm:flex">
+            <div className="text-on-surface-variant hidden items-center gap-3 text-xs tabular-nums @md:flex">
               <span>{queue.data.counts.needsYou} needs you</span>
               <span>{queue.data.counts.working} working</span>
             </div>

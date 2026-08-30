@@ -242,8 +242,6 @@ async function captureCleanFrame(
         `${url} overflows at ${viewport.label} (${String(overflow.scrollWidth)} > ${String(overflow.clientWidth)})`,
       );
     }
-    await page.screenshot({ type: 'png' });
-    await page.waitForTimeout(150);
     const candidate = await page.screenshot({ type: 'png' });
     const damaged = (await blackPixelRatio(page, candidate)) > 0.02;
     await page.close();
@@ -284,7 +282,10 @@ async function main(): Promise<void> {
 
   mkdirSync(outDir, { recursive: true });
 
-  const browser = await chromium.launch();
+  // GPU compositing occasionally returns a vertically shifted bitmap on this host even though the
+  // page DOM and its bounding rectangles are correct. Audit evidence must show the rendered page,
+  // not that compositor corruption, so use Chromium's software path for every captured frame.
+  const browser = await chromium.launch({ args: ['--disable-gpu', '--disable-gpu-compositing'] });
   // This is an online product audit. A persisted service worker can serve its offline fallback
   // after the local dev process restarts, which turns a capture into recovery-UI evidence instead
   // of the route it was asked to inspect. Offline behavior has its own dedicated browser suite.

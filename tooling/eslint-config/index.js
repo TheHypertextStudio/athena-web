@@ -308,19 +308,9 @@ export function semanticSurfaceCohortConfig(files) {
 export const serverComponentBoundaryConfig = [
   {
     files: ['apps/web/src/app/**/{page,layout}.tsx'],
+    plugins: { 'docket-ui': uiOwnershipPlugin },
     rules: {
-      'no-restricted-imports': [
-        'error',
-        {
-          paths: [
-            {
-              name: '@/lib/query',
-              message:
-                'Server Components must import server-safe query helpers from @/lib/query-core or @/lib/query-server. Client query hooks belong in a client component.',
-            },
-          ],
-        },
-      ],
+      'docket-ui/no-server-query-import': 'error',
     },
   },
 ];

@@ -91,3 +91,16 @@ ruleTester.run('docket-ui/no-raw-surface-role', plugin.rules['no-raw-surface-rol
     },
   ],
 });
+
+ruleTester.run('docket-ui/no-server-query-import', plugin.rules['no-server-query-import'], {
+  valid: [
+    { code: "'use client'; import { useApiQuery } from '@/lib/query'; useApiQuery;" },
+    { code: "import { query } from '@/lib/query-server'; query;" },
+  ],
+  invalid: [
+    {
+      code: "import { useApiQuery } from '@/lib/query'; useApiQuery;",
+      errors: [{ messageId: 'useServerQuery' }],
+    },
+  ],
+});

@@ -4,6 +4,7 @@ import {
   dataLayerConfig,
   overlayPrimitiveConfig,
   semanticSurfaceCohortConfig,
+  serverComponentBoundaryConfig,
 } from './tooling/eslint-config/index.js';
 
 /**
@@ -19,6 +20,7 @@ export default [
   ...dataLayerConfig,
   ...appLocationConfig,
   ...overlayPrimitiveConfig,
+  ...serverComponentBoundaryConfig,
   ...semanticSurfaceCohortConfig([
     'apps/web/src/components/agenda/**/*.{ts,tsx}',
     'apps/web/src/components/calendar/**/*.{ts,tsx}',

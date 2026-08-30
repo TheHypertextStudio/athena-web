@@ -523,6 +523,44 @@ describe('billing router (org-scoped, via the BillingGateway port)', () => {
     expect(res.status).toBe(403);
   });
 
+  it('accepts a same-origin return path and rejects external or protocol-relative paths', async () => {
+    const orgId = await makeOrg('active');
+    const app = billingApp(orgId, ['manage']);
+    const checkout = await app.request('/checkout', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ returnTo: `/orgs/${orgId}/settings/billing` }),
+    });
+
+    expect(checkout.status).toBe(200);
+
+    for (const returnTo of ['https://example.com/steal-session', '//example.com/steal-session']) {
+      const response = await billingApp(await makeOrg('active'), ['manage']).request('/checkout', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ returnTo }),
+      });
+      expect(response.status).toBe(422);
+    }
+  });
+
+  it('returns a stable billing-customer problem when Stripe customer creation fails', async () => {
+    const orgId = await makeOrg('active');
+    const createCustomer = vi
+      .spyOn(getContainer().billing, 'createCustomer')
+      .mockRejectedValueOnce(new Error('Stripe customer creation failed'));
+
+    const response = await billingApp(orgId, ['manage']).request('/checkout', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ code: 'billing_customer_missing' });
+    createCustomer.mockRestore();
+  });
+
   it('blocks Checkout when Docket already records current Pro access', async () => {
     const orgId = await makeOrg('active');
     await db.insert(organizationProductEntitlement).values({
@@ -1050,6 +1088,172 @@ describe('billing router (org-scoped, via the BillingGateway port)', () => {
     await expect(response.json()).resolves.toMatchObject({ code: 'subscription_exists' });
     expect(createPortal).not.toHaveBeenCalled();
     createPortal.mockRestore();
+  });
+
+  it('accepts enrollment-document evidence without inventing an institutional email', async () => {
+    const userId = `student-document-${Date.now()}`;
+    const email = `${userId}@example.com`;
+    await db.insert(user).values({ id: userId, name: 'Document Student', email });
+    const orgId = await makeOrg('active');
+    await db.update(organization).set({ isPersonal: true }).where(eq(organization.id, orgId));
+
+    const response = await billingApp(
+      orgId,
+      ['manage'],
+      fakeSession(userId, 'Document Student', email),
+    ).request('/discounts/applications', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        programKey: 'student',
+        evidenceType: 'enrollment_document',
+      }),
+    });
+
+    expect(response.status).toBe(201);
+    await expect(response.json()).resolves.toMatchObject({ institutionalEmail: null });
+  });
+
+  it('returns not found when a discount application targets a missing workspace', async () => {
+    const userId = `missing-workspace-${Date.now()}`;
+    const email = `${userId}@example.org`;
+    await db.insert(user).values({ id: userId, name: 'Missing Workspace', email });
+
+    const response = await billingApp(
+      '01H00000000000000000000000',
+      ['manage'],
+      fakeSession(userId, 'Missing Workspace', email),
+    ).request('/discounts/applications', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        programKey: 'nonprofit',
+        evidenceType: 'irs_registry',
+        ein: '12-3456789',
+      }),
+    });
+
+    expect(response.status).toBe(404);
+  });
+
+  it('does not convert a database integrity failure into a pending-application conflict', async () => {
+    const orgId = await makeOrg('active');
+    const missingUserId = `missing-applicant-${Date.now()}`;
+
+    const response = await billingApp(
+      orgId,
+      ['manage'],
+      fakeSession(missingUserId, 'Missing Applicant', `${missingUserId}@example.org`),
+    ).request('/discounts/applications', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        programKey: 'nonprofit',
+        evidenceType: 'irs_registry',
+        ein: '12-3456789',
+      }),
+    });
+
+    expect(response.status).toBe(500);
+  });
+
+  it('preserves stored nonprofit evidence when a supplement only supplies the requested note', async () => {
+    const userId = `supplement-ein-${Date.now()}`;
+    const email = `${userId}@example.org`;
+    await db.insert(user).values({ id: userId, name: 'Nonprofit Applicant', email });
+    const orgId = await makeOrg('active');
+    const [application] = await db
+      .insert(billingDiscountApplication)
+      .values({
+        organizationId: orgId,
+        applicantUserId: userId,
+        programKey: 'nonprofit',
+        status: 'needs_information',
+        evidenceType: 'irs_registry',
+        ein: '12-3456789',
+        informationRequest: 'Confirm the registry record.',
+      })
+      .returning();
+
+    const response = await billingApp(
+      orgId,
+      ['manage'],
+      fakeSession(userId, 'Nonprofit Applicant', email),
+    ).request(`/discounts/applications/${assertDefined(application).id}/supplement`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ note: 'The registry record remains current.' }),
+    });
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ ein: '12-3456789' });
+  });
+
+  it('serializes a previewed credit without claiming that Stripe issued it', async () => {
+    const orgId = await makeOrg('active');
+    const [award] = await db
+      .insert(billingDiscountAward)
+      .values({
+        organizationId: orgId,
+        programKey: 'nonprofit',
+        percentOff: 50,
+        status: 'applying',
+        startsAt: new Date('2026-08-01T00:00:00.000Z'),
+        endsAt: new Date('2027-08-01T00:00:00.000Z'),
+        reviewAt: new Date('2027-07-01T00:00:00.000Z'),
+        reason: 'Verified nonprofit',
+      })
+      .returning();
+    await db.insert(billingCredit).values({
+      organizationId: orgId,
+      awardId: assertDefined(award).id,
+      status: 'previewed',
+      currency: 'usd',
+      baseAmount: 400,
+      taxAmount: 0,
+      totalAmount: 400,
+      servicePeriodStartsAt: new Date('2026-08-01T00:00:00.000Z'),
+      servicePeriodEndsAt: new Date('2026-09-01T00:00:00.000Z'),
+      providerInvoiceId: `in_preview_${orgId}`,
+    });
+
+    const response = await billingApp(orgId, ['view']).request('/discounts');
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      credit: { status: 'previewed', totalAmount: 400, issuedAt: null },
+    });
+  });
+
+  it('stores document evidence with the generic type when the application has no legacy type', async () => {
+    const userId = `generic-evidence-${Date.now()}`;
+    const email = `${userId}@example.org`;
+    await db.insert(user).values({ id: userId, name: 'Evidence Applicant', email });
+    const orgId = await makeOrg('active');
+    const [application] = await db
+      .insert(billingDiscountApplication)
+      .values({
+        organizationId: orgId,
+        applicantUserId: userId,
+        programKey: 'nonprofit',
+        status: 'submitted',
+        evidenceType: null,
+        ein: '12-3456789',
+      })
+      .returning();
+    const form = new FormData();
+    form.set('file', new File(['proof'], 'determination.pdf', { type: 'application/pdf' }));
+
+    const response = await billingApp(
+      orgId,
+      ['manage'],
+      fakeSession(userId, 'Evidence Applicant', email),
+    ).request(`/discounts/applications/${assertDefined(application).id}/evidence`, {
+      method: 'POST',
+      body: form,
+    });
+
+    expect(response.status).toBe(201);
   });
 
   it('submits a student application from the Better Auth verified email for a personal workspace', async () => {

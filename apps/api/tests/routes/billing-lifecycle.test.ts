@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 import { eq } from 'drizzle-orm';
@@ -69,6 +69,18 @@ describe('billing lifecycle: GET /lifecycle', () => {
     expect(body.lifecycleState).toBe('active');
     expect(body.exportReadyAt).toBe('2026-08-20T00:00:00.000Z');
     expect(body.deleteAfterAt).toBe('2026-09-20T00:00:00.000Z');
+  });
+
+  it('returns null lifecycle timestamps when billing has not created an export', async () => {
+    const { orgId } = await seedBaseOrg(db, schema, false);
+    const app = appWithActor(billing, orgId, ['view']);
+
+    const res = await app.request('/lifecycle', { method: 'GET' });
+
+    expect(res.status).toBe(200);
+    expect(
+      await json<{ exportReadyAt: string | null; deleteAfterAt: string | null }>(res),
+    ).toMatchObject({ exportReadyAt: null, deleteAfterAt: null });
   });
 
   it('404s when the actor-context org row does not exist', async () => {
@@ -166,6 +178,24 @@ describe('billing: GET /', () => {
       applicationStatus: null,
       issuedCredit: null,
       products: [],
+    });
+  });
+
+  it('does not invent a cancellation date when Stripe has not supplied a period end', async () => {
+    const { orgId } = await seedBaseOrg(db, schema, false);
+    await db.insert(schema.organizationProductEntitlement).values({
+      organizationId: orgId,
+      productKey: 'docket_pro',
+      status: 'active',
+      source: 'stripe',
+      cancelAtPeriodEnd: true,
+    });
+
+    const res = await appWithActor(billing, orgId, ['view']).request('/');
+
+    expect(res.status).toBe(200);
+    expect(await json<{ products: { cancellationDate: string | null }[] }>(res)).toMatchObject({
+      products: [{ cancellationDate: null }],
     });
   });
 
@@ -337,6 +367,21 @@ describe('billing: POST /export', () => {
     const archive = await file.text();
     expect(archive).toContain('My org task');
     expect(archive).not.toContain('Other org secret');
+  });
+
+  it('keeps a replacement export available when deleting the superseded object fails', async () => {
+    const { orgId } = await seedBaseOrg(db, schema);
+    const app = appWithActor(billing, orgId, ['manage']);
+    expect((await app.request('/export', { method: 'POST' })).status).toBe(200);
+    const deleteBlob = vi
+      .spyOn(getContainer().blob, 'delete')
+      .mockRejectedValueOnce(new Error('Object storage deletion failed'));
+
+    const replacement = await app.request('/export', { method: 'POST' });
+
+    expect(replacement.status).toBe(200);
+    expect(deleteBlob).toHaveBeenCalledOnce();
+    deleteBlob.mockRestore();
   });
 
   it('denies the download to a member without manage', async () => {

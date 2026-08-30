@@ -11,6 +11,8 @@ export interface MobileLayoutRouteCase {
   readonly route: string;
   /** Optional rendered interaction state that this case must open before capture. */
   readonly setup?: MobileLayoutStateSetup | undefined;
+  /** Use a clean browser context so an authenticated session cannot redirect this surface. */
+  readonly authenticated?: boolean | undefined;
 }
 
 /**
@@ -80,6 +82,26 @@ export const MOBILE_LAYOUT_ROUTE_CASES: readonly MobileLayoutRouteCase[] = [
   { id: 'workspace-settings-statuses', route: '/orgs/:sharedOrgId/settings/statuses' },
   { id: 'workspace-settings-templates', route: '/orgs/:sharedOrgId/settings/templates' },
   { id: 'workspace-settings-work-structure', route: '/orgs/:sharedOrgId/settings/work-structure' },
+  { id: 'settings-google-calendar', route: '/settings/connections/google-calendar' },
+  {
+    id: 'workspace-settings-google-calendar',
+    route: '/orgs/:sharedOrgId/settings/connections/google-calendar',
+  },
+  { id: 'workspace-settings-notion', route: '/orgs/:sharedOrgId/settings/connections/notion' },
+  {
+    id: 'workspace-settings-notion-people',
+    route: '/orgs/:sharedOrgId/settings/connections/notion/people',
+  },
+  { id: 'marketing-home', route: '/' },
+  { id: 'marketing-about', route: '/about' },
+  { id: 'marketing-pricing', route: '/pricing' },
+  { id: 'marketing-privacy', route: '/privacy' },
+  { id: 'marketing-problems', route: '/problems' },
+  { id: 'marketing-terms', route: '/terms' },
+  { id: 'open-router', route: '/open' },
+  { id: 'auth-sign-in', route: '/sign-in', authenticated: false },
+  { id: 'auth-sign-up', route: '/sign-up', authenticated: false },
+  { id: 'auth-recover', route: '/recover', authenticated: false },
   {
     id: 'overlay-filter',
     route: '/orgs/:sharedOrgId/tasks',
@@ -141,6 +163,53 @@ export const MOBILE_LAYOUT_ROUTE_CASES: readonly MobileLayoutRouteCase[] = [
     setup: async (page) => {
       await page.keyboard.press('Control+k');
       await page.getByRole('dialog', { name: 'Command palette' }).waitFor();
+    },
+  },
+  {
+    id: 'overlay-navigation-sheet',
+    route: '/today',
+    setup: async (page) => {
+      await page.getByRole('button', { name: 'Open navigation' }).click();
+      await page.getByRole('dialog', { name: 'Navigation' }).waitFor();
+    },
+  },
+  {
+    id: 'overlay-calendar-display',
+    route: '/calendar',
+    setup: async (page) => {
+      await page.getByRole('button', { name: 'Display settings' }).click();
+      await page.getByRole('menu').waitFor();
+    },
+  },
+  {
+    id: 'calendar-people-axis',
+    route: '/calendar',
+    setup: async (page) => {
+      await page.getByRole('button', { name: 'Display settings' }).click();
+      await page.getByRole('menuitemradio', { name: 'People' }).click();
+      await page.getByRole('heading', { name: /People|August/ }).waitFor();
+    },
+  },
+  {
+    id: 'overlay-time-add-past',
+    route: '/time',
+    setup: async (page) => {
+      await page.getByRole('button', { name: 'Add past time' }).click();
+      await page.getByRole('dialog', { name: 'Add past time' }).waitFor();
+    },
+  },
+  {
+    id: 'time-view-control',
+    route: '/time',
+    setup: async (page) => {
+      await page.getByRole('group', { name: 'Time view' }).waitFor();
+    },
+  },
+  {
+    id: 'inbox-feed-tabs',
+    route: '/inbox',
+    setup: async (page) => {
+      await page.getByRole('tablist', { name: 'Inbox feeds' }).waitFor();
     },
   },
 ];

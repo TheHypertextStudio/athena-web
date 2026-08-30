@@ -36,4 +36,14 @@ describe('MenuListbox', () => {
     fireEvent.click(screen.getByRole('option', { name: 'Ada Lovelace' }));
     expect(onSelect).toHaveBeenCalledOnce();
   });
+
+  it('keeps secondary detail in the option accessible name', () => {
+    render(
+      <MenuListbox ariaLabel="Results">
+        <MenuOption secondary="Project Athena">Ada Lovelace</MenuOption>
+      </MenuListbox>,
+    );
+
+    expect(screen.getByRole('option', { name: /Ada Lovelace\s*Project Athena/ })).toBeVisible();
+  });
 });

@@ -22,9 +22,8 @@
  * The pending Files group reserves its heading and two rows at the real row height, so results
  * replace skeletons in place and the popover never re-flips position mid-typing.
  */
+import { MenuDivider, MenuListbox, MenuSectionLabel } from '@docket/ui/components';
 import {
-  menuLabel,
-  menuSeparator,
   Popover,
   PopoverAnchor,
   PopoverBody,
@@ -32,7 +31,6 @@ import {
   Skeleton,
 } from '@docket/ui/primitives';
 import type { PopoverVirtualAnchorRef } from '@docket/ui/primitives';
-import { cn } from '@docket/ui/lib/utils';
 import type { MentionItem } from '@docket/types';
 import { useEffect, useRef } from 'react';
 
@@ -56,14 +54,6 @@ export interface MentionMenuProps {
 }
 
 /** Shared heading treatment for every section of the menu — the menu section label, verbatim. */
-const HEADING_CLASS = menuLabel('standard');
-
-/**
- * The rule between sections; never applied above the first, whose heading already opens the list.
- * The menu separator rather than a `border-t`, so it is the same 1px rule at the same spacing.
- */
-const GROUP_DIVIDER = cn(menuSeparator('standard'), 'mb-2');
-
 /** Row id for a given item, so `aria-activedescendant` can point at it. */
 export function mentionRowId(listboxId: string, item: MentionItem): string {
   return `${listboxId}-${item.id.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
@@ -122,13 +112,13 @@ export default function MentionMenu({
         }}
       >
         <PopoverBody inset="none">
-          <ul role="listbox" id={listboxId} aria-label="Mention a resource" className="space-y-0.5">
+          <MenuListbox id={listboxId} ariaLabel="Mention a resource" className="space-y-0.5">
             {groups.map((group, index) => (
               <li key={group.key} role="group" aria-labelledby={`${listboxId}-group-${group.key}`}>
-                {index > 0 ? <div aria-hidden className={GROUP_DIVIDER} /> : null}
-                <p id={`${listboxId}-group-${group.key}`} className={HEADING_CLASS}>
+                {index > 0 ? <MenuDivider as="div" aria-hidden className="mb-2" /> : null}
+                <MenuSectionLabel as="p" id={`${listboxId}-group-${group.key}`}>
                   {group.label}
-                </p>
+                </MenuSectionLabel>
                 <ul className="space-y-0.5" role="presentation">
                   {group.items.map((item) => (
                     <MentionRow

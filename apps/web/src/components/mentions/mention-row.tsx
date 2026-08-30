@@ -13,8 +13,8 @@
  * makes a menu feel fast. Extra context goes in the trailing hint; completeness belongs to the
  * hovercard.
  */
-import { menuBadge, menuItemClass, menuSupporting } from '@docket/ui/primitives';
-import { cn } from '@docket/ui/lib/utils';
+import { MenuOption } from '@docket/ui/components';
+import { Badge } from '@docket/ui/primitives';
 import type { MentionItem } from '@docket/types';
 import { CornerDownLeft } from '@docket/ui/icons';
 
@@ -55,14 +55,18 @@ export default function MentionRow({
       : RESOURCE_TYPE_LABEL[item.resourceType];
 
   return (
-    <li
+    <MenuOption
       id={id}
-      role="option"
-      aria-selected={active}
-      // Selecting on pointerdown rather than click keeps the editor selection intact: a click
-      // would first move focus and collapse the range the insert transaction needs.
-      onPointerDown={(event) => {
-        event.preventDefault();
+      active={active}
+      leading={<Icon aria-hidden />}
+      secondary={item.subtitle}
+      badge={
+        <Badge variant="secondary">
+          {item.origin === 'external' ? MENTION_PROVIDER_LABEL[item.provider] : kindLabel}
+        </Badge>
+      }
+      trailing={active ? <CornerDownLeft className="text-on-surface-variant" aria-hidden /> : null}
+      onSelect={() => {
         onSelect(item);
       }}
       className={cn(
@@ -74,21 +78,7 @@ export default function MentionRow({
         { 'bg-on-surface/10': active },
       )}
     >
-      <Icon className="shrink-0" />
-      <span className="min-w-0 flex-[3] truncate">{item.title}</span>
-      {item.subtitle ? (
-        // Given a third of the leftover space at most, so a long parent name can never squeeze the
-        // title down to an ellipsis — the title is what the reader is aiming at.
-        <span
-          className={cn(menuSupporting('standard'), 'hidden min-w-0 flex-1 truncate sm:inline')}
-        >
-          {item.subtitle}
-        </span>
-      ) : null}
-      <span className={cn(menuBadge('standard'), 'bg-surface-container ml-0')}>
-        {item.origin === 'external' ? MENTION_PROVIDER_LABEL[item.provider] : kindLabel}
-      </span>
-      {active ? <CornerDownLeft className="text-on-surface-variant shrink-0" aria-hidden /> : null}
-    </li>
+      {item.title}
+    </MenuOption>
   );
 }

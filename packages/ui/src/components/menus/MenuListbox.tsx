@@ -32,6 +32,8 @@ export interface MenuOptionProps extends Omit<React.ComponentProps<'li'>, 'onSel
   readonly leading?: React.ReactNode | undefined;
   /** Supporting text under the primary label. */
   readonly supporting?: React.ReactNode | undefined;
+  /** Secondary text that shares the option row with the primary label. */
+  readonly secondary?: React.ReactNode | undefined;
   /** Optional trailing badge. */
   readonly badge?: React.ReactNode | undefined;
   /** Optional trailing value or shortcut. */
@@ -48,6 +50,7 @@ export function MenuOption({
   selected = active,
   leading,
   supporting,
+  secondary,
   badge,
   trailing,
   children,
@@ -89,40 +92,70 @@ export function MenuOption({
       {leading ? (
         <span className="flex size-5 shrink-0 items-center justify-center">{leading}</span>
       ) : null}
-      <span className="min-w-0 flex-1">
-        {children}
-        {supporting ? <span className={menuSupporting('standard')}>{supporting}</span> : null}
-      </span>
+      {secondary ? (
+        <>
+          <span className="min-w-0 flex-[3] truncate">{children}</span>
+          <span className="text-on-surface-variant hidden min-w-0 flex-1 truncate sm:inline">
+            {secondary}
+          </span>
+        </>
+      ) : (
+        <span className="min-w-0 flex-1">
+          {children}
+          {supporting ? <span className={menuSupporting('standard')}>{supporting}</span> : null}
+        </span>
+      )}
       {badge ? <span className="shrink-0">{badge}</span> : null}
       {trailing ? <span className="shrink-0">{trailing}</span> : null}
     </li>
   );
 }
 
+/** Props for a quiet listbox section label. */
+export type MenuSectionLabelProps =
+  | (React.ComponentProps<'li'> & { readonly as?: 'li' | undefined })
+  | (React.ComponentProps<'p'> & { readonly as: 'p' });
+
 /** A quiet section label for a listbox menu. */
-export function MenuSectionLabel({
-  className,
-  ...props
-}: React.ComponentProps<'li'>): React.JSX.Element {
+export function MenuSectionLabel(props: MenuSectionLabelProps): React.JSX.Element {
+  if (props.as === 'p') {
+    const { as: _as, className, ...paragraphProps } = props;
+    return (
+      <p
+        className={cn('text-label-medium text-on-surface-variant px-4 py-2', className)}
+        {...paragraphProps}
+      />
+    );
+  }
+
+  const { as: _as, className, ...itemProps } = props;
   return (
     <li
       role="presentation"
       className={cn('text-label-medium text-on-surface-variant px-4 py-2', className)}
-      {...props}
+      {...itemProps}
     />
   );
 }
 
+/** Props for a divider between related listbox option groups. */
+export type MenuDividerProps =
+  | (React.ComponentProps<'li'> & { readonly as?: 'li' | undefined })
+  | (React.ComponentProps<'div'> & { readonly as: 'div' });
+
 /** Divider between related listbox option groups. */
-export function MenuDivider({
-  className,
-  ...props
-}: React.ComponentProps<'li'>): React.JSX.Element {
+export function MenuDivider(props: MenuDividerProps): React.JSX.Element {
+  if (props.as === 'div') {
+    const { as: _as, className, ...dividerProps } = props;
+    return <div className={cn('bg-outline-variant mx-1 my-1 h-px', className)} {...dividerProps} />;
+  }
+
+  const { as: _as, className, ...itemProps } = props;
   return (
     <li
       role="separator"
       className={cn('bg-outline-variant mx-1 my-1 h-px', className)}
-      {...props}
+      {...itemProps}
     />
   );
 }

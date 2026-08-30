@@ -281,10 +281,11 @@ export function TodayPrompt({
             multiline: true,
             ringOn: 'within',
           }),
-          // `fieldSurface` pads for a form field — `py-2` around a 40px control. A composer is the
-          // primary thing on this page and has to invite writing, so it takes a composition field's
-          // inset instead. Height comes from padding, never from phantom rows.
-          'flex flex-col gap-2 rounded-xl px-3 py-3',
+          // `fieldSurface` pads for a form field. This is a composition surface, and the box's
+          // proportions have to say so: the writing area is the mass, and the bar is a thin strip
+          // under it. At a form field's inset the toolbar and padding owned three quarters of the
+          // control's height, so the thing you actually type into was the smallest part of it.
+          'flex flex-col gap-1 rounded-xl px-3 py-2.5',
           // Files can be dropped anywhere on the box, not just onto a button.
           dropping && 'ring-primary bg-surface-container-highest ring-2',
         )}
@@ -316,14 +317,16 @@ export function TodayPrompt({
           {...(mentionOrgId === undefined ? {} : { orgId: mentionOrgId })}
           insertMode="context"
           onKeyDown={onKeyDown}
-          // One line at rest, growing to fit whatever is pasted in.
-          rows={1}
+          // Three lines at rest, growing to fit whatever is pasted in. A resting height is slack
+          // on a form field and an invitation on a composition surface — this is where a day's
+          // planning gets typed, and a single line reads as a search box.
+          rows={3}
           autoGrow
           maxRows={16}
           placeholder={mode === 'athena' ? 'Ask Athena about today…' : 'What task needs capturing?'}
           aria-label={mode === 'athena' ? 'Ask Athena about today' : 'Add a task'}
           disabled={orgId === null}
-          className="placeholder:text-on-surface-variant text-body-large w-full resize-none bg-transparent px-1 outline-none disabled:opacity-50"
+          className="placeholder:text-on-surface-variant text-body-large w-full resize-none bg-transparent px-2 pt-1 outline-none disabled:opacity-50"
         />
 
         {/* Attachments sit under the prompt and above the bar, so what you dropped reads as part of

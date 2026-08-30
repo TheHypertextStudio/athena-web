@@ -7080,6 +7080,9 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 ### [TODAY-COPY-001] Name every Today section for what it holds
 
 - **Completed**: 2026-08-29
+- **Process**: Logged at completion. No entry was opened under Active Tasks before the work
+  started, which the Work Tracking Rules require; recorded here rather than back-filled, because
+  an in-flight history that did not happen is worse than a gap that did.
 - **Priority**: P1
 - **Summary**: Every section heading on Today was a figure of speech. "The day", "Work in motion",
   "Keep the momentum", and "Needs you" are now "Plan", "Projects & initiatives", "Suggested tasks",
@@ -7116,6 +7119,9 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 ### [TODAY-BLOCKED-001] Keep finished and archived tasks out of the blocked list
 
 - **Completed**: 2026-08-29
+- **Process**: Logged at completion. No entry was opened under Active Tasks before the work
+  started, which the Work Tracking Rules require; recorded here rather than back-filled, because
+  an in-flight history that did not happen is worse than a gap that did.
 - **Priority**: P1
 - **Summary**: `selectBlockedTasks` in `apps/api/src/routes/hub-today.ts` selected every task
   assigned to the caller with no filter on `archivedAt`, `completedAt`, or `canceledAt`, while every
@@ -7134,6 +7140,9 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 ### [DX-UI-VERIFY-001] Document how to verify UI from a worktree
 
 - **Completed**: 2026-08-29
+- **Process**: Logged at completion. No entry was opened under Active Tasks before the work
+  started, which the Work Tracking Rules require; recorded here rather than back-filled, because
+  an in-flight history that did not happen is worse than a gap that did.
 - **Priority**: P1
 - **Summary**: Added `docs/engineering/ui-verification.md`, a `verify-ui` skill, and a pointer from
   `AGENTS.md`'s Self-Validation Protocol. The procedure is three existing commands:
@@ -7160,6 +7169,9 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 ### [TODAY-SURFACE-001] Show the day's work on the daily surface
 
 - **Completed**: 2026-08-29
+- **Process**: Logged at completion. No entry was opened under Active Tasks before the work
+  started, which the Work Tracking Rules require; recorded here rather than back-filled, because
+  an in-flight history that did not happen is worse than a gap that did.
 - **Priority**: P1
 - **Summary**: Today renders the accepted plan, the approvals and blockers waiting on the person,
   and the outcomes that work moves — in that order. The page previously opened on a text box, a

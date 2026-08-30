@@ -34,16 +34,16 @@ Screenshots are in `screenshots/2026-08-29-programs-cards/`: `desktop-{light,dar
 response, because every record in a dev workspace is new and every real window is empty. The
 component and its data contract are the shipped ones; only the eight weekly counts stand in.
 
-| Dimension                           | Score | Evidence                                                                                                                                                                                                                                               |
-| ----------------------------------- | ----: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1. Brand identity and voice         |     3 | Calm MD3 surfaces with one blue status pill and a tinted identity mark. Copy states a condition — "On track · Active yesterday" — rather than labelling fields. Nothing here reads as a generic SaaS card grid.                                        |
-| 2. Typographic craft                |     4 | Three registers doing three jobs: `title-large` name, `body-medium` summary, `label-medium`/`label-small` metadata. Before this pass everything under the title sat at 11–12px, which is most of what "bland" meant. No raw type utilities remain.     |
-| 3. Spatial rhythm and density       |     3 | One `gap-3` rhythm inside a single `p-4` inset, with the signal and roll-up bands bottom-anchored so they align across a row. `card-styles.ts` holds the inset, minimum height, and grid so the frame and skeleton cannot disagree again.              |
-| 4. Hierarchy and information design |     4 | Health is now the largest coloured thing on the card, so "which of these needs me?" is answered at a squint before a word is read — see the green/brown/red/neutral column in `desktop-light.png`. Name, summary, signal, roll-up, in that order.      |
-| 5. Colour discipline                |     4 | Health is the only earned colour, spent twice on the same fact (the mark's tint and its label) rather than on two different facts. The histogram dropped from `primary/45` to `outline`; nothing decorative is coloured.                               |
-| 6. Motion and feedback              |     3 | Hover moves the card one full step up the surface ramp with the roll-up container moving with it (`hover-light.png`); focus draws the shared ring on the card's own radius (`focus-light.png`). Both are colour-only — no geometry moves.              |
-| 7. States completeness              |     3 | Loading is built from the card's own parts, so the grid does not resize on resolve (`loading-light.png`). A 90-character name truncates at two lines with a `title` tooltip (`overflow-long-title-light.png`). Nothing renders where nothing is known. |
-| 8. Detail craft                     |     3 | At 200% the histogram sits on the text baseline, roll-up numerals align in their container, and the checkbox lands centred on the 40px mark it replaces. No horizontal overflow at 320px (`w320-light.png`, probe returns false).                      |
+| Dimension                           | Score | Evidence                                                                                                                                                                                                                                                    |
+| ----------------------------------- | ----: | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Brand identity and voice         |     3 | Calm MD3 surfaces with one blue status pill and a tinted identity mark. Copy states a condition — "On track · Active yesterday" — rather than labelling fields. Nothing here reads as a generic SaaS card grid.                                             |
+| 2. Typographic craft                |     4 | Three registers doing three jobs: `title-large` name, `body-medium` summary, `label-medium`/`label-small` metadata. Before this pass everything under the title sat at 11–12px, which is most of what "bland" meant. No raw type utilities remain.          |
+| 3. Spatial rhythm and density       |     3 | One `gap-3` rhythm inside a single `p-4` inset, with the signal and roll-up bands bottom-anchored so they align across a row. `card-styles.ts` holds the inset, minimum height, and grid so the frame and skeleton cannot disagree again.                   |
+| 4. Hierarchy and information design |     4 | Health is now the largest coloured thing on the card, so "which of these needs me?" is answered at a squint before a word is read — see the green/amber/red/neutral column in `desktop-light.png`. Name, summary, signal, roll-up, in that order.           |
+| 5. Colour discipline                |     4 | Health is the only earned colour, spent twice on the same fact (the mark's tint and its label) rather than on two different facts. The histogram dropped from `primary/45` to `outline`, and `at_risk` gained its own token so all three values read apart. |
+| 6. Motion and feedback              |     3 | Hover moves the card one full step up the surface ramp with the roll-up container moving with it (`hover-light.png`); focus draws the shared ring on the card's own radius (`focus-light.png`). Both are colour-only — no geometry moves.                   |
+| 7. States completeness              |     3 | Loading is built from the card's own parts, so the grid does not resize on resolve (`loading-light.png`). A 90-character name truncates at two lines with a `title` tooltip (`overflow-long-title-light.png`). Nothing renders where nothing is known.      |
+| 8. Detail craft                     |     3 | At 200% the histogram sits on the text baseline, roll-up numerals align in their container, and the checkbox lands centred on the 40px mark it replaces. No horizontal overflow at 320px (`w320-light.png`, probe returns false).                           |
 
 Gates: A11y ✅ · Responsive ✅ · Theme parity ✅ · No placeholder ✅ · Screenshot-verified ✅
 
@@ -72,12 +72,15 @@ that had no owner, and the em dash under every card with no health set.
 
 ## Findings
 
-1. **"At risk" is nearly colourless.** `--state-canceled` is `oklch(0.5 0.03 25)` — chroma 0.03, a
-   near-grey, correct for cancelled work and wrong for a warning. On track (chroma 0.15) and off
-   track both read instantly; the middle value, the one worth catching early, reads as beige in
-   both themes. All four health modules borrow this token, so the fix is a `--health-at-risk` token
-   in `globals.css` and a change to the health palette product-wide — a decision worth making
-   deliberately rather than inside a card redesign. **Not fixed; needs a call.**
+1. **"At risk" was nearly colourless.** It borrowed `--state-canceled`, `oklch(0.5 0.03 25)` —
+   chroma 0.03, a near-grey, correct for cancelled work and wrong for a warning. On track (chroma
+   0.15) and off track both read instantly; the middle value, the one worth catching early, read as
+   beige in both themes. **Fixed:** `--health-at-risk` is its own token (`oklch(0.52 0.14 62)` light,
+   `oklch(0.79 0.14 75)` dark), so cancelled work keeps its grey. Lightness matches
+   `--state-completed`, and the three labels measure 4.84:1, 5.38:1 and 7.36:1 against the card in
+   light and 9.43:1, 9.07:1 and 6.18:1 in dark — every one clears AA. Every surface reading
+   `entity-display/health` gets it: the Programs card, both rosters, the Initiative distribution bar
+   and roadmap, the canvas nodes, the pickers, and the updates composer.
 2. **The status pill is the loudest mark and the least informative one.** Every Program in a normal
    workspace is active, so nine identical filled blue pills carry no differentiating information
    while sitting at the top of the colour hierarchy. `WorkStatusBadge` fills only the `started`
@@ -94,9 +97,9 @@ that had no owner, and the em dash under every card with no health set.
 
 ## Verdict
 
-**SHIP.** Every dimension is at or above the bar and all five gates are green. Finding 1 is the one
-worth acting on next, and it is a product-wide palette decision rather than a defect in this
-surface.
+**SHIP.** Every dimension is at or above the bar and all five gates are green. Finding 1 was the
+one worth acting on next and has since been fixed; findings 2 to 4 stay open and are recorded
+above with why.
 
 ## Follow-ups
 

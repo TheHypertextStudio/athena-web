@@ -29,12 +29,14 @@ export const HEALTH_LABEL: Record<Health, string> = {
  * The solid colour for each value — a dot, a swatch, or a distribution segment.
  *
  * @remarks
- * `on_track` borrows the calm green `completed` state token, `at_risk` the amber `canceled` token,
- * and `off_track` the `error` role, so health resolves in both themes without a raw value.
+ * `on_track` borrows the calm green `completed` state token and `off_track` the `error` role.
+ * `at_risk` has a token of its own: it used to borrow `canceled`, a near-grey chosen so that
+ * cancelled work recedes, which left the one value worth catching early as the hardest of the
+ * three to see.
  */
 export const HEALTH_FILL_CLASS: Record<Health, string> = {
   on_track: 'bg-state-completed',
-  at_risk: 'bg-state-canceled',
+  at_risk: 'bg-health-at-risk',
   off_track: 'bg-error',
 };
 
@@ -49,7 +51,7 @@ export const HEALTH_FILL_CLASS: Record<Health, string> = {
  */
 export const HEALTH_GLYPH_CLASS: Record<Health, string> = {
   on_track: 'bg-state-completed/15 text-state-completed',
-  at_risk: 'bg-state-canceled/15 text-state-canceled',
+  at_risk: 'bg-health-at-risk/15 text-health-at-risk',
   off_track: 'bg-error/15 text-error',
 };
 
@@ -62,7 +64,7 @@ export const HEALTH_UNKNOWN_LABEL = 'No health data';
 /** The label colour paired with each {@link HEALTH_FILL_CLASS} fill. */
 const HEALTH_TEXT_CLASS: Record<Health, string> = {
   on_track: 'text-state-completed',
-  at_risk: 'text-state-canceled',
+  at_risk: 'text-health-at-risk',
   off_track: 'text-error',
 };
 

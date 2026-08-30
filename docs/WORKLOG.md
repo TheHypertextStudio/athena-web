@@ -7555,6 +7555,34 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
   `.env.local` points at a file-backed PGlite database shared by the dev stack and the API test
   suite, so seeding a dev account for screenshots corrupts test runs until `pnpm db:reset`.
+
+### [HEALTH-AT-RISK-004] Give the middle health value a colour of its own
+
+- **Completed**: 2026-08-30
+- **Summary**: `at_risk` borrowed `--state-canceled`, a near-grey, so the one health value worth
+  catching early was the hardest of the three to see. It now has `--health-at-risk`, and every
+  surface reading `entity-display/health` picks it up.
+- **Approach**: The grey was correct for what it was named after — cancelled work should recede —
+  and wrong for a warning, so the fix was a new token rather than a change to the existing one.
+  `oklch(0.52 0.14 62)` in light and `oklch(0.79 0.14 75)` in dark: chroma 0.14 to sit in the same
+  register as `--state-completed` (0.15) and `--error` (0.2) instead of 0.03, and lightness matched
+  to `--state-completed` so it clears AA on the light surface ramp.
+- **Files changed**: `packages/ui/src/styles/globals.css` (both themes plus the `@theme inline`
+  mapping), `apps/web/src/components/entity-display/health.tsx` (fill, glyph tint, and label colour).
+- **Validation**: Root typecheck, lint, and format pass; `pnpm test` passes 25 of 26 tasks with
+  `@docket/api`'s 19 pre-existing failures unchanged, and the design-token ledger holds at 618.
+  Contrast was measured in the running app rather than derived: the three labels come back at
+  4.84:1, 5.38:1 and 7.36:1 against the card in light, and 9.43:1, 9.07:1 and 6.18:1 in dark, so
+  all six clear AA. Programs, Projects, and Initiatives were re-captured at both widths and themes.
+- **Learnings**: A contrast probe that reads `getComputedStyle().color` gets `oklch(...)` back in
+  Chromium, and parsing those three numbers as RGB reports a confident 1.00:1. Painting the value
+  into a 1×1 canvas and reading the pixel is what actually resolves it to sRGB. Separately, an
+  `evaluate` callback written as a TypeScript arrow function fails in the page with
+  `__name is not defined` — tsx's transform injects a helper the browser has never seen; pass the
+  body as a string.
+
+---
+
 ### [WORK-VIEW-DEBT-003] Collapse the duplicated roster presentation
 
 - **Completed**: 2026-08-29

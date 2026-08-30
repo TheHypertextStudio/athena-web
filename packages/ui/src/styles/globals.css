@@ -124,6 +124,17 @@
   --state-canceled: oklch(0.5 0.03 25);
 
   /*
+   * Health's middle value.
+   *
+   * `at_risk` used to borrow `--state-canceled`, which is a near-grey (chroma 0.03) because
+   * cancelled work should recede. That is the opposite of what "at risk" needs to do: it is the
+   * one health value worth catching early, and it was the hardest of the three to see, sitting
+   * between a chroma-0.15 green and a chroma-0.2 red. This is its own token so cancelled work can
+   * stay grey. Lightness matches `--state-completed` so it clears AA on the light surface ramp.
+   */
+  --health-at-risk: oklch(0.52 0.14 62);
+
+  /*
    * Label palette (light). Ten hues, each in three roles.
    *
    * A label's stored `color` is one of these keys, never a hex — a single fixed value cannot
@@ -299,6 +310,7 @@
     --state-started: oklch(0.78 0.13 250);
     --state-completed: oklch(0.78 0.14 150);
     --state-canceled: oklch(0.72 0.03 25);
+    --health-at-risk: oklch(0.79 0.14 75);
 
     /*
      * Label palette (dark). Same ten keys, re-tuned rather than re-derived: dots brighten to
@@ -417,6 +429,7 @@
   --color-state-started: var(--state-started);
   --color-state-completed: var(--state-completed);
   --color-state-canceled: var(--state-canceled);
+  --color-health-at-risk: var(--health-at-risk);
 
   /*
    * MD3 tonal surface utilities. These expose `bg-surface`, `bg-surface-container`,

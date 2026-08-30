@@ -44,7 +44,9 @@
   `LINEAR_AGENT_ENABLED=false`.
 - **Blockers for launch**: Deployment, a signed event fixture captured from Linear, the disabled-flag
   sandbox check, installation, account linking, and the live Linear acceptance matrix remain
-  pending. The feature flag must remain false until the sandbox check passes.
+  pending. The feature flag must remain false until the sandbox check passes. Exact-tip E2E run
+  `33300176140` exposed a stale MCP Apps composer locator after the product label changed to
+  `Steer this work`; the release test now targets the visible control label before deployment.
 
 ### [MCP-APPS-STABLE-002] Ship Athena on the official stable MCP Apps SDK
 

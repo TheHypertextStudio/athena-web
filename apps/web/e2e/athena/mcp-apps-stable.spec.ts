@@ -350,7 +350,7 @@ test('canonical Athena invocation creates and restores a fully interactive stabl
   await page.goto(`/athena?session=${SESSION_ID}`);
 
   await expect(page.getByTestId('mcp-app-view')).toHaveCount(0);
-  const composer = page.getByRole('combobox', { name: 'Steer Athena' });
+  const composer = page.getByRole('combobox', { name: 'Steer this work' });
   await composer.fill('Show me the interactive weather card.');
   await page
     .getByRole('form', { name: 'Steer Athena' })

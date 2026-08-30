@@ -16,7 +16,7 @@
 import type { ElicitationOut } from '@docket/athena/elicitation-api';
 import { AlarmClock, CircleAlert, HelpCircle, ListChecks, Sparkles } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
-import { Badge, Button, Chip, ControlGroup, Text } from '@docket/ui/primitives';
+import { Badge, Button, Chip, ControlGroup, Surface, Text } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
 
 import { useNow } from '@/lib/use-now';
@@ -195,15 +195,15 @@ export function ElicitationCard({
   };
 
   return (
-    <article
+    <Surface
+      as="article"
+      tone="canvas"
+      shape="medium"
+      pad="roomy"
       data-elicitation={elicitation.id}
       data-elicitation-status={elicitation.status}
       aria-labelledby={`elicitation-action-${elicitation.id}`}
-      className={cn(
-        'bg-surface-container flex flex-col gap-4 rounded-xl px-4 py-4',
-        focused && 'ring-primary ring-2',
-        className,
-      )}
+      className={cn('flex flex-col gap-4', focused && 'ring-primary ring-2', className)}
     >
       <header className="flex flex-col gap-2">
         <ControlGroup controlSize="xs" wrap>
@@ -319,7 +319,7 @@ export function ElicitationCard({
           ) : null}
         </div>
       )}
-    </article>
+    </Surface>
   );
 }
 

@@ -27,6 +27,8 @@ import {
   DialogHeader,
   DialogTitle,
   Skeleton,
+  Surface,
+  surfaceToneColor,
 } from '@docket/ui/primitives';
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 
@@ -200,7 +202,8 @@ export default function AthenaConversation({
             }
           }}
           className={cn(
-            'border-outline-variant bg-surface-container placeholder:text-on-surface-variant text-body-medium w-full resize-none rounded-xl border px-4 py-3',
+            surfaceToneColor('canvas'),
+            'border-outline-variant placeholder:text-on-surface-variant text-body-medium w-full resize-none rounded-xl border px-4 py-3',
             'focus-visible:ring-ring transition-colors outline-none focus-visible:ring-1 disabled:opacity-50',
           )}
         />
@@ -268,9 +271,13 @@ function ChatEntry({ activity }: ChatEntryProps): JSX.Element | null {
   }
   if (activity.type === 'response' || activity.type === 'elicitation') {
     return (
-      <div className="bg-surface-container text-on-surface text-body-medium mr-auto max-w-[85%] rounded-2xl rounded-bl-sm px-4 py-2.5 whitespace-pre-wrap">
+      <Surface
+        tone="canvas"
+        shape="medium"
+        className="text-body-medium mr-auto max-w-[85%] rounded-bl-sm px-4 py-2.5 whitespace-pre-wrap"
+      >
         {text}
-      </div>
+      </Surface>
     );
   }
   if (activity.type === 'error') {
@@ -287,7 +294,12 @@ function ChatEntry({ activity }: ChatEntryProps): JSX.Element | null {
         ? String((action as Record<string, unknown>)['summary'])
         : 'worked';
     return (
-      <span className="border-outline-variant bg-surface-container text-on-surface-variant mr-auto inline-flex max-w-[85%] items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs">
+      <span
+        className={cn(
+          surfaceToneColor('canvas'),
+          'border-outline-variant text-on-surface-variant mr-auto inline-flex max-w-[85%] items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs',
+        )}
+      >
         <span className="truncate">{summary}</span>
       </span>
     );

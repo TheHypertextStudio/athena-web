@@ -391,7 +391,7 @@ function VoiceTurn({ turn }: { readonly turn: VoiceTurnOut }): JSX.Element {
           'max-w-[85%] rounded-lg px-3 py-2',
           mine
             ? 'bg-secondary-container text-on-secondary-container'
-            : 'bg-surface-container-high text-on-surface',
+            : cn(surfaceToneColor('floating'), 'text-on-surface'),
         )}
       >
         <Text token="body-medium" tone="inherit">

@@ -556,11 +556,11 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
 
   if (failure) {
     return (
-      <div className="bg-surface-container rounded-xl px-4 py-3" data-testid="mcp-app-view-failure">
+      <Surface tone="canvas" shape="medium" pad="roomy" data-testid="mcp-app-view-failure">
         <Text token="body-small" tone="muted">
           {failure}
         </Text>
-      </div>
+      </Surface>
     );
   }
 

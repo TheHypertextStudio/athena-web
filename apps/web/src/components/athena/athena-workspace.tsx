@@ -1,7 +1,8 @@
 'use client';
 
 import { useQueryClient } from '@tanstack/react-query';
-import { Button, Skeleton } from '@docket/ui/primitives';
+import { cn } from '@docket/ui/lib/utils';
+import { Button, Skeleton, Surface, surfaceToneColor } from '@docket/ui/primitives';
 import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
@@ -273,7 +274,12 @@ export function AthenaWorkspace({
   const pending = actions.pending;
 
   return (
-    <div data-athena-workspace className="bg-surface flex h-full min-h-0 w-full flex-col">
+    <Surface
+      tone="page"
+      shape="none"
+      data-athena-workspace
+      className="flex h-full min-h-0 w-full flex-col"
+    >
       <header className="border-outline-variant flex min-h-16 flex-wrap items-center gap-x-4 gap-y-2 border-b px-4 py-3 @2xl:px-6">
         <div className="min-w-0 flex-1">
           <h1 className="text-on-surface text-xl font-semibold tracking-[-0.015em]">
@@ -331,9 +337,12 @@ export function AthenaWorkspace({
         </p>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto @3xl:grid @3xl:grid-cols-[19rem_minmax(0,1fr)] @3xl:overflow-hidden @6xl:grid-cols-[19rem_minmax(0,1fr)_16rem]">
-          <nav
+          <Surface
+            as="nav"
+            tone="card"
+            shape="none"
             aria-label="Athena work queue"
-            className="border-outline-variant bg-surface-container-low max-h-[34vh] shrink-0 overflow-y-auto border-b @3xl:max-h-none @3xl:border-r @3xl:border-b-0"
+            className="border-outline-variant max-h-[34vh] shrink-0 overflow-y-auto border-b @3xl:max-h-none @3xl:border-r @3xl:border-b-0"
           >
             {/* The one conversation is browsable from the same column the work queue lives in:
                 topics derived from what you said, a keyword lookup, and a date range. */}
@@ -348,7 +357,12 @@ export function AthenaWorkspace({
             </div>
             {groups.map((group) => (
               <section key={group.key} aria-labelledby={`athena-lane-${group.key}`}>
-                <div className="border-outline-variant bg-surface-container-low sticky top-0 z-10 flex items-center justify-between border-b px-3 py-2">
+                <Surface
+                  as="header"
+                  tone="card"
+                  shape="none"
+                  className="border-outline-variant sticky top-0 z-10 flex items-center justify-between border-b px-3 py-2"
+                >
                   <h2
                     id={`athena-lane-${group.key}`}
                     className="text-on-surface text-xs font-semibold"
@@ -364,7 +378,7 @@ export function AthenaWorkspace({
                           ? queue.data.counts.working
                           : queue.data.counts.finished}
                   </span>
-                </div>
+                </Surface>
                 {group.items.length > 0 ? (
                   <ul className="divide-outline-variant divide-y">
                     {group.items.map((session) => (
@@ -398,7 +412,7 @@ export function AthenaWorkspace({
                 ) : null}
               </section>
             ))}
-          </nav>
+          </Surface>
 
           <main className="flex min-h-[32rem] min-w-0 shrink-0 flex-col @3xl:min-h-0">
             {/* What Athena is waiting on sits above the work log, inside the conversation that
@@ -482,7 +496,10 @@ export function AthenaWorkspace({
                       onChange={setNewObjective}
                       {...(mentionOrgId === undefined ? {} : { orgId: mentionOrgId })}
                       insertMode="context"
-                      className="border-outline-variant bg-surface-container-low text-on-surface placeholder:text-on-surface-variant focus-visible:ring-ring mt-2 w-full resize-none rounded-lg border p-3 text-sm leading-6 outline-none focus-visible:ring-2"
+                      className={cn(
+                        surfaceToneColor('card'),
+                        'border-outline-variant text-on-surface placeholder:text-on-surface-variant focus-visible:ring-ring mt-2 w-full resize-none rounded-lg border p-3 text-sm leading-6 outline-none focus-visible:ring-2',
+                      )}
                     />
                   </label>
                   <div className="mt-3 flex justify-end">
@@ -499,7 +516,12 @@ export function AthenaWorkspace({
             )}
           </main>
 
-          <aside className="border-outline-variant bg-surface-container-low hidden overflow-y-auto border-l p-4 @6xl:block">
+          <Surface
+            as="aside"
+            tone="card"
+            shape="none"
+            className="border-outline-variant hidden overflow-y-auto border-l p-4 @6xl:block"
+          >
             <h2 className="text-on-surface text-sm font-semibold">Current context</h2>
             <dl className="mt-3 space-y-3 text-sm">
               <div>
@@ -537,10 +559,10 @@ export function AthenaWorkspace({
                 </p>
               </div>
             ) : null}
-          </aside>
+          </Surface>
         </div>
       )}
-    </div>
+    </Surface>
   );
 }
 

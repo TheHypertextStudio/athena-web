@@ -1,7 +1,7 @@
 'use client';
 
 import { cn } from '@docket/ui/lib/utils';
-import { Button } from '@docket/ui/primitives';
+import { Button, Surface, surfaceToneColor } from '@docket/ui/primitives';
 import { type JSX, type SyntheticEvent, useMemo, useState } from 'react';
 
 import { presentAthenaSession, type PersonalAthenaSessionDetail } from '@/lib/athena/presentation';
@@ -60,7 +60,12 @@ export function AthenaWorkbench({
   }
 
   return (
-    <article className={cn('bg-surface text-on-surface flex min-h-0 flex-1 flex-col', className)}>
+    <Surface
+      as="article"
+      tone="page"
+      shape="none"
+      className={cn('flex min-h-0 flex-1 flex-col', className)}
+    >
       <header className="border-outline-variant flex flex-col gap-3 border-b px-4 py-4 @2xl:px-6">
         <div className="text-label-medium flex flex-wrap items-center gap-2">
           <span className="bg-primary-container text-on-primary-container rounded-full px-2.5 py-1 font-medium">
@@ -279,7 +284,12 @@ export function AthenaWorkbench({
         </section>
 
         {view.result ? (
-          <section className="border-outline-variant bg-surface-container-low mx-4 mb-4 border px-4 py-4 @2xl:mx-6">
+          <Surface
+            as="section"
+            tone="card"
+            shape="none"
+            className="border-outline-variant mx-4 mb-4 border px-4 py-4 @2xl:mx-6"
+          >
             <h3 className="text-on-surface font-semibold">{view.result.title}</h3>
             <p className="text-on-surface-variant mt-1 text-sm leading-6">{view.result.summary}</p>
             {view.result.receipt && view.result.receipt.length > 0 ? (
@@ -295,12 +305,17 @@ export function AthenaWorkbench({
                 ))}
               </dl>
             ) : null}
-          </section>
+          </Surface>
         ) : null}
       </div>
 
       {session.status === 'canceled' ? (
-        <div className="border-outline-variant bg-surface flex items-center justify-between gap-3 border-t p-3 @2xl:p-4">
+        <div
+          className={cn(
+            surfaceToneColor('page'),
+            'border-outline-variant flex items-center justify-between gap-3 border-t p-3 @2xl:p-4',
+          )}
+        >
           <p className="text-on-surface-variant text-sm">This work is closed.</p>
           <Button type="button" className="min-h-10" disabled={pending} onClick={onStartNewWork}>
             Start new work
@@ -309,7 +324,10 @@ export function AthenaWorkbench({
       ) : (
         <form
           aria-label={freeformQuestion ? 'Answer Athena' : 'Steer Athena'}
-          className="border-outline-variant bg-surface flex items-end gap-2 border-t p-3 @2xl:p-4"
+          className={cn(
+            surfaceToneColor('page'),
+            'border-outline-variant flex items-end gap-2 border-t p-3 @2xl:p-4',
+          )}
           onSubmit={submit}
         >
           <label className="min-w-0 flex-1">
@@ -323,7 +341,10 @@ export function AthenaWorkbench({
               onChange={setDraft}
               {...(mentionOrgId === undefined ? {} : { orgId: mentionOrgId })}
               insertMode="context"
-              className="border-outline-variant bg-surface-container-low text-on-surface placeholder:text-on-surface-variant focus-visible:ring-ring min-h-12 w-full resize-none rounded-lg border px-3 py-2 text-sm leading-6 outline-none focus-visible:ring-2 disabled:opacity-60"
+              className={cn(
+                surfaceToneColor('card'),
+                'border-outline-variant text-on-surface placeholder:text-on-surface-variant focus-visible:ring-ring min-h-12 w-full resize-none rounded-lg border px-3 py-2 text-sm leading-6 outline-none focus-visible:ring-2 disabled:opacity-60',
+              )}
             />
           </label>
           <Button
@@ -335,6 +356,6 @@ export function AthenaWorkbench({
           </Button>
         </form>
       )}
-    </article>
+    </Surface>
   );
 }

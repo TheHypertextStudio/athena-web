@@ -11,7 +11,15 @@
  * app would hand a stranger a styling and tracking surface inside somebody's workspace.
  */
 import { ArrowRight, Mail, Plus } from '@docket/ui/icons';
-import { Badge, Button, ControlGroup, Skeleton, Text, Toolbar } from '@docket/ui/primitives';
+import {
+  Badge,
+  Button,
+  ControlGroup,
+  Skeleton,
+  Surface,
+  Text,
+  Toolbar,
+} from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
 import { type JSX, useState } from 'react';
 
@@ -143,7 +151,7 @@ export function MailMessageView({ messageId }: MailMessageViewProps): JSX.Elemen
         </ControlGroup>
       ) : null}
 
-      <div className="bg-surface-container-low rounded-xl px-4 py-4">
+      <Surface tone="card" shape="medium" pad="roomy">
         {message.content ? (
           <Text as="p" token="body-medium" className="whitespace-pre-wrap">
             {message.content}
@@ -153,7 +161,7 @@ export function MailMessageView({ messageId }: MailMessageViewProps): JSX.Elemen
             The message body has not been retrieved. The envelope above is what arrived.
           </Text>
         )}
-      </div>
+      </Surface>
 
       {message.streamEventId ? (
         <Link href="/stream" className="w-fit cursor-pointer">

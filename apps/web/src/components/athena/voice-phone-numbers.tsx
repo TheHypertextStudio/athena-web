@@ -33,7 +33,16 @@
 import { DIAL_CODES, DEFAULT_DIAL_CODE } from '@docket/athena/phone';
 import type { PhoneChallengeOut, PhoneNumberOut, PhoneNumberStatus } from '@docket/athena/phone';
 import { Check, Phone, PhoneOff, Trash2 } from '@docket/ui/icons';
-import { Badge, Button, ControlGroup, Field, Input, Select, Text } from '@docket/ui/primitives';
+import {
+  Badge,
+  Button,
+  ControlGroup,
+  Field,
+  Input,
+  Select,
+  Surface,
+  Text,
+} from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import { type JSX, useEffect, useMemo, useState } from 'react';
 
@@ -275,9 +284,13 @@ export function VoicePhoneNumbers(): JSX.Element {
       {items.length > 0 ? (
         <ul className="flex flex-col gap-2" data-phone-number-list>
           {items.map((number) => (
-            <li
+            <Surface
+              as="li"
+              tone="canvas"
+              shape="small"
+              pad="comfortable"
               key={number.id}
-              className="bg-surface-container flex items-center gap-3 rounded-md px-3 py-2"
+              className="flex items-center gap-3"
               data-phone-number-row
               data-phone-number-id={number.id}
             >
@@ -336,7 +349,7 @@ export function VoicePhoneNumbers(): JSX.Element {
                   <Trash2 aria-hidden="true" />
                 </Button>
               </ControlGroup>
-            </li>
+            </Surface>
           ))}
         </ul>
       ) : null}

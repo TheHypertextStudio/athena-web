@@ -2,7 +2,8 @@
 
 import type { RailPanelStatus } from '@docket/ui/components';
 import { Sparkles } from '@docket/ui/icons';
-import { Button, Skeleton } from '@docket/ui/primitives';
+import { cn } from '@docket/ui/lib/utils';
+import { Button, Skeleton, Surface, surfaceToneColor } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
 import {
   createContext,
@@ -283,11 +284,19 @@ export function AthenaRailPanel(): JSX.Element {
   );
 
   return (
-    <section
-      className="bg-surface text-on-surface flex h-full min-h-0 flex-col"
+    <Surface
+      as="section"
+      tone="page"
+      shape="none"
+      className="flex h-full min-h-0 flex-col"
       aria-label="Athena"
     >
-      <header className="border-outline-variant bg-surface-container-low flex min-h-14 shrink-0 items-center gap-2 border-b px-3">
+      <Surface
+        as="header"
+        tone="card"
+        shape="none"
+        className="border-outline-variant flex min-h-14 shrink-0 items-center gap-2 border-b px-3"
+      >
         {athena.selectedId || athena.launchDraft !== null ? (
           <Button
             type="button"
@@ -314,7 +323,7 @@ export function AthenaRailPanel(): JSX.Element {
             Open full
           </Link>
         </Button>
-      </header>
+      </Surface>
 
       {athena.feedback ? (
         <p
@@ -388,7 +397,7 @@ export function AthenaRailPanel(): JSX.Element {
           )}
         </nav>
       )}
-    </section>
+    </Surface>
   );
 }
 
@@ -422,7 +431,10 @@ function AthenaRailComposer(): JSX.Element {
         onChange={setDraft}
         {...(mentionOrgId === undefined ? {} : { orgId: mentionOrgId })}
         insertMode="context"
-        className="border-outline-variant bg-surface-container-low text-on-surface text-body-medium focus-visible:ring-ring w-full resize-none rounded-lg border p-3 outline-none focus-visible:ring-2"
+        className={cn(
+          surfaceToneColor('card'),
+          'border-outline-variant text-on-surface text-body-medium focus-visible:ring-ring w-full resize-none rounded-lg border p-3 outline-none focus-visible:ring-2',
+        )}
       />
       <div className="flex justify-end gap-2">
         <Button type="button" variant="ghost" className="min-h-10" onClick={athena.closeAthena}>

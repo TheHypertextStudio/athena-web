@@ -76,10 +76,20 @@ export function uiMetaSpread(meta: unknown): { ui?: McpUiToolMeta | undefined } 
 export function readUiResourceMeta(meta: unknown): McpUiResourceMeta | null {
   if (typeof meta !== 'object' || meta === null) return null;
   for (const key of [MCP_UI_META_KEY, MCP_UI_EXTENSION]) {
+    if (!Object.hasOwn(meta, key)) continue;
     const parsed = McpUiResourceMetaSchema.safeParse(Reflect.get(meta, key));
     if (parsed.success) return parsed.data as McpUiResourceMeta;
+    return null;
   }
   return null;
+}
+
+function declaresUiResourceMeta(meta: unknown): boolean {
+  return (
+    typeof meta === 'object' &&
+    meta !== null &&
+    [MCP_UI_META_KEY, MCP_UI_EXTENSION].some((key) => Object.hasOwn(meta, key))
+  );
 }
 
 /** A remote MCP endpoint plus its unsealed credential. */
@@ -622,15 +632,17 @@ export class RealMcpConnector implements McpConnector {
           const text = decodeUiResourceHtml(item);
           if (text === null) continue;
           const mimeType = typeof item.mimeType === 'string' ? item.mimeType : '';
+          const meta = readUiResourceMeta(item._meta);
+          if (declaresUiResourceMeta(item._meta) && meta === null) continue;
           if (
             !isRenderableUiResource({
               uri: typeof item.uri === 'string' ? item.uri : uri,
               mimeType,
               text,
+              ...(meta ? { meta } : {}),
             })
           )
             continue;
-          const meta = readUiResourceMeta(item._meta);
           return {
             uri: typeof item.uri === 'string' ? item.uri : uri,
             mimeType,

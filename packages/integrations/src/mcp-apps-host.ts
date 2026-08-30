@@ -295,6 +295,23 @@ const TEARDOWN_TIMEOUT_MS = 1_000;
 /** The stable display modes Athena implements in the browser. */
 const STABLE_DISPLAY_MODES = new Set<McpUiDisplayMode>(['inline', 'fullscreen']);
 
+/** Keep stored and emitted host context inside Athena's stable display-mode surface. */
+function stableHostContext(
+  value: McpUiHostContext,
+  fallbackDisplayMode: McpUiDisplayMode = 'inline',
+): McpUiHostContext {
+  const displayMode = STABLE_DISPLAY_MODES.has(value.displayMode ?? fallbackDisplayMode)
+    ? (value.displayMode ?? fallbackDisplayMode)
+    : fallbackDisplayMode;
+  return {
+    ...value,
+    displayMode,
+    availableDisplayModes: (value.availableDisplayModes ?? AVAILABLE_DISPLAY_MODES).filter((mode) =>
+      STABLE_DISPLAY_MODES.has(mode),
+    ),
+  };
+}
+
 /** Normalize facade results to the official MCP `CallToolResult` contract. */
 function officialToolResult(result: HostToolResult): CallToolResult {
   return {
@@ -419,10 +436,8 @@ export function createMcpAppHost(options: McpAppHostOptions): McpAppHost {
   let initialized = false;
   let toolInputSent = false;
   let teardownPromise: Promise<void> | null = null;
-  const declaredModes = options.hostContext?.availableDisplayModes ?? AVAILABLE_DISPLAY_MODES;
-  let context: McpUiHostContext = {
+  let context = stableHostContext({
     ...(options.hostContext ?? {}),
-    availableDisplayModes: declaredModes.filter((mode) => STABLE_DISPLAY_MODES.has(mode)),
     ...(options.tool
       ? {
           toolInfo: {
@@ -435,7 +450,7 @@ export function createMcpAppHost(options: McpAppHostOptions): McpAppHost {
           },
         }
       : {}),
-  };
+  });
   const capabilities: McpUiHostCapabilities = {
     ...(options.openLink ? { openLinks: {} } : {}),
     ...(options.callTool ? { serverTools: { listChanged: false } } : {}),
@@ -610,7 +625,7 @@ export function createMcpAppHost(options: McpAppHostOptions): McpAppHost {
       enqueue(async () => bridge.sendToolCancelled(reason === undefined ? {} : { reason }));
     },
     updateHostContext(patch): void {
-      context = { ...context, ...patch };
+      context = stableHostContext({ ...context, ...patch }, context.displayMode ?? 'inline');
       if (!closed) bridge.setHostContext(context);
     },
     async requestTeardown(): Promise<void> {

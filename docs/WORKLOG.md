@@ -86,6 +86,14 @@
   adapter instead preserves the proxy window and message listener for the response or one-second
   timeout, then closes the bridge. Production and upstream-reference acceptance remain part of the
   later end-to-end layer.
+- **Layer 1 review fix**: Normalize initial and updated host context before it reaches AppBridge, so
+  picture-in-picture is never stored, emitted, or returned as the current mode. The real remote
+  connector now distinguishes absent UI metadata from declared invalid metadata and rejects the
+  latter instead of returning a metadata-free resource. The covering REDs reproduced both leaks;
+  the Task 1 matrix now passes 100 integration, 36 API, and 18 Web tests. Affected typechecks,
+  ESLint, and the Web production build pass. Per controller ruling, ancestor cleanup keeps the
+  captured teardown channel and one-second wait rather than adding ghost DOM; app-controlled
+  removal still waits before hiding the view.
 - **Blockers**: Production acceptance needs an authenticated live Athena account and a publicly
   reachable pinned upstream reference server; local and CI evidence cannot substitute for it.
 

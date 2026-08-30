@@ -98,6 +98,29 @@ describe('handshake', () => {
     expect(host.appCapabilities).toEqual({ availableDisplayModes: ['inline', 'fullscreen'] });
   });
 
+  it('normalizes an initial picture-in-picture context to inline', async () => {
+    const { host, handshake, resultFor } = harness({
+      hostContext: {
+        displayMode: 'pip',
+        availableDisplayModes: ['inline', 'fullscreen', 'pip'],
+      },
+    });
+
+    const result = await handshake();
+    const initializedContext = result['hostContext'] as Record<string, unknown>;
+    expect(initializedContext['displayMode']).toBe('inline');
+    expect(initializedContext['availableDisplayModes']).toEqual(['inline', 'fullscreen']);
+    expect(host.hostContext.displayMode).toBe('inline');
+
+    await host.receive({
+      jsonrpc: '2.0',
+      id: 'pip-mode',
+      method: MCP_UI_METHODS.requestDisplayMode,
+      params: { mode: 'pip' },
+    });
+    expect(resultFor('pip-mode')?.result).toEqual({ mode: 'inline' });
+  });
+
   it('states its own protocol version when the view asks for one it does not speak', async () => {
     const { host, resultFor } = harness();
     await host.receive({
@@ -466,6 +489,23 @@ describe('view-initiated host requests', () => {
     });
     expect(resultFor(25)?.result).toEqual({ mode: 'inline' });
     expect(host.hostContext.displayMode).toBe('inline');
+  });
+
+  it('drops picture-in-picture from later host-context patches', async () => {
+    const { host, posted, handshake } = harness({
+      hostContext: { displayMode: 'inline', availableDisplayModes: ['inline', 'fullscreen'] },
+    });
+    await handshake();
+
+    host.updateHostContext({
+      displayMode: 'pip',
+      availableDisplayModes: ['fullscreen', 'pip'],
+    });
+
+    expect(host.hostContext.displayMode).toBe('inline');
+    expect(host.hostContext.availableDisplayModes).toEqual(['fullscreen']);
+    const patch = posted.find((message) => message.method === MCP_UI_METHODS.hostContextChanged);
+    expect(JSON.stringify(patch?.params)).not.toContain('pip');
   });
 
   it('rejects an unknown display mode', async () => {

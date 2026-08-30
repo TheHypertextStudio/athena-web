@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger,
   Text,
 } from '@docket/ui/primitives';
+import { ResponsiveControlGroup, type ResponsiveControlItem } from '@docket/ui/components';
 import { ChevronLeft, ChevronRight, Filter, Plus, Schedule, X } from '@docket/ui/icons';
 import { type JSX, useMemo, useState } from 'react';
 
@@ -172,6 +173,7 @@ export function TimeAnalytics(): JSX.Element {
   const projects = projectsQ.data?.items ?? [];
   const tasks = tasksQ.data?.items ?? [];
   const categories = categoriesQ.data?.items ?? [];
+  const cycles = cyclesQ.data?.items ?? [];
   const error = timelineQ.error ?? summaryQ.error ?? breakdownQ.error;
   const filters = activeFilters(state, orgs, projects, tasks, categories);
 
@@ -208,100 +210,20 @@ export function TimeAnalytics(): JSX.Element {
         </Button>
       </div>
 
-      <div className="flex min-w-0 [scrollbar-width:none] items-center gap-2 overflow-x-auto pb-1">
-        <div
-          className="bg-surface-container-low flex shrink-0 items-center rounded-xl p-1"
-          aria-label="Time period"
-        >
-          {PERIODS.map(([id, label]) => {
-            if (id === 'cycle') {
-              return (
-                <DropdownMenu key={id}>
-                  <DropdownMenuTrigger asChild>
-                    <Button size="sm" variant={state.period === id ? 'secondary' : 'ghost'}>
-                      {label}
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="start">
-                    <DropdownMenuLabel>Choose a cycle</DropdownMenuLabel>
-                    {(cyclesQ.data?.items ?? []).map((cycle) => (
-                      <DropdownMenuItem
-                        key={cycle.id}
-                        onSelect={() => {
-                          update(
-                            applyTimeReviewPatch(state, {
-                              period: 'cycle',
-                              cycleId: cycle.id,
-                              workspaceId: cycle.workspaceId,
-                            }),
-                          );
-                        }}
-                      >
-                        {cycle.workspaceName} · {cycle.name}
-                      </DropdownMenuItem>
-                    ))}
-                    {(cyclesQ.data?.items.length ?? 0) === 0 ? (
-                      <DropdownMenuItem disabled>No cycles are available to you.</DropdownMenuItem>
-                    ) : null}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              );
-            }
-            return (
-              <Button
-                key={id}
-                size="sm"
-                variant={state.period === id ? 'secondary' : 'ghost'}
-                onClick={() => {
-                  patch(
-                    id === 'custom'
-                      ? {
-                          period: id,
-                          start: state.anchor,
-                          end: Temporal.PlainDate.from(state.anchor).add({ days: 1 }).toString(),
-                        }
-                      : { period: id },
-                  );
-                }}
-              >
-                {label}
-              </Button>
-            );
-          })}
-        </div>
-        <Button
-          size="sm"
-          variant="secondary"
-          className="shrink-0"
-          aria-label={`Previous ${state.period}`}
-          onClick={() => {
-            update(navigateTimeReviewPeriod(state, -1));
-          }}
-        >
-          <ChevronLeft aria-hidden="true" />
-        </Button>
-        <Button
-          size="sm"
-          variant="secondary"
-          className="shrink-0"
-          aria-label={`Next ${state.period}`}
-          onClick={() => {
-            update(navigateTimeReviewPeriod(state, 1));
-          }}
-        >
-          <ChevronRight aria-hidden="true" />
-        </Button>
-        <TimeFilterMenu
-          state={state}
-          workspaces={orgs}
-          projects={projects}
-          tasks={tasks}
-          categories={categories}
-          cycles={cyclesQ.data?.items ?? []}
-          onPatch={patch}
-          onState={update}
-        />
-      </div>
+      <ResponsiveControlGroup
+        label="Time review controls"
+        overflowLabel="More time controls"
+        items={timeReviewControlItems({
+          state,
+          cycles,
+          workspaces: orgs,
+          projects,
+          tasks,
+          categories,
+          onPatch: patch,
+          onState: update,
+        })}
+      />
 
       {state.period === 'custom' ? <CustomRangeControls state={state} onPatch={patch} /> : null}
 
@@ -431,16 +353,7 @@ export function TimeAnalytics(): JSX.Element {
   );
 }
 
-function TimeFilterMenu({
-  state,
-  workspaces,
-  projects,
-  tasks,
-  categories,
-  cycles,
-  onPatch,
-  onState,
-}: {
+interface TimeFilterProps {
   readonly state: TimeReviewState;
   readonly workspaces: readonly { id: string; name: string }[];
   readonly projects: readonly { id: string; name: string }[];
@@ -456,15 +369,20 @@ function TimeFilterMenu({
   }[];
   readonly onPatch: (patch: Partial<TimeReviewState>) => void;
   readonly onState: (state: TimeReviewState) => void;
-}): JSX.Element {
+}
+
+function TimeFilterItems({
+  state,
+  workspaces,
+  projects,
+  tasks,
+  categories,
+  cycles,
+  onPatch,
+  onState,
+}: TimeFilterProps): JSX.Element {
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button size="sm" variant="secondary" className="shrink-0">
-          <Filter aria-hidden="true" /> Filters
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="max-h-[min(70vh,32rem)] overflow-y-auto">
+    <>
         <DropdownMenuLabel>Show</DropdownMenuLabel>
         {MEASURES.map(([id, label]) => (
           <DropdownMenuItem
@@ -582,9 +500,213 @@ function TimeFilterMenu({
             {cycle.workspaceName} · {cycle.name}
           </DropdownMenuItem>
         ))}
+    </>
+  );
+}
+
+function TimeFilterMenu(props: TimeFilterProps): JSX.Element {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button size="sm" variant="secondary">
+          <Filter aria-hidden="true" /> Filters
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <TimeFilterItems {...props} />
       </DropdownMenuContent>
     </DropdownMenu>
   );
+}
+
+function TimeFilterOverflow(props: TimeFilterProps): JSX.Element {
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger>Filters</DropdownMenuSubTrigger>
+      <DropdownMenuSubContent>
+        <TimeFilterItems {...props} />
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
+  );
+}
+
+function CyclePeriodItems({
+  state,
+  cycles,
+  onState,
+}: Pick<TimeFilterProps, 'state' | 'cycles' | 'onState'>): JSX.Element {
+  return (
+    <>
+      <DropdownMenuLabel>Choose a cycle</DropdownMenuLabel>
+      {cycles.map((cycle) => (
+        <DropdownMenuItem
+          key={cycle.id}
+          onSelect={() => {
+            onState(
+              applyTimeReviewPatch(state, {
+                period: 'cycle',
+                cycleId: cycle.id,
+                workspaceId: cycle.workspaceId,
+              }),
+            );
+          }}
+        >
+          {cycle.workspaceName} · {cycle.name}
+        </DropdownMenuItem>
+      ))}
+      {cycles.length === 0 ? (
+        <DropdownMenuItem disabled>No cycles are available to you.</DropdownMenuItem>
+      ) : null}
+    </>
+  );
+}
+
+function CyclePeriodMenu({
+  state,
+  selected,
+  cycles,
+  onState,
+}: Pick<TimeFilterProps, 'state' | 'cycles' | 'onState'> & {
+  readonly selected: boolean;
+}): JSX.Element {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button size="sm" variant={selected ? 'secondary' : 'ghost'}>
+          Cycle
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        <CyclePeriodItems state={state} cycles={cycles} onState={onState} />
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function CyclePeriodOverflow(
+  props: Pick<TimeFilterProps, 'state' | 'cycles' | 'onState'>,
+): JSX.Element {
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger>Cycle</DropdownMenuSubTrigger>
+      <DropdownMenuSubContent>
+        <CyclePeriodItems {...props} />
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
+  );
+}
+
+function timeReviewControlItems(props: TimeFilterProps): readonly ResponsiveControlItem[] {
+  const selectPeriod = (period: (typeof PERIODS)[number][0]): void => {
+    props.onPatch(
+      period === 'custom'
+        ? {
+            period,
+            start: props.state.anchor,
+            end: Temporal.PlainDate.from(props.state.anchor).add({ days: 1 }).toString(),
+          }
+        : { period },
+    );
+  };
+  const periodItems = PERIODS.map(([id, label]) => ({
+    id: `period-${id}`,
+    priority: id === props.state.period ? 0 : 3,
+    alwaysVisible: id === props.state.period,
+    inline:
+      id === 'cycle' ? (
+        <CyclePeriodMenu
+          state={props.state}
+          selected={id === props.state.period}
+          cycles={props.cycles}
+          onState={props.onState}
+        />
+      ) : (
+        <Button
+          type="button"
+          size="sm"
+          variant={id === props.state.period ? 'secondary' : 'ghost'}
+          onClick={() => {
+            selectPeriod(id);
+          }}
+        >
+          {label}
+        </Button>
+      ),
+    overflow:
+      id === 'cycle' ? (
+        <CyclePeriodOverflow state={props.state} cycles={props.cycles} onState={props.onState} />
+      ) : (
+        <DropdownMenuItem
+          onSelect={() => {
+            selectPeriod(id);
+          }}
+        >
+          {label}
+        </DropdownMenuItem>
+      ),
+  }));
+
+  return [
+    ...periodItems,
+    {
+      id: 'previous',
+      priority: 1,
+      inline: (
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          aria-label={`Previous ${props.state.period}`}
+          onClick={() => {
+            props.onState(navigateTimeReviewPeriod(props.state, -1));
+          }}
+        >
+          <ChevronLeft aria-hidden="true" />
+        </Button>
+      ),
+      overflow: (
+        <DropdownMenuItem
+          onSelect={() => {
+            props.onState(navigateTimeReviewPeriod(props.state, -1));
+          }}
+        >
+          Previous {props.state.period}
+        </DropdownMenuItem>
+      ),
+    },
+    {
+      id: 'next',
+      priority: 1,
+      inline: (
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          aria-label={`Next ${props.state.period}`}
+          onClick={() => {
+            props.onState(navigateTimeReviewPeriod(props.state, 1));
+          }}
+        >
+          <ChevronRight aria-hidden="true" />
+        </Button>
+      ),
+      overflow: (
+        <DropdownMenuItem
+          onSelect={() => {
+            props.onState(navigateTimeReviewPeriod(props.state, 1));
+          }}
+        >
+          Next {props.state.period}
+        </DropdownMenuItem>
+      ),
+    },
+    {
+      id: 'filters',
+      priority: 2,
+      inline: <TimeFilterMenu {...props} />,
+      overflow: <TimeFilterOverflow {...props} />,
+    },
+  ];
 }
 
 function CustomRangeControls({
@@ -705,24 +827,36 @@ function Breakdown({
   );
   return (
     <section className="flex min-w-0 flex-col gap-3">
-      <div
-        className="flex min-w-0 [scrollbar-width:none] gap-2 overflow-x-auto pb-1"
-        aria-label="Break down by"
-      >
-        {DIMENSIONS.map(([id, label]) => (
-          <Button
-            key={id}
-            size="sm"
-            variant={dimension === id ? 'secondary' : 'ghost'}
-            className="shrink-0"
-            onClick={() => {
-              onDimension(id);
-            }}
-          >
-            {label}
-          </Button>
-        ))}
-      </div>
+      <ResponsiveControlGroup
+        label="Breakdown dimension"
+        overflowLabel="More breakdown dimensions"
+        items={DIMENSIONS.map(([id, label]) => ({
+          id,
+          priority: id === dimension ? 0 : 1,
+          alwaysVisible: id === dimension,
+          inline: (
+            <Button
+              type="button"
+              size="sm"
+              variant={dimension === id ? 'secondary' : 'ghost'}
+              onClick={() => {
+                onDimension(id);
+              }}
+            >
+              {label}
+            </Button>
+          ),
+          overflow: (
+            <DropdownMenuItem
+              onSelect={() => {
+                onDimension(id);
+              }}
+            >
+              {label}
+            </DropdownMenuItem>
+          ),
+        }))}
+      />
       {loading ? (
         <Text token="body-medium" tone="muted">
           Loading breakdown…

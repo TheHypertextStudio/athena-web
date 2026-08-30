@@ -25,7 +25,7 @@ const {
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: routerReplace }),
 }));
-vi.mock('../../src/lib/app-location', () => ({
+vi.mock('@/lib/app-location', () => ({
   useAppSearchParams: () => new URLSearchParams(),
 }));
 vi.mock('../../src/components/active-org', () => ({
@@ -100,7 +100,7 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('TimeAnalytics', () => {
-  it('keeps the primary personal-review controls visible without a wrapping toolbar', async () => {
+  it('groups period navigation and filters into named responsive time controls', async () => {
     renderAnalytics();
     expect(screen.getByRole('button', { name: 'Add past time' })).toBeInTheDocument();
     for (const label of ['Day', 'Week', 'Month', 'Cycle', 'Custom', 'Filters'])
@@ -110,7 +110,7 @@ describe('TimeAnalytics', () => {
     await waitFor(() => {
       expect(summaryGet).toHaveBeenCalled();
     });
-    expect(screen.getByLabelText('Time period').parentElement).toHaveClass('overflow-x-auto');
+    expect(screen.getByLabelText('Time review controls')).toBeInTheDocument();
   });
 
   it('shows the selected period as a browsable empty session range', async () => {

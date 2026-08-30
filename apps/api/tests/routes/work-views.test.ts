@@ -2845,6 +2845,62 @@ describe('work-view routes', () => {
     expect(secondPage.nextCursor).toBeNull();
   });
 
+  it('rebalances a bounded persisted neighborhood before assigning an exhausted rank', async () => {
+    const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(schema.db, schema);
+    await grantOrganizationCapability(orgId, humanActorId, 'contribute');
+    const taskStatusId = statusId('task', 'todo');
+    const oldWrite = new Date('2020-01-01T00:00:00.000Z');
+    const itemId = (position: number): string => `B${String(position).padStart(25, '0')}`;
+    await schema.db.execute(sql`insert into task (
+        id, organization_id, team_id, title, state, status_id, visibility
+      )
+      select 'B' || lpad(series::text, 25, '0'), ${orgId}, ${teamId},
+        'Rank neighborhood ' || series, 'todo', ${taskStatusId}, 'public'
+      from generate_series(1, 180) series`);
+    await schema.db.execute(sql`insert into work_item_order (
+        organization_id, context_type, context_id, target, item_id, rank, updated_at
+      )
+      select ${orgId}, 'organization', ${orgId}, 'task',
+        'B' || lpad(series::text, 25, '0'),
+        'R' || lpad((series * 1000)::text, 20, '0'), ${oldWrite}
+      from generate_series(1, 180) series`);
+    const afterId = itemId(90);
+    const beforeId = itemId(91);
+    const movedId = itemId(130);
+    const exhaustedRank = `R${String(90 * 1000).padStart(20, '0')}`;
+    await schema.db.execute(
+      sql`update work_item_order set rank=${exhaustedRank}, updated_at=${oldWrite}
+      where organization_id=${orgId} and item_id between ${itemId(71)} and ${itemId(110)}`,
+    );
+
+    const app = appWithActor(workViews, orgId, ['contribute'], humanActorId);
+    const response = await app.request('/order', {
+      method: 'PATCH',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({
+        target: 'task',
+        itemId: movedId,
+        context: { kind: 'organization' },
+        groupField: null,
+        groupValue: null,
+        beforeId,
+        afterId,
+      }),
+    });
+    expect(response.status).toBe(200);
+    const rewritten = await schema.db
+      .select({ itemId: schema.workItemOrder.itemId })
+      .from(schema.workItemOrder)
+      .where(
+        and(
+          eq(schema.workItemOrder.organizationId, orgId),
+          gt(schema.workItemOrder.updatedAt, oldWrite),
+        ),
+      );
+    expect(rewritten.length).toBeGreaterThan(1);
+    expect(rewritten.length).toBeLessThanOrEqual(129);
+  });
+
   it('authorizes an Initiative reorder by exact points inside a large hierarchy context', async () => {
     const { orgId, humanActorId, statusId } = await seedBaseOrg(schema.db, schema);
     const activeStatusId = statusId('initiative', 'active');

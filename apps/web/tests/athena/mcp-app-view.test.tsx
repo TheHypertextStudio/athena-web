@@ -119,7 +119,7 @@ describe('McpAppView frames', () => {
   it('gives the proxy an origin and the widget none', async () => {
     const { frame, posted, fromProxy } = mount();
     // The proxy needs `allow-same-origin` to set the inner frame's policy…
-    expect(frame.getAttribute('sandbox')).toContain('allow-same-origin');
+    expect(frame.getAttribute('sandbox')).toBe('allow-scripts allow-same-origin');
 
     fromProxy({ jsonrpc: '2.0', method: MCP_UI_METHODS.sandboxProxyReady, params: {} });
     await waitFor(() => {
@@ -167,9 +167,13 @@ describe('McpAppView frames', () => {
     expect(posted).toHaveLength(0);
   });
 
-  it('honours the resource border preference', () => {
+  it('draws a visible boundary only when the resource explicitly prefers one', () => {
     const { view } = mount();
-    expect(screen.getByTestId('mcp-app-view').getAttribute('data-prefers-border')).toBe('true');
+    expect(screen.getByTestId('mcp-app-view')).toHaveClass(
+      'border',
+      'border-outline-variant',
+      'bg-surface-container-low',
+    );
     cleanup();
     render(
       <McpAppView
@@ -181,7 +185,8 @@ describe('McpAppView frames', () => {
         onCallTool={async () => ({})}
       />,
     );
-    expect(screen.getByTestId('mcp-app-view').getAttribute('data-prefers-border')).toBe('false');
+    expect(screen.getByTestId('mcp-app-view')).not.toHaveClass('border');
+    expect(screen.getByTestId('mcp-app-view')).toHaveClass('bg-transparent');
     void view;
   });
 
@@ -300,7 +305,7 @@ describe('McpAppView bridge', () => {
     expect(open).not.toHaveBeenCalled();
   });
 
-  it('passes a widget message and a context update to the conversation', async () => {
+  it('passes text messages but does not expose draft model-context updates', async () => {
     const onMessage = vi.fn(() => true);
     const onModelContext = vi.fn();
     const harness = mount({ onMessage, onModelContext });
@@ -323,7 +328,46 @@ describe('McpAppView bridge', () => {
       expect(onMessage).toHaveBeenCalledWith('Undo that');
     });
     await waitFor(() => {
-      expect(onModelContext).toHaveBeenCalledWith('The user advanced the checklist.');
+      expect(harness.posted.find((p) => p.message['id'] === 'w6')?.message['error']).toBeDefined();
+    });
+    expect(onModelContext).not.toHaveBeenCalled();
+  });
+
+  it('sends graceful teardown before an initialized host unmounts', async () => {
+    const harness = mount();
+    await handshake(harness);
+    await waitFor(() => {
+      expect(
+        harness.posted.some((entry) => entry.message['method'] === MCP_UI_METHODS.toolResult),
+      ).toBe(true);
+    });
+
+    harness.view.unmount();
+
+    await waitFor(() => {
+      expect(
+        harness.posted.some((entry) => entry.message['method'] === MCP_UI_METHODS.resourceTeardown),
+      ).toBe(true);
+    });
+  });
+
+  it('removes an app-requested view only after sending resource teardown', async () => {
+    const harness = mount();
+    await handshake(harness);
+
+    harness.fromProxy({ jsonrpc: '2.0', method: MCP_UI_METHODS.requestTeardown, params: {} });
+    await waitFor(() => {
+      expect(
+        harness.posted.some((entry) => entry.message['method'] === MCP_UI_METHODS.resourceTeardown),
+      ).toBe(true);
+    });
+    const teardown = harness.posted.find(
+      (entry) => entry.message['method'] === MCP_UI_METHODS.resourceTeardown,
+    );
+    harness.fromProxy({ jsonrpc: '2.0', id: teardown?.message['id'], result: {} });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('mcp-app-view')).not.toBeInTheDocument();
     });
   });
 

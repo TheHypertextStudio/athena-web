@@ -66,6 +66,14 @@ describe('reading a tool’s UI declaration', () => {
     });
     expect(readUiResourceMeta(7)).toBeNull();
   });
+
+  it('validates resource metadata with the official stable schema', () => {
+    expect(
+      readUiResourceMeta({ ui: { csp: { connectDomains: ['https://api.example.com'] } } }),
+    ).toEqual({ csp: { connectDomains: ['https://api.example.com'] } });
+    expect(readUiResourceMeta({ ui: { csp: { connectDomains: [7] } } })).toBeNull();
+    expect(readUiResourceMeta({ ui: { permissions: { camera: true } } })).toBeNull();
+  });
 });
 
 describe('uiMetaSpread', () => {

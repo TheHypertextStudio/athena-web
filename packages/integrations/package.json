@@ -24,6 +24,7 @@
     "@docket/env": "workspace:*",
     "@docket/types": "workspace:*",
     "@docket/work": "workspace:*",
+    "@modelcontextprotocol/ext-apps": "catalog:",
     "@modelcontextprotocol/sdk": "catalog:",
     "@notionhq/client": "^5.24.0",
     "zod": "catalog:"

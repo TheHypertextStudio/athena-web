@@ -46,6 +46,49 @@
   sandbox check, installation, account linking, and the live Linear acceptance matrix remain
   pending. The feature flag must remain false until the sandbox check passes.
 
+### [MCP-APPS-STABLE-002] Ship Athena on the official stable MCP Apps SDK
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-08-29
+- **Priority**: P0
+- **Description**: Move Athena's MCP Apps host from copied protocol types and a handwritten bridge
+  to the official `2026-01-26` stable protocol implementation in
+  `@modelcontextprotocol/ext-apps@1.7.5`, then render model-invoked MCP App results durably inside
+  the canonical conversation.
+- **Approach**: Ship two independently releasable layers. First, preserve the existing host facade
+  and cross-origin sandbox while replacing its wire engine with the official AppBridge, narrowing
+  advertised capabilities to the browser behaviors that work end to end, and making the stable
+  normative requirements executable. Second, retain raw remote tool results and UI resources in
+  the existing session-activity JSONB, enforce model/app visibility at every call boundary, and
+  render those presentations inline with textual fallback.
+- **Subtasks**:
+  - [x] Exact-pin the official SDK and make the protocol/sandbox layer conformant.
+  - [ ] Persist and render model-invoked MCP App presentations in Athena.
+  - [x] Replace the surface inventory with normative conformance evidence.
+  - [ ] Validate packages, production build, and an upstream reference app.
+- **Layer 1 implementation**: Pinned `@modelcontextprotocol/ext-apps@1.7.5` in the workspace
+  catalog and replaced Athena's copied protocol types and handwritten browser host engine with
+  official exports, schemas, `AppBridge`, and a proxy-backed transport behind the existing
+  `createMcpAppHost` facade. The host advertises only open links, server tools, text messages, and
+  sandbox policy. Resource validation accepts official text or base64 blob contents with the exact
+  stable MIME type, sanitizes CSP origins, and keeps the double iframe at the exact stable sandbox
+  values. Border treatment, display-mode intersection, and graceful teardown now match the stable
+  host contract.
+- **Layer 1 validation**: TDD started with three official-`App` compatibility failures, four web
+  adapter failures, invalid resource metadata being accepted, and unsafe CSP values reaching a
+  directive. The completed focused pass has 97 integration tests, 36 API MCP Apps tests, and 18
+  web host tests passing. Types, integrations, API, and web pass TypeScript and ESLint validation.
+  The Web production build also passes. The committed conformance matrix is regenerated from the
+  vendored stable specification and now distinguishes implemented stable product surface from
+  intentional capability omission.
+- **Layer 1 learning**: App-initiated teardown can wait for the resource response before hiding the
+  card. An ancestor-driven React unmount cannot postpone DOM removal from effect cleanup; the
+  adapter instead preserves the proxy window and message listener for the response or one-second
+  timeout, then closes the bridge. Production and upstream-reference acceptance remain part of the
+  later end-to-end layer.
+- **Blockers**: Production acceptance needs an authenticated live Athena account and a publicly
+  reachable pinned upstream reference server; local and CI evidence cannot substitute for it.
+
 ---
 
 ### [EDITOR-FOCUS-001] Stop blank editor clicks from moving the caret

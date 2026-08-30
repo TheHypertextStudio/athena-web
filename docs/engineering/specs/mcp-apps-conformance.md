@@ -10,24 +10,23 @@
 **Retrieved:** 2026-08-02
 
 Every row below is derived from the committed copy of the specification, not from memory.
-A row exists only when the item is implemented **and** exercised by a named test — there is no
-"partial" or "deferred" state to hide in, because an item with no implementation simply has no
-row, and `mcp-apps-conformance.test.ts` fails when the extracted surface contains an item the
-matrix does not cover.
+Each item names either an implemented handler or an intentional capability omission, and a
+test that proves the product claim. `mcp-apps-conformance.test.ts` fails when the extracted
+surface contains an item the matrix does not account for.
 
 ## Requests
 
 | Item | Host handler | Test |
 | --- | --- | --- |
-| `ui/download-file` | `packages/integrations/src/mcp-apps-host.ts :: handleDownloadFile` | `mcp-apps-host.test.ts :: downloads a file through the host and refuses when declined` |
-| `ui/initialize` | `packages/integrations/src/mcp-apps-host.ts :: handleInitialize` | `mcp-apps-host.test.ts :: answers ui/initialize with host capabilities and hostContext` |
-| `ui/message` | `packages/integrations/src/mcp-apps-host.ts :: handleMessage` | `mcp-apps-host.test.ts :: posts a ui/message into the conversation` |
-| `ui/open-link` | `packages/integrations/src/mcp-apps-host.ts :: handleOpenLink` | `mcp-apps-host.test.ts :: opens a link and answers with an empty result` |
-| `ui/request-display-mode` | `packages/integrations/src/mcp-apps-host.ts :: handleRequestDisplayMode` | `mcp-apps-host.test.ts :: reports the display mode actually applied, not the one requested` |
+| `ui/download-file` | `packages/integrations/src/mcp-apps-host.ts :: hostCapabilities`<br>_Accounted for by omission: Docket exposes no browser download adapter, so the capability and handler are absent._ | `mcp-apps-conformance.test.ts :: advertises only end-to-end host capabilities` |
+| `ui/initialize` | `packages/integrations/src/mcp-apps-host.ts :: createMcpAppHost` | `mcp-apps-host.test.ts :: answers ui/initialize with host capabilities and hostContext` |
+| `ui/message` | `packages/integrations/src/mcp-apps-host.ts :: AppBridge.onmessage` | `mcp-apps-host.test.ts :: posts a ui/message into the conversation` |
+| `ui/open-link` | `packages/integrations/src/mcp-apps-host.ts :: AppBridge.onopenlink` | `mcp-apps-host.test.ts :: opens a link and answers with an empty result` |
+| `ui/request-display-mode` | `packages/integrations/src/mcp-apps-host.ts :: AppBridge.onrequestdisplaymode` | `mcp-apps-host.test.ts :: reports the display mode actually applied, not the one requested` |
 | `ui/resource-teardown` | `packages/integrations/src/mcp-apps-host.ts :: requestTeardown` | `mcp-apps-host.test.ts :: asks the view to tear down and waits for its answer` |
-| `ui/update-model-context` | `packages/integrations/src/mcp-apps-host.ts :: handleUpdateModelContext` | `mcp-apps-host.test.ts :: overwrites, rather than accumulates, the model context` |
-| `tools/call` | `packages/integrations/src/mcp-apps-host.ts :: handleCallTool`<br>_Out-of-scope tools receive a JSON-RPC error naming the tool, never a silent success._ | `mcp-apps-host.test.ts :: executes an authorized tool and returns the result with the matching id` |
-| `resources/read` | `packages/integrations/src/mcp-apps-host.ts :: handleReadResource` | `mcp-apps-host.test.ts :: proxies resources/read and reports failures` |
+| `ui/update-model-context` | `packages/integrations/src/mcp-apps-host.ts :: hostCapabilities`<br>_Accounted for by omission because stable Docket does not expose model-context mutation to apps._ | `mcp-apps-host.test.ts :: does not serve draft model-context updates even when a legacy callback is supplied` |
+| `tools/call` | `packages/integrations/src/mcp-apps-host.ts :: AppBridge.oncalltool`<br>_Out-of-scope tools receive a JSON-RPC error naming the tool, never a silent success._ | `mcp-apps-host.test.ts :: executes an authorized tool and returns the result with the matching id` |
+| `resources/read` | `packages/integrations/src/mcp-apps-host.ts :: hostCapabilities`<br>_Accounted for by omission because this browser adapter does not proxy resources/read._ | `mcp-apps-conformance.test.ts :: advertises only end-to-end host capabilities` |
 | `ping` | `packages/integrations/src/mcp-apps-host.ts :: receive` | `mcp-apps-host.test.ts :: answers ping` |
 
 ## Notifications
@@ -36,38 +35,38 @@ matrix does not cover.
 | --- | --- | --- |
 | `ui/notifications/host-context-changed` | `packages/integrations/src/mcp-apps-host.ts :: updateHostContext` | `mcp-apps-host.test.ts :: restyles in place: a theme change is a partial host-context patch, not a reload` |
 | `ui/notifications/initialized` | `packages/integrations/src/mcp-apps-host.ts :: receive` | `mcp-apps-host.test.ts :: posts nothing to the view before ui/notifications/initialized arrives` |
-| `ui/notifications/request-teardown` | `packages/integrations/src/mcp-apps-host.ts :: receive` | `mcp-apps-host.test.ts :: reports size changes and teardown requests, and records log lines` |
+| `ui/notifications/request-teardown` | `packages/integrations/src/mcp-apps-host.ts :: requestteardown listener` | `mcp-apps-official-compat.test.ts :: turns an app teardown request into the same graceful teardown handshake before removal` |
 | `ui/notifications/sandbox-proxy-ready` | `packages/integrations/src/mcp-apps-sandbox.ts :: sandboxProxyDocument` | `mcp-apps-sandbox.test.ts :: announces itself to the host as soon as it loads` |
 | `ui/notifications/sandbox-resource-ready` | `packages/integrations/src/mcp-apps-sandbox.ts :: sandboxProxyDocument` | `mcp-apps-sandbox.test.ts :: renders the document it is handed under the policy it is handed` |
-| `ui/notifications/size-changed` | `packages/integrations/src/mcp-apps-host.ts :: receive` | `mcp-apps-host.test.ts :: reports size changes and teardown requests, and records log lines` |
+| `ui/notifications/size-changed` | `packages/integrations/src/mcp-apps-host.ts :: AppBridge.onsizechange` | `mcp-apps-host.test.ts :: reports valid size changes` |
 | `ui/notifications/tool-cancelled` | `packages/integrations/src/mcp-apps-host.ts :: deliverToolCancelled` | `mcp-apps-host.test.ts :: tells the view when the tool was cancelled` |
 | `ui/notifications/tool-input` | `packages/integrations/src/mcp-apps-host.ts :: deliverToolInput` | `mcp-apps-host.test.ts :: carries the tool arguments on ui/notifications/tool-input` |
 | `ui/notifications/tool-input-partial` | `packages/integrations/src/mcp-apps-host.ts :: deliverToolInputPartial` | `mcp-apps-host.test.ts :: stops streaming partial arguments once the complete set is sent` |
 | `ui/notifications/tool-result` | `packages/integrations/src/mcp-apps-host.ts :: deliverToolResult` | `mcp-apps-host.test.ts :: never posts tool-result before tool-input, even when only the result is delivered` |
-| `notifications/message` | `packages/integrations/src/mcp-apps-host.ts :: receive` | `mcp-apps-host.test.ts :: reports size changes and teardown requests, and records log lines` |
+| `notifications/message` | `packages/integrations/src/mcp-apps-host.ts :: hostCapabilities`<br>_Accounted for by omission because the browser adapter does not expose app logging._ | `mcp-apps-conformance.test.ts :: advertises only end-to-end host capabilities` |
 
 ## Host capabilities
 
 | Item | Host handler | Test |
 | --- | --- | --- |
-| `experimental` | `packages/types/src/mcp-apps.ts :: McpUiHostCapabilities`<br>_Declared in the type surface and omitted from the advertised set: Docket exposes no experimental host features, and advertising an empty bag would invite a view to probe it._ | `mcp-apps-conformance.test.ts :: every host capability the spec defines is representable` |
+| `experimental` | `packages/integrations/src/mcp-apps-host.ts :: hostCapabilities`<br>_Accounted for by omission because Docket exposes no experimental host features._ | `mcp-apps-conformance.test.ts :: advertises only end-to-end host capabilities` |
 | `openLinks` | `packages/integrations/src/mcp-apps-host.ts :: hostCapabilities` | `mcp-apps-host.test.ts :: answers ui/initialize with host capabilities and hostContext` |
-| `downloadFile` | `packages/integrations/src/mcp-apps-host.ts :: hostCapabilities` | `mcp-apps-host.test.ts :: downloads a file through the host and refuses when declined` |
+| `downloadFile` | `packages/integrations/src/mcp-apps-host.ts :: hostCapabilities` | `mcp-apps-conformance.test.ts :: advertises only end-to-end host capabilities` |
 | `serverTools` | `packages/integrations/src/mcp-apps-host.ts :: hostCapabilities` | `mcp-apps-host.test.ts :: answers ui/initialize with host capabilities and hostContext` |
-| `serverResources` | `packages/integrations/src/mcp-apps-host.ts :: hostCapabilities` | `mcp-apps-host.test.ts :: proxies resources/read and reports failures` |
-| `logging` | `packages/integrations/src/mcp-apps-host.ts :: hostCapabilities` | `mcp-apps-host.test.ts :: reports size changes and teardown requests, and records log lines` |
+| `serverResources` | `packages/integrations/src/mcp-apps-host.ts :: hostCapabilities` | `mcp-apps-conformance.test.ts :: advertises only end-to-end host capabilities` |
+| `logging` | `packages/integrations/src/mcp-apps-host.ts :: hostCapabilities` | `mcp-apps-conformance.test.ts :: advertises only end-to-end host capabilities` |
 | `sandbox` | `packages/integrations/src/mcp-apps-host.ts :: hostCapabilities` | `mcp-apps-host.test.ts :: adds exactly the origins the resource declared and nothing else` |
-| `updateModelContext` | `packages/integrations/src/mcp-apps-host.ts :: hostCapabilities` | `mcp-apps-host.test.ts :: overwrites, rather than accumulates, the model context` |
+| `updateModelContext` | `packages/integrations/src/mcp-apps-host.ts :: hostCapabilities` | `mcp-apps-conformance.test.ts :: advertises only end-to-end host capabilities` |
 | `message` | `packages/integrations/src/mcp-apps-host.ts :: hostCapabilities` | `mcp-apps-host.test.ts :: posts a ui/message into the conversation` |
-| `sampling` | `packages/types/src/mcp-apps.ts :: McpUiHostCapabilities`<br>_Representable and deliberately not advertised: Docket does not let embedded third-party HTML drive model sampling, and advertising it would promise a channel the host refuses._ | `mcp-apps-conformance.test.ts :: every host capability the spec defines is representable` |
+| `sampling` | `packages/integrations/src/mcp-apps-host.ts :: hostCapabilities`<br>_Accounted for by omission because Docket does not let embedded apps drive model sampling._ | `mcp-apps-conformance.test.ts :: advertises only end-to-end host capabilities` |
 
 ## App capabilities
 
 | Item | Host handler | Test |
 | --- | --- | --- |
-| `experimental` | `packages/integrations/src/mcp-apps-host.ts :: handleInitialize` | `mcp-apps-conformance.test.ts :: every app capability the spec defines survives the handshake` |
-| `tools` | `packages/integrations/src/mcp-apps-host.ts :: handleInitialize` | `mcp-apps-conformance.test.ts :: every app capability the spec defines survives the handshake` |
-| `availableDisplayModes` | `packages/integrations/src/mcp-apps-host.ts :: handleInitialize` | `mcp-apps-host.test.ts :: answers ui/initialize with host capabilities and hostContext` |
+| `experimental` | `packages/integrations/src/mcp-apps-host.ts :: AppBridge` | `mcp-apps-conformance.test.ts :: every app capability the spec defines survives the handshake` |
+| `tools` | `packages/integrations/src/mcp-apps-host.ts :: AppBridge` | `mcp-apps-conformance.test.ts :: every app capability the spec defines survives the handshake` |
+| `availableDisplayModes` | `packages/integrations/src/mcp-apps-host.ts :: AppBridge` | `mcp-apps-host.test.ts :: answers ui/initialize with host capabilities and hostContext` |
 
 ## `_meta` keys and capability declaration
 
@@ -78,7 +77,7 @@ matrix does not cover.
 | `_meta.ui.csp` | `packages/integrations/src/mcp-apps-host.ts :: buildViewCsp` | `mcp-apps-host.test.ts :: adds exactly the origins the resource declared and nothing else` |
 | `_meta.ui.permissions` | `packages/integrations/src/mcp-apps-host.ts :: buildViewPermissionsAllow` | `mcp-apps-host.test.ts :: grants only the permissions the resource asked for` |
 | `_meta.ui.domain` | `packages/integrations/src/mcp-apps-sandbox.ts :: sandboxProxyDocument`<br>_Honoured as the host-controlled proxy origin. Per the spec this field is host-dependent; Docket serves every view from its own API-origin proxy rather than minting a per-resource subdomain._ | `mcp-apps-sandbox.test.ts :: accepts messages only from the host origin it was built for` |
-| `_meta.ui.prefersBorder` | `apps/web/src/components/athena/mcp-app-view.tsx :: McpAppView` | `apps/web/tests/athena/mcp-app-view.test.tsx :: honours the resource border preference` |
+| `_meta.ui.prefersBorder` | `apps/web/src/components/athena/mcp-app-view.tsx :: McpAppView` | `apps/web/tests/athena/mcp-app-view.test.tsx :: draws a visible boundary only when the resource explicitly prefers one` |
 | `capabilities.extensions["io.modelcontextprotocol/ui"]` | `packages/integrations/src/mcp-connector.ts :: MCP_UI_CLIENT_CAPABILITY` | `mcp-apps-conformance.test.ts :: declares the ui extension with the profile mimeType` |
 
 ## Resource and security conventions

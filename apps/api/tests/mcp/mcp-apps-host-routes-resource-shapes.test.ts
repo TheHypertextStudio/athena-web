@@ -186,6 +186,19 @@ describe('toResourceOut — optional-field branches', () => {
     expect(body.resource?.permissions).toEqual({ camera: {} });
   });
 
+  it('rejects resource metadata that does not satisfy the official stable schema', async () => {
+    const { userId, connectionId } = await seedConnection();
+    state.session = sessionWithResource({
+      uri: 'ui://test/card',
+      mimeType: MCP_UI_MIME_TYPE,
+      text: '<html></html>',
+      meta: { csp: { connectDomains: [7] } } as never,
+    });
+
+    const body = await callRenderCard(connectionId, userId);
+    expect(body.resource).toBeNull();
+  });
+
   it('resolves a null resource for a non-renderable document (wrong mimeType)', async () => {
     const { userId, connectionId } = await seedConnection();
     state.session = sessionWithResource({

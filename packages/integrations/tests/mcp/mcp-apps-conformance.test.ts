@@ -18,6 +18,10 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import {
+  LATEST_PROTOCOL_VERSION,
+  RESOURCE_MIME_TYPE,
+} from '@modelcontextprotocol/ext-apps/app-bridge';
 
 import {
   MCP_UI_EXTENSION,
@@ -68,6 +72,8 @@ describe('committed specification', () => {
     const published = /LATEST_PROTOCOL_VERSION = "([^"]+)"/.exec(types)?.[1];
     expect(published).toBeDefined();
     expect(MCP_UI_PROTOCOL_VERSION).toBe(published);
+    expect(MCP_UI_PROTOCOL_VERSION).toBe(LATEST_PROTOCOL_VERSION);
+    expect(MCP_UI_MIME_TYPE).toBe(RESOURCE_MIME_TYPE);
   });
 
   it('uses the mimeType, scheme, meta key, and extension id the spec reserves', () => {
@@ -148,9 +154,7 @@ describe('claims the matrix cites here', () => {
     expect(prose).toContain('"mimeTypes": ["text/html;profile=mcp-app"]');
   });
 
-  it('every host capability the spec defines is representable', () => {
-    // `experimental` and `sampling` are representable and deliberately not advertised — see their
-    // rows. This asserts the two claims are true of the actual advertised set.
+  it('advertises only end-to-end host capabilities', async () => {
     const posted: JsonRpcMessage[] = [];
     const host = createMcpAppHost({
       hostInfo: { name: 'docket', version: '1.0.0' },
@@ -164,7 +168,7 @@ describe('claims the matrix cites here', () => {
       updateModelContext: () => undefined,
       sendMessage: () => true,
     });
-    void host.receive({
+    await host.receive({
       jsonrpc: '2.0',
       id: 1,
       method: MCP_UI_METHODS.initialize,
@@ -177,17 +181,17 @@ describe('claims the matrix cites here', () => {
     const capabilities = (posted[0]?.result as { hostCapabilities: Record<string, unknown> })
       .hostCapabilities;
     expect(Object.keys(capabilities).sort()).toEqual([
-      'downloadFile',
-      'logging',
       'message',
       'openLinks',
       'sandbox',
-      'serverResources',
       'serverTools',
-      'updateModelContext',
     ]);
+    expect(capabilities['downloadFile']).toBeUndefined();
     expect(capabilities['experimental']).toBeUndefined();
+    expect(capabilities['logging']).toBeUndefined();
     expect(capabilities['sampling']).toBeUndefined();
+    expect(capabilities['serverResources']).toBeUndefined();
+    expect(capabilities['updateModelContext']).toBeUndefined();
   });
 
   it('every app capability the spec defines survives the handshake', async () => {

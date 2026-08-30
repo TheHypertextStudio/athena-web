@@ -9,7 +9,7 @@
  *    text. Nothing here is typed from memory; if upstream adds a method, this picks it up on the
  *    next run and the gate goes red until someone implements it.
  * 2. {@link CONFORMANCE_CLAIMS} is Docket's answer: for each surface item, the module that
- *    implements it and the test that proves it.
+ *    implements it or intentionally omits it, and the test that proves the product claim.
  *
  * The gate in `mcp-apps-conformance.test.ts` fails when the two disagree in either direction — an
  * unclaimed spec item, or a claim for something the spec does not define.
@@ -180,13 +180,12 @@ export interface ConformanceClaim {
  * Docket's implementation and test for every item the spec defines.
  *
  * @remarks
- * There is deliberately no `status` column. A row exists only when the thing is implemented AND
- * tested; anything else is an absent row, which the gate reports as an uncovered spec item. That
- * is what makes "zero rows marked partial" a structural property rather than a promise.
+ * There is deliberately no `status` column. Each item must name an implemented handler or a
+ * capability gate that intentionally omits unsupported product surface, plus a proving test.
  */
 export const CONFORMANCE_CLAIMS: Readonly<Record<string, ConformanceClaim>> = {
   'ui/initialize': {
-    implementation: 'packages/integrations/src/mcp-apps-host.ts :: handleInitialize',
+    implementation: 'packages/integrations/src/mcp-apps-host.ts :: createMcpAppHost',
     test: 'mcp-apps-host.test.ts :: answers ui/initialize with host capabilities and hostContext',
   },
   'ui/notifications/initialized': {
@@ -214,32 +213,34 @@ export const CONFORMANCE_CLAIMS: Readonly<Record<string, ConformanceClaim>> = {
     test: 'mcp-apps-host.test.ts :: restyles in place: a theme change is a partial host-context patch, not a reload',
   },
   'ui/open-link': {
-    implementation: 'packages/integrations/src/mcp-apps-host.ts :: handleOpenLink',
+    implementation: 'packages/integrations/src/mcp-apps-host.ts :: AppBridge.onopenlink',
     test: 'mcp-apps-host.test.ts :: opens a link and answers with an empty result',
   },
   'ui/download-file': {
-    implementation: 'packages/integrations/src/mcp-apps-host.ts :: handleDownloadFile',
-    test: 'mcp-apps-host.test.ts :: downloads a file through the host and refuses when declined',
+    implementation: 'packages/integrations/src/mcp-apps-host.ts :: hostCapabilities',
+    test: 'mcp-apps-conformance.test.ts :: advertises only end-to-end host capabilities',
+    note: 'Accounted for by omission: Docket exposes no browser download adapter, so the capability and handler are absent.',
   },
   'ui/message': {
-    implementation: 'packages/integrations/src/mcp-apps-host.ts :: handleMessage',
+    implementation: 'packages/integrations/src/mcp-apps-host.ts :: AppBridge.onmessage',
     test: 'mcp-apps-host.test.ts :: posts a ui/message into the conversation',
   },
   'ui/update-model-context': {
-    implementation: 'packages/integrations/src/mcp-apps-host.ts :: handleUpdateModelContext',
-    test: 'mcp-apps-host.test.ts :: overwrites, rather than accumulates, the model context',
+    implementation: 'packages/integrations/src/mcp-apps-host.ts :: hostCapabilities',
+    test: 'mcp-apps-host.test.ts :: does not serve draft model-context updates even when a legacy callback is supplied',
+    note: 'Accounted for by omission because stable Docket does not expose model-context mutation to apps.',
   },
   'ui/request-display-mode': {
-    implementation: 'packages/integrations/src/mcp-apps-host.ts :: handleRequestDisplayMode',
+    implementation: 'packages/integrations/src/mcp-apps-host.ts :: AppBridge.onrequestdisplaymode',
     test: 'mcp-apps-host.test.ts :: reports the display mode actually applied, not the one requested',
   },
   'ui/notifications/size-changed': {
-    implementation: 'packages/integrations/src/mcp-apps-host.ts :: receive',
-    test: 'mcp-apps-host.test.ts :: reports size changes and teardown requests, and records log lines',
+    implementation: 'packages/integrations/src/mcp-apps-host.ts :: AppBridge.onsizechange',
+    test: 'mcp-apps-host.test.ts :: reports valid size changes',
   },
   'ui/notifications/request-teardown': {
-    implementation: 'packages/integrations/src/mcp-apps-host.ts :: receive',
-    test: 'mcp-apps-host.test.ts :: reports size changes and teardown requests, and records log lines',
+    implementation: 'packages/integrations/src/mcp-apps-host.ts :: requestteardown listener',
+    test: 'mcp-apps-official-compat.test.ts :: turns an app teardown request into the same graceful teardown handshake before removal',
   },
   'ui/resource-teardown': {
     implementation: 'packages/integrations/src/mcp-apps-host.ts :: requestTeardown',
@@ -254,26 +255,28 @@ export const CONFORMANCE_CLAIMS: Readonly<Record<string, ConformanceClaim>> = {
     test: 'mcp-apps-sandbox.test.ts :: renders the document it is handed under the policy it is handed',
   },
   'tools/call': {
-    implementation: 'packages/integrations/src/mcp-apps-host.ts :: handleCallTool',
+    implementation: 'packages/integrations/src/mcp-apps-host.ts :: AppBridge.oncalltool',
     test: 'mcp-apps-host.test.ts :: executes an authorized tool and returns the result with the matching id',
     note: 'Out-of-scope tools receive a JSON-RPC error naming the tool, never a silent success.',
   },
   'resources/read': {
-    implementation: 'packages/integrations/src/mcp-apps-host.ts :: handleReadResource',
-    test: 'mcp-apps-host.test.ts :: proxies resources/read and reports failures',
+    implementation: 'packages/integrations/src/mcp-apps-host.ts :: hostCapabilities',
+    test: 'mcp-apps-conformance.test.ts :: advertises only end-to-end host capabilities',
+    note: 'Accounted for by omission because this browser adapter does not proxy resources/read.',
   },
   'notifications/message': {
-    implementation: 'packages/integrations/src/mcp-apps-host.ts :: receive',
-    test: 'mcp-apps-host.test.ts :: reports size changes and teardown requests, and records log lines',
+    implementation: 'packages/integrations/src/mcp-apps-host.ts :: hostCapabilities',
+    test: 'mcp-apps-conformance.test.ts :: advertises only end-to-end host capabilities',
+    note: 'Accounted for by omission because the browser adapter does not expose app logging.',
   },
   ping: {
     implementation: 'packages/integrations/src/mcp-apps-host.ts :: receive',
     test: 'mcp-apps-host.test.ts :: answers ping',
   },
   'host-capability:experimental': {
-    implementation: 'packages/types/src/mcp-apps.ts :: McpUiHostCapabilities',
-    test: 'mcp-apps-conformance.test.ts :: every host capability the spec defines is representable',
-    note: 'Declared in the type surface and omitted from the advertised set: Docket exposes no experimental host features, and advertising an empty bag would invite a view to probe it.',
+    implementation: 'packages/integrations/src/mcp-apps-host.ts :: hostCapabilities',
+    test: 'mcp-apps-conformance.test.ts :: advertises only end-to-end host capabilities',
+    note: 'Accounted for by omission because Docket exposes no experimental host features.',
   },
   'host-capability:openLinks': {
     implementation: 'packages/integrations/src/mcp-apps-host.ts :: hostCapabilities',
@@ -281,7 +284,7 @@ export const CONFORMANCE_CLAIMS: Readonly<Record<string, ConformanceClaim>> = {
   },
   'host-capability:downloadFile': {
     implementation: 'packages/integrations/src/mcp-apps-host.ts :: hostCapabilities',
-    test: 'mcp-apps-host.test.ts :: downloads a file through the host and refuses when declined',
+    test: 'mcp-apps-conformance.test.ts :: advertises only end-to-end host capabilities',
   },
   'host-capability:serverTools': {
     implementation: 'packages/integrations/src/mcp-apps-host.ts :: hostCapabilities',
@@ -289,11 +292,11 @@ export const CONFORMANCE_CLAIMS: Readonly<Record<string, ConformanceClaim>> = {
   },
   'host-capability:serverResources': {
     implementation: 'packages/integrations/src/mcp-apps-host.ts :: hostCapabilities',
-    test: 'mcp-apps-host.test.ts :: proxies resources/read and reports failures',
+    test: 'mcp-apps-conformance.test.ts :: advertises only end-to-end host capabilities',
   },
   'host-capability:logging': {
     implementation: 'packages/integrations/src/mcp-apps-host.ts :: hostCapabilities',
-    test: 'mcp-apps-host.test.ts :: reports size changes and teardown requests, and records log lines',
+    test: 'mcp-apps-conformance.test.ts :: advertises only end-to-end host capabilities',
   },
   'host-capability:sandbox': {
     implementation: 'packages/integrations/src/mcp-apps-host.ts :: hostCapabilities',
@@ -301,27 +304,27 @@ export const CONFORMANCE_CLAIMS: Readonly<Record<string, ConformanceClaim>> = {
   },
   'host-capability:updateModelContext': {
     implementation: 'packages/integrations/src/mcp-apps-host.ts :: hostCapabilities',
-    test: 'mcp-apps-host.test.ts :: overwrites, rather than accumulates, the model context',
+    test: 'mcp-apps-conformance.test.ts :: advertises only end-to-end host capabilities',
   },
   'host-capability:message': {
     implementation: 'packages/integrations/src/mcp-apps-host.ts :: hostCapabilities',
     test: 'mcp-apps-host.test.ts :: posts a ui/message into the conversation',
   },
   'host-capability:sampling': {
-    implementation: 'packages/types/src/mcp-apps.ts :: McpUiHostCapabilities',
-    test: 'mcp-apps-conformance.test.ts :: every host capability the spec defines is representable',
-    note: 'Representable and deliberately not advertised: Docket does not let embedded third-party HTML drive model sampling, and advertising it would promise a channel the host refuses.',
+    implementation: 'packages/integrations/src/mcp-apps-host.ts :: hostCapabilities',
+    test: 'mcp-apps-conformance.test.ts :: advertises only end-to-end host capabilities',
+    note: 'Accounted for by omission because Docket does not let embedded apps drive model sampling.',
   },
   'app-capability:experimental': {
-    implementation: 'packages/integrations/src/mcp-apps-host.ts :: handleInitialize',
+    implementation: 'packages/integrations/src/mcp-apps-host.ts :: AppBridge',
     test: 'mcp-apps-conformance.test.ts :: every app capability the spec defines survives the handshake',
   },
   'app-capability:tools': {
-    implementation: 'packages/integrations/src/mcp-apps-host.ts :: handleInitialize',
+    implementation: 'packages/integrations/src/mcp-apps-host.ts :: AppBridge',
     test: 'mcp-apps-conformance.test.ts :: every app capability the spec defines survives the handshake',
   },
   'app-capability:availableDisplayModes': {
-    implementation: 'packages/integrations/src/mcp-apps-host.ts :: handleInitialize',
+    implementation: 'packages/integrations/src/mcp-apps-host.ts :: AppBridge',
     test: 'mcp-apps-host.test.ts :: answers ui/initialize with host capabilities and hostContext',
   },
   'meta:_meta.ui.resourceUri': {
@@ -347,7 +350,7 @@ export const CONFORMANCE_CLAIMS: Readonly<Record<string, ConformanceClaim>> = {
   },
   'meta:_meta.ui.prefersBorder': {
     implementation: 'apps/web/src/components/athena/mcp-app-view.tsx :: McpAppView',
-    test: 'apps/web/tests/athena/mcp-app-view.test.tsx :: honours the resource border preference',
+    test: 'apps/web/tests/athena/mcp-app-view.test.tsx :: draws a visible boundary only when the resource explicitly prefers one',
   },
   'meta:capabilities.extensions["io.modelcontextprotocol/ui"]': {
     implementation: 'packages/integrations/src/mcp-connector.ts :: MCP_UI_CLIENT_CAPABILITY',
@@ -421,10 +424,9 @@ export function renderConformanceMatrix(
     `**Retrieved:** ${sources.retrievedAt}`,
     '',
     'Every row below is derived from the committed copy of the specification, not from memory.',
-    'A row exists only when the item is implemented **and** exercised by a named test — there is no',
-    '"partial" or "deferred" state to hide in, because an item with no implementation simply has no',
-    'row, and `mcp-apps-conformance.test.ts` fails when the extracted surface contains an item the',
-    'matrix does not cover.',
+    'Each item names either an implemented handler or an intentional capability omission, and a',
+    'test that proves the product claim. `mcp-apps-conformance.test.ts` fails when the extracted',
+    'surface contains an item the matrix does not account for.',
     '',
   ];
 

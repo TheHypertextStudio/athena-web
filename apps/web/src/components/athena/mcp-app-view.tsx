@@ -11,6 +11,7 @@ import {
 } from 'react';
 import {
   createMcpAppHost,
+  MCP_APP_PROXY_SANDBOX,
   sandboxResourceParams,
   type JsonRpcMessage,
   type McpAppHost,
@@ -21,6 +22,7 @@ import {
   type McpUiContentBlock,
   type McpUiDisplayMode,
   type McpUiHostContext,
+  type McpUiHostStyles,
   type McpUiTheme,
 } from '@docket/types';
 import { Text } from '@docket/ui/primitives';
@@ -153,9 +155,9 @@ function currentTheme(): McpUiTheme {
  * Values are resolved from the live computed style rather than hard-coded, so a widget tracks the
  * app's real palette in both themes and after any future token change.
  */
-function hostStyleVariables(): Record<string, string> {
+function hostStyleVariables(): NonNullable<McpUiHostStyles['variables']> {
   if (typeof window === 'undefined') {
-    return {};
+    return {} as NonNullable<McpUiHostStyles['variables']>;
   }
   // Read off `body`, not `documentElement`. `next/font` declares its family variable on a class
   // further down the tree, so a token that references it is unresolved at the root — which is how
@@ -184,7 +186,7 @@ function hostStyleVariables(): Record<string, string> {
   if (fontFamily) {
     variables['--font-sans'] = fontFamily;
   }
-  return variables;
+  return variables as NonNullable<McpUiHostStyles['variables']>;
 }
 
 /**
@@ -221,17 +223,8 @@ function buildHostContext(maxWidth?: number): McpUiHostContext {
  * @param props - The resource, the tool call behind it, and the host callbacks.
  * @returns the framed widget.
  */
-export function McpAppView(props: McpAppViewProps): JSX.Element {
-  const {
-    resource,
-    tool,
-    result,
-    serverName,
-    onCallTool,
-    onMessage,
-    onModelContext,
-    sandboxOrigin,
-  } = props;
+export function McpAppView(props: McpAppViewProps): JSX.Element | null {
+  const { resource, tool, result, serverName, onCallTool, onMessage, sandboxOrigin } = props;
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   const containerRef = useRef<HTMLElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -239,6 +232,7 @@ export function McpAppView(props: McpAppViewProps): JSX.Element {
   const [height, setHeight] = useState(INITIAL_HEIGHT);
   const [displayMode, setDisplayMode] = useState<McpUiDisplayMode>('inline');
   const [failure, setFailure] = useState<string | null>(null);
+  const [visible, setVisible] = useState(true);
 
   const proxyUrl = useMemo(() => sandboxProxyUrl(sandboxOrigin), [sandboxOrigin]);
   const proxyOrigin = useMemo(() => {
@@ -263,8 +257,10 @@ export function McpAppView(props: McpAppViewProps): JSX.Element {
       return;
     }
 
+    let proxyWindow: Window | null = frame.contentWindow;
     const post = (message: JsonRpcMessage): void => {
-      frame.contentWindow?.postMessage(message, proxyOrigin || '*');
+      const target = frame.contentWindow ?? proxyWindow;
+      target?.postMessage(message, proxyOrigin || '*');
     };
 
     const host = createMcpAppHost({
@@ -308,7 +304,7 @@ export function McpAppView(props: McpAppViewProps): JSX.Element {
         ? {
             sendMessage: async (content: readonly McpUiContentBlock[]) => {
               const text = content
-                .map((block) => (typeof block.text === 'string' ? block.text : ''))
+                .map((block) => (block.type === 'text' ? block.text : ''))
                 .filter(Boolean)
                 .join('\n');
               if (!text) {
@@ -318,23 +314,13 @@ export function McpAppView(props: McpAppViewProps): JSX.Element {
             },
           }
         : {}),
-      ...(onModelContext
-        ? {
-            updateModelContext: (update) => {
-              const text = (update.content ?? [])
-                .map((block) => (typeof block.text === 'string' ? block.text : ''))
-                .filter(Boolean)
-                .join('\n');
-              if (text) {
-                onModelContext(text);
-              }
-            },
-          }
-        : {}),
       onSizeChanged: ({ height: reported }) => {
         if (typeof reported === 'number' && reported > 0) {
           setHeight(Math.min(Math.max(reported, 96), MAX_HEIGHT));
         }
+      },
+      onRequestTeardown: () => {
+        setVisible(false);
       },
     });
     hostRef.current = host;
@@ -343,6 +329,7 @@ export function McpAppView(props: McpAppViewProps): JSX.Element {
       if (event.source !== frame.contentWindow) {
         return;
       }
+      proxyWindow = event.source;
       if (proxyOrigin && event.origin !== proxyOrigin) {
         return;
       }
@@ -366,11 +353,13 @@ export function McpAppView(props: McpAppViewProps): JSX.Element {
     window.addEventListener('message', onWindowMessage);
 
     return () => {
-      window.removeEventListener('message', onWindowMessage);
-      host.close();
       hostRef.current = null;
+      void host.requestTeardown().finally(() => {
+        window.removeEventListener('message', onWindowMessage);
+        host.close();
+      });
     };
-  }, [resource, tool.name, tool.arguments, callTool, onMessage, onModelContext, proxyOrigin]);
+  }, [resource, tool.name, tool.arguments, callTool, onMessage, proxyOrigin]);
 
   // Deliver the result whenever it changes. The bridge holds it until the view says it is ready,
   // so this does not need to know anything about the handshake.
@@ -487,6 +476,8 @@ export function McpAppView(props: McpAppViewProps): JSX.Element {
     };
   }, [displayMode]);
 
+  if (!visible) return null;
+
   if (failure) {
     return (
       <div className="bg-surface-container rounded-xl px-4 py-3" data-testid="mcp-app-view-failure">
@@ -503,7 +494,9 @@ export function McpAppView(props: McpAppViewProps): JSX.Element {
       className={
         displayMode === 'fullscreen'
           ? 'bg-surface-container-low fixed inset-0 z-50 m-0 flex flex-col overflow-hidden'
-          : 'bg-surface-container-low m-0 overflow-hidden rounded-xl'
+          : resource.meta?.prefersBorder === true
+            ? 'bg-surface-container-low border-outline-variant m-0 overflow-hidden rounded-xl border'
+            : 'm-0 overflow-hidden rounded-xl bg-transparent'
       }
       // A fullscreen card covers the app, so it has to say it is a modal and name itself. Without
       // this a screen reader announces nothing on expand and tab order walks straight out into the
@@ -544,7 +537,7 @@ export function McpAppView(props: McpAppViewProps): JSX.Element {
         title={`${serverName}: ${tool.name}`}
         // The proxy needs an origin so it can set the inner frame's policy; the WIDGET never gets
         // one. Both facts matter, and they live on different frames for exactly that reason.
-        sandbox="allow-scripts allow-same-origin allow-popups"
+        sandbox={MCP_APP_PROXY_SANDBOX}
         referrerPolicy="no-referrer"
         // A card grows into its measured height rather than snapping. The global reduced-motion
         // rule in `globals.css` collapses this to nothing for anyone who asked for that.

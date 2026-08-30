@@ -24,6 +24,7 @@
     "@docket/connections": "workspace:*",
     "@docket/identity-access": "workspace:*",
     "@docket/work": "workspace:*",
+    "@modelcontextprotocol/ext-apps": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

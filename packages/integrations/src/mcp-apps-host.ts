@@ -25,20 +25,29 @@
  * @see `docs/engineering/specs/vendor/mcp-apps-2026-01-26.mdx` — the committed specification.
  */
 import {
-  MCP_UI_METHODS,
-  MCP_UI_MIME_TYPE,
-  MCP_UI_PROTOCOL_VERSION,
-  MCP_UI_PROXIED_METHODS,
+  AppBridge,
+  RESOURCE_MIME_TYPE,
   type McpUiAppCapabilities,
-  type McpUiContentBlock,
   type McpUiDisplayMode,
   type McpUiHostCapabilities,
   type McpUiHostContext,
-  type McpUiInitializeResult,
   type McpUiResourceCsp,
   type McpUiResourceMeta,
   type McpUiResourcePermissions,
-} from '@docket/types';
+  McpUiResourceMetaSchema,
+} from '@modelcontextprotocol/ext-apps/app-bridge';
+import type {
+  Transport,
+  TransportSendOptions,
+} from '@modelcontextprotocol/sdk/shared/transport.js';
+import {
+  ErrorCode,
+  JSONRPCMessageSchema,
+  McpError,
+  type CallToolResult,
+  type ContentBlock,
+  type JSONRPCMessage,
+} from '@modelcontextprotocol/sdk/types.js';
 
 /** JSON-RPC 2.0 reserved error codes this bridge emits. */
 export const JSON_RPC_ERROR = {
@@ -55,19 +64,27 @@ export const JSON_RPC_ERROR = {
 /** A JSON-RPC id as it may appear on the wire. */
 export type JsonRpcId = string | number;
 
-/** A JSON-RPC message travelling in either direction across the bridge. */
+/**
+ * A read-only view of a JSON-RPC message travelling across the compatibility facade.
+ *
+ * @remarks
+ * Runtime parsing remains owned by the SDK's {@link JSONRPCMessageSchema}. Optional fields here
+ * let adapters inspect a recording containing requests, notifications, and responses without
+ * repeatedly narrowing the official discriminated union.
+ */
 export interface JsonRpcMessage {
   readonly jsonrpc: '2.0';
-  readonly id?: JsonRpcId;
-  readonly method?: string;
+  readonly id?: JsonRpcId | undefined;
+  readonly method?: string | undefined;
   readonly params?: unknown;
   readonly result?: unknown;
-  readonly error?: { readonly code: number; readonly message: string; readonly data?: unknown };
+  readonly error?:
+    { readonly code: number; readonly message: string; readonly data?: unknown } | undefined;
 }
 
 /** The `CallToolResult` shape the host relays to a view. */
 export interface HostToolResult {
-  readonly content?: readonly McpUiContentBlock[];
+  readonly content?: readonly ContentBlock[];
   readonly structuredContent?: Readonly<Record<string, unknown>>;
   readonly isError?: boolean;
   readonly [key: string]: unknown;
@@ -136,7 +153,7 @@ export interface McpAppHostOptions {
   /** Navigate the user to a URL. Returning `false` refuses the request. */
   readonly openLink?: (url: string) => boolean | Promise<boolean>;
   /** Post a message into the host's conversation. Returning `false` refuses it. */
-  readonly sendMessage?: (content: readonly McpUiContentBlock[]) => boolean | Promise<boolean>;
+  readonly sendMessage?: (content: readonly ContentBlock[]) => boolean | Promise<boolean>;
   /** Replace what the model is told about this view. */
   readonly updateModelContext?: (update: McpAppModelContext) => void;
   /** Honour (or decline) a display-mode change; return the mode actually applied. */
@@ -155,7 +172,7 @@ export interface McpAppHostOptions {
 
 /** What a view last told the model about itself. */
 export interface McpAppModelContext {
-  readonly content?: readonly McpUiContentBlock[];
+  readonly content?: readonly ContentBlock[];
   readonly structuredContent?: Readonly<Record<string, unknown>>;
 }
 
@@ -207,10 +224,10 @@ export const MCP_APP_PROXY_SANDBOX = 'allow-scripts allow-same-origin';
  * @returns a CSP header value with no newlines, ready for a `<meta http-equiv>` or a header.
  */
 export function buildViewCsp(csp?: McpUiResourceCsp): string {
-  const resources = csp?.resourceDomains?.join(' ') ?? '';
-  const connect = csp?.connectDomains?.join(' ') ?? '';
-  const frames = csp?.frameDomains?.join(' ') ?? '';
-  const bases = csp?.baseUriDomains?.join(' ') ?? '';
+  const resources = declaredCspOrigins(csp?.resourceDomains);
+  const connect = declaredCspOrigins(csp?.connectDomains);
+  const frames = declaredCspOrigins(csp?.frameDomains);
+  const bases = declaredCspOrigins(csp?.baseUriDomains);
   const directives = [
     `default-src 'none'`,
     `script-src 'self' 'unsafe-inline'${resources ? ` ${resources}` : ''}`,
@@ -225,6 +242,31 @@ export function buildViewCsp(csp?: McpUiResourceCsp): string {
     `form-action 'none'`,
   ];
   return `${directives.join('; ')};`;
+}
+
+function declaredCspOrigins(values: string[] | undefined): string {
+  return values?.filter(isCspOrigin).join(' ') ?? '';
+}
+
+function isCspOrigin(value: string): boolean {
+  if (/\s|;/.test(value)) return false;
+  if (/^(?:https?|wss?):\/\/\*\.(?:[a-z\d-]+\.)*[a-z\d-]+(?::\d+)?$/i.test(value)) {
+    return true;
+  }
+
+  try {
+    const origin = new URL(value);
+    return (
+      ['http:', 'https:', 'ws:', 'wss:'].includes(origin.protocol) &&
+      origin.username === '' &&
+      origin.password === '' &&
+      origin.pathname === '/' &&
+      origin.search === '' &&
+      origin.hash === ''
+    );
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -247,50 +289,90 @@ export function buildViewPermissionsAllow(permissions?: McpUiResourcePermissions
   return features.join('; ');
 }
 
-/** The capabilities this host advertises to a view. */
-function hostCapabilities(options: McpAppHostOptions): McpUiHostCapabilities {
-  const modalities = { text: {}, image: {}, resource: {}, structuredContent: {} } as const;
+/** The one-second upper bound for graceful view teardown. */
+const TEARDOWN_TIMEOUT_MS = 1_000;
+
+/** The stable display modes Athena implements in the browser. */
+const STABLE_DISPLAY_MODES = new Set<McpUiDisplayMode>(['inline', 'fullscreen']);
+
+/** Normalize facade results to the official MCP `CallToolResult` contract. */
+function officialToolResult(result: HostToolResult): CallToolResult {
   return {
-    ...(options.openLink ? { openLinks: {} } : {}),
-    ...(options.downloadFile ? { downloadFile: {} } : {}),
-    ...(options.callTool ? { serverTools: { listChanged: false } } : {}),
-    ...(options.readResource ? { serverResources: { listChanged: false } } : {}),
-    ...(options.log ? { logging: {} } : {}),
-    ...(options.updateModelContext ? { updateModelContext: modalities } : {}),
-    ...(options.sendMessage ? { message: { text: {}, image: {} } } : {}),
-    sandbox: {
-      csp: options.resource.meta?.csp ?? {},
-      permissions: options.resource.meta?.permissions ?? {},
-    },
+    ...result,
+    content: [...(result.content ?? [])],
+    ...(result.structuredContent ? { structuredContent: { ...result.structuredContent } } : {}),
   };
 }
 
-/** Read a plain object off a JSON-RPC message, or `null`. */
-function objectParams(params: unknown): Readonly<Record<string, unknown>> | null {
-  if (typeof params !== 'object' || params === null || Array.isArray(params)) return null;
-  return params as Readonly<Record<string, unknown>>;
-}
+/** A transport that lets AppBridge speak through Athena's already-authenticated proxy adapter. */
+class ProxyTransport implements Transport {
+  onclose?: () => void;
+  onerror?: (error: Error) => void;
+  onmessage: NonNullable<Transport['onmessage']> = () => undefined;
+  sessionId?: string;
+  setProtocolVersion?: (version: string) => void;
+  private readonly responseWaiters = new Map<JsonRpcId, () => void>();
+  private readonly preInitializeQueue: JSONRPCMessage[] = [];
+  private initialized = false;
 
-/** Read a `string` field off a params object. */
-function stringField(params: Readonly<Record<string, unknown>> | null, key: string): string | null {
-  const value = params?.[key];
-  return typeof value === 'string' ? value : null;
-}
+  /** @param post - Deliver one official JSON-RPC message to the outer proxy iframe. */
+  constructor(private readonly post: (message: JsonRpcMessage) => void) {}
 
-/** Normalize `ui/message` content, which the spec types as an array of content blocks. */
-function contentBlocks(value: unknown): readonly McpUiContentBlock[] | null {
-  if (Array.isArray(value)) {
-    const blocks = value.filter(
-      (item): item is McpUiContentBlock =>
-        typeof item === 'object' && item !== null && typeof Reflect.get(item, 'type') === 'string',
-    );
-    return blocks.length === value.length ? blocks : null;
+  /** Mark the transport ready; the React adapter owns the actual event listener. */
+  start(): Promise<void> {
+    return Promise.resolve();
   }
-  // The spec's prose example shows a single block where the type says an array; accept both so a
-  // widget written against either reading works.
-  if (typeof value === 'object' && value !== null && typeof Reflect.get(value, 'type') === 'string')
-    return [value as McpUiContentBlock];
-  return null;
+
+  /** Send an AppBridge message through the outer proxy iframe. */
+  async send(message: JSONRPCMessage, _options?: TransportSendOptions): Promise<void> {
+    if ('method' in message && !this.initialized) {
+      this.preInitializeQueue.push(message);
+      return;
+    }
+    this.post(message);
+    if ('id' in message && message.id !== undefined && !('method' in message)) {
+      const waiter = this.responseWaiters.get(message.id);
+      if (waiter) {
+        this.responseWaiters.delete(message.id);
+        waiter();
+      }
+    }
+  }
+
+  /** Release host notifications only after the app completes the official handshake. */
+  markInitialized(): void {
+    this.initialized = true;
+    for (const message of this.preInitializeQueue.splice(0)) this.post(message);
+  }
+
+  /**
+   * Feed one iframe message into AppBridge and wait for a request response when one is expected.
+   *
+   * @param data - Untrusted `postMessage` data.
+   */
+  async receive(data: unknown): Promise<void> {
+    const parsed = JSONRPCMessageSchema.safeParse(data);
+    if (!parsed.success) return;
+    const message = parsed.data;
+    let answered: Promise<void> | undefined;
+    if ('method' in message && 'id' in message) {
+      answered = new Promise((resolve) => this.responseWaiters.set(message.id, resolve));
+    }
+    this.onmessage(message);
+    if (answered) {
+      await answered;
+    } else {
+      await Promise.resolve();
+    }
+  }
+
+  /** Close this transport and release pending response waiters. */
+  async close(): Promise<void> {
+    this.preInitializeQueue.length = 0;
+    for (const resolve of this.responseWaiters.values()) resolve();
+    this.responseWaiters.clear();
+    this.onclose?.();
+  }
 }
 
 /** A live bridge between one view frame and this host. */
@@ -336,451 +418,223 @@ export function createMcpAppHost(options: McpAppHostOptions): McpAppHost {
   let closed = false;
   let initialized = false;
   let toolInputSent = false;
-  let appCapabilities: McpUiAppCapabilities | null = null;
-  let modelContext: McpAppModelContext | null = null;
-  let context: McpUiHostContext = { ...(options.hostContext ?? {}) };
-  /** Host→view messages held until `ui/notifications/initialized` arrives. */
-  const queue: JsonRpcMessage[] = [];
-  /** Pending host→view requests, keyed by the id we minted. */
-  const pending = new Map<JsonRpcId, (message: JsonRpcMessage) => void>();
-  let nextRequestId = 1;
-
-  const audit = (entry: McpAppAuditEntry): void => {
-    options.onAudit?.(entry);
+  let teardownPromise: Promise<void> | null = null;
+  const declaredModes = options.hostContext?.availableDisplayModes ?? AVAILABLE_DISPLAY_MODES;
+  let context: McpUiHostContext = {
+    ...(options.hostContext ?? {}),
+    availableDisplayModes: declaredModes.filter((mode) => STABLE_DISPLAY_MODES.has(mode)),
+    ...(options.tool
+      ? {
+          toolInfo: {
+            ...(options.tool.requestId === undefined ? {} : { id: options.tool.requestId }),
+            tool: {
+              inputSchema: { type: 'object', properties: {} },
+              ...(options.tool.definition ?? {}),
+              name: options.tool.name,
+            },
+          },
+        }
+      : {}),
   };
+  const capabilities: McpUiHostCapabilities = {
+    ...(options.openLink ? { openLinks: {} } : {}),
+    ...(options.callTool ? { serverTools: { listChanged: false } } : {}),
+    ...(options.sendMessage ? { message: { text: {} } } : {}),
+    sandbox: {
+      csp: options.resource.meta?.csp ?? {},
+      permissions: options.resource.meta?.permissions ?? {},
+    },
+  };
+  const queue: (() => Promise<void>)[] = [];
+  const transport = new ProxyTransport(options.post);
+  const bridge = new AppBridge(null, options.hostInfo, capabilities, { hostContext: context });
 
-  const send = (message: JsonRpcMessage): void => {
+  const audit = (entry: McpAppAuditEntry): void => options.onAudit?.(entry);
+  const enqueue = (operation: () => Promise<void>): void => {
     if (closed) return;
-    // The spec is explicit: nothing reaches the View before it announces `initialized`. Holding
-    // the message here rather than asking callers to wait is what makes the ordering a property
-    // of the bridge instead of a convention.
     if (!initialized) {
-      queue.push(message);
+      queue.push(operation);
       return;
     }
-    options.post(message);
+    void operation();
   };
-
   const flush = (): void => {
-    while (queue.length > 0) {
-      const message = queue.shift();
-      if (message) options.post(message);
-    }
+    for (const operation of queue.splice(0)) void operation();
   };
 
-  const respond = (id: JsonRpcId, result: unknown): void => {
-    // A response to the View's own request is not subject to the initialized gate — the View is
-    // blocked on it, and `ui/initialize` is by definition answered before `initialized` arrives.
-    if (!closed) options.post({ jsonrpc: '2.0', id, result });
-  };
+  bridge.addEventListener('initialized', () => {
+    initialized = true;
+    transport.markInitialized();
+    audit({ method: 'ui/notifications/initialized', outcome: 'ok' });
+    flush();
+  });
+  bridge.addEventListener('sizechange', (size) => options.onSizeChanged?.(size));
 
-  const fail = (id: JsonRpcId, code: number, message: string): void => {
-    if (!closed) options.post({ jsonrpc: '2.0', id, error: { code, message } });
-  };
-
-  const notify = (method: string, params: unknown): void => {
-    send({ jsonrpc: '2.0', method, params });
-  };
-
-  const handleInitialize = (id: JsonRpcId, params: Readonly<Record<string, unknown>>): void => {
-    const declared = params['appCapabilities'];
-    appCapabilities = typeof declared === 'object' && declared !== null ? declared : {};
-    const requested = params['protocolVersion'];
-    const result: McpUiInitializeResult = {
-      // Echo a version we can serve; otherwise state ours and let the view decide.
-      protocolVersion:
-        typeof requested === 'string' && requested === MCP_UI_PROTOCOL_VERSION
-          ? requested
-          : MCP_UI_PROTOCOL_VERSION,
-      hostInfo: options.hostInfo,
-      hostCapabilities: hostCapabilities(options),
-      hostContext: {
-        ...context,
-        availableDisplayModes: context.availableDisplayModes ?? AVAILABLE_DISPLAY_MODES,
-        ...(options.tool
-          ? {
-              toolInfo: {
-                ...(options.tool.requestId === undefined ? {} : { id: options.tool.requestId }),
-                tool: options.tool.definition ?? { name: options.tool.name },
-              },
-            }
-          : {}),
-      },
+  const callTool = options.callTool;
+  if (callTool) {
+    bridge.oncalltool = async ({ name, arguments: args = {} }) => {
+      const decision = options.authorizeTool?.(name) ?? {
+        allowed: false,
+        reason: 'This host has not authorized any tools for embedded views.',
+      };
+      if (!decision.allowed) {
+        audit({ method: 'tools/call', outcome: 'error', detail: `refused:${name}` });
+        throw new McpError(JSON_RPC_ERROR.refused, `${name}: ${decision.reason}`);
+      }
+      try {
+        const result = await callTool(name, args);
+        audit({ method: 'tools/call', outcome: 'ok', detail: name });
+        toolInputSent = false;
+        deliverToolInput(args);
+        deliverToolResult(result);
+        return officialToolResult(result);
+      } catch (error) {
+        if (error instanceof McpError) throw error;
+        audit({ method: 'tools/call', outcome: 'error', detail: `failed:${name}` });
+        throw new McpError(ErrorCode.InternalError, `${name}: the tool call did not complete.`);
+      }
     };
-    context = result.hostContext;
-    respond(id, result);
-    audit({ method: MCP_UI_METHODS.initialize, id, outcome: 'ok' });
-  };
+  }
 
-  const handleCallTool = async (
-    id: JsonRpcId,
-    params: Readonly<Record<string, unknown>>,
-  ): Promise<void> => {
-    const name = stringField(params, 'name');
-    if (!name) {
-      fail(id, JSON_RPC_ERROR.invalidParams, 'tools/call requires a tool name.');
-      audit({ method: MCP_UI_PROXIED_METHODS.callTool, id, outcome: 'error', detail: 'no-name' });
-      return;
-    }
-    if (!options.callTool) {
-      fail(id, JSON_RPC_ERROR.methodNotFound, 'This host does not proxy tool calls.');
-      audit({ method: MCP_UI_PROXIED_METHODS.callTool, id, outcome: 'error', detail: name });
-      return;
-    }
-    const decision = options.authorizeTool?.(name) ?? {
-      allowed: false,
-      reason: 'This host has not authorized any tools for embedded views.',
+  const openLink = options.openLink;
+  if (openLink) {
+    bridge.onopenlink = async ({ url }) => {
+      if (!(await openLink(url))) {
+        audit({ method: 'ui/open-link', outcome: 'error', detail: url });
+        throw new McpError(JSON_RPC_ERROR.refused, 'This host did not open that link.');
+      }
+      audit({ method: 'ui/open-link', outcome: 'ok', detail: url });
+      return {};
     };
-    if (!decision.allowed) {
-      // An out-of-scope call is answered with an error carrying the tool name, never a silent
-      // success and never an empty result: a widget must be able to tell "refused" from "did
-      // nothing", and a person reading the audit log must be able to tell which tool was asked for.
-      fail(id, JSON_RPC_ERROR.refused, `${name}: ${decision.reason}`);
-      audit({
-        method: MCP_UI_PROXIED_METHODS.callTool,
-        id,
-        outcome: 'error',
-        detail: `refused:${name}`,
-      });
-      return;
-    }
-    const args = objectParams(params['arguments']) ?? {};
-    try {
-      const result = await options.callTool(name, args);
-      respond(id, result);
-      audit({ method: MCP_UI_PROXIED_METHODS.callTool, id, outcome: 'ok', detail: name });
-      // The interactive-phase sequence in the spec: a view-initiated tool call replays the same
-      // input/result notifications the original call did, so a view that renders purely from
-      // notifications needs no second code path for its own calls.
-      toolInputSent = false;
-      deliverToolInput(args);
-      deliverToolResult(result);
-    } catch {
-      fail(id, JSON_RPC_ERROR.internalError, `${name}: the tool call did not complete.`);
-      audit({
-        method: MCP_UI_PROXIED_METHODS.callTool,
-        id,
-        outcome: 'error',
-        detail: `failed:${name}`,
-      });
-    }
-  };
+  }
 
-  const handleReadResource = async (
-    id: JsonRpcId,
-    params: Readonly<Record<string, unknown>>,
-  ): Promise<void> => {
-    const uri = stringField(params, 'uri');
-    if (!uri) {
-      fail(id, JSON_RPC_ERROR.invalidParams, 'resources/read requires a uri.');
-      return;
-    }
-    if (!options.readResource) {
-      fail(id, JSON_RPC_ERROR.methodNotFound, 'This host does not proxy resource reads.');
-      return;
-    }
-    try {
-      respond(id, await options.readResource(uri));
-      audit({ method: MCP_UI_PROXIED_METHODS.readResource, id, outcome: 'ok', detail: uri });
-    } catch {
-      fail(id, JSON_RPC_ERROR.internalError, 'The resource could not be read.');
-      audit({ method: MCP_UI_PROXIED_METHODS.readResource, id, outcome: 'error', detail: uri });
-    }
-  };
-
-  const handleOpenLink = async (
-    id: JsonRpcId,
-    params: Readonly<Record<string, unknown>>,
-  ): Promise<void> => {
-    const url = stringField(params, 'url');
-    if (!url) {
-      fail(id, JSON_RPC_ERROR.invalidParams, 'ui/open-link requires a url.');
-      return;
-    }
-    if (!options.openLink) {
-      fail(id, JSON_RPC_ERROR.methodNotFound, 'This host cannot open links.');
-      return;
-    }
-    const opened = await options.openLink(url);
-    if (opened) {
-      respond(id, {});
-      audit({ method: MCP_UI_METHODS.openLink, id, outcome: 'ok', detail: url });
-      return;
-    }
-    // A refusal is a JSON-RPC error, not `{ isError: true }` with a 200 — a widget that cannot
-    // distinguish "opened" from "blocked" will show the user a link it believes worked.
-    fail(id, JSON_RPC_ERROR.refused, 'This host did not open that link.');
-    audit({ method: MCP_UI_METHODS.openLink, id, outcome: 'error', detail: url });
-  };
-
-  const handleMessage = async (
-    id: JsonRpcId,
-    params: Readonly<Record<string, unknown>>,
-  ): Promise<void> => {
-    const blocks = contentBlocks(params['content']);
-    const role = stringField(params, 'role');
-    if (!blocks || blocks.length === 0) {
-      fail(id, JSON_RPC_ERROR.invalidParams, 'ui/message requires message content.');
-      return;
-    }
-    if (role !== null && role !== 'user') {
-      // The extension allows only `user`. A widget must not be able to put words in the
-      // assistant's mouth in a transcript the user reads as Athena's.
-      fail(id, JSON_RPC_ERROR.invalidParams, 'ui/message may only send a user message.');
-      audit({ method: MCP_UI_METHODS.message, id, outcome: 'error', detail: 'role' });
-      return;
-    }
-    if (!options.sendMessage) {
-      fail(id, JSON_RPC_ERROR.methodNotFound, 'This host does not accept messages from views.');
-      return;
-    }
-    const sent = await options.sendMessage(blocks);
-    if (sent) {
-      respond(id, {});
-      audit({ method: MCP_UI_METHODS.message, id, outcome: 'ok' });
-      return;
-    }
-    fail(id, JSON_RPC_ERROR.refused, 'This host did not post that message.');
-    audit({ method: MCP_UI_METHODS.message, id, outcome: 'error' });
-  };
-
-  const handleUpdateModelContext = (
-    id: JsonRpcId,
-    params: Readonly<Record<string, unknown>>,
-  ): void => {
-    if (!options.updateModelContext) {
-      fail(id, JSON_RPC_ERROR.methodNotFound, 'This host does not accept context updates.');
-      return;
-    }
-    const content = contentBlocks(params['content']);
-    const structured = objectParams(params['structuredContent']);
-    if (!content && !structured) {
-      fail(id, JSON_RPC_ERROR.invalidParams, 'ui/update-model-context requires content.');
-      return;
-    }
-    // "Each request overwrites the previous context sent by the View" — so this is an assignment,
-    // not an append. Accumulating would make the model see a change and its own undo at once.
-    modelContext = {
-      ...(content ? { content } : {}),
-      ...(structured ? { structuredContent: structured } : {}),
+  const sendMessage = options.sendMessage;
+  if (sendMessage) {
+    bridge.onmessage = async ({ content }) => {
+      const textOnly = content.every((block) => block.type === 'text');
+      if (!textOnly || content.length === 0) {
+        throw new McpError(ErrorCode.InvalidParams, 'ui/message accepts text content only.');
+      }
+      if (!(await sendMessage(content))) {
+        audit({ method: 'ui/message', outcome: 'error' });
+        throw new McpError(JSON_RPC_ERROR.refused, 'This host did not post that message.');
+      }
+      audit({ method: 'ui/message', outcome: 'ok' });
+      return {};
     };
-    options.updateModelContext(modelContext);
-    respond(id, {});
-    audit({ method: MCP_UI_METHODS.updateModelContext, id, outcome: 'ok' });
-  };
+  }
 
-  const handleRequestDisplayMode = (
-    id: JsonRpcId,
-    params: Readonly<Record<string, unknown>>,
-  ): void => {
-    const requested = stringField(params, 'mode');
-    if (requested !== 'inline' && requested !== 'fullscreen' && requested !== 'pip') {
-      fail(id, JSON_RPC_ERROR.invalidParams, 'ui/request-display-mode requires a known mode.');
-      return;
+  bridge.onrequestdisplaymode = async ({ mode }) => {
+    const current = context.displayMode ?? 'inline';
+    const hostModes = context.availableDisplayModes ?? [];
+    const appModes = bridge.getAppCapabilities()?.availableDisplayModes ?? [];
+    if (
+      !STABLE_DISPLAY_MODES.has(mode) ||
+      !hostModes.includes(mode) ||
+      !appModes.includes(mode) ||
+      !options.requestDisplayMode
+    ) {
+      return { mode: current };
     }
-    const applied = options.requestDisplayMode
-      ? options.requestDisplayMode(requested)
-      : (context.displayMode ?? 'inline');
-    // The result reports what actually happened, which may not be what was asked for; the view
-    // reads the result rather than assuming its request was honoured.
+    const applied = options.requestDisplayMode(mode);
+    if (
+      !STABLE_DISPLAY_MODES.has(applied) ||
+      !hostModes.includes(applied) ||
+      !appModes.includes(applied)
+    ) {
+      return { mode: current };
+    }
     context = { ...context, displayMode: applied };
-    respond(id, { mode: applied });
-    audit({ method: MCP_UI_METHODS.requestDisplayMode, id, outcome: 'ok', detail: applied });
+    audit({ method: 'ui/request-display-mode', outcome: 'ok', detail: applied });
+    return { mode: applied };
   };
 
-  const handleDownloadFile = async (
-    id: JsonRpcId,
-    params: Readonly<Record<string, unknown>>,
-  ): Promise<void> => {
-    const contents = params['contents'];
-    if (!Array.isArray(contents) || contents.length === 0) {
-      fail(id, JSON_RPC_ERROR.invalidParams, 'ui/download-file requires resource contents.');
-      return;
-    }
-    if (!options.downloadFile) {
-      fail(id, JSON_RPC_ERROR.methodNotFound, 'This host does not download files for views.');
-      return;
-    }
-    const accepted = await options.downloadFile(contents);
-    if (accepted) {
-      respond(id, {});
-      audit({ method: MCP_UI_METHODS.downloadFile, id, outcome: 'ok' });
-      return;
-    }
-    fail(id, JSON_RPC_ERROR.refused, 'This host did not download that file.');
-    audit({ method: MCP_UI_METHODS.downloadFile, id, outcome: 'error' });
-  };
+  async function teardown(appInitiated: boolean): Promise<void> {
+    if (teardownPromise) return teardownPromise;
+    teardownPromise = (async () => {
+      if (initialized && !closed) {
+        try {
+          await bridge.teardownResource({}, { timeout: TEARDOWN_TIMEOUT_MS });
+        } catch {
+          // Timeout and view errors both mean the host proceeds with removal after one second.
+        }
+      }
+      if (appInitiated) options.onRequestTeardown?.();
+      closed = true;
+      queue.length = 0;
+      await bridge.close();
+    })();
+    return teardownPromise;
+  }
+
+  bridge.addEventListener('requestteardown', () => {
+    audit({ method: 'ui/notifications/request-teardown', outcome: 'ok' });
+    void teardown(true);
+  });
+
+  const ready = bridge.connect(transport);
 
   function deliverToolInput(args: Readonly<Record<string, unknown>>): void {
     if (toolInputSent) return;
     toolInputSent = true;
-    notify(MCP_UI_METHODS.toolInput, { arguments: args });
+    enqueue(async () => bridge.sendToolInput({ arguments: { ...args } }));
   }
 
   function deliverToolResult(result: HostToolResult): void {
-    // The spec requires complete tool input before the result. If a caller never supplied
-    // arguments, an empty set is still sent, because the view is entitled to rely on the
-    // ordering and a missing notification would strand a view that waits for it.
     if (!toolInputSent) deliverToolInput(options.tool?.arguments ?? {});
-    notify(MCP_UI_METHODS.toolResult, result);
+    enqueue(async () => bridge.sendToolResult(officialToolResult(result)));
   }
 
-  const host: McpAppHost = {
+  return {
     async receive(data: unknown): Promise<void> {
       if (closed) return;
-      const message = objectParams(data);
-      if (message?.['jsonrpc'] !== '2.0') return;
-      const id = message['id'];
-      const method = typeof message['method'] === 'string' ? message['method'] : null;
-
-      // A response to one of the host's own requests (currently only `ui/resource-teardown`).
+      await ready;
+      const candidate = JSONRPCMessageSchema.safeParse(data);
       if (
-        !method &&
-        (id === undefined ? false : typeof id === 'string' || typeof id === 'number')
+        candidate.success &&
+        'method' in candidate.data &&
+        'id' in candidate.data &&
+        candidate.data.method === 'ui/initialize'
       ) {
-        const waiter = pending.get(id as JsonRpcId);
-        if (waiter) {
-          pending.delete(id as JsonRpcId);
-          waiter(message as unknown as JsonRpcMessage);
-        }
-        return;
+        audit({ method: 'ui/initialize', id: candidate.data.id, outcome: 'ok' });
       }
-      if (!method) return;
-
-      const params = objectParams(message['params']);
-
-      // Notifications carry no id and are never answered.
-      if (id === undefined) {
-        switch (method) {
-          case MCP_UI_METHODS.initialized:
-            if (!initialized) {
-              initialized = true;
-              flush();
-            }
-            audit({ method, outcome: 'ok' });
-            return;
-          case MCP_UI_METHODS.sizeChanged:
-            options.onSizeChanged?.({
-              ...(typeof params?.['width'] === 'number' ? { width: params['width'] } : {}),
-              ...(typeof params?.['height'] === 'number' ? { height: params['height'] } : {}),
-            });
-            return;
-          case MCP_UI_METHODS.requestTeardown:
-            options.onRequestTeardown?.();
-            audit({ method, outcome: 'ok' });
-            return;
-          case MCP_UI_PROXIED_METHODS.log:
-            options.log?.(message['params']);
-            return;
-          default:
-            // Unknown notifications are dropped, per JSON-RPC: there is nobody to tell.
-            return;
-        }
-      }
-
-      const requestId = id as JsonRpcId;
-      if (!params && method !== MCP_UI_PROXIED_METHODS.ping) {
-        fail(requestId, JSON_RPC_ERROR.invalidParams, `${method} requires params.`);
-        return;
-      }
-      const safeParams = params ?? {};
-
-      switch (method) {
-        case MCP_UI_METHODS.initialize:
-          handleInitialize(requestId, safeParams);
-          return;
-        case MCP_UI_PROXIED_METHODS.ping:
-          respond(requestId, {});
-          return;
-        case MCP_UI_PROXIED_METHODS.callTool:
-          await handleCallTool(requestId, safeParams);
-          return;
-        case MCP_UI_PROXIED_METHODS.readResource:
-          await handleReadResource(requestId, safeParams);
-          return;
-        case MCP_UI_METHODS.openLink:
-          await handleOpenLink(requestId, safeParams);
-          return;
-        case MCP_UI_METHODS.message:
-          await handleMessage(requestId, safeParams);
-          return;
-        case MCP_UI_METHODS.updateModelContext:
-          handleUpdateModelContext(requestId, safeParams);
-          return;
-        case MCP_UI_METHODS.requestDisplayMode:
-          handleRequestDisplayMode(requestId, safeParams);
-          return;
-        case MCP_UI_METHODS.downloadFile:
-          await handleDownloadFile(requestId, safeParams);
-          return;
-        default:
-          // Everything else is refused by name. The host is a policy boundary: a view cannot
-          // reach a server method simply because the server would have answered it.
-          fail(requestId, JSON_RPC_ERROR.methodNotFound, `${method} is not available to views.`);
-          audit({ method, id: requestId, outcome: 'error', detail: 'method-not-found' });
-      }
+      await transport.receive(data);
     },
-
-    deliverToolInputPartial(args: Readonly<Record<string, unknown>>): void {
-      // "MUST stop sending once tool-input is sent with complete arguments."
+    deliverToolInputPartial(args): void {
       if (toolInputSent) return;
-      notify(MCP_UI_METHODS.toolInputPartial, { arguments: args });
+      enqueue(async () => bridge.sendToolInputPartial({ arguments: { ...args } }));
     },
-
     deliverToolInput,
     deliverToolResult,
-
-    deliverToolCancelled(reason?: string): void {
-      notify(MCP_UI_METHODS.toolCancelled, reason === undefined ? {} : { reason });
+    deliverToolCancelled(reason): void {
+      enqueue(async () => bridge.sendToolCancelled(reason === undefined ? {} : { reason }));
     },
-
-    updateHostContext(patch: McpUiHostContext): void {
+    updateHostContext(patch): void {
       context = { ...context, ...patch };
-      // Partial by design: the view merges. Sending the whole context would make a theme flip
-      // indistinguishable from a re-initialization, which is what causes the flash this
-      // notification exists to avoid.
-      notify(MCP_UI_METHODS.hostContextChanged, patch);
+      if (!closed) bridge.setHostContext(context);
     },
-
-    async requestTeardown(reason?: string): Promise<void> {
-      if (closed || !initialized) return;
-      const id: JsonRpcId = `host-${String(nextRequestId++)}`;
-      const answered = new Promise<void>((resolve) => {
-        pending.set(id, () => {
-          resolve();
-        });
-      });
-      options.post({
-        jsonrpc: '2.0',
-        id,
-        method: MCP_UI_METHODS.resourceTeardown,
-        params: reason === undefined ? {} : { reason },
-      });
-      await answered;
-      pending.delete(id);
+    async requestTeardown(): Promise<void> {
+      await teardown(false);
     },
-
     get initialized(): boolean {
       return initialized;
     },
     get appCapabilities(): McpUiAppCapabilities | null {
-      return appCapabilities;
+      return bridge.getAppCapabilities() ?? null;
     },
     get modelContext(): McpAppModelContext | null {
-      return modelContext;
+      return null;
     },
     get hostContext(): McpUiHostContext {
       return context;
     },
-
     close(): void {
+      if (closed) return;
       closed = true;
       queue.length = 0;
-      pending.clear();
+      void bridge.close();
     },
   };
-
-  return host;
 }
 
 /**
@@ -793,13 +647,35 @@ export function isRenderableUiResource(resource: {
   uri?: unknown;
   mimeType?: unknown;
   text?: unknown;
+  blob?: unknown;
+  meta?: unknown;
 }): boolean {
   return (
     typeof resource.uri === 'string' &&
     resource.uri.startsWith('ui://') &&
     typeof resource.mimeType === 'string' &&
-    resource.mimeType.split(';')[0]?.trim() === MCP_UI_MIME_TYPE.split(';')[0] &&
-    resource.mimeType.includes('profile=mcp-app') &&
-    typeof resource.text === 'string'
+    resource.mimeType.trim() === RESOURCE_MIME_TYPE &&
+    (resource.meta === undefined || McpUiResourceMetaSchema.safeParse(resource.meta).success) &&
+    decodeUiResourceHtml(resource) !== null
   );
+}
+
+/**
+ * Read an official MCP text or base64 blob resource as UTF-8 HTML.
+ *
+ * @param resource - A stable MCP resource content item.
+ * @returns the HTML string, or `null` when neither representation is valid UTF-8 content.
+ */
+export function decodeUiResourceHtml(resource: { text?: unknown; blob?: unknown }): string | null {
+  if (typeof resource.text === 'string') return resource.text;
+  if (typeof resource.blob !== 'string') return null;
+  if (!/^(?:[A-Za-z\d+/]{4})*(?:[A-Za-z\d+/]{2}==|[A-Za-z\d+/]{3}=)?$/.test(resource.blob))
+    return null;
+  try {
+    const binary = atob(resource.blob);
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    return null;
+  }
 }

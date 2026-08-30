@@ -6,6 +6,10 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import {
+  McpUiResourceMetaSchema,
+  McpUiToolMetaSchema,
+} from '@modelcontextprotocol/ext-apps/app-bridge';
+import {
   MCP_UI_EXTENSION,
   MCP_UI_META_KEY,
   MCP_UI_MIME_TYPE,
@@ -15,6 +19,7 @@ import {
 } from '@docket/types';
 
 import { SUNSAMA_BACKLOG } from './fixtures';
+import { decodeUiResourceHtml, isRenderableUiResource } from './mcp-apps-host';
 import { mcpSafeFetch } from './mcp-network';
 
 /**
@@ -45,7 +50,8 @@ export function readUiToolMeta(meta: unknown): McpUiToolMeta | null {
   if (typeof meta !== 'object' || meta === null) return null;
   for (const key of [MCP_UI_META_KEY, MCP_UI_EXTENSION]) {
     const candidate: unknown = Reflect.get(meta, key);
-    if (typeof candidate === 'object' && candidate !== null) return candidate;
+    const parsed = McpUiToolMetaSchema.safeParse(candidate);
+    if (parsed.success) return parsed.data as McpUiToolMeta;
   }
   return null;
 }
@@ -68,7 +74,12 @@ export function uiMetaSpread(meta: unknown): { ui?: McpUiToolMeta | undefined } 
  * @returns the resource metadata, or `null` when it declares none.
  */
 export function readUiResourceMeta(meta: unknown): McpUiResourceMeta | null {
-  return readUiToolMeta(meta) as McpUiResourceMeta | null;
+  if (typeof meta !== 'object' || meta === null) return null;
+  for (const key of [MCP_UI_META_KEY, MCP_UI_EXTENSION]) {
+    const parsed = McpUiResourceMetaSchema.safeParse(Reflect.get(meta, key));
+    if (parsed.success) return parsed.data as McpUiResourceMeta;
+  }
+  return null;
 }
 
 /** A remote MCP endpoint plus its unsealed credential. */
@@ -608,10 +619,17 @@ export class RealMcpConnector implements McpConnector {
       readUiResource: async (uri): Promise<RemoteUiResource | null> => {
         const read = await client.readResource({ uri });
         for (const item of read.contents) {
-          const text: unknown = Reflect.get(item, 'text');
-          if (typeof text !== 'string') continue;
+          const text = decodeUiResourceHtml(item);
+          if (text === null) continue;
           const mimeType = typeof item.mimeType === 'string' ? item.mimeType : '';
-          if (!mimeType.includes('profile=mcp-app')) continue;
+          if (
+            !isRenderableUiResource({
+              uri: typeof item.uri === 'string' ? item.uri : uri,
+              mimeType,
+              text,
+            })
+          )
+            continue;
           const meta = readUiResourceMeta(item._meta);
           return {
             uri: typeof item.uri === 'string' ? item.uri : uri,

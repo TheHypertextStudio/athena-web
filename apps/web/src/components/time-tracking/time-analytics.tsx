@@ -314,12 +314,7 @@ export function TimeAnalytics(): JSX.Element {
       state.view === 'sessions' &&
       (timelineQ.data?.items.length ?? 0) === 0 &&
       !timelineQ.isPending ? (
-        <EmptyState
-          rangeLabel={range.label}
-          onAdd={() => {
-            setAddOpen(true);
-          }}
-        />
+        <EmptyState rangeLabel={range.label} />
       ) : null}
       {!error &&
       state.view === 'sessions' &&
@@ -937,10 +932,8 @@ function NowView({ records }: { readonly records: readonly TimeRecordOut[] }): J
 
 function EmptyState({
   rangeLabel,
-  onAdd,
 }: {
   readonly rangeLabel: string;
-  readonly onAdd: () => void;
 }): JSX.Element {
   return (
     <Surface
@@ -951,12 +944,9 @@ function EmptyState({
       <Schedule aria-hidden="true" className="text-on-surface-variant size-6" />
       <Text token="title-medium">No time tracked for {rangeLabel}</Text>
       <Text as="p" token="body-medium" tone="muted" className="max-w-prose">
-        There are no sessions in this selected period. Add time you already worked, or start a timer
+        There are no sessions in this selected period. Use Add past time above, or start a timer
         from the work you are doing now.
       </Text>
-      <Button variant="secondary" onClick={onAdd}>
-        <Plus aria-hidden="true" /> Add past time
-      </Button>
     </Surface>
   );
 }

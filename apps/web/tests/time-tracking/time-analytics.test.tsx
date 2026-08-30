@@ -116,7 +116,7 @@ describe('TimeAnalytics', () => {
   it('shows the selected period as a browsable empty session range', async () => {
     renderAnalytics();
     expect(await screen.findByText(/No time tracked for/)).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Add past time' })).toHaveLength(2);
+    expect(screen.getAllByRole('button', { name: 'Add past time' })).toHaveLength(1);
   });
 
   it('changes an applied period through the shareable URL state', async () => {

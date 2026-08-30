@@ -45,10 +45,10 @@
  * masthead. The box grows through padding rather than reserved rows, so every pixel of it is
  * somewhere you can type.
  *
- * A line, not a card. The bordered box with a toolbar along its bottom edge made the page's first
- * element a form, and its inner text sat inset from the column every other line on the page aligns
- * to. This shares the page's left edge, so it lines up by construction rather than by a negative
- * margin.
+ * Deliberately narrower than the page. Every section below runs the full column; this is centred
+ * on its own axis at a tighter measure, because it is the one thing on the page you write into —
+ * a composer, not a row of content the rest of the page's width was chosen for. It does not share
+ * the page's left edge, and is not meant to.
  */
 import { ArrowUp, Paperclip, Plus } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
@@ -78,6 +78,7 @@ import {
 
 import { useAthenaPanel } from '@/components/athena/athena-panel-provider';
 import { useMentionOrgId } from '@/components/mentions/use-mention-org';
+import { useServerReachable } from '@/components/reachability';
 import { api } from '@/lib/api';
 import { userErrorMessage, readProblemError } from '@/lib/problem';
 import { startViewTransition } from '@/lib/view-transition';
@@ -137,6 +138,13 @@ export function TodayPrompt({
   const [files, setFiles] = useState<readonly File[]>([]);
   const [dropping, setDropping] = useState(false);
   const filePicker = useRef<HTMLInputElement>(null);
+  // Attachments have no offline-safe path: uploads are a raw multipart request the app's outbox
+  // cannot queue (its one queueable route commits a domain write and an idempotency record in a
+  // single transaction, which this route has no equivalent of). Refusing to arm the affordance
+  // when the server is unreachable is cheaper and more honest than staging a file for an upload
+  // that is already known to fail.
+  const reachable = useServerReachable();
+  const attachAvailable = orgId !== null && reachable;
 
   // No empty-workspace fork. This box used to run a `tasks` probe purely to decide whether to
   // show an onboarding heading, a different placeholder, swapped button emphasis, and a different
@@ -318,7 +326,7 @@ export function TodayPrompt({
         )}
         style={{ viewTransitionName: 'today-composer' }}
         onDragOver={(event) => {
-          if (orgId === null) return;
+          if (!attachAvailable) return;
           if (![...event.dataTransfer.types].includes('Files')) return;
           event.preventDefault();
           event.dataTransfer.dropEffect = 'copy';
@@ -331,9 +339,9 @@ export function TodayPrompt({
         }}
         onDrop={(event) => {
           // The same precondition the attach button carries. Without it a file could be staged
-          // before a workspace resolved, where capture returns early and pressing send does
-          // nothing at all.
-          if (orgId === null) return;
+          // before a workspace resolved, or while offline, where the upload is already known to
+          // fail and pressing send would do nothing but discover that.
+          if (!attachAvailable) return;
           if (![...event.dataTransfer.types].includes('Files')) return;
           event.preventDefault();
           setDropping(false);
@@ -419,8 +427,11 @@ export function TodayPrompt({
             type="button"
             variant="ghost"
             iconOnly
-            aria-label="Add files"
-            disabled={orgId === null}
+            // Named, not just disabled — a control that goes quietly inert reads as broken. This is
+            // the one thing this composer already knows in advance will fail, the same way it
+            // already knows a request needs a resolved workspace.
+            aria-label={reachable ? 'Add files' : 'Add files (you appear to be offline)'}
+            disabled={!attachAvailable}
             onClick={() => {
               filePicker.current?.click();
             }}

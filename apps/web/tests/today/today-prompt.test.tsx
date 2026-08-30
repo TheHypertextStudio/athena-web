@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { assertDefined } from '@docket/test-utils';
 
+import { ReachabilityProvider } from '../../src/components/reachability';
 import { TodayPrompt } from '../../src/components/today/today-prompt';
 
 const openAthena = vi.hoisted(() => vi.fn());
@@ -216,5 +217,35 @@ describe('TodayPrompt', () => {
       dataTransfer: { files: [new File(['x'], 'brief.pdf')], types: ['Files'] },
     });
     expect(screen.queryByRole('button', { name: /^Remove / })).not.toBeInTheDocument();
+  });
+
+  it('refuses to arm attachments when the server is unreachable', () => {
+    // Uploads have no offline-safe path — the outbox cannot queue a multipart request — so the
+    // composer already knows in advance that one will fail while the server is unreachable, the
+    // same way it already knows one will fail before a workspace resolves.
+    render(
+      <ReachabilityProvider reachable={false}>
+        <TodayPrompt orgId={ORG} orgLabel="Space" />
+      </ReachabilityProvider>,
+    );
+
+    const attach = screen.getByRole('button', { name: /^Add files/ });
+    expect(attach).toBeDisabled();
+    expect(attach).toHaveAccessibleName('Add files (you appear to be offline)');
+
+    const box = screen.getByLabelText('Ask Athena about today').closest('div[style]');
+    fireEvent.drop(assertDefined(box), {
+      dataTransfer: { files: [new File(['x'], 'brief.pdf')], types: ['Files'] },
+    });
+    expect(screen.queryByRole('button', { name: /^Remove / })).not.toBeInTheDocument();
+  });
+
+  it('re-arms attachments once the server is reachable again', () => {
+    render(
+      <ReachabilityProvider reachable>
+        <TodayPrompt orgId={ORG} orgLabel="Space" />
+      </ReachabilityProvider>,
+    );
+    expect(screen.getByRole('button', { name: 'Add files' })).toBeEnabled();
   });
 });

@@ -1,6 +1,8 @@
 import {
   appLocationConfig,
   baseConfig,
+  complexityConfig,
+  complexityDebtConfig,
   dataLayerConfig,
   menuStyleBoundaryConfig,
   overlayPrimitiveConfig,
@@ -13,6 +15,10 @@ import {
  * `tooling/eslint-config`) is the single source of truth for rules and ignores, and the
  * data-layer enforcement lives there too. Compose them here; add repo-specific overrides
  * (if any) after the spreads.
+ *
+ * `complexityDebtConfig` comes last on purpose: it relaxes the four complexity rules for the
+ * files that already exceeded them when the gate landed, and a relaxation only works if it wins.
+ * See docs/engineering/complexity-ratchet.md.
  *
  * @type {import('typescript-eslint').ConfigArray}
  */
@@ -30,4 +36,6 @@ export default [
     'apps/web/src/components/canvas/**/*.{ts,tsx}',
     'apps/web/src/components/time-tracking/**/*.{ts,tsx}',
   ]),
+  ...complexityConfig,
+  ...complexityDebtConfig,
 ];

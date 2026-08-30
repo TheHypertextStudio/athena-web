@@ -1,4 +1,7 @@
+import { readFileSync } from 'node:fs';
+
 import js from '@eslint/js';
+import sonarjs from 'eslint-plugin-sonarjs';
 import tseslint from 'typescript-eslint';
 
 import uiOwnershipPlugin from './plugin.js';
@@ -322,5 +325,99 @@ export const uiOwnershipConfig = [
   ...semanticSurfaceConfig,
   ...serverComponentBoundaryConfig,
 ];
+
+/**
+ * Control-flow limits: the complexity gate.
+ *
+ * @remarks
+ * The preset is strict about types and imports and was, until this landed, silent about control
+ * flow — a function could grow to any shape and pass every gate. These four rules are the shape
+ * check. `sonarjs/cognitive-complexity` earns its dependency by weighting nesting and charging a
+ * nested closure to the function that holds it, which catches what cyclomatic complexity does not:
+ * `packages/ui/src/components/views/flatten-groups.ts` scores 21 on cognitive complexity with no
+ * function over the cyclomatic target at all.
+ *
+ * Only that one sonarjs rule is enabled. The plugin's recommended preset carries roughly three
+ * hundred, which is a different decision that nobody has made.
+ *
+ * Violations that predate the gate are not held to these numbers — see
+ * {@link complexityDebtConfig}. Full rationale in `docs/engineering/complexity-ratchet.md`.
+ */
+export const COMPLEXITY_TARGETS = Object.freeze({
+  complexity: 12,
+  'max-depth': 4,
+  'max-params': 5,
+  'sonarjs/cognitive-complexity': 15,
+});
+
+/** The rule entry each rule wants: sonarjs takes a bare number, the core rules take `{ max }`. */
+function complexityRuleEntry(rule, limit) {
+  return rule === 'sonarjs/cognitive-complexity' ? ['error', limit] : ['error', { max: limit }];
+}
+
+/** @type {import('typescript-eslint').ConfigArray} */
+export const complexityConfig = [
+  {
+    files: ['**/*.ts', '**/*.tsx', '**/*.mts', '**/*.cts'],
+    plugins: { sonarjs },
+    rules: Object.fromEntries(
+      Object.entries(COMPLEXITY_TARGETS).map(([rule, target]) => [
+        rule,
+        complexityRuleEntry(rule, target),
+      ]),
+    ),
+  },
+];
+
+/**
+ * Escape a literal path so minimatch reads it as a path and not as a pattern.
+ *
+ * @remarks
+ * Ninety-three files here carry a Next.js dynamic segment. Left alone, `orgs/[id]/page.tsx` is a
+ * character class: it matches `orgs/i/page.tsx` and `orgs/d/page.tsx` and never the file itself, so
+ * the relaxation would land on files that do not exist while the real file failed the gate. This is
+ * verified in `complexity-policy.test.ts` against ESLint's own matcher rather than assumed.
+ */
+function escapeGlob(path) {
+  return path.replace(/[*?[\]{}!]/g, (character) => `\\${character}`);
+}
+
+const complexityDebt = JSON.parse(
+  readFileSync(new URL('./complexity-debt.json', import.meta.url), 'utf8'),
+);
+
+/**
+ * Per-file relaxations for complexity that predates the gate.
+ *
+ * @remarks
+ * Turning these four rules on with no relaxations fails every file that already exceeded them, and
+ * a gate that lands red gets disabled. `complexity-debt.json` records each such file's current
+ * worst value and this block pins the file to it, so its worst function cannot get worse while new
+ * and already-clean files are held to {@link COMPLEXITY_TARGETS}. The numbers may only ever be
+ * lowered — `pnpm complexity:ledger` rewrites them from a measurement. Sign-off is an empty ledger.
+ *
+ * Grouped by `(rule, limit)` rather than one object per file: ESLint walks the whole config array
+ * for every linted file, so several hundred single-file objects is a cost for no benefit.
+ *
+ * @type {import('typescript-eslint').ConfigArray}
+ */
+export const complexityDebtConfig = (() => {
+  /** @type {Map<string, string[]>} */
+  const groups = new Map();
+  for (const [file, rules] of Object.entries(complexityDebt)) {
+    for (const [rule, limit] of Object.entries(rules)) {
+      const key = `${rule} ${String(limit)}`;
+      const files = groups.get(key);
+      if (files === undefined) groups.set(key, [escapeGlob(file)]);
+      else files.push(escapeGlob(file));
+    }
+  }
+  return [...groups.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, files]) => {
+      const [rule, limit] = key.split(' ');
+      return { files: files.sort(), rules: { [rule]: complexityRuleEntry(rule, Number(limit)) } };
+    });
+})();
 
 export default baseConfig;

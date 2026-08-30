@@ -19,6 +19,7 @@ const TOOLCHAIN_CATALOG_DEPENDENCIES = new Set([
   '@vitejs/plugin-react',
   '@vitest/coverage-v8',
   'eslint',
+  'eslint-plugin-sonarjs',
   'typescript',
   'typescript-eslint',
   'vite',

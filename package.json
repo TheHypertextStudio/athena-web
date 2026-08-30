@@ -27,6 +27,7 @@
     "test:e2e": "turbo run test:e2e",
     "clean": "turbo run clean && rm -rf .turbo node_modules",
     "ci:gate-policy": "tsx scripts/ci-gate-policy.ts",
+    "complexity:ledger": "tsx scripts/complexity-ledger.ts",
     "secret-scan": "tsx scripts/secret-scan.ts",
     "secret:paste": "tsx scripts/set-secret-from-clipboard.ts",
     "notion:webhook-token": "tsx scripts/notion-webhook-token.ts",

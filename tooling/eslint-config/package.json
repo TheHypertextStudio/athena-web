@@ -12,10 +12,12 @@
   "files": [
     "index.js",
     "plugin.js",
-    "rules/**/*.js"
+    "rules/**/*.js",
+    "complexity-debt.json"
   ],
   "dependencies": {
     "@eslint/js": "catalog:",
+    "eslint-plugin-sonarjs": "catalog:",
     "typescript-eslint": "catalog:"
   },
   "peerDependencies": {

@@ -69,10 +69,20 @@
     "topo": {
       "dependsOn": ["^topo"]
     },
+    // `topo` chains every workspace dependency into the key, which covers the shared preset
+    // package. `eslint.config.js` is the one file it cannot: it sits at the repo root and
+    // belongs to no package, so without naming it a package's cached PASS replays after the
+    // composed config changes.
     "lint": {
       "dependsOn": ["topo"],
       "outputs": [],
-      "inputs": ["$TURBO_DEFAULT$", "!**/*.md"]
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "!**/*.md",
+        "$TURBO_ROOT$/eslint.config.js",
+        "$TURBO_ROOT$/tooling/eslint-config/index.js",
+        "$TURBO_ROOT$/tooling/eslint-config/complexity-debt.json"
+      ]
     },
     // Never cacheable: this rewrites source files in place, and its `outputs` are those same
     // input files rather than an artifact turbo can restore. A cached replay would report success

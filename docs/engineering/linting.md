@@ -39,3 +39,18 @@ Keep this limit on the API command. Do not raise `NODE_OPTIONS` for the workspac
 The Web command receives a 3 GiB old-space limit. Its type-aware lint reaches Node's default 2 GiB
 heap limit even when Turbo runs serially. Keep this limit in `apps/web/package.json`; it is a Web
 resource requirement, not a root scheduler setting.
+
+## Complexity rules
+
+The preset also enforces `complexity`, `max-depth`, `max-params` and
+`sonarjs/cognitive-complexity`. Files that already exceeded those limits when the gate landed are
+relaxed per file by a generated block built from `tooling/eslint-config/complexity-debt.json`, and
+those numbers may only ever be lowered. Do not hand-edit that file: run `pnpm complexity:ledger`,
+which rewrites it from a measurement. A complexity failure in new code is refactored, not ledgered.
+
+`eslint-plugin-sonarjs` is registered for that one rule; its recommended preset is deliberately not
+enabled. Loading the plugin adds a one-time module load per ESLint process, small against the API
+command's cold-run budget above but worth remembering if that budget ever gets tight.
+
+Full rationale, the ledger's shape, and the measured costs are in
+[complexity-ratchet.md](complexity-ratchet.md).

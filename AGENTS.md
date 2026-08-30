@@ -348,6 +348,14 @@ A task is ONLY complete when:
 - **NO stub implementations** (`throw new Error('Not implemented')`)
 - **NO skipped tests** (`it.skip()`, `describe.skip()`)
 - **NO placeholder content** without implementation plan
+- **NO new entries in `complexity-debt.json`**. That ledger records complexity that predates the
+  gate; it may only shrink. A complexity, cognitive-complexity, depth, or parameter-count failure in
+  code you wrote is refactored, never granted an exemption. See
+  `docs/engineering/complexity-ratchet.md`.
+- **NO new entries in `complexity-debt.json`**. That ledger records complexity that predates the
+  gate; it may only shrink. A complexity, cognitive-complexity, depth, or parameter-count failure in
+  code you wrote is refactored, never granted an exemption. See
+  `docs/engineering/complexity-ratchet.md`.
 
 If a task cannot be completed:
 

@@ -7899,6 +7899,55 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   component. Scoping the sweep to the _geometry_ — anything anchored to a window edge — is what
   found the one that three previous passes had walked past.
 
+### [COMPLEXITY-GATE-001] Enforce a complexity ceiling across the repo
+
+- **Completed**: 2026-08-30
+- **Process**: Logged at completion. No entry was opened under Active Tasks before the work
+  started, which the Work Tracking Rules require; recorded here rather than back-filled, because an
+  in-flight history that did not happen is worse than a gap that did.
+- **Priority**: P2
+- **Summary**: Nothing measured function complexity. A repo-wide search for `complexity`,
+  `max-depth`, `max-params` or `sonarjs` returned no hits in any ESLint config, policy test, or CI
+  script, so a function could grow to any shape and pass every gate. `complexity: 12`,
+  `max-depth: 4`, `max-params: 5` and `sonarjs/cognitive-complexity: 15` now apply to every
+  `.ts`/`.tsx`. The pre-commit hook already runs `eslint --max-warnings=0` on staged files, so the
+  rules alone reject an over-complex function at the commit that introduces it; there is no
+  separate checker.
+- **Decisions**: The first version of this shipped a second enforcement engine behind the rules —
+  a scanner driving ESLint programmatically, a policy test asserting the ledger matched what the
+  scanner measured, and turbo cache-key plumbing so those tests saw the whole workspace. About 860
+  lines to re-check in CI what ESLint already checks at commit time. It was cut. What enforces the
+  gate is the rules; what the repo carries is a ledger of what predates them and one script to
+  regenerate it.
+
+  The ledger records one number per file per rule: that file's current worst value, which
+  `complexityDebtConfig` pins it to. An earlier shape carried a second `debt` figure that existed
+  only to let the deleted policy test demand exact equality; ESLint never read it.
+
+  No refactoring of existing violations is in this slice. The debt is frozen and countable.
+
+- **Files changed**: `tooling/eslint-config/index.js` gains `COMPLEXITY_TARGETS`,
+  `complexityConfig` and `complexityDebtConfig`, both composed into `eslint.config.js` with the
+  relaxations last. New `tooling/eslint-config/complexity-debt.json`,
+  `scripts/complexity-ledger.ts` and `docs/engineering/complexity-ratchet.md`. Added the
+  `complexity:ledger` root script, the `eslint-plugin-sonarjs` catalog pin, cache-key inputs on
+  `turbo.json`'s `lint`, and notes in `docs/engineering/linting.md` and `AGENTS.md`.
+- **Validation**: `pnpm lint`, `pnpm typecheck`, `pnpm format:check`, `pnpm test:tooling` and
+  `pnpm test:coverage` pass. The gate was verified by trying to commit a 13-complexity function:
+  the pre-commit hook rejects it. Ledger: 484 files, 750 entries, regenerating idempotently.
+- **Learnings**: Two bugs would each have shipped a gate that reported a clean tree and enforced
+  nothing, and both fail silently. `Linter` relativizes `filePath` against its `cwd` before
+  matching `files` patterns, so a scan run from the wrong directory matches nothing and reports
+  zero violations. And many files carry a Next.js dynamic segment: unescaped, `orgs/[id]/page.tsx`
+  is a character class matching `orgs/i/page.tsx` and never the file itself, so every relaxation
+  would land on a path that does not exist.
+
+  The larger lesson is the 860 lines. The ledger needed a regenerator; it did not need a second
+  engine to audit the first. The question worth asking earlier is which of these parts would still
+  be here if the rule were simply on.
+
+- **Blockers for launch**: None.
+
 ### [TODAY-COPY-001] Name every Today section for what it holds
 
 - **Completed**: 2026-08-29

@@ -77,14 +77,12 @@ export const LATTICE_REASON_COPY: Readonly<Record<LatticeReason, LatticeReasonCo
 };
 
 /** Why a whole deployment cannot offer Lattice. */
-export type LatticeDeploymentReason = 'not_configured' | 'sequencing';
+export type LatticeDeploymentReason = 'not_configured';
 
 /** Copy for each deployment-level reason. */
 export const LATTICE_DEPLOYMENT_COPY: Readonly<Record<LatticeDeploymentReason, string>> = {
   not_configured:
     'Running Athena on your own computer is not set up for this Docket deployment yet.',
-  sequencing:
-    'Running Athena on your own computer is not available yet. It turns on once Athena’s standard model service is verified in production.',
 };
 
 /** What each device state means, in one word a person can scan. */

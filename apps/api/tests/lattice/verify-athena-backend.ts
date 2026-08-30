@@ -3,17 +3,15 @@
  * Docket's own API keys — and write the transcript and request traces as committed evidence.
  *
  * @remarks
- * This is the run the launch requirements call for — proof that Athena works end to end on
- * Cloudflare's model router using the project's own API keys, before the Lattice backend is
- * allowed to ship — and it is the run `apps/api/src/routes/lattice-gate.ts` reads to decide
- * whether the Lattice surface may be reached in production.
+ * This is the run the default-backend launch requirements call for — proof that Athena works end
+ * to end on Cloudflare's model router using the project's own API keys. It is independent of the
+ * per-user Lattice backend, which does not require Docket's cloud-model credentials.
  *
  * ## It refuses to lie
  *
  * The script asserts that the environment really did select `cloudflare-router` and that the
  * credential is Docket's own. If either is missing it exits non-zero and writes nothing. There is
- * no flag that makes it record `mode: 'production-keys'` without a real routed call having
- * happened, because a gate that can be talked into opening is not a gate.
+ * no flag that makes it record production evidence without a real routed call having happened.
  *
  * ## Running it
  *
@@ -25,8 +23,7 @@
  *   pnpm --filter @docket/api exec tsx tests/lattice/verify-athena-backend.ts
  * ```
  *
- * On success it prints the record to paste into `CLOUDFLARE_ROUTER_VERIFICATION`, which is what
- * opens the gate.
+ * On success it writes the committed evidence report and prints its location.
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
@@ -270,19 +267,10 @@ ${traces
 Every request above is to the Cloudflare gateway host, which is what "routed on Docket's own keys"
 means in practice.
 
-## Recording this in the gate
+## Scope
 
-Paste into \`apps/api/src/routes/lattice-gate.ts\`:
-
-\`\`\`ts
-export const CLOUDFLARE_ROUTER_VERIFICATION: ModelBackendVerification = {
-  backendId: 'cloudflare-router',
-  mode: 'production-keys',
-  recordedAt: '${new Date().toISOString().slice(0, 10)}',
-  scenarios: ['chat', 'tool-call', 'scheduled-agent-action'],
-  evidencePath: 'docs/engineering/evidence/athena-model-backend-verification.md',
-};
-\`\`\`
+This report proves Docket's operated fallback model path. Per-user Lattice acceptance is recorded
+separately and does not depend on this provider credential.
 `;
 
   await mkdir(dirname(REPORT_PATH), { recursive: true });

@@ -49,7 +49,6 @@ import {
   storeLatticeCredential,
   type LatticeConnectionRow,
 } from './lattice-connection';
-import { latticeSequencingSatisfied } from './lattice-gate';
 
 /** The live states the gateway reports for a paired device. */
 const DeviceStatusEnum = z.enum(['unpaired', 'reachable', 'offline', 'revoked']);
@@ -63,14 +62,14 @@ const UnavailableReasonEnum = z.enum(
 );
 
 /** Why this deployment cannot offer Lattice at all. */
-const DeploymentReasonEnum = z.enum(['not_configured', 'sequencing']);
+const DeploymentReasonEnum = z.literal('not_configured');
 
 /** Docket's view of one person's Lattice connection. */
 const LatticeStatusOut = z
   .object({
     available: z.boolean().describe('Whether this deployment can offer Lattice at all right now.'),
     deploymentReason: DeploymentReasonEnum.nullable().describe(
-      'Why the feature is unavailable: `not_configured` (no Lovelace OAuth client is registered) or `sequencing` (the routed default backend has no recorded production verification yet). Null when available.',
+      'Why the feature is unavailable: `not_configured` when no Lovelace OAuth client is registered. Null when available.',
     ),
     connected: z.boolean().describe('Whether an approved Lovelace grant is stored.'),
     enabled: z.boolean().describe('Whether Athena’s turns currently run on the connected device.'),
@@ -165,14 +164,9 @@ export function toLatticeStatus(
   row: LatticeConnectionRow | null,
 ): z.input<typeof LatticeStatusOut> {
   const configured = latticeConfigured();
-  const sequenced = latticeSequencingSatisfied();
-  // Sequencing is reported ahead of configuration because it is the stronger statement: a
-  // deployment that has not proven the default backend must not offer Lattice even if a Lovelace
-  // client id happens to be present.
-  const deploymentReason = !sequenced ? 'sequencing' : !configured ? 'not_configured' : null;
   return {
-    available: configured && sequenced,
-    deploymentReason,
+    available: configured,
+    deploymentReason: configured ? null : 'not_configured',
     connected: row?.status === 'connected',
     enabled: row?.enabled ?? false,
     deviceId: row?.deviceId ?? null,
@@ -185,20 +179,16 @@ export function toLatticeStatus(
 }
 
 /**
- * Refuse a mutating route while the feature is gated or unconfigured.
+ * Refuse a mutating route while the shared OAuth client is unconfigured.
  *
  * @remarks
- * The read route deliberately does NOT call this: a gated deployment still has to be able to say
- * *why* the section is unavailable, and a 409 would leave the surface with nothing true to render.
+ * The read route deliberately does NOT call this: an unconfigured deployment still has to be able
+ * to say why the section is unavailable, and a 409 would leave the surface with nothing true to
+ * render.
  *
  * @throws {ConflictError} When the deployment cannot offer Lattice.
  */
 function assertLatticeAvailable(): void {
-  if (!latticeSequencingSatisfied()) {
-    throw new ConflictError(
-      'Lattice is gated until Athena’s routed default backend has a recorded production verification',
-    );
-  }
   if (!latticeConfigured()) {
     throw new ConflictError('Lattice is not configured for this deployment');
   }

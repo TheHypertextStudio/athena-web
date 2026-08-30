@@ -1,8 +1,8 @@
 # Bring your own model: Athena on a Lovelace Lattice device
 
-> **Status**: implemented, gated behind the routed-default verification (see §8)
+> **Status**: implemented; production availability requires the shared Lovelace OAuth client
 > **Owner**: Athena model backend
-> **Last updated**: 2026-08-13
+> **Last updated**: 2026-08-30
 
 Someone can point Athena's model work at a computer they own. They authorize Docket from their
 Lovelace account, pick one of the machines they have paired with Lattice, and from then on Athena's
@@ -180,27 +180,32 @@ Lovelace → pick a computer), zero text fields for URLs/keys/tokens, zero termi
 recording that measures it is `apps/web/e2e/lattice/capture-lattice-flow.ts`, which counts the
 actions and asserts the input count is 0.
 
-## 8. Sequencing gate
+## 8. Independence from Docket's fallback backend
 
-Bring-your-own-Lattice ships **after** Athena is proven on Cloudflare's model router with Docket's
-own keys. `apps/api/src/routes/lattice-gate.ts` holds that as code the settings surface reads:
-`CLOUDFLARE_ROUTER_VERIFICATION.mode` must be `production-keys` for the Lattice surface to be
-reachable in production. Outside production the surface is reachable so the feature can be built and
-reviewed without an Anthropic account.
+Lattice is selected by the user, not by the deployment. An owner with a connected, enabled device
+is resolved to that device before Athena reads the process-level fallback runtime. Therefore an
+absent or misconfigured Docket-operated model provider cannot hide Lattice, reject its consent
+flow, or prevent that owner's turn from running locally.
 
-It is currently recorded as `harness`, so **in production the section renders "not available yet"
-and every mutating route refuses.** Recording a real-key run opens it.
+The process-level backend remains the fallback for registered agents and for owners who have not
+enabled Lattice. Its production readiness is a separate launch concern; it is not a prerequisite
+for choosing personal compute. The production-mode end-to-end test deliberately leaves the
+fallback unconfigured: enabled Lattice turns complete, while an unconnected or disabled owner
+reaches the fallback's normal configuration error.
 
 ## 9. Environment
 
-| Var                       | Required | Meaning                                                                                            |
-| ------------------------- | -------- | -------------------------------------------------------------------------------------------------- |
-| `LATTICE_CLIENT_ID`       | no       | Lovelace OAuth client. Absent ⇒ the section renders as unavailable and no Connect control appears. |
-| `LATTICE_CLIENT_SECRET`   | no       | Paired secret for the confidential client.                                                         |
-| `LATTICE_ACCOUNTS_ISSUER` | no       | Defaults to `https://accounts.uselovelace.com`.                                                    |
-| `LATTICE_GATEWAY_URL`     | no       | Defaults to `https://lattice.uselovelace.com`.                                                     |
+| Var                       | Required | Meaning                                                                                                            |
+| ------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------ |
+| `LATTICE_CLIENT_ID`       | no       | Docket's shared Lovelace OAuth client. Absent ⇒ the section renders as unavailable and no Connect control appears. |
+| `LATTICE_CLIENT_SECRET`   | no       | Paired secret for Docket's confidential OAuth client.                                                              |
+| `LATTICE_ACCOUNTS_ISSUER` | no       | Defaults to `https://accounts.uselovelace.com`.                                                                    |
+| `LATTICE_GATEWAY_URL`     | no       | Defaults to `https://lattice.uselovelace.com`.                                                                     |
 
-All optional: a deployment that sets none behaves exactly as it did before this feature existed.
+The OAuth client identifies Docket during consent; it is application infrastructure, not the model
+credential. Every model grant, device choice, and enablement state still belongs to the individual
+user. The user never enters a gateway URL, API key, or token. A deployment that sets none of these
+variables behaves exactly as it did before this feature existed.
 
 ## 10. The SDK
 
@@ -234,7 +239,6 @@ export * from '@reasonabletech/lattice-client';
 | `apps/api/src/routes/lattice-connection.ts`                  | Load/seal/refresh one person's grant.                                    |
 | `apps/api/src/routes/lattice-oauth.ts`                       | The browser callback.                                                    |
 | `apps/api/src/routes/lattice-backend.ts`                     | Per-owner backend resolution for the agent loop.                         |
-| `apps/api/src/routes/lattice-gate.ts`                        | The sequencing gate.                                                     |
 | `apps/web/src/app/(app)/settings/athena/lattice-section.tsx` | The settings surface.                                                    |
 | `apps/web/src/app/(app)/settings/athena/lattice-copy.ts`     | Application-owned copy per reason.                                       |
 | `packages/db/src/schema/agents.ts`                           | `lattice_connection`, `lattice_credential`.                              |

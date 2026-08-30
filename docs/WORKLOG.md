@@ -104,6 +104,7 @@
   - [x] Restore the shared-types 100% coverage gate for presentation revalidation.
   - [x] Fix Node 24 pinned-DNS lookup compatibility found by the public map-server proof.
   - [x] Keep URL-derived tool prefixes inside the connection form's accepted length.
+  - [x] Stop the deployment fallback from overriding a user's enabled Lattice backend.
   - [ ] Make personal MCP Apps an unmistakable Athena destination.
   - [ ] Validate packages, production build, and an upstream reference app.
 - **Layer 1 implementation**: Pinned `@modelcontextprotocol/ext-apps@1.7.5` in the workspace
@@ -266,6 +267,23 @@
   typecheck, and Web ESLint pass. A model-invoked production turn remains externally blocked because
   the live API has no `ANTHROPIC_API_KEY` secret or binding; the failure is confirmed in Cloud Run
   logs before any remote tool call.
+- **Per-user Lattice correction plan**: Treat Lattice as the user-selected Athena backend it was
+  designed to be. Remove the production-only Cloudflare verification gate from owner backend
+  resolution and the Lovelace settings/authorization surface; keep only the deployment's shared
+  OAuth-client registration as a prerequisite for starting consent. Prove in production mode that
+  an enabled owner's turn reaches their selected Lattice device without consulting the process
+  fallback, while an owner who has not enabled Lattice still uses that fallback. Remove the
+  obsolete `sequencing` response/copy and update the Lattice engineering spec before committing.
+- **Per-user Lattice correction implementation**: Deleted the production-only sequencing gate,
+  removed its API and settings-copy state, and made process fallback construction lazy. Athena now
+  reads an owner's connected and enabled Lattice device before accessing deployment model config;
+  owners without enabled Lattice still follow the unchanged fallback. The hermetic production-mode
+  flow intentionally has no `ANTHROPIC_API_KEY`: consent, device discovery, selection, local text,
+  tool calling, and offline no-fallback behavior pass, while unconnected and disabled owners reach
+  the expected fallback configuration error.
+- **Per-user Lattice correction validation**: The production-mode Lattice flow passes 11/11. API
+  and Web typechecks pass, affected API/Web ESLint is clean, Prettier reports the changed files
+  canonical, and `git diff --check` passes.
 - **Production official-map CSP repair**: Direct browser inspection showed that the unchanged
   pinned map app loaded inside Athena's exact inner sandbox but Cesium stopped before
   `App.connect()`: its runtime uses `new Function` and blob-backed workers. The host now permits
@@ -11538,7 +11556,8 @@ Docs updated: `mail-providers.md` §4.1 (cursor-honesty rule for both providers)
 - **Status**: REVIEW
 - **Completed**: 2026-08-02
 - **Priority**: P0
-- **Requirement ids**: WIL-41 … WIL-49 (Lovelace Lattice), WIL-51 (sequencing). WIL-50 remains open.
+- **Requirement ids**: WIL-41 … WIL-49 (Lovelace Lattice). WIL-50 tracks only the independent
+  Docket-operated fallback backend.
 - **Summary**: A person can authorize Docket from their Lovelace account and point Athena's model
   work at a computer they own. The turn is dispatched to Lovelace's hosted gateway with the
   `lattice:personal:<latticeId>` selector; the gateway relays it to the daemon on their machine.
@@ -11623,11 +11642,9 @@ fields** from disconnected to running.
 
 #### Blockers for launch
 
-- **WIL-50 is not closed.** No Docket-owned Anthropic or Cloudflare credential exists in this
-  environment, so Athena has never been run against the real model router with the project's own
-  keys. `apps/api/src/routes/lattice-gate.ts` records this honestly as `mode: 'harness'`, which
-  keeps the Lattice surface unreachable in production until a real-key run is recorded.
-- Registering the Lovelace OAuth app (WIL-47's real consent screen) needs a human with a browser.
+- Registering and deploying Docket's shared Lovelace OAuth client remains required for the real
+  consent screen. This is application identity only; users provide the authorization, device, and
+  model runtime through their own Lovelace account.
 
 ## [CI-STALE-DEPLOY-001] Stand deploy-production down when main has moved past it — 2026-08-15
 

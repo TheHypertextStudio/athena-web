@@ -39,7 +39,6 @@ import {
   loadLatticeConnection,
   recordLatticeFailure,
 } from './lattice-connection';
-import { latticeSequencingSatisfied } from './lattice-gate';
 
 /** Which backend a resolution landed on, for logging and for the session's own record. */
 export type ResolvedBackendKind = 'lattice' | 'default';
@@ -119,18 +118,18 @@ export function latticeChatPort(
 export async function resolveOwnerBackend(
   ownerUserId: string | null,
 ): Promise<ResolvedOwnerBackend> {
-  const fallback: ResolvedOwnerBackend = {
+  const fallback = (): ResolvedOwnerBackend => ({
     runtime: getContainer().agentTurn,
     kind: 'default',
     deviceId: null,
-  };
-  if (!ownerUserId || !latticeSequencingSatisfied()) return fallback;
+  });
+  if (!ownerUserId) return fallback();
 
   const connection = await loadLatticeConnection(ownerUserId);
   // Not connected, switched off, or no device chosen are all ordinary "this person is on the
   // default backend" states, not failures.
-  if (!connection || !connection.enabled || connection.status !== 'connected') return fallback;
-  if (!connection.deviceId) return fallback;
+  if (!connection || !connection.enabled || connection.status !== 'connected') return fallback();
+  if (!connection.deviceId) return fallback();
 
   const gateway = await latticeGatewayContext(connection);
   const deviceId = connection.deviceId;

@@ -38,7 +38,9 @@ type ResolveOwnerBackend = typeof ResolveOwnerBackendFn;
 type SignConnectState = typeof SignConnectStateFn;
 
 process.env['DATABASE_URL'] = 'pglite://memory://';
-process.env['APP_MODE'] = 'test';
+// This flow must remain available in the deployed API. The owner's Lattice choice is independent
+// of whether the process-level fallback has a verified model provider.
+process.env['APP_MODE'] = 'production';
 process.env['NODE_ENV'] = 'test';
 process.env['BETTER_AUTH_SECRET'] = 'test-secret-test-secret-test-secret-0123456789';
 process.env['CRON_SECRET'] = 'test-cron-secret';
@@ -441,10 +443,10 @@ describe('the bring-your-own-Lattice flow', () => {
     });
   });
 
-  it('leaves every other account on the default backend', async () => {
-    const other = await resolveOwnerBackend('user_without_lattice');
-    expect(other.kind).toBe('default');
-    expect(other.deviceId).toBeNull();
+  it('consults the deployment fallback only for an account without Lattice', async () => {
+    await expect(resolveOwnerBackend('user_without_lattice')).rejects.toThrow(
+      'Athena model backend "anthropic-direct" is missing config: ANTHROPIC_API_KEY',
+    );
   });
 
   it('surfaces an explicit unavailable state when the device goes offline, and answers from nowhere else', async () => {
@@ -478,13 +480,15 @@ describe('the bring-your-own-Lattice flow', () => {
     recorder.deviceOnline = true;
   });
 
-  it('returns to the default backend when switched off, keeping the grant', async () => {
+  it('returns to the deployment fallback when switched off, keeping the grant', async () => {
     await call('/v1/me/athena/lattice', {
       method: 'PATCH',
       body: JSON.stringify({ enabled: false }),
     });
 
-    expect((await resolveOwnerBackend(USER_ID)).kind).toBe('default');
+    await expect(resolveOwnerBackend(USER_ID)).rejects.toThrow(
+      'Athena model backend "anthropic-direct" is missing config: ANTHROPIC_API_KEY',
+    );
     const status = (await (await call('/v1/me/athena/lattice')).json()) as Record<string, unknown>;
     expect(status).toMatchObject({ connected: true, enabled: false, deviceId: 'lat_studio' });
   });

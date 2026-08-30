@@ -20,6 +20,7 @@
  */
 import type {
   CycleOut,
+  EntityDisplayOut,
   LabelOut,
   MilestoneOut,
   ProjectOut,
@@ -37,6 +38,7 @@ import {
   memberActorOptions,
   programOptions,
   projectOptions,
+  teamOptions,
 } from '@/components/pickers/options';
 import { api } from '@/lib/api';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
@@ -70,8 +72,12 @@ export interface ComposerOptions {
   readonly teams: readonly TeamOut[];
   /** The org's raw cycles (each carries its `teamId` so callers can scope to a team). */
   readonly cycles: readonly CycleOut[];
+  /** Cycle display records used when a caller scopes the raw cycle list. */
+  readonly cycleDisplays: readonly EntityDisplayOut[];
   /** The org's raw milestones (each carries its `projectId` so callers can scope to a project). */
   readonly milestones: readonly MilestoneOut[];
+  /** Milestone display records used when a caller scopes the raw milestone list. */
+  readonly milestoneDisplays: readonly EntityDisplayOut[];
   /** Whether any requested list is still loading. */
   readonly loading: boolean;
   /** Application-owned error copy when any requested option source failed. */
@@ -195,6 +201,17 @@ export function useComposerOptions(
       { enabled: on('cycles'), staleTime: STALE.static },
     ),
   );
+  const cycleDisplaysQ = useApiQuery(
+    apiQueryOptions(
+      queryKeys.entityDisplays(orgId, 'cycle'),
+      () =>
+        api.v1.orgs[':orgId'].display[':subjectType'].$get({
+          param: { orgId, subjectType: 'cycle' },
+        }),
+      'Could not load cycle icons.',
+      { enabled: on('cycles'), staleTime: STALE.static },
+    ),
+  );
   const milestonesQ = useApiQuery(
     apiQueryOptions(
       ['org', orgId, 'milestones'],
@@ -203,11 +220,33 @@ export function useComposerOptions(
       { enabled: on('milestones'), staleTime: STALE.static },
     ),
   );
+  const milestoneDisplaysQ = useApiQuery(
+    apiQueryOptions(
+      queryKeys.entityDisplays(orgId, 'milestone'),
+      () =>
+        api.v1.orgs[':orgId'].display[':subjectType'].$get({
+          param: { orgId, subjectType: 'milestone' },
+        }),
+      'Could not load milestone icons.',
+      { enabled: on('milestones'), staleTime: STALE.static },
+    ),
+  );
   const teamsQ = useApiQuery(
     apiQueryOptions(
       queryKeys.teams(orgId),
       () => api.v1.orgs[':orgId'].teams.$get({ param: { orgId } }),
       'Could not load teams.',
+      { enabled: on('teams'), staleTime: STALE.static },
+    ),
+  );
+  const teamDisplaysQ = useApiQuery(
+    apiQueryOptions(
+      queryKeys.entityDisplays(orgId, 'team'),
+      () =>
+        api.v1.orgs[':orgId'].display[':subjectType'].$get({
+          param: { orgId, subjectType: 'team' },
+        }),
+      'Could not load team icons.',
       { enabled: on('teams'), staleTime: STALE.static },
     ),
   );
@@ -224,8 +263,11 @@ export function useComposerOptions(
     initiativeDisplaysQ.isLoading ||
     labelsQ.isLoading ||
     cyclesQ.isLoading ||
+    cycleDisplaysQ.isLoading ||
     milestonesQ.isLoading ||
-    teamsQ.isLoading;
+    milestoneDisplaysQ.isLoading ||
+    teamsQ.isLoading ||
+    teamDisplaysQ.isLoading;
   const failedKinds = useMemo(() => {
     const failed = new Set<ComposerOptionKind>();
     if (membersQ.isError || agentsQ.isError) failed.add('actors');
@@ -233,23 +275,26 @@ export function useComposerOptions(
     if (programsQ.isError || programDisplaysQ.isError) failed.add('programs');
     if (initiativesQ.isError || initiativeDisplaysQ.isError) failed.add('initiatives');
     if (labelsQ.isError) failed.add('labels');
-    if (cyclesQ.isError) failed.add('cycles');
-    if (milestonesQ.isError) failed.add('milestones');
-    if (teamsQ.isError) failed.add('teams');
+    if (cyclesQ.isError || cycleDisplaysQ.isError) failed.add('cycles');
+    if (milestonesQ.isError || milestoneDisplaysQ.isError) failed.add('milestones');
+    if (teamsQ.isError || teamDisplaysQ.isError) failed.add('teams');
     return failed;
   }, [
     agentsQ.isError,
+    cycleDisplaysQ.isError,
     cyclesQ.isError,
     initiativeDisplaysQ.isError,
     initiativesQ.isError,
     labelsQ.isError,
     membersQ.isError,
     milestonesQ.isError,
+    milestoneDisplaysQ.isError,
     programDisplaysQ.isError,
     programsQ.isError,
     projectDisplaysQ.isError,
     projectsQ.isError,
     teamsQ.isError,
+    teamDisplaysQ.isError,
   ]);
   const retry = useCallback((): void => {
     const requests: Promise<unknown>[] = [];
@@ -263,22 +308,28 @@ export function useComposerOptions(
     if (initiativeDisplaysQ.isError) requests.push(initiativeDisplaysQ.refetch());
     if (labelsQ.isError) requests.push(labelsQ.refetch());
     if (cyclesQ.isError) requests.push(cyclesQ.refetch());
+    if (cycleDisplaysQ.isError) requests.push(cycleDisplaysQ.refetch());
     if (milestonesQ.isError) requests.push(milestonesQ.refetch());
+    if (milestoneDisplaysQ.isError) requests.push(milestoneDisplaysQ.refetch());
     if (teamsQ.isError) requests.push(teamsQ.refetch());
+    if (teamDisplaysQ.isError) requests.push(teamDisplaysQ.refetch());
     void Promise.all(requests);
   }, [
     agentsQ,
     cyclesQ,
+    cycleDisplaysQ,
     initiativeDisplaysQ,
     initiativesQ,
     labelsQ,
     membersQ,
     milestonesQ,
+    milestoneDisplaysQ,
     programDisplaysQ,
     programsQ,
     projectDisplaysQ,
     projectsQ,
     teamsQ,
+    teamDisplaysQ,
   ]);
 
   const workflowStatesFor = useCallback(
@@ -306,12 +357,16 @@ export function useComposerOptions(
   const projects = projectsQ.data?.items ?? [];
   const projectDisplays = projectDisplaysQ.data?.items ?? [];
   const programs = programsQ.data?.items ?? [];
+  const programDisplays = programDisplaysQ.data?.items ?? [];
   const initiatives = initiativesQ.data?.items ?? [];
   const initiativeDisplays = initiativeDisplaysQ.data?.items ?? [];
   const labels = labelsQ.data?.items ?? [];
   const cycles = cyclesQ.data?.items ?? [];
+  const cycleDisplays = cycleDisplaysQ.data?.items ?? [];
   const milestones = milestonesQ.data?.items ?? [];
+  const milestoneDisplays = milestoneDisplaysQ.data?.items ?? [];
   const teams = teamsQ.data?.items ?? [];
+  const teamDisplays = teamDisplaysQ.data?.items ?? [];
 
   return useMemo(
     () => ({
@@ -319,14 +374,16 @@ export function useComposerOptions(
       memberOptions: memberActorOptions(members.filter(({ status }) => status === 'active')),
       projectOptions: projectOptions(projects, projectDisplays),
       projects,
-      programOptions: programOptions(programs, programDisplaysQ.data?.items ?? []),
+      programOptions: programOptions(programs, programDisplays),
       initiativeOptions: initiativeOptions(initiatives, initiativeDisplays),
       labelOptions: labelOptions(labels),
       labels,
-      teamOptions: teams.map((team) => ({ value: team.id, label: team.name })),
+      teamOptions: teamOptions(teams, teamDisplays),
       teams,
       cycles,
+      cycleDisplays,
       milestones,
+      milestoneDisplays,
       loading,
       error: failedKinds.size > 0 ? 'Could not load some property choices.' : null,
       failedKinds,
@@ -339,12 +396,16 @@ export function useComposerOptions(
       projects,
       projectDisplays,
       programs,
+      programDisplays,
       initiatives,
       initiativeDisplays,
       labels,
       teams,
+      teamDisplays,
       cycles,
+      cycleDisplays,
       milestones,
+      milestoneDisplays,
       loading,
       failedKinds,
       retry,

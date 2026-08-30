@@ -91,7 +91,7 @@ describe('entity display routes', () => {
     expect(hidden.status).toBe(404);
   });
 
-  it('upserts display metadata through every native entity table', async () => {
+  it('round-trips defaults, customization, bulk reads, and reset through every native entity table', async () => {
     const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
     const [program] = await db
       .insert(schema.program)
@@ -173,6 +173,14 @@ describe('entity display routes', () => {
     ] as const;
 
     for (const [subjectType, subjectId] of subjects) {
+      const defaultDisplay = await app.request(`/${subjectType}/${subjectId}`);
+      expect(defaultDisplay.status).toBe(200);
+      expect(await defaultDisplay.json()).toMatchObject({
+        subjectType,
+        subjectId,
+        customized: false,
+      });
+
       const updated = await app.request(`/${subjectType}/${subjectId}`, {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
@@ -187,6 +195,30 @@ describe('entity display routes', () => {
         colorKey: 'indigo',
         customColor: '#4f46e5',
         customized: true,
+      });
+
+      const listed = await app.request(`/${subjectType}`);
+      expect(listed.status).toBe(200);
+      expect(await listed.json()).toMatchObject({
+        items: [
+          expect.objectContaining({
+            subjectType,
+            subjectId,
+            iconKey: 'layers',
+            colorKey: 'indigo',
+            customColor: '#4f46e5',
+            customized: true,
+          }),
+        ],
+      });
+
+      const reset = await app.request(`/${subjectType}/${subjectId}`, { method: 'DELETE' });
+      expect(reset.status).toBe(200);
+      expect(await reset.json()).toMatchObject({
+        subjectType,
+        subjectId,
+        customized: false,
+        customColor: null,
       });
     }
   });

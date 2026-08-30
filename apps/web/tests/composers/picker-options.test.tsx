@@ -171,7 +171,9 @@ describe('picker option mappers', () => {
     expect(projectOptions([project])).toEqual([
       expect.objectContaining({ value: IDS.project, label: 'Apollo', icon: expect.anything() }),
     ]);
-    expect(programOptions([program])).toEqual([{ value: IDS.program, label: 'Platform' }]);
+    expect(programOptions([program])).toEqual([
+      expect.objectContaining({ value: IDS.program, label: 'Platform', icon: expect.anything() }),
+    ]);
     expect(initiativeOptions([initiative])).toEqual([
       expect.objectContaining({ value: IDS.initiative, label: 'Q3', icon: expect.anything() }),
     ]);

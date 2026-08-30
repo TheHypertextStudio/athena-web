@@ -65,7 +65,8 @@ import {
 import { useCreationContext } from '@/components/create-object/creation-context';
 import { WorkspacePicker } from '@/components/create-object/workspace-picker';
 import { EntityMetadataItem } from '@/components/views/entity-detail-layout';
-import { workflowStateOptions } from '@/components/pickers/options';
+import { cycleOptions, milestoneOptions, workflowStateOptions } from '@/components/pickers/options';
+import { formatWindow } from '@/components/cycles/format-window';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { templatePatch } from '@/components/templates/queries';
 import { TeamPicker } from '@/components/teams/team-picker';
@@ -325,18 +326,21 @@ export const CreateTaskDialog = withComposerReset(function CreateTaskComposer({
   // server-derived `displayName` (its author name, else its window) — never the stored `number`,
   // which is the auto-roll idempotency key and reads as "Cycle 1000137".
   const cycleOptionsForTeam = useMemo(() => {
-    return options.cycles
-      .filter((cycle) => cycle.teamId === teamId)
-      .map((cycle) => ({ value: cycle.id, label: cycle.displayName }));
-  }, [options.cycles, teamId]);
+    return cycleOptions(
+      options.cycles.filter((cycle) => cycle.teamId === teamId),
+      formatWindow,
+      options.cycleDisplays,
+    );
+  }, [options.cycleDisplays, options.cycles, teamId]);
 
   // A milestone always belongs to exactly one project, so the picker is scoped to whichever
   // project is currently chosen — same rule the task detail rail applies post-creation.
   const milestoneOptionsForProject = useMemo(() => {
-    return options.milestones
-      .filter((milestone) => milestone.projectId === draft.projectId)
-      .map((milestone) => ({ value: milestone.id, label: milestone.name }));
-  }, [options.milestones, draft.projectId]);
+    return milestoneOptions(
+      options.milestones.filter((milestone) => milestone.projectId === draft.projectId),
+      options.milestoneDisplays,
+    );
+  }, [options.milestoneDisplays, options.milestones, draft.projectId]);
 
   /** Changing the project invalidates any milestone chosen under the previous one. */
   const changeProject = useCallback(

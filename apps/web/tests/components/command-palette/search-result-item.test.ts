@@ -1,3 +1,4 @@
+import { isValidElement } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { OrganizationId, type SearchResult } from '@docket/types';
@@ -59,6 +60,31 @@ describe('searchResultToPaletteItem', () => {
     item.run();
     expect(close).toHaveBeenCalledOnce();
     expect(push).toHaveBeenCalledWith(`/orgs/${ORG}/tasks/task_1`);
+  });
+
+  it('carries a customized native identity into the palette row', () => {
+    const item = searchResultToPaletteItem(
+      result({
+        display: {
+          subjectType: 'task',
+          subjectId: 'task_real_id',
+          iconKey: 'rocket',
+          colorKey: 'purple',
+          customColor: '#6d28d9',
+          coverImage: null,
+          customized: true,
+        },
+      }),
+      { close: vi.fn(), orgName: () => 'Acme', navigate: vi.fn() },
+    );
+
+    expect(isValidElement(item.icon)).toBe(true);
+    if (!isValidElement(item.icon)) throw new Error('Expected a rendered entity identity glyph.');
+    expect(item.icon.props).toMatchObject({
+      iconKey: 'rocket',
+      colorKey: 'purple',
+      customColor: '#6d28d9',
+    });
   });
 
   it('uses subject context for content results', () => {

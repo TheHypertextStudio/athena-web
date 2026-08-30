@@ -28,6 +28,7 @@ import { api } from './api';
 import type { ProjectDetailData } from './fetch-project-detail';
 import { userErrorMessage } from './problem';
 import { queryKeys, unwrap, useApiMutation } from './query';
+import { invalidateWorkTargetQueries } from './work-target-invalidation';
 
 /** The unbranded properties-panel patch surface. */
 export interface ProjectPatch {
@@ -139,6 +140,12 @@ export function useProjectMutations(
   const queryClient = useQueryClient();
   const subject = ProjectSubjectRef.parse({ subjectType: 'project', subjectId: projectId });
   const detailKey = useMemo(() => queryKeys.project(orgId, projectId), [orgId, projectId]);
+  const invalidateProjectTarget = (): void => {
+    void invalidateWorkTargetQueries(queryClient, {
+      target: 'project',
+      ownerOrganizationId: orgId,
+    });
+  };
 
   const patchCachedProject = useCallback(
     (
@@ -206,6 +213,15 @@ export function useProjectMutations(
       queryKeys.projects(orgId),
       queryKeys.entityMentions(orgId, 'project', projectId),
     ],
+    onSettled: (_data, _error, patchBody) => {
+      invalidateProjectTarget();
+      if (patchBody.programId !== undefined) {
+        void invalidateWorkTargetQueries(queryClient, {
+          target: 'program',
+          ownerOrganizationId: orgId,
+        });
+      }
+    },
   });
 
   const initiativeM = useApiMutation<
@@ -271,6 +287,13 @@ export function useProjectMutations(
       patchCachedProject(() => updated);
     },
     invalidateKeys: [aggregateKey, [...aggregateKey, 'relationships']],
+    onSettled: () => {
+      invalidateProjectTarget();
+      void invalidateWorkTargetQueries(queryClient, {
+        target: 'initiative',
+        ownerOrganizationId: orgId,
+      });
+    },
   });
 
   const updateM = useApiMutation({

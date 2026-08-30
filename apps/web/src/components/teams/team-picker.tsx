@@ -14,8 +14,8 @@
  *
  * @see {@link useActiveOrg} for the `teams` + `defaultTeamId` this picker is driven from.
  */
-import type { TeamOut } from '@docket/types';
-import { ChevronDown, Users } from '@docket/ui/icons';
+import { defaultEntityDisplay, type TeamOut } from '@docket/types';
+import { ChevronDown } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import {
   Button,
@@ -28,6 +28,10 @@ import {
   DropdownMenuTrigger,
 } from '@docket/ui/primitives';
 import type { JSX } from 'react';
+
+import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
+import { api } from '@/lib/api';
+import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
 
 /** Props for {@link TeamPicker}. */
 export interface TeamPickerProps {
@@ -56,10 +60,29 @@ export function TeamPicker({
   disabled,
   className,
 }: TeamPickerProps): JSX.Element | null {
+  const organizationId = teams[0]?.organizationId ?? '';
+  const teamDisplaysQ = useApiListQuery(
+    apiQueryOptions(
+      queryKeys.entityDisplays(organizationId, 'team'),
+      () =>
+        api.v1.orgs[':orgId'].display[':subjectType'].$get({
+          param: { orgId: organizationId, subjectType: 'team' },
+        }),
+      'Could not load team icons.',
+      { enabled: organizationId.length > 0 },
+    ),
+  );
+  const displayById = new Map(
+    (teamDisplaysQ.data?.items ?? []).map((display) => [display.subjectId, display]),
+  );
   // With one (or no) team the choice is implied; rendering a picker would only add noise.
   if (teams.length <= 1) return null;
 
   const selected = teams.find((t) => t.id === value) ?? null;
+  const selectedDisplay =
+    selected === null
+      ? null
+      : (displayById.get(selected.id) ?? defaultEntityDisplay('team', selected.id));
 
   return (
     <DropdownMenu>
@@ -75,7 +98,14 @@ export function TeamPicker({
             className,
           )}
         >
-          <Users className="size-4 opacity-70" aria-hidden="true" />
+          {selectedDisplay === null ? null : (
+            <EntityIconGlyph
+              iconKey={selectedDisplay.iconKey}
+              colorKey={selectedDisplay.colorKey}
+              customColor={selectedDisplay.customColor}
+              size={16}
+            />
+          )}
           <span className="max-w-32 truncate">{selected?.name ?? 'Select team'}</span>
           <ChevronDown className="size-4 opacity-70" aria-hidden="true" />
         </Button>
@@ -89,11 +119,20 @@ export function TeamPicker({
             onChange(next);
           }}
         >
-          {teams.map((team) => (
-            <DropdownMenuRadioItem key={team.id} value={team.id}>
-              {team.name}
-            </DropdownMenuRadioItem>
-          ))}
+          {teams.map((team) => {
+            const display = displayById.get(team.id) ?? defaultEntityDisplay('team', team.id);
+            return (
+              <DropdownMenuRadioItem key={team.id} value={team.id}>
+                <EntityIconGlyph
+                  iconKey={display.iconKey}
+                  colorKey={display.colorKey}
+                  customColor={display.customColor}
+                  size={16}
+                />
+                {team.name}
+              </DropdownMenuRadioItem>
+            );
+          })}
         </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>

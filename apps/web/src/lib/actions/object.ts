@@ -45,7 +45,11 @@ import {
   Users,
   User,
 } from '@docket/ui/icons';
-import type { Health } from '@docket/types';
+import {
+  ENTITY_PRESENTATION_POLICIES,
+  type EntityPresentationPolicyDefinition,
+  type Health,
+} from '@docket/types';
 import type { PlanningTimeframe } from '@docket/work/planning-timeframe';
 import type { Priority } from '@docket/work/task-contract';
 
@@ -318,6 +322,32 @@ export const OBJECT_DESCRIPTORS: Readonly<Record<ObjectKind, ObjectDescriptor>> 
     selectable: false,
     metaKeys: ['startsAt', 'endsAt', 'laneId'],
   },
+};
+
+/**
+ * The total presentation policy for the interaction layer's native object kinds.
+ *
+ * @remarks
+ * The shared type registry names persisted subject types in camel case. The interaction layer
+ * preserves route and DOM-facing snake-case names, so this adapter is the only translation point.
+ * A new {@link ObjectKind} must add a policy here or TypeScript rejects the descriptor change.
+ */
+export const OBJECT_PRESENTATION_POLICIES: Readonly<
+  Record<ObjectKind, EntityPresentationPolicyDefinition>
+> = {
+  task: ENTITY_PRESENTATION_POLICIES.task,
+  project: ENTITY_PRESENTATION_POLICIES.project,
+  initiative: ENTITY_PRESENTATION_POLICIES.initiative,
+  initiative_root: ENTITY_PRESENTATION_POLICIES.initiativeRoot,
+  program: ENTITY_PRESENTATION_POLICIES.program,
+  cycle: ENTITY_PRESENTATION_POLICIES.cycle,
+  calendar_event: ENTITY_PRESENTATION_POLICIES.calendarEvent,
+  time_block: ENTITY_PRESENTATION_POLICIES.timeBlock,
+  team: ENTITY_PRESENTATION_POLICIES.team,
+  milestone: ENTITY_PRESENTATION_POLICIES.milestone,
+  actor: ENTITY_PRESENTATION_POLICIES.actor,
+  label: ENTITY_PRESENTATION_POLICIES.label,
+  calendar_slot: ENTITY_PRESENTATION_POLICIES.calendarSlot,
 };
 
 /** Every {@link ObjectKind}, in a stable order suitable for iteration and tests. */

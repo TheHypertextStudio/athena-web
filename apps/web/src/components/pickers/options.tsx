@@ -28,8 +28,10 @@ import type {
   InitiativeOut,
   LabelOut,
   MemberOut,
+  MilestoneOut,
   ProgramOut,
   ProjectOut,
+  TeamOut,
   Visibility,
   WorkflowState,
 } from '@docket/types';
@@ -319,13 +321,71 @@ export function initiativeOptions(
 export function cycleOptions(
   cycles: readonly CycleOut[],
   formatWindow: (startsAt: string, endsAt: string) => string,
+  displays: readonly EntityDisplayOut[] = [],
 ): readonly PickerOption[] {
+  const displayById = new Map(displays.map((display) => [display.subjectId, display]));
   return cycles.map((cycle) => {
     const window = formatWindow(cycle.startsAt, cycle.endsAt);
+    const display = displayById.get(cycle.id) ?? defaultEntityDisplay('cycle', cycle.id);
     return {
       value: cycle.id,
       label: cycle.displayName,
+      icon: (
+        <EntityIconGlyph
+          iconKey={display.iconKey}
+          colorKey={display.colorKey}
+          customColor={display.customColor}
+          size={20}
+        />
+      ),
       ...(window === cycle.displayName ? {} : { hint: window }),
+    };
+  });
+}
+
+/** Map a project's milestones into entity options with their configured display glyphs. */
+export function milestoneOptions(
+  milestones: readonly MilestoneOut[],
+  displays: readonly EntityDisplayOut[] = [],
+): readonly PickerOption[] {
+  const displayById = new Map(displays.map((display) => [display.subjectId, display]));
+  return milestones.map((milestone) => {
+    const display =
+      displayById.get(milestone.id) ?? defaultEntityDisplay('milestone', milestone.id);
+    return {
+      value: milestone.id,
+      label: milestone.name,
+      icon: (
+        <EntityIconGlyph
+          iconKey={display.iconKey}
+          colorKey={display.colorKey}
+          customColor={display.customColor}
+          size={20}
+        />
+      ),
+    };
+  });
+}
+
+/** Map an organization's teams into entity options with their configured display glyphs. */
+export function teamOptions(
+  teams: readonly TeamOut[],
+  displays: readonly EntityDisplayOut[] = [],
+): readonly PickerOption[] {
+  const displayById = new Map(displays.map((display) => [display.subjectId, display]));
+  return teams.map((team) => {
+    const display = displayById.get(team.id) ?? defaultEntityDisplay('team', team.id);
+    return {
+      value: team.id,
+      label: team.name,
+      icon: (
+        <EntityIconGlyph
+          iconKey={display.iconKey}
+          colorKey={display.colorKey}
+          customColor={display.customColor}
+          size={20}
+        />
+      ),
     };
   });
 }

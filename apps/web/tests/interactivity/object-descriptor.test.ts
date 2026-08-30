@@ -6,6 +6,7 @@ import {
   isSameObject,
   OBJECT_DESCRIPTORS,
   OBJECT_KINDS,
+  OBJECT_PRESENTATION_POLICIES,
   type ObjectKind,
   type ObjectRef,
   objectKey,
@@ -52,6 +53,25 @@ describe('object descriptor registry', () => {
       expect(typeof descriptor.draggable).toBe('boolean');
       expect(typeof descriptor.selectable).toBe('boolean');
     }
+  });
+
+  it('assigns every interaction object an explicit presentation policy', () => {
+    expect(Object.keys(OBJECT_PRESENTATION_POLICIES)).toEqual(OBJECT_KINDS);
+    expect(OBJECT_PRESENTATION_POLICIES).toMatchObject({
+      task: { policy: 'customizable', subjectType: 'task' },
+      project: { policy: 'customizable', subjectType: 'project' },
+      initiative: { policy: 'customizable', subjectType: 'initiative' },
+      initiative_root: { policy: 'virtual' },
+      program: { policy: 'customizable', subjectType: 'program' },
+      cycle: { policy: 'customizable', subjectType: 'cycle' },
+      team: { policy: 'customizable', subjectType: 'team' },
+      milestone: { policy: 'customizable', subjectType: 'milestone' },
+      actor: { policy: 'avatar' },
+      label: { policy: 'semantic', subjectType: 'label' },
+      calendar_event: { policy: 'external' },
+      time_block: { policy: 'semantic' },
+      calendar_slot: { policy: 'virtual' },
+    });
   });
 
   it('rejects values that do not name a described kind', () => {

@@ -25,6 +25,75 @@ export const EntityDisplaySubjectType = z.enum(ENTITY_DISPLAY_SUBJECT_TYPES);
 /** Supported display-metadata subject type. */
 export type EntityDisplaySubjectType = z.infer<typeof EntityDisplaySubjectType>;
 
+/** Every native interaction subject, including identities that never own a display row. */
+export const ENTITY_PRESENTATION_SUBJECT_TYPES = [
+  'initiative',
+  'program',
+  'project',
+  'task',
+  'cycle',
+  'milestone',
+  'team',
+  'label',
+  'workStatus',
+  'actor',
+  'calendarEvent',
+  'attachment',
+  'timeBlock',
+  'initiativeRoot',
+  'calendarSlot',
+] as const;
+
+/** Native interaction subject with a declared presentation policy. */
+export const EntityPresentationSubjectType = z.enum(ENTITY_PRESENTATION_SUBJECT_TYPES);
+/** Supported native interaction subject. */
+export type EntityPresentationSubjectType = z.infer<typeof EntityPresentationSubjectType>;
+
+/** The reason a native entity does or does not use a decoupled display record. */
+export const EntityPresentationPolicy = z.enum([
+  'customizable',
+  'semantic',
+  'avatar',
+  'external',
+  'virtual',
+]);
+/** Presentation policy for one native Docket entity. */
+export type EntityPresentationPolicy = z.infer<typeof EntityPresentationPolicy>;
+
+/** The presentation contract for one native Docket interaction subject. */
+export interface EntityPresentationPolicyDefinition {
+  /** The policy that determines how a surface renders this entity's identity. */
+  readonly policy: EntityPresentationPolicy;
+  /** The optional display-record type used for customizable or semantic identities. */
+  readonly subjectType?: EntityDisplaySubjectType;
+}
+
+/**
+ * The complete presentation policy for native entities exposed by Docket's interaction layer.
+ *
+ * @remarks
+ * Customizable entities own icon and color overrides. Labels and work statuses also expose a
+ * decorative identity, but their workflow color remains semantic. Actors keep avatars, external
+ * records retain provider identity, and virtual records never acquire persistence of their own.
+ */
+export const ENTITY_PRESENTATION_POLICIES = {
+  initiative: { policy: 'customizable', subjectType: 'initiative' },
+  program: { policy: 'customizable', subjectType: 'program' },
+  project: { policy: 'customizable', subjectType: 'project' },
+  task: { policy: 'customizable', subjectType: 'task' },
+  cycle: { policy: 'customizable', subjectType: 'cycle' },
+  milestone: { policy: 'customizable', subjectType: 'milestone' },
+  team: { policy: 'customizable', subjectType: 'team' },
+  label: { policy: 'semantic', subjectType: 'label' },
+  workStatus: { policy: 'semantic', subjectType: 'workStatus' },
+  actor: { policy: 'avatar' },
+  calendarEvent: { policy: 'external' },
+  attachment: { policy: 'external' },
+  timeBlock: { policy: 'semantic' },
+  initiativeRoot: { policy: 'virtual' },
+  calendarSlot: { policy: 'virtual' },
+} as const satisfies Record<EntityPresentationSubjectType, EntityPresentationPolicyDefinition>;
+
 /** Stable presentation keys for the searchable strategic-work icon catalog. */
 export const ENTITY_DISPLAY_ICON_KEYS = [
   'target',

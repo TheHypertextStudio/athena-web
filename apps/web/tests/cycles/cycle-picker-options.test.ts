@@ -7,7 +7,7 @@
  * `displayName`; the window still rides along as the muted hint, but only when the label is not
  * already the window — otherwise a picker row printed the same string twice.
  */
-import { CycleOut } from '@docket/types';
+import { CycleOut, EntityDisplayOut } from '@docket/types';
 import { describe, expect, it } from 'vitest';
 
 import { cycleOptions } from '../../src/components/pickers/options';
@@ -64,5 +64,25 @@ describe('cycleOptions (task detail picker)', () => {
   it('omits the hint when the label already is the window', () => {
     const [option] = cycleOptions([unnamed], formatWindow);
     expect(option?.hint).toBeUndefined();
+  });
+
+  it('carries a configured cycle glyph into the picker', () => {
+    const display = EntityDisplayOut.parse({
+      subjectType: 'cycle',
+      subjectId: IDS.named,
+      iconKey: 'rocket',
+      colorKey: 'purple',
+      customColor: '#6d28d9',
+      coverImage: null,
+      customized: true,
+    });
+
+    const [option] = cycleOptions([named], formatWindow, [display]);
+    expect((option?.icon as { props?: unknown }).props).toMatchObject({
+      iconKey: 'rocket',
+      colorKey: 'purple',
+      customColor: '#6d28d9',
+      size: 20,
+    });
   });
 });

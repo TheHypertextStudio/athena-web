@@ -34,6 +34,7 @@ import {
   cycleOptions as toCycleOptions,
   labelOptions as toLabelOptions,
   memberActorOptions,
+  milestoneOptions as toMilestoneOptions,
   programOptions as toProgramOptions,
   projectOptions as toProjectOptions,
 } from '@/components/pickers/options';
@@ -187,6 +188,26 @@ export default function TaskDetailPage(): JSX.Element {
     ),
   );
   const projectDisplays = projectDisplaysQ.data?.items ?? [];
+  const cycleDisplaysQ = useApiListQuery(
+    apiQueryOptions(
+      queryKeys.entityDisplays(orgId, 'cycle'),
+      () =>
+        api.v1.orgs[':orgId'].display[':subjectType'].$get({
+          param: { orgId, subjectType: 'cycle' },
+        }),
+      'Could not load cycle icons.',
+    ),
+  );
+  const milestoneDisplaysQ = useApiListQuery(
+    apiQueryOptions(
+      queryKeys.entityDisplays(orgId, 'milestone'),
+      () =>
+        api.v1.orgs[':orgId'].display[':subjectType'].$get({
+          param: { orgId, subjectType: 'milestone' },
+        }),
+      'Could not load milestone icons.',
+    ),
+  );
   const projectOptions = useMemo<readonly PickerOption[]>(
     () => toProjectOptions(projects, projectDisplays),
     [projectDisplays, projects],
@@ -196,8 +217,8 @@ export default function TaskDetailPage(): JSX.Element {
     [programs],
   );
   const cycleOptions = useMemo<readonly PickerOption[]>(
-    () => toCycleOptions(cycles, formatWindow),
-    [cycles],
+    () => toCycleOptions(cycles, formatWindow, cycleDisplaysQ.data?.items ?? []),
+    [cycleDisplaysQ.data, cycles],
   );
   const labelsQ = useApiListQuery(labelsDef(orgId));
   const labelOptions = useMemo<readonly PickerOption[]>(
@@ -222,10 +243,11 @@ export default function TaskDetailPage(): JSX.Element {
   );
   const milestoneOptions = useMemo<readonly PickerOption[]>(
     () =>
-      milestones
-        .filter((m) => m.projectId === task?.projectId)
-        .map((m) => ({ value: m.id, label: m.name })),
-    [milestones, task?.projectId],
+      toMilestoneOptions(
+        milestones.filter((milestone) => milestone.projectId === task?.projectId),
+        milestoneDisplaysQ.data?.items ?? [],
+      ),
+    [milestoneDisplaysQ.data, milestones, task?.projectId],
   );
 
   const openTask = useCallback(

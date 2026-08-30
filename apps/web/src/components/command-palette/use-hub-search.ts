@@ -1,6 +1,13 @@
 'use client';
 
-import type { MentionEntityKind, SearchDocumentKind, SearchOut, SearchResult } from '@docket/types';
+import {
+  defaultEntityDisplay,
+  type EntityDisplaySubjectType,
+  type MentionEntityKind,
+  type SearchDocumentKind,
+  type SearchOut,
+  type SearchResult,
+} from '@docket/types';
 import {
   Activity,
   Building,
@@ -21,9 +28,10 @@ import {
   Users,
 } from '@docket/ui/icons';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
-import { useCallback, useMemo } from 'react';
+import { createElement, useCallback, useMemo } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
+import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
 import { api } from '@/lib/api';
 import { queryKeys } from '@/lib/query';
 import { hrefForSearchResult, isExternalSearchHref } from '@/lib/search-route';
@@ -120,7 +128,7 @@ export function searchResultToPaletteItem(
     section: 'results',
     label: hit.title,
     hint: resultHint(hit),
-    icon: SEARCH_KIND_ICON[hit.kind],
+    icon: searchResultIcon(hit),
     searchScore: hit.score,
     org: hit.organizationId
       ? { id: hit.organizationId, name: input.orgName(hit.organizationId) }
@@ -133,6 +141,36 @@ export function searchResultToPaletteItem(
       else input.navigate(href);
     },
   };
+}
+
+/** Return the custom entity identity when this search kind has one. */
+function searchResultIcon(hit: SearchResult) {
+  const subjectType = searchDisplaySubjectType(hit.kind);
+  if (!subjectType || !hit.organizationId) return SEARCH_KIND_ICON[hit.kind];
+  const display = hit.display ?? defaultEntityDisplay(subjectType, hit.entityId);
+  return createElement(EntityIconGlyph, {
+    iconKey: display.iconKey,
+    colorKey: display.colorKey,
+    customColor: display.customColor,
+    size: 20,
+  });
+}
+
+/** Map native search kinds to their presentation records. */
+function searchDisplaySubjectType(kind: SearchDocumentKind): EntityDisplaySubjectType | null {
+  switch (kind) {
+    case 'team':
+    case 'task':
+    case 'project':
+    case 'program':
+    case 'initiative':
+    case 'milestone':
+    case 'cycle':
+    case 'label':
+      return kind;
+    default:
+      return null;
+  }
 }
 
 function resultHint(hit: SearchResult): string | undefined {

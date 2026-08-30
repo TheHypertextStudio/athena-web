@@ -12,7 +12,14 @@ import {
 } from '@docket/ui/components';
 import { Button, Checkbox } from '@docket/ui/primitives';
 
-import { HEALTH_OPTIONS, PRIORITY_OPTIONS, statusOptions } from '@/components/pickers/options';
+import {
+  cycleOptions,
+  HEALTH_OPTIONS,
+  milestoneOptions,
+  PRIORITY_OPTIONS,
+  statusOptions,
+} from '@/components/pickers/options';
+import { formatWindow } from '@/components/cycles/format-window';
 import { useComposerOptions } from '@/components/pickers/use-composer-options';
 import { useStatusRegistry } from '@/components/statuses/status-registry';
 import { EstimatePicker } from '@/components/task-detail/EstimatePicker';
@@ -279,9 +286,9 @@ export default function CanvasPropertiesEditor({
         case 'programId':
           return options.programOptions;
         case 'milestoneId':
-          return options.milestones.map((item) => ({ value: item.id, label: item.name }));
+          return milestoneOptions(options.milestones, options.milestoneDisplays);
         case 'cycleId':
-          return options.cycles.map((item) => ({ value: item.id, label: item.displayName }));
+          return cycleOptions(options.cycles, formatWindow, options.cycleDisplays);
         case 'teamId':
           return options.teamOptions;
         default:
@@ -392,12 +399,15 @@ export default function CanvasPropertiesEditor({
     );
     const projectId = commonNonNullValue(tasks, (task) => task.projectId);
     const teamId = commonNonNullValue(tasks, (task) => task.teamId);
-    const milestoneOptions = options.milestones
-      .filter((item) => projectId !== null && item.projectId === projectId)
-      .map((item) => ({ value: item.id, label: item.name }));
-    const cycleOptions = options.cycles
-      .filter((item) => teamId !== null && item.teamId === teamId)
-      .map((item) => ({ value: item.id, label: item.displayName }));
+    const milestoneOptionsForProject = milestoneOptions(
+      options.milestones.filter((item) => projectId !== null && item.projectId === projectId),
+      options.milestoneDisplays,
+    );
+    const cycleOptionsForTeam = cycleOptions(
+      options.cycles.filter((item) => teamId !== null && item.teamId === teamId),
+      formatWindow,
+      options.cycleDisplays,
+    );
     return (
       <>
         {selectionIssue !== null ? (
@@ -482,7 +492,7 @@ export default function CanvasPropertiesEditor({
         </Field>
         <Field label="Milestone">
           <EntityPicker
-            options={milestoneOptions}
+            options={milestoneOptionsForProject}
             value={scalarValue(milestone)}
             onChange={(value) => {
               executeScalar('milestoneId', value, 'milestone');
@@ -498,7 +508,7 @@ export default function CanvasPropertiesEditor({
         </Field>
         <Field label="Cycle">
           <EntityPicker
-            options={cycleOptions}
+            options={cycleOptionsForTeam}
             value={scalarValue(cycle)}
             onChange={(value) => {
               executeScalar('cycleId', value, 'cycle');

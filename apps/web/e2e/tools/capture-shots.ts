@@ -24,7 +24,7 @@
  */
 import { chromium } from '@playwright/test';
 import type { BrowserContext, Page } from '@playwright/test';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { createMobileAuditFixture } from '../helpers/mobile-audit-fixture';
@@ -52,6 +52,7 @@ interface CliArgs {
   limit?: number;
   frameStart: number;
   frameLimit?: number;
+  records?: string;
 }
 
 /** The mobile remediation matrix: four viewports × two color schemes. */
@@ -90,6 +91,7 @@ function parseArgs(argv: string[]): CliArgs {
     frameLimit: flags.has('frame-limit')
       ? Number.parseInt(flags.get('frame-limit') ?? '', 10)
       : undefined,
+    records: flags.has('records') ? resolve(flags.get('records') ?? '') : undefined,
   };
 }
 
@@ -238,9 +240,8 @@ async function captureCleanFrame(
 }
 
 async function main(): Promise<void> {
-  const { session, outDir, routes, audit, start, limit, frameStart, frameLimit } = parseArgs(
-    process.argv.slice(2),
-  );
+  const { session, outDir, routes, audit, start, limit, frameStart, frameLimit, records } =
+    parseArgs(process.argv.slice(2));
   const meta = JSON.parse(readFileSync(`${session}.meta.json`, 'utf8')) as SessionMeta;
   if (audit && (!Number.isInteger(start) || start < 0)) {
     throw new Error('capture-shots: --start must be a non-negative integer');
@@ -340,6 +341,18 @@ async function main(): Promise<void> {
         entry.setup,
       );
       writeFileSync(file, frame);
+      if (records) {
+        appendFileSync(
+          records,
+          `${JSON.stringify({
+            caseId: entry.id,
+            route: entry.route,
+            viewport,
+            colorScheme,
+            file,
+          })}\n`,
+        );
+      }
       console.log(`[capture-shots] ${file}`);
     }
   }

@@ -9,6 +9,7 @@ import {
   user,
   workLocationAssertion,
   workLocationSyncAccount,
+  workLocationWrite,
   type Database,
 } from '@docket/db';
 import { eq } from 'drizzle-orm';
@@ -462,6 +463,104 @@ describe('two-account work-location convergence', () => {
     ).toBe('cancelled');
   });
 
+  it.each([
+    [
+      'an exception whose recurring parent was never imported',
+      {
+        id: 'orphan-exception-a',
+        eventType: 'workingLocation',
+        updated: '2026-08-14T17:10:00.000Z',
+        etag: 'orphan-exception-etag',
+        recurringEventId: 'master-that-does-not-exist',
+        originalStartTime: { date: '2026-09-21' },
+        start: { date: '2026-09-21' },
+        end: { date: '2026-09-22' },
+        workingLocationProperties: { type: 'homeOffice' },
+      },
+    ],
+    [
+      'an exception carrying no occurrence to attach itself to',
+      {
+        id: 'keyless-exception-a',
+        eventType: 'workingLocation',
+        updated: '2026-08-14T17:11:00.000Z',
+        etag: 'keyless-exception-etag',
+        recurringEventId: 'bootstrap-master-a',
+        start: { date: '2026-09-28' },
+        end: { date: '2026-09-29' },
+        workingLocationProperties: { type: 'homeOffice' },
+      },
+    ],
+  ] as const)('acknowledges %s without importing anything', async (_description, event) => {
+    // A calendar is a shared, user-editable surface: the provider will hand back events whose
+    // parent was deleted, or that arrive before the series they belong to. Each one has to be
+    // acknowledged and skipped. Crashing strands the whole account's sync, and half-writing an
+    // exception with no parent puts a row in the hub that nothing can render.
+    await database
+      .update(workLocationSyncAccount)
+      .set({ state: 'healthy', reason: null, bootstrapCompletedAt: new Date() })
+      .where(eq(workLocationSyncAccount.hubId, hubId));
+    const before = (await listWorkLocationAssertions(database, hubId)).items.length;
+    const transport = new FakeGoogleWorkLocationTransport();
+    transport.seed(connectionA, event);
+
+    const tally = await syncUserWorkLocations(database, { userId, transport });
+
+    expect(tally.errors).toBe(0);
+    expect((await listWorkLocationAssertions(database, hubId)).items).toHaveLength(before);
+    // The account stays healthy: an event we cannot use is not a provider failure.
+    expect(
+      (
+        await database
+          .select()
+          .from(workLocationSyncAccount)
+          .where(eq(workLocationSyncAccount.hubId, hubId))
+      ).every((accountState) => accountState.state === 'healthy'),
+    ).toBe(true);
+  });
+
+  it('flags an account whose calendar holds a recurrence the hub cannot model', async () => {
+    // Google accepts recurrences this product has no schedule shape for. Importing one anyway
+    // would silently drop the parts it cannot express, so the account is marked instead and the
+    // person is told the feed is incomplete rather than being shown a wrong week.
+    await database
+      .update(workLocationSyncAccount)
+      .set({ state: 'healthy', reason: null, bootstrapCompletedAt: new Date() })
+      .where(eq(workLocationSyncAccount.hubId, hubId));
+    const transport = new FakeGoogleWorkLocationTransport();
+    transport.seed(connectionA, {
+      id: 'unsupported-recurrence-a',
+      eventType: 'workingLocation',
+      updated: '2026-08-14T17:20:00.000Z',
+      etag: 'unsupported-recurrence-etag',
+      start: { date: '2026-09-07', timeZone: 'America/Los_Angeles' },
+      end: { date: '2026-09-08', timeZone: 'America/Los_Angeles' },
+      recurrence: ['RRULE:FREQ=MONTHLY;BYMONTHDAY=13'],
+      workingLocationProperties: {
+        type: 'customLocation',
+        customLocation: { label: 'Monthly offsite' },
+      },
+    });
+
+    const tally = await syncUserWorkLocations(database, { userId, transport });
+
+    expect(tally.unsupported).toBeGreaterThan(0);
+    expect(tally.imported).toBe(0);
+    const flagged = (
+      await database
+        .select()
+        .from(workLocationSyncAccount)
+        .where(eq(workLocationSyncAccount.connectionId, connectionA))
+    )[0];
+    expect(flagged).toMatchObject({ state: 'action_required', reason: 'unsupported_recurrence' });
+
+    // Leave the fixture healthy for the tests that follow.
+    await database
+      .update(workLocationSyncAccount)
+      .set({ state: 'healthy', reason: null })
+      .where(eq(workLocationSyncAccount.hubId, hubId));
+  });
+
   it('retries failed individual writes and heals the account after delivery succeeds', async () => {
     await database
       .update(workLocationSyncAccount)
@@ -516,10 +615,74 @@ describe('two-account work-location convergence', () => {
     ).toMatchObject({ state: 'healthy', reason: null });
   });
 
+  it('gives up on a write that has failed eight times and asks for user action', async () => {
+    // The retry test above covers the transient half. This is the other end of the same ladder:
+    // a write that never lands has to stop rescheduling itself, or it retries against a dead
+    // account forever while the person is never told anything is wrong.
+    await database
+      .update(workLocationSyncAccount)
+      .set({ state: 'healthy', reason: null, bootstrapCompletedAt: new Date() })
+      .where(eq(workLocationSyncAccount.hubId, hubId));
+    const transport = new FakeGoogleWorkLocationTransport();
+    transport.failUpserts = Number.MAX_SAFE_INTEGER;
+    const place = await createWorkPlace(database, hubId, {
+      name: 'Unreachable room',
+      geofence: null,
+      providerMappings: [],
+      sort: 0,
+    });
+    const assertion = await createWorkLocationAssertion(database, hubId, {
+      placeId: place.id,
+      schedule: { type: 'one_off_all_day', date: '2026-11-02', timezone: 'America/Los_Angeles' },
+    });
+    // This hub has two linked accounts, so the projection fans out to one write each; both take
+    // the same eight-strike path.
+    const queued = await enqueueWorkLocationProjection(database, hubId, assertion, 'create');
+
+    // Eight attempts, each after the previous backoff has elapsed. The eighth is the one that
+    // crosses from "retry later" to "stop".
+    let tally = { applied: 0, retried: 0, failed: 0 };
+    for (let attempt = 1; attempt <= 8; attempt += 1) {
+      tally = await drainWorkLocationWrites(database, {
+        userId,
+        transport,
+        now: new Date(Date.UTC(2026, 8, 1, 0, 0, 0) + attempt * 24 * 60 * 60_000),
+      });
+    }
+
+    expect(tally).toMatchObject({ applied: 0, retried: 0, failed: queued.length });
+    const abandoned = await database
+      .select()
+      .from(workLocationWrite)
+      .where(eq(workLocationWrite.assertionId, assertion.id));
+    // A null next attempt is what takes each row out of the drain query for good; without it the
+    // row keeps being selected and the failure count climbs without limit.
+    expect(abandoned).toHaveLength(queued.length);
+    for (const write of abandoned) {
+      expect(write).toMatchObject({
+        status: 'failed',
+        attempts: 8,
+        nextAttemptAt: null,
+        lastErrorCode: 'delivery_failed',
+      });
+    }
+    expect(
+      (
+        await database
+          .select()
+          .from(workLocationSyncAccount)
+          .where(eq(workLocationSyncAccount.hubId, hubId))
+      ).some((accountState) => accountState.state === 'action_required'),
+    ).toBe(true);
+  });
+
   it.each([
     [401, 'action_required', 'reauth_required'],
     [400, 'unsupported', 'unsupported_account'],
     [403, 'unsupported', 'unsupported_account'],
+    // 404 is the account that no longer has a primary calendar to read, which is a permanent
+    // condition and must not be retried alongside the transient ones.
+    [404, 'unsupported', 'unsupported_account'],
     [429, 'retrying', 'provider_unavailable'],
   ] as const)(
     'classifies Google status %i as %s instead of retrying every account failure',

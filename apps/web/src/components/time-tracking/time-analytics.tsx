@@ -266,18 +266,18 @@ export function TimeAnalytics(): JSX.Element {
       <Surface
         tone="card"
         shape="medium"
-        className="flex min-w-0 items-baseline justify-between gap-3 px-5 py-4"
+        className="flex min-w-0 flex-col gap-3 px-5 py-4 sm:flex-row sm:items-baseline sm:justify-between"
       >
         <div className="min-w-0">
           <Text token="display-small" numeric aria-label={spokenDuration(total)}>
             {formatDuration(total)}
           </Text>
-          <Text token="body-small" tone="muted">
+          <Text token="body-small" tone="muted" className="block">
             {MEASURES.find(([id]) => id === state.measure)?.[1]} · {range.label}
           </Text>
         </div>
         <div
-          className={`${surfaceToneColor('canvas')} flex shrink-0 rounded-lg p-1`}
+          className={`${surfaceToneColor('canvas')} flex shrink-0 self-start rounded-lg p-1 sm:self-auto`}
           aria-label="Time view"
         >
           {(['sessions', 'breakdown', 'now'] as const).map((view) => (

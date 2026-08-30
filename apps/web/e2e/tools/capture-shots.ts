@@ -225,6 +225,12 @@ async function captureCleanFrame(
 async function main(): Promise<void> {
   const { session, outDir, routes, audit, limit } = parseArgs(process.argv.slice(2));
   const meta = JSON.parse(readFileSync(`${session}.meta.json`, 'utf8')) as SessionMeta;
+  const selectedRoutes = audit
+    ? MOBILE_LAYOUT_ROUTE_CASES.slice(0, limit).map((entry) => entry.route)
+    : routes;
+  if (selectedRoutes.length === 0) {
+    throw new Error('capture-shots: the selected audit route set is empty');
+  }
 
   mkdirSync(outDir, { recursive: true });
 
@@ -257,12 +263,28 @@ async function main(): Promise<void> {
     await setupPage.close();
   }
 
-  const selectedRoutes = audit
-    ? MOBILE_LAYOUT_ROUTE_CASES.slice(0, limit).map((entry) => entry.route)
-    : routes;
-  if (selectedRoutes.length === 0) {
-    throw new Error('capture-shots: the selected audit route set is empty');
+  const needsFixture = selectedRoutes.some((route) =>
+    /:(?:projectId|cycleId|initiativeId|programId|actorId|taskId|teamId|seriesId|sessionId)\b/.test(
+      route,
+    ),
+  );
+  if (needsFixture && meta.mobileAuditFixture === undefined) {
+    const setupPage = await context.newPage();
+    const setupResponse = await setupPage.goto(`${meta.baseURL}/today`, {
+      waitUntil: 'domcontentloaded',
+    });
+    if (!setupResponse?.ok() || setupPage.url().includes('/sign-in')) {
+      throw new Error(
+        'Could not open an authenticated setup document for the mobile audit fixture',
+      );
+    }
+    await setupPage.waitForTimeout(500);
+    meta.mobileAuditFixture = await createMobileAuditFixture(setupPage);
+    sharedOrgId = meta.mobileAuditFixture.orgId;
+    writeFileSync(`${session}.meta.json`, JSON.stringify(meta, null, 2));
+    await setupPage.close();
   }
+
   for (const route of selectedRoutes) {
     // Every capture uses a fresh Page so Chromium cannot carry damaged compositor tiles from one
     // responsive/theme capture set into the next surface.

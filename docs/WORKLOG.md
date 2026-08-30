@@ -443,8 +443,20 @@
   aggregate reads after restore because the broad cache invalidation also refetched the exact
   aggregate. Recovery now fetches that authoritative aggregate once, then invalidates every other
   Project projection without blocking the result. The focused recovery, invalidation, and composer
-  suites pass 61 tests. Checkout remains disabled, and the shadow observation clock still ends at
-  `2026-08-30T21:49:02Z`.
+  suites pass 61 tests. Exact-main run `33292798402` then passed all 5,056 API behavior tests but
+  stopped deployment at 87.81 percent branch coverage against the 88 percent gate. The billing
+  launch audit now exercises every provider and entitlement ownership mismatch, provider failures,
+  invalid complimentary grants, and invalid redirect attestations. Billing route and reconciliation
+  tests now cover retained lifecycle dates, effective awards and credits, export replacement and
+  missing objects, terminal discount applications, Better Auth renewal identity, current-access
+  Checkout refusal, provider-side duplicate refusal, provider-confirmed Checkout coupons, empty
+  billing accounts, unowned provider discounts, payment-failure notices, and non-Error provider
+  failures. Concurrent main run `33294442088` passed all 5,055 API behavior tests but moved one
+  performance scenario outside coverage and reduced the branch result to 87.77 percent. The billing
+  suite now also covers a closed renewal rollout, every unauthenticated discount mutation, and the
+  personal-workspace fallback after an award expires. The seven focused billing suites pass 154
+  tests and cover at least 53 more branches than that exact-main baseline. Checkout remains
+  disabled, and the shadow observation clock still ends at `2026-08-30T21:49:02Z`.
 - **Decisions**: Checkout derives the customer email from the Better Auth server session and
   rejects a browser-supplied email. Stripe's Dashboard-only existing-subscriber redirect requires
   a recorded verification timestamp before `BILLING_ENABLED=true` can pass configuration. Docket

@@ -162,6 +162,151 @@ describe('reconcileBilling', () => {
     expect(entitlement).toMatchObject({ source: 'stripe', status: 'trialing' });
   });
 
+  it('records a healthy account with no subscription without inventing an entitlement', async () => {
+    const { orgId } = await seedBaseOrg(db, schema, false);
+    await db.insert(schema.organizationBillingAccount).values({
+      organizationId: orgId,
+      stripeCustomerId: `cus_${orgId}`,
+      countryVerificationRequired: false,
+    });
+    const { blob } = blobDouble();
+
+    const result = await reconcileBilling(
+      db,
+      new InMemoryBillingGateway(),
+      blob,
+      new Date('2026-08-25T01:00:00.000Z'),
+      { organizationId: orgId },
+    );
+
+    expect(result).toMatchObject({ accounts: 1, repaired: 0, alerts: 0 });
+    expect(await db.select().from(schema.organizationProductEntitlement)).toHaveLength(0);
+    const [sync] = await db
+      .select()
+      .from(schema.billingProviderSync)
+      .where(eq(schema.billingProviderSync.organizationId, orgId));
+    expect(sync).toMatchObject({ status: 'succeeded', lastError: null });
+  });
+
+  it('alerts when Stripe carries a discount without a current Docket award', async () => {
+    const { orgId } = await seedBaseOrg(db, schema, false);
+    await db.insert(schema.organizationBillingAccount).values({
+      organizationId: orgId,
+      stripeCustomerId: `cus_${orgId}`,
+      countryVerificationRequired: false,
+    });
+    const subscription: Subscription = {
+      id: 'sub_unowned_discount',
+      customerId: `cus_${orgId}`,
+      referenceId: orgId,
+      status: 'active',
+      currentPeriodEnd: '2026-09-25T00:00:00.000Z',
+      discountIds: ['di_unowned'],
+      couponIds: ['coupon_unowned'],
+    };
+    class UnownedDiscountGateway extends InMemoryBillingGateway {
+      override async listSubscriptions(): Promise<readonly Subscription[]> {
+        return [subscription];
+      }
+
+      override async getCustomerBillingCountry(): Promise<string | null> {
+        return 'US';
+      }
+    }
+    const { blob } = blobDouble();
+
+    const result = await reconcileBilling(
+      db,
+      new UnownedDiscountGateway(),
+      blob,
+      new Date('2026-08-25T01:00:00.000Z'),
+      { organizationId: orgId },
+    );
+
+    expect(result).toMatchObject({ repaired: 1, alerts: 1 });
+    const [sync] = await db
+      .select()
+      .from(schema.billingProviderSync)
+      .where(eq(schema.billingProviderSync.organizationId, orgId));
+    expect(sync).toMatchObject({
+      status: 'failed',
+      lastError: 'Stripe has a subscription discount without a current Docket award.',
+    });
+  });
+
+  it('notifies the organization when reconciliation observes a payment failure', async () => {
+    const { orgId } = await seedBaseOrg(db, schema, false);
+    await db.insert(schema.organizationBillingAccount).values({
+      organizationId: orgId,
+      stripeCustomerId: `cus_${orgId}`,
+      countryVerificationRequired: false,
+    });
+    await db.insert(schema.organizationProductEntitlement).values({
+      organizationId: orgId,
+      productKey: 'docket_pro',
+      source: 'stripe',
+      status: 'active',
+      stripeSubscriptionId: 'sub_payment_failed',
+      currentPeriodEnd: new Date('2026-09-25T00:00:00.000Z'),
+    });
+    const subscription: Subscription = {
+      id: 'sub_payment_failed',
+      customerId: `cus_${orgId}`,
+      referenceId: orgId,
+      status: 'past_due',
+      currentPeriodEnd: '2026-09-25T00:00:00.000Z',
+    };
+    class PaymentFailedGateway extends InMemoryBillingGateway {
+      override async listSubscriptions(): Promise<readonly Subscription[]> {
+        return [subscription];
+      }
+
+      override async getCustomerBillingCountry(): Promise<string | null> {
+        return 'US';
+      }
+    }
+    const { blob } = blobDouble();
+
+    await reconcileBilling(
+      db,
+      new PaymentFailedGateway(),
+      blob,
+      new Date('2026-08-25T01:00:00.000Z'),
+      { organizationId: orgId },
+    );
+
+    const notices = await db
+      .select()
+      .from(schema.notificationIntent)
+      .where(eq(schema.notificationIntent.organizationId, orgId));
+    expect(notices).toContainEqual(
+      expect.objectContaining({ subject: 'Docket Pro access changed', priority: 'high' }),
+    );
+  });
+
+  it('records a stable failure when Stripe rejects reconciliation without an Error object', async () => {
+    const { orgId } = await seedBaseOrg(db, schema, false);
+    await db.insert(schema.organizationBillingAccount).values({
+      organizationId: orgId,
+      stripeCustomerId: `cus_${orgId}`,
+      countryVerificationRequired: false,
+    });
+    const gateway = new InMemoryBillingGateway();
+    vi.spyOn(gateway, 'listSubscriptions').mockRejectedValue('provider unavailable');
+    const { blob } = blobDouble();
+
+    const result = await reconcileBilling(db, gateway, blob, new Date('2026-08-25T01:00:00.000Z'), {
+      organizationId: orgId,
+    });
+
+    expect(result).toMatchObject({ repaired: 0, alerts: 1 });
+    const [sync] = await db
+      .select()
+      .from(schema.billingProviderSync)
+      .where(eq(schema.billingProviderSync.organizationId, orgId));
+    expect(sync).toMatchObject({ status: 'failed', lastError: 'Billing reconciliation failed' });
+  });
+
   it('uses the stored subscription ID when Stripe Search has not indexed the subscription', async () => {
     const { orgId } = await seedBaseOrg(db, schema, false);
     await db.insert(schema.organizationBillingAccount).values({

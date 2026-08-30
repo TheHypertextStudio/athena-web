@@ -4,6 +4,7 @@ import type * as DbModule from '@docket/db';
 import { eq } from 'drizzle-orm';
 
 import { appWithActor, getDb, seedBaseOrg, seedOrg } from '../support/routes-harness';
+import { getContainer } from '../../src/container';
 import type billingRouter from '../../src/routes/billing';
 import type { billingExportDownload as BillingExportDownload } from '../../src/routes/billing';
 import { assertDefined } from '@docket/test-utils';
@@ -46,8 +47,15 @@ async function lifecycleOf(
 const MISSING_ULID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 
 describe('billing lifecycle: GET /lifecycle', () => {
-  it('returns the org lifecycle status (active, no timestamps) for a member', async () => {
+  it('returns the org lifecycle status and retained timestamps for a member', async () => {
     const { orgId } = await seedBaseOrg(db, schema, false);
+    await db
+      .update(schema.organization)
+      .set({
+        exportReadyAt: new Date('2026-08-20T00:00:00.000Z'),
+        deleteAfterAt: new Date('2026-09-20T00:00:00.000Z'),
+      })
+      .where(eq(schema.organization.id, orgId));
     const app = appWithActor(billing, orgId, ['view']);
     const res = await app.request('/lifecycle', { method: 'GET' });
     expect(res.status).toBe(200);
@@ -59,8 +67,8 @@ describe('billing lifecycle: GET /lifecycle', () => {
     }>(res);
     expect(body.organizationId).toBe(orgId);
     expect(body.lifecycleState).toBe('active');
-    expect(body.exportReadyAt).toBeNull();
-    expect(body.deleteAfterAt).toBeNull();
+    expect(body.exportReadyAt).toBe('2026-08-20T00:00:00.000Z');
+    expect(body.deleteAfterAt).toBe('2026-09-20T00:00:00.000Z');
   });
 
   it('404s when the actor-context org row does not exist', async () => {
@@ -76,10 +84,37 @@ describe('billing: GET /', () => {
     await db.insert(schema.organizationProductEntitlement).values({
       organizationId: orgId,
       productKey: 'docket_pro',
-      status: 'trialing',
+      status: 'active',
       source: 'stripe',
-      trialEndsAt: new Date('2026-08-25T00:00:00.000Z'),
-      currentPeriodEnd: new Date('2026-08-25T00:00:00.000Z'),
+      currentPeriodEnd: new Date('2026-09-25T00:00:00.000Z'),
+      cancelAtPeriodEnd: true,
+      providerObservedAt: new Date('2026-08-25T00:00:00.000Z'),
+    });
+    const [award] = await db
+      .insert(schema.billingDiscountAward)
+      .values({
+        organizationId: orgId,
+        percentOff: 50,
+        status: 'active',
+        startsAt: new Date('2026-08-01T00:00:00.000Z'),
+        endsAt: new Date('2027-08-01T00:00:00.000Z'),
+        reviewAt: new Date('2027-07-01T00:00:00.000Z'),
+        reason: 'Verified nonprofit',
+      })
+      .returning();
+    await db.insert(schema.billingCredit).values({
+      organizationId: orgId,
+      awardId: assertDefined(award).id,
+      status: 'issued',
+      currency: 'usd',
+      baseAmount: 400,
+      taxAmount: 0,
+      totalAmount: 400,
+      servicePeriodStartsAt: new Date('2026-08-01T00:00:00.000Z'),
+      servicePeriodEndsAt: new Date('2026-09-01T00:00:00.000Z'),
+      providerInvoiceId: `in_${orgId}`,
+      providerCreditNoteId: `cn_${orgId}`,
+      issuedAt: new Date('2026-08-02T00:00:00.000Z'),
     });
 
     const app = appWithActor(billing, orgId, ['view']);
@@ -91,21 +126,27 @@ describe('billing: GET /', () => {
       accessMode: 'writable',
       canManageBilling: false,
       checkoutEnabled: false,
-      effectiveDiscount: null,
+      effectiveDiscount: {
+        percentOff: 50,
+        status: 'active',
+        startsAt: '2026-08-01T00:00:00.000Z',
+        endsAt: '2027-08-01T00:00:00.000Z',
+        reviewAt: '2027-07-01T00:00:00.000Z',
+      },
       applicationStatus: null,
-      issuedCredit: null,
+      issuedCredit: { amount: 400, currency: 'usd', issuedAt: '2026-08-02T00:00:00.000Z' },
       products: [
         {
           productKey: 'docket_pro',
           name: 'Docket Pro',
-          status: 'trialing',
+          status: 'active',
           source: 'stripe',
-          trialEndsAt: '2026-08-25T00:00:00.000Z',
-          renewalDate: '2026-08-25T00:00:00.000Z',
-          cancelAtPeriodEnd: false,
-          cancellationDate: null,
+          trialEndsAt: null,
+          renewalDate: '2026-09-25T00:00:00.000Z',
+          cancelAtPeriodEnd: true,
+          cancellationDate: '2026-09-25T00:00:00.000Z',
           graceEndsAt: null,
-          providerObservedAt: null,
+          providerObservedAt: '2026-08-25T00:00:00.000Z',
         },
       ],
     });
@@ -257,6 +298,9 @@ describe('billing: POST /export', () => {
     // exportReadyAt is stamped on the org.
     const persisted = await lifecycleOf(orgId);
     expect(persisted.exportReadyAt).not.toBeNull();
+
+    const replacement = await app.request('/export', { method: 'POST' });
+    expect(replacement.status).toBe(200);
   });
 
   it('only includes the calling org rows (tenant isolation)', async () => {
@@ -321,6 +365,20 @@ describe('billing: POST /export', () => {
       .update(schema.organization)
       .set({ exportReadyAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000) })
       .where(eq(schema.organization.id, orgId));
+
+    const download = appWithActor(exportDownload, orgId, ['manage']);
+    expect((await download.request('/file')).status).toBe(404);
+  });
+
+  it('404s the download when retained export metadata points to a missing object', async () => {
+    const { orgId } = await seedBaseOrg(db, schema);
+    const app = appWithActor(billing, orgId, ['manage']);
+    expect((await app.request('/export', { method: 'POST' })).status).toBe(200);
+    const [org] = await db
+      .select({ exportBlobKey: schema.organization.exportBlobKey })
+      .from(schema.organization)
+      .where(eq(schema.organization.id, orgId));
+    await getContainer().blob.delete(assertDefined(assertDefined(org).exportBlobKey));
 
     const download = appWithActor(exportDownload, orgId, ['manage']);
     expect((await download.request('/file')).status).toBe(404);

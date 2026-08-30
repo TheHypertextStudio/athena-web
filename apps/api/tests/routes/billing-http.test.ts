@@ -463,6 +463,28 @@ describe('billing router (org-scoped, via the BillingGateway port)', () => {
     await expect(response.json()).resolves.toMatchObject({ effectiveDiscount: null });
   });
 
+  it('keeps a personal workspace writable without presenting an expired award as a discount', async () => {
+    const orgId = await makeOrg('active');
+    await db.update(organization).set({ isPersonal: true }).where(eq(organization.id, orgId));
+    await db.insert(billingDiscountAward).values({
+      organizationId: orgId,
+      percentOff: 50,
+      status: 'active',
+      startsAt: new Date('2024-08-01T00:00:00.000Z'),
+      endsAt: new Date('2025-08-01T00:00:00.000Z'),
+      reviewAt: new Date('2025-07-01T00:00:00.000Z'),
+      reason: 'Expired student eligibility',
+    });
+
+    const response = await billingApp(orgId, ['view']).request('/');
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      accessMode: 'writable',
+      effectiveDiscount: null,
+    });
+  });
+
   it('does not attach an expired scheduled award to Checkout', async () => {
     const orgId = await makeOrg('active');
     await db.insert(billingDiscountAward).values({
@@ -499,6 +521,83 @@ describe('billing router (org-scoped, via the BillingGateway port)', () => {
       body: JSON.stringify({}),
     });
     expect(res.status).toBe(403);
+  });
+
+  it('blocks Checkout when Docket already records current Pro access', async () => {
+    const orgId = await makeOrg('active');
+    await db.insert(organizationProductEntitlement).values({
+      organizationId: orgId,
+      productKey: 'docket_pro',
+      status: 'active',
+      source: 'stripe',
+    });
+    const listSubscriptions = vi.spyOn(getContainer().billing, 'listSubscriptions');
+
+    const response = await billingApp(orgId, ['manage']).request('/checkout', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+
+    expect(response.status).toBe(409);
+    expect(listSubscriptions).not.toHaveBeenCalled();
+    listSubscriptions.mockRestore();
+  });
+
+  it('blocks Checkout when Stripe already owns a current subscription', async () => {
+    const orgId = await makeOrg('active');
+    await getContainer().billing.createCheckoutSession({
+      referenceId: orgId,
+      priceKey: 'docket_pro_monthly',
+      successUrl: 'https://app.test/success',
+      cancelUrl: 'https://app.test/cancel',
+    });
+
+    const response = await billingApp(orgId, ['manage']).request('/checkout', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+
+    expect(response.status).toBe(409);
+  });
+
+  it('attaches the one approved scheduled discount to Checkout', async () => {
+    const orgId = await makeOrg('active');
+    const [award] = await db
+      .insert(billingDiscountAward)
+      .values({
+        organizationId: orgId,
+        percentOff: 50,
+        status: 'scheduled',
+        startsAt: new Date('2026-08-01T00:00:00.000Z'),
+        endsAt: new Date('2030-08-01T00:00:00.000Z'),
+        reviewAt: new Date('2029-08-01T00:00:00.000Z'),
+        reason: 'Verified student',
+      })
+      .returning();
+    const coupon = await getContainer().billing.createDiscountCoupon({
+      awardId: assertDefined(award).id,
+      name: 'Verified student',
+      percentOff: 50,
+      priceKey: 'docket_pro_monthly',
+      idempotencyKey: `discount-award:${assertDefined(award).id}:coupon`,
+    });
+    await db
+      .update(billingDiscountAward)
+      .set({ providerCouponId: coupon.id })
+      .where(eq(billingDiscountAward.id, assertDefined(award).id));
+    const createCheckout = vi.spyOn(getContainer().billing, 'createCheckoutSession');
+
+    const response = await billingApp(orgId, ['manage']).request('/checkout', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+
+    expect(response.status).toBe(200);
+    expect(createCheckout).toHaveBeenCalledWith(expect.objectContaining({ couponId: coupon.id }));
+    createCheckout.mockRestore();
   });
 
   it('POST /checkout returns a hosted URL without treating the redirect as activation', async () => {
@@ -723,6 +822,97 @@ describe('billing router (org-scoped, via the BillingGateway port)', () => {
     }
   });
 
+  it('keeps discount renewals closed while the public billing rollout is disabled', async () => {
+    const { env } = await import('../../src/env');
+    const userId = `closed-renewal-${Date.now()}`;
+    const email = `${userId}@example.org`;
+    await db.insert(user).values({ id: userId, name: 'Renewal Applicant', email });
+    const orgId = await makeOrg('active');
+    await db.insert(billingDiscountAward).values({
+      organizationId: orgId,
+      programKey: 'nonprofit',
+      percentOff: 50,
+      status: 'active',
+      startsAt: new Date('2026-08-01T00:00:00.000Z'),
+      endsAt: new Date('2027-08-01T00:00:00.000Z'),
+      reviewAt: new Date('2027-07-01T00:00:00.000Z'),
+      reason: 'Verified nonprofit',
+    });
+    const app = billingApp(orgId, ['manage'], fakeSession(userId, 'Renewal Applicant', email));
+    Reflect.set(env, 'BILLING_ENABLED', false);
+    try {
+      const response = await app.request('/discounts/renew', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          programKey: 'nonprofit',
+          evidenceType: 'irs_registry',
+          ein: '12-3456789',
+        }),
+      });
+
+      expect(response.status).toBe(503);
+      await expect(response.json()).resolves.toMatchObject({ code: 'billing_unavailable' });
+    } finally {
+      Reflect.set(env, 'BILLING_ENABLED', true);
+    }
+  });
+
+  it('requires a Better Auth session for every customer discount mutation', async () => {
+    const ownerId = `session-owner-${Date.now()}`;
+    const email = `${ownerId}@example.org`;
+    await db.insert(user).values({ id: ownerId, name: 'Application Owner', email });
+    const orgId = await makeOrg('active');
+    const [application] = await db
+      .insert(billingDiscountApplication)
+      .values({
+        organizationId: orgId,
+        applicantUserId: ownerId,
+        programKey: 'nonprofit',
+        status: 'needs_information',
+        evidenceType: 'irs_registry',
+        ein: '12-3456789',
+      })
+      .returning();
+    const applicationId = assertDefined(application).id;
+    const app = billingApp(orgId, ['manage'], null);
+    const form = new FormData();
+    form.set('file', new File(['proof'], 'determination.pdf', { type: 'application/pdf' }));
+
+    const responses = await Promise.all([
+      app.request('/discounts/applications', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          programKey: 'nonprofit',
+          evidenceType: 'irs_registry',
+          ein: '12-3456789',
+        }),
+      }),
+      app.request('/discounts/renew', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          programKey: 'nonprofit',
+          evidenceType: 'irs_registry',
+          ein: '12-3456789',
+        }),
+      }),
+      app.request(`/discounts/applications/${applicationId}/supplement`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ note: 'Additional registry information.' }),
+      }),
+      app.request(`/discounts/applications/${applicationId}/withdraw`, { method: 'POST' }),
+      app.request(`/discounts/applications/${applicationId}/evidence`, {
+        method: 'POST',
+        body: form,
+      }),
+    ]);
+
+    expect(responses.map((response) => response.status)).toEqual([401, 401, 401, 401, 401]);
+  });
+
   it('does not accept a discount application for Complimentary Docket Pro', async () => {
     const orgId = await makeOrg('active');
     await db.insert(organizationProductEntitlement).values({
@@ -915,6 +1105,37 @@ describe('billing router (org-scoped, via the BillingGateway port)', () => {
     await expect(duplicate.json()).resolves.toMatchObject({ code: 'discount_application_pending' });
   });
 
+  it('rejects incomplete student evidence and a student application for shared work', async () => {
+    const userId = `student-scope-${Date.now()}`;
+    const email = `${userId}@unlv.edu`;
+    await db.insert(user).values({
+      id: userId,
+      name: 'Scoped Student',
+      email,
+      emailVerified: true,
+    });
+    const orgId = await makeOrg('active');
+    const app = billingApp(orgId, ['manage'], fakeSession(userId, 'Scoped Student', email));
+
+    const incomplete = await app.request('/discounts/applications', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ programKey: 'student', evidenceType: 'institutional_email' }),
+    });
+    expect(incomplete.status).toBe(422);
+
+    const sharedWorkspace = await app.request('/discounts/applications', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        programKey: 'student',
+        evidenceType: 'institutional_email',
+        institutionalEmail: email,
+      }),
+    });
+    expect(sharedWorkspace.status).toBe(409);
+  });
+
   it('uses Better Auth verification instead of trusting a submitted institutional email', async () => {
     const userId = `unverified-${Date.now()}`;
     await db.insert(user).values({
@@ -1076,6 +1297,41 @@ describe('billing router (org-scoped, via the BillingGateway port)', () => {
     });
   });
 
+  it('refuses to supplement or withdraw an application after finance decides it', async () => {
+    const userId = `decided-${Date.now()}`;
+    const email = `${userId}@unlv.edu`;
+    await db
+      .insert(user)
+      .values({ id: userId, name: 'Decided Student', email, emailVerified: true });
+    const orgId = await makeOrg('active');
+    await db.update(organization).set({ isPersonal: true }).where(eq(organization.id, orgId));
+    const [application] = await db
+      .insert(billingDiscountApplication)
+      .values({
+        organizationId: orgId,
+        applicantUserId: userId,
+        programKey: 'student',
+        status: 'approved',
+        evidenceType: 'institutional_email',
+        institutionalEmail: email,
+        decisionReason: 'Verified.',
+        decidedAt: new Date('2026-08-01T00:00:00.000Z'),
+      })
+      .returning();
+    const row = assertDefined(application);
+    const app = billingApp(orgId, ['manage'], fakeSession(userId, 'Decided Student', email));
+
+    const supplemented = await app.request(`/discounts/applications/${row.id}/supplement`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ note: 'Late evidence.' }),
+    });
+    expect(supplemented.status).toBe(409);
+    expect(
+      (await app.request(`/discounts/applications/${row.id}/withdraw`, { method: 'POST' })).status,
+    ).toBe(409);
+  });
+
   it('stores supported private evidence and rejects evidence after withdrawal', async () => {
     const userId = `evidence-${Date.now()}`;
     const email = `${userId}@unlv.edu`;
@@ -1227,6 +1483,38 @@ describe('billing router (org-scoped, via the BillingGateway port)', () => {
       }),
     });
     expect(mismatch.status).toBe(409);
+  });
+
+  it('requires the Better Auth verified institutional email for a student renewal', async () => {
+    const userId = `renewal-email-${Date.now()}`;
+    const email = `${userId}@unlv.edu`;
+    await db
+      .insert(user)
+      .values({ id: userId, name: 'Renewing Student', email, emailVerified: true });
+    const orgId = await makeOrg('active');
+    await db.insert(billingDiscountAward).values({
+      organizationId: orgId,
+      programKey: 'student',
+      percentOff: 50,
+      status: 'active',
+      startsAt: new Date('2026-08-01T00:00:00.000Z'),
+      endsAt: new Date('2027-08-01T00:00:00.000Z'),
+      reviewAt: new Date('2027-07-01T00:00:00.000Z'),
+      reason: 'Verified student',
+    });
+    const app = billingApp(orgId, ['manage'], fakeSession(userId, 'Renewing Student', email));
+
+    const response = await app.request('/discounts/renew', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        programKey: 'student',
+        evidenceType: 'institutional_email',
+        institutionalEmail: 'different@unlv.edu',
+      }),
+    });
+
+    expect(response.status).toBe(409);
   });
 
   it('keeps discount applications private to the member who submitted them', async () => {

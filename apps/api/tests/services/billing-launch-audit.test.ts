@@ -23,8 +23,12 @@ beforeEach(async () => {
 class AuditGateway extends InMemoryBillingGateway {
   readonly auditCustomers = new Map<string, readonly BillingCustomer[]>();
   readonly auditSubscriptions = new Map<string, readonly Subscription[]>();
+  readonly auditErrors = new Map<string, unknown>();
 
   override async listCustomers(referenceId: string): Promise<readonly BillingCustomer[]> {
+    if (this.auditErrors.has(referenceId)) {
+      throw this.auditErrors.get(referenceId);
+    }
     return this.auditCustomers.get(referenceId) ?? [];
   }
 
@@ -112,6 +116,194 @@ describe('auditBillingLaunch', () => {
         }),
       ]),
     );
+  });
+
+  it('reports every provider and entitlement ownership mismatch', async () => {
+    const gateway = new AuditGateway();
+    const periodEnd = '2026-09-25T00:00:00.000Z';
+    const { orgId: missingAccountOrg } = await seedBaseOrg(db, schema, false);
+    await db.insert(schema.organizationProductEntitlement).values({
+      organizationId: missingAccountOrg,
+      productKey: 'docket_pro',
+      source: 'stripe',
+      status: 'active',
+      stripeSubscriptionId: `sub_${missingAccountOrg}`,
+      currentPeriodEnd: new Date(periodEnd),
+    });
+    await db.insert(schema.billingProviderSync).values({
+      organizationId: missingAccountOrg,
+      operation: 'reconcile_billing',
+      status: 'pending',
+      idempotencyKey: `billing-reconcile:${missingAccountOrg}`,
+      attempts: 0,
+      payload: {},
+    });
+
+    const { orgId: missingEntitlementOrg } = await seedBaseOrg(db, schema, false);
+    const missingEntitlementCustomer = `cus_${missingEntitlementOrg}`;
+    await db.insert(schema.organizationBillingAccount).values({
+      organizationId: missingEntitlementOrg,
+      stripeCustomerId: missingEntitlementCustomer,
+      countryVerificationRequired: false,
+    });
+    gateway.auditCustomers.set(missingEntitlementOrg, [
+      { id: `cus_wrong_${missingEntitlementOrg}`, referenceId: missingEntitlementOrg },
+    ]);
+    gateway.auditSubscriptions.set(missingEntitlementOrg, [
+      {
+        id: `sub_${missingEntitlementOrg}`,
+        customerId: `cus_other_${missingEntitlementOrg}`,
+        referenceId: missingEntitlementOrg,
+        status: 'active',
+        currentPeriodEnd: periodEnd,
+      },
+    ]);
+
+    const { orgId: driftedEntitlementOrg } = await seedBaseOrg(db, schema, false);
+    const driftedCustomer = `cus_${driftedEntitlementOrg}`;
+    await db.insert(schema.organizationBillingAccount).values({
+      organizationId: driftedEntitlementOrg,
+      stripeCustomerId: driftedCustomer,
+      countryVerificationRequired: false,
+    });
+    await db.insert(schema.organizationProductEntitlement).values({
+      organizationId: driftedEntitlementOrg,
+      productKey: 'docket_pro',
+      source: 'stripe',
+      status: 'trialing',
+      stripeSubscriptionId: `sub_stale_${driftedEntitlementOrg}`,
+      currentPeriodEnd: new Date('2026-09-24T00:00:00.000Z'),
+      cancelAtPeriodEnd: false,
+    });
+    gateway.auditCustomers.set(driftedEntitlementOrg, [
+      { id: driftedCustomer, referenceId: driftedEntitlementOrg },
+    ]);
+    gateway.auditSubscriptions.set(driftedEntitlementOrg, [
+      {
+        id: `sub_current_${driftedEntitlementOrg}`,
+        customerId: driftedCustomer,
+        referenceId: driftedEntitlementOrg,
+        status: 'active',
+        currentPeriodEnd: periodEnd,
+        cancelAtPeriodEnd: true,
+      },
+      {
+        id: `sub_canceled_${driftedEntitlementOrg}`,
+        customerId: driftedCustomer,
+        referenceId: driftedEntitlementOrg,
+        status: 'canceled',
+        currentPeriodEnd: periodEnd,
+      },
+    ]);
+
+    const report = await auditBillingLaunch(db, gateway, new Date('2026-08-25T00:00:00.000Z'), {
+      singleSubscriptionRedirectVerifiedAt: 'invalid timestamp',
+    });
+
+    expect(report.providerControls.singleSubscriptionRedirect).toMatchObject({
+      verified: false,
+      verifiedAt: null,
+      problem: { code: 'single_subscription_redirect_unverified' },
+    });
+    expect(
+      report.organizations
+        .find((row) => row.organizationId === missingAccountOrg)
+        ?.problems.map((problem) => problem.code),
+    ).toEqual(
+      expect.arrayContaining([
+        'billing_account_missing',
+        'provider_sync_unresolved',
+        'provider_customer_count',
+        'subscription_missing',
+      ]),
+    );
+    expect(
+      report.organizations
+        .find((row) => row.organizationId === missingEntitlementOrg)
+        ?.problems.map((problem) => problem.code),
+    ).toEqual(
+      expect.arrayContaining([
+        'billing_customer_mismatch',
+        'subscription_customer_mismatch',
+        'entitlement_missing',
+      ]),
+    );
+    expect(
+      report.organizations
+        .find((row) => row.organizationId === driftedEntitlementOrg)
+        ?.problems.map((problem) => problem.code),
+    ).toEqual(
+      expect.arrayContaining([
+        'entitlement_subscription_mismatch',
+        'entitlement_status_mismatch',
+        'entitlement_period_mismatch',
+        'entitlement_cancellation_mismatch',
+      ]),
+    );
+  });
+
+  it('reports provider failures and invalid complimentary grants without leaking access', async () => {
+    const gateway = new AuditGateway();
+    const { orgId: providerErrorOrg } = await seedBaseOrg(db, schema, false);
+    await db.insert(schema.organizationBillingAccount).values({
+      organizationId: providerErrorOrg,
+      stripeCustomerId: `cus_${providerErrorOrg}`,
+      countryVerificationRequired: false,
+    });
+    gateway.auditErrors.set(providerErrorOrg, new Error('provider unavailable'));
+
+    const { orgId: unknownProviderErrorOrg } = await seedBaseOrg(db, schema, false);
+    await db.insert(schema.organizationBillingAccount).values({
+      organizationId: unknownProviderErrorOrg,
+      stripeCustomerId: `cus_${unknownProviderErrorOrg}`,
+      countryVerificationRequired: false,
+    });
+    gateway.auditErrors.set(unknownProviderErrorOrg, 'provider unavailable');
+
+    const { orgId: invalidComplimentaryOrg } = await seedBaseOrg(db, schema, false);
+    await db.insert(schema.billingExemption).values({
+      organizationId: invalidComplimentaryOrg,
+      reason: 'Founder production access',
+    });
+    await db.insert(schema.organizationProductEntitlement).values({
+      organizationId: invalidComplimentaryOrg,
+      productKey: 'docket_free',
+      source: 'complimentary',
+      status: 'past_due',
+    });
+
+    const report = await auditBillingLaunch(db, gateway, new Date('2026-08-25T00:00:00.000Z'), {
+      singleSubscriptionRedirectVerifiedAt: '2026-08-25T01:00:00.000Z',
+    });
+
+    expect(
+      report.organizations.find((row) => row.organizationId === providerErrorOrg)?.problems,
+    ).toEqual([
+      expect.objectContaining({
+        code: 'provider_query_failed',
+        message: 'Stripe audit failed: provider unavailable',
+      }),
+    ]);
+    expect(
+      report.organizations.find((row) => row.organizationId === unknownProviderErrorOrg)?.problems,
+    ).toEqual([
+      expect.objectContaining({
+        code: 'provider_query_failed',
+        message: 'Stripe audit failed with an unknown provider error.',
+      }),
+    ]);
+    expect(report.complimentaryOrganizations).toEqual([
+      expect.objectContaining({
+        organizationId: invalidComplimentaryOrg,
+        status: 'past_due',
+        sharedWorkWritable: false,
+        capabilities: [],
+        problems: [
+          expect.objectContaining({ code: 'complimentary_entitlement_inactive' }),
+          expect.objectContaining({ code: 'complimentary_product_invalid' }),
+        ],
+      }),
+    ]);
   });
 
   it('passes a coherent mirror and blocks duplicate provider ownership', async () => {

@@ -64,15 +64,17 @@ export function parseSecretBindings(raw: string): SecretBinding[] {
     const equals = trimmed.indexOf('=');
     const colon = trimmed.lastIndexOf(':');
     if (equals <= 0 || colon <= equals + 1 || colon === trimmed.length - 1) {
-      throw new Error('invalid secret binding format');
+      throw new Error(`invalid secret binding format: ${JSON.stringify(trimmed)}`);
     }
     const envName = trimmed.slice(0, equals);
     const secretName = trimmed.slice(equals + 1, colon);
     const version = trimmed.slice(colon + 1);
     if (!/^[A-Z][A-Z0-9_]*$/.test(envName) || !/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(secretName)) {
-      throw new Error('invalid secret binding name');
+      throw new Error(`invalid secret binding name: ${JSON.stringify(trimmed)}`);
     }
-    if (!/^[a-zA-Z0-9._-]+$/.test(version)) throw new Error('invalid secret binding version');
+    if (!/^[a-zA-Z0-9._-]+$/.test(version)) {
+      throw new Error(`invalid secret binding version: ${JSON.stringify(trimmed)}`);
+    }
     bindings.push({ envName, secretName, version });
   }
   return bindings;

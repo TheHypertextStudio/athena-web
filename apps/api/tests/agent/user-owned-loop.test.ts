@@ -302,6 +302,47 @@ describe('user-owned Athena loop', () => {
     expect(applied?.body.action?.result?.isError).toBe(true);
   });
 
+  it('refuses approved hosted execution when the session surface is Lattice', async () => {
+    const seed = await seedAthenaSession('ask_before_acting');
+    await db
+      .update(schema.agentSession)
+      .set({ executionSurface: 'lattice', status: 'awaiting_approval' })
+      .where(eq(schema.agentSession.id, seed.sessionId));
+    const [action] = await db
+      .insert(schema.sessionActivity)
+      .values({
+        sessionId: seed.sessionId,
+        organizationId: null,
+        type: 'action',
+        approvalStatus: 'approved',
+        body: { action: { kind: 'capture', summary: 'Do not execute', mode: 'proposal' } },
+      })
+      .returning({ id: schema.sessionActivity.id });
+
+    await expect(
+      approveAndResume(
+        seed.orgId,
+        seed.ownerActorId,
+        seed.sessionId,
+        assertDefined(action).id,
+        { decision: 'approve' },
+        {},
+      ),
+    ).rejects.toThrow('Lattice assignment sessions run through the delegation scheduler');
+    await expect(
+      executeApprovedActions(seed.orgId, seed.sessionId, {
+        runId: 'run_lattice_guard',
+        sessionId: seed.sessionId,
+        generation: 1,
+        leaseToken: 'lease_lattice_guard',
+        leaseDurationMs: 60_000,
+      }),
+    ).rejects.toThrow('Lattice assignment sessions run through the delegation scheduler');
+    expect(
+      await db.select().from(schema.task).where(eq(schema.task.organizationId, seed.orgId)),
+    ).toHaveLength(0);
+  });
+
   it('executes and audits a concurrently approved action at most once', async () => {
     const seed = await seedAthenaSession('ask_before_acting');
     const deps = scriptedCreate(seed);

@@ -473,6 +473,11 @@ Answers **202** when Athena's durable runner takes the work rather than finishin
       const { session } = await loadSessionAccess(c, id, 'assign');
       const { decision, activityIds } = c.req.valid('json');
       const verdict = decision === 'approved' ? 'approve' : 'reject';
+      if (session.executionSurface === 'lattice') {
+        await decideProposalGroup(orgId, null, id, groupId, verdict, activityIds);
+        const { session: current } = await loadSessionAccess(c, id, 'assign');
+        return ok(c, AgentSessionOut, toSessionOut(current));
+      }
       if (session.executorKind === 'athena' && asynchronousRunnerEnabled()) {
         await decideProposalGroup(orgId, null, id, groupId, verdict, activityIds, {
           queueWake: true,
@@ -566,6 +571,12 @@ Athena decisions require the authenticated owner; registered-agent decisions req
         decision: body.decision === 'approved' ? 'approve' : 'reject',
         ...(body.scope ? { scope: body.scope } : {}),
       } as const;
+      if (session.executionSurface === 'lattice') {
+        await decideActivity(orgId, null, id, activityId, decision);
+        const updated = await loadActivity(id, activityId);
+        await enqueueSearchUpsert(orgId, 'agent_session', id);
+        return ok(c, SessionActivityOut, toActivityOut(updated));
+      }
       if (session.executorKind === 'athena' && asynchronousRunnerEnabled()) {
         await decideActivity(orgId, null, id, activityId, decision, { queueWake: true });
         await wakeWaitingAthenaGeneration(id);
@@ -596,6 +607,7 @@ Side effect: when the session was parked in \`awaiting_input\` it is resumed to 
       const { orgId } = c.get('actorCtx');
       const { id, activityId } = c.req.valid('param');
       const { session } = await loadSessionAccess(c, id, 'contribute');
+      assertHostedExecutionSurface(session);
       const body = c.req.valid('json');
       const created = await replyToElicitation(
         orgId,
@@ -653,6 +665,7 @@ Side effect: when the session was parked in \`awaiting_input\` it is resumed to 
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const { session } = await loadSessionAccess(c, id, 'contribute');
+      assertHostedExecutionSurface(session);
       if (session.executorKind === 'athena' && asynchronousRunnerEnabled()) {
         await queueWaitingAthenaWake(id);
         await wakeWaitingAthenaGeneration(id);
@@ -695,6 +708,7 @@ Side effect: when the session was parked in \`awaiting_input\` it is resumed to 
           return ok(c, AgentSessionOut, toSessionOut(canceled));
         }
       }
+      assertHostedExecutionSurface(session);
       const shouldWake =
         session.executorKind === 'athena' &&
         asynchronousRunnerEnabled() &&
@@ -739,6 +753,15 @@ Athena requires its authenticated owner and reauthorizes the stored tool with th
       const { decision } = c.req.valid('json');
       const { session } = await loadSessionAccess(c, id, 'assign');
       const approving = decision === 'approved';
+      if (session.executionSurface === 'lattice') {
+        const action = await latestProposedAction(id);
+        await decideActivity(orgId, null, id, action.id, {
+          decision: approving ? 'approve' : 'reject',
+        });
+        const { session: current } = await loadSessionAccess(c, id, 'assign');
+        await enqueueSearchUpsert(orgId, 'agent_session', current.id);
+        return ok(c, AgentSessionOut, toSessionOut(current));
+      }
       if (session.executorKind === 'athena' && asynchronousRunnerEnabled()) {
         const action = await latestProposedAction(id);
         await decideActivity(

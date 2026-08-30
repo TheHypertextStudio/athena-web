@@ -850,8 +850,9 @@ export const latticeCredential = pgTable(
  * @remarks
  * Docket writes `workId`, `logicalSubmissionId`, and the encrypted reply key while the row is
  * still `prepared`. A network retry therefore reuses the same identities and cannot enqueue a
- * second remote job. The reply key exists only while Docket may still need to open a sealed
- * result. Terminal settlement clears it in the same transaction that records the outcome.
+ * second remote job. Docket retains the reply key through human review so the relay result remains
+ * unacknowledged until the decision settles locally. Terminal settlement clears the key in the
+ * same transaction that records the outcome.
  *
  * Every foreign key that crosses an owner or workspace boundary includes that boundary. A bug
  * cannot attach one person's assignment, session, or Lattice connection to another person's
@@ -960,9 +961,9 @@ export const agentDelegation = pgTable(
     ),
     check(
       'agent_delegation_reply_key_lifecycle_check',
-      sql`(${t.status} in ('prepared','submitted') AND ${t.replyKeyCiphertext} IS NOT NULL)
+      sql`(${t.status} in ('prepared','submitted','proposed') AND ${t.replyKeyCiphertext} IS NOT NULL)
         OR (${t.status} = 'failed' AND ${t.failureCode} = 'result_decryption_failed' AND ${t.replyKeyCiphertext} IS NOT NULL)
-        OR (${t.status} in ('proposed','completed','failed','canceled') AND ${t.replyKeyCiphertext} IS NULL)`,
+        OR (${t.status} in ('completed','failed','canceled') AND ${t.replyKeyCiphertext} IS NULL)`,
     ),
     check(
       'agent_delegation_terminal_shape_check',

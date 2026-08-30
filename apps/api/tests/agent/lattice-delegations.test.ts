@@ -466,19 +466,18 @@ describe('durable Lattice assignment delegations', () => {
       nextPollAfterMs: 0,
     };
     await sweepLatticeDelegations(new Date(preparedAt.getTime() + 5_001), deps);
-    await sweepLatticeDelegations(new Date(preparedAt.getTime() + 6_002), deps);
 
-    const settled = one(
+    const proposedDelegation = one(
       await db
         .select()
         .from(schema.agentDelegation)
         .where(eq(schema.agentDelegation.id, prepared.id)),
     );
-    expect(settled).toMatchObject({
+    expect(proposedDelegation).toMatchObject({
       status: 'proposed',
       workState: 'completed',
       relayCursor: 'cursor_final',
-      replyKeyCiphertext: null,
+      replyKeyCiphertext: expect.any(String),
       returnedActivityId: expect.any(String),
       terminalOutcome: {
         outcome: 'completed',
@@ -487,10 +486,9 @@ describe('durable Lattice assignment delegations', () => {
           outputText: 'Use the existing task history to narrow the next milestone.',
         },
       },
-      resultAcknowledgedAt: expect.any(Date),
+      resultAcknowledgedAt: null,
     });
-    expect(deps.acknowledgeResult).toHaveBeenCalledTimes(1);
-    expect(deps.acknowledgeResult).toHaveBeenCalledWith(fixture.connection, prepared.workId);
+    expect(deps.acknowledgeResult).not.toHaveBeenCalled();
     const proposals = await db
       .select()
       .from(schema.sessionActivity)
@@ -502,14 +500,14 @@ describe('durable Lattice assignment delegations', () => {
       );
     expect(proposals).toHaveLength(1);
     expect(proposals[0]).toMatchObject({
-      id: settled.returnedActivityId,
+      id: proposedDelegation.returnedActivityId,
       approvalStatus: 'proposed',
       organizationId: fixture.organization.id,
       body: {
         lattice: {
-          delegationId: settled.id,
-          logicalSubmissionId: settled.logicalSubmissionId,
-          workId: settled.workId,
+          delegationId: proposedDelegation.id,
+          logicalSubmissionId: proposedDelegation.logicalSubmissionId,
+          workId: proposedDelegation.workId,
           runtimeId: 'lat_mac_studio',
           runtimeName: 'Mac Studio',
           outcome: 'completed',
@@ -535,25 +533,54 @@ describe('durable Lattice assignment delegations', () => {
     ).toMatchObject({ executionSurface: 'lattice', status: 'awaiting_approval' });
 
     const proposal = one(proposals);
-    if (proposal.body.action == null) {
-      throw new Error('Expected a proposed comment action');
-    }
-    const proposedAction = proposal.body.action;
-    await db
-      .update(schema.sessionActivity)
-      .set({
-        approvalStatus: 'applied',
-        body: {
-          ...proposal.body,
-          action: {
-            ...proposedAction,
-            result: { content: 'Comment created', isError: false },
-          },
-        },
-      })
-      .where(eq(schema.sessionActivity.id, proposal.id));
+    await decideActivity(fixture.organization.id, fixture.ownerActor.id, sessionId, proposal.id, {
+      decision: 'approve',
+    });
+
+    const settled = one(
+      await db
+        .select()
+        .from(schema.agentDelegation)
+        .where(eq(schema.agentDelegation.id, prepared.id)),
+    );
+    expect(settled).toMatchObject({
+      status: 'completed',
+      failureCode: null,
+      replyKeyCiphertext: null,
+      resultAcknowledgedAt: null,
+    });
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.sessionActivity)
+          .where(eq(schema.sessionActivity.id, proposal.id)),
+      ),
+    ).toMatchObject({
+      approvalStatus: 'applied',
+      body: { action: { result: { isError: false } } },
+    });
+    expect(
+      await db
+        .select()
+        .from(schema.comment)
+        .where(
+          and(
+            eq(schema.comment.subjectType, 'task'),
+            eq(schema.comment.subjectId, fixture.targetTask.id),
+          ),
+        ),
+    ).toHaveLength(1);
+    expect(
+      one(await db.select().from(schema.agentSession).where(eq(schema.agentSession.id, sessionId))),
+    ).toMatchObject({
+      status: 'completed',
+      endedAt: expect.any(Date),
+      currentStep: 'The Lattice result was added to the assigned task',
+    });
+
     await sweepLatticeDelegations(new Date(preparedAt.getTime() + 7_003), deps, {
-      pollingEnabled: false,
+      pollingEnabled: true,
       submissionsEnabled: false,
     });
     expect(
@@ -563,14 +590,189 @@ describe('durable Lattice assignment delegations', () => {
           .from(schema.agentDelegation)
           .where(eq(schema.agentDelegation.id, prepared.id)),
       ),
-    ).toMatchObject({ status: 'completed', failureCode: null });
+    ).toMatchObject({ status: 'completed', resultAcknowledgedAt: expect.any(Date) });
+    expect(deps.acknowledgeResult).toHaveBeenCalledWith(fixture.connection, prepared.workId);
+  });
+
+  it('settles a rejected result with its parent session before scheduler reconciliation', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const decidedAt = new Date('2026-08-29T18:10:00.000Z');
+    const proposed = await prepareProposedResult(fixture, deps, decidedAt);
+
+    await decideActivity(
+      fixture.organization.id,
+      fixture.ownerActor.id,
+      proposed.sessionId,
+      proposed.activity.id,
+      { decision: 'reject' },
+    );
+
     expect(
-      one(await db.select().from(schema.agentSession).where(eq(schema.agentSession.id, sessionId))),
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.id, proposed.delegation.id)),
+      ),
     ).toMatchObject({
-      status: 'completed',
-      endedAt: expect.any(Date),
-      currentStep: 'The Lattice result was added to the assigned task',
+      status: 'canceled',
+      replyKeyCiphertext: null,
+      resultAcknowledgedAt: null,
     });
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentSession)
+          .where(eq(schema.agentSession.id, proposed.sessionId)),
+      ),
+    ).toMatchObject({ status: 'canceled', endedAt: expect.any(Date) });
+    expect(
+      await db
+        .select()
+        .from(schema.comment)
+        .where(eq(schema.comment.subjectId, fixture.targetTask.id)),
+    ).toHaveLength(0);
+    expect(deps.acknowledgeResult).not.toHaveBeenCalled();
+  });
+
+  it('settles an invalid approved result as task_comment_failed in the decision transaction', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const proposed = await prepareProposedResult(
+      fixture,
+      deps,
+      new Date('2026-08-29T18:11:00.000Z'),
+    );
+    const action = proposed.activity.body.action;
+    if (!action?.toolCall || typeof action.toolCall.input !== 'object') {
+      throw new Error('Expected a proposed Lattice comment');
+    }
+    await db
+      .update(schema.sessionActivity)
+      .set({
+        body: {
+          ...proposed.activity.body,
+          action: {
+            ...action,
+            toolCall: {
+              ...action.toolCall,
+              input: { ...(action.toolCall.input as Record<string, unknown>), body: '' },
+            },
+          },
+        },
+      })
+      .where(eq(schema.sessionActivity.id, proposed.activity.id));
+
+    await decideActivity(
+      fixture.organization.id,
+      fixture.ownerActor.id,
+      proposed.sessionId,
+      proposed.activity.id,
+      { decision: 'approve' },
+    );
+
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.id, proposed.delegation.id)),
+      ),
+    ).toMatchObject({
+      status: 'failed',
+      failureCode: 'task_comment_failed',
+      replyKeyCiphertext: null,
+    });
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentSession)
+          .where(eq(schema.agentSession.id, proposed.sessionId)),
+      ),
+    ).toMatchObject({ status: 'failed', endedAt: expect.any(Date) });
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.sessionActivity)
+          .where(eq(schema.sessionActivity.id, proposed.activity.id)),
+      ),
+    ).toMatchObject({ approvalStatus: 'applied', body: { action: { result: { isError: true } } } });
+    expect(
+      await db
+        .select()
+        .from(schema.comment)
+        .where(eq(schema.comment.subjectId, fixture.targetTask.id)),
+    ).toHaveLength(0);
+  });
+
+  it('settles access loss inside result approval without writing a task comment', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const proposed = await prepareProposedResult(
+      fixture,
+      deps,
+      new Date('2026-08-29T18:12:00.000Z'),
+    );
+    await db
+      .update(schema.actor)
+      .set({ status: 'suspended' })
+      .where(eq(schema.actor.id, fixture.ownerActor.id));
+
+    await decideActivity(
+      fixture.organization.id,
+      fixture.ownerActor.id,
+      proposed.sessionId,
+      proposed.activity.id,
+      { decision: 'approve' },
+    );
+
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.id, proposed.delegation.id)),
+      ),
+    ).toMatchObject({ status: 'failed', failureCode: 'access_lost' });
+    expect(
+      await db
+        .select()
+        .from(schema.comment)
+        .where(eq(schema.comment.subjectId, fixture.targetTask.id)),
+    ).toHaveLength(0);
+  });
+
+  it('does not reconcile decided proposals while polling is disabled', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const proposed = await prepareProposedResult(
+      fixture,
+      deps,
+      new Date('2026-08-29T18:13:00.000Z'),
+    );
+    await db
+      .update(schema.sessionActivity)
+      .set({ approvalStatus: 'rejected' })
+      .where(eq(schema.sessionActivity.id, proposed.activity.id));
+
+    await sweepLatticeDelegations(new Date('2026-08-29T18:13:10.000Z'), deps, {
+      pollingEnabled: false,
+      submissionsEnabled: false,
+    });
+
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.id, proposed.delegation.id)),
+      ),
+    ).toMatchObject({ status: 'proposed', resultAcknowledgedAt: null });
+    expect(deps.acknowledgeResult).not.toHaveBeenCalled();
   });
 
   it('stops submission and polling independently without changing delegation state', async () => {
@@ -718,6 +920,122 @@ describe('durable Lattice assignment delegations', () => {
     expect(targetCalls).toBe(1);
   });
 
+  it('keeps the submission fence through the controller deadline after thirty seconds', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T18:43:00.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:deadline-fence`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    const delegation = one(
+      await db
+        .select()
+        .from(schema.agentDelegation)
+        .where(eq(schema.agentDelegation.sessionId, sessionId)),
+    );
+    let releaseFirst!: () => void;
+    let markFirstEntered!: () => void;
+    const firstEntered = new Promise<void>((resolve) => {
+      markFirstEntered = resolve;
+    });
+    const firstRelease = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    let targetCalls = 0;
+    vi.mocked(deps.submitWork).mockImplementation(async (_connection, input) => {
+      if (input.workId === delegation.workId) {
+        targetCalls += 1;
+        if (targetCalls === 1) {
+          markFirstEntered();
+          await firstRelease;
+        }
+      }
+      return { workId: input.workId, state: 'queued' };
+    });
+    const controls = { pollingEnabled: false, submissionsEnabled: true } as const;
+
+    const firstSweep = sweepLatticeDelegations(preparedAt, deps, controls);
+    await firstEntered;
+    await sweepLatticeDelegations(new Date(preparedAt.getTime() + 30_001), deps, controls);
+    releaseFirst();
+    await firstSweep;
+
+    expect(targetCalls).toBe(1);
+  });
+
+  it('does not let a stale controller failure overwrite deadline settlement', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T18:43:30.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:stale-controller-failure`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    const delegation = one(
+      await db
+        .select()
+        .from(schema.agentDelegation)
+        .where(eq(schema.agentDelegation.sessionId, sessionId)),
+    );
+    if (!delegation.deadlineAt) throw new Error('Expected a controller deadline');
+    let releaseFirst!: () => void;
+    let markFirstEntered!: () => void;
+    const firstEntered = new Promise<void>((resolve) => {
+      markFirstEntered = resolve;
+    });
+    const firstRelease = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    let targetCalls = 0;
+    vi.mocked(deps.submitWork).mockImplementation(async (_connection, input) => {
+      if (input.workId === delegation.workId) {
+        targetCalls += 1;
+        markFirstEntered();
+        await firstRelease;
+        throw new Error('stale controller timeout');
+      }
+      return { workId: input.workId, state: 'queued' };
+    });
+    const controls = { pollingEnabled: false, submissionsEnabled: true } as const;
+
+    const firstSweep = sweepLatticeDelegations(preparedAt, deps, controls);
+    await firstEntered;
+    await sweepLatticeDelegations(
+      new Date(delegation.deadlineAt.getTime() + 5_001),
+      deps,
+      controls,
+    );
+    releaseFirst();
+    await firstSweep;
+
+    expect(targetCalls).toBe(1);
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.id, delegation.id)),
+      ),
+    ).toMatchObject({ status: 'failed', failureCode: 'work_expired', nextPollAt: null });
+    expect(
+      one(await db.select().from(schema.agentSession).where(eq(schema.agentSession.id, sessionId))),
+    ).toMatchObject({
+      status: 'failed',
+      currentStep: 'Athena did not receive the Lattice result before it expired.',
+    });
+  });
+
   it('uses controller retry pacing and preserves the selected runtime metadata', async () => {
     const fixture = await seed();
     const deps = dependencies();
@@ -829,7 +1147,7 @@ describe('durable Lattice assignment delegations', () => {
     });
   });
 
-  it('keeps failed proposal activity history without leaving a result reference', async () => {
+  it('reconciles failed proposal activity history without leaving a result reference', async () => {
     const fixture = await seed();
     const deps = dependencies();
     const proposed = await prepareProposedResult(
@@ -851,7 +1169,7 @@ describe('durable Lattice assignment delegations', () => {
       .where(eq(schema.sessionActivity.id, proposed.activity.id));
 
     await sweepLatticeDelegations(new Date('2026-08-29T18:50:07.000Z'), deps, {
-      pollingEnabled: false,
+      pollingEnabled: true,
       submissionsEnabled: false,
     });
 
@@ -1018,6 +1336,41 @@ describe('durable Lattice assignment delegations', () => {
     ).toHaveLength(0);
   });
 
+  it('reauthorizes after runtime discovery and before the submit network call', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:47:00.000Z');
+    const runtimes = await deps.listRuntimes(fixture.connection);
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:submit-race-access-loss`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    vi.mocked(deps.listRuntimes).mockImplementation(async () => {
+      await db
+        .update(schema.actor)
+        .set({ status: 'suspended' })
+        .where(eq(schema.actor.id, fixture.ownerActor.id));
+      return runtimes;
+    });
+
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+
+    expect(deps.submitWork).not.toHaveBeenCalled();
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.sessionId, sessionId)),
+      ),
+    ).toMatchObject({ status: 'failed', failureCode: 'access_lost' });
+  });
+
   it('settles access loss before polling without opening or persisting relay progress', async () => {
     const fixture = await seed();
     const deps = dependencies();
@@ -1072,6 +1425,78 @@ describe('durable Lattice assignment delegations', () => {
     expect(
       vi.mocked(deps.pollEvents).mock.calls.some(([, workId]) => workId === delegation.workId),
     ).toBe(false);
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.id, delegation.id)),
+      ),
+    ).toMatchObject({ status: 'failed', failureCode: 'access_lost' });
+    expect(
+      await db
+        .select()
+        .from(schema.sessionActivity)
+        .where(
+          and(
+            eq(schema.sessionActivity.sessionId, sessionId),
+            eq(schema.sessionActivity.type, 'thought'),
+          ),
+        ),
+    ).toHaveLength(0);
+  });
+
+  it('reauthorizes inside the progress transaction before writing activity', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:55:00.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:progress-race-access-loss`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+    const delegation = one(
+      await db
+        .select()
+        .from(schema.agentDelegation)
+        .where(eq(schema.agentDelegation.sessionId, sessionId)),
+    );
+    deps.pollResult = {
+      workId: delegation.workId,
+      state: 'in_flight',
+      events: [
+        {
+          cursor: 'cursor_access_lost_after_open',
+          kind: 'progress',
+          sealed: {
+            version: 'relay-v1',
+            ephemeralPublicKey: 'ephemeral',
+            salt: 'salt',
+            iv: 'iv',
+            ciphertext: 'ciphertext',
+          },
+        },
+      ],
+      nextPollAfterMs: 1_000,
+    };
+    vi.mocked(deps.openWork).mockImplementation(async () => {
+      await db
+        .update(schema.actor)
+        .set({ status: 'suspended' })
+        .where(eq(schema.actor.id, fixture.ownerActor.id));
+      return { text: 'This progress must not persist' };
+    });
+
+    await sweepLatticeDelegations(new Date(preparedAt.getTime() + 5_001), deps, {
+      pollingEnabled: true,
+      submissionsEnabled: false,
+    });
+
     expect(
       one(
         await db
@@ -1407,7 +1832,7 @@ describe('durable Lattice assignment delegations', () => {
     });
   });
 
-  it('acknowledges an opened completed result after access is lost before task proposal', async () => {
+  it('does not acknowledge an opened completed result after access is lost', async () => {
     const fixture = await seed();
     const deps = dependencies();
     const preparedAt = new Date('2026-08-29T21:15:00.000Z');
@@ -1474,8 +1899,9 @@ describe('durable Lattice assignment delegations', () => {
       status: 'failed',
       failureCode: 'access_lost',
       terminalOutcome: { outcome: 'completed', payload },
-      resultAcknowledgedAt: expect.any(Date),
+      resultAcknowledgedAt: null,
     });
+    expect(deps.acknowledgeResult).not.toHaveBeenCalled();
     expect(
       await db
         .select()

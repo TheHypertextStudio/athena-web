@@ -2,12 +2,16 @@ import { workflowIdFor } from '@docket/athena/execution-protocol';
 import {
   actor,
   agent,
+  agentDelegation,
   agentSession,
   agentSessionRun,
+  athenaAssignment,
   auditEvent,
+  comment,
   db,
   sessionActivity,
 } from '@docket/db';
+import { canActor } from '@docket/authz';
 import type { SessionApprovalDecision } from '@docket/types';
 import { and, asc, desc, eq, isNull } from 'drizzle-orm';
 
@@ -32,6 +36,230 @@ interface ApprovalAuthorization {
   readonly organizationId: string;
   readonly actorId: string | null;
   readonly approverActorId: string | null;
+}
+
+type ApprovalTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/** Settle a returned Lattice proposal without admitting its session to hosted execution. */
+async function settleLatticeDecision(
+  tx: ApprovalTransaction,
+  session: SessionRow,
+  action: ActivityRow,
+  decision: 'approve' | 'reject',
+): Promise<ActivityRow> {
+  const [delegation] = await tx
+    .select()
+    .from(agentDelegation)
+    .where(
+      and(
+        eq(agentDelegation.sessionId, session.id),
+        eq(agentDelegation.returnedActivityId, action.id),
+        eq(agentDelegation.status, 'proposed'),
+      ),
+    )
+    .for('update')
+    .limit(1);
+  if (!delegation) {
+    throw new ConflictError('Lattice decisions require a durable returned delegation');
+  }
+
+  const now = new Date();
+  if (decision === 'reject') {
+    const [rejected] = await tx
+      .update(sessionActivity)
+      .set({ approvalStatus: 'rejected' })
+      .where(and(eq(sessionActivity.id, action.id), eq(sessionActivity.approvalStatus, 'proposed')))
+      .returning();
+    if (!rejected) throw new ConflictError('Activity is not a proposed action');
+    await tx.insert(auditEvent).values({
+      organizationId: delegation.organizationId,
+      actorId: null,
+      initiatorId: session.initiatorId,
+      subjectType: 'agent_session',
+      subjectId: session.id,
+      type: 'rejected',
+      metadata: { activityId: action.id, ...athenaAuditOrigin(session) },
+    });
+    await tx
+      .update(agentDelegation)
+      .set({
+        status: 'canceled',
+        replyKeyCiphertext: null,
+        returnedActivityId: null,
+        nextPollAt: null,
+        settledAt: now,
+      })
+      .where(and(eq(agentDelegation.id, delegation.id), eq(agentDelegation.status, 'proposed')));
+    await tx
+      .update(agentSession)
+      .set({
+        status: 'canceled',
+        currentStep: 'The Lattice result was rejected',
+        currentStepAt: now,
+        interruptedAt: now,
+        endedAt: now,
+      })
+      .where(eq(agentSession.id, session.id));
+    return rejected;
+  }
+
+  const [assignment] = await tx
+    .select()
+    .from(athenaAssignment)
+    .where(
+      and(
+        eq(athenaAssignment.id, delegation.assignmentId),
+        eq(athenaAssignment.ownerUserId, delegation.ownerUserId),
+        eq(athenaAssignment.organizationId, delegation.organizationId),
+      ),
+    )
+    .limit(1);
+  const [ownerActor] = await tx
+    .select({ id: actor.id })
+    .from(actor)
+    .where(
+      and(
+        eq(actor.userId, delegation.ownerUserId),
+        eq(actor.organizationId, delegation.organizationId),
+        eq(actor.kind, 'human'),
+        eq(actor.status, 'active'),
+        isNull(actor.archivedAt),
+      ),
+    )
+    .limit(1);
+  const authorized =
+    assignment && ownerActor
+      ? (
+          await canActor(
+            ownerActor.id,
+            'contribute',
+            {
+              kind: assignment.entityType,
+              id: assignment.entityId,
+              orgId: assignment.organizationId,
+            },
+            tx,
+          )
+        ).allow
+      : false;
+  const input = action.body.action?.toolCall?.input;
+  const inputRecord =
+    input && typeof input === 'object' ? (input as Record<string, unknown>) : undefined;
+  const body = inputRecord?.['body'];
+  const validComment =
+    assignment != null &&
+    inputRecord?.['orgId'] === assignment.organizationId &&
+    inputRecord['subjectType'] === assignment.entityType &&
+    inputRecord['subjectId'] === assignment.entityId &&
+    typeof body === 'string' &&
+    body.trim().length > 0;
+  const failureCode = !authorized ? 'access_lost' : validComment ? null : 'task_comment_failed';
+
+  if (!failureCode && assignment && ownerActor && typeof body === 'string') {
+    await tx.insert(comment).values({
+      organizationId: assignment.organizationId,
+      authorId: ownerActor.id,
+      subjectType: assignment.entityType,
+      subjectId: assignment.entityId,
+      body,
+      createdBy: ownerActor.id,
+    });
+  }
+  const [applied] = await tx
+    .update(sessionActivity)
+    .set({
+      approvalStatus: 'applied',
+      body: {
+        ...action.body,
+        ...(action.body.action
+          ? {
+              action: {
+                ...action.body.action,
+                result: {
+                  content: failureCode
+                    ? 'The Lattice result comment was not written'
+                    : 'Comment created',
+                  isError: failureCode != null,
+                },
+              },
+            }
+          : {}),
+      },
+    })
+    .where(and(eq(sessionActivity.id, action.id), eq(sessionActivity.approvalStatus, 'proposed')))
+    .returning();
+  if (!applied) throw new ConflictError('Activity is not a proposed action');
+  await tx.insert(auditEvent).values({
+    organizationId: delegation.organizationId,
+    actorId: ownerActor?.id ?? null,
+    initiatorId: session.initiatorId,
+    subjectType: 'agent_session',
+    subjectId: session.id,
+    type: 'approved',
+    metadata: {
+      activityId: action.id,
+      approverActorId: ownerActor?.id ?? null,
+      ...athenaAuditOrigin(session),
+    },
+  });
+  if (!failureCode && ownerActor) {
+    await tx.insert(auditEvent).values({
+      organizationId: delegation.organizationId,
+      actorId: ownerActor.id,
+      initiatorId: session.initiatorId,
+      subjectType: 'agent_session',
+      subjectId: session.id,
+      type: 'updated',
+      metadata: {
+        activityId: action.id,
+        tool: 'comment',
+        ...athenaAuditOrigin(session),
+      },
+    });
+  }
+  await tx
+    .update(agentDelegation)
+    .set(
+      failureCode
+        ? {
+            status: 'failed',
+            failureCode,
+            replyKeyCiphertext: null,
+            returnedActivityId: null,
+            nextPollAt: null,
+            settledAt: now,
+          }
+        : {
+            status: 'completed',
+            failureCode: null,
+            replyKeyCiphertext: null,
+            nextPollAt: null,
+            settledAt: now,
+          },
+    )
+    .where(and(eq(agentDelegation.id, delegation.id), eq(agentDelegation.status, 'proposed')));
+  await tx
+    .update(agentSession)
+    .set(
+      failureCode
+        ? {
+            status: 'failed',
+            currentStep:
+              failureCode === 'access_lost'
+                ? 'Athena stopped because you no longer have access to the assigned work.'
+                : 'Athena could not add the Lattice result to the assigned task.',
+            currentStepAt: now,
+            endedAt: now,
+          }
+        : {
+            status: 'completed',
+            currentStep: 'The Lattice result was added to the assigned task',
+            currentStepAt: now,
+            endedAt: now,
+          },
+    )
+    .where(eq(agentSession.id, session.id));
+  return applied;
 }
 
 /** Production-only durable continuation requested by a personal route. */
@@ -244,6 +472,9 @@ export async function decideActivity(
     if (target.type !== 'action' || target.approvalStatus !== 'proposed') {
       throw new ConflictError('Activity is not a proposed action');
     }
+    if (session.executionSurface === 'lattice') {
+      return await settleLatticeDecision(tx, session, target, decision.decision);
+    }
 
     const targets =
       decision.scope === 'all_in_session'
@@ -402,6 +633,13 @@ export async function decideProposalGroup(
     const wanted = activityIds ? new Set(activityIds) : null;
     const targets = wanted ? members.filter((m) => wanted.has(m.id)) : members;
     if (targets.length === 0) throw new NotFoundError('No proposed actions in the group');
+    if (session.executionSurface === 'lattice') {
+      const decided: ActivityRow[] = [];
+      for (const action of targets) {
+        decided.push(await settleLatticeDecision(tx, session, action, decision));
+      }
+      return decided;
+    }
     const authorizations = await authorizeApprovalTargets(
       tx,
       session,

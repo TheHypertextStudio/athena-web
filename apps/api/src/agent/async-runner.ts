@@ -7,6 +7,7 @@ import { ApiError, ConflictError } from '../error';
 import { env } from '../env';
 import type { SessionRow } from '../routes/agent-session-helpers';
 import { signInternalRequest } from './execution-hmac';
+import { assertHostedExecutionSurface } from './execution-surface';
 import {
   enqueueRunGeneration,
   type QueuedRunGeneration,
@@ -113,6 +114,12 @@ export async function persistWaitingAthenaWake(
   sessionId: string,
   now = new Date(),
 ): Promise<QueuedRunGeneration> {
+  const [session] = await handle
+    .select()
+    .from(agentSession)
+    .where(eq(agentSession.id, sessionId))
+    .limit(1);
+  if (session) assertHostedExecutionSurface(session);
   const [waiting] = await handle
     .select()
     .from(agentSessionRun)
@@ -388,6 +395,7 @@ export async function admitAthenaGeneration(
   options: RunGenerationOptions = {},
   dependencies: AsyncRunnerDependencies = defaultDependencies,
 ): Promise<AthenaGenerationAdmission> {
+  assertHostedExecutionSurface(session);
   if (!asynchronousRunnerEnabled(dependencies.config)) return { mode: 'sync' };
   const queued = await dependencies.enqueue(session, options);
   const delivery = await deliverAthenaDispatch(queued.runId, 'enqueue', dependencies);
@@ -402,6 +410,12 @@ export async function wakeWaitingAthenaGeneration(
   sessionId: string,
   dependencies: AsyncDispatchDependencies = defaultDependencies,
 ): Promise<RunGenerationMessage> {
+  const [session] = await db
+    .select()
+    .from(agentSession)
+    .where(eq(agentSession.id, sessionId))
+    .limit(1);
+  if (session) assertHostedExecutionSurface(session);
   const [waiting] = await db
     .select()
     .from(agentSessionRun)

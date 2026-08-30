@@ -695,6 +695,7 @@ async function latestProposedAction(
 
 /** Reopen eligible work after a steering message through the configured execution path. */
 async function driveAfterMessage(session: SessionRow): Promise<'sync' | 'async' | 'parked'> {
+  assertHostedExecutionSurface(session);
   if (session.status === 'awaiting_approval' || session.status === 'canceled') return 'parked';
   if (asynchronousRunnerEnabled()) {
     if (session.status === 'awaiting_input') {
@@ -936,6 +937,7 @@ const meAthena = new Hono<AppEnv>()
     async (c) => {
       const owner = requestOwner(c);
       const session = await currentChat(owner);
+      assertHostedExecutionSurface(session);
       const current = await appendMessage(session, c.req.valid('json'), owner);
       const mode = await driveAfterMessage(current);
       const detail = await personalDetail(owner, session.id);
@@ -1064,6 +1066,7 @@ const meAthena = new Hono<AppEnv>()
     async (c) => {
       const owner = requestOwner(c);
       const session = await loadOwnedSession(owner, c.req.valid('param').id);
+      assertHostedExecutionSurface(session);
       const current = await appendMessage(session, c.req.valid('json'), owner);
       const mode = await driveAfterMessage(current);
       const detail = await personalDetail(owner, session.id);
@@ -1212,6 +1215,10 @@ const meAthena = new Hono<AppEnv>()
         decision: body.decision === 'approved' ? ('approve' as const) : ('reject' as const),
         ...(body.scope ? { scope: body.scope } : {}),
       };
+      if (session.executionSurface === 'lattice') {
+        await decideActivity(session.contextOrganizationId ?? '', null, id, activityId, decision);
+        return ok(c, SessionActivityOut, toPersonalActivityOut(await loadActivity(id, activityId)));
+      }
       if (asynchronousRunnerEnabled()) {
         await decideActivity(session.contextOrganizationId ?? '', null, id, activityId, decision, {
           queueWake: true,
@@ -1243,6 +1250,7 @@ const meAthena = new Hono<AppEnv>()
       const owner = requestOwner(c);
       const { id, activityId } = c.req.valid('param');
       const session = await loadOwnedSession(owner, id);
+      assertHostedExecutionSurface(session);
       const workspaceId = session.contextOrganizationId ?? '';
       const created = await replyToElicitation(
         workspaceId,
@@ -1278,6 +1286,10 @@ const meAthena = new Hono<AppEnv>()
       const session = await loadOwnedSession(owner, id);
       const verdict = decision === 'approved' ? 'approve' : 'reject';
       const orgId = session.contextOrganizationId ?? '';
+      if (session.executionSurface === 'lattice') {
+        await decideProposalGroup(orgId, null, id, groupId, verdict, activityIds);
+        return ok(c, AthenaSessionDetailOut, await personalDetail(owner, id));
+      }
       if (asynchronousRunnerEnabled()) {
         await decideProposalGroup(orgId, null, id, groupId, verdict, activityIds, {
           queueWake: true,
@@ -1322,6 +1334,7 @@ const meAthena = new Hono<AppEnv>()
     async (c) => {
       const owner = requestOwner(c);
       const session = await loadOwnedSession(owner, c.req.valid('param').id);
+      assertHostedExecutionSurface(session);
       if (asynchronousRunnerEnabled()) {
         await queueWaitingAthenaWake(session.id);
         await wakeWaitingAthenaGeneration(session.id);
@@ -1362,6 +1375,7 @@ const meAthena = new Hono<AppEnv>()
           return ok(c, AthenaSessionSummaryOut, await personalSummaryForSession(owner, canceled));
         }
       }
+      assertHostedExecutionSurface(session);
       const shouldWake =
         asynchronousRunnerEnabled() &&
         (session.status === 'awaiting_input' || session.status === 'awaiting_approval');
@@ -1404,6 +1418,12 @@ const meAthena = new Hono<AppEnv>()
       const asynchronous = asynchronousRunnerEnabled();
 
       if (approving) {
+        if (session.executionSurface === 'lattice') {
+          const action = await latestProposedAction(session.id);
+          await decideActivity(orgId, null, session.id, action.id, { decision: 'approve' });
+          const current = await loadOwnedSession(owner, session.id);
+          return ok(c, AthenaSessionSummaryOut, await personalSummaryForSession(owner, current));
+        }
         if (asynchronous) {
           const action = await latestProposedAction(session.id);
           await decideActivity(
@@ -1427,6 +1447,11 @@ const meAthena = new Hono<AppEnv>()
       }
 
       const action = await latestProposedAction(session.id);
+      if (session.executionSurface === 'lattice') {
+        await decideActivity(orgId, null, session.id, action.id, { decision: 'reject' });
+        const current = await loadOwnedSession(owner, session.id);
+        return ok(c, AthenaSessionSummaryOut, await personalSummaryForSession(owner, current));
+      }
       await decideActivity(
         orgId,
         null,

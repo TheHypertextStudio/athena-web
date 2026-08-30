@@ -1,0 +1,4 @@
+ALTER TABLE "agent_delegation" DROP CONSTRAINT "agent_delegation_reply_key_lifecycle_check";--> statement-breakpoint
+ALTER TABLE "agent_delegation" ADD CONSTRAINT "agent_delegation_reply_key_lifecycle_check" CHECK (("agent_delegation"."status" in ('prepared','submitted','proposed') AND "agent_delegation"."reply_key_ciphertext" IS NOT NULL)
+        OR ("agent_delegation"."status" = 'failed' AND "agent_delegation"."failure_code" = 'result_decryption_failed' AND "agent_delegation"."reply_key_ciphertext" IS NOT NULL)
+        OR ("agent_delegation"."status" in ('completed','failed','canceled') AND "agent_delegation"."reply_key_ciphertext" IS NULL));

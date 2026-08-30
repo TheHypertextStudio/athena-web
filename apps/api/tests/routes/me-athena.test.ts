@@ -1,7 +1,7 @@
 import type * as AgentRuntimeModule from '@docket/athena/turn';
 import type * as AuthzModule from '@docket/authz';
 import type * as DbModule from '@docket/db';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, or } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -1444,6 +1444,71 @@ describe('personal Athena routes', () => {
         .select()
         .from(schema.agentSessionRun)
         .where(eq(schema.agentSessionRun.sessionId, sessionId)),
+    ).toHaveLength(0);
+  });
+
+  it('rejects personal message, reply, and resume paths for Lattice sessions', async () => {
+    const seed = await seedPeople();
+    const ownerApp = appFor(seed.owner);
+    const messageSession = await seedSession(seed, seed.owner, 'running');
+    const replySession = await seedSession(seed, seed.owner, 'awaiting_input');
+    const resumeSession = await seedSession(seed, seed.owner, 'awaiting_input');
+    const elicitationId = await seedActivity(replySession, {
+      type: 'elicitation',
+      body: { text: 'Which task?', toolUseId: 'toolu_lattice_reply' },
+    });
+    await db
+      .update(schema.agentSession)
+      .set({ executionSurface: 'lattice' })
+      .where(
+        or(
+          eq(schema.agentSession.id, messageSession),
+          eq(schema.agentSession.id, replySession),
+          eq(schema.agentSession.id, resumeSession),
+        ),
+      );
+    const beforeMessage = await db
+      .select()
+      .from(schema.sessionActivity)
+      .where(eq(schema.sessionActivity.sessionId, messageSession));
+
+    const messageResponse = await ownerApp.request(`/sessions/${messageSession}/messages`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ body: 'Do not enter the hosted runner' }),
+    });
+    const replyResponse = await ownerApp.request(
+      `/sessions/${replySession}/activity/${elicitationId}/reply`,
+      {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ body: 'Do not wake the hosted runner' }),
+      },
+    );
+    const resumeResponse = await ownerApp.request(`/sessions/${resumeSession}/resume`, {
+      method: 'POST',
+    });
+
+    expect(messageResponse.status).toBe(409);
+    expect(replyResponse.status).toBe(409);
+    expect(resumeResponse.status).toBe(409);
+    expect(
+      await db
+        .select()
+        .from(schema.sessionActivity)
+        .where(eq(schema.sessionActivity.sessionId, messageSession)),
+    ).toEqual(beforeMessage);
+    expect(
+      await db
+        .select()
+        .from(schema.agentSessionRun)
+        .where(
+          or(
+            eq(schema.agentSessionRun.sessionId, messageSession),
+            eq(schema.agentSessionRun.sessionId, replySession),
+            eq(schema.agentSessionRun.sessionId, resumeSession),
+          ),
+        ),
     ).toHaveLength(0);
   });
 

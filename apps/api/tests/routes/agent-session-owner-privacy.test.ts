@@ -722,6 +722,69 @@ describe('owner-private Athena compatibility routes', () => {
     ).toHaveLength(0);
   });
 
+  it('rejects compatibility reply, resume, and unbacked decision wakes for Lattice sessions', async () => {
+    runnerMocks.enabled = true;
+    const seed = await seedWorkspace();
+    const ownerApp = appFor(seed, seed.owner);
+    const replySession = await seedAthena(seed, seed.owner, 'awaiting_input');
+    const resumeSession = await seedAthena(seed, seed.owner, 'awaiting_input');
+    const decisionSession = await seedAthena(seed, seed.owner, 'awaiting_approval');
+    const elicitationId = await seedActivity(seed, replySession, 'athena', {
+      type: 'elicitation',
+      body: { text: 'Which task?', toolUseId: 'toolu_lattice_compat_reply' },
+    });
+    const actionId = await seedActivity(seed, decisionSession, 'athena', {
+      type: 'action',
+      approvalStatus: 'proposed',
+      body: {
+        action: {
+          kind: 'capture',
+          summary: 'Do not execute',
+          mode: 'proposal',
+          toolCall: {
+            connection: 'docket',
+            tool: 'capture',
+            input: { orgId: seed.orgId, text: 'Do not execute' },
+            toolUseId: 'toolu_lattice_unbacked',
+          },
+        },
+      },
+    });
+    await db
+      .update(schema.agentSession)
+      .set({ executionSurface: 'lattice' })
+      .where(
+        or(
+          eq(schema.agentSession.id, replySession),
+          eq(schema.agentSession.id, resumeSession),
+          eq(schema.agentSession.id, decisionSession),
+        ),
+      );
+
+    const replyResponse = await post(ownerApp, `/${replySession}/activity/${elicitationId}/reply`, {
+      body: 'Do not wake',
+    });
+    const resumeResponse = await post(ownerApp, `/${resumeSession}/resume`);
+    const decisionResponse = await decide(
+      ownerApp,
+      `/${decisionSession}/activity/${actionId}/decision`,
+      'approved',
+    );
+
+    expect(replyResponse.status).toBe(409);
+    expect(resumeResponse.status).toBe(409);
+    expect(decisionResponse.status).toBe(409);
+    expect(runnerMocks.wake).not.toHaveBeenCalled();
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.sessionActivity)
+          .where(eq(schema.sessionActivity.id, actionId)),
+      ).approvalStatus,
+    ).toBe('proposed');
+  });
+
   it('admits owner lifecycle and reply resumes through durable generations', async () => {
     const seed = await seedWorkspace();
     const ownerApp = appFor(seed, seed.owner);

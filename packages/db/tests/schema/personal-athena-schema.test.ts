@@ -205,8 +205,6 @@ describe('personal Athena schema', () => {
         workState: 'completed',
         terminalOutcome: { outcome: 'completed', report: 'The analysis is ready.' },
         returnedActivityId: assertDefined(returnedActivity).id,
-        replyKeyCiphertext: null,
-        settledAt: new Date(),
       })
       .where(eq(agentDelegation.id, assertDefined(delegation).id));
     await expect(
@@ -296,7 +294,6 @@ describe('personal Athena schema', () => {
     const terminalResult = {
       status: 'proposed' as const,
       terminalOutcome: { outcome: 'completed' },
-      replyKeyCiphertext: null,
     };
 
     await expect(
@@ -322,7 +319,7 @@ describe('personal Athena schema', () => {
 
     await db
       .update(agentDelegation)
-      .set({ status: 'completed' })
+      .set({ status: 'completed', replyKeyCiphertext: null, settledAt: new Date() })
       .where(eq(agentDelegation.id, delegationId));
 
     const failedAssignmentId = await createAssignment(

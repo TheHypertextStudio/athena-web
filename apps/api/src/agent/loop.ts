@@ -871,6 +871,7 @@ export async function executeApprovedActions(
   if (session.executorKind === 'registered_agent' && session.organizationId !== orgId) {
     throw new NotFoundError('Session not found');
   }
+  assertHostedExecutionSurface(session);
   const executor = toolboxExecutor(session);
 
   const approved = await db
@@ -1031,6 +1032,7 @@ async function executeApprovedGeneration(
   resumeSession: boolean,
   deps: LoopDeps,
 ): Promise<SessionRow> {
+  assertHostedExecutionSurface(session);
   const lease = await claimRunGeneration(session, {
     leaseDurationMs: deps.leaseDurationMs,
     resumeSession,

@@ -14,7 +14,10 @@ import {
   Button,
   Input,
   Popover,
+  PopoverBody,
   PopoverContent,
+  PopoverFooter,
+  PopoverHeader,
   PopoverTrigger,
   Select,
 } from '@docket/ui/primitives';
@@ -203,15 +206,15 @@ export function RepeatTaskControl({
           disabled={disabled}
         />
       </PopoverTrigger>
-      <PopoverContent className="w-[22rem] p-0" align="start">
-        <div className="border-outline-variant border-b px-4 py-3">
+      <PopoverContent presentation="panel" width="xl" align="start">
+        <PopoverHeader className="border-outline-variant border-b">
           <h2 className="text-title-small text-on-surface">Repeat task</h2>
           <p className="text-body-small text-on-surface-variant mt-0.5">
             Docket creates ordinary tasks ahead of time so they appear in planning.
           </p>
-        </div>
+        </PopoverHeader>
 
-        <div className="flex flex-col gap-4 p-4">
+        <PopoverBody className="flex flex-col gap-4">
           <label className="text-label-medium text-on-surface flex flex-col gap-1.5">
             Repeats
             <Select
@@ -455,9 +458,9 @@ export function RepeatTaskControl({
               </label>
             </div>
           ) : null}
-        </div>
+        </PopoverBody>
 
-        <div className="border-outline-variant flex items-center justify-between border-t px-3 py-2">
+        <PopoverFooter className="border-outline-variant justify-between border-t">
           <Button
             type="button"
             variant="ghost"
@@ -479,7 +482,7 @@ export function RepeatTaskControl({
           >
             Done
           </Button>
-        </div>
+        </PopoverFooter>
       </PopoverContent>
     </Popover>
   );

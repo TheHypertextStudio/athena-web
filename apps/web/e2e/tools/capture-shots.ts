@@ -161,7 +161,7 @@ async function openReviewRoute(page: Page, url: string): Promise<void> {
   if (!response?.ok()) {
     throw new Error(`Could not capture ${url}: HTTP ${String(response?.status() ?? 'unknown')}`);
   }
-  if (page.url().includes('/sign-in')) {
+  if (!allowSignIn && page.url().includes('/sign-in')) {
     throw new Error(`Could not capture ${url}: the saved test session is no longer authenticated`);
   }
   if (new URL(url).pathname.includes('/settings/')) {
@@ -210,12 +210,13 @@ async function captureCleanFrame(
   viewport: (typeof VIEWPORTS)[number],
   colorScheme: (typeof COLOR_SCHEMES)[number],
   setup?: MobileLayoutRouteCase['setup'],
+  allowSignIn = false,
 ): Promise<Buffer> {
   for (let attempt = 1; attempt <= 4; attempt += 1) {
     const page = await context.newPage();
     await page.setViewportSize(viewport);
     await page.emulateMedia({ colorScheme });
-    await openReviewRoute(page, url);
+    await openReviewRoute(page, url, allowSignIn);
     if (setup) await setup(page);
     const overflow = await page.evaluate(() => ({
       clientWidth: document.documentElement.clientWidth,
@@ -344,6 +345,7 @@ async function main(): Promise<void> {
         viewport,
         colorScheme,
         entry.setup,
+        entry.authenticated === false,
       );
       writeFileSync(file, frame);
       if (records) {

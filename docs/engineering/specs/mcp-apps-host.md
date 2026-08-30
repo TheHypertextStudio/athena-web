@@ -83,6 +83,12 @@ deliberate deviation from the spec's example, and it is strictly more restrictiv
 
 The policy travels as a `<meta http-equiv>` prepended to the document (a `srcdoc` frame has no
 response headers) and is computed **host-side** — never by a script running on the sandbox origin.
+When a resource explicitly declares static resource domains, the same script boundary permits
+`'unsafe-eval'` and workers created from `blob:` URLs so framework and visualization bundles from
+those declared domains can execute. This does not add a network origin: `script-src`, `worker-src`,
+and every other resource directive remain limited to the exact declared origins. An omitted or
+empty resource-domain declaration retains the stable specification's restrictive default without
+either capability.
 `withCspMeta` parses the original provider document inertly with exact-pinned `parse5@8.0.1`,
 inserts a host-created policy node as the normalized head's first child, and serializes the same
 document with its doctype intact. This is security-critical: HTML accepts executable markup before

@@ -232,6 +232,15 @@
   typecheck, and Web ESLint pass. A model-invoked production turn remains externally blocked because
   the live API has no `ANTHROPIC_API_KEY` secret or binding; the failure is confirmed in Cloud Run
   logs before any remote tool call.
+- **Production official-map CSP repair**: Direct browser inspection showed that the unchanged
+  pinned map app loaded inside Athena's exact inner sandbox but Cesium stopped before
+  `App.connect()`: its runtime uses `new Function` and blob-backed workers. The host now permits
+  those two local execution mechanisms only when the resource explicitly declares static resource
+  domains. The stable omitted/empty-CSP default remains unchanged, and every network directive
+  remains restricted to the declared origins. A headless run of the upstream `mcp-app.html` under
+  the production policy now loads Cesium and emits `ui/initialize` with protocol `2026-01-26`
+  without a console or request failure. Focused host, sandbox, and conformance validation passes
+  78 tests; integrations TypeScript and ESLint pass.
 - **Layer 3 decisions and retrospective**: The official stable prose and exact npm package source
   were the authority because Context7 remained quota-blocked. Counting normative vocabulary
   occurrences rather than methods/capabilities prevents a stable protocol symbol list from

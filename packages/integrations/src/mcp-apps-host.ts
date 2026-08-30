@@ -223,12 +223,13 @@ export function buildViewCsp(csp?: McpUiResourceCsp): string {
   const bases = declaredCspOrigins(csp?.baseUriDomains);
   const directives = [
     `default-src 'none'`,
-    `script-src 'self' 'unsafe-inline'${resources ? ` ${resources}` : ''}`,
+    `script-src 'self' 'unsafe-inline'${resources ? ` 'unsafe-eval' ${resources}` : ''}`,
     `style-src 'self' 'unsafe-inline'${resources ? ` ${resources}` : ''}`,
     `img-src 'self' data:${resources ? ` ${resources}` : ''}`,
     `font-src 'self'${resources ? ` ${resources}` : ''}`,
     `media-src 'self' data:${resources ? ` ${resources}` : ''}`,
     `connect-src ${connect || `'none'`}`,
+    ...(resources ? [`worker-src 'self' blob: ${resources}`] : []),
     `frame-src ${frames || `'none'`}`,
     `object-src 'none'`,
     `base-uri ${bases || `'self'`}`,

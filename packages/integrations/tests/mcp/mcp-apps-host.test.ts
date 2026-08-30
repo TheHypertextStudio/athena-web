@@ -675,6 +675,8 @@ describe('sandbox policy', () => {
     expect(csp).toContain(`frame-src 'none'`);
     expect(csp).toContain(`object-src 'none'`);
     expect(csp).toContain(`base-uri 'self'`);
+    expect(csp).not.toContain(`'unsafe-eval'`);
+    expect(csp).not.toContain(`worker-src`);
     // No implicit self on connect-src: a view has no same-origin server to reach.
     expect(csp).not.toContain(`connect-src 'self'`);
   });
@@ -687,7 +689,8 @@ describe('sandbox policy', () => {
       baseUriDomains: ['https://cdn.test'],
     });
     expect(csp).toContain(`connect-src https://api.weather.test`);
-    expect(csp).toContain(`script-src 'self' 'unsafe-inline' https://cdn.test`);
+    expect(csp).toContain(`script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.test`);
+    expect(csp).toContain(`worker-src 'self' blob: https://cdn.test`);
     expect(csp).toContain(`frame-src https://player.test`);
     expect(csp).toContain(`base-uri https://cdn.test`);
     expect(csp).not.toContain('https://elsewhere.test');
@@ -700,7 +703,10 @@ describe('sandbox policy', () => {
     });
 
     expect(csp).toContain(`connect-src 'none'`);
-    expect(csp).toContain(`script-src 'self' 'unsafe-inline' https://*.cdn.example.com`);
+    expect(csp).toContain(
+      `script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.cdn.example.com`,
+    );
+    expect(csp).toContain(`worker-src 'self' blob: https://*.cdn.example.com`);
     expect(csp).not.toContain('script-src *');
     expect(csp).not.toContain('/path');
   });

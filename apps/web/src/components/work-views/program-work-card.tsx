@@ -23,9 +23,9 @@ export interface ProgramWorkCardProps {
    * The display fields the view has switched on.
    *
    * @remarks
-   * The Display → Properties control writes `presentation.properties`, and every other lens reads
-   * it. This one used to ignore it, which made those toggles do nothing on the only card lens that
-   * renders anything — a dead control, which the craft rubric's "no placeholder" gate forbids.
+   * Read from `presentation.properties`, which the Display → Properties control writes. The card
+   * composes its own treatment for `status`, `health`, `owner`, `projectCount` and `taskCount`;
+   * the contract's other displayable fields are not shown on this lens yet.
    */
   readonly properties: ReadonlySet<string>;
 }
@@ -39,10 +39,8 @@ function activityRecency(latestOccurredAt: string | null): string {
  * The four fill heights an activity week can take, quietest first.
  *
  * @remarks
- * A fixed ladder rather than a computed pixel height: the previous version wrote
- * `style={{ height }}` on every bar, which put an un-tokenised value in the markup and made each
- * bar a one-off. Four static utilities carry the same shape, and the exact per-week counts stay
- * where they were always the real answer — the bar's accessible name.
+ * A fixed ladder rather than a height computed per bar, so every bar is a token and none is a
+ * one-off. The exact per-week counts live where they are actually readable — the accessible name.
  */
 const PULSE_FILL_CLASS = ['h-2', 'h-4', 'h-6', 'h-8'] as const;
 
@@ -54,48 +52,41 @@ const PULSE_FILL_CLASS = ['h-2', 'h-4', 'h-6', 'h-8'] as const;
  * quiet one the same size, so the roll-up line beneath them starts at the same place on every
  * card in a row.
  */
-const PULSE_FRAME_CLASS = 'flex h-8 w-24 shrink-0';
+const PULSE_FRAME_CLASS = 'flex h-8 w-24 shrink-0 items-end';
 
 /**
  * Place one week's event count on the {@link PULSE_FILL_CLASS} ladder.
  *
  * @param count - Events in that week.
- * @param maximum - The busiest week in the same eight-week window.
+ * @param maximum - The busiest week in the same eight-week window, always at least `count`.
  * @returns `0` for a week with no activity, otherwise a rung from 1 to 4.
  */
 function pulseLevel(count: number, maximum: number): number {
-  if (count === 0 || maximum === 0) return 0;
-  const rung = Math.ceil((count / maximum) * PULSE_FILL_CLASS.length);
-  return Math.min(PULSE_FILL_CLASS.length, Math.max(1, rung));
+  return count === 0 ? 0 : Math.ceil((count / maximum) * PULSE_FILL_CLASS.length);
 }
 
 /**
  * Render a restrained eight-week activity histogram with a label for every visible bucket.
  *
  * @remarks
- * Every week is drawn as a full-height track the bar fills from the bottom, so a quiet week reads
- * as an empty slot. Bars used to be drawn with no track at all, which left a run of quiet weeks
- * looking like disconnected 4px dashes — a rendering artifact rather than data.
+ * Each week is a full-height track the bar fills from the bottom, so a quiet week reads as an
+ * empty slot rather than as a bar that failed to draw.
  *
- * The fill is neutral on purpose, and quiet within that. Activity is not a verdict, and health is
- * the one thing on this card that has earned colour; spending the brand's primary on a
- * histogram — or a near-black neutral, which shouts just as loudly — takes attention the title
- * should be getting. `outline` reads as data against its track without competing for the card.
+ * The fill is neutral, and quiet within that. Activity is not a verdict; health is the one thing
+ * on this card that has earned colour, and a histogram loud enough to compete with the title takes
+ * attention the name should be getting.
  *
- * Heights normalise against the busiest week of this Program alone, so the shape answers "is this
- * one moving?" rather than "is this one busier than its neighbour?" — a comparison eight buckets
- * of eight weeks cannot honestly support.
+ * Heights normalise against this Program's own busiest week, so the shape answers "is this one
+ * moving?" rather than inviting a comparison across cards that eight buckets cannot support.
  */
 function ActivityPulse({ activity }: Pick<ProgramViewRow, 'activity'>): JSX.Element {
   const maximum = Math.max(...activity.weeks);
 
-  // A Program with nothing in the window gets a flat baseline rather than eight empty tracks.
-  // Eight of them is a row of tall grey slots drawing the eye to the absence of information,
-  // which on a roster of quiet Programs is most of what the reader sees. One flat rule says the
-  // same thing and lets the verdict beside it stay the loudest mark on the card.
+  // A flat baseline rather than eight empty tracks: on a roster of quiet Programs, eight tall
+  // grey slots per card is most of what the reader sees, all of it the absence of information.
   if (maximum === 0) {
     return (
-      <div className={cn(PULSE_FRAME_CLASS, 'items-end')}>
+      <div className={PULSE_FRAME_CLASS}>
         <span
           role="img"
           aria-label="No activity in the last 8 weeks"
@@ -107,7 +98,7 @@ function ActivityPulse({ activity }: Pick<ProgramViewRow, 'activity'>): JSX.Elem
 
   const label = `Activity over the last 8 weeks: ${activity.weeks.join(', ')}`;
   return (
-    <div role="list" aria-label={label} className={cn(PULSE_FRAME_CLASS, 'items-end gap-1')}>
+    <div role="list" aria-label={label} className={cn(PULSE_FRAME_CLASS, 'gap-1')}>
       {activity.weeks.map((count, index) => {
         const level = pulseLevel(count, maximum);
         const eventNoun = count === 1 ? 'event' : 'events';
@@ -135,11 +126,9 @@ function ActivityPulse({ activity }: Pick<ProgramViewRow, 'activity'>): JSX.Elem
  * The owner's avatar and name.
  *
  * @remarks
- * A Program nobody owns renders nothing here rather than the word "Unowned". A table column needs
+ * Takes a resolved actor, because a Program nobody owns renders nothing here. A table column needs
  * a placeholder to keep its rows aligned; a card does not, and on a roster where most Programs are
- * unassigned the placeholder becomes the most repeated words on the screen — the absence of
- * information, set in type, nine times over. The same reasoning drops the em dash for an unset
- * verdict.
+ * unassigned the placeholder would be the most repeated thing on the screen.
  */
 function ProgramOwner({ ownerActor }: { ownerActor: WorkViewActor }): JSX.Element {
   return (
@@ -163,34 +152,20 @@ interface ProgramCountProps {
   readonly icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
   /** The rolled-up count. */
   readonly value: number;
-  /** The org-skinned singular noun, for the count's accessible name. */
-  readonly singular: string;
-  /** The org-skinned plural noun, for the count's accessible name. */
-  readonly plural: string;
+  /** The org-skinned noun, already agreeing with {@link value}, for the accessible name. */
+  readonly noun: string;
 }
 
 /** One rolled-up child count: a glyph, an aligned number, and the noun a screen reader hears. */
-function ProgramCount({ icon: Icon, value, singular, plural }: ProgramCountProps): JSX.Element {
+function ProgramCount({ icon: Icon, value, noun }: ProgramCountProps): JSX.Element {
   return (
     <Text token="label-medium" tone="muted" numeric className="flex items-center gap-1.5">
       <Icon aria-hidden className="size-4" />
       {value}
-      <span className="sr-only">{value === 1 ? singular : plural}</span>
+      <span className="sr-only">{noun}</span>
     </Text>
   );
 }
-
-/**
- * The tonal container the rolled-up counts sit in.
- *
- * @remarks
- * The counts used to be two runs of small text floating against the card's right edge with
- * nothing holding them. A tonal container makes the roll-up one object you can find in the same
- * place on every card, which is the whole reason to read a grid rather than a list. It sits a
- * step above the card's own hover fill so it stays a distinct object while the card is hovered.
- */
-const ROLLUP_CONTAINER_CLASS =
-  'bg-surface-container-highest ml-auto flex shrink-0 items-center gap-3 rounded-full px-3 py-1';
 
 /**
  * Render the Programs card lens as a calm portfolio summary.
@@ -198,31 +173,25 @@ const ROLLUP_CONTAINER_CLASS =
  * @remarks
  * The card carries what the List lens carries — status, health, owner, and the rolled-up child
  * work — because switching lens should change how a roster is arranged, not how much of it you
- * are allowed to see. It previously showed the name, the summary, and the activity pulse only,
- * which made the Cards lens strictly less informative than the rows it replaced.
+ * are allowed to see.
  *
- * The signal and roll-up bands are pushed to the bottom edge (`mt-auto`) so they line up across
- * every card in a row however long a summary runs and whether or not a verdict is set. Ragged
- * bottom edges were most of why the grid read as unfinished.
+ * The signal and roll-up bands are pinned to the bottom edge (`mt-auto`) so they line up across
+ * every card in a row however long a summary runs and whether or not a verdict is set.
  *
  * @param props - The {@link ProgramWorkCardProps}.
  */
 export function ProgramWorkCard({ row, properties }: ProgramWorkCardProps): JSX.Element {
   const display = row.display ?? defaultEntityDisplay('program', row.id);
   const status = useWorkStatus('program', row.status);
-  const projectNoun = useVocabulary('project').toLowerCase();
-  const projectNounPlural = useVocabulary('project', { plural: true }).toLowerCase();
-  const taskNoun = useVocabulary('task').toLowerCase();
-  const taskNounPlural = useVocabulary('task', { plural: true }).toLowerCase();
+  const projectNoun = useVocabulary('project', { plural: row.projectCount !== 1 }).toLowerCase();
+  const taskNoun = useVocabulary('task', { plural: row.taskCount !== 1 }).toLowerCase();
 
-  const showStatus = properties.has('status');
   const showProjectCount = properties.has('projectCount');
   const showTaskCount = properties.has('taskCount');
   // Health names itself on the signal line. It does not tint the identity mark: a Program's mark
   // now carries the icon and colour its owner chose, and that choice outranks a derived signal.
-  const verdict = properties.has('health') ? (row.health ?? null) : null;
+  const verdict = properties.has('health') ? row.health : null;
   const owner = properties.has('owner') ? row.ownerActor : null;
-  const showRollup = owner !== null || showProjectCount || showTaskCount;
 
   return (
     <div className="flex h-full flex-col gap-3">
@@ -240,7 +209,7 @@ export function ProgramWorkCard({ row, properties }: ProgramWorkCardProps): JSX.
         <Text as="h2" token="title-large" title={row.name} className="line-clamp-2 min-w-0 flex-1">
           {row.name}
         </Text>
-        {showStatus ? (
+        {properties.has('status') ? (
           <span className="shrink-0">
             <WorkStatusBadge name={status.name} category={status.category} />
           </span>
@@ -255,15 +224,8 @@ export function ProgramWorkCard({ row, properties }: ProgramWorkCardProps): JSX.
 
       <div className="mt-auto flex flex-col gap-3">
         {/*
-         * Verdict and recency read as one statement on one line. Stacked, they were two muted
-         * lines four pixels apart that blurred into each other and made recency compete with a
-         * verdict it only qualifies. The em dash a table column needs for alignment is dropped
-         * here: on a card, "no verdict yet" is better said by the absence of one.
-         */}
-        {/*
-         * `items-end` so the pulse sits on the text's own baseline: its bars grow from the bottom
-         * of a fixed frame, and centering that frame against a single line left the quiet state's
-         * flat rule hovering in the gap below it.
+         * Verdict and recency read as one statement on one line, and `items-end` sits the pulse on
+         * that line's baseline — its bars grow from the bottom of a fixed frame.
          */}
         <div className="flex items-end justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
@@ -288,25 +250,15 @@ export function ProgramWorkCard({ row, properties }: ProgramWorkCardProps): JSX.
           <ActivityPulse activity={row.activity} />
         </div>
 
-        {showRollup ? (
+        {owner !== null || showProjectCount || showTaskCount ? (
           <div className="flex items-center gap-3">
             {owner ? <ProgramOwner ownerActor={owner} /> : null}
-            <span className={ROLLUP_CONTAINER_CLASS}>
+            <span className="bg-surface-container-highest ml-auto flex shrink-0 items-center gap-3 rounded-full px-3 py-1">
               {showProjectCount ? (
-                <ProgramCount
-                  icon={FolderKanban}
-                  value={row.projectCount}
-                  singular={projectNoun}
-                  plural={projectNounPlural}
-                />
+                <ProgramCount icon={FolderKanban} value={row.projectCount} noun={projectNoun} />
               ) : null}
               {showTaskCount ? (
-                <ProgramCount
-                  icon={ListChecks}
-                  value={row.taskCount}
-                  singular={taskNoun}
-                  plural={taskNounPlural}
-                />
+                <ProgramCount icon={ListChecks} value={row.taskCount} noun={taskNoun} />
               ) : null}
             </span>
           </div>

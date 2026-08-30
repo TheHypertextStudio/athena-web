@@ -21,7 +21,7 @@
 import type { WorkStatusCategory } from '@docket/types';
 import { StatusIcon } from '@docket/ui/components';
 import { Badge } from '@docket/ui/primitives';
-import type { JSX } from 'react';
+import type { CSSProperties, JSX } from 'react';
 
 import type { FieldOption } from '@/components/views/field-catalog';
 
@@ -73,8 +73,16 @@ export interface WorkStatusIconProps {
   name: string;
   /** The category it behaves as, which picks the glyph and its colour token. */
   category: WorkStatusCategory;
-  /** Extra classes merged after the token colour (size, spacing). */
+  /** Extra classes merged after the token colour (spacing). */
   className?: string;
+  /**
+   * Inline style forwarded to the glyph.
+   *
+   * @remarks
+   * The only supported way to resize it is `--status-icon-size`; a second `size-*` class loses a
+   * race with MUI's layer. See `docs/design/design-system.md`.
+   */
+  style?: CSSProperties;
 }
 
 /**
@@ -85,8 +93,13 @@ export interface WorkStatusIconProps {
  * accessible name is the workspace's own word for the stage — someone using a screen reader hears
  * "In review", not "started".
  */
-export function WorkStatusIcon({ name, category, className }: WorkStatusIconProps): JSX.Element {
-  return <StatusIcon type={category} label={name} className={className} />;
+export function WorkStatusIcon({
+  name,
+  category,
+  className,
+  style,
+}: WorkStatusIconProps): JSX.Element {
+  return <StatusIcon type={category} label={name} className={className} style={style} />;
 }
 
 /**

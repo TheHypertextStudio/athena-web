@@ -257,8 +257,28 @@ export function workViewContract<TTarget extends ViewTarget>(
   return CONTRACT_BY_TARGET[target];
 }
 
+/**
+ * The catalog for each target, built once.
+ *
+ * @remarks
+ * The catalog is a pure function of the target, and building one runs a schema parse per field.
+ * Three lenses call this on their render path — `work-list`, `work-cards`, `work-board` — so
+ * without this it is rebuilt for every roster render.
+ */
+const CATALOG_BY_TARGET = new Map<ViewTarget, readonly WorkViewFieldMetadata[]>();
+
 /** Return the target's exhaustive, human-labelled field catalog. */
 export function workViewFieldCatalog<TTarget extends ViewTarget>(
+  target: TTarget,
+): readonly WorkViewFieldMetadata<TTarget>[] {
+  const cached = CATALOG_BY_TARGET.get(target);
+  if (cached) return cached as readonly WorkViewFieldMetadata<TTarget>[];
+  const built = buildWorkViewFieldCatalog(target);
+  CATALOG_BY_TARGET.set(target, built);
+  return built;
+}
+
+function buildWorkViewFieldCatalog<TTarget extends ViewTarget>(
   target: TTarget,
 ): readonly WorkViewFieldMetadata<TTarget>[] {
   const contract = CONTRACT_BY_TARGET[target];

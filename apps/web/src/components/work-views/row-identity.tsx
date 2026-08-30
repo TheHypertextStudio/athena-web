@@ -4,16 +4,14 @@
  * `work-views/row-identity` — one leading mark per kind of work, shared by every lens.
  *
  * @remarks
- * The List lens owned this privately, so the Cards lens had nothing to draw and rendered an empty
- * `size-6` spacer where a glyph would go — a placeholder holding open a column for a mark that
- * was never coming. Sharing it means a Project wears its chosen icon and a Task its status ring
- * whichever lens you are looking at, and the selection checkbox has a consistent place to land.
+ * A Project wears its chosen icon and a Task its status ring whichever lens is open, and the
+ * selection checkbox has one consistent place to land.
  */
 import { defaultEntityDisplay } from '@docket/types';
 import { IdentityGlyph } from '@docket/ui/components';
 import { Layers } from '@docket/ui/icons';
 import type { ViewTarget } from '@docket/work/view-contract';
-import type { JSX } from 'react';
+import type { CSSProperties, JSX } from 'react';
 
 import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
 import type { useWorkStatusResolver } from '@/components/entity-display/use-work-status';
@@ -35,6 +33,8 @@ export interface RowIdentityProps {
    * steps up the scale. One rule — rows at 32, cards at 40 — rather than a size per target.
    */
   readonly size?: number | undefined;
+  /** Tone classes for the circle, e.g. a health tint. Ignored by targets with a chosen icon. */
+  readonly className?: string | undefined;
 }
 
 /**
@@ -49,7 +49,15 @@ export interface RowIdentityProps {
  *
  * @param props - The {@link RowIdentityProps}.
  */
-export function RowIdentity({ row, statusOf, size = 32 }: RowIdentityProps): JSX.Element {
+export function RowIdentity({
+  row,
+  statusOf,
+  size = 32,
+  className = '',
+}: RowIdentityProps): JSX.Element {
+  // Half the circle, the ratio EntityIconGlyph already derives — so a Task's ring and a Program's
+  // mark do not read lighter than a Project's at the same diameter.
+  const iconSize = Math.round(size * 0.5);
   if (row.target === 'project' || row.target === 'initiative') {
     const display = row.display ?? defaultEntityDisplay(row.target, row.id);
     return (
@@ -63,15 +71,19 @@ export function RowIdentity({ row, statusOf, size = 32 }: RowIdentityProps): JSX
   }
   if (row.target === 'program') {
     return (
-      <IdentityGlyph size={size}>
-        <Layers className="size-4" />
+      <IdentityGlyph size={size} className={className}>
+        <Layers style={{ width: iconSize, height: iconSize }} />
       </IdentityGlyph>
     );
   }
   const status = statusOf(row.status);
   return (
-    <IdentityGlyph size={size}>
-      <WorkStatusIcon name={status.name} category={status.category} />
+    <IdentityGlyph size={size} className={className}>
+      <WorkStatusIcon
+        name={status.name}
+        category={status.category}
+        style={{ '--status-icon-size': `${iconSize}px` } as CSSProperties}
+      />
     </IdentityGlyph>
   );
 }

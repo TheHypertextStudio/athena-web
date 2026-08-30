@@ -22,6 +22,31 @@ const THRESHOLDS: readonly [limit: number, unit: Intl.RelativeTimeFormatUnit, se
 ];
 
 /**
+ * The two `Intl` formatters, built once each on first use.
+ *
+ * @remarks
+ * Constructing an `Intl` formatter is expensive next to formatting with one — roughly thirty times
+ * the cost per call — and this runs once per roster item per render. They are created lazily rather
+ * than at module scope so importing this module stays free for callers that never format anything.
+ */
+let relative: Intl.RelativeTimeFormat | undefined;
+let absolute: Intl.DateTimeFormat | undefined;
+
+function relativeFormatter(): Intl.RelativeTimeFormat {
+  relative ??= new Intl.RelativeTimeFormat(undefined, { numeric: 'auto', style: 'short' });
+  return relative;
+}
+
+function absoluteFormatter(): Intl.DateTimeFormat {
+  absolute ??= new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+  return absolute;
+}
+
+/**
  * Format an ISO timestamp as a relative "… ago" stamp, or an absolute date when old.
  *
  * @param iso - The ISO timestamp to format.
@@ -37,14 +62,9 @@ export function relativeTime(iso: string, now: Date = new Date()): string {
 
   for (const [limit, unit, secs] of THRESHOLDS) {
     if (abs < limit) {
-      const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto', style: 'short' });
-      return rtf.format(Math.round(diffSecs / secs), unit);
+      return relativeFormatter().format(Math.round(diffSecs / secs), unit);
     }
   }
 
-  return new Date(iso).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
+  return absoluteFormatter().format(new Date(iso));
 }

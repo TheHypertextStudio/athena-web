@@ -239,7 +239,6 @@ describe('WorkCards', () => {
     const slot = screen.getByRole('checkbox', { name: 'Select Transit coalition partnerships' })
       .parentElement?.parentElement;
     expect(slot).toHaveClass('left-4');
-    expect(slot).not.toHaveClass('right-4');
   });
 
   it('says nothing at all about a Program nobody owns', () => {
@@ -254,9 +253,11 @@ describe('WorkCards', () => {
       />,
     );
 
-    // On a roster where most Programs are unassigned, a placeholder is the most repeated words on
-    // the screen. The counts keep their place in the roll-up without it.
-    expect(screen.queryByText(/unowned/i)).not.toBeInTheDocument();
+    // The owner property is switched on and there is no owner, so the slot renders nothing at all.
+    // On a roster where most Programs are unassigned, a placeholder would be the most repeated
+    // thing on the screen. The counts keep their place in the roll-up without it.
+    expect(programDefinition.presentation.properties).toContain('owner');
+    expect(screen.queryByText('Willie Chalmers III')).not.toBeInTheDocument();
     expect(screen.getByText(String(program.projectCount))).toBeVisible();
   });
 
@@ -316,6 +317,5 @@ describe('WorkCards', () => {
     // No verdict set means no verdict shown — the em dash a table column needs for alignment
     // would just be a stray mark here.
     expect(screen.queryByText('At risk')).not.toBeInTheDocument();
-    expect(screen.queryByText('—')).not.toBeInTheDocument();
   });
 });

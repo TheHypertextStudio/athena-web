@@ -124,7 +124,7 @@ export function WorkCards<TTarget extends ViewTarget>({
       <div
         role="list"
         aria-label={`${target.charAt(0).toUpperCase()}${target.slice(1)} cards`}
-        className={cn(CARD_GRID_CLASS, 'p-1')}
+        className={CARD_GRID_CLASS}
       >
         {rows.map((row) => (
           <WorkObjectCard
@@ -136,19 +136,11 @@ export function WorkCards<TTarget extends ViewTarget>({
             }}
           >
             {/*
-             * Laid over the card's leading glyph, which fades beneath it. It stays outside the
-             * link so a click selects instead of navigating, and its inset matches the content's
-             * so it lands in the column rather than the gutter — it used to be pinned to
-             * whichever corner the target happened to prefer.
+             * Laid over the card's leading glyph, which fades beneath it, and outside the link so
+             * a click selects instead of navigating. Its inset matches the content's, so it lands
+             * in the column rather than the gutter.
              */}
-            <span
-              className={cn(
-                selecting || selectedIds.has(row.id)
-                  ? 'opacity-100'
-                  : 'opacity-0 group-focus-within/card:opacity-100 group-hover/card:opacity-100',
-                'absolute top-4 left-4 z-10 flex size-10 items-center justify-center transition-opacity',
-              )}
-            >
+            <span className="absolute top-4 left-4 z-10 flex size-10 items-center justify-center opacity-0 transition-opacity group-focus-within/card:opacity-100 group-hover/card:opacity-100 group-data-[selecting=true]/card:opacity-100">
               <Checkbox
                 aria-label={`Select ${workViewRowTitle(row)}`}
                 checked={selectedIds.has(row.id)}

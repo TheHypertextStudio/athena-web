@@ -47,7 +47,7 @@ import { openEntity } from '@/lib/local-first-navigation';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, type RpcResponse, useApiQuery } from '@/lib/query';
 
-import { CARD_GRID_CLASS, CARD_MIN_HEIGHT } from './card-styles';
+import { CARD_GRID_CLASS, CARD_INSET, CARD_MIN_HEIGHT } from './card-styles';
 import { InitiativeTimeline } from './initiative-timeline';
 import { ProjectDependencyLens } from './project-dependency-lens';
 import { ProjectTimelineAdapter } from './project-timeline-adapter';
@@ -332,19 +332,18 @@ export function WorkViewPage<TTarget extends ViewTarget>({
       />
     );
   } else if (controller.loading && layout === 'cards') {
-    // Placeholder: the cards themselves — how many there are, and each one's name, summary,
-    // verdict and activity. Shaped like the loaded card on the loaded card's own grid, because a
-    // list-shaped placeholder under a card lens does not fill in so much as rearrange itself.
+    // placeholder: the cards themselves — how many there are, and each one's name, summary,
+    // verdict, owner and rolled-up counts. Shaped like the loaded card, on the loaded card's own
+    // grid, because a list-shaped stand-in under a card lens does not fill in so much as
+    // rearrange itself.
     content = (
-      <div
-        className={cn(CARD_GRID_CLASS, 'p-1')}
-        aria-label={`Loading ${copy.title.toLowerCase()}`}
-      >
+      <div className={CARD_GRID_CLASS} aria-label={`Loading ${copy.title.toLowerCase()}`}>
         {Array.from({ length: 6 }, (_, index) => (
           <div
             key={index}
             className={cn(
-              'bg-surface-container-low flex flex-col gap-3 rounded-xl p-4',
+              'bg-surface-container-low flex flex-col gap-3 rounded-xl',
+              CARD_INSET,
               CARD_MIN_HEIGHT,
             )}
           >

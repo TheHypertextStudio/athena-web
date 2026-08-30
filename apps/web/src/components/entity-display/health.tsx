@@ -5,15 +5,13 @@
  *
  * @remarks
  * `on_track | at_risk | off_track` is the same judgment on a Project, a Program, and an
- * Initiative, so it should look the same on all three. It did not: the roster list carried its
- * own label + colour records, the Programs card carried a dot-only variant that left the label
- * grey, and `programs/`, `projects/`, and `initiatives/` each kept a near-identical token module.
- * Four spellings of one verdict is four chances for them to drift apart.
+ * Initiative, so it should look the same on all three, and the work-view lenses read it from here.
+ * `projects/health.ts`, `project-detail/health.ts`, and `initiatives/health.ts` still hold their
+ * own byte-identical copies; migrating those and deleting them is the remaining work.
  *
  * Health is one of the few things the colour budget is spent on (craft rubric §5 — colour is
- * earned by semantics), which is exactly why it should be spent the same way every time. The
- * colour lives on the label itself rather than only on a 6px dot, so the verdict survives being
- * read at a glance.
+ * earned by semantics), which is why the colour sits on the label itself rather than only on a 6px
+ * dot: the verdict has to survive being read at a glance.
  */
 import type { Health } from '@docket/types';
 import { cn } from '@docket/ui/lib/utils';
@@ -56,7 +54,7 @@ export const HEALTH_GLYPH_CLASS: Record<Health, string> = {
 };
 
 /** The label colour paired with each {@link HEALTH_DOT_CLASS} fill. */
-export const HEALTH_TEXT_CLASS: Record<Health, string> = {
+const HEALTH_TEXT_CLASS: Record<Health, string> = {
   on_track: 'text-state-completed',
   at_risk: 'text-state-canceled',
   off_track: 'text-error',
@@ -66,8 +64,6 @@ export const HEALTH_TEXT_CLASS: Record<Health, string> = {
 export interface HealthLabelProps {
   /** The verdict, or `null` when nobody has set one. */
   readonly health: Health | null;
-  /** Extra classes merged after the token colour and type role. */
-  readonly className?: string | undefined;
 }
 
 /**
@@ -76,18 +72,12 @@ export interface HealthLabelProps {
  * @param props - The {@link HealthLabelProps}.
  * @returns the verdict, or an em dash when it is unset.
  */
-export function HealthLabel({ health, className }: HealthLabelProps): JSX.Element {
+export function HealthLabel({ health }: HealthLabelProps): JSX.Element {
   if (!health) {
-    return <span className={cn('text-on-surface-variant', className)}>—</span>;
+    return <span className="text-on-surface-variant">—</span>;
   }
   return (
-    <span
-      className={cn(
-        HEALTH_TEXT_CLASS[health],
-        'text-label-medium flex items-center gap-2',
-        className,
-      )}
-    >
+    <span className={cn(HEALTH_TEXT_CLASS[health], 'text-label-medium flex items-center gap-2')}>
       <span
         aria-hidden="true"
         className={cn(HEALTH_DOT_CLASS[health], 'size-1.5 shrink-0 rounded-full')}

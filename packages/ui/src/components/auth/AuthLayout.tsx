@@ -25,6 +25,7 @@
 import type * as React from 'react';
 
 import { cn } from '../../lib/utils';
+import { surfaceToneColor } from '../../primitives';
 
 /** Props for {@link AuthLayout}. */
 export interface AuthLayoutProps {
@@ -60,14 +61,15 @@ export function AuthLayout({
     // inset was charging ~40px a side for the privilege of drawing a border nobody can see against
     // a full-height card. The card goes edge-to-edge there and only becomes a card — max width,
     // radius, border, shadow, canvas around it — once there is width to spare.
-    <main className="bg-surface-container text-on-surface @container min-h-dvh">
+    <main className={cn(surfaceToneColor('canvas'), '@container min-h-dvh')}>
       {/* A container query cannot target the element that declares the container, so the centring
           lives on this descendant rather than on <main> — as a class on <main> it silently never
           matched and the card sat pinned to the top-left. */}
       <div className="flex min-h-dvh flex-col @md:items-center @md:justify-center @md:px-4 @md:py-8">
         <div
           className={cn(
-            'bg-surface flex min-h-dvh w-full flex-col justify-center gap-6 px-5 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))]',
+            surfaceToneColor('page'),
+            'flex min-h-dvh w-full flex-col justify-center gap-6 px-5 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))]',
             // A floor height rather than hugging the content, which made the card a squat
             // letterbox on a desktop viewport once the two columns halved its height.
             'border-outline-variant @md:min-h-80 @md:max-w-md @md:rounded-xl @md:border @md:p-6 @md:shadow-sm',

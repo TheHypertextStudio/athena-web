@@ -33,6 +33,7 @@
 import * as React from 'react';
 
 import { cn } from '../../lib/utils';
+import { surfaceToneColor } from '../../primitives';
 
 /** Stable id for the docked panel host, referenced by the activity bar's `aria-controls`. */
 export const SHELL_ASIDE_ID = 'shell-aside';
@@ -184,7 +185,8 @@ export function ShellAside({ panel, collapsed }: ShellAsideProps): React.JSX.Ele
         // separation, and a second shadowed box beside `<main>` framed the content twice); width is
         // the only animated property, and it's a flex sibling of `<main>`, so the panel reflows in one
         // continuous motion. Collapsed → zero width; the always-visible activity bar is the reopen.
-        'bg-surface @container hidden h-full min-h-0 shrink-0 overflow-hidden rounded-xl lg:block',
+        surfaceToneColor('page'),
+        '@container hidden h-full min-h-0 shrink-0 overflow-hidden rounded-xl lg:block',
         animating && 'transition-[width] duration-(--dur-slow) ease-in-out',
         open ? RAIL_WIDTH_CLASS : 'w-0',
       )}

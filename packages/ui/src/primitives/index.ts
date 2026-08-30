@@ -190,7 +190,14 @@ export type {
 } from './overlay-contract';
 export { VirtualMenuSurface, type VirtualMenuSurfaceProps } from './virtual-menu-surface';
 export { Separator } from './separator';
-export { Surface, type SurfaceElement, type SurfaceProps, type SurfaceTone } from './surface';
+export {
+  Surface,
+  surfaceToneColor,
+  surfaceToneVariable,
+  type SurfaceElement,
+  type SurfaceProps,
+  type SurfaceTone,
+} from './surface';
 export { Skeleton, SkeletonChip, SkeletonGlyph, SkeletonText } from './skeleton';
 export type { SkeletonTextProps, SkeletonTextScale } from './skeleton';
 export {

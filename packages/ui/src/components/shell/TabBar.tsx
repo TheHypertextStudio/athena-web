@@ -47,7 +47,8 @@
  */
 import * as React from 'react';
 
-import { TooltipProvider } from '../../primitives';
+import { cn } from '../../lib/utils';
+import { surfaceToneColor, TooltipProvider } from '../../primitives';
 
 import { TabItem } from './tab-item';
 import { OverflowMenu } from './tab-overflow-menu';
@@ -99,7 +100,10 @@ export function TabBar({
         panel is full-bleed there and a pill hugging the bezel has no breathing room.
       */}
       <div
-        className={`no-print bg-surface-container flex ${TAB_BAR_BLOCK_SIZE_CLASS} shrink-0 items-center overflow-hidden pr-2 lg:pr-0`}
+        className={cn(
+          surfaceToneColor('canvas'),
+          `no-print flex ${TAB_BAR_BLOCK_SIZE_CLASS} shrink-0 items-center overflow-hidden pr-2 lg:pr-0`,
+        )}
       >
         <div
           role="tablist"

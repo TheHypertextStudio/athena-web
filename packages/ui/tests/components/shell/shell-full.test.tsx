@@ -515,9 +515,10 @@ describe('AppShell rail', () => {
     const overlay = await screen.findByRole('dialog', { name: 'Tasks' });
     expect(within(overlay).getByText('Task list')).toBeInTheDocument();
     expect(overlay).toHaveAttribute('data-surface-tone', 'floating');
-    expect(within(overlay).getByText('Task list').parentElement).toHaveAttribute(
+    // The shell body clips only. A rail panel, such as Focus, owns its own one scroll region so
+    // desktop and mobile never create parent-and-child vertical scrollbars for the same content.
+    expect(within(overlay).getByText('Task list').parentElement).not.toHaveAttribute(
       'data-overlay-scroll-owner',
-      '',
     );
     expect(within(overlay).getByTestId('shell-utility-pane-bar')).toHaveClass(
       'min-h-12',

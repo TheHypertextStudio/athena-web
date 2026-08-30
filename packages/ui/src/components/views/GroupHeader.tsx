@@ -22,6 +22,7 @@ import * as React from 'react';
 import { ChevronDown, ChevronRight } from '../../icons';
 import { cn } from '../../lib/utils';
 import { focusRingInset } from '../../primitives/focus';
+import { surfaceToneColor } from '../../primitives/surface';
 
 /** Props for {@link GroupHeader}. */
 export interface GroupHeaderProps {
@@ -72,7 +73,8 @@ export function GroupHeader({
       aria-expanded={expanded}
       data-level={level}
       className={cn(
-        'border-outline-variant bg-surface-container text-on-surface hover:bg-surface-container-high text-body-medium flex h-9 w-full cursor-pointer items-center gap-2 border-b px-3 font-medium transition-colors outline-none select-none',
+        surfaceToneColor('canvas'),
+        'border-outline-variant hover:bg-surface-container-high text-body-medium flex h-9 w-full cursor-pointer items-center gap-2 border-b px-3 font-medium transition-colors outline-none select-none',
         focusRingInset,
         className,
       )}

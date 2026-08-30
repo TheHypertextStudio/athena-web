@@ -20,6 +20,7 @@ import * as React from 'react';
 
 import { cn } from '../../lib/utils';
 import { focusRingInset } from '../../primitives/focus';
+import { surfaceToneColor } from '../../primitives/surface';
 import { useListKeyboard } from '../../hooks/useListKeyboard';
 import { GroupHeader } from './GroupHeader';
 
@@ -426,7 +427,8 @@ export function EntityTable<T>({
       tabIndex={0}
       onKeyDown={handleGridKeyDown}
       className={cn(
-        'border-outline-variant bg-surface @container/table flex w-full flex-col overflow-x-auto rounded-xl border outline-none',
+        surfaceToneColor('page'),
+        'border-outline-variant @container/table flex w-full flex-col overflow-x-auto rounded-xl border outline-none',
         virtualized ? 'relative h-full min-h-0 overflow-y-auto' : 'overflow-y-hidden',
         focusRingInset,
         className,

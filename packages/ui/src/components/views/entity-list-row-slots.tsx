@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { cn } from '../../lib/utils';
+import { surfaceToneColor } from '../../primitives/surface';
 
 /** Props for {@link RowMeta}. */
 export interface RowMetaProps {
@@ -63,7 +64,8 @@ export function RowProgress({
       aria-valuenow={Math.round(clamped)}
       aria-label={label}
       className={cn(
-        'bg-surface-container relative inline-block h-1.5 w-16 overflow-hidden rounded-full align-middle',
+        surfaceToneColor('canvas'),
+        'relative inline-block h-1.5 w-16 overflow-hidden rounded-full align-middle',
         className,
       )}
     >
@@ -136,8 +138,8 @@ export function EntityList({
         className={cn(
           'flex w-full flex-col rounded-xl',
           tone === 'bordered'
-            ? 'border-outline-variant bg-surface overflow-hidden border'
-            : 'bg-surface-container-low p-2',
+            ? [surfaceToneColor('page'), 'border-outline-variant overflow-hidden border']
+            : [surfaceToneColor('card'), 'p-2'],
           className,
         )}
       >

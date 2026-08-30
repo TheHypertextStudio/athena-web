@@ -81,7 +81,14 @@ import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { readStoredBoolean, readStoredString, writeStoredValue } from '../../lib/browser-storage';
 import { Menu, X } from '../../icons';
 import { cn } from '../../lib/utils';
-import { Sheet, SheetBody, SheetClose, SheetContent, SheetTitle } from '../../primitives';
+import {
+  Sheet,
+  SheetBody,
+  SheetClose,
+  SheetContent,
+  SheetTitle,
+  surfaceToneColor,
+} from '../../primitives';
 import { MobilePanelSwitcher } from './MobilePanelSwitcher';
 import { useContextState } from './ContextProvider';
 import {
@@ -565,7 +572,8 @@ export function AppShell({
           // the notch. They resolve to `0px` everywhere else, so this is inert in a browser tab.
           // Top and bottom insets are applied to the mobile bar and `<main>` rather than here, so the
           // canvas colour still bleeds edge to edge behind the status bar.
-          'bg-surface-container text-on-surface flex h-dvh w-full flex-col overflow-hidden pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)] lg:flex-row lg:gap-2 lg:p-2',
+          surfaceToneColor('canvas'),
+          'flex h-dvh w-full flex-col overflow-hidden pr-[env(safe-area-inset-right)] pl-[env(safe-area-inset-left)] lg:flex-row lg:gap-2 lg:p-2',
           className,
         )}
       >
@@ -574,7 +582,10 @@ export function AppShell({
           to the page content (the `<main>` region below is a focus target via `tabIndex={-1}`). */}
         <a
           href="#main-content"
-          className="bg-surface text-on-surface border-outline-variant focus-visible:ring-ring text-body-medium sr-only z-50 rounded-md border px-3 py-2 font-medium shadow-sm transition-colors focus-visible:not-sr-only focus-visible:absolute focus-visible:top-2 focus-visible:left-2 focus-visible:ring-2 focus-visible:outline-none"
+          className={cn(
+            surfaceToneColor('page'),
+            'border-outline-variant focus-visible:ring-ring text-body-medium sr-only z-50 rounded-md border px-3 py-2 font-medium shadow-sm transition-colors focus-visible:not-sr-only focus-visible:absolute focus-visible:top-2 focus-visible:left-2 focus-visible:ring-2 focus-visible:outline-none',
+          )}
         >
           Skip to content
         </a>
@@ -673,7 +684,8 @@ export function AppShell({
               // `surface` is the separation, exactly as every other panel in the shell does it. A
               // border plus a drop shadow on the outermost frame drew a second box around content
               // that already had one.
-              'bg-surface @container min-h-0 flex-1 outline-none lg:rounded-xl',
+              surfaceToneColor('page'),
+              '@container min-h-0 flex-1 outline-none lg:rounded-xl',
               // The default: `<main>` is the shell's one scroll container, with a stable gutter so
               // content does not shift when it grows past the viewport.
               pageScrollOwner === 'shell' &&
@@ -762,7 +774,7 @@ export function AppShell({
               inset="none"
               scroll="visible"
               data-slot="shell-utility-pane-body"
-              className="@container overflow-hidden"
+              className="@container"
             >
               {activePanel?.node}
             </SheetBody>

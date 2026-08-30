@@ -439,8 +439,12 @@
   cover preservation and clearing, every searchable native display type, the uncustomized
   fallback, non-native search results, and cross-workspace parent visibility before and after a
   Better Auth user joins the parent workspace. The three focused API suites pass 76 tests, and the
-  display route reaches all eight branches. Checkout remains disabled, and the shadow observation
-  clock still ends at `2026-08-30T21:49:02Z`.
+  display route reaches all eight branches. A later exact-main run exposed duplicate Project
+  aggregate reads after restore because the broad cache invalidation also refetched the exact
+  aggregate. Recovery now fetches that authoritative aggregate once, then invalidates every other
+  Project projection without blocking the result. The focused recovery, invalidation, and composer
+  suites pass 61 tests. Checkout remains disabled, and the shadow observation clock still ends at
+  `2026-08-30T21:49:02Z`.
 - **Decisions**: Checkout derives the customer email from the Better Auth server session and
   rejects a browser-supplied email. Stripe's Dashboard-only existing-subscriber redirect requires
   a recorded verification timestamp before `BILLING_ENABLED=true` can pass configuration. Docket

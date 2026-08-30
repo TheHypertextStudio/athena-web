@@ -1,5 +1,5 @@
 import type { ViewTarget } from '@docket/work/view-contract';
-import type { QueryClient, QueryKey } from '@tanstack/react-query';
+import { hashKey, type QueryClient, type QueryKey } from '@tanstack/react-query';
 
 import { workTargetCollectionKey } from './query-keys';
 
@@ -7,6 +7,8 @@ import { workTargetCollectionKey } from './query-keys';
 export interface WorkTargetInvalidation {
   readonly target: ViewTarget;
   readonly ownerOrganizationId: string;
+  /** One authoritative query that the caller refreshes separately. */
+  readonly excludeQueryKey?: QueryKey;
 }
 
 function beginsWith(queryKey: QueryKey, prefix: QueryKey): boolean {
@@ -46,9 +48,13 @@ export function invalidateWorkTargetQueries(
     invalidation.ownerOrganizationId,
     invalidation.target,
   );
+  const excludedQueryHash = invalidation.excludeQueryKey
+    ? hashKey(invalidation.excludeQueryKey)
+    : null;
   return queryClient.invalidateQueries({
     predicate: (query) =>
-      beginsWith(query.queryKey, ownerCollection) ||
-      isTargetProjection(query.queryKey, invalidation.target),
+      query.queryHash !== excludedQueryHash &&
+      (beginsWith(query.queryKey, ownerCollection) ||
+        isTargetProjection(query.queryKey, invalidation.target)),
   });
 }

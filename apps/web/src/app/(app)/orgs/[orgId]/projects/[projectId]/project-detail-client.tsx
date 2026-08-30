@@ -138,19 +138,22 @@ export async function refreshRestoredProject<TData, TQueryKey extends QueryKey>(
   readonly aggregateQuery: FetchQueryOptions<TData, Error, TData, TQueryKey>;
   readonly ownerOrganizationId: string;
 }): Promise<'ready' | 'not-found' | 'cache-error'> {
-  await invalidateWorkTargetQueries(input.queryClient, {
+  let result: 'ready' | 'not-found' | 'cache-error';
+  try {
+    await input.queryClient.fetchQuery({ ...input.aggregateQuery, staleTime: 0 });
+    result = 'ready';
+  } catch (error) {
+    result = terminalDetailFailure(error) === 'not-found' ? 'not-found' : 'cache-error';
+  }
+  void invalidateWorkTargetQueries(input.queryClient, {
     target: 'project',
     ownerOrganizationId: input.ownerOrganizationId,
+    excludeQueryKey: input.aggregateQuery.queryKey,
   }).catch(() => undefined);
   void input.queryClient
     .invalidateQueries({ queryKey: queryKeys.portfolio() })
     .catch(() => undefined);
-  try {
-    await input.queryClient.fetchQuery({ ...input.aggregateQuery, staleTime: 0 });
-    return 'ready';
-  } catch (error) {
-    return terminalDetailFailure(error) === 'not-found' ? 'not-found' : 'cache-error';
-  }
+  return result;
 }
 
 /** Convert an agent activity payload into its one-line project activity summary. */

@@ -167,6 +167,28 @@ describe('work target invalidation', () => {
     for (const unsubscribe of unsubscribes) unsubscribe();
   });
 
+  it('excludes one separately refreshed query while refetching the rest of its Project family', async () => {
+    const queryClient = testClient();
+    const aggregateKey = queryKeys.projectAggregate('owner-b', 'project-1');
+    const aggregate = vi.fn(async () => ({ source: 'aggregate' }));
+    const overview = vi.fn(async () => ({ source: 'overview' }));
+    const unsubscribes = observeSeededQueries(queryClient, [
+      { queryKey: aggregateKey, queryFn: aggregate },
+      { queryKey: queryKeys.projects('owner-b'), queryFn: overview },
+    ]);
+
+    await invalidateWorkTargetQueries(queryClient, {
+      target: 'project',
+      ownerOrganizationId: 'owner-b',
+      excludeQueryKey: aggregateKey,
+    });
+
+    expect(aggregate).not.toHaveBeenCalled();
+    expect(queryClient.getQueryState(aggregateKey)?.isInvalidated).toBe(false);
+    expect(overview).toHaveBeenCalledOnce();
+    for (const unsubscribe of unsubscribes) unsubscribe();
+  });
+
   it('marks an inactive cached roster stale without fetching it or creating missing projections', async () => {
     const queryClient = testClient();
     const inactiveRosterKey = queryKeys.workView(

@@ -169,7 +169,9 @@ describe('Projects experience contract', () => {
     // a compact segmented toggle — but a standalone tab bar still lands on 40px.
     const tabs = source(join(root, 'packages/ui/src/primitives/tabs.tsx'));
     expect(tabs).toContain("useControlSize(undefined, 'xl')");
-    expect(tabs).not.toContain('min-h-10');
+    // No hardcoded height anywhere in the primitive — including the invisible clone the overflow
+    // logic measures, which would otherwise size a tab that is not the one being rendered.
+    expect(tabs).not.toMatch(/\bmin-h-\d/);
   });
 
   it('uses full-width heading-free documents and canonical MD3 prose hierarchy', () => {

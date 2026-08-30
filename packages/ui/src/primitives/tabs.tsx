@@ -407,6 +407,14 @@ function OverflowTabList({
   );
 }
 
+/**
+ * An invisible clone of one tab, measured to decide what fits before overflow collapses the rest.
+ *
+ * @remarks
+ * It resolves the same metrics {@link Tab} does. Hardcoding a size here would measure a tab that is
+ * not the one being rendered as soon as an enclosing `ControlGroup` sets a different step, and the
+ * overflow point would be computed from the wrong widths.
+ */
 function TabMeasurement({
   item,
   refs,
@@ -414,6 +422,7 @@ function TabMeasurement({
   item: TabsItem;
   refs: React.RefObject<Map<string, HTMLButtonElement>>;
 }): React.JSX.Element {
+  const metrics = CONTROL[useControlSize(undefined, 'xl')];
   return (
     <button
       ref={(element) => {
@@ -424,7 +433,14 @@ function TabMeasurement({
         }
       }}
       type="button"
-      className="text-label-large inline-flex min-h-10 items-center gap-2 rounded-md px-3 py-1.5"
+      className={cn(
+        'inline-flex items-center py-1.5',
+        metrics.minHeight,
+        metrics.paddingX,
+        metrics.gap,
+        typeClass(metrics.labelToken),
+        CONTROL_RADIUS,
+      )}
     >
       <span>{item.label}</span>
       {item.count !== undefined ? (

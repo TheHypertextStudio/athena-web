@@ -323,6 +323,7 @@ async function bootstrapAuthzSchema(client: PGlite): Promise<void> {
       archived_at timestamp,
       title text not null,
       description text,
+      summary text,
       team_id text not null,
       state text not null,
       status_id text not null,

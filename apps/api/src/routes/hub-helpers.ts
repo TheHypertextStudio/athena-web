@@ -88,18 +88,6 @@ export async function taskCategoriesFor(
   return resolved;
 }
 
-/**
- * toTaskItem converts internal API route data into the public API response shape.
- *
- * @remarks
- * The Hub gathers work from every workspace the reader belongs to, each naming its own statuses,
- * so the status *category* travels with the row. A reader of a Hub item has no single workspace
- * whose statuses it could look the key up in.
- *
- * @param t - The task row.
- * @param stateType - The category of the task's status, resolved by the caller in bulk.
- * @returns the serialized Hub task item.
- */
 /** Longest summary a Hub row carries. One line at a readable measure. */
 const SUMMARY_MAX = 140;
 
@@ -157,6 +145,18 @@ function taskSummary(description: string | null): string | null {
   return `${(lastSpace > SUMMARY_MAX * 0.6 ? clipped.slice(0, lastSpace) : clipped).trimEnd()}…`;
 }
 
+/**
+ * toTaskItem converts internal API route data into the public API response shape.
+ *
+ * @remarks
+ * The Hub gathers work from every workspace the reader belongs to, each naming its own statuses,
+ * so the status *category* travels with the row. A reader of a Hub item has no single workspace
+ * whose statuses it could look the key up in.
+ *
+ * @param t - The task row.
+ * @param stateType - The category of the task's status, resolved by the caller in bulk.
+ * @returns the serialized Hub task item.
+ */
 export function toTaskItem(t: TaskRow, stateType: WorkStatusCategory): z.input<typeof HubTaskItem> {
   return {
     id: t.id,

@@ -100,11 +100,69 @@ export async function taskCategoriesFor(
  * @param stateType - The category of the task's status, resolved by the caller in bulk.
  * @returns the serialized Hub task item.
  */
+/** Longest summary a Hub row carries. One line at a readable measure. */
+const SUMMARY_MAX = 140;
+
+/** Markdown syntax that carries no meaning once the text is one plain line. */
+const MARKDOWN_NOISE: readonly (readonly [RegExp, string])[] = [
+  [/```[\s\S]*?```/g, ' '], // fenced code
+  [/`([^`]+)`/g, '$1'], // inline code
+  [/!\[[^\]]*\]\([^)]*\)/g, ' '], // images
+  [/\[([^\]]+)\]\([^)]*\)/g, '$1'], // links keep their text
+  [/^\s{0,3}#{1,6}\s+.*$/gm, ' '], // headings: a label, not a summary — drop the whole line
+  [/^\s{0,3}>\s?/gm, ''], // block quotes
+  [/^\s{0,3}(?:[-*+]|\d+\.)\s+/gm, ''], // list markers
+  [/\*\*([^*]+)\*\*/g, '$1'], // bold
+  [/(?<!\*)\*([^*]+)\*(?!\*)/g, '$1'], // italic
+  [/^\s{0,3}(?:[-*_]\s*){3,}$/gm, ' '], // rules
+];
+
+/**
+ * Reduce a Task description to the one line that tells someone what the task is.
+ *
+ * @remarks
+ * This is the **fallback**, used only when `task.summary` is null. A written summary always wins;
+ * this is what a row shows when nothing has produced one.
+ *
+ * A description's opening sentence is conventionally its statement of intent, so it is what a
+ * person scanning a list needs; the rest is detail they open the task for. Truncating the raw body
+ * at a character count instead cuts mid-word, and on a description that opens with a heading or a
+ * checklist it returns punctuation rather than a sentence.
+ *
+ * Heading lines are dropped whole rather than unwrapped. A heading names a section; keeping its
+ * text merely glued a label to the sentence after it ("Print review Check the fold registration…").
+ *
+ * Markdown is stripped first so the line reads as prose rather than as source. Generating a summary
+ * here instead would mean a model call per row on a list endpoint, and would make the same row read
+ * differently on each load; that belongs on the write path, which is why `task.summary` exists.
+ *
+ * @param description - The stored description, which may be Markdown and may be absent.
+ * @returns one plain-text line, or null when the description holds no prose.
+ */
+function taskSummary(description: string | null): string | null {
+  if (!description) return null;
+  let text = description;
+  for (const [pattern, replacement] of MARKDOWN_NOISE) text = text.replace(pattern, replacement);
+  const flat = text.replace(/\s+/g, ' ').trim();
+  if (flat.length === 0) return null;
+
+  // The first sentence, when the text actually has sentence punctuation before the cap.
+  const sentence = /^(.+?[.!?])(?:\s|$)/.exec(flat.slice(0, SUMMARY_MAX + 40));
+  if (sentence?.[1] && sentence[1].length <= SUMMARY_MAX) return sentence[1];
+
+  if (flat.length <= SUMMARY_MAX) return flat;
+  // Otherwise cut on a word boundary rather than mid-word.
+  const clipped = flat.slice(0, SUMMARY_MAX);
+  const lastSpace = clipped.lastIndexOf(' ');
+  return `${(lastSpace > SUMMARY_MAX * 0.6 ? clipped.slice(0, lastSpace) : clipped).trimEnd()}…`;
+}
+
 export function toTaskItem(t: TaskRow, stateType: WorkStatusCategory): z.input<typeof HubTaskItem> {
   return {
     id: t.id,
     organizationId: t.organizationId,
     title: t.title,
+    summary: t.summary ?? taskSummary(t.description),
     state: t.state,
     stateType,
     priority: t.priority,

@@ -593,6 +593,7 @@ Side effects: emits a \`created\` observation onto the org's activity stream, an
             organizationId: orgId,
             title: body.title,
             description: body.description,
+            summary: body.summary ?? null,
             teamId: body.teamId,
             statusId,
             state,
@@ -1545,6 +1546,7 @@ Changing \`state\` runs the team's workflow-state transition: the key is validat
       const patch = {
         ...(body.title !== undefined ? { title: body.title } : {}),
         ...(body.description !== undefined ? { description: body.description } : {}),
+        ...(body.summary !== undefined ? { summary: body.summary } : {}),
         ...(statePatch !== undefined
           ? {
               statusId: statePatch.statusId,

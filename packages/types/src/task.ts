@@ -149,6 +149,13 @@ export const TaskCreate = z
       .string()
       .optional()
       .describe('Optional long-form body for the task (markdown). Omit for a title-only task.'),
+    summary: z
+      .string()
+      .max(200)
+      .optional()
+      .describe(
+        'Optional one-line statement of what the task is, written for someone scanning a list. Distinct from `description`, which is the full body. Set this when creating work on a person\u2019s behalf so Hub surfaces can say something useful without summarizing the body on every read.',
+      ),
     teamId: TeamId.describe(
       "The owning team. Required — a task always belongs to exactly one team, and the team's `workflow_states` define the states this task may occupy. Must reference a team in the caller's org.",
     ),
@@ -338,6 +345,13 @@ export const TaskOut = z
       .nullable()
       .optional()
       .describe('Long-form body (markdown); null when unset.'),
+    summary: z
+      .string()
+      .nullable()
+      .optional()
+      .describe(
+        'One-line statement of what the task is, for list surfaces; null when nothing has written one. Hub rows fall back to a lead-sentence extract of `description` when this is null.',
+      ),
     teamId: TeamId.describe(
       "The owning team, whose `workflow_states` define this task's allowed states.",
     ),
@@ -413,6 +427,14 @@ export const TaskUpdate = z
       .string()
       .optional()
       .describe('New long-form body (markdown). Omit to leave unchanged.'),
+    summary: z
+      .string()
+      .max(200)
+      .nullable()
+      .optional()
+      .describe(
+        'New one-line summary for list surfaces, or null to clear it and fall back to a lead-sentence extract of `description`. Omit to leave unchanged.',
+      ),
     state: z
       .string()
       .optional()

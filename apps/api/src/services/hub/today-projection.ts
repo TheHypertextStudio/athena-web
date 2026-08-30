@@ -25,7 +25,10 @@ export interface TodayPlanCandidate {
   readonly timeboxEndsAt: string | null;
   readonly blocked: boolean;
   readonly dependencyImpact: number;
-  readonly reason: string;
+  /** A one-line extract of the task's description, or null when it has none. */
+  readonly summary: string | null;
+  /** Why this item sits where it does, or null when its position is simply the accepted order. */
+  readonly reason: string | null;
 }
 
 /** Relevance facts for one visible Project or Initiative status candidate. */

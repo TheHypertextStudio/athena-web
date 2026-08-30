@@ -57,6 +57,12 @@ export const HubTaskItem = z
       'The org the Task belongs to (its org chip) — set on every item so the cross-org view never merges tenants.',
     ),
     title: z.string().describe('The Task title.'),
+    summary: z
+      .string()
+      .nullable()
+      .describe(
+        "A short plain-text excerpt of the Task's description, or null when it has none. Bounded server-side so a Hub row never carries a whole document.",
+      ),
     state: z
       .string()
       .describe(
@@ -176,7 +182,10 @@ export const HubTodayPlanItem = HubTaskItem.extend({
     .describe('Count of incomplete tasks this task directly unblocks.'),
   reason: z
     .string()
-    .describe('Application-owned explanation for this item occupying its position.'),
+    .nullable()
+    .describe(
+      'Application-owned explanation for this item occupying its position — a deadline, a running timer, a scheduled window, or work it unblocks. Null when its position is simply the order the caller accepted, which needs no explanation.',
+    ),
 }).meta({
   id: 'HubTodayPlanItem',
   description: 'A task in the accepted personal plan, enriched for Today.',

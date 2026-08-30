@@ -22,6 +22,7 @@ function planCandidate(
     id,
     organizationId: 'org-one',
     title: `Task ${id}`,
+    summary: null,
     state: 'todo',
     stateType: 'unstarted',
     priority: 'medium',
@@ -37,7 +38,7 @@ function planCandidate(
     timeboxEndsAt: null,
     blocked: false,
     dependencyImpact: 0,
-    reason: 'You chose this first',
+    reason: null,
     ...overrides,
   };
 }

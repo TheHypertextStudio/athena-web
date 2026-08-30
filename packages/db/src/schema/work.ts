@@ -420,6 +420,16 @@ export const task = pgTable(
     ...auditColumns(),
     title: text('title').notNull(),
     description: text('description'),
+    /**
+     * A one-line statement of what this task is, written for someone scanning a list.
+     *
+     * @remarks
+     * Distinct from {@link description}, which is the full body. Agents that create or restructure
+     * work set this so a Hub row can say something useful without the reader opening the task, and
+     * without a summarization call on every list read. Null when nothing has produced one; the Hub
+     * then falls back to a lead-sentence extract of the description.
+     */
+    summary: text('summary'),
     teamId: text('team_id')
       .notNull()
       .references(() => team.id, { onDelete: 'cascade' }),

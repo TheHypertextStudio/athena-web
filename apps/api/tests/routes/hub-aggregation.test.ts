@@ -594,8 +594,8 @@ describe('hub /today (daily operating projection)', () => {
     }>(await app.request(`/today?date=${date}`));
 
     expect(today.plan.map((item) => item.position)).toEqual([0, 1]);
-    expect(today.focus.now?.reason).toBe('You chose this first');
-    expect(today.focus.after?.reason).toBe('Next in your plan');
+    expect(today.focus.now?.reason).toBeNull();
+    expect(today.focus.after?.reason).toBeNull();
   });
 
   it('treats work completed outside Today as cleared instead of offering it as Now', async () => {

@@ -248,13 +248,15 @@ describe('buildHubTodayPayload', () => {
     const payload = await buildHubTodayPayload(userId, DATE);
 
     expect(payload.plan.length).toBeGreaterThanOrEqual(2);
-    expect(payload.plan[0]?.reason).toBe('You chose this first');
-    expect(payload.plan[1]?.reason).toBe('Next in your plan');
+    // No reason when the position is simply the accepted order: the string this replaced told the
+    // person they had chosen the thing they had chosen.
+    expect(payload.plan[0]?.reason).toBeNull();
+    expect(payload.plan[1]?.reason).toBeNull();
   });
 
   it('says a planned item is due today when its deadline has arrived', async () => {
     // A deadline outranks position: the second thing in the plan still says "Due today" rather than
-    // "Next in your plan", because the deadline is the fact that changes what to do about it.
+    // null, because the deadline is the fact that changes what to do about it.
     const { orgId, teamId, userId } = await seedPerson();
     const [hubRow] = await db
       .select({ id: schema.hub.id })

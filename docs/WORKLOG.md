@@ -462,6 +462,11 @@
   first combined ESLint process exhausted Node's default 2 GB heap before reporting a violation;
   the bounded 4 GB changed-file rerun passed. The launch generator reports 399 requirements, 12
   closed, 387 open, and sign-off withheld.
+- **Exact-main CI correction**: Exact-main run `33282319389` exposed an unrelated coverage
+  regression in the Linear OAuth scope helper. The existing test covered the Linear branch but
+  never called the helper's Google delegation branch, so `@docket/types` fell below its enforced
+  100% threshold. The behavior test now proves that a Calendar request returns the shared Google
+  Calendar scope catalog. It does not snapshot source text or private implementation details.
 - **Post-provider review**: The final bounded review found no code-path defect. It required explicit
   proof for the HTTP 403 permission-recovery path, permanent mismatch reuse across later provider
   operations, and every runtime rollout invariant. Those behavior cases now pass without timing

@@ -24,5 +24,7 @@ describe('Google OAuth scope helpers', () => {
       'https://www.googleapis.com/auth/gmail.modify',
     ]);
     expect(oauthScopesForConnector('linear')).toEqual(['read', 'write']);
+    expect(oauthScopesForConnector('calendar')).toEqual(GOOGLE_CONNECTOR_SCOPES.calendar);
+    expect(oauthScopesForConnector('github')).toEqual([]);
   });
 });

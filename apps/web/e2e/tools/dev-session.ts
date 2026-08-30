@@ -39,11 +39,13 @@ import { dirname, resolve } from 'node:path';
 
 import { signUpAndOnboard } from '../helpers/app';
 import { ORIGIN } from '../helpers/constants';
+import { createMobileAuditFixture } from '../helpers/mobile-audit-fixture';
 import { addVirtualAuthenticator } from '../helpers/webauthn';
 
 interface CliArgs {
   label: string;
   out: string;
+  withMobileAuditFixture: boolean;
 }
 
 function parseArgs(argv: string[]): CliArgs {
@@ -58,11 +60,12 @@ function parseArgs(argv: string[]): CliArgs {
   return {
     label: flags.get('label') ?? 'dev-audit',
     out: resolve(flags.get('out') ?? 'playwright/.auth/dev-session.json'),
+    withMobileAuditFixture: argv.includes('--with-mobile-audit-fixture'),
   };
 }
 
 async function main(): Promise<void> {
-  const { label, out } = parseArgs(process.argv.slice(2));
+  const { label, out, withMobileAuditFixture } = parseArgs(process.argv.slice(2));
 
   const browser = await chromium.launch();
   const context = await browser.newContext({ baseURL: ORIGIN, ignoreHTTPSErrors: true });
@@ -72,12 +75,18 @@ async function main(): Promise<void> {
   console.log(`[dev-session] signing up against ${ORIGIN} ...`);
   const { user, orgId } = await signUpAndOnboard(page, label);
   console.log(`[dev-session] signed up as ${user.email}, org ${orgId}`);
+  const sharedOrgId = withMobileAuditFixture
+    ? (await createMobileAuditFixture(page)).orgId
+    : undefined;
+  if (sharedOrgId !== undefined) {
+    console.log(`[dev-session] created mobile audit workspace ${sharedOrgId}`);
+  }
 
   mkdirSync(dirname(out), { recursive: true });
   await context.storageState({ path: out });
   writeFileSync(
     `${out}.meta.json`,
-    JSON.stringify({ email: user.email, orgId, baseURL: ORIGIN }, null, 2),
+    JSON.stringify({ email: user.email, orgId, sharedOrgId, baseURL: ORIGIN }, null, 2),
   );
 
   await browser.close();

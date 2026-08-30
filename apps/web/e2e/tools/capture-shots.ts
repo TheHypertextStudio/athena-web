@@ -28,10 +28,12 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { createMobileAuditFixture } from '../helpers/mobile-audit-fixture';
+import { TIMEOUTS } from '../helpers/constants';
 
 interface SessionMeta {
   email: string;
   orgId: string;
+  sharedOrgId?: string;
   baseURL: string;
 }
 
@@ -174,18 +176,38 @@ async function main(): Promise<void> {
   mkdirSync(outDir, { recursive: true });
 
   const browser = await chromium.launch();
-  const context = await browser.newContext({ storageState: session, ignoreHTTPSErrors: true });
-  const setupPage = await context.newPage();
-  await openReviewRoute(setupPage, `${meta.baseURL}/settings/profile`);
-  const auditFixture = await createMobileAuditFixture(setupPage);
-  await setupPage.close();
+  // This is an online product audit. A persisted service worker can serve its offline fallback
+  // after the local dev process restarts, which turns a capture into recovery-UI evidence instead
+  // of the route it was asked to inspect. Offline behavior has its own dedicated browser suite.
+  const context = await browser.newContext({
+    storageState: session,
+    ignoreHTTPSErrors: true,
+    serviceWorkers: 'block',
+  });
+  let sharedOrgId = meta.sharedOrgId;
+  if (sharedOrgId === undefined) {
+    const setupPage = await context.newPage();
+    // Settings can complete a client redirect after its document first settles. The audit fixture
+    // uses page.evaluate for authenticated same-origin writes, so that redirect destroys its
+    // execution context mid-request. Today is a stable authenticated document and needs no profile
+    // route transition before the local-only fixture is created.
+    const setupResponse = await setupPage.goto(`${meta.baseURL}/today`, {
+      waitUntil: 'domcontentloaded',
+    });
+    if (!setupResponse?.ok() || setupPage.url().includes('/sign-in')) {
+      throw new Error(
+        'Could not open an authenticated setup document for the mobile audit fixture',
+      );
+    }
+    await setupPage.waitForTimeout(500);
+    sharedOrgId = (await createMobileAuditFixture(setupPage)).orgId;
+    await setupPage.close();
+  }
 
   for (const route of routes) {
     // Every capture uses a fresh Page so Chromium cannot carry damaged compositor tiles from one
     // responsive/theme capture set into the next surface.
-    const path = route
-      .replaceAll(':orgId', meta.orgId)
-      .replaceAll(':sharedOrgId', auditFixture.orgId);
+    const path = route.replaceAll(':orgId', meta.orgId).replaceAll(':sharedOrgId', sharedOrgId);
     const slug = routeSlug(route);
     for (const viewport of VIEWPORTS) {
       for (const colorScheme of COLOR_SCHEMES) {

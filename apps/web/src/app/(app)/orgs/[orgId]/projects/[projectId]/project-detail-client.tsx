@@ -31,7 +31,7 @@ import {
   type QueryKey,
   useQueryClient,
 } from '@tanstack/react-query';
-import { type JSX, useEffect, useMemo, useState } from 'react';
+import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
 import { useCreateLabel } from '@/components/labels/queries';
@@ -51,6 +51,10 @@ import { MilestoneTasks } from '@/components/project-detail/milestone-tasks';
 import { ProjectMilestonesPanel } from '@/components/project-detail/project-milestones';
 import { ProjectDependenciesPanel } from '@/components/project-detail/project-dependencies';
 import { OverviewSummary } from '@/components/project-detail/overview-summary';
+import {
+  type ProjectRestoreRefreshState,
+  useProjectRestoreController,
+} from '@/components/project-detail/project-restore-controller';
 import { ResourcesTab } from '@/components/entity-detail/resources-tab';
 import { UpdatesPanel } from '@/components/entity-detail/updates-panel';
 import { memberActorOptions } from '@/components/pickers/options';
@@ -58,6 +62,7 @@ import { ProjectPeopleRow } from '@/components/project-detail/project-people-row
 import { PropertiesPanel } from '@/components/project-detail/properties-panel';
 import { PublishAction } from '@/components/publishing/publish-action';
 import { RepeatProjectDialog } from '@/components/recurrence/repeat-project-dialog';
+import { useResolvedAccountId } from '@/components/resolved-account';
 import { EntityDetailSkeleton } from '@/components/views/entity-detail-skeleton';
 import { DetailPrintSummary } from '@/components/views/detail-print-summary';
 import { useDetailTab } from '@/components/views/use-detail-tab';
@@ -98,7 +103,7 @@ export function ProjectRestorePrimaryAction({
   onRetryRefresh,
   onUndo,
 }: {
-  readonly refreshState: 'ready' | 'pending' | 'error';
+  readonly refreshState: ProjectRestoreRefreshState;
   readonly restorePending: boolean;
   readonly onRetryRefresh: () => void;
   readonly onUndo: () => void;
@@ -137,6 +142,9 @@ export async function refreshRestoredProject<TData, TQueryKey extends QueryKey>(
     target: 'project',
     ownerOrganizationId: input.ownerOrganizationId,
   }).catch(() => undefined);
+  void input.queryClient
+    .invalidateQueries({ queryKey: queryKeys.portfolio() })
+    .catch(() => undefined);
   try {
     await input.queryClient.fetchQuery({ ...input.aggregateQuery, staleTime: 0 });
     return 'ready';
@@ -162,6 +170,7 @@ export default function ProjectDetailPage(): JSX.Element {
   const { orgId, projectId } = params;
   const router = useAppRouter();
   const queryClient = useQueryClient();
+  const accountId = useResolvedAccountId();
   const projectNoun = useVocabulary('project');
   const taskNounPlural = useVocabulary('task', { plural: true }).toLowerCase();
   const subject = ProjectSubjectRef.parse({ subjectType: 'project', subjectId: projectId });
@@ -192,7 +201,6 @@ export default function ProjectDetailPage(): JSX.Element {
   const { tab, setTab } = useDetailTab<TabId>(PROJECT_TABS);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [trashedReceipt, setTrashedReceipt] = useState<ObjectCommandReceipt | null>(null);
-  const [restoreFailure, setRestoreFailure] = useState<string | null>(null);
   const [repeatProjectOpen, setRepeatProjectOpen] = useState(false);
   const [ownerPickerOpen, setOwnerPickerOpen] = useState(false);
   const [timelinePickerOpen, setTimelinePickerOpen] = useState(false);
@@ -203,8 +211,7 @@ export default function ProjectDetailPage(): JSX.Element {
   useEffect(() => {
     setTerminalState(null);
     setTrashedReceipt(null);
-    setRestoreFailure(null);
-  }, [projectId]);
+  }, [accountId, orgId, projectId]);
 
   useEffect(() => {
     if (trashedReceipt !== null || terminalFailure === null) return;
@@ -296,6 +303,12 @@ export default function ProjectDetailPage(): JSX.Element {
   const linkedInitiativeIds =
     aggregate?.references.initiatives.map((initiative) => initiative.id) ?? [];
   const display = entityDisplay.display;
+  const invalidateProject = useCallback((): void => {
+    void invalidateWorkTargetQueries(queryClient, {
+      target: 'project',
+      ownerOrganizationId: orgId,
+    });
+  }, [orgId, queryClient]);
   const memberOptions = useMemo<readonly PickerOption[]>(() => {
     const options = memberActorOptions(membersQ.data?.items ?? []);
     const lead = aggregate?.references.lead;
@@ -409,6 +422,32 @@ export default function ProjectDetailPage(): JSX.Element {
       ),
     invalidateKeys: [updatesKey, aggregateKey],
   });
+  const restoreController = useProjectRestoreController({
+    scope: { accountId, organizationId: orgId, projectId },
+    executeRestore: (request) =>
+      unwrap(
+        () =>
+          api.v1.orgs[':orgId']['object-commands'].$post(
+            { param: { orgId }, json: request },
+            { headers: { 'Idempotency-Key': request.commandId } },
+          ),
+        `Could not restore this ${projectNoun.toLowerCase()}.`,
+      ),
+    reconcile: () =>
+      refreshRestoredProject({
+        queryClient,
+        aggregateQuery: projectDetailAggregateDef(orgId, projectId),
+        ownerOrganizationId: orgId,
+      }),
+    onReconcileStart: () => {
+      setAggregateEnabled(true);
+    },
+    onRestored: () => {
+      setTrashedReceipt(null);
+      setTerminalState(null);
+    },
+    onNotApplied: invalidateProject,
+  });
   const moveProjectToTrash = useApiMutation<ObjectCommandResult, ObjectCommandRequest>({
     mutationFn: (request) =>
       unwrap(
@@ -419,44 +458,25 @@ export default function ProjectDetailPage(): JSX.Element {
           ),
         `Could not move this ${projectNoun.toLowerCase()} to trash.`,
       ),
-    invalidateKeys: [queryKeys.projects(orgId)],
+    onSettled: invalidateProject,
     onSuccess: (result) => {
+      restoreController.reset();
       setTrashedReceipt(result.receipt);
-      setRestoreFailure(null);
       setConfirmDeleteOpen(false);
     },
   });
-  const restoreProject = useApiMutation<ObjectCommandResult, ObjectCommandRequest>({
-    mutationFn: (request) =>
-      unwrap(
-        () =>
-          api.v1.orgs[':orgId']['object-commands'].$post(
-            { param: { orgId }, json: request },
-            { headers: { 'Idempotency-Key': request.commandId } },
-          ),
-        `Could not restore this ${projectNoun.toLowerCase()}.`,
-      ),
-    onSuccess: async (result) => {
-      if (!result.appliedIds.includes(projectId)) {
-        setRestoreFailure(
-          `This ${projectNoun.toLowerCase()} could not be restored because it changed elsewhere or you no longer have permission.`,
-        );
-        return;
-      }
-      setAggregateEnabled(true);
-      await queryClient.refetchQueries({ queryKey: aggregateKey, exact: true, type: 'active' });
-      if (queryClient.getQueryState(aggregateKey)?.error != null) {
-        setRestoreFailure(
-          `This ${projectNoun.toLowerCase()} was restored, but its page could not refresh. Try again or return to Projects.`,
-        );
-        return;
-      }
-      setTrashedReceipt(null);
-      setRestoreFailure(null);
-      setTerminalState(null);
-      void queryClient.invalidateQueries({ queryKey: queryKeys.projects(orgId) });
-    },
-  });
+  const restoreFailure =
+    restoreController.failure === 'not-applied'
+      ? `This ${projectNoun.toLowerCase()} could not be restored because it changed elsewhere or you no longer have permission.`
+      : restoreController.failure === 'confirmed-read'
+        ? `This ${projectNoun.toLowerCase()} was restored, but its page could not refresh. Retry refresh or return to Projects.`
+        : restoreController.failure === 'indeterminate-read'
+          ? `Docket could not confirm whether this ${projectNoun.toLowerCase()} was restored because its page could not refresh. Retry refresh before trying Undo again.`
+          : restoreController.failure === 'queued-read'
+            ? `This ${projectNoun.toLowerCase()} restore is saved on this device and will sync when you're back online. Retry refresh after it syncs; Undo cannot be sent again.`
+            : null;
+  const restoreMutationError =
+    restoreController.refreshState === 'idle' ? restoreController.restoreMutation.error : null;
 
   if (trashedReceipt !== null) {
     return (
@@ -470,31 +490,28 @@ export default function ProjectDetailPage(): JSX.Element {
                 : `This ${projectNoun.toLowerCase()} is hidden from active views and can be restored.`}
             </p>
           </div>
-          {(restoreFailure ?? restoreProject.error) ? (
+          {(restoreFailure ?? restoreMutationError) ? (
             <p role="alert" className="text-error text-body-medium">
               {restoreFailure ??
                 userErrorMessage(
-                  restoreProject.error,
+                  restoreMutationError,
                   `Could not restore this ${projectNoun.toLowerCase()}.`,
                 )}
             </p>
           ) : null}
           <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="default"
-              disabled={restoreProject.isPending}
-              onClick={() => {
-                setRestoreFailure(null);
-                restoreProject.mutate({
+            <ProjectRestorePrimaryAction
+              refreshState={restoreController.refreshState}
+              restorePending={restoreController.restoreMutation.isPending}
+              onRetryRefresh={restoreController.retryRefresh}
+              onUndo={() => {
+                restoreController.restoreMutation.mutate({
                   commandId: crypto.randomUUID(),
                   direction: 'undo',
                   receipt: trashedReceipt,
                 });
               }}
-            >
-              <Undo className="size-4" /> Undo
-            </Button>
+            />
             <Button
               type="button"
               variant="outline"

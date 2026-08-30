@@ -46,6 +46,18 @@ vi.mock('@/lib/query', async (importOriginal) => ({
 
 vi.mock('@/lib/use-org-capability', () => ({ useOrgCapability }));
 
+vi.mock('@/components/entity-display/use-entity-display', async () => {
+  const { defaultEntityDisplay } = await import('@docket/types');
+  return {
+    useEntityDisplay: ({ subjectId }: { subjectId: string }) => ({
+      display: defaultEntityDisplay('cycle', subjectId),
+      loading: false,
+      error: null,
+      mutation: mutationResult(),
+    }),
+  };
+});
+
 // The task table's rows each grow a `TaskTimerButton`, which reads the caller's one
 // tracker via `useLiveApiQuery` — a real hook this file does not stub (see the `@/lib/query`
 // mock above). Mock the transport it calls through instead of the query layer, so that read

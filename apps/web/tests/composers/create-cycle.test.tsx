@@ -1,4 +1,5 @@
 import { OrganizationId, TeamId, type TeamOut } from '@docket/types';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -43,18 +44,23 @@ describe('CreateCycleDialog continuation', () => {
   it('advances a non-overlapping window and sequence before the parent roster refreshes', async () => {
     const onCreated = vi.fn();
     const onOpenChange = vi.fn();
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    });
     render(
-      <CreateCycleDialog
-        orgId={ORG_ID}
-        cycleNoun="Cycle"
-        teams={[TEAM]}
-        defaultTeamId={TEAM_ID}
-        teamsLoading={false}
-        nextNumberForTeam={() => 7}
-        open
-        onOpenChange={onOpenChange}
-        onCreated={onCreated}
-      />,
+      <QueryClientProvider client={queryClient}>
+        <CreateCycleDialog
+          orgId={ORG_ID}
+          cycleNoun="Cycle"
+          teams={[TEAM]}
+          defaultTeamId={TEAM_ID}
+          teamsLoading={false}
+          nextNumberForTeam={() => 7}
+          open
+          onOpenChange={onOpenChange}
+          onCreated={onCreated}
+        />
+      </QueryClientProvider>,
     );
 
     expect(screen.queryByRole('button', { name: 'Expand editor' })).toBeNull();

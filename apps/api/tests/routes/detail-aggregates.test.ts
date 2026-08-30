@@ -626,7 +626,7 @@ describe('detail aggregate routes', () => {
     expect(relationshipBody).not.toHaveProperty('latestUpdate');
   });
 
-  it('rejects a local Initiative aggregate when its route parent is hidden', async () => {
+  it('reveals a cross-workspace Initiative parent only after the viewer joins that workspace', async () => {
     const local = await seedBaseOrg(db, schema);
     const hidden = await seedBaseOrg(db, schema);
     const session = await authenticatedSessionFor([local.humanActorId]);
@@ -651,6 +651,23 @@ describe('detail aggregate routes', () => {
     });
 
     expect((await reader.request(`/${localChild.id}/aggregate-detail`)).status).toBe(404);
+
+    await db
+      .update(schema.actor)
+      .set({ userId: session.user.id })
+      .where(eq(schema.actor.id, hidden.humanActorId));
+
+    const visible = await reader.request(`/${localChild.id}/aggregate-detail`);
+    expect(visible.status).toBe(200);
+    expect(await visible.json()).toMatchObject({
+      references: {
+        parent: {
+          id: hiddenParent.id,
+          organizationId: hidden.orgId,
+          name: 'Hidden aggregate parent',
+        },
+      },
+    });
   });
 
   it('counts only visible organization-owned work in an Initiative aggregate', async () => {

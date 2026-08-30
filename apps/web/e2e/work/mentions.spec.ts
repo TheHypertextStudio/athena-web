@@ -117,10 +117,11 @@ test.describe('mentions', () => {
     );
 
     await page.getByRole('tab', { name: /resources/i }).click();
-    await expect(page.getByRole('heading', { name: 'Related records' })).toBeVisible({
+    const relatedRecords = page.getByRole('heading', { name: 'Related records' }).locator('..');
+    await expect(relatedRecords.getByRole('heading', { name: 'Related records' })).toBeVisible({
       timeout: TIMEOUTS.sweep,
     });
-    await expect(page.getByText(taskTitle).first()).toBeVisible();
+    await expect(relatedRecords.getByText(taskTitle)).toBeVisible();
 
     // The Updates composer is a plain textarea, and prose mode there writes the same link form.
     await page.getByRole('tab', { name: /updates/i }).click();

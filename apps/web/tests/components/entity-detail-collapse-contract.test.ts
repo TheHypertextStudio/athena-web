@@ -14,6 +14,10 @@ const collapseBehavior = readFileSync(
 );
 const css = readFileSync(join(root, 'packages/ui/src/styles/globals.css'), 'utf8');
 
+function literalClassToken(token: string): RegExp {
+  return new RegExp(`className="[^"]*\\b${token}\\b[^"]*"`, 'g');
+}
+
 describe('entity detail collapse contract', () => {
   it('derives covered and coverless geometry in the shared layout', () => {
     expect(layout).toContain("data-detail-cover={cover ? 'present' : 'absent'}");
@@ -34,11 +38,11 @@ describe('entity detail collapse contract', () => {
   });
 
   it('morphs one identity from stacked to compact without duplicating the icon', () => {
-    expect(layout).toContain('className="detail-identity"');
-    expect(layout).toContain('className="detail-primary"');
-    expect(layout).toContain('className="detail-masthead"');
-    expect(layout).toContain('className="detail-tabs min-w-0"');
-    expect(layout.match(/className="detail-glyph/g)).toHaveLength(1);
+    expect(layout).toMatch(literalClassToken('detail-identity'));
+    expect(layout).toMatch(literalClassToken('detail-primary'));
+    expect(layout).toMatch(literalClassToken('detail-masthead'));
+    expect(layout).toMatch(literalClassToken('detail-tabs'));
+    expect(layout.match(literalClassToken('detail-glyph'))).toHaveLength(1);
     expect(layout.indexOf('detail-glyph')).toBeLessThan(layout.indexOf('detail-title'));
     expect(css).toContain('padding-block-start: var(--detail-expanded-glyph-row)');
     expect(css).toContain('padding-inline-start: var(--detail-compact-identity-inset)');
@@ -71,7 +75,7 @@ describe('entity detail collapse contract', () => {
     // `padding-block-start` moved off `.detail-header` onto `.masthead-content` — a sibling of the
     // cover rather than an ancestor of it, so the cover's `inset-0` against `.masthead-band` isn't
     // pushed down by the same padding that indents the eyebrow/title text.
-    expect(layout).toContain('className="masthead-content"');
+    expect(layout).toMatch(literalClassToken('masthead-content'));
     expect(css).toMatch(/\.masthead-content\s*\{[\s\S]*padding-block-start:\s*1\.5rem/);
     expect(css).not.toMatch(/\.detail-header\s*\{[^}]*padding-block-start/);
     expect(css).toMatch(/\.detail-tabs\s*\{[\s\S]*margin-block-start:\s*1rem/);

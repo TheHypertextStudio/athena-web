@@ -423,6 +423,24 @@
   shared work, integrations, MCP, Athena, and voice. The clean post-grant shadow interval started
   with successful run `33277031549` at `2026-08-29T21:49:02Z`, so active reconciliation cannot
   start before `2026-08-30T21:49:02Z` without waiving the approved 24-hour observation gate.
+- **Exact-main Web gate correction**: CI on `faf098490` exposed 57 Web failures that reduced to
+  invalid Cycle fixtures, one missing query provider, one malformed entity-display mock, two
+  stale source-text contracts, and a Project restore overwrite. The corrected fixtures now carry
+  the same window data as `CycleOut`. Composer tests mount the query boundary used by the app. The
+  Cycle detail suite uses the registry default instead of fabricating an icon key. The Project
+  restore surface again binds queued recovery to the Better Auth-resolved account, reconciles the
+  authoritative aggregate, and invalidates the cross-workspace portfolio. The browser tests now
+  follow Project properties into measured overflow and scope a related-record assertion to its
+  visible section. They do not pin an optional control to one row width or select a hidden editor
+  duplicate. Nine focused suites pass 131 tests. The two corrected browser cases pass against a
+  fresh isolated PGlite stack. Web type checking, changed-file lint, formatting, diff validation,
+  and Playwright discovery pass. The exact-main API run passed all 5,054 behavior tests but missed
+  the branch threshold at 87.83% against 88%. The correction now exercises stored display reads,
+  cover preservation and clearing, every searchable native display type, the uncustomized
+  fallback, non-native search results, and cross-workspace parent visibility before and after a
+  Better Auth user joins the parent workspace. The three focused API suites pass 76 tests, and the
+  display route reaches all eight branches. Checkout remains disabled, and the shadow observation
+  clock still ends at `2026-08-30T21:49:02Z`.
 - **Decisions**: Checkout derives the customer email from the Better Auth server session and
   rejects a browser-supplied email. Stripe's Dashboard-only existing-subscriber redirect requires
   a recorded verification timestamp before `BILLING_ENABLED=true` can pass configuration. Docket

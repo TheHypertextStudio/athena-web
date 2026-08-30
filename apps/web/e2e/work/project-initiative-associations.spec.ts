@@ -50,7 +50,11 @@ async function createFixture(
 
 /** Open the Project relationship picker and wait for its browser-visible options. */
 async function openInitiatives(page: Page): Promise<void> {
-  await page.getByRole('button', { name: /^Initiatives —/ }).click();
+  const trigger = page.getByRole('button', { name: /^Initiatives —/ });
+  if (!(await trigger.isVisible())) {
+    await page.getByRole('button', { name: 'More Project properties' }).click();
+  }
+  await trigger.click();
   await expect(page.getByRole('listbox', { name: 'Initiatives' })).toBeVisible({
     timeout: TIMEOUTS.pageReady,
   });

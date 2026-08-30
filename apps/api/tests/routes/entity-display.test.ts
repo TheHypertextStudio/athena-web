@@ -243,4 +243,63 @@ describe('entity display routes', () => {
     });
     expect(response.status).toBe(403);
   });
+
+  it('preserves an existing cover when an icon-only update omits it and clears it explicitly', async () => {
+    const { orgId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+    const [initiative] = await db
+      .insert(schema.initiative)
+      .values({
+        organizationId: orgId,
+        name: 'Cover behavior',
+        createdBy: humanActorId,
+        status: 'active',
+        statusId: statusId('initiative', 'active'),
+      })
+      .returning();
+    const initiativeId = assertDefined(initiative).id;
+    const app = appWithActor(entityDisplay, orgId, ['contribute'], humanActorId);
+    const coverImage = 'data:image/png;base64,Y292ZXI=';
+
+    const created = await app.request(`/initiative/${initiativeId}`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        iconKey: 'image',
+        colorKey: 'sky',
+        customColor: null,
+        coverImage,
+      }),
+    });
+    expect(created.status).toBe(200);
+    expect(await created.json()).toMatchObject({ coverImage, customized: true });
+
+    const iconOnlyUpdate = await app.request(`/initiative/${initiativeId}`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ iconKey: 'flag', colorKey: 'primary', customColor: null }),
+    });
+    expect(iconOnlyUpdate.status).toBe(200);
+    expect(await iconOnlyUpdate.json()).toMatchObject({
+      iconKey: 'flag',
+      coverImage,
+      customized: true,
+    });
+
+    const stored = await app.request(`/initiative/${initiativeId}`);
+    expect(stored.status).toBe(200);
+    expect(await stored.json()).toMatchObject({ coverImage, customized: true });
+
+    const cleared = await app.request(`/initiative/${initiativeId}`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        iconKey: 'flag',
+        colorKey: 'primary',
+        customColor: null,
+        coverImage: null,
+      }),
+    });
+    expect(cleared.status).toBe(200);
+    expect(await cleared.json()).toMatchObject({ coverImage: null, customized: true });
+  });
 });

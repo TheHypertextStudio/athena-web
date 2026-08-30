@@ -1604,4 +1604,101 @@ describe('search query service', () => {
       href: `/v1/orgs/${orgId}/tasks/${taskId}/attachments/${attachmentId}/download`,
     });
   });
+
+  it('composes display metadata for every searchable native entity kind', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const userId = await seedUserWithHub(db, schema, 'SearchDisplayUser');
+    const orgId = await seedOrg(db, schema);
+    const actorId = await addMember(db, schema, orgId, userId);
+    const nativeKinds = [
+      'team',
+      'task',
+      'project',
+      'program',
+      'initiative',
+      'milestone',
+      'cycle',
+      'label',
+    ] as const;
+    const nativeDocuments = nativeKinds.map((kind) => {
+      const entityId = `displayproof_${kind}`;
+      return {
+        id: `${kind}:${orgId}:${entityId}`,
+        organizationId: orgId,
+        kind,
+        family: 'work' as const,
+        sourceTable: kind,
+        entityId,
+        title: `Displayproof ${kind}`,
+        facet: {},
+        route: entityRoute(orgId, kind, entityId),
+        visibility: { mode: 'org_members' },
+        baseRank: 100,
+      };
+    });
+    await db.insert(schema.searchDocument).values([
+      ...nativeDocuments,
+      {
+        id: `task:${orgId}:displayproof_uncustomized`,
+        organizationId: orgId,
+        kind: 'task',
+        family: 'work',
+        sourceTable: 'task',
+        entityId: 'displayproof_uncustomized',
+        title: 'Displayproof uncustomized task',
+        facet: {},
+        route: entityRoute(orgId, 'task', 'displayproof_uncustomized'),
+        visibility: { mode: 'org_members' },
+        baseRank: 99,
+      },
+      {
+        id: `comment:${orgId}:displayproof_comment`,
+        organizationId: orgId,
+        kind: 'comment',
+        family: 'content',
+        sourceTable: 'comment',
+        entityId: 'displayproof_comment',
+        title: 'Displayproof comment',
+        facet: {},
+        route: entityRoute(orgId, 'comment', 'displayproof_comment'),
+        visibility: { mode: 'org_members' },
+        baseRank: 98,
+      },
+    ]);
+    await db.insert(schema.entityDisplay).values(
+      nativeKinds.map((subjectType) => ({
+        organizationId: orgId,
+        subjectType,
+        subjectId: `displayproof_${subjectType}`,
+        iconKey: 'sparkles' as const,
+        colorKey: 'indigo' as const,
+        customColor: '#4f46e5',
+        createdBy: actorId,
+      })),
+    );
+
+    const result = await searchWorkspace({
+      scope: 'org',
+      caller: { kind: 'user', userId },
+      orgId,
+      params: { q: 'displayproof', limit: 20 },
+    });
+    const byEntityId = new Map(result.items.map((item) => [item.entityId, item]));
+
+    for (const subjectType of nativeKinds) {
+      expect(byEntityId.get(`displayproof_${subjectType}`)?.display).toMatchObject({
+        subjectType,
+        subjectId: `displayproof_${subjectType}`,
+        iconKey: 'sparkles',
+        colorKey: 'indigo',
+        customColor: '#4f46e5',
+        customized: true,
+      });
+    }
+    expect(
+      result.items.find((item) => item.entityId === 'displayproof_uncustomized')?.display,
+    ).toBeNull();
+    expect(result.items.find((item) => item.kind === 'comment')?.display).toBeNull();
+  });
 });

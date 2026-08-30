@@ -168,7 +168,15 @@ const LABELS = [
 ];
 
 /** The cycle and milestone choices used to prove a workspace switch clears foreign ids. */
-const CYCLES = [{ id: CYCLE_ID, teamId: TEAM_ID, displayName: 'Cycle 1' }];
+const CYCLES = [
+  {
+    id: CYCLE_ID,
+    teamId: TEAM_ID,
+    displayName: 'Cycle 1',
+    startsAt: '2026-01-05T00:00:00.000Z',
+    endsAt: '2026-01-11T23:59:59.999Z',
+  },
+];
 const MILESTONES = [{ id: MILESTONE_ID, projectId: APOLLO_ID, name: 'Launch' }];
 
 const GLOBAL_TEAMS: readonly TeamOut[] = [

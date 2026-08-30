@@ -280,8 +280,8 @@ export function AthenaWorkspace({
       data-athena-workspace
       className="flex h-full min-h-0 w-full flex-col"
     >
-      <header className="border-outline-variant flex min-h-16 flex-wrap items-center gap-x-4 gap-y-2 border-b px-4 py-3 @2xl:px-6">
-        <div className="min-w-0 flex-1">
+      <header className="border-outline-variant flex min-h-16 flex-col gap-3 border-b px-4 py-3 @sm:flex-row @sm:items-center @sm:justify-between @2xl:px-6">
+        <div className="min-w-0">
           <h1 className="text-on-surface text-xl font-semibold tracking-[-0.015em]">
             Your Athena work
           </h1>
@@ -289,15 +289,17 @@ export function AthenaWorkspace({
             Work moving across every workspace, with decisions kept private to you.
           </p>
         </div>
-        {queue.data ? (
-          <div className="text-on-surface-variant flex items-center gap-3 text-xs tabular-nums">
-            <span>{queue.data.counts.needsYou} needs you</span>
-            <span>{queue.data.counts.working} working</span>
-          </div>
-        ) : null}
-        {/* Voice is a mode of this conversation, so its control lives here rather than behind a
-            settings tab or a separate route. */}
-        <VoiceLaunch workspaceId={workspaceFilter ?? null} />
+        <div className="flex items-center justify-between gap-3 @sm:justify-end">
+          {queue.data ? (
+            <div className="text-on-surface-variant hidden items-center gap-3 text-xs tabular-nums @sm:flex">
+              <span>{queue.data.counts.needsYou} needs you</span>
+              <span>{queue.data.counts.working} working</span>
+            </div>
+          ) : null}
+          {/* Voice is a mode of this conversation, so its control lives here rather than behind a
+              settings tab or a separate route. */}
+          <VoiceLaunch workspaceId={workspaceFilter ?? null} />
+        </div>
       </header>
 
       {actions.feedback ? (

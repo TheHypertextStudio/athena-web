@@ -130,6 +130,21 @@ function routeSlug(route: string): string {
 /** Wait until client data and loading placeholders have resolved. */
 async function waitForSettledPage(page: Page): Promise<void> {
   await page.waitForFunction(() => document.body.innerText.trim().length > 0);
+  await page.waitForFunction(
+    () => {
+      // Next can commit the route document before its generated utility stylesheet finishes
+      // loading. A screenshot at that point is plain HTML and says nothing about the product's
+      // layout, so wait for both a rendered utility and the app's typeface before accepting it.
+      const layoutRoot = document.querySelector<HTMLElement>('[class~="flex"]');
+      return (
+        layoutRoot !== null &&
+        getComputedStyle(layoutRoot).display === 'flex' &&
+        getComputedStyle(document.body).fontFamily.includes('IBM Plex Sans')
+      );
+    },
+    undefined,
+    { timeout: 20_000 },
+  );
   await page.evaluate(async () => document.fonts.ready);
   const waitForNoLoadingState = (): Promise<unknown> =>
     page.waitForFunction(

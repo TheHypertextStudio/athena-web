@@ -54,6 +54,7 @@
 import * as React from 'react';
 
 import { Ellipsis } from '../icons';
+import { CONTROL, CONTROL_RADIUS, useControlSize } from './control';
 import { cn } from '../lib/utils';
 import { Button } from './button';
 import {
@@ -63,6 +64,7 @@ import {
   DropdownMenuTrigger,
 } from './dropdown-menu';
 import { focusRing } from './focus';
+import { typeClass } from './text';
 
 /** The shared selection state threaded from {@link Tabs} down to each {@link Tab}. */
 interface TabsContextValue {
@@ -231,6 +233,10 @@ function moveTabFocus(
 export function TabList({ label, className, children }: TabListProps): React.JSX.Element {
   const { onValueChange } = useTabsContext();
   const ref = React.useRef<HTMLDivElement>(null);
+  // A standalone tab bar keeps its 40px touch-target floor; only an enclosing `ControlGroup`
+  // shrinks it, which is what lets a composer carry a compact two-position toggle without every
+  // existing tab bar in the app shrinking with it.
+  const size = useControlSize(undefined, 'xl');
 
   function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>): void {
     moveTabFocus(ref.current, event, onValueChange);
@@ -243,7 +249,8 @@ export function TabList({ label, className, children }: TabListProps): React.JSX
       aria-label={label}
       onKeyDown={onKeyDown}
       className={cn(
-        'bg-surface-container inline-flex items-center gap-0.5 rounded-lg p-0.5',
+        'bg-surface-container inline-flex items-center gap-0.5 p-0.5',
+        CONTROL[size].heightPx <= 32 ? 'rounded-md' : 'rounded-lg',
         className,
       )}
     >
@@ -432,6 +439,7 @@ export interface TabProps {
 export function Tab({ value, count, disabled, className, children }: TabProps): React.JSX.Element {
   const { value: selectedValue, onValueChange } = useTabsContext();
   const selected = value === selectedValue;
+  const metrics = CONTROL[useControlSize(undefined, 'xl')];
 
   return (
     <button
@@ -450,7 +458,13 @@ export function Tab({ value, count, disabled, className, children }: TabProps): 
         // One type token for both states. Bolding the selected tab would change the label's
         // rendered width, which shifts every tab after it — a size change on interaction, and the
         // reason a tab strip appears to "breathe" as you click along it.
-        'text-label-large relative inline-flex min-h-10 items-center gap-2 rounded-md px-3 py-1.5 transition-colors disabled:pointer-events-none disabled:opacity-50',
+        'relative inline-flex items-center transition-colors disabled:pointer-events-none disabled:opacity-50',
+        metrics.minHeight,
+        metrics.paddingX,
+        metrics.gap,
+        metrics.iconApply,
+        typeClass(metrics.labelToken),
+        CONTROL_RADIUS,
         selected
           ? 'bg-surface-container-highest text-on-surface'
           : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface',

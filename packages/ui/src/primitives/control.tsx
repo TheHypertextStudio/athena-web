@@ -325,17 +325,22 @@ export function ControlGroup({
  * Resolve the control size a primitive should render at.
  *
  * @param explicit - The primitive's own `controlSize` prop, if the caller passed one.
- * @returns `explicit`, else the nearest {@link ControlGroup}'s size, else
- *   {@link DEFAULT_CONTROL_SIZE}.
+ * @param standalone - The step to use when there is no enclosing {@link ControlGroup}. Defaults to
+ *   {@link DEFAULT_CONTROL_SIZE}; a primitive whose own resting size is larger passes its own, so
+ *   joining the scale never silently shrinks it wherever it already ships.
+ * @returns `explicit`, else the nearest {@link ControlGroup}'s size, else `standalone`.
  *
  * @remarks
  * Every control primitive in this package calls exactly this function. A primitive that reads a
  * height from anywhere else — a local constant, a `className` override, a prop named `size` — is
  * the bug this module exists to prevent.
  */
-export function useControlSize(explicit?: ControlSize): ControlSize {
+export function useControlSize(
+  explicit?: ControlSize,
+  standalone: ControlSize = DEFAULT_CONTROL_SIZE,
+): ControlSize {
   const inherited = React.useContext(ControlSizeContext);
-  return explicit ?? inherited ?? DEFAULT_CONTROL_SIZE;
+  return explicit ?? inherited ?? standalone;
 }
 
 /**

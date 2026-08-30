@@ -164,7 +164,12 @@ describe('Projects experience contract', () => {
     // own track styling), so the shell doesn't also draw a Separator beneath it.
     expect(detail).toContain('<Tabs');
     expect(layout).not.toContain('<Separator');
-    expect(source(join(root, 'packages/ui/src/primitives/tabs.tsx'))).toContain('min-h-10');
+    // The floor is the control scale's `xl` step, not a literal class. Tabs resolve their height
+    // through `useControlSize` like every other control, so an enclosing `ControlGroup` can render
+    // a compact segmented toggle — but a standalone tab bar still lands on 40px.
+    const tabs = source(join(root, 'packages/ui/src/primitives/tabs.tsx'));
+    expect(tabs).toContain("useControlSize(undefined, 'xl')");
+    expect(tabs).not.toContain('min-h-10');
   });
 
   it('uses full-width heading-free documents and canonical MD3 prose hierarchy', () => {

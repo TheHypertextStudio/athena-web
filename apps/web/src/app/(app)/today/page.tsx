@@ -1,6 +1,6 @@
 'use client';
 
-import { Button } from '@docket/ui/primitives';
+import { Button, Stack } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
 import { DayRecapEntry } from '@/components/today/day-recap-entry';
@@ -54,16 +54,16 @@ export default function TodayPage(): JSX.Element {
   };
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-5xl flex-col gap-7 px-5 py-7 @2xl:px-10 @2xl:py-9">
-      {/* `Today · Friday, August 7` on one line at the app's real page-title size. The 48px display
-          heading this replaces was 2.4× the documented ceiling (`design-system.md:293`: "page
-          titles are 20px, not a marketing 24px+"), and it sat over a separate date line and a
-          time-of-day greeting no spec ever asked for — three lines of masthead before the first
-          thing you can act on. */}
-      <h1 aria-label="Today" className="text-on-surface text-title-large shrink-0 font-semibold">
-        Today
-        <span className="text-on-surface-variant ml-2 font-normal">{heading}</span>
-      </h1>
+    <div className="mx-auto flex h-full w-full max-w-3xl flex-col gap-10 px-5 pt-10 pb-20 @2xl:px-8 @2xl:pt-14">
+      {/* The date used to sit inline at the title's own size, differing only in weight — thirty
+          characters of 22px text reading as one run-on rather than as a title with a date under it.
+          Two lines, two sizes: the title carries the page, the date supports it. */}
+      <Stack gap={1} className="shrink-0">
+        <h1 aria-label="Today" className="text-on-surface text-title-large font-semibold">
+          Today
+        </h1>
+        <p className="text-on-surface-variant text-body-medium">{heading}</p>
+      </Stack>
 
       <TodayPrompt
         orgId={activeOrgId}

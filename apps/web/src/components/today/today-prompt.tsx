@@ -260,9 +260,10 @@ export function TodayPrompt({
           {...(mentionOrgId === undefined ? {} : { orgId: mentionOrgId })}
           insertMode="context"
           onKeyDown={onKeyDown}
-          // Measured, not guessed. This was `rows={text.length > 90 ? 3 : 2}` — a stand-in for
-          // "has it wrapped yet" that is wrong at every width it was not tuned for.
-          rows={2}
+          // One line at rest, growing with what is typed. `rows={2}` reserved a second line the
+          // field had nothing to put in, which is slack inside a control rather than whitespace on
+          // a page — the box's presence comes from its fill, not from its height.
+          rows={1}
           autoGrow
           maxRows={10}
           placeholder={mode === 'athena' ? 'Ask Athena about today…' : 'What task needs capturing?'}

@@ -49,7 +49,7 @@ export function TodaySection({
   children,
 }: TodaySectionProps): JSX.Element {
   return (
-    <Stack as="section" gap={2} aria-labelledby={id}>
+    <Stack as="section" gap={3} aria-labelledby={id}>
       <Row gap={3}>
         <h2 id={id} className="text-on-surface text-title-medium">
           {heading}

@@ -50,7 +50,7 @@ export default function HomePage(): JSX.Element {
         tone="ink"
       />
       <AgentsStrip />
-      <ClosingSection pricing />
+      <ClosingSection />
     </>
   );
 }

@@ -7572,10 +7572,13 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   Economy — on the pricing page it was the H1, restated by the subtitle beneath it and again by the
   two product cards below that, three times on one screen. Distinctiveness — a price recital that
   could belong to any product. Hierarchy — it promoted a price sheet into the position that should
-  carry a claim. The pricing page now leads with the mechanic that is actually distinctive ("One
-  price for an organization of any size"), the subtitle carries the one fact the cards cannot say
-  (each organization bills on its own), and the cards keep the numbers. The home page's closing band
-  states both facts in one sentence, since a reader there has not seen the cards.
+  carry a claim. Rewriting it did not fix it: any sentence that recites both prices lands back in
+  the same balanced shape, with the padding ("free to use on your own", "share work in") only
+  smearing the seam. So the price line is gone. The home page's closing band is now the last call to
+  action and nothing else, proportioned to the one control it holds; the pricing page names itself
+  and lets the two product cards and the Billing details FAQ carry every fact, including the one the
+  cards cannot show — that each organization bills separately — which the FAQ's first answer already
+  stated.
 - **Files changed**: `apps/web/src/components/marketing/product-screenshot.tsx`,
   `apps/web/src/components/marketing/pricing-products.tsx`,
   `apps/web/src/components/marketing/closing-section.tsx`,

@@ -43,13 +43,9 @@ export function PricingProducts(): JSX.Element {
   return (
     <section id="pricing" className="mx-auto w-full max-w-6xl scroll-mt-20 px-6 py-20">
       <div className="flex max-w-2xl flex-col gap-4">
-        {/* The marketing register's display face, like every other heading on the site. This one
-            heading had been rendering in the app's Plex, two lines above a Fraunces H2. */}
+        {/* The marketing register's display face, like every other heading on the site. */}
         <Text as="h1" token="display-small" className="font-display text-ink text-balance">
-          One price for an organization of any size.
-        </Text>
-        <Text as="p" token="body-large" tone="muted">
-          Each organization is billed on its own.
+          Pricing
         </Text>
       </div>
       <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:max-w-2xl">

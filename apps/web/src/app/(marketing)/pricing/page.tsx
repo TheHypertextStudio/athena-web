@@ -7,8 +7,7 @@ import { PricingProducts } from '@/components/marketing/pricing-products';
 /** Pricing page metadata. */
 export const metadata: Metadata = {
   title: 'Pricing',
-  description:
-    'Docket is free to use on your own, and $8 a month for each organization you share work in.',
+  description: 'What Docket and Docket Pro cost.',
 };
 
 interface Faq {
@@ -66,7 +65,7 @@ export default function PricingPage(): JSX.Element {
           </dl>
         </div>
       </section>
-      <ClosingSection pricing={false} />
+      <ClosingSection />
     </>
   );
 }

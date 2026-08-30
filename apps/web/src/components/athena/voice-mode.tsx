@@ -38,8 +38,12 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogBody,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
+  Surface,
+  surfaceToneColor,
   Text,
 } from '@docket/ui/primitives';
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
@@ -247,7 +251,7 @@ export function VoiceMode({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-4">
+        <DialogBody className="flex flex-col gap-4">
           <VoiceStatus state={state} level={level} />
 
           {notice ? (
@@ -261,8 +265,11 @@ export function VoiceMode({
             </p>
           ) : null}
 
-          <div
-            className="bg-surface-container-low flex max-h-72 flex-col gap-3 overflow-y-auto rounded-lg p-4"
+          <Surface
+            tone="card"
+            shape="medium"
+            pad="comfortable"
+            className="flex flex-col gap-3"
             data-voice-transcript
           >
             {timeline.length === 0 && actions.length === 0 ? (
@@ -277,8 +284,10 @@ export function VoiceMode({
               <VoiceAction key={`${action.id}-${action.status}`} action={action} />
             ))}
             <div ref={endRef} />
-          </div>
+          </Surface>
+        </DialogBody>
 
+        <DialogFooter>
           <ControlGroup className="justify-between">
             <Text token="label-small" tone="muted" numeric>
               {session ? `Conversation ${session.conversationId.slice(-6)}` : 'Connecting…'}
@@ -288,7 +297,7 @@ export function VoiceMode({
               End voice
             </Button>
           </ControlGroup>
-        </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
@@ -307,7 +316,7 @@ function VoiceStatus({
     <div
       className={cn(
         'flex items-center gap-3 rounded-lg px-4 py-3',
-        listening ? 'bg-primary-container text-on-primary-container' : 'bg-surface-container',
+        listening ? 'bg-primary-container text-on-primary-container' : surfaceToneColor('canvas'),
       )}
       data-voice-state={state}
     >

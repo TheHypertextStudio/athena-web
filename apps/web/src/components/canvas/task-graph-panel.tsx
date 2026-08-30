@@ -77,6 +77,9 @@ import { useTaskGraphCreation } from './use-task-graph-creation';
 import { focusCanvasNode } from './focus-canvas-node';
 import { canvasCommandId, useCanvasCommandHistory } from './use-canvas-command-history';
 import CanvasOverlayPanel from './canvas-overlay-panel';
+import { GraphInspectorHost } from './graph-inspector-host';
+import { keepNodeInViewDeltaX } from './graph-inspector-geometry';
+import { prefersReducedMotion } from '@/lib/motion';
 
 /** Stable registries (must not be re-created per render — xyflow warns otherwise). */
 const NODE_TYPES = { task: TaskNode, taskBranch: TaskBranchNode, group: GroupNode };
@@ -437,6 +440,36 @@ export default function TaskGraphPanel({
     [selectedId, filtered.nodes],
   );
 
+  /**
+   * Keep the selected node visible once the inspector has taken its column.
+   *
+   * @remarks
+   * The smallest horizontal pan that clears the column, never a `fitView` — re-framing the whole
+   * graph would throw away the pan and zoom the user chose, which on a graph is the reading
+   * position itself. Zoom is not touched at all.
+   */
+  const keepSelectionInView = useCallback(
+    (visibleWidth: number) => {
+      if (!flowInstance || selectedNode === null) return;
+      const viewport = flowInstance.getViewport();
+      const delta = keepNodeInViewDeltaX({
+        nodeX: selectedNode.position.x,
+        nodeWidth: selectedNode.measured?.width ?? selectedNode.width ?? 0,
+        zoom: viewport.zoom,
+        viewportX: viewport.x,
+        visibleWidth,
+        margin: 24,
+      });
+      if (delta === 0) return;
+      void flowInstance.setViewport(
+        { ...viewport, x: viewport.x + delta },
+        // A JS animation; the global reduced-motion CSS rule cannot reach it.
+        { duration: prefersReducedMotion() ? 0 : 240 },
+      );
+    },
+    [flowInstance, selectedNode],
+  );
+
   // Element-level actions for the node toolbar and the edge's remove control.
   const canvasActions = useMemo<CanvasActions>(
     () => ({
@@ -721,21 +754,6 @@ export default function TaskGraphPanel({
                     </Surface>
                   </CanvasOverlayPanel>
                 ) : null}
-                {selectedNode !== null ? (
-                  <CanvasOverlayPanel position="top-right">
-                    <NodePeek
-                      node={selectedNode}
-                      nodes={filtered.nodes}
-                      edges={filtered.edges}
-                      canEdit={canEdit}
-                      onNavigate={navigate}
-                      onSetComplete={setComplete}
-                      onClose={() => {
-                        setSelectedId(null);
-                      }}
-                    />
-                  </CanvasOverlayPanel>
-                ) : null}
               </Canvas>
             </CanvasActionsProvider>
           </CanvasSelectionFrame>
@@ -762,12 +780,40 @@ export default function TaskGraphPanel({
     />
   );
 
+  // Only the full-density canvas peeks. The embedded graphs on the task and project detail pages
+  // run at a reduced density in a short box, and `setSelectedId` reaches them from creation and
+  // open-object paths that never consult `handleSelect`'s density check.
+  const inspector =
+    density === 'full' && selectedNode !== null ? (
+      <NodePeek
+        node={selectedNode}
+        nodes={filtered.nodes}
+        edges={filtered.edges}
+        canEdit={canEdit}
+        onNavigate={navigate}
+        onSetComplete={setComplete}
+        onClose={() => {
+          setSelectedId(null);
+        }}
+      />
+    ) : null;
+
   return (
     <div className={cn('flex h-full min-h-0 w-full flex-col', className)}>
       {renderChrome?.(bar)}
-      <div ref={containerRef} className="relative min-h-0 flex-1">
+      {/* `containerRef` stays on this row, never on the canvas column — see the note in
+          `GraphInspectorHost` about the aspect-ratio bucket re-packing the whole graph. */}
+      <GraphInspectorHost
+        hostRef={containerRef}
+        className="flex-1"
+        aside={inspector}
+        onClose={() => {
+          setSelectedId(null);
+        }}
+        onDock={keepSelectionInView}
+      >
         {body}
-      </div>
+      </GraphInspectorHost>
     </div>
   );
 }

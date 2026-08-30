@@ -4,9 +4,9 @@
  * @remarks
  * The stream analogue of `inbox/notification-meta.ts`: it flattens a {@link StreamEventOut} into
  * a thin {@link StreamEventRow} view-model (so the catalog + row read stable fields, decoupled
- * from the wire DTO), and derives the one-line description, the deep link, and the kind glyph/
- * tone. Heterogeneous sources render through one homogeneous line: `{actor} {verb} {subject}`,
- * with the provider shown as an attribution badge by the row, not a separate layout.
+ * from the wire DTO), and derives the one-line description, the deep link, and the actor kind.
+ * Heterogeneous sources render through one homogeneous line: `{actor} {verb} {subject}`, with
+ * the provider shown as an attribution badge by the row, not a separate layout.
  */
 import type {
   CanonicalEntityKind,
@@ -16,6 +16,7 @@ import type {
   StreamEventOut,
   StreamRelevance,
 } from '@docket/types';
+import type { ActorKind } from '@docket/ui/components';
 
 /**
  * A flattened, presentation-ready projection of one stream event.
@@ -362,54 +363,38 @@ export function relevanceLabel(relevance: StreamRelevance | null): string | null
   }
 }
 
-/** Glyph + tone descriptor for a kind (the row resolves `icon` to a real component). */
-export interface KindGlyph {
-  readonly icon: string;
-  readonly tone: string;
+/**
+ * The actor kind behind one event, for the shared {@link ActorAvatar}'s shape + ring.
+ *
+ * @remarks
+ * This is taxonomy, not inference. The `agent_*` kinds are, by definition, emitted by an agent
+ * acting on the user's behalf — nothing is being guessed from a display name, which the wire
+ * contract rightly forbids (see {@link StreamEventRow.actorIsViewer}). Everything else is a
+ * person until the API says otherwise.
+ *
+ * **Ceiling:** the wire event carries no explicit actor kind today. When it grows one, read that
+ * instead and delete this.
+ *
+ * @param row - The event.
+ * @returns `agent` for agent-emitted events, `human` for the rest.
+ */
+export function streamActorKind(row: StreamEventRow): ActorKind {
+  return row.kind.startsWith('agent_') ? 'agent' : 'human';
 }
 
-/** The leading glyph + tone for a kind. */
-export function kindGlyph(kind: EventKind): KindGlyph {
-  switch (kind) {
-    case 'mention':
-      return { icon: 'mention', tone: 'text-state-mention' };
-    case 'assignment':
-    case 'task_assignment':
-      return { icon: 'assignment', tone: 'text-state-assignment' };
-    case 'completed':
-      return { icon: 'completed', tone: 'text-state-completed' };
-    case 'comment':
-    case 'message':
-      return { icon: 'comment', tone: 'text-state-comment' };
-    case 'status_change':
-      return { icon: 'status', tone: 'text-state-status' };
-    case 'reaction':
-      return { icon: 'reaction', tone: 'text-on-surface-variant' };
-    case 'calendar_invite':
-    case 'calendar_update':
-    case 'meeting_attended':
-      return { icon: 'calendar', tone: 'text-on-surface-variant' };
-    case 'timer_started':
-    case 'timer_paused':
-    case 'timer_resumed':
-    case 'timer_switched':
-    case 'timer_stopped':
-      return { icon: 'timer', tone: 'text-on-surface-variant' };
-    case 'email_received':
-      return { icon: 'email', tone: 'text-on-surface-variant' };
-    case 'elicitation_requested':
-    case 'elicitation_answered':
-    case 'elicitation_expired':
-      return { icon: 'question', tone: 'text-state-started' };
-    case 'agent_started':
-    case 'agent_progress':
-    case 'agent_blocked':
-    case 'agent_completed':
-    case 'agent_failed':
-      return { icon: 'agent', tone: 'text-state-started' };
-    case 'field_change':
-      return { icon: 'edit', tone: 'text-on-surface-variant' };
-    default:
-      return { icon: 'created', tone: 'text-on-surface-variant' };
-  }
+/**
+ * The event's exact local instant, spelled out for the expanded detail panel.
+ *
+ * @remarks
+ * Guarded because `occurredAt` reaches the client as a string: an unparseable value makes
+ * `toLocaleString` emit the literal "Invalid Date" into the UI rather than throwing, which is
+ * how it ships unnoticed. Returning `null` lets the caller omit the element instead.
+ *
+ * @param row - The event.
+ * @returns The formatted local date and time, or `null` when the timestamp cannot be parsed.
+ */
+export function streamExactTime(row: StreamEventRow): string | null {
+  const parsed = new Date(row.occurredAt);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 }

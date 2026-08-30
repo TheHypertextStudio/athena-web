@@ -8,7 +8,7 @@
  * (`scope: 'org'`): it holds the filter {@link useViewState} (URL-persisted), derives the
  * server query params from it, runs the cursor-paginated live read (`useLiveInfiniteApiQuery` —
  * the polling-now/SSE-later seam), and flattens the pages into rows. It returns exactly the data
- * half of {@link StreamViewProps}; the page supplies the drawer `onSelect` + row `actions`.
+ * half of {@link StreamViewProps}; the page supplies the view's own slots.
  */
 import type { StreamPageOut } from '@docket/types';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -38,7 +38,7 @@ export interface UseStreamPageArgs {
 }
 
 /** The data half of {@link StreamViewProps} the page spreads into `<StreamView>`. */
-type StreamPageData = Omit<StreamViewProps, 'actions' | 'onSelect' | 'saveSlot' | 'now'>;
+type StreamPageData = Omit<StreamViewProps, 'actions' | 'saveSlot' | 'now'>;
 
 /** Wire the filter state + live cursor read for a stream scope. */
 export function useStreamPage(args: UseStreamPageArgs): StreamPageData {

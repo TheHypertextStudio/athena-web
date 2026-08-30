@@ -3,11 +3,12 @@ import { describe, expect, it } from 'vitest';
 import { type StreamEventOut as StreamEventOutType, StreamEventOut } from '@docket/types';
 
 import {
-  kindGlyph,
+  streamActorKind,
   streamActorLabel,
   streamDescription,
   streamEventDetailLabel,
   streamEventSentence,
+  streamExactTime,
   streamHref,
   toRow,
 } from '@/components/stream/stream-meta';
@@ -218,8 +219,35 @@ describe('streamHref', () => {
   });
 });
 
-describe('kindGlyph', () => {
-  it('maps completion to the completed tone', () => {
-    expect(kindGlyph('completed').tone).toContain('completed');
+describe('streamActorKind', () => {
+  it('reads every agent-emitted kind as an agent', () => {
+    for (const kind of [
+      'agent_started',
+      'agent_progress',
+      'agent_blocked',
+      'agent_completed',
+      'agent_failed',
+    ]) {
+      expect(streamActorKind(toRow(event({ kind })))).toBe('agent');
+    }
+  });
+
+  it('reads everything else as a person', () => {
+    for (const kind of ['completed', 'comment', 'field_change', 'mention']) {
+      expect(streamActorKind(toRow(event({ kind })))).toBe('human');
+    }
+  });
+});
+
+describe('streamExactTime', () => {
+  it('formats a parseable instant', () => {
+    const formatted = streamExactTime(toRow(event({ occurredAt: '2026-06-29T12:00:00.000Z' })));
+    expect(formatted).toBeTruthy();
+    expect(formatted).not.toContain('Invalid');
+  });
+
+  it('returns null rather than rendering "Invalid Date" into the panel', () => {
+    const row = { ...toRow(event()), occurredAt: 'not-a-date' };
+    expect(streamExactTime(row)).toBeNull();
   });
 });

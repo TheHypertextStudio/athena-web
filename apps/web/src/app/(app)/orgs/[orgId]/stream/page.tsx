@@ -2,16 +2,14 @@
 
 /** Per-workspace Stream — the firehose of every event in this org. */
 import { useTypedRoute } from '@/lib/app-location';
-import { type JSX, useState } from 'react';
+import type { JSX } from 'react';
 
-import { EventDrawer } from '@/components/stream/event-drawer';
-import type { StreamEventRow } from '@/components/stream/stream-meta';
 import { StreamView } from '@/components/stream/stream-view';
 import { useStreamPage } from '@/components/stream/use-stream-page';
 
 /**
- * The per-workspace Stream route — the firehose of every event in this org, filterable, with a
- * click-to-open event drawer.
+ * The per-workspace Stream route — the firehose of every event in this org, filterable, with
+ * click-to-expand event detail inline in the feed.
  *
  * @returns the workspace Stream page.
  */
@@ -20,16 +18,5 @@ export default function WorkspaceStreamPage(): JSX.Element {
     params: { orgId },
   } = useTypedRoute('/orgs/[orgId]/stream');
   const data = useStreamPage({ scope: 'org', orgId });
-  const [selected, setSelected] = useState<StreamEventRow | null>(null);
-  return (
-    <>
-      <StreamView {...data} onSelect={setSelected} />
-      <EventDrawer
-        row={selected}
-        onClose={() => {
-          setSelected(null);
-        }}
-      />
-    </>
-  );
+  return <StreamView {...data} />;
 }

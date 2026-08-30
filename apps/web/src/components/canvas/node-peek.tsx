@@ -4,7 +4,7 @@
  * `components/canvas/node-peek` — the in-canvas selection inspector.
  *
  * @remarks
- * When a node is selected (single-click), the host renders this in a `<Panel>` so the user can
+ * When a node is selected (single-click), the host docks this beside the canvas so the user can
  * read the task's blockers / blocked-by / subtasks and take a quick action **without leaving the
  * canvas** (double-click navigates instead). The blocker lists are derived from the in-memory
  * edge set — no extra fetch. "Mark done / Reopen" moves the task between the workspace's own
@@ -12,13 +12,15 @@
  * page.
  */
 import { type ActorKind, ActorAvatar, StatusIcon } from '@docket/ui/components';
-import { ArrowRight, X } from '@docket/ui/icons';
-import { Button, Surface } from '@docket/ui/primitives';
+import { ArrowRight } from '@docket/ui/icons';
+import { Button } from '@docket/ui/primitives';
 import type { Edge, Node } from '@xyflow/react';
 
 import type { WorkStatusCategory } from '@docket/types';
 
 import { PriorityGlyph } from '@/components/task-detail/PriorityGlyph';
+
+import { CanvasInspector } from './canvas-inspector';
 
 import type { TaskNodeData } from './task-node';
 
@@ -116,72 +118,66 @@ export default function NodePeek({
     data.assignee;
 
   return (
-    <Surface tone="floating" pad="comfortable" className="flex w-72 flex-col gap-3">
-      <div className="flex items-start gap-2">
-        <StatusIcon type={data.stateType} label={data.statusName} className="mt-0.5" />
-        <span className="text-on-surface text-body-medium flex-1 font-medium">{data.title}</span>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close"
-          className="text-on-surface-variant hover:text-on-surface"
-        >
-          <X className="size-4" />
-        </button>
-      </div>
+    <CanvasInspector
+      title={data.title}
+      leading={<StatusIcon type={data.stateType} label={data.statusName} />}
+      closeLabel="Close task details"
+      onClose={onClose}
+    >
+      <div className="flex flex-col gap-3">
+        <div className="text-on-surface-variant flex items-center gap-3 text-xs">
+          {data.priority !== 'none' ? (
+            <span className="flex items-center gap-1">
+              <PriorityGlyph priority={data.priority} />
+              {data.priority}
+            </span>
+          ) : null}
+          {assignee !== null ? (
+            <span className="flex items-center gap-1">
+              <ActorAvatar
+                kind={assignee.kind}
+                name={assignee.name}
+                avatarUrl={assignee.avatarUrl}
+                size={18}
+              />
+              {assignee.name}
+            </span>
+          ) : (
+            <span>Unassigned</span>
+          )}
+        </div>
 
-      <div className="text-on-surface-variant flex items-center gap-3 text-xs">
-        {data.priority !== 'none' ? (
-          <span className="flex items-center gap-1">
-            <PriorityGlyph priority={data.priority} />
-            {data.priority}
-          </span>
-        ) : null}
-        {assignee !== null ? (
-          <span className="flex items-center gap-1">
-            <ActorAvatar
-              kind={assignee.kind}
-              name={assignee.name}
-              avatarUrl={assignee.avatarUrl}
-              size={18}
-            />
-            {assignee.name}
-          </span>
-        ) : (
-          <span>Unassigned</span>
-        )}
-      </div>
+        <RefList label="Blocked by" refs={blockedBy} onNavigate={onNavigate} />
+        <RefList label="Blocks" refs={blocking} onNavigate={onNavigate} />
+        <RefList label="Subtasks" refs={subtasks} onNavigate={onNavigate} />
 
-      <RefList label="Blocked by" refs={blockedBy} onNavigate={onNavigate} />
-      <RefList label="Blocks" refs={blocking} onNavigate={onNavigate} />
-      <RefList label="Subtasks" refs={subtasks} onNavigate={onNavigate} />
-
-      <div className="flex items-center gap-2 pt-1">
-        <Button
-          type="button"
-          size="sm"
-          variant="ghost"
-          className="gap-1"
-          onClick={() => {
-            onNavigate(node.id);
-          }}
-        >
-          Open task <ArrowRight className="size-4" />
-        </Button>
-        {canEdit ? (
+        <div className="flex items-center gap-2 pt-1">
           <Button
             type="button"
             size="sm"
-            variant="outline"
-            className="ml-auto"
+            variant="ghost"
+            className="gap-1"
             onClick={() => {
-              onSetComplete(node.id, !isDone);
+              onNavigate(node.id);
             }}
           >
-            {isDone ? 'Reopen' : 'Mark done'}
+            Open task <ArrowRight className="size-4" />
           </Button>
-        ) : null}
+          {canEdit ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="ml-auto"
+              onClick={() => {
+                onSetComplete(node.id, !isDone);
+              }}
+            >
+              {isDone ? 'Reopen' : 'Mark done'}
+            </Button>
+          ) : null}
+        </div>
       </div>
-    </Surface>
+    </CanvasInspector>
   );
 }

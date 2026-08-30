@@ -129,13 +129,25 @@ GEN-10's acceptance criteria also name the published-brief templates. No publish
 
 ## Shell rail panels
 
-The right-hand supplemental panels, registered per route by `apps/web/src/components/app-shell-frame.tsx`. They are a class of their own rather than overlays: at `lg` and above each is a **docked column** beside `<main>`, and only below `lg` is it presented in a Sheet. Every route in the `(app)` group hosts exactly two of them, so they are on screen for more of a session than most rows in this file.
+The right-hand supplemental panels, registered per route by `apps/web/src/components/app-shell-frame.tsx`. They are a class of their own rather than overlays: at `lg` and above each is a **docked column** beside `<main>`, and below `lg` it becomes a **full-window pane** — never a side sheet, which used to leave a strip of unreachable page beside it (`docs/superpowers/specs/2026-08-25-full-screen-utility-panel-design.md`). Every route in the `(app)` group hosts exactly two of them, so they are on screen for more of a session than most rows in this file.
 
 | Surface id        | URL | Source                                                  | Scorecard(s)                                               |
 | ----------------- | --- | ------------------------------------------------------- | ---------------------------------------------------------- |
 | `agenda`          | —   | `apps/web/src/components/agenda/agenda.tsx`             | `docs/design/audits/2026-08-07-agenda-rail.md`             |
 | `day-tasks-panel` | —   | `apps/web/src/components/rail/day-tasks-panel.tsx`      | —                                                          |
 | `focus-panel`     | —   | `apps/web/src/components/time-tracking/focus-panel.tsx` | `docs/design/audits/2026-08-09-focus-working-companion.md` |
+
+## Graph inspectors
+
+Not overlays: selecting a node in the task or project graph docks its detail as a **column beside
+the canvas**, and on a host narrower than 768px as a pane covering the canvas
+(`docs/superpowers/specs/2026-08-30-docked-canvas-inspector-design.md`). They floated over the
+canvas's top-right corner until 2026-08-30.
+
+| Surface id     | URL | Source                                            | Scorecard(s) |
+| -------------- | --- | ------------------------------------------------- | ------------ |
+| `node-peek`    | —   | `apps/web/src/components/canvas/node-peek.tsx`    | —            |
+| `project-peek` | —   | `apps/web/src/components/canvas/project-peek.tsx` | —            |
 
 ## MCP App widgets
 

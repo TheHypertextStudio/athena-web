@@ -7581,6 +7581,127 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [OVERLAY-REMOVAL-001] Remove every side overlay, and rebuild Stream around inline expansion
+
+- **Completed**: 2026-08-30
+- **Process**: Logged at completion. No entry was opened under Active Tasks before the work
+  started, which the Work Tracking Rules require; recorded here rather than back-filled, because
+  an in-flight history that did not happen is worse than a gap that did.
+- **Priority**: P1
+- **Summary**: Two edge-anchored presentations are gone. The Stream event drawer is replaced by
+  inline expansion in the feed, and the task and project graph inspectors are a docked column
+  beside the canvas. Stream also took a full MD3 Expressive redesign, since it had to be rebuilt
+  around the new interaction anyway.
+
+  A third — the shell's compact-width right `Sheet` — was built on this branch and then **dropped
+  during the rebase**, because `9645a0d7` landed the same thing on `main` while this work was in
+  flight. The two agreed almost line for line (a `min-h-12` app bar carrying the panel switcher, a
+  `Close <panel>` action, the same safe-area inset), so there was nothing to salvage and main's is
+  the version that ships. What this branch keeps from that leg is the e2e coverage, which main's
+  version did not come with.
+
+- **Decisions**: The three prior sweeps that removed slide-overs (`9b0cc195`, `32289760`,
+  `b1e1f1f1`) were each shaped like "find every `Sheet`", so the one presentation that never used
+  `Sheet` survived all of them. That is why this pass enumerated _edge-anchored geometry_ instead
+  of a component name, and why the triage table in the canvas spec records what deliberately stays
+  floating — a bottom action bar and a centred empty state are not side panels, and sweeping them
+  in would have doubled the blast radius for no benefit.
+
+  Expressive here means shape, tonal containment, type, and motion-of-position. It cannot mean
+  scale or depth: `design-token-scan.ts` fails the build on `hover:scale-*` and on any `shadow-*`
+  outside the overlay allow-set. So Stream's three separators (`border-b` per episode, `divide-y`
+  per event, `border-l` on the disclosed list — three lines doing one job) became a tonal day card
+  plus a continuous timeline rail, which is what §8 of the design system asks for anyway. MD3's
+  emphasized easing pair was added as two tokens rather than as call-site cubic-beziers.
+
+  The nested-disclosure problem — an episode toggle and a per-line toggle on the same rows — is
+  resolved by what each one produces rather than by indentation: a disclosure that adds stations to
+  the spine reveals more events, one that opens a raised card off the spine reveals more about one
+  event. Only one line per episode is open at a time, which also keeps the infinite-scroll sentinel
+  from being shoved around mid-read.
+
+  Three deletions were free wins the change surfaced: `actor-avatar.tsx` was dead code duplicating
+  the shared `ActorAvatar` that ~25 other files use; `athena-plan.tsx` had the drawer as its only
+  consumer; and `provider-badge.tsx`'s six hardcoded brand hexes moved into the `[data-provider]`
+  token layer, which fixed a live bug — GitHub's near-black ink rendered an invisible dot on every
+  dark surface, because an inline `style={{background}}` cannot answer a theme change.
+
+  **Open finding, not fixed here:** the utility pane that landed on `main` sizes itself with
+  `w-[100vw]` (`sheet.tsx`'s `fullscreen` and `responsive-fullscreen` presentations). `100vw`
+  includes the classic scrollbar gutter, so on any platform that reserves one the pane is wider
+  than the viewport and takes the document into horizontal overflow — the responsive hard gate.
+  `inset-0` already pins both edges and is scrollbar-exclusive, so the `w-[100vw]` is redundant as
+  well as harmful. Left for its author rather than changed underneath them; the e2e assertion added
+  here (pane width === `documentElement.clientWidth`) is what would catch it.
+
+  Also worth naming: `main`'s Stream drawer is `presentation="responsive-fullscreen"` with
+  `side="right"`, which is full-screen only below 640px and a right-anchored side sheet above it.
+  That fixed the _hand-rolled_ half of the problem — it is a real `Sheet` now, with a focus trap —
+  but on any desktop width it was still a side overlay, which is what this change removes.
+
+  On the canvas, the tempting move is to put the aspect-ratio observer on the narrowed canvas
+  column. That is a bug: the layout engine buckets the ratio at 1.25 and re-packs the entire graph
+  when the bucket flips, so a ~1170px host losing ~300px would re-pack the graph under the user at
+  the moment they opened something to read. The observer stays on the host row and the width change
+  is absorbed by the smallest pan that keeps the selected node visible — never a `fitView`, which
+  would discard the pan and zoom the user chose.
+
+- **Files changed**: Deleted `stream/{event-drawer,athena-plan,actor-avatar}.tsx`. Added
+  `stream/{stream-spine,stream-event-detail}.tsx` and
+  `canvas/{graph-inspector-host,graph-inspector-geometry,canvas-inspector}.tsx`. Reworked
+  `stream/{stream-view,stream-episode,stream-event-line,provider-badge,stream-meta,use-stream-page}`,
+  both Stream routes, `canvas/{node-peek,project-peek,task-graph-panel,project-graph-panel}`,
+  and `packages/ui/src/styles/globals.css` (emphasized easing + provider dot tokens). Also deletes
+  `tests/components/stream/event-drawer.test.tsx`, which `main` added for a component this change
+  removes. Specs:
+  `docs/superpowers/specs/2026-08-25-full-screen-utility-panel-design.md` (recovered from the
+  dangling commit `e209ab23` and corrected — it described a panel _menu_ that shipped as a
+  `tablist`) and `docs/superpowers/specs/2026-08-30-docked-canvas-inspector-design.md`.
+- **Validation**: `pnpm lint`, `pnpm typecheck`, and `pnpm format:check` pass. The design-token
+  policy gate passes with four entries removed from `design-token-debt.json` and none added — every
+  new file is held to zero violations, which the ratchet enforces for unlisted files.
+
+  Every suite this change touches is green: 3645 web tests, 124 shell tests in `@docket/ui`, and
+  the design-policy tests. Three consecutive full-suite runs each failed on a _different_
+  timing-sensitive file — `graph-layout-performance` (a 100ms wall-clock budget), `markdown-table`
+  (editor autosave), and `outbox-cross-tab` (a concurrency race) — and each passes in isolation,
+  the last one 3/3. None is in this diff. The one real failure was mine and is fixed: the API's
+  work-view p95 test was reading the dev database I had seeded for screenshots, which
+  `docs/engineering/ui-verification.md` warns about; `pnpm db:reset` cleared it and the test passes.
+
+  Verified in a browser against a seeded account on the real local stack. `e2e/stream.spec.ts`
+  passes, including its new load-bearing assertion that no `dialog` is mounted anywhere while an
+  event is expanded. The new `e2e/shell/side-overlay-removal-evidence.spec.ts` passes and closes a
+  genuine gap: neither the shell's compact panel nor the graph inspectors had any e2e coverage,
+  which is part of why the 22rem side sheet survived three cleanup passes. Measured directly: the
+  compact pane fills the client width at 390 and 820 with no page strip and no horizontal overflow;
+  the graph inspector is a 256px `<aside>` docked beside the canvas at 1440, and a covering `<div>`
+  filling the graph host at 1024. Stream, the pane, and the graph were captured in both themes.
+
+- **Learned in verification**: two defects the unit tests could not have caught. The page container
+  spaces _every_ flex child, so the zero-height scroll sentinel and live region were collecting
+  ~64px of empty gap under the toolbar; they now share one wrapper. And the compact graph pane sat
+  at `z-20` while `CanvasOverlayPanel` pins canvas chrome at `!z-[2000]`, so the minimap, zoom
+  controls, and viewport toolbar punched straight through a pane that was supposed to cover them.
+
+  Also confirmed pre-existing and left alone: on the focused graph route a synthetic click on a
+  node navigates rather than selecting, so the evidence spec selects through the context menu. The
+  diff touches no click, selection, or navigation code.
+
+  `apps/web/e2e/calendar/agenda-quick-create-evidence.spec.ts` fails at its _desktop_ docked-rail
+  stage, on a control this change never touches and at a width where the modified Sheet is not
+  mounted: it expects a `group` named "Agenda zoom" that no longer exists in `src`, and a two-part
+  "Agenda display settings, 1×" name that `agenda-scale-controls.tsx` now emits with three parts.
+  Commit `c5cf92e2` changed the Agenda header without updating the spec — which is what happens to
+  a spec excluded from the default suite. Recorded here rather than fixed, as it is a separate
+  slice.
+
+- **Blockers**: A fresh `/design-review` scorecard for Stream is still outstanding; the shot set is
+  captured but not yet scored against the rubric.
+- **Learnings**: A cleanup scoped to a component name only finds the instances that used that
+  component. Scoping the sweep to the _geometry_ — anything anchored to a window edge — is what
+  found the one that three previous passes had walked past.
+
 ### [TODAY-COPY-001] Name every Today section for what it holds
 
 - **Completed**: 2026-08-29

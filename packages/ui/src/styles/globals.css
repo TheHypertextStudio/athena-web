@@ -182,6 +182,25 @@
   --label-slate-on-container: oklch(0.38 0.015 264);
 
   /*
+   * Provider brand dots (light), keyed off the `data-provider` attribute `ProviderBadge` emits.
+   *
+   * Source attribution is one of the few places the rubric lets colour be *earned*: telling
+   * Linear from GitHub from Docket at a glance is the badge's whole job, and a neutral dot
+   * cannot do it. What is not earned is a hex literal inside the component — see the note on
+   * the `[data-provider]` block below for why that was a live bug rather than a style
+   * preference.
+   *
+   * Values are the brands' own colours converted to oklch and pulled toward the palette's
+   * lightness band so they sit on the surface ramp instead of punching through it.
+   */
+  --provider-docket-dot: oklch(0.55 0.2 288);
+  --provider-linear-dot: oklch(0.53 0.16 274);
+  --provider-github-dot: oklch(0.4 0.01 264);
+  --provider-google-calendar-dot: oklch(0.55 0.02 80);
+  --provider-gmail-dot: oklch(0.55 0.02 80);
+  --provider-neutral-dot: oklch(0.55 0.02 264);
+
+  /*
    * MD3 tonal surface system (light).
    *
    * The canvas is `--surface-container` — a subtly cool-tinted neutral just off pure white,
@@ -347,6 +366,19 @@
     --label-slate-dot: oklch(0.72 0.015 264);
     --label-slate-container: oklch(0.32 0.01 264);
     --label-slate-on-container: oklch(0.88 0.012 264);
+
+    /*
+     * Provider brand dots (dark). Every value lifts in lightness, exactly like the label dots
+     * above. GitHub is the reason this block has to exist at all: its brand ink is near-black,
+     * and the component that used to paint it inline rendered an invisible dot on every dark
+     * surface in the product. A brand colour still has to clear its own background.
+     */
+    --provider-docket-dot: oklch(0.76 0.15 288);
+    --provider-linear-dot: oklch(0.74 0.13 274);
+    --provider-github-dot: oklch(0.8 0.01 264);
+    --provider-google-calendar-dot: oklch(0.74 0.02 80);
+    --provider-gmail-dot: oklch(0.74 0.02 80);
+    --provider-neutral-dot: oklch(0.72 0.015 264);
 
     /*
      * MD3 tonal surface system (dark).
@@ -589,6 +621,21 @@
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
 
   /*
+   * MD3 Expressive's *emphasized* pair (`md.sys.motion.easing.emphasized.{decelerate,accelerate}`).
+   * These are what makes an expressive transition read as sprung rather than linear-ish: an
+   * element entering overshoots its ease-out and settles, an element leaving pulls away slowly
+   * then goes. The standard `--ease-out` above stays the default for micro-feedback; reach for
+   * these only when something changes *size or position* enough that the arrival is the point —
+   * a disclosure unfolding, a pane docking.
+   *
+   * The pair exists as tokens rather than as call-site cubic-beziers for the reason §9 of
+   * design-system.md gives: a curve spelled inline is a second, unnamed motion system, and there
+   * is no way to change it later without finding every copy.
+   */
+  --ease-emphasized-decel: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --ease-emphasized-accel: cubic-bezier(0.3, 0, 0.8, 0.15);
+
+  /*
    * Org-rebind cross-fade (design-system.md §"Motion"): switching the bound org fades the
    * main panel back in over --dur-slow, making the context switch legible without layout
    * motion. Applied transiently by AppShell when `activeOrgId` changes.
@@ -665,6 +712,37 @@
     --label-dot: var(--label-slate-dot);
     --label-container: var(--label-slate-container);
     --label-on-container: var(--label-slate-on-container);
+  }
+
+  /*
+   * Provider dots, keyed off the `data-provider` attribute `ProviderBadge` emits — the same
+   * shape as the label colours above, for the same reason.
+   *
+   * The `:root` fallback is the quiet neutral, so a source system nobody has assigned a brand
+   * colour to renders a grey dot rather than nothing.
+   */
+  :root {
+    --provider-dot: var(--provider-neutral-dot);
+  }
+
+  [data-provider='docket'] {
+    --provider-dot: var(--provider-docket-dot);
+  }
+
+  [data-provider='linear'] {
+    --provider-dot: var(--provider-linear-dot);
+  }
+
+  [data-provider='github'] {
+    --provider-dot: var(--provider-github-dot);
+  }
+
+  [data-provider='google_calendar'] {
+    --provider-dot: var(--provider-google-calendar-dot);
+  }
+
+  [data-provider='gmail'] {
+    --provider-dot: var(--provider-gmail-dot);
   }
 
   [data-label-color='blue'] {

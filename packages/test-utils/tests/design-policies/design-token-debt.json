@@ -308,16 +308,6 @@
   "apps/web/src/components/search/search-client.tsx": {
     "raw-type-utility": 13
   },
-  "apps/web/src/components/stream/actor-avatar.tsx": {
-    "raw-type-utility": 2
-  },
-  "apps/web/src/components/stream/athena-plan.tsx": {
-    "raw-type-utility": 9
-  },
-  "apps/web/src/components/stream/provider-badge.tsx": {
-    "hardcoded-color": 6,
-    "raw-type-utility": 1
-  },
   "apps/web/src/components/task-detail/Dependencies.tsx": {
     "raw-type-utility": 6
   },

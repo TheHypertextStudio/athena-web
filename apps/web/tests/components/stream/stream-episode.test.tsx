@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { StreamEpisodeView } from '@/components/stream/stream-episode';
 import type { StreamEpisode } from '@/components/stream/stream-grouping';
@@ -119,17 +119,60 @@ describe('StreamEpisodeView', () => {
     expect(screen.getByText('You reacted')).toBeInTheDocument();
   });
 
-  it('opens the exact event from an event line', () => {
-    const onSelect = vi.fn();
-    const item = event('completed');
+  it('expands one event inline and closes the previously expanded one', () => {
+    render(<StreamEpisodeView episode={episode()} scope="org" />);
+    const [first, second] = screen.getAllByRole('button', { expanded: false });
+    if (!first || !second) throw new Error('The episode must render one disclosure per event.');
+
+    fireEvent.click(first);
+    expect(first).toHaveAttribute('aria-expanded', 'true');
+    expect(
+      document.getElementById(String(first.getAttribute('aria-controls'))),
+    ).toBeInTheDocument();
+
+    fireEvent.click(second);
+    expect(second).toHaveAttribute('aria-expanded', 'true');
+    expect(first).toHaveAttribute('aria-expanded', 'false');
+    expect(document.getElementById(String(first.getAttribute('aria-controls')))).toBeNull();
+  });
+
+  it('keeps the related-activity disclosure independent of an event expansion', () => {
+    const completed = event('completed');
+    const reaction = event('reaction', {
+      kind: 'reaction',
+      occurredAt: '2026-06-29T11:59:00.000Z',
+      detail: null,
+    });
     render(
       <StreamEpisodeView
-        episode={episode({ allEvents: [item], visibleEvents: [item] })}
+        episode={episode({
+          allEvents: [completed, reaction],
+          visibleEvents: [completed],
+          relatedEvents: [reaction],
+        })}
         scope="org"
-        onSelect={onSelect}
       />,
     );
-    fireEvent.click(screen.getByText('You completed the task'));
-    expect(onSelect).toHaveBeenCalledWith(item);
+    const disclosure = screen.getByRole('button', { name: 'Show 1 related event' });
+    fireEvent.click(disclosure);
+
+    const line = screen
+      .getAllByRole('button', { expanded: false })
+      .find((element) => element.getAttribute('aria-controls')?.startsWith('stream-event-detail-'));
+    if (!line) throw new Error('The episode must render an expandable event line.');
+    fireEvent.click(line);
+
+    // Both stay open, and they control different regions — the nested-disclosure contract.
+    expect(disclosure).toHaveAttribute('aria-expanded', 'true');
+    expect(line).toHaveAttribute('aria-expanded', 'true');
+    expect(disclosure.getAttribute('aria-controls')).not.toBe(line.getAttribute('aria-controls'));
+  });
+
+  it('inspects an event without mounting any overlay', () => {
+    render(<StreamEpisodeView episode={episode()} scope="org" />);
+    const [first] = screen.getAllByRole('button', { expanded: false });
+    if (!first) throw new Error('The episode must render a disclosure.');
+    fireEvent.click(first);
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });

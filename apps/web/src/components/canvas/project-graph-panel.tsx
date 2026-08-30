@@ -54,6 +54,7 @@ import {
   useCanvasCommandHistory,
 } from '@/components/canvas/use-canvas-command-history';
 import CanvasOverlayPanel from '@/components/canvas/canvas-overlay-panel';
+import { GraphInspectorHost } from '@/components/canvas/graph-inspector-host';
 
 /** The registered node renderers for this canvas (only the project card). */
 const NODE_TYPES = { project: ProjectNode };
@@ -346,7 +347,30 @@ export function ProjectGraphPanel({
         }}
       >
         <CanvasSelectionFrame label="Project dependency graph">
-          <div ref={containerRef} className="size-full min-h-0 flex-1">
+          {/* `containerRef` stays on this row, never on the canvas column — see the note in
+              `GraphInspectorHost` about the aspect-ratio bucket re-packing the whole graph. */}
+          <GraphInspectorHost
+            hostRef={containerRef}
+            className="size-full min-h-0 flex-1"
+            aside={
+              selected ? (
+                <ProjectPeek
+                  project={selected}
+                  orgId={orgId}
+                  leadName={selectedLeadName}
+                  blockedBy={neighbors.blockedBy}
+                  blocks={neighbors.blocks}
+                  onSelect={setSelectedId}
+                  onClose={() => {
+                    setSelectedId(null);
+                  }}
+                />
+              ) : null
+            }
+            onClose={() => {
+              setSelectedId(null);
+            }}
+          >
             <Canvas
               nodes={positioned}
               edges={edges}
@@ -384,23 +408,8 @@ export function ProjectGraphPanel({
                   </p>
                 </CanvasOverlayPanel>
               ) : null}
-              {selected ? (
-                <CanvasOverlayPanel position="top-right">
-                  <ProjectPeek
-                    project={selected}
-                    orgId={orgId}
-                    leadName={selectedLeadName}
-                    blockedBy={neighbors.blockedBy}
-                    blocks={neighbors.blocks}
-                    onSelect={setSelectedId}
-                    onClose={() => {
-                      setSelectedId(null);
-                    }}
-                  />
-                </CanvasOverlayPanel>
-              ) : null}
             </Canvas>
-          </div>
+          </GraphInspectorHost>
         </CanvasSelectionFrame>
       </CanvasCommandProviderWithHistory>
     </CanvasSelectionRetentionProvider>

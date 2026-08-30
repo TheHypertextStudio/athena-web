@@ -40,16 +40,40 @@ test('keeps substantive changes explicit inside a compact context episode', asyn
   await expect(related.getByText('You updated details')).toHaveCount(2);
   await expect(related.getByText(/Description:/)).toHaveCount(2);
 
-  await episode.getByText('You completed the task').click();
-  const drawer = page.getByRole('dialog', { name: 'Event details' });
-  await expect(drawer.getByText(/You completed/)).toBeVisible();
-  await expect(drawer.getByText(/In progress → Done/)).toBeVisible();
-  await expect(drawer.getByText(/\d{1,2}:\d{2}/)).toBeVisible();
-  await drawer.getByRole('button', { name: 'Close event details' }).click();
+  // Inspecting an exact event unfolds it in place. Reach the line structurally so re-wording the
+  // sentence cannot break the test.
+  const eventList = episode.getByRole('list', { name: /^Events about/ });
+  const firstEvent = eventList.getByRole('listitem').first().getByRole('button').first();
+  await expect(firstEvent).toHaveAttribute('aria-expanded', 'false');
+  const panelId = await firstEvent.getAttribute('aria-controls');
+  expect(panelId).toBeTruthy();
+  const detail = episode.locator(`[id="${String(panelId)}"]`);
+  await expect(detail).toHaveCount(0);
+
+  await firstEvent.click();
+  await expect(firstEvent).toHaveAttribute('aria-expanded', 'true');
+  await expect(detail).toBeVisible();
+  // The expansion is inline: no overlay of any kind is mounted.
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  // The old drawer's payload found a new home — typed detail, the exact instant, the subject link.
+  await expect(detail.getByText(/In progress → Done/)).toBeVisible();
+  await expect(detail.locator('time[datetime]')).not.toHaveCount(0);
+  await expect(detail.getByRole('link')).not.toHaveCount(0);
+
+  // The two disclosures are independent: expanding an event leaves the related list open.
+  await expect(disclosure).toHaveAttribute('aria-expanded', 'true');
+  await expect(related).toBeVisible();
+
+  await firstEvent.click();
+  await expect(firstEvent).toHaveAttribute('aria-expanded', 'false');
+  await expect(detail).toHaveCount(0);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(main.getByRole('heading', { name: 'Stream' })).toBeVisible();
   await expect(main.getByRole('button', { name: 'Filters' })).toBeVisible();
+  // Re-check overflow with a panel open: it is the widest content the feed can render.
+  await firstEvent.click();
+  await expect(detail).toBeVisible();
   const hasHorizontalOverflow = await page.evaluate(
     () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
   );

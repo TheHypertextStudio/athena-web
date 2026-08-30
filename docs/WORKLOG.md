@@ -184,6 +184,15 @@
   3,636 passing Web tests and 5,089 passing API tests before the production-size performance test
   exceeded its p95 budget under concurrent full-suite load and the API worker exhausted its heap;
   the CI-equivalent isolated `pnpm --filter @docket/api test:performance` run passes both tests.
+- **Current-main release-gate repair**: A detached `origin/main` baseline passed integrations
+  coverage at 90.40% branches, while the rebased MCP Apps branch initially fell to 89.37%; this was
+  therefore branch-owned rather than an unrelated current-main failure. Real-boundary tests now
+  cover default and explicit tool visibility, complete stable resource metadata, fixture-session
+  presentation capture, missing resource fallback, fallback raw results, plain tools, and unlisted
+  tools. Integrations now passes 1,025 tests and its coverage gate at 94.65% statements, 90.14%
+  branches, 96.48% functions, and 95.20% lines. The isolated current branch also passes all 3,639
+  Web tests and all 5,091 API tests with an eight-GiB Node heap; this preserves the production-size
+  benchmark while avoiding the earlier cross-package resource contention.
 - **Layer 3 decisions and retrospective**: The official stable prose and exact npm package source
   were the authority because Context7 remained quota-blocked. Counting normative vocabulary
   occurrences rather than methods/capabilities prevents a stable protocol symbol list from

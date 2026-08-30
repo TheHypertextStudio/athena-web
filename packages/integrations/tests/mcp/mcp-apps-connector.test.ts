@@ -15,6 +15,7 @@ import { MCP_UI_EXTENSION, MCP_UI_META_KEY, MCP_UI_MIME_TYPE } from '@docket/typ
 import {
   createWidgetFixtureServer,
   flatten,
+  isRemoteToolVisibleTo,
   MCP_UI_CLIENT_CAPABILITY,
   MockMcpConnector,
   readUiResourceMeta,
@@ -87,6 +88,27 @@ describe('uiMetaSpread', () => {
     const spread = uiMetaSpread(undefined);
     expect(spread).toEqual({});
     expect('ui' in spread).toBe(false);
+  });
+});
+
+describe('stable tool visibility', () => {
+  const tool = {
+    name: 'render_card',
+    description: 'Render a card.',
+    inputSchema: { type: 'object' },
+  };
+
+  it('treats an omitted visibility declaration as available to both callers', () => {
+    // Catches accidentally hiding stable default-visible tools from either model or app catalogs.
+    expect(isRemoteToolVisibleTo(tool, 'model')).toBe(true);
+    expect(isRemoteToolVisibleTo(tool, 'app')).toBe(true);
+  });
+
+  it('admits only audiences named by an explicit visibility declaration', () => {
+    // Catches app-only implementation tools leaking back into model discovery.
+    const appOnly = { ...tool, ui: { visibility: ['app' as const] } };
+    expect(isRemoteToolVisibleTo(appOnly, 'model')).toBe(false);
+    expect(isRemoteToolVisibleTo(appOnly, 'app')).toBe(true);
   });
 });
 
@@ -170,6 +192,93 @@ describe('a session against a widget-bearing server', () => {
     // The agent loop reads text; a widget needs the structure. Both come from one call.
     expect(raw?.['structuredContent']).toMatchObject({ title: 'Release 4.2 checklist' });
     expect(Array.isArray(raw?.['content'])).toBe(true);
+    await session.close();
+  });
+
+  it('captures a durable presentation when a fixture call includes its connection identity', async () => {
+    // Catches the mock/runtime seam flattening away the resource needed to reopen conversation history.
+    const session = await new MockMcpConnector().open(ENDPOINT);
+
+    const result = await session.callTool(
+      'release_checklist',
+      { view: 'summary' },
+      { connectionId: 'connection-1', serverName: 'Acme Release Tracker' },
+    );
+
+    expect(result.presentation).toMatchObject({
+      connectionId: 'connection-1',
+      serverName: 'Acme Release Tracker',
+      tool: 'release_checklist',
+      arguments: { view: 'summary' },
+      resource: {
+        uri: WIDGET_FIXTURE_URI,
+        mimeType: MCP_UI_MIME_TYPE,
+        meta: { csp: {}, prefersBorder: true },
+      },
+    });
+    expect(result.presentationUnavailable).toBeUndefined();
+    await session.close();
+  });
+
+  it('keeps text and marks a declared app unavailable when a fixture has no resource snapshot', async () => {
+    // Catches a missing resource erasing the successful textual result or pretending an app rendered.
+    const connector = new MockMcpConnector({
+      servers: {
+        'missing-card.example': {
+          tools: [
+            {
+              name: 'render_card',
+              description: 'Render a card.',
+              inputSchema: { type: 'object' },
+              ui: { resourceUri: 'ui://missing/card' },
+            },
+          ],
+          call: () => ({ content: 'Text fallback', isError: false }),
+        },
+      },
+    });
+    const session = await connector.open({ url: 'https://missing-card.example/mcp' });
+
+    await expect(
+      session.callTool('render_card', undefined, {
+        connectionId: 'connection-2',
+        serverName: 'Missing Card',
+      }),
+    ).resolves.toEqual({
+      content: 'Text fallback',
+      isError: false,
+      presentationUnavailable: true,
+    });
+    await session.close();
+  });
+
+  it('does not manufacture unavailable app state for plain or unlisted fixture tools', async () => {
+    // Catches the fallback marker appearing on calls that never declared an MCP App resource.
+    const connector = new MockMcpConnector({
+      servers: {
+        'plain-tools.example': {
+          tools: [
+            {
+              name: 'echo',
+              description: 'Echo text.',
+              inputSchema: { type: 'object' },
+            },
+          ],
+          call: (name) => ({ content: name, isError: false }),
+        },
+      },
+    });
+    const session = await connector.open({ url: 'https://plain-tools.example/mcp' });
+    const context = { connectionId: 'connection-3', serverName: 'Plain Tools' };
+
+    await expect(session.callTool('echo', { text: 'hello' }, context)).resolves.toEqual({
+      content: 'echo',
+      isError: false,
+    });
+    await expect(session.callTool('not_listed', {}, context)).resolves.toEqual({
+      content: 'not_listed',
+      isError: false,
+    });
     await session.close();
   });
 

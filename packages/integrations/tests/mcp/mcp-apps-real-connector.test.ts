@@ -103,6 +103,29 @@ describe('RealMcpConnector MCP App resources', () => {
     expect(presentation?.arguments).toEqual({ primary: shared, fallback: shared });
   });
 
+  it('retains every stable resource metadata field including an explicit false border preference', () => {
+    // Catches stable CSP, permission, domain, or boolean metadata being dropped from history.
+    const presentation = normalizeMcpAppPresentation({
+      ...PRESENTATION_INPUT,
+      resource: {
+        ...PRESENTATION_INPUT.resource,
+        meta: {
+          csp: { connectDomains: ['https://weather.example'] },
+          permissions: { geolocation: {} },
+          domain: 'weather.example',
+          prefersBorder: false,
+        },
+      },
+    });
+
+    expect(presentation?.resource.meta).toEqual({
+      csp: { connectDomains: ['https://weather.example'] },
+      permissions: { geolocation: {} },
+      domain: 'weather.example',
+      prefersBorder: false,
+    });
+  });
+
   it.each([
     ['credential-bearing arguments', { arguments: { authorization: 'Bearer secret' } }],
     [

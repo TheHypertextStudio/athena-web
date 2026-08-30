@@ -280,6 +280,11 @@ describe('generated deployment manifests', () => {
     ).toEqual([]);
   });
 
+  it('passes the shared Lattice OAuth registration into Cloud Run', () => {
+    const present = new Set(cloudRunEnvNames());
+    expect(present.has('LATTICE_CLIENT_ID')).toBe(true);
+  });
+
   it('gives the bootstrap skeleton every required var', () => {
     const present = bootstrapSkeletonKeys();
     expect(present.has('APP_MODE')).toBe(true);

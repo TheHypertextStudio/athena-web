@@ -140,6 +140,8 @@
   - [x] Keep URL-derived tool prefixes inside the connection form's accepted length.
   - [x] Stop the deployment fallback from overriding a user's enabled Lattice backend.
   - [x] Make personal MCP Apps an unmistakable Athena destination.
+  - [x] Pass the shared Lattice OAuth registration into production without selecting a backend
+        globally.
   - [ ] Validate packages, production build, and an upstream reference app.
 - **Layer 1 implementation**: Pinned `@modelcontextprotocol/ext-apps@1.7.5` in the workspace
   catalog and replaced Athena's copied protocol types and handwritten browser host engine with
@@ -326,6 +328,12 @@
   connector label. A behavioral test opens the real Athena dialog from the visible destination;
   the complete panel file passes 8/8, Web typecheck passes, affected ESLint is clean, and Prettier
   reports the changed files canonical.
+- **Production Lattice registration wiring**: Authenticated Chrome acceptance proved the deployed
+  MCP Apps entry point and official map connection, then stopped before the model tool call because
+  production had no Athena backend and could not expose the per-user Lattice consent flow. The
+  deploy now passes the non-secret `LATTICE_CLIENT_ID` repository variable into Cloud Run. This is
+  only Docket's shared OAuth registration: each person still authorizes Lovelace, chooses their own
+  device, and may disable it independently. No deployment-wide Lattice backend is selected.
 - **Shipping release validation**: The complete integrations MCP directory passes 205 tests; the
   root typecheck passes 26/26 tasks, root lint passes 25/25 tasks, and the canonical production
   build passes API, Runner, Admin, Web, and the generated service worker. The single bounded root

@@ -103,6 +103,9 @@ jobs:
           GOOGLE_CALENDAR_WEBHOOK_URL: "${{ vars.API_URL }}/webhooks/calendar/google"
           GOOGLE_OAUTH_PUBLIC: "${{ vars.GOOGLE_OAUTH_PUBLIC }}"
           GOOGLE_OAUTH_TEST_EMAILS: "${{ vars.GOOGLE_OAUTH_TEST_EMAILS }}"
+          # Public OAuth client registration shared by the deployment. Each person still grants
+          # and selects their own Lattice device; this value does not choose a backend globally.
+          LATTICE_CLIENT_ID: "${{ vars.LATTICE_CLIENT_ID }}"
           AGENT_MAX_TURNS: "${{ vars.AGENT_MAX_TURNS }}"
           ATHENA_ASYNC_RUNNER_ENABLED: "false"
           BILLING_CANARY_EMAILS: "${{ vars.BILLING_CANARY_EMAILS }}"

@@ -240,7 +240,8 @@ MCP_MAP_INTEROP_URL=https://PUBLIC-EPHEMERAL-HOST.example/mcp \
   pnpm --filter @docket/integrations test:mcp-map-interop
 ```
 
-The command fails unless the official server advertises `geocode` and `show-map`, `show-map`
-returns meaningful text, and Athena retains its `ui://cesium-map/mcp-app.html` presentation. An
-authenticated production acceptance run still requires a real Athena account connected to that
-public endpoint; this manual transport smoke does not close that release gate.
+The command calls `geocode` for Las Vegas, validates and parses the first returned bounding box,
+passes those exact server-derived bounds to `show-map`, and then fails unless `show-map` returns
+meaningful text and Athena retains its `ui://cesium-map/mcp-app.html` presentation. An authenticated
+production acceptance run still requires a real Athena account connected to that public endpoint;
+this manual transport smoke does not close that release gate.

@@ -152,6 +152,25 @@ describe('ui:// widget resources', () => {
     expect(content.text).not.toContain('@import url(');
   });
 
+  it('serves valid self-contained text HTML for every registered Athena widget', async () => {
+    const client = await connect(await seedCtx());
+    const widgets = (await allResources(client)).filter((resource) =>
+      resource.uri.startsWith('ui://'),
+    );
+
+    for (const widget of widgets) {
+      const read = await client.readResource({ uri: widget.uri });
+      expect(read.contents).toHaveLength(1);
+      const content = read.contents[0] as { uri: string; mimeType: string; text: string };
+      expect(content.uri).toBe(widget.uri);
+      expect(content.mimeType).toBe(UI_MIME_TYPE);
+      expect(content.text).toMatch(/^<!doctype html>/i);
+      expect(content.text).toMatch(/<html[\s>]/i);
+      expect(content.text).toMatch(/<body[\s>]/i);
+      expect(content.text.trim().length, widget.uri).toBeGreaterThan(100);
+    }
+  });
+
   it('speaks the extension handshake, not an ad-hoc ready signal', async () => {
     const client = await connect(await seedCtx());
     const read = await client.readResource({ uri: 'ui://docket/change-report' });

@@ -181,6 +181,51 @@
 - **Layer 3 files changed**: `pnpm-workspace.yaml`, `pnpm-lock.yaml`,
   `packages/integrations/package.json`, `packages/integrations/tests/mcp/{mcp-apps-conformance.ts,mcp-apps-conformance.test.ts,mcp-apps-official-compat.test.ts,emit-conformance-matrix.ts,run-map-interop.ts}`,
   `docs/engineering/specs/{mcp-apps-conformance.md,mcp-apps-host.md}`, and this worklog.
+- **Layer 3 review fix 1 plan**: Strengthen the manifest gate so every production path resolves
+  from the repository root and every locator names a construct present in that source. Re-audit all
+  81 responsibility assignments, replacing connector/upstream evidence with Athena server and
+  widget-runtime behavior where the normative role requires it. Add RED coverage for malformed
+  official-App requests and for the public map smoke's `geocode` → derived `show-map` flow, then
+  regenerate the matrix and repeat focused runtime, sandbox, Web, MCP, package, and repository
+  validation. The controller-adjudicated fullscreen border preference is outside this fix round.
+- **Layer 3 review fix 1 implementation**: The manifest now resolves every implementation file
+  strictly from the repository root and verifies that its `file :: locator` names a production
+  construct that exists. All 81 rows were re-audited by responsibility: Athena server rows point
+  to first-party resource/fallback behavior, View rows execute the production widget runtime, and
+  Sandbox policy rows cross the real Web-to-proxy boundary while naming the production sandbox
+  policy builder. UI-enabled server registrations now enforce meaningful text fallback at the
+  catalog boundary. The official-App malformed-link case returns JSON-RPC `-32602` and performs no
+  browser action. The public map runner now calls official `geocode`, validates and parses its first
+  result, and passes those exact bounds to `show-map` before checking text fallback and the retained
+  resource snapshot.
+- **Layer 3 review fix 1 TDD evidence**: RED first showed a nonexistent `registerAppResources`
+  locator, a View row incorrectly assigned to the upstream official App, malformed `ui/open-link`
+  becoming `-32603`, an Athena UI-enabled callback returning empty content, and the map runner
+  failing at import before its flow could be tested. GREEN has the all-81 manifest gate at 13/13,
+  focused integration conformance/official/host/sandbox/connector/map at 92/92, API runtime,
+  fallback, resources, routes, and visibility at 32/32, Web adapter policy/runtime at 23/23, and
+  the complete integrations MCP directory at 196/196. Integrations, API, and Web typechecks and
+  ESLint pass. Integrations coverage passes 992/992 at 96.69% statements, 94.01% branches, 97.11%
+  functions, and 97.26% lines. Focused API catalog coverage passes 11/11 and focused Web adapter
+  coverage passes 23/23. Full API coverage runs 5,035 tests but retains the unrelated baseline of
+  19 initiative route failures (1 in `group-a.test.ts`, 18 in `initiatives-detail.test.ts`); no
+  review-fix path overlaps either file or the initiative route implementation.
+- **Layer 3 review fix 1 decisions and retrospective**: `HOST-008` is recorded as unsupported
+  because Athena snapshots once rather than implementing a performance cache. Ignoring optional
+  partial input is recorded as implemented View behavior because the production runtime proves it,
+  while progressive rendering stays unsupported. The stable MUST/MUST NOT rows have production
+  behavior and named tests; the two deliberately unimplemented SHOULD recommendations—retaining
+  CSP policy in logs and showing a separate external-domain warning—remain explicit deviations.
+  Executable path and locator checks catch fabricated evidence mechanically, while responsibility
+  checks prevent an upstream App from proving Athena's own View or server behavior. Context7 was
+  still quota-blocked, so the vendored stable spec, its recorded hash, and exact-pinned package
+  source remained the authority.
+- **Layer 3 review fix 1 files changed**: `apps/api/src/mcp/catalog.ts`,
+  `apps/api/tests/mcp/{mcp-app-fallback.test.ts,mcp-app-runtime.test.ts,mcp-apps.test.ts}`,
+  `apps/web/tests/athena/mcp-app-view.test.tsx`,
+  `packages/integrations/src/mcp-apps-host.ts`,
+  `packages/integrations/tests/mcp/{mcp-apps-conformance.ts,mcp-apps-conformance.test.ts,mcp-apps-official-compat.test.ts,mcp-apps-sandbox.test.ts,run-map-interop.ts,run-map-interop.test.ts}`,
+  `docs/engineering/specs/{mcp-apps-conformance.md,mcp-apps-host.md}`, and this worklog.
 - **Blockers**: Production acceptance needs an authenticated live Athena account and a publicly
   reachable pinned upstream reference server; local and CI evidence cannot substitute for it.
   Once available, start the exact-pinned map server behind an ephemeral public HTTPS endpoint,

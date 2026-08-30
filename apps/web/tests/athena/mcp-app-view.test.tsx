@@ -146,6 +146,35 @@ describe('McpAppView frames', () => {
     expect(html).toContain('<body>checklist</body>');
   });
 
+  it('propagates declared CSP and permissions across the Web proxy boundary', async () => {
+    const resource = {
+      ...RESOURCE,
+      meta: {
+        csp: {
+          connectDomains: ['https://api.acme.test'],
+          resourceDomains: ['https://cdn.acme.test'],
+        },
+        permissions: { camera: {}, clipboardWrite: {} },
+      },
+    };
+    const { posted, fromProxy } = mount({ resource });
+    fromProxy({ jsonrpc: '2.0', method: MCP_UI_METHODS.sandboxProxyReady, params: {} });
+    await waitFor(() => {
+      expect(posted).not.toHaveLength(0);
+    });
+
+    const ready = posted.find(
+      (entry) => entry.message['method'] === MCP_UI_METHODS.sandboxResourceReady,
+    );
+    const params = ready?.message['params'] as Record<string, unknown>;
+    expect(String(params['html'])).toContain(`connect-src https://api.acme.test`);
+    expect(String(params['html'])).toContain(`img-src 'self' data: https://cdn.acme.test`);
+    expect(String(params['html'])).not.toContain('https://undeclared.acme.test');
+    expect(params['allow']).toBe(`camera 'src'; clipboard-write 'src'`);
+    expect(params['csp']).toEqual(resource.meta.csp);
+    expect(params['permissions']).toEqual(resource.meta.permissions);
+  });
+
   it('posts only to the proxy origin, never to a wildcard', async () => {
     const { posted, fromProxy } = mount();
     fromProxy({ jsonrpc: '2.0', method: MCP_UI_METHODS.sandboxProxyReady, params: {} });
@@ -267,6 +296,40 @@ describe('McpAppView frames', () => {
 });
 
 describe('McpAppView bridge', () => {
+  it('initializes the browser adapter with truthful capabilities and stable host context', async () => {
+    const harness = mount();
+    harness.fromProxy({ jsonrpc: '2.0', method: MCP_UI_METHODS.sandboxProxyReady, params: {} });
+    harness.fromProxy({
+      jsonrpc: '2.0',
+      id: 'initialize-web',
+      method: MCP_UI_METHODS.initialize,
+      params: {
+        appInfo: { name: 'acme-release-view', version: '1.0.0' },
+        appCapabilities: { availableDisplayModes: ['inline', 'fullscreen'] },
+        protocolVersion: MCP_UI_PROTOCOL_VERSION,
+      },
+    });
+    await waitFor(() => {
+      expect(
+        harness.posted.find((entry) => entry.message['id'] === 'initialize-web'),
+      ).toBeDefined();
+    });
+    const result = harness.posted.find((entry) => entry.message['id'] === 'initialize-web')
+      ?.message['result'] as Record<string, unknown>;
+    expect(result['hostCapabilities']).toEqual({
+      openLinks: {},
+      serverTools: { listChanged: false },
+      sandbox: { csp: {}, permissions: {} },
+    });
+    expect(result['hostContext']).toMatchObject({
+      theme: 'light',
+      displayMode: 'inline',
+      availableDisplayModes: ['inline', 'fullscreen'],
+      containerDimensions: { maxHeight: 640 },
+      platform: 'web',
+    });
+  });
+
   it('delivers tool input then tool result, and only after the view is initialized', async () => {
     const harness = mount();
     harness.fromProxy({ jsonrpc: '2.0', method: MCP_UI_METHODS.sandboxProxyReady, params: {} });
@@ -457,7 +520,7 @@ describe('McpAppView bridge', () => {
     });
   });
 
-  it('returns attempted background focus to the fullscreen card', async () => {
+  it('enters fullscreen, reports the resulting mode, and contains focus', async () => {
     const outside = document.createElement('button');
     outside.textContent = 'Background control';
     document.body.append(outside);
@@ -477,6 +540,9 @@ describe('McpAppView bridge', () => {
       const close = await screen.findByRole('button', { name: 'Close' });
       const dialog = screen.getByRole('dialog');
       expect(dialog).toHaveAttribute('aria-modal', 'true');
+      expect(
+        harness.posted.find((entry) => entry.message['id'] === 'full-1')?.message['result'],
+      ).toEqual({ mode: 'fullscreen' });
 
       outside.focus();
       fireEvent.focusIn(outside);

@@ -14,7 +14,7 @@
  */
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
@@ -128,6 +128,51 @@ describe('conformance matrix', () => {
         source,
         `${requirement.id} cites a test that does not exist: ${String(testName)}`,
       ).toContain(`'${String(testName)}'`);
+    }
+  });
+
+  it('resolves every implementation responsibility from the repository root', () => {
+    for (const requirement of NORMATIVE_REQUIREMENTS) {
+      const [file, locator] = requirement.implementation.split(' :: ');
+      expect(file, `${requirement.id} needs an implementation file`).toBeTruthy();
+      expect(locator, `${requirement.id} needs an implementation locator`).toBeTruthy();
+
+      const implementationPath = resolve(REPO_ROOT, file ?? '');
+      const repoRelative = relative(REPO_ROOT, implementationPath);
+      expect(
+        repoRelative.startsWith('..'),
+        `${requirement.id} escapes the repository root: ${String(file)}`,
+      ).toBe(false);
+      expect(
+        existsSync(implementationPath),
+        `${requirement.id} cites production code that does not exist: ${String(file)}`,
+      ).toBe(true);
+      expect(
+        readFileSync(implementationPath, 'utf8'),
+        `${requirement.id} locator is absent from ${String(file)}: ${String(locator)}`,
+      ).toContain(locator);
+    }
+  });
+
+  it('assigns server and view obligations to Athena production behavior', () => {
+    for (const requirement of NORMATIVE_REQUIREMENTS.filter(
+      (entry) => entry.applicability === 'applicable',
+    )) {
+      const [implementationFile] = requirement.implementation.split(' :: ');
+      const [testFile] = requirement.test.split(' :: ');
+      if (requirement.role === 'server') {
+        expect(implementationFile, requirement.id).toMatch(/^apps\/api\/src\/mcp\//);
+        expect(testFile, requirement.id).toMatch(/^apps\/api\/tests\/mcp\//);
+      }
+      if (requirement.role === 'view') {
+        expect(implementationFile, requirement.id).toBe('apps/api/src/mcp/apps/runtime.ts');
+        expect(testFile, requirement.id).toBe('apps/api/tests/mcp/mcp-app-runtime.test.ts');
+      }
+      if (requirement.role === 'sandbox' && requirement.id !== 'SANDBOX-001') {
+        expect(implementationFile, requirement.id).toBe(
+          'packages/integrations/src/mcp-apps-sandbox.ts',
+        );
+      }
     }
   });
 

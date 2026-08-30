@@ -26,6 +26,7 @@ import {
   SetLevelRequestSchema,
   SubscribeRequestSchema,
   UnsubscribeRequestSchema,
+  type CallToolResult,
 } from '@modelcontextprotocol/sdk/types.js';
 import { db, mcpSubscription } from '@docket/db';
 import { and, eq } from 'drizzle-orm';
@@ -50,6 +51,60 @@ import {
 import { type CatalogEntry, pageValues } from './list-pagination';
 
 const DEFAULT_PAGE_SIZE = 50;
+
+/** Read the stable or legacy UI resource linkage from a tool's open metadata map. */
+function uiToolResourceUri(meta: unknown): string | null {
+  if (!meta || typeof meta !== 'object') return null;
+  const record = meta as Readonly<Record<PropertyKey, unknown>>;
+  for (const key of ['ui', 'io.modelcontextprotocol/ui']) {
+    const value = record[key];
+    if (typeof value === 'string' && value.startsWith('ui://')) return value;
+    if (value && typeof value === 'object') {
+      const resourceUri = (value as Readonly<Record<PropertyKey, unknown>>)['resourceUri'];
+      if (typeof resourceUri === 'string' && resourceUri.startsWith('ui://')) return resourceUri;
+    }
+  }
+  return null;
+}
+
+/**
+ * Guarantee a useful non-UI representation for an Athena tool that also declares a widget.
+ *
+ * @remarks
+ * The enforcement lives at the server registration boundary so a future UI-enabled handler cannot
+ * accidentally return only structured data. Non-UI clients ignore widget metadata and depend on
+ * this content; structured output is serialized when available, otherwise the result still names
+ * whether the operation completed or failed.
+ */
+function ensureUiToolTextFallback(result: CallToolResult): CallToolResult {
+  if (
+    result.content.some(
+      (block) =>
+        block.type === 'text' && typeof block.text === 'string' && block.text.trim() !== '',
+    )
+  ) {
+    return result;
+  }
+  const text = result.structuredContent
+    ? JSON.stringify(result.structuredContent, null, 2)
+    : result.isError
+      ? 'The tool could not complete.'
+      : 'The tool completed successfully.';
+  return { ...result, content: [...result.content, { type: 'text', text }] };
+}
+
+/** Wrap a UI-enabled tool callback with the server's text-fallback invariant. */
+function uiToolCallback<InputArgs extends ToolInputSchema>(
+  config: ToolConfig<InputArgs, ToolOutputSchema>,
+  callback: ToolCallback<InputArgs>,
+): ToolCallback<InputArgs> {
+  if (!uiToolResourceUri(config._meta)) return callback;
+  const invoke = callback as (
+    ...args: Parameters<ToolCallback<InputArgs>>
+  ) => CallToolResult | Promise<CallToolResult>;
+  return (async (...args: Parameters<ToolCallback<InputArgs>>) =>
+    ensureUiToolTextFallback(await invoke(...args))) as ToolCallback<InputArgs>;
+}
 
 type ListResourcesRequest = z.infer<typeof ListResourcesRequestSchema>;
 type ListResourceTemplatesRequest = z.infer<typeof ListResourceTemplatesRequestSchema>;
@@ -141,7 +196,7 @@ export class McpCatalog implements McpRegistrar {
     cb: ToolCallback<InputArgs>,
   ): RegisteredTool {
     this.tools.push({ key: name, value: toolListValue(name, config) });
-    return this.mcp.registerTool(name, config, cb);
+    return this.mcp.registerTool(name, config, uiToolCallback(config, cb));
   }
 
   registerTaskTool<
@@ -159,7 +214,7 @@ export class McpCatalog implements McpRegistrar {
         execution: { taskSupport: 'forbidden' },
       };
       this.tools.push({ key: name, value: toolListValue(name, syncConfig) });
-      return this.mcp.registerTool(name, syncConfig, fallback);
+      return this.mcp.registerTool(name, syncConfig, uiToolCallback(syncConfig, fallback));
     }
 
     this.tools.push({ key: name, value: toolListValue(name, config) });

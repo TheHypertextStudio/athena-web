@@ -26,6 +26,7 @@ async function officialHarness(
   beforeConnect?: (app: App) => void,
 ) {
   const appMessages: JSONRPCMessage[] = [];
+  const hostMessages: JSONRPCMessage[] = [];
   const transport: Transport = {
     start: async () => undefined,
     send: async (message) => {
@@ -37,7 +38,10 @@ async function officialHarness(
   const host = createMcpAppHost({
     hostInfo: { name: 'docket', version: '1.0.0' },
     resource: RESOURCE,
-    post: (message) => transport.onmessage?.(message as JSONRPCMessage),
+    post: (message) => {
+      hostMessages.push(message as JSONRPCMessage);
+      transport.onmessage?.(message as JSONRPCMessage);
+    },
     ...overrides,
   });
   const app = new App({ name: 'official-compatibility-app', version: '1.0.0' }, appCapabilities, {
@@ -45,7 +49,7 @@ async function officialHarness(
   });
   beforeConnect?.(app);
   await app.connect(transport);
-  return { app, appMessages, host };
+  return { app, appMessages, host, hostMessages };
 }
 
 describe('official MCP Apps compatibility', () => {
@@ -157,6 +161,20 @@ describe('official MCP Apps compatibility', () => {
       message: { text: {} },
       sandbox: { csp: {}, permissions: {} },
     });
+  });
+
+  it('returns invalid params for malformed official-App input without opening a link', async () => {
+    const openLink = vi.fn(() => true);
+    const { host, hostMessages } = await officialHarness({ openLink });
+
+    await host.receive({ jsonrpc: '2.0', id: 'bad-link', method: 'ui/open-link', params: {} });
+
+    expect(hostMessages.find((message) => 'id' in message && message.id === 'bad-link')).toEqual({
+      jsonrpc: '2.0',
+      id: 'bad-link',
+      error: expect.objectContaining({ code: -32602 }),
+    });
+    expect(openLink).not.toHaveBeenCalled();
   });
 
   it('keeps the current mode unless both host and app support the requested stable mode', async () => {

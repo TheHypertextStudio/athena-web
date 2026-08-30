@@ -160,7 +160,7 @@ describe('sandbox proxy document', () => {
     expect(proxy.frame()?.srcdoc).toContain('first');
   });
 
-  it('forwards host messages down to the view and view messages up to the host', () => {
+  it('forwards both directions without synthesizing requests or request ids', () => {
     const proxy = runProxy(HOST);
     proxy.dispatch({
       source: proxy.parentWindow,
@@ -185,6 +185,9 @@ describe('sandbox proxy document', () => {
     const call = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'refresh' } };
     proxy.dispatch({ source: proxy.viewSource(), origin: 'null', data: call });
     expect(proxy.toHost.at(-1)).toEqual({ message: call, origin: HOST });
+    expect(proxy.toHost.filter((entry) => 'id' in (entry.message as object))).toEqual([
+      { message: call, origin: HOST },
+    ]);
   });
 
   it('never forwards a sandbox-reserved message in either direction', () => {

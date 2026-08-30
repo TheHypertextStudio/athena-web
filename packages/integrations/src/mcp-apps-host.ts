@@ -34,6 +34,7 @@ import {
   type McpUiResourceCsp,
   type McpUiResourceMeta,
   type McpUiResourcePermissions,
+  McpUiOpenLinkRequestSchema,
   McpUiResourceMetaSchema,
 } from '@modelcontextprotocol/ext-apps/app-bridge';
 import type {
@@ -602,6 +603,24 @@ export function createMcpAppHost(options: McpAppHostOptions): McpAppHost {
         candidate.data.method === 'ui/initialize'
       ) {
         audit({ method: 'ui/initialize', id: candidate.data.id, outcome: 'ok' });
+      }
+      if (
+        candidate.success &&
+        'method' in candidate.data &&
+        'id' in candidate.data &&
+        candidate.data.method === 'ui/open-link' &&
+        !McpUiOpenLinkRequestSchema.safeParse(candidate.data).success
+      ) {
+        options.post({
+          jsonrpc: '2.0',
+          id: candidate.data.id,
+          error: {
+            code: JSON_RPC_ERROR.invalidParams,
+            message: 'Invalid params for ui/open-link.',
+          },
+        });
+        audit({ method: 'ui/open-link', id: candidate.data.id, outcome: 'error' });
+        return;
       }
       await transport.receive(data);
     },

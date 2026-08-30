@@ -56,7 +56,9 @@ export function requiredProductionSecretEnvNames(linearAgentEnabled: boolean): r
 /** Parse the multiline `API_SECRET_BINDINGS` format without accepting shell syntax. */
 export function parseSecretBindings(raw: string): SecretBinding[] {
   const bindings: SecretBinding[] = [];
-  for (const line of raw.split(/\r?\n/)) {
+  // GitHub repository variables can retain zsh's literal newline spelling
+  // when an operator pastes a multiline value through its shell.
+  for (const line of raw.replaceAll("$'\\n'", '\n').split(/\r?\n/)) {
     const trimmed = line.trim();
     if (!trimmed) continue;
     const equals = trimmed.indexOf('=');

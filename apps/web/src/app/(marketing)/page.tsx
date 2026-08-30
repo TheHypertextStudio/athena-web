@@ -37,15 +37,15 @@ export default function HomePage(): JSX.Element {
         tone="paper"
       />
       <FeatureSplit
-        title="Align work with initiatives"
-        description="Initiatives connect goals to responsible work."
+        title="See what an initiative adds up to"
+        description="An initiative holds no work itself. Its health is whatever its projects and programs report."
         side="left"
         surface="/marketing/initiative.jpg"
       />
       <OrganizationsPair />
       <FeatureBand
         title="Place tasks on the calendar"
-        description="Calendar placement shows whether planned work fits."
+        description="Scheduling a task puts it against the hours you actually have."
         surface="/marketing/calendar.jpg"
         tone="ink"
       />

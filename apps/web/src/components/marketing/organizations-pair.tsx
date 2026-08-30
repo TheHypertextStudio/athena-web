@@ -29,7 +29,7 @@ export function OrganizationsPair(): JSX.Element {
         tone="inherit"
         className="text-ink-muted mt-4 max-w-2xl text-balance"
       >
-        Organizations keep their data separate while users see their responsibilities together.
+        Each organization keeps its own data. One view draws your work out of all of them.
       </Text>
       <div className="mt-12 grid gap-5 sm:grid-cols-2">
         <ProductScreenshot

@@ -190,7 +190,7 @@ describe('McpAppView frames', () => {
     void view;
   });
 
-  it('says so, in its own words, when it has nowhere to render', () => {
+  it('uses application-owned fallback copy when it has nowhere to render', () => {
     render(
       <McpAppView
         resource={RESOURCE}
@@ -201,7 +201,19 @@ describe('McpAppView frames', () => {
         onCallTool={async () => ({})}
       />,
     );
-    expect(screen.getByTestId('mcp-app-view-failure').textContent).toBeTruthy();
+    expect(screen.getByTestId('mcp-app-view-failure')).toHaveTextContent(
+      'Interactive view unavailable.',
+    );
+  });
+
+  it('keeps the same fallback when the sandbox frame fails to load', async () => {
+    const { frame } = mount();
+    fireEvent.error(frame);
+    await waitFor(() => {
+      expect(screen.getByTestId('mcp-app-view-failure')).toHaveTextContent(
+        'Interactive view unavailable.',
+      );
+    });
   });
 });
 
@@ -307,8 +319,7 @@ describe('McpAppView bridge', () => {
 
   it('passes text messages but does not expose draft model-context updates', async () => {
     const onMessage = vi.fn(() => true);
-    const onModelContext = vi.fn();
-    const harness = mount({ onMessage, onModelContext });
+    const harness = mount({ onMessage });
     await handshake(harness);
 
     harness.fromProxy({
@@ -330,7 +341,6 @@ describe('McpAppView bridge', () => {
     await waitFor(() => {
       expect(harness.posted.find((p) => p.message['id'] === 'w6')?.message['error']).toBeDefined();
     });
-    expect(onModelContext).not.toHaveBeenCalled();
   });
 
   it('sends graceful teardown before an initialized host unmounts', async () => {

@@ -9,8 +9,7 @@
  * routinely half-succeeds, and the half that did not is precisely the part prose buries.
  *
  * Undo lives here rather than in the transcript because taking a change back is a decision about a
- * specific set, and the card is the only place that set is visible. After undoing, the widget
- * pushes `ui/update-model-context` so the agent stops describing a change that no longer exists.
+ * specific set, and the card is the only place that set is visible.
  */
 import { appDocument } from './runtime';
 
@@ -274,8 +273,6 @@ const SCRIPT = String.raw`
       el('skipped').replaceChildren();
       el('skipped-label').hidden = true;
       button.hidden = true;
-      // Without this the agent keeps answering as though the change still stands.
-      await window.docket.tell('The user undid that change from the report card. It no longer applies.');
     } catch {
       // The message stays beside the rows rather than replacing them: what could not be undone is
       // exactly the thing the person needs to still be looking at.

@@ -154,8 +154,6 @@ export interface McpAppHostOptions {
   readonly openLink?: (url: string) => boolean | Promise<boolean>;
   /** Post a message into the host's conversation. Returning `false` refuses it. */
   readonly sendMessage?: (content: readonly ContentBlock[]) => boolean | Promise<boolean>;
-  /** Replace what the model is told about this view. */
-  readonly updateModelContext?: (update: McpAppModelContext) => void;
   /** Honour (or decline) a display-mode change; return the mode actually applied. */
   readonly requestDisplayMode?: (mode: McpUiDisplayMode) => McpUiDisplayMode;
   /** Hand resource contents to the user as a download. Returning `false` refuses. */
@@ -168,12 +166,6 @@ export interface McpAppHostOptions {
   readonly onRequestTeardown?: () => void;
   /** Every inbound view→host request, for the audit trail the spec asks hosts to keep. */
   readonly onAudit?: (entry: McpAppAuditEntry) => void;
-}
-
-/** What a view last told the model about itself. */
-export interface McpAppModelContext {
-  readonly content?: readonly ContentBlock[];
-  readonly structuredContent?: Readonly<Record<string, unknown>>;
 }
 
 /** One view→host message, recorded for review. */
@@ -412,8 +404,6 @@ export interface McpAppHost {
   readonly initialized: boolean;
   /** The view's declared capabilities, once it has sent them. */
   readonly appCapabilities: McpUiAppCapabilities | null;
-  /** The last `ui/update-model-context` the view sent, or `null`. */
-  readonly modelContext: McpAppModelContext | null;
   /** The host context as currently reported to the view. */
   readonly hostContext: McpUiHostContext;
   /** Stop accepting messages and drop queued work. */
@@ -636,9 +626,6 @@ export function createMcpAppHost(options: McpAppHostOptions): McpAppHost {
     },
     get appCapabilities(): McpUiAppCapabilities | null {
       return bridge.getAppCapabilities() ?? null;
-    },
-    get modelContext(): McpAppModelContext | null {
-      return null;
     },
     get hostContext(): McpUiHostContext {
       return context;

@@ -63,7 +63,7 @@
   render those presentations inline with textual fallback.
 - **Subtasks**:
   - [x] Exact-pin the official SDK and make the protocol/sandbox layer conformant.
-  - [ ] Persist and render model-invoked MCP App presentations in Athena.
+  - [x] Persist and render model-invoked MCP App presentations in Athena.
   - [x] Replace the surface inventory with normative conformance evidence.
   - [ ] Validate packages, production build, and an upstream reference app.
 - **Layer 1 implementation**: Pinned `@modelcontextprotocol/ext-apps@1.7.5` in the workspace
@@ -94,6 +94,38 @@
   ESLint, and the Web production build pass. Per controller ruling, ancestor cleanup keeps the
   captured teardown channel and one-second wait rather than adding ghost DOM; app-controlled
   removal still waits before hiding the view.
+- **Layer 2 implementation**: Model-facing, app-facing, and manual-launch execution boundaries now
+  enforce all four stable visibility states. The original personal Athena remote call captures a
+  validated raw `CallToolResult` plus decoded text/blob UI resource immediately, reduces resource
+  metadata to stable CSP, permissions, domain, and border fields, rejects credentials and
+  non-JSON-safe or over-2-MiB payloads, and persists the presentation atomically inside the
+  existing action-result JSONB. The owner-safe activity projection revalidates that allowlist,
+  and the canonical workbench renders the retained snapshot beneath its action with
+  `Interactive view unavailable.` as the application-owned fallback. Reload never reruns the
+  original model tool; view calls remain fixed to its original personal connection and app-visible
+  tools. The inline connection dialog now uses the full OAuth-default ceremony with explicit
+  bearer and unauthenticated alternatives, while credentials remain absent from browser response
+  DTOs. Draft `ui/update-model-context` callbacks, transcript injection, widget runtime helper,
+  and explanatory UI were removed; text-only `ui/message` remains on the canonical chat route.
+- **Layer 2 validation**: Strict TDD captured RED then GREEN for visibility and blob capture,
+  atomic persistence and projection, reload rendering and failure copy, OAuth/bearer/none setup,
+  and removal of model-context injection. The final focused acceptance pass has 190 integration
+  MCP tests, 348 API agent/host/activity tests, and 104 Web Athena tests passing. Full affected
+  package suites pass for types (791), database (215), integrations (986), and Web (3,588). All
+  five affected packages pass TypeScript and ESLint; the API and Web production builds pass with
+  the documented local public origins. The full API suite has 5,011 passing tests and 19 unrelated
+  existing initiative-hierarchy route failures, reproducible in the unchanged
+  `initiatives-detail.test.ts`; the task-focused API surface remains green.
+- **Layer 2 learning**: The existing `session_activity.body` action-result JSONB and personal
+  projection are sufficient for the complete bounded presentation, so this layer needs no schema
+  migration or new storage. Snapshotting at the connector/session boundary is what guarantees a
+  reopened card cannot repeat a model-invoked side effect. A presentation that fails retention is
+  represented only by an owned unavailable marker alongside the safe textual result, never by
+  provider error prose.
+- **Layer 2 self-review**: Confirmed no capability omitted by Layer 1 was re-advertised, app-only
+  helpers are unreachable from model and manual call paths, registered-agent calls cannot persist
+  a personal connection id, presentation DTOs contain no credentials, no migration was added, and
+  `ui/update-model-context` survives only in negative conformance tests/protocol accounting.
 - **Blockers**: Production acceptance needs an authenticated live Athena account and a publicly
   reachable pinned upstream reference server; local and CI evidence cannot substitute for it.
 

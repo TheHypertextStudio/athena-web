@@ -26,8 +26,12 @@ import {
   TOOL_INPUT_PARTIAL_METHOD,
   TOOL_RESULT_METHOD,
   type McpUiMessageRequest,
+  McpUiResourceMetaSchema,
+  type McpUiResourceCsp,
+  type McpUiResourcePermissions,
   type McpUiUpdateModelContextRequest,
 } from '@modelcontextprotocol/ext-apps/app-bridge';
+import { CallToolResultSchema, type CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
 export type {
   McpUiAppCapabilities,
@@ -113,6 +117,155 @@ export type McpUiUpdateModelContextParams = McpUiUpdateModelContextRequest['para
 /** The MCP Apps client capability Docket advertises during MCP initialization. */
 export interface McpUiClientCapability {
   readonly mimeTypes: readonly string[];
+}
+
+/** Maximum serialized size of one retained MCP App presentation. */
+export const MCP_APP_PRESENTATION_MAX_BYTES = 2 * 1024 * 1024;
+
+/** Stable, host-retained metadata for one normalized MCP App resource. */
+export interface McpAppResourceSnapshotMeta {
+  /** Origins the app may contact or load, after stable-schema validation. */
+  readonly csp?: McpUiResourceCsp | undefined;
+  /** Browser capabilities the app requested, after stable-schema validation. */
+  readonly permissions?: McpUiResourcePermissions | undefined;
+  /** Server-requested host domain hint; Docket still owns the actual sandbox origin. */
+  readonly domain?: string | undefined;
+  /** Whether the host should draw a visible boundary around the app. */
+  readonly prefersBorder?: boolean | undefined;
+}
+
+/** A decoded, renderable `ui://` document safe to hand to the sandbox adapter. */
+export interface McpAppResourceSnapshot {
+  /** The stable `ui://` resource identifier. */
+  readonly uri: string;
+  /** The stable MCP App profile MIME type. */
+  readonly mimeType: string;
+  /** Decoded HTML, including when the server originally returned a base64 blob. */
+  readonly text: string;
+  /** Only stable resource metadata retained from the provider response. */
+  readonly meta?: McpAppResourceSnapshotMeta | undefined;
+}
+
+/** A durable model-invoked MCP App card that can reopen without rerunning its tool. */
+export interface McpAppPresentation {
+  /** The owner-scoped personal MCP connection used for this call. */
+  readonly connectionId: string;
+  /** The application-owned visible name of the connected server. */
+  readonly serverName: string;
+  /** The remote server's un-namespaced tool name. */
+  readonly tool: string;
+  /** The JSON-safe arguments sent by the model. */
+  readonly arguments: Readonly<Record<string, unknown>>;
+  /** The validated raw stable MCP `CallToolResult`. */
+  readonly result: CallToolResult;
+  /** The normalized resource captured immediately after the tool call. */
+  readonly resource: McpAppResourceSnapshot;
+}
+
+function record(value: unknown): Readonly<Record<string, unknown>> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Readonly<Record<string, unknown>>)
+    : null;
+}
+
+const CREDENTIAL_KEYS = new Set([
+  'authorization',
+  'bearertoken',
+  'cookie',
+  'credential',
+  'credentials',
+  'password',
+  'secret',
+  'secrets',
+  'token',
+  'tokens',
+  'apikey',
+  'accesstoken',
+  'refreshtoken',
+  'idtoken',
+  'clientsecret',
+  'codeverifier',
+  'privatekey',
+]);
+
+function containsCredential(value: unknown, seen = new WeakSet()): boolean {
+  if (value === null || typeof value !== 'object') return false;
+  if (seen.has(value)) return false;
+  seen.add(value);
+  if (Array.isArray(value)) return value.some((item) => containsCredential(item, seen));
+  return Object.entries(value).some(
+    ([key, item]) =>
+      CREDENTIAL_KEYS.has(key.toLowerCase().replaceAll(/[^a-z0-9]/g, '')) ||
+      containsCredential(item, seen),
+  );
+}
+
+function jsonSafeClone<T>(value: T): T | null {
+  try {
+    const serialized = JSON.stringify(value, (_key, item: unknown) => {
+      if (
+        item === undefined ||
+        typeof item === 'bigint' ||
+        typeof item === 'function' ||
+        typeof item === 'symbol' ||
+        (typeof item === 'number' && !Number.isFinite(item))
+      ) {
+        throw new TypeError('MCP presentation is not JSON-safe');
+      }
+      return item;
+    });
+    if (new TextEncoder().encode(serialized).byteLength > MCP_APP_PRESENTATION_MAX_BYTES) {
+      return null;
+    }
+    return JSON.parse(serialized) as T;
+  } catch {
+    return null;
+  }
+}
+
+/** Validate and normalize an untrusted persisted MCP App presentation. */
+export function parseMcpAppPresentation(value: unknown): McpAppPresentation | null {
+  const source = record(value);
+  const resource = record(source?.['resource']);
+  const argumentsValue = record(source?.['arguments']);
+  const result = CallToolResultSchema.safeParse(source?.['result']);
+  const meta = McpUiResourceMetaSchema.safeParse(resource?.['meta'] ?? {});
+  if (
+    !source ||
+    typeof source['connectionId'] !== 'string' ||
+    source['connectionId'].length === 0 ||
+    typeof source['serverName'] !== 'string' ||
+    source['serverName'].length === 0 ||
+    typeof source['tool'] !== 'string' ||
+    source['tool'].length === 0 ||
+    !argumentsValue ||
+    !result.success ||
+    !resource ||
+    typeof resource['uri'] !== 'string' ||
+    !isUiResourceUri(resource['uri']) ||
+    resource['mimeType'] !== MCP_UI_MIME_TYPE ||
+    typeof resource['text'] !== 'string' ||
+    !meta.success
+  ) {
+    return null;
+  }
+  const presentation: McpAppPresentation = {
+    connectionId: source['connectionId'],
+    serverName: source['serverName'],
+    tool: source['tool'],
+    arguments: argumentsValue,
+    result: result.data,
+    resource: {
+      uri: resource['uri'],
+      mimeType: resource['mimeType'],
+      text: resource['text'],
+      ...(Object.keys(meta.data).length > 0
+        ? { meta: meta.data as McpAppResourceSnapshotMeta }
+        : {}),
+    },
+  };
+  if (containsCredential(presentation)) return null;
+  return jsonSafeClone(presentation);
 }
 
 /**

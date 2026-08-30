@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AthenaWorkbench } from '../../src/components/athena/athena-workbench';
 import type { PersonalAthenaSessionDetail } from '../../src/lib/athena/presentation';
@@ -49,6 +49,11 @@ const session: PersonalAthenaSessionDetail = {
   result: null,
 };
 
+afterEach(() => {
+  cleanup();
+  delete process.env['NEXT_PUBLIC_API_URL'];
+});
+
 describe('AthenaWorkbench', () => {
   it('offers an explicit continuation for older activity', () => {
     const onLoadOlder = vi.fn();
@@ -79,6 +84,69 @@ describe('AthenaWorkbench', () => {
 
     fireEvent.click(screen.getByText('Technical details'));
     expect(screen.getByText(/sunsama_create_task/)).toBeVisible();
+  });
+
+  it('renders a retained presentation directly beneath its textual tool action', () => {
+    process.env['NEXT_PUBLIC_API_URL'] = 'https://api.docket.test';
+    render(
+      <AthenaWorkbench
+        session={{
+          ...session,
+          activities: [
+            {
+              id: 'tool_presented',
+              type: 'tool',
+              createdAt: '2026-07-15T16:02:00.000Z',
+              service: 'Weather Service',
+              action: 'Show Las Vegas weather',
+              outcome: 'Completed: Show Las Vegas weather',
+              presentation: {
+                connectionId: 'connection-1',
+                serverName: 'Weather Service',
+                tool: 'weather_card',
+                arguments: { city: 'Las Vegas' },
+                result: { content: [{ type: 'text', text: '72 degrees' }], isError: false },
+                resource: {
+                  uri: 'ui://weather/card',
+                  mimeType: 'text/html;profile=mcp-app',
+                  text: '<!doctype html><title>Weather</title>',
+                  meta: { prefersBorder: true },
+                },
+              },
+            },
+          ],
+        }}
+      />,
+    );
+
+    const action = screen.getByText('Weather Service · Show Las Vegas weather');
+    const frame = screen.getByTestId('mcp-app-view');
+    expect(action.compareDocumentPosition(frame) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText('Completed: Show Las Vegas weather')).toBeVisible();
+  });
+
+  it('keeps textual action state and shows subdued fallback for an invalid presentation', () => {
+    render(
+      <AthenaWorkbench
+        session={{
+          ...session,
+          activities: [
+            {
+              id: 'tool_unavailable',
+              type: 'tool',
+              createdAt: '2026-07-15T16:02:00.000Z',
+              service: 'Weather Service',
+              action: 'Show Las Vegas weather',
+              outcome: 'Completed: Show Las Vegas weather',
+              presentationUnavailable: true,
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByText('Completed: Show Las Vegas weather')).toBeVisible();
+    expect(screen.getByText('Interactive view unavailable.')).toBeVisible();
   });
 
   it('emits structured decisions, lifecycle control, and state-aware steering', () => {

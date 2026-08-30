@@ -75,7 +75,6 @@ describe('handshake', () => {
     const { host, handshake } = harness({
       openLink: () => true,
       callTool: async () => ({ content: [] }),
-      updateModelContext: () => undefined,
     });
     const result = await handshake();
 
@@ -464,9 +463,8 @@ describe('view-initiated host requests', () => {
     expect(resultFor(20)?.error?.code).toBe(JSON_RPC_ERROR.methodNotFound);
   });
 
-  it('does not serve draft model-context updates even when a legacy callback is supplied', async () => {
-    const updateModelContext = vi.fn();
-    const { host, resultFor, handshake } = harness({ updateModelContext });
+  it('does not serve draft model-context updates', async () => {
+    const { host, resultFor, handshake } = harness();
     await handshake();
     await host.receive({
       jsonrpc: '2.0',
@@ -475,7 +473,6 @@ describe('view-initiated host requests', () => {
       params: { content: [{ type: 'text', text: 'x' }] },
     });
     expect(resultFor(24)?.error?.code).toBe(JSON_RPC_ERROR.methodNotFound);
-    expect(updateModelContext).not.toHaveBeenCalled();
   });
 
   it('reports the display mode actually applied, not the one requested', async () => {

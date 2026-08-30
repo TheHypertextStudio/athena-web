@@ -97,6 +97,61 @@ const REFRESHED_OAUTH = {
 };
 
 describe('openToolbox — personal (Athena) remote MCP connections', () => {
+  it('surfaces absent, model-only, and dual-visible tools while keeping app-only helpers out of the model catalog', async () => {
+    const userId = await seedUser('Visibility');
+    await db.insert(schema.personalMcpConnection).values({
+      ownerUserId: userId,
+      name: 'Visibility server',
+      alias: 'visible',
+      url: 'https://mcp.visibility.example/mcp',
+      authMode: 'none',
+      status: 'connected',
+    });
+    const close = vi.fn(async () => undefined);
+    const openSpy = vi.spyOn(getContainer().mcpConnector, 'open').mockResolvedValue({
+      serverInfo: () => ({ name: 'visibility-server' }),
+      listTools: async () => [
+        { name: 'default_tool', description: 'default', inputSchema: {} },
+        {
+          name: 'model_tool',
+          description: 'model',
+          inputSchema: {},
+          ui: { visibility: ['model'] },
+        },
+        {
+          name: 'app_helper',
+          description: 'app',
+          inputSchema: {},
+          ui: { visibility: ['app'] },
+        },
+        {
+          name: 'both_tool',
+          description: 'both',
+          inputSchema: {},
+          ui: { visibility: ['model', 'app'] },
+        },
+      ],
+      callTool: async () => ({ content: 'ok', isError: false }),
+      close,
+    });
+
+    const toolbox = await openToolbox({ kind: 'athena', ownerUserId: userId });
+    try {
+      const names = toolbox.tools.map((tool) => tool.name);
+      expect(names).toEqual(
+        expect.arrayContaining([
+          'visible__default_tool',
+          'visible__model_tool',
+          'visible__both_tool',
+        ]),
+      );
+      expect(names).not.toContain('visible__app_helper');
+    } finally {
+      await toolbox.close();
+      openSpy.mockRestore();
+    }
+  });
+
   it('sends a fresh mcp_oauth access token as the bearer credential, unrefreshed', async () => {
     const userId = await seedUser('OAuthFresh');
     const [conn] = await db

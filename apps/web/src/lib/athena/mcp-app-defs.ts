@@ -116,34 +116,11 @@ async function postToCanonicalChat(text: string): Promise<boolean> {
  * @remarks
  * The MCP Apps extension restricts `ui/message` to the `user` role — a widget is speaking AS the
  * user, not narrating to them — so the text is posted verbatim, exactly as if the person had typed
- * it into the composer themselves. That is also why {@link postWidgetModelContext} does NOT share
- * this framing: the two methods exist precisely because one should read as the user's own words
- * and the other should not.
+ * it into the composer themselves.
  *
  * @param text - The message content the widget composed.
  * @returns whether the host posted it and, if so, that Athena's reply can be expected shortly.
  */
 export async function postWidgetMessage(text: string): Promise<boolean> {
   return postToCanonicalChat(text);
-}
-
-/**
- * Record a widget's `ui/update-model-context` update so the model's next turn reflects it.
- *
- * @remarks
- * Framed as a card update, never as something the person said — the extension draws this exact
- * distinction ("This event serves a different use case from... `ui/message`"), so unlike
- * {@link postWidgetMessage} the text is prefixed with the server's name before it reaches the
- * transcript. Docket's durable transcript has only `user`/`assistant` roles (it is the literal
- * payload sent to the model), so there is no silent "system context" channel to defer this onto;
- * posting it through the same turn-driving call is what makes "the next model request's context
- * contains that content" true without a second, unaudited way for arbitrary third-party HTML to
- * write into a person's conversation.
- *
- * @param serverName - The visible name of the connected server the widget came from.
- * @param text - The content the widget wants the model to know.
- * @returns whether the host accepted it.
- */
-export async function postWidgetModelContext(serverName: string, text: string): Promise<boolean> {
-  return postToCanonicalChat(`${serverName} card update — ${text}`);
 }

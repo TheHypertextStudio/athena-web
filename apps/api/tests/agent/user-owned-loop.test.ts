@@ -805,6 +805,105 @@ describe('user-owned Athena loop', () => {
     expect(claimed?.body.action?.result).toBeUndefined();
   });
 
+  it('persists a model-invoked presentation atomically and reloads it without rerunning the tool', async () => {
+    const seed = await seedAthenaSession('routine_autonomy');
+    await db
+      .update(schema.agentSession)
+      .set({ status: 'running', startedAt: new Date() })
+      .where(eq(schema.agentSession.id, seed.sessionId));
+    const leaseToken = 'presentation-worker';
+    const [run] = await db
+      .insert(schema.agentSessionRun)
+      .values({
+        sessionId: seed.sessionId,
+        ownerUserId: seed.ownerUserId,
+        generation: 1,
+        workflowInstanceId: `${seed.sessionId}:1`,
+        status: 'running',
+        attempt: 1,
+        leaseToken,
+        leaseExpiresAt: new Date(Date.now() + 60_000),
+      })
+      .returning({ id: schema.agentSessionRun.id });
+    const [action] = await db
+      .insert(schema.sessionActivity)
+      .values({
+        sessionId: seed.sessionId,
+        organizationId: null,
+        type: 'action',
+        approvalStatus: 'approved',
+        body: {
+          action: {
+            kind: 'weather_card',
+            summary: 'Show Las Vegas weather',
+            mode: 'proposal',
+            toolCall: {
+              connection: 'weather',
+              tool: 'weather_card',
+              input: { city: 'Las Vegas' },
+              toolUseId: 'toolu_weather_card',
+            },
+          },
+        },
+      })
+      .returning({ id: schema.sessionActivity.id });
+    const callTool = vi.fn(async () => ({
+      content: '72 degrees',
+      isError: false,
+      presentation: {
+        connectionId: 'connection-1',
+        serverName: 'Weather Service',
+        tool: 'weather_card',
+        arguments: { city: 'Las Vegas' },
+        result: { content: [{ type: 'text' as const, text: '72 degrees' }], isError: false },
+        resource: {
+          uri: 'ui://weather/card',
+          mimeType: 'text/html;profile=mcp-app',
+          text: '<!doctype html><title>Weather</title>',
+          meta: { prefersBorder: true },
+        },
+      },
+    }));
+    const toolbox = vi.spyOn(toolboxModule, 'openToolbox').mockResolvedValue({
+      tools: [],
+      annotations: () => undefined,
+      annotationSource: () => 'remote' as const,
+      resolve: () => ({ connection: 'weather', rawName: 'weather_card' }),
+      callTool,
+      close: async () => undefined,
+    });
+    const lease = {
+      runId: assertDefined(run).id,
+      sessionId: seed.sessionId,
+      generation: 1,
+      leaseToken,
+      leaseDurationMs: 60_000,
+    };
+
+    try {
+      await expect(executeApprovedActions(seed.orgId, seed.sessionId, lease)).resolves.toBe(
+        'settled',
+      );
+      const [persisted] = await db
+        .select({ body: schema.sessionActivity.body })
+        .from(schema.sessionActivity)
+        .where(eq(schema.sessionActivity.id, assertDefined(action).id));
+      expect((persisted?.body.action?.result as Record<string, unknown>)['presentation']).toEqual(
+        expect.objectContaining({
+          connectionId: 'connection-1',
+          tool: 'weather_card',
+        }),
+      );
+
+      await expect(executeApprovedActions(seed.orgId, seed.sessionId, lease)).resolves.toBe(
+        'settled',
+      );
+      expect(callTool).toHaveBeenCalledOnce();
+    } finally {
+      toolbox.mockRestore();
+    }
+  });
+
   it.each([
     ['thought', 'thinking', 'thought-activity'],
     ['response', 'text', 'response-activity'],

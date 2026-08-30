@@ -938,7 +938,12 @@ export async function executeApprovedActions(
             ...claimed.body,
             action: {
               ...claimed.body.action,
-              result: { content: result.content, isError: result.isError },
+              result: {
+                content: result.content,
+                isError: result.isError,
+                ...(result.presentation ? { presentation: result.presentation } : {}),
+                ...(result.presentationUnavailable ? { presentationUnavailable: true } : {}),
+              },
             },
           };
         }

@@ -28,8 +28,10 @@ import {
   mcpOAuthTokenNeedsRefresh,
   parseMcpOAuthCredential,
   refreshMcpOAuthCredential,
+  isRemoteToolVisibleTo,
   type RemoteMcpSession,
 } from '@docket/integrations';
+import type { McpAppPresentation } from '@docket/types';
 import { and, eq } from 'drizzle-orm';
 
 import { getContainer } from '../container';
@@ -166,6 +168,10 @@ export interface ToolboxResult {
   readonly content: string;
   /** Whether the tool reported failure (the model reacts instead of assuming success). */
   readonly isError: boolean;
+  /** A durable interactive presentation captured during this original remote call. */
+  readonly presentation?: McpAppPresentation | undefined;
+  /** A declared app could not be retained safely and should show the owned fallback. */
+  readonly presentationUnavailable?: boolean | undefined;
 }
 
 /** Where one model-facing tool name routes: a connection key + the raw name there. */
@@ -281,8 +287,16 @@ export async function openToolbox(executor: ToolboxExecutor): Promise<Toolbox> {
   // tools namespaced `<alias>__<name>` (an alias can't contain `__`, so namespaced
   // names never collide with Docket's). A server that fails to open is demoted to
   // `error` on its row — never silently skipped as if healthy.
-  const remoteSessions = new Map<string, RemoteMcpSession>();
-  const remoteRows: { readonly id: string; readonly url: string; readonly alias: string }[] =
+  const remoteSessions = new Map<
+    string,
+    { readonly id: string; readonly name: string; readonly session: RemoteMcpSession }
+  >();
+  const remoteRows: {
+    readonly id: string;
+    readonly url: string;
+    readonly alias: string;
+    readonly name: string;
+  }[] =
     executor.kind === 'registered_agent'
       ? (
           await db
@@ -297,13 +311,14 @@ export async function openToolbox(executor: ToolboxExecutor): Promise<Toolbox> {
             )
         ).map((row) => {
           const config = row.config as unknown as { readonly url: string; readonly alias: string };
-          return { id: row.id, url: config.url, alias: config.alias };
+          return { id: row.id, url: config.url, alias: config.alias, name: config.alias };
         })
       : await db
           .select({
             id: personalMcpConnection.id,
             url: personalMcpConnection.url,
             alias: personalMcpConnection.alias,
+            name: personalMcpConnection.name,
           })
           .from(personalMcpConnection)
           .where(
@@ -364,8 +379,9 @@ export async function openToolbox(executor: ToolboxExecutor): Promise<Toolbox> {
         ...(bearerToken ? { bearerToken } : {}),
       });
       const tools = await session.listTools();
-      remoteSessions.set(row.alias, session);
+      remoteSessions.set(row.alias, { id: row.id, name: row.name, session });
       for (const tool of tools) {
+        if (!isRemoteToolVisibleTo(tool, 'model')) continue;
         const namespaced = `${row.alias}__${tool.name}`;
         if (tool.annotations) annotationsByName.set(namespaced, tool.annotations);
         defs.push({
@@ -430,10 +446,16 @@ export async function openToolbox(executor: ToolboxExecutor): Promise<Toolbox> {
     callTool: async (name, input) => {
       const target = resolve(name);
       if (target.connection !== DOCKET_CONNECTION) {
-        const session = remoteSessions.get(target.connection);
+        const remote = remoteSessions.get(target.connection);
         /* v8 ignore next -- @preserve defensive: resolve only names live connections */
-        if (!session) return { content: `Unknown connection: ${target.connection}`, isError: true };
-        return session.callTool(target.rawName, input);
+        if (!remote) return { content: `Unknown connection: ${target.connection}`, isError: true };
+        return remote.session.callTool(
+          target.rawName,
+          input,
+          executor.kind === 'athena'
+            ? { connectionId: remote.id, serverName: remote.name }
+            : undefined,
+        );
       }
       const result = (await client.callTool({
         name: target.rawName,
@@ -443,8 +465,8 @@ export async function openToolbox(executor: ToolboxExecutor): Promise<Toolbox> {
     },
     close: async () => {
       await client.close();
-      for (const session of remoteSessions.values()) {
-        await session.close();
+      for (const remote of remoteSessions.values()) {
+        await remote.session.close();
       }
     },
   };

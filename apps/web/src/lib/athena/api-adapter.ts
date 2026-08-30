@@ -4,6 +4,7 @@ import type {
   AthenaSessionSummaryOut,
   SessionActivityOut,
 } from '@docket/types';
+import { parseMcpAppPresentation } from '@docket/types';
 
 import type {
   PersonalAthenaActivity,
@@ -87,6 +88,8 @@ export function adaptAthenaActivity(activity: AthenaApiActivity): PersonalAthena
     const connection = string(toolCall?.['connection']);
     const outcome = string(result?.['content']);
     const toolName = string(toolCall?.['tool']);
+    const rawPresentation = result?.['presentation'];
+    const presentation = parseMcpAppPresentation(rawPresentation);
     return {
       id: activity.id,
       type: 'tool',
@@ -94,6 +97,11 @@ export function adaptAthenaActivity(activity: AthenaApiActivity): PersonalAthena
       service: serviceLabel(connection),
       action: summary,
       ...(outcome ? { outcome } : {}),
+      ...(presentation ? { presentation } : {}),
+      ...(result?.['presentationUnavailable'] === true ||
+      (rawPresentation !== undefined && !presentation)
+        ? { presentationUnavailable: true }
+        : {}),
       ...(toolCall
         ? {
             technical: {

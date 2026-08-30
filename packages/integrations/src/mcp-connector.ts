@@ -4,7 +4,7 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
-import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { CallToolResultSchema, type CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import {
   McpUiResourceMetaSchema,
   McpUiToolMetaSchema,
@@ -13,6 +13,9 @@ import {
   MCP_UI_EXTENSION,
   MCP_UI_META_KEY,
   MCP_UI_MIME_TYPE,
+  parseMcpAppPresentation,
+  type McpAppPresentation,
+  type McpAppResourceSnapshot,
   type McpUiClientCapability,
   type McpUiResourceMeta,
   type McpUiToolMeta,
@@ -130,6 +133,14 @@ export interface RemoteToolDescriptor {
   readonly ui?: McpUiToolMeta | undefined;
 }
 
+/** The caller-owned identity needed to retain a model-invoked app presentation. */
+export interface RemoteToolPresentationContext {
+  /** The personal MCP connection id; never a credential. */
+  readonly connectionId: string;
+  /** The application-owned visible server name. */
+  readonly serverName: string;
+}
+
 /** One `ui://` document read from a remote server. */
 export interface RemoteUiResource {
   /** The `ui://` uri. */
@@ -148,6 +159,10 @@ export interface RemoteToolResult {
   readonly content: string;
   /** Whether the tool reported failure. */
   readonly isError: boolean;
+  /** A bounded app presentation captured during this call, when the tool declares valid UI. */
+  readonly presentation?: McpAppPresentation | undefined;
+  /** A declared app could not be retained safely; render application-owned fallback copy. */
+  readonly presentationUnavailable?: boolean | undefined;
 }
 
 /** The human-facing identity an MCP server advertises during initialization. */
@@ -165,7 +180,11 @@ export interface RemoteMcpSession {
   /** List the server's tools. */
   listTools(): Promise<readonly RemoteToolDescriptor[]>;
   /** Call one tool by its un-namespaced name. */
-  callTool(name: string, input: unknown): Promise<RemoteToolResult>;
+  callTool(
+    name: string,
+    input: unknown,
+    presentationContext?: RemoteToolPresentationContext,
+  ): Promise<RemoteToolResult>;
   /**
    * Call one tool and keep the whole `CallToolResult`.
    *
@@ -185,6 +204,66 @@ export interface RemoteMcpSession {
   readUiResource?(uri: string): Promise<RemoteUiResource | null>;
   /** Close the transport. */
   close(): Promise<void>;
+}
+
+export { MCP_APP_PRESENTATION_MAX_BYTES } from '@docket/types';
+
+/** Whether a remote tool may cross the requested stable MCP Apps visibility boundary. */
+export function isRemoteToolVisibleTo(
+  tool: RemoteToolDescriptor,
+  audience: 'model' | 'app',
+): boolean {
+  const visibility = tool.ui?.visibility;
+  return visibility === undefined || visibility.includes(audience);
+}
+
+function resourceSnapshot(resource: RemoteUiResource | null): McpAppResourceSnapshot | null {
+  if (!resource || !isRenderableUiResource(resource)) return null;
+  const meta = resource.meta;
+  return {
+    uri: resource.uri,
+    mimeType: resource.mimeType,
+    text: resource.text,
+    ...(meta
+      ? {
+          meta: {
+            ...(meta.csp ? { csp: meta.csp } : {}),
+            ...(meta.permissions ? { permissions: meta.permissions } : {}),
+            ...(meta.domain ? { domain: meta.domain } : {}),
+            ...(meta.prefersBorder === undefined ? {} : { prefersBorder: meta.prefersBorder }),
+          },
+        }
+      : {}),
+  };
+}
+
+/** Build a bounded, credential-free presentation or omit it without disturbing text fallback. */
+export function normalizeMcpAppPresentation(input: {
+  readonly context: RemoteToolPresentationContext;
+  readonly tool: RemoteToolDescriptor;
+  readonly arguments: unknown;
+  readonly result: unknown;
+  readonly resource: RemoteUiResource | null;
+}): McpAppPresentation | undefined {
+  const result = CallToolResultSchema.safeParse(input.result);
+  const resource = resourceSnapshot(input.resource);
+  if (!result.success || !resource) return undefined;
+  if (
+    input.arguments === null ||
+    typeof input.arguments !== 'object' ||
+    Array.isArray(input.arguments)
+  ) {
+    return undefined;
+  }
+  const candidate: McpAppPresentation = {
+    connectionId: input.context.connectionId,
+    serverName: input.context.serverName,
+    tool: input.tool.name,
+    arguments: input.arguments as Readonly<Record<string, unknown>>,
+    result: result.data,
+    resource,
+  };
+  return parseMcpAppPresentation(candidate) ?? undefined;
 }
 
 /** The remote-MCP port: open a session against an endpoint. */
@@ -223,8 +302,7 @@ export interface FixtureMcpServer {
  * The document speaks the extension by hand rather than importing an SDK, because it runs under a
  * policy with no network. It sends `ui/initialize`, waits for the result, announces
  * `ui/notifications/initialized`, renders from `ui/notifications/tool-result`, and on a click
- * calls its own server tool and pushes a `ui/update-model-context` so the agent stops describing
- * the state the user just changed.
+ * calls its own server tool and refreshes from the returned server state.
  */
 export const WIDGET_FIXTURE_HTML = String.raw`<!doctype html>
 <html>
@@ -336,9 +414,6 @@ export const WIDGET_FIXTURE_HTML = String.raw`<!doctype html>
 
   document.getElementById('advance').addEventListener('click', () => {
     request('tools/call', { name: 'advance_release', arguments: {} })
-      .then(() => request('ui/update-model-context', {
-        content: [{ type: 'text', text: 'The user advanced the release checklist from the card.' }],
-      }))
       .catch(() => {
         document.getElementById('sub').textContent = 'Acme would not accept that change.';
       });
@@ -428,6 +503,15 @@ export function createWidgetFixtureServer(): FixtureMcpServer {
         annotations: { readOnlyHint: false, destructiveHint: true },
         ui: { resourceUri: WIDGET_FIXTURE_URI, visibility: ['model'] },
       },
+      {
+        // App-only helper: views may refresh through it, but model/manual launchers must not list
+        // or invoke it directly.
+        name: 'refresh_release_internal',
+        description: 'Refresh the release card from its own embedded view.',
+        inputSchema: { type: 'object', properties: {} },
+        annotations: { readOnlyHint: true },
+        ui: { resourceUri: WIDGET_FIXTURE_URI, visibility: ['app'] },
+      },
     ],
     uiResources: {
       [WIDGET_FIXTURE_URI]: {
@@ -443,7 +527,11 @@ export function createWidgetFixtureServer(): FixtureMcpServer {
         for (const step of steps) step.done = false;
         return { content: JSON.stringify(snapshot()), isError: false };
       }
-      if (name === 'release_checklist' || name === 'advance_release') {
+      if (
+        name === 'release_checklist' ||
+        name === 'advance_release' ||
+        name === 'refresh_release_internal'
+      ) {
         if (name === 'advance_release') {
           const next = steps.find((step) => !step.done);
           if (next) next.done = true;
@@ -462,7 +550,12 @@ export function createWidgetFixtureServer(): FixtureMcpServer {
         const next = steps.find((step) => !step.done);
         if (next) next.done = true;
       }
-      if (name === 'release_checklist' || name === 'advance_release') return result();
+      if (
+        name === 'release_checklist' ||
+        name === 'advance_release' ||
+        name === 'refresh_release_internal'
+      )
+        return result();
       return { content: [{ type: 'text', text: `Unknown tool: ${name}` }], isError: true };
     },
   };
@@ -539,10 +632,40 @@ export class MockMcpConnector implements McpConnector {
     }
     const server = this.servers[host];
     if (!server) throw new Error(`No MCP server reachable at ${endpoint.url}`);
+    const listTools = async (): Promise<readonly RemoteToolDescriptor[]> => server.tools;
     return {
       serverInfo: () => server.serverInfo ?? { name: host },
-      listTools: async () => server.tools,
-      callTool: async (name, input) => server.call(name, input),
+      listTools,
+      callTool: async (name, input, presentationContext) => {
+        if (!presentationContext) return server.call(name, input);
+        const raw = server.callRaw
+          ? server.callRaw(name, input)
+          : (() => {
+              const flat = server.call(name, input);
+              return {
+                content: [{ type: 'text', text: flat.content }],
+                isError: flat.isError,
+              };
+            })();
+        const flattened = flatten(raw as CallToolResult);
+        const tool = server.tools.find((candidate) => candidate.name === name);
+        const resourceUri = tool?.ui?.resourceUri;
+        const resource = resourceUri ? (server.uiResources?.[resourceUri] ?? null) : null;
+        const presentation = tool
+          ? normalizeMcpAppPresentation({
+              context: presentationContext,
+              tool,
+              arguments: input ?? {},
+              result: raw,
+              resource,
+            })
+          : undefined;
+        return {
+          ...flattened,
+          ...(presentation ? { presentation } : {}),
+          ...(resourceUri && !presentation ? { presentationUnavailable: true } : {}),
+        };
+      },
       callToolRaw: async (name, input) =>
         server.callRaw
           ? server.callRaw(name, input)
@@ -585,73 +708,96 @@ export class RealMcpConnector implements McpConnector {
     // touching SDK types.
     await client.connect(transport as Transport);
     const serverInfo = client.getServerVersion();
+    let listedTools: readonly RemoteToolDescriptor[] | null = null;
+    const listTools = async (): Promise<readonly RemoteToolDescriptor[]> => {
+      if (listedTools) return listedTools;
+      const listed = await client.listTools();
+      listedTools = listed.tools.map((tool) => ({
+        name: tool.name,
+        description: tool.description ?? tool.name,
+        inputSchema: tool.inputSchema,
+        ...uiMetaSpread(tool._meta),
+        ...(tool.annotations
+          ? {
+              annotations: {
+                ...(tool.annotations.readOnlyHint !== undefined
+                  ? { readOnlyHint: tool.annotations.readOnlyHint }
+                  : {}),
+                ...(tool.annotations.destructiveHint !== undefined
+                  ? { destructiveHint: tool.annotations.destructiveHint }
+                  : {}),
+                ...(tool.annotations.openWorldHint !== undefined
+                  ? { openWorldHint: tool.annotations.openWorldHint }
+                  : {}),
+              },
+            }
+          : {}),
+      }));
+      return listedTools;
+    };
+    const readUiResource = async (uri: string): Promise<RemoteUiResource | null> => {
+      const read = await client.readResource({ uri });
+      for (const item of read.contents) {
+        const text = decodeUiResourceHtml(item);
+        if (text === null) continue;
+        const mimeType = typeof item.mimeType === 'string' ? item.mimeType : '';
+        const meta = readUiResourceMeta(item._meta);
+        if (declaresUiResourceMeta(item._meta) && meta === null) continue;
+        if (
+          !isRenderableUiResource({
+            uri: typeof item.uri === 'string' ? item.uri : uri,
+            mimeType,
+            text,
+            ...(meta ? { meta } : {}),
+          })
+        )
+          continue;
+        return {
+          uri: typeof item.uri === 'string' ? item.uri : uri,
+          mimeType,
+          text,
+          ...(meta ? { meta } : {}),
+        };
+      }
+      return null;
+    };
     return {
       serverInfo: (): RemoteMcpServerInfo => ({
         name: serverInfo?.name ?? new URL(endpoint.url).hostname,
         ...(serverInfo?.title ? { title: serverInfo.title } : {}),
       }),
-      listTools: async (): Promise<readonly RemoteToolDescriptor[]> => {
-        const listed = await client.listTools();
-        return listed.tools.map((tool) => ({
-          name: tool.name,
-          description: tool.description ?? tool.name,
-          inputSchema: tool.inputSchema,
-          ...uiMetaSpread(tool._meta),
-          ...(tool.annotations
-            ? {
-                annotations: {
-                  ...(tool.annotations.readOnlyHint !== undefined
-                    ? { readOnlyHint: tool.annotations.readOnlyHint }
-                    : {}),
-                  ...(tool.annotations.destructiveHint !== undefined
-                    ? { destructiveHint: tool.annotations.destructiveHint }
-                    : {}),
-                  ...(tool.annotations.openWorldHint !== undefined
-                    ? { openWorldHint: tool.annotations.openWorldHint }
-                    : {}),
-                },
-              }
-            : {}),
-        }));
-      },
-      callTool: async (name, input) => {
+      listTools,
+      callTool: async (name, input, presentationContext) => {
         const result = (await client.callTool({
           name,
           arguments: (input ?? {}) as Record<string, unknown>,
         })) as CallToolResult;
-        return flatten(result);
+        const flattened = flatten(result);
+        if (!presentationContext) return flattened;
+        const tool = (await listTools()).find((candidate) => candidate.name === name);
+        const resourceUri = tool?.ui?.resourceUri;
+        const resource = resourceUri ? await readUiResource(resourceUri) : null;
+        const presentation = tool
+          ? normalizeMcpAppPresentation({
+              context: presentationContext,
+              tool,
+              arguments: input ?? {},
+              result,
+              resource,
+            })
+          : undefined;
+        return {
+          ...flattened,
+          ...(presentation ? { presentation } : {}),
+          ...(resourceUri && !presentation ? { presentationUnavailable: true } : {}),
+        };
       },
       callToolRaw: async (name, input): Promise<Record<string, unknown>> =>
         await client.callTool({
           name,
           arguments: (input ?? {}) as Record<string, unknown>,
         }),
-      readUiResource: async (uri): Promise<RemoteUiResource | null> => {
-        const read = await client.readResource({ uri });
-        for (const item of read.contents) {
-          const text = decodeUiResourceHtml(item);
-          if (text === null) continue;
-          const mimeType = typeof item.mimeType === 'string' ? item.mimeType : '';
-          const meta = readUiResourceMeta(item._meta);
-          if (declaresUiResourceMeta(item._meta) && meta === null) continue;
-          if (
-            !isRenderableUiResource({
-              uri: typeof item.uri === 'string' ? item.uri : uri,
-              mimeType,
-              text,
-              ...(meta ? { meta } : {}),
-            })
-          )
-            continue;
-          return {
-            uri: typeof item.uri === 'string' ? item.uri : uri,
-            mimeType,
-            text,
-            ...(meta ? { meta } : {}),
-          };
-        }
-        return null;
-      },
+      readUiResource,
       close: async () => {
         await client.close();
       },

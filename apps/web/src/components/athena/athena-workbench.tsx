@@ -8,6 +8,8 @@ import { presentAthenaSession, type PersonalAthenaSessionDetail } from '@/lib/at
 import type { PersonalAthenaLifecycle } from '@/lib/athena/query-defs';
 import MentionTextarea from '@/components/mentions/mention-textarea';
 import { useMentionOrgId } from '@/components/mentions/use-mention-org';
+import { McpAppView } from '@/components/athena/mcp-app-view';
+import { callMcpAppViewTool, postWidgetMessage } from '@/lib/athena/mcp-app-defs';
 
 /** Events emitted by the shared personal Athena workbench. */
 export interface AthenaWorkbenchProps {
@@ -181,34 +183,96 @@ export function AthenaWorkbench({
             <p className="text-on-surface-variant py-8 text-sm">Athena is preparing the work.</p>
           ) : (
             <ol className="divide-outline-variant divide-y">
-              {view.activity.map((entry) => (
-                <li key={entry.id} className="grid gap-1 py-4 @2xl:grid-cols-[10rem_minmax(0,1fr)]">
-                  <span className="text-on-surface-variant text-xs tabular-nums">
-                    {new Intl.DateTimeFormat(undefined, {
-                      hour: 'numeric',
-                      minute: '2-digit',
-                    }).format(new Date(entry.createdAt))}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-on-surface text-sm font-medium break-words">{entry.title}</p>
-                    {entry.detail ? (
-                      <p className="text-on-surface-variant mt-0.5 text-sm leading-6 break-words whitespace-pre-wrap">
-                        {entry.detail}
+              {view.activity.map((entry) => {
+                const presentation = entry.presentation;
+                return (
+                  <li
+                    key={entry.id}
+                    className="grid gap-1 py-4 @2xl:grid-cols-[10rem_minmax(0,1fr)]"
+                  >
+                    <span className="text-on-surface-variant text-xs tabular-nums">
+                      {new Intl.DateTimeFormat(undefined, {
+                        hour: 'numeric',
+                        minute: '2-digit',
+                      }).format(new Date(entry.createdAt))}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-on-surface text-sm font-medium break-words">
+                        {entry.title}
                       </p>
-                    ) : null}
-                    {entry.technical ? (
-                      <details className="text-on-surface-variant mt-2 text-xs">
-                        <summary className="focus-visible:ring-ring min-h-10 w-fit cursor-pointer py-2 focus-visible:ring-2 focus-visible:outline-none">
-                          Technical details
-                        </summary>
-                        <pre className="bg-surface-container-high mt-1 max-w-full overflow-x-auto rounded-md p-3 text-[0.7rem] leading-5">
-                          {JSON.stringify(entry.technical, null, 2)}
-                        </pre>
-                      </details>
-                    ) : null}
-                  </div>
-                </li>
-              ))}
+                      {entry.detail ? (
+                        <p className="text-on-surface-variant mt-0.5 text-sm leading-6 break-words whitespace-pre-wrap">
+                          {entry.detail}
+                        </p>
+                      ) : null}
+                      {presentation ? (
+                        <div className="mt-3">
+                          <McpAppView
+                            resource={{
+                              uri: presentation.resource.uri,
+                              mimeType: presentation.resource.mimeType,
+                              text: presentation.resource.text,
+                              ...(presentation.resource.meta
+                                ? {
+                                    meta: {
+                                      ...(presentation.resource.meta.csp
+                                        ? { csp: presentation.resource.meta.csp }
+                                        : {}),
+                                      ...(presentation.resource.meta.permissions
+                                        ? {
+                                            permissions: presentation.resource.meta.permissions,
+                                          }
+                                        : {}),
+                                      ...(presentation.resource.meta.domain
+                                        ? { domain: presentation.resource.meta.domain }
+                                        : {}),
+                                      ...(presentation.resource.meta.prefersBorder === undefined
+                                        ? {}
+                                        : {
+                                            prefersBorder: presentation.resource.meta.prefersBorder,
+                                          }),
+                                    },
+                                  }
+                                : {}),
+                            }}
+                            tool={{
+                              name: presentation.tool,
+                              arguments: presentation.arguments,
+                            }}
+                            result={presentation.result}
+                            serverName={presentation.serverName}
+                            onCallTool={(tool, args) =>
+                              callMcpAppViewTool({
+                                connectionId: presentation.connectionId,
+                                tool,
+                                arguments: args,
+                              })
+                            }
+                            onMessage={postWidgetMessage}
+                          />
+                        </div>
+                      ) : entry.presentationUnavailable ? (
+                        <p
+                          className="text-on-surface-variant text-body-small mt-2"
+                          data-testid="mcp-app-view-failure"
+                        >
+                          Interactive view unavailable.
+                        </p>
+                      ) : null}
+                      {entry.technical ? (
+                        <details className="text-on-surface-variant mt-2 text-xs">
+                          <summary className="focus-visible:ring-ring min-h-10 w-fit cursor-pointer py-2 focus-visible:ring-2 focus-visible:outline-none">
+                            Technical details
+                          </summary>
+                          <pre className="bg-surface-container-high mt-1 max-w-full overflow-x-auto rounded-md p-3 text-[0.7rem] leading-5">
+                            {JSON.stringify(entry.technical, null, 2)}
+                          </pre>
+                        </details>
+                      ) : null}
+                    </div>
+                  </li>
+                );
+              })}
             </ol>
           )}
         </section>

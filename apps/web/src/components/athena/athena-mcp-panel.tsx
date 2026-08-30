@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { type JSX, useCallback, useEffect, useState } from 'react';
+import { type JSX, useCallback, useEffect, useId, useState } from 'react';
 import { Cable, RefreshCw } from '@docket/ui/icons';
 import {
   Button,
@@ -13,6 +13,7 @@ import {
   DialogTitle,
   Field,
   Input,
+  Select,
   Text,
 } from '@docket/ui/primitives';
 
@@ -22,12 +23,12 @@ import {
   mcpAppKeys,
   mcpAppWidgetsDef,
   postWidgetMessage,
-  postWidgetModelContext,
   renderMcpAppWidget,
   type McpAppRender,
   type McpAppWidget,
 } from '@/lib/athena/mcp-app-defs';
 import { queryKeys, useApiQuery } from '@/lib/query';
+import { deriveMcpConnectorDraft } from '@/components/settings/mcp-connector-draft';
 
 import { McpAppView } from './mcp-app-view';
 
@@ -64,20 +65,67 @@ interface RenderedWidget extends McpAppRender {
  * surface uses, so a connection made from either place is the same connection.
  */
 function ConnectForm({ onConnected }: { readonly onConnected: () => void }): JSX.Element {
+  const aliasId = useId();
+  const authId = useId();
+  const tokenId = useId();
   const [url, setUrl] = useState('');
   const [name, setName] = useState('');
+  const [alias, setAlias] = useState('');
+  const [nameEdited, setNameEdited] = useState(false);
+  const [aliasEdited, setAliasEdited] = useState(false);
+  const [authMode, setAuthMode] = useState<'oauth' | 'bearer' | 'none'>('oauth');
+  const [bearerToken, setBearerToken] = useState('');
   const [failure, setFailure] = useState<string | null>(null);
   const queryClient = useQueryClient();
+
+  const preview = useMutation({
+    mutationFn: async () => {
+      const response = await api.v1.me.athena.connections.preview.$post({
+        json: { url: url.trim() },
+      });
+      if (!response.ok) throw new Error('preview-failed');
+      return response.json();
+    },
+    onSuccess: (server) => {
+      if (!nameEdited) setName(server.name);
+    },
+  });
 
   const connect = useMutation({
     mutationFn: async () => {
       const response = await api.v1.me.athena.connections.$post({
-        json: { url, name: name.trim() || url, alias: suggestAlias(url), authMode: 'none' },
+        json: {
+          url: url.trim(),
+          name: name.trim(),
+          alias: alias.trim(),
+          authMode,
+          ...(authMode === 'bearer' && bearerToken.trim()
+            ? { bearerToken: bearerToken.trim() }
+            : {}),
+        },
       });
       if (!response.ok) throw new Error('connect-failed');
       return response.json();
     },
-    onSuccess: async () => {
+    onSuccess: async (connection) => {
+      if (authMode === 'oauth') {
+        try {
+          const response = await api.v1.me.athena.connections[':id'].authorize.$post({
+            param: { id: connection.id },
+          });
+          if (!response.ok) throw new Error('authorize-failed');
+          const authorization = await response.json();
+          window.location.assign(authorization.authorizationUrl);
+          return;
+        } catch {
+          setFailure('Docket could not start secure approval for that server.');
+          return;
+        }
+      }
+      if (connection.status !== 'connected') {
+        setFailure('Docket could not verify that server. Check its settings and try again.');
+        return;
+      }
       await queryClient.invalidateQueries({ queryKey: mcpAppKeys.widgets() });
       onConnected();
     },
@@ -105,7 +153,17 @@ function ConnectForm({ onConnected }: { readonly onConnected: () => void }): JSX
         <Input
           value={url}
           onChange={(event) => {
-            setUrl(event.target.value);
+            const nextUrl = event.target.value;
+            const draft = deriveMcpConnectorDraft(nextUrl, {
+              ...(nameEdited ? { label: name } : {}),
+              ...(aliasEdited ? { alias } : {}),
+            });
+            setUrl(nextUrl);
+            if (!nameEdited) setName(draft.label);
+            if (!aliasEdited) setAlias(draft.alias);
+          }}
+          onBlur={() => {
+            if (url.trim()) preview.mutate();
           }}
           placeholder="https://mcp.example.com/mcp"
           controlSize="lg"
@@ -116,30 +174,88 @@ function ConnectForm({ onConnected }: { readonly onConnected: () => void }): JSX
         <Input
           value={name}
           onChange={(event) => {
+            setNameEdited(true);
             setName(event.target.value);
           }}
           placeholder="Acme Release Tracker"
           controlSize="lg"
         />
       </Field>
+      <details className="bg-surface-container rounded-xl px-4 py-3">
+        <summary className="text-on-surface text-label-large cursor-pointer">
+          Advanced options
+        </summary>
+        <div className="mt-4 flex flex-col gap-1.5">
+          <label htmlFor={aliasId} className="text-on-surface text-label-large">
+            Tool prefix
+          </label>
+          <Input
+            id={aliasId}
+            required
+            pattern="^[a-z][a-z0-9_]{1,20}$"
+            value={alias}
+            onChange={(event) => {
+              setAliasEdited(true);
+              setAlias(event.target.value.toLowerCase());
+            }}
+          />
+        </div>
+      </details>
+      <details className="bg-surface-container rounded-xl px-4 py-3">
+        <summary className="text-on-surface text-label-large cursor-pointer">
+          Other connection methods
+        </summary>
+        <div className="mt-4 flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor={authId} className="text-on-surface text-label-large">
+              Connection method
+            </label>
+            <Select
+              id={authId}
+              value={authMode}
+              onChange={(event) => {
+                setAuthMode(event.target.value as 'oauth' | 'bearer' | 'none');
+              }}
+            >
+              <option value="oauth">Sign in and approve access</option>
+              <option value="bearer">Bearer token</option>
+              <option value="none">No authentication</option>
+            </Select>
+          </div>
+          {authMode === 'bearer' ? (
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor={tokenId} className="text-on-surface text-label-large">
+                Bearer token
+              </label>
+              <Input
+                id={tokenId}
+                type="password"
+                required
+                value={bearerToken}
+                onChange={(event) => {
+                  setBearerToken(event.target.value);
+                }}
+              />
+            </div>
+          ) : null}
+        </div>
+      </details>
       <ControlGroup controlSize="lg" className="justify-end">
-        <Button type="submit" disabled={connect.isPending || url.trim() === ''}>
-          {connect.isPending ? 'Connecting…' : 'Connect'}
+        <Button
+          type="submit"
+          disabled={
+            connect.isPending ||
+            url.trim() === '' ||
+            name.trim() === '' ||
+            !/^[a-z][a-z0-9_]{1,20}$/.test(alias.trim()) ||
+            (authMode === 'bearer' && bearerToken.trim() === '')
+          }
+        >
+          {connect.isPending ? 'Preparing…' : authMode === 'oauth' ? 'Continue' : 'Connect'}
         </Button>
       </ControlGroup>
     </form>
   );
-}
-
-/** Derive a namespace prefix from a server URL when the person did not name one. */
-function suggestAlias(url: string): string {
-  try {
-    const host = new URL(url).hostname.replace(/^www\./, '');
-    const label = host.split('.')[0]?.replace(/[^a-z0-9]/gi, '') ?? '';
-    return label === '' ? 'server' : label;
-  } catch {
-    return 'server';
-  }
 }
 
 /**
@@ -152,14 +268,12 @@ export function AthenaMcpPanel({ className }: AthenaMcpPanelProps): JSX.Element 
   const [connectOpen, setConnectOpen] = useState(false);
   const [rendered, setRendered] = useState<RenderedWidget | null>(null);
   const [widgetSaid, setWidgetSaid] = useState<string | null>(null);
-  const [widgetContext, setWidgetContext] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const widgets = useApiQuery(mcpAppWidgetsDef);
   const queryClient = useQueryClient();
 
-  // Both handlers below post into the caller's canonical Athena chat rather than only updating
-  // this panel's own display state — the whole point of `ui/message` and `ui/update-model-context`
-  // is that the *conversation*, not just this sidebar, ends up knowing what happened. The queue is
+  // This handler posts into the caller's canonical Athena chat rather than only updating
+  // this panel's own display state. The queue is
   // invalidated afterward so the workbench beside this panel picks up Athena's reply promptly
   // instead of waiting for its own poll interval.
   const sayToConversation = useCallback(
@@ -174,16 +288,6 @@ export function AthenaMcpPanel({ className }: AthenaMcpPanelProps): JSX.Element 
       setWidgetSaid(text);
       await queryClient.invalidateQueries({ queryKey: queryKeys.athena() });
       return true;
-    },
-    [queryClient, rendered?.serverName],
-  );
-
-  const tellModelContext = useCallback(
-    (text: string): void => {
-      setWidgetContext(text);
-      void postWidgetModelContext(rendered?.serverName ?? 'This card', text).then((posted) => {
-        if (posted) void queryClient.invalidateQueries({ queryKey: queryKeys.athena() });
-      });
     },
     [queryClient, rendered?.serverName],
   );
@@ -323,16 +427,10 @@ export function AthenaMcpPanel({ className }: AthenaMcpPanelProps): JSX.Element 
               return result;
             }}
             onMessage={sayToConversation}
-            onModelContext={tellModelContext}
           />
           {widgetSaid ? (
             <Text as="p" token="body-small">
               {widgetSaid}
-            </Text>
-          ) : null}
-          {widgetContext ? (
-            <Text as="p" token="body-small" tone="muted" data-testid="mcp-app-model-context">
-              Athena has been told: {widgetContext}
             </Text>
           ) : null}
           <ControlGroup controlSize="sm">

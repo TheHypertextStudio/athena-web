@@ -382,7 +382,7 @@ function scriptFor(entityType?: EntityDocumentType): string {
     el('edits').hidden = !isTask();
   }
 
-  async function edit(control, field, value, previous, description, after) {
+  async function edit(control, field, value, previous, after) {
     if (!isTask()) return;
     control.disabled = true;
     try {
@@ -390,7 +390,6 @@ function scriptFor(entityType?: EntityDocumentType): string {
       entity[field] = value;
       if (after) after();
       window.docket.notice('');
-      await window.docket.tell(description);
     } catch {
       control.value = previous;
       window.docket.notice('That could not be saved. Open Docket to check it.', 'error');
@@ -403,7 +402,7 @@ function scriptFor(entityType?: EntityDocumentType): string {
     if (!entity) return;
     const select = event.target;
     const selected = (entity.stateOptions || []).find((option) => option.key === select.value);
-    await edit(select, 'state', select.value, entity.state, 'The user updated this task from the Docket card.', () => {
+    await edit(select, 'state', select.value, entity.state, () => {
       entity.stateType = selected ? selected.type : undefined; renderEdits();
     });
   });
@@ -412,7 +411,7 @@ function scriptFor(entityType?: EntityDocumentType): string {
     if (!entity) return;
     const input = event.target;
     const previous = entity.dueDate ? String(entity.dueDate).slice(0, 10) : '';
-    await edit(input, 'dueDate', input.value || null, previous, 'The user updated this task due date from the Docket card.');
+    await edit(input, 'dueDate', input.value || null, previous);
   });
 
   el('open').addEventListener('click', () => {

@@ -227,7 +227,7 @@ export const CONFORMANCE_CLAIMS: Readonly<Record<string, ConformanceClaim>> = {
   },
   'ui/update-model-context': {
     implementation: 'packages/integrations/src/mcp-apps-host.ts :: hostCapabilities',
-    test: 'mcp-apps-host.test.ts :: does not serve draft model-context updates even when a legacy callback is supplied',
+    test: 'mcp-apps-host.test.ts :: does not serve draft model-context updates',
     note: 'Accounted for by omission because stable Docket does not expose model-context mutation to apps.',
   },
   'ui/request-display-mode': {

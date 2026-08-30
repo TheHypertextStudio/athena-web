@@ -48,7 +48,6 @@ describe('official MCP Apps compatibility', () => {
       callTool: async () => ({ content: [] }),
       sendMessage: () => true,
       readResource: async () => ({}),
-      updateModelContext: () => undefined,
       downloadFile: () => true,
       log: () => undefined,
     });

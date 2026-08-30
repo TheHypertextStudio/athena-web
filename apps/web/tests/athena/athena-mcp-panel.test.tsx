@@ -2,11 +2,10 @@
  * `AthenaMcpPanel`'s widget→conversation wiring.
  *
  * @remarks
- * `McpAppView` already proves the protocol reaches this panel's `onMessage`/`onModelContext`
+ * `McpAppView` already proves the protocol reaches this panel's `onMessage`
  * props (`mcp-app-view.test.tsx`). What that suite does NOT cover — and what was the actual
  * gap — is what this panel DOES with them. Before this test existed, both callbacks only wrote to
- * local `useState`: a widget's `ui/message` never reached the conversation, and its
- * `ui/update-model-context` never reached the model's next turn. These tests drive the real
+ * local `useState`: a widget's `ui/message` never reached the conversation. These tests drive the real
  * `McpAppView` bridge through a fake proxy frame (the same technique `mcp-app-view.test.tsx` uses)
  * and assert on the one HTTP call that actually matters: `POST /v1/me/athena/chat/messages`, the
  * same endpoint the conversation's own composer calls.
@@ -14,7 +13,7 @@
 import '@testing-library/jest-dom/vitest';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MCP_UI_METHODS, MCP_UI_MIME_TYPE, MCP_UI_PROTOCOL_VERSION } from '@docket/types';
@@ -57,6 +56,10 @@ Object.defineProperty(window, 'matchMedia', {
 const widgetsGet = vi.fn();
 const callPost = vi.fn();
 const chatMessagesPost = vi.fn();
+const connectionPreviewPost = vi.fn();
+const connectionCreatePost = vi.fn();
+const connectionAuthorizePost = vi.fn();
+const assignLocation = vi.fn();
 
 vi.mock('@/lib/api', () => ({
   api: {
@@ -68,7 +71,11 @@ vi.mock('@/lib/api', () => ({
             call: { $post: callPost },
             'view-call': { $post: vi.fn() },
           },
-          connections: { $post: vi.fn() },
+          connections: {
+            $post: connectionCreatePost,
+            preview: { $post: connectionPreviewPost },
+            ':id': { authorize: { $post: connectionAuthorizePost } },
+          },
           chat: { messages: { $post: chatMessagesPost } },
         },
       },
@@ -147,6 +154,11 @@ async function showAndHandshake(): Promise<ReturnType<typeof captureFrame>> {
 }
 
 beforeEach(() => {
+  Object.defineProperty(window, 'location', {
+    value: { assign: assignLocation, href: 'https://docket.test/athena' },
+    writable: true,
+    configurable: true,
+  });
   process.env['NEXT_PUBLIC_API_URL'] = SANDBOX_ORIGIN;
   widgetsGet.mockResolvedValue({ ok: true, status: 200, json: async () => [WIDGET] });
   callPost.mockResolvedValue({
@@ -164,6 +176,21 @@ beforeEach(() => {
     ok: true,
     status: 200,
     json: async () => ({ id: 'session-1' }),
+  });
+  connectionPreviewPost.mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: async () => ({ name: 'Acme' }),
+  });
+  connectionCreatePost.mockResolvedValue({
+    ok: true,
+    status: 201,
+    json: async () => ({ id: 'connection-new', authMode: 'oauth', status: 'pending' }),
+  });
+  connectionAuthorizePost.mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: async () => ({ authorizationUrl: 'https://acme.example/authorize' }),
   });
 });
 
@@ -218,8 +245,86 @@ describe('AthenaMcpPanel: ui/message reaches the conversation', () => {
   });
 });
 
-describe('AthenaMcpPanel: ui/update-model-context reaches the model', () => {
-  it('appends the context to the canonical chat, framed as a card update rather than user speech', async () => {
+describe('AthenaMcpPanel: personal connection ceremony', () => {
+  it('defaults to OAuth, previews identity, and starts owner-scoped approval without exposing a token', async () => {
+    renderPanel();
+    fireEvent.click(await screen.findByRole('button', { name: 'Connect a tool' }));
+
+    fireEvent.change(screen.getByLabelText('Server address'), {
+      target: { value: 'https://mcp.acme.example/mcp' },
+    });
+    fireEvent.blur(screen.getByLabelText('Server address'));
+    await waitFor(() => {
+      expect(connectionPreviewPost).toHaveBeenCalledWith({
+        json: { url: 'https://mcp.acme.example/mcp' },
+      });
+    });
+
+    fireEvent.click(screen.getByText('Other connection methods'));
+    expect(screen.getByLabelText('Connection method')).toHaveValue('oauth');
+    expect(screen.queryByLabelText('Bearer token')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+    await waitFor(() => {
+      expect(connectionCreatePost).toHaveBeenCalledWith({
+        json: {
+          url: 'https://mcp.acme.example/mcp',
+          name: 'Acme',
+          alias: 'acme',
+          authMode: 'oauth',
+        },
+      });
+    });
+    expect(connectionAuthorizePost).toHaveBeenCalledWith({ param: { id: 'connection-new' } });
+    expect(assignLocation).toHaveBeenCalledWith('https://acme.example/authorize');
+    expect(JSON.stringify(connectionCreatePost.mock.calls)).not.toContain('bearerToken');
+  });
+
+  it.each([
+    ['bearer', 'Bearer token', 'secret-token'],
+    ['none', 'No authentication', null],
+  ] as const)(
+    'makes %s an explicit alternative and completes its non-OAuth connection check',
+    async (authMode, option, token) => {
+      connectionCreatePost.mockResolvedValue({
+        ok: true,
+        status: 201,
+        json: async () => ({ id: 'connection-new', authMode, status: 'connected' }),
+      });
+      renderPanel();
+      fireEvent.click(await screen.findByRole('button', { name: 'Connect a tool' }));
+      fireEvent.change(screen.getByLabelText('Server address'), {
+        target: { value: 'https://mcp.acme.example/mcp' },
+      });
+      fireEvent.click(screen.getByText('Other connection methods'));
+      fireEvent.change(screen.getByLabelText('Connection method'), {
+        target: { value: authMode },
+      });
+      expect(screen.getByRole('option', { name: option })).toBeInTheDocument();
+      if (token) {
+        fireEvent.change(screen.getByLabelText('Bearer token'), { target: { value: token } });
+      }
+
+      fireEvent.click(screen.getByRole('button', { name: 'Connect' }));
+
+      await waitFor(() => {
+        expect(connectionCreatePost).toHaveBeenCalledWith({
+          json: {
+            url: 'https://mcp.acme.example/mcp',
+            name: 'Acme',
+            alias: 'acme',
+            authMode,
+            ...(token ? { bearerToken: token } : {}),
+          },
+        });
+      });
+      expect(connectionAuthorizePost).not.toHaveBeenCalled();
+    },
+  );
+});
+
+describe('AthenaMcpPanel: draft model-context updates stay unsupported', () => {
+  it('rejects model-context injection without writing to the canonical chat', async () => {
     renderPanel();
     const harness = await showAndHandshake();
 
@@ -233,16 +338,11 @@ describe('AthenaMcpPanel: ui/update-model-context reaches the model', () => {
     });
 
     await waitFor(() => {
-      expect(chatMessagesPost).toHaveBeenCalledWith({
-        json: {
-          body: `${WIDGET.connectionName} card update — The user advanced the release checklist from the card.`,
-        },
-      });
+      expect(
+        harness.posted.find((entry) => entry.message['id'] === 'w3')?.message['error'],
+      ).toBeDefined();
     });
-    // Never framed as if the person typed it verbatim — that is what `ui/message` is for.
-    const [call] = chatMessagesPost.mock.calls;
-    expect((call as [{ json: { body: string } }])[0].json.body).not.toBe(
-      'The user advanced the release checklist from the card.',
-    );
+    expect(chatMessagesPost).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('mcp-app-model-context')).not.toBeInTheDocument();
   });
 });

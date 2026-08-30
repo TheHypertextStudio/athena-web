@@ -18,6 +18,7 @@ import { WIDGET_FIXTURE_URI } from '@docket/integrations';
 
 import type {
   isAppCallableTool as IsAppCallableTool,
+  isModelCallableTool as IsModelCallableTool,
   runWidgetTool as RunWidgetTool,
 } from '../../src/mcp/apps/host-routes';
 import { getMigratedDb } from '../support/db';
@@ -27,6 +28,7 @@ let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
 let runWidgetTool!: typeof RunWidgetTool;
 let isAppCallableTool!: typeof IsAppCallableTool;
+let isModelCallableTool!: typeof IsModelCallableTool;
 
 beforeAll(async () => {
   schema = await getMigratedDb();
@@ -34,7 +36,8 @@ beforeAll(async () => {
   // The container resolves `MockMcpConnector` in test mode, which serves the widget fixture at
   // `mcp.acme-release.example` — a third-party MCP Apps server standing in for a real one, so the
   // whole path (list, call, read the `ui://` document) runs without depending on anyone's uptime.
-  ({ runWidgetTool, isAppCallableTool } = await import('../../src/mcp/apps/host-routes'));
+  ({ runWidgetTool, isAppCallableTool, isModelCallableTool } =
+    await import('../../src/mcp/apps/host-routes'));
 });
 
 /** Seed a user with one connected personal MCP connection at `url`. */
@@ -118,6 +121,17 @@ describe('view-initiated calls', () => {
     ).resolves.toBeDefined();
   });
 
+  it('refuses an app-only helper from the manual call path while allowing its owning view', async () => {
+    const { userId, connectionId } = await seedConnection('https://mcp.acme-release.example/mcp');
+
+    await expect(
+      runWidgetTool(userId, connectionId, 'refresh_release_internal', {}, false),
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      runWidgetTool(userId, connectionId, 'refresh_release_internal', {}, true),
+    ).resolves.toBeDefined();
+  });
+
   it('reads the spec default when a tool declares no visibility at all', () => {
     // "visibility defaults to ["model", "app"] if omitted" — absent means view-callable.
     expect(isAppCallableTool({ name: 'x', description: 'x', inputSchema: {}, ui: {} })).toBe(true);
@@ -132,6 +146,42 @@ describe('view-initiated calls', () => {
     ).toBe(false);
     expect(
       isAppCallableTool({
+        name: 'x',
+        description: 'x',
+        inputSchema: {},
+        ui: { visibility: ['model', 'app'] },
+      }),
+    ).toBe(true);
+    expect(
+      isAppCallableTool({
+        name: 'x',
+        description: 'x',
+        inputSchema: {},
+        ui: { visibility: ['app'] },
+      }),
+    ).toBe(true);
+  });
+
+  it('applies the complementary model visibility rule to manual and model launchers', () => {
+    expect(isModelCallableTool({ name: 'x', description: 'x', inputSchema: {} })).toBe(true);
+    expect(
+      isModelCallableTool({
+        name: 'x',
+        description: 'x',
+        inputSchema: {},
+        ui: { visibility: ['model'] },
+      }),
+    ).toBe(true);
+    expect(
+      isModelCallableTool({
+        name: 'x',
+        description: 'x',
+        inputSchema: {},
+        ui: { visibility: ['app'] },
+      }),
+    ).toBe(false);
+    expect(
+      isModelCallableTool({
         name: 'x',
         description: 'x',
         inputSchema: {},

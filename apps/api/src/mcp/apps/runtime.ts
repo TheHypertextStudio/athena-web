@@ -25,8 +25,7 @@ export const UI_MIME_TYPE = 'text/html;profile=mcp-app';
  *
  * @remarks
  * Exposes `docket.onData(fn)` for a widget to render from, `docket.call(tool, args)` to invoke a
- * server tool, `docket.tell(text)` to push what the user just did into the model's context,
- * `docket.link(url)` to open Docket proper, `docket.notice(text, tone)` to report a failure beside
+ * server tool, `docket.link(url)` to open Docket proper, `docket.notice(text, tone)` to report a failure beside
  * content already on screen, and `docket.stateGlyph(type)` for the workflow-state icon. Nothing
  * else is global.
  *
@@ -34,10 +33,6 @@ export const UI_MIME_TYPE = 'text/html;profile=mcp-app';
  * belong here, not in four widgets: each one would otherwise reimplement them, and the first
  * version of this surface simply did not — every card shipped with a hardcoded "Working…" that
  * never cleared.
- *
- * `ui/update-model-context` matters more than it looks: without it the agent goes on describing a
- * change the user has already undone from the card, which is the single most confusing thing a
- * widget can do.
  *
  * Sizing is not optional and not the host's problem to guess. A host running flexible container
  * dimensions is required by the spec to size the frame from `ui/notifications/size-changed`, so a
@@ -520,9 +515,6 @@ export const RUNTIME_JS = String.raw`
     },
     call(name, args) {
       return request('tools/call', { name, arguments: args });
-    },
-    tell(text) {
-      return request('ui/update-model-context', { content: [{ type: 'text', text }] });
     },
     link(url) {
       return request('ui/open-link', { url });

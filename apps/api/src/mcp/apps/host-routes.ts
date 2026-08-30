@@ -22,6 +22,7 @@
 import { db, personalMcpConnection, personalMcpCredential } from '@docket/db';
 import {
   isRenderableUiResource,
+  isRemoteToolVisibleTo,
   parseMcpOAuthCredential,
   type RemoteMcpSession,
   type RemoteToolDescriptor,
@@ -168,8 +169,12 @@ async function withSession<T>(
  * @returns `true` when an embedded view may call it.
  */
 export function isAppCallableTool(tool: RemoteToolDescriptor): boolean {
-  const visibility = tool.ui?.visibility;
-  return visibility === undefined || visibility.includes('app');
+  return isRemoteToolVisibleTo(tool, 'app');
+}
+
+/** Whether a remote tool may appear in model-facing and manual-launch catalogs. */
+export function isModelCallableTool(tool: RemoteToolDescriptor): boolean {
+  return isRemoteToolVisibleTo(tool, 'model');
 }
 
 /** Serialize a UI resource for the browser host. */
@@ -244,6 +249,13 @@ export async function runWidgetTool(
         `${tool} is not callable from an embedded view on ${connection.name}`,
       );
     }
+    if (!requireAppVisible && !isModelCallableTool(descriptor)) {
+      throw new ApiError(
+        403,
+        'forbidden',
+        `${tool} is not available in the Connected Tools launcher on ${connection.name}`,
+      );
+    }
     const result = session.callToolRaw
       ? await session.callToolRaw(tool, args)
       : {
@@ -294,6 +306,7 @@ const mcpAppHostRoutes = new Hono<AppEnv>()
         try {
           const tools = await withSession(connection, (session) => session.listTools());
           for (const tool of tools) {
+            if (!isModelCallableTool(tool)) continue;
             const resourceUri = tool.ui?.resourceUri;
             if (!resourceUri) continue;
             widgets.push({

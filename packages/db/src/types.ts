@@ -10,6 +10,7 @@
 import {
   DEFAULT_WORKFLOW_STATES,
   type HubPreferences as HubPreferencesShape,
+  type McpAppPresentation,
   type WorkflowState as WorkflowStateShape,
   type WorkStatusCategory,
 } from '@docket/types';
@@ -318,6 +319,10 @@ export interface SessionActivityBody {
               readonly content: string;
               /** Whether execution failed. */
               readonly isError: boolean;
+              /** Durable interactive UI captured during the original remote tool call. */
+              readonly presentation?: McpAppPresentation | undefined;
+              /** The remote tool declared UI that could not be safely retained. */
+              readonly presentationUnavailable?: boolean | undefined;
             }
           | undefined;
         /**

@@ -66,7 +66,6 @@ const SCRIPT = String.raw`
           edits: [{ action: 'complete', taskId: item.taskId }],
         });
         markDone(check, name);
-        await window.docket.tell('The user marked "' + item.title + '" done on the ' + day.date + ' plan.');
       } catch {
         check.disabled = false;
         window.docket.notice('That could not be ticked off. Open Docket to check it.', 'error');

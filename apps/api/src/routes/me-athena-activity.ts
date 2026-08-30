@@ -1,5 +1,5 @@
 /** Owner-safe projection for activity returned by the personal Athena API. */
-import type { SessionActivityOut } from '@docket/types';
+import { parseMcpAppPresentation, type SessionActivityOut } from '@docket/types';
 import type { z } from 'zod';
 
 import { toActivityOut, type ActivityRow } from './agent-session-helpers';
@@ -85,6 +85,10 @@ function personalBody(activity: ActivityRow): Record<string, unknown> {
     const toolCall = record(action['toolCall']);
     const result = record(action['result']);
     const isError = result?.['isError'] === true;
+    const presentation = parseMcpAppPresentation(result?.['presentation']);
+    const presentationUnavailable =
+      result?.['presentationUnavailable'] === true ||
+      (result?.['presentation'] !== undefined && !presentation);
     return {
       action: {
         ...(typeof action['kind'] === 'string' ? { kind: action['kind'].slice(0, 120) } : {}),
@@ -109,6 +113,8 @@ function personalBody(activity: ActivityRow): Record<string, unknown> {
               result: {
                 content: isError ? FAILED_ACTION_COPY : `Completed: ${summary}`,
                 isError,
+                ...(presentation ? { presentation } : {}),
+                ...(presentationUnavailable ? { presentationUnavailable: true } : {}),
               },
             }
           : {}),

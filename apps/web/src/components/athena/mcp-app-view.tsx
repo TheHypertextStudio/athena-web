@@ -62,8 +62,6 @@ export interface McpAppViewProps {
   ) => Promise<Readonly<Record<string, unknown>>>;
   /** Post a message the widget composed into the conversation. */
   readonly onMessage?: (text: string) => Promise<boolean> | boolean;
-  /** Record what the widget wants the model to know about its state. */
-  readonly onModelContext?: (text: string) => void;
   /** Overrides the API origin the sandbox proxy is served from. Tests only. */
   readonly sandboxOrigin?: string;
 }
@@ -258,6 +256,10 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
     }
 
     let proxyWindow: Window | null = frame.contentWindow;
+    const onFrameError = (): void => {
+      setFailure('Interactive view unavailable.');
+    };
+    frame.addEventListener('error', onFrameError);
     const post = (message: JsonRpcMessage): void => {
       const target = frame.contentWindow ?? proxyWindow;
       target?.postMessage(message, proxyOrigin || '*');
@@ -356,6 +358,7 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
       hostRef.current = null;
       void host.requestTeardown().finally(() => {
         window.removeEventListener('message', onWindowMessage);
+        frame.removeEventListener('error', onFrameError);
         host.close();
       });
     };
@@ -429,10 +432,8 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
 
   useEffect(() => {
     if (!proxyOrigin) {
-      setFailure('This card cannot be shown here yet.');
-      return;
+      setFailure('Interactive view unavailable.');
     }
-    setFailure(null);
   }, [proxyOrigin]);
 
   // Escape closes a fullscreen card. The view is told through a host-context change rather than a

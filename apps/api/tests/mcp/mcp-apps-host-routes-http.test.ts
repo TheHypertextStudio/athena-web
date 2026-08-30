@@ -143,6 +143,7 @@ describe('GET /widgets', () => {
     expect(widgets.length).toBeGreaterThan(0);
     expect(widgets.every((w) => w.connectionId === widgetConnId)).toBe(true);
     expect(widgets.map((w) => w.tool)).toContain('release_checklist');
+    expect(widgets.map((w) => w.tool)).not.toContain('refresh_release_internal');
   });
 });
 

@@ -163,6 +163,112 @@ describe('toPersonalActivityOut', () => {
     });
   });
 
+  it('allowlists a valid persisted app presentation while retaining application-owned text', () => {
+    const presentation = {
+      connectionId: 'connection-1',
+      serverName: 'Weather Service',
+      tool: 'weather_card',
+      arguments: { city: 'Las Vegas' },
+      result: { content: [{ type: 'text' as const, text: '72 degrees' }], isError: false },
+      resource: {
+        uri: 'ui://weather/card',
+        mimeType: 'text/html;profile=mcp-app',
+        text: '<!doctype html><title>Weather</title>',
+        meta: { prefersBorder: true },
+      },
+    };
+    const out = toPersonalActivityOut(
+      row({
+        type: 'action',
+        body: {
+          action: {
+            kind: 'weather_card',
+            summary: 'Show Las Vegas weather',
+            result: { content: 'provider prose', isError: false, presentation },
+          },
+        },
+      }),
+    );
+
+    expect(out.body).toEqual({
+      action: {
+        kind: 'weather_card',
+        summary: 'Show Las Vegas weather',
+        result: {
+          content: 'Completed: Show Las Vegas weather',
+          isError: false,
+          presentation,
+        },
+      },
+    });
+  });
+
+  it('drops an invalid app presentation rather than projecting untrusted provider fields', () => {
+    const out = toPersonalActivityOut(
+      row({
+        type: 'action',
+        body: {
+          action: {
+            kind: 'weather_card',
+            summary: 'Show Las Vegas weather',
+            result: {
+              content: 'provider prose',
+              isError: false,
+              presentation: {
+                connectionId: 'connection-1',
+                serverName: 'Weather Service',
+                tool: 'weather_card',
+                arguments: {},
+                result: { content: [] },
+                resource: { uri: 'https://not-ui.example/card', mimeType: 'text/html', text: 'x' },
+              },
+            },
+          },
+        },
+      }),
+    );
+
+    expect(JSON.stringify(out.body)).not.toContain('not-ui.example');
+    expect(out.body).toMatchObject({
+      action: { result: { presentationUnavailable: true } },
+    });
+  });
+
+  it('drops an oversized otherwise-valid presentation at the personal projection boundary', () => {
+    const out = toPersonalActivityOut(
+      row({
+        type: 'action',
+        body: {
+          action: {
+            kind: 'weather_card',
+            summary: 'Show Las Vegas weather',
+            result: {
+              content: 'provider prose',
+              isError: false,
+              presentation: {
+                connectionId: 'connection-1',
+                serverName: 'Weather Service',
+                tool: 'weather_card',
+                arguments: {},
+                result: { content: [] },
+                resource: {
+                  uri: 'ui://weather/card',
+                  mimeType: 'text/html;profile=mcp-app',
+                  text: 'x'.repeat(2 * 1024 * 1024),
+                },
+              },
+            },
+          },
+        },
+      }),
+    );
+
+    expect(out.body).toMatchObject({
+      action: { result: { presentationUnavailable: true } },
+    });
+    expect(JSON.stringify(out.body)).not.toContain('xxxxxxxxxxxxxxxx');
+  });
+
   it('keeps a string kind and connection, and stringifies a bigint technical value', () => {
     const out = toPersonalActivityOut(
       row({

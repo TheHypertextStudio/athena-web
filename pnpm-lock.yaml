@@ -1173,6 +1173,9 @@ importers:
       '@modelcontextprotocol/ext-apps':
         specifier: 'catalog:'
         version: 1.7.5(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(zod@4.4.3)
+      '@modelcontextprotocol/sdk':
+        specifier: 'catalog:'
+        version: 1.29.0(zod@4.4.3)
       zod:
         specifier: 'catalog:'
         version: 4.4.3

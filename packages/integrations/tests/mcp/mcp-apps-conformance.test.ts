@@ -165,7 +165,6 @@ describe('claims the matrix cites here', () => {
       callTool: async () => ({ content: [] }),
       readResource: async () => ({}),
       log: () => undefined,
-      updateModelContext: () => undefined,
       sendMessage: () => true,
     });
     await host.receive({

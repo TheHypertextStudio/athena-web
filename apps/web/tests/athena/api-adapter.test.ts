@@ -192,4 +192,98 @@ describe('personal Athena API adapter', () => {
     ]);
     expect(JSON.stringify(detail)).not.toContain('Private reasoning');
   });
+
+  it('retains only a valid app presentation on its corresponding tool activity', () => {
+    const presentation = {
+      connectionId: 'connection-1',
+      serverName: 'Weather Service',
+      tool: 'weather_card',
+      arguments: { city: 'Las Vegas' },
+      result: { content: [{ type: 'text', text: '72 degrees' }], isError: false },
+      resource: {
+        uri: 'ui://weather/card',
+        mimeType: 'text/html;profile=mcp-app',
+        text: '<!doctype html><title>Weather</title>',
+        meta: { prefersBorder: true },
+      },
+    };
+    const detail = adaptAthenaDetail(
+      AthenaSessionDetailOut.parse({
+        ...base,
+        activities: [
+          {
+            id: '01J99999999999999999999999',
+            sessionId: base.id,
+            organizationId: null,
+            type: 'action',
+            approvalStatus: 'applied',
+            createdAt: '2026-07-15T16:03:00.000Z',
+            body: {
+              action: {
+                summary: 'Show Las Vegas weather',
+                toolCall: {
+                  connection: 'weather',
+                  tool: 'weather_card',
+                  input: {},
+                  toolUseId: 'x',
+                },
+                result: {
+                  content: 'Completed: Show Las Vegas weather',
+                  isError: false,
+                  presentation,
+                },
+              },
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(detail.activities[0]).toMatchObject({ type: 'tool', presentation });
+  });
+
+  it('marks a malformed retained presentation unavailable without exposing its HTML', () => {
+    const detail = adaptAthenaDetail(
+      AthenaSessionDetailOut.parse({
+        ...base,
+        activities: [
+          {
+            id: '01JBBBBBBBBBBBBBBBBBBBBBBB',
+            sessionId: base.id,
+            organizationId: null,
+            type: 'action',
+            approvalStatus: 'applied',
+            createdAt: '2026-07-15T16:04:00.000Z',
+            body: {
+              action: {
+                summary: 'Show Las Vegas weather',
+                result: {
+                  content: 'Completed: Show Las Vegas weather',
+                  isError: false,
+                  presentation: {
+                    connectionId: 'connection-1',
+                    serverName: 'Weather Service',
+                    tool: 'weather_card',
+                    arguments: {},
+                    result: { content: [] },
+                    resource: {
+                      uri: 'https://evil.example/card',
+                      mimeType: 'text/html',
+                      text: '<script>steal()</script>',
+                    },
+                  },
+                },
+              },
+            },
+          },
+        ],
+      }),
+    );
+
+    expect(detail.activities[0]).toMatchObject({
+      type: 'tool',
+      presentationUnavailable: true,
+    });
+    expect(JSON.stringify(detail)).not.toContain('<script>');
+  });
 });

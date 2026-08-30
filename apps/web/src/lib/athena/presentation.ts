@@ -5,6 +5,7 @@
  * These intentionally sit between the personal API and React. The personal API lane can replace
  * the structural transport types without changing the queue, dock, or workbench components.
  */
+import type { McpAppPresentation } from '@docket/types';
 
 /** A Docket object Athena was opened from. */
 export interface PersonalAthenaSource {
@@ -77,6 +78,8 @@ export type PersonalAthenaActivity =
       readonly service: string;
       readonly action: string;
       readonly outcome?: string;
+      readonly presentation?: McpAppPresentation;
+      readonly presentationUnavailable?: boolean;
       readonly technical?: {
         readonly toolName?: string;
         readonly input?: unknown;
@@ -106,6 +109,8 @@ export interface AthenaActivityPresentation {
   readonly title: string;
   readonly detail?: string;
   readonly createdAt: string;
+  readonly presentation?: McpAppPresentation;
+  readonly presentationUnavailable?: boolean;
   readonly technical?: {
     readonly toolName?: string;
     readonly input?: unknown;
@@ -180,6 +185,8 @@ export function presentAthenaActivity(
       title: `${activity.service} · ${activity.action}`,
       ...(activity.outcome ? { detail: activity.outcome } : {}),
       createdAt: activity.createdAt,
+      ...(activity.presentation ? { presentation: activity.presentation } : {}),
+      ...(activity.presentationUnavailable ? { presentationUnavailable: true } : {}),
       ...(activity.technical ? { technical: activity.technical } : {}),
     };
   }

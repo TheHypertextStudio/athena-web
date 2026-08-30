@@ -23,6 +23,7 @@ import type { CycleCarryoverAction } from '@docket/types';
 import {
   Button,
   Dialog,
+  DialogBody,
   DialogClose,
   DialogContent,
   DialogDescription,
@@ -113,8 +114,8 @@ export function CloseCycleDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent className="gap-0 p-0">
-        <DialogHeader className="border-outline-variant gap-1 border-b px-4 py-4 pr-12">
+      <DialogContent presentation={{ kind: 'centered', size: 'standard', height: 'tall' }}>
+        <DialogHeader inset="compact" className="border-outline-variant gap-1 border-b pr-12">
           <DialogTitle>Close {cycleName}</DialogTitle>
           <DialogDescription>
             {items.length === 0
@@ -125,31 +126,36 @@ export function CloseCycleDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {items.length > 0 ? (
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-1">
-            {items.map((item) => (
-              <CarryoverRow
-                key={item.taskId}
-                item={item}
-                targets={targets}
-                onActionChange={(action) => {
-                  onActionChange(item.taskId, action);
-                }}
-                onTargetChange={(targetCycleId) => {
-                  onTargetChange(item.taskId, targetCycleId);
-                }}
-              />
-            ))}
-          </div>
-        ) : null}
+        <DialogBody inset="compact" className="flex flex-col gap-3 py-1">
+          {items.length > 0 ? (
+            <div>
+              {items.map((item) => (
+                <CarryoverRow
+                  key={item.taskId}
+                  item={item}
+                  targets={targets}
+                  onActionChange={(action) => {
+                    onActionChange(item.taskId, action);
+                  }}
+                  onTargetChange={(targetCycleId) => {
+                    onTargetChange(item.taskId, targetCycleId);
+                  }}
+                />
+              ))}
+            </div>
+          ) : null}
 
-        {closeError ? (
-          <p role="alert" className="text-error text-body-medium px-4 pt-3">
-            {closeError}
-          </p>
-        ) : null}
+          {closeError ? (
+            <p role="alert" className="text-error text-body-medium">
+              {closeError}
+            </p>
+          ) : null}
+        </DialogBody>
 
-        <DialogFooter className="border-outline-variant items-center justify-between border-t px-4 py-4 sm:justify-between">
+        <DialogFooter
+          inset="compact"
+          className="border-outline-variant items-center justify-between border-t sm:justify-between"
+        >
           <span className="text-on-surface-variant text-label-medium">
             {items.length === 0 ? 'Ready to close' : summary}
           </span>

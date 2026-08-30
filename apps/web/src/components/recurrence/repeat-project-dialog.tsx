@@ -8,6 +8,7 @@ import { Check, FolderKanban, RefreshCw } from '@docket/ui/icons';
 import {
   Button,
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -112,8 +113,8 @@ export function RepeatProjectDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl gap-0 p-0">
-        <DialogHeader className="border-outline-variant border-b px-6 py-5">
+      <DialogContent presentation={{ kind: 'centered', size: 'wide', height: 'tall' }}>
+        <DialogHeader className="border-outline-variant border-b">
           <DialogTitle>Repeat this {projectNoun.toLowerCase()}</DialogTitle>
           <DialogDescription>
             Docket will use this work as the starting shape for each new occurrence. The current
@@ -121,7 +122,7 @@ export function RepeatProjectDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-6 px-6 py-5">
+        <DialogBody className="flex flex-col gap-6">
           <section className="flex flex-col gap-3" aria-labelledby="included-work-heading">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -230,9 +231,9 @@ export function RepeatProjectDialog({
               We couldn&apos;t start this repeating {projectNoun.toLowerCase()}. Please try again.
             </p>
           ) : null}
-        </div>
+        </DialogBody>
 
-        <DialogFooter className="border-outline-variant border-t px-6 py-4">
+        <DialogFooter className="border-outline-variant border-t">
           <Button
             variant="ghost"
             onClick={() => {

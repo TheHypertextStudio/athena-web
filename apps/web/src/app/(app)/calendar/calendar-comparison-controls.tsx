@@ -28,6 +28,7 @@ import {
   Button,
   focusRingInset,
   Popover,
+  PopoverBody,
   PopoverContent,
   PopoverTrigger,
   Select,
@@ -102,80 +103,82 @@ export function CalendarComparisonControls({
           <ChevronDown className="hidden size-4 opacity-60 @2xl:inline" aria-hidden="true" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="end" aria-label="People" className="flex w-80 flex-col gap-3 p-2">
-        <label className="flex flex-col gap-1">
-          <span className="text-label-medium text-on-surface-variant px-1">Workspace</span>
-          <Select
-            name="comparison-workspace"
-            value={workspaceId}
-            onChange={(event) => {
-              onWorkspaceChange(event.target.value);
-            }}
-          >
-            {workspaces.length === 0 ? <option value="">No shared workspaces</option> : null}
-            {workspaces.map((workspace) => (
-              <option key={workspace.id} value={workspace.id}>
-                {workspace.name}
-              </option>
-            ))}
-          </Select>
-        </label>
+      <PopoverContent presentation="panel" width="xl" align="end" aria-label="People">
+        <PopoverBody className="flex flex-col gap-3">
+          <label className="flex flex-col gap-1">
+            <span className="text-label-medium text-on-surface-variant px-1">Workspace</span>
+            <Select
+              name="comparison-workspace"
+              value={workspaceId}
+              onChange={(event) => {
+                onWorkspaceChange(event.target.value);
+              }}
+            >
+              {workspaces.length === 0 ? <option value="">No shared workspaces</option> : null}
+              {workspaces.map((workspace) => (
+                <option key={workspace.id} value={workspace.id}>
+                  {workspace.name}
+                </option>
+              ))}
+            </Select>
+          </label>
 
-        <div className="flex min-w-0 flex-col gap-1">
-          <span id={peopleLabelId} className="text-label-medium text-on-surface-variant px-1">
-            People
-          </span>
-          {members.length > 0 ? (
-            <ul aria-labelledby={peopleLabelId} className="flex max-h-64 flex-col overflow-y-auto">
-              {members.map((member) => {
-                const selected = selectedActorIds.includes(member.actorId);
-                return (
-                  <li key={member.actorId}>
-                    <button
-                      type="button"
-                      role="checkbox"
-                      aria-checked={selected}
-                      onClick={() => {
-                        onActorChange(member.actorId, !selected);
-                      }}
-                      className={cn(
-                        'hover:bg-surface-container-highest flex min-h-10 w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors motion-reduce:transition-none',
-                        focusRingInset,
-                      )}
-                    >
-                      <Avatar aria-hidden="true" className="size-6 shrink-0">
-                        <AvatarFallback className="text-label-medium">
-                          {initials(member.displayName)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="text-body-medium text-on-surface min-w-0 flex-1 truncate">
-                        {member.displayName}
-                      </span>
-                      {selected ? (
-                        <Check className="text-primary size-4 shrink-0" aria-hidden="true" />
-                      ) : null}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          ) : membersPending ? (
-            <p className="text-body-small text-on-surface-variant px-1">Loading people…</p>
-          ) : (
-            <p role="status" className="text-body-small text-on-surface-variant px-1">
-              No people available.
-            </p>
-          )}
-        </div>
+          <div className="flex min-w-0 flex-col gap-1">
+            <span id={peopleLabelId} className="text-label-medium text-on-surface-variant px-1">
+              People
+            </span>
+            {members.length > 0 ? (
+              <ul aria-labelledby={peopleLabelId} className="flex flex-col">
+                {members.map((member) => {
+                  const selected = selectedActorIds.includes(member.actorId);
+                  return (
+                    <li key={member.actorId}>
+                      <button
+                        type="button"
+                        role="checkbox"
+                        aria-checked={selected}
+                        onClick={() => {
+                          onActorChange(member.actorId, !selected);
+                        }}
+                        className={cn(
+                          'hover:bg-surface-container-highest flex min-h-10 w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors motion-reduce:transition-none',
+                          focusRingInset,
+                        )}
+                      >
+                        <Avatar aria-hidden="true" className="size-6 shrink-0">
+                          <AvatarFallback className="text-label-medium">
+                            {initials(member.displayName)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="text-body-medium text-on-surface min-w-0 flex-1 truncate">
+                          {member.displayName}
+                        </span>
+                        {selected ? (
+                          <Check className="text-primary size-4 shrink-0" aria-hidden="true" />
+                        ) : null}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : membersPending ? (
+              <p className="text-body-small text-on-surface-variant px-1">Loading people…</p>
+            ) : (
+              <p role="status" className="text-body-small text-on-surface-variant px-1">
+                No people available.
+              </p>
+            )}
+          </div>
 
-        {/*
+          {/*
           The permission model is not obvious from the lanes alone, so it is stated here rather than
           in a bordered box beside the grid — supporting text inside the control it explains.
         */}
-        <p className="text-body-small text-on-surface-variant px-1">
-          Details appear only from layers each person shared with this workspace. Private provider
-          events always appear as Busy.
-        </p>
+          <p className="text-body-small text-on-surface-variant px-1">
+            Details appear only from layers each person shared with this workspace. Private provider
+            events always appear as Busy.
+          </p>
+        </PopoverBody>
       </PopoverContent>
     </Popover>
   );

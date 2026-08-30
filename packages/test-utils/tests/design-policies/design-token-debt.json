@@ -46,7 +46,7 @@
     "raw-type-utility": 5
   },
   "apps/web/src/app/(app)/orgs/[orgId]/initiatives/[initiativeId]/initiative-detail-client.tsx": {
-    "raw-type-utility": 10
+    "raw-type-utility": 7
   },
   "apps/web/src/app/(app)/orgs/[orgId]/my-work/my-work-client.tsx": {
     "raw-type-utility": 2
@@ -82,7 +82,7 @@
     "raw-type-utility": 8
   },
   "apps/web/src/app/(app)/today/page.tsx": {
-    "raw-type-utility": 4
+    "raw-type-utility": 1
   },
   "apps/web/src/app/(app)/workspaces/new/page.tsx": {
     "raw-type-utility": 6
@@ -284,6 +284,9 @@
   "apps/web/src/components/portfolio/org-filter-chips.tsx": {
     "raw-type-utility": 2
   },
+  "apps/web/src/components/programs/flow-snapshot.tsx": {
+    "raw-type-utility": 4
+  },
   "apps/web/src/components/project-detail/agent-activity-feed.tsx": {
     "raw-type-utility": 4
   },
@@ -331,13 +334,13 @@
     "raw-type-utility": 4
   },
   "apps/web/src/components/teams/team-list-ui.tsx": {
-    "raw-type-utility": 8
+    "raw-type-utility": 6
   },
   "apps/web/src/components/teams/team-picker.tsx": {
     "raw-type-utility": 1
   },
   "apps/web/src/components/today/today-prompt.tsx": {
-    "raw-type-utility": 7
+    "raw-type-utility": 1
   },
   "apps/web/src/components/triage/source-tag.tsx": {
     "raw-type-utility": 2

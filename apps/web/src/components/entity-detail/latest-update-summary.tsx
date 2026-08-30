@@ -5,8 +5,8 @@ import type { UpdateOut } from '@docket/types';
 import { ActorAvatar } from '@docket/ui/components';
 import type { JSX } from 'react';
 
-import { relativeTime } from '@/components/programs/format-time';
 import { HEALTH_FILL_CLASS, HEALTH_LABEL } from '@/components/entity-display/health';
+import { relativeTime } from '@docket/ui';
 
 /** Props for {@link LatestUpdateSummary}. */
 export interface LatestUpdateSummaryProps {

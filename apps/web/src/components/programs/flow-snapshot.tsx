@@ -17,11 +17,10 @@
  * reads as a calm status banner.
  */
 import type { Health } from '@docket/types';
-import { cn } from '@docket/ui';
+import { cn, relativeTime } from '@docket/ui';
 import { CheckCircle2, CircleDashed, CircleDot, FolderKanban, RefreshCw } from '@docket/ui/icons';
 import type { JSX, ReactNode } from 'react';
 
-import { relativeTime } from './format-time';
 import { HEALTH_FILL_CLASS, HEALTH_LABEL } from '@/components/entity-display/health';
 
 /** The flow metrics the snapshot reports, rolled up from the program's work + structure. */

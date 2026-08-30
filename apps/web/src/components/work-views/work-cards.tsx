@@ -7,7 +7,6 @@ import type { ViewTarget } from '@docket/work/view-contract';
 import { type JSX, type ReactNode } from 'react';
 
 import { useRelationDropTarget } from '@/components/dnd/use-relation-drop-target';
-import { useWorkStatusResolver } from '@/components/entity-display/use-work-status';
 import { ObjectSurface } from '@/components/objects/object-surface';
 
 import DocketLink from '@/components/docket-link';
@@ -112,7 +111,6 @@ export function WorkCards<TTarget extends ViewTarget>({
   loadingMoreRows = false,
   onLoadMoreRows,
 }: WorkCardsProps<TTarget>): JSX.Element {
-  const statusOf = useWorkStatusResolver(target);
   const propertyKeys: ReadonlySet<string> = new Set(definition.presentation.properties);
   // Programs read the key set and lay their own card out, so the label/kind catalog is built only
   // for the targets whose card renders a generic property list from it.

@@ -17,7 +17,14 @@ import {
   type ControlSize,
 } from '../../primitives';
 import { MoreHorizontal } from '../../icons';
-import { type ReactNode, type RefObject, useCallback, useLayoutEffect, useRef, useState } from 'react';
+import {
+  type ReactNode,
+  type RefObject,
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 
 /** One control with inline and overflow presentations. */
 export interface ResponsiveControlItem {
@@ -98,9 +105,14 @@ export function useResponsiveControlLayout(
     const ordered = [...items].sort((left, right) => left.priority - right.priority);
     const alwaysVisible = ordered.filter((item) => item.alwaysVisible);
     const optional = ordered.filter((item) => !item.alwaysVisible);
+    const measuredOverflowWidth =
+      overflowMeasurementRef.current?.getBoundingClientRect().width ?? 0;
     const overflowWidth =
-      overflowMeasurementRef.current?.getBoundingClientRect().width || OVERFLOW_FALLBACK_WIDTH_PX;
-    const widthFor = (selection: readonly ResponsiveControlItem[], includesOverflow: boolean): number =>
+      measuredOverflowWidth > 0 ? measuredOverflowWidth : OVERFLOW_FALLBACK_WIDTH_PX;
+    const widthFor = (
+      selection: readonly ResponsiveControlItem[],
+      includesOverflow: boolean,
+    ): number =>
       selection.reduce((total, item) => total + (widthsRef.current.get(item.id) ?? 0), 0) +
       Math.max(0, selection.length - 1 + (includesOverflow ? 1 : 0)) * GAP_PX +
       (includesOverflow ? overflowWidth : 0);
@@ -129,7 +141,9 @@ export function useResponsiveControlLayout(
       measure();
     });
     observer.observe(container);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+    };
   }, [measure]);
 
   return {
@@ -166,7 +180,9 @@ export function ResponsiveControlGroup({
       {items.map((item) => (
         <span
           key={item.id}
-          ref={(node) => layout.setItemRef(item.id, node)}
+          ref={(node) => {
+            layout.setItemRef(item.id, node);
+          }}
           data-responsive-item={item.id}
           hidden={!inlineSet.has(item.id)}
           className="shrink-0"

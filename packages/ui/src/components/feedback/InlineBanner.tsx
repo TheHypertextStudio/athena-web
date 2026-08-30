@@ -72,7 +72,7 @@ export function InlineBanner({
       shape="small"
       pad="comfortable"
       role="status"
-      className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-2 gap-y-1.5 shadow-level1"
+      className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-2 gap-y-1.5"
     >
       {icon ? <span className={`mt-0.5 shrink-0 ${TONE_CLASS[tone]}`}>{icon}</span> : null}
       <div className={icon ? 'min-w-0' : 'col-span-2 min-w-0'}>
@@ -98,7 +98,9 @@ export function InlineBanner({
           variant="link"
           controlSize="md"
           onClick={action.onSelect}
-          className={icon ? 'col-start-2 justify-self-start px-0' : 'col-span-2 justify-self-start px-0'}
+          className={
+            icon ? 'col-start-2 justify-self-start px-0' : 'col-span-2 justify-self-start px-0'
+          }
         >
           {action.label}
         </Button>

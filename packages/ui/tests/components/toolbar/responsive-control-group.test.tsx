@@ -15,12 +15,18 @@ let width = 0;
 
 class ResizeObserverMock {
   observe(): void {
-    resize = () => this.callback([], this as unknown as ResizeObserver);
+    resize = () => {
+      this.callback([], this);
+    };
   }
 
-  unobserve(): void {}
+  unobserve(): void {
+    // StrictMode cleanup must not discard the callback that the test triggers manually.
+  }
 
-  disconnect(): void {}
+  disconnect(): void {
+    // StrictMode cleanup must not discard the callback that the test triggers manually.
+  }
 
   constructor(private readonly callback: ResizeObserverCallback) {}
 }
@@ -53,7 +59,8 @@ beforeEach(() => {
     this: HTMLElement,
   ) {
     const item = this.getAttribute('data-responsive-item');
-    const itemWidth = item === 'current' ? 112 : item === 'previous' ? 124 : item === 'filters' ? 72 : 112;
+    const itemWidth =
+      item === 'current' ? 112 : item === 'previous' ? 124 : item === 'filters' ? 72 : 112;
     return {
       bottom: 0,
       height: 32,
@@ -64,7 +71,7 @@ beforeEach(() => {
       x: 0,
       y: 0,
       toJSON: () => ({}),
-    } as DOMRect;
+    };
   });
 });
 
@@ -76,7 +83,13 @@ afterEach(() => {
 
 function renderAt(nextWidth: number): void {
   width = nextWidth;
-  render(<ResponsiveControlGroup label="Time controls" overflowLabel="More time controls" items={items} />);
+  render(
+    <ResponsiveControlGroup
+      label="Time controls"
+      overflowLabel="More time controls"
+      items={items}
+    />,
+  );
   Object.defineProperty(screen.getByTestId('responsive-control-group'), 'clientWidth', {
     configurable: true,
     value: width,

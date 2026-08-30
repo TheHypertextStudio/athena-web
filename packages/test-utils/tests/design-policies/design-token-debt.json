@@ -305,9 +305,6 @@
   "apps/web/src/components/rail/day-tasks-panel.tsx": {
     "raw-type-utility": 1
   },
-  "apps/web/src/components/recovery-nudge-banner.tsx": {
-    "raw-type-utility": 4
-  },
   "apps/web/src/components/search/search-client.tsx": {
     "raw-type-utility": 13
   },

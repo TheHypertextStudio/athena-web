@@ -83,7 +83,6 @@ export interface DesignTokenViolation {
  */
 export const SHADOW_ALLOWED_FILES: ReadonlySet<string> = new Set([
   'packages/ui/src/primitives/dialog.tsx',
-  'packages/ui/src/primitives/settings-dialog.tsx',
   'packages/ui/src/primitives/sheet.tsx',
   'packages/ui/src/primitives/popover.tsx',
   'packages/ui/src/primitives/tooltip.tsx',

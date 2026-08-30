@@ -87,7 +87,9 @@ export default function FocusImmersive({ userId = null }: FocusImmersiveProps): 
         </Button>
       }
       title={
-        <h1 className="text-on-surface text-title-small truncate font-semibold">Focus mode</h1>
+        <Text as="h1" token="title-small" className="truncate">
+          Focus mode
+        </Text>
       }
       actions={
         <Text token="body-small" tone="muted" className="shrink-0">

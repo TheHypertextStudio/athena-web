@@ -45,6 +45,7 @@ interface CliArgs {
   outDir: string;
   routes: string[];
   audit: boolean;
+  start: number;
   limit?: number;
 }
 
@@ -78,6 +79,7 @@ function parseArgs(argv: string[]): CliArgs {
     outDir: resolve(flags.get('out') ?? '.data/design-review-shots'),
     routes,
     audit,
+    start: flags.has('start') ? Number.parseInt(flags.get('start') ?? '', 10) : 0,
     limit: flags.has('limit') ? Number.parseInt(flags.get('limit') ?? '', 10) : undefined,
   };
 }
@@ -225,10 +227,18 @@ async function captureCleanFrame(
 }
 
 async function main(): Promise<void> {
-  const { session, outDir, routes, audit, limit } = parseArgs(process.argv.slice(2));
+  const { session, outDir, routes, audit, start, limit } = parseArgs(process.argv.slice(2));
   const meta = JSON.parse(readFileSync(`${session}.meta.json`, 'utf8')) as SessionMeta;
+  if (audit && (!Number.isInteger(start) || start < 0)) {
+    throw new Error('capture-shots: --start must be a non-negative integer');
+  }
+  if (audit && limit !== undefined && (!Number.isInteger(limit) || limit <= 0)) {
+    throw new Error('capture-shots: --limit must be a positive integer');
+  }
   const selectedRoutes = audit
-    ? MOBILE_LAYOUT_ROUTE_CASES.slice(0, limit).map((entry) => entry.route)
+    ? MOBILE_LAYOUT_ROUTE_CASES.slice(start, limit === undefined ? undefined : start + limit).map(
+        (entry) => entry.route,
+      )
     : routes;
   if (selectedRoutes.length === 0) {
     throw new Error('capture-shots: the selected audit route set is empty');

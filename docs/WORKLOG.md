@@ -799,6 +799,17 @@
   personal-workspace fallback after an award expires. The seven focused billing suites pass 154
   tests and cover at least 53 more branches than that exact-main baseline. Checkout remains
   disabled, and the shadow observation clock still ends at `2026-08-30T21:49:02Z`.
+- **Current-head API coverage correction**: Exact-main run `33297433302` passed all 5,072 API
+  behavior tests. It stopped before deployment because branch coverage reached 87.95% against the
+  88% gate. The correction covers same-origin Checkout return paths, stable customer-creation
+  failure handling, discount evidence and application boundaries, absent lifecycle timestamps,
+  missing provider period ends, export replacement cleanup, and provider discount ownership. The
+  three affected suites pass 83 tests. Focused coverage proves 14 additional production branches,
+  which clears the exact run's 12-branch deficit without lowering the threshold or adding timing
+  assertions. Production audit run `33294810116` remains green on revision
+  `docket-api-00216-ttm`. Checkout remains disabled, reconciliation remains in shadow mode, the
+  Scheduler remains healthy, and all six Founder organizations retain the five Docket Pro
+  capabilities.
 - **Decisions**: Checkout derives the customer email from the Better Auth server session and
   rejects a browser-supplied email. Stripe's Dashboard-only existing-subscriber redirect requires
   a recorded verification timestamp before `BILLING_ENABLED=true` can pass configuration. Docket

@@ -997,7 +997,7 @@
     [content] minmax(0, 0fr);
   grid-template-areas:
     'glyph actions'
-    'title .'
+    'title title'
     'meta .'
     'content .';
   align-items: start;

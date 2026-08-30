@@ -134,6 +134,8 @@ test('Project header stays compact and operable across overflow widths', async (
       const tabBounds = bounds(tabs);
       const glyphBounds = bounds(glyph);
       const actionsBounds = bounds(actions);
+      const primaryBounds = bounds(header.querySelector<HTMLElement>('.detail-primary'));
+      const titleBounds = bounds(title);
       return {
         mastheadPaddingTop: Number.parseFloat(
           getComputedStyle(mastheadContent ?? header).paddingTop,
@@ -142,6 +144,7 @@ test('Project header stays compact and operable across overflow widths', async (
         glyphHeight: glyphBounds?.height ?? 0,
         glyphTop: glyphBounds?.top ?? 0,
         actionsTop: actionsBounds?.top ?? 0,
+        titleRightGap: primaryBounds && titleBounds ? primaryBounds.right - titleBounds.right : 999,
         titleWhiteSpace: title ? getComputedStyle(title).whiteSpace : '',
         titleFullyVisible: titleField
           ? titleField.scrollHeight <= titleField.clientHeight + 1
@@ -154,6 +157,7 @@ test('Project header stays compact and operable across overflow widths', async (
     expect(expanded.glyphWidth).toBeCloseTo(48, 0);
     expect(expanded.glyphHeight).toBeCloseTo(48, 0);
     expect(Math.abs(expanded.glyphTop - expanded.actionsTop)).toBeLessThanOrEqual(1);
+    expect(expanded.titleRightGap).toBeLessThanOrEqual(1);
     expect(expanded.titleWhiteSpace).toBe('normal');
     expect(expanded.titleFullyVisible).toBe(true);
     expect(expanded.subtitleFullyVisible).toBe(true);

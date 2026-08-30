@@ -1024,7 +1024,6 @@ export function FilterBuilder<TTarget extends ViewTarget>({
         presentation="panel"
         width="xl"
         align="end"
-        role="dialog"
         aria-label={`Filter ${labelTarget(target)}`}
       >
         {!advanced ? (

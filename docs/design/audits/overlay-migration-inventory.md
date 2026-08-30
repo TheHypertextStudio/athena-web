@@ -29,7 +29,7 @@ must migrate before the ownership lint rule reaches error severity.
 | `packages/ui/src/primitives/dialog.tsx` and `sheet.tsx` dialog roles and fixed scrims | Shared primitive infrastructure | Allowed |
 | `apps/web/src/app/(marketing)/layout.tsx` paper layer | Noninteractive page backdrop | Allowed |
 | `apps/web/src/components/athena/mcp-app-view.tsx` fixed fullscreen shell | App-owned modal shell | Pending |
-| `apps/web/src/components/work-views/filter-builder.tsx` and `display-controls.tsx` dialog roles | Shared panel semantics still declared by consumers | Pending review |
+| `apps/web/src/components/work-views/filter-builder.tsx` and `display-controls.tsx` dialog roles | Shared panel semantics still declared by consumers | Migrated |
 | `packages/ui/src/components/shell/tab-overflow-menu.tsx` and `apps/web/src/components/scheduling/scheduling-dense-overflow-ui.tsx` dialog roles | Popover semantics supplied by consumer | Migrated |
 
 No direct Radix overlay imports outside `packages/ui/src/primitives/` appeared in this scan. The

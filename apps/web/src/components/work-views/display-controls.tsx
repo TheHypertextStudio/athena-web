@@ -54,7 +54,6 @@ export function DisplayControls<TTarget extends ViewTarget>({
       <PopoverContent
         presentation="panel"
         width="xl"
-        role="dialog"
         aria-label="Display view"
         align="end"
         onCloseAutoFocus={(event) => {

@@ -134,17 +134,14 @@ afterEach(() => {
 });
 
 describe('Project restore invalidation', () => {
-  it('binds Project recovery to the account identity resolved by the app shell', () => {
+  it('uses the shared Project identity controller', () => {
     const webRoot = join(import.meta.dirname, '../../..');
     const projectSource = readFileSync(
       join(webRoot, 'src/app/(app)/orgs/[orgId]/projects/[projectId]/project-detail-client.tsx'),
       'utf8',
     );
-    const shellSource = readFileSync(join(webRoot, 'src/components/app-shell-frame.tsx'), 'utf8');
-
-    expect(projectSource).toContain('useResolvedAccountId');
-    expect(projectSource).not.toContain("import { useSession } from '@/lib/auth-client'");
-    expect(shellSource).toContain('<ResolvedAccountProvider userId={renderedStorageUserId}>');
+    expect(projectSource).toContain('useEntityDisplay({');
+    expect(projectSource).toContain("subjectType: 'project'");
   });
 
   it('ignores a restore write that settles after the receipt recovery state resets', async () => {

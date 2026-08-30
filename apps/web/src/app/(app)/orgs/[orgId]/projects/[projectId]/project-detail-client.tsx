@@ -91,6 +91,7 @@ import { invalidateWorkTargetQueries } from '@/lib/work-target-invalidation';
 type TabId = 'overview' | 'tasks' | 'updates' | 'resources';
 const PROJECT_TABS = ['overview', 'tasks', 'updates', 'resources'] as const;
 
+/** Render the recovery control that follows a restored Project redirect. */
 export function ProjectRestorePrimaryAction({
   refreshState,
   restorePending,
@@ -121,6 +122,12 @@ export function ProjectRestorePrimaryAction({
   );
 }
 
+/**
+ * Revalidate a restored Project aggregate and report whether its detail route can reopen.
+ *
+ * @param input - The aggregate query and organization scope to refresh.
+ * @returns The recovery state for the restored Project route.
+ */
 export async function refreshRestoredProject<TData, TQueryKey extends QueryKey>(input: {
   readonly queryClient: QueryClient;
   readonly aggregateQuery: FetchQueryOptions<TData, Error, TData, TQueryKey>;

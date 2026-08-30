@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import { InitiativeWorkViewQueryRequest } from '@docket/types';
-import { sql } from 'drizzle-orm';
+import { InitiativeWorkViewQueryRequest, WorkViewQueryResponse } from '@docket/types';
+import { and, eq, gt, sql } from 'drizzle-orm';
 
 import { queryWorkView } from '../../src/lib/work-views/query';
-import { getDb, seedBaseOrg } from '../support/routes-harness';
+import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
 import { programRequest, projectRequest, taskRequest } from './request-fixtures';
 
 process.env['BETTER_AUTH_SECRET'] ??= 'work-view-performance-test-secret-at-least-32-characters';
@@ -14,6 +14,24 @@ const COUNTS = { task: 50_000, project: 5_000, program: 1_000, initiative: 1_000
 const INSERT_CHUNK = 500;
 const SAMPLE_COUNT = 20;
 const P95_LIMIT_MS = 300;
+const JSON_HEADERS = { 'content-type': 'application/json' };
+
+async function grantOrganizationCapability(
+  schema: typeof DbModule,
+  organizationId: string,
+  actorId: string,
+): Promise<void> {
+  await schema.db.insert(schema.grant).values({
+    organizationId,
+    subjectKind: 'actor',
+    subjectId: actorId,
+    resourceKind: 'organization',
+    resourceId: organizationId,
+    capabilities: ['contribute'],
+    effect: 'allow',
+    cascades: true,
+  });
+}
 
 async function insertInChunks(
   count: number,
@@ -135,6 +153,103 @@ describe('work-view production-size performance', () => {
         .filter(([, milliseconds]) => milliseconds > P95_LIMIT_MS)
         .map(([target, milliseconds]) => `${target}: ${milliseconds.toFixed(1)}ms`);
       expect(failures, `Work-view p95 results: ${JSON.stringify(results)}`).toEqual([]);
+    },
+  );
+
+  it(
+    'rebalances a fixed neighborhood inside 50,000 rows and preserves window continuation',
+    { timeout: 300_000 },
+    async () => {
+      const schema = await getDb();
+      const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(schema.db, schema);
+      await grantOrganizationCapability(schema, orgId, humanActorId);
+      const taskStatusId = statusId('task', 'todo');
+      const oldWrite = new Date('2020-01-01T00:00:00.000Z');
+      await schema.db.execute(sql`insert into task (
+          id, organization_id, team_id, title, state, status_id, visibility
+        )
+        select 'B' || lpad(series::text, 25, '0'), ${orgId}, ${teamId},
+          case when series between 24940 and 25070 then 'Window ' || series else 'Bulk ' || series end,
+          'todo', ${taskStatusId}, 'public'
+        from generate_series(1, 50000) series`);
+      await schema.db.execute(sql`insert into work_item_order (
+          organization_id, context_type, context_id, target, item_id, rank, updated_at
+        )
+        select ${orgId}, 'organization', ${orgId}, 'task',
+          'B' || lpad(series::text, 25, '0'),
+          'R' || lpad((series * 1000)::text, 20, '0'), ${oldWrite}
+        from generate_series(1, 50000) series`);
+      const itemId = (position: number): string => `B${String(position).padStart(25, '0')}`;
+      const afterId = itemId(25000);
+      const beforeId = itemId(25001);
+      const movedId = itemId(25070);
+      const exhaustedRank = `R${String(25000 * 1000).padStart(20, '0')}`;
+      await schema.db.execute(
+        sql`update work_item_order set rank=${exhaustedRank}, updated_at=${oldWrite}
+        where organization_id=${orgId} and item_id between ${itemId(24981)} and ${itemId(25020)}`,
+      );
+
+      const workViews = (await import('../../src/routes/work-views')).default;
+      const app = appWithActor(workViews, orgId, ['contribute'], humanActorId);
+      const response = await app.request('/order', {
+        method: 'PATCH',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({
+          target: 'task',
+          itemId: movedId,
+          context: { kind: 'organization' },
+          groupField: null,
+          groupValue: null,
+          beforeId,
+          afterId,
+        }),
+      });
+      expect(response.status).toBe(200);
+      const rewritten = await schema.db
+        .select({ itemId: schema.workItemOrder.itemId })
+        .from(schema.workItemOrder)
+        .where(
+          and(
+            eq(schema.workItemOrder.organizationId, orgId),
+            gt(schema.workItemOrder.updatedAt, oldWrite),
+          ),
+        );
+      expect(rewritten.length).toBeGreaterThan(65);
+      expect(rewritten.length).toBeLessThanOrEqual(129);
+      await schema.db.execute(
+        sql`delete from task where organization_id=${orgId} and title not like 'Window %'`,
+      );
+
+      const baseRequest = taskRequest();
+      const request = taskRequest({
+        definition: {
+          ...baseRequest.definition,
+          filter: { kind: 'predicate', field: 'title', operator: 'contains', operand: 'Window' },
+        },
+        limit: 100,
+      });
+      const expected = Array.from({ length: 131 }, (_, index) => itemId(index + 24940)).filter(
+        (id) => id !== movedId,
+      );
+      expected.splice(expected.indexOf(afterId) + 1, 0, movedId);
+      const firstResponse = await app.request('/query', {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify(request),
+      });
+      const firstPage = WorkViewQueryResponse.parse(await firstResponse.json());
+      if (firstPage.target !== 'task') throw new Error('expected bounded-rank first page');
+      expect(firstPage.rows.map((row) => row.id)).toEqual(expected.slice(0, 100));
+      expect(firstPage.nextCursor).not.toBeNull();
+      const secondResponse = await app.request('/query', {
+        method: 'POST',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ ...request, cursor: firstPage.nextCursor }),
+      });
+      const secondPage = WorkViewQueryResponse.parse(await secondResponse.json());
+      if (secondPage.target !== 'task') throw new Error('expected bounded-rank continuation');
+      expect(secondPage.rows.map((row) => row.id)).toEqual(expected.slice(100));
+      expect(secondPage.nextCursor).toBeNull();
     },
   );
 });

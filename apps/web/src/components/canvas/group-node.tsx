@@ -8,6 +8,8 @@
  * at a negative `zIndex` so task nodes and edges draw on top. Colors come from the surface tokens.
  */
 import type { NodeProps } from '@xyflow/react';
+import { surfaceToneColor } from '@docket/ui/primitives';
+import { cn } from '@docket/ui/lib/utils';
 import { memo } from 'react';
 
 /** The data a {@link GroupNode} renders. */
@@ -20,7 +22,12 @@ interface GroupNodeData extends Record<string, unknown> {
 function GroupNodeComponent({ data }: NodeProps): React.JSX.Element {
   const { label } = data as GroupNodeData;
   return (
-    <div className="border-outline-variant bg-surface-container-low/50 size-full rounded-xl border">
+    <div
+      className={cn(
+        surfaceToneColor('card'),
+        'border-outline-variant bg-opacity-50 size-full rounded-xl border',
+      )}
+    >
       <div className="text-on-surface-variant truncate px-3 py-1.5 text-xs font-medium">
         {label}
       </div>

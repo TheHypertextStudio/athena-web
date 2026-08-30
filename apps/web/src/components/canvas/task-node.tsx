@@ -14,6 +14,7 @@ import type { WorkStatusCategory } from '@docket/types';
 import type { Priority } from '@docket/work/task-contract';
 import { type ActorKind, ActorAvatar, StatusIcon } from '@docket/ui/components';
 import { cn } from '@docket/ui/lib/utils';
+import { surfaceToneColor } from '@docket/ui/primitives';
 import { Handle, type NodeProps, NodeToolbar, Position } from '@xyflow/react';
 import { memo } from 'react';
 
@@ -163,7 +164,8 @@ function TaskNodeComponent({ id, data, selected }: NodeProps): React.JSX.Element
         data-drop-state={relation.dropProps['data-drop-state']}
         style={{ viewTransitionName: taskNodeTransitionName(id) }}
         className={cn(
-          'task-branch-header group bg-surface-container-high border-outline-variant relative flex items-start gap-2.5 rounded-xl border transition-colors',
+          surfaceToneColor('floating'),
+          'task-branch-header group border-outline-variant relative flex items-start gap-2.5 rounded-xl border transition-colors',
           compact ? 'h-14 w-[240px] px-2.5 py-2' : 'h-[84px] w-[300px] px-3 py-2.5',
           (selected || selection.selected) && 'ring-primary ring-2',
           relation.dropProps.className,
@@ -176,7 +178,12 @@ function TaskNodeComponent({ id, data, selected }: NodeProps): React.JSX.Element
       >
         {actions !== null ? (
           <NodeToolbar position={Position.Top} offset={8}>
-            <div className="border-outline-variant bg-surface-container flex items-center gap-1 rounded-lg border p-1">
+            <div
+              className={cn(
+                surfaceToneColor('canvas'),
+                'border-outline-variant flex items-center gap-1 rounded-lg border p-1',
+              )}
+            >
               <button
                 type="button"
                 onClick={() => {
@@ -215,7 +222,7 @@ function TaskNodeComponent({ id, data, selected }: NodeProps): React.JSX.Element
         <Handle
           type="target"
           position={Position.Left}
-          className="!border-outline-variant !bg-surface !size-2"
+          className={cn(surfaceToneColor('page'), '!border-outline-variant !size-2')}
         />
 
         <StatusIcon type={stateType} label={statusName} className="mt-0.5 shrink-0" />
@@ -256,10 +263,15 @@ function TaskNodeComponent({ id, data, selected }: NodeProps): React.JSX.Element
         <Handle
           type="source"
           position={Position.Right}
-          className="!border-outline-variant !bg-surface !size-2"
+          className={cn(surfaceToneColor('page'), '!border-outline-variant !size-2')}
         />
         {relation.effectLabel ? (
-          <span className="bg-surface text-on-surface ring-outline-variant pointer-events-none absolute -top-7 left-1/2 z-50 -translate-x-1/2 rounded px-2 py-1 whitespace-nowrap ring-1">
+          <span
+            className={cn(
+              surfaceToneColor('page'),
+              'ring-outline-variant pointer-events-none absolute -top-7 left-1/2 z-50 -translate-x-1/2 rounded px-2 py-1 whitespace-nowrap ring-1',
+            )}
+          >
             {relation.effectLabel}
           </span>
         ) : null}

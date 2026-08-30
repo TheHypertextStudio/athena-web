@@ -22,7 +22,7 @@
 import type { ObjectCommandIn } from '@docket/types';
 import { EmptyState } from '@docket/ui/components';
 import { Workflow, X } from '@docket/ui/icons';
-import { Button, Skeleton, Surface } from '@docket/ui/primitives';
+import { Button, Skeleton, Surface, surfaceToneVariable } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import { type Edge, type Node, type ReactFlowInstance } from '@xyflow/react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -116,7 +116,7 @@ export interface TaskGraphPanelProps {
 
 /** Minimap node color by status-category token (the canvas is generic; the host injects this). */
 function taskStateColor(node: Node): string {
-  if (node.type === 'group') return 'var(--color-surface-container-low)';
+  if (node.type === 'group') return surfaceToneVariable('card');
   return `var(--color-state-${taskData(node).stateType})`;
 }
 

@@ -22,6 +22,7 @@ export default [
   ...semanticSurfaceCohortConfig([
     'apps/web/src/components/agenda/**/*.{ts,tsx}',
     'apps/web/src/components/calendar/**/*.{ts,tsx}',
+    'apps/web/src/components/canvas/**/*.{ts,tsx}',
     'apps/web/src/components/time-tracking/**/*.{ts,tsx}',
   ]),
 ];

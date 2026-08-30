@@ -29,6 +29,7 @@
 import type { Health, ProjectStatus } from '@docket/types';
 import { ArrowRight } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
+import { surfaceToneColor } from '@docket/ui/primitives';
 import { Handle, type NodeProps, Position } from '@xyflow/react';
 import Link from '@/components/docket-link';
 import { memo } from 'react';
@@ -144,7 +145,8 @@ function ProjectNodeComponent({ id, data, selected }: NodeProps): React.JSX.Elem
           height: size.height,
         }}
         className={cn(
-          'group bg-surface-container-high relative flex flex-col justify-center gap-1.5 overflow-hidden rounded-lg transition-colors',
+          surfaceToneColor('floating'),
+          'group relative flex flex-col justify-center gap-1.5 overflow-hidden rounded-lg transition-colors',
           compact ? 'px-3' : 'px-3.5',
           (selected || selection.selected) && 'ring-primary ring-2',
           relation.dropProps.className,
@@ -175,7 +177,10 @@ function ProjectNodeComponent({ id, data, selected }: NodeProps): React.JSX.Elem
           onClick={(event) => {
             event.stopPropagation();
           }}
-          className="nodrag nopan bg-surface-container-highest text-on-surface-variant hover:bg-secondary-container hover:text-on-secondary-container focus-visible:ring-ring absolute top-1 right-1 z-10 inline-flex size-6 items-center justify-center rounded-md opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none"
+          className={cn(
+            surfaceToneColor('prominent'),
+            'nodrag nopan hover:bg-secondary-container hover:text-on-secondary-container focus-visible:ring-ring absolute top-1 right-1 z-10 inline-flex size-6 items-center justify-center rounded-md opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:outline-none',
+          )}
         >
           <ArrowRight className="size-4" />
         </Link>
@@ -221,7 +226,10 @@ function ProjectNodeComponent({ id, data, selected }: NodeProps): React.JSX.Elem
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-label={taskReading}
-                className="bg-surface-container h-1.5 min-w-0 flex-1 overflow-hidden rounded-full"
+                className={cn(
+                  surfaceToneColor('canvas'),
+                  'h-1.5 min-w-0 flex-1 overflow-hidden rounded-full',
+                )}
               >
                 <div
                   className="bg-primary h-full rounded-full transition-[width] duration-500 ease-out"
@@ -234,7 +242,12 @@ function ProjectNodeComponent({ id, data, selected }: NodeProps): React.JSX.Elem
 
         <Handle type="source" position={Position.Right} className="!bg-outline-variant !size-2" />
         {relation.effectLabel ? (
-          <span className="bg-surface text-on-surface ring-outline-variant pointer-events-none absolute -top-7 left-1/2 z-50 -translate-x-1/2 rounded px-2 py-1 whitespace-nowrap ring-1">
+          <span
+            className={cn(
+              surfaceToneColor('page'),
+              'ring-outline-variant pointer-events-none absolute -top-7 left-1/2 z-50 -translate-x-1/2 rounded px-2 py-1 whitespace-nowrap ring-1',
+            )}
+          >
             {relation.effectLabel}
           </span>
         ) : null}

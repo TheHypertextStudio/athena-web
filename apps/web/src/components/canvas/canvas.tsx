@@ -30,7 +30,9 @@ import '@xyflow/react/dist/style.css';
 import { useMediaQuery } from '@docket/ui/hooks';
 import { Maximize } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
+import { surfaceToneColor, surfaceToneVariable } from '@docket/ui/primitives';
 import {
+  type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
   type ReactNode,
   useCallback,

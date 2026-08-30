@@ -21,7 +21,7 @@
  */
 import type { Health, ProjectOverviewItem, ProjectStatus } from '@docket/types';
 import { ArrowRight, X } from '@docket/ui/icons';
-import { Button } from '@docket/ui/primitives';
+import { Button, Surface } from '@docket/ui/primitives';
 import { cn } from '@docket/ui/lib/utils';
 import Link from '@/components/docket-link';
 import type { JSX } from 'react';
@@ -145,7 +145,12 @@ export default function ProjectPeek({
   const target = formatCalendarDate(project.targetDate, { month: 'short', day: 'numeric' });
 
   return (
-    <div className="bg-surface-container-high flex w-72 max-w-[80vw] flex-col gap-3 rounded-xl p-3">
+    <Surface
+      tone="floating"
+      shape="large"
+      pad="comfortable"
+      className="flex w-72 max-w-[80vw] flex-col gap-3"
+    >
       <div className="flex items-start gap-2">
         <span className="text-on-surface text-title-small min-w-0 flex-1">{project.name}</span>
         <button
@@ -206,6 +211,6 @@ export default function ProjectPeek({
           Open project <ArrowRight className="size-4" aria-hidden />
         </Link>
       </Button>
-    </div>
+    </Surface>
   );
 }

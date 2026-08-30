@@ -90,6 +90,7 @@ async function applyNestedFilter(
 async function arrangeRoster(page: Page, route: keyof typeof CONTROL_CASES): Promise<void> {
   const { filterLabel, subgroup, secondSort } = CONTROL_CASES[route];
   const display = await openDisplayControls(page);
+  await display.getByRole('button', { name: 'Organize', exact: true }).click();
   const groupBy = display.getByRole('combobox', { name: 'Group by', exact: true });
   const grouped = waitForViewQuery(page);
   await groupBy.selectOption('status');

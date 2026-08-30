@@ -17,7 +17,7 @@
  * is announced via `role="alert"`.
  */
 import type { Health, UpdateOut } from '@docket/types';
-import { cn } from '@docket/ui';
+import { cn, relativeTime } from '@docket/ui';
 import { ActorAvatar } from '@docket/ui/components';
 import { ChevronDown } from '@docket/ui/icons';
 import {
@@ -35,8 +35,6 @@ import { useState } from 'react';
 import { useActiveOrgIdOptional } from '@/components/active-org';
 import { HEALTH_FILL_CLASS, HEALTH_LABEL } from '@/components/entity-display/health';
 import MentionTextarea from '@/components/mentions/mention-textarea';
-
-import { relativeTime } from '../programs/format-time';
 
 /** Resolve an actor id to a display name + kind (passed by the caller). */
 export type ResolveActor = (actorId: string | null | undefined) => {

@@ -29,7 +29,6 @@ import { HealthLabel } from '@/components/entity-display/health';
 import { ActorName } from '@/components/entity-display/roster-cells';
 import { useWorkStatusResolver } from '@/components/entity-display/use-work-status';
 import { WorkStatusIcon } from '@/components/entity-display/work-status';
-import { formatDate } from '@/components/initiatives/format-date';
 import { ObjectSurface } from '@/components/objects/object-surface';
 import { PriorityGlyph } from '@/components/task-detail/PriorityGlyph';
 import type { ObjectRef } from '@/lib/actions';
@@ -96,7 +95,7 @@ const FIELD_WIDTH: Record<string, string> = {
   dueDate: 'w-28',
   targetDate: 'w-28',
   targetTimeframe: 'w-32',
-  latestUpdate: 'w-28',
+  latestUpdate: 'w-44',
   progress: 'w-28',
   estimate: 'w-24',
   estimateMinutes: 'w-24',
@@ -381,15 +380,18 @@ function PropertyValue({
       <ActorName actor={actor} token="body-medium" tone="default" />
     );
   }
-  if (field.kind === 'date' || field.key === 'latestUpdate') {
-    const formatted = typeof value === 'string' ? formatDate(value) : null;
-    return formatted ? (
+  // `datetime` joins `date` here rather than dropping through to the bare-text fallback, so two
+  // columns holding the same kind of value do not render one with a glyph and one without.
+  // `latestUpdate` needs no special case: its contract kind is already `datetime`.
+  if (field.kind === 'date' || field.kind === 'datetime') {
+    const formatted = typeof value === 'string' ? formatWorkViewValue(value, field.kind) : '—';
+    return formatted === '—' ? (
+      <span>—</span>
+    ) : (
       <span className="flex items-center gap-2 whitespace-nowrap tabular-nums">
         <Calendar className="size-3.5" />
         {formatted}
       </span>
-    ) : (
-      <span>—</span>
     );
   }
   if (field.key === 'progress' && typeof value === 'number') {

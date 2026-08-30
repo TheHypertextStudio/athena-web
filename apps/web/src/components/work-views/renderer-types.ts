@@ -56,6 +56,22 @@ export function workViewRowDisplayValue(row: WorkViewRowFor<ViewTarget>, field: 
   return workViewRowValue(row, field);
 }
 
+/**
+ * Day plus time, for a `datetime` field.
+ *
+ * @remarks
+ * A `datetime` carries an instant, and two of them on the same day are a different fact from one.
+ * Formatting `updatedAt` as a bare calendar day would make a record touched at 09:00 and again at
+ * 17:00 read identically, which is exactly what the column exists to tell apart.
+ */
+const DATE_TIME_OPTIONS: Intl.DateTimeFormatOptions = {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+};
+
 /** Format a projected scalar or relation value for a compact row or card. */
 export function formatWorkViewValue(value: unknown, kind?: string): string {
   if (value === null || value === undefined || value === '') return '—';
@@ -74,7 +90,8 @@ export function formatWorkViewValue(value: unknown, kind?: string): string {
     return Array.isArray(value) && value.length > 0 ? String(value.length) : '—';
   if (Array.isArray(value)) return value.length === 0 ? '—' : String(value.length);
   if ((kind === 'date' || kind === 'datetime') && typeof value === 'string') {
-    return formatCalendarDate(value) ?? '—';
+    const options = kind === 'datetime' ? DATE_TIME_OPTIONS : undefined;
+    return formatCalendarDate(value, options) ?? '—';
   }
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   if (typeof value === 'number')

@@ -22,7 +22,7 @@ export function ProductScreenshot({
 }: ProductScreenshotProps): JSX.Element {
   const ink = tone === 'ink';
   return (
-    <figure
+    <div
       className={`relative overflow-hidden rounded-lg border ${aspect} ${
         ink ? 'border-paper/25 bg-paper/10' : 'border-ink/15 bg-paper-deep'
       }`}
@@ -35,6 +35,6 @@ export function ProductScreenshot({
         sizes="(min-width: 768px) 72rem, 100vw"
         className={`object-cover ${position === 'center' ? 'object-center' : 'object-top'}`}
       />
-    </figure>
+    </div>
   );
 }

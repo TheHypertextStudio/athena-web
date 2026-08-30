@@ -33,8 +33,6 @@ export interface RowIdentityProps {
    * steps up the scale. One rule — rows at 32, cards at 40 — rather than a size per target.
    */
   readonly size?: number | undefined;
-  /** Tone classes for the circle, e.g. a health tint. Ignored by targets with a chosen icon. */
-  readonly className?: string | undefined;
 }
 
 /**
@@ -47,14 +45,13 @@ export interface RowIdentityProps {
  * circle the nav and the empty state already use, rather than faking a picker over a field that
  * does not exist.
  *
+ * There is deliberately no tone override: Projects and Initiatives render through
+ * {@link EntityIconGlyph}, which owns its own colour from the entity's chosen display, so a
+ * caller-supplied tint could only ever reach two of the four targets.
+ *
  * @param props - The {@link RowIdentityProps}.
  */
-export function RowIdentity({
-  row,
-  statusOf,
-  size = 32,
-  className = '',
-}: RowIdentityProps): JSX.Element {
+export function RowIdentity({ row, statusOf, size = 32 }: RowIdentityProps): JSX.Element {
   // Half the circle, the ratio EntityIconGlyph already derives — so a Task's ring and a Program's
   // mark do not read lighter than a Project's at the same diameter.
   const iconSize = Math.round(size * 0.5);
@@ -71,14 +68,14 @@ export function RowIdentity({
   }
   if (row.target === 'program') {
     return (
-      <IdentityGlyph size={size} className={className}>
+      <IdentityGlyph size={size}>
         <Layers style={{ width: iconSize, height: iconSize }} />
       </IdentityGlyph>
     );
   }
   const status = statusOf(row.status);
   return (
-    <IdentityGlyph size={size} className={className}>
+    <IdentityGlyph size={size}>
       <WorkStatusIcon
         name={status.name}
         category={status.category}

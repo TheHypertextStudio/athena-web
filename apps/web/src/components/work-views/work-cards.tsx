@@ -114,9 +114,12 @@ export function WorkCards<TTarget extends ViewTarget>({
 }: WorkCardsProps<TTarget>): JSX.Element {
   const statusOf = useWorkStatusResolver(target);
   const propertyKeys: ReadonlySet<string> = new Set(definition.presentation.properties);
-  const properties = workViewDisplayFieldCatalog(target).filter((field) =>
-    propertyKeys.has(field.key),
-  );
+  // Programs read the key set and lay their own card out, so the label/kind catalog is built only
+  // for the targets whose card renders a generic property list from it.
+  const properties =
+    target === 'program'
+      ? []
+      : workViewDisplayFieldCatalog(target).filter((field) => propertyKeys.has(field.key));
   const selecting = selectedIds.size > 0;
   const toggle = (id: string): void => {
     const next = new Set(selectedIds);

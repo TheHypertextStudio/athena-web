@@ -76,11 +76,14 @@ const PULSE_FRAME_CLASS = 'flex h-8 w-24 shrink-0 items-end';
  * Place one week's event count on the {@link PULSE_FILL_CLASS} ladder.
  *
  * @param count - Events in that week.
- * @param maximum - The busiest week in the same eight-week window, always at least `count`.
+ * @param maximum - The busiest week in the same eight-week window.
  * @returns `0` for a week with no activity, otherwise a rung from 1 to 4.
  */
 function pulseLevel(count: number, maximum: number): number {
-  return count === 0 ? 0 : Math.ceil((count / maximum) * PULSE_FILL_CLASS.length);
+  // `maximum` is guarded here rather than only at the caller: dividing by zero yields `Infinity`,
+  // which indexes past the ladder and renders a bar with no height class and no error.
+  if (count === 0 || maximum === 0) return 0;
+  return Math.ceil((count / maximum) * PULSE_FILL_CLASS.length);
 }
 
 /**

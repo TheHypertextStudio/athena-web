@@ -156,16 +156,26 @@ function fallbackFor<TTarget extends ViewTarget>(target: TTarget): WorkViewDefin
 }
 
 /**
- * The Cards lens placeholder, built from the loaded card's own parts.
+ * The Cards lens placeholder.
  *
  * @remarks
- * placeholder: the cards themselves — how many there are, and each one's name, summary, health,
- * owner and rolled-up counts. Shaped like the loaded card, on the loaded card's own grid, because
- * a list-shaped stand-in under a card lens does not fill in so much as rearrange itself.
+ * placeholder: the cards themselves — how many there are, and each one's name and properties.
+ * Shaped like the loaded card on the loaded card's own grid, because a list-shaped stand-in under
+ * a card lens does not fill in so much as rearrange itself.
+ *
+ * Only Programs have a designed card; every other target renders a name over a short property
+ * list. So the placeholder follows the target rather than promising all three of the Program
+ * card's bands to a reader who is about to get two lines of label and value.
  */
-function CardsSkeleton({ label }: { readonly label: string }): JSX.Element {
+function CardsSkeleton({
+  label,
+  target,
+}: {
+  readonly label: string;
+  readonly target: ViewTarget;
+}): JSX.Element {
   return (
-    <div className={CARD_GRID_CLASS} aria-label={`Loading ${label}`}>
+    <div role="status" aria-label={`Loading ${label}`} className={CARD_GRID_CLASS}>
       {Array.from({ length: 6 }, (_, index) => (
         <div
           key={index}
@@ -182,18 +192,27 @@ function CardsSkeleton({ label }: { readonly label: string }): JSX.Element {
               <Skeleton className="h-5 w-1/2 rounded" />
             </div>
           </div>
-          <Skeleton className="h-4 w-full rounded" />
-          <Skeleton className="h-4 w-2/3 rounded" />
-          <div className="mt-auto flex flex-col gap-3">
-            <div className="flex items-end justify-between gap-3">
-              <Skeleton className="h-4 w-40 rounded" />
-              <Skeleton className="h-8 w-24 rounded" />
+          {target === 'program' ? (
+            <>
+              <Skeleton className="h-4 w-full rounded" />
+              <Skeleton className="h-4 w-2/3 rounded" />
+              <div className="mt-auto flex flex-col gap-3">
+                <div className="flex items-end justify-between gap-3">
+                  <Skeleton className="h-4 w-40 rounded" />
+                  <Skeleton className="h-8 w-24 rounded" />
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <Skeleton className="h-5 w-28 rounded" />
+                  <Skeleton className="h-6 w-20 rounded-full" />
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="mt-3 flex flex-col gap-1">
+              <Skeleton className="h-4 w-2/3 rounded" />
+              <Skeleton className="h-4 w-1/2 rounded" />
             </div>
-            <div className="flex items-center justify-between gap-3">
-              <Skeleton className="h-5 w-28 rounded" />
-              <Skeleton className="h-6 w-20 rounded-full" />
-            </div>
-          </div>
+          )}
         </div>
       ))}
     </div>
@@ -210,8 +229,9 @@ function CardsSkeleton({ label }: { readonly label: string }): JSX.Element {
 function RowsSkeleton({ label }: { readonly label: string }): JSX.Element {
   return (
     <div
-      className="bg-surface-container-low h-full min-h-0 rounded-xl p-2"
+      role="status"
       aria-label={`Loading ${label}`}
+      className="bg-surface-container-low h-full min-h-0 rounded-xl p-2"
     >
       <div className="h-8 px-3 py-2">
         <Skeleton className="h-3 w-24 rounded" />
@@ -408,7 +428,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
   } else if (controller.loading) {
     content =
       layout === 'cards' ? (
-        <CardsSkeleton label={copy.title.toLowerCase()} />
+        <CardsSkeleton label={copy.title.toLowerCase()} target={target} />
       ) : (
         <RowsSkeleton label={copy.title.toLowerCase()} />
       );

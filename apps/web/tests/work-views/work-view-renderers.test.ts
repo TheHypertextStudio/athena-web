@@ -18,4 +18,16 @@ describe('work-view renderer registry', () => {
       'H2 FY 2027',
     );
   });
+
+  it('keeps the time on a datetime so two same-day instants stay distinguishable', () => {
+    const morning = formatWorkViewValue('2026-08-23T09:00:00.000Z', 'datetime');
+    const evening = formatWorkViewValue('2026-08-23T17:00:00.000Z', 'datetime');
+
+    expect(morning).not.toBe(evening);
+    // A bare `YYYY-MM-DD` is a calendar day and carries no instant, so it keeps the day-only form.
+    expect(formatWorkViewValue('2026-08-23', 'date')).not.toMatch(/\d:\d/);
+    // Neither shape may leak the raw wire value.
+    expect(morning).not.toContain('T');
+    expect(formatWorkViewValue('not-a-date', 'datetime')).toBe('—');
+  });
 });

@@ -92,8 +92,8 @@ export const SETTINGS_NODES = {
   connectionsTools: personalNode(
     'connections-tools',
     'connections',
-    'Tools for Athena',
-    'Connect services Athena can use under rules you set.',
+    'Tools & apps for Athena',
+    'Connect services Athena can use and show as interactive apps.',
   ),
   connectionsEmailTasks: personalNode(
     'connections-email-tasks',

@@ -105,7 +105,7 @@
   - [x] Fix Node 24 pinned-DNS lookup compatibility found by the public map-server proof.
   - [x] Keep URL-derived tool prefixes inside the connection form's accepted length.
   - [x] Stop the deployment fallback from overriding a user's enabled Lattice backend.
-  - [ ] Make personal MCP Apps an unmistakable Athena destination.
+  - [x] Make personal MCP Apps an unmistakable Athena destination.
   - [ ] Validate packages, production build, and an upstream reference app.
 - **Layer 1 implementation**: Pinned `@modelcontextprotocol/ext-apps@1.7.5` in the workspace
   catalog and replaced Athena's copied protocol types and handwritten browser host engine with
@@ -284,6 +284,14 @@
 - **Per-user Lattice correction validation**: The production-mode Lattice flow passes 11/11. API
   and Web typechecks pass, affected API/Web ESLint is clean, Prettier reports the changed files
   canonical, and `git diff --check` passes.
+- **User-path correction**: The always-visible Athena rail now names the capability `Tools & apps`
+  and offers one direct `Connect a tool or app` action. Its empty state and consent dialog explain
+  that connecting an MCP server gives Athena both callable tools and interactive apps rendered in
+  the current conversation. The Today conversation door and personal Settings use the same
+  language, so a user is not expected to infer MCP Apps from `Connected tools` or a generic
+  connector label. A behavioral test opens the real Athena dialog from the visible destination;
+  the complete panel file passes 8/8, Web typecheck passes, affected ESLint is clean, and Prettier
+  reports the changed files canonical.
 - **Production official-map CSP repair**: Direct browser inspection showed that the unchanged
   pinned map app loaded inside Athena's exact inner sandbox but Cesium stopped before
   `App.connect()`: its runtime uses `new Function` and blob-backed workers. The host now permits

@@ -200,6 +200,19 @@ afterEach(() => {
   delete process.env['NEXT_PUBLIC_API_URL'];
 });
 
+describe('AthenaMcpPanel: visible destination', () => {
+  it('offers tools and interactive apps directly from Athena', async () => {
+    renderPanel();
+
+    expect(await screen.findByRole('heading', { name: 'Tools & apps' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Connect a tool or app' }));
+
+    expect(screen.getByRole('dialog', { name: 'Connect a tool or app' })).toHaveTextContent(
+      'show its interactive apps directly in this conversation',
+    );
+  });
+});
+
 describe('AthenaMcpPanel: ui/message reaches the conversation', () => {
   it('keeps meaningful text visible when a successful tool has no interactive resource', async () => {
     callPost.mockResolvedValue({
@@ -269,7 +282,7 @@ describe('AthenaMcpPanel: ui/message reaches the conversation', () => {
 describe('AthenaMcpPanel: personal connection ceremony', () => {
   it('defaults to OAuth, previews identity, and starts owner-scoped approval without exposing a token', async () => {
     renderPanel();
-    fireEvent.click(await screen.findByRole('button', { name: 'Connect a tool' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Connect a tool or app' }));
 
     fireEvent.change(screen.getByLabelText('Server address'), {
       target: { value: 'https://mcp.acme.example/mcp' },
@@ -313,7 +326,7 @@ describe('AthenaMcpPanel: personal connection ceremony', () => {
         json: async () => ({ id: 'connection-new', authMode, status: 'connected' }),
       });
       renderPanel();
-      fireEvent.click(await screen.findByRole('button', { name: 'Connect a tool' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Connect a tool or app' }));
       fireEvent.change(screen.getByLabelText('Server address'), {
         target: { value: 'https://mcp.acme.example/mcp' },
       });

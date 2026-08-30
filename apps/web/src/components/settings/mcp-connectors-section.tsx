@@ -123,8 +123,8 @@ export function McpConnectorsSection({ orgId, canManage }: McpConnectorsSectionP
           title="No tools connected yet"
           body={
             canManage
-              ? 'Connect a tool so Athena can act through the services you already use.'
-              : 'An admin can connect a tool so Athena can act through it.'
+              ? 'Connect an MCP server so Athena can use its tools and show its interactive apps.'
+              : 'An admin can connect an MCP server so Athena can use its tools and apps.'
           }
           frame="none"
           {...(canManage
@@ -143,10 +143,9 @@ export function McpConnectorsSection({ orgId, canManage }: McpConnectorsSectionP
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add a connector</DialogTitle>
+            <DialogTitle>Connect a tool or app</DialogTitle>
             <DialogDescription>
-              Give Athena access to a remote MCP (Model Context Protocol) server it can use as a
-              tool.
+              Give Athena access to a remote MCP server it can use for tools and interactive apps.
             </DialogDescription>
           </DialogHeader>
           <AddMcpConnectorForm

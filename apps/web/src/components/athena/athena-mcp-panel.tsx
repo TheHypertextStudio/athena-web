@@ -354,13 +354,13 @@ export function AthenaMcpPanel({ className }: AthenaMcpPanelProps): JSX.Element 
 
   return (
     <section
-      aria-label="Connected tools"
+      aria-label="Tools and apps"
       data-athena-mcp-panel
       className={className ?? 'flex flex-col gap-3 p-3'}
     >
       <div className="flex w-full min-w-0 items-center justify-between">
         <Text as="h2" token="title-small">
-          Connected tools
+          Tools &amp; apps
         </Text>
         <ControlGroup controlSize="sm">
           <Button
@@ -373,7 +373,7 @@ export function AthenaMcpPanel({ className }: AthenaMcpPanelProps): JSX.Element 
             }}
           >
             <Cable aria-hidden="true" />
-            Connect a tool
+            Connect a tool or app
           </Button>
         </ControlGroup>
       </div>
@@ -390,7 +390,8 @@ export function AthenaMcpPanel({ className }: AthenaMcpPanelProps): JSX.Element 
         </Text>
       ) : items.length === 0 ? (
         <Text token="body-small" tone="muted">
-          Nothing connected yet. Add a server and its cards appear here, in this conversation.
+          Nothing connected yet. Connect an MCP server so Athena can use its tools and show its
+          interactive apps here.
         </Text>
       ) : (
         <ul className="flex flex-col gap-1">
@@ -480,10 +481,10 @@ export function AthenaMcpPanel({ className }: AthenaMcpPanelProps): JSX.Element 
       <Dialog open={connectOpen} onOpenChange={setConnectOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Connect a tool</DialogTitle>
+            <DialogTitle>Connect a tool or app</DialogTitle>
             <DialogDescription>
-              Add a remote MCP server so Athena can use its tools — and show its cards — in this
-              conversation. You stay right here.
+              Add a remote MCP server so Athena can use its tools and show its interactive apps
+              directly in this conversation. You stay right here.
             </DialogDescription>
           </DialogHeader>
           <ConnectForm

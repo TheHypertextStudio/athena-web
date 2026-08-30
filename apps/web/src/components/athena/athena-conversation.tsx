@@ -224,16 +224,17 @@ export default function AthenaConversation({
           }}
         >
           <Cable aria-hidden="true" className="size-4" />
-          Connect a tool
+          Connect a tool or app
         </Button>
       </div>
 
       <Dialog open={connectOpen} onOpenChange={setConnectOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Connect a tool</DialogTitle>
+            <DialogTitle>Connect a tool or app</DialogTitle>
             <DialogDescription>
-              Add a remote MCP server so Athena can use its tools in this conversation too.
+              Add a remote MCP server so Athena can use its tools and show interactive apps in this
+              conversation too.
             </DialogDescription>
           </DialogHeader>
           <AddMcpConnectorForm

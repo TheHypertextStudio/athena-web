@@ -1,7 +1,7 @@
 /**
  * `pnpm --filter @docket/web exec tsx e2e/tools/capture-shots.ts` — capture the design-review
- * skill's "standard shot set" (1440×900 + 390×844, light + dark) for a list of routes, using a
- * session saved by {@link file://./dev-session.ts}.
+ * skill's responsive shot set (desktop, phone, narrow phone, and short phone in light and dark)
+ * for a list of routes, using a session saved by {@link file://./dev-session.ts}.
  *
  * @remarks
  * The `design-review` skill (`.claude/skills/design-review/SKILL.md`) expects screenshots of
@@ -43,10 +43,12 @@ interface CliArgs {
   routes: string[];
 }
 
-/** The design-review skill's standard shot set: two viewports × two color schemes. */
+/** The mobile remediation matrix: four viewports × two color schemes. */
 const VIEWPORTS = [
   { label: '1440x900', width: 1440, height: 900 },
   { label: '390x844', width: 390, height: 844 },
+  { label: '320x844', width: 320, height: 844 },
+  { label: '390x600', width: 390, height: 600 },
 ];
 const COLOR_SCHEMES: ('light' | 'dark')[] = ['light', 'dark'];
 
@@ -163,6 +165,15 @@ async function captureCleanFrame(
     await page.setViewportSize(viewport);
     await page.emulateMedia({ colorScheme });
     await openReviewRoute(page, url);
+    const overflow = await page.evaluate(() => ({
+      clientWidth: document.documentElement.clientWidth,
+      scrollWidth: document.documentElement.scrollWidth,
+    }));
+    if (overflow.scrollWidth > overflow.clientWidth) {
+      throw new Error(
+        `${url} overflows at ${viewport.label} (${String(overflow.scrollWidth)} > ${String(overflow.clientWidth)})`,
+      );
+    }
     await page.screenshot({ type: 'png' });
     await page.waitForTimeout(150);
     const candidate = await page.screenshot({ type: 'png' });
@@ -229,21 +240,6 @@ async function main(): Promise<void> {
         console.log(`[capture-shots] ${file}`);
       }
     }
-    const page = await context.newPage();
-    await page.setViewportSize({ width: 320, height: 844 });
-    await page.emulateMedia({ colorScheme: 'light' });
-    await openReviewRoute(page, `${meta.baseURL}${path}`);
-    const overflow = await page.evaluate(() => ({
-      clientWidth: document.documentElement.clientWidth,
-      scrollWidth: document.documentElement.scrollWidth,
-    }));
-    if (overflow.scrollWidth > overflow.clientWidth) {
-      throw new Error(
-        `${path} overflows at 320px (${String(overflow.scrollWidth)} > ${String(overflow.clientWidth)})`,
-      );
-    }
-    await page.close();
-    console.log(`[capture-shots] 320px overflow check passed: ${path}`);
   }
   await browser.close();
 }

@@ -89,10 +89,15 @@ export default function DayPlan({
   // The promoted task is not repeated as a row. Everything else keeps its accepted order — the
   // server already sorted `plan`, and re-sorting here would disagree with the order the person
   // accepted.
+  // Only skipped when the promoted card is actually rendered. `FocusCard` needs all three action
+  // handlers, and every one of them is optional, so skipping unconditionally dropped the task from
+  // the page entirely whenever a host supplied fewer.
+  const promoted = now && onComplete && onDefer && onTimebox ? now : null;
+
   const groups = useMemo<PlanGroup[]>(() => {
     const byOrg = new Map<string, PlanGroup>();
     for (const item of plan) {
-      if (item.planItemId === now?.planItemId) continue;
+      if (item.planItemId === promoted?.planItemId) continue;
       const group = byOrg.get(item.organizationId);
       if (group) group.tasks.push(item);
       else
@@ -103,7 +108,7 @@ export default function DayPlan({
         });
     }
     return [...byOrg.values()];
-  }, [plan, now, orgName]);
+  }, [plan, promoted, orgName]);
 
   const rowActions = (item: HubTodayPlanItem): JSX.Element => (
     // Overlaid, not reserved. At `opacity-0` in the flow these still occupied their full width,
@@ -168,9 +173,9 @@ export default function DayPlan({
         />
       ) : (
         <Stack gap={2}>
-          {now && onComplete && onDefer && onTimebox ? (
+          {promoted && onComplete && onDefer && onTimebox ? (
             <FocusCard
-              item={now}
+              item={promoted}
               orgName={orgName}
               completing={completing}
               onComplete={onComplete}

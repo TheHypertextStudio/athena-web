@@ -222,4 +222,21 @@ describe('DayPlan', () => {
     expect(onPlan).toHaveBeenCalledOnce();
     expect(screen.getByRole('link')).toHaveAttribute('href', '/tasks');
   });
+
+  it('still shows the current task when no action handlers are supplied', () => {
+    const now = planItem({ id: 't1', title: 'One', sort: 0 });
+    render(
+      <DayPlan
+        plan={[now, planItem({ id: 't2', title: 'Two', sort: 1 })]}
+        now={now}
+        orgName={orgName}
+        loading={false}
+      />,
+    );
+
+    // Every action callback is optional, so the promoted card cannot render — the task has to fall
+    // back to an ordinary row rather than vanishing while the header still counts it.
+    expect(screen.queryByRole('article')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('link')).toHaveLength(2);
+  });
 });

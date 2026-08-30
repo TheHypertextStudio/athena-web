@@ -25,7 +25,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
   Popover,
   PopoverAnchor,
@@ -93,35 +92,31 @@ export function FocusCard({
                 "Now", which is the same fact in words. Keeping it bought a second left margin —
                 the eyebrow and the action row on the card's edge, the title and summary indented
                 past a glyph — for information the card already carries. */}
-            <Stack gap={1} className="min-w-0">
-              <Link
-                href={`/orgs/${item.organizationId}/tasks/${item.id}`}
-                className="text-on-surface text-title-medium focus-visible:ring-ring block text-balance hover:underline focus-visible:rounded focus-visible:ring-2 focus-visible:outline-none"
-              >
-                {item.title}
-              </Link>
-              {/* Tier one is `task.summary`, written on the write path; the server falls back to a
+            <Link
+              href={`/orgs/${item.organizationId}/tasks/${item.id}`}
+              className="text-on-surface text-title-medium focus-visible:ring-ring block text-balance hover:underline focus-visible:rounded focus-visible:ring-2 focus-visible:outline-none"
+            >
+              {item.title}
+            </Link>
+            {/* Tier one is `task.summary`, written on the write path; the server falls back to a
                     lead-sentence extract of the description and sends null only when there is
                     neither. Nothing is reserved for the null case — an empty line under a title is
                     what makes a card look unwritten. */}
-              {item.summary ? (
-                <p className="text-on-surface-variant text-body-small line-clamp-2">
-                  {item.summary}
-                </p>
-              ) : null}
-              {/* Only facts that change what to do: a deadline or running timer (`reason`), and
+            {item.summary ? (
+              <p className="text-on-surface-variant text-body-small line-clamp-2">{item.summary}</p>
+            ) : null}
+            {/* Only facts that change what to do: a deadline or running timer (`reason`), and
                     when it is scheduled or how long it should take (`time`). */}
-              {(item.reason ?? time) ? (
-                <Row gap={3} className="text-on-surface-variant text-body-small flex-wrap">
-                  {item.reason ? <span>{item.reason}</span> : null}
-                  {time ? (
-                    <span className="inline-flex items-center gap-1">
-                      <AlarmClock aria-hidden="true" className="size-3.5" /> {time}
-                    </span>
-                  ) : null}
-                </Row>
-              ) : null}
-            </Stack>
+            {(item.reason ?? time) ? (
+              <Row gap={3} className="text-on-surface-variant text-body-small flex-wrap">
+                {item.reason ? <span>{item.reason}</span> : null}
+                {time ? (
+                  <span className="inline-flex items-center gap-1">
+                    <AlarmClock aria-hidden="true" className="size-3.5" /> {time}
+                  </span>
+                ) : null}
+              </Row>
+            ) : null}
           </Stack>
           <OrgChip orgId={item.organizationId} name={orgName(item.organizationId)} />
         </Row>
@@ -213,10 +208,6 @@ function FocusActions({
             }}
           >
             Defer
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem asChild>
-            <Link href={taskHref}>Open task</Link>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

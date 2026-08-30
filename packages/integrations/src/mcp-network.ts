@@ -320,8 +320,10 @@ const defaultRequest: McpPinnedRequest = async (url, init, address, signal, limi
         signal,
         maxHeaderSize: limits.maxHeaderBytes,
         servername: url.hostname,
-        lookup: (_hostname, _options, callback) => {
-          callback(null, address, isIP(address));
+        lookup: (_hostname, options, callback) => {
+          const family = isIP(address);
+          if (options.all) callback(null, [{ address, family }]);
+          else callback(null, address, family);
         },
       },
       (incoming) => {

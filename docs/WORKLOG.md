@@ -66,6 +66,7 @@
   - [x] Persist and render model-invoked MCP App presentations in Athena.
   - [x] Replace the surface inventory with normative conformance evidence.
   - [x] Restore the shared-types 100% coverage gate for presentation revalidation.
+  - [x] Fix Node 24 pinned-DNS lookup compatibility found by the public map-server proof.
   - [ ] Make personal MCP Apps an unmistakable Athena destination.
   - [ ] Validate packages, production build, and an upstream reference app.
 - **Layer 1 implementation**: Pinned `@modelcontextprotocol/ext-apps@1.7.5` in the workspace
@@ -203,6 +204,16 @@
   production-size performance gate remains green in its isolated release configuration; running
   it inside the already resource-saturated package suite exceeded its p95 budget and is not used
   as substitute evidence for the isolated performance command.
+- **Public map interoperability repair**: The first real public run against the pinned official
+  map server exposed Node 24 requesting `lookup(..., { all: true })` from Athena's validated-address
+  HTTPS adapter. The adapter returned the older scalar callback shape, causing
+  `ERR_INVALID_IP_ADDRESS` before any MCP handshake. A RED regression captured the exact Node 24
+  callback contract; the adapter now returns the single pinned address as an address array when
+  requested and preserves the scalar form otherwise. The official server then completed
+  initialize, listed `geocode` and `show-map`, geocoded Las Vegas, rendered the derived bounds,
+  retained `ui://cesium-map/mcp-app.html`, and returned meaningful text fallback through a public
+  ephemeral HTTPS tunnel. Integrations passes 1,026 tests at 94.65% statements, 90.14% branches,
+  96.48% functions, and 95.20% lines; its TypeScript and ESLint gates pass.
 - **Layer 3 decisions and retrospective**: The official stable prose and exact npm package source
   were the authority because Context7 remained quota-blocked. Counting normative vocabulary
   occurrences rather than methods/capabilities prevents a stable protocol symbol list from

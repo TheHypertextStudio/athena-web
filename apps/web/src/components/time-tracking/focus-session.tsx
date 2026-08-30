@@ -30,6 +30,7 @@ import Link from '@/components/docket-link';
 import { type JSX, useEffect, useRef, useState } from 'react';
 
 import { formatClock, spokenDuration } from './format-duration';
+import type { FocusPresentation } from './focus-route-frame';
 import type { TimerControls } from './use-timer';
 
 /** Props for {@link FocusSession}. */
@@ -58,8 +59,8 @@ export interface FocusSessionProps {
   readonly onRequestName: () => void;
   /** Ref target for {@link onRequestName}. */
   readonly nameFieldId: string;
-  /** Use full touch targets when the shared card is rendered in immersive mode. */
-  readonly comfortable?: boolean;
+  /** The enclosing rail or page presentation chooses the control density. */
+  readonly presentation?: FocusPresentation | undefined;
 }
 
 /**
@@ -90,7 +91,7 @@ export default function FocusSession({
   controls,
   onRequestName,
   nameFieldId,
-  comfortable = false,
+  presentation = 'rail',
 }: FocusSessionProps): JSX.Element {
   const provenanceText = provenanceLine(fromPlan, unanchored);
   const [editing, setEditing] = useState(false);
@@ -203,7 +204,7 @@ export default function FocusSession({
         </Text>
       ) : null}
 
-      <ControlGroup controlSize={comfortable ? 'xl' : 'sm'} className="w-full min-w-0">
+      <ControlGroup controlSize={presentation === 'page' ? 'xl' : 'sm'} className="w-full min-w-0">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

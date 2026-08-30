@@ -28,9 +28,5 @@ export default async function FocusGroupLayout({
     queryFn: () => unwrap(() => api.v1.orgs.$get(), 'Could not load your organizations.'),
   });
 
-  return (
-    <HydrationBoundary state={dehydrate(queryClient)}>
-      <div className="bg-surface text-on-surface min-h-dvh">{children}</div>
-    </HydrationBoundary>
-  );
+  return <HydrationBoundary state={dehydrate(queryClient)}>{children}</HydrationBoundary>;
 }

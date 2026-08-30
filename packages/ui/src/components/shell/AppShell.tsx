@@ -97,6 +97,7 @@ import { ShellDrawerProvider } from './ShellDrawerContext';
 import { ShellSidebarProvider } from './ShellSidebarContext';
 import { ShellOverlayProvider } from './ShellOverlayContext';
 import { ShellRailDock } from './ShellRailDock';
+import { ShellTopBar } from './ShellTopBar';
 
 /** localStorage keys for the shell-owned rail state (active panel + collapsed), persisted across sessions. */
 const RAIL_ACTIVE_KEY = 'docket.rail.active';
@@ -583,38 +584,45 @@ export function AppShell({
           device the bar must grow by the inset so its controls clear the status bar, instead of
           keeping a 48px box and hiding the menu button underneath it. The inset is `0px` in a
           browser tab, where this stays exactly the 48px bar it was. */}
-        <div className="border-outline-variant flex min-h-12 shrink-0 items-center gap-2 border-b px-2 pt-[env(safe-area-inset-top)] lg:hidden">
-          <button
-            type="button"
-            aria-label="Open navigation"
-            aria-expanded={drawerOpen}
-            onClick={() => {
-              setDrawerOpen(true);
-            }}
-            className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-ring flex size-10 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none"
-          >
-            <Menu aria-hidden="true" className="size-5" />
-          </button>
-          <div className="flex min-w-0 flex-1 items-center">
-            {mobileBrand ?? <span className="text-body-medium truncate font-semibold">Docket</span>}
-          </div>
-          {mobileActions}
-          {/* Mobile rail trigger — opens the panels as a right sheet. Uses the active panel's glyph. */}
-          {activePanel ? (
+        <ShellTopBar
+          className="lg:hidden"
+          navigation={
             <button
               type="button"
-              aria-label={`Show ${activePanel.label}`}
-              aria-controls={SHELL_ASIDE_SHEET_ID}
-              aria-expanded={overlayPanelOpen}
+              aria-label="Open navigation"
+              aria-expanded={drawerOpen}
               onClick={() => {
-                setOverlayPanelOpen(true);
+                setDrawerOpen(true);
               }}
-              className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-ring flex size-10 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none [&_svg]:size-5"
+              className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-ring flex size-10 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none"
             >
-              {activePanel.icon}
+              <Menu aria-hidden="true" className="size-5" />
             </button>
-          ) : null}
-        </div>
+          }
+          title={
+            mobileBrand ?? <span className="text-body-medium truncate font-semibold">Docket</span>
+          }
+          actions={
+            <>
+              {mobileActions}
+              {/* Mobile rail trigger — opens the panels as a right sheet. Uses the active panel's glyph. */}
+              {activePanel ? (
+                <button
+                  type="button"
+                  aria-label={`Show ${activePanel.label}`}
+                  aria-controls={SHELL_ASIDE_SHEET_ID}
+                  aria-expanded={overlayPanelOpen}
+                  onClick={() => {
+                    setOverlayPanelOpen(true);
+                  }}
+                  className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-ring flex size-10 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:ring-2 focus-visible:outline-none [&_svg]:size-5"
+                >
+                  {activePanel.icon}
+                </button>
+              ) : null}
+            </>
+          }
+        />
 
         {/* Off-canvas navigation drawer — the SAME sidebar node, shown below `lg` on demand. */}
         <Sheet open={!isDesktop && drawerOpen} onOpenChange={setDrawerOpen}>
@@ -750,7 +758,12 @@ export function AppShell({
                 </SheetClose>
               </div>
             ) : null}
-            <SheetBody inset="none" className="@container">
+            <SheetBody
+              inset="none"
+              scroll="visible"
+              data-slot="shell-utility-pane-body"
+              className="@container overflow-hidden"
+            >
               {activePanel?.node}
             </SheetBody>
           </SheetContent>

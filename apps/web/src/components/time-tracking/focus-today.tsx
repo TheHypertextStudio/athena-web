@@ -7,13 +7,15 @@ import Link from '@/components/docket-link';
 import type { JSX } from 'react';
 
 import { formatDuration } from './format-duration';
+import type { FocusPresentation } from './focus-route-frame';
 
 /** Props for {@link FocusToday}. */
 export interface FocusTodayProps {
   readonly records: readonly TimeRecordOut[];
   readonly activeRecordId?: string | null;
   readonly limit?: number;
-  readonly comfortable?: boolean;
+  /** The enclosing rail or page presentation. This is separate from saved shell density. */
+  readonly presentation?: FocusPresentation | undefined;
 }
 
 /** Show the day's human total and most recent sessions, never synthetic suggestions. */

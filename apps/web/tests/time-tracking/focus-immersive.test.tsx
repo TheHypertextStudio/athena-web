@@ -57,6 +57,17 @@ const { default: FocusImmersive } = await import('@/components/time-tracking/foc
 afterEach(cleanup);
 
 describe('FocusImmersive', () => {
+  it('uses the shared focus route frame instead of a route-specific page shell', () => {
+    render(
+      <TooltipProvider>
+        <FocusImmersive />
+      </TooltipProvider>,
+    );
+
+    expect(screen.getByTestId('focus-route-frame')).toHaveAttribute('data-density');
+    expect(screen.getByTestId('focus-route-frame')).toHaveAttribute('data-surface-tone', 'canvas');
+  });
+
   it('keeps an anchored task linked while its additional context is loading', () => {
     render(
       <TooltipProvider>

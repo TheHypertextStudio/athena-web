@@ -8,6 +8,7 @@ import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { type JSX, useId, useState } from 'react';
 
 import FocusIdle, { type FocusShortcut } from './focus-idle';
+import FocusRouteFrame from './focus-route-frame';
 import FocusSession from './focus-session';
 import FocusTaskContext from './focus-task-context';
 import FocusToday from './focus-today';
@@ -19,8 +20,14 @@ import { useTimerControls, useTimerState } from './use-timer';
 /** How many real earlier tasks are offered as quick restarts while idle. */
 const IMMERSIVE_SHORTCUT_LIMIT = 4;
 
+/** Props for {@link FocusImmersive}. */
+export interface FocusImmersiveProps {
+  /** The authenticated person whose density preference scopes this page. */
+  readonly userId?: string | null | undefined;
+}
+
 /** Immersive Focus mode, sharing all work state and controls with the rail companion. */
-export default function FocusImmersive(): JSX.Element {
+export default function FocusImmersive({ userId = null }: FocusImmersiveProps): JSX.Element {
   const router = useRouter();
   const timer = useTimerState();
   const controls = useTimerControls(timer.record?.id ?? null);
@@ -53,8 +60,9 @@ export default function FocusImmersive(): JSX.Element {
   };
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-[1440px] flex-col">
-      <header className="border-outline-variant/50 flex min-h-16 items-center justify-between gap-4 border-b px-4 sm:px-6">
+    <FocusRouteFrame
+      userId={userId}
+      navigation={
         <Button
           variant="ghost"
           controlSize="xl"
@@ -76,13 +84,17 @@ export default function FocusImmersive(): JSX.Element {
           <ChevronLeft aria-hidden="true" />
           Return to workspace
         </Button>
-        <h1 className="text-on-surface text-title-medium hidden sm:block">Focus mode</h1>
+      }
+      title={
+        <h1 className="text-on-surface text-title-small truncate font-semibold">Focus mode</h1>
+      }
+      actions={
         <Text token="body-small" tone="muted" className="shrink-0">
           {timer.phase === 'running' ? 'Tracking' : timer.phase === 'paused' ? 'Paused' : 'Ready'}
         </Text>
-      </header>
-
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-8 px-5 py-8 md:grid-cols-[minmax(0,1fr)_22rem] md:px-10 lg:gap-12 lg:px-16">
+      }
+    >
+      <div className="mx-auto grid w-full max-w-[1440px] grid-cols-1 gap-6 px-4 py-5 sm:px-6 md:grid-cols-[minmax(0,1fr)_22rem] md:px-10 md:py-8 lg:gap-12 lg:px-16">
         <section aria-label="Focused work" className="min-w-0 py-2 md:pr-4">
           {timer.loading ? (
             <div className="flex max-w-2xl flex-col gap-4">
@@ -147,7 +159,7 @@ export default function FocusImmersive(): JSX.Element {
                 shortcuts={shortcuts}
                 starting={controls.starting}
                 onStart={start}
-                comfortable
+                presentation="page"
               />
             </div>
           )}
@@ -180,13 +192,13 @@ export default function FocusImmersive(): JSX.Element {
                   .querySelector<HTMLInputElement>(`#${CSS.escape(nameFieldId)} input`)
                   ?.focus();
               }}
-              comfortable
+              presentation="page"
             />
           ) : null}
           <FocusToday
             records={today.records}
             activeRecordId={timer.record?.id ?? null}
-            comfortable
+            presentation="page"
           />
           {today.error ? (
             <Text token="body-small" role="status" tone="muted">
@@ -195,6 +207,6 @@ export default function FocusImmersive(): JSX.Element {
           ) : null}
         </aside>
       </div>
-    </main>
+    </FocusRouteFrame>
   );
 }

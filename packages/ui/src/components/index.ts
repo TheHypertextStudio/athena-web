@@ -167,6 +167,7 @@ export {
   shellMainInlineSize,
 } from './shell/AppShell';
 export { useShellOverlayHost } from './shell/ShellOverlayContext';
+export { ShellTopBar, type ShellTopBarProps } from './shell/ShellTopBar';
 export { ShellRailDock, type ShellRailDockProps } from './shell/ShellRailDock';
 export {
   PageScrollProvider,

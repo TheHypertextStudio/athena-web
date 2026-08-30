@@ -65,7 +65,11 @@ export default function FocusPanel(): JSX.Element {
         </Text>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto px-3 pb-3">
+      <div
+        data-testid="focus-panel-body"
+        data-scroll-owner="focus-panel"
+        className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto px-3 pb-3"
+      >
         {loading ? (
           <div
             data-testid="timer-loading"

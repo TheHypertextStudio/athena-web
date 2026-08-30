@@ -19,6 +19,7 @@ import { Button, Text } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
 import { formatDuration } from './format-duration';
+import type { FocusPresentation } from './focus-route-frame';
 
 /** One task the panel can put the clock on with a single click. */
 export interface FocusShortcut {
@@ -40,8 +41,8 @@ export interface FocusIdleProps {
   readonly starting: boolean;
   /** Begin tracking; called with no task id for a deliberately nameless start. */
   readonly onStart: (taskId?: string) => void;
-  /** Use full touch targets when rendered in immersive mode. */
-  readonly comfortable?: boolean;
+  /** The enclosing rail or page presentation chooses the control density. */
+  readonly presentation?: FocusPresentation | undefined;
 }
 
 /** The one sentence each suggestion source justifies itself with. */
@@ -59,7 +60,7 @@ export default function FocusIdle({
   shortcuts,
   starting,
   onStart,
-  comfortable = false,
+  presentation = 'rail',
 }: FocusIdleProps): JSX.Element {
   return (
     <div className="flex flex-col gap-3">
@@ -81,7 +82,7 @@ export default function FocusIdle({
           </Text>
           <Button
             variant="default"
-            controlSize={comfortable ? 'xl' : 'sm'}
+            controlSize={presentation === 'page' ? 'xl' : 'sm'}
             className="w-full"
             data-testid="timer-start-suggested"
             disabled={starting}
@@ -96,7 +97,7 @@ export default function FocusIdle({
       ) : (
         <Button
           variant="secondary"
-          controlSize={comfortable ? 'xl' : 'sm'}
+          controlSize={presentation === 'page' ? 'xl' : 'sm'}
           className="w-full"
           aria-label="Start a timer"
           data-testid="timer-start"

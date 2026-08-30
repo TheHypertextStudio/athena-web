@@ -100,6 +100,7 @@ import { useOnlineStatus } from '@/lib/use-online-status';
 import { CREATE_WORKSPACE_PATH } from '@/lib/workspace-creation';
 import { athenaHref } from '@/lib/athena/query-defs';
 import type { PersonalAthenaContext } from '@/lib/athena/presentation';
+import { usePersistedDensity } from '@/hooks/use-persisted-density';
 
 /**
  * How long the session query may stay pending before the shell treats the server as unreachable.
@@ -675,6 +676,8 @@ function AppShellInner({
 }: AppShellInnerProps): JSX.Element {
   const router = useRouter();
   const { setContext, setDensity, density } = useContextState();
+  const persistedDensity = usePersistedDensity(userId);
+  const densityRestoredForUser = useRef<string | null | undefined>(undefined);
   const { orgs, skin } = useActiveOrg();
   const { openPalette } = useCommandPalette();
   const { tabs, recentDocuments, activeKey, closeTab } = useOpenDocuments();
@@ -711,12 +714,15 @@ function AppShellInner({
   const unreadCount = unreadCountQ.data?.unread ?? 0;
 
   useEffect(() => {
-    if (userId) setDensity(readDensity(userId));
-  }, [setDensity, userId]);
-
-  useEffect(() => {
+    // The first client pass must restore before it writes. Writing the default value here used to
+    // erase a saved compact/spacious preference before localStorage had a chance to load it.
+    if (densityRestoredForUser.current !== userId) {
+      densityRestoredForUser.current = userId;
+      setDensity(persistedDensity);
+      return;
+    }
     if (userId) writeDensity(userId, density);
-  }, [density, userId]);
+  }, [density, persistedDensity, setDensity, userId]);
 
   const workspaces = useMemo<readonly Workspace[]>(
     () =>

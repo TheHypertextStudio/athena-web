@@ -113,7 +113,7 @@ export interface RailPanel {
   readonly label: string;
   /** The activity-bar glyph (and the mobile trigger icon when active). */
   readonly icon: React.ReactNode;
-  /** The panel body (owns its own header). */
+  /** The panel fills its host, and its named body is the only region allowed to scroll. */
   readonly node: React.ReactNode;
   /** Live state shown on the icon; absent when the panel has nothing ongoing to report. */
   readonly status?: RailPanelStatus;

@@ -297,6 +297,17 @@ afterEach(() => {
 });
 
 describe('FocusPanel', () => {
+  it("marks its content body as the rail presentation's only scroll owner", async () => {
+    activeGet.mockResolvedValue(jsonResponse(idlePayload()));
+    renderPanel();
+
+    await screen.findByTestId('timer-start');
+    expect(screen.getByTestId('focus-panel-body')).toHaveAttribute(
+      'data-scroll-owner',
+      'focus-panel',
+    );
+  });
+
   it('starts the timer on one press, with no name and no dialog', async () => {
     activeGet.mockResolvedValue(jsonResponse(idlePayload()));
     recordsPost.mockResolvedValue(

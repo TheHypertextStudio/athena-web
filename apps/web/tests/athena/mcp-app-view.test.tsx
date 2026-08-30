@@ -257,7 +257,7 @@ describe('McpAppView frames', () => {
       fireEvent.load(harness.frame);
 
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(10_000);
+        await vi.advanceTimersByTimeAsync(30_001);
       });
 
       expect(screen.getByTestId('mcp-app-view-failure')).toHaveTextContent(
@@ -286,7 +286,7 @@ describe('McpAppView frames', () => {
       ).toBe(true);
 
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(10_000);
+        await vi.advanceTimersByTimeAsync(30_001);
       });
 
       expect(screen.getByTestId('mcp-app-view-failure')).toHaveTextContent(

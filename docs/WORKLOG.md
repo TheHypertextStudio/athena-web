@@ -223,6 +223,15 @@
   accepts at most 21. The URL draft now keeps the full readable name and bounds only the generated
   prefix. A RED fixture reproduces the exact public hostname; the draft and complete Athena MCP
   panel ceremony pass 11 tests after the fix.
+- **Production official-app startup repair**: The promoted production UI connected the public
+  pinned map server, listed its `show-map` tool, retained meaningful fallback text, and mounted the
+  sandboxed card. The SDK example loads Cesium's declared CDN assets before calling `App.connect()`;
+  on a cold production load that exceeded Athena's five-second initialization deadline and replaced
+  the live frame with owned fallback copy. The host now permits a bounded 30-second initialization
+  window while retaining the same fallback and teardown behavior. The 27-case view suite, Web
+  typecheck, and Web ESLint pass. A model-invoked production turn remains externally blocked because
+  the live API has no `ANTHROPIC_API_KEY` secret or binding; the failure is confirmed in Cloud Run
+  logs before any remote tool call.
 - **Layer 3 decisions and retrospective**: The official stable prose and exact npm package source
   were the authority because Context7 remained quota-blocked. Counting normative vocabulary
   occurrences rather than methods/capabilities prevents a stable protocol symbol list from

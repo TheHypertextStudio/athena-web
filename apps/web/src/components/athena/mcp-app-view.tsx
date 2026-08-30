@@ -66,8 +66,15 @@ const INITIAL_HEIGHT = 96;
 /** The widest a card may grow before it gets its own scroll region. */
 const MAX_HEIGHT = 640;
 
-/** Maximum time a sandboxed app may take to complete its official initialization handshake. */
-const MCP_APP_INITIALIZATION_TIMEOUT_MS = 5_000;
+/**
+ * Maximum time a sandboxed app may take to complete its official initialization handshake.
+ *
+ * Official apps may load declared framework or visualization assets before calling
+ * `App.connect()`. Five seconds proved too short for the SDK's own Cesium example on a cold
+ * production load, so the host keeps the textual fallback available while allowing a realistic
+ * bounded startup window.
+ */
+const MCP_APP_INITIALIZATION_TIMEOUT_MS = 30_000;
 
 /**
  * Docket token → the style variable the extension standardizes.

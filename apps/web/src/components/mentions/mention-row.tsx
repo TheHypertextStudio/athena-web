@@ -69,14 +69,7 @@ export default function MentionRow({
       onSelect={() => {
         onSelect(item);
       }}
-      className={cn(
-        // Keep the shared menu grammar, with the mention picker's denser 40px row contract.
-        menuItemClass('standard'),
-        'min-h-10 cursor-pointer',
-        // The list is driven by `aria-activedescendant`, not focus, so the active row applies the
-        // spec's focus state layer directly.
-        { 'bg-on-surface/10': active },
-      )}
+      className="min-h-10 cursor-pointer"
     >
       {item.title}
     </MenuOption>

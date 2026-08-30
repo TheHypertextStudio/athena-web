@@ -511,45 +511,20 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
     }
   }, [proxyOrigin]);
 
-  // Escape closes a fullscreen card. The view is told through a host-context change rather than a
-  // reply, because nothing it sent is being answered — the host moved it.
-  useEffect(() => {
-    if (displayMode !== 'fullscreen') {
-      return;
-    }
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape') {
-        return;
-      }
-      setDisplayMode('inline');
-      hostRef.current?.updateHostContext({ displayMode: 'inline' });
-    };
-    window.addEventListener('keydown', onKey);
-    return () => {
-      window.removeEventListener('keydown', onKey);
-    };
-  }, [displayMode]);
+  const closeFullscreen = (): void => {
+    setDisplayMode('inline');
+    hostRef.current?.updateHostContext({ displayMode: 'inline' });
+  };
 
-  // The frame is an opaque origin, so the host cannot see individual controls inside it to
-  // implement a conventional first/last-element loop. It can still enforce the modal boundary:
-  // when Tab leaves the iframe (or an assistive-technology shortcut reaches background chrome),
-  // the document's capture-phase focus event returns the person to the visible Close control.
-  // Focus inside the iframe remains untouched because the outer frame is a descendant here.
-  useEffect(() => {
-    if (displayMode !== 'fullscreen') {
-      return;
+  // Move the existing frame host instead of rendering a second iframe. The widget keeps its DOM,
+  // message channel, and in-frame state while the shared Dialog takes over modal behavior.
+  useLayoutEffect(() => {
+    const frameHost = frameHostRef.current;
+    const target =
+      displayMode === 'fullscreen' ? fullscreenContainerRef.current : inlineContainerRef.current;
+    if (frameHost && target && frameHost.parentElement !== target) {
+      target.append(frameHost);
     }
-    const keepFocusInside = (event: FocusEvent): void => {
-      const container = containerRef.current;
-      if (!container || !(event.target instanceof Node) || container.contains(event.target)) {
-        return;
-      }
-      closeButtonRef.current?.focus();
-    };
-    document.addEventListener('focusin', keepFocusInside, true);
-    return () => {
-      document.removeEventListener('focusin', keepFocusInside, true);
-    };
   }, [displayMode]);
 
   if (!visible) return null;
@@ -565,61 +540,17 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
   }
 
   return (
-    <figure
-      ref={containerRef}
-      className={
-        displayMode === 'fullscreen'
-          ? 'bg-surface-container-low fixed inset-0 z-50 m-0 flex flex-col overflow-hidden'
-          : resource.meta?.prefersBorder === true
-            ? 'bg-surface-container-low border-outline-variant m-0 overflow-hidden rounded-xl border'
-            : 'm-0 overflow-hidden rounded-xl bg-transparent'
-      }
-      // A fullscreen card covers the app, so it has to say it is a modal and name itself. Without
-      // this a screen reader announces nothing on expand and tab order walks straight out into the
-      // page underneath.
-      {...(displayMode === 'fullscreen'
-        ? {
-            role: 'dialog' as const,
-            'aria-modal': true,
-            'aria-label': `${serverName}: ${tool.name}`,
-          }
-        : {})}
-      data-testid="mcp-app-view"
-      data-display-mode={displayMode}
-      data-resource-uri={resource.uri}
-      data-prefers-border={String(resource.meta?.prefersBorder ?? false)}
-    >
-      {displayMode === 'fullscreen' ? (
-        // Escape alone is not an exit a person can find. The widget's own "Show less" may also be
-        // hidden if the host withdraws the mode, which would leave no visible way out at all.
-        <div className="flex justify-end p-2">
-          <button
-            ref={closeButtonRef}
-            type="button"
-            autoFocus
-            className="text-on-surface-variant hover:bg-surface-container text-label-large rounded-md px-3 py-1.5"
-            onClick={() => {
-              setDisplayMode('inline');
-              hostRef.current?.updateHostContext({ displayMode: 'inline' });
-            }}
-          >
-            Close
-          </button>
-        </div>
-      ) : null}
-      <iframe
-        key={presentationIdentity}
-        ref={frameRef}
-        src={proxyUrl}
-        title={`${serverName}: ${tool.name}`}
-        // The proxy needs an origin so it can set the inner frame's policy; the WIDGET never gets
-        // one. Both facts matter, and they live on different frames for exactly that reason.
-        sandbox={MCP_APP_PROXY_SANDBOX}
-        referrerPolicy="no-referrer"
-        // A card grows into its measured height rather than snapping. The global reduced-motion
-        // rule in `globals.css` collapses this to nothing for anyone who asked for that.
+    <>
+      <Surface
+        as="figure"
+        tone={resource.meta?.prefersBorder === true ? 'card' : 'page'}
+        shape="medium"
         className={
-          displayMode === 'fullscreen' ? 'm-0 hidden overflow-hidden' : 'm-0 overflow-hidden'
+          displayMode === 'fullscreen'
+            ? 'm-0 hidden'
+            : resource.meta?.prefersBorder === true
+              ? 'border-outline-variant m-0 overflow-hidden border'
+              : 'm-0 overflow-hidden bg-transparent'
         }
         data-testid="mcp-app-view"
         data-display-mode={displayMode}
@@ -627,12 +558,27 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
         data-prefers-border={String(resource.meta?.prefersBorder ?? false)}
       >
         <div ref={inlineContainerRef} className="min-h-0 w-full">
-          <McpIframeHost
+          <div
             ref={frameHostRef}
-            proxyUrl={proxyUrl}
-            title={`${serverName}: ${tool.name}`}
-            frameRef={frameRef}
-          />
+            className={displayMode === 'fullscreen' ? 'flex min-h-0 flex-1' : 'min-h-0 w-full'}
+          >
+            <iframe
+              key={presentationIdentity}
+              ref={frameRef}
+              src={proxyUrl}
+              title={`${serverName}: ${tool.name}`}
+              // The proxy needs an origin so it can set the inner frame's policy; the widget never
+              // gets one. Both facts live on different frames for exactly that reason.
+              sandbox={MCP_APP_PROXY_SANDBOX}
+              referrerPolicy="no-referrer"
+              className={
+                displayMode === 'fullscreen'
+                  ? 'block h-full w-full flex-1 border-0 bg-transparent'
+                  : 'block w-full border-0 bg-transparent transition-[height]'
+              }
+              style={displayMode === 'fullscreen' ? undefined : { height: `${String(height)}px` }}
+            />
+          </div>
         </div>
         <figcaption className="px-4 pb-2">
           <Text token="label-small" tone="muted">
@@ -649,6 +595,7 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
         <DialogContent
           presentation={{ kind: 'fullscreen' }}
           showClose={false}
+          aria-modal="true"
           aria-describedby={undefined}
         >
           <DialogHeader className="flex-row items-center justify-between" inset="compact">

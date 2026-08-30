@@ -1,5 +1,4 @@
 import { act, renderHook } from '@testing-library/react';
-import { createRef } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { usePaletteKeyboard } from '@/components/command-palette/use-palette-keyboard';
@@ -34,7 +33,6 @@ describe('usePaletteKeyboard', () => {
             selected.run();
           },
           onClose: vi.fn(),
-          dialogRef: createRef<HTMLDivElement>(),
         }),
       { initialProps: { items: [local] as readonly PaletteItem[] } },
     );

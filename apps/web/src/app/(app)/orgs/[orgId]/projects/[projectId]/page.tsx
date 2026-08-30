@@ -13,7 +13,6 @@ import type { JSX } from 'react';
 
 import { apiQueryOptions, unwrap } from '@/lib/query-core';
 import { queryKeys } from '@/lib/query-keys';
-import { apiQueryOptions } from '@/lib/query-core';
 import { dehydrate, getServerApi, getServerQueryClient } from '@/lib/query-server';
 
 import ProjectDetailClient from './project-detail-client';

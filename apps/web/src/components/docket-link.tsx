@@ -179,24 +179,6 @@ export default function DocketLink({
   );
 }
 
-/**
- * Warm query data when the app provider is present without making a link depend on that provider.
- *
- * @remarks
- * `DocketLink` also renders in offline shells, loading layouts, and isolated component trees. Query
- * prefetch is an enhancement for authenticated detail links, so the absence of a query client must
- * not stop the link from rendering or navigating.
- */
-function useOptionalPrefetchApi(): ReturnType<typeof usePrefetchApi> {
-  const queryClient = useContext(QueryClientContext);
-  return useCallback<ReturnType<typeof usePrefetchApi>>(
-    (definition) => {
-      if (queryClient) void queryClient.prefetchQuery(definition);
-    },
-    [queryClient],
-  );
-}
-
 /** Warm the same aggregate query the destination detail route reads. */
 function prefetchDetailAggregate(href: string, prefetch: PrefetchApi): void {
   const queryAt = href.indexOf('?');

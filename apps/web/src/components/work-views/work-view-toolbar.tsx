@@ -214,7 +214,6 @@ export function WorkViewToolbar<TTarget extends ViewTarget>({
                 }
               />
               <DisplayControls
-                kind="display"
                 target={target}
                 definition={definition}
                 onChange={commit}
@@ -228,7 +227,6 @@ export function WorkViewToolbar<TTarget extends ViewTarget>({
                 trigger={
                   <DisplayControlsTrigger
                     ref={displayTriggerRef}
-                    kind="display"
                     iconOnly
                     className="rounded-full"
                   />

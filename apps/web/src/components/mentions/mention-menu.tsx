@@ -138,19 +138,25 @@ export default function MentionMenu({
               </li>
             ))}
 
-          {externalPending ? (
-            <li aria-hidden role="presentation">
-              {groups.length > 0 ? <div aria-hidden className={GROUP_DIVIDER} /> : null}
-              <p className={HEADING_CLASS}>
-                Files
-                <span className="ml-1 opacity-70">searching…</span>
-              </p>
-              <div className="space-y-0.5 px-2">
-                <Skeleton className="h-10 rounded-md" />
-                <Skeleton className="h-10 rounded-md" />
-              </div>
-            </li>
-          ) : null}
+            {externalPending || externalFailed ? (
+              <li aria-hidden role="presentation">
+                {groups.length > 0 ? <MenuDivider as="div" aria-hidden className="mb-2" /> : null}
+                <MenuSectionLabel as="p">
+                  Files
+                  {externalPending ? <span className="ml-1 opacity-70">searching…</span> : null}
+                </MenuSectionLabel>
+                {externalPending ? (
+                  <div className="space-y-0.5 px-2">
+                    <Skeleton className="h-10 rounded-md" />
+                    <Skeleton className="h-10 rounded-md" />
+                  </div>
+                ) : (
+                  <p className="text-on-surface-variant px-3 py-2 text-sm">
+                    File search is unavailable.
+                  </p>
+                )}
+              </li>
+            ) : null}
 
             {nothingYet && !localPending && !localFailed ? (
               <li
@@ -163,19 +169,27 @@ export default function MentionMenu({
               </li>
             ) : null}
 
-          {nothingYet && localPending ? (
-            <li aria-hidden className="space-y-0.5 px-3 py-1">
-              <Skeleton className="h-10 rounded-md" />
-              <Skeleton className="h-10 rounded-md" />
-              <Skeleton className="h-10 rounded-md" />
-            </li>
-          ) : null}
+            {nothingYet && localPending ? (
+              <li aria-hidden className="space-y-0.5 px-3 py-1">
+                <Skeleton className="h-10 rounded-md" />
+                <Skeleton className="h-10 rounded-md" />
+                <Skeleton className="h-10 rounded-md" />
+              </li>
+            ) : null}
 
-          <p
-            aria-live="polite"
-            aria-atomic="true"
-            className="sr-only"
-          >{`${state.items.length} results`}</p>
+            {nothingYet && localFailed ? (
+              <li
+                role="presentation"
+                className="text-on-surface-variant text-body-medium px-3 py-6 text-center"
+              >
+                Search is unavailable.
+              </li>
+            ) : null}
+          </MenuListbox>
+
+          <p aria-live="polite" aria-atomic="true" className="sr-only">
+            {`${state.items.length} results`}
+          </p>
         </PopoverBody>
       </PopoverContent>
     </Popover>

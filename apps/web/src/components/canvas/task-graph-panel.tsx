@@ -702,7 +702,7 @@ export default function TaskGraphPanel({
                 ) : null}
                 {display.ready && readyNodes.length > 0 ? (
                   <CanvasOverlayPanel position="bottom-left" className="!mb-4">
-                    <Surface tone="raised" pad="tight" className="max-h-56 w-56 overflow-auto">
+                    <Surface tone="floating" pad="tight" className="max-h-56 w-56 overflow-auto">
                       <p className="text-on-surface-variant text-label-medium mb-1">
                         Ready to start
                       </p>

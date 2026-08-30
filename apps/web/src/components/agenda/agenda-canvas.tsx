@@ -338,25 +338,14 @@ function TimelineArrangement({
             } else {
               router.push('/calendar');
             }
-            onOpenItem={({ item }) => {
-              const entry = entryById.get(item.id);
-              if (!entry) return;
-              if (entry.taskId && entry.organizationId) {
-                router.push(`/orgs/${entry.organizationId}/tasks/${entry.taskId}`);
-              } else if (entry.calendarItem) {
-                onOpenCalendarItem(entry.calendarItem.id);
-              } else {
-                router.push('/calendar');
-              }
-            }}
-            onMoveItem={({ item, toLane, startMinutes }) => {
-              persistMove(item, toLane, startMinutes);
-            }}
-            onResizeItem={({ item, lane: targetLane, edge, startMinutes, endMinutes }) => {
-              persistResize(item, targetLane, edge, startMinutes, endMinutes);
-            }}
-          />
-        </div>
+          }}
+          onMoveItem={({ item, toLane, startMinutes }) => {
+            persistMove(item, toLane, startMinutes);
+          }}
+          onResizeItem={({ item, lane: targetLane, edge, startMinutes, endMinutes }) => {
+            persistResize(item, targetLane, edge, startMinutes, endMinutes);
+          }}
+        />
       )}
       {workLocationComposition?.overlays}
       <CreateBlockForm

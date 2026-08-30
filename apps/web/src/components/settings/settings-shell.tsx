@@ -22,9 +22,9 @@
  */
 import {
   Dialog,
+  DialogContent,
   DialogDescription,
   DialogTitle,
-  SettingsDialogContent,
   Surface,
 } from '@docket/ui/primitives';
 import { type Workspace, WorkspaceSwitcher } from '@docket/ui/components';
@@ -161,8 +161,9 @@ export function SettingsShell({ active, children }: SettingsShellProps): JSX.Ele
         if (!open) close();
       }}
     >
-      <SettingsDialogContent
-        className="p-0"
+      <DialogContent
+        presentation={{ kind: 'responsive-fullscreen', size: 'workspace', height: 'tall' }}
+        closeLabel="Close settings"
         onOpenAutoFocus={(event) => {
           if (!window.location.hash && !hasPendingRouteFragmentFocus()) return;
           event.preventDefault();
@@ -175,7 +176,7 @@ export function SettingsShell({ active, children }: SettingsShellProps): JSX.Ele
         {/* `pr-14` reserves the close button's absolute 48px so the switcher never runs under it. */}
         <Surface
           as="header"
-          tone={scrolled ? 'prominent' : 'raised'}
+          tone={scrolled ? 'prominent' : 'floating'}
           shape="none"
           className="flex shrink-0 items-center gap-3 py-3 pr-14 pl-5 transition-colors motion-reduce:transition-none"
         >

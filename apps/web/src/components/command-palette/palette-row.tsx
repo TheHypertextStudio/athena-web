@@ -1,8 +1,7 @@
 'use client';
 
 import { CornerDownLeft, type LucideIcon } from '@docket/ui/icons';
-import { MENU_METRICS, menuItemClass } from '@docket/ui/primitives';
-import { cn } from '@docket/ui/lib/utils';
+import { MenuOption } from '@docket/ui/components';
 import { isValidElement, type JSX } from 'react';
 
 import { OrgChip } from '@/components/org-chip';
@@ -72,32 +71,11 @@ export function PaletteRow({
       onSelect={onSelect}
       onActiveChange={onHover}
       trailing={
-        <span className="flex shrink-0 items-center gap-2">
-          {item.org ? <OrgChip orgId={item.org.id} name={item.org.name} /> : null}
-
-          {item.source ? (
-            <span className="bg-surface-container text-label-medium ml-0 rounded-full px-2 py-0.5">
-              {item.source}
-            </span>
-          ) : null}
-
-          {item.hitType ? (
-            <span className="border-outline-variant text-label-medium ml-0 rounded-full border px-2 py-0.5">
-              {SEARCH_KIND_LABEL[item.hitType]}
-            </span>
-          ) : item.hint ? (
-            <span className="text-on-surface-variant text-label-medium ml-0 shrink-0">
-              {item.hint}
-            </span>
-          ) : null}
-
-          {active ? (
-            <CornerDownLeft aria-hidden="true" className="text-on-surface-variant shrink-0" />
-          ) : null}
-        </span>
+        active ? (
+          <CornerDownLeft aria-hidden="true" className="text-on-surface-variant shrink-0" />
+        ) : null
       }
     >
-      {paletteIcon(item.icon)}
       <span className="flex min-w-0 flex-1 flex-col items-start py-0.5">
         <span className="w-full truncate">{item.label}</span>
         {(item.breadcrumb && item.breadcrumb.length > 0) || item.hint || item.org || item.source ? (
@@ -119,10 +97,6 @@ export function PaletteRow({
           </span>
         ) : null}
       </span>
-
-      {active ? (
-        <CornerDownLeft aria-hidden="true" className="text-on-surface-variant shrink-0" />
-      ) : null}
-    </li>
+    </MenuOption>
   );
 }

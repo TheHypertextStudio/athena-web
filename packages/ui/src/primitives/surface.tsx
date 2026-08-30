@@ -88,6 +88,7 @@ const surfaceVariants = cva('min-w-0', {
       none: 'rounded-none',
       small: 'rounded-lg',
       medium: 'rounded-xl',
+      large: 'rounded-2xl',
     },
     /** Internal inset. Kept to three steps so surfaces do not each invent their own padding. */
     pad: {
@@ -102,7 +103,18 @@ const surfaceVariants = cva('min-w-0', {
 
 /** The elements a surface may render as. A surface is a region, never a control. */
 export type SurfaceElement =
-  'div' | 'section' | 'header' | 'footer' | 'aside' | 'nav' | 'li' | 'ul';
+  | 'div'
+  | 'section'
+  | 'header'
+  | 'footer'
+  | 'aside'
+  | 'nav'
+  | 'main'
+  | 'article'
+  | 'figure'
+  | 'label'
+  | 'li'
+  | 'ul';
 
 /** Props for {@link Surface}. */
 export interface SurfaceProps
@@ -111,6 +123,8 @@ export interface SurfaceProps
     VariantProps<typeof surfaceVariants> {
   /** The element to render. Defaults to `div`; pass a landmark when the markup calls for one. */
   as?: SurfaceElement;
+  /** Associate a label surface with its form control. */
+  htmlFor?: string;
 }
 
 /**

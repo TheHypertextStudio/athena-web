@@ -78,7 +78,7 @@ export function usePaletteKeyboard({
           break;
       }
     },
-    [items, activeId, setActiveId, runActive, onClose, dialogRef],
+    [items, activeId, setActiveId, runActive, onClose],
   );
 
   return { runActive, onKeyDown };

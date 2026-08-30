@@ -105,10 +105,6 @@ export function CommandPalette({
 
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
-  const dialogRef = useRef<HTMLDivElement>(null);
-  // The element focused when the palette opened — restored on close so a keyboard user lands
-  // back where they were (Radix Dialog/Sheet do this for free; this composed overlay does not).
-  const openerRef = useRef<HTMLElement | null>(null);
   // A dismissal returns to the opener. A selected command owns the next focus destination, so
   // restoring the opener would race routed heading focus and newly opened panels or dialogs.
   const restoreFocusOnCloseRef = useRef(true);
@@ -132,12 +128,6 @@ export function CommandPalette({
     const frame = requestAnimationFrame(() => inputRef.current?.focus());
     return () => {
       cancelAnimationFrame(frame);
-      const opener = openerRef.current;
-      openerRef.current = null;
-      // Keep the panel mounted for one exit-animation pass, then restore focus to the opener
-      // (Radix Dialog/Sheet do this for free; this composed overlay must do it explicitly).
-      setClosing(true);
-      if (restoreFocusOnCloseRef.current && opener?.isConnected) opener.focus();
     };
   }, [open]);
 
@@ -269,6 +259,9 @@ export function CommandPalette({
           event.preventDefault();
           requestAnimationFrame(() => inputRef.current?.focus());
         }}
+        onCloseAutoFocus={(event) => {
+          if (!restoreFocusOnCloseRef.current) event.preventDefault();
+        }}
         onEscapeKeyDown={(event) => {
           if (mode === null) return;
           event.preventDefault();
@@ -388,7 +381,7 @@ export function CommandPalette({
                     {group.section === 'results' && (modeResult ? modeResult.loading : loading)
                       ? ` · ${mode !== null ? 'loading…' : 'searching…'}`
                       : ''}
-                  </p>
+                  </MenuSectionLabel>
                   <ul role="presentation" className="flex flex-col gap-0.5">
                     {group.rows.map((item) => {
                       const index = indexOf(item);
@@ -408,7 +401,7 @@ export function CommandPalette({
                       );
                     })}
                   </ul>
-                </li>
+                </Fragment>
               ))}
             </MenuListbox>
           ) : null}

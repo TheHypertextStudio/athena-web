@@ -7,6 +7,30 @@
 
 ## Active Tasks
 
+### [ATHENA-PHONE-AUTH-001] Verify phone ownership and authenticate calls without routine codes
+
+- **Status**: REVIEW
+- **Started**: 2026-08-30
+- **Priority**: P0
+- **Description**: Replace local SMS challenges with Twilio Verify. Admit A-attested linked calls
+  to Athena's restricted phone surface, and require a confirmed callback to the stored number for
+  every weaker inbound signal. Preserve revocation, bounded task mutations, call summaries, and
+  conflict-safe Undo.
+- **Approach**: Keep provider calls behind small REST adapters. Store verification rate history by
+  user and normalized E.164 number. Model callback authorization as a durable, idempotent state
+  machine that binds Twilio's inbound, outbound, status, and digit webhooks to one expected call.
+  Resolve the live voice session before every command, and record each task mutation through the
+  existing change-set transaction.
+- **Validation**: The focused API phone suites pass 62 tests. The focused Settings and call-summary
+  suites pass 27 tests. The post-rebase migration smoke passes 8 tests. UI and Web type checks,
+  touched-file ESLint, 33 interaction tests for the repaired shared surfaces, and the dotenv-wrapped
+  Web production build pass. Four Settings screenshots cover 390px and 1280px in light and dark
+  themes.
+- **Blockers**: Production Twilio resources and configuration remain unchanged. Enabling phone
+  access still requires explicit authorization to provision the Verify service and voice webhooks,
+  followed by the real-handset canary matrix. The deployed code must keep phone access unavailable
+  until those values exist as one complete configuration.
+
 ### [ANDROID-FOUNDATION-001] Establish Docket's native Android floor
 
 - **Status**: IN_PROGRESS

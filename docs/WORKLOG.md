@@ -69,6 +69,7 @@
   - [x] Replace the surface inventory with normative conformance evidence.
   - [x] Restore the shared-types 100% coverage gate for presentation revalidation.
   - [x] Fix Node 24 pinned-DNS lookup compatibility found by the public map-server proof.
+  - [x] Keep URL-derived tool prefixes inside the connection form's accepted length.
   - [ ] Make personal MCP Apps an unmistakable Athena destination.
   - [ ] Validate packages, production build, and an upstream reference app.
 - **Layer 1 implementation**: Pinned `@modelcontextprotocol/ext-apps@1.7.5` in the workspace
@@ -216,6 +217,12 @@
   retained `ui://cesium-map/mcp-app.html`, and returned meaningful text fallback through a public
   ephemeral HTTPS tunnel. Integrations passes 1,026 tests at 94.65% statements, 90.14% branches,
   96.48% functions, and 95.20% lines; its TypeScript and ESLint gates pass.
+- **Production connection-form repair**: The authenticated production ceremony proved the Athena
+  entry point is visible at `Athena` → `Connected tools` → `Connect a tool`, but the official
+  server's long `trycloudflare.com` hostname generated a 28-character tool prefix while the form
+  accepts at most 21. The URL draft now keeps the full readable name and bounds only the generated
+  prefix. A RED fixture reproduces the exact public hostname; the draft and complete Athena MCP
+  panel ceremony pass 11 tests after the fix.
 - **Layer 3 decisions and retrospective**: The official stable prose and exact npm package source
   were the authority because Context7 remained quota-blocked. Counting normative vocabulary
   occurrences rather than methods/capabilities prevents a stable protocol symbol list from

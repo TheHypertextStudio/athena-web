@@ -37,11 +37,12 @@ export function deriveMcpConnectorDraft(
     const provider = hostParts.find((part) => !GENERIC_HOST_PARTS.has(part.toLowerCase()));
     if (!provider) return { label, alias };
 
-    const suggestedAlias = provider
+    const normalizedProvider = provider
       .toLowerCase()
       .replace(/[^a-z0-9_]/g, '_')
       .replace(/^_+/, '');
-    const suggestedLabel = suggestedAlias
+    const suggestedAlias = normalizedProvider.slice(0, 21);
+    const suggestedLabel = normalizedProvider
       .split('_')
       .filter(Boolean)
       .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)

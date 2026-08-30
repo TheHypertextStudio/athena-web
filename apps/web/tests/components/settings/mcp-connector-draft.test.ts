@@ -21,6 +21,15 @@ describe('deriveMcpConnectorDraft', () => {
       }),
     ).toEqual({ label: 'Planning', alias: 'planning' });
   });
+
+  it('keeps a long public hostname suggestion within the connect form alias limit', () => {
+    expect(
+      deriveMcpConnectorDraft('https://click-dna-charged-priorities.trycloudflare.com/mcp'),
+    ).toEqual({
+      label: 'Click Dna Charged Priorities',
+      alias: 'click_dna_charged_pri',
+    });
+  });
 });
 
 describe('connectorReadinessLabel', () => {

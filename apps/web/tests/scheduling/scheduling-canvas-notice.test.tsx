@@ -120,6 +120,32 @@ describe('SchedulingCanvas notice', () => {
     expect(screen.getByRole('status')).not.toHaveClass('italic');
   });
 
+  it('marks a pending schedule as busy without marking an ordinary empty schedule as loading', () => {
+    const view = render(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[EMPTY_LANE]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+        emptyMessage="Loading calendar items…"
+      />,
+    );
+
+    expect(screen.getByRole('status')).toHaveAttribute('aria-busy', 'true');
+
+    view.rerender(
+      <SchedulingCanvas
+        displayTimezone="UTC"
+        lanes={[EMPTY_LANE]}
+        pixelsPerHour={60}
+        viewportWidth={500}
+        emptyMessage="Nothing scheduled."
+      />,
+    );
+
+    expect(screen.getByRole('status')).not.toHaveAttribute('aria-busy');
+  });
+
   it('keeps the time grid visible without rendering deliberately blank empty copy', () => {
     render(
       <SchedulingCanvas

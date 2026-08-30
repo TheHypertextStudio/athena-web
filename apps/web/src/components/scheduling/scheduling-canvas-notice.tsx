@@ -45,6 +45,10 @@ export function SchedulingCanvasNotice({
   const normalizedEmptyMessage = emptyMessage.trim();
   const normalizedError = error?.trim();
   const hasError = normalizedError !== undefined && normalizedError.length > 0;
+  // Calendar supplies the in-flight query state as its empty message while the grid remains
+  // visible. Expose that state to assistive technology and capture tooling, so a loading canvas
+  // cannot masquerade as an empty calendar after the route has otherwise painted.
+  const loading = !hasError && /^Loading\b/i.test(normalizedEmptyMessage);
   if (!hasError && (!isEmpty || normalizedEmptyMessage.length === 0)) return null;
 
   return (
@@ -59,6 +63,7 @@ export function SchedulingCanvasNotice({
       */}
       <div
         role={hasError ? 'alert' : 'status'}
+        aria-busy={loading || undefined}
         className={`text-body-medium flex max-w-full flex-col items-center gap-1.5 rounded-2xl px-3 py-1.5 text-center text-balance ${
           hasError
             ? 'bg-error-container text-on-error-container'

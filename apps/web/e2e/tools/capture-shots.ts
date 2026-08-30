@@ -29,7 +29,10 @@ import { resolve } from 'node:path';
 
 import { createMobileAuditFixture } from '../helpers/mobile-audit-fixture';
 import type { MobileAuditFixture } from '../helpers/mobile-audit-fixture';
-import { MOBILE_LAYOUT_ROUTE_CASES } from '../helpers/mobile-layout-audit-cases';
+import {
+  MOBILE_LAYOUT_ROUTE_CASES,
+  type MobileLayoutRouteCase,
+} from '../helpers/mobile-layout-audit-cases';
 import { TIMEOUTS } from '../helpers/constants';
 
 interface SessionMeta {
@@ -47,6 +50,8 @@ interface CliArgs {
   audit: boolean;
   start: number;
   limit?: number;
+  frameStart: number;
+  frameLimit?: number;
 }
 
 /** The mobile remediation matrix: four viewports × two color schemes. */
@@ -81,6 +86,10 @@ function parseArgs(argv: string[]): CliArgs {
     audit,
     start: flags.has('start') ? Number.parseInt(flags.get('start') ?? '', 10) : 0,
     limit: flags.has('limit') ? Number.parseInt(flags.get('limit') ?? '', 10) : undefined,
+    frameStart: flags.has('frame-start') ? Number.parseInt(flags.get('frame-start') ?? '', 10) : 0,
+    frameLimit: flags.has('frame-limit')
+      ? Number.parseInt(flags.get('frame-limit') ?? '', 10)
+      : undefined,
   };
 }
 
@@ -198,12 +207,14 @@ async function captureCleanFrame(
   url: string,
   viewport: (typeof VIEWPORTS)[number],
   colorScheme: (typeof COLOR_SCHEMES)[number],
+  setup?: MobileLayoutRouteCase['setup'],
 ): Promise<Buffer> {
   for (let attempt = 1; attempt <= 4; attempt += 1) {
     const page = await context.newPage();
     await page.setViewportSize(viewport);
     await page.emulateMedia({ colorScheme });
     await openReviewRoute(page, url);
+    if (setup) await setup(page);
     const overflow = await page.evaluate(() => ({
       clientWidth: document.documentElement.clientWidth,
       scrollWidth: document.documentElement.scrollWidth,
@@ -227,7 +238,9 @@ async function captureCleanFrame(
 }
 
 async function main(): Promise<void> {
-  const { session, outDir, routes, audit, start, limit } = parseArgs(process.argv.slice(2));
+  const { session, outDir, routes, audit, start, limit, frameStart, frameLimit } = parseArgs(
+    process.argv.slice(2),
+  );
   const meta = JSON.parse(readFileSync(`${session}.meta.json`, 'utf8')) as SessionMeta;
   if (audit && (!Number.isInteger(start) || start < 0)) {
     throw new Error('capture-shots: --start must be a non-negative integer');
@@ -235,12 +248,20 @@ async function main(): Promise<void> {
   if (audit && limit !== undefined && (!Number.isInteger(limit) || limit <= 0)) {
     throw new Error('capture-shots: --limit must be a positive integer');
   }
-  const selectedRoutes = audit
-    ? MOBILE_LAYOUT_ROUTE_CASES.slice(start, limit === undefined ? undefined : start + limit).map(
-        (entry) => entry.route,
-      )
-    : routes;
-  if (selectedRoutes.length === 0) {
+  if (
+    !Number.isInteger(frameStart) ||
+    frameStart < 0 ||
+    frameStart >= VIEWPORTS.length * COLOR_SCHEMES.length
+  ) {
+    throw new Error('capture-shots: --frame-start must select one of the eight audit frames');
+  }
+  if (frameLimit !== undefined && (!Number.isInteger(frameLimit) || frameLimit <= 0)) {
+    throw new Error('capture-shots: --frame-limit must be a positive integer');
+  }
+  const selectedCases: readonly MobileLayoutRouteCase[] = audit
+    ? MOBILE_LAYOUT_ROUTE_CASES.slice(start, limit === undefined ? undefined : start + limit)
+    : routes.map((route) => ({ id: routeSlug(route), route }));
+  if (selectedCases.length === 0) {
     throw new Error('capture-shots: the selected audit route set is empty');
   }
 
@@ -275,9 +296,9 @@ async function main(): Promise<void> {
     await setupPage.close();
   }
 
-  const needsFixture = selectedRoutes.some((route) =>
+  const needsFixture = selectedCases.some((entry) =>
     /:(?:projectId|cycleId|initiativeId|programId|actorId|taskId|teamId|seriesId|sessionId)\b/.test(
-      route,
+      entry.route,
     ),
   );
   if (needsFixture) {
@@ -301,23 +322,25 @@ async function main(): Promise<void> {
     sharedOrgId = meta.mobileAuditFixture.orgId;
   }
 
-  for (const route of selectedRoutes) {
+  const selectedFrames = VIEWPORTS.flatMap((viewport) =>
+    COLOR_SCHEMES.map((colorScheme) => ({ viewport, colorScheme })),
+  ).slice(frameStart, frameLimit === undefined ? undefined : frameStart + frameLimit);
+  for (const entry of selectedCases) {
     // Every capture uses a fresh Page so Chromium cannot carry damaged compositor tiles from one
     // responsive/theme capture set into the next surface.
-    const path = resolveAuditRoute(route, meta, sharedOrgId);
-    const slug = routeSlug(route);
-    for (const viewport of VIEWPORTS) {
-      for (const colorScheme of COLOR_SCHEMES) {
-        const file = `${outDir}/${slug}-${viewport.label}-${colorScheme}.png`;
-        const frame = await captureCleanFrame(
-          context,
-          `${meta.baseURL}${path}`,
-          viewport,
-          colorScheme,
-        );
-        writeFileSync(file, frame);
-        console.log(`[capture-shots] ${file}`);
-      }
+    const path = resolveAuditRoute(entry.route, meta, sharedOrgId);
+    const slug = entry.id;
+    for (const { viewport, colorScheme } of selectedFrames) {
+      const file = `${outDir}/${slug}-${viewport.label}-${colorScheme}.png`;
+      const frame = await captureCleanFrame(
+        context,
+        `${meta.baseURL}${path}`,
+        viewport,
+        colorScheme,
+        entry.setup,
+      );
+      writeFileSync(file, frame);
+      console.log(`[capture-shots] ${file}`);
     }
   }
   await browser.close();

@@ -1,9 +1,16 @@
-/** One rendered route that the responsive audit must capture in every viewport and theme. */
+import type { Page } from '@playwright/test';
+
+/** Put a rendered route into a named interaction state before each captured frame. */
+export type MobileLayoutStateSetup = (page: Page) => Promise<void>;
+
+/** One rendered route or interaction state that the responsive audit captures in every viewport and theme. */
 export interface MobileLayoutRouteCase {
   /** Stable identifier used in the audit record and screenshot paths. */
   readonly id: string;
   /** Route template. Fixture identifiers are resolved by capture-shots.ts. */
   readonly route: string;
+  /** Optional rendered interaction state that this case must open before capture. */
+  readonly setup?: MobileLayoutStateSetup | undefined;
 }
 
 /**
@@ -73,4 +80,51 @@ export const MOBILE_LAYOUT_ROUTE_CASES: readonly MobileLayoutRouteCase[] = [
   { id: 'workspace-settings-statuses', route: '/orgs/:sharedOrgId/settings/statuses' },
   { id: 'workspace-settings-templates', route: '/orgs/:sharedOrgId/settings/templates' },
   { id: 'workspace-settings-work-structure', route: '/orgs/:sharedOrgId/settings/work-structure' },
+  {
+    id: 'overlay-filter',
+    route: '/orgs/:sharedOrgId/tasks',
+    setup: async (page) => {
+      await page.getByRole('button', { name: 'Filter' }).click();
+      await page.getByRole('dialog', { name: 'Filter tasks' }).waitFor();
+    },
+  },
+  {
+    id: 'overlay-filter-advanced',
+    route: '/orgs/:sharedOrgId/tasks',
+    setup: async (page) => {
+      const filterButton = page.getByRole('button', { name: 'Filter' });
+      await filterButton.click();
+      const filter = page.getByRole('dialog', { name: 'Filter tasks' });
+      await filter.getByRole('button', { name: 'Advanced filter' }).click();
+      await filter.getByRole('button', { name: 'Apply filter' }).waitFor();
+    },
+  },
+  {
+    id: 'overlay-display',
+    route: '/orgs/:sharedOrgId/tasks',
+    setup: async (page) => {
+      await page.getByRole('button', { name: 'Display' }).click();
+      await page.getByRole('dialog', { name: 'Display view' }).waitFor();
+    },
+  },
+  {
+    id: 'overlay-display-organize',
+    route: '/orgs/:sharedOrgId/tasks',
+    setup: async (page) => {
+      await page.getByRole('button', { name: 'Display' }).click();
+      const display = page.getByRole('dialog', { name: 'Display view' });
+      await display.getByRole('button', { name: 'Organize' }).click();
+      await display.getByRole('heading', { name: 'Organize' }).waitFor();
+    },
+  },
+  {
+    id: 'overlay-display-properties',
+    route: '/orgs/:sharedOrgId/tasks',
+    setup: async (page) => {
+      await page.getByRole('button', { name: 'Display' }).click();
+      const display = page.getByRole('dialog', { name: 'Display view' });
+      await display.getByRole('button', { name: 'Properties' }).click();
+      await display.getByRole('heading', { name: 'Properties' }).waitFor();
+    },
+  },
 ];

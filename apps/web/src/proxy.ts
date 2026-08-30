@@ -129,6 +129,24 @@ function briefHostname(): string | undefined {
 }
 
 /**
+ * Whether `host` is a Portless hostname that routes to this local product stack.
+ *
+ * @remarks
+ * Portless assigns a branch checkout a host such as
+ * `entity-identity.docket.localhost`, while Next inlines the canonical
+ * `docket.localhost` from `.env.local` into this module. Those two names do
+ * not match, but neither can be a customer-owned public brief domain.
+ * Treating the prefixed host as a custom domain rewrites ordinary application
+ * paths to `/briefs/domain/*` before the app can render them.
+ *
+ * @param host - The lower-level host selected by the browser or reverse proxy.
+ * @returns `true` when the host belongs to the Portless local development domain.
+ */
+function isPortlessAppHost(host: string): boolean {
+  return host === 'docket.localhost' || host.endsWith('.docket.localhost');
+}
+
+/**
  * Two request-time responsibilities: restore the browser-facing host for proxied API calls, and
  * gate the authenticated `(app)` surfaces.
  *
@@ -193,7 +211,7 @@ function briefHostname(): string | undefined {
 export function proxy(request: NextRequest): NextResponse {
   const own = ownHostname();
   const host = requestHost(request).split(':')[0];
-  if (own !== undefined && host !== undefined && host !== own) {
+  if (own !== undefined && host !== undefined && host !== own && !isPortlessAppHost(host)) {
     const briefUrl = request.nextUrl.clone();
     // Bare root (`/`) must not become a trailing-slash target (`/briefs/`): Next's own
     // trailing-slash redirect never resolves for a path that arrived via `rewrite()` rather than a

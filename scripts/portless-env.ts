@@ -57,7 +57,7 @@
  * is the constraint that settled the launcher form.
  */
 import { spawn } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -106,6 +106,19 @@ const HOST_BEARING_VARS: readonly string[] = [
  * {@link HOST_BEARING_VARS}, so that the next person to notice it is missing reads this first.
  */
 const DELIBERATELY_UNPREFIXED: readonly string[] = ['BETTER_AUTH_COOKIE_DOMAIN'];
+
+/**
+ * Load the package-local development environment before applying a Portless prefix.
+ *
+ * @remarks
+ * Next loads `.env.local` only after this launcher has started its child process. Without this
+ * eager load, {@link applyPortlessPrefix} sees none of the host-bearing values and leaves the
+ * child pointed at a different worktree's canonical hosts.
+ */
+function loadPackageEnv(): void {
+  const envPath = resolve(process.cwd(), '.env.local');
+  if (existsSync(envPath)) process.loadEnvFile(envPath);
+}
 
 /**
  * Read the current package's configured Portless service name.
@@ -223,6 +236,7 @@ function main(): void {
     process.exit(2);
   }
 
+  loadPackageEnv();
   const changed = applyPortlessPrefix();
   if (changed.length > 0) {
     console.log(

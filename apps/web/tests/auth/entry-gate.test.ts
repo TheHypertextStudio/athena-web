@@ -581,6 +581,22 @@ describe('proxy: public brief host rewrite', () => {
     expect(response.headers.get('x-middleware-rewrite')).toBeNull();
   });
 
+  it('leaves a Portless worktree app host untouched by the brief rewrite', () => {
+    // Next inlines the canonical host before Portless prefixes the child process. The branch host
+    // is therefore not equal to `ownHostname()`, but it is still an app origin and never a public
+    // brief domain.
+    vi.stubEnv('NEXT_PUBLIC_APP_URL', 'https://docket.localhost');
+
+    const response = proxy(
+      request({
+        host: 'entity-identity-detail-headers-release.docket.localhost',
+        pathname: '/sign-up',
+      }),
+    );
+
+    expect(response.headers.get('x-middleware-rewrite')).toBeNull();
+  });
+
   it('never rewrites when the product’s own host is unconfigured — nothing safe to compare against', () => {
     vi.stubEnv('NEXT_PUBLIC_APP_URL', '');
 

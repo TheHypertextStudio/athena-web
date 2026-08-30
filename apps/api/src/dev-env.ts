@@ -24,3 +24,47 @@ const envPath = resolve(process.cwd(), '.env.local');
 if (existsSync(envPath)) {
   dotenvx.config({ path: envPath, overload: true, quiet: true });
 }
+
+/** Host-bearing values that must follow the API worktree's Portless prefix. */
+const PORTLESS_HOST_VALUES: readonly string[] = [
+  'API_URL',
+  'WEB_URL',
+  'NEXT_PUBLIC_API_URL',
+  'NEXT_PUBLIC_APP_URL',
+  'BETTER_AUTH_URL',
+  'BETTER_AUTH_TRUSTED_ORIGINS',
+  'BETTER_AUTH_ALLOWED_HOSTS',
+  'BETTER_AUTH_PASSKEY_RP_ID',
+  'NEXT_PUBLIC_PASSKEY_RP_ID',
+];
+
+/** Reapply this API worktree's Portless host prefix after a watched env reload. */
+function reapplyPortlessPrefix(): void {
+  const rawUrl = process.env['PORTLESS_URL'];
+  if (!rawUrl) return;
+
+  let host: string;
+  try {
+    host = new URL(rawUrl).hostname;
+  } catch {
+    return;
+  }
+
+  const serviceHost = 'api.docket.localhost';
+  if (!host.endsWith(`.${serviceHost}`)) return;
+  const prefix = host.slice(0, -(serviceHost.length + 1));
+  if (!prefix) return;
+
+  const hostPattern = /(^|[/@,\s])((?:[\w-]+\.)*)docket\.localhost/g;
+  for (const name of PORTLESS_HOST_VALUES) {
+    const current = process.env[name];
+    if (!current) continue;
+    process.env[name] = current.replace(hostPattern, (_match, lead: string, subNames: string) =>
+      subNames.startsWith(`${prefix}.`) ? _match : `${lead}${prefix}.${subNames}docket.localhost`,
+    );
+  }
+}
+
+// `tsx watch` restarts after `.env.local` changes. Its local reload intentionally wins over the
+// parent process, so restore the branch-specific endpoints before the API imports its env schema.
+reapplyPortlessPrefix();

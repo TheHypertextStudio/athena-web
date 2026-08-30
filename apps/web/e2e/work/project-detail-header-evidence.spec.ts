@@ -87,7 +87,10 @@ test('Project header stays compact and operable across overflow widths', async (
     await setHeaderProgress(page, 0);
 
     const metadata = page.getByRole('group', { name: 'Project properties' });
-    await expect(page.getByText('Owner', { exact: true })).toHaveCount(0);
+    // The print summary has an Owner cell for paper output. The interactive masthead keeps the
+    // accountable owner in its own labelled row, outside the ordinary Project properties group.
+    await expect(page.getByLabel('Project ownership')).toBeVisible();
+    await expect(metadata.getByText('Owner', { exact: true })).toHaveCount(0);
     expect(
       await page
         .locator('.detail-secondary')
@@ -114,6 +117,7 @@ test('Project header stays compact and operable across overflow widths', async (
     expect(layout.primaryColumns.split(' ').length).toBeGreaterThanOrEqual(2);
 
     const expanded = await page.locator('header.detail-header').evaluate((header) => {
+      const mastheadContent = header.querySelector<HTMLElement>('.masthead-content');
       const glyph = header.querySelector<HTMLElement>('.detail-glyph');
       const title = header.querySelector<HTMLElement>('.detail-title');
       const titleField = title?.querySelector<HTMLElement>('textarea, span');
@@ -128,7 +132,9 @@ test('Project header stays compact and operable across overflow widths', async (
       const tabBounds = bounds(tabs);
       const glyphBounds = bounds(glyph);
       return {
-        headerPaddingTop: Number.parseFloat(getComputedStyle(header).paddingTop),
+        mastheadPaddingTop: Number.parseFloat(
+          getComputedStyle(mastheadContent ?? header).paddingTop,
+        ),
         glyphWidth: glyphBounds?.width ?? 0,
         glyphHeight: glyphBounds?.height ?? 0,
         titleWhiteSpace: title ? getComputedStyle(title).whiteSpace : '',
@@ -139,7 +145,7 @@ test('Project header stays compact and operable across overflow widths', async (
         tabsGap: metadataBounds && tabBounds ? tabBounds.top - metadataBounds.bottom : 0,
       };
     });
-    expect(expanded.headerPaddingTop).toBeGreaterThanOrEqual(20);
+    expect(expanded.mastheadPaddingTop).toBeGreaterThanOrEqual(20);
     expect(expanded.glyphWidth).toBeCloseTo(48, 0);
     expect(expanded.glyphHeight).toBeCloseTo(48, 0);
     expect(expanded.titleWhiteSpace).toBe('normal');
@@ -150,6 +156,7 @@ test('Project header stays compact and operable across overflow widths', async (
     measurements[`${viewport.width}`] = layout;
     await page.screenshot({
       path: resolve(SHOT_ROOT, `project-header-${viewport.width}x${viewport.height}-light.png`),
+      caret: 'initial',
     });
   }
 
@@ -162,9 +169,9 @@ test('Project header stays compact and operable across overflow widths', async (
   await page.keyboard.press('Enter');
   const overflow = page.getByRole('group', { name: 'More Project properties' });
   await expect(overflow).toBeVisible();
-  const startDate = overflow.getByRole('button', { name: /Timeline Start/ });
+  const startDate = overflow.getByRole('button', { name: /Start date/ });
   await expect(startDate).toBeVisible();
-  const targetDate = overflow.getByRole('button', { name: /Timeline Target/ });
+  const targetDate = overflow.getByRole('button', { name: /Target date/ });
   await expect(targetDate).toBeVisible();
   for (const dateTrigger of [startDate, targetDate]) {
     expect(
@@ -181,14 +188,16 @@ test('Project header stays compact and operable across overflow widths', async (
   await page.waitForTimeout(200);
   await page.screenshot({
     path: resolve(SHOT_ROOT, 'project-header-320x720-overflow-light.png'),
+    caret: 'initial',
   });
   await startDate.focus();
   await expect(startDate).toBeFocused();
   await page.keyboard.press('Enter');
-  await expect(page.locator('[data-date-picker]')).toBeVisible();
+  await expect(page.getByRole('grid', { name: 'Start date' })).toBeVisible();
   await page.waitForTimeout(200);
   await page.screenshot({
     path: resolve(SHOT_ROOT, 'project-header-320x720-start-picker-light.png'),
+    caret: 'initial',
   });
   await page.keyboard.press('Escape');
   await page.keyboard.press('Escape');
@@ -260,6 +269,7 @@ test('Project header stays compact and operable across overflow widths', async (
           SHOT_ROOT,
           `project-header-${viewport.width}x${viewport.height}-${scheme}.png`,
         ),
+        caret: 'initial',
       });
     }
   }

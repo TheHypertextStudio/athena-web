@@ -74,6 +74,7 @@ test('Project Initiative links render on first paint and survive picker replacem
   await expect(page.getByRole('button', { name: 'Initiatives — Safe streets' })).toBeVisible();
   await page.screenshot({
     path: resolve(SHOT_ROOT, 'project-initiative-association-wide-initial.png'),
+    caret: 'initial',
   });
 
   await openInitiatives(page);
@@ -99,5 +100,6 @@ test('Project Initiative links render on first paint and survive picker replacem
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   await page.screenshot({
     path: resolve(SHOT_ROOT, 'project-initiative-association-390-final.png'),
+    caret: 'initial',
   });
 });

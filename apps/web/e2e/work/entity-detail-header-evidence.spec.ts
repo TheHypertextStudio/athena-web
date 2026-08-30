@@ -125,6 +125,7 @@ test('Initiative and Program headers preserve identity and compact section acces
             SHOT_ROOT,
             `${fixture.kind}-header-${viewport.width}x${viewport.height}-${scheme}.png`,
           ),
+          caret: 'initial',
         });
       }
     }

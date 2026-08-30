@@ -1,5 +1,7 @@
 import type { JSX } from 'react';
 
+import { surfaceToneColor } from '@docket/ui/primitives';
+
 import type { AgendaDayContext } from './agenda-day-context';
 
 /** Props for {@link AgendaDayContextStrip}. */
@@ -22,7 +24,7 @@ export default function AgendaDayContextStrip({
       {items.map((item) => (
         <span
           key={item.id}
-          className="bg-surface-container-high text-label-medium text-on-surface inline-flex min-w-0 items-center gap-1.5 rounded-full px-2.5 py-1"
+          className={`${surfaceToneColor('floating')} text-label-medium inline-flex min-w-0 items-center gap-1.5 rounded-full px-2.5 py-1`}
           data-agenda-day-context={item.kind}
         >
           <span

@@ -5,7 +5,7 @@ import Link from '@/components/docket-link';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { Button } from '@docket/ui/primitives';
+import { Button, surfaceToneColor } from '@docket/ui/primitives';
 import { SHELL_DESKTOP_QUERY } from '@docket/ui/components';
 import { useMediaQuery } from '@docket/ui/hooks';
 
@@ -282,7 +282,7 @@ function TimelineArrangement({
         <div
           ref={setMobileCreateHost}
           data-agenda-create-host=""
-          className="bg-surface absolute inset-0 isolate"
+          className={`${surfaceToneColor('page')} absolute inset-0 isolate`}
         />
       ) : (
         <SchedulingCanvas

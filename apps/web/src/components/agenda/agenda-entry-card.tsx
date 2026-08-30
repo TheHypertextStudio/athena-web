@@ -25,6 +25,7 @@ import {
 } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
 import { STRETCHED_LINK } from '@docket/ui/lib/stretched-link';
+import { surfaceToneColor } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
 import { type JSX, useRef } from 'react';
 
@@ -157,7 +158,8 @@ export default function AgendaEntryCard({
     <div
       style={{ viewTransitionName: agendaEntryTransitionName(entry.id) }}
       className={cn(
-        'bg-surface-container-low hover:bg-surface-container relative flex h-full w-full items-start gap-2 overflow-hidden rounded-lg px-3 py-2.5 transition-[opacity,background-color,box-shadow,transform] duration-(--dur-base) ease-(--ease-out) hover:shadow-sm motion-safe:hover:-translate-y-px',
+        surfaceToneColor('card'),
+        'hover:bg-surface-container relative flex h-full w-full items-start gap-2 overflow-hidden rounded-lg px-3 py-2.5 transition-[opacity,background-color,box-shadow,transform] duration-(--dur-base) ease-(--ease-out) hover:shadow-sm motion-safe:hover:-translate-y-px',
         entry.done && 'opacity-60',
       )}
     >

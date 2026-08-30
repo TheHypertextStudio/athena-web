@@ -19,5 +19,8 @@ export default [
   ...dataLayerConfig,
   ...appLocationConfig,
   ...overlayPrimitiveConfig,
-  ...semanticSurfaceCohortConfig(['apps/web/src/components/time-tracking/**/*.{ts,tsx}']),
+  ...semanticSurfaceCohortConfig([
+    'apps/web/src/components/agenda/**/*.{ts,tsx}',
+    'apps/web/src/components/time-tracking/**/*.{ts,tsx}',
+  ]),
 ];

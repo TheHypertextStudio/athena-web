@@ -76,7 +76,7 @@ const LIVE_APP_HTML = `<!doctype html>
       void request('ui/open-link', { url: 'https://example.test/from-app' });
     });
     document.querySelector('#teardown').addEventListener('click', () => {
-      send({ jsonrpc: '2.0', method: 'ui/request-teardown', params: {} });
+      send({ jsonrpc: '2.0', method: 'ui/notifications/request-teardown', params: {} });
     });
     request('ui/initialize', {
       appInfo: { name: 'athena-e2e-app', version: '1.0.0' },

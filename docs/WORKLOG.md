@@ -246,7 +246,11 @@
   fullscreen, and focus containment, then failed only because its deliberately silent fallback
   fixture still expected the former five-second initialization deadline. The journey now triggers
   the browser adapter's frame-load failure boundary directly, preserving the same application-text
-  fallback assertion without waiting for the new 30-second official-app startup allowance.
+  fallback assertion without waiting for the new 30-second official-app startup allowance. The
+  next exact-tip run reached app-initiated teardown and exposed that the handwritten fixture still
+  emitted the pre-stable `ui/request-teardown` spelling; it now emits the official SDK's
+  `ui/notifications/request-teardown` notification before asserting the host's resource-teardown
+  response and removal path.
 - **Layer 3 decisions and retrospective**: The official stable prose and exact npm package source
   were the authority because Context7 remained quota-blocked. Counting normative vocabulary
   occurrences rather than methods/capabilities prevents a stable protocol symbol list from

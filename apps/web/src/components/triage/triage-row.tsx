@@ -45,7 +45,6 @@ import {
   HoverCardContent,
   HoverCardTrigger,
   focusRing,
-  menuDestructiveItem,
 } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
@@ -316,7 +315,7 @@ export function TriageRow({
 
         <ContextMenuSeparator />
         <ContextMenuItem
-          className={menuDestructiveItem()}
+          destructive
           onSelect={() => {
             onDismiss();
           }}

@@ -59,6 +59,7 @@ import {
   menuCheckedItemClass,
   MENU_VIEWPORT_FIT,
   menuContentClass,
+  menuDestructiveItem,
   menuFocusRing,
   menuGroup,
   menuItemClass,
@@ -243,6 +244,7 @@ export function DropdownMenuItem({
   className,
   inset,
   selected = false,
+  destructive = false,
   children,
   supporting,
   badge,
@@ -257,6 +259,8 @@ export function DropdownMenuItem({
   badge?: React.ReactNode | undefined;
   /** Optional trailing meta/shortcut hint (anatomy #6). */
   trailingText?: React.ReactNode | undefined;
+  /** Render an action that deletes or irreversibly removes data. */
+  destructive?: boolean | undefined;
   /**
    * Render the row in its selected state — the spec's `menu-item.selected.*` roles and its 12dp
    * corner. For rows whose selection the menu does not own itself: the active workspace, the
@@ -273,6 +277,7 @@ export function DropdownMenuItem({
       className={cn(
         menuItemClass(variant, { selected }),
         menuFocusRing,
+        destructive && menuDestructiveItem(),
         { [MENU_INDICATOR_GUTTER]: inset },
         className,
       )}

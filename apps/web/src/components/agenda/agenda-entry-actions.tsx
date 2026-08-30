@@ -26,7 +26,6 @@ import {
   PopoverBody,
   PopoverContent,
   Stack,
-  menuDestructiveItem,
 } from '@docket/ui/primitives';
 import { type JSX, useRef, useState } from 'react';
 
@@ -120,7 +119,7 @@ export default function AgendaEntryActions({ entry }: AgendaEntryActionsProps): 
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem
-            className={menuDestructiveItem()}
+            destructive
             onSelect={() => {
               removeFromPlan(entry);
             }}

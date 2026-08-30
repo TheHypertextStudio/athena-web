@@ -13,7 +13,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   Tabs,
-  menuDestructiveItem,
   type TabsItem,
 } from '@docket/ui/primitives';
 import { useTypedRoute } from '@/lib/app-location';
@@ -385,7 +384,7 @@ export default function ProgramDetailPage(): JSX.Element {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" width="sm">
                 <DropdownMenuItem
-                  className={menuDestructiveItem()}
+                  destructive
                   onSelect={() => {
                     setConfirmDeleteOpen(true);
                   }}

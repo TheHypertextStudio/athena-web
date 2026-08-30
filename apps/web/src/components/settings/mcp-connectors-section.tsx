@@ -27,7 +27,6 @@ import {
   Input,
   Select,
   Skeleton,
-  menuDestructiveItem,
 } from '@docket/ui/primitives';
 import { useAppSearchParams } from '@/lib/app-location';
 import { type JSX, useEffect, useId, useState } from 'react';
@@ -363,9 +362,8 @@ function McpConnectorRow({ orgId, mcp, canManage }: McpConnectorRowProps): JSX.E
             </Button>
           )}
           <Button
-            variant="ghost"
+            variant="ghost-destructive"
             size="sm"
-            className={menuDestructiveItem()}
             disabled={busy}
             onClick={() => {
               setConfirmDisconnect(true);

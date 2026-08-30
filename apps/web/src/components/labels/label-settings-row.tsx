@@ -25,7 +25,6 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
-  menuDestructiveItem,
 } from '@docket/ui/primitives';
 import { Ellipsis } from '@docket/ui/icons';
 import type { JSX, ReactNode } from 'react';
@@ -140,7 +139,7 @@ export function LabelSettingsRow({
               </DropdownMenuSub>
             ) : null}
             <DropdownMenuSeparator />
-            <DropdownMenuItem className={menuDestructiveItem()} onSelect={onDelete}>
+            <DropdownMenuItem destructive onSelect={onDelete}>
               Delete
             </DropdownMenuItem>
           </DropdownMenuContent>

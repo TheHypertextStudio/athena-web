@@ -22,7 +22,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   Skeleton,
-  menuDestructiveItem,
 } from '@docket/ui/primitives';
 import { Copy, Edit, Ellipsis, LayoutTemplate, Plus, Trash2 } from '@docket/ui/icons';
 import { type JSX, useState } from 'react';
@@ -293,7 +292,7 @@ function KindGroup({
                     Duplicate
                   </DropdownMenuItem>
                   <DropdownMenuItem
-                    className={menuDestructiveItem()}
+                    destructive
                     onSelect={() => {
                       onDelete(template);
                     }}

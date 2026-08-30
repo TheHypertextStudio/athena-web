@@ -2,6 +2,7 @@ import {
   appLocationConfig,
   baseConfig,
   dataLayerConfig,
+  menuStyleBoundaryConfig,
   overlayPrimitiveConfig,
   semanticSurfaceCohortConfig,
   serverComponentBoundaryConfig,
@@ -20,6 +21,7 @@ export default [
   ...dataLayerConfig,
   ...appLocationConfig,
   ...overlayPrimitiveConfig,
+  ...menuStyleBoundaryConfig,
   ...serverComponentBoundaryConfig,
   ...semanticSurfaceCohortConfig([
     'apps/web/src/components/agenda/**/*.{ts,tsx}',

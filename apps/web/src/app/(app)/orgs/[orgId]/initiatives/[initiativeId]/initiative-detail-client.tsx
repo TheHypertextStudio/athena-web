@@ -13,7 +13,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   Tabs,
-  menuDestructiveItem,
 } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import Link from '@/components/docket-link';
@@ -570,7 +569,7 @@ export default function InitiativeDetailPage(): JSX.Element {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem
-                  className={menuDestructiveItem()}
+                  destructive
                   onSelect={() => {
                     deleteInitiative.reset();
                     setConfirmDeleteOpen(true);

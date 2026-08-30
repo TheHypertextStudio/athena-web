@@ -23,7 +23,6 @@ import {
   DropdownMenuTrigger,
   Surface,
   Tabs,
-  menuDestructiveItem,
 } from '@docket/ui/primitives';
 import {
   type FetchQueryOptions,
@@ -739,7 +738,7 @@ export default function ProjectDetailPage(): JSX.Element {
                 {canEdit && canDelete ? <DropdownMenuSeparator /> : null}
                 {canDelete ? (
                   <DropdownMenuItem
-                    className={menuDestructiveItem()}
+                    destructive
                     onSelect={() => {
                       moveProjectToTrash.reset();
                       setConfirmDeleteOpen(true);

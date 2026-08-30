@@ -27,7 +27,6 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-  menuDestructiveItem,
 } from '@docket/ui/primitives';
 import { EmptyState } from '@docket/ui/components';
 import Link from '@/components/docket-link';
@@ -519,7 +518,7 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
-                            className={menuDestructiveItem()}
+                            destructive
                             onSelect={() => {
                               setConfirmRetire(place);
                             }}
@@ -619,7 +618,7 @@ export default function WorkLocationsSettingsPage(): JSX.Element {
                         ) : null}
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
-                          className={menuDestructiveItem()}
+                          destructive
                           onSelect={() => {
                             setConfirmDeleteSchedule(assertion);
                           }}

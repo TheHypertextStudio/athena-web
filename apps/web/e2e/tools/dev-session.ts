@@ -40,6 +40,7 @@ import { dirname, resolve } from 'node:path';
 import { signUpAndOnboard } from '../helpers/app';
 import { ORIGIN } from '../helpers/constants';
 import { createMobileAuditFixture } from '../helpers/mobile-audit-fixture';
+import type { MobileAuditFixture } from '../helpers/mobile-audit-fixture';
 import { addVirtualAuthenticator } from '../helpers/webauthn';
 
 interface CliArgs {
@@ -75,9 +76,10 @@ async function main(): Promise<void> {
   console.log(`[dev-session] signing up against ${ORIGIN} ...`);
   const { user, orgId } = await signUpAndOnboard(page, label);
   console.log(`[dev-session] signed up as ${user.email}, org ${orgId}`);
-  const sharedOrgId = withMobileAuditFixture
-    ? (await createMobileAuditFixture(page)).orgId
+  const mobileAuditFixture: MobileAuditFixture | undefined = withMobileAuditFixture
+    ? await createMobileAuditFixture(page)
     : undefined;
+  const sharedOrgId = mobileAuditFixture?.orgId;
   if (sharedOrgId !== undefined) {
     console.log(`[dev-session] created mobile audit workspace ${sharedOrgId}`);
   }
@@ -86,7 +88,11 @@ async function main(): Promise<void> {
   await context.storageState({ path: out });
   writeFileSync(
     `${out}.meta.json`,
-    JSON.stringify({ email: user.email, orgId, sharedOrgId, baseURL: ORIGIN }, null, 2),
+    JSON.stringify(
+      { email: user.email, orgId, sharedOrgId, mobileAuditFixture, baseURL: ORIGIN },
+      null,
+      2,
+    ),
   );
 
   await browser.close();

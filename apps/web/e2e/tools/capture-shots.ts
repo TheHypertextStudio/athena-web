@@ -28,12 +28,15 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { createMobileAuditFixture } from '../helpers/mobile-audit-fixture';
+import type { MobileAuditFixture } from '../helpers/mobile-audit-fixture';
+import { MOBILE_LAYOUT_ROUTE_CASES } from '../helpers/mobile-layout-audit-cases';
 import { TIMEOUTS } from '../helpers/constants';
 
 interface SessionMeta {
   email: string;
   orgId: string;
   sharedOrgId?: string;
+  mobileAuditFixture?: MobileAuditFixture;
   baseURL: string;
 }
 
@@ -41,6 +44,8 @@ interface CliArgs {
   session: string;
   outDir: string;
   routes: string[];
+  audit: boolean;
+  limit?: number;
 }
 
 /** The mobile remediation matrix: four viewports × two color schemes. */
@@ -64,14 +69,44 @@ function parseArgs(argv: string[]): CliArgs {
       routes.push(arg);
     }
   }
-  if (routes.length === 0) {
+  const audit = argv.includes('--audit');
+  if (!audit && routes.length === 0) {
     throw new Error('capture-shots: pass at least one route, e.g. /today');
   }
   return {
     session: resolve(flags.get('session') ?? 'playwright/.auth/dev-session.json'),
     outDir: resolve(flags.get('out') ?? '.data/design-review-shots'),
     routes,
+    audit,
+    limit: flags.has('limit') ? Number.parseInt(flags.get('limit') ?? '', 10) : undefined,
   };
+}
+
+/** Replace stable local audit fixture tokens in a route case. */
+function resolveAuditRoute(route: string, meta: SessionMeta, sharedOrgId: string): string {
+  const fixture = meta.mobileAuditFixture;
+  const values: Record<string, string | undefined> = {
+    orgId: meta.orgId,
+    sharedOrgId,
+    projectId: fixture?.projectId,
+    cycleId: fixture?.cycleId,
+    initiativeId: fixture?.initiativeId,
+    programId: fixture?.programId,
+    actorId: fixture?.personId,
+    taskId: fixture?.taskId,
+    teamId: fixture?.teamId,
+    seriesId: fixture?.recurrenceSeriesId,
+    sessionId: fixture?.agentSessionId,
+  };
+  return route.replace(/:([A-Za-z][A-Za-z0-9]*)/g, (token, name: string) => {
+    const value = values[name];
+    if (value === undefined) {
+      throw new Error(
+        `capture-shots: ${token} requires --with-mobile-audit-fixture session metadata`,
+      );
+    }
+    return value;
+  });
 }
 
 /** A filesystem-safe name for a route, e.g. `/orgs/:orgId/athena` → `orgs-orgId-athena`. */
@@ -188,7 +223,7 @@ async function captureCleanFrame(
 }
 
 async function main(): Promise<void> {
-  const { session, outDir, routes } = parseArgs(process.argv.slice(2));
+  const { session, outDir, routes, audit, limit } = parseArgs(process.argv.slice(2));
   const meta = JSON.parse(readFileSync(`${session}.meta.json`, 'utf8')) as SessionMeta;
 
   mkdirSync(outDir, { recursive: true });
@@ -222,10 +257,16 @@ async function main(): Promise<void> {
     await setupPage.close();
   }
 
-  for (const route of routes) {
+  const selectedRoutes = audit
+    ? MOBILE_LAYOUT_ROUTE_CASES.slice(0, limit).map((entry) => entry.route)
+    : routes;
+  if (selectedRoutes.length === 0) {
+    throw new Error('capture-shots: the selected audit route set is empty');
+  }
+  for (const route of selectedRoutes) {
     // Every capture uses a fresh Page so Chromium cannot carry damaged compositor tiles from one
     // responsive/theme capture set into the next surface.
-    const path = route.replaceAll(':orgId', meta.orgId).replaceAll(':sharedOrgId', sharedOrgId);
+    const path = resolveAuditRoute(route, meta, sharedOrgId);
     const slug = routeSlug(route);
     for (const viewport of VIEWPORTS) {
       for (const colorScheme of COLOR_SCHEMES) {

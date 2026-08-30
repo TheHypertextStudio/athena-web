@@ -157,7 +157,9 @@ async function openReviewRoute(page: Page, url: string): Promise<void> {
   await waitForSettledPage(page);
   const failure = await page.evaluate(() => {
     const visibleText = document.body.innerText;
-    return /(?:this page doesn['’]t exist|page unavailable|application error)/i.test(visibleText);
+    return /(?:this page doesn['’]t exist|page unavailable|application error|could not load)/i.test(
+      visibleText,
+    );
   });
   if (failure) {
     throw new Error(`Could not capture ${url}: the route rendered an application failure state`);
@@ -268,21 +270,25 @@ async function main(): Promise<void> {
       route,
     ),
   );
-  if (needsFixture && meta.mobileAuditFixture === undefined) {
-    const setupPage = await context.newPage();
-    const setupResponse = await setupPage.goto(`${meta.baseURL}/today`, {
-      waitUntil: 'domcontentloaded',
-    });
-    if (!setupResponse?.ok() || setupPage.url().includes('/sign-in')) {
-      throw new Error(
-        'Could not open an authenticated setup document for the mobile audit fixture',
-      );
+  if (needsFixture) {
+    if (meta.mobileAuditFixture === undefined) {
+      const setupPage = await context.newPage();
+      const setupResponse = await setupPage.goto(`${meta.baseURL}/today`, {
+        waitUntil: 'domcontentloaded',
+      });
+      if (!setupResponse?.ok() || setupPage.url().includes('/sign-in')) {
+        throw new Error(
+          'Could not open an authenticated setup document for the mobile audit fixture',
+        );
+      }
+      await setupPage.waitForTimeout(500);
+      meta.mobileAuditFixture = await createMobileAuditFixture(setupPage);
+      writeFileSync(`${session}.meta.json`, JSON.stringify(meta, null, 2));
+      await setupPage.close();
     }
-    await setupPage.waitForTimeout(500);
-    meta.mobileAuditFixture = await createMobileAuditFixture(setupPage);
+    // Detail records only exist in the fixture workspace. A session can carry an older shared
+    // workspace id for ordinary route captures, so dynamic audit routes must select this owner.
     sharedOrgId = meta.mobileAuditFixture.orgId;
-    writeFileSync(`${session}.meta.json`, JSON.stringify(meta, null, 2));
-    await setupPage.close();
   }
 
   for (const route of selectedRoutes) {

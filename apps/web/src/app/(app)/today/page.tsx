@@ -1,7 +1,7 @@
 'use client';
 
 import { Button, Stack } from '@docket/ui/primitives';
-import { type JSX } from 'react';
+import { type JSX, useMemo } from 'react';
 
 import { DayRecapEntry } from '@/components/today/day-recap-entry';
 import SuggestedTasks from '@/components/today/suggested-tasks';
@@ -47,7 +47,20 @@ export default function TodayPage(): JSX.Element {
     useTodayData();
   const actions = useTodayActions(date);
   const { openAthena } = useAthenaPanel();
-  const plannedTaskIds = new Set((data?.plan ?? []).map((item) => item.id));
+  // Once per payload rather than once per render: Today re-renders on every query settle, timer
+  // tick and inline mutation, and fresh array identities here would defeat memoisation downstream.
+  const attention = useMemo(() => {
+    const planned = new Set((data?.plan ?? []).map((item) => item.id));
+    const needs = data?.needsAttention;
+    return {
+      // Approvals are NOT deduped against the plan. A plan row shows a task's blocked state and
+      // its due date, so repeating those would be noise — but it says nothing about an agent
+      // holding for a signature, so filtering these hid the approval with nowhere else to see it.
+      approvals: needs?.approvals ?? [],
+      blocked: (needs?.blocked ?? []).filter((task) => !planned.has(task.id)),
+      dueToday: (needs?.dueToday ?? []).filter((task) => !planned.has(task.id)),
+    };
+  }, [data]);
   const openTodayAthena = (draft: string): void => {
     if (!activeOrgId) return;
     openAthena({ workspaceId: activeOrgId, workspaceName: orgName(activeOrgId) }, draft);
@@ -94,14 +107,15 @@ export default function TodayPage(): JSX.Element {
           task that never made it onto the plan is the third, and the only one the plan below
           cannot show.
 
-          Everything already on the plan is filtered out. The plan row carries its own Blocked
-          marker and its own due date, so repeating it here would put one task on screen twice and
-          make the day look busier than it is. */}
+          Blocked and due-today are filtered against the plan, because a plan row already carries
+          its own Blocked marker and its own due date. Approvals are not: nothing on a plan row says
+          an agent is holding for a signature, so filtering them left an approval on a planned task
+          with nowhere on the page to appear. */}
       {data ? (
         <NeedsAttention
-          approvals={data.needsAttention.approvals.filter((t) => !plannedTaskIds.has(t.id))}
-          blocked={data.needsAttention.blocked.filter((t) => !plannedTaskIds.has(t.id))}
-          dueToday={data.needsAttention.dueToday.filter((t) => !plannedTaskIds.has(t.id))}
+          approvals={attention.approvals}
+          blocked={attention.blocked}
+          dueToday={attention.dueToday}
           orgName={orgName}
         />
       ) : null}

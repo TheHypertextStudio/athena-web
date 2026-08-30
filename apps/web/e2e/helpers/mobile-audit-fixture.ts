@@ -107,31 +107,48 @@ async function activateLocalDocketPro(
   origins: MobileAuditOrigins,
   orgId: string,
 ): Promise<void> {
-  const event = {
-    id: `mobile-audit-${orgId}-${crypto.randomUUID()}`,
-    type: 'subscription.updated',
-    referenceId: orgId,
-    createdAt: new Date().toISOString(),
-    subscription: {
-      id: `mobile-audit-subscription-${orgId}`,
+  const customerId = `mobile-audit-customer-${orgId}`;
+  const createdAt = new Date().toISOString();
+  const events = [
+    {
+      id: `mobile-audit-checkout-${orgId}-${crypto.randomUUID()}`,
+      type: 'checkout.completed',
       referenceId: orgId,
-      status: 'active',
-      currentPeriodEnd: new Date(Date.now() + 86_400_000).toISOString(),
+      customerId,
+      createdAt,
     },
-  };
-  const response = await page.evaluate(
-    async ({ event, url }) => {
-      const webhook = await fetch(url, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(event),
-      });
-      return { status: webhook.status, ok: webhook.ok, body: await webhook.text() };
+    {
+      id: `mobile-audit-subscription-${orgId}-${crypto.randomUUID()}`,
+      type: 'subscription.updated',
+      referenceId: orgId,
+      customerId,
+      createdAt,
+      subscription: {
+        id: `mobile-audit-subscription-${orgId}`,
+        customerId,
+        referenceId: orgId,
+        status: 'active',
+        currentPeriodEnd: new Date(Date.now() + 86_400_000).toISOString(),
+      },
     },
-    { event, url: `${origins.apiOrigin}/internal/billing/webhook` },
-  );
-  if (!response.ok) {
-    throw new Error(`Local billing webhook returned ${String(response.status)}: ${response.body}`);
+  ];
+  for (const event of events) {
+    const response = await page.evaluate(
+      async ({ event, url }) => {
+        const webhook = await fetch(url, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(event),
+        });
+        return { status: webhook.status, ok: webhook.ok, body: await webhook.text() };
+      },
+      { event, url: `${origins.apiOrigin}/internal/billing/webhook` },
+    );
+    if (!response.ok) {
+      throw new Error(
+        `Local billing webhook returned ${String(response.status)}: ${response.body}`,
+      );
+    }
   }
 
   const billing = await apiJson<BillingState>(page, `/v1/orgs/${orgId}/billing`);

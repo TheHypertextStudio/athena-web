@@ -58,6 +58,52 @@ describe('webhooks asBillingEvent defensive parse (mock gateway / local-test pat
     });
     expect(res.status).toBe(400);
   });
+
+  it('binds a mock Checkout customer before applying its subscription', async () => {
+    const { orgId } = await seedBaseOrg(db, schema, false);
+    const customerId = `cus_local_${orgId}`;
+    const checkout = await webhooks.request('/webhook', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({
+        id: `evt_checkout_${orgId}`,
+        type: 'checkout.completed',
+        referenceId: orgId,
+        customerId,
+        createdAt: '2026-08-30T00:00:00.000Z',
+      }),
+    });
+
+    expect(checkout.status).toBe(200);
+    expect(await checkout.json()).toEqual({ received: true, effect: 'none' });
+    const [account] = await db
+      .select({ customerId: schema.organizationBillingAccount.stripeCustomerId })
+      .from(schema.organizationBillingAccount)
+      .where(eq(schema.organizationBillingAccount.organizationId, orgId));
+    expect(account).toEqual({ customerId });
+
+    const subscription = await webhooks.request('/webhook', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({
+        id: `evt_subscription_${orgId}`,
+        type: 'subscription.updated',
+        referenceId: orgId,
+        customerId,
+        createdAt: '2026-08-30T00:01:00.000Z',
+        subscription: {
+          id: `sub_local_${orgId}`,
+          customerId,
+          referenceId: orgId,
+          status: 'active',
+          currentPeriodEnd: '2026-09-30T00:00:00.000Z',
+        },
+      }),
+    });
+
+    expect(subscription.status).toBe(200);
+    expect(await subscription.json()).toEqual({ received: true, effect: 'active' });
+  });
 });
 
 /**

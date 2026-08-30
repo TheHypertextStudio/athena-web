@@ -32,8 +32,10 @@
   223 tests with 90.17% function coverage, including callback-authorization foreign keys and its
   update lifecycle. The integrated release repair passes 114 focused Web tests and 8 shared-menu
   tests. It preserves editor focus while suggestion menus open, keeps schedule scrollbars visible,
-  and aligns stale source contracts with the shared mobile overlay geometry. Four Settings
-  screenshots cover 390px and 1280px in light and dark themes.
+  and aligns stale source contracts with the shared mobile overlay geometry. The release browser
+  fixture now binds its mock Checkout customer before applying a mock subscription, and the full
+  16-test billing webhook suite passes. Four Settings screenshots cover 390px and 1280px in light
+  and dark themes.
 - **Blockers**: Production Twilio resources and configuration remain unchanged. Enabling phone
   access still requires explicit authorization to provision the Verify service and voice webhooks,
   followed by the real-handset canary matrix. The deployed code must keep phone access unavailable

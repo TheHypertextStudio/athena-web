@@ -66,9 +66,10 @@ const webhooks = new Hono().post('/webhook', async (c) => {
   // so it must never be re-parsed/re-serialized before verification.
   const rawBody = await c.req.text();
   const gateway = getContainer().billing;
+  const verifiesWebhook = canVerifyWebhook(gateway);
 
   let event: BillingEvent | null;
-  if (canVerifyWebhook(gateway)) {
+  if (verifiesWebhook) {
     // Real Stripe path: the signature MUST be present and valid, else reject.
     const signature = c.req.header('stripe-signature');
     if (!signature) return c.json({ error: 'missing stripe-signature header' }, 400);
@@ -109,6 +110,16 @@ const webhooks = new Hono().post('/webhook', async (c) => {
   }
 
   const now = new Date().toISOString();
+  if (!verifiesWebhook && event.type === 'checkout.completed' && event.customerId) {
+    await db
+      .insert(organizationBillingAccount)
+      .values({
+        organizationId: event.referenceId,
+        stripeCustomerId: event.customerId,
+        countryVerificationRequired: true,
+      })
+      .onConflictDoNothing({ target: organizationBillingAccount.organizationId });
+  }
   const originalEventType = event.type;
   const [previousEntitlement] = event.referenceId
     ? await db

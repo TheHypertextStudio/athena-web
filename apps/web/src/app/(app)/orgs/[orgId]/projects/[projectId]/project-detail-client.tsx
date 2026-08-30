@@ -138,7 +138,7 @@ export async function refreshRestoredProject<TData, TQueryKey extends QueryKey>(
   readonly aggregateQuery: FetchQueryOptions<TData, Error, TData, TQueryKey>;
   readonly ownerOrganizationId: string;
 }): Promise<'ready' | 'not-found' | 'cache-error'> {
-  await invalidateWorkTargetQueries(input.queryClient, {
+  void invalidateWorkTargetQueries(input.queryClient, {
     target: 'project',
     ownerOrganizationId: input.ownerOrganizationId,
   }).catch(() => undefined);

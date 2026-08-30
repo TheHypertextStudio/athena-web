@@ -577,8 +577,7 @@ describe('CreateProjectDialog — robust composer', () => {
     expect(within(menu).queryByText('Team')).not.toBeInTheDocument();
     fireEvent.keyDown(menu, { key: 'Escape' });
 
-    const properties = screen.getByRole('group', { name: 'Project properties' });
-    expect(properties).toHaveClass('flex-nowrap');
+    expect(screen.getByRole('group', { name: 'Project properties' })).toHaveClass('flex-nowrap');
     expect(propertiesResize).toBeDefined();
     act(() => {
       propertiesResize?.(
@@ -587,8 +586,10 @@ describe('CreateProjectDialog — robust composer', () => {
       );
     });
     fireEvent.click(screen.getByRole('button', { name: 'More Project properties' }));
-    const overflow = await screen.findByRole('group', { name: 'More Project properties' });
-    expect(within(overflow).getByRole('group', { name: 'Timeline' })).toBeInTheDocument();
+    await waitFor(() => {
+      const overflow = screen.getByRole('group', { name: 'More Project properties' });
+      expect(within(overflow).getByRole('group', { name: 'Timeline' })).toBeVisible();
+    });
 
     act(() => {
       propertiesResize?.(
@@ -602,7 +603,11 @@ describe('CreateProjectDialog — robust composer', () => {
     ).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Program/ })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Start from template' })).toBeVisible();
-    expect(within(properties).getByRole('group', { name: 'Timeline' })).toBeVisible();
+    expect(
+      within(screen.getByRole('group', { name: 'Project properties' })).getByRole('group', {
+        name: 'Timeline',
+      }),
+    ).toBeVisible();
   });
 
   it.each(BLOCKED_PROJECT_DESTINATIONS)('disables submission when %s', (_reason, destination) => {

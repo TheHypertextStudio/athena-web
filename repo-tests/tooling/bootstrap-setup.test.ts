@@ -382,7 +382,11 @@ describe('production account-creation deployment contract', () => {
       expect(bindings).toContain(mount);
     }
     expect(workflow).not.toContain('SMTP_PASS=');
-    expect(workflow).toContain('secrets: ${{ vars.API_SECRET_BINDINGS }}');
+    expect(workflow).toContain('id: active-secrets');
+    expect(workflow).toContain(
+      "awk -F= '$1 !~ /^LINEAR_AGENT_(CLIENT_ID|CLIENT_SECRET|WEBHOOK_SECRET)$/'",
+    );
+    expect(workflow).toContain('secrets: ${{ steps.active-secrets.outputs.bindings }}');
     expect(workflow).toContain('--env DATABASE_URL_UNPOOLED');
     expect(workflow).not.toContain('--env DATABASE_URL_UNPOOLED=');
   });

@@ -14,8 +14,9 @@
  * codes there clears this with no extra request. Dismissal persists per-user in localStorage, and
  * self-resets once the account is healthy again so a later low state re-prompts.
  */
-import { Shield, X } from '@docket/ui/icons';
-import Link from '@/components/docket-link';
+import { InlineBanner } from '@docket/ui/components';
+import { Shield } from '@docket/ui/icons';
+import { useRouter } from 'next/navigation';
 import { type JSX, useEffect, useState } from 'react';
 
 import { sectionHref } from '@/components/settings/settings-registry';
@@ -41,6 +42,7 @@ export function RecoveryNudgeBanner({
   userId,
 }: RecoveryNudgeBannerProps): JSX.Element | null {
   const [dismissed, setDismissed] = useState(() => readRecoveryNudgeDismissed(userId));
+  const router = useRouter();
 
   const statusQ = useApiQuery(
     apiQueryOptions(
@@ -71,6 +73,7 @@ export function RecoveryNudgeBanner({
   const message = noCodes
     ? 'Set up recovery codes — they’re the only way back in if you lose your passkey.'
     : `You’re low on recovery codes (${status.remaining} left). Regenerate a fresh set.`;
+  const actionLabel = noCodes ? 'Set up recovery codes' : 'Regenerate recovery codes';
 
   function dismiss(): void {
     writeRecoveryNudgeDismissed(userId, true);
@@ -78,31 +81,20 @@ export function RecoveryNudgeBanner({
   }
 
   return (
-    <div
-      role="status"
-      className="bg-surface-container-high text-on-surface shadow-level1 flex flex-col gap-1.5 rounded-lg p-2.5"
+    <InlineBanner
+      tone={noCodes ? 'critical' : 'info'}
+      title={noCodes ? 'Recovery codes needed' : 'Recovery codes running low'}
+      icon={<Shield aria-hidden="true" className="size-4" />}
+      action={{
+        label: actionLabel,
+        onSelect: () => {
+          router.push(sectionHref(personalOrgId, 'security'));
+        },
+      }}
+      dismissLabel="Dismiss recovery-code reminder"
+      onDismiss={dismiss}
     >
-      <div className="flex items-start gap-2">
-        <Shield
-          aria-hidden="true"
-          className={`mt-0.5 size-4 shrink-0 ${noCodes ? 'text-error' : 'text-primary'}`}
-        />
-        <p className="text-on-surface-variant min-w-0 flex-1 text-xs leading-snug">{message}</p>
-        <button
-          type="button"
-          aria-label="Dismiss"
-          onClick={dismiss}
-          className="text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface focus-visible:ring-ring -mt-0.5 -mr-0.5 flex size-6 shrink-0 items-center justify-center rounded-md transition-colors focus-visible:ring-2 focus-visible:outline-none"
-        >
-          <X aria-hidden="true" className="size-4" />
-        </button>
-      </div>
-      <Link
-        href={sectionHref(personalOrgId, 'security')}
-        className="text-primary hover:text-primary/80 focus-visible:ring-ring ml-6 inline-flex w-fit items-center rounded-sm text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none"
-      >
-        {noCodes ? 'Set up' : 'Regenerate'}
-      </Link>
-    </div>
+      {message}
+    </InlineBanner>
   );
 }

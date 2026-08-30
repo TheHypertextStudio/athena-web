@@ -813,6 +813,28 @@ describe('Sidebar collapse', () => {
     expect(screen.getByRole('complementary', { name: 'Navigation' })).toHaveClass('lg:w-60');
     expect(screen.queryByRole('button', { name: /navigation$/ })).toBeNull();
   });
+
+  it('keeps the mobile navigation footer in the drawer scroll region', () => {
+    render(
+      <ContextProvider initialContext={ACME.id}>
+        <ShellSidebarProvider value={{ collapsed: false, onToggle: () => undefined }}>
+          <ShellDrawerProvider dismiss={() => undefined}>
+            <Sidebar
+              workspaces={WORKSPACES}
+              {...sidebarHrefs()}
+              onSelectWorkspace={() => undefined}
+              onOpenSearch={() => undefined}
+              footer={<a href="/settings/security">Recovery codes</a>}
+            />
+          </ShellDrawerProvider>
+        </ShellSidebarProvider>
+      </ContextProvider>,
+    );
+
+    expect(screen.getByTestId('sidebar-scroll-region')).toContainElement(
+      screen.getByRole('link', { name: 'Recovery codes' }),
+    );
+  });
 });
 
 describe('Sidebar', () => {

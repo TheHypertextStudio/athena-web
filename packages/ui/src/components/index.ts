@@ -27,6 +27,12 @@ export {
 } from './atoms/StatusIcon';
 export { IdentityGlyph, type IdentityGlyphProps } from './atoms/IdentityGlyph';
 export {
+  InlineBanner,
+  type InlineBannerAction,
+  type InlineBannerProps,
+  type InlineBannerTone,
+} from './feedback';
+export {
   LabelChip,
   type LabelChipColor,
   type LabelChipProps,

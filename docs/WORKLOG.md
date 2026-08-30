@@ -396,6 +396,33 @@
   switching, and production policy links. The production account pin and redirect attestation are
   recorded. Checkout remains disabled. Cloud Run now reports shadow reconciliation, so the
   24-hour observation started with the deployment at `2026-08-29T00:55:37Z`.
+- **Hypertext Studio sandbox canary**: The dedicated Hypertext Studio Stripe account
+  `acct_1TTQ9DAREPz33Avb` passed the provider-backed launch path on 2026-08-29. Hosted Checkout
+  created one card-required 14-day trial at $8 USD per month with automatic tax. A repeated Docket
+  Checkout request returned the same unexpired session. The Stripe portal showed the payment
+  method and invoice, preserved access through cancellation at period end, and restored the
+  subscription on reactivation. A Stripe test clock then proved the first paid renewal, the first
+  failed off-session payment, a second failed attempt that kept the original seven-day grace
+  deadline, payment recovery that cleared the grace period, and the authentication-required
+  invoice event. Every signed webhook returned HTTP 200.
+- **Discount and webhook canary**: A verified Better Auth customer submitted a Student application.
+  Finance requested more information, the customer supplemented the application, and finance
+  approved the 50% award from a stored provider preview. Stripe attached one product discount and
+  issued a $4 USD credit note against the paid $8 USD recurring line. The customer billing summary
+  reports the active award, annual review date, and issued credit. Replaying one signed Stripe
+  event twice returned `duplicate` both times. Delivering a newer subscription event before an
+  older event returned `active` for both because each handler retrieved Stripe's current snapshot.
+  The final provider-backed sandbox audit passed at `2026-08-29T23:57:04.406Z` with zero unresolved
+  controls. The broken PGlite sandbox store from the disk-full incident was moved aside instead of
+  deleted, and the canary was repeated against a fresh migrated store.
+- **Current production evidence**: Production audit run `33280855143` passed at
+  `2026-08-29T23:23:56.083Z`. Revision `docket-api-00216-ttm` keeps Checkout disabled and
+  reconciliation in `shadow`. The 15-minute Scheduler is enabled and its latest recorded attempt
+  returned status code zero. The audit found no billed organizations, no unresolved provider
+  controls, and six active Founder complimentary organizations. Each complimentary grant supplies
+  shared work, integrations, MCP, Athena, and voice. The clean post-grant shadow interval started
+  with successful run `33277031549` at `2026-08-29T21:49:02Z`, so active reconciliation cannot
+  start before `2026-08-30T21:49:02Z` without waiving the approved 24-hour observation gate.
 - **Decisions**: Checkout derives the customer email from the Better Auth server session and
   rejects a browser-supplied email. Stripe's Dashboard-only existing-subscriber redirect requires
   a recorded verification timestamp before `BILLING_ENABLED=true` can pass configuration. Docket
@@ -409,11 +436,12 @@
   cancellation, read-only retention, Pricing, Terms, and Privacy policies on 2026-08-28. No
   separate finance or legal approver exists, so those internal gates are closed. Government tax
   registrations remain operational requirements rather than internal approval requests.
-- **Blockers**: Production still needs the live full-price canary, live discounted canary, Founder
-  complimentary grant, and 72-hour canary observation. The Founder grant is ready in the
-  authenticated Hypertext Studio operator session and awaits the required action-time production
-  entitlement confirmation. Whole-product launch sign-off remains independent of this billing
-  slice.
+- **Blockers**: The 24-hour production shadow interval ends at `2026-08-30T21:49:02Z`. Production
+  then needs the live full-price and discounted canaries plus the approved 72-hour observation
+  before public Checkout can open. Founder complimentary access, owner policy approval, Stripe
+  sandbox behavior, provider permissions, webhook signatures, automatic tax, duplicate-event
+  handling, reordered-event handling, payment recovery, and discount credit issuance are closed.
+  Whole-product launch sign-off remains independent of this billing slice.
 - **Post-provider review plan**: Reproduce and fix the Stripe gateway behavior that caches a
   transient account-verification failure for the lifetime of the API process. Make the production
   audit reject a missing or stale Scheduler attempt instead of treating an absent status as

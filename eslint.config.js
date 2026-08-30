@@ -3,6 +3,7 @@ import {
   baseConfig,
   dataLayerConfig,
   overlayPrimitiveConfig,
+  semanticSurfaceCohortConfig,
 } from './tooling/eslint-config/index.js';
 
 /**
@@ -13,4 +14,10 @@ import {
  *
  * @type {import('typescript-eslint').ConfigArray}
  */
-export default [...baseConfig, ...dataLayerConfig, ...appLocationConfig, ...overlayPrimitiveConfig];
+export default [
+  ...baseConfig,
+  ...dataLayerConfig,
+  ...appLocationConfig,
+  ...overlayPrimitiveConfig,
+  ...semanticSurfaceCohortConfig(['apps/web/src/components/time-tracking/**/*.{ts,tsx}']),
+];

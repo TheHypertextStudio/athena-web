@@ -292,6 +292,18 @@ export const semanticSurfaceConfig = [
   },
 ];
 
+/** Turn on the semantic-surface rule for a migrated directory without grandfathering old callers. */
+export function semanticSurfaceCohortConfig(files) {
+  return [
+    {
+      files,
+      ignores: ['packages/ui/src/primitives/**/*'],
+      plugins: { 'docket-ui': uiOwnershipPlugin },
+      rules: { 'docket-ui/no-raw-surface-role': 'error' },
+    },
+  ];
+}
+
 /** Keep server route modules away from client query hooks. */
 export const serverComponentBoundaryConfig = [
   {

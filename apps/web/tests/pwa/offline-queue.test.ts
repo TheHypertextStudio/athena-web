@@ -447,7 +447,7 @@ describe('withOfflineOutbox', () => {
     expect(inner).not.toHaveBeenCalled();
   });
 
-  it('sends an online command under the requested account while durable binding is pending', async () => {
+  it('waits for account binding before a failed live command enters the durable queue', async () => {
     await setOutboxUser(null);
     setCalls.length = 0;
     const bindingGate = deferred<undefined>();
@@ -462,21 +462,27 @@ describe('withOfflineOutbox', () => {
     const inner = vi.fn(async (input: RequestInfo | URL) => {
       if (!(input instanceof Request)) throw new Error('Expected a prepared Request');
       replayOwner = input.headers.get('X-Docket-Replay-Owner');
-      return new Response('{}', { status: 200 });
+      throw new TypeError('Connection dropped');
     });
     const command = objectCommand('binding-live-command', {}, 'binding-user');
-    const result = await withOfflineOutbox(inner)(command.path, command).catch(
-      (error: unknown) => error,
-    );
+    const result = withOfflineOutbox(inner)(command.path, command).catch((error: unknown) => error);
+
+    await Promise.resolve();
+    expect(inner).not.toHaveBeenCalled();
 
     bindingGate.resolve(undefined);
     await binding;
+    const caught = await result;
 
-    expect(result).toBeInstanceOf(Response);
-    expect((result as Response).status).toBe(200);
+    expect(caught).toBeInstanceOf(QueuedOfflineWriteError);
     expect(replayOwner).toBe('binding-user');
     expect(inner).toHaveBeenCalledOnce();
-    expect(outboxSnapshot()).toEqual([]);
+    expect(outboxSnapshot()).toHaveLength(1);
+    expect(outboxSnapshot()[0]).toMatchObject({
+      userId: 'binding-user',
+      path: command.path,
+      status: 'queued',
+    });
   });
 
   it('uses an object command id as the missing live and replay idempotency key', async () => {

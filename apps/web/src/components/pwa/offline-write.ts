@@ -8,7 +8,7 @@ import {
   migrateReplayHeaders,
   sanitizeReplayHeaders,
 } from './outbox-model';
-import { captureOutboxOwner, captureOutboxRequestOwnerId, enqueueWrite } from './outbox';
+import { enqueueWrite, resolveOutboxOwnerForWrite } from './outbox';
 
 /**
  * The seam where an undeliverable write becomes a queued one.
@@ -171,8 +171,7 @@ export function withOfflineOutbox(inner: typeof fetch): typeof fetch {
     const path = target.queuePath;
     const queueable = path !== null && isQueueableWrite(method, path);
     const asRequest = typeof input === 'string' || input instanceof URL ? null : input;
-    const queueOwner = queueable ? captureOutboxOwner() : null;
-    const requestOwnerId = queueable ? captureOutboxRequestOwnerId() : null;
+    const queueOwner = queueable ? await resolveOutboxOwnerForWrite() : null;
     const liveAttemptStartedAt = queueable ? Date.now() : null;
     let liveInput = input;
     let liveInit = init;
@@ -186,9 +185,9 @@ export function withOfflineOutbox(inner: typeof fetch): typeof fetch {
     // checks the server's copy of the record rather than trusting the queue to have emptied.
     let spare = queueable && asRequest && init?.body === undefined ? asRequest.clone() : null;
     if (queueable) {
-      if (requestOwnerId === null)
+      if (queueOwner === null)
         throw new TypeError('Cannot send a queueable write without an active outbox owner.');
-      const prepared = await preparePostAttempt(input, init, path, requestOwnerId);
+      const prepared = await preparePostAttempt(input, init, path, queueOwner.userId);
       liveInput = prepared.request;
       liveInit = undefined;
       spare = prepared.spare;

@@ -110,19 +110,41 @@ export function captureOutboxOwner(): OutboxOwnerToken | null {
 }
 
 /**
- * Capture the account allowed to start a live object command.
+ * Resolve the account generation that may start a queueable write.
  *
  * @remarks
- * Durable binding can still be pending when the authenticated shell becomes interactive. The live
- * request may proceed under that requested account, but its failure cannot be queued until a
- * durable {@link OutboxOwnerToken} exists. A sign-out cleanup fence returns `null` so no request can
- * enter while another account is waiting outside browser-wide deletion.
+ * The authenticated shell can render before its IndexedDB ownership bind finishes. A write must
+ * wait for that bind before it reaches the network. Otherwise a connection loss during the bind
+ * leaves the failed request without a stable account generation to queue under. This wait follows
+ * outbox state changes rather than a timer, and it returns the non-durable owner when browser
+ * storage is unavailable so online writes still work.
  *
- * @returns The active or pending session account, or `null` during destructive session cleanup.
+ * @returns The settled session owner, or `null` if sign-out or an account replacement supersedes it.
  */
-export function captureOutboxRequestOwnerId(): string | null {
+export async function resolveOutboxOwnerForWrite(): Promise<OutboxOwnerToken | null> {
   if (sessionTransitionGate !== null) return null;
-  return currentOwner()?.userId ?? requestedUserId;
+  const expectedUserId = requestedUserId;
+  if (expectedUserId === null) return null;
+
+  const settled = currentOwner();
+  if (settled?.userId === expectedUserId) return settled;
+
+  return await new Promise<OutboxOwnerToken | null>((resolve) => {
+    let unsubscribe = (): void => undefined;
+    const inspect = (): void => {
+      if (sessionTransitionGate !== null || requestedUserId !== expectedUserId) {
+        unsubscribe();
+        resolve(null);
+        return;
+      }
+      const owner = currentOwner();
+      if (owner?.userId !== expectedUserId) return;
+      unsubscribe();
+      resolve(owner);
+    };
+    unsubscribe = subscribeOutbox(inspect);
+    inspect();
+  });
 }
 
 /** Check that an operation still belongs to the account generation that started it. */

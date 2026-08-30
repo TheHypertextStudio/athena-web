@@ -509,6 +509,14 @@
   billing account and proves that Docket preserves its consumed-trial timestamp. The focused admin
   route suite passes 57 tests. API type checking, changed-file ESLint, Prettier, and the diff check
   pass. Checkout remains disabled while this correction moves through exact-main CI and deployment.
+- **Offline-write release correction**: E2E run `33282592106` proved that a queueable edit could
+  reach the network while the Better Auth account was still binding its durable browser outbox. A
+  connection loss during that window left the request without a stable account generation, so the
+  mutation rolled the optimistic edit back and showed a generic update failure. Queueable writes now
+  wait for the account-binding state change before the live attempt. The wait has no timer, rejects
+  an account that sign-out or replacement supersedes, and still permits online writes when browser
+  storage cannot provide durable replay. The queue and cross-tab suites pass 98 behavior tests. Web
+  type checking, changed-file ESLint, Prettier, and the diff check pass.
 
 ---
 

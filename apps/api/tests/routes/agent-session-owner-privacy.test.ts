@@ -700,6 +700,28 @@ describe('owner-private Athena compatibility routes', () => {
     expect((await post(ownerApp, `/${pending}/run`)).status).toBe(200);
   });
 
+  it('rejects Lattice assignment work before the compatibility runner can admit it', async () => {
+    const seed = await seedWorkspace();
+    const ownerApp = appFor(seed, seed.owner);
+    const sessionId = await seedAthena(seed, seed.owner, 'pending');
+    await db
+      .update(schema.agentSession)
+      .set({ executionSurface: 'lattice' })
+      .where(eq(schema.agentSession.id, sessionId));
+
+    const admissionsBeforeRequest = runnerMocks.admit.mock.calls.length;
+    const response = await post(ownerApp, `/${sessionId}/run`);
+
+    expect(response.status).toBe(409);
+    expect(runnerMocks.admit).toHaveBeenCalledTimes(admissionsBeforeRequest);
+    expect(
+      await db
+        .select()
+        .from(schema.agentSessionRun)
+        .where(eq(schema.agentSessionRun.sessionId, sessionId)),
+    ).toHaveLength(0);
+  });
+
   it('admits owner lifecycle and reply resumes through durable generations', async () => {
     const seed = await seedWorkspace();
     const ownerApp = appFor(seed, seed.owner);

@@ -158,6 +158,24 @@ describe('personal Athena schema', () => {
     expect(delegation?.relayCursor).toBe('cursor_0');
 
     await expect(
+      db
+        .update(agentDelegation)
+        .set({ submissionLeaseToken: 'half-a-lease' })
+        .where(eq(agentDelegation.id, assertDefined(delegation).id)),
+    ).rejects.toThrow();
+    await db
+      .update(agentDelegation)
+      .set({
+        submissionLeaseToken: 'submission-lease',
+        submissionLeaseExpiresAt: new Date('2026-08-30T22:00:00.000Z'),
+      })
+      .where(eq(agentDelegation.id, assertDefined(delegation).id));
+    await db
+      .update(agentDelegation)
+      .set({ submissionLeaseToken: null, submissionLeaseExpiresAt: null })
+      .where(eq(agentDelegation.id, assertDefined(delegation).id));
+
+    await expect(
       db.insert(agentDelegation).values({
         ...prepared,
         ownerUserId: otherUserId,

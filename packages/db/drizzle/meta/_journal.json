@@ -799,6 +799,13 @@
       "when": 1788123151796,
       "tag": "0113_lattice-agent-delegation",
       "breakpoints": true
+    },
+    {
+      "idx": 114,
+      "version": "7",
+      "when": 1788126459934,
+      "tag": "0114_hard_demogoblin",
+      "breakpoints": true
     }
   ]
 }

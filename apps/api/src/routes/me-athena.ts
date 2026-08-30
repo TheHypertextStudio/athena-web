@@ -45,6 +45,7 @@ import {
 import { editProposalInput, listProposalGroups } from '../agent/proposals';
 import { cancelLatticeDelegation } from '../agent/lattice-delegations';
 import { latticeDelegationDependencies } from '../agent/lattice-delegation-runtime';
+import { assertHostedExecutionSurface } from '../agent/execution-surface';
 import { loadTranscript, saveTranscript } from '../agent/transcript';
 import type { AppEnv } from '../context';
 import { AuthError, ConflictError, NotFoundError } from '../error';
@@ -1085,6 +1086,7 @@ const meAthena = new Hono<AppEnv>()
     async (c) => {
       const owner = requestOwner(c);
       const session = await loadOwnedSession(owner, c.req.valid('param').id);
+      assertHostedExecutionSurface(session);
       const admission = await admitAthenaGeneration(session, {
         runnableStatuses: ['pending', 'running'],
       });

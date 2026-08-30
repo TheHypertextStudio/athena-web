@@ -2,7 +2,6 @@ import { workflowIdFor } from '@docket/athena/execution-protocol';
 import {
   actor,
   agent,
-  agentDelegation,
   agentSession,
   agentSessionRun,
   auditEvent,
@@ -176,18 +175,6 @@ export async function resolveAction(
       .where(and(eq(sessionActivity.id, action.id), eq(sessionActivity.approvalStatus, 'proposed')))
       .returning({ id: sessionActivity.id });
     if (!decided) throw new ConflictError('No proposed action awaiting approval');
-    if (decision === 'rejected') {
-      await tx
-        .update(agentDelegation)
-        .set({ status: 'canceled', returnedActivityId: null, settledAt: new Date() })
-        .where(
-          and(
-            eq(agentDelegation.returnedActivityId, decided.id),
-            eq(agentDelegation.status, 'proposed'),
-          ),
-        );
-    }
-
     const nextStatus = decision === 'approved' ? 'running' : 'canceled';
     const [updated] = await tx
       .update(agentSession)
@@ -320,15 +307,6 @@ export async function decideActivity(
         // `executing` before dispatch and advances it only after the result is durable.
         if (action.id === activityId) decidedTarget = decidedRow;
       } else {
-        await tx
-          .update(agentDelegation)
-          .set({ status: 'canceled', returnedActivityId: null, settledAt: new Date() })
-          .where(
-            and(
-              eq(agentDelegation.returnedActivityId, action.id),
-              eq(agentDelegation.status, 'proposed'),
-            ),
-          );
         await tx.insert(auditEvent).values({
           organizationId: authorization.organizationId,
           actorId: authorization.actorId,
@@ -448,17 +426,6 @@ export async function decideProposalGroup(
         )
         .returning();
       if (!row) continue;
-      if (decision === 'reject') {
-        await tx
-          .update(agentDelegation)
-          .set({ status: 'canceled', returnedActivityId: null, settledAt: new Date() })
-          .where(
-            and(
-              eq(agentDelegation.returnedActivityId, action.id),
-              eq(agentDelegation.status, 'proposed'),
-            ),
-          );
-      }
       await tx.insert(auditEvent).values({
         organizationId: authorization.organizationId,
         actorId: authorization.actorId,

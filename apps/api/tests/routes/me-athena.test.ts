@@ -1424,6 +1424,29 @@ describe('personal Athena routes', () => {
     expect((await response.json()) as { status: string }).toMatchObject({ status: 'completed' });
   });
 
+  it('rejects Lattice assignment work before the personal runner can admit it', async () => {
+    const seed = await seedPeople();
+    const sessionId = await seedSession(seed, seed.owner, 'pending');
+    await db
+      .update(schema.agentSession)
+      .set({ executionSurface: 'lattice' })
+      .where(eq(schema.agentSession.id, sessionId));
+
+    const response = await appFor(seed.owner).request(`/sessions/${sessionId}/run`, {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: '{}',
+    });
+
+    expect(response.status).toBe(409);
+    expect(
+      await db
+        .select()
+        .from(schema.agentSessionRun)
+        .where(eq(schema.agentSessionRun.sessionId, sessionId)),
+    ).toHaveLength(0);
+  });
+
   it('admits transcript-free personal replies through durable generations', async () => {
     const seed = await seedPeople();
     const sessionId = await seedSession(seed, seed.owner, 'awaiting_input');

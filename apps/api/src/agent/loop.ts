@@ -48,6 +48,7 @@ import {
   materializeElicitations,
 } from '../services/elicitation-service';
 import { classifyTool, decideUserOwnedToolExecution } from './approval-policy';
+import { assertHostedExecutionSurface } from './execution-surface';
 import { markProvenance } from './provenance';
 import { buildSystemPrompt } from './system-prompt';
 import {
@@ -396,6 +397,7 @@ async function driveSessionWithAdmission(
   if (session.executorKind === 'registered_agent' && session.organizationId !== orgId) {
     throw new NotFoundError('Session not found');
   }
+  assertHostedExecutionSurface(session);
   if (!admission.runnableStatuses.includes(session.status)) {
     throw new ConflictError('Session is not in a runnable state');
   }

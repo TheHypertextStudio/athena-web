@@ -877,9 +877,15 @@ export const agentDelegation = pgTable(
     replyKeyCiphertext: text('reply_key_ciphertext'),
     status: text('status').$type<AgentDelegationStatus>().notNull().default('prepared'),
     workState: text('work_state'),
+    submissionLeaseToken: text('submission_lease_token'),
+    submissionLeaseExpiresAt: timestamp('submission_lease_expires_at'),
     relayCursor: text('relay_cursor').notNull().default('cursor_0'),
     nextPollAt: timestamp('next_poll_at'),
     deadlineAt: timestamp('deadline_at'),
+    runtimeName: text('runtime_name'),
+    runtimeReachability: text('runtime_reachability'),
+    runtimeLastSeenAt: timestamp('runtime_last_seen_at'),
+    relayQueuePosition: integer('relay_queue_position'),
     failureCode: text('failure_code'),
     terminalOutcome: jsonb('terminal_outcome').$type<AgentDelegationTerminalOutcome>(),
     returnedActivityId: text('returned_activity_id'),
@@ -948,8 +954,14 @@ export const agentDelegation = pgTable(
     ),
     check('agent_delegation_cursor_check', sql`char_length(${t.relayCursor}) > 0`),
     check(
+      'agent_delegation_submission_lease_check',
+      sql`(${t.submissionLeaseToken} IS NULL AND ${t.submissionLeaseExpiresAt} IS NULL)
+        OR (${t.status} = 'prepared' AND ${t.submissionLeaseToken} IS NOT NULL AND ${t.submissionLeaseExpiresAt} IS NOT NULL)`,
+    ),
+    check(
       'agent_delegation_reply_key_lifecycle_check',
       sql`(${t.status} in ('prepared','submitted') AND ${t.replyKeyCiphertext} IS NOT NULL)
+        OR (${t.status} = 'failed' AND ${t.failureCode} = 'result_decryption_failed' AND ${t.replyKeyCiphertext} IS NOT NULL)
         OR (${t.status} in ('proposed','completed','failed','canceled') AND ${t.replyKeyCiphertext} IS NULL)`,
     ),
     check(

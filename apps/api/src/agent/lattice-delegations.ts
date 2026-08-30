@@ -11,8 +11,24 @@ import {
 } from '@docket/db';
 import { canActor } from '@docket/authz';
 import { LatticeUnavailableError } from '@docket/integrations';
-import { RelayControllerError } from '@lovelace-ai/lattice-relay-client';
-import { and, asc, eq, isNull, lte, or } from 'drizzle-orm';
+import type {
+  RelayRuntimeRegistrationView,
+  RelaySealedEnvelope,
+  RelayWorkEventsResponse,
+  RelayWorkExpiryEvent,
+  RelayWorkProgressEvent,
+  RelayWorkResultAcknowledged,
+  RelayWorkResultEvent,
+} from '@lovelace-ai/compute';
+import {
+  RelayControllerError,
+  type BuildAgentTaskOptions,
+  type RelayWorkState,
+  type SubmittedWork,
+  type SubmitWorkOptions,
+} from '@lovelace-ai/lattice-relay-client';
+import type { WorkKeyPair } from '@lovelace-ai/lattice-relay-crypto';
+import { and, asc, eq, isNotNull, isNull, lte, or } from 'drizzle-orm';
 
 import { sealCredential, unsealCredential } from '../lib/credentials';
 import type { AthenaAssignmentRow } from './assignments';
@@ -22,107 +38,28 @@ const STANDARD_DEADLINE_MS = 120_000;
 const MAX_POLL_BATCH = 10;
 const MAX_SUBMIT_BATCH = 10;
 const TRANSIENT_RETRY_MS = 5_000;
+const SUBMISSION_LEASE_MS = 30_000;
 
-interface ReplyKeyPair {
-  readonly publicKey: string;
-  readonly privateKey: string;
-}
-
-interface RelayWorkKey {
-  readonly keyId: string;
-  readonly publicKey: string;
-  readonly notBefore: string;
-  readonly notAfter: string;
-  readonly revokedAt?: string;
-}
-
-interface RelayRuntime {
-  readonly latticeId: string;
-  readonly accountId: string;
-  readonly displayName: string;
-  readonly reachability?: 'reachable' | 'unreachable';
-  readonly workKeys: readonly RelayWorkKey[];
-}
-
-interface RelaySealedEnvelope {
-  readonly version: string;
-  readonly keyId?: string;
-  readonly ephemeralPublicKey: string;
-  readonly salt: string;
-  readonly iv: string;
-  readonly ciphertext: string;
-}
-
-interface RelayProgressEvent {
-  readonly cursor: string;
-  readonly kind: 'progress';
-  readonly sealed: RelaySealedEnvelope;
-}
-
-interface RelayResultEvent {
-  readonly cursor: 'cursor_final';
-  readonly kind: 'result';
-  readonly outcome: 'completed' | 'failed' | 'cancelled' | 'work_key_expired';
-  readonly sealed: RelaySealedEnvelope;
-}
-
-interface RelayExpiryEvent {
-  readonly cursor: 'cursor_final';
-  readonly kind: 'expiry';
-  readonly reason: 'deadline_expired' | 'work_retention_expired' | 'result_retention_expired';
-  readonly expiredAt: string;
-}
-
-type RelayEvent = RelayProgressEvent | RelayResultEvent | RelayExpiryEvent;
-
-type RelayWorkState =
-  | 'pending'
-  | 'queued'
-  | 'in_flight'
-  | 'completed'
-  | 'failed'
-  | 'cancelled'
-  | 'expired'
-  | 'offline_queued'
-  | 'rate_limited'
-  | 'queue_full';
+type SurfaceWorkEventsResponse = Omit<RelayWorkEventsResponse, 'state'> & {
+  readonly state: RelayWorkState;
+};
 
 /** The wire and crypto boundary implemented by the official Lovelace packages. */
 export interface LatticeDelegationDependencies {
-  readonly generateReplyKey: (keyId: string) => Promise<ReplyKeyPair>;
-  readonly buildAgentTaskCommand: (input: {
-    readonly instruction: string;
-    readonly logicalSubmissionId: string;
-    readonly replyPublicKey: string;
-    readonly deadlineAt: Date;
-    readonly model: string;
-    readonly metadata: Record<string, unknown>;
-  }) => unknown;
-  readonly listRuntimes: (connection: LatticeConnectionRow) => Promise<readonly RelayRuntime[]>;
+  readonly generateReplyKey: (keyId: string) => Promise<WorkKeyPair>;
+  readonly buildAgentTaskCommand: (input: BuildAgentTaskOptions) => unknown;
+  readonly listRuntimes: (
+    connection: LatticeConnectionRow,
+  ) => Promise<readonly RelayRuntimeRegistrationView[]>;
   readonly submitWork: (
     connection: LatticeConnectionRow,
-    input: {
-      readonly latticeId: string;
-      readonly accountId: string;
-      readonly controllerId: string;
-      readonly logicalSubmissionId: string;
-      readonly workId: string;
-      readonly plaintext: Uint8Array;
-      readonly deadlineAt: string;
-      readonly keyId: string;
-      readonly recipientPublicKey: string;
-    },
-  ) => Promise<{ readonly workId: string; readonly state: RelayWorkState }>;
+    input: SubmitWorkOptions,
+  ) => Promise<SubmittedWork>;
   readonly pollEvents: (
     connection: LatticeConnectionRow,
     workId: string,
     cursor: string,
-  ) => Promise<{
-    readonly workId: string;
-    readonly state: RelayWorkState;
-    readonly events: readonly RelayEvent[];
-    readonly nextPollAfterMs: number;
-  }>;
+  ) => Promise<SurfaceWorkEventsResponse>;
   readonly openWork: (
     envelope: RelaySealedEnvelope,
     privateKey: string,
@@ -131,11 +68,11 @@ export interface LatticeDelegationDependencies {
   readonly cancelWork: (
     connection: LatticeConnectionRow,
     workId: string,
-  ) => Promise<{ readonly state: RelayWorkState }>;
+  ) => Promise<Pick<SubmittedWork, 'state'>>;
   readonly acknowledgeResult: (
     connection: LatticeConnectionRow,
     workId: string,
-  ) => Promise<{ readonly state: RelayWorkState; readonly acknowledgedAt: string }>;
+  ) => Promise<Pick<SubmittedWork, 'state'> & Pick<RelayWorkResultAcknowledged, 'acknowledgedAt'>>;
 }
 
 /** Counts returned by one bounded scheduler pass. */
@@ -150,11 +87,11 @@ export interface LatticeDelegationSweepResult {
 
 /** Independent emergency controls for relay reads and new submissions. */
 export interface LatticeDelegationSweepOptions {
-  readonly pollingEnabled?: boolean;
-  readonly submissionsEnabled?: boolean;
+  readonly pollingEnabled: boolean;
+  readonly submissionsEnabled: boolean;
 }
 
-interface StoredReplyKey extends ReplyKeyPair {
+interface StoredReplyKey extends WorkKeyPair {
   readonly keyId: string;
 }
 
@@ -190,13 +127,11 @@ export async function prepareLatticeAssignmentRun(
     throw new Error('an enabled Lattice connection with a selected runtime is required');
   }
   const runtimeId = connection.deviceId;
+  const delegationId = genId();
   const workId = `work_${genId()}`;
-  const logicalSubmissionId = `athena:${assignment.id}:${genId()}`;
+  const logicalSubmissionId = `athena:${delegationId}`;
   const replyKey = await deps.generateReplyKey(`docket-reply-${workId}`);
-  const replyKeyCiphertext = storeReplyKey({
-    keyId: `docket-reply-${workId}`,
-    ...replyKey,
-  });
+  const replyKeyCiphertext = storeReplyKey(replyKey);
   const deadlineAt = new Date(now.getTime() + STANDARD_DEADLINE_MS);
 
   return await db.transaction(async (tx) => {
@@ -254,6 +189,7 @@ export async function prepareLatticeAssignmentRun(
       body: { text: prompt, author: 'user', assignmentId: assignment.id },
     });
     await tx.insert(agentDelegation).values({
+      id: delegationId,
       ownerUserId: assignment.ownerUserId,
       organizationId: assignment.organizationId,
       assignmentId: assignment.id,
@@ -281,7 +217,10 @@ export async function prepareLatticeAssignmentRun(
   });
 }
 
-function usableWorkKey(runtime: RelayRuntime, now: Date): RelayWorkKey | null {
+function usableWorkKey(
+  runtime: RelayRuntimeRegistrationView,
+  now: Date,
+): RelayRuntimeRegistrationView['workKeys'][number] | null {
   return (
     runtime.workKeys.find((key) => {
       if (key.revokedAt) return false;
@@ -307,6 +246,7 @@ async function reconcileDecidedProposals(now: Date): Promise<void> {
   const decided = await db
     .select({
       delegationId: agentDelegation.id,
+      sessionId: agentDelegation.sessionId,
       approvalStatus: sessionActivity.approvalStatus,
       body: sessionActivity.body,
     })
@@ -319,21 +259,50 @@ async function reconcileDecidedProposals(now: Date): Promise<void> {
   for (const row of decided) {
     if (row.approvalStatus !== 'applied' && row.approvalStatus !== 'rejected') continue;
     const executionFailed = row.approvalStatus === 'applied' && proposalExecutionFailed(row.body);
-    await db
-      .update(agentDelegation)
-      .set(
+    await db.transaction(async (tx) => {
+      const delegationUpdate =
         row.approvalStatus === 'rejected'
-          ? { status: 'canceled', returnedActivityId: null, settledAt: now }
+          ? { status: 'canceled' as const, returnedActivityId: null, settledAt: now }
           : executionFailed
             ? {
-                status: 'failed',
+                status: 'failed' as const,
                 failureCode: 'task_comment_failed',
                 returnedActivityId: null,
                 settledAt: now,
               }
-            : { status: 'completed', failureCode: null, settledAt: now },
-      )
-      .where(and(eq(agentDelegation.id, row.delegationId), eq(agentDelegation.status, 'proposed')));
+            : { status: 'completed' as const, failureCode: null, settledAt: now };
+      const [claimed] = await tx
+        .update(agentDelegation)
+        .set(delegationUpdate)
+        .where(
+          and(eq(agentDelegation.id, row.delegationId), eq(agentDelegation.status, 'proposed')),
+        )
+        .returning({ id: agentDelegation.id });
+      if (!claimed) return;
+
+      const sessionUpdate =
+        row.approvalStatus === 'rejected'
+          ? {
+              status: 'canceled' as const,
+              currentStep: 'The Lattice result was rejected',
+              currentStepAt: now,
+              endedAt: now,
+            }
+          : executionFailed
+            ? {
+                status: 'failed' as const,
+                currentStep: failureMessage('task_comment_failed'),
+                currentStepAt: now,
+                endedAt: now,
+              }
+            : {
+                status: 'completed' as const,
+                currentStep: 'The Lattice result was added to the assigned task',
+                currentStepAt: now,
+                endedAt: now,
+              };
+      await tx.update(agentSession).set(sessionUpdate).where(eq(agentSession.id, row.sessionId));
+    });
   }
 }
 
@@ -357,6 +326,10 @@ async function settleFailure(
   code: string,
   workState: string | null,
   now: Date,
+  options: {
+    readonly terminalOutcome?: { readonly outcome: string; readonly payload?: unknown };
+    readonly retainReplyKey?: boolean;
+  } = {},
 ): Promise<boolean> {
   return await db.transaction(async (tx) => {
     const [claimed] = await tx
@@ -365,7 +338,10 @@ async function settleFailure(
         status: 'failed',
         failureCode: code,
         workState,
-        replyKeyCiphertext: null,
+        submissionLeaseToken: null,
+        submissionLeaseExpiresAt: null,
+        ...(options.retainReplyKey ? {} : { replyKeyCiphertext: null }),
+        terminalOutcome: options.terminalOutcome,
         returnedActivityId: null,
         nextPollAt: null,
         settledAt: now,
@@ -402,6 +378,7 @@ async function settleCanceled(
   sessionId: string,
   workState: string | null,
   now: Date,
+  terminalOutcome?: { readonly outcome: string; readonly payload?: unknown },
 ): Promise<boolean> {
   return await db.transaction(async (tx) => {
     const [claimed] = await tx
@@ -409,8 +386,11 @@ async function settleCanceled(
       .set({
         status: 'canceled',
         workState,
+        submissionLeaseToken: null,
+        submissionLeaseExpiresAt: null,
         failureCode: null,
         replyKeyCiphertext: null,
+        terminalOutcome,
         nextPollAt: null,
         settledAt: now,
       })
@@ -452,8 +432,6 @@ function failureMessage(code: string): string {
       return 'Athena stopped because the Mac Studio work key expired.';
     case 'runtime_not_found':
       return 'Athena could not find the selected Mac Studio in this Lattice account.';
-    case 'runtime_offline':
-      return 'Athena is waiting because the selected Mac Studio is offline.';
     case 'submission_rejected':
       return 'Athena could not submit this assignment to the selected Mac Studio.';
     case 'relay_unavailable':
@@ -466,6 +444,8 @@ function failureMessage(code: string): string {
       return 'Athena could not finish the assignment on the selected Mac Studio.';
     case 'result_invalid':
       return 'Athena received a Lattice result that did not contain a usable report.';
+    case 'task_comment_failed':
+      return 'Athena could not add the Lattice result to the assigned task.';
     default:
       return 'Athena could not finish the Lattice assignment.';
   }
@@ -507,6 +487,8 @@ async function recordTransientRelayFailure(
       .set({
         failureCode: 'relay_unavailable',
         nextPollAt: new Date(now.getTime() + TRANSIENT_RETRY_MS),
+        submissionLeaseToken: null,
+        submissionLeaseExpiresAt: null,
       })
       .where(eq(agentDelegation.id, row.id));
     await tx
@@ -516,11 +498,41 @@ async function recordTransientRelayFailure(
   });
 }
 
+async function claimPreparedSubmission(
+  row: typeof agentDelegation.$inferSelect,
+  now: Date,
+): Promise<typeof agentDelegation.$inferSelect | null> {
+  const leaseToken = genId();
+  const [claimed] = await db
+    .update(agentDelegation)
+    .set({
+      submissionLeaseToken: leaseToken,
+      submissionLeaseExpiresAt: new Date(now.getTime() + SUBMISSION_LEASE_MS),
+    })
+    .where(
+      and(
+        eq(agentDelegation.id, row.id),
+        eq(agentDelegation.status, 'prepared'),
+        or(
+          isNull(agentDelegation.submissionLeaseExpiresAt),
+          lte(agentDelegation.submissionLeaseExpiresAt, now),
+        ),
+      ),
+    )
+    .returning();
+  return claimed ?? null;
+}
+
 async function submitPrepared(
   row: typeof agentDelegation.$inferSelect,
   now: Date,
   deps: LatticeDelegationDependencies,
 ): Promise<'submitted' | 'failed' | 'skipped'> {
+  if (!(await stillAuthorized(row))) {
+    return (await settleFailure(row.id, row.sessionId, 'access_lost', null, now))
+      ? 'failed'
+      : 'skipped';
+  }
   const [connection] = await db
     .select()
     .from(latticeConnection)
@@ -571,7 +583,14 @@ async function submitPrepared(
       logicalSubmissionId: row.logicalSubmissionId,
       replyPublicKey: replyKey.publicKey,
       deadlineAt: row.deadlineAt,
+      toolPolicy: [],
+      executionMode: 'standard',
       model: 'poolside/laguna-s-2.1',
+      input: {
+        organizationId: row.organizationId,
+        taskId: row.taskId,
+        assignmentId: row.assignmentId,
+      },
       metadata: {
         docketDelegationId: row.id,
         docketSessionId: row.sessionId,
@@ -590,41 +609,71 @@ async function submitPrepared(
       keyId: workKey.keyId,
       recipientPublicKey: workKey.publicKey,
     });
+    const runtimeLastSeenAt = accepted.lastSeenAt ?? runtime.lastSeenAt;
+    const parsedRuntimeLastSeenAt = runtimeLastSeenAt ? new Date(runtimeLastSeenAt) : null;
+    const runtimeMetadata = {
+      runtimeName: runtime.displayName,
+      runtimeReachability: runtime.reachability ?? null,
+      runtimeLastSeenAt:
+        parsedRuntimeLastSeenAt && !Number.isNaN(parsedRuntimeLastSeenAt.getTime())
+          ? parsedRuntimeLastSeenAt
+          : null,
+      relayQueuePosition: accepted.queuePosition ?? null,
+    };
+    if (accepted.state === 'rate_limited' || accepted.state === 'queue_full') {
+      const retryAfterMs = accepted.retryAfterMs ?? TRANSIENT_RETRY_MS;
+      await db.transaction(async (tx) => {
+        await tx
+          .update(agentDelegation)
+          .set({
+            ...runtimeMetadata,
+            workState: accepted.state,
+            nextPollAt: new Date(now.getTime() + retryAfterMs),
+            submissionLeaseToken: null,
+            submissionLeaseExpiresAt: null,
+          })
+          .where(
+            and(
+              eq(agentDelegation.id, row.id),
+              eq(agentDelegation.status, 'prepared'),
+              eq(agentDelegation.submissionLeaseToken, row.submissionLeaseToken ?? ''),
+            ),
+          );
+        await tx
+          .update(agentSession)
+          .set({
+            currentStep:
+              accepted.state === 'rate_limited'
+                ? 'Waiting for the Lattice submission limit to reset'
+                : 'Waiting for space in the selected Lattice runtime queue',
+            currentStepAt: now,
+          })
+          .where(eq(agentSession.id, row.sessionId));
+      });
+      return 'skipped';
+    }
     if (accepted.workId !== row.workId) {
-      if (accepted.state === 'rate_limited' || accepted.state === 'queue_full') {
-        await db.transaction(async (tx) => {
-          await tx
-            .update(agentDelegation)
-            .set({
-              workState: accepted.state,
-              nextPollAt: new Date(now.getTime() + TRANSIENT_RETRY_MS),
-            })
-            .where(and(eq(agentDelegation.id, row.id), eq(agentDelegation.status, 'prepared')));
-          await tx
-            .update(agentSession)
-            .set({
-              currentStep:
-                accepted.state === 'rate_limited'
-                  ? 'Waiting for the Lattice submission limit to reset'
-                  : 'Waiting for space in the selected Lattice runtime queue',
-              currentStepAt: now,
-            })
-            .where(eq(agentSession.id, row.sessionId));
-        });
-        return 'skipped';
-      }
       throw new Error('relay changed the caller-minted work id');
     }
     const [updated] = await db
       .update(agentDelegation)
       .set({
+        ...runtimeMetadata,
         status: 'submitted',
         workState: accepted.state,
         submittedAt: now,
         failureCode: null,
         nextPollAt: new Date(now.getTime() + TRANSIENT_RETRY_MS),
+        submissionLeaseToken: null,
+        submissionLeaseExpiresAt: null,
       })
-      .where(and(eq(agentDelegation.id, row.id), eq(agentDelegation.status, 'prepared')))
+      .where(
+        and(
+          eq(agentDelegation.id, row.id),
+          eq(agentDelegation.status, 'prepared'),
+          eq(agentDelegation.submissionLeaseToken, row.submissionLeaseToken ?? ''),
+        ),
+      )
       .returning({ id: agentDelegation.id });
     if (!updated) return 'skipped';
     await db
@@ -665,7 +714,7 @@ function progressText(payload: unknown): string | null {
 
 async function persistProgress(
   row: typeof agentDelegation.$inferSelect,
-  event: RelayProgressEvent,
+  event: RelayWorkProgressEvent,
   expectedCursor: string,
   payload: unknown,
   workState: RelayWorkState,
@@ -748,8 +797,11 @@ async function proposeResult(
   payload: unknown,
   now: Date,
 ): Promise<boolean> {
+  const terminalOutcome = { outcome: 'completed', payload } as const;
   if (!(await stillAuthorized(row))) {
-    return await settleFailure(row.id, row.sessionId, 'access_lost', 'completed', now);
+    return await settleFailure(row.id, row.sessionId, 'access_lost', 'completed', now, {
+      terminalOutcome,
+    });
   }
   const [assignment] = await db
     .select()
@@ -768,7 +820,9 @@ async function proposeResult(
     .limit(1);
   const report = outputText(payload);
   if (!assignment || !report) {
-    return await settleFailure(row.id, row.sessionId, 'result_invalid', 'completed', now);
+    return await settleFailure(row.id, row.sessionId, 'result_invalid', 'completed', now, {
+      terminalOutcome,
+    });
   }
 
   return await db.transaction(async (tx) => {
@@ -825,7 +879,7 @@ async function proposeResult(
         relayCursor: 'cursor_final',
         replyKeyCiphertext: null,
         nextPollAt: null,
-        terminalOutcome: { outcome: 'completed', payload },
+        terminalOutcome,
         failureCode: null,
         returnedActivityId: activity.id,
         settledAt: now,
@@ -895,6 +949,11 @@ async function pollSubmitted(
   now: Date,
   deps: LatticeDelegationDependencies,
 ): Promise<'polled' | 'proposed' | 'failed' | 'canceled' | 'skipped'> {
+  if (!(await stillAuthorized(row))) {
+    return (await settleFailure(row.id, row.sessionId, 'access_lost', row.workState, now))
+      ? 'failed'
+      : 'skipped';
+  }
   const [connection] = await db
     .select()
     .from(latticeConnection)
@@ -934,7 +993,7 @@ async function pollSubmitted(
     }
     let expectedCursor = row.relayCursor;
     for (const progress of response.events.filter(
-      (event): event is RelayProgressEvent => event.kind === 'progress',
+      (event): event is RelayWorkProgressEvent => event.kind === 'progress',
     )) {
       if (progress.cursor === expectedCursor) continue;
       let payload: unknown;
@@ -950,6 +1009,7 @@ async function pollSubmitted(
           'result_decryption_failed',
           response.state,
           now,
+          { retainReplyKey: true },
         ))
           ? 'failed'
           : 'skipped';
@@ -960,7 +1020,7 @@ async function pollSubmitted(
       expectedCursor = progress.cursor;
     }
     const terminal = response.events.find(
-      (event): event is RelayResultEvent | RelayExpiryEvent => event.kind !== 'progress',
+      (event): event is RelayWorkResultEvent | RelayWorkExpiryEvent => event.kind !== 'progress',
     );
     if (!terminal) {
       await db
@@ -981,7 +1041,9 @@ async function pollSubmitted(
       return 'polled';
     }
     if (terminal.kind === 'expiry') {
-      return (await settleFailure(row.id, row.sessionId, 'work_expired', response.state, now))
+      return (await settleFailure(row.id, row.sessionId, 'work_expired', response.state, now, {
+        terminalOutcome: { outcome: 'expired', payload: terminal },
+      }))
         ? 'failed'
         : 'skipped';
     }
@@ -998,6 +1060,7 @@ async function pollSubmitted(
         'result_decryption_failed',
         response.state,
         now,
+        { retainReplyKey: true },
       ))
         ? 'failed'
         : 'skipped';
@@ -1006,13 +1069,18 @@ async function pollSubmitted(
       return (await proposeResult(row, payload, now)) ? 'proposed' : 'skipped';
     }
     if (terminal.outcome === 'cancelled') {
-      return (await settleCanceled(row.id, row.sessionId, response.state, now))
+      return (await settleCanceled(row.id, row.sessionId, response.state, now, {
+        outcome: terminal.outcome,
+        payload,
+      }))
         ? 'canceled'
         : 'skipped';
     }
     const code =
       terminal.outcome === 'work_key_expired' ? 'runtime_key_expired' : 'execution_failed';
-    return (await settleFailure(row.id, row.sessionId, code, response.state, now))
+    return (await settleFailure(row.id, row.sessionId, code, response.state, now, {
+      terminalOutcome: { outcome: terminal.outcome, payload },
+    }))
       ? 'failed'
       : 'skipped';
   } catch (cause) {
@@ -1031,8 +1099,16 @@ async function pollSubmitted(
 export async function sweepLatticeDelegations(
   now: Date,
   deps: LatticeDelegationDependencies,
-  options: LatticeDelegationSweepOptions = {},
+  options: LatticeDelegationSweepOptions,
 ): Promise<LatticeDelegationSweepResult> {
+  const runtimeOptions = options as LatticeDelegationSweepOptions | null | undefined;
+  if (
+    runtimeOptions == null ||
+    typeof runtimeOptions.pollingEnabled !== 'boolean' ||
+    typeof runtimeOptions.submissionsEnabled !== 'boolean'
+  ) {
+    throw new Error('Lattice scheduler controls are required');
+  }
   const result = {
     polled: 0,
     submitted: 0,
@@ -1042,7 +1118,7 @@ export async function sweepLatticeDelegations(
     acknowledged: 0,
   };
   await reconcileDecidedProposals(now);
-  if (options.pollingEnabled !== false) {
+  if (runtimeOptions.pollingEnabled) {
     const due = await db
       .select()
       .from(agentDelegation)
@@ -1074,7 +1150,13 @@ export async function sweepLatticeDelegations(
       .from(agentDelegation)
       .where(
         and(
-          or(eq(agentDelegation.status, 'proposed'), eq(agentDelegation.status, 'completed')),
+          or(
+            eq(agentDelegation.status, 'proposed'),
+            eq(agentDelegation.status, 'completed'),
+            eq(agentDelegation.status, 'failed'),
+            eq(agentDelegation.status, 'canceled'),
+          ),
+          isNotNull(agentDelegation.terminalOutcome),
           isNull(agentDelegation.resultAcknowledgedAt),
           or(isNull(agentDelegation.nextPollAt), lte(agentDelegation.nextPollAt, now)),
         ),
@@ -1086,7 +1168,7 @@ export async function sweepLatticeDelegations(
     }
   }
 
-  if (options.submissionsEnabled === false) return result;
+  if (!runtimeOptions.submissionsEnabled) return result;
   const prepared = await db
     .select()
     .from(agentDelegation)
@@ -1099,7 +1181,9 @@ export async function sweepLatticeDelegations(
     .orderBy(asc(agentDelegation.nextPollAt), asc(agentDelegation.createdAt))
     .limit(MAX_SUBMIT_BATCH);
   for (const row of prepared) {
-    const outcome = await submitPrepared(row, now, deps);
+    const claimed = await claimPreparedSubmission(row, now);
+    if (!claimed) continue;
+    const outcome = await submitPrepared(claimed, now, deps);
     if (outcome === 'submitted') result.submitted += 1;
     if (outcome === 'failed') result.failed += 1;
   }

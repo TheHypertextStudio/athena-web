@@ -63,6 +63,7 @@ import {
 import { editProposalInput, listProposalGroups } from '../agent/proposals';
 import { cancelLatticeDelegation } from '../agent/lattice-delegations';
 import { latticeDelegationDependencies } from '../agent/lattice-delegation-runtime';
+import { assertHostedExecutionSurface } from '../agent/execution-surface';
 import { loadTranscript } from '../agent/transcript';
 
 /**
@@ -335,6 +336,7 @@ Behavior & side effects: atomically claims a durable \`agent_session_run\` gener
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const { session } = await loadSessionAccess(c, id, 'contribute');
+      assertHostedExecutionSurface(session);
       if (session.executorKind === 'athena' && asynchronousRunnerEnabled()) {
         await admitAthenaGeneration(session, { runnableStatuses: ['pending', 'running'] });
         const { session: current } = await loadSessionAccess(c, id, 'contribute');

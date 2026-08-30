@@ -33,9 +33,9 @@ import type { JSX } from 'react';
 import { useState } from 'react';
 
 import { useActiveOrgIdOptional } from '@/components/active-org';
+import { HEALTH_DOT_CLASS, HEALTH_LABEL } from '@/components/entity-display/health';
 import MentionTextarea from '@/components/mentions/mention-textarea';
 
-import { HEALTH_DOT_CLASS, HEALTH_LABEL } from '../programs/health';
 import { relativeTime } from '../programs/format-time';
 
 /** Resolve an actor id to a display name + kind (passed by the caller). */

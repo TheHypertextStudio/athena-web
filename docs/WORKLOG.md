@@ -7556,6 +7556,74 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   `.env.local` points at a file-backed PGlite database shared by the dev stack and the API test
   suite, so seeding a dev account for screenshots corrupts test runs until `pnpm db:reset`.
 
+### [PROGRAMS-CARDS-001] Make the Programs roster read as a portfolio
+
+- **Completed**: 2026-08-29
+- **Summary**: The Cards lens is now the Program roster's default, and its card carries what the
+  List lens carries — workspace status, health verdict, owner, and the rolled-up project and task
+  counts — instead of a name, a summary, and an activity histogram. The card frame it sits in was
+  repaired, three orphaned Programs modules were deleted, and health gained one shared treatment.
+- **Approach**: Four defects drove the work, each visible in a screenshot rather than inferred.
+  (1) `Card` and its inner `DocketLink` both declared `p-4`, insetting content 32px while the hover
+  checkbox stayed pinned at 16px — outside the content column, in the padding gutter. The link is
+  now the only padding owner, and the checkbox lays over the leading glyph and cross-fades with it,
+  the swap `work-list.tsx` already performed for rows. That also retired the
+  `row.target === 'program' ? 'right-4' : 'left-4'` corner exception. (2) The card discarded four
+  fields `ProgramViewRow` already carried, which made switching to Cards a downgrade; it now renders
+  them, and honours `presentation.properties`, so Display → Properties stops being a control that
+  changes nothing on the only card lens with a real renderer. (3) The activity histogram drew bars
+  with an inline `style={{ height }}` over no baseline, so a run of quiet weeks looked like
+  disconnected 4px dashes; weeks are now full-height tracks filled from the bottom on a four-rung
+  ladder of static heights, an entirely empty window collapses to a single flat rule, and the fill
+  dropped from `primary/45` to `outline` so health keeps the card's only earned colour.
+  (4) The grid's 16rem column minimum truncated nearly every Program name; at 20rem a title wraps to
+  two lines before truncating.
+- **Files changed**:
+  - `apps/web/src/components/work-views/program-work-card.tsx` — rebuilt around a bottom-anchored
+    signal and roll-up band, so those two lines align across every card in a row.
+  - `apps/web/src/components/work-views/work-cards.tsx` — one padding owner, one minimum height, a
+    leading-slot checkbox, a wider grid, and the List lens's own drop-target treatment.
+  - `apps/web/src/components/work-views/card-styles.ts` (new) — the geometry the card, its frame,
+    and the skeleton have to agree on, which is why they used to disagree.
+  - `apps/web/src/components/work-views/row-identity.tsx` (new) — `RowIdentity`, lifted out of
+    `work-list.tsx` so both lenses draw one mark per kind of work. The Cards lens had been rendering
+    an empty `size-6` spacer where a glyph would go.
+  - `apps/web/src/components/entity-display/health.tsx` (new) — one `HealthLabel`, replacing the
+    records `work-list.tsx` and the card each kept privately. The verdict now takes the colour
+    rather than delegating it to a 6px dot.
+  - `apps/web/src/components/work-views/work-view-page.tsx` — Programs default to `cards`, and the
+    loading skeleton follows the layout, so the roster fills in instead of painting list rows and
+    rearranging into a grid.
+  - `apps/web/src/components/work-views/work-list.tsx`, `entity-detail/updates-panel.tsx` — moved
+    onto the shared glyph and health treatment.
+  - Deleted `programs/program-list-ui.tsx`, `programs/program-health.tsx`,
+    `programs/flow-snapshot.tsx`, `programs/health.ts`, `programs/program-catalog.ts` — all
+    unreachable since the roster moved to `WorkViewPage`, and together most of the area's token debt.
+  - `apps/web/tests/work-views/work-cards.test.tsx`, `tests/components/roster-grid-contract.test.ts`
+  - `.claude/launch.json` — a `docket-web-http` entry (see Learnings).
+- **Validation**: Root `typecheck`, `lint`, and `format:check` pass. `pnpm test` passes 25 of 26
+  tasks; `@docket/api` fails 19 tests in `initiatives-detail` and `programs` CRUD, an identical set
+  before and after this change, in a slice that shares no code with it. The Programs card suite
+  covers the roll-up, the property gating, the leading-slot checkbox, and the quiet window.
+  `design-token-debt.json` fell from 682 to 626 and no touched file retains an entry. Screenshots at
+  1440×900 and 390×844 in both themes are in
+  `docs/design/audits/screenshots/2026-08-29-programs-cards/`, and the scorecard is
+  `docs/design/audits/2026-08-29-programs-cards.md` — every dimension at or above 3, every gate green.
+- **Learnings**: The `docket-web` launch entry exports `https://` API URLs, but portless serves a
+  worktree's branch hosts over HTTP only, so every web→API proxy hop fails with `EPROTO` and sign-up
+  never reaches onboarding. Screenshot work from a worktree needs a plain-HTTP localhost stack, which
+  is what the added `docket-web-http` entry is; host-only cookies are shared across ports, so
+  `BETTER_AUTH_COOKIE_DOMAIN` has to be empty there rather than `docket.localhost`. Separately,
+  `TaskCreate` has no `programId` — a task joins a Program through its Project — so seeding a roster
+  with non-zero task counts means creating tasks under the Program's projects.
+- **Retrospective**: The ledger was the fastest way in. `program-list-ui.tsx` carried 28 raw type
+  utilities, which read as the file to fix; it was dead code, and the file actually on screen was
+  three directories away. Checking what the route renders before trusting the debt ranking would have
+  saved a detour. The reverse also held: the two defects that most needed fixing — doubled padding
+  and a histogram with no baseline — were invisible in the source and obvious in a screenshot at 200%.
+
+---
+
 ### [EDITOR-TABLES-002] Attach Markdown table controls to the table
 
 - **Completed**: 2026-08-29

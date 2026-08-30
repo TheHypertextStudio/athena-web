@@ -5,10 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 const root = resolve(import.meta.dirname, '../../../../');
 const rosterGridPath = join(root, 'apps/web/src/components/views/roster-grid.ts');
-const legacyRosterPaths = [
-  join(root, 'apps/web/src/components/programs/program-list-ui.tsx'),
-  join(root, 'apps/web/src/components/teams/team-list-ui.tsx'),
-];
+const legacyRosterPaths = [join(root, 'apps/web/src/components/teams/team-list-ui.tsx')];
 const typedRosterPaths = [
   join(root, 'apps/web/src/app/(app)/orgs/[orgId]/tasks/org-tasks-client.tsx'),
   join(root, 'apps/web/src/app/(app)/orgs/[orgId]/projects/projects-client.tsx'),

@@ -7,12 +7,14 @@ import type { ViewTarget } from '@docket/work/view-contract';
 import { type JSX, type ReactNode } from 'react';
 
 import { useRelationDropTarget } from '@/components/dnd/use-relation-drop-target';
+import { useWorkStatusResolver } from '@/components/entity-display/use-work-status';
 import { ObjectSurface } from '@/components/objects/object-surface';
 
 import DocketLink from '@/components/docket-link';
 import { buildEntityHref } from '@/lib/authenticated-route';
 import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
 
+import { CARD_GLYPH_FADE_CLASS, CARD_GRID_CLASS, CARD_INSET, CARD_MIN_HEIGHT } from './card-styles';
 import type { WorkViewDefinitionFor } from './view-state';
 import { workViewDisplayFieldCatalog } from './view-state';
 import {
@@ -27,10 +29,12 @@ import { ProgramWorkCard } from './program-work-card';
 function WorkObjectCard<TTarget extends ViewTarget>({
   row,
   onActivate,
+  selecting,
   children,
 }: {
   readonly row: WorkViewRowFor<TTarget>;
   readonly onActivate: () => void;
+  readonly selecting: boolean;
   readonly children: ReactNode;
 }): JSX.Element {
   const object = objectForWorkViewRow(row);
@@ -42,11 +46,15 @@ function WorkObjectCard<TTarget extends ViewTarget>({
         role="listitem"
         tabIndex={0}
         data-drop-state={drop.dropState}
+        data-selecting={selecting}
         className={cn(
-          'group/card focus-visible:ring-primary relative min-h-36 cursor-pointer p-4 outline-none focus-visible:ring-2',
+          'group/card focus-visible:ring-primary relative cursor-pointer outline-none focus-visible:ring-2',
+          CARD_MIN_HEIGHT,
           drop.dropProps.className,
-          drop.dropState === 'accept' && 'ring-primary bg-primary/8 ring-2',
-          drop.dropState === 'reject' && 'ring-error/60 bg-error/5 ring-1',
+          // The accept/reject treatment the List lens draws on a row, so a drop target reads the
+          // same whichever lens you are in.
+          drop.dropState === 'accept' && 'ring-primary bg-primary/8 z-10 ring-2 ring-inset',
+          drop.dropState === 'reject' && 'ring-error/60 bg-error/5 z-10 ring-1 ring-inset',
         )}
       >
         {children}
@@ -98,9 +106,12 @@ export function WorkCards<TTarget extends ViewTarget>({
   loadingMoreRows = false,
   onLoadMoreRows,
 }: WorkCardsProps<TTarget>): JSX.Element {
+  const statusOf = useWorkStatusResolver(target);
+  const propertyKeys: ReadonlySet<string> = new Set(definition.presentation.properties);
   const properties = workViewDisplayFieldCatalog(target).filter((field) =>
-    definition.presentation.properties.includes(field.key),
+    propertyKeys.has(field.key),
   );
+  const selecting = selectedIds.size > 0;
   const toggle = (id: string): void => {
     const next = new Set(selectedIds);
     if (next.has(id)) next.delete(id);
@@ -113,23 +124,29 @@ export function WorkCards<TTarget extends ViewTarget>({
       <div
         role="list"
         aria-label={`${target.charAt(0).toUpperCase()}${target.slice(1)} cards`}
-        className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-3 p-1"
+        className={cn(CARD_GRID_CLASS, 'p-1')}
       >
         {rows.map((row) => (
           <WorkObjectCard
             key={row.id}
             row={row}
+            selecting={selecting}
             onActivate={() => {
               onActivate(row);
             }}
           >
+            {/*
+             * Laid over the card's leading glyph, which fades beneath it. It stays outside the
+             * link so a click selects instead of navigating, and its inset matches the content's
+             * so it lands in the column rather than the gutter — it used to be pinned to
+             * whichever corner the target happened to prefer.
+             */}
             <span
               className={cn(
-                selectedIds.size > 0 || selectedIds.has(row.id)
+                selecting || selectedIds.has(row.id)
                   ? 'opacity-100'
                   : 'opacity-0 group-focus-within/card:opacity-100 group-hover/card:opacity-100',
-                'absolute top-4 z-10 transition-opacity',
-                row.target === 'program' ? 'right-4' : 'left-4',
+                'absolute top-4 left-4 z-10 flex size-8 items-center justify-center transition-opacity',
               )}
             >
               <Checkbox
@@ -145,7 +162,10 @@ export function WorkCards<TTarget extends ViewTarget>({
             </span>
             <DocketLink
               href={buildEntityHref(entityNavigationSnapshotFromWorkViewRow(row))}
-              className="focus-visible:ring-primary block min-h-36 rounded-xl p-4 outline-none focus-visible:ring-2"
+              className={cn(
+                'focus-visible:ring-primary flex h-full flex-col rounded-xl outline-none focus-visible:ring-2',
+                CARD_INSET,
+              )}
               onClick={(event) => {
                 if (
                   event.button !== 0 ||
@@ -160,28 +180,32 @@ export function WorkCards<TTarget extends ViewTarget>({
               }}
             >
               {row.target === 'program' ? (
-                <ProgramWorkCard row={row} />
+                <ProgramWorkCard row={row} properties={propertyKeys} />
               ) : (
-                <div className="flex items-start gap-3">
-                  <CardIdentity row={row} />
-                  <div className="min-w-0 flex-1">
-                    <h2 className="text-title-medium truncate">{workViewRowTitle(row)}</h2>
-                    {properties.length > 0 ? (
-                      <dl className="text-on-surface-variant text-body-small mt-3 grid gap-1">
-                        {properties.map((field) => (
-                          <div key={field.key} className="flex min-w-0 gap-2">
-                            <dt className="shrink-0">{field.label}</dt>
-                            <dd className="truncate">
-                              {formatWorkViewValue(
-                                workViewRowDisplayValue(row, field.key),
-                                field.kind,
-                              )}
-                            </dd>
-                          </div>
-                        ))}
-                      </dl>
-                    ) : null}
+                <div className="flex min-w-0 flex-col gap-3">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <span className={CARD_GLYPH_FADE_CLASS}>
+                      <CardIdentity row={row} />
+                    </span>
+                    <h2 className="text-title-medium line-clamp-2 min-w-0 flex-1">
+                      {workViewRowTitle(row)}
+                    </h2>
                   </div>
+                  {properties.length > 0 ? (
+                    <dl className="text-on-surface-variant text-body-small grid gap-1">
+                      {properties.map((field) => (
+                        <div key={field.key} className="flex min-w-0 gap-2">
+                          <dt className="shrink-0">{field.label}</dt>
+                          <dd className="truncate">
+                            {formatWorkViewValue(
+                              workViewRowDisplayValue(row, field.key),
+                              field.kind,
+                            )}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  ) : null}
                 </div>
               )}
             </DocketLink>

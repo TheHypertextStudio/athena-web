@@ -22,7 +22,7 @@ import { CheckCircle2, CircleDashed, CircleDot, FolderKanban, RefreshCw } from '
 import type { JSX, ReactNode } from 'react';
 
 import { relativeTime } from './format-time';
-import { HEALTH_DOT_CLASS, HEALTH_LABEL } from './health';
+import { HEALTH_DOT_CLASS, HEALTH_LABEL } from '@/components/entity-display/health';
 
 /** The flow metrics the snapshot reports, rolled up from the program's work + structure. */
 export interface FlowMetrics {

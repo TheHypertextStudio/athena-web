@@ -6,7 +6,7 @@ import { ActorAvatar } from '@docket/ui/components';
 import type { JSX } from 'react';
 
 import { relativeTime } from '@/components/programs/format-time';
-import { HEALTH_DOT_CLASS, HEALTH_LABEL } from '@/components/programs/health';
+import { HEALTH_DOT_CLASS, HEALTH_LABEL } from '@/components/entity-display/health';
 
 /** Props for {@link LatestUpdateSummary}. */
 export interface LatestUpdateSummaryProps {

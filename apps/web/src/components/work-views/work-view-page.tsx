@@ -32,6 +32,7 @@ import {
   Select,
   Skeleton,
 } from '@docket/ui/primitives';
+import { cn } from '@docket/ui/lib/utils';
 import type { ViewTarget } from '@docket/work/view-contract';
 import { Fragment, type JSX, useCallback, useEffect, useRef, useState } from 'react';
 
@@ -46,6 +47,7 @@ import { openEntity } from '@/lib/local-first-navigation';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, type RpcResponse, useApiQuery } from '@/lib/query';
 
+import { CARD_GRID_CLASS, CARD_MIN_HEIGHT } from './card-styles';
 import { InitiativeTimeline } from './initiative-timeline';
 import { ProjectDependencyLens } from './project-dependency-lens';
 import { ProjectTimelineAdapter } from './project-timeline-adapter';
@@ -93,7 +95,10 @@ const FALLBACKS = {
     filter: null,
     arrangement: { groupBy: null, subGroupBy: null, orderBy: [] },
     presentation: {
-      layout: 'list',
+      // Programs are discrete ongoing commitments rather than a queue to work down, so the
+      // roster's job is "which of these needs me?" — a question a grid of cards answers at a
+      // glance and a flat list of rows makes you read for.
+      layout: 'cards',
       properties: ['status', 'health', 'owner', 'projectCount', 'taskCount'],
       density: 'compact',
       showEmptyGroups: false,
@@ -325,6 +330,40 @@ export function WorkViewPage<TTarget extends ViewTarget>({
           create([], returnFocusTo);
         }}
       />
+    );
+  } else if (controller.loading && layout === 'cards') {
+    // Placeholder: the cards themselves — how many there are, and each one's name, summary,
+    // verdict and activity. Shaped like the loaded card on the loaded card's own grid, because a
+    // list-shaped placeholder under a card lens does not fill in so much as rearrange itself.
+    content = (
+      <div
+        className={cn(CARD_GRID_CLASS, 'p-1')}
+        aria-label={`Loading ${copy.title.toLowerCase()}`}
+      >
+        {Array.from({ length: 6 }, (_, index) => (
+          <div
+            key={index}
+            className={cn(
+              'bg-surface-container-low flex flex-col gap-3 rounded-xl p-4',
+              CARD_MIN_HEIGHT,
+            )}
+          >
+            <div className="flex items-start gap-3">
+              <Skeleton className="size-8 shrink-0 rounded-full" />
+              <Skeleton className="h-4 flex-1 rounded" />
+            </div>
+            <Skeleton className="h-3 w-full rounded" />
+            <Skeleton className="h-3 w-2/3 rounded" />
+            <div className="mt-auto flex items-end justify-between gap-3">
+              <div className="flex flex-col gap-1">
+                <Skeleton className="h-3 w-20 rounded" />
+                <Skeleton className="h-3 w-24 rounded" />
+              </div>
+              <Skeleton className="h-8 w-24 rounded" />
+            </div>
+          </div>
+        ))}
+      </div>
     );
   } else if (controller.loading) {
     content = (

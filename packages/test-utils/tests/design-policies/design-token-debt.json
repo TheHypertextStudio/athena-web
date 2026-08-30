@@ -12,7 +12,7 @@
     "raw-type-utility": 3
   },
   "apps/admin/src/app/(admin)/orgs/[id]/page.tsx": {
-    "raw-type-utility": 9
+    "raw-type-utility": 3
   },
   "apps/admin/src/app/(admin)/orgs/page.tsx": {
     "raw-type-utility": 2
@@ -46,16 +46,16 @@
     "raw-type-utility": 5
   },
   "apps/web/src/app/(app)/orgs/[orgId]/initiatives/[initiativeId]/initiative-detail-client.tsx": {
-    "raw-type-utility": 11
+    "raw-type-utility": 10
   },
   "apps/web/src/app/(app)/orgs/[orgId]/my-work/my-work-client.tsx": {
-    "raw-type-utility": 3
+    "raw-type-utility": 2
   },
   "apps/web/src/app/(app)/orgs/[orgId]/programs/[programId]/program-detail-client.tsx": {
     "raw-type-utility": 3
   },
   "apps/web/src/app/(app)/orgs/[orgId]/projects/[projectId]/project-detail-client.tsx": {
-    "raw-type-utility": 9
+    "raw-type-utility": 5
   },
   "apps/web/src/app/(app)/orgs/[orgId]/sessions/[sessionId]/page.tsx": {
     "raw-type-utility": 3
@@ -70,7 +70,7 @@
     "raw-type-utility": 3
   },
   "apps/web/src/app/(app)/orgs/[orgId]/views/page.tsx": {
-    "raw-type-utility": 4
+    "raw-type-utility": 3
   },
   "apps/web/src/app/(app)/portfolio/portfolio-client.tsx": {
     "raw-type-utility": 1
@@ -284,15 +284,6 @@
   "apps/web/src/components/portfolio/org-filter-chips.tsx": {
     "raw-type-utility": 2
   },
-  "apps/web/src/components/programs/flow-snapshot.tsx": {
-    "raw-type-utility": 4
-  },
-  "apps/web/src/components/programs/program-health.tsx": {
-    "raw-type-utility": 6
-  },
-  "apps/web/src/components/programs/program-list-ui.tsx": {
-    "raw-type-utility": 28
-  },
   "apps/web/src/components/project-detail/agent-activity-feed.tsx": {
     "raw-type-utility": 4
   },
@@ -343,7 +334,7 @@
     "raw-type-utility": 4
   },
   "apps/web/src/components/teams/team-list-ui.tsx": {
-    "raw-type-utility": 14
+    "raw-type-utility": 10
   },
   "apps/web/src/components/teams/team-picker.tsx": {
     "raw-type-utility": 1
@@ -404,7 +395,7 @@
     "raw-type-utility": 4
   },
   "packages/ui/src/components/shell/WorkspaceSwitcher.tsx": {
-    "raw-type-utility": 6
+    "raw-type-utility": 5
   },
   "packages/ui/src/components/views/EntityListRow.tsx": {
     "raw-type-utility": 3

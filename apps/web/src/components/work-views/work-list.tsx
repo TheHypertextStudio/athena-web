@@ -25,10 +25,10 @@ import { useRelationDropTarget } from '@/components/dnd/use-relation-drop-target
 import { useDragState } from '@/components/dnd/drag-context';
 import DocketLink from '@/components/docket-link';
 import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
+import { HealthLabel } from '@/components/entity-display/health';
 import { useWorkStatusResolver } from '@/components/entity-display/use-work-status';
 import { WorkStatusIcon } from '@/components/entity-display/work-status';
 import { formatDate } from '@/components/initiatives/format-date';
-import { HEALTH_FILL_CLASS } from '@/components/initiatives/health';
 import { ObjectSurface } from '@/components/objects/object-surface';
 import { PriorityGlyph } from '@/components/task-detail/PriorityGlyph';
 import type { ObjectRef } from '@/lib/actions';
@@ -83,18 +83,6 @@ const TARGET_LABEL = {
   program: 'Program',
   initiative: 'Initiative',
 } as const;
-
-const HEALTH_LABEL: Record<Health, string> = {
-  on_track: 'On track',
-  at_risk: 'At risk',
-  off_track: 'Off track',
-};
-
-const HEALTH_TEXT_CLASS: Record<Health, string> = {
-  on_track: 'text-state-completed',
-  at_risk: 'text-state-canceled',
-  off_track: 'text-error',
-};
 
 const FIELD_WIDTH: Record<string, string> = {
   status: 'w-32',
@@ -383,14 +371,7 @@ function PropertyValue({
     return <PriorityGlyph priority={value as 'urgent' | 'high' | 'medium' | 'low' | 'none'} />;
   }
   if (field.key === 'health' && (value === null || typeof value === 'string')) {
-    if (value === null) return <span>—</span>;
-    const health = value as Health;
-    return (
-      <span className={`${HEALTH_TEXT_CLASS[health]} text-label-medium flex items-center gap-2`}>
-        <span className={`${HEALTH_FILL_CLASS[health]} size-1.5 rounded-full`} />
-        {HEALTH_LABEL[health]}
-      </span>
-    );
+    return <HealthLabel health={value as Health | null} />;
   }
   if (actor) {
     return (

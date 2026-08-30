@@ -6,7 +6,7 @@ import { FolderKanban, Layers, Target } from '@docket/ui/icons';
 import { DecorativeIcon } from '@docket/ui/primitives';
 import type { JSX, ReactNode } from 'react';
 
-import { HEALTH_DOT_CLASS, HEALTH_LABEL } from '@/components/programs/health';
+import { HEALTH_DOT_CLASS, HEALTH_LABEL } from '@/components/entity-display/health';
 
 /** Props for {@link InitiativeOverviewSummary}. */
 export interface InitiativeOverviewSummaryProps {

@@ -55,6 +55,10 @@ const task = TaskViewRow.parse({
   isContext: false,
 });
 
+/** Fixture values the assertions share with the row, so neither drifts from the other. */
+const PROGRAM_SUMMARY = 'Coordinate advocacy with regional partners.';
+const PROGRAM_LAST_ACTIVE = '2026-08-23T00:00:00.000Z';
+
 const programDefinition = ProgramViewDefinition.parse({
   version: 2,
   target: 'program',
@@ -62,7 +66,7 @@ const programDefinition = ProgramViewDefinition.parse({
   arrangement: { groupBy: null, subGroupBy: null, orderBy: [] },
   presentation: {
     layout: 'cards',
-    properties: ['status', 'owner', 'projectCount', 'taskCount'],
+    properties: ['status', 'health', 'owner', 'projectCount', 'taskCount'],
     density: 'compact',
     showEmptyGroups: false,
   },
@@ -73,7 +77,7 @@ const program = ProgramViewRow.parse({
   organizationId: '01ARZ3NDEKTSV4RRFFQ69G5FA0',
   id: '01ARZ3NDEKTSV4RRFFQ69G5FA2',
   name: 'Transit coalition partnerships',
-  summary: 'Coordinate advocacy with regional partners.',
+  summary: PROGRAM_SUMMARY,
   status: 'active',
   health: 'at_risk',
   owner: '01ARZ3NDEKTSV4RRFFQ69G5FE0',
@@ -94,7 +98,7 @@ const program = ProgramViewRow.parse({
   isContext: false,
   activity: {
     weeks: [0, 2, 1, 3, 0, 4, 2, 5],
-    latestOccurredAt: '2026-08-23T00:00:00.000Z',
+    latestOccurredAt: PROGRAM_LAST_ACTIVE,
   },
 });
 
@@ -178,8 +182,8 @@ describe('WorkCards', () => {
     expect(screen.getByText('Willie Chalmers III')).toBeVisible();
   });
 
-  it('renders a Program card around health and visible activity instead of its generic properties', () => {
-    render(
+  it('renders a Program card around its own name, verdict, owner, and visible activity', () => {
+    const { container } = render(
       <WorkCards
         target="program"
         definition={programDefinition}
@@ -191,26 +195,79 @@ describe('WorkCards', () => {
     );
 
     expect(screen.getByRole('link', { name: /Transit coalition partnerships/ })).toBeVisible();
-    expect(
-      screen.getByRole('checkbox', { name: 'Select Transit coalition partnerships' }).parentElement
-        ?.parentElement,
-    ).toHaveClass('right-4');
-    expect(screen.getByText('Coordinate advocacy with regional partners.')).toBeVisible();
-    expect(screen.getByText('At risk')).toBeVisible();
+    expect(screen.getByText(PROGRAM_SUMMARY)).toBeVisible();
+
+    // The roll-up the List lens shows: the owner by name and both child counts, so switching lens
+    // changes how the roster is arranged rather than how much of it you are allowed to see.
+    expect(screen.getByText('Willie Chalmers III')).toBeVisible();
+    expect(screen.getByText(String(program.projectCount))).toBeVisible();
+    expect(screen.getByText(String(program.taskCount))).toBeVisible();
+
+    // Recency stays a real `<time>`, so it carries the machine-readable instant as well as its
+    // rendered phrasing.
+    expect(container.querySelector('time')).toHaveAttribute('dateTime', PROGRAM_LAST_ACTIVE);
+
+    // Every week keeps its own bucket and its own accessible name, including the quiet ones — a
+    // week with no events is an empty track rather than a missing bar.
     expect(
       screen.getByLabelText('Activity over the last 8 weeks: 0, 2, 1, 3, 0, 4, 2, 5'),
     ).toBeVisible();
     expect(screen.getAllByRole('listitem')).toHaveLength(9);
     expect(screen.getByRole('listitem', { name: 'Week 1: 0 events' })).toBeVisible();
-    expect(screen.getByRole('listitem', { name: 'Week 2: 2 events' })).toBeVisible();
     expect(screen.getByRole('listitem', { name: 'Week 3: 1 event' })).toBeVisible();
     expect(screen.getByRole('listitem', { name: 'Week 8: 5 events' })).toBeVisible();
-    expect(screen.getByText(/active/i)).toBeVisible();
-    expect(screen.queryByText('Status')).not.toBeInTheDocument();
-    expect(screen.queryByText('Owner')).not.toBeInTheDocument();
+
+    // The generic property list is what the Program card replaces, not something it also renders.
     expect(screen.queryByText('Project count')).not.toBeInTheDocument();
     expect(screen.queryByText('Task count')).not.toBeInTheDocument();
+  });
+
+  it('leaves the selection checkbox in the leading slot rather than a per-target corner', () => {
+    render(
+      <WorkCards
+        target="program"
+        definition={programDefinition}
+        rows={[program]}
+        selectedIds={new Set()}
+        onSelectionChange={vi.fn()}
+        onActivate={vi.fn()}
+      />,
+    );
+
+    // Programs used to be the one target whose checkbox was pinned to the opposite corner, where
+    // it sat in the card's padding gutter instead of over the identity glyph it replaces.
+    const slot = screen.getByRole('checkbox', { name: 'Select Transit coalition partnerships' })
+      .parentElement?.parentElement;
+    expect(slot).toHaveClass('left-4');
+    expect(slot).not.toHaveClass('right-4');
+  });
+
+  it('shows only the properties the view has switched on', () => {
+    const bareDefinition = ProgramViewDefinition.parse({
+      ...programDefinition,
+      presentation: { ...programDefinition.presentation, properties: [] },
+    });
+
+    render(
+      <WorkCards
+        target="program"
+        definition={bareDefinition}
+        rows={[program]}
+        selectedIds={new Set()}
+        onSelectionChange={vi.fn()}
+        onActivate={vi.fn()}
+      />,
+    );
+
+    // Name, summary, and activity are the card itself and always render; everything else answers
+    // to Display → Properties, which used to do nothing at all on this lens.
+    expect(screen.getByRole('link', { name: /Transit coalition partnerships/ })).toBeVisible();
+    expect(
+      screen.getByLabelText('Activity over the last 8 weeks: 0, 2, 1, 3, 0, 4, 2, 5'),
+    ).toBeVisible();
     expect(screen.queryByText('Willie Chalmers III')).not.toBeInTheDocument();
+    expect(screen.queryByText(String(program.projectCount))).not.toBeInTheDocument();
+    expect(screen.queryByText(String(program.taskCount))).not.toBeInTheDocument();
   });
 
   it('renders a quiet Program pulse when its activity summary has no events', () => {
@@ -232,10 +289,15 @@ describe('WorkCards', () => {
       />,
     );
 
-    expect(
-      screen.getByLabelText('Activity over the last 8 weeks: 0, 0, 0, 0, 0, 0, 0, 0'),
-    ).toBeVisible();
+    // An empty window collapses to one flat baseline instead of eight tall empty tracks, so a
+    // roster of quiet Programs is not a wall of slots drawing the eye to missing information.
+    expect(screen.getByRole('img', { name: 'No activity in the last 8 weeks' })).toBeVisible();
+    expect(screen.queryByRole('listitem', { name: /^Week 1:/ })).not.toBeInTheDocument();
     expect(screen.getByText('No recent activity')).toBeVisible();
+
+    // No verdict set means no verdict shown — the em dash a table column needs for alignment
+    // would just be a stray mark here.
     expect(screen.queryByText('At risk')).not.toBeInTheDocument();
+    expect(screen.queryByText('—')).not.toBeInTheDocument();
   });
 });

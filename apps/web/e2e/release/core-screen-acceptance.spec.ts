@@ -184,8 +184,8 @@ test('every primary authenticated screen and local-first detail settles', async 
   const details: readonly DetailCase[] = [
     {
       name: 'Task detail',
-      href: orgHref(orgId, `tasks/${ids.taskId}`),
-      aggregatePath: `/v1/orgs/${orgId}/tasks/${ids.taskId}/aggregate-detail`,
+      href: orgHref(orgId, `tasks/${fixture.taskId}`),
+      aggregatePath: `/v1/orgs/${orgId}/tasks/${fixture.taskId}/aggregate-detail`,
       loadedControl: { role: 'heading', name: 'Screen acceptance task' },
     },
     {

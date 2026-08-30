@@ -13,6 +13,9 @@ test('work view overlays keep their controls reachable on a short phone viewport
     waitUntil: 'domcontentloaded',
     timeout: TIMEOUTS.pageReady,
   });
+  // The document can reach domcontentloaded before React attaches the trigger handler. The visual
+  // contract starts only after the control is live, otherwise the test clicks inert SSR markup.
+  await page.waitForTimeout(500);
 
   await page.getByRole('button', { name: 'Filter' }).click();
   const filter = page.getByRole('dialog', { name: 'Filter tasks' });

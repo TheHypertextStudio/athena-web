@@ -292,6 +292,17 @@
   connector label. A behavioral test opens the real Athena dialog from the visible destination;
   the complete panel file passes 8/8, Web typecheck passes, affected ESLint is clean, and Prettier
   reports the changed files canonical.
+- **Shipping release validation**: The complete integrations MCP directory passes 205 tests; the
+  root typecheck passes 26/26 tasks, root lint passes 25/25 tasks, and the canonical production
+  build passes API, Runner, Admin, Web, and the generated service worker. The single bounded root
+  test run reached 3,646 passing Web tests before both canvas timing budgets exceeded their limits
+  under concurrent monorepo load; the isolated Web performance command passes 2/2. The API work-
+  view performance command passes 2/2 and the OpenAPI richness contract passes 2/2 in their
+  isolated release configurations. Root coverage reached and passed integrations with 1,026 tests
+  at 94.65% statements, 90.14% branches, 96.48% functions, and 95.20% lines, then stopped because
+  five unrelated repository-wide source scans timed out while 24 coverage tasks ran concurrently.
+  No full-suite or coverage loop was repeated; the reproducible MCP Apps, Lattice, contract,
+  performance, type, lint, and production-build gates are green.
 - **Production official-map CSP repair**: Direct browser inspection showed that the unchanged
   pinned map app loaded inside Athena's exact inner sandbox but Cesium stopped before
   `App.connect()`: its runtime uses `new Function` and blob-backed workers. The host now permits

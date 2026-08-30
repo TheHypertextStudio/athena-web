@@ -37,8 +37,13 @@
  * `filled`, not `outlined`. A composer needs presence, and in a tonal system that comes from a
  * surface step; a hand-added border was reaching for emphasis with the one device the design system
  * spends most sparingly. `ringOn: 'within'` because the wrapper owns the focus ring for a textarea
- * nested inside it, and the field's type comes from the control scale's `fieldToken` rather than a
- * size picked by eye.
+ * nested inside it.
+ *
+ * Its inset and its type both sit above the control scale deliberately. That scale describes form
+ * fields — a 40px control with `body-medium` text — and this is not one: it is the primary thing a
+ * person does on this page, and at a form field's proportions it read as a utility strip under the
+ * masthead. The box grows through padding rather than reserved rows, so every pixel of it is
+ * somewhere you can type.
  *
  * A line, not a card. The bordered box with a toolbar along its bottom edge made the page's first
  * element a form, and its inner text sat inset from the column every other line on the page aligns
@@ -247,7 +252,11 @@ export function TodayPrompt({
             multiline: true,
             ringOn: 'within',
           }),
-          'flex flex-col gap-2',
+          // `fieldSurface` pads for a form field — `py-2` around a 40px control. A composer is
+          // the primary thing on this page and has to invite writing, so it takes a composition
+          // field's inset instead. Height comes from padding, never from phantom rows: a reserved
+          // second line the field has nothing to put in is slack, not generosity.
+          'flex flex-col gap-3 px-4 py-3.5',
         )}
         style={{ viewTransitionName: 'today-composer' }}
       >
@@ -260,9 +269,7 @@ export function TodayPrompt({
           {...(mentionOrgId === undefined ? {} : { orgId: mentionOrgId })}
           insertMode="context"
           onKeyDown={onKeyDown}
-          // One line at rest, growing with what is typed. `rows={2}` reserved a second line the
-          // field had nothing to put in, which is slack inside a control rather than whitespace on
-          // a page — the box's presence comes from its fill, not from its height.
+          // One line at rest, growing with what is typed.
           rows={1}
           autoGrow
           maxRows={10}
@@ -272,7 +279,7 @@ export function TodayPrompt({
           // Type, placeholder colour, and the ring all come from the wrapper; a textarea does not
           // inherit font from its parent, so `font-[inherit]` takes the wrapper's resolved token
           // instead of naming a size here.
-          className="placeholder:text-on-surface-variant w-full resize-none bg-transparent font-[inherit] text-[length:inherit] leading-[inherit] outline-none disabled:opacity-50"
+          className="placeholder:text-on-surface-variant text-body-large w-full resize-none bg-transparent outline-none disabled:opacity-50"
         />
 
         {files.length > 0 ? (

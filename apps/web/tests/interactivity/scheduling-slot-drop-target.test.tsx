@@ -10,7 +10,10 @@ import type { ObjectRef } from '../../src/lib/actions/object';
 
 let currentSource: { readonly data: unknown } | null = null;
 let droppableInput: unknown;
-let monitor: { readonly onDragMove?: (event: unknown) => void } = {};
+let monitor: {
+  readonly onDragMove?: (event: unknown) => void;
+  readonly onDragEnd?: (event: unknown) => void;
+} = {};
 
 vi.mock('@dnd-kit/react', () => ({
   useDragOperation: () => ({ source: currentSource, target: null }),
@@ -36,6 +39,55 @@ const slot: ObjectRef = {
   title: '10:00 AM',
 };
 
+interface CollisionInput {
+  readonly droppable: {
+    readonly id: string;
+    readonly shape: {
+      readonly center: { readonly x: number; readonly y: number };
+      readonly containsPoint: () => boolean;
+    };
+  };
+  readonly dragOperation: {
+    readonly source: { readonly data: unknown } | null;
+    readonly position: { readonly current: { readonly x: number; readonly y: number } };
+  };
+}
+
+interface DroppableInput {
+  readonly id: string;
+  readonly collisionPriority?: number;
+  readonly collisionDetector?: (input: CollisionInput) => { readonly priority: number } | null;
+}
+
+function collisionPriorityFor(source: { readonly data: unknown } | null): number | undefined {
+  const input = droppableInput as DroppableInput;
+  return input.collisionDetector?.({
+    droppable: {
+      id: input.id,
+      shape: {
+        center: { x: 0, y: 0 },
+        containsPoint: () => true,
+      },
+    },
+    dragOperation: {
+      source,
+      position: { current: { x: 20, y: 20 } },
+    },
+  })?.priority;
+}
+
+function source(actionScope: 'all' | 'reference'): { readonly data: unknown } {
+  return {
+    data: {
+      kind: 'docket-object',
+      object: task,
+      objects: [task],
+      sourceSurfaceId: 'tasks-list',
+      actionScope,
+    },
+  };
+}
+
 function Target(): React.JSX.Element {
   const drop = useSchedulingSlotDropTarget({
     startMinutesAt: () => 600,
@@ -49,15 +101,7 @@ function Target(): React.JSX.Element {
 }
 
 beforeEach(() => {
-  currentSource = {
-    data: {
-      kind: 'docket-object',
-      object: task,
-      objects: [task],
-      sourceSurfaceId: 'reference-tasks',
-      actionScope: 'reference',
-    },
-  };
+  currentSource = source('reference');
   droppableInput = undefined;
   monitor = {};
 });
@@ -100,8 +144,51 @@ describe('useSchedulingSlotDropTarget', () => {
     expect(screen.getByTestId('target')).toHaveAttribute('data-drop-state', 'reject');
     expect(screen.getByTestId('target')).not.toHaveTextContent('Schedule at 10:00 AM');
     expect(droppableInput).toMatchObject({
-      collisionPriority: -2,
       data: { canDrop: false, effectLabel: null },
+    });
+    expect(collisionPriorityFor(currentSource)).toBe(-2);
+  });
+
+  it('resolves and commits a writable slot without waiting for source state to render', async () => {
+    const activeSource = source('all');
+    currentSource = null;
+    const run = vi.fn();
+    const registry = createActionRegistry();
+    registry.register(
+      'task',
+      defineActionDomain('task', [
+        {
+          id: 'task.schedule',
+          relationId: 'task.calendar-slot',
+          label: 'Schedule task',
+          objectKinds: ['task'],
+          run,
+        },
+      ]),
+    );
+    render(
+      <ActionRegistryProvider registry={registry}>
+        <Target />
+      </ActionRegistryProvider>,
+    );
+
+    expect((droppableInput as DroppableInput).collisionPriority).toBeUndefined();
+    expect(collisionPriorityFor(activeSource)).toBe(2);
+
+    const input = droppableInput as DroppableInput;
+    act(() => {
+      monitor.onDragEnd?.({
+        nativeEvent: { clientY: 20 },
+        operation: {
+          source: activeSource,
+          target: { id: input.id },
+          position: { current: { x: 20, y: 20 } },
+        },
+      });
+    });
+
+    await vi.waitFor(() => {
+      expect(run).toHaveBeenCalledOnce();
     });
   });
 });

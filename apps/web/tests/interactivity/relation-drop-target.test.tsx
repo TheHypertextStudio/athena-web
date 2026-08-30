@@ -29,6 +29,43 @@ vi.mock('@dnd-kit/react', () => ({
 
 let droppableInput: unknown;
 
+interface CollisionInput {
+  readonly droppable: {
+    readonly id: string;
+    readonly shape: {
+      readonly center: { readonly x: number; readonly y: number };
+      readonly containsPoint: () => boolean;
+    };
+  };
+  readonly dragOperation: {
+    readonly source: { readonly data: unknown } | null;
+    readonly position: { readonly current: { readonly x: number; readonly y: number } };
+  };
+}
+
+interface DroppableInput {
+  readonly id: string;
+  readonly collisionPriority?: number;
+  readonly collisionDetector?: (input: CollisionInput) => { readonly priority: number } | null;
+}
+
+function collisionPriorityFor(source: { readonly data: unknown } | null): number | undefined {
+  const input = droppableInput as DroppableInput;
+  return input.collisionDetector?.({
+    droppable: {
+      id: input.id,
+      shape: {
+        center: { x: 0, y: 0 },
+        containsPoint: () => true,
+      },
+    },
+    dragOperation: {
+      source,
+      position: { current: { x: 1, y: 1 } },
+    },
+  })?.priority;
+}
+
 const task: ObjectRef = {
   kind: 'task',
   id: 'task-1',
@@ -76,6 +113,39 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('useRelationDropTarget', () => {
+  it('resolves collision priority from a source that appears after the target mounts', () => {
+    const activeSource = currentSource;
+    if (activeSource === null) throw new Error('expected an active source fixture');
+    currentSource = null;
+    const registry = createActionRegistry();
+    registry.register(
+      'task',
+      defineActionDomain('task', [
+        {
+          id: 'task.moveToProject',
+          relationId: 'task.project',
+          label: 'Move to project',
+          objectKinds: ['task'],
+          run: () => undefined,
+        },
+      ]),
+    );
+
+    render(
+      <ActionRegistryProvider registry={registry}>
+        <Target />
+      </ActionRegistryProvider>,
+    );
+
+    expect((droppableInput as DroppableInput).collisionPriority).toBeUndefined();
+    expect(collisionPriorityFor(activeSource)).toBe(4);
+
+    cleanup();
+    currentSource = null;
+    render(<Target object={task} execute={vi.fn().mockResolvedValue('unchanged')} />);
+    expect(collisionPriorityFor(activeSource)).toBe(-1);
+  });
+
   it('resolves source and target through the domain catalog and registered relation action', () => {
     const registry = createActionRegistry();
     registry.register(
@@ -100,8 +170,9 @@ describe('useRelationDropTarget', () => {
     expect(screen.getByTestId('target')).toHaveTextContent('Move to Launch Athena');
     expect(droppableInput).toMatchObject({
       type: 'docket-relation-target',
-      collisionPriority: 4,
+      collisionDetector: expect.any(Function),
     });
+    expect(collisionPriorityFor(currentSource)).toBe(4);
   });
 
   it('dispatches the one registered relation action with ordered subjects and target', async () => {
@@ -180,9 +251,9 @@ describe('useRelationDropTarget', () => {
     expect(screen.getByTestId('target')).toHaveAttribute('data-drop-state', 'reject');
     expect(screen.getByTestId('target')).not.toHaveTextContent('Move to Launch Athena');
     expect(droppableInput).toMatchObject({
-      collisionPriority: -1,
       data: { canDrop: false, effectLabel: null },
     });
+    expect(collisionPriorityFor(currentSource)).toBe(-1);
     expect(run).not.toHaveBeenCalled();
   });
 
@@ -249,6 +320,6 @@ describe('useRelationDropTarget', () => {
     expect(screen.getByTestId('target')).toHaveTextContent(
       'This item belongs to another workspace',
     );
-    expect(droppableInput).toMatchObject({ collisionPriority: -1 });
+    expect(collisionPriorityFor(currentSource)).toBe(-1);
   });
 });

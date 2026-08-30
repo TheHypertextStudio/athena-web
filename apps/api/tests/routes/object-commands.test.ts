@@ -7,6 +7,7 @@ import type * as DbModule from '@docket/db';
 import type objectCommandsRouter from '../../src/routes/object-commands';
 import type projectsRouter from '../../src/routes/projects';
 import type { AppEnv } from '../../src/context';
+import { MAX_OBJECT_COMMAND_BYTES } from '../../src/lib/http-limits';
 import { idempotency } from '../../src/lib/idempotency';
 import { flushDeferredWork } from '../../src/lib/after-response';
 import { EntityWriteBus, type EntityWriteEvent } from '../../src/events/entity-write-bus';
@@ -1048,6 +1049,130 @@ describe('object commands', () => {
         effect: 'allow',
       });
     }
+  });
+
+  it('renames a Task through a replay-safe property command', async () => {
+    const seeded = await seedTaskAccessOrg(db, schema, 'contribute');
+    const [row] = await db
+      .insert(schema.task)
+      .values({
+        organizationId: seeded.orgId,
+        teamId: seeded.teamId,
+        title: 'Draft the launch note',
+        state: 'backlog',
+        statusId: seeded.statusId('task', 'backlog'),
+      })
+      .returning({ id: schema.task.id });
+    if (!row) throw new Error('task insert returned no row');
+    const app = appWithActor(objectCommands, seeded.orgId, ['contribute'], seeded.humanActorId);
+
+    const renamed = await send(app, {
+      commandId: 'rename-task',
+      objectKind: 'task',
+      objectIds: [row.id],
+      operation: {
+        type: 'replace_property',
+        property: 'title',
+        value: 'Publish the launch note',
+      },
+    });
+    expect(renamed.status).toBe(200);
+    const payload = (await renamed.json()) as {
+      receipt: { entries: Record<string, unknown>[] } & Record<string, unknown>;
+    };
+    expect(payload.receipt.entries).toEqual([
+      {
+        kind: 'object',
+        objectId: row.id,
+        property: 'title',
+        before: 'Draft the launch note',
+        after: 'Publish the launch note',
+      },
+    ]);
+    const [stored] = await db
+      .select({ title: schema.task.title })
+      .from(schema.task)
+      .where(eq(schema.task.id, row.id));
+    expect(stored?.title).toBe('Publish the launch note');
+
+    const undone = await send(app, {
+      commandId: 'undo-rename-task',
+      direction: 'undo',
+      receipt: payload.receipt,
+    });
+    expect(undone.status).toBe(200);
+    const [restored] = await db
+      .select({ title: schema.task.title })
+      .from(schema.task)
+      .where(eq(schema.task.id, row.id));
+    expect(restored?.title).toBe('Draft the launch note');
+  });
+
+  it('rejects a title rename whose replay envelope exceeds the command limit', async () => {
+    const seeded = await seedTaskAccessOrg(db, schema, 'contribute');
+    const existingTitle = '界'.repeat(Math.floor((MAX_OBJECT_COMMAND_BYTES - 512) / 3));
+    const [row] = await db
+      .insert(schema.task)
+      .values({
+        organizationId: seeded.orgId,
+        teamId: seeded.teamId,
+        title: existingTitle,
+        state: 'backlog',
+        statusId: seeded.statusId('task', 'backlog'),
+      })
+      .returning({ id: schema.task.id });
+    if (!row) throw new Error('task insert returned no row');
+    const commandId = 'rename-oversized-title';
+    const replacement = 'A short replacement title';
+    const receipt = {
+      commandId,
+      objectKind: 'task',
+      action: 'replace_property',
+      entries: [
+        {
+          kind: 'object',
+          objectId: row.id,
+          property: 'title',
+          before: existingTitle,
+          after: replacement,
+        },
+      ],
+    } as const;
+    const encoder = new TextEncoder();
+    expect(encoder.encode(existingTitle).byteLength).toBeLessThan(MAX_OBJECT_COMMAND_BYTES);
+    expect(
+      encoder.encode(JSON.stringify({ commandId: '\0'.repeat(200), direction: 'undo', receipt }))
+        .byteLength,
+    ).toBeGreaterThan(MAX_OBJECT_COMMAND_BYTES);
+
+    const app = appWithActor(objectCommands, seeded.orgId, ['contribute'], seeded.humanActorId);
+    const response = await send(app, {
+      commandId,
+      objectKind: 'task',
+      objectIds: [row.id],
+      operation: {
+        type: 'replace_property',
+        property: 'title',
+        value: replacement,
+      },
+    });
+    expect(response.status).toBe(422);
+
+    const [stored] = await db
+      .select({ title: schema.task.title })
+      .from(schema.task)
+      .where(eq(schema.task.id, row.id));
+    expect(stored?.title).toBe(existingTitle);
+    const [recorded] = await db
+      .select({ id: schema.changeSet.id })
+      .from(schema.changeSet)
+      .where(
+        eq(
+          schema.changeSet.id,
+          objectCommandChangeSetId(seeded.orgId, seeded.humanActorId, commandId),
+        ),
+      );
+    expect(recorded).toBeUndefined();
   });
 
   it('stores canonical Task status fields and restores all terminal fields on undo', async () => {

@@ -74,8 +74,7 @@ export interface WorkBoardProps<TTarget extends ViewTarget> {
 interface BoardCellData {
   readonly kind: 'work-board-cell';
   readonly path: readonly string[];
-  readonly effectLabel: string | null;
-  readonly canDrop: boolean;
+  readonly effectLabel: string;
 }
 
 function isBoardCellData(value: unknown): value is BoardCellData {
@@ -122,17 +121,22 @@ function WorkBoardCell({
 }): JSX.Element {
   const operation = useDragOperation();
   const canAccept = mutable && canAcceptSource(operation.source?.data);
+  const acceptsSource = useCallback(
+    (source: { readonly data: unknown }): boolean => mutable && canAcceptSource(source.data),
+    [canAcceptSource, mutable],
+  );
   const drop = useDroppable<BoardCellData>({
     id: `work-board-cell:${workViewGroupPathKey(path)}`,
     type: 'work-board-cell',
-    collisionPriority: canAccept ? 2 : -2,
+    accept: acceptsSource,
+    collisionPriority: 2,
     data: {
       kind: 'work-board-cell',
       path,
-      effectLabel: canAccept ? `Move to ${label}` : null,
-      canDrop: canAccept,
+      effectLabel: `Move to ${label}`,
     },
-    disabled: !canAccept,
+    // The pointer source exists only after activation, so mutable cells must already be registered.
+    disabled: !mutable,
   });
   const accepting = drop.isDropTarget && canAccept;
   return (
@@ -355,7 +359,6 @@ export function WorkBoard<TTarget extends ViewTarget>({
         !mutable ||
         !isObjectDragData(source) ||
         !isBoardCellData(destination) ||
-        !destination.canDrop ||
         !canAcceptBoardSource(source)
       )
         return;

@@ -132,6 +132,8 @@ interface DndInput {
   readonly id: string;
   readonly type: string;
   readonly disabled?: boolean;
+  readonly accept?: (source: { readonly data: unknown }) => boolean;
+  readonly collisionPriority?: number;
   readonly data?: {
     readonly kind?: string;
     readonly path?: readonly string[];
@@ -172,7 +174,7 @@ function renderBoard(
   ],
 ) {
   const onActivate = vi.fn();
-  render(
+  const view = () => (
     <ActionRegistryProvider registry={menuRegistry()}>
       <ObjectContextMenuProvider>
         <WorkBoard
@@ -194,8 +196,9 @@ function renderBoard(
           onLoadMore={vi.fn()}
         />
       </ObjectContextMenuProvider>
-    </ActionRegistryProvider>,
+    </ActionRegistryProvider>
   );
+  render(view());
   return { onActivate };
 }
 
@@ -270,6 +273,30 @@ describe('WorkBoard route-owned row interaction policy', () => {
     expect(screen.queryByRole('article', { name: 'Context task' })).toBeNull();
   });
 
+  it('registers mutable board destinations before a pointer drag has a source', () => {
+    dnd.source = null;
+    renderBoard();
+
+    const cells = inputs('work-board-cell');
+    expect(cells).toHaveLength(2);
+    for (const cell of cells) {
+      expect(cell.disabled).toBe(false);
+      expect(cell.data?.effectLabel).toMatch(/^Move to /);
+    }
+  });
+
+  it('accepts a writable source synchronously without waiting for a render', () => {
+    dnd.source = null;
+    renderBoard();
+    const cells = inputs('work-board-cell');
+    expect(cells).toHaveLength(2);
+    for (const cell of cells) {
+      expect(cell.collisionPriority).toBe(2);
+      expect(cell.accept?.(sourceFor(local, ['todo']))).toBe(true);
+      expect(cell.accept?.(sourceFor(foreign, ['todo']))).toBe(false);
+    }
+  });
+
   it('does not advertise or commit board destinations for a foreign source', () => {
     const onDrop = vi.fn();
     dnd.source = sourceFor(foreign, ['todo']);
@@ -278,9 +305,8 @@ describe('WorkBoard route-owned row interaction policy', () => {
     const cells = inputs('work-board-cell');
     expect(cells).toHaveLength(2);
     for (const cell of cells) {
-      expect(cell.disabled).toBe(true);
-      expect(cell.data?.canDrop).toBe(false);
-      expect(cell.data?.effectLabel).toBeNull();
+      expect(cell.disabled).toBe(false);
+      expect(cell.accept?.(dnd.source)).toBe(false);
     }
 
     const destination = cells.find((cell) => cell.data?.path?.[0] === 'started');
@@ -306,9 +332,8 @@ describe('WorkBoard route-owned row interaction policy', () => {
     const cells = inputs('work-board-cell');
     expect(cells).toHaveLength(2);
     for (const cell of cells) {
-      expect(cell.disabled).toBe(true);
-      expect(cell.data?.canDrop).toBe(false);
-      expect(cell.data?.effectLabel).toBeNull();
+      expect(cell.disabled).toBe(false);
+      expect(cell.accept?.(dnd.source)).toBe(false);
     }
 
     const destination = cells.find((cell) => cell.data?.path?.[0] === 'started');
@@ -338,8 +363,8 @@ describe('WorkBoard route-owned row interaction policy', () => {
 
     const cells = inputs('work-board-cell');
     for (const cell of cells) {
-      expect(cell.disabled).toBe(true);
-      expect(cell.data?.effectLabel).toBeNull();
+      expect(cell.disabled).toBe(false);
+      expect(cell.accept?.(dnd.source)).toBe(false);
     }
     const destination = cells.find((cell) => cell.data?.path?.[0] === 'todo');
     if (destination === undefined) throw new Error('expected the Todo destination');
@@ -358,7 +383,7 @@ describe('WorkBoard route-owned row interaction policy', () => {
     const cells = inputs('work-board-cell');
     for (const cell of cells) {
       expect(cell.disabled).toBe(false);
-      expect(cell.data?.canDrop).toBe(true);
+      expect(cell.accept?.(dnd.source)).toBe(true);
       expect(cell.data?.effectLabel).toMatch(/^Move to /);
     }
 

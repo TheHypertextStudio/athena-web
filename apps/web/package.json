@@ -30,6 +30,7 @@
   },
   "dependencies": {
     "@better-auth/passkey": "catalog:",
+    "@dnd-kit/collision": "catalog:",
     "@dnd-kit/dom": "catalog:",
     "@dnd-kit/react": "catalog:",
     "@docket/api": "workspace:*",

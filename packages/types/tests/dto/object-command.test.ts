@@ -22,9 +22,48 @@ describe('ObjectCommandIn', () => {
     ).toMatchObject({ objectKind: 'task' });
   });
 
-  it('rejects identity text and Project-only properties on Tasks', () => {
+  it('accepts non-empty Task titles and rejects empty titles', () => {
+    const base = {
+      commandId: 'rename-task',
+      objectKind: 'task',
+      objectIds: taskIds,
+    } as const;
+    const longTitle = 'x'.repeat(201);
+
+    for (const title of ['Publish the launch', longTitle]) {
+      expect(
+        ObjectCommandIn.safeParse({
+          ...base,
+          operation: { type: 'replace_property', property: 'title', value: title },
+        }).success,
+      ).toBe(true);
+    }
+    expect(
+      ObjectCommandIn.safeParse({
+        ...base,
+        operation: { type: 'replace_property', property: 'title', value: '' },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('requires a Task title replacement to target exactly one Task', () => {
+    expect(
+      ObjectCommandIn.safeParse({
+        commandId: 'rename-task',
+        objectKind: 'task',
+        objectIds: [...taskIds, '01ARZ3NDEKTSV4RRFFQ69G5FAW'],
+        operation: {
+          type: 'replace_property',
+          property: 'title',
+          value: 'One title cannot rename two Tasks',
+        },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects unsupported text and Project-only properties on Tasks', () => {
     for (const operation of [
-      { type: 'replace_property', property: 'title', value: 'Destroyed' },
+      { type: 'replace_property', property: 'description', value: 'Destroyed' },
       { type: 'replace_property', property: 'health', value: 'on_track' },
     ]) {
       expect(
@@ -202,6 +241,30 @@ describe('ObjectCommandReplayIn', () => {
         },
       }).direction,
     ).toBe('undo');
+  });
+
+  it('accepts replay of a Task title receipt without narrowing the Task title contract', () => {
+    const longTitle = 'x'.repeat(201);
+    expect(
+      ObjectCommandReplayIn.safeParse({
+        commandId: 'replay-title',
+        direction: 'undo',
+        receipt: {
+          commandId: 'rename-task',
+          objectKind: 'task',
+          action: 'replace_property',
+          entries: [
+            {
+              kind: 'object',
+              objectId: taskIds[0],
+              property: 'title',
+              before: 'Draft the launch note',
+              after: longTitle,
+            },
+          ],
+        },
+      }).success,
+    ).toBe(true);
   });
 
   it('rejects duplicate receipt entries and receipts spanning more than 500 objects', () => {

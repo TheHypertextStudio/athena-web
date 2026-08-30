@@ -12,8 +12,10 @@ import {
   CycleId,
   LabelId,
   MilestoneId,
+  type ObjectCommandResult,
   ProgramId,
   ProjectId,
+  TaskId,
   TaskSubjectRef,
   TaskStatusKey,
   type TaskArchived,
@@ -236,12 +238,36 @@ export function useTaskMutations(
     invalidateKeys: [detailKey, queryKeys.tasks(orgId)],
   });
 
-  const patchMutation = useApiMutation<
-    TaskOut,
+  const propsMutation = useApiMutation<
+    TaskOut | ObjectCommandResult,
     TaskPatch,
     { previous?: TaskDetailAggregate | undefined }
   >({
     mutationFn: (patch) => {
+      const title = patch.title;
+      if (title !== undefined && Object.keys(patch).length === 1) {
+        const commandId = crypto.randomUUID();
+        return unwrap(
+          () =>
+            api.v1.orgs[':orgId']['object-commands'].$post(
+              {
+                param: { orgId },
+                json: {
+                  commandId,
+                  objectKind: 'task',
+                  objectIds: [TaskId.parse(taskId)],
+                  operation: {
+                    type: 'replace_property',
+                    property: 'title',
+                    value: title,
+                  },
+                },
+              },
+              { headers: { 'Idempotency-Key': commandId } },
+            ),
+          'Could not update the task.',
+        );
+      }
       const body = {
         ...(patch.title !== undefined ? { title: patch.title } : {}),
         ...(patch.description !== undefined ? { description: patch.description } : {}),
@@ -291,7 +317,7 @@ export function useTaskMutations(
       if (ctx?.previous) queryClient.setQueryData(detailKey, ctx.previous);
     },
     onSuccess: (updated) => {
-      adoptTaskOut(updated);
+      if (!('receipt' in updated)) adoptTaskOut(updated);
     },
     // The Resources tab's derived sections are a projection of this record's prose, and the query
     // cache survives a reload — so without this, adding a mention to the description leaves that
@@ -392,9 +418,9 @@ export function useTaskMutations(
   );
   const patchTask = useCallback(
     (patch: TaskPatch): void => {
-      patchMutation.mutate(patch);
+      propsMutation.mutate(patch);
     },
-    [patchMutation],
+    [propsMutation],
   );
   const addSubtask = useCallback(
     (title: string): Promise<void> => addSubtaskMutation.mutateAsync(title).then(() => undefined),
@@ -422,8 +448,8 @@ export function useTaskMutations(
     deleteMutation.reset();
   }, [deleteMutation]);
 
-  const actionError = patchMutation.error
-    ? userErrorMessage(patchMutation.error, 'Could not update this task.')
+  const actionError = propsMutation.error
+    ? userErrorMessage(propsMutation.error, 'Could not update this task.')
     : stateMutation.error
       ? userErrorMessage(stateMutation.error, 'Could not change the task state.')
       : priorityMutation.error
@@ -450,7 +476,7 @@ export function useTaskMutations(
     deleteTask,
     resetDelete,
     actionError,
-    propsPending: patchMutation.isPending,
+    propsPending: propsMutation.isPending,
     statusPending: stateMutation.isPending,
     priorityPending: priorityMutation.isPending,
     deletePending: deleteMutation.isPending,

@@ -117,6 +117,7 @@ catalog:
   eslint: ^10.7.0
   '@eslint/js': ^10.0.1
   typescript-eslint: ^8.63.0
+  '@dnd-kit/collision': 0.5.0
   '@dnd-kit/react': 0.5.0
   '@dnd-kit/dom': 0.5.0
 

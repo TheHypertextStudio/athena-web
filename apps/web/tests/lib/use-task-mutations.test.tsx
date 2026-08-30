@@ -21,7 +21,8 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 import type { JSX, ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { statePost, taskPatch } = vi.hoisted(() => ({
+const { objectCommandsPost, statePost, taskPatch } = vi.hoisted(() => ({
+  objectCommandsPost: vi.fn(),
   statePost: vi.fn(),
   taskPatch: vi.fn(),
 }));
@@ -31,6 +32,7 @@ vi.mock('../../src/lib/api', () => ({
     v1: {
       orgs: {
         ':orgId': {
+          'object-commands': { $post: objectCommandsPost },
           tasks: {
             ':id': {
               state: { $post: statePost },
@@ -48,6 +50,7 @@ vi.mock('../../src/lib/api', () => ({
 
 import { queryKeys } from '../../src/lib/query';
 import { useTaskMutations } from '../../src/lib/use-task-mutations';
+import { QueuedOfflineWriteError } from '../../src/components/pwa/offline-write';
 
 const ORG_ID = OrganizationId.parse('01BX5ZZKBKACTAV9WEVGEMMVRZ');
 const TASK_ID = TaskId.parse('01BX5ZZKBKACTAV9WEVGEMMVS1');
@@ -83,6 +86,29 @@ function baseDetail(): TaskDetail {
 /** A typed mock Hono response for the `unwrap` layer. */
 function okResponse<T>(body: T) {
   return { ok: true, status: 200, json: () => Promise.resolve(body) };
+}
+
+/** A successful replay-safe Task title command response. */
+function titleCommandResponse(title: string) {
+  return okResponse({
+    appliedIds: [TASK_ID],
+    conflictingIds: [],
+    deniedIds: [],
+    receipt: {
+      commandId: 'returned-command',
+      objectKind: 'task',
+      action: 'replace_property',
+      entries: [
+        {
+          kind: 'object',
+          objectId: TASK_ID,
+          property: 'title',
+          before: 'Draft the launch note',
+          after: title,
+        },
+      ],
+    },
+  });
 }
 
 /** A promise plus the handles to settle it, so "before it resolves" is observable. */
@@ -132,6 +158,7 @@ function mountMutations() {
 }
 
 beforeEach(() => {
+  objectCommandsPost.mockReset();
   statePost.mockReset();
   taskPatch.mockReset();
 });
@@ -212,6 +239,132 @@ describe('useTaskMutations — task priority', () => {
     });
     expect(result.current.actionError).toBe('Could not update the priority.');
     expect(result.current.actionError).not.toContain('ECONNREFUSED');
+  });
+});
+
+describe('useTaskMutations — task title', () => {
+  it('sends title edits through one replay-safe object command', async () => {
+    const renamed = 'Publish the launch note';
+    taskPatch.mockResolvedValue(okResponse({ ...baseDetail(), title: renamed }));
+    objectCommandsPost.mockResolvedValue(titleCommandResponse(renamed));
+    const { result, read } = mountMutations();
+
+    act(() => {
+      result.current.patchTask({ title: renamed });
+    });
+
+    await waitFor(() => {
+      expect(read()?.title).toBe(renamed);
+    });
+    await waitFor(() => {
+      expect(objectCommandsPost).toHaveBeenCalledTimes(1);
+    });
+    expect(taskPatch).not.toHaveBeenCalled();
+    const [request, options] = objectCommandsPost.mock.calls[0] as [
+      {
+        param: { orgId: string };
+        json: {
+          commandId: string;
+          objectKind: string;
+          objectIds: string[];
+          operation: { type: string; property: string; value: string };
+        };
+      },
+      { headers: { 'Idempotency-Key': string } },
+    ];
+    expect(request).toMatchObject({
+      param: { orgId: ORG_ID },
+      json: {
+        objectKind: 'task',
+        objectIds: [TASK_ID],
+        operation: { type: 'replace_property', property: 'title', value: renamed },
+      },
+    });
+    expect(request.json.commandId).not.toBe('');
+    expect(options.headers['Idempotency-Key']).toBe(request.json.commandId);
+  });
+
+  it('keeps an offline-queued title visible and surfaces the saved-on-device copy', async () => {
+    const renamed = 'Publish the launch note offline';
+    objectCommandsPost.mockRejectedValue(new QueuedOfflineWriteError('queued-title-command'));
+    const { result, read } = mountMutations();
+
+    act(() => {
+      result.current.patchTask({ title: renamed });
+    });
+
+    await waitFor(() => {
+      expect(read()?.title).toBe(renamed);
+    });
+    await waitFor(() => {
+      expect(result.current.actionError).toBe(
+        "Saved on this device. Docket will sync it as soon as you're back online.",
+      );
+    });
+    expect(taskPatch).not.toHaveBeenCalled();
+  });
+
+  it('keeps mixed title patches on the Task PATCH route', async () => {
+    const renamed = 'Publish the launch note';
+    const dueDate = '2026-09-01';
+    taskPatch.mockResolvedValue(okResponse({ ...baseDetail(), title: renamed, dueDate }));
+    const { result, read } = mountMutations();
+
+    act(() => {
+      result.current.patchTask({ title: renamed, dueDate });
+    });
+
+    await waitFor(() => {
+      expect(read()).toMatchObject({ title: renamed, dueDate });
+    });
+    await waitFor(() => {
+      expect(taskPatch).toHaveBeenCalledTimes(1);
+    });
+    expect(objectCommandsPost).not.toHaveBeenCalled();
+    expect(taskPatch).toHaveBeenCalledWith({
+      param: { orgId: ORG_ID, id: TASK_ID },
+      json: { title: renamed, dueDate },
+    });
+  });
+
+  it('clears a failed title command after a later ordinary patch succeeds', async () => {
+    objectCommandsPost.mockRejectedValue(new Error(LEAKY_REJECTION));
+    taskPatch.mockResolvedValue(okResponse({ ...baseDetail(), dueDate: '2026-09-01' }));
+    const { result } = mountMutations();
+
+    act(() => {
+      result.current.patchTask({ title: 'This rename will fail' });
+    });
+    await waitFor(() => {
+      expect(result.current.actionError).toBe('Could not update the task.');
+    });
+
+    act(() => {
+      result.current.patchTask({ dueDate: '2026-09-01' });
+    });
+    await waitFor(() => {
+      expect(result.current.actionError).toBeNull();
+    });
+  });
+
+  it('clears a failed ordinary patch after a later title command succeeds', async () => {
+    taskPatch.mockRejectedValue(new Error(LEAKY_REJECTION));
+    objectCommandsPost.mockResolvedValue(titleCommandResponse('Publish the launch note'));
+    const { result } = mountMutations();
+
+    act(() => {
+      result.current.patchTask({ dueDate: '2026-09-01' });
+    });
+    await waitFor(() => {
+      expect(result.current.actionError).toBe('Could not update the task.');
+    });
+
+    act(() => {
+      result.current.patchTask({ title: 'Publish the launch note' });
+    });
+    await waitFor(() => {
+      expect(result.current.actionError).toBeNull();
+    });
   });
 });
 

@@ -9,6 +9,7 @@ import { useOptionalActionRegistry } from '@/lib/actions/registry-context';
 
 import { isObjectDragData, type ObjectDragData, resolveObjectRelation } from './object-drag-data';
 import { useDragController } from './drag-context';
+import { useCollisionDetectorWithPriority } from './source-aware-collision-detector';
 
 /** Inputs for a position-aware empty calendar lane destination. */
 export interface UseSchedulingSlotDropTargetOptions {
@@ -63,10 +64,22 @@ export function useSchedulingSlotDropTarget(
   const effectLabel =
     target && resolution?.accepted && action ? `Schedule at ${target.title}` : null;
   const droppableId = `docket-calendar-slot:${instanceId}`;
+  const collisionDetector = useCollisionDetectorWithPriority((input) => {
+    const dragData = input.dragOperation.source?.data;
+    if (!isObjectDragData(dragData)) return null;
+    if (disabled || dragData.actionScope !== 'all' || nodeRef.current === null) return -2;
+    const bounds = nodeRef.current.getBoundingClientRect();
+    const collisionMinutes = startMinutesAt(input.dragOperation.position.current.y, bounds);
+    const collisionTarget = targetAt(collisionMinutes);
+    if (collisionTarget === null) return -2;
+    const collisionResolution = resolveObjectRelation(dragData.objects, collisionTarget);
+    if (!collisionResolution.accepted) return -2;
+    return registry?.getByRelation(collisionResolution.intent.relationId) === undefined ? -2 : 2;
+  });
   const droppable = useDroppable({
     id: droppableId,
     type: 'docket-relation-target',
-    collisionPriority: canDrop ? 2 : -2,
+    collisionDetector,
     disabled,
     data: { kind: 'docket-relation-target', target, effectLabel, canDrop },
   });
@@ -80,10 +93,17 @@ export function useSchedulingSlotDropTarget(
       );
     },
     onDragEnd: (event) => {
-      if (event.operation.target?.id !== droppableId || registry === null) return;
+      if (event.operation.target?.id !== droppableId) return;
+      setStartMinutes(null);
+      if (registry === null || nodeRef.current === null) return;
       const dragData = event.operation.source?.data;
       if (!isObjectDragData(dragData) || dragData.actionScope !== 'all') return;
-      const finalTarget = startMinutes === null ? null : targetAt(startMinutes);
+      const bounds = nodeRef.current.getBoundingClientRect();
+      const finalMinutes = startMinutesAt(
+        clientYFor(event.nativeEvent, event.operation.position.current.y),
+        bounds,
+      );
+      const finalTarget = targetAt(finalMinutes);
       if (!finalTarget) return;
       const finalResolution = resolveObjectRelation(dragData.objects, finalTarget);
       if (!finalResolution.accepted) return;
@@ -108,7 +128,6 @@ export function useSchedulingSlotDropTarget(
                 : (result.detail ?? 'This time cannot receive this item'),
           );
         });
-      setStartMinutes(null);
     },
   });
 

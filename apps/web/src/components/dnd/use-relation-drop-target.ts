@@ -7,7 +7,7 @@ import {
   type RelationResolution,
 } from '@docket/work/relation-contract';
 import { useDragDropMonitor, useDragOperation, useDroppable } from '@dnd-kit/react';
-import { useId, useMemo } from 'react';
+import { useCallback, useId, useMemo } from 'react';
 
 import { CURSOR_DROP_STATE } from '@/lib/actions/cursor';
 import type { ObjectRef } from '@/lib/actions/object';
@@ -16,6 +16,7 @@ import type { ActionInvocationResult } from '@/lib/actions/types';
 
 import { isObjectDragData, type ObjectDragData, resolveObjectRelation } from './object-drag-data';
 import { useDragController } from './drag-context';
+import { useCollisionDetectorWithPriority } from './source-aware-collision-detector';
 
 /** Shared visual state for a canonical destination. */
 export type DropState = 'idle' | 'accept' | 'reject';
@@ -139,22 +140,40 @@ export function useRelationDropTarget(
   const dragController = useDragController();
   const registry = useOptionalActionRegistry();
   const operation = useDragOperation<ObjectDragData>();
+  const canDropSource = useCallback(
+    (data: unknown): boolean => {
+      if (disabled) return false;
+      const sourceResolution = resolutionFor(data, target);
+      if (sourceResolution?.accepted !== true) return false;
+      return (
+        execute !== undefined ||
+        registry?.getByRelation(sourceResolution.intent.relationId) !== undefined
+      );
+    },
+    [disabled, execute, registry, target],
+  );
   const resolution = resolutionFor(operation.source?.data, target);
   const relationId = resolution?.accepted === true ? resolution.intent.relationId : null;
   const action = relationId === null ? undefined : registry?.getByRelation(relationId);
   const hasExecutor = execute !== undefined || action !== undefined;
-  const canDrop = !disabled && resolution?.accepted === true && hasExecutor;
+  const canDrop = canDropSource(operation.source?.data);
   const previewLabel =
     resolution?.accepted === true && hasExecutor
       ? acceptedLabel(resolution.intent.relationId, target)
       : null;
   const droppableId = `docket-relation-target:${target.kind}:${target.id}:${instanceId}`;
+  const collisionDetector = useCollisionDetectorWithPriority((input) => {
+    const sourceData = input.dragOperation.source?.data;
+    return !isObjectDragData(sourceData)
+      ? null
+      : canDropSource(sourceData)
+        ? ACCEPTED_COLLISION_PRIORITY[priority]
+        : REJECTED_COLLISION_PRIORITY[priority];
+  });
   const droppable = useDroppable({
     id: droppableId,
     type: 'docket-relation-target',
-    collisionPriority: canDrop
-      ? ACCEPTED_COLLISION_PRIORITY[priority]
-      : REJECTED_COLLISION_PRIORITY[priority],
+    collisionDetector,
     data: {
       kind: 'docket-relation-target',
       target,

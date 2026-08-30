@@ -460,15 +460,22 @@ describe('the real workflows', () => {
     expect(test?.steps.every((step) => !step.continueOnError)).toBe(true);
   });
 
-  it('runs the required core-screen gate against PostgreSQL', () => {
+  it('runs exactly the three release-critical browser journeys against PostgreSQL', () => {
     const ci = workflows.find((workflow) => workflow.path === '.github/workflows/ci.yml');
     const smoke = ci?.jobs.find((job) => job.id === 'core-screen-smoke');
-    const commands = (smoke?.steps ?? []).flatMap((step) => (step.run ? [step.run] : []));
+    const command = smoke?.steps.find((step) => step.run?.includes('playwright test'))?.run;
+    const commandTokens = command?.trim().split(/\s+/);
+    const testTokenIndex = commandTokens?.indexOf('test');
+    const testInvocation =
+      testTokenIndex === undefined ? undefined : commandTokens?.slice(testTokenIndex + 1);
     const source = readFileSync(join(REPO_ROOT, '.github/workflows/ci.yml'), 'utf8');
 
-    expect(commands.some((command) => command.includes('core-screen-acceptance.spec.ts'))).toBe(
-      true,
-    );
+    expect(testInvocation).toEqual([
+      'e2e/release/core-screen-acceptance.spec.ts',
+      'e2e/platform/pwa-offline-sync.spec.ts',
+      'e2e/work/work-views.spec.ts',
+      '--workers=1',
+    ]);
     expect(source).toContain('image: postgres:17-alpine');
     expect(source).toContain('DATABASE_URL: postgres://docket:docket@127.0.0.1:5432/docket');
     expect(smoke?.continueOnError).toBe(false);

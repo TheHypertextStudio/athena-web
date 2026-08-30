@@ -59,6 +59,11 @@ const objectIds = <T extends z.ZodType>(id: T) =>
 const taskPropertyOperation = z.discriminatedUnion('property', [
   z.object({
     type: z.literal('replace_property'),
+    property: z.literal('title'),
+    value: z.string().min(1),
+  }),
+  z.object({
+    type: z.literal('replace_property'),
     property: z.literal('state'),
     value: z.string().min(1).max(200),
   }),
@@ -231,6 +236,18 @@ export const ObjectCommandIn = z
   ])
   .superRefine((command, context) => {
     if (
+      command.objectKind === 'task' &&
+      command.operation.type === 'replace_property' &&
+      command.operation.property === 'title' &&
+      command.objectIds.length !== 1
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['objectIds'],
+        message: 'A Task title replacement must target exactly one Task.',
+      });
+    }
+    if (
       !['add_association', 'remove_association'].includes(command.operation.type) ||
       !('associationIds' in command.operation)
     ) {
@@ -251,7 +268,7 @@ export const ObjectCommandIn = z
 export type ObjectCommandIn = z.infer<typeof ObjectCommandIn>;
 
 /** A JSON-safe scalar stored in a replay receipt. */
-export const ObjectCommandValue = z.union([z.string().max(200), z.number(), z.boolean(), z.null()]);
+export const ObjectCommandValue = z.union([z.string(), z.number(), z.boolean(), z.null()]);
 /** A JSON-safe scalar stored in a replay receipt. */
 export type ObjectCommandValue = z.infer<typeof ObjectCommandValue>;
 
@@ -375,6 +392,7 @@ export const ObjectCommandReceipt = z
       }
     }
     const taskProperties: Record<string, z.ZodType> = {
+      title: z.string().min(1),
       state: z.string().min(1).max(200),
       statusId: WorkStatusId,
       completedAt: z.iso.datetime().nullable(),

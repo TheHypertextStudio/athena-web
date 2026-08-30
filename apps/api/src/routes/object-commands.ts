@@ -85,6 +85,7 @@ import {
 type CommandEntry = ObjectCommandReceipt['entries'][number];
 
 const TASK_PROPERTIES = new Set([
+  'title',
   'state',
   'statusId',
   'completedAt',
@@ -120,6 +121,21 @@ const PROJECT_PROPERTIES = new Set([
 
 function ownedValidation(message: string, path: (string | number)[] = []): ValidationError {
   return new ValidationError(new z.ZodError([{ code: 'custom', path, message, input: undefined }]));
+}
+
+// JSON escapes each NUL as six ASCII bytes, so this maximizes a valid 200-code-unit command id.
+const WORST_VALID_REPLAY_COMMAND_ID = '\0'.repeat(200);
+
+/** Reject a forward receipt that the command endpoint could not accept back for undo. */
+function assertReceiptFitsReplayEnvelope(receipt: ObjectCommandReceipt): void {
+  const envelope = {
+    commandId: WORST_VALID_REPLAY_COMMAND_ID,
+    direction: 'undo',
+    receipt,
+  } as const;
+  if (new TextEncoder().encode(JSON.stringify(envelope)).byteLength > MAX_OBJECT_COMMAND_BYTES) {
+    throw ownedValidation('Command receipt is too large to replay');
+  }
 }
 
 function normalize(value: unknown): ObjectCommandValue {
@@ -1636,6 +1652,13 @@ async function executeForward(
       });
     }
 
+    const receipt: ObjectCommandReceipt = {
+      commandId: command.commandId,
+      objectKind: command.objectKind,
+      action: command.operation.type,
+      entries,
+    };
+    assertReceiptFitsReplayEnvelope(receipt);
     await recordChangeSetInTx(tx, {
       id: objectCommandChangeSetId(orgId, actorId, command.commandId),
       orgId,
@@ -1649,12 +1672,7 @@ async function executeForward(
       appliedIds: command.objectIds,
       conflictingIds: [],
       deniedIds: [],
-      receipt: {
-        commandId: command.commandId,
-        objectKind: command.objectKind,
-        action: command.operation.type,
-        entries,
-      },
+      receipt,
     };
     const execution = { effects, result };
     await enqueueObjectCommandEffectJob(tx, {

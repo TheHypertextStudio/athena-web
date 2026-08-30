@@ -30,6 +30,8 @@ vi.mock('@docket/auth', () => ({ auth: { api: { getSession } } }));
 const state = vi.hoisted(() => ({
   session: null as RemoteMcpSession | null,
   openedWith: [] as { url: string; bearerToken?: string }[],
+  callCount: 0,
+  readCount: 0,
 }));
 
 vi.mock('../../src/container', async (importOriginal) => {
@@ -67,7 +69,7 @@ async function json<T>(res: Response): Promise<T> {
 /** Build a one-tool session that serves `resource` (or omits `readUiResource` when `undefined`). */
 function sessionWithResource(
   resource: RemoteUiResource | null,
-  options: { readUiResource?: boolean; callToolRaw?: boolean } = {},
+  options: { readUiResource?: boolean; callToolRaw?: boolean; resourceError?: Error } = {},
 ): RemoteMcpSession {
   const descriptor: RemoteToolDescriptor = {
     name: 'render_card',
@@ -83,14 +85,25 @@ function sessionWithResource(
     callTool: async () => ({ content: 'ok', isError: false }),
     ...(includeCallToolRaw
       ? {
-          callToolRaw: async () => ({
-            content: [{ type: 'text', text: 'ok' }],
-            structuredContent: { ok: true },
-            isError: false,
-          }),
+          callToolRaw: async () => {
+            state.callCount += 1;
+            return {
+              content: [{ type: 'text', text: 'ok' }],
+              structuredContent: { ok: true },
+              isError: false,
+            };
+          },
         }
       : {}),
-    ...(includeReadUiResource ? { readUiResource: async () => resource } : {}),
+    ...(includeReadUiResource
+      ? {
+          readUiResource: async () => {
+            state.readCount += 1;
+            if (options.resourceError) throw options.resourceError;
+            return resource;
+          },
+        }
+      : {}),
     close: async () => undefined,
   };
 }
@@ -101,6 +114,8 @@ beforeEach(async () => {
   app = (await import('../../src/mcp/apps/host-routes')).default;
   state.session = null;
   state.openedWith = [];
+  state.callCount = 0;
+  state.readCount = 0;
 });
 
 /** Seed a user with one connected personal MCP connection. */
@@ -208,6 +223,30 @@ describe('toResourceOut — optional-field branches', () => {
     });
     const body = await callRenderCard(connectionId, userId);
     expect(body.resource).toBeNull();
+  });
+
+  it('keeps a successful tool result when resource reading throws, without rerunning the tool', async () => {
+    const { userId, connectionId } = await seedConnection();
+    state.session = sessionWithResource(null, {
+      resourceError: new Error('provider resource read failed'),
+    });
+
+    const body = await callRenderCard(connectionId, userId);
+
+    expect(body.resource).toBeNull();
+    expect(state.callCount).toBe(1);
+    expect(state.readCount).toBe(1);
+  });
+
+  it('keeps a successful tool result when the resource is absent, without rerunning the tool', async () => {
+    const { userId, connectionId } = await seedConnection();
+    state.session = sessionWithResource(null);
+
+    const body = await callRenderCard(connectionId, userId);
+
+    expect(body.resource).toBeNull();
+    expect(state.callCount).toBe(1);
+    expect(state.readCount).toBe(1);
   });
 
   it('falls back to a flattened text result when the session has no callToolRaw', async () => {

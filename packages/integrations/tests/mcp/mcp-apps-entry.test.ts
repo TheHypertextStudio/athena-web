@@ -39,7 +39,7 @@ describe('@docket/integrations/mcp-apps entry point', () => {
     // hands back working functions rather than merely present-but-broken bindings.
     expect(McpApps.buildViewCsp()).toContain(`default-src 'none'`);
     expect(McpApps.withCspMeta('<html><head></head></html>', McpApps.MCP_APP_SANDBOX_CSP)).toBe(
-      `<html><head><meta http-equiv="Content-Security-Policy" content="${McpApps.MCP_APP_SANDBOX_CSP}"></head></html>`,
+      `<html><head><meta http-equiv="Content-Security-Policy" content="${McpApps.MCP_APP_SANDBOX_CSP}"></head><body></body></html>`,
     );
     expect(McpApps.sandboxProxyDocument('https://host.example')).toContain('https://host.example');
   });

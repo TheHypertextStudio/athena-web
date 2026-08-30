@@ -1,14 +1,6 @@
 'use client';
 
-import {
-  type JSX,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { type JSX, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   createMcpAppHost,
   MCP_APP_PROXY_SANDBOX,
@@ -230,6 +222,10 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
   const containerRef = useRef<HTMLElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const hostRef = useRef<McpAppHost | null>(null);
+  const onCallToolRef = useRef(onCallTool);
+  const onMessageRef = useRef(onMessage);
+  onCallToolRef.current = onCallTool;
+  onMessageRef.current = onMessage;
   const [height, setHeight] = useState(INITIAL_HEIGHT);
   const [displayMode, setDisplayMode] = useState<McpUiDisplayMode>('inline');
   const [failure, setFailure] = useState<string | null>(null);
@@ -243,11 +239,7 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
       return '';
     }
   }, [proxyUrl]);
-
-  const callTool = useCallback(
-    async (name: string, args: Readonly<Record<string, unknown>>) => onCallTool(name, args),
-    [onCallTool],
-  );
+  const presentationIdentity = `${resource.uri}\u0000${tool.name}`;
 
   // The proxy can finish loading immediately after the iframe enters the DOM. Install the message
   // listener in the same commit, before paint, so its one-shot `sandbox/proxy-ready` announcement
@@ -259,16 +251,43 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
     }
 
     let proxyWindow: Window | null = frame.contentWindow;
+    let lifecycleResource: McpAppResource | null = resource;
     let initializationDeadline: number | undefined;
+    let disposed = false;
+    let disposal: Promise<void> | null = null;
+    let onWindowMessage: ((event: MessageEvent) => void) | null = null;
+    let host: McpAppHost | null = null;
     const clearInitializationDeadline = (): void => {
       if (initializationDeadline !== undefined) {
         window.clearTimeout(initializationDeadline);
         initializationDeadline = undefined;
       }
     };
-    const fail = (): void => {
+    const release = (): void => {
+      if (disposed) return;
+      disposed = true;
       clearInitializationDeadline();
+      if (onWindowMessage) window.removeEventListener('message', onWindowMessage);
+      frame.removeEventListener('error', onFrameError);
+      if (hostRef.current === host) hostRef.current = null;
+      host?.close();
+      host = null;
+      proxyWindow = null;
+      lifecycleResource = null;
+    };
+    const dispose = (graceful: boolean): Promise<void> => {
+      if (disposal) return disposal;
+      disposal = (async () => {
+        if (graceful && host?.initialized) {
+          await host.requestTeardown().catch(() => undefined);
+        }
+        release();
+      })();
+      return disposal;
+    };
+    const fail = (): void => {
       setFailure('Interactive view unavailable.');
+      void dispose(false);
     };
     const onFrameError = (): void => {
       fail();
@@ -279,13 +298,13 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
       target?.postMessage(message, proxyOrigin || '*');
     };
 
-    const host = createMcpAppHost({
+    host = createMcpAppHost({
       hostInfo: { name: 'docket-athena', version: '1.0.0' },
       resource,
       tool: { name: tool.name, ...(tool.arguments ? { arguments: tool.arguments } : {}) },
       hostContext: buildHostContext(containerRef.current?.clientWidth),
       post,
-      callTool,
+      callTool: (name, args) => onCallToolRef.current(name, args),
       // Scope: the API decides. The browser holds no credential for the connected server, so an
       // unauthorized call fails there, not here — but the bridge still requires an explicit
       // allow, so a widget can never reach a tool the host did not intend to expose.
@@ -316,7 +335,7 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
         const opened = window.open(parsed.href, '_blank', 'noopener,noreferrer');
         return opened !== null;
       },
-      ...(onMessage
+      ...(onMessageRef.current
         ? {
             sendMessage: async (content: readonly McpUiContentBlock[]) => {
               const text = content
@@ -326,7 +345,7 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
               if (!text) {
                 return false;
               }
-              return await onMessage(text);
+              return (await onMessageRef.current?.(text)) ?? false;
             },
           }
         : {}),
@@ -336,12 +355,15 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
         }
       },
       onRequestTeardown: () => {
-        setVisible(false);
+        void dispose(true).finally(() => {
+          setVisible(false);
+        });
       },
     });
     hostRef.current = host;
 
-    const onWindowMessage = (event: MessageEvent): void => {
+    onWindowMessage = (event: MessageEvent): void => {
+      if (disposed) return;
       if (event.source !== frame.contentWindow) {
         return;
       }
@@ -357,17 +379,22 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
       if (method === MCP_UI_METHODS.sandboxProxyReady) {
         // The proxy is up. Hand it the document plus the policy computed from what the resource
         // declared — the host decides the CSP, never a script running on the sandbox origin.
+        const readyResource = lifecycleResource;
+        if (!readyResource) return;
         post({
           jsonrpc: '2.0',
           method: MCP_UI_METHODS.sandboxResourceReady,
-          params: sandboxResourceParams(resource),
+          params: sandboxResourceParams(readyResource),
         });
+        lifecycleResource = null;
         return;
       }
-      void host
+      const receivingHost = host;
+      if (!receivingHost) return;
+      void receivingHost
         .receive(data)
         .then(() => {
-          if (host.initialized) clearInitializationDeadline();
+          if (receivingHost.initialized) clearInitializationDeadline();
         })
         .catch(() => {
           fail();
@@ -377,15 +404,12 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
     initializationDeadline = window.setTimeout(fail, MCP_APP_INITIALIZATION_TIMEOUT_MS);
 
     return () => {
-      clearInitializationDeadline();
-      hostRef.current = null;
-      void host.requestTeardown().finally(() => {
-        window.removeEventListener('message', onWindowMessage);
-        frame.removeEventListener('error', onFrameError);
-        host.close();
-      });
+      // A route/browser unmount cannot keep the React subtree visible, but the captured proxy
+      // channel remains alive until the app answers teardown or the bridge's one-second bound
+      // expires. Every failure before initialization releases immediately.
+      void dispose(host?.initialized === true);
     };
-  }, [resource, tool.name, tool.arguments, callTool, onMessage, proxyOrigin]);
+  }, [presentationIdentity, proxyOrigin]);
 
   // Deliver the result whenever it changes. The bridge holds it until the view says it is ready,
   // so this does not need to know anything about the handshake.
@@ -556,6 +580,7 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
         </div>
       ) : null}
       <iframe
+        key={presentationIdentity}
         ref={frameRef}
         src={proxyUrl}
         title={`${serverName}: ${tool.name}`}

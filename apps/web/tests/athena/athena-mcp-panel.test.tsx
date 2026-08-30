@@ -201,6 +201,27 @@ afterEach(() => {
 });
 
 describe('AthenaMcpPanel: ui/message reaches the conversation', () => {
+  it('keeps meaningful text visible when a successful tool has no interactive resource', async () => {
+    callPost.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        connectionId: WIDGET.connectionId,
+        tool: WIDGET.tool,
+        resource: null,
+        result: { content: [{ type: 'text', text: '3 of 4 done' }], isError: false },
+        arguments: {},
+      }),
+    });
+    renderPanel();
+
+    assertDefined((await screen.findByText(WIDGET.description)).closest('button')).click();
+
+    expect(await screen.findByText('3 of 4 done')).toBeVisible();
+    expect(screen.getByText('Interactive view unavailable.')).toBeVisible();
+    expect(callPost).toHaveBeenCalledOnce();
+  });
+
   it('posts the widget-composed text verbatim to the canonical chat, not just local state', async () => {
     renderPanel();
     const harness = await showAndHandshake();

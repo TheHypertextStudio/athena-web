@@ -263,7 +263,9 @@ export async function runWidgetTool(
         };
     const resourceUri = descriptor.ui?.resourceUri;
     const resource =
-      resourceUri && session.readUiResource ? await session.readUiResource(resourceUri) : null;
+      resourceUri && session.readUiResource
+        ? await session.readUiResource(resourceUri).catch(() => null)
+        : null;
     return {
       connectionId: connection.id,
       tool,

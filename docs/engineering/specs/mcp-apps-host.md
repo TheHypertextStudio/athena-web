@@ -83,8 +83,12 @@ deliberate deviation from the spec's example, and it is strictly more restrictiv
 
 The policy travels as a `<meta http-equiv>` prepended to the document (a `srcdoc` frame has no
 response headers) and is computed **host-side** — never by a script running on the sandbox origin.
-Permissions declared under `_meta.ui.permissions` become an `allow` attribute in Permission Policy
-form (`camera 'src'`), granting the feature to the frame's own origin only.
+`withCspMeta` parses the provider document inertly with exact-pinned `parse5@8.0.1`, prefixes the
+policy before parsing, and serializes the normalized document. This is security-critical: HTML
+accepts executable markup before a late `<head>`, and string insertion into that head lets Chromium
+run the earlier node before it sees the policy. Permissions declared under `_meta.ui.permissions`
+become an `allow` attribute in Permission Policy form (`camera 'src'`), granting the feature to the
+frame's own origin only.
 
 ---
 
@@ -212,7 +216,14 @@ the same rows the Settings surface manages, so a connection made in either place
   driven without a browser.
 - `packages/integrations/tests/mcp/mcp-apps-sandbox.test.ts` — executes the shipped proxy script
   against stand-ins for its browser objects.
-- `apps/web/tests/athena/mcp-app-view.test.tsx` — 15 tests of the browser adapter.
+- `apps/web/tests/athena/mcp-app-view.test.tsx` — browser-adapter lifecycle, failure disposal,
+  rerender stability, host context, focus, and graceful teardown.
+- `apps/web/e2e/athena/mcp-apps-stable.spec.ts` — real Chromium evidence for hostile-order CSP and
+  the complete Athena model-invocation journey: automatic inline render, original-connection app
+  calls, text fallback, reload without rerun, theme, sizing, fullscreen, focus, and teardown. The
+  journey is runnable and unskipped; the current worktree dev stack cannot complete its real auth
+  ceremony because the Web-to-API auth rewrite hangs, so only its standalone hostile-CSP test is
+  closed locally in this pass.
 - `apps/api/tests/mcp/mcp-apps-sandbox.test.ts` — the proxy endpoint's headers and origin.
 - `apps/api/tests/mcp/mcp-apps-tokens.test.ts` — the widget stylesheet's vocabulary, against the
   vendored spec.

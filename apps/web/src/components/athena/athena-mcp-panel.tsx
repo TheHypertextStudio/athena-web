@@ -56,6 +56,22 @@ interface RenderedWidget extends McpAppRender {
   readonly serverName: string;
 }
 
+/** Extract meaningful text blocks from one successful raw MCP tool result. */
+function textualResult(result: Readonly<Record<string, unknown>>): string | null {
+  if (result['isError'] === true || !Array.isArray(result['content'])) return null;
+  const text = result['content']
+    .map((block) => {
+      if (typeof block !== 'object' || block === null) return '';
+      return Reflect.get(block, 'type') === 'text' && typeof Reflect.get(block, 'text') === 'string'
+        ? String(Reflect.get(block, 'text'))
+        : '';
+    })
+    .filter(Boolean)
+    .join('\n')
+    .trim();
+  return text || null;
+}
+
 /**
  * The inline connect form.
  *
@@ -334,6 +350,7 @@ export function AthenaMcpPanel({ className }: AthenaMcpPanelProps): JSX.Element 
   }, [refreshToken, rendered?.connectionId, rendered?.tool]);
 
   const items = widgets.data ?? [];
+  const renderedText = rendered ? textualResult(rendered.result) : null;
 
   return (
     <section
@@ -401,33 +418,44 @@ export function AthenaMcpPanel({ className }: AthenaMcpPanelProps): JSX.Element 
         </ul>
       )}
 
-      {rendered?.resource ? (
+      {rendered ? (
         <div className="flex flex-col gap-2">
-          <McpAppView
-            resource={{
-              uri: rendered.resource.uri,
-              mimeType: rendered.resource.mimeType,
-              text: rendered.resource.text,
-              meta: {
-                ...(rendered.resource.csp ? { csp: rendered.resource.csp } : {}),
-                ...(rendered.resource.permissions
-                  ? { permissions: rendered.resource.permissions }
-                  : {}),
-                ...(rendered.resource.prefersBorder === undefined
-                  ? {}
-                  : { prefersBorder: rendered.resource.prefersBorder }),
-              },
-            }}
-            tool={{ name: rendered.tool, arguments: rendered.arguments }}
-            result={rendered.result}
-            serverName={rendered.serverName}
-            onCallTool={async (name, args) => {
-              const result = await callTool(name, args);
-              setRefreshToken((token) => token + 1);
-              return result;
-            }}
-            onMessage={sayToConversation}
-          />
+          {rendered.resource ? (
+            <McpAppView
+              resource={{
+                uri: rendered.resource.uri,
+                mimeType: rendered.resource.mimeType,
+                text: rendered.resource.text,
+                meta: {
+                  ...(rendered.resource.csp ? { csp: rendered.resource.csp } : {}),
+                  ...(rendered.resource.permissions
+                    ? { permissions: rendered.resource.permissions }
+                    : {}),
+                  ...(rendered.resource.prefersBorder === undefined
+                    ? {}
+                    : { prefersBorder: rendered.resource.prefersBorder }),
+                },
+              }}
+              tool={{ name: rendered.tool, arguments: rendered.arguments }}
+              result={rendered.result}
+              serverName={rendered.serverName}
+              onCallTool={async (name, args) => {
+                const result = await callTool(name, args);
+                setRefreshToken((token) => token + 1);
+                return result;
+              }}
+              onMessage={sayToConversation}
+            />
+          ) : (
+            <Text token="body-small" tone="muted">
+              Interactive view unavailable.
+            </Text>
+          )}
+          {renderedText ? (
+            <Text as="p" token="body-small" className="whitespace-pre-wrap">
+              {renderedText}
+            </Text>
+          ) : null}
           {widgetSaid ? (
             <Text as="p" token="body-small">
               {widgetSaid}

@@ -19,6 +19,7 @@
  * it runs under a policy that forbids fetching anything, so there is nothing to bundle from.
  */
 import { MCP_UI_METHODS } from '@docket/types';
+import { parse, serialize } from 'parse5';
 
 import {
   buildViewCsp,
@@ -47,13 +48,15 @@ export const MCP_APP_SANDBOX_CSP = [
 ].join('; ');
 
 /**
- * Prepend a `Content-Security-Policy` meta tag to a widget document.
+ * Parse an inert widget document and prepend its `Content-Security-Policy` meta tag.
  *
  * @remarks
  * A `srcdoc` frame has no response headers, so the policy has to travel inside the document, and
- * it only binds if it precedes everything it governs. Inserting immediately after `<head>` — or
- * synthesizing a head when the document has none — is what makes that true for real-world HTML
- * rather than only for well-formed HTML.
+ * it only binds if it precedes everything it governs. String insertion cannot guarantee that:
+ * HTML's parser accepts executable nodes before a late `<head>`, and Chromium can run them before
+ * a later CSP meta is encountered. parse5 builds the browser-shaped tree without executing it;
+ * prefixing the meta before parsing makes the HTML tree builder place it first in the normalized
+ * head, ahead of every script, preload, stylesheet, image, or other resource-loading node.
  *
  * @param html - The widget document as the server served it.
  * @param csp - The policy value to enforce.
@@ -61,17 +64,7 @@ export const MCP_APP_SANDBOX_CSP = [
  */
 export function withCspMeta(html: string, csp: string): string {
   const tag = `<meta http-equiv="Content-Security-Policy" content="${csp.replace(/"/g, '&quot;')}">`;
-  const headOpen = /<head(\s[^>]*)?>/i.exec(html);
-  if (headOpen) {
-    const at = headOpen.index + headOpen[0].length;
-    return `${html.slice(0, at)}${tag}${html.slice(at)}`;
-  }
-  const htmlOpen = /<html(\s[^>]*)?>/i.exec(html);
-  if (htmlOpen) {
-    const at = htmlOpen.index + htmlOpen[0].length;
-    return `${html.slice(0, at)}<head>${tag}</head>${html.slice(at)}`;
-  }
-  return `<head>${tag}</head>${html}`;
+  return serialize(parse(`${tag}${html}`));
 }
 
 /**

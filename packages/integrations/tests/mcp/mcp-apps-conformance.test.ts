@@ -190,6 +190,9 @@ describe('conformance matrix', () => {
     ]);
     for (const entry of ADVERTISED_OPTIONAL_CAPABILITIES) {
       const [file, testName] = entry.test.split(' :: ');
+      expect(file, `${entry.capability} must cite browser-executed Playwright evidence`).toMatch(
+        /^apps\/web\/e2e\/.*\.spec\.ts$/,
+      );
       const candidates = [
         join(dirname(fileURLToPath(import.meta.url)), file ?? ''),
         join(REPO_ROOT, file ?? ''),

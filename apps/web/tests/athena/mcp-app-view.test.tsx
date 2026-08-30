@@ -298,6 +298,84 @@ describe('McpAppView frames', () => {
 });
 
 describe('McpAppView bridge', () => {
+  it('keeps one initialized bridge alive across ordinary parent rerenders', async () => {
+    const onCallTool = vi.fn(async () => ({ content: [{ type: 'text', text: 'still live' }] }));
+    const harness = mount({ onCallTool });
+    await handshake(harness);
+    await waitFor(() => {
+      expect(
+        harness.posted.some((entry) => entry.message['method'] === MCP_UI_METHODS.toolResult),
+      ).toBe(true);
+    });
+    const originalFrame = harness.frame;
+
+    harness.view.rerender(
+      <McpAppView
+        resource={{ ...RESOURCE, meta: { ...RESOURCE.meta } }}
+        tool={{ name: 'release_checklist', arguments: { release: '4.2' } }}
+        result={{ content: [{ type: 'text', text: '2 of 4 done' }] }}
+        serverName="Acme Release Tracker"
+        sandboxOrigin={SANDBOX_ORIGIN}
+        onCallTool={onCallTool}
+      />,
+    );
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    });
+
+    expect(harness.view.container.querySelector('iframe')).toBe(originalFrame);
+    expect(
+      harness.posted.some((entry) => entry.message['method'] === MCP_UI_METHODS.resourceTeardown),
+    ).toBe(false);
+
+    harness.fromProxy({
+      jsonrpc: '2.0',
+      id: 'after-rerender',
+      method: 'tools/call',
+      params: { name: 'advance_release', arguments: {} },
+    });
+    await waitFor(() => {
+      expect(
+        harness.posted.find((entry) => entry.message['id'] === 'after-rerender'),
+      ).toMatchObject({ message: { result: { content: [{ type: 'text', text: 'still live' }] } } });
+    });
+  });
+
+  it('releases its message listener immediately when initialization fails', async () => {
+    const remove = vi.spyOn(window, 'removeEventListener');
+    const harness = mount();
+    fireEvent.error(harness.frame);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('mcp-app-view-failure')).toBeVisible();
+      expect(remove.mock.calls.some(([type]) => type === 'message')).toBe(true);
+    });
+    const postedAtFailure = harness.posted.length;
+    harness.fromProxy({ jsonrpc: '2.0', method: MCP_UI_METHODS.sandboxProxyReady, params: {} });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(harness.posted).toHaveLength(postedAtFailure);
+  });
+
+  it('releases an initialized bridge immediately when its frame fails', async () => {
+    const remove = vi.spyOn(window, 'removeEventListener');
+    const harness = mount();
+    await handshake(harness);
+    await waitFor(() => {
+      expect(
+        harness.posted.some((entry) => entry.message['method'] === MCP_UI_METHODS.toolResult),
+      ).toBe(true);
+    });
+    fireEvent.error(harness.frame);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('mcp-app-view-failure')).toBeVisible();
+      expect(remove.mock.calls.some(([type]) => type === 'message')).toBe(true);
+    });
+    expect(
+      harness.posted.some((entry) => entry.message['method'] === MCP_UI_METHODS.resourceTeardown),
+    ).toBe(false);
+  });
+
   it('initializes the browser adapter with truthful capabilities and stable host context', async () => {
     const harness = mount();
     harness.fromProxy({ jsonrpc: '2.0', method: MCP_UI_METHODS.sandboxProxyReady, params: {} });
@@ -476,6 +554,7 @@ describe('McpAppView bridge', () => {
   });
 
   it('removes an app-requested view only after sending resource teardown', async () => {
+    const remove = vi.spyOn(window, 'removeEventListener');
     const harness = mount();
     await handshake(harness);
 
@@ -492,6 +571,7 @@ describe('McpAppView bridge', () => {
 
     await waitFor(() => {
       expect(screen.queryByTestId('mcp-app-view')).not.toBeInTheDocument();
+      expect(remove.mock.calls.some(([type]) => type === 'message')).toBe(true);
     });
   });
 

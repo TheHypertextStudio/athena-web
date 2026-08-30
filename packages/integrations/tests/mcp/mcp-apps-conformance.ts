@@ -109,7 +109,7 @@ const EVIDENCE = {
   },
   webPolicyBoundary: {
     implementation:
-      'apps/web/src/components/athena/mcp-app-view.tsx :: sandboxResourceParams(resource)',
+      'apps/web/src/components/athena/mcp-app-view.tsx :: sandboxResourceParams(readyResource)',
     test: 'apps/web/tests/athena/mcp-app-view.test.tsx :: propagates declared CSP and permissions across the Web proxy boundary',
   },
   restrictiveDefault: {
@@ -591,19 +591,21 @@ export const NORMATIVE_REQUIREMENTS: readonly NormativeRequirement[] = [
 ];
 
 /** Advertised stable optional surfaces and the end-to-end test that proves each promise. */
+const ATHENA_BROWSER_JOURNEY =
+  'apps/web/e2e/athena/mcp-apps-stable.spec.ts :: canonical Athena invocation creates and restores a fully interactive stable MCP App';
+const ATHENA_BROWSER_CSP =
+  'apps/web/e2e/athena/mcp-apps-stable.spec.ts :: host CSP is installed before hostile executable markup and permits zero egress';
+
 export const ADVERTISED_OPTIONAL_CAPABILITIES = [
-  { capability: 'openLinks', test: EVIDENCE.browserOpenLink.test },
-  {
-    capability: 'serverTools',
-    test: 'apps/web/tests/athena/mcp-app-view.test.tsx :: runs a tool the widget asks for and answers with the result',
-  },
-  { capability: 'message.text', test: EVIDENCE.browserMessage.test },
-  { capability: 'sandbox.csp', test: EVIDENCE.webPolicyBoundary.test },
-  { capability: 'sandbox.permissions', test: EVIDENCE.webPolicyBoundary.test },
-  { capability: 'hostContext.theme', test: EVIDENCE.browserTheme.test },
-  { capability: 'hostContext.sizing', test: EVIDENCE.browserSizing.test },
-  { capability: 'displayMode.inline', test: EVIDENCE.browserHostContext.test },
-  { capability: 'displayMode.fullscreen', test: EVIDENCE.browserDisplayMode.test },
+  { capability: 'openLinks', test: ATHENA_BROWSER_JOURNEY },
+  { capability: 'serverTools', test: ATHENA_BROWSER_JOURNEY },
+  { capability: 'message.text', test: ATHENA_BROWSER_JOURNEY },
+  { capability: 'sandbox.csp', test: ATHENA_BROWSER_CSP },
+  { capability: 'sandbox.permissions', test: ATHENA_BROWSER_JOURNEY },
+  { capability: 'hostContext.theme', test: ATHENA_BROWSER_JOURNEY },
+  { capability: 'hostContext.sizing', test: ATHENA_BROWSER_JOURNEY },
+  { capability: 'displayMode.inline', test: ATHENA_BROWSER_JOURNEY },
+  { capability: 'displayMode.fullscreen', test: ATHENA_BROWSER_JOURNEY },
 ] as const;
 
 function escapeCell(value: string): string {

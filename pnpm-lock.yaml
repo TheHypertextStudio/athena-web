@@ -1006,6 +1006,9 @@ importers:
       '@notionhq/client':
         specifier: ^5.24.0
         version: 5.24.0
+      parse5:
+        specifier: 8.0.1
+        version: 8.0.1
       zod:
         specifier: 'catalog:'
         version: 4.4.3

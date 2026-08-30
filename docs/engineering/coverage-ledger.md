@@ -139,6 +139,73 @@ cannot deploy through this gate.
 
 ---
 
+## How `@docket/api` drifted below its own bar
+
+> **Measured**: 2026-08-30, comparing `1809ba05` (26 Aug, the commit that set the 88 threshold and
+> recorded an 88.30% / 18084-of-20478 baseline) against `HEAD`.
+
+The gate ran red on `main` for four days and code kept landing. `pnpm test:coverage` failed on
+`@docket/api` at 87.95% and was restored to 88.06% by the tests in
+`apps/api/tests/services/work-location/`. This section records what slipped through in the
+meantime, so the drift is a list rather than a feeling.
+
+In that window `apps/api/src` took 47 commits across 81 files, +5,182/−1,265 lines. Isolating the
+branches that sit on **lines those commits added**:
+
+|                      |                                          |
+| -------------------- | ---------------------------------------- |
+| Branches added       | 1,192                                    |
+| Uncovered            | 245                                      |
+| Coverage of new code | **79.4%**, against the package's 88% bar |
+
+That is the mechanism. The threshold is one global percentage over ~21,000 branches, so a feature
+landing at 79% moves the aggregate by a fraction of a point. Enough of them in a row walk the
+package under its own bar without any single change looking responsible — which is exactly what
+happened.
+
+Where the 245 uncovered new branches sit:
+
+| Uncovered / added | File                                    |
+| ----------------- | --------------------------------------- |
+| 47 / 125          | `routes/notion-mirror-reconcile.ts`     |
+| 39 / 114          | `routes/integration-reconcile-graph.ts` |
+| 35 / 128          | `lib/idempotency.ts`                    |
+| 27 / 82           | `lib/external-agent-processor.ts`       |
+| 12 / 123          | `routes/initiative-aggregates.ts`       |
+| 10 / 10           | `dev-env.ts`                            |
+| 10 / 15           | `routes/hub-helpers.ts`                 |
+| 7 / 27            | `lib/external-agent-publisher.ts`       |
+| 7 / 61            | `lib/external-agent-relay.ts`           |
+| 7 / 22            | `routes/webhooks.ts`                    |
+| 5 / 12            | `lib/external-agent-session.ts`         |
+| 5 / 40            | `lib/sql-state.ts`                      |
+
+The external-agent surface is the single largest cluster once its four files are added together:
+46 uncovered branches across processor, relay, publisher, and session. `lib/idempotency.ts` is the
+most consequential per branch — it is replay authorization, and an untested branch there is an
+untested access check.
+
+Reproduce with:
+
+```bash
+pnpm turbo run test:coverage --filter=@docket/api --force
+git diff -U0 <baseline>..HEAD -- apps/api/src   # intersect added lines with coverage-final.json
+```
+
+### Two things this does not fix
+
+**Nothing stops it recurring.** A per-diff coverage check — new and changed lines must meet the bar
+on their own, independent of the aggregate — is what would catch a feature landing at 79%. The
+global threshold structurally cannot.
+
+**The run is load-sensitive.** On an oversubscribed machine a run stretched from ~4 minutes to
+13m49s and five test files died on timeouts, contributing zero coverage and moving the measured
+number by ~9 branches. `tests/security/route-auth.test.ts` had capped its own `beforeAll` at 60s —
+a third of the preset's budget — and was the first to go; that cap is now removed. The remaining
+four hit the package's `testTimeout: 60_000` and are untouched.
+
+---
+
 ## Related
 
 - CI wiring: `.github/workflows/ci.yml`, job `coverage`

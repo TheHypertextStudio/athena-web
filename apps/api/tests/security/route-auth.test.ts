@@ -183,13 +183,18 @@ async function probe(route: RouteProbe): Promise<Response> {
   return server.request(route.path, init);
 }
 
+// No timeout argument: this hook boots PGlite and builds the whole server, and it inherits the
+// preset's 180s hook budget deliberately. It previously capped itself at 60s — a third of that —
+// which made it the first thing in the package to die on an oversubscribed runner, taking the
+// file's coverage contribution down with it. Raise the preset if this is ever genuinely too slow;
+// do not re-add a lower local cap.
 beforeAll(async () => {
   await getDb();
   server = await buildServer();
   const response = await server.request('/v1/openapi.json');
   expect(response.status).toBe(200);
   probes = probesFromDocument((await response.json()) as OpenApiDocument);
-}, 60_000);
+});
 
 describe('route auth matrix', () => {
   it('derives a substantial route list from the published API document', () => {

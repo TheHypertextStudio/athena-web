@@ -198,13 +198,20 @@ the same rows the Settings surface manages, so a connection made in either place
 
 ---
 
-## 9. Evidence
+## 9. Stable conformance and interoperability evidence
 
-- `packages/integrations/tests/mcp/mcp-apps-host.test.ts` — 50 tests driving a fake view frame.
-- `packages/integrations/tests/mcp/mcp-apps-sandbox.test.ts` — 14 tests that **execute** the
-  shipped proxy script against a stand-in for its three browser objects.
-- `packages/integrations/tests/mcp/mcp-apps-conformance.test.ts` — the gate: spec digests, full
-  surface coverage, and a check that every test the matrix cites exists by name.
+- `packages/integrations/tests/mcp/mcp-apps-conformance.test.ts` — the stable gate: committed spec
+  digests, all 81 uppercase RFC 2119 occurrences, host/sandbox/server/view responsibility,
+  applicability, implementation evidence, real named tests, generated-document freshness, and an
+  end-to-end test for every advertised optional capability.
+- `packages/integrations/tests/mcp/mcp-apps-official-compat.test.ts` — the official SDK `App`
+  drives Athena's real compatibility facade and proxy transport through handshake ordering,
+  truthful capabilities, malformed input, tool input/result, a view-initiated tool call, links,
+  text messages, size/theme changes, fullscreen negotiation, and graceful teardown.
+- `packages/integrations/tests/mcp/mcp-apps-host.test.ts` — protocol behavior and security policy
+  driven without a browser.
+- `packages/integrations/tests/mcp/mcp-apps-sandbox.test.ts` — executes the shipped proxy script
+  against stand-ins for its browser objects.
 - `apps/web/tests/athena/mcp-app-view.test.tsx` — 15 tests of the browser adapter.
 - `apps/api/tests/mcp/mcp-apps-sandbox.test.ts` — the proxy endpoint's headers and origin.
 - `apps/api/tests/mcp/mcp-apps-tokens.test.ts` — the widget stylesheet's vocabulary, against the
@@ -214,3 +221,26 @@ the same rows the Settings surface manages, so a connection made in either place
   writes to `docs/design/audits/screenshots/mcp-apps/`, which is where the craft review reads from.
   The suite asserts each widget reports its own height and that nothing overflows horizontally, so
   a broken resize loop hangs the spec rather than passing it.
+
+### Pinned upstream map-server smoke
+
+The workspace exact-pins `@modelcontextprotocol/server-map@1.7.5`. Its published Streamable HTTP
+example binds `localhost`/`0.0.0.0`; Athena correctly rejects that address before connecting, so a
+local process cannot be used to manufacture remote interoperability evidence by weakening SSRF.
+
+Run the pinned server, expose its `/mcp` route through an ephemeral **public HTTPS** endpoint, then
+exercise the production `RealMcpConnector`:
+
+```bash
+# Terminal 1. This local origin is only the tunnel/deployment source; Athena will not call it.
+PORT=3001 pnpm --filter @docket/integrations exec mcp-map-server
+
+# Terminal 2. Point at the public HTTPS endpoint created for the process above.
+MCP_MAP_INTEROP_URL=https://PUBLIC-EPHEMERAL-HOST.example/mcp \
+  pnpm --filter @docket/integrations test:mcp-map-interop
+```
+
+The command fails unless the official server advertises `geocode` and `show-map`, `show-map`
+returns meaningful text, and Athena retains its `ui://cesium-map/mcp-app.html` presentation. An
+authenticated production acceptance run still requires a real Athena account connected to that
+public endpoint; this manual transport smoke does not close that release gate.

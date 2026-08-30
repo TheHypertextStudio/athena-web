@@ -15,16 +15,12 @@ import { writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import {
-  extractSpecSurface,
-  readSpecSources,
-  renderConformanceMatrix,
-} from './mcp-apps-conformance';
+import { readSpecSources, renderConformanceMatrix } from './mcp-apps-conformance';
 
 const target = join(
   dirname(fileURLToPath(import.meta.url)),
   '../../../../docs/engineering/specs/mcp-apps-conformance.md',
 );
 
-writeFileSync(target, renderConformanceMatrix(readSpecSources(), extractSpecSurface()));
+writeFileSync(target, renderConformanceMatrix(readSpecSources()));
 process.stdout.write(`wrote ${target}\n`);

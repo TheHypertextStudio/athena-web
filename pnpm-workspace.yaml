@@ -87,6 +87,7 @@ catalog:
   # MCP
   '@modelcontextprotocol/sdk': ^1.29.0
   '@modelcontextprotocol/ext-apps': 1.7.5
+  '@modelcontextprotocol/server-map': 1.7.5
 
   # Billing
   stripe: 22.3.0

@@ -2,16 +2,15 @@
  * The MCP Apps conformance gate.
  *
  * @remarks
- * Three things are checked, and all three have to hold for the matrix to mean anything:
+ * Four things are checked, and all four have to hold for the manifest to mean anything:
  *
  * 1. The provenance of the committed spec copies — the bytes still hash to what `sources.json`
  *    recorded, so nobody has quietly edited the specification to match the implementation.
- * 2. Coverage — every item extracted from the spec text has a claim, and every claim corresponds
- *    to an item the spec actually defines.
+ * 2. Coverage — every uppercase RFC 2119 occurrence has one stable, fingerprinted manifest row.
  * 3. Truthfulness of the claims — each row names a test, and that test exists, by name, in the
  *    file the row names. A matrix that cites tests nobody wrote is worse than no matrix.
  *
- * Plus the handful of behavioural assertions the matrix itself cites.
+ * 4. Optional truthfulness — every advertised capability has an end-to-end test.
  */
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
@@ -33,9 +32,9 @@ import {
 import { createMcpAppHost, type JsonRpcMessage } from '../../src/mcp-apps-host';
 import { MCP_UI_CLIENT_CAPABILITY } from '../../src/mcp-connector';
 import {
-  CONFORMANCE_CLAIMS,
-  claimKey,
-  extractSpecSurface,
+  ADVERTISED_OPTIONAL_CAPABILITIES,
+  NORMATIVE_REQUIREMENTS,
+  extractNormativeRequirements,
   readSpecSources,
   readVendored,
   renderConformanceMatrix,
@@ -87,51 +86,74 @@ describe('committed specification', () => {
 });
 
 describe('conformance matrix', () => {
-  const surface = extractSpecSurface();
+  const requirements = extractNormativeRequirements();
 
-  it('extracts a surface that includes every method the spec names', () => {
-    const names = new Set(surface.map((item) => item.name));
-    for (const method of Object.values(MCP_UI_METHODS)) {
-      expect(names, `the spec text does not mention ${method}`).toContain(method);
-    }
-    // The extraction is doing real work, not returning a hand-written list.
-    expect(surface.filter((item) => item.kind === 'method').length).toBeGreaterThan(5);
-    expect(surface.filter((item) => item.kind === 'notification').length).toBeGreaterThan(5);
+  it('accounts for every RFC 2119 requirement rather than only protocol symbols', () => {
+    expect(requirements).toHaveLength(81);
+    expect(requirements.some((requirement) => requirement.level === 'MUST NOT')).toBe(true);
+    expect(new Set(NORMATIVE_REQUIREMENTS.map((requirement) => requirement.role))).toEqual(
+      new Set(['host', 'sandbox', 'server', 'view']),
+    );
+    expect(requirements.map((requirement) => requirement.sourceFingerprint).sort()).toEqual(
+      NORMATIVE_REQUIREMENTS.map((requirement) => requirement.sourceFingerprint).sort(),
+    );
   });
 
-  it('claims every item the spec defines, and claims nothing it does not', () => {
-    const keys = surface.map(claimKey);
-    const missing = keys.filter((key) => !CONFORMANCE_CLAIMS[key]);
-    expect(missing, 'spec items with no implementation claim').toEqual([]);
-
-    const extra = Object.keys(CONFORMANCE_CLAIMS).filter((key) => !keys.includes(key));
-    expect(extra, 'claims for things the spec does not define').toEqual([]);
-  });
-
-  it('has no row that hedges — every claim names an implementation and a real test', () => {
-    for (const [key, claim] of Object.entries(CONFORMANCE_CLAIMS)) {
-      expect(claim.implementation, key).toMatch(/\.tsx? :: \S/);
-      const [file, testName] = claim.test.split(' :: ');
-      expect(testName, key).toBeTruthy();
+  it('gives every applicable requirement implementation and named behavioral evidence', () => {
+    const ids = new Set<string>();
+    for (const requirement of NORMATIVE_REQUIREMENTS) {
+      expect(ids.has(requirement.id), `duplicate stable id ${requirement.id}`).toBe(false);
+      ids.add(requirement.id);
+      expect(requirement.implementation, requirement.id).toMatch(/\.tsx? :: \S/);
+      if (requirement.applicability === 'not-applicable') {
+        expect(
+          requirement.reason?.length,
+          `${requirement.id} needs a concrete reason`,
+        ).toBeGreaterThan(20);
+      }
+      const [file, testName] = requirement.test.split(' :: ');
+      expect(testName, requirement.id).toBeTruthy();
 
       const candidates = [
         join(dirname(fileURLToPath(import.meta.url)), file ?? ''),
         join(REPO_ROOT, file ?? ''),
       ];
       const found = candidates.find((path) => existsSync(path));
-      expect(found, `${key} cites a test file that does not exist: ${String(file)}`).toBeDefined();
+      expect(
+        found,
+        `${requirement.id} cites a test file that does not exist: ${String(file)}`,
+      ).toBeDefined();
       const source = readFileSync(assertDefined(found), 'utf8');
-      expect(source, `${key} cites a test that does not exist: ${String(testName)}`).toContain(
+      expect(
+        source,
+        `${requirement.id} cites a test that does not exist: ${String(testName)}`,
+      ).toContain(`'${String(testName)}'`);
+    }
+  });
+
+  it('names an existing end-to-end test for every advertised optional capability', () => {
+    expect(ADVERTISED_OPTIONAL_CAPABILITIES.map((entry) => entry.capability).sort()).toEqual([
+      'displayMode.fullscreen',
+      'displayMode.inline',
+      'hostContext.sizing',
+      'hostContext.theme',
+      'message.text',
+      'openLinks',
+      'sandbox.csp',
+      'sandbox.permissions',
+      'serverTools',
+    ]);
+    for (const entry of ADVERTISED_OPTIONAL_CAPABILITIES) {
+      const [file, testName] = entry.test.split(' :: ');
+      const candidates = [
+        join(dirname(fileURLToPath(import.meta.url)), file ?? ''),
+        join(REPO_ROOT, file ?? ''),
+      ];
+      const found = candidates.find((path) => existsSync(path));
+      expect(found, `${entry.capability} cites no test file`).toBeDefined();
+      expect(readFileSync(assertDefined(found), 'utf8'), entry.capability).toContain(
         `'${String(testName)}'`,
       );
-
-      // No row may hedge. The implementation and test columns are structural (a method really is
-      // named `tool-input-partial`), so the vocabulary check applies to the prose column, which is
-      // the only place a "we'll get to it" could hide.
-      const note = (claim.note ?? '').toLowerCase();
-      for (const word of ['unimplemented', 'partially', 'deferred', 'todo', 'not yet', 'planned']) {
-        expect(note, `${key} hedges with "${word}"`).not.toContain(word);
-      }
     }
   });
 
@@ -140,9 +162,7 @@ describe('conformance matrix', () => {
       existsSync(MATRIX_PATH),
       'run: pnpm --filter @docket/integrations exec tsx tests/mcp/emit-conformance-matrix.ts',
     ).toBe(true);
-    expect(readFileSync(MATRIX_PATH, 'utf8')).toBe(
-      renderConformanceMatrix(readSpecSources(), surface),
-    );
+    expect(readFileSync(MATRIX_PATH, 'utf8')).toBe(renderConformanceMatrix(readSpecSources()));
   });
 });
 

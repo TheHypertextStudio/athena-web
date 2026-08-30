@@ -143,8 +143,50 @@
   while protocol receive failure, frame failure, deadline expiry, and unmount share the bounded
   cleanup path. Focused view/workbench validation passes 29 tests, and Web TypeScript and ESLint
   pass.
+- **Layer 3 implementation**: Replaced the protocol-symbol inventory with an executable stable
+  normative manifest covering all 81 uppercase RFC 2119 occurrences in the vendored
+  `2026-01-26` prose: 49 host, 6 sandbox, 14 server, and 12 view obligations. Every row has a
+  stable id, source heading/line/text fingerprint, RFC level, applicability, production location,
+  real named behavioral test, and a concrete reason for conditional or unsupported behavior. The
+  gate rejects changed spec bytes, missing or extra normative statements, missing evidence,
+  invented test names, stale generated documentation, and advertised optional capabilities that
+  lack end-to-end evidence. `MAY` behavior remains optional; sampling, downloads, logging,
+  resource browsing, model-context updates, picture-in-picture, and draft app tools remain
+  unadvertised.
+- **Layer 3 interoperability**: Expanded the official `App` compatibility test to drive Athena's
+  real facade and custom transport through initialize/initialized ordering, truthful capability
+  negotiation, malformed input, tool input/result, a view-initiated server tool, open-link,
+  text-only messaging, size and theme changes, inline/fullscreen negotiation, and graceful
+  teardown. Exact-pinned `@modelcontextprotocol/server-map@1.7.5` and added a manual public-HTTPS
+  smoke that uses the production `RealMcpConnector` to require `geocode`, `show-map`, meaningful
+  text fallback, and a retained `ui://cesium-map/mcp-app.html` snapshot. The pinned server starts
+  locally, but the production boundary correctly rejects a local attempt with
+  `MCP endpoint address is not public: 127.0.0.1`; no SSRF rule was weakened to turn that rejection
+  into evidence.
+- **Layer 3 validation**: Focused manifest plus official-SDK compatibility passes 15 tests; the
+  complete integrations MCP directory passes 192 tests. Integrations coverage passes 988 tests at
+  96.69% statements, 93.99% branches, 97.11% functions, and 97.25% lines. Fresh root typecheck
+  passes 26 tasks, root lint passes all packages, and the production build passes API, Runner,
+  Admin, and Web (including the production service worker). Root tooling passes 175 tests, then
+  `pnpm test` stops at the pre-existing documentation-coverage failure for exported
+  `setOutboxUser` in `apps/web/src/components/pwa/outbox.ts:440`; that declaration is unchanged
+  from base commit `aced6a7a` and this branch has no diff in that file. The task's focused and
+  affected suites remain green.
+- **Layer 3 decisions and retrospective**: The official stable prose and exact npm package source
+  were the authority because Context7 remained quota-blocked. Counting normative vocabulary
+  occurrences rather than methods/capabilities prevents a stable protocol symbol list from
+  concealing sandbox ordering, visibility, fallback, or teardown obligations. Keeping the
+  upstream smoke as a public-endpoint command preserves the real outbound security boundary; the
+  cost is that local CI cannot close remote-server or authenticated production acceptance.
+- **Layer 3 files changed**: `pnpm-workspace.yaml`, `pnpm-lock.yaml`,
+  `packages/integrations/package.json`, `packages/integrations/tests/mcp/{mcp-apps-conformance.ts,mcp-apps-conformance.test.ts,mcp-apps-official-compat.test.ts,emit-conformance-matrix.ts,run-map-interop.ts}`,
+  `docs/engineering/specs/{mcp-apps-conformance.md,mcp-apps-host.md}`, and this worklog.
 - **Blockers**: Production acceptance needs an authenticated live Athena account and a publicly
   reachable pinned upstream reference server; local and CI evidence cannot substitute for it.
+  Once available, start the exact-pinned map server behind an ephemeral public HTTPS endpoint,
+  run `MCP_MAP_INTEROP_URL=https://PUBLIC-HOST/mcp pnpm --filter @docket/integrations
+test:mcp-map-interop`, connect the same endpoint from authenticated Athena, and capture model
+  invocation, inline interaction, reload restoration, fullscreen, and teardown evidence.
 
 ---
 

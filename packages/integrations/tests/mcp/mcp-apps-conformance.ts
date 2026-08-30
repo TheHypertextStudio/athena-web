@@ -112,6 +112,10 @@ const EVIDENCE = {
       'apps/web/src/components/athena/mcp-app-view.tsx :: sandboxResourceParams(resource)',
     test: 'apps/web/tests/athena/mcp-app-view.test.tsx :: propagates declared CSP and permissions across the Web proxy boundary',
   },
+  restrictiveDefault: {
+    implementation: 'packages/integrations/src/mcp-apps-host.ts :: buildViewCsp',
+    test: 'apps/web/tests/athena/mcp-app-view.test.tsx :: hands the proxy a document whose policy blocks network egress',
+  },
   sandboxPolicyBoundary: {
     implementation: 'packages/integrations/src/mcp-apps-sandbox.ts :: sandboxResourceParams',
     test: 'apps/web/tests/athena/mcp-app-view.test.tsx :: propagates declared CSP and permissions across the Web proxy boundary',
@@ -177,6 +181,10 @@ const EVIDENCE = {
     implementation: 'apps/web/src/components/athena/mcp-app-view.tsx :: requestDisplayMode',
     test: 'apps/web/tests/athena/mcp-app-view.test.tsx :: enters fullscreen, reports the resulting mode, and contains focus',
   },
+  hostDisplayModeCapability: {
+    implementation: 'packages/integrations/src/mcp-apps-host.ts :: bridge.onrequestdisplaymode',
+    test: 'mcp-apps-official-compat.test.ts :: keeps the current mode unless both host and app support the requested stable mode',
+  },
   browserToolNotifications: {
     implementation: 'apps/web/src/components/athena/mcp-app-view.tsx :: deliverToolInput',
     test: 'apps/web/tests/athena/mcp-app-view.test.tsx :: delivers tool input then tool result, and only after the view is initialized',
@@ -208,6 +216,10 @@ const EVIDENCE = {
   runtimeContext: {
     implementation: 'apps/api/src/mcp/apps/runtime.ts :: applyHostContext',
     test: 'apps/api/tests/mcp/mcp-app-runtime.test.ts :: merges theme sizing and display-mode responses in the Athena widget runtime',
+  },
+  runtimeDisplayModeCapability: {
+    implementation: 'apps/api/src/mcp/apps/runtime.ts :: async requestDisplayMode(mode)',
+    test: 'apps/api/tests/mcp/mcp-app-runtime.test.ts :: does not request a display mode the host context does not offer',
   },
   runtimeToolNotifications: {
     implementation: 'apps/api/src/mcp/apps/runtime.ts :: handleResult',
@@ -278,7 +290,7 @@ export const NORMATIVE_REQUIREMENTS: readonly NormativeRequirement[] = [
   defineRequirement('SERVER-007', '14eb096e92aef753', 'server', 'applicable', 'serverResource'),
   defineRequirement('SERVER-008', '7020222c5779a235', 'server', 'applicable', 'serverResource'),
   defineRequirement('HOST-002', '9fa81c3e52c742c3', 'host', 'applicable', 'webPolicyBoundary'),
-  defineRequirement('HOST-003', 'fc191c471fc083fb', 'host', 'applicable', 'webPolicyBoundary'),
+  defineRequirement('HOST-003', 'fc191c471fc083fb', 'host', 'applicable', 'restrictiveDefault'),
   defineRequirement('HOST-004', '206c1711ff883b57', 'host', 'applicable', 'webPolicyBoundary'),
   defineRequirement('HOST-005', '8d8e265b528fc512', 'host', 'applicable', 'webPolicyBoundary'),
   defineRequirement(
@@ -358,9 +370,21 @@ export const NORMATIVE_REQUIREMENTS: readonly NormativeRequirement[] = [
   defineRequirement('HOST-018', 'd90c088450cbe3cc', 'host', 'applicable', 'browserHostContext'),
   defineRequirement('HOST-019', 'a913c0bdd3e0363c', 'host', 'applicable', 'browserSizing'),
   defineRequirement('VIEW-003', '10fa2a0572b0e08b', 'view', 'applicable', 'runtimeInitialize'),
-  defineRequirement('VIEW-004', '42ffc1178e4709b0', 'view', 'applicable', 'runtimeContext'),
+  defineRequirement(
+    'VIEW-004',
+    '42ffc1178e4709b0',
+    'view',
+    'applicable',
+    'runtimeDisplayModeCapability',
+  ),
   defineRequirement('VIEW-005', '506540c0ef05df46', 'view', 'applicable', 'runtimeContext'),
-  defineRequirement('HOST-020', '2a15799d4a485092', 'host', 'applicable', 'browserDisplayMode'),
+  defineRequirement(
+    'HOST-020',
+    '2a15799d4a485092',
+    'host',
+    'applicable',
+    'hostDisplayModeCapability',
+  ),
   defineRequirement('HOST-021', '36351519afa4511e', 'host', 'applicable', 'browserDisplayMode'),
   defineRequirement('HOST-022', '83188a959380935f', 'host', 'applicable', 'hostDisplayMode'),
   defineRequirement('HOST-023', 'efe085fad33eb6e6', 'host', 'applicable', 'hostDisplayMode'),

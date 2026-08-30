@@ -186,6 +186,21 @@ describe('Athena MCP App production runtime', () => {
     expect(runtime.docket.displayMode).toBe('inline');
   });
 
+  it('does not request a display mode the host context does not offer', async () => {
+    const initialize = runtime.request('ui/initialize');
+    runtime.respond(initialize, {
+      hostContext: { displayMode: 'inline', availableDisplayModes: ['inline'] },
+    });
+    await runtime.docket.ready;
+
+    const requested = runtime.docket.requestDisplayMode('fullscreen');
+    expect(
+      runtime.posted.filter((message) => message.method === 'ui/request-display-mode'),
+    ).toEqual([]);
+    await expect(requested).resolves.toBe('inline');
+    expect(runtime.docket.displayMode).toBe('inline');
+  });
+
   it('handles complete tool notifications and ignores partial arguments for critical work', async () => {
     const initialize = runtime.request('ui/initialize');
     runtime.respond(initialize, { hostContext: {} });

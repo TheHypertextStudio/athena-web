@@ -226,6 +226,27 @@
   `packages/integrations/src/mcp-apps-host.ts`,
   `packages/integrations/tests/mcp/{mcp-apps-conformance.ts,mcp-apps-conformance.test.ts,mcp-apps-official-compat.test.ts,mcp-apps-sandbox.test.ts,run-map-interop.ts,run-map-interop.test.ts}`,
   `docs/engineering/specs/{mcp-apps-conformance.md,mcp-apps-host.md}`, and this worklog.
+- **Layer 3 review fix 2 plan**: Correct the three remaining evidence assignments without changing
+  product scope: map omitted-CSP restrictive default to the existing Web/proxy network-denial
+  behavior, map the host's undeclared-display-mode MUST NOT to the official negative negotiation
+  test, and add a production `RUNTIME_JS` regression proving a View emits no display-mode request
+  when host context does not offer that mode. Use a temporary production mutation to capture RED
+  for the already-implemented runtime guard, then restore it for GREEN; regenerate the matrix and
+  rerun only focused manifest/runtime/official and affected static checks.
+- **Layer 3 review fix 2 outcome**: `HOST-003` now cites the actual `buildViewCsp` restrictive
+  default and the Web/proxy test that proves omitted policy blocks network egress. `HOST-020` now
+  cites AppBridge display-mode negotiation and the official-App negative test that leaves the mode
+  inline without invoking the host adapter when the app did not declare fullscreen. `VIEW-004`
+  now cites a production-runtime test that observes no `ui/request-display-mode` request when host
+  context offers inline only. Temporarily disabling that runtime guard produced the intended RED
+  wire request; restoring the existing guard produced GREEN. A generic level-only evidence rule
+  was not added: RFC level cannot determine whether a named behavioral test contains the relevant
+  negative/default assertion, and lexical test-name enforcement would be brittle rather than an
+  executable protocol guarantee.
+- **Layer 3 review fix 2 validation**: Focused manifest plus official-App compatibility passes
+  18/18; the production widget runtime passes 5/5. Integrations and API TypeScript and ESLint pass.
+  The generated matrix is fresh, `git diff --check` passes, and the review-fix range contains no
+  merge commit.
 - **Blockers**: Production acceptance needs an authenticated live Athena account and a publicly
   reachable pinned upstream reference server; local and CI evidence cannot substitute for it.
   Once available, start the exact-pinned map server behind an ephemeral public HTTPS endpoint,

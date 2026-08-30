@@ -111,6 +111,12 @@ git stash pop                                      # reapply your edits
 pnpm dev
 ```
 
+For **automated verification** — driving the app headlessly, signing in, taking screenshots — use
+`scripts/dev-stack.sh` rather than `pnpm dev`, and follow
+[`engineering/ui-verification.md`](engineering/ui-verification.md). `pnpm dev` relies on the
+privileged portless `:443` proxy, which fails opaquely from headless Chromium; `dev-stack.sh` brings
+the same stack up on plain HTTP in the topology CI uses.
+
 `turbo` resolves the task graph natively — `//#db:up` (Docker Postgres) →
 `@docket/db#db:migrate` → each app's `dev` — so the database is up and migrated before the
 servers start. No shell chaining required.

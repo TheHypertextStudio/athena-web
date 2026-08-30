@@ -1,7 +1,7 @@
 # AGENTS.md - Project Athena Agent Guidelines
 
-> **Version**: 2.0.3
-> **Last Updated**: 2026-08-26
+> **Version**: 2.1.0
+> **Last Updated**: 2026-08-29
 > **Applies To**: All AI coding agents working on Project Athena
 
 This document defines the operational framework for AI agents contributing to Project Athena. All agents MUST adhere to these guidelines to ensure consistent, high-quality, autonomous development.
@@ -558,6 +558,22 @@ Agents SHOULD periodically review:
 ---
 
 ## Self-Validation Protocol
+
+### Running the app to verify UI
+
+**Read [`docs/engineering/ui-verification.md`](docs/engineering/ui-verification.md) BEFORE starting a
+dev server from a worktree.** It is the whole procedure: `scripts/dev-stack.sh start` brings the
+stack up in the CI topology, `apps/web/e2e/tools/dev-session.ts` performs the passkey ceremony
+headlessly and persists an authenticated session, and `apps/web/e2e/tools/capture-shots.ts` takes the
+standard shot set with an overflow check.
+
+All three already exist. Do **not** build a parallel dev stack, launch-config entry, sign-in flow, or
+screenshot script — every environment problem that motivates one (portless TLS failures, stale
+`docket.localhost` aliases, `dotenv-cli` override precedence, the shared PGlite database, cold-route
+timeouts) is documented there with its fix. A second path is a second thing to keep correct.
+
+A fresh session is an empty account; seed through the API before claiming a surface was verified, and
+run `pnpm db:reset` afterwards because the dev database is the same file the API test suite reads.
 
 ### Pre-Commit Validation
 

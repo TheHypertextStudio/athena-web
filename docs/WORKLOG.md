@@ -7077,6 +7077,86 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [TODAY-COPY-001] Name every Today section for what it holds
+
+- **Completed**: 2026-08-29
+- **Priority**: P1
+- **Summary**: Every section heading on Today was a figure of speech. "The day", "Work in motion",
+  "Keep the momentum", and "Needs you" are now "Plan", "Projects & initiatives", "Suggested tasks",
+  and "Needs attention" — each naming its contents. Component and file names follow the headings.
+- **Decisions**: The summary strip is deleted rather than reworded. It counted approvals, blockers,
+  and due-today tasks that the sections directly beneath it already listed, so it restated the page
+  to the person reading it. The one fact it carried that nothing else did — a deadline landing on a
+  task never accepted into the plan — is now a "Due today" group of real rows inside Needs
+  attention, so the count is not needed to convey it.
+
+  `HubTodayPlanItem.reason` became nullable. Its positional fallback returned "You chose this first"
+  for position 0, which told a person they had chosen the thing they had chosen, under a card
+  already headed "Now". It now returns null there and the card omits the line, keeping only reasons
+  that change what to do: a deadline, a running timer, a scheduled window, or the count of work
+  unblocked. The promoted card also drops the workspace's state key rendered as a word ("Backlog")
+  in favour of the same `StatusIcon` every row on the page carries.
+
+  The composer is one `Surface` with a real segmented control. The two destinations were adjacent
+  `Chip`s, which read as unrelated controls; they are now one `TabList` track with the armed segment
+  filled. Every button in the section went through a `ControlGroup` — the page previously mixed
+  `controlSize="sm"` with `className="min-h-11"` overrides, so no two action rows agreed on height.
+
+- **Files changed**: Renamed `todays-work` → `day-plan`, `work-in-motion` → `project-status`,
+  `keep-the-momentum` → `suggested-tasks`, and replaced `needs-you` + `today-attention` with
+  `needs-attention`. Reworked `today-prompt`, `focus-card`, `today-section`, and the Today page.
+  API: `planReason` in `hub-today.ts`, `TodayPlanCandidate` in `services/hub/today-projection.ts`,
+  and `HubTodayPlanItem` in `packages/types/src/hub.ts`.
+- **Validation**: `pnpm lint`, `pnpm typecheck`, `pnpm format:check` pass. 3580 web tests and the
+  hub API suites pass. Screenshots captured at 1440px and 900px in both themes against a seeded
+  account.
+- **Learnings**: A count above a list the reader can already see is not a summary, it is the same
+  information twice. The test that a component earns its place is whether removing it loses a fact.
+
+### [TODAY-BLOCKED-001] Keep finished and archived tasks out of the blocked list
+
+- **Completed**: 2026-08-29
+- **Priority**: P1
+- **Summary**: `selectBlockedTasks` in `apps/api/src/routes/hub-today.ts` selected every task
+  assigned to the caller with no filter on `archivedAt`, `completedAt`, or `canceledAt`, while every
+  other task query in the same file filters all three. An archived or finished task stayed in
+  "Blocked" permanently, and a blocker that had itself been canceled or archived went on blocking.
+- **Decisions**: Both sides of the dependency edge are filtered to live work. The blocked side now
+  matches `duePredicate`'s existing shape, and the blocking side treats canceled and archived
+  blockers the same way it already treated completed ones — a blocker that cannot be worked cannot
+  be what is holding something up.
+- **Files changed**: `apps/api/src/routes/hub-today.ts`.
+- **Validation**: Reproduced against a seeded account, where a deleted task kept appearing under
+  Blocked; the row disappears after the fix. Hub API suites pass.
+- **Learnings**: The defect was invisible for as long as Today rendered `needsAttention` as a summed
+  number. Rendering the rows is what surfaced it.
+
+### [DX-UI-VERIFY-001] Document how to verify UI from a worktree
+
+- **Completed**: 2026-08-29
+- **Priority**: P1
+- **Summary**: Added `docs/engineering/ui-verification.md`, a `verify-ui` skill, and a pointer from
+  `AGENTS.md`'s Self-Validation Protocol. The procedure is three existing commands:
+  `scripts/dev-stack.sh start`, `e2e/tools/dev-session.ts`, `e2e/tools/capture-shots.ts`.
+- **Decisions**: The doc leads with "everything you need already exists" because the failure it
+  addresses is not a missing tool but an undiscoverable one. During this task an agent rebuilt a
+  screenshot harness that `capture-shots.ts` already provided and added a redundant launch
+  configuration, after losing an hour to portless TLS errors that `dev-stack.sh` exists to avoid.
+  That launch entry has been removed rather than kept: a second path is a second thing to keep
+  correct.
+- **Files changed**: Added `docs/engineering/ui-verification.md` and `.claude/skills/verify-ui.md`.
+  Updated `AGENTS.md` (version 2.1.0) and `docs/local-development.md`. Removed the
+  `docket-web-localhost` entry from `.claude/launch.json`.
+- **Validation**: Ran the documented sequence end to end in this worktree — stack `READY`, passkey
+  ceremony completed headlessly, four screenshots plus the 320px overflow check.
+- **Learnings**: The traps worth writing down were the ones with misleading symptoms:
+  `dotenv-cli`'s `-o` makes the file win over the environment; the Hub's day comes from the hub
+  timezone, so a UTC date silently plans work onto tomorrow; `DATABASE_URL` is a file-backed PGlite
+  database shared with the API test suite, so seeding dev data fails those tests until `db:reset`.
+- **Blockers**: `apps/api/tests/routes/initiatives-detail.test.ts` fails 18 assertions and
+  `group-a.test.ts` one more. Confirmed pre-existing by checking out the base commit in a scratch
+  worktree and reproducing the identical 18 failures there; unrelated to this work.
+
 ### [TODAY-SURFACE-001] Show the day's work on the daily surface
 
 - **Completed**: 2026-08-29

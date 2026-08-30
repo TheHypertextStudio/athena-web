@@ -18,7 +18,6 @@
  * lose them.
  */
 import type { HubTodayPlanItem } from '@docket/types';
-import { StatusIcon } from '@docket/ui/components';
 import { AlarmClock, ArrowRight, Check, Ellipsis } from '@docket/ui/icons';
 import {
   Button,
@@ -84,56 +83,58 @@ export function FocusCard({
   const time = timing(item, displayTimezone);
   return (
     <Card role="article" aria-label={`Now: ${item.title}`} className="p-4 @xl:p-5">
-      <Row gap={4} align="start" justify="between">
-        <Stack className="min-w-0">
-          <p className="text-primary text-label-large">Now</p>
-          {/* The same status glyph every row on this page carries. It used to be spelled out as a
-              word on the meta line below — the workspace's own state key, rendered as text, under a
-              card that says "Now". The glyph says it in the shared vocabulary instead. */}
-          <Row gap={2} align="start" className="mt-1">
-            <StatusIcon type={item.stateType} />
-            <Link
-              href={`/orgs/${item.organizationId}/tasks/${item.id}`}
-              className="text-on-surface text-title-medium focus-visible:ring-ring block text-balance hover:underline focus-visible:rounded focus-visible:ring-2 focus-visible:outline-none"
-            >
-              {item.title}
-            </Link>
-          </Row>
-          {/* Tier one is `task.summary`, written on the write path; the server falls back to a
-              lead-sentence extract of the description and sends null only when there is neither.
-              Nothing is reserved for the null case — an empty line under a title is what makes a
-              card look unwritten, whereas a card that simply ends after its title still carries a
-              glyph, a workspace, its timing, and its actions. */}
-          {item.summary ? (
-            <p className="text-on-surface-variant text-body-small mt-1 line-clamp-2">
-              {item.summary}
-            </p>
-          ) : null}
-        </Stack>
-        <OrgChip orgId={item.organizationId} name={orgName(item.organizationId)} />
-      </Row>
-      {/* Only facts that change what to do: a deadline or running timer (`reason`), and when it is
-          scheduled or how long it should take (`time`). The row disappears when there are neither,
-          rather than standing empty or being padded with the task's own state spelled out. */}
-      {(item.reason ?? time) ? (
-        <Row gap={3} className="text-on-surface-variant text-body-small mt-2 flex-wrap">
-          {item.reason ? <span>{item.reason}</span> : null}
-          {time ? (
-            <span className="inline-flex items-center gap-1">
-              <AlarmClock aria-hidden="true" className="size-3.5" /> {time}
-            </span>
-          ) : null}
+      {/* One Stack owns the vertical rhythm. This was four separate `mt-*` values — one per block —
+          so the spacing between any two lines depended on which block happened to follow which. */}
+      <Stack gap={3}>
+        <Row gap={4} align="start" justify="between">
+          <Stack gap={1} className="min-w-0">
+            <p className="text-primary text-label-large">Now</p>
+            {/* No status glyph. A row needs one because a row has no label; this card is headed
+                "Now", which is the same fact in words. Keeping it bought a second left margin —
+                the eyebrow and the action row on the card's edge, the title and summary indented
+                past a glyph — for information the card already carries. */}
+            <Stack gap={1} className="min-w-0">
+              <Link
+                href={`/orgs/${item.organizationId}/tasks/${item.id}`}
+                className="text-on-surface text-title-medium focus-visible:ring-ring block text-balance hover:underline focus-visible:rounded focus-visible:ring-2 focus-visible:outline-none"
+              >
+                {item.title}
+              </Link>
+              {/* Tier one is `task.summary`, written on the write path; the server falls back to a
+                    lead-sentence extract of the description and sends null only when there is
+                    neither. Nothing is reserved for the null case — an empty line under a title is
+                    what makes a card look unwritten. */}
+              {item.summary ? (
+                <p className="text-on-surface-variant text-body-small line-clamp-2">
+                  {item.summary}
+                </p>
+              ) : null}
+              {/* Only facts that change what to do: a deadline or running timer (`reason`), and
+                    when it is scheduled or how long it should take (`time`). */}
+              {(item.reason ?? time) ? (
+                <Row gap={3} className="text-on-surface-variant text-body-small flex-wrap">
+                  {item.reason ? <span>{item.reason}</span> : null}
+                  {time ? (
+                    <span className="inline-flex items-center gap-1">
+                      <AlarmClock aria-hidden="true" className="size-3.5" /> {time}
+                    </span>
+                  ) : null}
+                </Row>
+              ) : null}
+            </Stack>
+          </Stack>
+          <OrgChip orgId={item.organizationId} name={orgName(item.organizationId)} />
         </Row>
-      ) : null}
-      <FocusActions
-        item={item}
-        completing={completing}
-        date={date}
-        displayTimezone={displayTimezone}
-        onComplete={onComplete}
-        onDefer={onDefer}
-        onTimebox={onTimebox}
-      />
+        <FocusActions
+          item={item}
+          completing={completing}
+          date={date}
+          displayTimezone={displayTimezone}
+          onComplete={onComplete}
+          onDefer={onDefer}
+          onTimebox={onTimebox}
+        />
+      </Stack>
     </Card>
   );
 }
@@ -173,7 +174,7 @@ function FocusActions({
           {/* One primary, one secondary, everything else behind `⋯`. Five ghost buttons in a row
               gave completing the task, starting a timer, scheduling it, deferring it, and opening
               it identical weight, so the card asked the reader to rank them. */}
-          <ControlGroup controlSize="sm" className="mt-3">
+          <ControlGroup controlSize="sm">
             <Button
               type="button"
               disabled={completing}

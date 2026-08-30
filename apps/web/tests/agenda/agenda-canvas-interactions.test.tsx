@@ -271,9 +271,10 @@ describe('Agenda scheduling interactions', () => {
   it('keeps the schedule inside one page-owned viewport without an extra agenda scrollport', () => {
     renderTimeline([]);
 
-    const frame = screen.getByTestId('agenda-canvas-frame');
-    expect(screen.getByRole('region', { name: 'Schedule' })).toBe(frame.firstElementChild);
-    expect(canvasProps().minimumReadableTimedItemWidth).toBe(96);
+    const schedule = screen.getByRole('region', { name: 'Schedule' });
+    expect(schedule.parentElement).toHaveClass('relative', 'h-full', 'min-h-0');
+    expect(schedule.parentElement).not.toHaveClass('overflow-auto');
+    expect(canvasProps()).toMatchObject({ viewportHeight: '100%', minimumLaneWidth: 180 });
   });
 
   it('mounts the same work-location composition slots and editor overlays as Calendar', () => {

@@ -9,7 +9,7 @@ const { push, useApiQueryMock } = vi.hoisted(() => ({
   useApiQueryMock: vi.fn(),
 }));
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
+vi.mock('@/lib/interactions/navigation', () => ({ useAppRouter: () => ({ push }) }));
 
 vi.mock('@/lib/query', async () => {
   const actual = await vi.importActual<{ apiQueryOptions: typeof apiQueryOptions }>('@/lib/query');

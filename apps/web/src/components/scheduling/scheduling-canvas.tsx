@@ -256,7 +256,7 @@ export default function SchedulingCanvas({
       // variants were tried and both broke `fluid-scheduling-gestures`. Lane alignment is instead
       // guaranteed where it is actually decided, in `use-scheduling-viewport`'s horizontal anchor:
       // every rendered scroll position is a whole number of lanes, measured across 162 widths.
-      className={`bg-surface relative scrollbar-none overflow-auto overscroll-contain ${presentation === 'agenda' ? '' : 'rounded-xl'} ${viewportHeight === undefined ? 'h-[clamp(20rem,68dvh,48rem)]' : ''}`}
+      className={`bg-surface relative overflow-auto overscroll-contain ${presentation === 'agenda' ? '' : 'rounded-xl'} ${viewportHeight === undefined ? 'h-[clamp(20rem,68dvh,48rem)]' : ''}`}
       style={
         {
           '--schedule-sticky-top': `${String(headerHeight)}px`,

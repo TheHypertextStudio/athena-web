@@ -58,6 +58,7 @@ export function MenuOption({
   onActiveChange,
   onSelect,
   onMouseEnter,
+  onMouseDown,
   onPointerDown,
   ...props
 }: MenuOptionProps): React.JSX.Element {
@@ -77,6 +78,14 @@ export function MenuOption({
         if (event.defaultPrevented) return;
         // The associated editor or search field owns focus through aria-activedescendant.
         event.preventDefault();
+        pointerSelected.current = true;
+        onSelect?.();
+      }}
+      onMouseDown={(event) => {
+        onMouseDown?.(event);
+        if (event.defaultPrevented) return;
+        event.preventDefault();
+        if (pointerSelected.current) return;
         pointerSelected.current = true;
         onSelect?.();
       }}

@@ -59,7 +59,8 @@ describe('SchedulingCanvas Agenda presentation', () => {
 
     const canvas = screen.getByRole('region', { name: 'Schedule' });
     expect(canvas).toHaveAttribute('data-schedule-presentation', 'agenda');
-    expect(canvas).toHaveClass('overflow-auto', 'overscroll-contain', 'scrollbar-none');
+    expect(canvas).toHaveClass('overflow-auto', 'overscroll-contain');
+    expect(canvas).not.toHaveClass('scrollbar-none');
     expect(canvas).not.toHaveClass('rounded-xl');
     expect(screen.queryByText('Agenda date label')).not.toBeInTheDocument();
     expect(screen.getByText('Team offsite')).toBeInTheDocument();

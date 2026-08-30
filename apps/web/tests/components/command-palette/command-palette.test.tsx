@@ -128,8 +128,10 @@ function renderPalette() {
       </AuthenticationInterlockProvider>
     </QueryWrapper>
   );
-  render(<CommandPalette open onClose={onClose} sessionOwnerUserId="user-1" />, { wrapper });
-  return { onClose };
+  const view = render(<CommandPalette open onClose={onClose} sessionOwnerUserId="user-1" />, {
+    wrapper,
+  });
+  return { onClose, view };
 }
 
 describe('CommandPalette — sign-out recovery', () => {
@@ -191,9 +193,11 @@ describe('CommandPalette — # label sub-mode', () => {
       window.history.replaceState(null, '', href);
       document.body.append(heading);
     });
-    renderPalette();
+    const { onClose, view } = renderPalette();
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'passkeys' } });
     fireEvent.click(await screen.findByRole('option', { name: /Passkeys/ }));
+    expect(onClose).toHaveBeenCalledOnce();
+    view.rerender(<CommandPalette open={false} onClose={onClose} sessionOwnerUserId="user-1" />);
     act(() => {
       while (frames.length > 0) frames.shift()?.(0);
     });

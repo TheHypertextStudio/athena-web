@@ -509,8 +509,9 @@ describe('canvas bulk Properties editor', () => {
   it('uses a bounded responsive editor with a scrolling body and a non-wrapping action bar', () => {
     openEditor([task('task-a')]);
     expect(screen.getByTestId('canvas-selection-bar')).toHaveClass('flex-nowrap');
-    expect(screen.getByTestId('canvas-properties-editor').className).toContain(
-      'max-w-[calc(100vw-1rem)]',
+    expect(screen.getByTestId('canvas-properties-editor')).toHaveClass(
+      'w-[calc(100%-1.5rem)]',
+      'max-w-sm',
     );
     expect(screen.getByTestId('canvas-properties-body')).toHaveClass('overflow-y-auto');
     expect(screen.getByRole('heading', { name: 'Properties' })).toHaveAttribute('id');

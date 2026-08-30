@@ -28,13 +28,12 @@ describe('entity detail collapse contract', () => {
     expect(css).toContain('--detail-collapse-range: 6rem');
   });
 
-  it('keeps enough stable body geometry for the scroll timeline to finish', () => {
+  it('keeps collapse geometry on the shared detail scroll owner', () => {
     expect(layout).toContain('detail-body page-bleed page-grid');
-    expect(css).toContain('.detail-body');
-    expect(css).toContain('container-type: size');
+    expect(css).toContain('container-type: inline-size');
     expect(css).toContain('overflow-anchor: none');
-    expect(css).toMatch(/min-block-size:\s*calc\(100cqb/);
-    expect(css).toContain('var(--detail-collapse-range)');
+    expect(css).toContain("[data-detail-cover='present']");
+    expect(css).toContain('--detail-collapse-range: 6rem');
   });
 
   it('morphs one identity from stacked to compact without duplicating the icon', () => {
@@ -44,7 +43,9 @@ describe('entity detail collapse contract', () => {
     expect(layout).toMatch(literalClassToken('detail-tabs'));
     expect(layout.match(literalClassToken('detail-glyph'))).toHaveLength(1);
     expect(layout.indexOf('detail-glyph')).toBeLessThan(layout.indexOf('detail-title'));
-    expect(css).toContain('padding-block-start: var(--detail-expanded-glyph-row)');
+    expect(css).toMatch(
+      /\.detail-primary\s*\{[\s\S]*\[identity\] var\(--detail-expanded-glyph-size\)/,
+    );
     expect(css).toContain('padding-inline-start: var(--detail-compact-identity-inset)');
     expect(css).toContain('font-size: var(--text-title-medium)');
     expect(css).toContain('--detail-expanded-glyph-size: 3rem');
@@ -64,7 +65,8 @@ describe('entity detail collapse contract', () => {
     expect(css).toMatch(
       /\.detail-primary\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) auto/,
     );
-    expect(css).toMatch(/\.detail-primary\s*\{[^}]*align-items:\s*center/);
+    expect(css).toMatch(/\.detail-primary\s*\{[^}]*align-items:\s*start/);
+    expect(css).toMatch(/\.detail-actions\s*\{[^}]*align-self:\s*start/);
   });
 
   it('keeps expanded text readable and restores spacing that collapses with the masthead', () => {

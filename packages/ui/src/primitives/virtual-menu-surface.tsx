@@ -40,6 +40,12 @@ export function VirtualMenuSurface({
         presentation="menu"
         width={width}
         sideOffset={sideOffset}
+        onOpenAutoFocus={(event) => {
+          event.preventDefault();
+        }}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+        }}
         role="presentation"
         data-overlay-scroll-owner=""
         style={{ maxHeight: `${estimatedHeight}px` }}

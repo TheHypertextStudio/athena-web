@@ -43,6 +43,18 @@ describe('MenuListbox', () => {
     expect(onSelect).toHaveBeenCalledOnce();
   });
 
+  it('activates an option on mouse down without moving focus', () => {
+    const onSelect = vi.fn();
+    render(
+      <MenuListbox ariaLabel="Results">
+        <MenuOption onSelect={onSelect}>Ada Lovelace</MenuOption>
+      </MenuListbox>,
+    );
+
+    fireEvent.mouseDown(screen.getByRole('option', { name: 'Ada Lovelace' }));
+    expect(onSelect).toHaveBeenCalledOnce();
+  });
+
   it('keeps secondary detail in the option accessible name', () => {
     render(
       <MenuListbox ariaLabel="Results">

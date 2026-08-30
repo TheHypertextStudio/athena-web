@@ -69,8 +69,8 @@ describe('Auth visual contract', () => {
   it('is a bounded card on the app canvas, not a full-bleed surface', () => {
     const layout = source(layoutPath);
     // Floating panel on tinted canvas — the composition the token system already documents.
-    expect(layout).toContain('bg-surface-container');
-    expect(layout).toContain('bg-surface');
+    expect(layout).toContain("surfaceToneColor('canvas')");
+    expect(layout).toContain("surfaceToneColor('page')");
     expect(layout).toContain('max-w-md');
     // The card widens rather than the content stacking into one narrow column on a wide viewport.
     expect(layout).toContain('@3xl:max-w-3xl');

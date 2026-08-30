@@ -81,7 +81,7 @@ import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { readStoredBoolean, readStoredString, writeStoredValue } from '../../lib/browser-storage';
 import { Menu, X } from '../../icons';
 import { cn } from '../../lib/utils';
-import { Sheet, SheetClose, SheetContent, SheetTitle } from '../../primitives';
+import { Sheet, SheetBody, SheetClose, SheetContent, SheetTitle } from '../../primitives';
 import { MobilePanelSwitcher } from './MobilePanelSwitcher';
 import { useContextState } from './ContextProvider';
 import {
@@ -617,12 +617,13 @@ export function AppShell({
         </div>
 
         {/* Off-canvas navigation drawer — the SAME sidebar node, shown below `lg` on demand. */}
-        <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
+        <Sheet open={!isDesktop && drawerOpen} onOpenChange={setDrawerOpen}>
           <SheetContent
             side="left"
+            presentation="edge"
+            size="navigation"
             aria-label="Navigation"
             aria-describedby={undefined}
-            className="lg:hidden"
           >
             <SheetTitle className="sr-only">Navigation</SheetTitle>
             <ShellSidebarProvider value={sidebarState}>
@@ -717,10 +718,10 @@ export function AppShell({
         >
           <SheetContent
             side="right"
+            presentation="fullscreen"
             id={SHELL_ASIDE_SHEET_ID}
             aria-label={activePanel?.label}
             aria-describedby={undefined}
-            className="@container inset-0 flex h-dvh w-screen max-w-none flex-col overflow-hidden border-0 shadow-none"
           >
             <SheetTitle className="sr-only">{activePanel?.label}</SheetTitle>
             {!isDesktop && activePanel ? (
@@ -749,7 +750,9 @@ export function AppShell({
                 </SheetClose>
               </div>
             ) : null}
-            <div className="min-h-0 flex-1 overflow-auto">{activePanel?.node}</div>
+            <SheetBody inset="none" className="@container">
+              {activePanel?.node}
+            </SheetBody>
           </SheetContent>
         </Sheet>
       </div>

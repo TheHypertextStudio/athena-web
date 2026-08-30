@@ -4,8 +4,10 @@ import type { ScheduleComparisonItemOut } from '@docket/types';
 import {
   Badge,
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
+  DialogHeader,
   DialogTitle,
 } from '@docket/ui/primitives';
 import { type JSX } from 'react';
@@ -83,11 +85,11 @@ export function CalendarSharedItemDetails({
     >
       <DialogContent
         showClose={false}
-        className="max-h-[calc(100dvh-2rem)] max-w-xl gap-0 overflow-hidden p-0"
+        presentation={{ kind: 'centered', size: 'standard', height: 'tall' }}
       >
         {detail ? (
-          <div className="flex min-h-0 flex-1 flex-col">
-            <header className="border-outline-variant flex shrink-0 flex-col gap-2 border-b p-6">
+          <>
+            <DialogHeader className="gap-2">
               <div className="flex items-start gap-2">
                 <DialogTitle className="text-title-medium min-w-0 flex-1">
                   {detail.item.title}
@@ -101,28 +103,29 @@ export function CalendarSharedItemDetails({
                 <Badge variant="secondary">Read-only</Badge>
                 <Badge variant="outline">{CALENDAR_ITEM_KIND_LABEL[detail.item.kind]}</Badge>
               </div>
-            </header>
-            <dl
-              className="text-body-medium grid min-h-0 flex-1 gap-5 overflow-y-auto p-6"
-              data-testid="calendar-shared-item-dialog-scroll"
-            >
-              <div>
-                <dt className="text-on-surface-variant text-label-medium">When</dt>
-                <dd className="text-on-surface mt-1">{timeLabel(detail, displayTimezone)}</dd>
-              </div>
-              <div>
-                <dt className="text-on-surface-variant text-label-medium">Schedule owner</dt>
-                <dd className="text-on-surface mt-1">{detail.personName}</dd>
-              </div>
-              <div>
-                <dt className="text-on-surface-variant text-label-medium">Timezones</dt>
-                <dd className="text-on-surface mt-1">
-                  Times shown in {displayTimezone}
-                  {detail.personTimezone ? ` · ${detail.personName}: ${detail.personTimezone}` : ''}
-                </dd>
-              </div>
-            </dl>
-          </div>
+            </DialogHeader>
+            <DialogBody data-testid="calendar-shared-item-dialog-scroll">
+              <dl className="text-body-medium grid gap-5">
+                <div>
+                  <dt className="text-on-surface-variant text-label-medium">When</dt>
+                  <dd className="text-on-surface mt-1">{timeLabel(detail, displayTimezone)}</dd>
+                </div>
+                <div>
+                  <dt className="text-on-surface-variant text-label-medium">Schedule owner</dt>
+                  <dd className="text-on-surface mt-1">{detail.personName}</dd>
+                </div>
+                <div>
+                  <dt className="text-on-surface-variant text-label-medium">Timezones</dt>
+                  <dd className="text-on-surface mt-1">
+                    Times shown in {displayTimezone}
+                    {detail.personTimezone
+                      ? ` · ${detail.personName}: ${detail.personTimezone}`
+                      : ''}
+                  </dd>
+                </div>
+              </dl>
+            </DialogBody>
+          </>
         ) : (
           <>
             <DialogTitle className="sr-only">Shared calendar item</DialogTitle>

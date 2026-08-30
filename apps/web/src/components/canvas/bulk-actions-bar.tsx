@@ -5,8 +5,10 @@ import { Ellipsis, Folder, RefreshCw, Trash2, TuneRounded, Undo } from '@docket/
 import {
   Button,
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
+  DialogHeader,
   DialogTitle,
   DropdownMenu,
   DropdownMenuContent,
@@ -140,7 +142,7 @@ export default function BulkActionsBar({
       >
         <DialogContent
           showClose={false}
-          className="flex max-h-[min(42rem,calc(100vh-2rem))] w-96 max-w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden p-2"
+          presentation={{ kind: 'centered', size: 'compact', height: 'tall' }}
           data-testid="canvas-properties-editor"
           onOpenAutoFocus={(event) => {
             event.preventDefault();
@@ -150,7 +152,7 @@ export default function BulkActionsBar({
             event.preventDefault();
           }}
         >
-          <div className="flex shrink-0 items-center justify-between gap-3">
+          <DialogHeader className="flex-row items-start justify-between gap-3" inset="compact">
             <div>
               <DialogTitle asChild>
                 <h2
@@ -177,13 +179,14 @@ export default function BulkActionsBar({
             >
               Close
             </Button>
-          </div>
-          <div
-            className="mt-2 min-h-0 flex-1 overflow-y-auto pr-1"
+          </DialogHeader>
+          <DialogBody
+            className="flex flex-col"
+            inset="compact"
             data-testid="canvas-properties-body"
           >
             <CanvasPropertiesEditor snapshots={activeSnapshots} />
-          </div>
+          </DialogBody>
         </DialogContent>
       </Dialog>
     </>

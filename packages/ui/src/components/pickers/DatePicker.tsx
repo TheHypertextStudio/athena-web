@@ -33,6 +33,7 @@ import {
   ControlGroup,
   OVERLAY_COLLISION_PADDING,
   Popover,
+  PopoverBody,
   PopoverContent,
   PopoverTrigger,
 } from '../../primitives';
@@ -165,11 +166,12 @@ export function DatePicker({
         {trigger}
       </PopoverTrigger>
       <PopoverContent
-        className="w-auto p-3"
+        presentation="panel"
+        width="content"
         collisionPadding={OVERLAY_COLLISION_PADDING}
         data-date-picker=""
       >
-        <div className="flex flex-col gap-2">
+        <PopoverBody scroll="visible" className="flex flex-col gap-2">
           <CalendarGrid
             value={day}
             onSelect={(next) => {
@@ -196,7 +198,7 @@ export function DatePicker({
                 : null
             }
           />
-        </div>
+        </PopoverBody>
       </PopoverContent>
     </Popover>
   );

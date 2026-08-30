@@ -514,15 +514,11 @@ describe('AppShell rail', () => {
 
     const overlay = await screen.findByRole('dialog', { name: 'Tasks' });
     expect(within(overlay).getByText('Task list')).toBeInTheDocument();
-    expect(overlay).toHaveClass(
-      'inset-0',
-      'h-dvh',
-      'w-screen',
-      'max-w-none',
-      'border-0',
-      'shadow-none',
+    expect(overlay).toHaveAttribute('data-surface-tone', 'floating');
+    expect(within(overlay).getByText('Task list').parentElement).toHaveAttribute(
+      'data-overlay-scroll-owner',
+      '',
     );
-    expect(overlay).not.toHaveClass('w-[22rem]', 'max-w-[90vw]');
     expect(within(overlay).getByTestId('shell-utility-pane-bar')).toHaveClass(
       'min-h-12',
       'border-b',
@@ -1470,9 +1466,8 @@ describe('TabBar', () => {
     const switcher = await screen.findByRole('dialog', { name: 'Open documents' });
     const search = within(switcher).getByRole('searchbox', { name: 'Search open documents' });
     expect(search).toHaveFocus();
-    expect(switcher).toHaveClass('w-88', 'lg:w-[min(480px,calc(100vw-1.5rem))]', 'p-2');
-    expect(switcher).not.toHaveClass('p-1');
-    expect(search.parentElement).toHaveClass('h-9', 'coarse:h-10');
+    expect(switcher).toHaveAttribute('data-surface-tone', 'floating');
+    expect(switcher.querySelector('[data-overlay-scroll-owner]')).toBeTruthy();
     expect(within(switcher).queryByText('Open documents')).not.toBeInTheDocument();
 
     const jumpA = within(switcher).getByRole('link', { name: 'Fix the build' });
@@ -1623,10 +1618,10 @@ describe('TabBar', () => {
     expect(close).toHaveClass('size-10');
     expect(layer).toHaveClass('size-7');
     expect(close).toHaveClass('absolute');
-    expect(results).toHaveClass('max-h-80', 'overflow-y-auto', 'overscroll-contain');
+    expect(results.parentElement).toHaveAttribute('data-overlay-scroll-owner', '');
   });
 
-  it('filters and closes within a thirteen-document scrolling result list', async () => {
+  it('filters and closes within a thirteen-document list owned by the panel scroll region', async () => {
     const tabs: readonly OpenTab[] = Array.from({ length: 13 }, (_, index) => ({
       key: `task:o1:t${String(index + 1)}`,
       type: 'task',
@@ -1655,7 +1650,7 @@ describe('TabBar', () => {
     const switcher = await screen.findByRole('dialog', { name: 'Open documents' });
     const results = within(switcher).getByRole('list', { name: 'Open document results' });
     const search = within(switcher).getByRole('searchbox', { name: 'Search open documents' });
-    expect(results).toHaveClass('max-h-80', 'overflow-y-auto', 'overscroll-contain');
+    expect(results.parentElement).toHaveAttribute('data-overlay-scroll-owner', '');
     expect(within(results).getAllByRole('listitem')).toHaveLength(13);
 
     fireEvent.change(search, { target: { value: '13' } });

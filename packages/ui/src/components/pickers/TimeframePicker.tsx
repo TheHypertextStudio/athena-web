@@ -15,6 +15,7 @@ import {
   ControlGroup,
   focusRing,
   Popover,
+  PopoverBody,
   PopoverContent,
   PopoverTrigger,
   Text,
@@ -179,7 +180,8 @@ export function TimeframePicker({
         {trigger}
       </PopoverTrigger>
       <PopoverContent
-        className="w-[22rem] max-w-[calc(100vw-2rem)] p-2"
+        presentation="panel"
+        width="xl"
         collisionPadding={OVERLAY_COLLISION_PADDING}
         data-timeframe-picker=""
         onOpenAutoFocus={(event) => {
@@ -189,7 +191,7 @@ export function TimeframePicker({
             ?.focus();
         }}
       >
-        <div className="flex flex-col gap-2">
+        <PopoverBody className="flex flex-col gap-2" inset="compact">
           <div
             ref={precisionRef}
             role="listbox"
@@ -311,7 +313,7 @@ export function TimeframePicker({
               </Button>
             </div>
           ) : null}
-        </div>
+        </PopoverBody>
       </PopoverContent>
     </Popover>
   );

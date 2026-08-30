@@ -1,12 +1,11 @@
 'use client';
 
-import { cn } from '@docket/ui/lib/utils';
 import {
-  menuFocusRing,
-  menuItemClass,
-  menuLabel,
+  Button,
   Popover,
+  PopoverBody,
   PopoverContent,
+  PopoverHeader,
   PopoverTrigger,
 } from '@docket/ui/primitives';
 import { type JSX, useRef, useState } from 'react';
@@ -79,29 +78,25 @@ export function SchedulingDenseOverflow({
           </button>
         </PopoverTrigger>
         <PopoverContent
-          role="dialog"
+          presentation="panel"
+          width="lg"
           aria-label={label}
           align="end"
-          className="w-80 max-w-[calc(100vw-2rem)]"
           onCloseAutoFocus={(event) => {
             if (revealingRef.current) event.preventDefault();
             revealingRef.current = false;
           }}
         >
-          <p className={menuLabel('standard')}>{label}</p>
-          <div className="flex max-h-72 flex-col overflow-y-auto" role="list">
+          <PopoverHeader inset="compact">
+            <p className="text-label-medium text-on-surface-variant">{label}</p>
+          </PopoverHeader>
+          <PopoverBody className="flex flex-col gap-1" inset="compact">
             {group.items.map(({ item }) => {
               const timeRange =
                 formatScheduleInstantRange(item.startsAt, item.endsAt, displayTimezone) ??
                 'Unavailable time';
               const content =
                 renderItem?.({ item, lane, allDay: false, density: 'compact' }) ?? item.title;
-              // A row in a popover-hosted overflow list is a menu row.
-              const sharedClassName = cn(
-                menuItemClass('standard'),
-                menuFocusRing,
-                'w-full text-left',
-              );
               const children = (
                 <>
                   <span
@@ -120,27 +115,32 @@ export function SchedulingDenseOverflow({
                 </>
               );
               return (
-                <div key={item.id} role="listitem" className="flex min-w-0 items-stretch gap-1">
+                <div key={item.id} className="flex min-w-0 items-stretch gap-1">
                   {item.openable !== false && onOpenItem ? (
-                    <button
+                    <Button
                       type="button"
                       aria-label={`Open ${item.title}, ${timeRange}`}
-                      className={sharedClassName}
+                      variant="ghost"
+                      className="h-auto min-h-11 min-w-0 flex-1 justify-start gap-2 px-2 py-2 text-left"
                       onClick={() => {
                         setOpen(false);
                         onOpenItem({ item, lane });
                       }}
                     >
                       {children}
-                    </button>
+                    </Button>
                   ) : (
-                    <div className={sharedClassName}>{children}</div>
+                    <div className="text-on-surface flex min-h-11 min-w-0 flex-1 items-center gap-2 px-2 py-2">
+                      {children}
+                    </div>
                   )}
                   {onRevealItem ? (
-                    <button
+                    <Button
                       type="button"
                       aria-label={`Show ${item.title} on calendar`}
-                      className="text-primary text-label-medium hover:bg-primary-container focus-visible:ring-ring min-h-11 min-w-11 shrink-0 rounded px-2 outline-none focus-visible:ring-2 focus-visible:ring-inset"
+                      variant="ghost"
+                      size="sm"
+                      className="min-h-11 shrink-0 px-2"
                       onClick={() => {
                         revealingRef.current = true;
                         setOpen(false);
@@ -148,12 +148,12 @@ export function SchedulingDenseOverflow({
                       }}
                     >
                       Show
-                    </button>
+                    </Button>
                   ) : null}
                 </div>
               );
             })}
-          </div>
+          </PopoverBody>
         </PopoverContent>
       </Popover>
     </div>

@@ -9,7 +9,9 @@ import {
   fieldSurface,
   menuFocusRing,
   Popover,
+  PopoverBody,
   PopoverContent,
+  PopoverHeader,
   PopoverTrigger,
   Tooltip,
   TooltipContent,
@@ -154,77 +156,79 @@ export function OverflowMenu({
 
       <PopoverContent
         ref={contentRef}
-        role="dialog"
+        presentation="panel"
+        width="wide"
         aria-label="Open documents"
         align="end"
-        className="w-88 p-2 lg:w-[min(480px,calc(100vw-1.5rem))]"
         onOpenAutoFocus={(event) => {
           event.preventDefault();
           searchRef.current?.focus();
         }}
         onKeyDown={handleContentKeyDown}
       >
-        <div
-          className={cn(
-            fieldSurface({ variant: 'filled', controlSize: 'lg', ringOn: 'within' }),
-            CONTROL.lg.gap,
-            'flex items-center',
-          )}
-        >
-          <Search aria-hidden="true" className={cn(CONTROL.lg.icon, 'text-on-surface-variant')} />
-          <input
-            ref={searchRef}
-            type="search"
-            aria-label="Search open documents"
-            placeholder="Search open documents"
-            value={query}
-            onChange={(event) => {
-              setQuery(event.currentTarget.value);
-            }}
-            className="placeholder:text-on-surface-variant min-w-0 flex-1 bg-transparent outline-none"
-          />
-          <kbd
-            aria-hidden="true"
-            className="text-on-surface-variant text-label-small shrink-0 tabular-nums"
-          >
-            {shortcutLabel}
-          </kbd>
-        </div>
-
-        {filteredTabs.length === 0 ? (
-          <p className="text-on-surface-variant text-body-small px-4 py-3">
-            No open documents found
-          </p>
-        ) : (
+        <PopoverHeader inset="compact">
           <div
-            role="list"
-            aria-label="Open document results"
-            className="flex max-h-80 flex-col gap-0.5 overflow-y-auto overscroll-contain"
+            className={cn(
+              fieldSurface({ variant: 'filled', controlSize: 'lg', ringOn: 'within' }),
+              CONTROL.lg.gap,
+              'flex items-center',
+            )}
           >
-            {filteredTabs.map((tab, index) => {
-              const Icon = TYPE_ICON[tab.type];
-              const active = tab.key === activeKey;
-              return (
-                <MenuActionRow
-                  key={tab.key}
-                  label={tabLabel(tab)}
-                  leading={<Icon aria-hidden="true" />}
-                  selected={active}
-                  renderPrimary={(children, className) => renderLink(tab.href, children, className)}
-                  actionLabel={`Close ${tabLabel(tab)}`}
-                  actionIcon={<X aria-hidden="true" />}
-                  onPrimarySelect={() => {
-                    handleOpenChange(false);
-                  }}
-                  onAction={() => {
-                    pendingCloseIndexRef.current = index;
-                    onClose(tab.key);
-                  }}
-                />
-              );
-            })}
+            <Search aria-hidden="true" className={cn(CONTROL.lg.icon, 'text-on-surface-variant')} />
+            <input
+              ref={searchRef}
+              type="search"
+              aria-label="Search open documents"
+              placeholder="Search open documents"
+              value={query}
+              onChange={(event) => {
+                setQuery(event.currentTarget.value);
+              }}
+              className="placeholder:text-on-surface-variant min-w-0 flex-1 bg-transparent outline-none"
+            />
+            <kbd
+              aria-hidden="true"
+              className="text-on-surface-variant text-label-small shrink-0 tabular-nums"
+            >
+              {shortcutLabel}
+            </kbd>
           </div>
-        )}
+        </PopoverHeader>
+
+        <PopoverBody inset="compact">
+          {filteredTabs.length === 0 ? (
+            <p className="text-on-surface-variant text-body-small px-4 py-3">
+              No open documents found
+            </p>
+          ) : (
+            <div role="list" aria-label="Open document results" className="flex flex-col gap-0.5">
+              {filteredTabs.map((tab, index) => {
+                const Icon = TYPE_ICON[tab.type];
+                const active = tab.key === activeKey;
+                return (
+                  <MenuActionRow
+                    key={tab.key}
+                    label={tabLabel(tab)}
+                    leading={<Icon aria-hidden="true" />}
+                    selected={active}
+                    renderPrimary={(children, className) =>
+                      renderLink(tab.href, children, className)
+                    }
+                    actionLabel={`Close ${tabLabel(tab)}`}
+                    actionIcon={<X aria-hidden="true" />}
+                    onPrimarySelect={() => {
+                      handleOpenChange(false);
+                    }}
+                    onAction={() => {
+                      pendingCloseIndexRef.current = index;
+                      onClose(tab.key);
+                    }}
+                  />
+                );
+              })}
+            </div>
+          )}
+        </PopoverBody>
       </PopoverContent>
     </Popover>
   );

@@ -82,7 +82,7 @@ export default function CalendarItemDrawer({
     >
       <DialogContent
         showClose={false}
-        className="max-h-[calc(100dvh-2rem)] max-w-3xl gap-0 overflow-hidden p-0"
+        presentation={{ kind: 'centered', size: 'detail', height: 'tall' }}
       >
         {itemId === null ? (
           <>

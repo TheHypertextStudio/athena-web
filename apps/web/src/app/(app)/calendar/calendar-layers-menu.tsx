@@ -18,7 +18,13 @@
  */
 import type { CalendarLayerOut } from '@docket/types';
 import { ChevronDown, Layers } from '@docket/ui/icons';
-import { Button, Popover, PopoverContent, PopoverTrigger } from '@docket/ui/primitives';
+import {
+  Button,
+  Popover,
+  PopoverBody,
+  PopoverContent,
+  PopoverTrigger,
+} from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
 import CalendarLayerPanel from '@/components/calendar/calendar-layer-panel';
@@ -68,22 +74,15 @@ export function CalendarLayersMenu({
           <ChevronDown className="hidden size-4 opacity-60 @2xl:inline" aria-hidden="true" />
         </Button>
       </PopoverTrigger>
-      {/*
-        `w-88`, not `w-80`: at 320px a row's account line ("Also on ada@acme.com" — the fact that
-        justifies Hide duplicates) truncated away, and `max-w` keeps that honest on a 390px phone
-        where the popover cannot have the extra 32px.
-      */}
-      <PopoverContent
-        align="end"
-        aria-label="Calendars"
-        className="flex w-[22rem] max-w-[calc(100vw-1.5rem)] flex-col gap-1 p-2"
-      >
-        {layersError ? (
-          <p role="status" className="text-body-small text-on-surface-variant px-1">
-            Layer controls are temporarily unavailable.
-          </p>
-        ) : null}
-        <CalendarLayerPanel layers={layers} />
+      <PopoverContent presentation="panel" width="xl" align="end" aria-label="Calendars">
+        <PopoverBody className="flex flex-col gap-1" inset="compact">
+          {layersError ? (
+            <p role="status" className="text-body-small text-on-surface-variant px-1">
+              Layer controls are temporarily unavailable.
+            </p>
+          ) : null}
+          <CalendarLayerPanel layers={layers} />
+        </PopoverBody>
       </PopoverContent>
     </Popover>
   );

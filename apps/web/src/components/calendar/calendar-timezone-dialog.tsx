@@ -5,9 +5,11 @@ import {
   Button,
   Checkbox,
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
+  DialogHeader,
   DialogTitle,
   Input,
 } from '@docket/ui/primitives';
@@ -100,143 +102,148 @@ export function CalendarTimezoneDialog({
         Time zone
       </Button>
       <DialogContent
-        className="max-w-md gap-4"
+        presentation={{ kind: 'centered', size: 'compact', height: 'tall' }}
         aria-label="Event time zone"
         onCloseAutoFocus={(event) => {
           event.preventDefault();
           triggerRef.current?.focus();
         }}
       >
-        <DialogTitle>Event time zone</DialogTitle>
-        <DialogDescription className="sr-only">
-          Search by time zone code, name, identifier, or city.
-        </DialogDescription>
+        <DialogHeader>
+          <DialogTitle>Event time zone</DialogTitle>
+          <DialogDescription className="sr-only">
+            Search by time zone code, name, identifier, or city.
+          </DialogDescription>
+        </DialogHeader>
 
-        <label className="text-body-medium flex items-center gap-2 py-1">
-          <Checkbox
-            checked={separate}
-            onChange={(event) => {
-              const next = event.target.checked;
-              setSeparate(next);
-              if (!next) setPendingEnd(pendingStart);
-            }}
-          />
-          Use separate start and end time zones
-        </label>
+        <DialogBody className="flex flex-col gap-4">
+          <label className="text-body-medium flex items-center gap-2 py-1">
+            <Checkbox
+              checked={separate}
+              onChange={(event) => {
+                const next = event.target.checked;
+                setSeparate(next);
+                if (!next) setPendingEnd(pendingStart);
+              }}
+            />
+            Use separate start and end time zones
+          </label>
 
-        <div className="grid grid-cols-2 gap-2" role="group" aria-label="Time zone field">
-          <Button
-            type="button"
-            variant={target === 'start' ? 'secondary' : 'outline'}
-            className="h-auto min-w-0 justify-start px-3 py-2 text-left"
-            onClick={() => {
-              setTarget('start');
-            }}
-          >
-            <span className="min-w-0">
-              <span className="text-label-small text-on-surface-variant block">Starts</span>
-              <span className="block truncate">{zoneLabel(pendingStart)}</span>
-            </span>
-          </Button>
-          <Button
-            type="button"
-            variant={target === 'end' ? 'secondary' : 'outline'}
-            disabled={!separate}
-            className="h-auto min-w-0 justify-start px-3 py-2 text-left"
-            onClick={() => {
-              setTarget('end');
-            }}
-          >
-            <span className="min-w-0">
-              <span className="text-label-small text-on-surface-variant block">Ends</span>
-              <span className="block truncate">
-                {zoneLabel(separate ? pendingEnd : pendingStart)}
+          <div className="grid grid-cols-2 gap-2" role="group" aria-label="Time zone field">
+            <Button
+              type="button"
+              variant={target === 'start' ? 'secondary' : 'outline'}
+              className="h-auto min-w-0 justify-start px-3 py-2 text-left"
+              onClick={() => {
+                setTarget('start');
+              }}
+            >
+              <span className="min-w-0">
+                <span className="text-label-small text-on-surface-variant block">Starts</span>
+                <span className="block truncate">{zoneLabel(pendingStart)}</span>
               </span>
-            </span>
-          </Button>
-        </div>
-
-        <label className="relative block">
-          <span className="sr-only">Search time zones</span>
-          <Search
-            aria-hidden="true"
-            className="text-on-surface-variant pointer-events-none absolute top-2.5 left-3 size-4"
-          />
-          <Input
-            value={query}
-            role="combobox"
-            aria-autocomplete="list"
-            aria-expanded="true"
-            aria-controls={listboxId}
-            aria-activedescendant={activeEntry ? `${listboxId}-${activeIndex}` : undefined}
-            onChange={(event) => {
-              setQuery(event.target.value);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'ArrowDown') {
-                event.preventDefault();
-                setActiveIndex((current) => Math.min(current + 1, results.length - 1));
-              } else if (event.key === 'ArrowUp') {
-                event.preventDefault();
-                setActiveIndex((current) => Math.max(current - 1, 0));
-              } else if (event.key === 'Home') {
-                event.preventDefault();
-                setActiveIndex(0);
-              } else if (event.key === 'End') {
-                event.preventDefault();
-                setActiveIndex(Math.max(results.length - 1, 0));
-              } else if (event.key === 'Enter' && activeEntry) {
-                event.preventDefault();
-                chooseTimezone(activeEntry.id);
-              }
-            }}
-            placeholder="Search code, name, city, or IANA zone"
-            className="pl-9"
-          />
-        </label>
-
-        <div
-          id={listboxId}
-          role="listbox"
-          aria-label={`${target === 'start' ? 'Start' : 'End'} time zones`}
-          className="border-outline-variant max-h-64 overflow-y-auto rounded-lg border"
-        >
-          {results.map((entry, index) => {
-            const selected = (target === 'start' ? pendingStart : pendingEnd) === entry.id;
-            return (
-              <button
-                key={entry.id}
-                id={`${listboxId}-${index}`}
-                type="button"
-                role="option"
-                aria-selected={selected}
-                className="hover:bg-surface-container-high focus-visible:ring-ring aria-selected:bg-secondary-container flex w-full items-center justify-between gap-3 px-3 py-2 text-left focus-visible:ring-2 focus-visible:outline-none"
-                onMouseMove={() => {
-                  setActiveIndex(index);
-                }}
-                onClick={() => {
-                  chooseTimezone(entry.id);
-                }}
-              >
-                <span className="min-w-0">
-                  <span className="text-body-medium block truncate">
-                    {entry.city} · {entry.commonName}
-                  </span>
-                  <span className="text-body-small text-on-surface-variant block truncate">
-                    {entry.id}
-                  </span>
+            </Button>
+            <Button
+              type="button"
+              variant={target === 'end' ? 'secondary' : 'outline'}
+              disabled={!separate}
+              className="h-auto min-w-0 justify-start px-3 py-2 text-left"
+              onClick={() => {
+                setTarget('end');
+              }}
+            >
+              <span className="min-w-0">
+                <span className="text-label-small text-on-surface-variant block">Ends</span>
+                <span className="block truncate">
+                  {zoneLabel(separate ? pendingEnd : pendingStart)}
                 </span>
-                <span className="text-body-small text-on-surface-variant shrink-0">
-                  {entry.offsetLabel} · {entry.abbreviation}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+              </span>
+            </Button>
+          </div>
 
-        <span className="sr-only" aria-live="polite" aria-atomic="true">
-          {results.length} time zones. {activeEntry ? `${activeEntry.city}, ${activeEntry.id}` : ''}
-        </span>
+          <label className="relative block">
+            <span className="sr-only">Search time zones</span>
+            <Search
+              aria-hidden="true"
+              className="text-on-surface-variant pointer-events-none absolute top-2.5 left-3 size-4"
+            />
+            <Input
+              value={query}
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded="true"
+              aria-controls={listboxId}
+              aria-activedescendant={activeEntry ? `${listboxId}-${activeIndex}` : undefined}
+              onChange={(event) => {
+                setQuery(event.target.value);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'ArrowDown') {
+                  event.preventDefault();
+                  setActiveIndex((current) => Math.min(current + 1, results.length - 1));
+                } else if (event.key === 'ArrowUp') {
+                  event.preventDefault();
+                  setActiveIndex((current) => Math.max(current - 1, 0));
+                } else if (event.key === 'Home') {
+                  event.preventDefault();
+                  setActiveIndex(0);
+                } else if (event.key === 'End') {
+                  event.preventDefault();
+                  setActiveIndex(Math.max(results.length - 1, 0));
+                } else if (event.key === 'Enter' && activeEntry) {
+                  event.preventDefault();
+                  chooseTimezone(activeEntry.id);
+                }
+              }}
+              placeholder="Search code, name, city, or IANA zone"
+              className="pl-9"
+            />
+          </label>
+
+          <div
+            id={listboxId}
+            role="listbox"
+            aria-label={`${target === 'start' ? 'Start' : 'End'} time zones`}
+            className="border-outline-variant rounded-lg border"
+          >
+            {results.map((entry, index) => {
+              const selected = (target === 'start' ? pendingStart : pendingEnd) === entry.id;
+              return (
+                <button
+                  key={entry.id}
+                  id={`${listboxId}-${index}`}
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  className="hover:bg-surface-container-high focus-visible:ring-ring aria-selected:bg-secondary-container flex w-full items-center justify-between gap-3 px-3 py-2 text-left focus-visible:ring-2 focus-visible:outline-none"
+                  onMouseMove={() => {
+                    setActiveIndex(index);
+                  }}
+                  onClick={() => {
+                    chooseTimezone(entry.id);
+                  }}
+                >
+                  <span className="min-w-0">
+                    <span className="text-body-medium block truncate">
+                      {entry.city} · {entry.commonName}
+                    </span>
+                    <span className="text-body-small text-on-surface-variant block truncate">
+                      {entry.id}
+                    </span>
+                  </span>
+                  <span className="text-body-small text-on-surface-variant shrink-0">
+                    {entry.offsetLabel} · {entry.abbreviation}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <span className="sr-only" aria-live="polite" aria-atomic="true">
+            {results.length} time zones.{' '}
+            {activeEntry ? `${activeEntry.city}, ${activeEntry.id}` : ''}
+          </span>
+        </DialogBody>
 
         <DialogFooter>
           <Button

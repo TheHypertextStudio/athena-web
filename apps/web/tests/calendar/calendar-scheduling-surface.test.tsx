@@ -895,7 +895,10 @@ describe('CalendarSchedulingSurface persistence', () => {
     const dialog = screen.getByRole('dialog', { name: 'Shared planning' });
     expect(dialog).toHaveTextContent('Event');
     expect(dialog).not.toHaveTextContent('Provider event');
-    expect(dialog).toHaveClass('max-h-[calc(100dvh-2rem)]');
+    expect(within(dialog).getByTestId('calendar-shared-item-dialog-scroll')).toHaveAttribute(
+      'data-overlay-scroll-owner',
+      '',
+    );
   });
 
   it('moves clipped timed items exactly and persists all-day edits only through date callbacks', () => {

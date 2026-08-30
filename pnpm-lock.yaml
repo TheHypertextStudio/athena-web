@@ -329,6 +329,12 @@ importers:
       '@hono/standard-validator':
         specifier: 'catalog:'
         version: 0.2.2(@standard-schema/spec@1.1.0)(hono@4.12.23)
+      '@lovelace-ai/lattice-relay-client':
+        specifier: ^0.0.1
+        version: 0.0.1
+      '@lovelace-ai/lattice-relay-crypto':
+        specifier: ^0.0.1
+        version: 0.0.1
       '@modelcontextprotocol/sdk':
         specifier: 'catalog:'
         version: 1.29.0(zod@4.4.3)
@@ -997,6 +1003,9 @@ importers:
       '@docket/work':
         specifier: workspace:*
         version: link:../../domains/work
+      '@lovelace-ai/compute':
+        specifier: ^0.0.1
+        version: 0.0.1
       '@modelcontextprotocol/ext-apps':
         specifier: 'catalog:'
         version: 1.7.5(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(zod@4.4.3)
@@ -1006,6 +1015,9 @@ importers:
       '@notionhq/client':
         specifier: ^5.24.0
         version: 5.24.0
+      '@reasonabletech/lattice-client':
+        specifier: ^0.0.1
+        version: 0.0.1
       parse5:
         specifier: 8.0.1
         version: 8.0.1
@@ -2894,6 +2906,22 @@ packages:
   '@levischuck/tiny-cbor@0.2.11':
     resolution: {integrity: sha512-llBRm4dT4Z89aRsm6u2oEZ8tfwL/2l6BwpZ7JcyieouniDECM5AqNgr/y08zalEIvW3RSK4upYyybDcmjXqAow==}
 
+  '@lovelace-ai/acsp@0.0.1':
+    resolution: {integrity: sha512-1ms5D1ZxQJ1+zp20iKvKcgK6DLFMLYtOtGnfIc5VViPsga9NkITUpRMHy5atbBUUldlvO1HRxwOkHFbmuWUz2Q==}
+    engines: {node: '>=24'}
+
+  '@lovelace-ai/compute@0.0.1':
+    resolution: {integrity: sha512-2qg2JpT47GhECxZB/dBx6/3WdAYcPK2YoHWurwABGTj8lPgS2evc6imv9L8QkFVJ1yEVmAaQrQwv14uhoyndgQ==}
+    engines: {node: '>=24'}
+
+  '@lovelace-ai/lattice-relay-client@0.0.1':
+    resolution: {integrity: sha512-GbN4BTXsCaqDY+9RqTHjMkzdWEH4j5anaLTEBjqJnTQ4p7z7yUs/RQAyzUrLvqcdhsHXQRMWrRExyfW3G2VhZA==}
+    engines: {node: '>=24'}
+
+  '@lovelace-ai/lattice-relay-crypto@0.0.1':
+    resolution: {integrity: sha512-x23dA0C8EnNfqrRmHFJ7xLv5HGhvM5Vi3dQvBVJNyZLwlOui71DghdSrOi/G812mqsGJ2vOvkOPTbvN9XeKFaQ==}
+    engines: {node: '>=24'}
+
   '@manypkg/find-root@1.1.0':
     resolution: {integrity: sha512-mki5uBvhHzO8kYYix/WRy2WX8S3B5wdVSc9D6KcU5lQNglP2yt58/VfLuAK49glRXChosY8ap2oJ1qgma3GUVA==}
 
@@ -3673,6 +3701,10 @@ packages:
 
   '@radix-ui/rect@1.1.3':
     resolution: {integrity: sha512-JtyZR+mqgBibTo8xea3B6ZRmzZiM/YeVBtUkas6zMuXjAlfIFIW2FgqeM9eLyvEaYX66vr6DJMK+4U6LV0KhNw==}
+
+  '@reasonabletech/lattice-client@0.0.1':
+    resolution: {integrity: sha512-SiEZCxK5hlzifOQGxDD09o+yKF1q8LjEnuc3DOOV82JkyrQ8qbYDryHyCsmbl5Jd/EkJeYu6cM+bvjkvgkRlmQ==}
+    engines: {node: '>=24'}
 
   '@rolldown/binding-android-arm64@1.0.3':
     resolution: {integrity: sha512-454rs7jHngixp/NMxd5srYD57OnzSlZ/eFTETjORQHLwJG1lRtmNOJcBerZlfu4GjKqeq8aCCIQrMdHyhI51Hw==}
@@ -8418,6 +8450,9 @@ packages:
   zod@4.1.11:
     resolution: {integrity: sha512-WPsqwxITS2tzx1bzhIKsEs19ABD5vmCVa4xBo2tq/SrV4RNZtfws1EnCWQXM6yh8bD08a1idvkB5MZSBiZsjwg==}
 
+  zod@4.3.6:
+    resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
+
   zod@4.4.3:
     resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
 
@@ -9929,6 +9964,24 @@ snapshots:
 
   '@levischuck/tiny-cbor@0.2.11': {}
 
+  '@lovelace-ai/acsp@0.0.1':
+    dependencies:
+      zod: 4.3.6
+
+  '@lovelace-ai/compute@0.0.1':
+    dependencies:
+      zod: 4.3.6
+
+  '@lovelace-ai/lattice-relay-client@0.0.1':
+    dependencies:
+      '@lovelace-ai/acsp': 0.0.1
+      '@lovelace-ai/compute': 0.0.1
+      '@lovelace-ai/lattice-relay-crypto': 0.0.1
+
+  '@lovelace-ai/lattice-relay-crypto@0.0.1':
+    dependencies:
+      '@lovelace-ai/compute': 0.0.1
+
   '@manypkg/find-root@1.1.0':
     dependencies:
       '@babel/runtime': 7.29.7
@@ -10758,6 +10811,10 @@ snapshots:
       '@types/react-dom': 19.2.3(@types/react@19.2.17)
 
   '@radix-ui/rect@1.1.3': {}
+
+  '@reasonabletech/lattice-client@0.0.1':
+    dependencies:
+      '@lovelace-ai/compute': 0.0.1
 
   '@rolldown/binding-android-arm64@1.0.3':
     optional: true
@@ -15107,6 +15164,8 @@ snapshots:
   zod@3.25.76: {}
 
   zod@4.1.11: {}
+
+  zod@4.3.6: {}
 
   zod@4.4.3: {}
 

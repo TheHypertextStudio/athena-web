@@ -29,7 +29,13 @@ import { and, eq, isNull, lte, or, sql } from 'drizzle-orm';
 import { NotFoundError } from '../error';
 import type { EmitEventInput } from '../routes/event-emit';
 import { runSession } from '../routes/agent-session-runner';
+import { loadLatticeConnection } from '../routes/lattice-connection';
 import { admitAthenaGeneration } from './async-runner';
+import {
+  prepareLatticeAssignmentRun,
+  type LatticeDelegationDependencies,
+} from './lattice-delegations';
+import { latticeDelegationDependencies } from './lattice-delegation-runtime';
 
 /** Assignment row used by route serializers and trigger workers. */
 export type AthenaAssignmentRow = typeof athenaAssignment.$inferSelect;
@@ -198,7 +204,20 @@ export async function startAssignmentRun(
   actorId: string,
   prompt: string,
   externalRunRef: string,
+  latticeDeps: LatticeDelegationDependencies = latticeDelegationDependencies,
 ): Promise<string> {
+  const connection = await loadLatticeConnection(assignment.ownerUserId);
+  if (connection?.enabled && connection.deviceId) {
+    return await prepareLatticeAssignmentRun(
+      assignment,
+      actorId,
+      prompt,
+      externalRunRef,
+      connection,
+      new Date(),
+      latticeDeps,
+    );
+  }
   const session = await db.transaction(async (tx) => {
     const [session] = await tx
       .insert(agentSession)

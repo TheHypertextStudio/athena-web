@@ -50,6 +50,8 @@
     "@docket/work": "workspace:*",
     "@hono/node-server": "^2.0.8",
     "@hono/standard-validator": "catalog:",
+    "@lovelace-ai/lattice-relay-client": "^0.0.1",
+    "@lovelace-ai/lattice-relay-crypto": "^0.0.1",
     "@modelcontextprotocol/sdk": "catalog:",
     "@scalar/hono-api-reference": "catalog:",
     "drizzle-orm": "catalog:",

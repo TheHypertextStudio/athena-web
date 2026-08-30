@@ -25,10 +25,12 @@
     "@docket/env": "workspace:*",
     "@docket/types": "workspace:*",
     "@docket/work": "workspace:*",
+    "@lovelace-ai/compute": "^0.0.1",
     "@modelcontextprotocol/ext-apps": "catalog:",
     "@modelcontextprotocol/sdk": "catalog:",
     "@notionhq/client": "^5.24.0",
     "parse5": "8.0.1",
+    "@reasonabletech/lattice-client": "^0.0.1",
     "zod": "catalog:"
   },
   "devDependencies": {

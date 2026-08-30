@@ -1,12 +1,16 @@
 # Bring your own model: Athena on a Lovelace Lattice device
 
-> **Status**: implemented; production availability requires the shared Lovelace OAuth client
+> **Reader**: the maintainer who must ship and verify the Docket–Lattice production round trip
+> **Required action**: preserve the no-fallback boundary and complete both production proofs
+> **Status**: implemented locally; production rollout and proof remain open
 > **Owner**: Athena model backend
 > **Last updated**: 2026-08-30
 
 Someone can point Athena's model work at a computer they own. They authorize Docket from their
 Lovelace account, pick one of the machines they have paired with Lattice, and from then on Athena's
-replies are generated there instead of on Docket's model service.
+chat replies are generated there instead of on Docket's model service. Personal Athena assignment
+jobs use the same machine through a durable sealed relay work item. Docket retains the work
+identity, reply key, progress cursor, and review state until the job settles.
 
 The reason to want this is not novelty. It is that "where did my data go" becomes answerable: the
 prompt, the workspace context, and the reply never leave a machine the person controls.
@@ -20,10 +24,10 @@ with it — a laptop or desktop running the `lattice-daemon`, which fronts a loc
 (Ollama or LM Studio). The daemon polls **outbound**; there is no inbound port, no tunnel, and no
 callback from the cloud into the home network.
 
-Work reaches that machine through Lovelace's **hosted gateway**. An application sends an ordinary
-OpenAI-compatible chat request to the gateway with the model selector
-`lattice:personal:<latticeId>`; the gateway seals it as relay work, the daemon picks it up on its
-next poll, executes locally, and the result returns through the same gateway response.
+Work reaches that machine through Lovelace's **hosted gateway**. Chat sends an ordinary
+OpenAI-compatible request with the model selector `lattice:personal:<latticeId>`. Assignment work
+sends a caller-minted work id and a sealed schema-version-2 `agent_task` through the public personal
+relay routes. The daemon polls outbound in both cases.
 
 **Docket never talks to the device.** It talks to the gateway. That is not an implementation
 detail — it is what makes the feature work for a laptop behind NAT on hotel wifi.
@@ -37,19 +41,20 @@ personal-runtime dispatch with an API-key credential throws
 
 So the credential is a per-user OAuth grant, obtained through Sign in with Lovelace:
 
-- **Issuer**: `https://accounts.uselovelace.com` (`/oauth/authorize`, `/oauth/token`).
-- **Flow**: authorization code + PKCE (S256). Docket holds a client secret and could use a plain
-  code exchange; it uses PKCE anyway, because the code travels through the user's browser and PKCE
-  is what makes an intercepted code useless.
+- **Issuer**: `https://auth.uselovelace.com` (`/oauth/authorize`, `/oauth/token`).
+- **Client**: public client `docket-athena`.
+- **Flow**: authorization code + PKCE (S256). Docket stores no client secret for this grant.
 - **Stored**: access token, refresh token, granted scope — sealed with AES-256-GCM
   (`lattice_credential.ciphertext`). No Lovelace password ever reaches Docket.
 
 ### The scopes, and the ones deliberately not requested
 
-| Scope                          | Why Athena needs it                                                                                                                                                   |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `lattice:compute:inference`    | Submit the model turn, and read the person's device records. Reading runtime records is covered by this scope upstream, so device discovery costs no extra authority. |
-| `lattice:compute:catalog:read` | Populate the device/model surface from the gateway's own catalog rather than a list Docket hard-codes and lets rot.                                                   |
+| Scope                          | Why Athena needs it                                                                                       |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| `openid profile email`         | Bind the Lovelace grant to the Docket owner who approved it.                                              |
+| `offline_access`               | Refresh the owner grant without sending the person through consent for every job.                         |
+| `lattice:compute:inference`    | Use an existing personal runtime for chat and durable relay work.                                         |
+| `lattice:compute:catalog:read` | Populate the device and model surface from the gateway catalog instead of a Docket-owned hard-coded list. |
 
 Not requested, and why:
 
@@ -84,8 +89,11 @@ It is enforced at four layers, deliberately redundantly:
 4. **`resolveOwnerBackend`** throws rather than degrading when a stored grant cannot produce a
    usable token.
 
-Tested by counting requests, not just by asserting an error: `lattice-gateway.test.ts` and
-`lattice-flow.test.ts` both assert that an offline turn produces **zero** dispatches anywhere.
+Tests count Docket generation rows and remote submissions. An offline selected runtime keeps the
+delegation queued and produces zero Docket generation rows.
+
+The sequence diagram separates the two execution paths and shows where Docket owns durable state:
+[`lattice-athena-round-trip.mmd`](./lattice-athena-round-trip.mmd).
 
 ## 4. Tool calling over a text-only wire
 
@@ -131,8 +139,9 @@ once per turn:
 const turnRuntime = deps.turnRuntime ?? (await resolveOwnerTurnRuntime(session.ownerUserId));
 ```
 
-No connection, not enabled, or no device chosen ⇒ the container's process-level runtime, unchanged.
-Two people on the same API instance can be on different backends in the same second.
+No connection, a disabled connection, or no device choice uses the container's process-level
+runtime. Once an owner enables a selected runtime, a failure propagates as a Lattice error. Docket
+does not switch that turn to the process-level runtime.
 
 `@docket/athena` takes **no** dependency on `@docket/integrations`. The network edge arrives as an
 injected `LatticeChatPort`, exposed by `@docket/athena/turn/adapters/lattice` and wired by
@@ -141,10 +150,12 @@ defines the port.
 
 ## 6. Data model
 
-| Table                | Holds                                                                                                                                                |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `lattice_connection` | One row per Better Auth user: status, `enabled`, the chosen `device_id`/`device_name`/`device_status`, granted scope, and the last failure **code**. |
-| `lattice_credential` | The AES-256-GCM sealed OAuth tokens, joined by a compound FK on `(connection_id, owner_user_id)`.                                                    |
+| Table                | Holds                                                                                                                                                                                                                               |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lattice_connection` | One row per Better Auth user: status, `enabled`, the chosen runtime, granted scope, and the last failure code.                                                                                                                      |
+| `lattice_credential` | The AES-256-GCM sealed OAuth tokens, joined by a compound owner foreign key.                                                                                                                                                        |
+| `agent_session`      | The execution surface. Assignment sessions delegated to the relay use `execution_surface = lattice`.                                                                                                                                |
+| `agent_delegation`   | One durable assignment job with owner, assignment, session, task, connection, runtime, logical submission id, work id, sealed reply key, relay cursor, next poll time, failure, outcome, proposal, and result acknowledgement time. |
 
 Per user, not per organization: a coworker cannot point the team's Athena at a laptop they do not
 own. Two constraints carry real weight:
@@ -160,11 +171,24 @@ emits constraints inside `CREATE TABLE` but unique indexes _after_ `ALTER TABLE 
 As an index it produced a migration that failed with `42830` whenever the batch also contained other
 new tables. This was caught by `apps/api/tests/lattice/lattice-flow.test.ts`, not by review.
 
+Docket stores the reply key and caller-minted work id before the first network request. A retry
+reuses both identifiers. Terminal settlement clears the reply key in the same transaction that
+records the outcome. The state machine is in
+[`lattice-delegation-state.mmd`](./lattice-delegation-state.mmd).
+
 ## 7. Surfaces
 
 `GET|PATCH|DELETE /v1/me/athena/lattice`, `POST /v1/me/athena/lattice/authorize`,
 `GET /v1/me/athena/lattice/devices`, `POST /v1/me/athena/lattice/device`, and the browser callback
 at `/internal/integrations/lattice/callback`.
+
+Durable assignment jobs use the OAuth-protected gateway routes
+`GET /v1/personal-relay/lattices`, `POST /v1/personal-relay/work-items`,
+`GET /v1/personal-relay/work-items/:workId/events`, and
+`PUT /v1/personal-relay/work-items/:workId/cancellation`. After Docket stores a terminal result it
+calls `PUT /v1/personal-relay/work-items/:workId/result-acknowledgement`, which lets the relay delete
+the sealed result and progress ciphertext. The gateway derives the Lovelace account from the token.
+Docket never supplies an authoritative account identity.
 
 **Unavailability is a 200, not a 409.** Every Lattice failure has an actionable cause — wake the
 machine, start the daemon, reconnect, pick another device — so it comes back in the payload as a
@@ -195,41 +219,35 @@ reaches the fallback's normal configuration error.
 
 ## 9. Environment
 
-| Var                       | Required | Meaning                                                                                                            |
-| ------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------ |
-| `LATTICE_CLIENT_ID`       | no       | Docket's shared Lovelace OAuth client. Absent ⇒ the section renders as unavailable and no Connect control appears. |
-| `LATTICE_CLIENT_SECRET`   | no       | Paired secret for Docket's confidential OAuth client.                                                              |
-| `LATTICE_ACCOUNTS_ISSUER` | no       | Defaults to `https://accounts.uselovelace.com`.                                                                    |
-| `LATTICE_GATEWAY_URL`     | no       | Defaults to `https://lattice.uselovelace.com`.                                                                     |
+| Var                                  | Required | Meaning                                                                                                |
+| ------------------------------------ | -------- | ------------------------------------------------------------------------------------------------------ |
+| `LATTICE_CLIENT_ID`                  | no       | Lovelace OAuth client. Absent ⇒ the section renders as unavailable and no Connect control appears.     |
+| `LATTICE_CLIENT_SECRET`              | no       | Optional compatibility value. Production `docket-athena` is a public PKCE client and does not set one. |
+| `LATTICE_ACCOUNTS_ISSUER`            | no       | Defaults to `https://auth.uselovelace.com`.                                                            |
+| `LATTICE_GATEWAY_URL`                | no       | Defaults to `https://lattice.uselovelace.com`.                                                         |
+| `ATHENA_LATTICE_SUBMISSIONS_ENABLED` | yes      | Set false to stop new durable submissions while existing work continues to settle.                     |
+| `ATHENA_LATTICE_POLLING_ENABLED`     | yes      | Set false to stop polling without deleting delegation rows, work ids, or encrypted keys.               |
 
 The OAuth client identifies Docket during consent; it is application infrastructure, not the model
 credential. Every model grant, device choice, and enablement state still belongs to the individual
 user. The user never enters a gateway URL, API key, or token. A deployment that sets none of these
-variables behaves exactly as it did before this feature existed.
+OAuth values keeps Lattice unavailable. Every deployment must set both emergency controls
+explicitly. The production workflow supplies `false` when either production variable is absent.
 
 ## 10. The SDK
 
-The upstream SDK is `@reasonabletech/lattice-client`
-(`ReasonableTech/lovelace:packages/platform/lattice-client`). It is **not published to any registry
-Docket can install from**, and neither are the two private sibling packages it depends on
-(`@lovelace-ai/compute`, `@lovelace-ai/auth-core`) — all three 404, and `pnpm.overrides` does not
-rewrite transitive dependencies of a `file:` tarball, so locally packed tarballs do not resolve
-either. Declaring an unresolvable dependency would break `pnpm install` for the whole monorepo.
-
-So the SDK's client is vendored verbatim in `packages/integrations/src/lattice-sdk.ts`, with only
-its two type-only upstream imports re-declared locally and attributed. Behaviour, route paths,
-header names and error classes are unchanged. **It is the only module in Docket that speaks HTTP to
-a Lattice gateway**, so when Lovelace publishes, the migration is one file:
-
-```ts
-export * from '@reasonabletech/lattice-client';
-```
+Docket imports the official Lovelace package surfaces from the reviewed source:
+`@reasonabletech/lattice-client`, `@lovelace-ai/compute`,
+`@lovelace-ai/lattice-relay-client`, and `@lovelace-ai/lattice-relay-crypto`. The source no longer
+contains a copied gateway protocol. Lovelace has published version `0.0.1` of these four direct
+dependencies plus the transitive `@lovelace-ai/acsp` package. Docket's lockfile resolves them from
+the registry without a `link:` or `file:` override.
 
 ## 11. Files
 
 | Path                                                         | What                                                                     |
 | ------------------------------------------------------------ | ------------------------------------------------------------------------ |
-| `packages/integrations/src/lattice-sdk.ts`                   | The vendored gateway client. The only Lattice HTTP.                      |
+| `packages/integrations/src/lattice-sdk.ts`                   | The narrow re-export surface for the official Lovelace packages.         |
 | `packages/integrations/src/lattice-oauth.ts`                 | PKCE flow, token exchange, refresh, scope check.                         |
 | `packages/integrations/src/lattice-gateway.ts`               | Device discovery, turn dispatch, error→reason mapping.                   |
 | `domains/athena/src/turn/internal/lattice-tool-protocol.ts`  | Private text-tool protocol; reached through the adapter.                 |
@@ -239,10 +257,12 @@ export * from '@reasonabletech/lattice-client';
 | `apps/api/src/routes/lattice-connection.ts`                  | Load/seal/refresh one person's grant.                                    |
 | `apps/api/src/routes/lattice-oauth.ts`                       | The browser callback.                                                    |
 | `apps/api/src/routes/lattice-backend.ts`                     | Per-owner backend resolution for the agent loop.                         |
+| `apps/api/src/agent/lattice-delegations.ts`                  | Docket-owned durable job state, polling, proposal, and cancellation.     |
+| `apps/api/src/agent/lattice-delegation-runtime.ts`           | Official relay client and crypto adapter.                                |
 | `apps/web/src/app/(app)/settings/athena/lattice-section.tsx` | The settings surface.                                                    |
 | `apps/web/src/app/(app)/settings/athena/lattice-copy.ts`     | Application-owned copy per reason.                                       |
-| `packages/db/src/schema/agents.ts`                           | `lattice_connection`, `lattice_credential`.                              |
-| `packages/db/drizzle/0063_lattice_byo_model.sql`             | The additive migration.                                                  |
+| `packages/db/src/schema/agents.ts`                           | Lattice connection, credential, session surface, and delegation records. |
+| `packages/db/drizzle/0112_agent-delegation.sql`              | The durable delegation migration.                                        |
 
 ## 12. Evidence
 

@@ -1,0 +1,15 @@
+stateDiagram-v2
+[_] --> prepared: Store work id and reply key
+prepared --> submitted: Relay accepts caller ids
+prepared --> failed: Authorization, runtime, or key failure
+prepared --> canceled: Owner cancels before submission
+submitted --> submitted: Save progress cursor and next poll time
+submitted --> proposed: Open completed result and propose comment
+submitted --> failed: Expiry, access loss, invalid ciphertext, or remote failure
+submitted --> canceled: Owner or daemon cancels
+proposed --> completed: Owner approves and comment applies
+proposed --> failed: Approved comment fails
+proposed --> canceled: Owner rejects or cancels
+completed --> [_]
+failed --> [_]
+canceled --> [_]

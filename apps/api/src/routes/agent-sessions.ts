@@ -61,6 +61,8 @@ import {
   resumeSessionExecution,
 } from '../agent/loop';
 import { editProposalInput, listProposalGroups } from '../agent/proposals';
+import { cancelLatticeDelegation } from '../agent/lattice-delegations';
+import { latticeDelegationDependencies } from '../agent/lattice-delegation-runtime';
 import { loadTranscript } from '../agent/transcript';
 
 /**
@@ -678,6 +680,19 @@ Side effect: when the session was parked in \`awaiting_input\` it is resumed to 
       const { orgId } = c.get('actorCtx');
       const { id } = c.req.valid('param');
       const { session } = await loadSessionAccess(c, id, 'contribute');
+      if (session.executionSurface === 'lattice' && session.ownerUserId) {
+        const didCancel = await cancelLatticeDelegation(
+          session.ownerUserId,
+          session.id,
+          new Date(),
+          latticeDelegationDependencies,
+        );
+        if (didCancel) {
+          const { session: canceled } = await loadSessionAccess(c, id, 'contribute');
+          await enqueueSearchUpsert(orgId, 'agent_session', canceled.id);
+          return ok(c, AgentSessionOut, toSessionOut(canceled));
+        }
+      }
       const shouldWake =
         session.executorKind === 'athena' &&
         asynchronousRunnerEnabled() &&

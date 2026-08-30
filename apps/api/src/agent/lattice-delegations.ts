@@ -1,0 +1,1188 @@
+/** Durable Docket ownership for personal Athena work submitted through Lovelace Lattice. */
+import {
+  actor,
+  agentDelegation,
+  agentSession,
+  athenaAssignment,
+  db,
+  genId,
+  latticeConnection,
+  sessionActivity,
+} from '@docket/db';
+import { canActor } from '@docket/authz';
+import { LatticeUnavailableError } from '@docket/integrations';
+import { RelayControllerError } from '@lovelace-ai/lattice-relay-client';
+import { and, asc, eq, isNull, lte, or } from 'drizzle-orm';
+
+import { sealCredential, unsealCredential } from '../lib/credentials';
+import type { AthenaAssignmentRow } from './assignments';
+import type { LatticeConnectionRow } from '../routes/lattice-connection';
+
+const STANDARD_DEADLINE_MS = 120_000;
+const MAX_POLL_BATCH = 10;
+const MAX_SUBMIT_BATCH = 10;
+const TRANSIENT_RETRY_MS = 5_000;
+
+interface ReplyKeyPair {
+  readonly publicKey: string;
+  readonly privateKey: string;
+}
+
+interface RelayWorkKey {
+  readonly keyId: string;
+  readonly publicKey: string;
+  readonly notBefore: string;
+  readonly notAfter: string;
+  readonly revokedAt?: string;
+}
+
+interface RelayRuntime {
+  readonly latticeId: string;
+  readonly accountId: string;
+  readonly displayName: string;
+  readonly reachability?: 'reachable' | 'unreachable';
+  readonly workKeys: readonly RelayWorkKey[];
+}
+
+interface RelaySealedEnvelope {
+  readonly version: string;
+  readonly keyId?: string;
+  readonly ephemeralPublicKey: string;
+  readonly salt: string;
+  readonly iv: string;
+  readonly ciphertext: string;
+}
+
+interface RelayProgressEvent {
+  readonly cursor: string;
+  readonly kind: 'progress';
+  readonly sealed: RelaySealedEnvelope;
+}
+
+interface RelayResultEvent {
+  readonly cursor: 'cursor_final';
+  readonly kind: 'result';
+  readonly outcome: 'completed' | 'failed' | 'cancelled' | 'work_key_expired';
+  readonly sealed: RelaySealedEnvelope;
+}
+
+interface RelayExpiryEvent {
+  readonly cursor: 'cursor_final';
+  readonly kind: 'expiry';
+  readonly reason: 'deadline_expired' | 'work_retention_expired' | 'result_retention_expired';
+  readonly expiredAt: string;
+}
+
+type RelayEvent = RelayProgressEvent | RelayResultEvent | RelayExpiryEvent;
+
+type RelayWorkState =
+  | 'pending'
+  | 'queued'
+  | 'in_flight'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+  | 'expired'
+  | 'offline_queued'
+  | 'rate_limited'
+  | 'queue_full';
+
+/** The wire and crypto boundary implemented by the official Lovelace packages. */
+export interface LatticeDelegationDependencies {
+  readonly generateReplyKey: (keyId: string) => Promise<ReplyKeyPair>;
+  readonly buildAgentTaskCommand: (input: {
+    readonly instruction: string;
+    readonly logicalSubmissionId: string;
+    readonly replyPublicKey: string;
+    readonly deadlineAt: Date;
+    readonly model: string;
+    readonly metadata: Record<string, unknown>;
+  }) => unknown;
+  readonly listRuntimes: (connection: LatticeConnectionRow) => Promise<readonly RelayRuntime[]>;
+  readonly submitWork: (
+    connection: LatticeConnectionRow,
+    input: {
+      readonly latticeId: string;
+      readonly accountId: string;
+      readonly controllerId: string;
+      readonly logicalSubmissionId: string;
+      readonly workId: string;
+      readonly plaintext: Uint8Array;
+      readonly deadlineAt: string;
+      readonly keyId: string;
+      readonly recipientPublicKey: string;
+    },
+  ) => Promise<{ readonly workId: string; readonly state: RelayWorkState }>;
+  readonly pollEvents: (
+    connection: LatticeConnectionRow,
+    workId: string,
+    cursor: string,
+  ) => Promise<{
+    readonly workId: string;
+    readonly state: RelayWorkState;
+    readonly events: readonly RelayEvent[];
+    readonly nextPollAfterMs: number;
+  }>;
+  readonly openWork: (
+    envelope: RelaySealedEnvelope,
+    privateKey: string,
+    aad: { readonly latticeId: string; readonly workId: string },
+  ) => Promise<unknown>;
+  readonly cancelWork: (
+    connection: LatticeConnectionRow,
+    workId: string,
+  ) => Promise<{ readonly state: RelayWorkState }>;
+  readonly acknowledgeResult: (
+    connection: LatticeConnectionRow,
+    workId: string,
+  ) => Promise<{ readonly state: RelayWorkState; readonly acknowledgedAt: string }>;
+}
+
+/** Counts returned by one bounded scheduler pass. */
+export interface LatticeDelegationSweepResult {
+  readonly polled: number;
+  readonly submitted: number;
+  readonly proposed: number;
+  readonly failed: number;
+  readonly canceled: number;
+  readonly acknowledged: number;
+}
+
+/** Independent emergency controls for relay reads and new submissions. */
+export interface LatticeDelegationSweepOptions {
+  readonly pollingEnabled?: boolean;
+  readonly submissionsEnabled?: boolean;
+}
+
+interface StoredReplyKey extends ReplyKeyPair {
+  readonly keyId: string;
+}
+
+function storeReplyKey(key: StoredReplyKey): string {
+  return sealCredential(JSON.stringify(key));
+}
+
+function loadReplyKey(ciphertext: string): StoredReplyKey {
+  const parsed = JSON.parse(unsealCredential(ciphertext)) as Partial<StoredReplyKey>;
+  if (
+    typeof parsed.keyId !== 'string' ||
+    typeof parsed.publicKey !== 'string' ||
+    typeof parsed.privateKey !== 'string'
+  ) {
+    throw new Error('stored Lattice reply key is invalid');
+  }
+  return parsed as StoredReplyKey;
+}
+
+/**
+ * Create the Docket session and prepared delegation before any relay request can leave Docket.
+ */
+export async function prepareLatticeAssignmentRun(
+  assignment: AthenaAssignmentRow,
+  actorId: string,
+  prompt: string,
+  externalRunRef: string,
+  connection: LatticeConnectionRow,
+  now: Date,
+  deps: LatticeDelegationDependencies,
+): Promise<string> {
+  if (!connection.enabled || !connection.deviceId) {
+    throw new Error('an enabled Lattice connection with a selected runtime is required');
+  }
+  const runtimeId = connection.deviceId;
+  const workId = `work_${genId()}`;
+  const logicalSubmissionId = `athena:${assignment.id}:${genId()}`;
+  const replyKey = await deps.generateReplyKey(`docket-reply-${workId}`);
+  const replyKeyCiphertext = storeReplyKey({
+    keyId: `docket-reply-${workId}`,
+    ...replyKey,
+  });
+  const deadlineAt = new Date(now.getTime() + STANDARD_DEADLINE_MS);
+
+  return await db.transaction(async (tx) => {
+    const [lockedAssignment] = await tx
+      .select({ id: athenaAssignment.id })
+      .from(athenaAssignment)
+      .where(
+        and(
+          eq(athenaAssignment.id, assignment.id),
+          eq(athenaAssignment.ownerUserId, assignment.ownerUserId),
+        ),
+      )
+      .for('update')
+      .limit(1);
+    if (!lockedAssignment) throw new Error('Athena assignment is no longer available');
+    const [existing] = await tx
+      .select({ sessionId: agentDelegation.sessionId })
+      .from(agentDelegation)
+      .where(
+        and(
+          eq(agentDelegation.assignmentId, assignment.id),
+          eq(agentDelegation.ownerUserId, assignment.ownerUserId),
+          or(
+            eq(agentDelegation.status, 'prepared'),
+            eq(agentDelegation.status, 'submitted'),
+            eq(agentDelegation.status, 'proposed'),
+          ),
+        ),
+      )
+      .limit(1);
+    if (existing) return existing.sessionId;
+
+    const [session] = await tx
+      .insert(agentSession)
+      .values({
+        executorKind: 'athena',
+        ownerUserId: assignment.ownerUserId,
+        contextOrganizationId: assignment.organizationId,
+        taskId: assignment.entityType === 'task' ? assignment.entityId : null,
+        trigger: 'assignment',
+        executionSurface: 'lattice',
+        status: 'pending',
+        initiatorId: actorId,
+        externalRunRef,
+        currentStep: 'Waiting to submit to the selected Lattice runtime',
+        currentStepAt: now,
+      })
+      .returning();
+    /* v8 ignore next -- @preserve defensive: insert always returns a row */
+    if (!session) throw new Error('Lattice assignment session insert returned no row');
+    await tx.insert(sessionActivity).values({
+      sessionId: session.id,
+      organizationId: null,
+      type: 'response',
+      body: { text: prompt, author: 'user', assignmentId: assignment.id },
+    });
+    await tx.insert(agentDelegation).values({
+      ownerUserId: assignment.ownerUserId,
+      organizationId: assignment.organizationId,
+      assignmentId: assignment.id,
+      sessionId: session.id,
+      taskId: assignment.entityType === 'task' ? assignment.entityId : null,
+      connectionId: connection.id,
+      runtimeId,
+      logicalSubmissionId,
+      workId,
+      replyKeyCiphertext,
+      status: 'prepared',
+      nextPollAt: now,
+      deadlineAt,
+    });
+    await tx
+      .update(athenaAssignment)
+      .set({ activeSessionId: session.id, pausedReason: null })
+      .where(
+        and(
+          eq(athenaAssignment.id, assignment.id),
+          eq(athenaAssignment.ownerUserId, assignment.ownerUserId),
+        ),
+      );
+    return session.id;
+  });
+}
+
+function usableWorkKey(runtime: RelayRuntime, now: Date): RelayWorkKey | null {
+  return (
+    runtime.workKeys.find((key) => {
+      if (key.revokedAt) return false;
+      const notBefore = new Date(key.notBefore).getTime();
+      const notAfter = new Date(key.notAfter).getTime();
+      return notBefore <= now.getTime() && now.getTime() < notAfter;
+    }) ?? null
+  );
+}
+
+function proposalExecutionFailed(body: unknown): boolean {
+  if (!body || typeof body !== 'object') return false;
+  const action = (body as Record<string, unknown>)['action'];
+  if (!action || typeof action !== 'object') return false;
+  const result = (action as Record<string, unknown>)['result'];
+  return Boolean(
+    result && typeof result === 'object' && (result as Record<string, unknown>)['isError'] === true,
+  );
+}
+
+/** Settle locally decided proposals outside Athena's conversational turn handler. */
+async function reconcileDecidedProposals(now: Date): Promise<void> {
+  const decided = await db
+    .select({
+      delegationId: agentDelegation.id,
+      approvalStatus: sessionActivity.approvalStatus,
+      body: sessionActivity.body,
+    })
+    .from(agentDelegation)
+    .innerJoin(sessionActivity, eq(agentDelegation.returnedActivityId, sessionActivity.id))
+    .where(eq(agentDelegation.status, 'proposed'))
+    .orderBy(asc(agentDelegation.createdAt))
+    .limit(MAX_POLL_BATCH);
+
+  for (const row of decided) {
+    if (row.approvalStatus !== 'applied' && row.approvalStatus !== 'rejected') continue;
+    const executionFailed = row.approvalStatus === 'applied' && proposalExecutionFailed(row.body);
+    await db
+      .update(agentDelegation)
+      .set(
+        row.approvalStatus === 'rejected'
+          ? { status: 'canceled', returnedActivityId: null, settledAt: now }
+          : executionFailed
+            ? {
+                status: 'failed',
+                failureCode: 'task_comment_failed',
+                returnedActivityId: null,
+                settledAt: now,
+              }
+            : { status: 'completed', failureCode: null, settledAt: now },
+      )
+      .where(and(eq(agentDelegation.id, row.delegationId), eq(agentDelegation.status, 'proposed')));
+  }
+}
+
+async function promptForSession(sessionId: string): Promise<string> {
+  const [row] = await db
+    .select({ body: sessionActivity.body })
+    .from(sessionActivity)
+    .where(and(eq(sessionActivity.sessionId, sessionId), eq(sessionActivity.type, 'response')))
+    .orderBy(asc(sessionActivity.createdAt))
+    .limit(1);
+  const text = row?.body.text;
+  if (typeof text !== 'string' || text.trim().length === 0) {
+    throw new Error('prepared Lattice delegation has no instruction');
+  }
+  return text;
+}
+
+async function settleFailure(
+  delegationId: string,
+  sessionId: string,
+  code: string,
+  workState: string | null,
+  now: Date,
+): Promise<boolean> {
+  return await db.transaction(async (tx) => {
+    const [claimed] = await tx
+      .update(agentDelegation)
+      .set({
+        status: 'failed',
+        failureCode: code,
+        workState,
+        replyKeyCiphertext: null,
+        returnedActivityId: null,
+        nextPollAt: null,
+        settledAt: now,
+      })
+      .where(
+        and(
+          eq(agentDelegation.id, delegationId),
+          or(eq(agentDelegation.status, 'prepared'), eq(agentDelegation.status, 'submitted')),
+        ),
+      )
+      .returning({ id: agentDelegation.id });
+    if (!claimed) return false;
+    await tx.insert(sessionActivity).values({
+      sessionId,
+      organizationId: null,
+      type: 'error',
+      body: { text: failureMessage(code), code, source: 'lattice' },
+    });
+    await tx
+      .update(agentSession)
+      .set({
+        status: 'failed',
+        currentStep: failureMessage(code),
+        currentStepAt: now,
+        endedAt: now,
+      })
+      .where(eq(agentSession.id, sessionId));
+    return true;
+  });
+}
+
+async function settleCanceled(
+  delegationId: string,
+  sessionId: string,
+  workState: string | null,
+  now: Date,
+): Promise<boolean> {
+  return await db.transaction(async (tx) => {
+    const [claimed] = await tx
+      .update(agentDelegation)
+      .set({
+        status: 'canceled',
+        workState,
+        failureCode: null,
+        replyKeyCiphertext: null,
+        nextPollAt: null,
+        settledAt: now,
+      })
+      .where(
+        and(
+          eq(agentDelegation.id, delegationId),
+          or(eq(agentDelegation.status, 'prepared'), eq(agentDelegation.status, 'submitted')),
+        ),
+      )
+      .returning({ id: agentDelegation.id });
+    if (!claimed) return false;
+    await tx
+      .update(agentSession)
+      .set({
+        status: 'canceled',
+        currentStep: 'The Lattice assignment was canceled',
+        currentStepAt: now,
+        interruptedAt: now,
+        endedAt: now,
+      })
+      .where(eq(agentSession.id, sessionId));
+    return true;
+  });
+}
+
+function failureMessage(code: string): string {
+  switch (code) {
+    case 'access_lost':
+      return 'Athena stopped because you no longer have access to the assigned work.';
+    case 'oauth_invalid':
+      return 'Athena stopped because the Lattice connection needs authorization again.';
+    case 'scope_missing':
+      return 'Athena stopped because the Lattice connection does not grant compute access.';
+    case 'result_decryption_failed':
+      return 'Athena could not verify the encrypted result returned by Lattice.';
+    case 'result_key_invalid':
+      return 'Athena could not open the saved key for this Lattice assignment.';
+    case 'runtime_key_expired':
+      return 'Athena stopped because the Mac Studio work key expired.';
+    case 'runtime_not_found':
+      return 'Athena could not find the selected Mac Studio in this Lattice account.';
+    case 'runtime_offline':
+      return 'Athena is waiting because the selected Mac Studio is offline.';
+    case 'submission_rejected':
+      return 'Athena could not submit this assignment to the selected Mac Studio.';
+    case 'relay_unavailable':
+      return 'Athena is waiting for the Lovelace Lattice relay to respond.';
+    case 'unknown_work':
+      return 'Athena stopped because Lattice no longer recognizes this assignment.';
+    case 'work_expired':
+      return 'Athena did not receive the Lattice result before it expired.';
+    case 'execution_failed':
+      return 'Athena could not finish the assignment on the selected Mac Studio.';
+    case 'result_invalid':
+      return 'Athena received a Lattice result that did not contain a usable report.';
+    default:
+      return 'Athena could not finish the Lattice assignment.';
+  }
+}
+
+function authorizationFailureCode(cause: unknown): 'oauth_invalid' | 'scope_missing' | null {
+  if (!(cause instanceof LatticeUnavailableError)) return null;
+  if (cause.reason === 'insufficient_scopes') return 'scope_missing';
+  if (cause.reason === 'not_connected' || cause.reason === 'authorization_expired') {
+    return 'oauth_invalid';
+  }
+  return null;
+}
+
+function relayTerminalFailureCode(
+  cause: unknown,
+  phase: 'submit' | 'poll',
+): 'oauth_invalid' | 'scope_missing' | 'submission_rejected' | 'unknown_work' | null {
+  if (!(cause instanceof RelayControllerError)) return null;
+  if (cause.status === 401) return 'oauth_invalid';
+  if (cause.status === 403) return 'scope_missing';
+  if (phase === 'poll' && cause.status === 404) return 'unknown_work';
+  if (
+    phase === 'submit' &&
+    (cause.status === 400 || cause.status === 404 || cause.status === 409)
+  ) {
+    return 'submission_rejected';
+  }
+  return null;
+}
+
+async function recordTransientRelayFailure(
+  row: typeof agentDelegation.$inferSelect,
+  now: Date,
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx
+      .update(agentDelegation)
+      .set({
+        failureCode: 'relay_unavailable',
+        nextPollAt: new Date(now.getTime() + TRANSIENT_RETRY_MS),
+      })
+      .where(eq(agentDelegation.id, row.id));
+    await tx
+      .update(agentSession)
+      .set({ currentStep: failureMessage('relay_unavailable'), currentStepAt: now })
+      .where(eq(agentSession.id, row.sessionId));
+  });
+}
+
+async function submitPrepared(
+  row: typeof agentDelegation.$inferSelect,
+  now: Date,
+  deps: LatticeDelegationDependencies,
+): Promise<'submitted' | 'failed' | 'skipped'> {
+  const [connection] = await db
+    .select()
+    .from(latticeConnection)
+    .where(
+      and(
+        eq(latticeConnection.id, row.connectionId),
+        eq(latticeConnection.ownerUserId, row.ownerUserId),
+      ),
+    )
+    .limit(1);
+  if (!connection?.enabled || !connection.accountId || connection.deviceId !== row.runtimeId) {
+    return (await settleFailure(row.id, row.sessionId, 'oauth_invalid', null, now))
+      ? 'failed'
+      : 'skipped';
+  }
+  if (!row.replyKeyCiphertext || !row.deadlineAt) {
+    return (await settleFailure(row.id, row.sessionId, 'result_key_invalid', null, now))
+      ? 'failed'
+      : 'skipped';
+  }
+
+  let replyKey: StoredReplyKey;
+  try {
+    replyKey = loadReplyKey(row.replyKeyCiphertext);
+  } catch {
+    return (await settleFailure(row.id, row.sessionId, 'result_key_invalid', null, now))
+      ? 'failed'
+      : 'skipped';
+  }
+
+  try {
+    const runtimes = await deps.listRuntimes(connection);
+    const runtime = runtimes.find((candidate) => candidate.latticeId === row.runtimeId);
+    if (runtime?.accountId !== connection.accountId) {
+      return (await settleFailure(row.id, row.sessionId, 'runtime_not_found', null, now))
+        ? 'failed'
+        : 'skipped';
+    }
+    const workKey = usableWorkKey(runtime, now);
+    if (!workKey) {
+      return (await settleFailure(row.id, row.sessionId, 'runtime_key_expired', null, now))
+        ? 'failed'
+        : 'skipped';
+    }
+    const instruction = await promptForSession(row.sessionId);
+    const command = deps.buildAgentTaskCommand({
+      instruction,
+      logicalSubmissionId: row.logicalSubmissionId,
+      replyPublicKey: replyKey.publicKey,
+      deadlineAt: row.deadlineAt,
+      model: 'poolside/laguna-s-2.1',
+      metadata: {
+        docketDelegationId: row.id,
+        docketSessionId: row.sessionId,
+        docketTaskId: row.taskId,
+        docketAssignmentId: row.assignmentId,
+      },
+    });
+    const accepted = await deps.submitWork(connection, {
+      latticeId: row.runtimeId,
+      accountId: connection.accountId,
+      controllerId: `docket:${row.ownerUserId}`,
+      logicalSubmissionId: row.logicalSubmissionId,
+      workId: row.workId,
+      plaintext: new TextEncoder().encode(JSON.stringify(command)),
+      deadlineAt: row.deadlineAt.toISOString(),
+      keyId: workKey.keyId,
+      recipientPublicKey: workKey.publicKey,
+    });
+    if (accepted.workId !== row.workId) {
+      if (accepted.state === 'rate_limited' || accepted.state === 'queue_full') {
+        await db.transaction(async (tx) => {
+          await tx
+            .update(agentDelegation)
+            .set({
+              workState: accepted.state,
+              nextPollAt: new Date(now.getTime() + TRANSIENT_RETRY_MS),
+            })
+            .where(and(eq(agentDelegation.id, row.id), eq(agentDelegation.status, 'prepared')));
+          await tx
+            .update(agentSession)
+            .set({
+              currentStep:
+                accepted.state === 'rate_limited'
+                  ? 'Waiting for the Lattice submission limit to reset'
+                  : 'Waiting for space in the selected Lattice runtime queue',
+              currentStepAt: now,
+            })
+            .where(eq(agentSession.id, row.sessionId));
+        });
+        return 'skipped';
+      }
+      throw new Error('relay changed the caller-minted work id');
+    }
+    const [updated] = await db
+      .update(agentDelegation)
+      .set({
+        status: 'submitted',
+        workState: accepted.state,
+        submittedAt: now,
+        failureCode: null,
+        nextPollAt: new Date(now.getTime() + TRANSIENT_RETRY_MS),
+      })
+      .where(and(eq(agentDelegation.id, row.id), eq(agentDelegation.status, 'prepared')))
+      .returning({ id: agentDelegation.id });
+    if (!updated) return 'skipped';
+    await db
+      .update(agentSession)
+      .set({
+        status: 'running',
+        startedAt: now,
+        currentStep:
+          accepted.state === 'offline_queued'
+            ? 'Queued until the selected Lattice runtime comes online'
+            : 'Running on the selected Lattice runtime',
+        currentStepAt: now,
+      })
+      .where(eq(agentSession.id, row.sessionId));
+    return 'submitted';
+  } catch (cause) {
+    const failureCode =
+      authorizationFailureCode(cause) ?? relayTerminalFailureCode(cause, 'submit');
+    if (failureCode) {
+      return (await settleFailure(row.id, row.sessionId, failureCode, null, now))
+        ? 'failed'
+        : 'skipped';
+    }
+    await recordTransientRelayFailure(row, now);
+    return 'skipped';
+  }
+}
+
+function progressText(payload: unknown): string | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const record = payload as Record<string, unknown>;
+  for (const field of ['text', 'message', 'step'] as const) {
+    const value = record[field];
+    if (typeof value === 'string' && value.trim().length > 0) return value.trim();
+  }
+  return null;
+}
+
+async function persistProgress(
+  row: typeof agentDelegation.$inferSelect,
+  event: RelayProgressEvent,
+  expectedCursor: string,
+  payload: unknown,
+  workState: RelayWorkState,
+  now: Date,
+): Promise<boolean> {
+  return await db.transaction(async (tx) => {
+    const [claimed] = await tx
+      .update(agentDelegation)
+      .set({ relayCursor: event.cursor, workState, failureCode: null })
+      .where(
+        and(
+          eq(agentDelegation.id, row.id),
+          eq(agentDelegation.status, 'submitted'),
+          eq(agentDelegation.relayCursor, expectedCursor),
+        ),
+      )
+      .returning({ id: agentDelegation.id });
+    if (!claimed) return false;
+    const text = progressText(payload);
+    if (text) {
+      await tx.insert(sessionActivity).values({
+        sessionId: row.sessionId,
+        organizationId: null,
+        type: 'thought',
+        body: { text, source: 'lattice', relayCursor: event.cursor },
+      });
+      await tx
+        .update(agentSession)
+        .set({ currentStep: text, currentStepAt: now })
+        .where(eq(agentSession.id, row.sessionId));
+    }
+    return true;
+  });
+}
+
+async function stillAuthorized(row: typeof agentDelegation.$inferSelect): Promise<boolean> {
+  const [assignment] = await db
+    .select()
+    .from(athenaAssignment)
+    .where(
+      and(
+        eq(athenaAssignment.id, row.assignmentId),
+        eq(athenaAssignment.ownerUserId, row.ownerUserId),
+      ),
+    )
+    .limit(1);
+  if (!assignment) return false;
+  const [ownerActor] = await db
+    .select({ id: actor.id })
+    .from(actor)
+    .where(
+      and(
+        eq(actor.userId, row.ownerUserId),
+        eq(actor.organizationId, row.organizationId),
+        eq(actor.kind, 'human'),
+        eq(actor.status, 'active'),
+        isNull(actor.archivedAt),
+      ),
+    )
+    .limit(1);
+  if (!ownerActor) return false;
+  return (
+    await canActor(
+      ownerActor.id,
+      'contribute',
+      { kind: assignment.entityType, id: assignment.entityId, orgId: assignment.organizationId },
+      db,
+    )
+  ).allow;
+}
+
+function outputText(payload: unknown): string | null {
+  if (!payload || typeof payload !== 'object') return null;
+  const value = (payload as Record<string, unknown>)['outputText'];
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
+
+async function proposeResult(
+  row: typeof agentDelegation.$inferSelect,
+  payload: unknown,
+  now: Date,
+): Promise<boolean> {
+  if (!(await stillAuthorized(row))) {
+    return await settleFailure(row.id, row.sessionId, 'access_lost', 'completed', now);
+  }
+  const [assignment] = await db
+    .select()
+    .from(athenaAssignment)
+    .where(eq(athenaAssignment.id, row.assignmentId))
+    .limit(1);
+  const [connection] = await db
+    .select({ deviceName: latticeConnection.deviceName })
+    .from(latticeConnection)
+    .where(
+      and(
+        eq(latticeConnection.id, row.connectionId),
+        eq(latticeConnection.ownerUserId, row.ownerUserId),
+      ),
+    )
+    .limit(1);
+  const report = outputText(payload);
+  if (!assignment || !report) {
+    return await settleFailure(row.id, row.sessionId, 'result_invalid', 'completed', now);
+  }
+
+  return await db.transaction(async (tx) => {
+    const [claimable] = await tx
+      .select({ id: agentDelegation.id })
+      .from(agentDelegation)
+      .where(and(eq(agentDelegation.id, row.id), eq(agentDelegation.status, 'submitted')))
+      .for('update')
+      .limit(1);
+    if (!claimable) return false;
+    const [activity] = await tx
+      .insert(sessionActivity)
+      .values({
+        sessionId: row.sessionId,
+        organizationId: row.organizationId,
+        type: 'action',
+        approvalStatus: 'proposed',
+        proposalGroupId: genId(),
+        body: {
+          lattice: {
+            delegationId: row.id,
+            logicalSubmissionId: row.logicalSubmissionId,
+            workId: row.workId,
+            runtimeId: row.runtimeId,
+            runtimeName: connection?.deviceName ?? row.runtimeId,
+            outcome: 'completed',
+          },
+          action: {
+            kind: 'comment',
+            summary: `Post Athena's Lattice result on the assigned ${assignment.entityType}`,
+            toolCall: {
+              connection: 'docket',
+              tool: 'comment',
+              input: {
+                orgId: row.organizationId,
+                subjectType: assignment.entityType,
+                subjectId: assignment.entityId,
+                body: report,
+              },
+              toolUseId: `lattice:${row.workId}:result`,
+            },
+            mode: 'proposal',
+          },
+        },
+      })
+      .returning({ id: sessionActivity.id });
+    /* v8 ignore next -- @preserve defensive: insert always returns a row */
+    if (!activity) throw new Error('Lattice proposal insert returned no row');
+    const [claimed] = await tx
+      .update(agentDelegation)
+      .set({
+        status: 'proposed',
+        workState: 'completed',
+        relayCursor: 'cursor_final',
+        replyKeyCiphertext: null,
+        nextPollAt: null,
+        terminalOutcome: { outcome: 'completed', payload },
+        failureCode: null,
+        returnedActivityId: activity.id,
+        settledAt: now,
+      })
+      .where(and(eq(agentDelegation.id, row.id), eq(agentDelegation.status, 'submitted')))
+      .returning({ id: agentDelegation.id });
+    /* v8 ignore next -- @preserve defensive: the row is locked above until this update */
+    if (!claimed) throw new Error('Lattice delegation proposal claim returned no row');
+    await tx
+      .update(agentSession)
+      .set({
+        status: 'awaiting_approval',
+        currentStep: 'Waiting for you to review the Lattice result',
+        currentStepAt: now,
+      })
+      .where(eq(agentSession.id, row.sessionId));
+    return true;
+  });
+}
+
+async function acknowledgeStoredResult(
+  row: typeof agentDelegation.$inferSelect,
+  now: Date,
+  deps: LatticeDelegationDependencies,
+): Promise<boolean> {
+  const [connection] = await db
+    .select()
+    .from(latticeConnection)
+    .where(
+      and(
+        eq(latticeConnection.id, row.connectionId),
+        eq(latticeConnection.ownerUserId, row.ownerUserId),
+      ),
+    )
+    .limit(1);
+  if (!connection?.enabled) {
+    await db
+      .update(agentDelegation)
+      .set({ nextPollAt: new Date(now.getTime() + TRANSIENT_RETRY_MS) })
+      .where(and(eq(agentDelegation.id, row.id), isNull(agentDelegation.resultAcknowledgedAt)));
+    return false;
+  }
+
+  try {
+    const accepted = await deps.acknowledgeResult(connection, row.workId);
+    const acknowledgedAt = new Date(accepted.acknowledgedAt);
+    if (Number.isNaN(acknowledgedAt.getTime())) {
+      throw new Error('relay returned an invalid result acknowledgement time');
+    }
+    const [updated] = await db
+      .update(agentDelegation)
+      .set({ resultAcknowledgedAt: acknowledgedAt, nextPollAt: null })
+      .where(and(eq(agentDelegation.id, row.id), isNull(agentDelegation.resultAcknowledgedAt)))
+      .returning({ id: agentDelegation.id });
+    return Boolean(updated);
+  } catch {
+    await db
+      .update(agentDelegation)
+      .set({ nextPollAt: new Date(now.getTime() + TRANSIENT_RETRY_MS) })
+      .where(and(eq(agentDelegation.id, row.id), isNull(agentDelegation.resultAcknowledgedAt)));
+    return false;
+  }
+}
+
+async function pollSubmitted(
+  row: typeof agentDelegation.$inferSelect,
+  now: Date,
+  deps: LatticeDelegationDependencies,
+): Promise<'polled' | 'proposed' | 'failed' | 'canceled' | 'skipped'> {
+  const [connection] = await db
+    .select()
+    .from(latticeConnection)
+    .where(
+      and(
+        eq(latticeConnection.id, row.connectionId),
+        eq(latticeConnection.ownerUserId, row.ownerUserId),
+      ),
+    )
+    .limit(1);
+  if (!connection?.enabled) {
+    return (await settleFailure(row.id, row.sessionId, 'oauth_invalid', row.workState, now))
+      ? 'failed'
+      : 'skipped';
+  }
+  if (!row.replyKeyCiphertext) {
+    return (await settleFailure(row.id, row.sessionId, 'result_key_invalid', row.workState, now))
+      ? 'failed'
+      : 'skipped';
+  }
+
+  let replyKey: StoredReplyKey;
+  try {
+    replyKey = loadReplyKey(row.replyKeyCiphertext);
+  } catch {
+    return (await settleFailure(row.id, row.sessionId, 'result_key_invalid', row.workState, now))
+      ? 'failed'
+      : 'skipped';
+  }
+
+  try {
+    const response = await deps.pollEvents(connection, row.workId, row.relayCursor);
+    if (response.workId !== row.workId) {
+      return (await settleFailure(row.id, row.sessionId, 'unknown_work', row.workState, now))
+        ? 'failed'
+        : 'skipped';
+    }
+    let expectedCursor = row.relayCursor;
+    for (const progress of response.events.filter(
+      (event): event is RelayProgressEvent => event.kind === 'progress',
+    )) {
+      if (progress.cursor === expectedCursor) continue;
+      let payload: unknown;
+      try {
+        payload = await deps.openWork(progress.sealed, replyKey.privateKey, {
+          latticeId: row.runtimeId,
+          workId: row.workId,
+        });
+      } catch {
+        return (await settleFailure(
+          row.id,
+          row.sessionId,
+          'result_decryption_failed',
+          response.state,
+          now,
+        ))
+          ? 'failed'
+          : 'skipped';
+      }
+      if (!(await persistProgress(row, progress, expectedCursor, payload, response.state, now))) {
+        return 'skipped';
+      }
+      expectedCursor = progress.cursor;
+    }
+    const terminal = response.events.find(
+      (event): event is RelayResultEvent | RelayExpiryEvent => event.kind !== 'progress',
+    );
+    if (!terminal) {
+      await db
+        .update(agentDelegation)
+        .set({
+          workState: response.state,
+          relayCursor: expectedCursor,
+          failureCode: null,
+          nextPollAt: new Date(now.getTime() + response.nextPollAfterMs),
+        })
+        .where(
+          and(
+            eq(agentDelegation.id, row.id),
+            eq(agentDelegation.status, 'submitted'),
+            eq(agentDelegation.relayCursor, expectedCursor),
+          ),
+        );
+      return 'polled';
+    }
+    if (terminal.kind === 'expiry') {
+      return (await settleFailure(row.id, row.sessionId, 'work_expired', response.state, now))
+        ? 'failed'
+        : 'skipped';
+    }
+    let payload: unknown;
+    try {
+      payload = await deps.openWork(terminal.sealed, replyKey.privateKey, {
+        latticeId: row.runtimeId,
+        workId: row.workId,
+      });
+    } catch {
+      return (await settleFailure(
+        row.id,
+        row.sessionId,
+        'result_decryption_failed',
+        response.state,
+        now,
+      ))
+        ? 'failed'
+        : 'skipped';
+    }
+    if (terminal.outcome === 'completed') {
+      return (await proposeResult(row, payload, now)) ? 'proposed' : 'skipped';
+    }
+    if (terminal.outcome === 'cancelled') {
+      return (await settleCanceled(row.id, row.sessionId, response.state, now))
+        ? 'canceled'
+        : 'skipped';
+    }
+    const code =
+      terminal.outcome === 'work_key_expired' ? 'runtime_key_expired' : 'execution_failed';
+    return (await settleFailure(row.id, row.sessionId, code, response.state, now))
+      ? 'failed'
+      : 'skipped';
+  } catch (cause) {
+    const failureCode = authorizationFailureCode(cause) ?? relayTerminalFailureCode(cause, 'poll');
+    if (failureCode) {
+      return (await settleFailure(row.id, row.sessionId, failureCode, row.workState, now))
+        ? 'failed'
+        : 'skipped';
+    }
+    await recordTransientRelayFailure(row, now);
+    return 'skipped';
+  }
+}
+
+/** Poll due work first, settle terminal output, then submit a bounded prepared batch. */
+export async function sweepLatticeDelegations(
+  now: Date,
+  deps: LatticeDelegationDependencies,
+  options: LatticeDelegationSweepOptions = {},
+): Promise<LatticeDelegationSweepResult> {
+  const result = {
+    polled: 0,
+    submitted: 0,
+    proposed: 0,
+    failed: 0,
+    canceled: 0,
+    acknowledged: 0,
+  };
+  await reconcileDecidedProposals(now);
+  if (options.pollingEnabled !== false) {
+    const due = await db
+      .select()
+      .from(agentDelegation)
+      .where(
+        and(
+          eq(agentDelegation.status, 'submitted'),
+          or(isNull(agentDelegation.nextPollAt), lte(agentDelegation.nextPollAt, now)),
+        ),
+      )
+      .orderBy(asc(agentDelegation.nextPollAt), asc(agentDelegation.createdAt))
+      .limit(MAX_POLL_BATCH);
+    for (const row of due) {
+      const outcome = await pollSubmitted(row, now, deps);
+      if (
+        outcome === 'polled' ||
+        outcome === 'proposed' ||
+        outcome === 'failed' ||
+        outcome === 'canceled'
+      ) {
+        result.polled += 1;
+      }
+      if (outcome === 'proposed') result.proposed += 1;
+      if (outcome === 'failed') result.failed += 1;
+      if (outcome === 'canceled') result.canceled += 1;
+    }
+
+    const awaitingAcknowledgement = await db
+      .select()
+      .from(agentDelegation)
+      .where(
+        and(
+          or(eq(agentDelegation.status, 'proposed'), eq(agentDelegation.status, 'completed')),
+          isNull(agentDelegation.resultAcknowledgedAt),
+          or(isNull(agentDelegation.nextPollAt), lte(agentDelegation.nextPollAt, now)),
+        ),
+      )
+      .orderBy(asc(agentDelegation.nextPollAt), asc(agentDelegation.createdAt))
+      .limit(MAX_POLL_BATCH);
+    for (const row of awaitingAcknowledgement) {
+      if (await acknowledgeStoredResult(row, now, deps)) result.acknowledged += 1;
+    }
+  }
+
+  if (options.submissionsEnabled === false) return result;
+  const prepared = await db
+    .select()
+    .from(agentDelegation)
+    .where(
+      and(
+        eq(agentDelegation.status, 'prepared'),
+        or(isNull(agentDelegation.nextPollAt), lte(agentDelegation.nextPollAt, now)),
+      ),
+    )
+    .orderBy(asc(agentDelegation.nextPollAt), asc(agentDelegation.createdAt))
+    .limit(MAX_SUBMIT_BATCH);
+  for (const row of prepared) {
+    const outcome = await submitPrepared(row, now, deps);
+    if (outcome === 'submitted') result.submitted += 1;
+    if (outcome === 'failed') result.failed += 1;
+  }
+  return result;
+}
+
+/** Cancel one owner-matched Lattice delegation before the Docket session is settled locally. */
+export async function cancelLatticeDelegation(
+  ownerUserId: string,
+  sessionId: string,
+  now: Date,
+  deps: LatticeDelegationDependencies,
+): Promise<boolean> {
+  const [row] = await db
+    .select()
+    .from(agentDelegation)
+    .where(
+      and(
+        eq(agentDelegation.ownerUserId, ownerUserId),
+        eq(agentDelegation.sessionId, sessionId),
+        or(
+          eq(agentDelegation.status, 'prepared'),
+          eq(agentDelegation.status, 'submitted'),
+          eq(agentDelegation.status, 'proposed'),
+        ),
+      ),
+    )
+    .limit(1);
+  if (!row) return false;
+
+  if (row.status === 'submitted') {
+    const [connection] = await db
+      .select()
+      .from(latticeConnection)
+      .where(
+        and(
+          eq(latticeConnection.id, row.connectionId),
+          eq(latticeConnection.ownerUserId, ownerUserId),
+        ),
+      )
+      .limit(1);
+    if (!connection) throw new Error('Lattice connection is no longer available');
+    await deps.cancelWork(connection, row.workId);
+  }
+
+  return await db.transaction(async (tx) => {
+    const [canceled] = await tx
+      .update(agentDelegation)
+      .set({
+        status: 'canceled',
+        workState: row.status === 'submitted' ? 'cancelled' : row.workState,
+        replyKeyCiphertext: null,
+        returnedActivityId: null,
+        nextPollAt: null,
+        settledAt: now,
+      })
+      .where(
+        and(
+          eq(agentDelegation.id, row.id),
+          or(
+            eq(agentDelegation.status, 'prepared'),
+            eq(agentDelegation.status, 'submitted'),
+            eq(agentDelegation.status, 'proposed'),
+          ),
+        ),
+      )
+      .returning({ id: agentDelegation.id });
+    if (!canceled) return false;
+    if (row.returnedActivityId) {
+      await tx
+        .update(sessionActivity)
+        .set({ approvalStatus: 'rejected' })
+        .where(
+          and(
+            eq(sessionActivity.id, row.returnedActivityId),
+            eq(sessionActivity.approvalStatus, 'proposed'),
+          ),
+        );
+    }
+    await tx
+      .update(agentSession)
+      .set({ status: 'canceled', endedAt: now, interruptedAt: now })
+      .where(and(eq(agentSession.id, sessionId), eq(agentSession.ownerUserId, ownerUserId)));
+    return true;
+  });
+}

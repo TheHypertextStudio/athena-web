@@ -1,6 +1,6 @@
 {
-  "id": "acf2634a-5ada-4a3b-942e-32b8a0a4a044",
-  "prevId": "b7d4fbc5-777f-4a0a-a8f6-66b956032500",
+  "id": "60c86470-5ff6-4054-90af-e17cb06f08fe",
+  "prevId": "2762d7cf-511a-4361-a432-e98c9695a4d6",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -11617,6 +11617,12 @@
         "returned_activity_id": {
           "name": "returned_activity_id",
           "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "result_acknowledged_at": {
+          "name": "result_acknowledged_at",
+          "type": "timestamp",
           "primaryKey": false,
           "notNull": false
         },
@@ -26146,6 +26152,241 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.phone_call_authorization": {
+      "name": "phone_call_authorization",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "phone_number_id": {
+          "name": "phone_number_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "destination_e164": {
+          "name": "destination_e164",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source": {
+          "name": "source",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'awaiting_hangup'"
+        },
+        "inbound_call_sid": {
+          "name": "inbound_call_sid",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "outbound_call_sid": {
+          "name": "outbound_call_sid",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "stir_verification": {
+          "name": "stir_verification",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "outbound_started_at": {
+          "name": "outbound_started_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "authorized_at": {
+          "name": "authorized_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "failure_reason": {
+          "name": "failure_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "phone_call_authorization_inbound_sid_idx": {
+          "name": "phone_call_authorization_inbound_sid_idx",
+          "columns": [
+            {
+              "expression": "inbound_call_sid",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "phone_call_authorization_outbound_sid_idx": {
+          "name": "phone_call_authorization_outbound_sid_idx",
+          "columns": [
+            {
+              "expression": "outbound_call_sid",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "phone_call_authorization_active_number_idx": {
+          "name": "phone_call_authorization_active_number_idx",
+          "columns": [
+            {
+              "expression": "phone_number_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"phone_call_authorization\".\"phone_number_id\" is not null and \"phone_call_authorization\".\"state\" in ('dialing','awaiting_digit','authorized','connected')",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "phone_call_authorization_number_idx": {
+          "name": "phone_call_authorization_number_idx",
+          "columns": [
+            {
+              "expression": "phone_number_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "phone_call_authorization_destination_idx": {
+          "name": "phone_call_authorization_destination_idx",
+          "columns": [
+            {
+              "expression": "destination_e164",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "phone_call_authorization_user_id_user_id_fk": {
+          "name": "phone_call_authorization_user_id_user_id_fk",
+          "tableFrom": "phone_call_authorization",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "phone_call_authorization_phone_number_id_phone_number_id_fk": {
+          "name": "phone_call_authorization_phone_number_id_phone_number_id_fk",
+          "tableFrom": "phone_call_authorization",
+          "tableTo": "phone_number",
+          "columnsFrom": [
+            "phone_number_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "phone_call_authorization_source_check": {
+          "name": "phone_call_authorization_source_check",
+          "value": "\"phone_call_authorization\".\"source\" in ('weak_inbound','docket')"
+        },
+        "phone_call_authorization_state_check": {
+          "name": "phone_call_authorization_state_check",
+          "value": "\"phone_call_authorization\".\"state\" in ('awaiting_hangup','dialing','awaiting_digit','authorized','connected','completed','failed','expired','canceled')"
+        },
+        "phone_call_authorization_destination_check": {
+          "name": "phone_call_authorization_destination_check",
+          "value": "\"phone_call_authorization\".\"destination_e164\" ~ '^\\+[1-9][0-9]{6,14}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.phone_number": {
       "name": "phone_number",
       "schema": "",
@@ -26331,17 +26572,48 @@
           "primaryKey": true,
           "notNull": true
         },
+        "user_id": {
+          "name": "user_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "phone_number_id": {
           "name": "phone_number_id",
           "type": "text",
           "primaryKey": false,
+          "notNull": false
+        },
+        "e164": {
+          "name": "e164",
+          "type": "text",
+          "primaryKey": false,
           "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'legacy_sms'"
+        },
+        "provider_challenge_id": {
+          "name": "provider_challenge_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider_status": {
+          "name": "provider_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "code_hash": {
           "name": "code_hash",
           "type": "text",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "expires_at": {
           "name": "expires_at",
@@ -26411,9 +26683,64 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "phone_verification_e164_idx": {
+          "name": "phone_verification_e164_idx",
+          "columns": [
+            {
+              "expression": "e164",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "phone_verification_user_idx": {
+          "name": "phone_verification_user_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
+        "phone_verification_user_id_user_id_fk": {
+          "name": "phone_verification_user_id_user_id_fk",
+          "tableFrom": "phone_verification",
+          "tableTo": "user",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
         "phone_verification_phone_number_id_phone_number_id_fk": {
           "name": "phone_verification_phone_number_id_phone_number_id_fk",
           "tableFrom": "phone_verification",
@@ -26424,7 +26751,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -26439,8 +26766,38 @@
         "phone_verification_max_attempts_check": {
           "name": "phone_verification_max_attempts_check",
           "value": "\"phone_verification\".\"max_attempts\" > 0"
+        },
+        "phone_verification_provider_check": {
+          "name": "phone_verification_provider_check",
+          "value": "\"phone_verification\".\"provider\" in ('legacy_sms','twilio_verify','capture')"
         }
       },
+      "isRLSEnabled": false
+    },
+    "public.phone_verification_rate_lock": {
+      "name": "phone_verification_rate_lock",
+      "schema": "",
+      "columns": {
+        "e164": {
+          "name": "e164",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.voice_session": {
@@ -26492,6 +26849,18 @@
         },
         "call_sid": {
           "name": "call_sid",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "authorization_method": {
+          "name": "authorization_method",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "stir_verification": {
+          "name": "stir_verification",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -31988,7 +32357,8 @@
         "connector_sync_failed",
         "connector_needs_reauth",
         "automation",
-        "service_announcement"
+        "service_announcement",
+        "phone_call"
       ]
     },
     "public.object_command_effect_status": {

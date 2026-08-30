@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { findVar, isRealValue, realEnvValue, VAR_REGISTRY } from '../../src/index';
@@ -53,6 +56,8 @@ function validApiEnv(): Record<string, string> {
     LINEAR_AGENT_ENABLED: 'false',
     AGENT_MAX_TURNS: '24',
     ATHENA_ASYNC_RUNNER_ENABLED: 'false',
+    ATHENA_LATTICE_SUBMISSIONS_ENABLED: 'true',
+    ATHENA_LATTICE_POLLING_ENABLED: 'true',
     CRON_SECRET: 'test-cron-secret',
     BILLING_ENABLED: 'false',
     BILLING_RECONCILIATION_MODE: 'off',
@@ -94,6 +99,25 @@ describe('registry', () => {
       targets: ['api'],
       required: false,
       sensitive: false,
+    });
+  });
+
+  it('requires both Lattice emergency controls while keeping OAuth availability optional', () => {
+    expect(findVar('ATHENA_LATTICE_SUBMISSIONS_ENABLED')).toMatchObject({
+      targets: ['api'],
+      required: true,
+    });
+    expect(findVar('ATHENA_LATTICE_POLLING_ENABLED')).toMatchObject({
+      targets: ['api'],
+      required: true,
+    });
+    expect(findVar('LATTICE_CLIENT_ID')).toMatchObject({
+      targets: ['api'],
+      required: false,
+    });
+    expect(findVar('LATTICE_CLIENT_SECRET')).toMatchObject({
+      targets: ['api'],
+      required: false,
     });
   });
 
@@ -145,6 +169,35 @@ describe('registry', () => {
     // A var carrying the optional `generate` hint.
     const generated = findVar('BETTER_AUTH_SECRET');
     expect(generated?.generate).toBe('openssl rand -base64 32');
+  });
+});
+
+describe('production Lattice deployment contract', () => {
+  const workflow = readFileSync(
+    resolve(import.meta.dirname, '../../../../.github/workflows/deploy.yml'),
+    'utf8',
+  );
+
+  it('passes explicit fail-closed controls and the public PKCE client configuration', () => {
+    expect(workflow).toContain(
+      'ATHENA_LATTICE_SUBMISSIONS_ENABLED: "${{ vars.ATHENA_LATTICE_SUBMISSIONS_ENABLED || \'false\' }}"',
+    );
+    expect(workflow).toContain(
+      'ATHENA_LATTICE_POLLING_ENABLED: "${{ vars.ATHENA_LATTICE_POLLING_ENABLED || \'false\' }}"',
+    );
+    expect(workflow).toContain('LATTICE_CLIENT_ID: "${{ vars.LATTICE_CLIENT_ID }}"');
+    expect(workflow).toContain('LATTICE_ACCOUNTS_ISSUER: "https://auth.uselovelace.com"');
+    expect(workflow).toContain('LATTICE_GATEWAY_URL: "https://lattice.uselovelace.com"');
+  });
+
+  it('blocks enabled Lattice work without a client id and never mounts a client secret', () => {
+    expect(workflow).toContain('- name: Validate Lattice production configuration');
+    expect(workflow).toContain(
+      '[[ "$ATHENA_LATTICE_SUBMISSIONS_ENABLED" == \'true\' || "$ATHENA_LATTICE_POLLING_ENABLED" == \'true\' ]]',
+    );
+    expect(workflow).toContain('[[ -z "${LATTICE_CLIENT_ID//[[:space:]]/}" ]]');
+    expect(workflow).toContain('$1 != "LATTICE_CLIENT_SECRET"');
+    expect(workflow).not.toMatch(/^\s+LATTICE_CLIENT_SECRET:/m);
   });
 });
 
@@ -239,6 +292,14 @@ describe('slices', () => {
     expect(() => agentServer.ATHENA_MAX_CONCURRENT_RUNS.parse('65')).toThrow();
     expect(() => agentServer.ATHENA_ASYNC_RUNNER_ENABLED.parse(undefined)).toThrow();
     expect(agentServer.ATHENA_ASYNC_RUNNER_ENABLED.parse('true')).toBe(true);
+    expect(() => agentServer.ATHENA_LATTICE_SUBMISSIONS_ENABLED.parse(undefined)).toThrow();
+    expect(agentServer.ATHENA_LATTICE_SUBMISSIONS_ENABLED.parse('false')).toBe(false);
+    expect(agentServer.ATHENA_LATTICE_SUBMISSIONS_ENABLED.parse('true')).toBe(true);
+    expect(() => agentServer.ATHENA_LATTICE_POLLING_ENABLED.parse(undefined)).toThrow();
+    expect(agentServer.ATHENA_LATTICE_POLLING_ENABLED.parse('false')).toBe(false);
+    expect(agentServer.ATHENA_LATTICE_POLLING_ENABLED.parse('true')).toBe(true);
+    expect(authServer.LATTICE_CLIENT_ID.parse(undefined)).toBeUndefined();
+    expect(authServer.LATTICE_CLIENT_SECRET.parse(undefined)).toBeUndefined();
     expect(agentServer.CLOUDFLARE_ATHENA_RUNNER_URL.parse('https://runner.example.com')).toBe(
       'https://runner.example.com',
     );
@@ -349,6 +410,18 @@ describe.each([
 // ===========================================================================
 
 describe('api composition', () => {
+  it.each(['ATHENA_LATTICE_SUBMISSIONS_ENABLED', 'ATHENA_LATTICE_POLLING_ENABLED'] as const)(
+    'rejects startup when required emergency control %s is absent',
+    async (missingControl) => {
+      for (const [key, value] of Object.entries(validApiEnv())) {
+        vi.stubEnv(key, value);
+      }
+      vi.stubEnv(missingControl, undefined);
+
+      await expect(import('../../src/api')).rejects.toThrow();
+    },
+  );
+
   it('validates a complete explicit contract (NODE_ENV the only default)', async () => {
     for (const [key, value] of Object.entries(validApiEnv())) {
       vi.stubEnv(key, value);

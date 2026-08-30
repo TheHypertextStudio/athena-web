@@ -43,6 +43,8 @@ import {
   resumeSessionExecution,
 } from '../agent/loop';
 import { editProposalInput, listProposalGroups } from '../agent/proposals';
+import { cancelLatticeDelegation } from '../agent/lattice-delegations';
+import { latticeDelegationDependencies } from '../agent/lattice-delegation-runtime';
 import { loadTranscript, saveTranscript } from '../agent/transcript';
 import type { AppEnv } from '../context';
 import { AuthError, ConflictError, NotFoundError } from '../error';
@@ -1346,6 +1348,18 @@ const meAthena = new Hono<AppEnv>()
     async (c) => {
       const owner = requestOwner(c);
       const session = await loadOwnedSession(owner, c.req.valid('param').id);
+      if (session.executionSurface === 'lattice') {
+        const didCancel = await cancelLatticeDelegation(
+          owner,
+          session.id,
+          new Date(),
+          latticeDelegationDependencies,
+        );
+        if (didCancel) {
+          const canceled = await loadOwnedSession(owner, session.id);
+          return ok(c, AthenaSessionSummaryOut, await personalSummaryForSession(owner, canceled));
+        }
+      }
       const shouldWake =
         asynchronousRunnerEnabled() &&
         (session.status === 'awaiting_input' || session.status === 'awaiting_approval');

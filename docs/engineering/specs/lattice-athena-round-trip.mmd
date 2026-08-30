@@ -1,0 +1,40 @@
+sequenceDiagram
+autonumber
+participant Person as Docket owner
+participant Docket as Docket API
+participant Gateway as Lovelace gateway
+participant Relay as Lovelace relay
+participant Studio as Mac Studio daemon
+participant LM as LM Studio / Laguna
+
+    rect rgb(235, 245, 255)
+        Note over Person,LM: Athena chat model turn
+        Person->>Docket: Ask about an existing Docket task
+        Docket->>Gateway: Chat completion for selected runtime
+        Gateway->>Relay: Enqueue sealed inference work
+        Studio->>Relay: Poll and lease work
+        Studio->>LM: Run poolside/laguna-s-2.1
+        LM-->>Studio: Model response
+        Studio-->>Relay: Return sealed response
+        Relay-->>Gateway: Complete request
+        Gateway-->>Docket: Completion and correlation ids
+        Docket-->>Person: Athena response
+    end
+
+    rect rgb(245, 240, 255)
+        Note over Person,LM: Personal Athena assignment
+        Docket->>Docket: Store prepared delegation, work id, and reply key
+        Docket->>Gateway: Submit sealed schema-v2 agent_task
+        Gateway->>Relay: Enqueue account-bound work
+        Studio->>Relay: Poll and lease work
+        Studio->>LM: Run analysis on poolside/laguna-s-2.1
+        LM-->>Studio: Assignment result
+        Studio-->>Relay: Return sealed progress and result
+        Docket->>Gateway: Poll from saved relay cursor
+        Gateway-->>Docket: Return sealed events
+        Docket->>Docket: Open result and create one proposed comment
+        Docket->>Gateway: Acknowledge durably stored terminal result
+        Gateway->>Relay: Delete sealed result and progress ciphertext
+        Person->>Docket: Approve the proposal
+        Docket-->>Person: Show one applied task comment
+    end

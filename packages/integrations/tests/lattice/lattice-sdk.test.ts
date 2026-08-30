@@ -1,11 +1,10 @@
 /**
- * The vendored Lattice SDK client: does it put the right bytes on the wire, and does it turn the
+ * The official Lattice SDK client: does it put the right bytes on the wire, and does it turn the
  * gateway's documented error codes into the right error classes.
  *
  * @remarks
- * These assertions are deliberately about the *wire*, not about Docket's own abstractions. If the
- * upstream SDK is ever swapped back in for this vendored copy, these tests must keep passing
- * unchanged — that is what makes the swap safe.
+ * These assertions are deliberately about the *wire*, not about Docket's own abstractions. They
+ * keep the package boundary honest when Lovelace changes its implementation.
  */
 import {
   LATTICE_GATEWAY_BASE_URL,
@@ -69,9 +68,9 @@ describe('personalRuntimeTarget', () => {
   it('accepts an already-built target or a runtime resource, not just a bare id', () => {
     // listPersonalRuntimes hands back full resource records; callers must be able to feed one
     // straight back in without extracting the id themselves first.
-    expect(personalRuntimeTarget({ latticeId: 'lat_xyz', model: 'ignored-on-the-way-in' })).toEqual(
-      { latticeId: 'lat_xyz', model: 'lattice:personal:lat_xyz' },
-    );
+    expect(
+      personalRuntimeTarget({ latticeId: 'lat_xyz', model: 'lattice:personal:lat_stale' }),
+    ).toEqual({ latticeId: 'lat_xyz', model: 'lattice:personal:lat_xyz' });
   });
 });
 

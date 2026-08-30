@@ -292,13 +292,12 @@ Lovelace can reject new controller submissions while preserving status and resul
 already accepted. The managed Studio daemon can stop claiming new work while it finishes or returns
 its active lease. No rollback step will delete relay work or Docket delegation history.
 
-## Open Decisions
+## Resolved Decisions
 
-The Lovelace maintainers must choose the durable relay store that fits the current production
-platform. The store must satisfy the atomic lease and idempotency rules above. The implementation
-plan cannot name a database migration until that deployment choice is confirmed from the current
-Lovelace infrastructure.
+Production uses the PostgreSQL relay snapshot store. Each mutation runs in a transaction under an
+advisory lock. Long-poll waits stay outside that lock. The mounted file store remains the one-instance
+bootstrap and cutover source, and the old bucket remains read-only for seven days after cutover.
 
-The final delegation OAuth scope names must come from Lovelace's canonical scope registry. Docket
-will consume those names after Lovelace publishes them. Docket will not invent provider scope names
-in advance.
+The public controller routes require `lattice:compute:inference`. That scope can use an existing
+runtime. Runtime creation, revocation, and bootstrap remain behind
+`lattice:compute:personal_runtime:manage`.

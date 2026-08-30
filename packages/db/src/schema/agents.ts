@@ -883,6 +883,7 @@ export const agentDelegation = pgTable(
     failureCode: text('failure_code'),
     terminalOutcome: jsonb('terminal_outcome').$type<AgentDelegationTerminalOutcome>(),
     returnedActivityId: text('returned_activity_id'),
+    resultAcknowledgedAt: timestamp('result_acknowledged_at'),
     submittedAt: timestamp('submitted_at'),
     settledAt: timestamp('settled_at'),
     createdAt: timestamp('created_at').notNull().defaultNow(),

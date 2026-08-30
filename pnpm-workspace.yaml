@@ -29,6 +29,11 @@ minimumReleaseAgeExclude:
   # runtime declarations as a peer. Pinning the release used to generate the runner's
   # bindings keeps local Miniflare and CI on the same Workers surface.
   - '@cloudflare/workers-types@5.20260716.1'
+  - '@lovelace-ai/acsp@0.0.1'
+  - '@lovelace-ai/compute@0.0.1'
+  - '@lovelace-ai/lattice-relay-client@0.0.1'
+  - '@lovelace-ai/lattice-relay-crypto@0.0.1'
+  - '@reasonabletech/lattice-client@0.0.1'
 
 # Single source of truth for cross-cut versions that MUST be byte-identical
 # across every package (FROZEN: DECISIONS.md "turbo+node+pnpm pins" / pnpm catalog).

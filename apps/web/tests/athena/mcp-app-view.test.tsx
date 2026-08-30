@@ -133,7 +133,9 @@ describe('McpAppView frames', () => {
   });
 
   it('hands the proxy a document whose policy blocks network egress', async () => {
-    const { posted, fromProxy } = mount();
+    const resource = { ...RESOURCE, meta: { prefersBorder: true } };
+    expect(resource.meta).not.toHaveProperty('csp');
+    const { posted, fromProxy } = mount({ resource });
     fromProxy({ jsonrpc: '2.0', method: MCP_UI_METHODS.sandboxProxyReady, params: {} });
     await waitFor(() => {
       expect(posted).not.toHaveLength(0);

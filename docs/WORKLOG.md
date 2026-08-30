@@ -247,6 +247,16 @@
   18/18; the production widget runtime passes 5/5. Integrations and API TypeScript and ESLint pass.
   The generated matrix is fresh, `git diff --check` passes, and the review-fix range contains no
   merge commit.
+- **Layer 3 review fix 3 plan**: Correct only the `HOST-003` Web fixture so the cited behavioral
+  test passes a resource whose metadata truly omits `csp`, while retaining literal assertions for
+  `default-src 'none'` and `connect-src 'none'`. Mutation-test the omitted-metadata branch, restore
+  production unchanged, then run focused Web, manifest, and affected static validation.
+- **Layer 3 review fix 3 outcome**: The cited Web fixture now retains `prefersBorder` while truly
+  omitting `meta.csp`, and explicitly guards that setup before exercising the real Web-to-proxy
+  boundary. A temporary permissive omitted-CSP mutation produced RED on the literal
+  `connect-src 'none'` assertion; restoring production produced GREEN. The complete Web adapter
+  file passes 23/23, the manifest gate passes 13/13, and Web TypeScript and ESLint pass. No test
+  name or manifest row changed, so the generated matrix remains current without regeneration.
 - **Blockers**: Production acceptance needs an authenticated live Athena account and a publicly
   reachable pinned upstream reference server; local and CI evidence cannot substitute for it.
   Once available, start the exact-pinned map server behind an ephemeral public HTTPS endpoint,

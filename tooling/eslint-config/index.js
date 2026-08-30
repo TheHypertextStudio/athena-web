@@ -1,6 +1,8 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 
+import uiOwnershipPlugin from './plugin.js';
+
 /**
  * Shared flat ESLint config for all Docket workspace members (ESLint 9).
  *
@@ -194,6 +196,129 @@ export const appLocationConfig = [
       ],
     },
   },
+];
+
+/** Product trees where a shared primitive must own overlay and surface infrastructure. */
+const UI_OWNERSHIP_SURFACES = [
+  'packages/ui/src/components/**/*.{ts,tsx}',
+  'apps/web/src/components/**/*.{ts,tsx}',
+  'apps/web/src/app/(app)/**/*.{ts,tsx}',
+];
+
+/** Radix packages may only appear in the primitives that wrap their accessibility behavior. */
+const RADIX_OVERLAY_PACKAGES = [
+  '@radix-ui/react-dialog',
+  '@radix-ui/react-popover',
+  '@radix-ui/react-dropdown-menu',
+  '@radix-ui/react-context-menu',
+  '@radix-ui/react-hover-card',
+  '@radix-ui/react-tooltip',
+];
+
+const MENU_STYLE_EXPORTS = [
+  'menuBadge',
+  'menuCheckedItemClass',
+  'menuContentClass',
+  'menuDestructiveItem',
+  'menuFocusRing',
+  'menuGroup',
+  'menuItemClass',
+  'menuLabel',
+  'menuSeparator',
+  'menuSupporting',
+  'menuTrailingText',
+];
+
+/**
+ * Keep product overlay behavior inside the shared primitive layer.
+ *
+ * This policy is ready to enable for every product tree after the remaining menu-style builder
+ * imports migrate. The primitive implementation is deliberately exempt because it is the one
+ * layer that owns Radix and visual geometry.
+ */
+export const overlayPrimitiveConfig = [
+  {
+    files: UI_OWNERSHIP_SURFACES,
+    ignores: ['packages/ui/src/primitives/**/*'],
+    plugins: { 'docket-ui': uiOwnershipPlugin },
+    rules: {
+      'docket-ui/no-bespoke-overlay': 'error',
+      'docket-ui/no-overlay-style-override': 'error',
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            ...RADIX_OVERLAY_PACKAGES.map((name) => ({
+              name,
+              message:
+                'Use the typed overlay exported by @docket/ui/primitives. Radix belongs inside packages/ui/src/primitives.',
+            })),
+          ],
+        },
+      ],
+    },
+  },
+];
+
+/** Keep feature code from rebuilding the MD3 menu system from low-level class helpers. */
+export const menuStyleBoundaryConfig = [
+  {
+    files: ['apps/web/src/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@docket/ui/primitives',
+              importNames: MENU_STYLE_EXPORTS,
+              message:
+                'Use DropdownMenu, ContextMenu, PickerList, MenuListbox, MenuActionRow, or VirtualMenuSurface instead of menu style builders.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+];
+
+/** Require product resting regions to name a semantic owner rather than a raw tonal token. */
+export const semanticSurfaceConfig = [
+  {
+    files: UI_OWNERSHIP_SURFACES,
+    ignores: ['packages/ui/src/primitives/**/*'],
+    plugins: { 'docket-ui': uiOwnershipPlugin },
+    rules: { 'docket-ui/no-raw-surface-role': 'error' },
+  },
+];
+
+/** Keep server route modules away from client query hooks. */
+export const serverComponentBoundaryConfig = [
+  {
+    files: ['apps/web/src/app/**/{page,layout}.tsx'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@/lib/query',
+              message:
+                'Server Components must import server-safe query helpers from @/lib/query-core or @/lib/query-server. Client query hooks belong in a client component.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+];
+
+/** The complete UI ownership policy once all migrated product surfaces are clean. */
+export const uiOwnershipConfig = [
+  ...overlayPrimitiveConfig,
+  ...menuStyleBoundaryConfig,
+  ...semanticSurfaceConfig,
+  ...serverComponentBoundaryConfig,
 ];
 
 export default baseConfig;

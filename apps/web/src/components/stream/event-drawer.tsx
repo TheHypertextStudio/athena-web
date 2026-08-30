@@ -77,7 +77,7 @@ export function EventDrawer({ row, onClose }: EventDrawerProps): JSX.Element | n
           </SheetClose>
         </SheetHeader>
 
-        <SheetBody className="p-5">
+        <SheetBody inset="compact">
           <h2 className="text-on-surface text-title-medium">{streamDescription(row)}</h2>
           <time
             dateTime={row.occurredAt}

@@ -157,7 +157,7 @@ export function useCanvasMenus(options: CanvasMenuOptions): CanvasMenus {
             style={{ position: 'fixed', left: open.x, top: open.y, width: 0, height: 0 }}
           />
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" side="bottom" sideOffset={0} className="min-w-56">
+        <DropdownMenuContent align="start" side="bottom" sideOffset={0} width="md">
           {open.node !== null ? (
             <>
               <DropdownMenuLabel>{nodeLabel(open.node)}</DropdownMenuLabel>

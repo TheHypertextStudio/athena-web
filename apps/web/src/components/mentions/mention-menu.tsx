@@ -27,6 +27,7 @@ import {
   menuSeparator,
   Popover,
   PopoverAnchor,
+  PopoverBody,
   PopoverContent,
   Skeleton,
 } from '@docket/ui/primitives';
@@ -108,6 +109,8 @@ export default function MentionMenu({
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverAnchor virtualRef={anchorRef} />
       <PopoverContent
+        presentation="panel"
+        width="wide"
         side="bottom"
         align="start"
         sideOffset={6}
@@ -117,37 +120,33 @@ export default function MentionMenu({
         onCloseAutoFocus={(event) => {
           event.preventDefault();
         }}
-        className={cn(
-          'w-[min(24rem,calc(100vw-2rem))]',
-          'max-h-[min(22rem,var(--radix-popover-content-available-height))] overflow-y-auto',
-          'duration-(--dur-fast)',
-        )}
       >
-        <ul role="listbox" id={listboxId} aria-label="Mention a resource" className="space-y-0.5">
-          {groups.map((group, index) => (
-            <li key={group.key} role="group" aria-labelledby={`${listboxId}-group-${group.key}`}>
-              {index > 0 ? <div aria-hidden className={GROUP_DIVIDER} /> : null}
-              <p id={`${listboxId}-group-${group.key}`} className={HEADING_CLASS}>
-                {group.label}
-              </p>
-              <ul className="space-y-0.5" role="presentation">
-                {group.items.map((item) => (
-                  <MentionRow
-                    key={item.id}
-                    id={mentionRowId(listboxId, item)}
-                    item={item}
-                    active={item.id === resolvedActiveKey}
-                    onSelect={onSelect}
-                  />
-                ))}
-              </ul>
-              {group.hidden > 0 ? (
-                <p className="text-on-surface-variant px-2 pt-1 pb-0.5 text-xs">
-                  {`+${group.hidden} more — keep typing to narrow`}
+        <PopoverBody inset="none">
+          <ul role="listbox" id={listboxId} aria-label="Mention a resource" className="space-y-0.5">
+            {groups.map((group, index) => (
+              <li key={group.key} role="group" aria-labelledby={`${listboxId}-group-${group.key}`}>
+                {index > 0 ? <div aria-hidden className={GROUP_DIVIDER} /> : null}
+                <p id={`${listboxId}-group-${group.key}`} className={HEADING_CLASS}>
+                  {group.label}
                 </p>
-              ) : null}
-            </li>
-          ))}
+                <ul className="space-y-0.5" role="presentation">
+                  {group.items.map((item) => (
+                    <MentionRow
+                      key={item.id}
+                      id={mentionRowId(listboxId, item)}
+                      item={item}
+                      active={item.id === resolvedActiveKey}
+                      onSelect={onSelect}
+                    />
+                  ))}
+                </ul>
+                {group.hidden > 0 ? (
+                  <p className="text-on-surface-variant px-2 pt-1 pb-0.5 text-xs">
+                    {`+${group.hidden} more — keep typing to narrow`}
+                  </p>
+                ) : null}
+              </li>
+            ))}
 
           {externalPending ? (
             <li aria-hidden role="presentation">
@@ -163,14 +162,16 @@ export default function MentionMenu({
             </li>
           ) : null}
 
-          {externalFailed && !externalPending ? (
-            <li role="presentation">
-              {groups.length > 0 ? <div aria-hidden className={GROUP_DIVIDER} /> : null}
-              <p className={HEADING_CLASS}>
-                Files <span className="opacity-70">· unavailable</span>
-              </p>
-            </li>
-          ) : null}
+            {nothingYet && !localPending && !localFailed ? (
+              <li
+                role="presentation"
+                className="text-on-surface-variant text-body-medium px-3 py-6 text-center"
+              >
+                {query.trim() === ''
+                  ? 'Nothing to reference yet'
+                  : `No matches for “${query.trim()}”`}
+              </li>
+            ) : null}
 
           {nothingYet && localPending ? (
             <li aria-hidden className="space-y-0.5 px-3 py-1">
@@ -180,32 +181,12 @@ export default function MentionMenu({
             </li>
           ) : null}
 
-          {nothingYet && !localPending && !localFailed ? (
-            <li
-              role="presentation"
-              className="text-on-surface-variant text-body-medium px-3 py-6 text-center"
-            >
-              {query.trim() === ''
-                ? 'Nothing to reference yet'
-                : `No matches for “${query.trim()}”`}
-            </li>
-          ) : null}
-
-          {localFailed ? (
-            <li
-              role="alert"
-              className="text-error bg-error/5 border-error/30 text-body-medium m-1 rounded-md border px-3 py-2"
-            >
-              Could not search this workspace.
-            </li>
-          ) : null}
-        </ul>
-
-        <p
-          aria-live="polite"
-          aria-atomic="true"
-          className="sr-only"
-        >{`${state.items.length} results`}</p>
+          <p
+            aria-live="polite"
+            aria-atomic="true"
+            className="sr-only"
+          >{`${state.items.length} results`}</p>
+        </PopoverBody>
       </PopoverContent>
     </Popover>
   );

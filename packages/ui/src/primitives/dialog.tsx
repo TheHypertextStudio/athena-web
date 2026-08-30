@@ -255,7 +255,9 @@ export function DialogHeader({
   return (
     <div
       className={cn(
-        'flex shrink-0 flex-col gap-1.5 text-left',
+        // DialogContent's shared close control sits at the top-right edge. Reserve that column
+        // here so titles never rely on a caller-specific right-padding repair.
+        'flex shrink-0 flex-col gap-1.5 pr-12 text-left',
         overlayInsetClass(inset),
         className,
       )}

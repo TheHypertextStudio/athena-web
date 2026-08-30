@@ -115,7 +115,7 @@ export function CloseCycleDialog({
       }}
     >
       <DialogContent presentation={{ kind: 'centered', size: 'standard', height: 'tall' }}>
-        <DialogHeader inset="compact" className="border-outline-variant gap-1 border-b pr-12">
+        <DialogHeader inset="compact" className="border-outline-variant gap-1 border-b">
           <DialogTitle>Close {cycleName}</DialogTitle>
           <DialogDescription>
             {items.length === 0
@@ -126,7 +126,7 @@ export function CloseCycleDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <DialogBody inset="compact" className="flex flex-col gap-3 py-1">
+        <DialogBody inset="compact" className="flex flex-col gap-3">
           {items.length > 0 ? (
             <div>
               {items.map((item) => (

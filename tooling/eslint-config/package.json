@@ -10,7 +10,9 @@
   },
   "main": "./index.js",
   "files": [
-    "index.js"
+    "index.js",
+    "plugin.js",
+    "rules/**/*.js"
   ],
   "dependencies": {
     "@eslint/js": "catalog:",

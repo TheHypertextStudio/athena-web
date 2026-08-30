@@ -307,6 +307,7 @@ detour back to `in_progress` once unblocked.
 - **shadcn/ui components** - Accessible, customizable
 - **Data fetching** - All reads/writes go through the typed TanStack Query layer in `apps/web/src/lib/query.ts` (`apiQueryOptions` + def-only `useApiQuery`/`useApiListQuery`/`useLiveApiQuery`/`useApiMutation`); never hand-roll `useEffect`+`fetch` or call `api.v1.*` in a component. See **`docs/engineering/specs/data-layer.md`**.
 - **Error handling** - UI copy must be application-owned. Never render exception/provider text or Problem `title`/`detail`; use `UserFacingError` helpers and branch only on error type, HTTP status, or stable Problem code. The source-policy test enforces this across web and admin production code.
+- **UI ownership** - Search `@docket/ui` before building UI infrastructure. Do not implement a dialog, menu, popover, sheet, tooltip, hover card, banner, card, or resting surface with manual Tailwind or custom CSS when a shared component or typed variant exists. Extend a domain-neutral primitive when the required presentation is missing, and add behavior coverage for that primitive. Product tests cover what a person can do. ESLint owns AST policy through `@docket/eslint-config`; do not add source-reading product tests to enforce component ownership.
 
 ### Database Patterns (Drizzle)
 

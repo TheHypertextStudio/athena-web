@@ -322,7 +322,7 @@ export function ComposerShell({
           }}
           className="contents"
         >
-          <DialogHeader inset="standard" className="relative min-w-0 pb-3">
+          <DialogHeader inset="standard" className="min-w-0">
             {contextRow !== undefined ? (
               <div data-composer-context-row="" className="min-w-0">
                 <EntityMetadataRow
@@ -394,7 +394,7 @@ export function ComposerShell({
             </div>
           </DialogHeader>
 
-          <DialogBody inset="standard" className="flex flex-col gap-2 pt-2">
+          <DialogBody inset="standard" className="flex flex-col gap-4">
             {bodyEditor !== null ? (
               <>
                 {/*

@@ -89,7 +89,7 @@ function AssociationGroup({
                 {busy ? 'Linking…' : 'Link'}
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" width="lg" className="max-h-72 overflow-y-auto">
+            <DropdownMenuContent align="end" width="lg">
               <DropdownMenuLabel>Link a {noun}</DropdownMenuLabel>
               <DropdownMenuSeparator />
               {candidates.length === 0 ? (

@@ -117,7 +117,7 @@ export function TemplateMenu({
           <ChevronDown className="size-4 shrink-0" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-72">
+      <DropdownMenuContent align="end" width="lg">
         {groups.map((group) => (
           <div key={group.scope}>
             {showScopeLabels ? (

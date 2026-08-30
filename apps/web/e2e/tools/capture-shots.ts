@@ -277,6 +277,10 @@ async function main(): Promise<void> {
     ignoreHTTPSErrors: true,
     serviceWorkers: 'block',
   });
+  const anonymousContext = await browser.newContext({
+    ignoreHTTPSErrors: true,
+    serviceWorkers: 'block',
+  });
   let sharedOrgId = meta.sharedOrgId;
   if (sharedOrgId === undefined) {
     const setupPage = await context.newPage();
@@ -331,10 +335,11 @@ async function main(): Promise<void> {
     // responsive/theme capture set into the next surface.
     const path = resolveAuditRoute(entry.route, meta, sharedOrgId);
     const slug = entry.id;
+    const entryContext = entry.authenticated === false ? anonymousContext : context;
     for (const { viewport, colorScheme } of selectedFrames) {
       const file = `${outDir}/${slug}-${viewport.label}-${colorScheme}.png`;
       const frame = await captureCleanFrame(
-        context,
+        entryContext,
         `${meta.baseURL}${path}`,
         viewport,
         colorScheme,

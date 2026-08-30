@@ -77,6 +77,30 @@ export function appWithActor(
   return drainingDeferredWork(app);
 }
 
+/** Mount a router with a Better Auth session linked to the supplied human actor. */
+export async function appWithAuthenticatedActor(
+  db: Db,
+  schema: typeof DbModule,
+  router: unknown,
+  orgId: string,
+  capabilities: readonly string[],
+  actorId: string,
+  roleId: string | null = 'role_test',
+): Promise<ReturnType<typeof appWithActor>> {
+  const actor = one(
+    await db
+      .select({ userId: schema.actor.userId })
+      .from(schema.actor)
+      .where(and(eq(schema.actor.id, actorId), eq(schema.actor.organizationId, orgId)))
+      .limit(1),
+  );
+  const userId = actor.userId ?? (await seedUserWithHub(db, schema, `Actor-${actorId}`));
+  if (!actor.userId) {
+    await db.update(schema.actor).set({ userId }).where(eq(schema.actor.id, actorId));
+  }
+  return appWithActor(router, orgId, capabilities, actorId, fakeSession(userId), roleId);
+}
+
 /** Mount a router behind an injected session only (top-level personal surfaces). */
 export function appWithSession(router: unknown, session: AuthSession) {
   const app = new Hono<AppEnv>();

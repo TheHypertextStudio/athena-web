@@ -6,6 +6,7 @@ import type * as DbModule from '@docket/db';
 import {
   addMember,
   appWithActor,
+  appWithAuthenticatedActor,
   fakeSession,
   getDb,
   one,
@@ -30,6 +31,15 @@ beforeAll(async () => {
 /** Parse a JSON response body as the given shape. */
 async function json<T>(res: Response): Promise<T> {
   return (await res.json()) as T;
+}
+
+/** Mount the Initiative router with the seeded actor's linked Better Auth identity. */
+async function authenticatedInitiativesApp(
+  orgId: string,
+  capabilities: readonly string[],
+  actorId: string,
+): ReturnType<typeof appWithAuthenticatedActor> {
+  return appWithAuthenticatedActor(db, schema, initiatives, orgId, capabilities, actorId);
 }
 
 // A valid ULID-shaped id that no seeded row uses (passes branded-id validation, 404s on lookup).
@@ -121,7 +131,7 @@ interface Detail {
 describe('initiatives detail roll-up', () => {
   it('omits archived Projects from every active Initiative detail projection', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
-    const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId);
+    const writer = await authenticatedInitiativesApp(orgId, ['contribute'], humanActorId);
     const initiativeId = await seedInitiative(orgId, humanActorId);
     const activeProjectId = await seedProject(orgId, humanActorId, {
       name: 'Active Project',
@@ -230,7 +240,7 @@ describe('initiatives detail roll-up', () => {
       colorKey: 'primary',
       createdBy: humanActorId,
     });
-    const viewer = appWithActor(initiatives, orgId, ['view'], humanActorId);
+    const viewer = await authenticatedInitiativesApp(orgId, ['view'], humanActorId);
     const response = await viewer.request('/overview');
     expect(response.status).toBe(200);
     const body = await json<{
@@ -257,7 +267,7 @@ describe('initiatives detail roll-up', () => {
 
   it('returns zeroed roll-up + null health + active status for an initiative with no children', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
-    const viewer = appWithActor(initiatives, orgId, ['view'], humanActorId);
+    const viewer = await authenticatedInitiativesApp(orgId, ['view'], humanActorId);
     const id = await seedInitiative(orgId, humanActorId);
 
     const res = await viewer.request(`/${id}`, { method: 'GET' });
@@ -272,7 +282,7 @@ describe('initiatives detail roll-up', () => {
 
   it('rolls up child health to the worst verdict and buckets the distribution', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
-    const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId);
+    const writer = await authenticatedInitiativesApp(orgId, ['contribute'], humanActorId);
     const id = await seedInitiative(orgId, humanActorId);
 
     // Projects: on_track, at_risk, null (unknown). Program: off_track (the worst overall).
@@ -306,7 +316,7 @@ describe('initiatives detail roll-up', () => {
 
   it('does not overwrite manual status when every associated project is terminal', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
-    const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId);
+    const writer = await authenticatedInitiativesApp(orgId, ['contribute'], humanActorId);
     const id = await seedInitiative(orgId, humanActorId);
 
     const done = await seedProject(orgId, humanActorId, {
@@ -330,7 +340,7 @@ describe('initiatives detail roll-up', () => {
 
   it('keeps manual status independent when a program is the only child', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
-    const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId);
+    const writer = await authenticatedInitiativesApp(orgId, ['contribute'], humanActorId);
     const id = await seedInitiative(orgId, humanActorId);
     const prog = await seedProgram(orgId, humanActorId, { health: 'on_track' });
     await writer.request(`/${id}/programs`, {
@@ -360,7 +370,7 @@ describe('initiatives detail roll-up', () => {
 describe('initiatives context hierarchy', () => {
   it('creates one child level by default and rejects self-links, duplicate parents, and cycles', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
-    const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId);
+    const writer = await authenticatedInitiativesApp(orgId, ['contribute'], humanActorId);
     const root = await seedInitiative(orgId, humanActorId);
     const child = await seedInitiative(orgId, humanActorId);
     const grandchild = await seedInitiative(orgId, humanActorId);
@@ -569,7 +579,7 @@ describe('initiatives context hierarchy', () => {
 
   it('returns labels, URL resources, updates, and deduplicated descendant work in aggregate detail', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
-    const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId);
+    const writer = await authenticatedInitiativesApp(orgId, ['contribute'], humanActorId);
     const root = await seedInitiative(orgId, humanActorId);
     const child = await seedInitiative(orgId, humanActorId);
     const projectId = await seedProject(orgId, humanActorId, {
@@ -632,7 +642,7 @@ describe('initiatives context hierarchy', () => {
 
   it('prefers a direct work link over a duplicate inherited link', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
-    const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId);
+    const writer = await authenticatedInitiativesApp(orgId, ['contribute'], humanActorId);
     const root = await seedInitiative(orgId, humanActorId);
     const child = await seedInitiative(orgId, humanActorId);
     const projectId = await seedProject(orgId, humanActorId);
@@ -673,7 +683,7 @@ describe('initiatives context hierarchy', () => {
       body: 'Cross-tenant blocker',
       health: 'off_track',
     });
-    const viewer = appWithActor(initiatives, owner.orgId, ['view'], owner.humanActorId);
+    const viewer = await authenticatedInitiativesApp(owner.orgId, ['view'], owner.humanActorId);
     const aggregate = await json<{ latestUpdate: unknown; updateCount: number }>(
       await viewer.request(`/${root}/aggregate`),
     );
@@ -898,7 +908,7 @@ describe('initiatives program associations', () => {
 describe('initiatives timeline roll-up', () => {
   it('includes and deduplicates work connected through visible descendants', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
-    const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId);
+    const writer = await authenticatedInitiativesApp(orgId, ['contribute'], humanActorId);
     const root = await seedInitiative(orgId, humanActorId);
     const child = await seedInitiative(orgId, humanActorId);
     const projectId = await seedProject(orgId, humanActorId, { name: 'Descendant project' });
@@ -935,7 +945,7 @@ describe('initiatives timeline roll-up', () => {
 
   it('returns program lanes + project bars with their dates', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
-    const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId);
+    const writer = await authenticatedInitiativesApp(orgId, ['contribute'], humanActorId);
     const id = await seedInitiative(orgId, humanActorId);
 
     const dated = await seedProject(orgId, humanActorId, {
@@ -1000,7 +1010,7 @@ describe('initiatives timeline roll-up', () => {
 
   it('filters project bars to those overlapping the from/to window (undated always shown)', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
-    const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId);
+    const writer = await authenticatedInitiativesApp(orgId, ['contribute'], humanActorId);
     const id = await seedInitiative(orgId, humanActorId);
 
     const inWindow = await seedProject(orgId, humanActorId, {
@@ -1039,7 +1049,7 @@ describe('initiatives timeline roll-up', () => {
 
   it('applies an open-ended (from-only) window', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
-    const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId);
+    const writer = await authenticatedInitiativesApp(orgId, ['contribute'], humanActorId);
     const id = await seedInitiative(orgId, humanActorId);
     const after = await seedProject(orgId, humanActorId, {
       name: 'After',
@@ -1197,7 +1207,7 @@ describe('initiatives overview edge cases', () => {
       .update(schema.initiative)
       .set({ ownerId: assertDefined(owner).id })
       .where(eq(schema.initiative.id, owned));
-    const viewer = appWithActor(initiatives, orgId, ['view'], humanActorId);
+    const viewer = await authenticatedInitiativesApp(orgId, ['view'], humanActorId);
     const body = await json<{ items: { id: string; ownerName: string | null }[] }>(
       await viewer.request('/overview'),
     );
@@ -1207,7 +1217,7 @@ describe('initiatives overview edge cases', () => {
 
   it('sorts multiple children of the same parent alphabetically by name', async () => {
     const { orgId, humanActorId, statusId } = await seedBaseOrg(db, schema);
-    const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId);
+    const writer = await authenticatedInitiativesApp(orgId, ['contribute'], humanActorId);
     const root = await seedInitiative(orgId, humanActorId);
     const [zeta] = await db
       .insert(schema.initiative)
@@ -1450,7 +1460,7 @@ describe('initiatives aggregate — access and 404s', () => {
       body: 'Second',
       createdAt: new Date('2026-02-01T00:00:00Z'),
     });
-    const viewer = appWithActor(initiatives, orgId, ['view'], humanActorId);
+    const viewer = await authenticatedInitiativesApp(orgId, ['view'], humanActorId);
     const body = await json<{ latestUpdate: { body: string } | null; updateCount: number }>(
       await viewer.request(`/${id}/aggregate`),
     );
@@ -1482,7 +1492,7 @@ describe('initiatives aggregate — connected work dedup and cross-org filtering
       .update(schema.organization)
       .set({ initiativeMaxDepth: 3 })
       .where(eq(schema.organization.id, orgId));
-    const writer = appWithActor(initiatives, orgId, ['contribute'], humanActorId);
+    const writer = await authenticatedInitiativesApp(orgId, ['contribute'], humanActorId);
     const root = await seedInitiative(orgId, humanActorId);
     const child = await seedInitiative(orgId, humanActorId);
     const grandchild = await seedInitiative(orgId, humanActorId);

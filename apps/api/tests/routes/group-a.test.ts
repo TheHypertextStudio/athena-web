@@ -2,7 +2,12 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
-import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
+import {
+  appWithActor,
+  appWithAuthenticatedActor,
+  getDb,
+  seedBaseOrg,
+} from '../support/routes-harness';
 import type cyclesRouter from '../../src/routes/cycles';
 import type initiativesRouter from '../../src/routes/initiatives';
 import type milestonesRouter from '../../src/routes/milestones';
@@ -36,7 +41,14 @@ const MISSING_ULID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 describe('initiatives router', () => {
   it('lists, creates, gets, patches, and deletes', async () => {
     const { orgId, humanActorId } = await seedBaseOrg(db, schema);
-    const writer = appWithActor(initiatives, orgId, ['manage'], humanActorId);
+    const writer = await appWithAuthenticatedActor(
+      db,
+      schema,
+      initiatives,
+      orgId,
+      ['manage'],
+      humanActorId,
+    );
 
     // Empty list first.
     const empty = await writer.request('/', { method: 'GET' });

@@ -517,6 +517,12 @@
   an account that sign-out or replacement supersedes, and still permits online writes when browser
   storage cannot provide durable replay. The queue and cross-tab suites pass 98 behavior tests. Web
   type checking, changed-file ESLint, Prettier, and the diff check pass.
+- **Initiative fixture correction**: Exact-main CI run `33284378618` passed every job except the
+  API test job. Nineteen Initiative tests still mounted organization actors without Better Auth
+  sessions after Initiative detail reads moved to canonical resource authorization. The shared
+  route harness now links a seeded human actor to a Better Auth user and mounts that user's
+  session. The affected tests use that authenticated fixture instead of weakening the production
+  route or trusting actor context as identity. The two failed files now pass all 57 tests.
 
 ---
 

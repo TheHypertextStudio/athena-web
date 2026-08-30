@@ -22,7 +22,7 @@
  */
 import type { CycleOut, CycleStats, TaskOut } from '@docket/types';
 import { useVocabulary } from '@docket/ui/hooks';
-import { Skeleton } from '@docket/ui/primitives';
+import { Skeleton, Surface } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
 import { useAppRouter as useRouter } from '@/lib/interactions/navigation';
 import { type JSX, useMemo } from 'react';
@@ -184,9 +184,13 @@ export function ActiveCycleOverview({
     stats && stats.committed > 0 ? Math.round((stats.completed / stats.committed) * 100) : 0;
 
   return (
-    <section
+    <Surface
+      as="section"
+      tone="card"
+      shape="medium"
+      pad="roomy"
       aria-labelledby="active-cycle-heading"
-      className="bg-surface-container-low flex flex-col gap-4 rounded-xl p-4"
+      className="flex flex-col gap-4"
     >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <h2 id="active-cycle-heading" className="text-on-surface text-title-large min-w-0">
@@ -258,13 +262,9 @@ export function ActiveCycleOverview({
       </dl>
 
       {detailQ.isPending ? (
-        // placeholder: the cycle's committed tasks — their titles, states and assignees. They are
-        // the cycle's own record and cannot be named before the read lands.
-        <div className="flex flex-col gap-2" aria-hidden="true">
-          <Skeleton className="h-8 w-full rounded-lg" />
-          <Skeleton className="h-8 w-full rounded-lg" />
-          <Skeleton className="h-8 w-full rounded-lg" />
-        </div>
+        <p className="text-on-surface-variant text-body-medium" aria-live="polite">
+          Loading committed work…
+        </p>
       ) : detailQ.isError ? (
         <p role="alert" className="text-error text-body-medium">
           {userErrorMessage(detailQ.error, `Could not load this ${cycleNounLower}'s work.`)}
@@ -297,6 +297,6 @@ export function ActiveCycleOverview({
           ) : null}
         </div>
       )}
-    </section>
+    </Surface>
   );
 }

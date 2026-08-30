@@ -17,6 +17,7 @@ import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as PhoneVerificationModule from '../../src/routes/phone-verification';
+import { CapturePhoneVerificationProvider } from '../../src/routes/phone-verification-provider';
 import { getDb, seedUserWithHub } from '../support/routes-harness';
 
 let schema!: typeof DbModule;
@@ -64,6 +65,53 @@ async function seedNumber(
 }
 
 describe('phone verification', () => {
+  it('uses provider-owned codes and preserves the send limit after a pending row is deleted', async () => {
+    const clock = fixedClock(Date.UTC(2026, 7, 2, 9, 0, 0));
+    const provider = new CapturePhoneVerificationProvider(CODE);
+    const service = new PhoneVerificationService({ provider: () => provider, now: clock.now });
+    const e164 = '+15559990001';
+    const { userId, row } = await seedNumber('VerifyDurableLimit', e164);
+
+    const issued = await service.issueChallenge(row);
+    expect(issued.ok).toBe(true);
+    expect(provider.outbox).toEqual([{ to: e164, code: CODE }]);
+
+    await db.delete(schema.phoneNumber).where(eq(schema.phoneNumber.id, row.id));
+    const [recreated] = await db
+      .insert(schema.phoneNumber)
+      .values({
+        userId,
+        e164,
+        dialCode: '1',
+        country: 'US',
+        nationalNumber: e164.slice(2),
+        status: 'pending',
+      })
+      .returning();
+    if (!recreated) throw new Error('failed to recreate phone number');
+
+    await expect(service.issueChallenge(recreated)).resolves.toMatchObject({
+      ok: false,
+      refusal: 'resend-too-soon',
+    });
+    expect(provider.outbox).toHaveLength(1);
+  });
+
+  it('reserves concurrent sends before either request reaches the provider', async () => {
+    const clock = fixedClock(Date.UTC(2026, 7, 2, 9, 0, 0));
+    const provider = new CapturePhoneVerificationProvider(CODE);
+    const service = new PhoneVerificationService({ provider: () => provider, now: clock.now });
+    const { row } = await seedNumber('VerifyConcurrentLimit');
+
+    const results = await Promise.all([service.issueChallenge(row), service.issueChallenge(row)]);
+
+    expect(results.filter((result) => result.ok)).toHaveLength(1);
+    expect(results.filter((result) => !result.ok)).toEqual([
+      expect.objectContaining({ refusal: 'resend-too-soon' }),
+    ]);
+    expect(provider.outbox).toHaveLength(1);
+  });
+
   it('actually texts the code to the number being verified', async () => {
     const sms = new CaptureSmsSender();
     const clock = fixedClock(Date.UTC(2026, 7, 2, 9, 0, 0));
@@ -122,6 +170,66 @@ describe('phone verification', () => {
       .where(eq(schema.phoneNumber.id, row.id));
     expect(verified?.status).toBe('verified');
     expect(verified?.verifiedAt).not.toBeNull();
+  });
+
+  it('refuses an automatic transfer when another account already verified the number', async () => {
+    const clock = fixedClock(Date.UTC(2026, 7, 2, 9, 0, 0));
+    const provider = new CapturePhoneVerificationProvider(CODE);
+    const service = new PhoneVerificationService({ provider: () => provider, now: clock.now });
+    const e164 = '+15559990002';
+    const { row } = await seedNumber('VerifyTransferPending', e164);
+    const existingUserId = await seedUserWithHub(db, schema, 'VerifyTransferExisting');
+    await db.insert(schema.phoneNumber).values({
+      userId: existingUserId,
+      e164,
+      dialCode: '1',
+      country: 'US',
+      nationalNumber: e164.slice(2),
+      status: 'verified',
+      verifiedAt: clock.now(),
+    });
+    await service.issueChallenge(row);
+
+    await expect(service.submit(row, CODE)).rejects.toThrow(
+      'This phone number is linked to another account.',
+    );
+
+    const [pending] = await db
+      .select()
+      .from(schema.phoneNumber)
+      .where(eq(schema.phoneNumber.id, row.id));
+    expect(pending?.status).toBe('pending');
+    const [challenge] = await db
+      .select()
+      .from(schema.phoneVerification)
+      .where(eq(schema.phoneVerification.phoneNumberId, row.id));
+    expect(challenge?.consumedAt).toBeNull();
+  });
+
+  it('reports a provider check failure without spending the user attempt budget', async () => {
+    const capture = new CapturePhoneVerificationProvider(CODE);
+    const service = new PhoneVerificationService({
+      provider: () => ({
+        kind: 'capture',
+        start: (to) => capture.start(to),
+        check: () => Promise.reject(new Error('provider outage')),
+      }),
+    });
+    const { row } = await seedNumber('VerifyProviderFailure');
+    await service.issueChallenge(row);
+
+    const result = await service.submit(row, CODE);
+
+    expect(result).toMatchObject({
+      ok: false,
+      refusal: 'provider-unavailable',
+      attemptsRemaining: PHONE_VERIFICATION_MAX_ATTEMPTS,
+    });
+    const [challenge] = await db
+      .select()
+      .from(schema.phoneVerification)
+      .where(eq(schema.phoneVerification.phoneNumberId, row.id));
+    expect(challenge?.attempts).toBe(0);
   });
 
   it('expires a code and refuses it afterwards', async () => {

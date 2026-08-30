@@ -21,10 +21,42 @@ gates:
 
 # Athena phone verification and linking audit — 2026-08-28
 
-**Verdict: DO NOT SHIP.** The launch owner must keep phone linking and inbound telephone access
-disabled until the P0 findings in this audit are closed. The current code proves control of a
-handset once. It does not provide a safe account credential, a working production delivery path,
-or a complete settings experience.
+## Remediation status — 2026-08-30
+
+The implementation now closes the code and interface blockers from this audit. The launch owner
+must still keep production phone access disabled until Hypertext Studio provisions the Twilio
+Verify service and Docket number and the real-handset canaries pass.
+
+The remediation made these changes:
+
+- Twilio Verify owns all new production codes. Legacy local challenges remain valid only through
+  their original ten-minute lifetime.
+- Passkey-fresh sessions now gate add, initial verification, re-enable, and delete. Pause remains
+  immediate.
+- Exact A attestation enters the restricted phone surface. Every weaker or absent signal triggers
+  a callback to the stored verified number and requires DTMF `1` before any private state loads.
+- Disable and delete revoke local sessions first and request provider hang-up. Each relay command
+  rechecks the durable live session.
+- E.164 send history survives pending-row deletion. A per-number lock reserves sends atomically.
+  Provider outages do not spend a person's code-check attempt.
+- Verified-number uniqueness now returns a stable conflict instead of a server error. Version 1
+  refuses automatic number transfer until Docket has a prior-owner notice and audit policy.
+- Version 1 exposes and accepts United States numbers only. It no longer claims unsafe
+  international normalization.
+- Settings now has loading and error states, semantic forms, mutation feedback, a removal
+  confirmation, 40 px destructive controls, a non-wrapping mobile action row, destination and
+  callback copy, last-call state, pause or enable, and `Call me`.
+- Phone task mutations create change sets in their transaction. Call end publishes a summary with
+  direct Undo for one change and per-change review for several changes.
+
+The remaining launch blockers are provider operations rather than missing repository behavior.
+The launch owner must provision the four required Twilio values, configure signed webhooks, and
+run handset canaries for A attestation, forced callback, wrong digit, no answer, Docket retry,
+mid-call revocation, and post-call Undo. Docket also needs a product policy for transferring
+recycled numbers and periodic re-verification before it can automate either case.
+
+**Original verdict: DO NOT SHIP.** The sections below record the 2026-08-28 state that produced
+that verdict. The remediation note above is the current repository state.
 
 ## Current state
 

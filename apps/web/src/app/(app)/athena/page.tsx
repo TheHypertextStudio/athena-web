@@ -4,6 +4,7 @@ import { useAppSearchParams } from '@/lib/app-location';
 import type { JSX } from 'react';
 
 import { AthenaWorkspace } from '@/components/athena/athena-workspace';
+import { PhoneCallSummarySheet } from '@/components/athena/phone-call-summary-sheet';
 import type { PersonalAthenaContext, PersonalAthenaSource } from '@/lib/athena/presentation';
 
 /** Parse the compact `type:id` contextual handoff carried by Athena links. */
@@ -30,6 +31,7 @@ function readSource(value: string | null, label: string | null): PersonalAthenaS
 export default function AthenaPage(): JSX.Element {
   const search = useAppSearchParams();
   const workspaceId = search.get('workspace');
+  const voiceSessionId = search.get('call');
   const source = readSource(search.get('context'), search.get('contextLabel'));
   const context: PersonalAthenaContext | null =
     workspaceId || source
@@ -37,11 +39,14 @@ export default function AthenaPage(): JSX.Element {
       : null;
 
   return (
-    <AthenaWorkspace
-      initialSessionId={search.get('session')}
-      workspaceFilter={workspaceId}
-      invocationContext={context}
-      startNewWork={search.get('new') === '1'}
-    />
+    <>
+      <AthenaWorkspace
+        initialSessionId={search.get('session')}
+        workspaceFilter={workspaceId}
+        invocationContext={context}
+        startNewWork={search.get('new') === '1'}
+      />
+      {voiceSessionId ? <PhoneCallSummarySheet voiceSessionId={voiceSessionId} /> : null}
+    </>
   );
 }

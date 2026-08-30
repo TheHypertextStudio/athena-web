@@ -19,6 +19,7 @@ import {
   seedUserWithHub,
 } from '../support/routes-harness';
 import { assertDefined } from '@docket/test-utils';
+import { undoChangeSetAtomically } from '../../src/mcp/change-set';
 
 let schema!: typeof DbModule;
 let db!: typeof DbModule.db;
@@ -79,6 +80,7 @@ describe('DocketVoiceToolRunner', () => {
       });
       expect(outcome.ok).toBe(true);
       expect(outcome.summary).toContain('Call the plumber');
+      expect(outcome.changeSetId).toEqual(expect.any(String));
 
       const [row] = await db
         .select()
@@ -88,6 +90,15 @@ describe('DocketVoiceToolRunner', () => {
         title: 'Call the plumber',
         description: 'Kitchen sink is leaking',
         createdBy: humanActorId,
+      });
+      const [record] = await db
+        .select()
+        .from(schema.changeSet)
+        .where(eq(schema.changeSet.id, outcome.changeSetId ?? ''));
+      expect(record?.origin).toMatchObject({
+        client: 'athena-phone',
+        sessionId: 'voice_1',
+        tool: 'create_task',
       });
     });
 
@@ -215,12 +226,40 @@ describe('DocketVoiceToolRunner', () => {
       const outcome = await runner.run(await ctxFor(orgId, userId, humanActorId), 'complete_task', {
         title: 'water',
       });
-      expect(outcome).toEqual({ ok: true, summary: 'Closed “Water the plants”.' });
+      expect(outcome).toMatchObject({ ok: true, summary: 'Closed “Water the plants”.' });
+      expect(outcome.changeSetId).toEqual(expect.any(String));
       const [after] = await db
         .select()
         .from(schema.task)
         .where(eq(schema.task.id, assertDefined(row).id));
       expect(after?.completedAt).not.toBeNull();
+    });
+
+    it('rejects Undo after a later edit changes the task', async () => {
+      const runner = new DocketVoiceToolRunner();
+      const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(db, schema);
+      const userId = await seedUserWithHub(db, schema, 'VoiceUndoConflict');
+      const [row] = await db
+        .insert(schema.task)
+        .values({
+          organizationId: orgId,
+          title: 'Submit the report',
+          teamId,
+          state: 'backlog',
+          statusId: statusId('task', 'backlog'),
+        })
+        .returning({ id: schema.task.id });
+      const id = assertDefined(row).id;
+      const outcome = await runner.run(await ctxFor(orgId, userId, humanActorId), 'complete_task', {
+        title: 'submit',
+      });
+      if (!outcome.changeSetId) throw new Error('voice change set missing');
+      await db
+        .update(schema.task)
+        .set({ title: 'Submit the final report' })
+        .where(eq(schema.task.id, id));
+
+      await expect(undoChangeSetAtomically(orgId, outcome.changeSetId)).rejects.toThrow();
     });
 
     it('applies the subtask policy when voice closes the final active child', async () => {

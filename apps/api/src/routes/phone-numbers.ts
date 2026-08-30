@@ -14,13 +14,14 @@
 import { db, phoneNumber } from '@docket/db';
 import {
   composeE164,
-  DIAL_CODES,
   maskE164,
+  PhoneCallOut,
   PhoneChallengeOut,
   PhoneNumberCreate,
   PhoneNumberListOut,
   PhoneNumberOut,
   PhoneVerifyBody,
+  SUPPORTED_PHONE_COUNTRIES,
 } from '@docket/athena/phone';
 import type { PhoneChallengeSummary } from '@docket/athena/phone';
 import { and, desc, eq } from 'drizzle-orm';
@@ -29,7 +30,14 @@ import type { Context } from 'hono';
 import { z } from 'zod';
 
 import type { AppEnv } from '../context';
-import { AuthError, ConflictError, NotFoundError, ValidationError } from '../error';
+import {
+  ApiError,
+  AuthError,
+  ConflictError,
+  NotFoundError,
+  ReauthRequiredError,
+  ValidationError,
+} from '../error';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
@@ -42,11 +50,19 @@ import {
   type PhoneVerificationRow,
   type PhoneVerificationService,
 } from './phone-verification';
+import {
+  createDocketCallbackAuthorization,
+  startCallbackAuthorization,
+} from './phone-call-authorization';
+import type { TelephonyProvider } from './twilio-telephony';
+import { revokePhoneAccess } from './voice-session-service';
 
 const idParam = z.object({ id: z.string() });
 
 /** Every dial code the country selector offers, as the server's allowlist. */
-const DIAL_CODE_BY_COUNTRY = new Map(DIAL_CODES.map((d) => [d.iso2, d.dialCode]));
+const DIAL_CODE_BY_COUNTRY = new Map(
+  SUPPORTED_PHONE_COUNTRIES.map((country) => [country.iso2, country.dialCode]),
+);
 
 /**
  * Project a stored binding onto the redacted wire shape.
@@ -69,6 +85,7 @@ function toPhoneNumberOut(
     status: row.status,
     callingEnabled: row.callingEnabled,
     verifiedAt: row.verifiedAt?.toISOString() ?? null,
+    lastCalledAt: row.lastCalledAt?.toISOString() ?? null,
     createdAt: row.createdAt.toISOString(),
     challenge: challenge ? toChallengeSummary(challenge) : null,
   };
@@ -103,17 +120,25 @@ function toChallengeSummary(
   };
 }
 
+/** Runtime dependencies for caller-owned phone-number routes. */
+export interface PhoneNumberRouteDeps {
+  /** Outbound telephony adapter used by the authenticated Call me action. */
+  readonly telephony: () => TelephonyProvider;
+  /** Docket-owned destination displayed in Settings. */
+  readonly athenaNumber: () => string | null;
+}
+
 /**
- * Build the caller-owned phone number routes.
+ * Build the caller-owned phone-number routes.
  *
- * @param createVerification - Builds the one-time-code service from the app container. A factory,
- *   not a resolved instance: the container's SMS transport is lazy, and no route here runs at
- *   startup, so resolving it eagerly would force SMS configuration to exist just to boot the API.
- *   Called fresh inside each handler that needs it, matching {@link PhoneVerificationService}'s own
- *   per-request contract.
- * @returns the Hono sub-app mounted at `/v1/me/phone-numbers`.
+ * @param createVerification - Builds the verification service for the current request.
+ * @param deps - Supplies outbound telephony and the configured Athena number.
+ * @returns The Hono sub-app mounted at `/v1/me/phone-numbers`.
  */
-export function createPhoneNumberRoutes(createVerification: () => PhoneVerificationService) {
+export function createPhoneNumberRoutes(
+  createVerification: () => PhoneVerificationService,
+  deps?: PhoneNumberRouteDeps,
+) {
   return new Hono<AppEnv>()
     .get(
       '/',
@@ -134,7 +159,10 @@ export function createPhoneNumberRoutes(createVerification: () => PhoneVerificat
 
         // A person holds a handful of numbers and only the pending ones are looked up, so this is
         // zero or one extra query, issued concurrently — not a fan-out worth batching.
-        return ok(c, PhoneNumberListOut, { items: await Promise.all(rows.map(phoneNumberOut)) });
+        return ok(c, PhoneNumberListOut, {
+          athenaNumber: deps?.athenaNumber() ?? null,
+          items: await Promise.all(rows.map(phoneNumberOut)),
+        });
       },
     )
     .post(
@@ -148,6 +176,7 @@ export function createPhoneNumberRoutes(createVerification: () => PhoneVerificat
       }),
       zJson(PhoneNumberCreate),
       async (c) => {
+        requireFreshSession(c);
         const userId = requireUserId(c);
         const input = c.req.valid('json');
         const expectedDialCode = DIAL_CODE_BY_COUNTRY.get(input.country.toUpperCase());
@@ -192,6 +221,37 @@ export function createPhoneNumberRoutes(createVerification: () => PhoneVerificat
       },
     )
     .post(
+      '/:id/call',
+      apiDoc({
+        tag: 'Me Phone',
+        summary: 'Ask Athena to call the verified number',
+        response: PhoneCallOut,
+        description:
+          'Create an authenticated callback to the stored verified number. The destination cannot be supplied by the request.',
+      }),
+      zParam(idParam),
+      async (c) => {
+        const userId = requireUserId(c);
+        const row = await requireOwned(userId, c.req.valid('param').id);
+        if (row.status !== 'verified' || !row.callingEnabled) {
+          throw new ConflictError('Turn on calling for this verified number first.');
+        }
+        if (!deps) throw new ConflictError('Phone callbacks are not available right now.');
+        const authorization = await createDocketCallbackAuthorization(row);
+        const started = await startCallbackAuthorization(
+          authorization.id,
+          deps.telephony(),
+          authorization.createdAt,
+        );
+        if (!started) throw new Error('phone callback authorization disappeared');
+        return ok(c, PhoneCallOut, {
+          authorizationId: started.id,
+          state: started.state === 'dialing' ? 'dialing' : 'failed',
+          expiresAt: started.expiresAt.toISOString(),
+        });
+      },
+    )
+    .post(
       '/:id/resend',
       apiDoc({
         tag: 'Me Phone',
@@ -222,6 +282,7 @@ export function createPhoneNumberRoutes(createVerification: () => PhoneVerificat
       zParam(idParam),
       zJson(PhoneVerifyBody),
       async (c) => {
+        requireFreshSession(c);
         const userId = requireUserId(c);
         const row = await requireOwned(userId, c.req.valid('param').id);
         const result = await createVerification().submit(row, c.req.valid('json').code);
@@ -242,16 +303,19 @@ export function createPhoneNumberRoutes(createVerification: () => PhoneVerificat
       zJson(z.object({ enabled: z.boolean() })),
       async (c) => {
         const userId = requireUserId(c);
+        const enabled = c.req.valid('json').enabled;
+        if (enabled) requireFreshSession(c);
         const row = await requireOwned(userId, c.req.valid('param').id);
         if (row.status !== 'verified') {
           throw new ConflictError('Verify this number before turning calling on.');
         }
         const [updated] = await db
           .update(phoneNumber)
-          .set({ callingEnabled: c.req.valid('json').enabled })
+          .set({ callingEnabled: enabled })
           .where(eq(phoneNumber.id, row.id))
           .returning();
         if (!updated) throw new NotFoundError('Phone number not found');
+        if (!enabled && deps) await revokePhoneAccess(row.id, deps.telephony());
         return ok(c, PhoneNumberOut, toPhoneNumberOut(updated));
       },
     )
@@ -266,11 +330,13 @@ export function createPhoneNumberRoutes(createVerification: () => PhoneVerificat
       }),
       zParam(idParam),
       async (c) => {
+        requireFreshSession(c);
         const userId = requireUserId(c);
         const row = await requireOwned(userId, c.req.valid('param').id);
         // Projected before the delete: the response describes the number as it stood at the moment
         // of the call, and a pending number discarded mid-verification did have a code outstanding.
         const projected = await phoneNumberOut(row);
+        if (deps) await revokePhoneAccess(row.id, deps.telephony());
         await db.delete(phoneNumber).where(eq(phoneNumber.id, row.id));
         return ok(c, PhoneNumberOut, projected);
       },
@@ -307,9 +373,10 @@ async function issue(
  * failing with the same sentence is how people end up locked out without warning.
  */
 function refusalToError(
-  refusal: 'no-challenge' | 'expired' | 'attempts-exhausted' | 'wrong-code',
+  refusal:
+    'no-challenge' | 'expired' | 'attempts-exhausted' | 'wrong-code' | 'provider-unavailable',
   remaining: number,
-): ConflictError {
+): ApiError {
   switch (refusal) {
     case 'no-challenge':
       return new ConflictError('Ask for a new code, then enter it here.');
@@ -323,6 +390,8 @@ function refusalToError(
           ? 'That code is not right. One more try before you need a new code.'
           : `That code is not right. ${String(remaining)} tries left.`,
       );
+    case 'provider-unavailable':
+      return new ApiError(503, 'internal', 'Docket could not check that code. Try again.');
   }
 }
 
@@ -349,6 +418,16 @@ function requireUserId(c: Context<AppEnv>): string {
   const userId = c.get('session')?.user.id;
   if (!userId) throw new AuthError('Authentication required.');
   return userId;
+}
+
+/** Require the five-minute passkey-fresh session used for credential changes. */
+function requireFreshSession(c: Context<AppEnv>): void {
+  const session = c.get('session');
+  if (!session?.user.id) throw new AuthError('Authentication required.');
+  const ageMs = Date.now() - new Date(session.session.createdAt).getTime();
+  if (ageMs > 5 * 60 * 1000) {
+    throw new ReauthRequiredError('Please re-verify your passkey to continue.');
+  }
 }
 
 export default createPhoneNumberRoutes;

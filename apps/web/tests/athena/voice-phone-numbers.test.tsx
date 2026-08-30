@@ -26,6 +26,11 @@ const bindPost = vi.fn();
 const verifyPost = vi.fn();
 const resendPost = vi.fn();
 const removeDelete = vi.fn();
+const callingPost = vi.fn();
+const callPost = vi.fn();
+const reauth = vi.fn();
+
+vi.mock('@/components/settings/use-reauth', () => ({ useReauth: () => reauth }));
 
 vi.mock('@/lib/api', () => ({
   api: {
@@ -37,6 +42,8 @@ vi.mock('@/lib/api', () => ({
           ':id': {
             verify: { $post: verifyPost },
             resend: { $post: resendPost },
+            calling: { $post: callingPost },
+            call: { $post: callPost },
             $delete: removeDelete,
           },
         },
@@ -54,6 +61,8 @@ const SERVER_DIAGNOSTIC = 'psycopg2.errors.UniqueViolation at 0xdeadbeef';
 interface NumberOverrides {
   readonly id?: string;
   readonly status?: 'pending' | 'verified' | 'blocked';
+  readonly callingEnabled?: boolean;
+  readonly lastCalledAt?: string | null;
   readonly challenge?: Record<string, unknown> | null;
 }
 
@@ -61,6 +70,8 @@ interface NumberOverrides {
 function phoneNumber({
   id = 'pn-1',
   status = 'pending',
+  callingEnabled = true,
+  lastCalledAt = null,
   challenge = status === 'pending' ? challengeSummary() : null,
 }: NumberOverrides = {}): Record<string, unknown> {
   return {
@@ -69,8 +80,9 @@ function phoneNumber({
     dialCode: '1',
     country: 'US',
     status,
-    callingEnabled: true,
+    callingEnabled,
     verifiedAt: null,
+    lastCalledAt,
     createdAt: '2026-08-15T09:00:00.000Z',
     challenge,
   };
@@ -88,7 +100,7 @@ function challengeSummary(overrides: Record<string, unknown> = {}): Record<strin
 }
 
 function listing(...items: Record<string, unknown>[]): unknown {
-  return okResponse({ items });
+  return okResponse({ athenaNumber: '+17025550100', items });
 }
 
 function renderSection(): ReturnType<typeof render> {
@@ -119,12 +131,90 @@ beforeEach(() => {
   // that forgot to stub a route would quietly reuse the previous test's response and pass because
   // of its neighbour.
   vi.resetAllMocks();
+  reauth.mockResolvedValue(undefined);
   numbersGet.mockResolvedValue(listing());
 });
 
 afterEach(cleanup);
 
 describe('VoicePhoneNumbers', () => {
+  it('shows how calls authenticate and starts a callback to the stored number', async () => {
+    numbersGet.mockResolvedValue(
+      listing(
+        phoneNumber({
+          id: 'pn-1',
+          status: 'verified',
+          lastCalledAt: '2026-08-30T18:30:00.000Z',
+        }),
+      ),
+    );
+    callPost.mockResolvedValue(
+      okResponse({
+        authorizationId: 'auth-1',
+        state: 'dialing',
+        expiresAt: '2026-08-30T18:35:00.000Z',
+      }),
+    );
+    renderSection();
+
+    expect(await screen.findByRole('link', { name: '+1 702 555 0100' })).toHaveAttribute(
+      'href',
+      'tel:+17025550100',
+    );
+    expect(screen.getByText(/carrier can verify/i)).toBeInTheDocument();
+    expect(screen.getByText(/last call/i)).toBeInTheDocument();
+
+    await userEvent.click(control(rowAction('pn-1', 'call'), 'call'));
+    await waitFor(() => {
+      expect(callPost).toHaveBeenCalledWith({ param: { id: 'pn-1' } });
+    });
+    expect(reauth).not.toHaveBeenCalled();
+  });
+
+  it('pauses immediately but requires a passkey before calls are enabled again', async () => {
+    numbersGet
+      .mockResolvedValueOnce(
+        listing(phoneNumber({ id: 'pn-1', status: 'verified', callingEnabled: true })),
+      )
+      .mockResolvedValue(
+        listing(phoneNumber({ id: 'pn-1', status: 'verified', callingEnabled: false })),
+      );
+    callingPost
+      .mockResolvedValueOnce(
+        okResponse(phoneNumber({ id: 'pn-1', status: 'verified', callingEnabled: false })),
+      )
+      .mockResolvedValueOnce(problemResponse('session is stale', 401, 'reauth_required'))
+      .mockResolvedValue(
+        okResponse(phoneNumber({ id: 'pn-1', status: 'verified', callingEnabled: true })),
+      );
+    renderSection();
+
+    await waitFor(() => {
+      expect(rowAction('pn-1', 'disable-calling')).not.toBeNull();
+    });
+    await userEvent.click(control(rowAction('pn-1', 'disable-calling'), 'disable-calling'));
+    await waitFor(() => {
+      expect(callingPost).toHaveBeenCalledWith({
+        param: { id: 'pn-1' },
+        json: { enabled: false },
+      });
+    });
+    expect(reauth).not.toHaveBeenCalled();
+
+    await waitFor(() => {
+      expect(rowAction('pn-1', 'enable-calling')).not.toBeNull();
+    });
+    await userEvent.click(control(rowAction('pn-1', 'enable-calling'), 'enable-calling'));
+
+    await waitFor(() => {
+      expect(reauth).toHaveBeenCalledOnce();
+      expect(callingPost).toHaveBeenLastCalledWith({
+        param: { id: 'pn-1' },
+        json: { enabled: true },
+      });
+    });
+  });
+
   it('offers the code box for a number the server already reports as pending', async () => {
     // No bind ran in this session — exactly the state a page reload leaves behind.
     numbersGet.mockResolvedValue(listing(phoneNumber({ id: 'pn-1' })));
@@ -155,6 +245,60 @@ describe('VoicePhoneNumbers', () => {
       expect(addForm()).not.toBeNull();
     });
     expect(verifyForm()).toBeNull();
+  });
+
+  it('does not expose the add form until the phone-number list loads', async () => {
+    const pending = deferred<unknown>();
+    numbersGet.mockReturnValue(pending.promise);
+    renderSection();
+
+    expect(screen.getByLabelText('Loading phone numbers')).toBeInTheDocument();
+    expect(addForm()).toBeNull();
+
+    pending.resolve(listing());
+    await waitFor(() => {
+      expect(addForm()).not.toBeNull();
+    });
+  });
+
+  it('shows application-owned recovery when the phone-number list fails', async () => {
+    numbersGet.mockResolvedValue(problemResponse(SERVER_DIAGNOSTIC, 503, 'internal'));
+    renderSection();
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Could not load your phone numbers.');
+    expect(alert).not.toHaveTextContent(SERVER_DIAGNOSTIC);
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    expect(addForm()).toBeNull();
+  });
+
+  it('submits the add and verification forms with Enter', async () => {
+    numbersGet
+      .mockResolvedValueOnce(listing())
+      .mockResolvedValue(listing(phoneNumber({ id: 'pn-1' })));
+    bindPost.mockResolvedValue(
+      okResponse({ phoneNumber: phoneNumber({ id: 'pn-1' }), ...challengeSummary() }),
+    );
+    verifyPost.mockResolvedValue(okResponse(phoneNumber({ id: 'pn-1', status: 'verified' })));
+    renderSection();
+
+    await waitFor(() => {
+      expect(addForm()).not.toBeNull();
+    });
+    await userEvent.type(field('national-number'), '4155550123{Enter}');
+    await waitFor(() => {
+      expect(bindPost).toHaveBeenCalledOnce();
+    });
+    await waitFor(() => {
+      expect(verifyForm()).not.toBeNull();
+    });
+    await userEvent.type(field('code'), '314159{Enter}');
+    await waitFor(() => {
+      expect(verifyPost).toHaveBeenCalledWith({
+        param: { id: 'pn-1' },
+        json: { code: '314159' },
+      });
+    });
   });
 
   it('keeps a second number bindable without abandoning the pending one', async () => {
@@ -362,6 +506,7 @@ describe('VoicePhoneNumbers', () => {
       expect(rowAction('pn-1', 'remove')).not.toBeNull();
     });
     await userEvent.click(control(rowAction('pn-1', 'remove'), 'remove'));
+    await userEvent.click(screen.getByRole('button', { name: 'Remove phone number' }));
 
     // The mutation really ran — without this the test would pass on a mis-wired mock throwing.
     await waitFor(() => {
@@ -382,6 +527,7 @@ describe('VoicePhoneNumbers', () => {
     });
     numbersGet.mockResolvedValue(listing());
     await userEvent.click(control(rowAction('pn-1', 'remove'), 'remove'));
+    await userEvent.click(screen.getByRole('button', { name: 'Remove phone number' }));
 
     await waitFor(() => {
       expect(removeDelete).toHaveBeenCalledWith({ param: { id: 'pn-1' } });

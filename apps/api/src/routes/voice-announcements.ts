@@ -113,3 +113,8 @@ export function callerGreeting(name: string): string {
   const first = name.trim().split(/\s+/)[0] ?? '';
   return first ? `Hi ${first}, it's Athena. What's on your mind?` : "Hi, it's Athena. What's up?";
 }
+
+/** What a recognized caller hears before Docket verifies the call by calling back. */
+export function callbackAnnouncement(): string {
+  return 'Hi, this is Athena from Docket. I need to call you right back at your verified number. Please answer and press 1 to continue.';
+}

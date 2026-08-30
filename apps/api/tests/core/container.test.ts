@@ -40,6 +40,11 @@ import {
   type AppRuntimeEnv,
 } from '../../src/container';
 import { MockRealtimeProvider, OpenAiRealtimeProvider } from '../../src/routes/voice-provider';
+import {
+  CapturePhoneVerificationProvider,
+  TwilioVerifyProvider,
+} from '../../src/routes/phone-verification-provider';
+import { CaptureTelephonyProvider, TwilioTelephony } from '../../src/routes/twilio-telephony';
 
 const LOCAL: AppRuntimeEnv = { APP_MODE: 'local' };
 const TEST: AppRuntimeEnv = { APP_MODE: 'test' };
@@ -209,6 +214,8 @@ describe('buildAppContainer', () => {
   it('builds every mock service in local mode with no credentials configured', () => {
     const container = buildAppContainer(LOCAL);
     expect(container.sms).toBeInstanceOf(CaptureSmsSender);
+    expect(container.phoneVerification).toBeInstanceOf(CapturePhoneVerificationProvider);
+    expect(container.telephony).toBeInstanceOf(CaptureTelephonyProvider);
     expect(container.push).toBeInstanceOf(CapturePushSender);
     expect(container.voice).toBeInstanceOf(MockRealtimeProvider);
     // Touch every lazy getter once so its accessor line is exercised.
@@ -221,6 +228,28 @@ describe('buildAppContainer', () => {
     expect(container.inboundMail).toBeDefined();
     expect(container.mcpConnector).toBeDefined();
     expect(container.blob).toBeDefined();
+  });
+
+  it('requires the complete Twilio phone configuration before either production adapter runs', () => {
+    const partial = buildAppContainer({
+      APP_MODE: 'production',
+      TWILIO_ACCOUNT_SID: 'AC_test',
+      TWILIO_AUTH_TOKEN: 'secret',
+      TWILIO_VERIFY_SERVICE_SID: 'VA_test',
+    });
+    expect(() => partial.phoneVerification).toThrow(
+      'Missing required production config: TWILIO_PHONE_NUMBER',
+    );
+
+    const configured = buildAppContainer({
+      APP_MODE: 'production',
+      TWILIO_ACCOUNT_SID: 'AC_test',
+      TWILIO_AUTH_TOKEN: 'secret',
+      TWILIO_VERIFY_SERVICE_SID: 'VA_test',
+      TWILIO_PHONE_NUMBER: '+17025550100',
+    });
+    expect(configured.phoneVerification).toBeInstanceOf(TwilioVerifyProvider);
+    expect(configured.telephony).toBeInstanceOf(TwilioTelephony);
   });
 
   it('uses Stripe test mode for an explicitly enabled local billing run', () => {

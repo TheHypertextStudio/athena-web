@@ -29,7 +29,12 @@ import { type JSX, type ReactNode } from 'react';
 import { OrgChip } from '@/components/org-chip';
 
 import { relativeTime } from '../agents/format-time';
-import { isApproval, notificationHref, notificationKind } from './notification-meta';
+import {
+  isApproval,
+  notificationHref,
+  notificationKind,
+  phoneNotificationAction,
+} from './notification-meta';
 
 /** Props for {@link NotificationRow}. */
 export interface NotificationRowProps {
@@ -41,6 +46,10 @@ export interface NotificationRowProps {
   readonly onApprove: (id: string) => void;
   /** Mark the notification read, dismissing it from the attention queue. */
   readonly onMarkRead: (id: string) => void;
+  /** Start an authenticated callback from a cooldown notification. */
+  readonly onCallMe: (id: string, phoneNumberId: string) => void;
+  /** Undo the one reversible change named by a post-call notification. */
+  readonly onUndoPhoneChange: (id: string, voiceSessionId: string, changeSetId: string) => void;
   /** Whether an action for this row is in flight (disables both inline actions). */
   readonly pending: boolean;
 }
@@ -53,11 +62,14 @@ export function NotificationRow({
   orgName,
   onApprove,
   onMarkRead,
+  onCallMe,
+  onUndoPhoneChange,
   pending,
 }: NotificationRowProps): JSX.Element {
   const { icon: Icon, label } = notificationKind(notification.type);
   const unread = !notification.readAt;
   const approval = isApproval(notification.type);
+  const phoneAction = phoneNotificationAction(notification);
   const href = notificationHref(notification);
   const summary = notification.body.summary;
   const deliveryHints = notificationDeliveryHintsFromBody(notification.body);
@@ -150,6 +162,40 @@ export function NotificationRow({
               }}
             >
               {pending ? 'Approving…' : 'Approve ▸'}
+            </Button>
+          ) : null}
+          {phoneAction?.kind === 'call_me' ? (
+            <Button
+              size="sm"
+              className="relative z-10 whitespace-nowrap"
+              disabled={pending}
+              onClick={() => {
+                onCallMe(notification.id, phoneAction.phoneNumberId);
+              }}
+            >
+              Call me
+            </Button>
+          ) : null}
+          {phoneAction?.kind === 'undo' ? (
+            <Button
+              size="sm"
+              variant="outline"
+              className="relative z-10 whitespace-nowrap"
+              disabled={pending}
+              onClick={() => {
+                onUndoPhoneChange(
+                  notification.id,
+                  phoneAction.voiceSessionId,
+                  phoneAction.changeSetId,
+                );
+              }}
+            >
+              Undo
+            </Button>
+          ) : null}
+          {phoneAction?.kind === 'review' && href ? (
+            <Button size="sm" variant="outline" className="relative z-10 whitespace-nowrap" asChild>
+              <Link href={href}>Review changes</Link>
             </Button>
           ) : null}
           <Button

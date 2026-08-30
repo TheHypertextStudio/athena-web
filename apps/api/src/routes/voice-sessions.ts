@@ -25,6 +25,8 @@
 import {
   VoiceEventsAck,
   VoiceEventsBody,
+  PhoneCallSummaryOut,
+  PhoneCallUndoOut,
   VoiceSessionOut,
   VoiceSessionStartBody,
   VoiceTurnOut,
@@ -40,6 +42,7 @@ import { apiDoc } from '../lib/openapi-route';
 import { zJson, zParam } from '../lib/validate';
 
 import { callerGreeting } from './voice-announcements';
+import { loadPhoneCallSummary, undoPhoneCallChange } from './phone-call-summary';
 import { voiceInstructions } from './voice-instructions';
 import type { VoiceRealtimeProvider } from './voice-provider';
 import {
@@ -51,6 +54,7 @@ import {
 import { VOICE_TOOL_DEFINITIONS } from './voice-tools';
 
 const idParam = z.object({ id: z.string() });
+const changeParam = z.object({ id: z.string(), changeSetId: z.string() });
 
 /**
  * Build the browser voice routes.
@@ -121,6 +125,39 @@ export function createVoiceRoutes(createProvider: () => VoiceRealtimeProvider) {
         return ok(c, z.object({ items: z.array(VoiceTurnOut) }), {
           items: [...(await recentTurns(userId))],
         });
+      },
+    )
+    .get(
+      '/:id/summary',
+      apiDoc({
+        tag: 'Athena Voice',
+        summary: 'Review changes from a phone call',
+        response: PhoneCallSummaryOut,
+        description:
+          'Return only the signed-in caller’s phone session and its reversible task changes.',
+      }),
+      zParam(idParam),
+      async (c) =>
+        ok(
+          c,
+          PhoneCallSummaryOut,
+          await loadPhoneCallSummary(requireUserId(c), c.req.valid('param').id),
+        ),
+    )
+    .post(
+      '/:id/changes/:changeSetId/undo',
+      apiDoc({
+        tag: 'Athena Voice',
+        summary: 'Undo one phone call change',
+        response: PhoneCallUndoOut,
+        description:
+          'Reverse one caller-owned phone change only when no later edit changed the affected task.',
+      }),
+      zParam(changeParam),
+      async (c) => {
+        const { id, changeSetId } = c.req.valid('param');
+        await undoPhoneCallChange(requireUserId(c), id, changeSetId);
+        return ok(c, PhoneCallUndoOut, { changeSetId, undone: true });
       },
     )
     .post(

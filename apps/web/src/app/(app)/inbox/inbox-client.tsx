@@ -7,7 +7,7 @@ import { type JSX } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
 import { ActivityRow } from '@/components/inbox/activity-row';
-import { isApproval } from '@/components/inbox/notification-meta';
+import { notificationNeedsAction } from '@/components/inbox/notification-meta';
 import { NotificationRow } from '@/components/inbox/notification-row';
 import { SegmentedTabs } from '@/components/inbox/segmented-tabs';
 import { type InboxTab, useInboxPage } from './use-inbox-page';
@@ -28,6 +28,8 @@ export default function InboxClient(): JSX.Element {
     markingAll,
     segments,
     onApprove,
+    onCallMe,
+    onUndoPhoneChange,
     onMarkRead,
     onMarkAllRead,
   } = useInboxPage();
@@ -39,7 +41,7 @@ export default function InboxClient(): JSX.Element {
   const visibleInbox = orderedInbox.filter((notification) => filterNotification(tab, notification));
   const visibleUnreadCount = visibleInbox.filter((notification) => !notification.readAt).length;
   const needsAction = visibleInbox.filter(
-    (notification) => isApproval(notification.type) && !notification.readAt,
+    (notification) => notificationNeedsAction(notification) && !notification.readAt,
   );
   const updates = visibleInbox.filter((notification) => !needsAction.includes(notification));
   const empty = emptyStateForTab(tab);
@@ -114,6 +116,8 @@ export default function InboxClient(): JSX.Element {
               notifications={needsAction}
               orgName={orgName}
               onApprove={onApprove}
+              onCallMe={onCallMe}
+              onUndoPhoneChange={onUndoPhoneChange}
               onMarkRead={onMarkRead}
               pendingIds={pendingIds}
             />
@@ -122,6 +126,8 @@ export default function InboxClient(): JSX.Element {
               notifications={updates}
               orgName={orgName}
               onApprove={onApprove}
+              onCallMe={onCallMe}
+              onUndoPhoneChange={onUndoPhoneChange}
               onMarkRead={onMarkRead}
               pendingIds={pendingIds}
             />
@@ -160,7 +166,7 @@ function filterNotification(tab: InboxTab, notification: NotificationOut): boole
     case 'unread':
       return !notification.readAt;
     case 'needs_action':
-      return isApproval(notification.type) && !notification.readAt;
+      return notificationNeedsAction(notification) && !notification.readAt;
     case 'announcements':
       return notification.type === 'service_announcement';
     case 'mentions':
@@ -193,6 +199,12 @@ interface NotificationGroupProps {
   readonly notifications: readonly NotificationOut[];
   readonly orgName: (orgId: string) => string;
   readonly onApprove: (id: string) => Promise<void>;
+  readonly onCallMe: (id: string, phoneNumberId: string) => Promise<void>;
+  readonly onUndoPhoneChange: (
+    id: string,
+    voiceSessionId: string,
+    changeSetId: string,
+  ) => Promise<void>;
   readonly onMarkRead: (id: string) => Promise<void>;
   readonly pendingIds: ReadonlySet<string>;
 }
@@ -203,6 +215,8 @@ function NotificationGroup({
   notifications,
   orgName,
   onApprove,
+  onCallMe,
+  onUndoPhoneChange,
   onMarkRead,
   pendingIds,
 }: NotificationGroupProps): JSX.Element | null {
@@ -217,6 +231,12 @@ function NotificationGroup({
           orgName={notification.organizationId ? orgName(notification.organizationId) : null}
           onApprove={(id) => {
             void onApprove(id);
+          }}
+          onCallMe={(id, phoneNumberId) => {
+            void onCallMe(id, phoneNumberId);
+          }}
+          onUndoPhoneChange={(id, voiceSessionId, changeSetId) => {
+            void onUndoPhoneChange(id, voiceSessionId, changeSetId);
           }}
           onMarkRead={(id) => {
             void onMarkRead(id);

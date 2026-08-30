@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 
 import { NotificationId, OrganizationId, type NotificationOut } from '@docket/types';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const { useInboxPage } = vi.hoisted(() => ({
@@ -49,7 +49,12 @@ function notification(overrides: Partial<NotificationOut>): NotificationOut {
 function renderInbox(
   notifications: readonly NotificationOut[],
   options: { readonly tab?: string } = {},
-): void {
+): {
+  readonly onCallMe: ReturnType<typeof vi.fn>;
+  readonly onUndoPhoneChange: ReturnType<typeof vi.fn>;
+} {
+  const onCallMe = vi.fn();
+  const onUndoPhoneChange = vi.fn();
   useInboxPage.mockReturnValue({
     tab: options.tab ?? 'all',
     setTab: vi.fn(),
@@ -89,11 +94,14 @@ function renderInbox(
     ],
     refetch: vi.fn(),
     onApprove: vi.fn(),
+    onCallMe,
+    onUndoPhoneChange,
     onMarkRead: vi.fn(),
     onMarkAllRead: vi.fn(),
   });
 
   render(<InboxClient />);
+  return { onCallMe, onUndoPhoneChange };
 }
 
 describe('InboxClient notification UX', () => {
@@ -171,5 +179,42 @@ describe('InboxClient notification UX', () => {
     expect(screen.getByText('Scheduled maintenance')).toBeInTheDocument();
     expect(screen.queryByText('Approve a low-risk agent action')).not.toBeInTheDocument();
     expect(screen.queryByText('Review the launch checklist')).not.toBeInTheDocument();
+  });
+
+  it('starts a callback from an authenticated cooldown notification', () => {
+    const { onCallMe } = renderInbox([
+      notification({
+        id: NOTICE_ID,
+        type: 'phone_call',
+        body: {
+          title: 'Athena paused automatic callbacks',
+          action: 'call_me',
+          phoneNumberId: 'phone_1',
+        },
+      }),
+    ]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Call me' }));
+
+    expect(onCallMe).toHaveBeenCalledWith(NOTICE_ID, 'phone_1');
+  });
+
+  it('undoes the single change named by a post-call notification', () => {
+    const { onUndoPhoneChange } = renderInbox([
+      notification({
+        id: NOTICE_ID,
+        type: 'phone_call',
+        body: {
+          title: 'Athena updated one task',
+          action: 'undo',
+          voiceSessionId: 'voice_1',
+          changes: [{ changeSetId: 'change_1' }],
+        },
+      }),
+    ]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+
+    expect(onUndoPhoneChange).toHaveBeenCalledWith(NOTICE_ID, 'voice_1', 'change_1');
   });
 });

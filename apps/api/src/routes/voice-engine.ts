@@ -80,6 +80,8 @@ export interface VoiceToolOutcome {
    * and a voice channel has no place to hide one.
    */
   readonly summary: string;
+  /** Durable undo record when the tool changed work. */
+  readonly changeSetId?: string;
 }
 
 /** The port every tool the voice channel can call lives behind. */

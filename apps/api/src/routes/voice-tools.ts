@@ -21,8 +21,13 @@ import { and, desc, eq, ilike, isNull } from 'drizzle-orm';
 
 import { encodeListCursor, seekAfter } from '../lib/list-cursor';
 import { resolveLandingTarget } from '../lib/task-landing';
-import { setTaskState } from '../lib/task-state';
+import {
+  applySubtaskCompletionPolicy,
+  finishTaskStateTransition,
+  writeTaskStateTransition,
+} from '../lib/task-state';
 import { loadStatusSets } from '../lib/work-status';
+import { recordChangeSetInTransaction, trackedFields } from '../mcp/change-set';
 
 import { buildTaskViewFilter } from './task-helpers';
 import type {
@@ -131,9 +136,10 @@ export class DocketVoiceToolRunner implements VoiceToolRunner {
         summary: 'I need to know which workspace this belongs to before I can add it.',
       };
     }
+    const organizationId = ctx.organizationId;
     const actorId = ctx.initiatorActorId;
     if (!actorId) return unavailableActorOutcome();
-    const landing = await resolveLandingTarget(ctx.organizationId, actorId);
+    const landing = await resolveLandingTarget(organizationId, actorId);
     if (!landing) {
       return {
         ok: false,
@@ -143,7 +149,7 @@ export class DocketVoiceToolRunner implements VoiceToolRunner {
     const contribution = await canActor(
       actorId,
       'contribute',
-      { kind: 'team', id: landing.teamId, orgId: ctx.organizationId },
+      { kind: 'team', id: landing.teamId, orgId: organizationId },
       db,
     );
     if (!contribution.allow) {
@@ -153,32 +159,49 @@ export class DocketVoiceToolRunner implements VoiceToolRunner {
       };
     }
     const notes = stringArg(args, 'notes');
-    const [created] = await db
-      .insert(task)
-      .values({
-        organizationId: ctx.organizationId,
-        title,
-        ...(notes ? { description: notes } : {}),
-        teamId: landing.teamId,
-        statusId: landing.statusId,
-        state: landing.state,
-        assigneeId: landing.assigneeId,
-        cycleId: landing.cycleId,
-        source: 'native',
-        createdBy: actorId,
-      })
-      .returning({ id: task.id });
+    const created = await db.transaction(async (tx) => {
+      const [row] = await tx
+        .insert(task)
+        .values({
+          organizationId,
+          title,
+          ...(notes ? { description: notes } : {}),
+          teamId: landing.teamId,
+          statusId: landing.statusId,
+          state: landing.state,
+          assigneeId: landing.assigneeId,
+          cycleId: landing.cycleId,
+          source: 'native',
+          createdBy: actorId,
+        })
+        .returning();
+      if (!row) return null;
+      const summary = `Added “${title}”.`;
+      const changeSetId = await recordChangeSetInTransaction(tx, {
+        orgId: organizationId,
+        actorId,
+        origin: { client: 'athena-phone', sessionId: ctx.voiceSessionId, tool: 'create_task' },
+        summary,
+        changes: [{ kind: 'task', id: row.id, op: 'create', after: trackedFields('task', row) }],
+      });
+      return { summary, changeSetId };
+    });
     if (!created) return { ok: false, summary: 'I couldn’t save that one. Try me again.' };
-    return { ok: true, summary: `Added “${title}”.` };
+    return {
+      ok: true,
+      summary: created.summary,
+      ...(created.changeSetId ? { changeSetId: created.changeSetId } : {}),
+    };
   }
 
   private async listOpenTasks(ctx: VoiceSessionContext): Promise<VoiceToolOutcome> {
     if (!ctx.organizationId) {
       return { ok: false, summary: 'I need to know which workspace to look in.' };
     }
+    const organizationId = ctx.organizationId;
     const actorId = ctx.initiatorActorId;
     if (!actorId) return unavailableActorOutcome();
-    const canView = await buildTaskViewFilter(ctx.organizationId, actorId);
+    const canView = await buildTaskViewFilter(organizationId, actorId);
     const visible: { id: string; title: string; createdAt: Date }[] = [];
     let after: string | undefined;
 
@@ -199,7 +222,7 @@ export class DocketVoiceToolRunner implements VoiceToolRunner {
         .from(task)
         .where(
           and(
-            eq(task.organizationId, ctx.organizationId),
+            eq(task.organizationId, organizationId),
             isNull(task.completedAt),
             isNull(task.canceledAt),
             isNull(task.archivedAt),
@@ -238,9 +261,10 @@ export class DocketVoiceToolRunner implements VoiceToolRunner {
     if (!ctx.organizationId) {
       return { ok: false, summary: 'I need to know which workspace to look in.' };
     }
+    const organizationId = ctx.organizationId;
     const actorId = ctx.initiatorActorId;
     if (!actorId) return unavailableActorOutcome();
-    const canView = await buildTaskViewFilter(ctx.organizationId, actorId);
+    const canView = await buildTaskViewFilter(organizationId, actorId);
     const matches: {
       id: string;
       title: string;
@@ -269,7 +293,7 @@ export class DocketVoiceToolRunner implements VoiceToolRunner {
         .from(task)
         .where(
           and(
-            eq(task.organizationId, ctx.organizationId),
+            eq(task.organizationId, organizationId),
             isNull(task.completedAt),
             isNull(task.canceledAt),
             isNull(task.archivedAt),
@@ -304,7 +328,7 @@ export class DocketVoiceToolRunner implements VoiceToolRunner {
     const contribution = await canActor(
       actorId,
       'contribute',
-      { kind: 'task', id: match.id, orgId: ctx.organizationId },
+      { kind: 'task', id: match.id, orgId: organizationId },
       db,
     );
     if (!contribution.allow) {
@@ -313,7 +337,7 @@ export class DocketVoiceToolRunner implements VoiceToolRunner {
         summary: 'I can see that task, but I don’t have permission to close it.',
       };
     }
-    const statuses = await loadStatusSets(ctx.organizationId, {
+    const statuses = await loadStatusSets(organizationId, {
       entityTypes: ['task'],
       teamIds: [match.teamId],
     });
@@ -321,14 +345,55 @@ export class DocketVoiceToolRunner implements VoiceToolRunner {
       .for('task', match.teamId)
       .find((status) => status.category === 'completed');
     if (!completedStatus) return { ok: false, summary: 'I cannot close tasks in this workspace.' };
-    const completed = await setTaskState({
-      organizationId: ctx.organizationId,
-      taskId: match.id,
-      state: completedStatus.key,
-      actorId,
+    const completed = await db.transaction(async (tx) => {
+      const [current] = await tx
+        .select()
+        .from(task)
+        .where(
+          and(
+            eq(task.id, match.id),
+            eq(task.organizationId, organizationId),
+            isNull(task.archivedAt),
+            isNull(task.completedAt),
+          ),
+        )
+        .for('update');
+      if (!current) return null;
+      const mutation = await writeTaskStateTransition(tx, {
+        before: current,
+        statusId: completedStatus.id,
+        state: completedStatus.key,
+        completedAt: new Date(),
+        canceledAt: null,
+      });
+      if (!mutation) return null;
+      const cascades = await applySubtaskCompletionPolicy(tx, mutation);
+      const summary = `Closed “${match.title}”.`;
+      const changeSetId = await recordChangeSetInTransaction(tx, {
+        orgId: organizationId,
+        actorId,
+        origin: { client: 'athena-phone', sessionId: ctx.voiceSessionId, tool: 'complete_task' },
+        summary,
+        changes: [mutation, ...cascades].map((change) => ({
+          kind: 'task' as const,
+          id: change.after.id,
+          op: 'update' as const,
+          before: trackedFields('task', change.before),
+          after: trackedFields('task', change.after),
+        })),
+      });
+      return { mutation, cascades, summary, changeSetId };
     });
     if (!completed) return { ok: false, summary: 'I could not close that task.' };
-    return { ok: true, summary: `Closed “${match.title}”.` };
+    await finishTaskStateTransition({ actorId }, completed.mutation);
+    for (const cascade of completed.cascades) {
+      await finishTaskStateTransition({ actorId: null }, cascade);
+    }
+    return {
+      ok: true,
+      summary: completed.summary,
+      ...(completed.changeSetId ? { changeSetId: completed.changeSetId } : {}),
+    };
   }
 }
 

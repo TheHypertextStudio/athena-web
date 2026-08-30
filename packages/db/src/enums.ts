@@ -443,6 +443,7 @@ export const notificationType = pgEnum('notification_type', [
   'connector_needs_reauth',
   'automation',
   'service_announcement',
+  'phone_call',
 ]);
 
 /** Principal kind that created a notification service intent. */

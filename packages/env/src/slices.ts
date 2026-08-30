@@ -289,6 +289,8 @@ export const voiceServer = {
   TWILIO_AUTH_TOKEN: z.string().min(1).optional(),
   /** The E.164 number people call to reach Athena. */
   TWILIO_PHONE_NUMBER: z.string().min(1).optional(),
+  /** Verify service that owns phone-linking codes and fraud controls. */
+  TWILIO_VERIFY_SERVICE_SID: z.string().min(1).optional(),
 };
 
 /** Cron secret, observability, blob/export storage, and transactional email. */

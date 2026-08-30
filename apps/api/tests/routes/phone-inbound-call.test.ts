@@ -15,6 +15,8 @@ import type * as DbModule from '@docket/db';
 import { and, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
+import { startCallbackForInboundCall } from '../../src/routes/phone-call-authorization';
+import { CaptureTelephonyProvider } from '../../src/routes/twilio-telephony';
 import type * as DirectoryModule from '../../src/routes/phone-directory';
 import type * as TwilioModule from '../../src/routes/twilio-voice';
 import type * as VoiceServiceModule from '../../src/routes/voice-session-service';
@@ -168,9 +170,161 @@ describe('caller id resolution', () => {
 });
 
 describe('inbound call disposition', () => {
+  it('asks for one DTMF digit and submits empty timeouts to the signed digit route', () => {
+    const twiml = twilio.callbackGatherTwiml('auth_123');
+    expect(twiml).toContain('input="dtmf"');
+    expect(twiml).toContain('numDigits="1"');
+    expect(twiml).toContain('timeout="8"');
+    expect(twiml).toContain('actionOnEmptyResult="true"');
+    expect(twiml).toContain('/callback/auth_123/digit');
+  });
+
+  it('creates a callback authorization instead of opening context for a weakly attested call', async () => {
+    const caller = await seedCaller({ lifecycleState: 'active' });
+    const before = await footprint(caller.userId);
+
+    const decision = await twilio.decideInboundCall({
+      From: caller.e164,
+      CallSid: 'CA_callback_weak',
+      StirVerstat: 'TN-Validation-Passed-B',
+    });
+
+    expect(decision.disposition).toBe('callback-pending');
+    expect(decision.twiml).toContain('call you right back');
+    expect(decision.twiml).not.toContain('<ConversationRelay');
+    expect(decision.voiceSessionId).toBeUndefined();
+    expect(await footprint(caller.userId)).toEqual(before);
+    const [authorization] = await db
+      .select()
+      .from(schema.phoneCallAuthorization)
+      .where(eq(schema.phoneCallAuthorization.inboundCallSid, 'CA_callback_weak'));
+    expect(authorization).toMatchObject({
+      phoneNumberId: caller.numberId,
+      destinationE164: caller.e164,
+      source: 'weak_inbound',
+      state: 'awaiting_hangup',
+    });
+  });
+
+  it('opens the restricted session only after digit 1 on the expected callback', async () => {
+    const caller = await seedCaller({ lifecycleState: 'active' });
+    await twilio.decideInboundCall({
+      From: caller.e164,
+      CallSid: 'CA_callback_confirm',
+      StirVerstat: 'TN-Validation-Passed-B',
+    });
+    const [authorization] = await db
+      .select()
+      .from(schema.phoneCallAuthorization)
+      .where(eq(schema.phoneCallAuthorization.inboundCallSid, 'CA_callback_confirm'));
+    if (!authorization) throw new Error('callback authorization missing');
+    const telephony = new CaptureTelephonyProvider();
+    await startCallbackForInboundCall('CA_callback_confirm', telephony);
+
+    const refused = await twilio.confirmCallbackAuthorization(
+      authorization.id,
+      'CA_wrong_leg',
+      '1',
+    );
+    expect(refused.disposition).toBe('callback-refused');
+    expect(await footprint(caller.userId)).toMatchObject({ sessions: 0, activities: 0 });
+
+    const connected = await twilio.confirmCallbackAuthorization(
+      authorization.id,
+      telephony.placedCallSids[0] ?? '',
+      '1',
+    );
+    expect(connected.disposition).toBe('connected');
+    expect(connected.twiml).toContain('<ConversationRelay');
+    const [session] = await db
+      .select()
+      .from(schema.voiceSession)
+      .where(eq(schema.voiceSession.id, connected.voiceSessionId ?? ''));
+    expect(session?.authorizationMethod).toBe('callback');
+    const duplicate = await twilio.confirmCallbackAuthorization(
+      authorization.id,
+      telephony.placedCallSids[0] ?? '',
+      '1',
+    );
+    expect(duplicate.voiceSessionId).toBe(connected.voiceSessionId);
+    const sessions = await db
+      .select({ id: schema.voiceSession.id })
+      .from(schema.voiceSession)
+      .where(eq(schema.voiceSession.callSid, telephony.placedCallSids[0] ?? ''));
+    expect(sessions).toHaveLength(1);
+    if (connected.voiceSessionId) {
+      await voiceService.closeVoiceSession(connected.voiceSessionId, 'caller_hung_up');
+    }
+  });
+
+  it('rejects a wrong digit and records a stable failure without opening a session', async () => {
+    const caller = await seedCaller({ lifecycleState: 'active' });
+    await twilio.decideInboundCall({ From: caller.e164, CallSid: 'CA_callback_wrong_digit' });
+    const [authorization] = await db
+      .select()
+      .from(schema.phoneCallAuthorization)
+      .where(eq(schema.phoneCallAuthorization.inboundCallSid, 'CA_callback_wrong_digit'));
+    if (!authorization) throw new Error('callback authorization missing');
+    const telephony = new CaptureTelephonyProvider();
+    await startCallbackForInboundCall('CA_callback_wrong_digit', telephony);
+
+    const refused = await twilio.confirmCallbackAuthorization(
+      authorization.id,
+      telephony.placedCallSids[0] ?? '',
+      '7',
+    );
+
+    expect(refused.disposition).toBe('callback-refused');
+    expect(await footprint(caller.userId)).toMatchObject({ sessions: 0, activities: 0 });
+    const [failed] = await db
+      .select()
+      .from(schema.phoneCallAuthorization)
+      .where(eq(schema.phoneCallAuthorization.id, authorization.id));
+    expect(failed).toMatchObject({ state: 'failed', failureReason: 'confirmation_rejected' });
+  });
+
+  it('expires a callback before accepting its confirmation digit', async () => {
+    const caller = await seedCaller({ lifecycleState: 'active' });
+    const startedAt = new Date('2026-08-30T12:00:00.000Z');
+    await twilio.decideInboundCall(
+      { From: caller.e164, CallSid: 'CA_callback_expired' },
+      startedAt,
+    );
+    const [authorization] = await db
+      .select()
+      .from(schema.phoneCallAuthorization)
+      .where(eq(schema.phoneCallAuthorization.inboundCallSid, 'CA_callback_expired'));
+    if (!authorization) throw new Error('callback authorization missing');
+    const telephony = new CaptureTelephonyProvider();
+    await startCallbackForInboundCall(
+      'CA_callback_expired',
+      telephony,
+      new Date('2026-08-30T12:00:10.000Z'),
+    );
+
+    const refused = await twilio.confirmCallbackAuthorization(
+      authorization.id,
+      telephony.placedCallSids[0] ?? '',
+      '1',
+      new Date('2026-08-30T12:05:01.000Z'),
+    );
+
+    expect(refused.disposition).toBe('callback-refused');
+    expect(await footprint(caller.userId)).toMatchObject({ sessions: 0, activities: 0 });
+    const [expired] = await db
+      .select()
+      .from(schema.phoneCallAuthorization)
+      .where(eq(schema.phoneCallAuthorization.id, authorization.id));
+    expect(expired).toMatchObject({ state: 'expired', failureReason: 'authorization_expired' });
+  });
+
   it('connects an entitled caller and binds the call to their one conversation', async () => {
     const caller = await seedCaller({ lifecycleState: 'active' });
-    const decision = await twilio.decideInboundCall({ From: caller.e164, CallSid: 'CA_connect_1' });
+    const decision = await twilio.decideInboundCall({
+      From: caller.e164,
+      CallSid: 'CA_connect_1',
+      StirVerstat: 'TN-Validation-Passed-A',
+    });
 
     expect(decision.disposition).toBe('connected');
     expect(decision.twiml).toContain('<ConversationRelay');
@@ -232,7 +386,11 @@ describe('inbound call disposition', () => {
       .update(schema.organizationProductEntitlement)
       .set({ status: 'active' })
       .where(eq(schema.organizationProductEntitlement.organizationId, caller.orgId));
-    const second = await twilio.decideInboundCall({ From: caller.e164, CallSid: 'CA_cycle_2' });
+    const second = await twilio.decideInboundCall({
+      From: caller.e164,
+      CallSid: 'CA_cycle_2',
+      StirVerstat: 'TN-Validation-Passed-A',
+    });
     expect(second.disposition).toBe('connected');
     if (second.voiceSessionId) {
       await voiceService.closeVoiceSession(second.voiceSessionId, 'caller_hung_up');
@@ -266,7 +424,11 @@ describe('inbound call disposition', () => {
 
   it('stamps the number so a stale binding is visible', async () => {
     const caller = await seedCaller({});
-    const decision = await twilio.decideInboundCall({ From: caller.e164, CallSid: 'CA_stamp_1' });
+    const decision = await twilio.decideInboundCall({
+      From: caller.e164,
+      CallSid: 'CA_stamp_1',
+      StirVerstat: 'TN-Validation-Passed-A',
+    });
     const [number] = await db
       .select()
       .from(schema.phoneNumber)
@@ -275,5 +437,41 @@ describe('inbound call disposition', () => {
     if (decision.voiceSessionId) {
       await voiceService.closeVoiceSession(decision.voiceSessionId, 'caller_hung_up');
     }
+  });
+
+  it('revokes the live engine and provider call when phone access is paused', async () => {
+    const caller = await seedCaller({});
+    const decision = await twilio.decideInboundCall({
+      From: caller.e164,
+      CallSid: 'CA_revoke_live',
+      StirVerstat: 'TN-Validation-Passed-A',
+    });
+    if (!decision.voiceSessionId) throw new Error('expected connected call');
+    const telephony = new CaptureTelephonyProvider();
+
+    await voiceService.revokePhoneAccess(caller.numberId, telephony);
+
+    expect(voiceService.liveVoiceSession(decision.voiceSessionId)).toBeNull();
+    expect(telephony.endedCallSids).toEqual(['CA_revoke_live']);
+    const [row] = await db
+      .select()
+      .from(schema.voiceSession)
+      .where(eq(schema.voiceSession.id, decision.voiceSessionId));
+    expect(row).toMatchObject({ status: 'ended', endedReason: 'phone_access_revoked' });
+  });
+
+  it('keeps a live session open for non-terminal Twilio call statuses', async () => {
+    const caller = await seedCaller({});
+    const decision = await twilio.decideInboundCall({
+      From: caller.e164,
+      CallSid: 'CA_status_ringing',
+      StirVerstat: 'TN-Validation-Passed-A',
+    });
+    if (!decision.voiceSessionId) throw new Error('expected connected call');
+
+    await twilio.handleCallStatus('CA_status_ringing', 'answered', new CaptureTelephonyProvider());
+
+    expect(voiceService.liveVoiceSession(decision.voiceSessionId)).not.toBeNull();
+    await voiceService.closeVoiceSession(decision.voiceSessionId, 'caller_hung_up');
   });
 });

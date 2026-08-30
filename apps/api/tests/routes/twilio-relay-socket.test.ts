@@ -184,6 +184,25 @@ describe('relaySocketHandlers — the post-setup message loop', () => {
 
     expect(receive).not.toHaveBeenCalled();
   });
+
+  it('rechecks authorization before every command and closes a revoked socket', async () => {
+    const socket = fakeSocket();
+    const receive = vi.fn();
+    const session = fakeLiveSession(receive);
+    const lookup = vi.fn().mockReturnValueOnce(session).mockReturnValue(null);
+    const handlers = relaySocketHandlers(socket, lookup);
+    await handlers.onMessage(
+      JSON.stringify({ type: 'setup', customParameters: { voiceSessionId: 'vs_fake' } }),
+    );
+
+    await handlers.onMessage(
+      JSON.stringify({ type: 'prompt', voicePrompt: 'List my tasks', lang: 'en-US', last: true }),
+    );
+
+    expect(lookup).toHaveBeenLastCalledWith('vs_fake');
+    expect(receive).not.toHaveBeenCalled();
+    expect(socket.close).toHaveBeenCalledWith(1008);
+  });
 });
 
 describe('relaySocketHandlers — onClose', () => {

@@ -283,6 +283,9 @@ export const DIAL_CODES: readonly DialCodeOption[] = [
 /** The dial code preselected when a person has never bound a number. */
 export const DEFAULT_DIAL_CODE = '1';
 
+/** Countries whose national-number rules Athena v1 validates for phone linking. */
+export const SUPPORTED_PHONE_COUNTRIES = DIAL_CODES.filter((country) => country.iso2 === 'US');
+
 /** Every dial code the selector offers, deduplicated — the server's allowlist. */
 export const ALLOWED_DIAL_CODES: ReadonlySet<string> = new Set(DIAL_CODES.map((d) => d.dialCode));
 
@@ -381,6 +384,8 @@ export const PhoneNumberOut = z
     /** True when Athena will answer calls from this number. */
     callingEnabled: z.boolean(),
     verifiedAt: z.string().nullable(),
+    /** When this binding most recently reached Athena by phone. */
+    lastCalledAt: z.string().nullable(),
     createdAt: z.string(),
     /** The outstanding code's limits, or null when no code is awaiting entry. */
     challenge: PhoneChallengeSummary.nullable(),
@@ -394,10 +399,25 @@ export type PhoneNumberOut = z.infer<typeof PhoneNumberOut>;
 
 /** The caller's bound phone numbers. */
 export const PhoneNumberListOut = z
-  .object({ items: z.array(PhoneNumberOut) })
+  .object({
+    /** Docket-owned destination people call, or null while telephony is unavailable. */
+    athenaNumber: E164.nullable(),
+    items: z.array(PhoneNumberOut),
+  })
   .meta({ id: 'PhoneNumberListOut', description: 'Phone numbers bound to the account.' });
 /** Phone-number-list-out value. */
 export type PhoneNumberListOut = z.infer<typeof PhoneNumberListOut>;
+
+/** An authenticated outbound callback requested from Docket. */
+export const PhoneCallOut = z
+  .object({
+    authorizationId: z.string(),
+    state: z.enum(['dialing', 'failed']),
+    expiresAt: z.string(),
+  })
+  .meta({ id: 'PhoneCallOut', description: 'State of an authenticated Athena callback.' });
+/** Phone-call-out value. */
+export type PhoneCallOut = z.infer<typeof PhoneCallOut>;
 
 /**
  * Bind a new phone number: a country choice plus the number as typed nationally.

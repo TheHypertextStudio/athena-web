@@ -44,6 +44,7 @@ const NOTIFICATION_KIND: Record<NotificationType, NotificationKindMeta> = {
   connector_needs_reauth: { icon: Cable, label: 'Reconnect needed' },
   automation: { icon: Sparkles, label: 'Automation' },
   service_announcement: { icon: MessageSquare, label: 'Service announcement' },
+  phone_call: { icon: Sparkles, label: 'Athena phone call' },
 };
 
 /**
@@ -69,6 +70,45 @@ export function notificationKind(type: NotificationType): NotificationKindMeta {
  */
 export function isApproval(type: NotificationType): boolean {
   return type === 'approval_request';
+}
+
+/** Inline action carried by a server-authored Athena phone notification. */
+export type PhoneNotificationAction =
+  | { readonly kind: 'call_me'; readonly phoneNumberId: string }
+  | {
+      readonly kind: 'undo';
+      readonly voiceSessionId: string;
+      readonly changeSetId: string;
+    }
+  | { readonly kind: 'review' };
+
+/** Parse only the closed set of phone actions the Inbox knows how to execute. */
+export function phoneNotificationAction(
+  notification: NotificationOut,
+): PhoneNotificationAction | null {
+  if (notification.type !== 'phone_call') return null;
+  const action = notification.body['action'];
+  if (action === 'call_me') {
+    const phoneNumberId = notification.body['phoneNumberId'];
+    return typeof phoneNumberId === 'string' ? { kind: 'call_me', phoneNumberId } : null;
+  }
+  if (action === 'review') return { kind: 'review' };
+  if (action !== 'undo') return null;
+  const voiceSessionId = notification.body['voiceSessionId'];
+  const changes = notification.body['changes'];
+  if (typeof voiceSessionId !== 'string' || !Array.isArray(changes) || changes.length !== 1) {
+    return null;
+  }
+  const safeChanges: unknown[] = changes;
+  const change = safeChanges[0];
+  if (typeof change !== 'object' || change === null) return null;
+  const changeSetId = (change as Record<string, unknown>)['changeSetId'];
+  return typeof changeSetId === 'string' ? { kind: 'undo', voiceSessionId, changeSetId } : null;
+}
+
+/** Whether an unread notification belongs in the Inbox's Needs action lane. */
+export function notificationNeedsAction(notification: NotificationOut): boolean {
+  return isApproval(notification.type) || phoneNotificationAction(notification) !== null;
 }
 
 /**

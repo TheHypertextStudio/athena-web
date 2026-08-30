@@ -4,7 +4,7 @@ import type { AuditEventOut, NotificationOut } from '@docket/types';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 
-import { isApproval } from '@/components/inbox/notification-meta';
+import { isApproval, notificationNeedsAction } from '@/components/inbox/notification-meta';
 import type { SegmentDef } from '@/components/inbox/segmented-tabs';
 import { api } from '@/lib/api';
 import { userErrorMessage, readProblemError } from '@/lib/problem';
@@ -37,6 +37,8 @@ export interface InboxPageData {
   /** Force a re-fetch (error-state retry). */
   refetch: () => void;
   onApprove: (id: string) => Promise<void>;
+  onCallMe: (id: string, phoneNumberId: string) => Promise<void>;
+  onUndoPhoneChange: (id: string, voiceSessionId: string, changeSetId: string) => Promise<void>;
   onMarkRead: (id: string) => Promise<void>;
   onMarkAllRead: () => Promise<void>;
 }
@@ -156,6 +158,62 @@ export function useInboxPage(): InboxPageData {
     [refreshInbox, setPending],
   );
 
+  const onCallMe = useCallback(
+    async (id: string, phoneNumberId: string): Promise<void> => {
+      setActionError(null);
+      setPending(id, true);
+      try {
+        const call = await api.v1.me['phone-numbers'][':id'].call.$post({
+          param: { id: phoneNumberId },
+        });
+        if (!call.ok) {
+          setActionError(
+            userErrorMessage(
+              await readProblemError(call, 'Could not start the call.'),
+              'Could not start the call.',
+            ),
+          );
+          return;
+        }
+        await api.v1.notifications[':id'].read.$post({ param: { id } });
+        await refreshInbox();
+      } catch (caught) {
+        setActionError(userErrorMessage(caught, 'Could not start the call.'));
+      } finally {
+        setPending(id, false);
+      }
+    },
+    [refreshInbox, setPending],
+  );
+
+  const onUndoPhoneChange = useCallback(
+    async (id: string, voiceSessionId: string, changeSetId: string): Promise<void> => {
+      setActionError(null);
+      setPending(id, true);
+      try {
+        const undone = await api.v1.me.athena.voice[':id'].changes[':changeSetId'].undo.$post({
+          param: { id: voiceSessionId, changeSetId },
+        });
+        if (!undone.ok) {
+          setActionError(
+            userErrorMessage(
+              await readProblemError(undone, 'That change can no longer be undone.'),
+              'That change can no longer be undone.',
+            ),
+          );
+          return;
+        }
+        await api.v1.notifications[':id'].read.$post({ param: { id } });
+        await refreshInbox();
+      } catch (caught) {
+        setActionError(userErrorMessage(caught, 'That change can no longer be undone.'));
+      } finally {
+        setPending(id, false);
+      }
+    },
+    [refreshInbox, setPending],
+  );
+
   const onMarkAllRead = useCallback(async (): Promise<void> => {
     setActionError(null);
     setMarkingAll(true);
@@ -208,14 +266,18 @@ export function useInboxPage(): InboxPageData {
       {
         id: 'needs_action',
         label: 'Needs action',
-        count: pendingApprovals,
-        emphasis: pendingApprovals > 0,
+        count: notifications.filter(
+          (notification) => !notification.readAt && notificationNeedsAction(notification),
+        ).length,
+        emphasis: notifications.some(
+          (notification) => !notification.readAt && notificationNeedsAction(notification),
+        ),
       },
       { id: 'announcements', label: 'Announcements', count: announcementCount },
       { id: 'mentions', label: 'Mentions & assignments', count: mentionsCount },
       { id: 'activity', label: 'Activity' },
     ],
-    [announcementCount, mentionsCount, notifications.length, pendingApprovals, unreadCount],
+    [announcementCount, mentionsCount, notifications, unreadCount],
   );
 
   return {
@@ -237,6 +299,8 @@ export function useInboxPage(): InboxPageData {
       void activityQ.refetch();
     },
     onApprove,
+    onCallMe,
+    onUndoPhoneChange,
     onMarkRead,
     onMarkAllRead,
   };

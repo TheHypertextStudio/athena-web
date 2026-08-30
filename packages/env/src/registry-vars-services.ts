@@ -340,4 +340,13 @@ export const SERVICE_VARS: readonly VarSpec[] = [
     zod: voiceServer.TWILIO_PHONE_NUMBER,
     where: 'The E.164 number people call to reach Athena',
   },
+  {
+    name: 'TWILIO_VERIFY_SERVICE_SID',
+    slice: 'voice',
+    scope: 'server',
+    targets: ['api'],
+    required: false,
+    zod: voiceServer.TWILIO_VERIFY_SERVICE_SID,
+    where: 'Twilio Verify service that owns Athena phone-linking challenges',
+  },
 ] as const;

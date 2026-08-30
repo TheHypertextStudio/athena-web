@@ -5,9 +5,10 @@
  * This module exists because the previous phone flow in this codebase generated a one-time code
  * and then never sent it anywhere, which made verification structurally impossible: a real person
  * could not verify a real number, ever. The fix is not "also call the SMS sender" — it is to make
- * **the send the thing that creates the challenge**, so a challenge that was never delivered
- * cannot exist as an outstanding one. {@link issueChallenge} writes the row only after the
- * transport accepts the message, and records `deliveryFailed` when it does not.
+ * **the send the thing that creates the challenge**. {@link issueChallenge} reserves the durable
+ * Docket limit before it asks the provider to send. It then records whether the provider accepted
+ * the request, so concurrent sends cannot bypass the limit and failed delivery never grants
+ * verification.
  *
  * Four limits, all enforced here and all readable by the caller so the UI can state them:
  *
@@ -18,14 +19,15 @@
  * | resend gap | 60 seconds | stops a "resend" button from becoming an SMS cannon aimed at someone else's phone |
  * | sends per hour | 5 per number | caps the cost and the harassment of enumerating numbers |
  *
- * The code is compared with a **timing-safe** equality over its SHA-256, and the attempt counter
- * is incremented *before* the comparison, so an attacker cannot get a free guess by disconnecting.
+ * Legacy codes are compared with a timing-safe equality over their SHA-256. The attempt counter is
+ * incremented before either provider path runs, so an attacker cannot get a free guess by
+ * disconnecting.
  *
  * @see {@link ../../../../docs/engineering/specs/voice-and-phone.md} §"Phone verification"
  */
 import { createHash, randomInt, timingSafeEqual } from 'node:crypto';
 
-import { db, phoneNumber, phoneVerification } from '@docket/db';
+import { db, phoneNumber, phoneVerification, phoneVerificationRateLock } from '@docket/db';
 import type { SmsSender } from '@docket/integrations';
 import {
   PHONE_VERIFICATION_MAX_ATTEMPTS,
@@ -34,9 +36,12 @@ import {
   PHONE_VERIFICATION_SEND_WINDOW_MS,
   PHONE_VERIFICATION_TTL_MS,
 } from '@docket/athena/phone';
-import { and, desc, eq, gt, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, isNull, lt, sql } from 'drizzle-orm';
 
 import { ConflictError, NotFoundError } from '../error';
+import { hasSqlState } from '../lib/sql-state';
+
+import type { PhoneVerificationProvider } from './phone-verification-provider';
 
 /** A row of {@link phoneVerification}. */
 export type PhoneVerificationRow = typeof phoneVerification.$inferSelect;
@@ -55,7 +60,8 @@ export type PhoneNumberRow = typeof phoneNumber.$inferSelect;
 export type ChallengeRefusal = 'resend-too-soon' | 'send-limit-reached';
 
 /** Why a submitted code was not accepted. */
-export type VerificationRefusal = 'no-challenge' | 'expired' | 'attempts-exhausted' | 'wrong-code';
+export type VerificationRefusal =
+  'no-challenge' | 'expired' | 'attempts-exhausted' | 'wrong-code' | 'provider-unavailable';
 
 /** The outcome of asking for a one-time code. */
 export type ChallengeResult =
@@ -73,6 +79,8 @@ export type VerificationResult =
 
 /** Everything {@link PhoneVerificationService} needs from the outside world. */
 export interface PhoneVerificationDeps {
+  /** Managed provider that owns new verification codes. */
+  readonly provider?: () => PhoneVerificationProvider;
   /**
    * How to reach the SMS transport. In local/test this resolves the capturing double, so no
    * account is needed.
@@ -84,7 +92,7 @@ export interface PhoneVerificationDeps {
    * and every method of this service, including the ones that only read, would then require the
    * ability to send.
    */
-  readonly sms: () => SmsSender;
+  readonly sms?: () => SmsSender;
   /** Injected clock; tests advance it rather than sleeping. */
   readonly now?: () => Date;
   /** Injected code generator; tests pin it so an assertion never depends on randomness. */
@@ -133,89 +141,129 @@ export class PhoneVerificationService {
    * Send a one-time code to a number and record the challenge it must answer.
    *
    * @remarks
-   * Order matters and is the point of this method. Limits are checked first; the previous
-   * outstanding challenge is invalidated next (so an old code can never be used after a resend);
-   * the SMS goes out; and only then is the new challenge persisted. If the transport throws, the
-   * challenge is still written but flagged `deliveryFailed`, because a person staring at a
-   * verification screen needs to be told the code is not coming rather than left waiting — and
-   * because the send still counted against the rate limit and must be recorded.
+   * Docket first locks the durable E.164 rate row and reserves the send. The provider call happens
+   * only after that transaction commits. Concurrent requests therefore see the reservation before
+   * either can send. Provider failures update the reserved challenge instead of erasing the cost.
    *
    * @param number - The phone number row being proven.
    * @returns the new challenge, or a refusal naming the limit that was hit.
    */
   async issueChallenge(number: PhoneNumberRow): Promise<ChallengeResult> {
     const now = this.now();
-    const recent = await db
-      .select({ createdAt: phoneVerification.createdAt })
-      .from(phoneVerification)
-      .where(
-        and(
-          eq(phoneVerification.phoneNumberId, number.id),
-          gt(
-            phoneVerification.createdAt,
-            new Date(now.getTime() - PHONE_VERIFICATION_SEND_WINDOW_MS),
-          ),
-        ),
-      )
-      .orderBy(desc(phoneVerification.createdAt));
+    const adapter = this.deps.provider?.();
+    const provider = adapter?.kind ?? 'legacy_sms';
+    const legacyCode = adapter ? null : this.generateCode();
+    const reserved = await db.transaction(async (tx): Promise<ChallengeResult> => {
+      await tx
+        .insert(phoneVerificationRateLock)
+        .values({ e164: number.e164, createdAt: now })
+        .onConflictDoNothing({ target: phoneVerificationRateLock.e164 });
+      await tx
+        .select({ e164: phoneVerificationRateLock.e164 })
+        .from(phoneVerificationRateLock)
+        .where(eq(phoneVerificationRateLock.e164, number.e164))
+        .for('update');
 
-    const last = recent[0];
-    if (last) {
-      const sinceLast = now.getTime() - last.createdAt.getTime();
-      if (sinceLast < PHONE_VERIFICATION_RESEND_INTERVAL_MS) {
+      const recent = await tx
+        .select({ createdAt: phoneVerification.createdAt })
+        .from(phoneVerification)
+        .where(
+          and(
+            eq(phoneVerification.e164, number.e164),
+            gt(
+              phoneVerification.createdAt,
+              new Date(now.getTime() - PHONE_VERIFICATION_SEND_WINDOW_MS),
+            ),
+          ),
+        )
+        .orderBy(desc(phoneVerification.createdAt));
+
+      const last = recent[0];
+      if (
+        last &&
+        now.getTime() - last.createdAt.getTime() < PHONE_VERIFICATION_RESEND_INTERVAL_MS
+      ) {
         return {
           ok: false,
           refusal: 'resend-too-soon',
           retryAt: new Date(last.createdAt.getTime() + PHONE_VERIFICATION_RESEND_INTERVAL_MS),
         };
       }
-    }
-    if (recent.length >= PHONE_VERIFICATION_MAX_SENDS) {
-      const oldest = recent[recent.length - 1];
-      return {
-        ok: false,
-        refusal: 'send-limit-reached',
-        retryAt: new Date(
-          (oldest?.createdAt.getTime() ?? now.getTime()) + PHONE_VERIFICATION_SEND_WINDOW_MS,
-        ),
-      };
-    }
+      if (recent.length >= PHONE_VERIFICATION_MAX_SENDS) {
+        const oldest = recent[recent.length - 1];
+        return {
+          ok: false,
+          refusal: 'send-limit-reached',
+          retryAt: new Date(
+            (oldest?.createdAt.getTime() ?? now.getTime()) + PHONE_VERIFICATION_SEND_WINDOW_MS,
+          ),
+        };
+      }
 
-    // A resend must retire the previous code. Without this, every resend widens the set of
-    // currently-valid codes, which is the opposite of what a person pressing "resend" expects.
-    await db
-      .update(phoneVerification)
-      .set({ invalidatedAt: now })
-      .where(
-        and(
-          eq(phoneVerification.phoneNumberId, number.id),
-          isNull(phoneVerification.consumedAt),
-          isNull(phoneVerification.invalidatedAt),
-        ),
-      );
+      await tx
+        .update(phoneVerification)
+        .set({ invalidatedAt: now })
+        .where(
+          and(
+            eq(phoneVerification.e164, number.e164),
+            isNull(phoneVerification.consumedAt),
+            isNull(phoneVerification.invalidatedAt),
+          ),
+        );
+      const [challenge] = await tx
+        .insert(phoneVerification)
+        .values({
+          userId: number.userId,
+          phoneNumberId: number.id,
+          e164: number.e164,
+          provider,
+          providerStatus: 'starting',
+          codeHash: legacyCode ? hashCode(legacyCode).toString('hex') : null,
+          expiresAt: new Date(now.getTime() + PHONE_VERIFICATION_TTL_MS),
+          maxAttempts: PHONE_VERIFICATION_MAX_ATTEMPTS,
+          createdAt: now,
+        })
+        .returning();
+      if (!challenge) throw new Error('phone verification insert returned no row');
+      return { ok: true, challenge };
+    });
+    if (!reserved.ok) return reserved;
 
-    const code = this.generateCode();
     let deliveryFailed = false;
-    try {
-      await this.deps.sms().send({ to: number.e164, body: verificationMessage(code) });
-    } catch {
-      // The provider's own words never reach a person or a log line here; the fact of failure is
-      // what the caller needs, and it is carried as a boolean.
-      deliveryFailed = true;
+    let providerChallengeId: string | null = null;
+    let providerStatus = 'pending';
+    if (adapter) {
+      try {
+        const started = await adapter.start(number.e164);
+        providerChallengeId = started.providerChallengeId;
+        providerStatus = started.status;
+        deliveryFailed = started.status !== 'pending';
+      } catch {
+        deliveryFailed = true;
+        providerStatus = 'failed';
+      }
+    } else {
+      try {
+        if (!this.deps.sms) throw new Error('phone verification provider is not configured');
+        if (!legacyCode) throw new Error('legacy phone verification code is missing');
+        await this.deps.sms().send({ to: number.e164, body: verificationMessage(legacyCode) });
+      } catch {
+        // The provider's own words never reach a person or a log line here; the fact of failure is
+        // what the caller needs, and it is carried as a boolean.
+        deliveryFailed = true;
+      }
     }
 
     const [challenge] = await db
-      .insert(phoneVerification)
-      .values({
-        phoneNumberId: number.id,
-        codeHash: hashCode(code).toString('hex'),
-        expiresAt: new Date(now.getTime() + PHONE_VERIFICATION_TTL_MS),
-        maxAttempts: PHONE_VERIFICATION_MAX_ATTEMPTS,
+      .update(phoneVerification)
+      .set({
+        providerChallengeId,
+        providerStatus,
         deliveryFailed,
-        createdAt: now,
       })
+      .where(eq(phoneVerification.id, reserved.challenge.id))
       .returning();
-    if (!challenge) throw new Error('phone verification insert returned no row');
+    if (!challenge) throw new Error('phone verification reservation disappeared');
     return { ok: true, challenge };
   }
 
@@ -257,11 +305,48 @@ export class PhoneVerificationService {
     const [counted] = await db
       .update(phoneVerification)
       .set({ attempts: sql`${phoneVerification.attempts} + 1` })
-      .where(eq(phoneVerification.id, challenge.id))
+      .where(
+        and(
+          eq(phoneVerification.id, challenge.id),
+          lt(phoneVerification.attempts, phoneVerification.maxAttempts),
+          isNull(phoneVerification.invalidatedAt),
+          isNull(phoneVerification.consumedAt),
+        ),
+      )
       .returning();
-    const attempts = counted?.attempts ?? challenge.attempts + 1;
+    if (!counted) {
+      return { ok: false, refusal: 'attempts-exhausted', attemptsRemaining: 0 };
+    }
+    const attempts = counted.attempts;
 
-    const matches = timingSafeEqual(hashCode(code), Buffer.from(challenge.codeHash, 'hex'));
+    let matches = false;
+    if (challenge.provider === 'legacy_sms') {
+      matches =
+        challenge.codeHash !== null &&
+        timingSafeEqual(hashCode(code), Buffer.from(challenge.codeHash, 'hex'));
+    } else if (this.deps.provider) {
+      try {
+        const checked = await this.deps.provider().check(number.e164, code);
+        await db
+          .update(phoneVerification)
+          .set({
+            providerChallengeId: checked.providerChallengeId,
+            providerStatus: checked.status,
+          })
+          .where(eq(phoneVerification.id, challenge.id));
+        matches = checked.status === 'approved';
+      } catch {
+        await db
+          .update(phoneVerification)
+          .set({ attempts: sql`greatest(${phoneVerification.attempts} - 1, 0)` })
+          .where(eq(phoneVerification.id, challenge.id));
+        return {
+          ok: false,
+          refusal: 'provider-unavailable',
+          attemptsRemaining: challenge.maxAttempts - challenge.attempts,
+        };
+      }
+    }
     if (!matches) {
       const remaining = Math.max(0, challenge.maxAttempts - attempts);
       if (remaining === 0) {
@@ -273,19 +358,26 @@ export class PhoneVerificationService {
       return { ok: false, refusal: 'wrong-code', attemptsRemaining: remaining };
     }
 
-    return await db.transaction(async (tx) => {
-      await tx
-        .update(phoneVerification)
-        .set({ consumedAt: now })
-        .where(eq(phoneVerification.id, challenge.id));
-      const [verified] = await tx
-        .update(phoneNumber)
-        .set({ status: 'verified', verifiedAt: now })
-        .where(eq(phoneNumber.id, number.id))
-        .returning();
-      if (!verified) throw new NotFoundError('Phone number not found');
-      return { ok: true, number: verified };
-    });
+    try {
+      return await db.transaction(async (tx) => {
+        await tx
+          .update(phoneVerification)
+          .set({ consumedAt: now })
+          .where(eq(phoneVerification.id, challenge.id));
+        const [verified] = await tx
+          .update(phoneNumber)
+          .set({ status: 'verified', verifiedAt: now })
+          .where(eq(phoneNumber.id, number.id))
+          .returning();
+        if (!verified) throw new NotFoundError('Phone number not found');
+        return { ok: true, number: verified };
+      });
+    } catch (error) {
+      if (hasSqlState(error, '23505')) {
+        throw new ConflictError('This phone number is linked to another account.');
+      }
+      throw error;
+    }
   }
 }
 

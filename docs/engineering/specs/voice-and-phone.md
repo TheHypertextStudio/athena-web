@@ -2,7 +2,7 @@
 
 > **Status**: implemented (browser channel and telephony front door), pending a live provisioned number
 > **Owner**: Athena / channels
-> **Last updated**: 2026-08-02
+> **Last updated**: 2026-08-30
 
 Athena can be spoken to. In a browser, and on the telephone. Both are the **same conversation** —
 the one `agent_session` of kind `chat` that `GET /v1/me/athena/chat` returns — and both run on the
@@ -282,8 +282,19 @@ last-7-digits fallback. A partial unique index — `phone_number_verified_unique
 number, so the lookup either finds exactly one account or finds none, and "none" cannot read or
 append to anybody's conversation because no user id is ever obtained.
 
-Caller id is spoofable. That is exactly why the match is exact, and why the voice tool surface is
-small enough that a spoofed call cannot do quiet damage.
+Caller ID is only a lookup key. It does not authenticate the speaker. A matched call enters the
+restricted phone surface directly only when Twilio sends the exact
+`TN-Validation-Passed-A` STIR/SHAKEN result. Every other result creates a durable callback
+authorization, announces the callback, and ends the inbound leg. The callback starts only after
+Twilio reports that inbound leg as completed. It dials only the E.164 snapshot copied from the
+verified `phone_number` row, and `<Gather>` must receive `1` on the expected outbound call SID
+before `openVoiceSession` runs.
+
+Callback authorizations expire after five minutes. One number may have one active callback, at
+least 60 seconds separate attempts, and no more than five attempts in a rolling hour. Two
+consecutive failures pause automatic callbacks for 15 minutes and create a caller-owned Inbox
+notification with a `Call me` action. The full transition state machine is in
+`diagrams/phone-call-authorization-state.md`.
 
 ### 9.5 Entitlement gating
 
@@ -322,16 +333,17 @@ Three properties, each tested:
 
 ### 9.7 Failure modes
 
-| failure                                   | behaviour                                                                                                                                                                                                      |
-| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| forged/unsigned webhook                   | `403`, no TwiML, nothing created                                                                                                                                                                               |
-| caller id withheld or malformed           | unrecognized announcement; no account reached                                                                                                                                                                  |
-| dropped call mid-turn                     | socket close → `session.end`; what was said up to that point is already persisted, because every turn is written as it happens rather than at hang-up                                                          |
-| socket dies without a close frame         | close code 1006 → `transport_closed` on the session row                                                                                                                                                        |
-| carrier leg fails after the webhook       | the `/status` callback closes the session                                                                                                                                                                      |
-| provider outage (realtime)                | `VoiceProviderUnavailableError(status)`; the browser panel shows `link-failed` copy                                                                                                                            |
-| process restart mid-call                  | the session ends — the audio link died with it. The transcript up to that instant is durable. This is a stated scope limit: a voice session is bound to one process for its lifetime, because its transport is |
-| SMS carrier refuses the verification code | the challenge is recorded with `deliveryFailed`, and the settings surface says the code is not coming rather than leaving the person waiting                                                                   |
+| failure                               | behaviour                                                                                                                                                                                                      |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| forged/unsigned webhook               | `403`, no TwiML, nothing created                                                                                                                                                                               |
+| caller id withheld or malformed       | unrecognized announcement; no account reached                                                                                                                                                                  |
+| dropped call mid-turn                 | socket close → `session.end`; what was said up to that point is already persisted, because every turn is written as it happens rather than at hang-up                                                          |
+| socket dies without a close frame     | close code 1006 → `transport_closed` on the session row                                                                                                                                                        |
+| weak or absent carrier attestation    | the inbound leg ends; a callback to the stored verified number asks for DTMF `1` before any session opens                                                                                                      |
+| carrier leg fails after the webhook   | only a terminal `/status` event closes the session; `initiated`, `ringing`, and `answered` leave it live                                                                                                       |
+| provider outage (realtime)            | `VoiceProviderUnavailableError(status)`; the browser panel shows `link-failed` copy                                                                                                                            |
+| process restart mid-call              | the session ends — the audio link died with it. The transcript up to that instant is durable. This is a stated scope limit: a voice session is bound to one process for its lifetime, because its transport is |
+| Twilio Verify refuses or cannot check | the provider result becomes an application-owned verification failure; no provider body or code reaches the UI                                                                                                 |
 
 ---
 
@@ -339,14 +351,19 @@ Three properties, each tested:
 
 `apps/api/src/routes/phone-verification.ts`. A number is a **credential**, so:
 
-- **The send creates the challenge.** The row is written after the transport accepts the message, so
-  a challenge that was never delivered cannot exist as an outstanding one. (The bug this replaces
-  generated a code and never sent it, making verification impossible for any real person.)
-- **Only a SHA-256 is stored**, compared with `timingSafeEqual`.
-- **The attempt is counted before the comparison**, so abandoning the request mid-flight does not
-  buy a free guess.
-- **A resend retires the previous code**, so pressing "resend" narrows the valid set rather than
-  widening it.
+- Production starts and checks codes through the Twilio Verify REST API. Docket never generates or
+  stores a new production code. Local development and tests use a capture provider.
+- Each attempt stores `userId` and normalized `e164` independently of the deletable phone binding.
+  Deleting and re-adding a pending number therefore does not reset the send history.
+- A durable row keyed by normalized E.164 is locked before a send is reserved. The reservation
+  commits before Docket calls Twilio, so concurrent requests cannot both pass a read-before-send
+  check. A provider failure still counts against the send budget because it still consumed a
+  provider attempt.
+- Legacy locally hashed challenges remain checkable until their original ten-minute expiry. Every
+  challenge created after deployment is provider-owned.
+- A provider outage while checking a code does not spend one of the person's five code guesses.
+  Docket rolls back the reserved check attempt and returns an application-owned retry failure.
+- Docket applies the table below before the provider call. Twilio may reject sooner.
 
 | limit          | value           | why                                                                                      |
 | -------------- | --------------- | ---------------------------------------------------------------------------------------- |
@@ -356,23 +373,49 @@ Three properties, each tested:
 | sends per hour | 5 per number    | caps the cost and the harassment of enumerating numbers                                  |
 
 The number is entered as a **country selection plus a national number** — `PhoneNumberCreate` has
-no `e164` field at all, so a client cannot submit an ambiguous string. Every read shape returns
-`+1 ••• ••• ••23`; the full national number is never returned, even to its owner, because a stolen
-session token must not become a directory.
+no `e164` field at all, so a client cannot submit an ambiguous string. Version 1 supports United
+States numbers only. Both the API schema and the country control enforce that scope. Athena must
+use a region-aware phone-number library before it expands beyond the United States. Every read
+shape returns `+1 ••• ••• ••23`; the full national number is never returned, even to its owner,
+because a stolen session token must not become a directory.
+
+Athena does not transfer a verified number between accounts automatically. A second account may
+prove that it currently receives a code, but that proof alone does not authorize Athena to revoke
+another account's credential without a transfer notice and audit policy. The API returns a stable
+conflict and leaves both rows unchanged. A future transfer flow must revoke the prior binding, end
+its calls, notify both accounts, and write the transfer audit in one transaction.
 
 `callingEnabled` is separate from `status`: pausing "Athena may answer calls from this number"
 must not throw away the proof of ownership, or every pause would cost another SMS round trip.
+Adding a number, checking its initial code, enabling calls, and deleting the number require a
+passkey-backed session no more than five minutes old. Pausing calls remains immediate. The web
+surface sends the request first and invokes passkey step-up only after the API returns the stable
+`reauth_required` code.
+
+## 10.1 Restricted phone access and post-call review
+
+The phone tool list contains only `create_task`, `list_open_tasks`, and `complete_task`. It has no
+document, settings, integration, deletion, or bulk-operation tool. The relay resolves the live
+session again before every command. Pausing or deleting a phone binding removes the local session
+first, cancels callback authorization, and then asks Twilio to end the provider leg.
+
+Every task mutation and its change set commit in one database transaction. Call end creates one
+idempotent `phone_call` Inbox notification. One change exposes `Undo` directly. Several changes
+expose `Review changes` and one Undo per row in a sheet over the canonical Athena conversation.
+Undo locks the recorded tasks and refuses the whole reversal when a later edit no longer matches
+the recorded after-state.
 
 ---
 
 ## 11. Ports, adapters, and running with zero external accounts
 
-| seam                     | real adapter                                                                                       | local/test double                                                      |
-| ------------------------ | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| realtime speech          | `OpenAiRealtimeProvider` — mints an ephemeral client secret via `POST /v1/realtime/client_secrets` | `MockRealtimeProvider` — a fixture credential with `transport: 'mock'` |
-| language model (phone)   | `AthenaVoiceResponder` over the container's `AgentTurnRuntime`                                     | the same class over `MockAgentTurnRuntime`                             |
-| SMS (verification codes) | the existing `RealSmsSender`                                                                       | the existing `CaptureSmsSender`                                        |
-| telephony                | the Twilio webhook + relay socket                                                                  | driven directly in tests; no account, no telephone                     |
+| seam                   | real adapter                                                                                       | local/test double                                                      |
+| ---------------------- | -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| realtime speech        | `OpenAiRealtimeProvider` — mints an ephemeral client secret via `POST /v1/realtime/client_secrets` | `MockRealtimeProvider` — a fixture credential with `transport: 'mock'` |
+| language model (phone) | `AthenaVoiceResponder` over the container's `AgentTurnRuntime`                                     | the same class over `MockAgentTurnRuntime`                             |
+| phone verification     | `TwilioVerifyProvider` over the Verify REST API                                                    | `CapturePhoneVerificationProvider`                                     |
+| outbound telephony     | `TwilioTelephony` over the Calls REST API                                                          | `CaptureTelephonyProvider`                                             |
+| inbound telephony      | signed Twilio webhooks plus ConversationRelay                                                      | signed route tests plus a scripted relay socket                        |
 
 `resolveVoiceProvider` always chooses the double in `local`/`test`, even if a real key is present —
 a developer's stray key must never turn a test run into a billed call.
@@ -392,21 +435,26 @@ All optional; absent means the doubles run.
 | `TWILIO_ACCOUNT_SID`                            | the account owning the Athena number                                                          |
 | `TWILIO_AUTH_TOKEN`                             | the key every inbound webhook signature is verified against                                   |
 | `TWILIO_PHONE_NUMBER`                           | the number people call                                                                        |
+| `TWILIO_VERIFY_SERVICE_SID`                     | the Verify service that owns production SMS challenges                                        |
+
+Production validates the two Twilio credentials, the Verify service SID, and the Docket phone
+number as one feature configuration before either production phone adapter can run.
 
 ---
 
 ## 12. What is live, and what is not
 
-**Live and tested.** The session engine and both adapters; the browser panel end to end against the
-fixture provider; phone verification with real delivery, expiry, attempt and rate limits; caller-id
-resolution in both directions; the entitlement gate with a zero-footprint assertion; the
-announcements; the TwiML; the ConversationRelay translation table; the WebSocket frame codec.
+**Implemented and tested locally.** The session engine; Twilio Verify and Calls REST adapters;
+legacy challenge compatibility; durable send limits; direct A-attested entry; weak-attestation
+callback confirmation; callback rate limits and cooldown notifications; revocation; restricted
+tools; transactional change sets; post-call review; and conflict-safe Undo.
 
 **Not verifiable here.** Placing a real telephone call. That needs a provisioned Twilio number and
 a live account, neither of which exists in this environment. The webhook, the TwiML, the socket and
 the engine are all exercised, but nobody has dialled the number, and this document does not claim
 otherwise.
 
-**Deliberately out of scope for launch.** Multi-party calls, outbound calls (Athena calling you),
-call recording, non-English languages beyond `<Language>` configuration, and voice access to the
-full MCP toolbox.
+**Deliberately out of scope for launch.** Android digital phone-number credentials, multi-party
+calls, call recording, non-English languages beyond `<Language>` configuration, and voice access
+to the full MCP toolbox. Digital credentials can improve initial linking where carriers support
+them. They do not authenticate the speaker on later PSTN calls.

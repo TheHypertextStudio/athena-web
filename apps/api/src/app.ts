@@ -26,6 +26,7 @@ import { createPhoneNumberRoutes } from './routes/phone-numbers';
 import { PhoneVerificationService } from './routes/phone-verification';
 import { createVoiceRoutes } from './routes/voice-sessions';
 import { getContainer } from './container';
+import { env } from './env';
 import type { AppEnv } from './context';
 import { bodyLimit } from 'hono/body-limit';
 import { etag } from 'hono/etag';
@@ -169,14 +170,10 @@ const notificationInbox = new NotificationInboxService(db);
 const notificationIntents = new NotificationIntentService(db);
 const notificationPreferences = new NotificationPreferenceService(db);
 const notificationContactPoints = new NotificationContactPointService(db);
-// Phone verification and voice both resolve their boundary adapters from the one container, so
-// local runs use the capturing SMS double and the fixture realtime provider with no accounts.
-// The port is passed as a thunk, like `createVoiceRoutes(() => getContainer().voice)` below:
-// `sms` is a lazy container value specifically so a deploy that never sends SMS isn't blocked by
-// credentials it doesn't have, and resolving it any earlier than the send itself would hand that
-// failure to every caller — including the ones that only read a challenge back.
+// Phone verification and voice resolve their boundary adapters from the one container. Local runs
+// use capture providers, while production resolves Twilio only when a request needs it.
 const createPhoneVerification = () =>
-  new PhoneVerificationService({ sms: () => getContainer().sms });
+  new PhoneVerificationService({ provider: () => getContainer().phoneVerification });
 
 /** The chained route tree; its type is the public RPC contract (consumed only via `typeof`). */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -200,7 +197,13 @@ const routes = app
     createNotificationPreferenceRoutes(notificationPreferences),
   )
   .route('/me/contact-points', createContactPointRoutes(notificationContactPoints))
-  .route('/me/phone-numbers', createPhoneNumberRoutes(createPhoneVerification))
+  .route(
+    '/me/phone-numbers',
+    createPhoneNumberRoutes(createPhoneVerification, {
+      telephony: () => getContainer().telephony,
+      athenaNumber: () => env.TWILIO_PHONE_NUMBER ?? null,
+    }),
+  )
   // Registered before `/me/athena` so the more specific voice prefix is matched first.
   .route(
     '/me/athena/voice',

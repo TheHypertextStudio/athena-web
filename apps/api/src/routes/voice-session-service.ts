@@ -16,9 +16,18 @@
  * behaviour, since the audio link died with it — and the transcript up to that moment is already
  * durable, because every turn was persisted as it happened rather than at hang-up.
  */
-import { actor, db, organization, sessionActivity, user, voiceSession } from '@docket/db';
+import {
+  actor,
+  db,
+  organization,
+  phoneCallAuthorization,
+  sessionActivity,
+  user,
+  voiceSession,
+} from '@docket/db';
 import type { VoiceChannel, VoiceEndReason, VoiceTurnOut } from '@docket/athena/voice';
-import { and, desc, eq, isNull } from 'drizzle-orm';
+import type { VoiceSessionAuthorizationMethod } from '@docket/db';
+import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 
 import { assertProductCapability } from '../product-capability';
 import { NotFoundError, ProductRequiredError } from '../error';
@@ -28,10 +37,12 @@ import { loadTranscript } from '../agent/transcript';
 import { getContainer } from '../container';
 
 import { resolveCanonicalConversation } from './agent-dispatch';
+import { publishPhoneCallSummary } from './phone-call-summary';
 import { VoiceSessionEngine, type VoiceSessionContext } from './voice-engine';
 import { voiceInstructions } from './voice-instructions';
 import { AthenaVoiceResponder } from './voice-responder';
 import type { VoiceProviderId } from './voice-provider';
+import type { TelephonyProvider } from './twilio-telephony';
 import { DatabaseVoiceTranscriptStore } from './voice-store';
 import { DocketVoiceToolRunner } from './voice-tools';
 
@@ -68,6 +79,10 @@ export interface OpenVoiceSessionInput {
   readonly callSid?: string | null;
   /** The verified number the call came from. */
   readonly phoneNumberId?: string | null;
+  /** Signal that authorized a phone session. */
+  readonly authorizationMethod?: VoiceSessionAuthorizationMethod | null;
+  /** Carrier attestation observed on inbound entry. */
+  readonly stirVerification?: string | null;
 }
 
 /** A freshly opened session. */
@@ -187,6 +202,8 @@ export async function openVoiceSession(input: OpenVoiceSessionInput): Promise<Op
       provider: input.provider,
       ...(input.callSid ? { callSid: input.callSid } : {}),
       ...(input.phoneNumberId ? { phoneNumberId: input.phoneNumberId } : {}),
+      ...(input.authorizationMethod ? { authorizationMethod: input.authorizationMethod } : {}),
+      ...(input.stirVerification ? { stirVerification: input.stirVerification } : {}),
     })
     .returning();
   /* v8 ignore next -- @preserve defensive: insert always returns a row */
@@ -299,6 +316,51 @@ export async function closeVoiceSession(
       .where(and(eq(voiceSession.id, voiceSessionId), eq(voiceSession.status, 'active')));
   }
   releaseVoiceSession(voiceSessionId);
+  await publishPhoneCallSummary(voiceSessionId);
+}
+
+/**
+ * End every live call and pending callback tied to one phone binding.
+ *
+ * Local authorization is removed before the provider request. A provider outage therefore cannot
+ * leave a cached relay able to run another tool after the user revoked access.
+ */
+export async function revokePhoneAccess(
+  phoneNumberId: string,
+  telephony: TelephonyProvider,
+): Promise<void> {
+  const sessions = await db
+    .select({ id: voiceSession.id, callSid: voiceSession.callSid })
+    .from(voiceSession)
+    .where(and(eq(voiceSession.phoneNumberId, phoneNumberId), eq(voiceSession.status, 'active')));
+  await db
+    .update(phoneCallAuthorization)
+    .set({ state: 'canceled', failureReason: 'phone_access_revoked', updatedAt: new Date() })
+    .where(
+      and(
+        eq(phoneCallAuthorization.phoneNumberId, phoneNumberId),
+        inArray(phoneCallAuthorization.state, [
+          'awaiting_hangup',
+          'dialing',
+          'awaiting_digit',
+          'authorized',
+          'connected',
+        ]),
+      ),
+    );
+  for (const session of sessions) {
+    await closeVoiceSession(session.id, 'phone_access_revoked');
+  }
+  const failures: string[] = [];
+  for (const session of sessions) {
+    if (!session.callSid) continue;
+    try {
+      await telephony.endCall(session.callSid);
+    } catch {
+      failures.push(session.callSid);
+    }
+  }
+  if (failures.length > 0) throw new Error('telephony provider could not end an active call');
 }
 
 /**

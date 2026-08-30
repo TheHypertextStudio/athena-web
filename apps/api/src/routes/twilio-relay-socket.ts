@@ -60,7 +60,7 @@ export function relaySocketHandlers(
   socket: RelaySocket,
   lookup: (voiceSessionId: string) => LiveVoiceSession | null = liveVoiceSession,
 ): SocketHandlers {
-  let session: LiveVoiceSession | null = null;
+  let voiceSessionId: string | null = null;
 
   return {
     async onMessage(raw: string): Promise<void> {
@@ -75,14 +75,20 @@ export function relaySocketHandlers(
 
       const setup = readSetup(message);
       if (setup) {
-        session = setup.voiceSessionId ? lookup(setup.voiceSessionId) : null;
+        voiceSessionId = setup.voiceSessionId ?? null;
+        const session = voiceSessionId ? lookup(voiceSessionId) : null;
         if (!session) {
           // No session means the webhook never authorized this call. There is nothing to say.
           socket.close(1008);
         }
         return;
       }
-      if (!session) return;
+      if (!voiceSessionId) return;
+      const session = lookup(voiceSessionId);
+      if (!session) {
+        socket.close(1008);
+        return;
+      }
 
       const event = toEngineEvent(message);
       if (!event) return;
@@ -90,6 +96,7 @@ export function relaySocketHandlers(
     },
 
     async onClose(code: number): Promise<void> {
+      const session = voiceSessionId ? lookup(voiceSessionId) : null;
       if (!session) return;
       await closeVoiceSession(session.ctx.voiceSessionId, endReasonForClose(code));
     },

@@ -11,8 +11,10 @@
 import type * as DbModule from '@docket/db';
 import { PHONE_VERIFICATION_TTL_MS } from '@docket/athena/phone';
 import { CaptureSmsSender } from '@docket/integrations';
+import { eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
+import { CaptureTelephonyProvider } from '../../src/routes/twilio-telephony';
 import type { createPhoneNumberRoutes as CreatePhoneNumberRoutes } from '../../src/routes/phone-numbers';
 import type { PhoneVerificationService as PhoneVerificationServiceClass } from '../../src/routes/phone-verification';
 import { appWithSession, fakeSession, getDb, seedUserWithHub } from '../support/routes-harness';
@@ -51,6 +53,7 @@ function fixedClock(start: number): { now: () => Date; advance: (ms: number) => 
 async function harness(label: string) {
   const userId = await seedUserWithHub(db, schema, label);
   const sms = new CaptureSmsSender();
+  const telephony = new CaptureTelephonyProvider();
   const clock = fixedClock(Date.UTC(2026, 7, 2, 9, 0, 0));
   const createVerification = () =>
     new PhoneVerificationService({
@@ -58,9 +61,12 @@ async function harness(label: string) {
       now: clock.now,
       generateCode: () => CODE,
     });
-  const routes = createPhoneNumberRoutes(createVerification);
+  const routes = createPhoneNumberRoutes(createVerification, {
+    telephony: () => telephony,
+    athenaNumber: () => '+17025550100',
+  });
   const app = appWithSession(routes, fakeSession(userId));
-  return { app, userId, sms, clock };
+  return { app, routes, userId, sms, telephony, clock };
 }
 
 interface ChallengeSummaryWire {
@@ -90,6 +96,72 @@ interface ChallengeWire {
 }
 
 describe('phone number routes', () => {
+  it('requires a fresh session before binding a phone credential', async () => {
+    const userId = await seedUserWithHub(db, schema, 'PhoneCreateStepUp');
+    const session = fakeSession(userId);
+    if (!session) throw new Error('expected fake session');
+    session.session.createdAt = new Date(Date.now() - 6 * 60 * 1000);
+    const routes = createPhoneNumberRoutes(
+      () =>
+        new PhoneVerificationService({
+          sms: () => new CaptureSmsSender(),
+          generateCode: () => CODE,
+        }),
+    );
+    const app = appWithSession(routes, session);
+
+    const response = await app.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ country: 'US', dialCode: '1', nationalNumber: '4155550101' }),
+    });
+
+    expect(response.status).toBe(401);
+    expect(await body<{ code: string }>(response)).toMatchObject({ code: 'reauth_required' });
+  });
+
+  it('requires freshness for verify, enable, and delete but lets a stale session pause calls', async () => {
+    const { app, routes, userId } = await harness('PhoneMutationStepUp');
+    const created = await body<ChallengeWire>(
+      await app.request('/', {
+        method: 'POST',
+        headers: J,
+        body: JSON.stringify({ country: 'US', dialCode: '1', nationalNumber: '4155550102' }),
+      }),
+    );
+    const stale = fakeSession(userId);
+    if (!stale) throw new Error('expected fake session');
+    stale.session.createdAt = new Date(Date.now() - 6 * 60 * 1000);
+    const staleApp = appWithSession(routes, stale);
+
+    const verify = await staleApp.request(`/${created.phoneNumber.id}/verify`, {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ code: CODE }),
+    });
+    expect(verify.status).toBe(401);
+
+    await db
+      .update(schema.phoneNumber)
+      .set({ status: 'verified', verifiedAt: new Date(), callingEnabled: true })
+      .where(eq(schema.phoneNumber.id, created.phoneNumber.id));
+    const paused = await staleApp.request(`/${created.phoneNumber.id}/calling`, {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ enabled: false }),
+    });
+    expect(paused.status).toBe(200);
+    const enabled = await staleApp.request(`/${created.phoneNumber.id}/calling`, {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ enabled: true }),
+    });
+    expect(enabled.status).toBe(401);
+    expect(
+      (await staleApp.request(`/${created.phoneNumber.id}`, { method: 'DELETE' })).status,
+    ).toBe(401);
+  });
+
   it('requires a signed-in caller for every route', async () => {
     const routes = createPhoneNumberRoutes(
       () =>
@@ -138,12 +210,45 @@ describe('phone number routes', () => {
     expect(list.items[0]?.id).toBe(challenge.phoneNumber.id);
   });
 
+  it('starts an authenticated callback only to the stored verified number', async () => {
+    const { app, telephony } = await harness('PhoneCallMe');
+    const created = await body<ChallengeWire>(
+      await app.request('/', {
+        method: 'POST',
+        headers: J,
+        body: JSON.stringify({ country: 'US', dialCode: '1', nationalNumber: '4155550129' }),
+      }),
+    );
+    await app.request(`/${created.phoneNumber.id}/verify`, {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ code: CODE }),
+    });
+
+    const response = await app.request(`/${created.phoneNumber.id}/call`, { method: 'POST' });
+
+    expect(response.status).toBe(200);
+    expect(await body<{ state: string }>(response)).toMatchObject({ state: 'dialing' });
+    expect(telephony.callbacks).toHaveLength(1);
+    expect(telephony.callbacks[0]?.to).toBe('+14155550129');
+  });
+
   it('refuses a country/dial-code pair that does not match the allowlist', async () => {
     const { app } = await harness('PhoneBadDialCode');
     const res = await app.request('/', {
       method: 'POST',
       headers: J,
       body: JSON.stringify({ country: 'US', dialCode: '44', nationalNumber: '4155550123' }),
+    });
+    expect(res.status).toBe(422);
+  });
+
+  it('rejects countries whose national-number rules v1 does not validate', async () => {
+    const { app } = await harness('PhoneUnsupportedCountry');
+    const res = await app.request('/', {
+      method: 'POST',
+      headers: J,
+      body: JSON.stringify({ country: 'GB', dialCode: '44', nationalNumber: '02079460958' }),
     });
     expect(res.status).toBe(422);
   });

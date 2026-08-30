@@ -34,13 +34,24 @@ import { apiHosts, requireEnvOrigin } from '@docket/env/api';
 import { Hono } from 'hono';
 
 import { env } from '../env';
+import { getContainer } from '../container';
 
 import { recordCallFrom, resolveCaller } from './phone-directory';
 import {
+  callbackAnnouncement,
   callerGreeting,
   productRequiredAnnouncement,
   unrecognizedCallerAnnouncement,
 } from './voice-announcements';
+import {
+  authorizationById,
+  authorizationByOutboundSid,
+  claimCallbackAuthorization,
+  createWeakInboundAuthorization,
+  notifyCallbackCooldownAfterFailure,
+  setAuthorizationState,
+  startCallbackForInboundCall,
+} from './phone-call-authorization';
 import { TWILIO_RELAY_PROVIDER_ID } from './voice-provider';
 import {
   closeVoiceSession,
@@ -55,6 +66,7 @@ import {
   TWILIO_SIGNATURE_HEADER,
   verifyTwilioSignature,
 } from './twilio-signature';
+import type { TelephonyProvider } from './twilio-telephony';
 
 /** The path the media WebSocket connects back on. */
 export const RELAY_SOCKET_PATH = '/internal/telephony/twilio/relay';
@@ -128,6 +140,20 @@ export function relayTwiml(socketUrl: string, voiceSessionId: string, greeting: 
   ].join('');
 }
 
+/** TwiML that asks the verified callback recipient for one confirmation digit. */
+export function callbackGatherTwiml(authorizationId: string): string {
+  const origin = requireEnvOrigin(apiHosts.api, 'API_URL');
+  const action = `${origin}/internal/telephony/twilio/callback/${encodeURIComponent(authorizationId)}/digit`;
+  return [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<Response>',
+    `<Gather input="dtmf" numDigits="1" timeout="8" actionOnEmptyResult="true" method="POST" action="${escapeXml(action)}">`,
+    `<Say voice="${ANNOUNCEMENT_VOICE}">This is Athena from Docket. Press 1 to continue your call.</Say>`,
+    '</Gather>',
+    '</Response>',
+  ].join('');
+}
+
 /**
  * The `wss://` URL Twilio's media socket connects back to.
  *
@@ -142,7 +168,12 @@ export function relaySocketUrl(): string {
 
 /** How an inbound call was answered, for tests and for metrics. */
 export type InboundCallDisposition =
-  'connected' | 'product-required' | 'unrecognized-caller' | 'forged-request';
+  | 'connected'
+  | 'callback-pending'
+  | 'callback-refused'
+  | 'product-required'
+  | 'unrecognized-caller'
+  | 'forged-request';
 
 /** The result of deciding what to do with one inbound call. */
 export interface InboundCallDecision {
@@ -151,6 +182,116 @@ export interface InboundCallDecision {
   readonly status: 200 | 403;
   /** The opened session, present only when the call was connected. */
   readonly voiceSessionId?: string;
+}
+
+/**
+ * Confirm one callback digit and open the restricted phone session only on the expected call leg.
+ */
+export async function confirmCallbackAuthorization(
+  authorizationId: string,
+  outboundCallSid: string,
+  digit: string,
+  now: Date = new Date(),
+): Promise<InboundCallDecision> {
+  const authorization = await authorizationById(authorizationId);
+  if (authorization?.outboundCallSid !== outboundCallSid) {
+    return callbackRefusedDecision();
+  }
+  if (authorization.expiresAt.getTime() <= now.getTime()) {
+    await setAuthorizationState(authorization.id, 'expired', {
+      failureReason: 'authorization_expired',
+    });
+    return callbackRefusedDecision();
+  }
+  if (authorization.state === 'connected') {
+    const existing = liveVoiceSessionByCallSid(outboundCallSid);
+    if (existing) {
+      return {
+        disposition: 'connected',
+        twiml: relayTwiml(relaySocketUrl(), existing.ctx.voiceSessionId, callerGreeting('there')),
+        status: 200,
+        voiceSessionId: existing.ctx.voiceSessionId,
+      };
+    }
+    return callbackRefusedDecision();
+  }
+  if (!['dialing', 'awaiting_digit'].includes(authorization.state))
+    return callbackRefusedDecision();
+  const claimed = await claimCallbackAuthorization(authorization.id, outboundCallSid, now);
+  if (!claimed) {
+    const existing = liveVoiceSessionByCallSid(outboundCallSid);
+    if (!existing) return callbackRefusedDecision();
+    return {
+      disposition: 'connected',
+      twiml: relayTwiml(relaySocketUrl(), existing.ctx.voiceSessionId, callerGreeting('there')),
+      status: 200,
+      voiceSessionId: existing.ctx.voiceSessionId,
+    };
+  }
+  if (digit !== '1') {
+    await setAuthorizationState(authorization.id, 'failed', {
+      failureReason: 'confirmation_rejected',
+    });
+    return callbackRefusedDecision();
+  }
+  const resolution = await resolveCaller(authorization.destinationE164);
+  if (
+    !resolution.ok ||
+    resolution.caller.userId !== authorization.userId ||
+    resolution.caller.phoneNumberId !== authorization.phoneNumberId ||
+    !(await isAthenaEntitledForCaller(authorization.userId))
+  ) {
+    await setAuthorizationState(authorization.id, 'canceled', {
+      failureReason: 'phone_access_revoked',
+    });
+    return callbackRefusedDecision();
+  }
+
+  const existing = liveVoiceSessionByCallSid(outboundCallSid);
+  if (existing) {
+    return {
+      disposition: 'connected',
+      twiml: relayTwiml(
+        relaySocketUrl(),
+        existing.ctx.voiceSessionId,
+        callerGreeting(resolution.caller.name),
+      ),
+      status: 200,
+      voiceSessionId: existing.ctx.voiceSessionId,
+    };
+  }
+  const opened = await openVoiceSession({
+    userId: authorization.userId,
+    channel: 'phone',
+    provider: TWILIO_RELAY_PROVIDER_ID,
+    callSid: outboundCallSid,
+    phoneNumberId: authorization.phoneNumberId,
+    authorizationMethod: authorization.source === 'docket' ? 'docket' : 'callback',
+    stirVerification: authorization.stirVerification,
+  });
+  rememberCallSid(opened.voiceSessionId, outboundCallSid);
+  await setAuthorizationState(authorization.id, 'connected', { authorizedAt: now });
+  await recordCallFrom(resolution.caller.phoneNumberId, now);
+  return {
+    disposition: 'connected',
+    twiml: relayTwiml(
+      relaySocketUrl(),
+      opened.voiceSessionId,
+      callerGreeting(resolution.caller.name),
+    ),
+    status: 200,
+    voiceSessionId: opened.voiceSessionId,
+  };
+}
+
+function callbackRefusedDecision(): InboundCallDecision {
+  return {
+    disposition: 'callback-refused',
+    twiml: announcementTwiml(
+      'I could not confirm this call. Open Docket and choose Call me when you are ready.',
+    ),
+    status: 200,
+  };
 }
 
 /**
@@ -190,12 +331,24 @@ export async function decideInboundCall(
     };
   }
 
+  const stirVerification = params['StirVerstat'];
+  if (stirVerification !== 'TN-Validation-Passed-A') {
+    await createWeakInboundAuthorization(caller, callSid, stirVerification, now);
+    return {
+      disposition: 'callback-pending',
+      twiml: announcementTwiml(callbackAnnouncement()),
+      status: 200,
+    };
+  }
+
   const opened = await openVoiceSession({
     userId: caller.userId,
     channel: 'phone',
     provider: TWILIO_RELAY_PROVIDER_ID,
     callSid,
     phoneNumberId: caller.phoneNumberId,
+    authorizationMethod: 'stir_a',
+    stirVerification,
   });
   rememberCallSid(opened.voiceSessionId, callSid);
   await recordCallFrom(caller.phoneNumberId, now);
@@ -253,6 +406,41 @@ twilioVoice.post('/voice', async (c) => {
   return c.body(decision.twiml, decision.status, { 'content-type': 'text/xml; charset=utf-8' });
 });
 
+twilioVoice.post('/callback/:authorizationId/answer', async (c) => {
+  const params = await readFormParams(c.req.raw);
+  if (!validTwilioRequest(c.req.url, c.req.raw.headers, params)) return c.text('Forbidden', 403);
+  const authorization = await authorizationById(c.req.param('authorizationId'));
+  const callSid = params['CallSid'];
+  if (
+    !authorization ||
+    !callSid ||
+    authorization.outboundCallSid !== callSid ||
+    !['dialing', 'awaiting_digit'].includes(authorization.state) ||
+    authorization.expiresAt.getTime() <= Date.now()
+  ) {
+    return c.body(callbackRefusedDecision().twiml, 200, {
+      'content-type': 'text/xml; charset=utf-8',
+    });
+  }
+  await setAuthorizationState(authorization.id, 'awaiting_digit');
+  return c.body(callbackGatherTwiml(authorization.id), 200, {
+    'content-type': 'text/xml; charset=utf-8',
+  });
+});
+
+twilioVoice.post('/callback/:authorizationId/digit', async (c) => {
+  const params = await readFormParams(c.req.raw);
+  if (!validTwilioRequest(c.req.url, c.req.raw.headers, params)) return c.text('Forbidden', 403);
+  const decision = await confirmCallbackAuthorization(
+    c.req.param('authorizationId'),
+    params['CallSid'] ?? '',
+    params['Digits'] ?? '',
+  );
+  return c.body(decision.twiml, decision.status, {
+    'content-type': 'text/xml; charset=utf-8',
+  });
+});
+
 /**
  * The call-status callback Twilio posts when a ConversationRelay session finishes.
  *
@@ -272,11 +460,50 @@ twilioVoice.post('/status', async (c) => {
   if (!authentic) return c.text('Forbidden', 403);
 
   const callSid = params['CallSid'];
-  if (callSid) {
-    const session = liveVoiceSessionByCallSid(callSid);
-    if (session) await closeVoiceSession(session.ctx.voiceSessionId, 'caller_hung_up');
-  }
+  if (callSid) await handleCallStatus(callSid, params['CallStatus'], getContainer().telephony);
   return c.body(null, 204);
 });
 
 export default twilioVoice;
+
+const TERMINAL_CALL_STATUSES = new Set(['completed', 'busy', 'failed', 'no-answer', 'canceled']);
+
+/** Apply one signed Twilio status transition without closing a call that is still live. */
+export async function handleCallStatus(
+  callSid: string,
+  callStatus: string | undefined,
+  telephony: TelephonyProvider,
+): Promise<void> {
+  if (!callStatus || !TERMINAL_CALL_STATUSES.has(callStatus)) return;
+
+  const session = liveVoiceSessionByCallSid(callSid);
+  if (session) await closeVoiceSession(session.ctx.voiceSessionId, 'caller_hung_up');
+
+  if (callStatus === 'completed') {
+    await startCallbackForInboundCall(callSid, telephony);
+  }
+
+  const callback = await authorizationByOutboundSid(callSid);
+  if (!callback || ['completed', 'failed', 'expired', 'canceled'].includes(callback.state)) return;
+  const updated = await setAuthorizationState(
+    callback.id,
+    callback.state === 'connected' ? 'completed' : 'failed',
+    callback.state === 'connected'
+      ? {}
+      : { failureReason: `callback_${callStatus.replace(/-/g, '_')}` },
+  );
+  if (updated?.state === 'failed') await notifyCallbackCooldownAfterFailure(updated.id);
+}
+
+function validTwilioRequest(
+  requestUrl: string,
+  headers: Headers,
+  params: Readonly<Record<string, string>>,
+): boolean {
+  return verifyTwilioSignature(
+    env.TWILIO_AUTH_TOKEN,
+    externalRequestUrl(requestUrl, headers),
+    params,
+    headers.get(TWILIO_SIGNATURE_HEADER) ?? undefined,
+  );
+}

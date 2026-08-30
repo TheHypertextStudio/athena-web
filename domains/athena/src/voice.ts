@@ -39,6 +39,7 @@ export const VoiceEndReason = z.enum([
   'user_ended',
   'caller_hung_up',
   'transport_closed',
+  'phone_access_revoked',
   'plan_required',
   'error',
 ]);
@@ -128,6 +129,37 @@ export const VoiceActionOut = z
   .meta({ id: 'VoiceActionOut', description: 'An action taken during a voice turn.' });
 /** Voice action value. */
 export type VoiceActionOut = z.infer<typeof VoiceActionOut>;
+
+/** One reversible task change made during a phone call. */
+export const PhoneCallChangeOut = z.object({
+  changeSetId: z.string(),
+  summary: z.string(),
+  tool: z.enum(['create_task', 'complete_task']),
+  createdAt: z.string(),
+  undoneAt: z.string().nullable(),
+  undoAvailable: z.boolean(),
+});
+/** Phone-call change value. */
+export type PhoneCallChangeOut = z.infer<typeof PhoneCallChangeOut>;
+
+/** Review data shown over the canonical Athena conversation after a phone call. */
+export const PhoneCallSummaryOut = z.object({
+  voiceSessionId: z.string(),
+  conversationId: z.string(),
+  startedAt: z.string(),
+  endedAt: z.string().nullable(),
+  changes: z.array(PhoneCallChangeOut),
+});
+/** Phone-call summary value. */
+export type PhoneCallSummaryOut = z.infer<typeof PhoneCallSummaryOut>;
+
+/** Result of undoing one call change. */
+export const PhoneCallUndoOut = z.object({
+  changeSetId: z.string(),
+  undone: z.literal(true),
+});
+/** Phone-call undo value. */
+export type PhoneCallUndoOut = z.infer<typeof PhoneCallUndoOut>;
 
 /**
  * Everything a client needs to start and render a voice session.

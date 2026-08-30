@@ -43,6 +43,27 @@ export type VoiceSessionChannel = 'web' | 'phone';
 /** Lifecycle of a voice session row. */
 export type VoiceSessionStatus = 'active' | 'ended';
 
+/** Verification backend recorded for one challenge. */
+export type PhoneVerificationProvider = 'legacy_sms' | 'twilio_verify' | 'capture';
+
+/** Origin of a durable callback authorization. */
+export type PhoneCallAuthorizationSource = 'weak_inbound' | 'docket';
+
+/** State of the callback authorization state machine. */
+export type PhoneCallAuthorizationState =
+  | 'awaiting_hangup'
+  | 'dialing'
+  | 'awaiting_digit'
+  | 'authorized'
+  | 'connected'
+  | 'completed'
+  | 'failed'
+  | 'expired'
+  | 'canceled';
+
+/** Signal that authorized one phone voice session. */
+export type VoiceSessionAuthorizationMethod = 'stir_a' | 'callback' | 'docket';
+
 /**
  * A phone number a person has bound to their Docket account.
  *
@@ -109,21 +130,33 @@ export const phoneNumber = pgTable(
  * One outstanding (or spent) one-time-code challenge against a phone number.
  *
  * @remarks
- * Only the SHA-256 of the code is stored, so a database read cannot verify anybody's number.
- * `attempts` counts *wrong* submissions and is compared against `maxAttempts` before the hash is
- * even looked at, which is what makes brute force cost something. Rows are retained after
- * `consumedAt`/exhaustion because the resend limiter counts sends over a rolling window and a
- * deletable history is not a limit.
+ * Managed verification providers own new codes and never expose them to Docket. Legacy rows retain
+ * their SHA-256 hash only for the remaining ten-minute deployment compatibility window. `attempts`
+ * counts wrong submissions and is compared against `maxAttempts` before either provider path runs.
+ * Rows remain after consumption or exhaustion because a deletable send history is not a limit.
  */
 export const phoneVerification = pgTable(
   'phone_verification',
   {
     id: text('id').primaryKey().$defaultFn(genId),
-    phoneNumberId: text('phone_number_id')
+    /** Owner retained even when the pending binding is removed, so account limits survive. */
+    userId: text('user_id')
       .notNull()
-      .references(() => phoneNumber.id, { onDelete: 'cascade' }),
-    /** SHA-256 of the 6-digit code. The code itself is never persisted. */
-    codeHash: text('code_hash').notNull(),
+      .references(() => user.id, { onDelete: 'cascade' }),
+    /** Nullable because deleting a pending binding must not delete its send history. */
+    phoneNumberId: text('phone_number_id').references(() => phoneNumber.id, {
+      onDelete: 'set null',
+    }),
+    /** Normalized destination retained for provider-independent rolling limits. */
+    e164: text('e164').notNull(),
+    /** Backend that owns this challenge and its code. */
+    provider: text('provider').$type<PhoneVerificationProvider>().notNull().default('legacy_sms'),
+    /** Opaque provider correlation id. Null only for challenges issued before managed Verify. */
+    providerChallengeId: text('provider_challenge_id'),
+    /** Last normalized provider state, never raw provider copy. */
+    providerStatus: text('provider_status'),
+    /** SHA-256 of a legacy 6-digit code. Managed providers never expose a code to Docket. */
+    codeHash: text('code_hash'),
     expiresAt: timestamp('expires_at').notNull(),
     /** Wrong-code submissions so far. */
     attempts: integer('attempts').notNull().default(0),
@@ -139,8 +172,71 @@ export const phoneVerification = pgTable(
   },
   (t) => [
     index('phone_verification_number_idx').on(t.phoneNumberId, t.createdAt),
+    index('phone_verification_e164_idx').on(t.e164, t.createdAt),
+    index('phone_verification_user_idx').on(t.userId, t.createdAt),
     check('phone_verification_attempts_check', sql`${t.attempts} >= 0`),
     check('phone_verification_max_attempts_check', sql`${t.maxAttempts} > 0`),
+    check(
+      'phone_verification_provider_check',
+      sql`${t.provider} in ('legacy_sms','twilio_verify','capture')`,
+    ),
+  ],
+);
+
+/** Stable row used to serialize verification-send reservations for one normalized number. */
+export const phoneVerificationRateLock = pgTable('phone_verification_rate_lock', {
+  e164: text('e164').primaryKey(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+});
+
+/** Durable authorization for a weak inbound call or an authenticated Docket callback request. */
+export const phoneCallAuthorization = pgTable(
+  'phone_call_authorization',
+  {
+    id: text('id').primaryKey().$defaultFn(genId),
+    userId: text('user_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    phoneNumberId: text('phone_number_id').references(() => phoneNumber.id, {
+      onDelete: 'set null',
+    }),
+    /** Snapshot of the linked destination. Inbound request parameters never populate this field. */
+    destinationE164: text('destination_e164').notNull(),
+    source: text('source').$type<PhoneCallAuthorizationSource>().notNull(),
+    state: text('state').$type<PhoneCallAuthorizationState>().notNull().default('awaiting_hangup'),
+    inboundCallSid: text('inbound_call_sid'),
+    outboundCallSid: text('outbound_call_sid'),
+    /** Raw Twilio verification label retained for support and aggregate metrics. */
+    stirVerification: text('stir_verification'),
+    expiresAt: timestamp('expires_at').notNull(),
+    outboundStartedAt: timestamp('outbound_started_at'),
+    authorizedAt: timestamp('authorized_at'),
+    failureReason: text('failure_reason'),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    uniqueIndex('phone_call_authorization_inbound_sid_idx').on(t.inboundCallSid),
+    uniqueIndex('phone_call_authorization_outbound_sid_idx').on(t.outboundCallSid),
+    uniqueIndex('phone_call_authorization_active_number_idx')
+      .on(t.phoneNumberId)
+      .where(
+        sql`${t.phoneNumberId} is not null and ${t.state} in ('dialing','awaiting_digit','authorized','connected')`,
+      ),
+    index('phone_call_authorization_number_idx').on(t.phoneNumberId, t.createdAt),
+    index('phone_call_authorization_destination_idx').on(t.destinationE164, t.createdAt),
+    check('phone_call_authorization_source_check', sql`${t.source} in ('weak_inbound','docket')`),
+    check(
+      'phone_call_authorization_state_check',
+      sql`${t.state} in ('awaiting_hangup','dialing','awaiting_digit','authorized','connected','completed','failed','expired','canceled')`,
+    ),
+    check(
+      'phone_call_authorization_destination_check',
+      sql`${t.destinationE164} ~ '^\\+[1-9][0-9]{6,14}$'`,
+    ),
   ],
 );
 
@@ -181,6 +277,10 @@ export const voiceSession = pgTable(
     }),
     /** The telephony provider's call identifier; null for a browser session. */
     callSid: text('call_sid'),
+    /** Signal that authorized a phone session. Null for browser and legacy phone sessions. */
+    authorizationMethod: text('authorization_method').$type<VoiceSessionAuthorizationMethod>(),
+    /** Carrier attestation observed on inbound entry, when one existed. */
+    stirVerification: text('stir_verification'),
     /** The realtime speech provider backing this session (`openai-realtime`, `twilio-relay`, `mock`). */
     provider: text('provider').notNull(),
     /** How many turns the person spoke — cheap health signal for a channel that can fail silently. */

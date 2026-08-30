@@ -123,7 +123,11 @@ export class DatabaseVoiceTranscriptStore implements VoiceTranscriptStore {
           action: {
             kind: action.tool,
             summary: outcome.summary,
-            result: { content: outcome.summary, isError: !outcome.ok },
+            result: {
+              content: outcome.summary,
+              isError: !outcome.ok,
+              ...(outcome.changeSetId ? { changeSetId: outcome.changeSetId } : {}),
+            },
           },
           voice: this.marker(ctx, false),
         },

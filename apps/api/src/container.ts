@@ -56,6 +56,16 @@ import { configureNotificationTransports } from '@docket/notifications/dispatch'
 import type { TaskSynthesizer } from '@docket/work/task-drafting';
 
 import { env } from './env';
+import {
+  CapturePhoneVerificationProvider,
+  type PhoneVerificationProvider,
+  TwilioVerifyProvider,
+} from './routes/phone-verification-provider';
+import {
+  CaptureTelephonyProvider,
+  type TelephonyProvider,
+  TwilioTelephony,
+} from './routes/twilio-telephony';
 import { resolveVoiceProvider, type VoiceRealtimeProvider } from './routes/voice-provider';
 
 /** Runtime configuration values used to choose local mocks or production services. */
@@ -105,6 +115,10 @@ export interface AppRuntimeEnv {
   readonly OPENAI_API_KEY?: string;
   readonly VOICE_REALTIME_MODEL?: string;
   readonly VOICE_REALTIME_VOICE?: string;
+  readonly TWILIO_ACCOUNT_SID?: string;
+  readonly TWILIO_AUTH_TOKEN?: string;
+  readonly TWILIO_PHONE_NUMBER?: string;
+  readonly TWILIO_VERIFY_SERVICE_SID?: string;
 }
 
 /** Service dependencies shared by API route handlers and background execution paths. */
@@ -121,6 +135,10 @@ export interface AppContainer {
   readonly inboundMail: InboundMailReceiver;
   readonly mcpConnector: McpConnector;
   readonly sms: SmsSender;
+  /** Provider-owned phone-number verification boundary. */
+  readonly phoneVerification: PhoneVerificationProvider;
+  /** Outbound calls and active-call termination. */
+  readonly telephony: TelephonyProvider;
   readonly push: PushSender;
   /** The realtime speech backend behind Athena's browser voice mode. */
   readonly voice: VoiceRealtimeProvider;
@@ -233,6 +251,12 @@ export function toAppRuntimeEnv(): AppRuntimeEnv {
     ...(env.OPENAI_API_KEY ? { OPENAI_API_KEY: env.OPENAI_API_KEY } : {}),
     ...(env.VOICE_REALTIME_MODEL ? { VOICE_REALTIME_MODEL: env.VOICE_REALTIME_MODEL } : {}),
     ...(env.VOICE_REALTIME_VOICE ? { VOICE_REALTIME_VOICE: env.VOICE_REALTIME_VOICE } : {}),
+    ...(env.TWILIO_ACCOUNT_SID ? { TWILIO_ACCOUNT_SID: env.TWILIO_ACCOUNT_SID } : {}),
+    ...(env.TWILIO_AUTH_TOKEN ? { TWILIO_AUTH_TOKEN: env.TWILIO_AUTH_TOKEN } : {}),
+    ...(env.TWILIO_PHONE_NUMBER ? { TWILIO_PHONE_NUMBER: env.TWILIO_PHONE_NUMBER } : {}),
+    ...(env.TWILIO_VERIFY_SERVICE_SID
+      ? { TWILIO_VERIFY_SERVICE_SID: env.TWILIO_VERIFY_SERVICE_SID }
+      : {}),
     ...(env.GITHUB_API_BASE ? { GITHUB_API_BASE: env.GITHUB_API_BASE } : {}),
     ...(env.LINEAR_API_BASE ? { LINEAR_API_BASE: env.LINEAR_API_BASE } : {}),
     ...(env.GOOGLE_GMAIL_API_BASE ? { GOOGLE_GMAIL_API_BASE: env.GOOGLE_GMAIL_API_BASE } : {}),
@@ -448,6 +472,41 @@ function buildSmsSender(runtimeEnv: AppRuntimeEnv): SmsSender {
   return new RealSmsSender(smsConfig);
 }
 
+function buildPhoneVerificationProvider(runtimeEnv: AppRuntimeEnv): PhoneVerificationProvider {
+  if (localMode(runtimeEnv)) return new CapturePhoneVerificationProvider();
+  const config = twilioPhoneConfig(runtimeEnv);
+  return new TwilioVerifyProvider({
+    accountSid: config.accountSid,
+    authToken: config.authToken,
+    serviceSid: config.verifyServiceSid,
+  });
+}
+
+function buildTelephonyProvider(runtimeEnv: AppRuntimeEnv): TelephonyProvider {
+  if (localMode(runtimeEnv)) return new CaptureTelephonyProvider();
+  const config = twilioPhoneConfig(runtimeEnv);
+  return new TwilioTelephony({
+    accountSid: config.accountSid,
+    authToken: config.authToken,
+    from: config.phoneNumber,
+  });
+}
+
+/** Validate phone linking and calling as one production feature configuration. */
+function twilioPhoneConfig(runtimeEnv: AppRuntimeEnv): {
+  readonly accountSid: string;
+  readonly authToken: string;
+  readonly verifyServiceSid: string;
+  readonly phoneNumber: string;
+} {
+  return {
+    accountSid: required('TWILIO_ACCOUNT_SID', runtimeEnv.TWILIO_ACCOUNT_SID),
+    authToken: required('TWILIO_AUTH_TOKEN', runtimeEnv.TWILIO_AUTH_TOKEN),
+    verifyServiceSid: required('TWILIO_VERIFY_SERVICE_SID', runtimeEnv.TWILIO_VERIFY_SERVICE_SID),
+    phoneNumber: required('TWILIO_PHONE_NUMBER', runtimeEnv.TWILIO_PHONE_NUMBER),
+  };
+}
+
 function buildPushSender(runtimeEnv: AppRuntimeEnv): PushSender {
   if (localMode(runtimeEnv)) return new CapturePushSender();
   const pushConfig = pushConfigFromEnv(runtimeEnv);
@@ -500,6 +559,8 @@ export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv())
   const inboundMail = lazyValue(() => buildInboundReceiver(runtimeEnv));
   const mcpConnector = lazyValue(() => (mock ? new MockMcpConnector() : new RealMcpConnector()));
   const sms = lazyValue(() => buildSmsSender(runtimeEnv));
+  const phoneVerification = lazyValue(() => buildPhoneVerificationProvider(runtimeEnv));
+  const telephony = lazyValue(() => buildTelephonyProvider(runtimeEnv));
   // Voice resolves through the same real/mock seam every other boundary uses, and is lazy for
   // the same reason the mailer is: a deploy that never opens a voice session must not be blocked
   // at boot by a credential it does not use.
@@ -545,6 +606,12 @@ export function buildAppContainer(runtimeEnv: AppRuntimeEnv = toAppRuntimeEnv())
     },
     get sms() {
       return sms();
+    },
+    get phoneVerification() {
+      return phoneVerification();
+    },
+    get telephony() {
+      return telephony();
     },
     get voice() {
       return voice();

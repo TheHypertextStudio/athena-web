@@ -39,6 +39,8 @@ import { UserFacingError } from '@/lib/problem';
  *    fixed box with its own scrollbar inside someone else's transcript.
  */
 export interface McpAppViewProps {
+  /** Stable identity for the originating connection and persisted/manual presentation instance. */
+  readonly instanceId: string;
   /** The `ui://` document to render, as the connected server served it. */
   readonly resource: McpAppResource;
   /** The tool call that produced it. */
@@ -217,15 +219,22 @@ function buildHostContext(maxWidth?: number): McpUiHostContext {
  * @returns the framed widget.
  */
 export function McpAppView(props: McpAppViewProps): JSX.Element | null {
-  const { resource, tool, result, serverName, onCallTool, onMessage, sandboxOrigin } = props;
+  const { instanceId, resource, tool, result, serverName, onCallTool, onMessage, sandboxOrigin } =
+    props;
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   const containerRef = useRef<HTMLElement | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const hostRef = useRef<McpAppHost | null>(null);
-  const onCallToolRef = useRef(onCallTool);
-  const onMessageRef = useRef(onMessage);
-  onCallToolRef.current = onCallTool;
-  onMessageRef.current = onMessage;
+  const presentationIdentity = `${instanceId}\u0000${resource.uri}\u0000${tool.name}`;
+  const callbackLifecycleRef = useRef<{
+    identity: string;
+    onCallTool: McpAppViewProps['onCallTool'];
+    onMessage: McpAppViewProps['onMessage'];
+  } | null>(null);
+  if (callbackLifecycleRef.current?.identity === presentationIdentity) {
+    callbackLifecycleRef.current.onCallTool = onCallTool;
+    callbackLifecycleRef.current.onMessage = onMessage;
+  }
   const [height, setHeight] = useState(INITIAL_HEIGHT);
   const [displayMode, setDisplayMode] = useState<McpUiDisplayMode>('inline');
   const [failure, setFailure] = useState<string | null>(null);
@@ -239,8 +248,6 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
       return '';
     }
   }, [proxyUrl]);
-  const presentationIdentity = `${resource.uri}\u0000${tool.name}`;
-
   // The proxy can finish loading immediately after the iframe enters the DOM. Install the message
   // listener in the same commit, before paint, so its one-shot `sandbox/proxy-ready` announcement
   // cannot race a passive effect and leave the widget waiting forever for its resource document.
@@ -252,6 +259,8 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
 
     let proxyWindow: Window | null = frame.contentWindow;
     let lifecycleResource: McpAppResource | null = resource;
+    const lifecycleCallbacks = { identity: presentationIdentity, onCallTool, onMessage };
+    callbackLifecycleRef.current = lifecycleCallbacks;
     let initializationDeadline: number | undefined;
     let disposed = false;
     let disposal: Promise<void> | null = null;
@@ -270,6 +279,7 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
       if (onWindowMessage) window.removeEventListener('message', onWindowMessage);
       frame.removeEventListener('error', onFrameError);
       if (hostRef.current === host) hostRef.current = null;
+      if (callbackLifecycleRef.current === lifecycleCallbacks) callbackLifecycleRef.current = null;
       host?.close();
       host = null;
       proxyWindow = null;
@@ -304,7 +314,7 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
       tool: { name: tool.name, ...(tool.arguments ? { arguments: tool.arguments } : {}) },
       hostContext: buildHostContext(containerRef.current?.clientWidth),
       post,
-      callTool: (name, args) => onCallToolRef.current(name, args),
+      callTool: (name, args) => lifecycleCallbacks.onCallTool(name, args),
       // Scope: the API decides. The browser holds no credential for the connected server, so an
       // unauthorized call fails there, not here — but the bridge still requires an explicit
       // allow, so a widget can never reach a tool the host did not intend to expose.
@@ -335,7 +345,7 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
         const opened = window.open(parsed.href, '_blank', 'noopener,noreferrer');
         return opened !== null;
       },
-      ...(onMessageRef.current
+      ...(lifecycleCallbacks.onMessage
         ? {
             sendMessage: async (content: readonly McpUiContentBlock[]) => {
               const text = content
@@ -345,7 +355,7 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
               if (!text) {
                 return false;
               }
-              return (await onMessageRef.current?.(text)) ?? false;
+              return (await lifecycleCallbacks.onMessage?.(text)) ?? false;
             },
           }
         : {}),

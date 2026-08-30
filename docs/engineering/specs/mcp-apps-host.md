@@ -83,12 +83,14 @@ deliberate deviation from the spec's example, and it is strictly more restrictiv
 
 The policy travels as a `<meta http-equiv>` prepended to the document (a `srcdoc` frame has no
 response headers) and is computed **host-side** — never by a script running on the sandbox origin.
-`withCspMeta` parses the provider document inertly with exact-pinned `parse5@8.0.1`, prefixes the
-policy before parsing, and serializes the normalized document. This is security-critical: HTML
-accepts executable markup before a late `<head>`, and string insertion into that head lets Chromium
-run the earlier node before it sees the policy. Permissions declared under `_meta.ui.permissions`
-become an `allow` attribute in Permission Policy form (`camera 'src'`), granting the feature to the
-frame's own origin only.
+`withCspMeta` parses the original provider document inertly with exact-pinned `parse5@8.0.1`,
+inserts a host-created policy node as the normalized head's first child, and serializes the same
+document with its doctype intact. This is security-critical: HTML accepts executable markup before
+a late `<head>`, and string insertion into that head lets Chromium run the earlier node before it
+sees the policy. Preserving the original doctype also keeps ordinary provider documents in
+standards mode instead of silently changing their CSS layout to quirks mode. Permissions declared
+under `_meta.ui.permissions` become an `allow` attribute in Permission Policy form
+(`camera 'src'`), granting the feature to the frame's own origin only.
 
 ---
 
@@ -127,6 +129,13 @@ possibly attacker-authored.
 The browser holds **no credential** for a connected server. That is the reason for the API routes
 rather than a generic proxy: the authorization decision must not live in the least trustworthy
 place in the system.
+
+The browser bridge is keyed by a stable presentation instance that includes its originating
+connection. A persisted conversation card uses `connectionId:activityId`; the manual launcher uses
+its connection id. Replacing one connection with another therefore tears down and recreates the
+frame even when both servers expose the same tool and `ui://` URI. Each bridge retains its own
+connection callback during bounded teardown, while ordinary rerenders of the same instance update
+their callback in place without reinitializing the app.
 
 ---
 
@@ -217,7 +226,8 @@ the same rows the Settings surface manages, so a connection made in either place
 - `packages/integrations/tests/mcp/mcp-apps-sandbox.test.ts` — executes the shipped proxy script
   against stand-ins for its browser objects.
 - `apps/web/tests/athena/mcp-app-view.test.tsx` — browser-adapter lifecycle, failure disposal,
-  rerender stability, host context, focus, and graceful teardown.
+  same-instance rerender stability, cross-connection replacement and routing, host context, focus,
+  and graceful teardown.
 - `apps/web/e2e/athena/mcp-apps-stable.spec.ts` — real Chromium evidence for hostile-order CSP and
   the complete Athena model-invocation journey: automatic inline render, original-connection app
   calls, text fallback, reload without rerun, theme, sizing, fullscreen, focus, and teardown. The

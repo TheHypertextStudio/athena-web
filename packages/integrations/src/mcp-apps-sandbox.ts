@@ -19,7 +19,13 @@
  * it runs under a policy that forbids fetching anything, so there is nothing to bundle from.
  */
 import { MCP_UI_METHODS } from '@docket/types';
-import { parse, serialize } from 'parse5';
+import {
+  defaultTreeAdapter,
+  html as parse5Html,
+  parse,
+  serialize,
+  type DefaultTreeAdapterTypes,
+} from 'parse5';
 
 import {
   buildViewCsp,
@@ -55,16 +61,40 @@ export const MCP_APP_SANDBOX_CSP = [
  * it only binds if it precedes everything it governs. String insertion cannot guarantee that:
  * HTML's parser accepts executable nodes before a late `<head>`, and Chromium can run them before
  * a later CSP meta is encountered. parse5 builds the browser-shaped tree without executing it;
- * prefixing the meta before parsing makes the HTML tree builder place it first in the normalized
- * head, ahead of every script, preload, stylesheet, image, or other resource-loading node.
+ * inserting a host-created meta node as the normalized head's first child puts it ahead of every
+ * script, preload, stylesheet, image, or other resource-loading node without discarding the
+ * provider's doctype.
  *
  * @param html - The widget document as the server served it.
  * @param csp - The policy value to enforce.
  * @returns the document with the policy as the first thing in its head.
  */
 export function withCspMeta(html: string, csp: string): string {
-  const tag = `<meta http-equiv="Content-Security-Policy" content="${csp.replace(/"/g, '&quot;')}">`;
-  return serialize(parse(`${tag}${html}`));
+  const document = parse(html);
+  const htmlElement = document.childNodes.find(
+    (node): node is DefaultTreeAdapterTypes.Element => 'tagName' in node && node.tagName === 'html',
+  );
+  if (!htmlElement) throw new Error('Normalized MCP App document has no html element');
+
+  let head = htmlElement.childNodes.find(
+    (node): node is DefaultTreeAdapterTypes.Element => 'tagName' in node && node.tagName === 'head',
+  );
+  if (!head) {
+    head = defaultTreeAdapter.createElement('head', parse5Html.NS.HTML, []);
+    const firstChild = htmlElement.childNodes[0];
+    if (firstChild) defaultTreeAdapter.insertBefore(htmlElement, head, firstChild);
+    else defaultTreeAdapter.appendChild(htmlElement, head);
+  }
+
+  const meta = defaultTreeAdapter.createElement('meta', parse5Html.NS.HTML, [
+    { name: 'http-equiv', value: 'Content-Security-Policy' },
+    { name: 'content', value: csp },
+  ]);
+  const firstHeadChild = head.childNodes[0];
+  if (firstHeadChild) defaultTreeAdapter.insertBefore(head, meta, firstHeadChild);
+  else defaultTreeAdapter.appendChild(head, meta);
+
+  return serialize(document);
 }
 
 /**

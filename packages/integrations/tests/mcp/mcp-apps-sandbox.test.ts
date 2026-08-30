@@ -260,6 +260,15 @@ describe('sandbox proxy document', () => {
 });
 
 describe('policy injection', () => {
+  it('preserves a provider doctype so the sandbox stays in standards mode', () => {
+    const injected = withCspMeta(
+      '<!doctype html><html><head><title>x</title></head><body>safe</body></html>',
+      `default-src 'none'`,
+    );
+
+    expect(injected).toMatch(/^<!DOCTYPE html>/);
+  });
+
   it('puts the CSP first in the head so it governs everything after it', () => {
     const injected = withCspMeta(
       '<!doctype html><html><head><title>x</title></head></html>',

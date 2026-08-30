@@ -422,6 +422,7 @@ export function AthenaMcpPanel({ className }: AthenaMcpPanelProps): JSX.Element 
         <div className="flex flex-col gap-2">
           {rendered.resource ? (
             <McpAppView
+              instanceId={rendered.connectionId}
               resource={{
                 uri: rendered.resource.uri,
                 mimeType: rendered.resource.mimeType,

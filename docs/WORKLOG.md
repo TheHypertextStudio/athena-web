@@ -309,6 +309,33 @@
   `@docket/types` 100% gate and fails at 98.1% statements, 91.69% branches, 96.83% functions, and
   98.34% lines. Narrow API and Web coverage invocations pass their 7 and 32 behavioral tests but
   intentionally cannot meet package-wide global thresholds when only selected files run.
+- **Whole-branch final-fix round 2 plan**: Preserve a provider document's standards mode by parsing
+  the original HTML inertly, inserting a host-created CSP meta AST node as the normalized head's
+  first child, and serializing with its doctype intact. Scope every browser bridge lifecycle to an
+  explicit persisted/manual presentation instance so switching connections with the same URI and
+  tool gracefully replaces the frame while ordinary rerenders remain stable. Capture unit,
+  Chromium, and React RED before each production correction; retain the authenticated full-journey
+  and public-map gates as external blockers.
+- **Whole-branch final-fix round 2 outcome**: `withCspMeta` now parses the original provider
+  document, inserts a host-created CSP meta node as the normalized head's first child, and
+  serializes without losing the doctype. A required `McpAppView.instanceId` scopes lifecycle to the
+  persisted `connectionId:activityId` or manual connection id. Same-instance rerenders update their
+  lifecycle callback object in place; switching connections replaces the iframe and each retiring
+  bridge retains only its original connection callback through graceful teardown.
+- **Whole-branch final-fix round 2 TDD evidence**: The unit RED lost `<!DOCTYPE html>`, and the exact
+  normalized document produced Chromium `BackCompat`. GREEN preserves the doctype and reports
+  `CSS1Compat`; the hostile late-head probe still records zero egress. The cross-connection RED
+  retained the same iframe for two connections sharing URI/tool. GREEN replaces it, loads the
+  second HTML, sends teardown to the first bridge, routes a retiring-first-frame call only to the
+  first connection, and routes the replacement frame only to the second. The original cloned
+  same-presentation rerender remains stable.
+- **Whole-branch final-fix round 2 validation**: Sandbox unit behavior passes 17/17; the targeted
+  Chromium standards-mode and hostile-order cases pass 2/2; integrations MCP passes 198/198;
+  focused Web view/panel/workbench passes 42/42. Integrations and Web TypeScript and ESLint pass.
+  The root production build passes API, Runner, Admin, Web, and the production service worker. A
+  direct filtered Web build first refused the absent `API_URL` because it bypassed the root dotenv
+  wrapper; the canonical root build supplied the environment and passed. The authenticated
+  complete journey and public-map acceptance remain explicit external blockers and were not rerun.
 - **Blockers**: Production acceptance needs an authenticated live Athena account and a publicly
   reachable pinned upstream reference server; local and CI evidence cannot substitute for it.
   Once available, start the exact-pinned map server behind an ephemeral public HTTPS endpoint,

@@ -54,6 +54,7 @@ function mount(overrides: Partial<Parameters<typeof McpAppView>[0]> = {}) {
 
   const view = render(
     <McpAppView
+      instanceId="connection-a:presentation-a"
       resource={RESOURCE}
       tool={{ name: 'release_checklist', arguments: { release: '4.2' } }}
       result={{ content: [{ type: 'text', text: '2 of 4 done' }] }}
@@ -208,6 +209,7 @@ describe('McpAppView frames', () => {
     cleanup();
     render(
       <McpAppView
+        instanceId="connection-a:presentation-a"
         resource={{ ...RESOURCE, meta: { csp: {}, prefersBorder: false } }}
         tool={{ name: 'release_checklist' }}
         result={{}}
@@ -224,6 +226,7 @@ describe('McpAppView frames', () => {
   it('uses application-owned fallback copy when it has nowhere to render', () => {
     render(
       <McpAppView
+        instanceId="connection-a:presentation-a"
         resource={RESOURCE}
         tool={{ name: 'release_checklist' }}
         result={{}}
@@ -311,6 +314,7 @@ describe('McpAppView bridge', () => {
 
     harness.view.rerender(
       <McpAppView
+        instanceId="connection-a:presentation-a"
         resource={{ ...RESOURCE, meta: { ...RESOURCE.meta } }}
         tool={{ name: 'release_checklist', arguments: { release: '4.2' } }}
         result={{ content: [{ type: 'text', text: '2 of 4 done' }] }}
@@ -339,6 +343,113 @@ describe('McpAppView bridge', () => {
         harness.posted.find((entry) => entry.message['id'] === 'after-rerender'),
       ).toMatchObject({ message: { result: { content: [{ type: 'text', text: 'still live' }] } } });
     });
+  });
+
+  it('replaces the bridge when an identical app presentation switches connections', async () => {
+    const firstCallTool = vi.fn(async () => ({ content: [{ type: 'text', text: 'first' }] }));
+    const secondCallTool = vi.fn(async () => ({ content: [{ type: 'text', text: 'second' }] }));
+    const harness = mount({ onCallTool: firstCallTool });
+    await handshake(harness);
+    await waitFor(() => {
+      expect(
+        harness.posted.some((entry) => entry.message['method'] === MCP_UI_METHODS.toolResult),
+      ).toBe(true);
+    });
+    const firstFrame = harness.frame;
+
+    harness.view.rerender(
+      <McpAppView
+        instanceId="connection-b:presentation-b"
+        resource={{ ...RESOURCE, text: '<!doctype html><html><body>second</body></html>' }}
+        tool={{ name: 'release_checklist', arguments: { release: '4.2' } }}
+        result={{ content: [{ type: 'text', text: 'second result' }] }}
+        serverName="Second Release Tracker"
+        sandboxOrigin={SANDBOX_ORIGIN}
+        onCallTool={secondCallTool}
+      />,
+    );
+
+    const secondFrame = assertDefined(harness.view.container.querySelector('iframe'));
+    expect(secondFrame).not.toBe(firstFrame);
+    const secondPosted: { message: Record<string, unknown>; origin: string }[] = [];
+    const secondProxyWindow = {
+      postMessage: (message: Record<string, unknown>, origin: string) =>
+        secondPosted.push({ message, origin }),
+    };
+    Object.defineProperty(secondFrame, 'contentWindow', {
+      value: secondProxyWindow,
+      configurable: true,
+    });
+    const fromSecondProxy = (data: unknown): void => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data,
+          origin: SANDBOX_ORIGIN,
+          source: secondProxyWindow as never,
+        }),
+      );
+    };
+
+    // The first bridge remains alive only to finish graceful teardown. Its closure must retain
+    // the first connection callback while the replacement render installs the second one.
+    harness.fromProxy({
+      jsonrpc: '2.0',
+      id: 'first-after-switch',
+      method: 'tools/call',
+      params: { name: 'first_connection_action', arguments: {} },
+    });
+    await waitFor(() => {
+      expect(firstCallTool).toHaveBeenCalledWith('first_connection_action', {});
+      expect(
+        harness.posted.find((entry) => entry.message['id'] === 'first-after-switch'),
+      ).toMatchObject({ message: { result: { content: [{ type: 'text', text: 'first' }] } } });
+    });
+    expect(secondCallTool).not.toHaveBeenCalled();
+
+    fromSecondProxy({
+      jsonrpc: '2.0',
+      method: MCP_UI_METHODS.sandboxProxyReady,
+      params: {},
+    });
+    await waitFor(() => {
+      const ready = secondPosted.find(
+        (entry) => entry.message['method'] === MCP_UI_METHODS.sandboxResourceReady,
+      );
+      expect((ready?.message['params'] as Record<string, unknown>)['html']).toContain(
+        '<body>second</body>',
+      );
+    });
+    fromSecondProxy({
+      jsonrpc: '2.0',
+      id: 'second-initialize',
+      method: MCP_UI_METHODS.initialize,
+      params: {
+        appInfo: { name: 'second-view', version: '1.0.0' },
+        appCapabilities: {},
+        protocolVersion: MCP_UI_PROTOCOL_VERSION,
+      },
+    });
+    await waitFor(() => {
+      expect(secondPosted.some((entry) => entry.message['id'] === 'second-initialize')).toBe(true);
+    });
+    fromSecondProxy({ jsonrpc: '2.0', method: MCP_UI_METHODS.initialized, params: {} });
+    fromSecondProxy({
+      jsonrpc: '2.0',
+      id: 'second-tool-call',
+      method: 'tools/call',
+      params: { name: 'advance_release', arguments: {} },
+    });
+
+    await waitFor(() => {
+      expect(secondCallTool).toHaveBeenCalledWith('advance_release', {});
+      expect(
+        secondPosted.find((entry) => entry.message['id'] === 'second-tool-call'),
+      ).toMatchObject({ message: { result: { content: [{ type: 'text', text: 'second' }] } } });
+    });
+    expect(firstCallTool).toHaveBeenCalledTimes(1);
+    expect(
+      harness.posted.some((entry) => entry.message['method'] === MCP_UI_METHODS.resourceTeardown),
+    ).toBe(true);
   });
 
   it('releases its message listener immediately when initialization fails', async () => {

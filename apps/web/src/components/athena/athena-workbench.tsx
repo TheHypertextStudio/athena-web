@@ -208,6 +208,7 @@ export function AthenaWorkbench({
                       {presentation ? (
                         <div className="mt-3">
                           <McpAppView
+                            instanceId={`${presentation.connectionId}:${entry.id}`}
                             resource={{
                               uri: presentation.resource.uri,
                               mimeType: presentation.resource.mimeType,

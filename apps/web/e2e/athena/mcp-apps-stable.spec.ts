@@ -453,3 +453,14 @@ test('host CSP is installed before hostile executable markup and permits zero eg
 
   expect(attempted).toEqual([]);
 });
+
+test('host CSP normalization preserves standards mode for provider documents', async ({ page }) => {
+  const params = sandboxResourceParams({
+    uri: 'ui://standards/document',
+    mimeType: MCP_UI_MIME_TYPE,
+    text: '<!doctype html><html><head><title>standards</title></head><body>safe</body></html>',
+  });
+
+  await page.goto(`data:text/html;charset=utf-8,${encodeURIComponent(String(params['html']))}`);
+  expect(await page.evaluate(() => document.compatMode)).toBe('CSS1Compat');
+});

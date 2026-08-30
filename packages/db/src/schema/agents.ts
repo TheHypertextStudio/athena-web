@@ -216,6 +216,11 @@ export const agentSession = pgTable(
     index('agent_session_agent_idx').on(t.agentId),
     uniqueIndex('agent_session_id_owner_uq').on(t.id, t.ownerUserId),
     uniqueIndex('agent_session_id_org_uq').on(t.id, t.organizationId),
+    unique('agent_session_id_owner_context_org_uq').on(
+      t.id,
+      t.ownerUserId,
+      t.contextOrganizationId,
+    ),
     check(
       'agent_session_executor_shape_check',
       sql`(
@@ -411,6 +416,7 @@ export const sessionActivity = pgTable(
   (t) => [
     index('session_activity_session_idx').on(t.sessionId, t.createdAt),
     index('session_activity_proposal_group_idx').on(t.sessionId, t.proposalGroupId),
+    unique('session_activity_id_session_uq').on(t.id, t.sessionId),
   ],
 );
 
@@ -687,6 +693,7 @@ export const athenaAssignment = pgTable(
   },
   (t) => [
     uniqueIndex('athena_assignment_id_owner_uq').on(t.id, t.ownerUserId),
+    unique('athena_assignment_id_owner_org_uq').on(t.id, t.ownerUserId, t.organizationId),
     index('athena_assignment_owner_status_idx').on(t.ownerUserId, t.status, t.createdAt),
     index('athena_assignment_target_idx').on(t.organizationId, t.entityType, t.entityId),
     check(
@@ -846,8 +853,9 @@ export const latticeCredential = pgTable(
  * second remote job. The reply key exists only while Docket may still need to open a sealed
  * result. Terminal settlement clears it in the same transaction that records the outcome.
  *
- * Every foreign key that crosses an owner boundary includes `ownerUserId`. A bug cannot attach
- * one person's assignment, session, or Lattice connection to another person's delegation.
+ * Every foreign key that crosses an owner or workspace boundary includes that boundary. A bug
+ * cannot attach one person's assignment, session, or Lattice connection to another person's
+ * delegation, and it cannot combine an assignment and session from different workspaces.
  */
 export const agentDelegation = pgTable(
   'agent_delegation',
@@ -874,9 +882,7 @@ export const agentDelegation = pgTable(
     deadlineAt: timestamp('deadline_at'),
     failureCode: text('failure_code'),
     terminalOutcome: jsonb('terminal_outcome').$type<AgentDelegationTerminalOutcome>(),
-    returnedActivityId: text('returned_activity_id').references(() => sessionActivity.id, {
-      onDelete: 'set null',
-    }),
+    returnedActivityId: text('returned_activity_id'),
     submittedAt: timestamp('submitted_at'),
     settledAt: timestamp('settled_at'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
@@ -893,20 +899,47 @@ export const agentDelegation = pgTable(
     uniqueIndex('agent_delegation_work_uq').on(t.workId),
     index('agent_delegation_due_idx').on(t.status, t.nextPollAt),
     index('agent_delegation_owner_idx').on(t.ownerUserId, t.status),
+    index('agent_delegation_organization_idx').on(t.organizationId),
+    index('agent_delegation_task_idx').on(t.taskId),
+    index('agent_delegation_assignment_owner_org_idx').on(
+      t.assignmentId,
+      t.ownerUserId,
+      t.organizationId,
+    ),
+    index('agent_delegation_session_owner_org_idx').on(
+      t.sessionId,
+      t.ownerUserId,
+      t.organizationId,
+    ),
+    index('agent_delegation_connection_owner_idx').on(t.connectionId, t.ownerUserId),
+    index('agent_delegation_returned_activity_session_idx').on(t.returnedActivityId, t.sessionId),
     foreignKey({
-      columns: [t.assignmentId, t.ownerUserId],
-      foreignColumns: [athenaAssignment.id, athenaAssignment.ownerUserId],
-      name: 'agent_delegation_assignment_owner_fk',
+      columns: [t.assignmentId, t.ownerUserId, t.organizationId],
+      foreignColumns: [
+        athenaAssignment.id,
+        athenaAssignment.ownerUserId,
+        athenaAssignment.organizationId,
+      ],
+      name: 'agent_delegation_assignment_owner_org_fk',
     }).onDelete('cascade'),
     foreignKey({
-      columns: [t.sessionId, t.ownerUserId],
-      foreignColumns: [agentSession.id, agentSession.ownerUserId],
-      name: 'agent_delegation_session_owner_fk',
+      columns: [t.sessionId, t.ownerUserId, t.organizationId],
+      foreignColumns: [
+        agentSession.id,
+        agentSession.ownerUserId,
+        agentSession.contextOrganizationId,
+      ],
+      name: 'agent_delegation_session_owner_org_fk',
     }).onDelete('cascade'),
     foreignKey({
       columns: [t.connectionId, t.ownerUserId],
       foreignColumns: [latticeConnection.id, latticeConnection.ownerUserId],
       name: 'agent_delegation_connection_owner_fk',
+    }).onDelete('restrict'),
+    foreignKey({
+      columns: [t.returnedActivityId, t.sessionId],
+      foreignColumns: [sessionActivity.id, sessionActivity.sessionId],
+      name: 'agent_delegation_returned_activity_session_fk',
     }).onDelete('restrict'),
     check(
       'agent_delegation_status_check',
@@ -924,6 +957,11 @@ export const agentDelegation = pgTable(
         OR (${t.status} in ('proposed','completed') AND ${t.terminalOutcome} IS NOT NULL)
         OR (${t.status} = 'failed' AND ${t.failureCode} IS NOT NULL)
         OR ${t.status} = 'canceled'`,
+    ),
+    check(
+      'agent_delegation_returned_activity_shape_check',
+      sql`(${t.status} in ('proposed','completed') AND ${t.returnedActivityId} IS NOT NULL)
+        OR (${t.status} in ('prepared','submitted','failed','canceled') AND ${t.returnedActivityId} IS NULL)`,
     ),
   ],
 );

@@ -22,11 +22,13 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { AddressInfo } from 'node:net';
 import { resolve } from 'node:path';
 
+import { eq } from 'drizzle-orm';
 import { migrate } from 'drizzle-orm/pglite/migrator';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
+import { assertDefined } from '@docket/test-utils';
 
 import type { AppEnv } from '../../src/context';
 import type { resolveOwnerBackend as ResolveOwnerBackendFn } from '../../src/routes/lattice-backend';
@@ -502,14 +504,77 @@ describe('the bring-your-own-Lattice flow', () => {
     expect(status).toMatchObject({ connected: true, enabled: false, deviceId: 'lat_studio' });
   });
 
-  it('disconnecting deletes the grant and the stored token', async () => {
+  it('disconnecting deletes the grant without deleting delegation history', async () => {
+    const [connection] = await db
+      .select()
+      .from(schema.latticeConnection)
+      .where(eq(schema.latticeConnection.ownerUserId, USER_ID));
+    const [workspace] = await db
+      .insert(schema.organization)
+      .values({ name: 'Lattice history workspace', slug: 'lattice-history-workspace' })
+      .returning();
+    const storedConnection = assertDefined(connection);
+    const storedWorkspace = assertDefined(workspace);
+    const [assignment] = await db
+      .insert(schema.athenaAssignment)
+      .values({
+        ownerUserId: USER_ID,
+        organizationId: storedWorkspace.id,
+        entityType: 'task',
+        entityId: 'task_lattice_disconnect_history',
+        objective: 'Keep this delegation after disconnecting Lovelace.',
+      })
+      .returning();
+    const [session] = await db
+      .insert(schema.agentSession)
+      .values({
+        executorKind: 'athena',
+        ownerUserId: USER_ID,
+        contextOrganizationId: storedWorkspace.id,
+        trigger: 'assignment',
+        executionSurface: 'lattice',
+      })
+      .returning();
+    const storedAssignment = assertDefined(assignment);
+    const storedSession = assertDefined(session);
+    const [delegation] = await db
+      .insert(schema.agentDelegation)
+      .values({
+        ownerUserId: USER_ID,
+        organizationId: storedWorkspace.id,
+        assignmentId: storedAssignment.id,
+        sessionId: storedSession.id,
+        connectionId: storedConnection.id,
+        runtimeId: 'lat_studio',
+        logicalSubmissionId: 'docket:delegation:disconnect-history',
+        workId: 'work_disconnect_history',
+        replyKeyCiphertext: 'v1:gcm:disconnect-history',
+      })
+      .returning();
+    const storedDelegation = assertDefined(delegation);
+
     const response = await call('/v1/me/athena/lattice', { method: 'DELETE' });
+    expect(response.status).toBe(200);
     expect((await response.json()) as Record<string, unknown>).toMatchObject({
       connected: false,
+      enabled: false,
       deviceId: null,
     });
     expect(await db.select().from(schema.latticeCredential)).toHaveLength(0);
-    expect(await db.select().from(schema.latticeConnection)).toHaveLength(0);
+    expect(await db.select().from(schema.latticeConnection)).toEqual([
+      expect.objectContaining({
+        id: storedConnection.id,
+        status: 'disconnected',
+        enabled: false,
+        deviceId: null,
+      }),
+    ]);
+    expect(await db.select().from(schema.agentDelegation)).toEqual([
+      expect.objectContaining({
+        id: storedDelegation.id,
+        connectionId: storedConnection.id,
+      }),
+    ]);
   });
 });
 import { installTestProductFixture } from '../support/db';

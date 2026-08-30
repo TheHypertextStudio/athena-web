@@ -394,18 +394,34 @@ const lattice = new Hono<AppEnv>()
       summary: 'Disconnect Lovelace',
       response: LatticeStatusOut,
       description:
-        'Delete the stored grant and device choice. Athena returns to the routed default backend immediately. This does not revoke the grant inside Lovelace — the user does that from their Lovelace account.',
+        'Delete the stored grant and device choice while retaining the connection identity for delegation history. Athena returns to the routed default backend immediately. This does not revoke the grant inside Lovelace — the user does that from their Lovelace account.',
     }),
     async (c) => {
       const ownerUserId = requestOwner(c);
       const row = await loadLatticeConnection(ownerUserId);
-      if (row) {
-        // The credential row cascades from the compound FK, but deleting it first means a failure
-        // between the two statements leaves no orphaned token behind.
-        await db.delete(latticeCredential).where(eq(latticeCredential.connectionId, row.id));
-        await db.delete(latticeConnection).where(eq(latticeConnection.id, row.id));
-      }
-      return ok(c, LatticeStatusOut, toLatticeStatus(null));
+      const disconnected = row
+        ? await db.transaction(async (tx) => {
+            await tx.delete(latticeCredential).where(eq(latticeCredential.connectionId, row.id));
+            const [updated] = await tx
+              .update(latticeConnection)
+              .set({
+                status: 'disconnected',
+                enabled: false,
+                deviceId: null,
+                deviceName: null,
+                deviceStatus: null,
+                grantedScope: null,
+                accountId: null,
+                lastFailureReason: null,
+                lastFailureAt: null,
+                lastVerifiedAt: null,
+              })
+              .where(eq(latticeConnection.id, row.id))
+              .returning();
+            return updated ?? null;
+          })
+        : null;
+      return ok(c, LatticeStatusOut, toLatticeStatus(disconnected));
     },
   );
 

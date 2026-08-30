@@ -15,6 +15,7 @@ import {
   organization,
   personalMcpConnection,
   personalMcpCredential,
+  sessionActivity,
   user,
 } from '../../src/schema';
 import { assertDefined } from '@docket/test-utils';
@@ -25,6 +26,50 @@ const db = drizzle(client);
 let ownerUserId = '';
 let otherUserId = '';
 let organizationId = '';
+
+async function createWorkspace(suffix: string): Promise<string> {
+  const [workspace] = await db
+    .insert(organization)
+    .values({ name: `Personal Athena ${suffix}`, slug: `personal-athena-${suffix}` })
+    .returning({ id: organization.id });
+  return assertDefined(workspace).id;
+}
+
+async function createAssignment(workspaceId: string, suffix: string): Promise<string> {
+  const [assignment] = await db
+    .insert(athenaAssignment)
+    .values({
+      ownerUserId,
+      organizationId: workspaceId,
+      entityType: 'initiative',
+      entityId: `initiative_${suffix}`,
+      objective: `Analyze ${suffix}.`,
+    })
+    .returning({ id: athenaAssignment.id });
+  return assertDefined(assignment).id;
+}
+
+async function createAthenaSession(workspaceId: string): Promise<string> {
+  const [session] = await db
+    .insert(agentSession)
+    .values({
+      executorKind: 'athena',
+      ownerUserId,
+      contextOrganizationId: workspaceId,
+      trigger: 'assignment',
+      executionSurface: 'lattice',
+    })
+    .returning({ id: agentSession.id });
+  return assertDefined(session).id;
+}
+
+async function connectionId(): Promise<string> {
+  const [connection] = await db
+    .select({ id: latticeConnection.id })
+    .from(latticeConnection)
+    .where(eq(latticeConnection.ownerUserId, ownerUserId));
+  return assertDefined(connection).id;
+}
 
 beforeAll(async () => {
   await migrate(db, { migrationsFolder: resolve(import.meta.dirname, '../../drizzle') });
@@ -129,11 +174,19 @@ describe('personal Athena schema', () => {
     ).rejects.toThrow();
 
     await db
+      .insert(sessionActivity)
+      .values({ sessionId: assertDefined(session).id, type: 'action', body: {} });
+    const [returnedActivity] = await db
+      .select({ id: sessionActivity.id })
+      .from(sessionActivity)
+      .where(eq(sessionActivity.sessionId, assertDefined(session).id));
+    await db
       .update(agentDelegation)
       .set({
         status: 'proposed',
         workState: 'completed',
         terminalOutcome: { outcome: 'completed', report: 'The analysis is ready.' },
+        returnedActivityId: assertDefined(returnedActivity).id,
         replyKeyCiphertext: null,
         settledAt: new Date(),
       })
@@ -144,6 +197,162 @@ describe('personal Athena schema', () => {
         .set({ status: 'submitted', replyKeyCiphertext: null, terminalOutcome: null })
         .where(eq(agentDelegation.id, assertDefined(delegation).id)),
     ).rejects.toThrow();
+  });
+
+  it('binds delegation assignments and sessions to the same organization', async () => {
+    const otherOrganizationId = await createWorkspace('delegation-other-org');
+    const assignmentId = await createAssignment(organizationId, 'delegation-org-boundary');
+    const sameOrganizationSessionId = await createAthenaSession(organizationId);
+    const otherOrganizationSessionId = await createAthenaSession(otherOrganizationId);
+    const latticeConnectionId = await connectionId();
+
+    await expect(
+      db.insert(agentDelegation).values({
+        ownerUserId,
+        organizationId: otherOrganizationId,
+        assignmentId,
+        sessionId: otherOrganizationSessionId,
+        connectionId: latticeConnectionId,
+        runtimeId: 'lat_wrong_assignment_org',
+        logicalSubmissionId: 'docket:delegation:wrong-assignment-org',
+        workId: 'work_wrong_assignment_org',
+        replyKeyCiphertext: 'v1:gcm:wrong-assignment-org',
+      }),
+    ).rejects.toThrow();
+
+    await expect(
+      db.insert(agentDelegation).values({
+        ownerUserId,
+        organizationId,
+        assignmentId,
+        sessionId: otherOrganizationSessionId,
+        connectionId: latticeConnectionId,
+        runtimeId: 'lat_wrong_session_org',
+        logicalSubmissionId: 'docket:delegation:wrong-session-org',
+        workId: 'work_wrong_session_org',
+        replyKeyCiphertext: 'v1:gcm:wrong-session-org',
+      }),
+    ).rejects.toThrow();
+
+    await db.insert(agentDelegation).values({
+      ownerUserId,
+      organizationId,
+      assignmentId,
+      sessionId: sameOrganizationSessionId,
+      connectionId: latticeConnectionId,
+      runtimeId: 'lat_same_org',
+      logicalSubmissionId: 'docket:delegation:same-org',
+      workId: 'work_same_org',
+      replyKeyCiphertext: 'v1:gcm:same-org',
+    });
+  });
+
+  it('requires a returned activity from the delegation session only after a usable result', async () => {
+    const assignmentId = await createAssignment(organizationId, 'delegation-returned-activity');
+    const sessionId = await createAthenaSession(organizationId);
+    const otherSessionId = await createAthenaSession(organizationId);
+    const latticeConnectionId = await connectionId();
+    const [delegation] = await db
+      .insert(agentDelegation)
+      .values({
+        ownerUserId,
+        organizationId,
+        assignmentId,
+        sessionId,
+        connectionId: latticeConnectionId,
+        runtimeId: 'lat_returned_activity',
+        logicalSubmissionId: 'docket:delegation:returned-activity',
+        workId: 'work_returned_activity',
+        replyKeyCiphertext: 'v1:gcm:returned-activity',
+      })
+      .returning({ id: agentDelegation.id });
+    const [sameSessionActivity] = await db
+      .insert(sessionActivity)
+      .values({ sessionId, type: 'action', body: {} })
+      .returning({ id: sessionActivity.id });
+    const [otherSessionActivity] = await db
+      .insert(sessionActivity)
+      .values({ sessionId: otherSessionId, type: 'action', body: {} })
+      .returning({ id: sessionActivity.id });
+    const delegationId = assertDefined(delegation).id;
+    const terminalResult = {
+      status: 'proposed' as const,
+      terminalOutcome: { outcome: 'completed' },
+      replyKeyCiphertext: null,
+    };
+
+    await expect(
+      db.update(agentDelegation).set(terminalResult).where(eq(agentDelegation.id, delegationId)),
+    ).rejects.toThrow();
+    await expect(
+      db
+        .update(agentDelegation)
+        .set({
+          ...terminalResult,
+          returnedActivityId: assertDefined(otherSessionActivity).id,
+        })
+        .where(eq(agentDelegation.id, delegationId)),
+    ).rejects.toThrow();
+
+    await db
+      .update(agentDelegation)
+      .set({
+        ...terminalResult,
+        returnedActivityId: assertDefined(sameSessionActivity).id,
+      })
+      .where(eq(agentDelegation.id, delegationId));
+
+    await db
+      .update(agentDelegation)
+      .set({ status: 'completed' })
+      .where(eq(agentDelegation.id, delegationId));
+
+    const failedAssignmentId = await createAssignment(
+      organizationId,
+      'delegation-returned-activity-failure',
+    );
+    const [failedDelegation] = await db
+      .insert(agentDelegation)
+      .values({
+        ownerUserId,
+        organizationId,
+        assignmentId: failedAssignmentId,
+        sessionId,
+        connectionId: latticeConnectionId,
+        runtimeId: 'lat_returned_activity_failure',
+        logicalSubmissionId: 'docket:delegation:returned-activity-failure',
+        workId: 'work_returned_activity_failure',
+        replyKeyCiphertext: 'v1:gcm:returned-activity-failure',
+      })
+      .returning({ id: agentDelegation.id });
+    await db
+      .update(agentDelegation)
+      .set({ status: 'failed', failureCode: 'runtime_failed', replyKeyCiphertext: null })
+      .where(eq(agentDelegation.id, assertDefined(failedDelegation).id));
+  });
+
+  it('adds an index led by every delegation foreign-key column set', async () => {
+    const result = (await db.execute(`
+      select indexname, indexdef
+      from pg_indexes
+      where schemaname = 'public' and tablename = 'agent_delegation'
+    `)) as unknown as { rows: { indexname: string; indexdef: string }[] };
+    const indexes = Object.fromEntries(result.rows.map((row) => [row.indexname, row.indexdef]));
+
+    expect(indexes['agent_delegation_assignment_owner_org_idx']).toContain(
+      '(assignment_id, owner_user_id, organization_id)',
+    );
+    expect(indexes['agent_delegation_session_owner_org_idx']).toContain(
+      '(session_id, owner_user_id, organization_id)',
+    );
+    expect(indexes['agent_delegation_connection_owner_idx']).toContain(
+      '(connection_id, owner_user_id)',
+    );
+    expect(indexes['agent_delegation_organization_idx']).toContain('(organization_id)');
+    expect(indexes['agent_delegation_task_idx']).toContain('(task_id)');
+    expect(indexes['agent_delegation_returned_activity_session_idx']).toContain(
+      '(returned_activity_id, session_id)',
+    );
   });
 
   it('binds personal connection credentials to the same owner', async () => {

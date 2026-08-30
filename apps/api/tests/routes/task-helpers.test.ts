@@ -16,6 +16,7 @@ import type * as DbModule from '@docket/db';
 import {
   buildTaskViewCondition,
   buildTaskViewFilter,
+  toOut,
   type ViewableTaskParts,
 } from '../../src/routes/task-helpers';
 import { getDb, one, seedBaseOrg } from '../support/routes-harness';
@@ -316,4 +317,29 @@ describe('buildTaskViewFilter', () => {
       expect(canView(fixture.task)).toBe(false);
     },
   );
+});
+
+describe('toOut', () => {
+  it('returns the stored summary, so a written one can be read back', async () => {
+    const schema = await getDb();
+    const { db } = schema;
+    const base = await seedBaseOrg(db, schema);
+    const row = one(
+      await db
+        .insert(schema.task)
+        .values({
+          organizationId: base.orgId,
+          title: 'Renew the studio insurance policy',
+          summary: 'Broker needs the signed schedule before the 1st.',
+          teamId: base.teamId,
+          state: 'todo',
+          statusId: base.statusId('task', 'todo'),
+        })
+        .returning(),
+    );
+
+    // `TaskOut.summary` is optional, so omitting it here parsed cleanly and the field simply never
+    // reached any client — a write-only column with a contract that advertised reads.
+    expect(toOut(row, []).summary).toBe('Broker needs the signed schedule before the 1st.');
+  });
 });

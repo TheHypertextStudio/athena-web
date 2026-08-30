@@ -91,6 +91,17 @@ export async function taskCategoriesFor(
 /** Longest summary a Hub row carries. One line at a readable measure. */
 const SUMMARY_MAX = 140;
 
+/**
+ * How much of a description the fallback ever inspects.
+ *
+ * @remarks
+ * The result is capped at {@link SUMMARY_MAX}, so the lead sentence can only ever come from the
+ * opening of the text — running ten passes over a whole multi-kilobyte document to produce 140
+ * characters is work with no effect on the answer. A Hub read serializes well over a hundred tasks,
+ * so this is the difference between scanning a paragraph per row and scanning a document per row.
+ */
+const SUMMARY_SCAN_MAX = 2_000;
+
 /** Markdown syntax that carries no meaning once the text is one plain line. */
 const MARKDOWN_NOISE: readonly (readonly [RegExp, string])[] = [
   [/```[\s\S]*?```/g, ' '], // fenced code
@@ -129,14 +140,18 @@ const MARKDOWN_NOISE: readonly (readonly [RegExp, string])[] = [
  */
 function taskSummary(description: string | null): string | null {
   if (!description) return null;
-  let text = description;
+  let text = description.slice(0, SUMMARY_SCAN_MAX);
   for (const [pattern, replacement] of MARKDOWN_NOISE) text = text.replace(pattern, replacement);
   const flat = text.replace(/\s+/g, ' ').trim();
   if (flat.length === 0) return null;
 
-  // The first sentence, when the text actually has sentence punctuation before the cap.
-  const sentence = /^(.+?[.!?])(?:\s|$)/.exec(flat.slice(0, SUMMARY_MAX + 40));
-  if (sentence?.[1] && sentence[1].length <= SUMMARY_MAX) return sentence[1];
+  // The first sentence, when the text actually has sentence punctuation before the cap. The
+  // following character must open a new sentence, because a bare "period then space" also matches
+  // the inside of "e.g. rebuild the form" or "No. 4 press check" and would return the abbreviation
+  // as the whole summary. A match of only a word or two is rejected for the same reason.
+  const sentence = /^(.+?[.!?])(?:\s+(?=[A-Z0-9"'([])|$)/.exec(flat.slice(0, SUMMARY_MAX + 40));
+  const lead = sentence?.[1];
+  if (lead && lead.length <= SUMMARY_MAX && lead.split(' ').length >= 4) return lead;
 
   if (flat.length <= SUMMARY_MAX) return flat;
   // Otherwise cut on a word boundary rather than mid-word.

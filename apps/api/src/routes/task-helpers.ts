@@ -35,6 +35,7 @@ export function toOut(t: TaskRow, labels: readonly LabelRefRow[]): z.input<typeo
     organizationId: t.organizationId,
     title: t.title,
     description: t.description,
+    summary: t.summary,
     teamId: t.teamId,
     state: t.state,
     priority: t.priority,

@@ -27,6 +27,13 @@ export {
 } from './atoms/StatusIcon';
 export { IdentityGlyph, type IdentityGlyphProps } from './atoms/IdentityGlyph';
 export {
+  ResponsiveControlGroup,
+  type ResponsiveControlGroupProps,
+  type ResponsiveControlLayout,
+  type ResponsiveControlItem,
+  useResponsiveControlLayout,
+} from './toolbar';
+export {
   InlineBanner,
   type InlineBannerAction,
   type InlineBannerProps,

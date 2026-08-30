@@ -24,7 +24,7 @@ import {
   HEALTH_LABEL,
   HEALTH_UNKNOWN_FILL_CLASS,
   HEALTH_UNKNOWN_LABEL,
-} from './health';
+} from '@/components/entity-display/health';
 
 /** One ordered segment of the distribution bar (worst→best, neutral last). */
 interface Segment {

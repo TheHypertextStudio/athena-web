@@ -35,6 +35,8 @@ import {
 } from './renderer-types';
 import { objectForWorkViewRow, type WorkViewRowInteractionPolicy } from './work-view-object';
 
+import { CARD_CHECKBOX_REVEAL_CLASS } from './card-styles';
+
 const MAX_MOUNTED_CARDS_PER_CELL = 100;
 
 /** Property-changing move emitted by a mutable board group. */
@@ -188,6 +190,7 @@ function WorkBoardCard<TTarget extends ViewTarget>({
       role="article"
       aria-label={workViewRowTitle(row)}
       data-drop-state={relation.dropState}
+      data-selecting={selectionActive || selected}
       className={cn(
         'group/card border-outline-variant bg-surface text-on-surface hover:bg-surface-container-high relative rounded-lg border p-3',
         relation.dropProps.className,
@@ -197,9 +200,7 @@ function WorkBoardCard<TTarget extends ViewTarget>({
     >
       <div className="flex items-start gap-2">
         {interaction.writable ? (
-          <span
-            className={`${selectionActive || selected ? 'opacity-100' : 'opacity-0 group-focus-within/card:opacity-100 group-hover/card:opacity-100'} transition-opacity`}
-          >
+          <span className={CARD_CHECKBOX_REVEAL_CLASS}>
             <Checkbox
               aria-label={`Select ${workViewRowTitle(row)}`}
               checked={selected}

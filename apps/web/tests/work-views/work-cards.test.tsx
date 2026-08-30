@@ -119,7 +119,9 @@ describe('WorkCards', () => {
 
     expect(screen.getByRole('list', { name: 'Task cards' })).toBeInTheDocument();
     expect(
-      screen.getByRole('checkbox', { name: 'Select Ship the roster' }).parentElement?.parentElement,
+      screen
+        .getByRole('checkbox', { name: 'Select Ship the roster' })
+        .closest('[data-selection-slot]'),
     ).toHaveClass('opacity-0');
     const link = screen.getByRole('link', { name: /Ship the roster/ });
     expect(link).toHaveAttribute('href', `/orgs/${task.organizationId}/tasks/${task.id}`);
@@ -182,7 +184,7 @@ describe('WorkCards', () => {
     expect(screen.getByText('Willie Chalmers III')).toBeVisible();
   });
 
-  it('renders a Program card around its own name, verdict, owner, and visible activity', () => {
+  it('renders a Program card around its own name, health, owner, and visible activity', () => {
     const { container } = render(
       <WorkCards
         target="program"
@@ -236,8 +238,9 @@ describe('WorkCards', () => {
 
     // Programs used to be the one target whose checkbox was pinned to the opposite corner, where
     // it sat in the card's padding gutter instead of over the identity glyph it replaces.
-    const slot = screen.getByRole('checkbox', { name: 'Select Transit coalition partnerships' })
-      .parentElement?.parentElement;
+    const slot = screen
+      .getByRole('checkbox', { name: 'Select Transit coalition partnerships' })
+      .closest('[data-selection-slot]');
     expect(slot).toHaveClass('left-4');
   });
 
@@ -287,6 +290,34 @@ describe('WorkCards', () => {
     expect(screen.queryByText('Willie Chalmers III')).not.toBeInTheDocument();
     expect(screen.queryByText(String(program.projectCount))).not.toBeInTheDocument();
     expect(screen.queryByText(String(program.taskCount))).not.toBeInTheDocument();
+  });
+
+  it('falls through to a label and value for a property it does not compose itself', () => {
+    const withExtras = ProgramViewDefinition.parse({
+      ...programDefinition,
+      presentation: {
+        ...programDefinition.presentation,
+        properties: ['status', 'visibility', 'updatedAt'],
+      },
+    });
+
+    render(
+      <WorkCards
+        target="program"
+        definition={withExtras}
+        rows={[program]}
+        selectedIds={new Set()}
+        onSelectionChange={vi.fn()}
+        onActivate={vi.fn()}
+      />,
+    );
+
+    // The contract marks eleven Program fields displayable and Display offers a toggle for each.
+    // Only five have a designed place on the card, so the rest have to land somewhere or their
+    // toggles do nothing at all.
+    expect(screen.getByText('Visibility')).toBeVisible();
+    expect(screen.getByText('private')).toBeVisible();
+    expect(screen.getByText('Updated')).toBeVisible();
   });
 
   it('renders a quiet Program pulse when its activity summary has no events', () => {

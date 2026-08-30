@@ -6,7 +6,7 @@ import {
   type Health,
   type WorkViewActor,
 } from '@docket/types';
-import { ActorAvatar, ListCell, ListRow, ListView } from '@docket/ui/components';
+import { ListCell, ListRow, ListView } from '@docket/ui/components';
 import { Calendar } from '@docket/ui/icons';
 import { STRETCHED_LINK } from '@docket/ui/lib/stretched-link';
 import { cn } from '@docket/ui/lib/utils';
@@ -26,6 +26,7 @@ import { useDragState } from '@/components/dnd/drag-context';
 import DocketLink from '@/components/docket-link';
 import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
 import { HealthLabel } from '@/components/entity-display/health';
+import { ActorName } from '@/components/entity-display/roster-cells';
 import { useWorkStatusResolver } from '@/components/entity-display/use-work-status';
 import { WorkStatusIcon } from '@/components/entity-display/work-status';
 import { formatDate } from '@/components/initiatives/format-date';
@@ -375,15 +376,9 @@ function PropertyValue({
   }
   if (actor) {
     return (
-      <span className="flex min-w-0 items-center gap-2">
-        <ActorAvatar
-          kind={actor.kind}
-          name={actor.displayName}
-          avatarUrl={actor.avatar}
-          size={20}
-        />
-        <span className="truncate">{actor.displayName}</span>
-      </span>
+      // `body-medium` and the default tone are what a ListRow cell already renders, so this reads
+      // exactly as the inline pair it replaces.
+      <ActorName actor={actor} token="body-medium" tone="default" />
     );
   }
   if (field.kind === 'date' || field.key === 'latestUpdate') {

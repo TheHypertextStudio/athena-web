@@ -59,10 +59,10 @@ tail below names exactly which files still owe one.
 | --- | --- |
 | Placeholder elements | 242 |
 | Files containing one | 101 |
-| Annotated | 151 |
-| Unannotated | 91 |
+| Annotated | 146 |
+| Unannotated | 96 |
 | Inside the enforced scope | 236 |
-| Unannotated inside the enforced scope | 85 |
+| Unannotated inside the enforced scope | 90 |
 
 ## Remaining unannotated, by file
 
@@ -71,6 +71,7 @@ tail below names exactly which files still owe one.
 | `apps/web/src/components/time-tracking/focus-immersive.tsx` | 6 |
 | `apps/web/src/components/mentions/mention-menu.tsx` | 5 |
 | `apps/web/src/components/task-detail/task-detail-loading.tsx` | 5 |
+| `apps/web/src/components/work-views/work-view-page.tsx` | 5 |
 | `apps/web/src/components/stream/stream-view.tsx` | 4 |
 | `apps/web/src/app/(app)/orgs/[orgId]/recurrence-series/[seriesId]/page.tsx` | 3 |
 | `apps/web/src/components/athena/athena-panel-provider.tsx` | 3 |
@@ -319,7 +320,7 @@ tail below names exactly which files still owe one.
 | `apps/web/src/components/tasks/task-hierarchy-picker-overlay.tsx:129` | `TaskHierarchyPickerOverlay` | skeleton | **unannotated** |
 | `apps/web/src/components/team-detail/team-people.tsx:121` | `TeamPeopleSkeleton` | skeleton | who is on this team, their titles, roles, and current load. |
 | `apps/web/src/components/teams/team-card.tsx:179` | `TeamCardsSkeleton` | skeleton | how many teams the workspace has, and each one's cover, name, roster and counts. |
-| `apps/web/src/components/teams/team-list-ui.tsx:204` | `ListSkeleton` | skeleton | the team rows — how many teams the workspace has and each one's name, key and member count. The roster's heading and "New team" action are static copy. |
+| `apps/web/src/components/teams/team-list-ui.tsx:202` | `ListSkeleton` | skeleton | the team rows — how many teams the workspace has and each one's name, key and member count. The roster's heading and "New team" action are static copy. |
 | `apps/web/src/components/time-tracking/focus-immersive.tsx:89` | `FocusImmersive` | skeleton | **unannotated** |
 | `apps/web/src/components/time-tracking/focus-immersive.tsx:90` | `FocusImmersive` | skeleton | **unannotated** |
 | `apps/web/src/components/time-tracking/focus-immersive.tsx:91` | `FocusImmersive` | skeleton | **unannotated** |
@@ -336,20 +337,20 @@ tail below names exactly which files still owe one.
 | `apps/web/src/components/views/entity-detail-skeleton.tsx:114` | `EntityDetailSkeleton` | skeleton | the breadcrumb trail, which names containers the record has not been read from yet. |
 | `apps/web/src/components/views/entity-detail-skeleton.tsx:143` | `EntityDetailBodySkeleton` | status-loader | the active tab's panel, still being assembled from the composite read. |
 | `apps/web/src/components/work-views/project-dependency-lens.tsx:62` | `ProjectDependencyLens` | skeleton | **unannotated** |
-| `apps/web/src/components/work-views/work-view-page.tsx:354` | `WorkViewPage` | skeleton | the cards themselves — how many there are, and each one's name, summary, verdict, owner and rolled-up counts. Shaped like the loaded card, on the loaded card's own grid, because a list-shaped stand-in under a card lens does not fill in so much as rearrange itself. |
-| `apps/web/src/components/work-views/work-view-page.tsx:356` | `WorkViewPage` | skeleton | the cards themselves — how many there are, and each one's name, summary, verdict, owner and rolled-up counts. Shaped like the loaded card, on the loaded card's own grid, because a list-shaped stand-in under a card lens does not fill in so much as rearrange itself. |
-| `apps/web/src/components/work-views/work-view-page.tsx:357` | `WorkViewPage` | skeleton | the cards themselves — how many there are, and each one's name, summary, verdict, owner and rolled-up counts. Shaped like the loaded card, on the loaded card's own grid, because a list-shaped stand-in under a card lens does not fill in so much as rearrange itself. |
-| `apps/web/src/components/work-views/work-view-page.tsx:360` | `WorkViewPage` | skeleton | the cards themselves — how many there are, and each one's name, summary, verdict, owner and rolled-up counts. Shaped like the loaded card, on the loaded card's own grid, because a list-shaped stand-in under a card lens does not fill in so much as rearrange itself. |
-| `apps/web/src/components/work-views/work-view-page.tsx:361` | `WorkViewPage` | skeleton | the cards themselves — how many there are, and each one's name, summary, verdict, owner and rolled-up counts. Shaped like the loaded card, on the loaded card's own grid, because a list-shaped stand-in under a card lens does not fill in so much as rearrange itself. |
-| `apps/web/src/components/work-views/work-view-page.tsx:364` | `WorkViewPage` | skeleton | the cards themselves — how many there are, and each one's name, summary, verdict, owner and rolled-up counts. Shaped like the loaded card, on the loaded card's own grid, because a list-shaped stand-in under a card lens does not fill in so much as rearrange itself. |
-| `apps/web/src/components/work-views/work-view-page.tsx:365` | `WorkViewPage` | skeleton | the cards themselves — how many there are, and each one's name, summary, verdict, owner and rolled-up counts. Shaped like the loaded card, on the loaded card's own grid, because a list-shaped stand-in under a card lens does not fill in so much as rearrange itself. |
-| `apps/web/src/components/work-views/work-view-page.tsx:368` | `WorkViewPage` | skeleton | the cards themselves — how many there are, and each one's name, summary, verdict, owner and rolled-up counts. Shaped like the loaded card, on the loaded card's own grid, because a list-shaped stand-in under a card lens does not fill in so much as rearrange itself. |
-| `apps/web/src/components/work-views/work-view-page.tsx:369` | `WorkViewPage` | skeleton | the cards themselves — how many there are, and each one's name, summary, verdict, owner and rolled-up counts. Shaped like the loaded card, on the loaded card's own grid, because a list-shaped stand-in under a card lens does not fill in so much as rearrange itself. |
-| `apps/web/src/components/work-views/work-view-page.tsx:383` | `WorkViewPage` | skeleton | the cards themselves — how many there are, and each one's name, summary, verdict, owner and rolled-up counts. Shaped like the loaded card, on the loaded card's own grid, because a list-shaped stand-in under a card lens does not fill in so much as rearrange itself. |
-| `apps/web/src/components/work-views/work-view-page.tsx:387` | `WorkViewPage` | skeleton | the cards themselves — how many there are, and each one's name, summary, verdict, owner and rolled-up counts. Shaped like the loaded card, on the loaded card's own grid, because a list-shaped stand-in under a card lens does not fill in so much as rearrange itself. |
-| `apps/web/src/components/work-views/work-view-page.tsx:388` | `WorkViewPage` | skeleton | the cards themselves — how many there are, and each one's name, summary, verdict, owner and rolled-up counts. Shaped like the loaded card, on the loaded card's own grid, because a list-shaped stand-in under a card lens does not fill in so much as rearrange itself. |
-| `apps/web/src/components/work-views/work-view-page.tsx:390` | `WorkViewPage` | skeleton | the cards themselves — how many there are, and each one's name, summary, verdict, owner and rolled-up counts. Shaped like the loaded card, on the loaded card's own grid, because a list-shaped stand-in under a card lens does not fill in so much as rearrange itself. |
-| `apps/web/src/components/work-views/work-view-page.tsx:391` | `WorkViewPage` | skeleton | the cards themselves — how many there are, and each one's name, summary, verdict, owner and rolled-up counts. Shaped like the loaded card, on the loaded card's own grid, because a list-shaped stand-in under a card lens does not fill in so much as rearrange itself. |
+| `apps/web/src/components/work-views/work-view-page.tsx:179` | `CardsSkeleton` | skeleton | the roster rows — how many there are, and each one's mark, name, and the two |
+| `apps/web/src/components/work-views/work-view-page.tsx:181` | `CardsSkeleton` | skeleton | the roster rows — how many there are, and each one's mark, name, and the two |
+| `apps/web/src/components/work-views/work-view-page.tsx:182` | `CardsSkeleton` | skeleton | the roster rows — how many there are, and each one's mark, name, and the two |
+| `apps/web/src/components/work-views/work-view-page.tsx:185` | `CardsSkeleton` | skeleton | the roster rows — how many there are, and each one's mark, name, and the two |
+| `apps/web/src/components/work-views/work-view-page.tsx:186` | `CardsSkeleton` | skeleton | the roster rows — how many there are, and each one's mark, name, and the two |
+| `apps/web/src/components/work-views/work-view-page.tsx:189` | `CardsSkeleton` | skeleton | the roster rows — how many there are, and each one's mark, name, and the two |
+| `apps/web/src/components/work-views/work-view-page.tsx:190` | `CardsSkeleton` | skeleton | the roster rows — how many there are, and each one's mark, name, and the two |
+| `apps/web/src/components/work-views/work-view-page.tsx:193` | `CardsSkeleton` | skeleton | the roster rows — how many there are, and each one's mark, name, and the two |
+| `apps/web/src/components/work-views/work-view-page.tsx:194` | `CardsSkeleton` | skeleton | the roster rows — how many there are, and each one's mark, name, and the two |
+| `apps/web/src/components/work-views/work-view-page.tsx:217` | `RowsSkeleton` | skeleton | **unannotated** |
+| `apps/web/src/components/work-views/work-view-page.tsx:221` | `RowsSkeleton` | skeleton | **unannotated** |
+| `apps/web/src/components/work-views/work-view-page.tsx:222` | `RowsSkeleton` | skeleton | **unannotated** |
+| `apps/web/src/components/work-views/work-view-page.tsx:224` | `RowsSkeleton` | skeleton | **unannotated** |
+| `apps/web/src/components/work-views/work-view-page.tsx:225` | `RowsSkeleton` | skeleton | **unannotated** |
 | `packages/ui/src/components/pickers/PickerList.tsx:404` | `PickerList` | skeleton | **unannotated** |
 | `packages/ui/src/components/pickers/PickerList.tsx:405` | `PickerList` | skeleton | **unannotated** |
 | `packages/ui/src/components/shell/ShellActivityBar.tsx:91` | `ShellActivityBar` | animate-pulse | **unannotated** |

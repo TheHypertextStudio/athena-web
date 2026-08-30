@@ -6,7 +6,7 @@ import { ActorAvatar } from '@docket/ui/components';
 import type { JSX } from 'react';
 
 import { relativeTime } from '@/components/programs/format-time';
-import { HEALTH_DOT_CLASS, HEALTH_LABEL } from '@/components/entity-display/health';
+import { HEALTH_FILL_CLASS, HEALTH_LABEL } from '@/components/entity-display/health';
 
 /** Props for {@link LatestUpdateSummary}. */
 export interface LatestUpdateSummaryProps {
@@ -52,7 +52,7 @@ export function LatestUpdateSummary({
                 <span className="text-on-surface-variant text-label-medium inline-flex items-center gap-1.5">
                   <span
                     aria-hidden="true"
-                    className={`size-1.5 rounded-full ${HEALTH_DOT_CLASS[update.health]}`}
+                    className={`size-1.5 rounded-full ${HEALTH_FILL_CLASS[update.health]}`}
                   />
                   {HEALTH_LABEL[update.health]}
                 </span>

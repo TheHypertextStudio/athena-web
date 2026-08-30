@@ -6,6 +6,7 @@ import type {
   WorkViewGroup,
 } from '@docket/types';
 import type { ViewTarget } from '@docket/work/view-contract';
+import { formatCalendarDate } from '@/lib/format-date';
 
 /** Target-indexed row projection consumed by shared roster renderers. */
 export interface WorkViewRowByTarget {
@@ -72,6 +73,9 @@ export function formatWorkViewValue(value: unknown, kind?: string): string {
   if (kind === 'relation-many')
     return Array.isArray(value) && value.length > 0 ? String(value.length) : '—';
   if (Array.isArray(value)) return value.length === 0 ? '—' : String(value.length);
+  if ((kind === 'date' || kind === 'datetime') && typeof value === 'string') {
+    return formatCalendarDate(value) ?? '—';
+  }
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   if (typeof value === 'number')
     return Number.isInteger(value) ? String(value) : `${String(Math.round(value * 100))}%`;

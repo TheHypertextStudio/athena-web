@@ -6,7 +6,7 @@ import { FolderKanban, Layers, Target } from '@docket/ui/icons';
 import { DecorativeIcon } from '@docket/ui/primitives';
 import type { JSX, ReactNode } from 'react';
 
-import { HEALTH_DOT_CLASS, HEALTH_LABEL } from '@/components/entity-display/health';
+import { HEALTH_FILL_CLASS, HEALTH_LABEL } from '@/components/entity-display/health';
 
 /** Props for {@link InitiativeOverviewSummary}. */
 export interface InitiativeOverviewSummaryProps {
@@ -43,7 +43,7 @@ export function InitiativeOverviewSummary({
         <div className="text-on-surface-variant text-body-small inline-flex items-center gap-2">
           <span
             aria-hidden="true"
-            className={`size-2 rounded-full ${health ? HEALTH_DOT_CLASS[health] : 'bg-on-surface-variant/50'}`}
+            className={`size-2 rounded-full ${health ? HEALTH_FILL_CLASS[health] : 'bg-on-surface-variant/50'}`}
           />
           {health ? `Rollup: ${HEALTH_LABEL[health]}` : 'No connected health set'}
         </div>
@@ -115,7 +115,7 @@ function HealthCount({
     <div className="flex items-center gap-2">
       <span
         aria-hidden="true"
-        className={`size-2 rounded-full ${tone ? HEALTH_DOT_CLASS[tone] : 'bg-on-surface-variant/50'}`}
+        className={`size-2 rounded-full ${tone ? HEALTH_FILL_CLASS[tone] : 'bg-on-surface-variant/50'}`}
       />
       <dt className="text-on-surface-variant text-label-medium">{label}</dt>
       <dd className="text-on-surface text-body-small ml-auto tabular-nums">{value}</dd>

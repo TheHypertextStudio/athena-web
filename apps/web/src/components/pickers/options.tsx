@@ -42,7 +42,7 @@ import type { ReactNode } from 'react';
 
 import { CYCLE_STATUS } from '@/components/cycles/cycle-status';
 import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
-import { HEALTH_DOT_CLASS, HEALTH_LABEL } from '@/components/project-detail/health';
+import { HEALTH_FILL_CLASS, HEALTH_LABEL } from '@/components/entity-display/health';
 import type { StatusLike } from '@/components/statuses/status-registry';
 import { PRIORITY_LABEL, PRIORITY_ORDER } from '@/components/task-detail/priority';
 import { PriorityGlyph } from '@/components/task-detail/PriorityGlyph';
@@ -75,7 +75,7 @@ const HEALTH_ORDER: readonly Health[] = ['on_track', 'at_risk', 'off_track'];
 export const HEALTH_OPTIONS: readonly PickerOption<Health>[] = HEALTH_ORDER.map((health) => ({
   value: health,
   label: HEALTH_LABEL[health],
-  icon: <span className={`size-2.5 rounded-full ${HEALTH_DOT_CLASS[health]}`} aria-hidden />,
+  icon: <span className={`size-2.5 rounded-full ${HEALTH_FILL_CLASS[health]}`} aria-hidden />,
 }));
 
 /**

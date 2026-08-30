@@ -33,7 +33,7 @@ import { Handle, type NodeProps, Position } from '@xyflow/react';
 import Link from '@/components/docket-link';
 import { memo } from 'react';
 
-import { HEALTH_DOT_CLASS, HEALTH_LABEL } from '@/components/projects/health';
+import { HEALTH_FILL_CLASS, HEALTH_LABEL } from '@/components/entity-display/health';
 import { ObjectSurface } from '@/components/objects/object-surface';
 import { useWorkStatus } from '@/components/entity-display/use-work-status';
 import { WorkStatusBadge, WorkStatusIcon } from '@/components/entity-display/work-status';
@@ -187,7 +187,7 @@ function ProjectNodeComponent({ id, data, selected }: NodeProps): React.JSX.Elem
             <span
               aria-label={HEALTH_LABEL[health]}
               title={HEALTH_LABEL[health]}
-              className={cn('size-2 shrink-0 rounded-full', HEALTH_DOT_CLASS[health])}
+              className={cn('size-2 shrink-0 rounded-full', HEALTH_FILL_CLASS[health])}
             />
           ) : null}
         </div>

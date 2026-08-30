@@ -1,23 +1,24 @@
 'use client';
 
 /**
- * `entity-display/health` — the one presentation of a health verdict, wherever it is read.
+ * `entity-display/health` — the one presentation of health, wherever it is read.
  *
  * @remarks
- * `on_track | at_risk | off_track` is the same judgment on a Project, a Program, and an
- * Initiative, so it should look the same on all three, and the work-view lenses read it from here.
- * `projects/health.ts`, `project-detail/health.ts`, and `initiatives/health.ts` still hold their
- * own byte-identical copies; migrating those and deleting them is the remaining work.
+ * `on_track | at_risk | off_track` means the same thing on a Project, a Program, and an
+ * Initiative, so it should look the same on all three. It did not: four screens each kept their
+ * own token module, and every record in them was identical — the same labels, and one colour
+ * record living under two names, because a dot and a bar segment had been treated as different
+ * questions. They are the same question.
  *
  * Health is one of the few things the colour budget is spent on (craft rubric §5 — colour is
  * earned by semantics), which is why the colour sits on the label itself rather than only on a 6px
- * dot: the verdict has to survive being read at a glance.
+ * dot: it has to survive being read at a glance.
  */
 import type { Health } from '@docket/types';
 import { cn } from '@docket/ui/lib/utils';
 import type { JSX } from 'react';
 
-/** Human-readable label for each {@link Health} verdict. */
+/** Human-readable label for each {@link Health} value. */
 export const HEALTH_LABEL: Record<Health, string> = {
   on_track: 'On track',
   at_risk: 'At risk',
@@ -25,27 +26,26 @@ export const HEALTH_LABEL: Record<Health, string> = {
 };
 
 /**
- * The solid dot fill for each verdict.
+ * The solid colour for each value — a dot, a swatch, or a distribution segment.
  *
  * @remarks
  * `on_track` borrows the calm green `completed` state token, `at_risk` the amber `canceled` token,
- * and `off_track` the `error` role — so a verdict resolves in both themes without a raw value.
+ * and `off_track` the `error` role, so health resolves in both themes without a raw value.
  */
-export const HEALTH_DOT_CLASS: Record<Health, string> = {
+export const HEALTH_FILL_CLASS: Record<Health, string> = {
   on_track: 'bg-state-completed',
   at_risk: 'bg-state-canceled',
   off_track: 'bg-error',
 };
 
 /**
- * The tonal fill and foreground an {@link IdentityGlyph} takes for each verdict.
+ * The tonal fill and foreground an `IdentityGlyph` takes for each value.
  *
  * @remarks
- * A roster's job is to answer "which of these needs me?" before anything is read, and a verdict
- * spelled only in a label and a 6px dot cannot answer it at a glance across a grid. Tinting the
- * entity's own identity mark makes the verdict the largest coloured thing on a card without
- * spending colour on anything new — the mark was already there, in neutral. The label stays, so
- * the meaning never rests on colour alone.
+ * A roster's job is to answer "which of these needs me?" before anything is read, and health
+ * spelled only in a label and a 6px dot cannot answer it across a grid. Tinting the entity's own
+ * identity mark makes health the largest coloured thing on a card without spending colour on
+ * anything new. The label stays, so the meaning never rests on colour alone.
  */
 export const HEALTH_GLYPH_CLASS: Record<Health, string> = {
   on_track: 'bg-state-completed/15 text-state-completed',
@@ -53,7 +53,13 @@ export const HEALTH_GLYPH_CLASS: Record<Health, string> = {
   off_track: 'bg-error/15 text-error',
 };
 
-/** The label colour paired with each {@link HEALTH_DOT_CLASS} fill. */
+/** The fill for children carrying no health, in an Initiative's distribution bar. */
+export const HEALTH_UNKNOWN_FILL_CLASS = 'bg-on-surface-variant/30';
+
+/** The label for the unknown-health bucket in a distribution legend. */
+export const HEALTH_UNKNOWN_LABEL = 'No health data';
+
+/** The label colour paired with each {@link HEALTH_FILL_CLASS} fill. */
 const HEALTH_TEXT_CLASS: Record<Health, string> = {
   on_track: 'text-state-completed',
   at_risk: 'text-state-canceled',
@@ -62,15 +68,15 @@ const HEALTH_TEXT_CLASS: Record<Health, string> = {
 
 /** Props for {@link HealthLabel}. */
 export interface HealthLabelProps {
-  /** The verdict, or `null` when nobody has set one. */
+  /** The health value, or `null` when nobody has set one. */
   readonly health: Health | null;
 }
 
 /**
- * A health verdict as a coloured dot and its label.
+ * Health as a coloured dot and its label.
  *
  * @param props - The {@link HealthLabelProps}.
- * @returns the verdict, or an em dash when it is unset.
+ * @returns the label, or an em dash when health is unset.
  */
 export function HealthLabel({ health }: HealthLabelProps): JSX.Element {
   if (!health) {
@@ -80,7 +86,7 @@ export function HealthLabel({ health }: HealthLabelProps): JSX.Element {
     <span className={cn(HEALTH_TEXT_CLASS[health], 'text-label-medium flex items-center gap-2')}>
       <span
         aria-hidden="true"
-        className={cn(HEALTH_DOT_CLASS[health], 'size-1.5 shrink-0 rounded-full')}
+        className={cn(HEALTH_FILL_CLASS[health], 'size-1.5 shrink-0 rounded-full')}
       />
       {HEALTH_LABEL[health]}
     </span>

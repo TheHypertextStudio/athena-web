@@ -7555,6 +7555,48 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
   `.env.local` points at a file-backed PGlite database shared by the dev stack and the API test
   suite, so seeding a dev account for screenshots corrupts test runs until `pnpm db:reset`.
+### [WORK-VIEW-DEBT-003] Collapse the duplicated roster presentation
+
+- **Completed**: 2026-08-29
+- **Summary**: Four health token modules became one, five dead files went, and the two cells every
+  roster repeats — a rolled-up count and an actor's avatar-plus-name — became shared components
+  that four call sites now use. The Programs card stopped ignoring six of the eleven display
+  properties its own contract offers.
+- **Approach**: A four-agent review of the Programs work turned up findings the redesign had left
+  behind or created, and this closes all of them rather than the convenient half.
+- **Health**: `projects/health.ts`, `project-detail/health.ts`, and `initiatives/health.ts` each
+  held a copy of the same records, verified identical by hash before merging — the same labels, and
+  one colour record living under two names (`HEALTH_DOT_CLASS` in one file, `HEALTH_FILL_CLASS` in
+  another) because a dot and a bar segment had been treated as different questions. All six
+  consumers now read `entity-display/health.tsx`. `readHealth` was a `?? null` with no callers and
+  went with them.
+- **Dead code**: `projects/project-health.tsx` (the twin of a file deleted two commits ago) and
+  `marketing/placeholder-surface.tsx` both had zero importers.
+- **Dead controls**: the Program contract marks eleven fields displayable and Display offers a
+  toggle for each, but the card composed five and silently dropped the rest. Unhandled switched-on
+  fields now fall through to the same label-and-value pair the other targets' cards render. That
+  needed `formatWorkViewValue` to learn dates first — it was returning a raw ISO string for any
+  `datetime`, which the generic card branch has been showing on every target all along.
+- **Waste**: `relativeTime` built a fresh `Intl` formatter per call, once per card per render, and
+  `workViewFieldCatalog` ran a schema parse per field on three lenses' render paths. Both are built
+  once now. Defaulting Programs to cards is what made either one hot.
+- **A bug this branch introduced**: `RowIdentity`'s `size` grew the circle but not its contents, so
+  a Task's status ring read lighter than a Project's icon at a card's 40px. All three branches
+  derive from the size now, the Task branch through the status glyph's own `--status-icon-size`.
+- **Language**: "verdict" was used as a synonym for health across the new module and the card.
+  `tests/components/initiative-health-language.test.ts` already banned that word on the Initiatives
+  screens, so the ban now covers the shared module every surface reads.
+- **Validation**: Root typecheck, lint, and format pass. `pnpm test` passes 25 of 26 tasks, with
+  `@docket/api`'s 19 pre-existing `initiatives-detail` and `programs` CRUD failures unchanged.
+  `design-token-debt.json` fell from 626 to 618 — `team-list-ui.tsx` lost two raw type utilities to
+  the shared count cell — and no touched file carries a new entry. Programs, Teams, and Projects
+  were re-captured at both widths and both themes; all three render unchanged.
+- **Learnings**: The word a test bans is worth grepping for before inventing vocabulary — the
+  Initiatives screens had already rejected "verdict" for health, and the ban did not reach the new
+  shared module until the module was added to it.
+
+---
+
 ### [MARKETING-COPY-002] Let the marketing page show the product without a disclaimer
 
 - **Completed**: 2026-08-29
@@ -7599,7 +7641,7 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 - **Completed**: 2026-08-29
 - **Summary**: The Cards lens is now the Program roster's default, and its card carries what the
-  List lens carries — workspace status, health verdict, owner, and the rolled-up project and task
+  List lens carries — workspace status, health, owner, and the rolled-up project and task
   counts — instead of a name, a summary, and an activity histogram. The card frame it sits in was
   repaired, three orphaned Programs modules were deleted, and health gained one shared treatment.
 - **Approach**: Four defects drove the work, each visible in a screenshot rather than inferred.
@@ -7628,7 +7670,7 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
     `work-list.tsx` so both lenses draw one mark per kind of work. The Cards lens had been rendering
     an empty `size-6` spacer where a glyph would go.
   - `apps/web/src/components/entity-display/health.tsx` (new) — one `HealthLabel`, replacing the
-    records `work-list.tsx` and the card each kept privately. The verdict now takes the colour
+    records `work-list.tsx` and the card each kept privately. Health now takes the colour
     rather than delegating it to a 6px dot.
   - `apps/web/src/components/work-views/work-view-page.tsx` — Programs default to `cards`, and the
     loading skeleton follows the layout, so the roster fills in instead of painting list rows and
@@ -7657,10 +7699,10 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   with non-zero task counts means creating tasks under the Program's projects.
 - **Second pass (2026-08-29)**: The first pass was structurally right and still read as bland, and
   it stamped "Unowned" under every card without an owner. Removed that placeholder and the em dash
-  for an unset verdict — a table column needs a placeholder to hold its rows in line, a card does
+  where health is unset — a table column needs a placeholder to hold its rows in line, a card does
   not, and on a roster where most Programs are unassigned the placeholder becomes the most repeated
   words on the screen. Then pushed the card toward MD3 Expressive within the token system: the
-  health verdict now tints the identity mark (`HEALTH_GLYPH_CLASS`), which turns the card's largest
+  health now tints the identity mark (`HEALTH_GLYPH_CLASS`), which turns the card's largest
   element into its most useful one and makes the grid answer "which of these needs me?" at a squint;
   the title moved to `title-large` and the summary to `body-medium`, because everything below the
   title had been sitting at 11–12px with no middle register; and the roll-up moved into a tonal
@@ -7669,7 +7711,7 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   had outgrown the skeleton built for the shorter one. Both fixed. Scorecard:
   `docs/design/audits/2026-08-29-programs-cards.md` — SHIP, typography/hierarchy/colour at 4.
 - **Open findings**: `--state-canceled` (`oklch(0.5 0.03 25)`, chroma 0.03) is a near-grey, correct
-  for cancelled work and wrong for "at risk" — the middle health verdict, the one worth catching
+  for cancelled work and wrong for "at risk" — the middle health value, the one worth catching
   early, reads as beige in both themes while on-track and off-track read instantly. All four health
   modules borrow it, so fixing it means a `--health-at-risk` token and a product-wide palette
   decision. The shared work-view empty state also names itself without teaching, and its CTA

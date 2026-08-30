@@ -31,7 +31,11 @@ import { useWorkStatusResolver } from '@/components/entity-display/use-work-stat
 import { ObjectSurface } from '@/components/objects/object-surface';
 
 import { formatAxisTick, formatPlanningDate, toMillis } from './format-date';
-import { HEALTH_FILL_CLASS, HEALTH_LABEL, HEALTH_UNKNOWN_FILL_CLASS } from './health';
+import {
+  HEALTH_FILL_CLASS,
+  HEALTH_LABEL,
+  HEALTH_UNKNOWN_FILL_CLASS,
+} from '@/components/entity-display/health';
 import { computeWindow, pct, placeBars } from './roadmap-math';
 
 /** The health-keyed fill class for a bar or swatch, defaulting to the neutral unknown fill. */

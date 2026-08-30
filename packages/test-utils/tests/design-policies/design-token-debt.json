@@ -296,9 +296,6 @@
   "apps/web/src/components/projects/project-catalog.ts": {
     "raw-type-utility": 1
   },
-  "apps/web/src/components/projects/project-health.tsx": {
-    "raw-type-utility": 6
-  },
   "apps/web/src/components/property-pickers/property-panel.tsx": {
     "raw-type-utility": 2
   },
@@ -334,7 +331,7 @@
     "raw-type-utility": 4
   },
   "apps/web/src/components/teams/team-list-ui.tsx": {
-    "raw-type-utility": 10
+    "raw-type-utility": 8
   },
   "apps/web/src/components/teams/team-picker.tsx": {
     "raw-type-utility": 1

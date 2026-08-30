@@ -25,6 +25,7 @@ import type { ComponentPropsWithoutRef, JSX } from 'react';
 
 import { ObjectSurface } from '@/components/objects/object-surface';
 import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
+import { WorkCount } from '@/components/entity-display/roster-cells';
 import { ROSTER_DATA_CELL_CLASS, ROSTER_HEADER_CELL_CLASS } from '@/components/views/roster-grid';
 
 /** The row view-model derived for one Team (scope + workflow roll-up). */
@@ -124,19 +125,16 @@ function TeamGridRow({
             '—'
           )}
         </div>
-        <div
-          className={`${ROSTER_DATA_CELL_CLASS} text-on-surface-variant gap-1.5 text-sm tabular-nums`}
-        >
-          <FolderKanban aria-hidden="true" className="size-4" />
-          {projectCount}
-          <span className="sr-only">{projectWord}</span>
+        <div className={ROSTER_DATA_CELL_CLASS}>
+          <WorkCount
+            icon={FolderKanban}
+            value={projectCount}
+            noun={projectWord}
+            token="body-medium"
+          />
         </div>
         <div className={`${ROSTER_DATA_CELL_CLASS} justify-between gap-2`}>
-          <span className="text-on-surface-variant flex items-center gap-1.5 text-sm tabular-nums">
-            <ListChecks aria-hidden="true" className="size-4" />
-            {taskCount}
-            <span className="sr-only">{taskWord}</span>
-          </span>
+          <WorkCount icon={ListChecks} value={taskCount} noun={taskWord} token="body-medium" />
           {team.triageEnabled ? <Badge variant="secondary">Triage</Badge> : null}
         </div>
       </Link>

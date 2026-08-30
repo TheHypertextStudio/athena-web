@@ -26,7 +26,7 @@ import { cn } from '@docket/ui/lib/utils';
 import Link from '@/components/docket-link';
 import type { JSX } from 'react';
 
-import { HEALTH_DOT_CLASS, HEALTH_LABEL } from '@/components/projects/health';
+import { HEALTH_FILL_CLASS, HEALTH_LABEL } from '@/components/entity-display/health';
 import { useWorkStatus, useWorkStatusResolver } from '@/components/entity-display/use-work-status';
 import { WorkStatusBadge } from '@/components/entity-display/work-status';
 import { formatCalendarDate } from '@/lib/format-date';
@@ -173,7 +173,7 @@ export default function ProjectPeek({
             <span className="inline-flex items-center gap-1.5">
               <span
                 aria-hidden="true"
-                className={cn('size-2 rounded-full', HEALTH_DOT_CLASS[health])}
+                className={cn('size-2 rounded-full', HEALTH_FILL_CLASS[health])}
               />
               {HEALTH_LABEL[health]}
             </span>

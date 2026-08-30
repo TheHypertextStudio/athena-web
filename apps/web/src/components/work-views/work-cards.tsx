@@ -14,7 +14,13 @@ import DocketLink from '@/components/docket-link';
 import { buildEntityHref } from '@/lib/authenticated-route';
 import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
 
-import { CARD_GLYPH_FADE_CLASS, CARD_GRID_CLASS, CARD_INSET, CARD_MIN_HEIGHT } from './card-styles';
+import {
+  CARD_CHECKBOX_REVEAL_CLASS,
+  CARD_GLYPH_FADE_CLASS,
+  CARD_GRID_CLASS,
+  CARD_INSET,
+  CARD_MIN_HEIGHT,
+} from './card-styles';
 import type { WorkViewDefinitionFor } from './view-state';
 import { workViewDisplayFieldCatalog } from './view-state';
 import {
@@ -140,7 +146,13 @@ export function WorkCards<TTarget extends ViewTarget>({
              * a click selects instead of navigating. Its inset matches the content's, so it lands
              * in the column rather than the gutter.
              */}
-            <span className="absolute top-4 left-4 z-10 flex size-10 items-center justify-center opacity-0 transition-opacity group-focus-within/card:opacity-100 group-hover/card:opacity-100 group-data-[selecting=true]/card:opacity-100">
+            <span
+              data-selection-slot=""
+              className={cn(
+                CARD_CHECKBOX_REVEAL_CLASS,
+                'absolute top-4 left-4 z-10 flex size-10 items-center justify-center',
+              )}
+            >
               <Checkbox
                 aria-label={`Select ${workViewRowTitle(row)}`}
                 checked={selectedIds.has(row.id)}

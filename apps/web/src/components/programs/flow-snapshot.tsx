@@ -22,7 +22,7 @@ import { CheckCircle2, CircleDashed, CircleDot, FolderKanban, RefreshCw } from '
 import type { JSX, ReactNode } from 'react';
 
 import { relativeTime } from './format-time';
-import { HEALTH_DOT_CLASS, HEALTH_LABEL } from '@/components/entity-display/health';
+import { HEALTH_FILL_CLASS, HEALTH_LABEL } from '@/components/entity-display/health';
 
 /** The flow metrics the snapshot reports, rolled up from the program's work + structure. */
 export interface FlowMetrics {
@@ -76,7 +76,7 @@ export function FlowSnapshot({
             aria-hidden="true"
             className={cn(
               'size-2.5 rounded-full',
-              health ? HEALTH_DOT_CLASS[health] : 'bg-on-surface-variant/50',
+              health ? HEALTH_FILL_CLASS[health] : 'bg-on-surface-variant/50',
             )}
           />
           <span className="text-on-surface text-title-medium">

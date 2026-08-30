@@ -1,19 +1,21 @@
 'use client';
 
-import { defaultEntityDisplay, type ProgramViewRow, type WorkViewActor } from '@docket/types';
+import { defaultEntityDisplay, type ProgramViewRow } from '@docket/types';
 import { cn, relativeTime } from '@docket/ui';
-import { ActorAvatar } from '@docket/ui/components';
 import { useVocabulary } from '@docket/ui/hooks';
 import { FolderKanban, ListChecks } from '@docket/ui/icons';
 import { Text, toneClass, typeClass } from '@docket/ui/primitives';
-import type { ComponentType, JSX } from 'react';
+import type { JSX } from 'react';
 
 import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
 import { HealthLabel } from '@/components/entity-display/health';
+import { ActorName, WorkCount } from '@/components/entity-display/roster-cells';
 import { useWorkStatus } from '@/components/entity-display/use-work-status';
 import { WorkStatusBadge } from '@/components/entity-display/work-status';
 
 import { CARD_GLYPH_FADE_CLASS } from './card-styles';
+import { formatWorkViewValue, workViewRowDisplayValue } from './renderer-types';
+import { workViewDisplayFieldCatalog } from './view-state';
 
 /** Props for {@link ProgramWorkCard}. */
 export interface ProgramWorkCardProps {
@@ -24,11 +26,27 @@ export interface ProgramWorkCardProps {
    *
    * @remarks
    * Read from `presentation.properties`, which the Display → Properties control writes. The card
-   * composes its own treatment for `status`, `health`, `owner`, `projectCount` and `taskCount`;
-   * the contract's other displayable fields are not shown on this lens yet.
+   * composes its own treatment for the five it can lay out — see {@link COMPOSED_FIELDS}.
    */
   readonly properties: ReadonlySet<string>;
 }
+
+/**
+ * The fields the card lays out itself, rather than as a label and a value.
+ *
+ * @remarks
+ * `name` is the title. The other five carry a designed treatment — health tints the identity
+ * mark, the counts share a container, the owner takes an avatar — so rendering them again in the
+ * fall-through list would say everything twice.
+ */
+const COMPOSED_FIELDS: ReadonlySet<string> = new Set([
+  'name',
+  'status',
+  'health',
+  'owner',
+  'projectCount',
+  'taskCount',
+]);
 
 /** Render the recent visible activity label without turning an old record update into a signal. */
 function activityRecency(latestOccurredAt: string | null): string {
@@ -72,9 +90,9 @@ function pulseLevel(count: number, maximum: number): number {
  * Each week is a full-height track the bar fills from the bottom, so a quiet week reads as an
  * empty slot rather than as a bar that failed to draw.
  *
- * The fill is neutral, and quiet within that. Activity is not a verdict; health is the one thing
- * on this card that has earned colour, and a histogram loud enough to compete with the title takes
- * attention the name should be getting.
+ * The fill is neutral, and quiet within that. Health is the one thing on this card that has
+ * earned colour, and a histogram loud enough to compete with the title takes attention the name
+ * should be getting.
  *
  * Heights normalise against this Program's own busiest week, so the shape answers "is this one
  * moving?" rather than inviting a comparison across cards that eight buckets cannot support.
@@ -123,51 +141,6 @@ function ActivityPulse({ activity }: Pick<ProgramViewRow, 'activity'>): JSX.Elem
 }
 
 /**
- * The owner's avatar and name.
- *
- * @remarks
- * Takes a resolved actor, because a Program nobody owns renders nothing here. A table column needs
- * a placeholder to keep its rows aligned; a card does not, and on a roster where most Programs are
- * unassigned the placeholder would be the most repeated thing on the screen.
- */
-function ProgramOwner({ ownerActor }: { ownerActor: WorkViewActor }): JSX.Element {
-  return (
-    <span className="flex min-w-0 items-center gap-2">
-      <ActorAvatar
-        kind={ownerActor.kind}
-        name={ownerActor.displayName}
-        avatarUrl={ownerActor.avatar}
-        size={20}
-      />
-      <Text token="label-medium" tone="muted" truncate>
-        {ownerActor.displayName}
-      </Text>
-    </span>
-  );
-}
-
-/** Props for {@link ProgramCount}. */
-interface ProgramCountProps {
-  /** The glyph naming what is being counted. */
-  readonly icon: ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
-  /** The rolled-up count. */
-  readonly value: number;
-  /** The org-skinned noun, already agreeing with {@link value}, for the accessible name. */
-  readonly noun: string;
-}
-
-/** One rolled-up child count: a glyph, an aligned number, and the noun a screen reader hears. */
-function ProgramCount({ icon: Icon, value, noun }: ProgramCountProps): JSX.Element {
-  return (
-    <Text token="label-medium" tone="muted" numeric className="flex items-center gap-1.5">
-      <Icon aria-hidden className="size-4" />
-      {value}
-      <span className="sr-only">{noun}</span>
-    </Text>
-  );
-}
-
-/**
  * Render the Programs card lens as a calm portfolio summary.
  *
  * @remarks
@@ -176,7 +149,7 @@ function ProgramCount({ icon: Icon, value, noun }: ProgramCountProps): JSX.Eleme
  * are allowed to see.
  *
  * The signal and roll-up bands are pinned to the bottom edge (`mt-auto`) so they line up across
- * every card in a row however long a summary runs and whether or not a verdict is set.
+ * every card in a row however long a summary runs and whether or not health is set.
  *
  * @param props - The {@link ProgramWorkCardProps}.
  */
@@ -188,9 +161,16 @@ export function ProgramWorkCard({ row, properties }: ProgramWorkCardProps): JSX.
 
   const showProjectCount = properties.has('projectCount');
   const showTaskCount = properties.has('taskCount');
+  // The contract marks eleven Program fields displayable and Display offers a toggle for each.
+  // Five have a designed place on the card; the rest fall through to the same label-and-value pair
+  // the other targets' cards render, so a toggle never does nothing. The catalog is memoized per
+  // target, so reading it here rather than taking it as a prop costs a map lookup.
+  const extras = workViewDisplayFieldCatalog('program').filter(
+    (field) => properties.has(field.key) && !COMPOSED_FIELDS.has(field.key),
+  );
   // Health names itself on the signal line. It does not tint the identity mark: a Program's mark
-  // now carries the icon and colour its owner chose, and that choice outranks a derived signal.
-  const verdict = properties.has('health') ? row.health : null;
+  // carries the icon and colour its owner chose, and that choice outranks a derived signal.
+  const health = properties.has('health') ? row.health : null;
   const owner = properties.has('owner') ? row.ownerActor : null;
 
   return (
@@ -229,9 +209,9 @@ export function ProgramWorkCard({ row, properties }: ProgramWorkCardProps): JSX.
          */}
         <div className="flex items-end justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
-            {verdict ? (
+            {health ? (
               <>
-                <HealthLabel health={verdict} />
+                <HealthLabel health={health} />
                 <span
                   aria-hidden="true"
                   className={cn(typeClass('label-small'), toneClass('muted'))}
@@ -252,16 +232,39 @@ export function ProgramWorkCard({ row, properties }: ProgramWorkCardProps): JSX.
 
         {owner !== null || showProjectCount || showTaskCount ? (
           <div className="flex items-center gap-3">
-            {owner ? <ProgramOwner ownerActor={owner} /> : null}
+            {owner ? <ActorName actor={owner} token="label-medium" /> : null}
             <span className="bg-surface-container-highest ml-auto flex shrink-0 items-center gap-3 rounded-full px-3 py-1">
               {showProjectCount ? (
-                <ProgramCount icon={FolderKanban} value={row.projectCount} noun={projectNoun} />
+                <WorkCount
+                  icon={FolderKanban}
+                  value={row.projectCount}
+                  noun={projectNoun}
+                  token="label-medium"
+                />
               ) : null}
               {showTaskCount ? (
-                <ProgramCount icon={ListChecks} value={row.taskCount} noun={taskNoun} />
+                <WorkCount
+                  icon={ListChecks}
+                  value={row.taskCount}
+                  noun={taskNoun}
+                  token="label-medium"
+                />
               ) : null}
             </span>
           </div>
+        ) : null}
+
+        {extras.length > 0 ? (
+          <dl className="text-on-surface-variant text-body-small grid gap-1">
+            {extras.map((field) => (
+              <div key={field.key} className="flex min-w-0 gap-2">
+                <dt className="shrink-0">{field.label}</dt>
+                <dd className="truncate">
+                  {formatWorkViewValue(workViewRowDisplayValue(row, field.key), field.kind)}
+                </dd>
+              </div>
+            ))}
+          </dl>
         ) : null}
       </div>
     </div>

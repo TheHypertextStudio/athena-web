@@ -155,6 +155,80 @@ function fallbackFor<TTarget extends ViewTarget>(target: TTarget): WorkViewDefin
   return FALLBACKS[target] as WorkViewDefinitionFor<TTarget>;
 }
 
+/**
+ * The Cards lens placeholder, built from the loaded card's own parts.
+ *
+ * @remarks
+ * placeholder: the cards themselves — how many there are, and each one's name, summary, health,
+ * owner and rolled-up counts. Shaped like the loaded card, on the loaded card's own grid, because
+ * a list-shaped stand-in under a card lens does not fill in so much as rearrange itself.
+ */
+function CardsSkeleton({ label }: { readonly label: string }): JSX.Element {
+  return (
+    <div className={CARD_GRID_CLASS} aria-label={`Loading ${label}`}>
+      {Array.from({ length: 6 }, (_, index) => (
+        <div
+          key={index}
+          className={cn(
+            'bg-surface-container-low flex flex-col gap-3 rounded-xl',
+            CARD_INSET,
+            CARD_MIN_HEIGHT,
+          )}
+        >
+          <div className="flex items-start gap-3">
+            <Skeleton className="size-10 shrink-0 rounded-full" />
+            <div className="flex flex-1 flex-col gap-2">
+              <Skeleton className="h-5 w-full rounded" />
+              <Skeleton className="h-5 w-1/2 rounded" />
+            </div>
+          </div>
+          <Skeleton className="h-4 w-full rounded" />
+          <Skeleton className="h-4 w-2/3 rounded" />
+          <div className="mt-auto flex flex-col gap-3">
+            <div className="flex items-end justify-between gap-3">
+              <Skeleton className="h-4 w-40 rounded" />
+              <Skeleton className="h-8 w-24 rounded" />
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <Skeleton className="h-5 w-28 rounded" />
+              <Skeleton className="h-6 w-20 rounded-full" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The roster placeholder every other lens falls back to.
+ *
+ * @remarks
+ * placeholder: the roster rows — how many there are, and each one's mark, name, and the two
+ * metadata columns a wide viewport shows.
+ */
+function RowsSkeleton({ label }: { readonly label: string }): JSX.Element {
+  return (
+    <div
+      className="bg-surface-container-low h-full min-h-0 rounded-xl p-2"
+      aria-label={`Loading ${label}`}
+    >
+      <div className="h-8 px-3 py-2">
+        <Skeleton className="h-3 w-24 rounded" />
+      </div>
+      {Array.from({ length: 8 }, (_, index) => (
+        <div key={index} className="flex h-14 items-center gap-3 rounded-lg px-3">
+          <Skeleton className="size-8 shrink-0 rounded-full" />
+          <Skeleton className="h-3.5 w-[min(28rem,45%)] rounded" />
+          <span className="flex-1" />
+          <Skeleton className="hidden h-3 w-24 rounded @2xl:block" />
+          <Skeleton className="hidden h-3 w-20 rounded @2xl:block" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** Render one organization roster from the shared server query and target contract. */
 export function WorkViewPage<TTarget extends ViewTarget>({
   organizationId,
@@ -331,68 +405,13 @@ export function WorkViewPage<TTarget extends ViewTarget>({
         }}
       />
     );
-  } else if (controller.loading && layout === 'cards') {
-    // placeholder: the cards themselves — how many there are, and each one's name, summary,
-    // verdict, owner and rolled-up counts. Shaped like the loaded card, on the loaded card's own
-    // grid, because a list-shaped stand-in under a card lens does not fill in so much as
-    // rearrange itself.
-    content = (
-      <div className={CARD_GRID_CLASS} aria-label={`Loading ${copy.title.toLowerCase()}`}>
-        {Array.from({ length: 6 }, (_, index) => (
-          <div
-            key={index}
-            className={cn(
-              'bg-surface-container-low flex flex-col gap-3 rounded-xl',
-              CARD_INSET,
-              CARD_MIN_HEIGHT,
-            )}
-          >
-            {/* Built from the loaded card's own parts — a 40px mark, a two-line title, a
-                two-line summary, the signal row, and the roll-up — so the placeholder's height
-                lands where the card's does and the grid does not resize under the reader. */}
-            <div className="flex items-start gap-3">
-              <Skeleton className="size-10 shrink-0 rounded-full" />
-              <div className="flex flex-1 flex-col gap-2">
-                <Skeleton className="h-5 w-full rounded" />
-                <Skeleton className="h-5 w-1/2 rounded" />
-              </div>
-            </div>
-            <Skeleton className="h-4 w-full rounded" />
-            <Skeleton className="h-4 w-2/3 rounded" />
-            <div className="mt-auto flex flex-col gap-3">
-              <div className="flex items-end justify-between gap-3">
-                <Skeleton className="h-4 w-40 rounded" />
-                <Skeleton className="h-8 w-24 rounded" />
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <Skeleton className="h-5 w-28 rounded" />
-                <Skeleton className="h-6 w-20 rounded-full" />
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    );
   } else if (controller.loading) {
-    content = (
-      <div
-        className="bg-surface-container-low h-full min-h-0 rounded-xl p-2"
-        aria-label={`Loading ${copy.title.toLowerCase()}`}
-      >
-        <div className="h-8 px-3 py-2">
-          <Skeleton className="h-3 w-24 rounded" />
-        </div>
-        {Array.from({ length: 8 }, (_, index) => (
-          <div key={index} className="flex h-14 items-center gap-3 rounded-lg px-3">
-            <Skeleton className="size-8 shrink-0 rounded-full" />
-            <Skeleton className="h-3.5 w-[min(28rem,45%)] rounded" />
-            <span className="flex-1" />
-            <Skeleton className="hidden h-3 w-24 rounded @2xl:block" />
-            <Skeleton className="hidden h-3 w-20 rounded @2xl:block" />
-          </div>
-        ))}
-      </div>
-    );
+    content =
+      layout === 'cards' ? (
+        <CardsSkeleton label={copy.title.toLowerCase()} />
+      ) : (
+        <RowsSkeleton label={copy.title.toLowerCase()} />
+      );
   } else if (controller.error) {
     content = (
       <WorkViewLoadFailure

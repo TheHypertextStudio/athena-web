@@ -39,7 +39,7 @@ component and its data contract are the shipped ones; only the eight weekly coun
 | 1. Brand identity and voice         |     3 | Calm MD3 surfaces with one blue status pill and a tinted identity mark. Copy states a condition — "On track · Active yesterday" — rather than labelling fields. Nothing here reads as a generic SaaS card grid.                                        |
 | 2. Typographic craft                |     4 | Three registers doing three jobs: `title-large` name, `body-medium` summary, `label-medium`/`label-small` metadata. Before this pass everything under the title sat at 11–12px, which is most of what "bland" meant. No raw type utilities remain.     |
 | 3. Spatial rhythm and density       |     3 | One `gap-3` rhythm inside a single `p-4` inset, with the signal and roll-up bands bottom-anchored so they align across a row. `card-styles.ts` holds the inset, minimum height, and grid so the frame and skeleton cannot disagree again.              |
-| 4. Hierarchy and information design |     4 | The verdict is now the largest coloured thing on the card, so "which of these needs me?" is answered at a squint before a word is read — see the green/brown/red/neutral column in `desktop-light.png`. Name, summary, signal, roll-up, in that order. |
+| 4. Hierarchy and information design |     4 | Health is now the largest coloured thing on the card, so "which of these needs me?" is answered at a squint before a word is read — see the green/brown/red/neutral column in `desktop-light.png`. Name, summary, signal, roll-up, in that order.      |
 | 5. Colour discipline                |     4 | Health is the only earned colour, spent twice on the same fact (the mark's tint and its label) rather than on two different facts. The histogram dropped from `primary/45` to `outline`; nothing decorative is coloured.                               |
 | 6. Motion and feedback              |     3 | Hover moves the card one full step up the surface ramp with the roll-up container moving with it (`hover-light.png`); focus draws the shared ring on the card's own radius (`focus-light.png`). Both are colour-only — no geometry moves.              |
 | 7. States completeness              |     3 | Loading is built from the card's own parts, so the grid does not resize on resolve (`loading-light.png`). A 90-character name truncates at two lines with a `title` tooltip (`overflow-long-title-light.png`). Nothing renders where nothing is known. |
@@ -48,10 +48,10 @@ component and its data contract are the shipped ones; only the eight weekly coun
 Gates: A11y ✅ · Responsive ✅ · Theme parity ✅ · No placeholder ✅ · Screenshot-verified ✅
 
 **A11y**: every activity week keeps its own accessible name and an empty window says so in one;
-the identity mark's tint is never the only carrier of a verdict, because the label is always beside
+the identity mark's tint is never the only carrier of health, because the label is always beside
 it; the card's link takes focus with a visible ring; the selection checkbox keeps its label through
 the glyph swap. **No placeholder**: this pass removed the last two — "Unowned" under every card
-that had no owner, and the em dash under every card with no verdict.
+that had no owner, and the em dash under every card with no health set.
 
 ## What this pass changed
 
@@ -59,7 +59,7 @@ that had no owner, and the em dash under every card with no verdict.
    and on a roster where most Programs are unassigned it became the most repeated words on screen —
    the absence of information, set in type, once per card. The roll-up container keeps its place
    without it. `program-work-card.tsx`'s `ProgramOwner` now takes a non-null actor.
-2. **The verdict tints the identity mark** (`HEALTH_GLYPH_CLASS` in `entity-display/health.tsx`).
+2. **Health tints the identity mark** (`HEALTH_GLYPH_CLASS` in `entity-display/health.tsx`).
    The mark was already there in neutral, so this spends no new colour and turns the card's largest
    element into its most useful one.
 3. **The title moved to `title-large` and the summary to `body-medium`.** The card had one 16px
@@ -74,7 +74,7 @@ that had no owner, and the em dash under every card with no verdict.
 
 1. **"At risk" is nearly colourless.** `--state-canceled` is `oklch(0.5 0.03 25)` — chroma 0.03, a
    near-grey, correct for cancelled work and wrong for a warning. On track (chroma 0.15) and off
-   track both read instantly; the middle verdict, the one worth catching early, reads as beige in
+   track both read instantly; the middle value, the one worth catching early, reads as beige in
    both themes. All four health modules borrow this token, so the fix is a `--health-at-risk` token
    in `globals.css` and a change to the health palette product-wide — a decision worth making
    deliberately rather than inside a card redesign. **Not fixed; needs a call.**

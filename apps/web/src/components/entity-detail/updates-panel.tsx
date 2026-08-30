@@ -33,7 +33,7 @@ import type { JSX } from 'react';
 import { useState } from 'react';
 
 import { useActiveOrgIdOptional } from '@/components/active-org';
-import { HEALTH_DOT_CLASS, HEALTH_LABEL } from '@/components/entity-display/health';
+import { HEALTH_FILL_CLASS, HEALTH_LABEL } from '@/components/entity-display/health';
 import MentionTextarea from '@/components/mentions/mention-textarea';
 
 import { relativeTime } from '../programs/format-time';
@@ -166,7 +166,7 @@ export function UpdatesPanel({
                     {health !== '' ? (
                       <span
                         aria-hidden="true"
-                        className={cn('size-1.5 rounded-full', HEALTH_DOT_CLASS[health])}
+                        className={cn('size-1.5 rounded-full', HEALTH_FILL_CLASS[health])}
                       />
                     ) : null}
                     <span>{choiceLabel(health)}</span>
@@ -188,7 +188,7 @@ export function UpdatesPanel({
                               aria-hidden="true"
                               className={cn(
                                 'size-1.5 rounded-full',
-                                HEALTH_DOT_CLASS[option.value],
+                                HEALTH_FILL_CLASS[option.value],
                               )}
                             />
                           ) : null}
@@ -259,7 +259,7 @@ export function UpdatesPanel({
                       <span className="text-on-surface-variant inline-flex items-center gap-1.5 text-xs">
                         <span
                           aria-hidden="true"
-                          className={cn('size-1.5 rounded-full', HEALTH_DOT_CLASS[update.health])}
+                          className={cn('size-1.5 rounded-full', HEALTH_FILL_CLASS[update.health])}
                         />
                         {HEALTH_LABEL[update.health]}
                       </span>

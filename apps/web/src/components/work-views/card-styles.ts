@@ -41,3 +41,14 @@ export const CARD_GRID_CLASS = 'grid grid-cols-[repeat(auto-fill,minmax(20rem,1f
  */
 export const CARD_GLYPH_FADE_CLASS =
   'shrink-0 transition-opacity group-focus-within/card:opacity-0 group-hover/card:opacity-0 group-data-[selecting=true]/card:opacity-0';
+
+/**
+ * The selection checkbox's reveal, the mirror of {@link CARD_GLYPH_FADE_CLASS}.
+ *
+ * @remarks
+ * Both the Cards and Board lenses hang a checkbox off a `group/card` root that carries
+ * `data-selecting`, so the rule is the same in both and neither has to recompute in JavaScript
+ * what the DOM already says. They each wrote their own copy of it before, and disagreed.
+ */
+export const CARD_CHECKBOX_REVEAL_CLASS =
+  'opacity-0 transition-opacity group-focus-within/card:opacity-100 group-hover/card:opacity-100 group-data-[selecting=true]/card:opacity-100';

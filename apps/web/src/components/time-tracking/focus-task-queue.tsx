@@ -3,7 +3,7 @@
 /** Planned work and task search for the Focus rail. */
 import type { HubTodayPlanItem, SearchOut, SearchResult } from '@docket/types';
 import { Plus, Search } from '@docket/ui/icons';
-import { Skeleton, Text } from '@docket/ui/primitives';
+import { Skeleton, surfaceToneColor, Text } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
 
 import { useActiveOrg } from '@/components/active-org';
@@ -55,7 +55,7 @@ function TaskChoice({
     <button
       type="button"
       disabled={disabled}
-      className="bg-surface-container-low hover:bg-surface-container-high focus-visible:outline-primary flex min-h-12 w-full min-w-0 flex-col items-start justify-center rounded-lg px-3 py-2 text-left focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50"
+      className={`${surfaceToneColor('card')} hover:bg-surface-container-high focus-visible:outline-primary flex min-h-12 w-full min-w-0 flex-col items-start justify-center rounded-lg px-3 py-2 text-left focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-50`}
       onClick={() => {
         onChoose(id, title);
       }}

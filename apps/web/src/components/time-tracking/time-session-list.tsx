@@ -3,7 +3,7 @@
 /** The chronological, filter-aware source of truth behind Time review totals and breakdowns. */
 import { Temporal } from '@js-temporal/polyfill';
 import type { TimeRecordOut } from '@docket/types';
-import { Skeleton, Text } from '@docket/ui/primitives';
+import { Skeleton, Surface, Text } from '@docket/ui/primitives';
 import { Computer, Edit } from '@docket/ui/icons';
 import type { JSX } from 'react';
 
@@ -85,7 +85,12 @@ export function TimeSessionList({
                 {formatDuration(total)}
               </Text>
             </div>
-            <ul className="bg-surface-container-low divide-outline-variant/30 divide-y overflow-hidden rounded-xl">
+            <Surface
+              as="ul"
+              tone="card"
+              shape="medium"
+              className="divide-outline-variant/30 divide-y overflow-hidden"
+            >
               {group.map((record) => {
                 const source = sourceLabel(record);
                 const duration = measureOf(record, measure);
@@ -131,7 +136,7 @@ export function TimeSessionList({
                   </li>
                 );
               })}
-            </ul>
+            </Surface>
           </section>
         );
       })}
@@ -146,14 +151,14 @@ function SessionSkeleton(): JSX.Element {
       {[0, 1].map((group) => (
         <div key={group} className="flex flex-col gap-2">
           <Skeleton className="h-5 w-40" />
-          <div className="bg-surface-container-low overflow-hidden rounded-xl">
+          <Surface tone="card" shape="medium" className="overflow-hidden">
             {[0, 1, 2].map((row) => (
               <Skeleton
                 key={row}
                 className="border-outline-variant/30 h-14 rounded-none border-b last:border-b-0"
               />
             ))}
-          </div>
+          </Surface>
         </div>
       ))}
     </div>

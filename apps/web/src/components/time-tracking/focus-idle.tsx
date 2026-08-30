@@ -15,7 +15,7 @@
  */
 import type { TimeAnchorSuggestion } from '@docket/types';
 import { Play } from '@docket/ui/icons';
-import { Button, Text } from '@docket/ui/primitives';
+import { Button, surfaceToneColor, Text } from '@docket/ui/primitives';
 import type { JSX } from 'react';
 
 import { formatDuration } from './format-duration';
@@ -68,8 +68,8 @@ export default function FocusIdle({
         <div
           className={
             nudging
-              ? 'bg-surface-container-high flex flex-col gap-2 rounded-xl p-3'
-              : 'bg-surface-container flex flex-col gap-2 rounded-xl p-3'
+              ? `${surfaceToneColor('floating')} flex flex-col gap-2 rounded-xl p-3`
+              : `${surfaceToneColor('canvas')} flex flex-col gap-2 rounded-xl p-3`
           }
           data-testid="focus-suggestion"
           data-nudging={nudging ? 'true' : 'false'}
@@ -125,7 +125,7 @@ export default function FocusIdle({
                   onClick={() => {
                     onStart(shortcut.taskId);
                   }}
-                  className="bg-surface-container-low hover:bg-surface-container focus-visible:outline-primary flex min-h-10 w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2"
+                  className={`${surfaceToneColor('card')} hover:bg-surface-container focus-visible:outline-primary flex min-h-10 w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2`}
                 >
                   <span className="text-on-surface text-body-medium min-w-0 flex-1 truncate">
                     {shortcut.title}

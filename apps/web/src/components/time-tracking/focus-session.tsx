@@ -21,6 +21,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  Surface,
   Text,
   Tooltip,
   TooltipContent,
@@ -133,8 +134,11 @@ export default function FocusSession({
   };
 
   return (
-    <div
-      className="bg-surface-container flex flex-col gap-2 rounded-xl p-3"
+    <Surface
+      tone="canvas"
+      shape="medium"
+      pad="comfortable"
+      className="flex flex-col gap-2"
       data-testid="focus-session"
       data-timer-state={running ? 'running' : 'paused'}
     >
@@ -286,6 +290,6 @@ export default function FocusSession({
           {notice}
         </Text>
       ) : null}
-    </div>
+    </Surface>
   );
 }

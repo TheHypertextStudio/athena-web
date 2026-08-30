@@ -20,6 +20,7 @@ import {
   ControlGroup,
   Field,
   Input,
+  Surface,
   Text,
   Textarea,
 } from '@docket/ui/primitives';
@@ -89,7 +90,7 @@ export function TimeSharePanel(): JSX.Element {
         </Text>
       </div>
 
-      <div className="bg-surface-container-low flex min-w-0 flex-col gap-4 rounded-xl p-5">
+      <Surface tone="card" shape="medium" className="flex min-w-0 flex-col gap-4 p-5">
         <Field
           label="What is this share for?"
           description="A name for you, so several widgets stay tellable apart."
@@ -148,15 +149,15 @@ export function TimeSharePanel(): JSX.Element {
             {userErrorMessage(create.error, 'Could not create the share.')}
           </Text>
         ) : null}
-      </div>
+      </Surface>
 
       {minted ? (
-        <div className="bg-surface-container-low flex min-w-0 flex-col gap-3 rounded-xl p-5">
+        <Surface tone="card" shape="medium" className="flex min-w-0 flex-col gap-3 p-5">
           <Text token="title-small">Copy this now — it is not shown again</Text>
           <Field label="Paste this into your page">
             <Textarea readOnly rows={8} value={minted.embedSnippet} className="font-mono" />
           </Field>
-        </div>
+        </Surface>
       ) : null}
 
       {live.length > 0 ? (

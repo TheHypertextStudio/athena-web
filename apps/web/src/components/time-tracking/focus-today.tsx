@@ -2,7 +2,7 @@
 
 /** Today's real time-ledger summary shared by both Focus surfaces. */
 import type { TimeRecordOut } from '@docket/types';
-import { Text } from '@docket/ui/primitives';
+import { Surface, Text } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
 import type { JSX } from 'react';
 
@@ -47,7 +47,7 @@ export default function FocusToday({
         </div>
       </div>
       {recent.length > 0 ? (
-        <ul className="bg-surface-container-low flex flex-col rounded-xl">
+        <Surface as="ul" tone="card" shape="medium" className="flex flex-col">
           {recent.map((record) => {
             const title = record.title.trim() || 'Unnamed session';
             const content = (
@@ -76,7 +76,7 @@ export default function FocusToday({
               </li>
             );
           })}
-        </ul>
+        </Surface>
       ) : null}
     </section>
   );

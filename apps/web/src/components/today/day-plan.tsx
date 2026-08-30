@@ -106,9 +106,11 @@ export default function DayPlan({
   }, [plan, now, orgName]);
 
   const rowActions = (item: HubTodayPlanItem): JSX.Element => (
+    // Overlaid, not reserved. At `opacity-0` in the flow these still occupied their full width,
+    // which is the gap that opened between every row's metadata and the list's right edge.
     <ControlGroup
       controlSize="sm"
-      className="shrink-0 opacity-0 transition-opacity group-focus-within/planrow:opacity-100 group-hover/planrow:opacity-100"
+      className="bg-surface-container-high absolute inset-y-1 right-1 rounded-md pl-2 opacity-0 transition-opacity group-focus-within/planrow:opacity-100 group-hover/planrow:opacity-100"
     >
       {/* Promoting is only meaningful relative to a task already ahead of this one. */}
       {now && onPromote ? (
@@ -186,7 +188,7 @@ export default function DayPlan({
               ) : null}
               <EntityList aria-label={group.orgLabel} tone="tonal">
                 {group.tasks.map((item) => (
-                  <Row key={item.planItemId} gap={1} className="group/planrow rounded-lg">
+                  <Row key={item.planItemId} className="group/planrow relative rounded-lg">
                     <HubTaskRow
                       task={item}
                       orgLabel={group.orgLabel}

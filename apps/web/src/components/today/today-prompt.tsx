@@ -28,9 +28,17 @@
  * the armed one filled — a single control with two positions, rather than two chips that happen to
  * be adjacent. Athena is the resting choice and stays so across visits.
  *
- * The whole thing is one {@link Surface}. It was previously a bare textarea over a hairline rule
- * with controls floating beneath it, which read as three unrelated elements stacked in a column
- * rather than as a field you type into.
+ * The whole thing is one field, rendered through {@link fieldSurface} — the same recipe every
+ * input, textarea, and select in the product uses — so it lands inside the closed variant set
+ * rather than inventing a fourth look. It was previously a bare textarea over a hairline rule with
+ * controls floating beneath it, which read as three unrelated elements stacked in a column rather
+ * than as something you type into.
+ *
+ * `filled`, not `outlined`. A composer needs presence, and in a tonal system that comes from a
+ * surface step; a hand-added border was reaching for emphasis with the one device the design system
+ * spends most sparingly. `ringOn: 'within'` because the wrapper owns the focus ring for a textarea
+ * nested inside it, and the field's type comes from the control scale's `fieldToken` rather than a
+ * size picked by eye.
  *
  * A line, not a card. The bordered box with a toolbar along its bottom edge made the page's first
  * element a form, and its inner text sat inset from the column every other line on the page aligns
@@ -38,15 +46,16 @@
  * margin.
  */
 import { ArrowUp, Paperclip } from '@docket/ui/icons';
+import { cn } from '@docket/ui/lib/utils';
 import {
   Button,
   Chip,
   ControlGroup,
   Stack,
-  Surface,
   Tab,
   TabList,
   Tabs,
+  fieldSurface,
 } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
 import {
@@ -230,101 +239,106 @@ export function TodayPrompt({
       {/* No heading and no explainer above the box. What used to sit here — a rhetorical
           "What's on your plate?" over two sentences describing what pasting does — was the field
           narrating itself to the person already using it. */}
-      <Surface
-        tone="page"
-        pad="comfortable"
-        className="border-outline-variant focus-within:border-primary border transition-colors"
+      <div
+        className={cn(
+          fieldSurface({
+            variant: 'filled',
+            controlSize: 'xl',
+            multiline: true,
+            ringOn: 'within',
+          }),
+          'flex flex-col gap-2',
+        )}
         style={{ viewTransitionName: 'today-composer' }}
       >
-        <Stack gap={2}>
-          <MentionTextarea
-            value={text}
-            onChange={(next) => {
-              setText(next);
-              if (notice) setNotice(null);
-            }}
-            {...(mentionOrgId === undefined ? {} : { orgId: mentionOrgId })}
-            insertMode="context"
-            onKeyDown={onKeyDown}
-            // Measured, not guessed. This was `rows={text.length > 90 ? 3 : 2}` — a stand-in for
-            // "has it wrapped yet" that is wrong at every width it was not tuned for.
-            rows={2}
-            autoGrow
-            maxRows={10}
-            placeholder={
-              mode === 'athena' ? 'Ask Athena about today…' : 'What task needs capturing?'
-            }
-            aria-label={mode === 'athena' ? 'Ask Athena about today' : 'Add a task'}
-            disabled={orgId === null}
-            className="text-body-large placeholder:text-on-surface-variant text-on-surface w-full resize-none bg-transparent outline-none disabled:opacity-50"
-          />
+        <MentionTextarea
+          value={text}
+          onChange={(next) => {
+            setText(next);
+            if (notice) setNotice(null);
+          }}
+          {...(mentionOrgId === undefined ? {} : { orgId: mentionOrgId })}
+          insertMode="context"
+          onKeyDown={onKeyDown}
+          // Measured, not guessed. This was `rows={text.length > 90 ? 3 : 2}` — a stand-in for
+          // "has it wrapped yet" that is wrong at every width it was not tuned for.
+          rows={2}
+          autoGrow
+          maxRows={10}
+          placeholder={mode === 'athena' ? 'Ask Athena about today…' : 'What task needs capturing?'}
+          aria-label={mode === 'athena' ? 'Ask Athena about today' : 'Add a task'}
+          disabled={orgId === null}
+          // Type, placeholder colour, and the ring all come from the wrapper; a textarea does not
+          // inherit font from its parent, so `font-[inherit]` takes the wrapper's resolved token
+          // instead of naming a size here.
+          className="placeholder:text-on-surface-variant w-full resize-none bg-transparent font-[inherit] text-[length:inherit] leading-[inherit] outline-none disabled:opacity-50"
+        />
 
-          {files.length > 0 ? (
-            <ControlGroup controlSize="sm" wrap>
-              {files.map((file, index) => (
-                <Chip
-                  key={`${file.name}:${String(index)}`}
-                  variant="input"
-                  icon={<Paperclip />}
-                  removeLabel={`Remove ${file.name}`}
-                  onRemove={() => {
-                    setFiles((current) => current.filter((_, at) => at !== index));
-                  }}
-                >
-                  {file.name}
-                </Chip>
-              ))}
-            </ControlGroup>
-          ) : null}
-
-          {/* One group, one height: the attach control, the destination toggle, and send all
-              resolve through the same control step instead of each carrying a `min-h` override. */}
-          <ControlGroup controlSize="sm">
-            <input
-              ref={filePicker}
-              type="file"
-              multiple
-              className="hidden"
-              onChange={pickFiles}
-              aria-hidden="true"
-              tabIndex={-1}
-            />
-            <Button
-              type="button"
-              variant="ghost"
-              iconOnly
-              aria-label="Attach files"
-              disabled={orgId === null}
-              onClick={() => {
-                filePicker.current?.click();
-              }}
-            >
-              <Paperclip aria-hidden="true" />
-            </Button>
-            <Tabs
-              value={mode}
-              onValueChange={(next) => {
-                setMode(next as CaptureMode);
-              }}
-            >
-              <TabList label="Send this to">
-                <Tab value="athena">Athena</Tab>
-                <Tab value="task">Task</Tab>
-              </TabList>
-            </Tabs>
-            <Button
-              type="button"
-              iconOnly
-              disabled={!canSubmit}
-              onClick={submit}
-              aria-label={mode === 'task' ? 'Add task' : 'Ask Athena'}
-              className="ml-auto"
-            >
-              <ArrowUp aria-hidden="true" />
-            </Button>
+        {files.length > 0 ? (
+          <ControlGroup controlSize="sm" wrap>
+            {files.map((file, index) => (
+              <Chip
+                key={`${file.name}:${String(index)}`}
+                variant="input"
+                icon={<Paperclip />}
+                removeLabel={`Remove ${file.name}`}
+                onRemove={() => {
+                  setFiles((current) => current.filter((_, at) => at !== index));
+                }}
+              >
+                {file.name}
+              </Chip>
+            ))}
           </ControlGroup>
-        </Stack>
-      </Surface>
+        ) : null}
+
+        {/* One group, one height: the attach control, the destination toggle, and send all
+              resolve through the same control step instead of each carrying a `min-h` override. */}
+        <ControlGroup controlSize="sm">
+          <input
+            ref={filePicker}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={pickFiles}
+            aria-hidden="true"
+            tabIndex={-1}
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            iconOnly
+            aria-label="Attach files"
+            disabled={orgId === null}
+            onClick={() => {
+              filePicker.current?.click();
+            }}
+          >
+            <Paperclip aria-hidden="true" />
+          </Button>
+          <Tabs
+            value={mode}
+            onValueChange={(next) => {
+              setMode(next as CaptureMode);
+            }}
+          >
+            <TabList label="Send this to">
+              <Tab value="athena">Athena</Tab>
+              <Tab value="task">Task</Tab>
+            </TabList>
+          </Tabs>
+          <Button
+            type="button"
+            iconOnly
+            disabled={!canSubmit}
+            onClick={submit}
+            aria-label={mode === 'task' ? 'Add task' : 'Ask Athena'}
+            className="ml-auto"
+          >
+            <ArrowUp aria-hidden="true" />
+          </Button>
+        </ControlGroup>
+      </div>
       <div aria-live="polite" className="empty:hidden">
         {error ? (
           <p className="text-error text-body-small">{error}</p>

@@ -20,7 +20,8 @@
  */
 import type { TaskOut } from '@docket/types';
 import type { Priority } from '@docket/work/task-contract';
-import { StatusGlyph } from '@docket/ui/components';
+import { EmptyState, StatusGlyph } from '@docket/ui/components';
+import { ListChecks } from '@docket/ui/icons';
 import { Button, Row, Skeleton, Stack } from '@docket/ui/primitives';
 import { useQueries } from '@tanstack/react-query';
 import Link from '@/components/docket-link';
@@ -163,9 +164,12 @@ export default function AllTasksClient(): JSX.Element {
           </Button>
         </Stack>
       ) : sorted.length === 0 ? (
-        <Stack align="center" gap={2} className="justify-center p-12 text-center">
-          <p className="text-on-surface text-body-medium font-medium">No tasks assigned to you</p>
-        </Stack>
+        <EmptyState
+          icon={ListChecks}
+          title="No tasks assigned to you"
+          body="Tasks assigned to you across your workspaces will appear here."
+          className="my-auto"
+        />
       ) : (
         <Stack as="ul" gap={1} className="min-h-0 flex-1 overflow-auto">
           {sorted.map((task) => (

@@ -467,6 +467,17 @@
   never called the helper's Google delegation branch, so `@docket/types` fell below its enforced
   100% threshold. The behavior test now proves that a Calendar request returns the shared Google
   Calendar scope catalog. It does not snapshot source text or private implementation details.
+- **Exact-main database correction**: Run `33282592168` exposed a second unrelated coverage
+  regression after the external-agent relay schema added an update callback. All 218 database
+  tests passed, but function coverage reached 89.94% against the 90% gate because no database test
+  advanced the link through Drizzle. The lifecycle suite now proves that a relay-state update
+  persists `ready` and invokes the row's update timestamp. The focused file passes 28 tests, and
+  database type checking, changed-file lint, formatting, and the diff check pass.
+- **Exact-main infrastructure evidence**: The API image reached Artifact Registry in run
+  `33282592168`. Artifact Registry then returned HTTP 502 while writing the optional `buildcache`
+  manifest, which failed the image job after the release image push. The release owner will retry
+  that failed job once after the run completes. E2E run `33282592106` also found an unrelated
+  offline-sync failure; the MCP cold-start case passed on its retry and remains recorded as flaky.
 - **Post-provider review**: The final bounded review found no code-path defect. It required explicit
   proof for the HTTP 403 permission-recovery path, permanent mismatch reuse across later provider
   operations, and every runtime rollout invariant. Those behavior cases now pass without timing

@@ -14,6 +14,7 @@ import {
   agentElicitation,
   agentExecution,
   agentSession,
+  agentSessionExternalLink,
   athenaAssignment,
   athenaMailbox,
   athenaPresence,
@@ -167,6 +168,13 @@ beforeAll(async () => {
         .returning()
     )[0],
   ).id;
+  await db.insert(agentSessionExternalLink).values({
+    sessionId: ids['agentSession'],
+    organizationId: ids['org'],
+    provider: 'linear',
+    externalSessionId: 'linear-session-1',
+    externalWorkspaceId: 'linear-workspace-1',
+  });
   // --- calendar chain: account -> connection -> list/event, layer -> item -> task-link/write ---
   await db
     .insert(account)
@@ -527,6 +535,16 @@ describe('calendar island updates ($onUpdate coverage)', () => {
 });
 
 describe('agent-adjacent islands updates ($onUpdate coverage)', () => {
+  it('bumps updatedAt when the external relay state advances', async () => {
+    const [row] = await db
+      .update(agentSessionExternalLink)
+      .set({ relayStatus: 'ready' })
+      .where(eq(agentSessionExternalLink.sessionId, assertDefined(ids['agentSession'])))
+      .returning();
+    expect(row?.relayStatus).toBe('ready');
+    expect(row?.updatedAt).toBeInstanceOf(Date);
+  });
+
   it('bumps updatedAt when a session activity row is revised in place', async () => {
     const [row] = await db
       .update(sessionActivity)

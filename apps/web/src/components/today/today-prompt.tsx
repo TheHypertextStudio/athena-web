@@ -22,21 +22,41 @@
  * That is also why the placeholder no longer says "paste a plan". In Task mode a twelve-line
  * braindump becomes *one* task titled by line one; only Athena decomposes it.
  *
- * **The destination is a visible toggle, not a hidden one.** It used to be a bare chevron beside
- * the send button: the armed mode lived in that button's label and in the placeholder, so the same
- * `Enter` keystroke inserted a row or started an agent depending on state you had to infer. Both
- * destinations are now on screen at once with the active one selected, which is the difference
- * between choosing and discovering. Athena is the resting choice and stays so across visits.
+ * **The destination is a segmented toggle, not a hidden chevron.** The mode used to live in a bare
+ * chevron beside the send button, so the same `Enter` keystroke inserted a row or started an agent
+ * depending on state you had to infer. Both destinations now sit in one {@link TabList} track with
+ * the armed one filled — a single control with two positions, rather than two chips that happen to
+ * be adjacent. Athena is the resting choice and stays so across visits.
+ *
+ * The whole thing is one {@link Surface}. It was previously a bare textarea over a hairline rule
+ * with controls floating beneath it, which read as three unrelated elements stacked in a column
+ * rather than as a field you type into.
  *
  * A line, not a card. The bordered box with a toolbar along its bottom edge made the page's first
  * element a form, and its inner text sat inset from the column every other line on the page aligns
  * to. This shares the page's left edge, so it lines up by construction rather than by a negative
  * margin.
  */
-import { ListChecks, Sparkles } from '@docket/ui/icons';
-import { Button, Chip, ControlGroup } from '@docket/ui/primitives';
+import { ArrowUp, Paperclip } from '@docket/ui/icons';
+import {
+  Button,
+  Chip,
+  ControlGroup,
+  Stack,
+  Surface,
+  Tab,
+  TabList,
+  Tabs,
+} from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
-import { type JSX, type KeyboardEvent, useCallback, useState } from 'react';
+import {
+  type ChangeEvent,
+  type JSX,
+  type KeyboardEvent,
+  useCallback,
+  useRef,
+  useState,
+} from 'react';
 
 import { useAthenaPanel } from '@/components/athena/athena-panel-provider';
 import { useMentionOrgId } from '@/components/mentions/use-mention-org';
@@ -95,6 +115,8 @@ export function TodayPrompt({
   const [notice, setNotice] = useState<CaptureNotice | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [mode, setModeState] = useState<CaptureMode>('athena');
+  const [files, setFiles] = useState<readonly File[]>([]);
+  const filePicker = useRef<HTMLInputElement>(null);
 
   // No empty-workspace fork. This box used to run a `tasks` probe purely to decide whether to
   // show an onboarding heading, a different placeholder, swapped button emphasis, and a different
@@ -123,6 +145,21 @@ export function TodayPrompt({
         return;
       }
       const created = await res.json();
+      // Attachments hang off a task, so they can only be sent once the task exists. A failure here
+      // must not read as a failed capture — the task is already saved either way.
+      for (const file of files) {
+        const body = new FormData();
+        body.append('file', file);
+        // Relative, like `api` itself — the web app proxies `/v1/*` to the API, and the typed
+        // client cannot express a multipart body.
+        const upload = await fetch(`/v1/orgs/${orgId}/tasks/${created.id}/attachments/upload`, {
+          method: 'POST',
+          body,
+          credentials: 'include',
+        });
+        if (!upload.ok) setError('Task saved, but a file could not be attached.');
+      }
+      setFiles([]);
       setText('');
       setNotice({
         title: created.title,
@@ -134,7 +171,7 @@ export function TodayPrompt({
     } finally {
       setBusy(null);
     }
-  }, [orgId, orgLabel, text, onCaptured]);
+  }, [orgId, orgLabel, text, files, onCaptured]);
 
   const askAthena = useCallback((): void => {
     if (!orgId || !text.trim()) return;
@@ -159,6 +196,22 @@ export function TodayPrompt({
     setModeState(next);
   }, []);
 
+  /**
+   * Stage picked files, and arm Task mode.
+   *
+   * @remarks
+   * A file can only be attached to a task — the Athena rail starts a session from a draft string
+   * and has nowhere to put one. Switching automatically beats disabling the control half the time
+   * or accepting a file the armed destination would silently drop.
+   */
+  const pickFiles = useCallback((event: ChangeEvent<HTMLInputElement>): void => {
+    const picked = [...(event.target.files ?? [])];
+    if (picked.length === 0) return;
+    setFiles((current) => [...current, ...picked]);
+    setModeState('task');
+    event.target.value = '';
+  }, []);
+
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLTextAreaElement>): void => {
       if (event.key !== 'Enter' || event.shiftKey) return;
@@ -173,87 +226,117 @@ export function TodayPrompt({
   );
 
   return (
-    <div className="flex flex-col gap-2">
+    <Stack gap={2}>
       {/* No heading and no explainer above the box. What used to sit here — a rhetorical
           "What's on your plate?" over two sentences describing what pasting does — was the field
           narrating itself to the person already using it. */}
-      <div
-        className="border-outline-variant focus-within:border-primary flex flex-col gap-2 border-b pb-2 transition-colors duration-(--dur-base) ease-(--ease-out)"
+      <Surface
+        tone="page"
+        pad="comfortable"
+        className="border-outline-variant focus-within:border-primary border transition-colors"
         style={{ viewTransitionName: 'today-composer' }}
       >
-        <MentionTextarea
-          value={text}
-          onChange={(next) => {
-            setText(next);
-            if (notice) setNotice(null);
-          }}
-          {...(mentionOrgId === undefined ? {} : { orgId: mentionOrgId })}
-          insertMode="context"
-          onKeyDown={onKeyDown}
-          // Measured, not guessed. This was `rows={text.length > 90 ? 3 : 2}` — a stand-in for
-          // "has it wrapped yet" that is wrong at every width it was not tuned for.
-          rows={1}
-          autoGrow
-          maxRows={10}
-          placeholder={mode === 'athena' ? 'Ask Athena about today…' : 'What task needs capturing?'}
-          aria-label={mode === 'athena' ? 'Ask Athena about today' : 'Add a task'}
-          disabled={orgId === null}
-          className="placeholder:text-on-surface-variant text-on-surface w-full resize-none bg-transparent text-base leading-relaxed outline-none disabled:opacity-50 @2xl:text-lg"
-        />
-        {/* Both destinations on screen, the armed one selected. Selecting is not sending: the
-            toggle only points the draft somewhere, and the button beside it still names the
-            consequence, because "insert a row" and "start an agent" are not the same promise. */}
-        <div className="flex items-center gap-2">
-          <ControlGroup controlSize="sm" role="group" aria-label="Send this to">
-            <Chip
-              variant="filter"
-              icon={<Sparkles />}
-              selected={mode === 'athena'}
+        <Stack gap={2}>
+          <MentionTextarea
+            value={text}
+            onChange={(next) => {
+              setText(next);
+              if (notice) setNotice(null);
+            }}
+            {...(mentionOrgId === undefined ? {} : { orgId: mentionOrgId })}
+            insertMode="context"
+            onKeyDown={onKeyDown}
+            // Measured, not guessed. This was `rows={text.length > 90 ? 3 : 2}` — a stand-in for
+            // "has it wrapped yet" that is wrong at every width it was not tuned for.
+            rows={2}
+            autoGrow
+            maxRows={10}
+            placeholder={
+              mode === 'athena' ? 'Ask Athena about today…' : 'What task needs capturing?'
+            }
+            aria-label={mode === 'athena' ? 'Ask Athena about today' : 'Add a task'}
+            disabled={orgId === null}
+            className="text-body-large placeholder:text-on-surface-variant text-on-surface w-full resize-none bg-transparent outline-none disabled:opacity-50"
+          />
+
+          {files.length > 0 ? (
+            <ControlGroup controlSize="sm" wrap>
+              {files.map((file, index) => (
+                <Chip
+                  key={`${file.name}:${String(index)}`}
+                  variant="input"
+                  icon={<Paperclip />}
+                  removeLabel={`Remove ${file.name}`}
+                  onRemove={() => {
+                    setFiles((current) => current.filter((_, at) => at !== index));
+                  }}
+                >
+                  {file.name}
+                </Chip>
+              ))}
+            </ControlGroup>
+          ) : null}
+
+          {/* One group, one height: the attach control, the destination toggle, and send all
+              resolve through the same control step instead of each carrying a `min-h` override. */}
+          <ControlGroup controlSize="sm">
+            <input
+              ref={filePicker}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={pickFiles}
+              aria-hidden="true"
+              tabIndex={-1}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              iconOnly
+              aria-label="Attach files"
+              disabled={orgId === null}
               onClick={() => {
-                setMode('athena');
+                filePicker.current?.click();
               }}
             >
-              Athena
-            </Chip>
-            <Chip
-              variant="filter"
-              icon={<ListChecks />}
-              selected={mode === 'task'}
-              onClick={() => {
-                setMode('task');
+              <Paperclip aria-hidden="true" />
+            </Button>
+            <Tabs
+              value={mode}
+              onValueChange={(next) => {
+                setMode(next as CaptureMode);
               }}
             >
-              Task
-            </Chip>
+              <TabList label="Send this to">
+                <Tab value="athena">Athena</Tab>
+                <Tab value="task">Task</Tab>
+              </TabList>
+            </Tabs>
+            <Button
+              type="button"
+              iconOnly
+              disabled={!canSubmit}
+              onClick={submit}
+              aria-label={mode === 'task' ? 'Add task' : 'Ask Athena'}
+              className="ml-auto"
+            >
+              <ArrowUp aria-hidden="true" />
+            </Button>
           </ControlGroup>
-          <Button
-            type="button"
-            variant={canSubmit ? 'default' : 'ghost'}
-            controlSize="sm"
-            disabled={!canSubmit}
-            onClick={submit}
-            className="ml-auto min-h-11"
-          >
-            {mode === 'task' ? <ListChecks /> : <Sparkles />}
-            {busy === 'capture' ? 'Adding…' : mode === 'task' ? 'Add task' : 'Ask Athena'}
-          </Button>
-        </div>
-      </div>
-      <div aria-live="polite" className="min-h-4 px-1">
+        </Stack>
+      </Surface>
+      <div aria-live="polite" className="empty:hidden">
         {error ? (
-          <p className="text-error text-sm">{error}</p>
+          <p className="text-error text-body-small">{error}</p>
         ) : notice ? (
-          <p className="text-on-surface-variant text-sm">
+          <p className="text-on-surface-variant text-body-small">
             Added <span className="text-on-surface font-medium">“{notice.title}”</span> —{' '}
-            <Link
-              href={notice.href}
-              className="text-on-surface hover:text-primary font-medium underline underline-offset-4 transition-colors"
-            >
-              view task
-            </Link>
+            <Button asChild variant="link" controlSize="sm">
+              <Link href={notice.href}>view task</Link>
+            </Button>
           </p>
         ) : null}
       </div>
-    </div>
+    </Stack>
   );
 }

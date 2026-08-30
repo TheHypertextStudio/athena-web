@@ -52,7 +52,7 @@ export interface HubTaskRowProps {
    * Exists so a list can make the row flex beside sibling controls. Row actions are deliberately
    * NOT a slot on this component: the row renders an `<a>`, and a `<button>` inside an anchor is
    * invalid HTML no matter how carefully its click is stopped. A caller that wants row actions
-   * puts them next to the row, not inside it — see `todays-work.tsx`.
+   * puts them next to the row, not inside it — see `day-plan.tsx`.
    */
   readonly className?: string;
 }
@@ -112,6 +112,7 @@ export default function HubTaskRow({
           </Link>
         )}
         leading={<StatusIcon type={task.stateType} />}
+        {...(task.summary === null ? {} : { subtitle: task.summary })}
         title={
           <>
             {lead ? (

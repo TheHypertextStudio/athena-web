@@ -70,15 +70,18 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('TodayPrompt', () => {
-  it('shows both destinations at once, with Athena the armed one', () => {
+  it('puts both destinations in one segmented control, with Athena armed', () => {
     render(<TodayPrompt orgId={ORG} orgLabel="Space" />);
     expect(screen.getByLabelText('Ask Athena about today')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Ask Athena' })).toBeDisabled();
 
-    // The chevron this replaces kept the armed destination off-screen, so the same Enter key
-    // inserted a row or started an agent depending on state you had to infer.
-    expect(screen.getByRole('button', { name: 'Athena' })).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('button', { name: 'Task' })).toHaveAttribute('aria-pressed', 'false');
+    // One control with two positions, not two adjacent chips. The chevron this replaces kept the
+    // armed destination off-screen, so the same Enter key inserted a row or started an agent
+    // depending on state you had to infer.
+    const tabs = screen.getAllByRole('tab');
+    expect(tabs).toHaveLength(2);
+    expect(screen.getByRole('tab', { name: 'Athena' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Task' })).toHaveAttribute('aria-selected', 'false');
   });
 
   it('routes the default draft to Athena and resets an explicit task-capture switch on revisit', async () => {
@@ -90,7 +93,7 @@ describe('TodayPrompt', () => {
     expect(openAthena).toHaveBeenCalledOnce();
     expect(capturePost).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Task' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Task' }));
     first.unmount();
     render(<TodayPrompt orgId={ORG} orgLabel="Space" />);
     await waitFor(() => {

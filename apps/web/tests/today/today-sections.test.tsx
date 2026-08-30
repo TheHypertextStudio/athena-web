@@ -5,8 +5,8 @@ import { OrganizationId, TaskId } from '@docket/types';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import NeedsYou from '../../src/components/today/needs-you';
-import TodaysWork from '../../src/components/today/todays-work';
+import NeedsAttention from '../../src/components/today/needs-attention';
+import DayPlan from '../../src/components/today/day-plan';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock('../../src/components/time-tracking/task-timer-button', () => ({
@@ -54,7 +54,7 @@ function task(overrides: TaskOverrides): HubTaskItem {
 
 const orgName = (orgId: string): string => (orgId === ORG_A ? 'Acme' : 'Hope Fund');
 
-/** {@link task} plus the accepted-plan enrichment `TodaysWork` reads. */
+/** {@link task} plus the accepted-plan enrichment `DayPlan` reads. */
 function planItem(overrides: TaskOverrides & { sort?: number }): HubTodayPlanItem {
   const { sort = 0, ...rest } = overrides;
   return {
@@ -74,9 +74,11 @@ function planItem(overrides: TaskOverrides & { sort?: number }): HubTodayPlanIte
 
 afterEach(cleanup);
 
-describe('NeedsYou', () => {
+describe('NeedsAttention', () => {
   it('renders nothing at all when nothing is waiting', () => {
-    const { container } = render(<NeedsYou approvals={[]} blocked={[]} orgName={orgName} />);
+    const { container } = render(
+      <NeedsAttention approvals={[]} blocked={[]} dueToday={[]} orgName={orgName} />,
+    );
     // A clear day is a short page. An empty "Needs you" heading over two empty groups would be
     // three lines of chrome announcing the absence of work.
     expect(container).toBeEmptyDOMElement();
@@ -84,23 +86,25 @@ describe('NeedsYou', () => {
 
   it('puts approvals above blockers, because only one of them has an agent waiting on a human', () => {
     render(
-      <NeedsYou
+      <NeedsAttention
         approvals={[task({ id: 'a1', title: 'Send the donor notes' })]}
         blocked={[task({ id: 'b1', title: 'Ship the rollout' })]}
+        dueToday={[]}
         orgName={orgName}
       />,
     );
 
     const headings = screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
-    expect(headings[0]).toContain('Waiting on your approval');
+    expect(headings[0]).toContain('Approvals');
     expect(headings[1]).toContain('Blocked');
   });
 
   it('shows only the group that has something in it', () => {
     render(
-      <NeedsYou
+      <NeedsAttention
         approvals={[]}
         blocked={[task({ id: 'b1', title: 'Ship it' })]}
+        dueToday={[]}
         orgName={orgName}
       />,
     );
@@ -109,12 +113,12 @@ describe('NeedsYou', () => {
   });
 });
 
-describe('TodaysWork', () => {
+describe('DayPlan', () => {
   it('renders every planned task, not a truncated few', () => {
     const plan = Array.from({ length: 7 }, (_, i) =>
       planItem({ id: `t${String(i)}`, title: `Task ${String(i)}`, sort: i }),
     );
-    render(<TodaysWork plan={plan} orgName={orgName} loading={false} />);
+    render(<DayPlan plan={plan} orgName={orgName} loading={false} />);
 
     // The section this replaces rendered `focus.now` and `focus.after` only — two of however many
     // tasks the day actually held, and none at all before a plan was accepted.
@@ -124,7 +128,7 @@ describe('TodaysWork', () => {
   it('promotes the current item and does not repeat it as a row', () => {
     const now = planItem({ id: 't1', title: 'One', sort: 0 });
     render(
-      <TodaysWork
+      <DayPlan
         plan={[now, planItem({ id: 't2', title: 'Two', sort: 1 })]}
         now={now}
         orgName={orgName}
@@ -145,11 +149,12 @@ describe('TodaysWork', () => {
 
   it('carries the state glyph and due date the row used to drop', () => {
     render(
-      <TodaysWork
+      <DayPlan
         plan={[
           planItem({
             id: 't1',
             title: 'Finalise the budget',
+            summary: null,
             state: 'done',
             stateType: 'completed',
             dueDate: '2026-08-07',
@@ -167,7 +172,7 @@ describe('TodaysWork', () => {
 
   it('marks a blocked item so the row says why it will not move', () => {
     render(
-      <TodaysWork
+      <DayPlan
         plan={[{ ...planItem({ id: 't1', title: 'Waiting' }), blocked: true, dependencyImpact: 3 }]}
         orgName={orgName}
         loading={false}
@@ -180,17 +185,13 @@ describe('TodaysWork', () => {
 
   it('groups by workspace only when the day actually spans more than one', () => {
     const single = render(
-      <TodaysWork
-        plan={[planItem({ id: 't1', title: 'One' })]}
-        orgName={orgName}
-        loading={false}
-      />,
+      <DayPlan plan={[planItem({ id: 't1', title: 'One' })]} orgName={orgName} loading={false} />,
     );
     expect(screen.queryByRole('heading', { level: 3 })).not.toBeInTheDocument();
     single.unmount();
 
     render(
-      <TodaysWork
+      <DayPlan
         plan={[
           planItem({ id: 't1', title: 'One' }),
           planItem({ id: 't2', title: 'Two', organizationId: ORG_B }),
@@ -206,14 +207,14 @@ describe('TodaysWork', () => {
   });
 
   it('keeps its heading painted while loading rather than replacing a known word with a grey bar', () => {
-    render(<TodaysWork plan={[]} orgName={orgName} loading />);
-    expect(screen.getByRole('heading', { level: 2, name: 'The day' })).toBeInTheDocument();
+    render(<DayPlan plan={[]} orgName={orgName} loading />);
+    expect(screen.getByRole('heading', { level: 2, name: 'Plan' })).toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
   it('offers a way to fill an empty day instead of only stating it is empty', () => {
     const onPlan = vi.fn();
-    render(<TodaysWork plan={[]} orgName={orgName} loading={false} unplanned onPlan={onPlan} />);
+    render(<DayPlan plan={[]} orgName={orgName} loading={false} unplanned onPlan={onPlan} />);
 
     // Planning is the empty state's own action now — it used to be a banner above every section,
     // announcing Athena where the day's work should have been.

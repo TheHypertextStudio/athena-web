@@ -59,6 +59,7 @@ function item(id: string, position: number): HubTodayPlanItem {
     id: TaskId.parse(TASK_IDS[id]),
     organizationId: ORG,
     title: `Task ${id}`,
+    summary: null,
     state: 'todo',
     stateType: 'unstarted',
     priority: 'medium',
@@ -74,7 +75,7 @@ function item(id: string, position: number): HubTodayPlanItem {
     timeboxEndsAt: null,
     blocked: false,
     dependencyImpact: 0,
-    reason: position === 0 ? 'You chose this first' : 'Next in your plan',
+    reason: null,
   };
 }
 
@@ -171,7 +172,7 @@ describe('useTodayActions', () => {
       planItemId: item('after', 1).planItemId,
       position: 1,
       sort: 10,
-      reason: 'Next in your plan',
+      reason: null,
     };
     const initial = today(now, duplicate);
     initial.plan = [now, duplicate];
@@ -198,7 +199,7 @@ describe('useTodayActions', () => {
       planItemId: item('after', 1).planItemId,
       position: 1,
       sort: 10,
-      reason: 'Next in your plan',
+      reason: null,
     };
     const initial = today(now, duplicate);
     initial.plan = [now, duplicate];

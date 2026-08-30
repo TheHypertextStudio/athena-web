@@ -2,7 +2,7 @@
 
 import type { HubTodaySuggestion } from '@docket/types';
 import { ArrowRight, Play, Plus, Sparkles, X } from '@docket/ui/icons';
-import { Button } from '@docket/ui/primitives';
+import { Button, ControlGroup } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
 import { type JSX, useMemo, useState } from 'react';
 
@@ -10,8 +10,8 @@ import { OrgChip } from '@/components/org-chip';
 
 import { TodaySection } from './today-section';
 
-/** Props for the cleared-day Athena suggestions. */
-export interface KeepTheMomentumProps {
+/** Props for {@link SuggestedTasks}. */
+export interface SuggestedTasksProps {
   readonly suggestions: readonly HubTodaySuggestion[];
   readonly orgName: (organizationId: string) => string;
   readonly onAdd: (suggestion: HubTodaySuggestion) => void;
@@ -21,8 +21,8 @@ export interface KeepTheMomentumProps {
   readonly blockedPlan?: boolean;
 }
 
-/** Offer only grounded work that the server established can fit the remaining day. */
-export default function KeepTheMomentum({
+/** Tasks the server established can fit the time remaining today. */
+export default function SuggestedTasks({
   suggestions,
   orgName,
   onAdd,
@@ -30,7 +30,7 @@ export default function KeepTheMomentum({
   onAskAthena,
   busy = false,
   blockedPlan = false,
-}: KeepTheMomentumProps): JSX.Element {
+}: SuggestedTasksProps): JSX.Element {
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(() => new Set());
   const visible = useMemo(
     () => suggestions.filter((item) => !dismissed.has(item.id)).slice(0, 3),
@@ -38,17 +38,16 @@ export default function KeepTheMomentum({
   );
   return (
     <TodaySection
-      id="momentum-heading"
-      heading="Keep the momentum"
+      id="suggested-tasks-heading"
+      heading="Suggested tasks"
       count={visible.length > 0 ? visible.length : undefined}
     >
-      {/* The one line of narration kept anywhere on this page, because it is the only section whose
-          contents need a *reason* to be trusted: these are suggestions, and which of two situations
-          produced them changes what they mean. */}
+      {/* The one supporting line on this page. These rows are suggestions rather than commitments,
+          and which of two situations produced them changes what they mean. */}
       <p className="text-on-surface-variant text-body-small">
         {blockedPlan
-          ? 'Your remaining plan is blocked. This is work that fits while you wait.'
-          : 'Your plan is clear. This is work that fits the time left.'}
+          ? 'The rest of the plan is blocked. These tasks fit the time left.'
+          : 'The plan is complete. These tasks fit the time left.'}
       </p>
       {visible.length > 0 ? (
         <ul className="bg-surface-container-low divide-outline-variant mt-1 divide-y rounded-xl px-4">
@@ -72,11 +71,9 @@ export default function KeepTheMomentum({
                     {suggestion.reason} · {String(suggestion.estimateMinutes)} min
                   </p>
                 </div>
-                <div className="flex min-h-11 flex-wrap items-center gap-1">
+                <ControlGroup controlSize="lg" wrap>
                   <Button
                     type="button"
-                    controlSize="sm"
-                    className="min-h-11"
                     disabled={busy}
                     onClick={() => {
                       onStart(suggestion);
@@ -86,9 +83,7 @@ export default function KeepTheMomentum({
                   </Button>
                   <Button
                     type="button"
-                    controlSize="sm"
                     variant="outline"
-                    className="min-h-11"
                     disabled={busy}
                     onClick={() => {
                       onAdd(suggestion);
@@ -96,32 +91,23 @@ export default function KeepTheMomentum({
                   >
                     <Plus aria-hidden="true" /> Add to today
                   </Button>
-                  <Button
-                    asChild
-                    controlSize="sm"
-                    variant="ghost"
-                    iconOnly
-                    aria-label="Open task"
-                    className="min-h-11 min-w-11"
-                  >
+                  <Button asChild variant="ghost" iconOnly aria-label="Open task">
                     <Link href={`/orgs/${suggestion.organizationId}/tasks/${suggestion.id}`}>
                       <ArrowRight aria-hidden="true" />
                     </Link>
                   </Button>
                   <Button
                     type="button"
-                    controlSize="sm"
                     variant="ghost"
                     iconOnly
                     aria-label="Dismiss"
-                    className="min-h-11 min-w-11"
                     onClick={() => {
                       setDismissed((current) => new Set([...current, suggestion.id]));
                     }}
                   >
                     <X aria-hidden="true" />
                   </Button>
-                </div>
+                </ControlGroup>
               </div>
             </li>
           ))}
@@ -129,15 +115,15 @@ export default function KeepTheMomentum({
       ) : (
         <div className="bg-surface-container-low mt-1 rounded-xl p-4">
           <p className="text-on-surface text-body-medium">
-            {blockedPlan ? 'Nothing else fits around the block.' : 'You’re clear.'}
+            {blockedPlan ? 'No task fits around the blocker.' : 'No tasks left.'}
           </p>
           <p className="text-on-surface-variant text-body-small mt-1">
             {blockedPlan
-              ? 'Open the task to resolve what is blocking it, or ask Athena to reshape the plan.'
-              : 'Nothing else honest fits right now. Athena can help rethink the rest of the day.'}
+              ? 'Open the blocked task to resolve its dependency, or ask Athena to rebuild the plan.'
+              : 'No remaining task fits the time left. Athena can rebuild the rest of the day.'}
           </p>
           {onAskAthena ? (
-            <Button type="button" variant="outline" className="mt-3 min-h-11" onClick={onAskAthena}>
+            <Button type="button" variant="outline" className="mt-3" onClick={onAskAthena}>
               <Sparkles aria-hidden="true" /> Ask Athena
             </Button>
           ) : null}

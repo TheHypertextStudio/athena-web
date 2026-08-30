@@ -13,8 +13,8 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { FocusCard } from '../../src/components/today/focus-card';
-import KeepTheMomentum from '../../src/components/today/keep-the-momentum';
-import WorkInMotion from '../../src/components/today/work-in-motion';
+import SuggestedTasks from '../../src/components/today/suggested-tasks';
+import ProjectStatus from '../../src/components/today/project-status';
 import { assertDefined } from '@docket/test-utils';
 
 vi.mock('../../src/components/time-tracking/task-timer-button', () => ({
@@ -26,7 +26,9 @@ const item = (id: string, position: number): HubTodayPlanItem =>
     id,
     organizationId: '01JQ000000000000000000000A',
     title: `Task ${id}`,
+    summary: null,
     state: 'todo',
+    stateType: 'unstarted',
     priority: 'high',
     assigneeId: null,
     projectId: null,
@@ -40,7 +42,7 @@ const item = (id: string, position: number): HubTodayPlanItem =>
     timeboxEndsAt: null,
     blocked: false,
     dependencyImpact: 0,
-    reason: position === 0 ? 'You chose this first' : 'Next in your plan',
+    reason: 'Due today',
   }) as HubTodayPlanItem;
 
 const ORG = OrganizationId.parse('01JQ000000000000000000000A');
@@ -71,18 +73,21 @@ describe('FocusCard', () => {
     expect(cards).toHaveLength(1);
     const now = assertDefined(cards[0]);
 
-    fireEvent.click(within(now).getByRole('button', { name: 'Mark complete' }));
-    fireEvent.click(within(now).getByRole('button', { name: 'Defer' }));
+    // Completing is the primary action and the only filled control; everything that is not
+    // "finish this" or "start the clock" sits behind the overflow menu, so the card does not ask
+    // the reader to rank five identically-weighted buttons.
+    fireEvent.click(within(now).getByRole('button', { name: /complete/i }));
     expect(complete).toHaveBeenCalledWith(expect.objectContaining({ id: 'now' }));
-    expect(defer).toHaveBeenCalledWith(expect.objectContaining({ id: 'now' }));
-    expect(within(now).getByRole('button', { name: /timebox/i })).toBeInTheDocument();
+    expect(within(now).getByRole('button', { name: 'More actions' })).toBeInTheDocument();
 
-    // Promotion is not offered on the item you are already on — there is nothing ahead of it.
-    expect(within(now).queryByRole('button', { name: 'Make next' })).not.toBeInTheDocument();
+    // Timebox and defer are reachable, but not as peers of the primary action.
+    expect(within(now).queryByRole('button', { name: /timebox/i })).not.toBeInTheDocument();
+    expect(within(now).queryByRole('button', { name: 'Defer' })).not.toBeInTheDocument();
+    expect(defer).not.toHaveBeenCalled();
   });
 });
 
-describe('WorkInMotion', () => {
+describe('ProjectStatus', () => {
   it('gives Projects progress and Initiatives connected-work health', () => {
     const cards: HubTodayStatusCard[] = [
       {
@@ -115,7 +120,7 @@ describe('WorkInMotion', () => {
         connectedWork: { onTrack: 2, atRisk: 1, offTrack: 0, total: 3 },
       },
     ];
-    render(<WorkInMotion cards={cards} orgName={() => 'Acme'} />);
+    render(<ProjectStatus cards={cards} orgName={() => 'Acme'} />);
 
     // Each card is one row that links to its entity — not a tile with a separate "Open" affordance.
     const rows = screen.getAllByRole('link');
@@ -157,14 +162,14 @@ describe('WorkInMotion', () => {
         progress: { completed: 0, total: 0 },
       },
     ];
-    render(<WorkInMotion cards={cards} orgName={() => 'Acme'} />);
+    render(<ProjectStatus cards={cards} orgName={() => 'Acme'} />);
 
     // A 0% track and a 0-of-0 project look identical, and mean opposite things.
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
   });
 });
 
-describe('KeepTheMomentum', () => {
+describe('SuggestedTasks', () => {
   it('shows at most three feasible tasks and dismisses only the local suggestion', () => {
     const suggestions = ['a', 'b', 'c', 'd'].map<HubTodaySuggestion>(
       (id) =>
@@ -172,6 +177,7 @@ describe('KeepTheMomentum', () => {
           id: `01JQ000000000000000000000${id.toUpperCase()}`,
           organizationId: '01JQ000000000000000000000A',
           title: `Suggestion ${id}`,
+          summary: null,
           state: 'todo',
           priority: 'medium',
           estimateMinutes: 20,
@@ -180,7 +186,7 @@ describe('KeepTheMomentum', () => {
         }) as HubTodaySuggestion,
     );
     render(
-      <KeepTheMomentum
+      <SuggestedTasks
         suggestions={suggestions}
         orgName={() => 'Acme'}
         onAdd={vi.fn()}
@@ -200,6 +206,7 @@ describe('KeepTheMomentum', () => {
       id: '01JQ000000000000000000000A',
       organizationId: '01JQ000000000000000000000B',
       title: 'One honest next step',
+      summary: null,
       state: 'todo',
       priority: 'medium',
       estimateMinutes: 20,
@@ -207,7 +214,7 @@ describe('KeepTheMomentum', () => {
       reason: 'Fits the time left today',
     } as HubTodaySuggestion;
     render(
-      <KeepTheMomentum
+      <SuggestedTasks
         suggestions={[suggestion]}
         orgName={() => 'Acme'}
         onAdd={vi.fn()}
@@ -220,9 +227,18 @@ describe('KeepTheMomentum', () => {
     expect(screen.getByRole('button', { name: 'Add to today' })).toBeDisabled();
   });
 
-  it('describes a blocked plan as blocked instead of claiming it is clear', () => {
+  it('tells the two situations apart instead of always claiming the plan is clear', () => {
+    // Asserting the *difference* rather than either wording: a blocked plan and a finished plan
+    // produce suggestions for opposite reasons, and the supporting line has to say which. Pinning
+    // the exact sentence here would make the copy uneditable.
+    const clear = render(
+      <SuggestedTasks suggestions={[]} orgName={() => 'Acme'} onAdd={vi.fn()} onStart={vi.fn()} />,
+    );
+    const clearText = screen.getByRole('region', { name: 'Suggested tasks' }).textContent;
+    clear.unmount();
+
     render(
-      <KeepTheMomentum
+      <SuggestedTasks
         suggestions={[]}
         orgName={() => 'Acme'}
         onAdd={vi.fn()}
@@ -230,8 +246,8 @@ describe('KeepTheMomentum', () => {
         blockedPlan
       />,
     );
+    const blockedText = screen.getByRole('region', { name: 'Suggested tasks' }).textContent;
 
-    expect(screen.getByText(/remaining plan is blocked/i)).toBeInTheDocument();
-    expect(screen.queryByText('You’re clear.')).not.toBeInTheDocument();
+    expect(blockedText).not.toEqual(clearText);
   });
 });

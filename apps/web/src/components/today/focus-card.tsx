@@ -8,7 +8,7 @@
  * this" — the only two of the day's tasks the page showed at all. The rest of `plan[]` was fetched
  * and dropped, so a fifteen-item day and a two-item day drew the identical surface.
  *
- * The day is now one list (`todays-work.tsx`), and this is its promoted first entry: the same task
+ * The day is now one list (`day-plan.tsx`), and this is its promoted first entry: the same task
  * the sequence called "Now", carrying the inline actions that only make sense for the thing you are
  * actually doing — the timer, complete, the timebox popover, defer. "After this" is no longer a
  * second card; it is simply the next row.
@@ -18,6 +18,7 @@
  * lose them.
  */
 import type { HubTodayPlanItem } from '@docket/types';
+import { StatusIcon } from '@docket/ui/components';
 import { AlarmClock, ArrowRight, Check, Ellipsis } from '@docket/ui/icons';
 import {
   Button,
@@ -30,6 +31,7 @@ import {
   Popover,
   PopoverAnchor,
   PopoverContent,
+  ControlGroup,
   Row,
   Stack,
 } from '@docket/ui/primitives';
@@ -85,24 +87,44 @@ export function FocusCard({
       <Row gap={4} align="start" justify="between">
         <Stack className="min-w-0">
           <p className="text-primary text-label-large">Now</p>
-          <Link
-            href={`/orgs/${item.organizationId}/tasks/${item.id}`}
-            className="text-on-surface text-title-medium focus-visible:ring-ring mt-1 block text-balance hover:underline focus-visible:rounded focus-visible:ring-2 focus-visible:outline-none"
-          >
-            {item.title}
-          </Link>
+          {/* The same status glyph every row on this page carries. It used to be spelled out as a
+              word on the meta line below — the workspace's own state key, rendered as text, under a
+              card that says "Now". The glyph says it in the shared vocabulary instead. */}
+          <Row gap={2} align="start" className="mt-1">
+            <StatusIcon type={item.stateType} />
+            <Link
+              href={`/orgs/${item.organizationId}/tasks/${item.id}`}
+              className="text-on-surface text-title-medium focus-visible:ring-ring block text-balance hover:underline focus-visible:rounded focus-visible:ring-2 focus-visible:outline-none"
+            >
+              {item.title}
+            </Link>
+          </Row>
+          {/* Tier one is `task.summary`, written on the write path; the server falls back to a
+              lead-sentence extract of the description and sends null only when there is neither.
+              Nothing is reserved for the null case — an empty line under a title is what makes a
+              card look unwritten, whereas a card that simply ends after its title still carries a
+              glyph, a workspace, its timing, and its actions. */}
+          {item.summary ? (
+            <p className="text-on-surface-variant text-body-small mt-1 line-clamp-2">
+              {item.summary}
+            </p>
+          ) : null}
         </Stack>
         <OrgChip orgId={item.organizationId} name={orgName(item.organizationId)} />
       </Row>
-      <Row gap={3} className="text-on-surface-variant text-body-small mt-2 flex-wrap">
-        <span>{item.reason}</span>
-        {time ? (
-          <span className="inline-flex items-center gap-1">
-            <AlarmClock aria-hidden="true" className="size-3.5" /> {time}
-          </span>
-        ) : null}
-        <span className="capitalize">{item.state.replaceAll('_', ' ')}</span>
-      </Row>
+      {/* Only facts that change what to do: a deadline or running timer (`reason`), and when it is
+          scheduled or how long it should take (`time`). The row disappears when there are neither,
+          rather than standing empty or being padded with the task's own state spelled out. */}
+      {(item.reason ?? time) ? (
+        <Row gap={3} className="text-on-surface-variant text-body-small mt-2 flex-wrap">
+          {item.reason ? <span>{item.reason}</span> : null}
+          {time ? (
+            <span className="inline-flex items-center gap-1">
+              <AlarmClock aria-hidden="true" className="size-3.5" /> {time}
+            </span>
+          ) : null}
+        </Row>
+      ) : null}
       <FocusActions
         item={item}
         completing={completing}
@@ -148,45 +170,31 @@ function FocusActions({
     <Popover open={timeboxOpen} onOpenChange={setTimeboxOpen}>
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
         <PopoverAnchor asChild>
-          <Row gap={2} className="mt-4 min-h-11">
-            <TaskTimerButton taskId={item.id} title={item.title} />
+          {/* One primary, one secondary, everything else behind `⋯`. Five ghost buttons in a row
+              gave completing the task, starting a timer, scheduling it, deferring it, and opening
+              it identical weight, so the card asked the reader to rank them. */}
+          <ControlGroup controlSize="sm" className="mt-3">
             <Button
               type="button"
-              variant="outline"
               disabled={completing}
               onClick={() => {
                 onComplete(item);
               }}
-              className="hidden min-h-11 shrink-0 @md:inline-flex"
             >
-              <Check aria-hidden="true" /> Mark complete
+              <Check aria-hidden="true" /> Complete
             </Button>
-            <Row gap={1} className="ml-auto hidden @lg:flex">
-              <Button type="button" variant="ghost" className="min-h-11" onClick={openTimebox}>
-                {timeboxLabel}
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                className="min-h-11"
-                onClick={() => {
-                  onDefer(item);
-                }}
-              >
-                Defer
-              </Button>
-              <Button asChild variant="ghost" className="min-h-11">
-                <Link href={taskHref}>
-                  Open <ArrowRight aria-hidden="true" />
-                </Link>
-              </Button>
-            </Row>
+            <TaskTimerButton taskId={item.id} title={item.title} />
             <DropdownMenuTrigger asChild>
-              <Button type="button" variant="ghost" className="ml-auto min-h-11 @lg:hidden">
-                <Ellipsis aria-hidden="true" /> More
+              <Button type="button" variant="ghost" iconOnly aria-label="More actions">
+                <Ellipsis aria-hidden="true" />
               </Button>
             </DropdownMenuTrigger>
-          </Row>
+            <Button asChild variant="ghost" className="ml-auto">
+              <Link href={taskHref}>
+                Open <ArrowRight aria-hidden="true" />
+              </Link>
+            </Button>
+          </ControlGroup>
         </PopoverAnchor>
         <DropdownMenuContent
           align="end"
@@ -197,14 +205,6 @@ function FocusActions({
             event.preventDefault();
           }}
         >
-          <DropdownMenuItem
-            disabled={completing}
-            onSelect={() => {
-              onComplete(item);
-            }}
-          >
-            Mark complete
-          </DropdownMenuItem>
           <DropdownMenuItem onSelect={openTimebox}>{timeboxLabel}…</DropdownMenuItem>
           <DropdownMenuItem
             onSelect={() => {

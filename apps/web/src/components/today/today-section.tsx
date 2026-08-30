@@ -10,10 +10,11 @@
  * Two hierarchy rules the page was breaking are enforced here rather than restated per section:
  *
  * 1. **A section heading is smaller than the page title.** Both were `text-title-large`, which made
- *    "Work in motion" read heavier than "Today" — the section headings are non-semibold at the same
+ *    "Projects & initiatives" read heavier than "Today" — section headings are non-semibold at the same
  *    size, so the larger-looking word was the subordinate one. Sections are `title-medium`.
- * 2. **A heading is a label, not a sentence.** The sub-lines this replaces ("The outcomes today's
- *    work is moving.") narrated the section to someone already reading it. A `count` carries the
+ * 2. **A heading names its contents literally.** The labels this replaces — "The day", "Work in
+ *    motion", "Keep the momentum" — were figures of speech where a person needs a noun, and each
+ *    carried a sub-line narrating the section to someone already reading it. A `count` carries the
  *    only supporting fact that was ever load-bearing.
  */
 import { Row, Stack } from '@docket/ui/primitives';
@@ -49,7 +50,7 @@ export function TodaySection({
 }: TodaySectionProps): JSX.Element {
   return (
     <Stack as="section" gap={2} aria-labelledby={id}>
-      <Row gap={3} className="min-h-8">
+      <Row gap={3}>
         <h2 id={id} className="text-on-surface text-title-medium">
           {heading}
         </h2>

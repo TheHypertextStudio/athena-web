@@ -40,6 +40,7 @@ function task(id: string, title = 'Task'): unknown {
     id,
     organizationId: ORG,
     title,
+    summary: null,
     state: 'in_progress',
     stateType: 'started',
     priority: 'medium',
@@ -52,7 +53,7 @@ function task(id: string, title = 'Task'): unknown {
     timeboxEndsAt: null,
     blocked: false,
     dependencyImpact: 0,
-    reason: 'Next in your plan',
+    reason: null,
   };
 }
 

@@ -1,5 +1,5 @@
 /**
- * `today/work-in-motion` — the larger outcomes today's work is moving, as rows.
+ * `today/project-status` — the Projects and Initiatives today's tasks belong to, as rows.
  *
  * @remarks
  * This was a two-column grid of four ~230px cards that consumed the entire fold to carry about five
@@ -31,8 +31,8 @@ import { formatCalendarDate } from '@/lib/format-date';
 
 import { TodaySection } from './today-section';
 
-/** Props for grounded Project and Initiative status stories. */
-export interface WorkInMotionProps {
+/** Props for {@link ProjectStatus}. */
+export interface ProjectStatusProps {
   readonly cards: readonly HubTodayStatusCard[];
   readonly orgName: (organizationId: string) => string;
 }
@@ -61,13 +61,17 @@ function HealthChip({
   );
 }
 
-/** Connect today's execution to at most four visible larger outcomes. */
-export default function WorkInMotion({ cards, orgName }: WorkInMotionProps): JSX.Element | null {
+/** At most four Projects or Initiatives, each with its health, progress, and latest update. */
+export default function ProjectStatus({ cards, orgName }: ProjectStatusProps): JSX.Element | null {
   if (cards.length === 0) return null;
   const visible = cards.slice(0, 4);
   return (
-    <TodaySection id="work-in-motion-heading" heading="Work in motion" count={visible.length}>
-      <EntityList aria-label="Work in motion" tone="tonal">
+    <TodaySection
+      id="project-status-heading"
+      heading="Projects & initiatives"
+      count={visible.length}
+    >
+      <EntityList aria-label="Projects and initiatives" tone="tonal">
         {visible.map((card) => {
           const href = `/orgs/${card.organizationId}/${card.kind === 'project' ? 'projects' : 'initiatives'}/${card.id}`;
           return (

@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * `settings/athena` — run Athena on your own computer.
+ * `settings/athena` — run models on your own computer.
  *
  * @remarks
  * The whole management surface for the Lovelace Lattice backend: connect, see which of your
@@ -79,7 +79,7 @@ function ReasonNote({ reason }: { readonly reason: LatticeReason }): JSX.Element
 }
 
 /**
- * Settings → Athena → run Athena on your own computer.
+ * Settings → Athena → run models on your own computer.
  *
  * @returns The Lattice management section.
  */

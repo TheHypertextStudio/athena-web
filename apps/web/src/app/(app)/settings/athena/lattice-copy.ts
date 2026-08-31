@@ -36,11 +36,11 @@ export interface LatticeReasonCopy {
 export const LATTICE_REASON_COPY: Readonly<Record<LatticeReason, LatticeReasonCopy>> = {
   not_connected: {
     title: 'Your Lovelace account is not connected.',
-    action: 'Connect Lovelace to run Athena on your own computer.',
+    action: 'Connect Lovelace to run models on your own computer.',
   },
   no_device_selected: {
     title: 'No computer is chosen yet.',
-    action: 'Pick which of your computers should answer Athena.',
+    action: 'Pick which of your computers should run the models.',
   },
   device_offline: {
     title: 'That computer is not reachable right now.',
@@ -82,7 +82,7 @@ export type LatticeDeploymentReason = 'not_configured';
 /** Copy for each deployment-level reason. */
 export const LATTICE_DEPLOYMENT_COPY: Readonly<Record<LatticeDeploymentReason, string>> = {
   not_configured:
-    'Running Athena on your own computer is not set up for this Docket deployment yet.',
+    'Running models on your own computer is not set up for this Docket deployment yet.',
 };
 
 /** What each device state means, in one word a person can scan. */
@@ -97,8 +97,8 @@ export const LATTICE_DEVICE_STATUS_COPY: Readonly<
 
 /** Copy for the outcome flag the OAuth callback puts on the return URL. */
 export const LATTICE_RETURN_COPY: Readonly<Record<string, string>> = {
-  connected: 'Lovelace connected. Choose which computer should answer Athena.',
+  connected: 'Lovelace connected. Choose which computer should run the models.',
   declined: 'You declined the request, so nothing changed.',
-  scopes: 'Some permissions were not approved, so Athena cannot use your computer yet.',
+  scopes: 'Some permissions were not approved, so Athena cannot run models on your computer yet.',
   error: 'That connection attempt did not finish. You can try again.',
 };

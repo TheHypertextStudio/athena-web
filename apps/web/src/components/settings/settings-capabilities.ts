@@ -85,8 +85,8 @@ export const SETTINGS_NODES = {
   athenaLattice: personalNode(
     'athena-lattice',
     'athena',
-    'Run Athena on your own computer',
-    'Connect a computer you own so it can run Athena.',
+    'Run models on your own computer',
+    'Connect a computer you own so Athena can run its models there instead of in the cloud.',
     ['lattice', 'local'],
   ),
   connectionsTools: personalNode(

@@ -3,7 +3,7 @@
 import { InlineBanner } from '@docket/ui/components';
 import { Skeleton } from '@docket/ui/primitives';
 import { useRouter } from 'next/navigation';
-import type { JSX } from 'react';
+import type { JSX, ReactNode } from 'react';
 
 import { isAuthFailure } from '@/lib/query';
 import { userErrorMessage } from '@/lib/problem';
@@ -68,6 +68,48 @@ export function QueryErrorBanner({
       {userErrorMessage(error, fallback)}
     </InlineBanner>
   );
+}
+
+/** Props for {@link AsyncContent}. */
+export interface AsyncContentProps {
+  /** Whether the first read is still in flight. */
+  readonly loading: boolean;
+  /** Whether the read produced nothing to show. */
+  readonly empty: boolean;
+  /** The placeholder shown during the first read. */
+  readonly skeleton: ReactNode;
+  /** What to show when there is nothing to display. */
+  readonly emptyState: ReactNode;
+  /** The loaded content. */
+  readonly children: ReactNode;
+}
+
+/**
+ * Choose between a screen's three states: first load, nothing to show, and content.
+ *
+ * @remarks
+ * Every operator screen has these same three states, and each one used to spell them out inline as
+ * a chain of conditionals wrapped around large blocks of JSX. Naming the states once puts the
+ * choice in a single place and leaves each screen declaring three named pieces instead of
+ * describing the branching.
+ *
+ * `children` is an already-built node rather than a callback, so it is constructed even while
+ * loading. Screens read their rows through `data?.items ?? []`, which makes that harmless — and it
+ * keeps the call site declarative instead of nesting a render function inside the JSX.
+ *
+ * @param props - See {@link AsyncContentProps}.
+ * @returns whichever state applies.
+ */
+export function AsyncContent({
+  loading,
+  empty,
+  skeleton,
+  emptyState,
+  children,
+}: AsyncContentProps): ReactNode {
+  if (loading) return skeleton;
+  if (empty) return emptyState;
+  return children;
 }
 
 /** Props for {@link ListSkeleton}. */

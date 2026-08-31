@@ -5,14 +5,14 @@ import { Building } from '@docket/ui/icons';
 import { Skeleton, Stack, Surface, Text } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
-import { QueryErrorBanner } from '@/components/admin-feedback';
+import { AsyncContent, QueryErrorBanner } from '@/components/admin-feedback';
 import { AdminPage, AdminPageHeader, AdminSection } from '@/components/admin-page';
 import { AdminList, AdminListRow } from '@/components/admin-table';
 import { LifecycleBadge } from '@/components/lifecycle-badge';
 import { api } from '@/lib/api';
 import { lifecycleLabel } from '@/lib/lifecycle';
 import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
-import type { AdminOrg } from '@/lib/types';
+import type { AdminMetrics, AdminOrg } from '@/lib/types';
 import { metricsDef } from '@/lib/use-admin-queues';
 
 /** How many rows a retention queue shows before it defers to the organization list. */
@@ -59,50 +59,6 @@ export default function DashboardPage(): JSX.Element {
   const pendingDeletion = useApiQuery(pendingDeletionDef);
   const exportWindow = useApiQuery(exportWindowDef);
 
-  /** The metric grid: placeholders on first load, otherwise the counts. */
-  function counts(): JSX.Element {
-    if (metrics.isPending) return <MetricSkeleton />;
-    if (!metrics.data) return <></>;
-
-    return (
-      <Stack gap={6}>
-        <AdminSection title="Platform">
-          <MetricGrid>
-            <Metric label="Users" value={metrics.data.totalUsers} />
-            <Metric label="Organizations" value={metrics.data.totalOrgs} />
-          </MetricGrid>
-        </AdminSection>
-
-        <AdminSection
-          title="Service"
-          description="What Athena is doing across every organization right now."
-        >
-          <MetricGrid>
-            <Metric label="Awaiting approval" value={metrics.data.queues.stuckApprovals} />
-            <Metric label="Failed sessions" value={metrics.data.queues.agentErrors} />
-            <Metric label="Sessions run" value={metrics.data.queues.agentVolume} />
-            <Metric label="Retention holds" value={metrics.data.queues.activeHolds} />
-          </MetricGrid>
-        </AdminSection>
-
-        <AdminSection
-          title="Organizations by state"
-          description="Legacy retention markers. Billing access never advances these."
-        >
-          <MetricGrid>
-            {metrics.data.orgsByLifecycle.map((bucket) => (
-              <Metric
-                key={bucket.lifecycleState}
-                label={lifecycleLabel(bucket.lifecycleState)}
-                value={bucket.count}
-              />
-            ))}
-          </MetricGrid>
-        </AdminSection>
-      </Stack>
-    );
-  }
-
   return (
     <AdminPage width="list">
       <AdminPageHeader
@@ -117,7 +73,14 @@ export default function DashboardPage(): JSX.Element {
       />
 
       <div className="grid gap-8 @4xl:grid-cols-[1.4fr_1fr]">
-        {counts()}
+        <AsyncContent
+          loading={metrics.isPending}
+          empty={metrics.data === undefined}
+          skeleton={<MetricSkeleton />}
+          emptyState={<MetricSkeleton />}
+        >
+          {metrics.data ? <PlatformMetrics metrics={metrics.data} /> : null}
+        </AsyncContent>
 
         <Stack gap={6}>
           <AdminSection title="Pending deletion">
@@ -138,6 +101,47 @@ export default function DashboardPage(): JSX.Element {
         </Stack>
       </div>
     </AdminPage>
+  );
+}
+
+/** Every headline count the dashboard reports, grouped by what it describes. */
+function PlatformMetrics({ metrics }: { readonly metrics: AdminMetrics }): JSX.Element {
+  return (
+    <Stack gap={6}>
+      <AdminSection title="Platform">
+        <MetricGrid>
+          <Metric label="Users" value={metrics.totalUsers} />
+          <Metric label="Organizations" value={metrics.totalOrgs} />
+        </MetricGrid>
+      </AdminSection>
+
+      <AdminSection
+        title="Service"
+        description="What Athena is doing across every organization right now."
+      >
+        <MetricGrid>
+          <Metric label="Awaiting approval" value={metrics.queues.stuckApprovals} />
+          <Metric label="Failed sessions" value={metrics.queues.agentErrors} />
+          <Metric label="Sessions run" value={metrics.queues.agentVolume} />
+          <Metric label="Retention holds" value={metrics.queues.activeHolds} />
+        </MetricGrid>
+      </AdminSection>
+
+      <AdminSection
+        title="Organizations by state"
+        description="Legacy retention markers. Billing access never advances these."
+      >
+        <MetricGrid>
+          {metrics.orgsByLifecycle.map((bucket) => (
+            <Metric
+              key={bucket.lifecycleState}
+              label={lifecycleLabel(bucket.lifecycleState)}
+              value={bucket.count}
+            />
+          ))}
+        </MetricGrid>
+      </AdminSection>
+    </Stack>
   );
 }
 

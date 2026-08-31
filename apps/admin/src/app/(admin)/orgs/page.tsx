@@ -7,7 +7,12 @@ import { Building } from '@docket/ui/icons';
 import { Input, Stack, Text } from '@docket/ui/primitives';
 import { type JSX, useMemo, useState } from 'react';
 
-import { ListSkeleton, QueryErrorBanner, RefreshingOverlay } from '@/components/admin-feedback';
+import {
+  AsyncContent,
+  ListSkeleton,
+  QueryErrorBanner,
+  RefreshingOverlay,
+} from '@/components/admin-feedback';
 import { AdminPage, AdminPageHeader } from '@/components/admin-page';
 import { AdminPagination } from '@/components/admin-pagination';
 import { AdminTable } from '@/components/admin-table';
@@ -39,6 +44,26 @@ function orgsDef(search: string, state: LifecycleFilterValue, offset: number) {
         },
       }),
     'Could not load organizations.',
+  );
+}
+
+/** What an empty organization list means, which depends on whether filters narrowed it. */
+function NoOrganizations({ filtered }: { readonly filtered: boolean }): JSX.Element {
+  if (filtered) {
+    return (
+      <EmptyState
+        icon={Building}
+        title="No matching organizations"
+        body="Nothing matches this search and lifecycle filter."
+      />
+    );
+  }
+  return (
+    <EmptyState
+      icon={Building}
+      title="No organizations yet"
+      body="Workspaces appear here as people create them."
+    />
   );
 }
 
@@ -121,52 +146,6 @@ export default function OrgsPage(): JSX.Element {
   const items = query.data?.items ?? [];
   const filtered = debouncedSearch !== '' || filter !== ALL_STATES;
 
-  /** The screen's body: first load, no results, or the table. */
-  function body(): JSX.Element {
-    if (query.isPending) return <ListSkeleton />;
-
-    if (items.length === 0) {
-      if (filtered) {
-        return (
-          <EmptyState
-            icon={Building}
-            title="No matching organizations"
-            body="Nothing matches this search and lifecycle filter."
-          />
-        );
-      }
-      return (
-        <EmptyState
-          icon={Building}
-          title="No organizations yet"
-          body="Workspaces appear here as people create them."
-        />
-      );
-    }
-
-    return (
-      <Stack gap={4}>
-        <RefreshingOverlay refreshing={query.isFetching}>
-          <AdminTable
-            label="Organizations"
-            columns={columns}
-            rows={items}
-            getRowKey={(row) => row.id}
-            rowHref={(row) => `/orgs/${row.id}`}
-          />
-        </RefreshingOverlay>
-        <AdminPagination
-          offset={offset}
-          pageSize={PAGE_SIZE}
-          pageCount={items.length}
-          total={total}
-          onOffsetChange={setOffset}
-          noun="organizations"
-        />
-      </Stack>
-    );
-  }
-
   return (
     <AdminPage width="list">
       <AdminPageHeader
@@ -202,7 +181,32 @@ export default function OrgsPage(): JSX.Element {
         onRetry={() => void query.refetch()}
       />
 
-      {body()}
+      <AsyncContent
+        loading={query.isPending}
+        empty={items.length === 0}
+        skeleton={<ListSkeleton />}
+        emptyState={<NoOrganizations filtered={filtered} />}
+      >
+        <Stack gap={4}>
+          <RefreshingOverlay refreshing={query.isFetching}>
+            <AdminTable
+              label="Organizations"
+              columns={columns}
+              rows={items}
+              getRowKey={(row) => row.id}
+              rowHref={(row) => `/orgs/${row.id}`}
+            />
+          </RefreshingOverlay>
+          <AdminPagination
+            offset={offset}
+            pageSize={PAGE_SIZE}
+            pageCount={items.length}
+            total={total}
+            onOffsetChange={setOffset}
+            noun="organizations"
+          />
+        </Stack>
+      </AsyncContent>
     </AdminPage>
   );
 }

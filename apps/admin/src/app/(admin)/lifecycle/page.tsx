@@ -1,115 +1,157 @@
 'use client';
 
-import { Skeleton } from '@docket/ui/primitives';
-import Link from 'next/link';
-import { type JSX, useCallback, useEffect, useState } from 'react';
+import { EmptyState } from '@docket/ui/components';
+import { Layers } from '@docket/ui/icons';
+import { Badge, Skeleton, Stack, Surface, Text } from '@docket/ui/primitives';
+import { type JSX } from 'react';
 
-import { EmptyState, ErrorBanner, PageHeader, ROW_CLASS, SignInAction } from '@/components/ui-bits';
+import { AsyncContent, QueryErrorBanner } from '@/components/admin-feedback';
+import { AdminPage, AdminPageHeader } from '@/components/admin-page';
+import { AdminList, AdminListRow } from '@/components/admin-table';
 import { api } from '@/lib/api';
 import { formatTimestamp, lifecycleLabel } from '@/lib/lifecycle';
-import { isAuthError, userErrorMessage, userProblemMessage } from '@/lib/problem';
+import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 import type { AdminLifecycleBoard } from '@/lib/types';
+
+/** One column of the retention board. */
+type BoardColumn = AdminLifecycleBoard['columns'][number];
+
+/** One organization on the board. */
+type BoardOrg = BoardColumn['orgs'][number];
+
+/** The legacy retention board. */
+const boardDef = apiQueryOptions(
+  queryKeys.lifecycle(),
+  () => api.admin.lifecycle.$get(),
+  'Could not load the lifecycle board.',
+);
 
 /**
  * The legacy organization-retention board.
  *
  * @remarks
- * This compatibility screen reads `GET /admin/lifecycle` for migration diagnostics. Billing
- * never changes these markers. The Billing section reports subscription access and recovery.
+ * A compatibility screen for migration diagnostics. Billing never changes these markers, and
+ * cancelling a subscription never advances one or deletes workspace data — the Billing section
+ * reports subscription access and recovery separately.
+ *
+ * The board was previously unreachable: it renders a full column per lifecycle state and nothing in
+ * the console linked to it. It now sits under Operations in the sidebar.
  */
 export default function LifecyclePage(): JSX.Element {
-  const [board, setBoard] = useState<AdminLifecycleBoard | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [authFailed, setAuthFailed] = useState(false);
-
-  /** Load the lifecycle board. */
-  const load = useCallback(async (): Promise<void> => {
-    setLoading(true);
-    setError(null);
-    setAuthFailed(false);
-    try {
-      const res = await api.admin.lifecycle.$get();
-      if (!res.ok) {
-        setAuthFailed(isAuthError(res));
-        setError(await userProblemMessage(res, 'Could not load the lifecycle board.'));
-        return;
-      }
-      setBoard(await res.json());
-    } catch (caught) {
-      setError(userErrorMessage(caught, 'Something went wrong loading the lifecycle board.'));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const query = useApiQuery(boardDef);
+  const columns = query.data?.columns ?? [];
 
   return (
-    <div className="flex w-full flex-col gap-6 p-4 sm:p-8">
-      <PageHeader
+    <AdminPage width="console">
+      <AdminPageHeader
         title="Legacy retention markers"
         description="Migration diagnostics for old retention records. Billing cancellation never changes these markers or deletes workspace data."
       />
-      <ErrorBanner message={error} action={authFailed ? <SignInAction /> : null} />
-
-      {loading ? (
-        <BoardSkeleton />
-      ) : board ? (
+      <QueryErrorBanner
+        error={query.error}
+        fallback="Could not load the lifecycle board."
+        onRetry={() => void query.refetch()}
+      />
+      <AsyncContent
+        loading={query.isPending}
+        empty={columns.length === 0}
+        skeleton={<BoardSkeleton />}
+        emptyState={
+          <EmptyState
+            icon={Layers}
+            title="No retention records"
+            body="No organization carries a legacy retention marker."
+          />
+        }
+      >
         <div className="flex gap-4 overflow-x-auto pb-4">
-          {board.columns.map((column) => (
-            <section
-              key={column.lifecycleState}
-              className="border-outline-variant bg-surface-container flex w-72 shrink-0 flex-col gap-3 rounded-lg border p-3"
-              aria-label={lifecycleLabel(column.lifecycleState)}
-            >
-              <header className="flex items-center justify-between">
-                <h2 className="text-on-surface text-body-medium font-medium">
-                  {lifecycleLabel(column.lifecycleState)}
-                </h2>
-                <span className="bg-surface-container-highest text-on-surface-variant rounded-full px-2 py-0.5 text-xs tabular-nums">
-                  {column.orgs.length}
-                </span>
-              </header>
-              {column.orgs.length > 0 ? (
-                <ul className="flex flex-col gap-1.5">
-                  {column.orgs.map((org) => (
-                    <li key={org.id}>
-                      <Link
-                        href={`/orgs/${org.id}`}
-                        className={`${ROW_CLASS} flex-col gap-1 rounded-md px-3 py-2`}
-                      >
-                        <span className="text-body-medium truncate font-medium">{org.name}</span>
-                        <span className="text-on-surface-variant truncate text-xs">
-                          {org.deleteAfterAt
-                            ? `Delete after ${formatTimestamp(org.deleteAfterAt)}`
-                            : org.exportReadyAt
-                              ? `Export ready ${formatTimestamp(org.exportReadyAt)}`
-                              : org.slug}
-                        </span>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <EmptyState message="Empty" />
-              )}
-            </section>
+          {columns.map((column) => (
+            <BoardColumnPanel key={column.lifecycleState} column={column} />
           ))}
         </div>
-      ) : null}
-    </div>
+      </AsyncContent>
+    </AdminPage>
   );
+}
+
+/** One lifecycle state's column of organizations. */
+function BoardColumnPanel({ column }: { readonly column: BoardColumn }): JSX.Element {
+  const label = lifecycleLabel(column.lifecycleState);
+
+  return (
+    <Surface
+      as="section"
+      tone="canvas"
+      shape="medium"
+      pad="comfortable"
+      className="w-72 shrink-0"
+      aria-label={label}
+    >
+      <Stack gap={3}>
+        <div className="flex items-center justify-between gap-2">
+          <Text as="h2" token="label-large">
+            {label}
+          </Text>
+          <Badge variant="secondary">{column.orgs.length}</Badge>
+        </div>
+
+        <ColumnOrgs label={label} orgs={column.orgs} />
+      </Stack>
+    </Surface>
+  );
+}
+
+/** The organizations in one column, or a note that the state is unoccupied. */
+function ColumnOrgs({
+  label,
+  orgs,
+}: {
+  readonly label: string;
+  readonly orgs: readonly BoardOrg[];
+}): JSX.Element {
+  if (orgs.length === 0) {
+    return (
+      <EmptyState icon={Layers} title="Empty" body={`No organization is ${label.toLowerCase()}.`} />
+    );
+  }
+
+  return (
+    <AdminList label={`${label} organizations`}>
+      {orgs.map((org) => (
+        <AdminListRow
+          key={org.id}
+          href={`/orgs/${org.id}`}
+          title={org.name}
+          subtitle={retentionNote(org)}
+        />
+      ))}
+    </AdminList>
+  );
+}
+
+/**
+ * The most operationally relevant fact about an organization on the board.
+ *
+ * @remarks
+ * A deletion deadline outranks an export-ready date, which outranks the slug: an operator scanning
+ * this board is looking for what is about to happen, and the slug is only worth showing when
+ * nothing is.
+ *
+ * @param org - The organization's board row.
+ * @returns the line shown under the organization's name.
+ */
+function retentionNote(org: BoardOrg): string {
+  if (org.deleteAfterAt) return `Delete after ${formatTimestamp(org.deleteAfterAt)}`;
+  if (org.exportReadyAt) return `Export ready ${formatTimestamp(org.exportReadyAt)}`;
+  return org.slug;
 }
 
 /** A loading placeholder for the lifecycle board. */
 function BoardSkeleton(): JSX.Element {
   return (
-    <div className="flex gap-4 overflow-hidden">
-      {Array.from({ length: 4 }, (_, i) => (
-        <Skeleton key={i} className="h-64 w-72 shrink-0 rounded-lg" />
+    <div className="flex gap-4 overflow-hidden" aria-hidden="true">
+      {Array.from({ length: 4 }, (_, index) => (
+        <Skeleton key={index} className="h-64 w-72 shrink-0 rounded-xl" />
       ))}
     </div>
   );

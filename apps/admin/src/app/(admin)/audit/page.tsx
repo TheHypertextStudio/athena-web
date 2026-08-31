@@ -6,7 +6,12 @@ import { Activity, ChevronDown, ChevronRight } from '@docket/ui/icons';
 import { Button, Input, Stack, Surface, Text } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
 
-import { ListSkeleton, QueryErrorBanner, RefreshingOverlay } from '@/components/admin-feedback';
+import {
+  AsyncContent,
+  ListSkeleton,
+  QueryErrorBanner,
+  RefreshingOverlay,
+} from '@/components/admin-feedback';
 import { AdminPage, AdminPageHeader } from '@/components/admin-page';
 import { AdminPagination } from '@/components/admin-pagination';
 import { api } from '@/lib/api';
@@ -34,6 +39,26 @@ function auditDef(type: string, offset: number) {
   );
 }
 
+/** What an empty audit feed means, which depends on whether a type filter narrowed it. */
+function NoEvents({ filtered }: { readonly filtered: boolean }): JSX.Element {
+  if (filtered) {
+    return (
+      <EmptyState
+        icon={Activity}
+        title="No matching events"
+        body="No operator action of that type has been recorded."
+      />
+    );
+  }
+  return (
+    <EmptyState
+      icon={Activity}
+      title="No operator actions yet"
+      body="Holds, billing decisions, and impersonations are recorded here as they happen."
+    />
+  );
+}
+
 /**
  * The operator audit trail.
  *
@@ -54,49 +79,6 @@ export default function AuditPage(): JSX.Element {
   const query = useApiListQuery(auditDef(debouncedType, offset));
 
   const events = query.data?.items ?? [];
-
-  /** The screen's body: first load, no results, or the event stream. */
-  function body(): JSX.Element {
-    if (query.isPending) return <ListSkeleton rows={8} />;
-
-    if (events.length === 0) {
-      if (debouncedType) {
-        return (
-          <EmptyState
-            icon={Activity}
-            title="No matching events"
-            body="No operator action of that type has been recorded."
-          />
-        );
-      }
-      return (
-        <EmptyState
-          icon={Activity}
-          title="No operator actions yet"
-          body="Holds, billing decisions, and impersonations are recorded here as they happen."
-        />
-      );
-    }
-
-    return (
-      <Stack gap={4}>
-        <RefreshingOverlay refreshing={query.isFetching}>
-          <Stack gap={1} as="ul">
-            {events.map((event) => (
-              <AuditRow key={event.id} event={event} />
-            ))}
-          </Stack>
-        </RefreshingOverlay>
-        <AdminPagination
-          offset={offset}
-          pageSize={PAGE_SIZE}
-          pageCount={events.length}
-          onOffsetChange={setOffset}
-          noun="events"
-        />
-      </Stack>
-    );
-  }
 
   return (
     <AdminPage width="list">
@@ -124,7 +106,29 @@ export default function AuditPage(): JSX.Element {
         onRetry={() => void query.refetch()}
       />
 
-      {body()}
+      <AsyncContent
+        loading={query.isPending}
+        empty={events.length === 0}
+        skeleton={<ListSkeleton rows={8} />}
+        emptyState={<NoEvents filtered={debouncedType !== ''} />}
+      >
+        <Stack gap={4}>
+          <RefreshingOverlay refreshing={query.isFetching}>
+            <Stack gap={1} as="ul">
+              {events.map((event) => (
+                <AuditRow key={event.id} event={event} />
+              ))}
+            </Stack>
+          </RefreshingOverlay>
+          <AdminPagination
+            offset={offset}
+            pageSize={PAGE_SIZE}
+            pageCount={events.length}
+            onOffsetChange={setOffset}
+            noun="events"
+          />
+        </Stack>
+      </AsyncContent>
     </AdminPage>
   );
 }

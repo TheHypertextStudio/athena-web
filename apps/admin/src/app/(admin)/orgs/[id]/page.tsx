@@ -39,11 +39,13 @@ export default function OrgDetailPage(): JSX.Element {
     <AdminPage width="form">
       <DetailBackLink href="/orgs" label="organizations" />
 
-      <QueryErrorBanner
-        error={detail.error}
-        fallback="Could not load this organization."
-        onRetry={() => void detail.load()}
-      />
+      {detail.error ? (
+        <QueryErrorBanner
+          error={detail.error}
+          fallback="Could not load this organization."
+          onRetry={() => void detail.load()}
+        />
+      ) : null}
 
       <AsyncContent
         loading={detail.loading}
@@ -82,7 +84,9 @@ function OrgDetail({
       <BillingState billing={billing} />
 
       <AdminSection title="Billing actions">
-        <QueryErrorBanner error={detail.actionError} fallback="Could not complete that action." />
+        {detail.actionError ? (
+          <QueryErrorBanner error={detail.actionError} fallback="Could not complete that action." />
+        ) : null}
         <BillingActions org={org} detail={detail} />
       </AdminSection>
     </Stack>

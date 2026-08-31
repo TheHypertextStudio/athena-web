@@ -11,15 +11,20 @@ import { userErrorMessage } from '@/lib/problem';
 /** Props for {@link QueryErrorBanner}. */
 export interface QueryErrorBannerProps {
   /**
-   * The failure from a query, mutation, or action — or `null` to render nothing.
+   * The failure to report.
    *
    * @remarks
-   * Deliberately an `Error` rather than `unknown`: this component reads a failure's `status` to
-   * choose the recovery, and preserves its message only when it is a `UserFacingError`. Handing it
-   * an already-rendered string used to type-check and then silently discard that string in favour
-   * of the fallback, losing which of a screen's actions had failed.
+   * Non-nullable, and an `Error` rather than `unknown`. This component renders a failure; whether
+   * there *is* one is the screen's question, so the screen asks it. Accepting `null` here would put
+   * that decision inside a component named for the opposite case, and accepting `unknown` is how an
+   * already-rendered string once type-checked and then got silently swapped for the fallback,
+   * losing which of a screen's actions had failed.
+   *
+   * The status is read to choose the recovery (401/403 offers sign-in, anything else offers retry),
+   * and the message survives only for a `UserFacingError` — so sources carry the error itself
+   * rather than a string.
    */
-  readonly error: Error | null | undefined;
+  readonly error: Error;
   /** Application-owned copy used when the failure carries none of its own. */
   readonly fallback: string;
   /** Retry the failed read, when the caller has something to retry. */
@@ -40,15 +45,10 @@ export interface QueryErrorBannerProps {
  * text or a Problem `detail` can never reach the screen.
  *
  * @param props - See {@link QueryErrorBannerProps}.
- * @returns the failure banner, or `null` when there is no error.
+ * @returns the failure banner.
  */
-export function QueryErrorBanner({
-  error,
-  fallback,
-  onRetry,
-}: QueryErrorBannerProps): JSX.Element | null {
+export function QueryErrorBanner({ error, fallback, onRetry }: QueryErrorBannerProps): JSX.Element {
   const router = useRouter();
-  if (!error) return null;
 
   if (isAuthFailure(error)) {
     return (

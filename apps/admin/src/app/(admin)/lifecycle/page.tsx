@@ -47,11 +47,13 @@ export default function LifecyclePage(): JSX.Element {
         title="Legacy retention markers"
         description="Migration diagnostics for old retention records. Billing cancellation never changes these markers or deletes workspace data."
       />
-      <QueryErrorBanner
-        error={query.error}
-        fallback="Could not load the lifecycle board."
-        onRetry={() => void query.refetch()}
-      />
+      {query.error ? (
+        <QueryErrorBanner
+          error={query.error}
+          fallback="Could not load the lifecycle board."
+          onRetry={() => void query.refetch()}
+        />
+      ) : null}
       <AsyncContent
         loading={query.isPending}
         empty={columns.length === 0}

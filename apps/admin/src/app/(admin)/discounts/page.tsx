@@ -75,11 +75,13 @@ export default function DiscountsPage(): JSX.Element {
         description="Review eligibility and preview every Stripe effect before approval."
       />
 
-      <QueryErrorBanner
-        error={queue.error}
-        fallback="Could not load discount applications."
-        onRetry={() => void queue.refetch()}
-      />
+      {queue.error ? (
+        <QueryErrorBanner
+          error={queue.error}
+          fallback="Could not load discount applications."
+          onRetry={() => void queue.refetch()}
+        />
+      ) : null}
 
       <div className="grid gap-6 @4xl:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
         <AdminSection title={`Review queue (${items.length})`}>
@@ -229,87 +231,129 @@ function ApplicationReview({
 
   const busy =
     runPreview.isPending || approve.isPending || requestInformation.isPending || reject.isPending;
-  const noReason = reason.trim().length === 0;
+
+  // The one failure this panel is showing: whichever of the read or the four decisions failed most
+  // recently. Named here so the guard below reads as a question about the panel's state.
+  const failure =
+    detail.error ?? runPreview.error ?? approve.error ?? requestInformation.error ?? reject.error;
 
   return (
     <Stack gap={4}>
-      <QueryErrorBanner
-        error={
-          detail.error ??
-          runPreview.error ??
-          approve.error ??
-          requestInformation.error ??
-          reject.error
-        }
-        fallback="Could not complete that action."
-      />
+      {failure ? (
+        <QueryErrorBanner error={failure} fallback="Could not complete that action." />
+      ) : null}
 
       <ApplicationFacts application={application} />
       <Evidence detail={detail.data} applicationId={application.id} />
       <DecisionHistory detail={detail.data} />
 
-      {canDecide ? (
-        <Stack gap={3}>
-          <Input
-            value={reason}
-            onChange={(event) => {
-              setReason(event.target.value);
-            }}
-            placeholder="Required finance reason"
-            aria-label="Finance decision reason"
-          />
+      <DecisionControls
+        application={application}
+        canDecide={canDecide}
+        reason={reason}
+        preview={preview}
+        busy={busy}
+        onReasonChange={setReason}
+        onPreview={() => {
+          runPreview.mutate(undefined);
+        }}
+        onApprove={() => {
+          approve.mutate(undefined);
+        }}
+        onRequestInformation={() => {
+          requestInformation.mutate(undefined);
+        }}
+        onReject={() => {
+          reject.mutate(undefined);
+        }}
+        previewing={runPreview.isPending}
+        approving={approve.isPending}
+        requesting={requestInformation.isPending}
+        rejecting={reject.isPending}
+      />
+    </Stack>
+  );
+}
 
-          <PreviewResult preview={preview} />
+/** The finance decision: a required reason, the provider preview, and the four outcomes. */
+function DecisionControls({
+  application,
+  canDecide,
+  reason,
+  preview,
+  busy,
+  onReasonChange,
+  onPreview,
+  onApprove,
+  onRequestInformation,
+  onReject,
+  previewing,
+  approving,
+  requesting,
+  rejecting,
+}: {
+  readonly application: Application;
+  readonly canDecide: boolean;
+  readonly reason: string;
+  readonly preview: ApprovalPreview | null;
+  readonly busy: boolean;
+  readonly onReasonChange: (next: string) => void;
+  readonly onPreview: () => void;
+  readonly onApprove: () => void;
+  readonly onRequestInformation: () => void;
+  readonly onReject: () => void;
+  readonly previewing: boolean;
+  readonly approving: boolean;
+  readonly requesting: boolean;
+  readonly rejecting: boolean;
+}): JSX.Element {
+  if (!canDecide) {
+    return (
+      <Text as="p" token="body-small" tone="muted">
+        Support can inspect this application. Finance records revenue decisions.
+      </Text>
+    );
+  }
 
-          <ControlGroup controlSize="md" wrap>
-            <Button
-              variant="outline"
-              disabled={busy}
-              onClick={() => {
-                runPreview.mutate(undefined);
-              }}
-            >
-              {runPreview.isPending ? 'Previewing…' : 'Preview approval'}
-            </Button>
-            <Button
-              disabled={busy || !preview || noReason}
-              onClick={() => {
-                approve.mutate(undefined);
-              }}
-            >
-              {approve.isPending ? 'Approving…' : 'Approve'}
-            </Button>
-            <Button
-              variant="ghost"
-              disabled={busy || noReason}
-              onClick={() => {
-                requestInformation.mutate(undefined);
-              }}
-            >
-              {requestInformation.isPending ? 'Requesting…' : 'Request information'}
-            </Button>
-            <ConfirmButton
-              label={reject.isPending ? 'Rejecting…' : 'Reject'}
-              disabled={busy || noReason}
-              pending={reject.isPending}
-              title="Reject this application?"
-              description={`${application.organizationName} is told their application was not approved. The reason you entered is recorded and sent with the decision.`}
-              confirmLabel="Reject application"
-              onConfirm={() => {
-                reject.mutate(undefined);
-              }}
-            />
-          </ControlGroup>
+  const noReason = reason.trim().length === 0;
 
-          {preview ? null : (
-            <Text as="p" token="body-small" tone="muted">
-              Approval needs a preview first — it confirms exactly what changes at the provider.
-            </Text>
-          )}
-        </Stack>
-      ) : (
+  return (
+    <Stack gap={3}>
+      <Input
+        value={reason}
+        onChange={(event) => {
+          onReasonChange(event.target.value);
+        }}
+        placeholder="Required finance reason"
+        aria-label="Finance decision reason"
+      />
+
+      <PreviewResult preview={preview} />
+
+      <ControlGroup controlSize="md" wrap>
+        <Button variant="outline" disabled={busy} onClick={onPreview}>
+          {previewing ? 'Previewing…' : 'Preview approval'}
+        </Button>
+        <Button disabled={busy || !preview || noReason} onClick={onApprove}>
+          {approving ? 'Approving…' : 'Approve'}
+        </Button>
+        <Button variant="ghost" disabled={busy || noReason} onClick={onRequestInformation}>
+          {requesting ? 'Requesting…' : 'Request information'}
+        </Button>
+        <ConfirmButton
+          label={rejecting ? 'Rejecting…' : 'Reject'}
+          disabled={busy || noReason}
+          pending={rejecting}
+          title="Reject this application?"
+          description={`${application.organizationName} is told their application was not approved. The reason you entered is recorded and sent with the decision.`}
+          confirmLabel="Reject application"
+          onConfirm={onReject}
+        />
+      </ControlGroup>
+
+      {preview ? null : (
         <Text as="p" token="body-small" tone="muted">
-          Support can inspect this application. Finance records revenue decisions.
+          Approval needs a preview first — it confirms exactly what changes at the provider.
         </Text>
       )}
     </Stack>

@@ -100,11 +100,13 @@ export default function AuditPage(): JSX.Element {
         }
       />
 
-      <QueryErrorBanner
-        error={query.error}
-        fallback="Could not load the audit log."
-        onRetry={() => void query.refetch()}
-      />
+      {query.error ? (
+        <QueryErrorBanner
+          error={query.error}
+          fallback="Could not load the audit log."
+          onRetry={() => void query.refetch()}
+        />
+      ) : null}
 
       <AsyncContent
         loading={query.isPending}

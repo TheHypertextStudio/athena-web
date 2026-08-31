@@ -64,11 +64,13 @@ export default function SettingsPage(): JSX.Element {
         empty={controls === undefined}
         skeleton={<ControlsSkeleton />}
         emptyState={
-          <QueryErrorBanner
-            error={error}
-            fallback="Could not load the service controls."
-            onRetry={reload}
-          />
+          error ? (
+            <QueryErrorBanner
+              error={error}
+              fallback="Could not load the service controls."
+              onRetry={reload}
+            />
+          ) : null
         }
       >
         {controls ? (
@@ -101,10 +103,12 @@ function LatticeControls({
       title="Lovelace Lattice"
       description="Both controls are on unless someone turns them off. A change applies to every organization on the next scheduled run. Only a superadmin can change them."
     >
-      <QueryErrorBanner
-        error={actionError}
-        fallback="Could not change this control. It is unchanged for everyone."
-      />
+      {actionError ? (
+        <QueryErrorBanner
+          error={actionError}
+          fallback="Could not change this control. It is unchanged for everyone."
+        />
+      ) : null}
       <Stack gap={2} aria-busy={pending !== null}>
         {CONTROLS.map((control) => (
           <ControlCard

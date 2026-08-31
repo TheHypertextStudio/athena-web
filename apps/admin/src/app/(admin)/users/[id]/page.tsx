@@ -46,11 +46,13 @@ export default function UserDetailPage(): JSX.Element {
     <AdminPage width="form">
       <DetailBackLink href="/users" label="users" />
 
-      <QueryErrorBanner
-        error={query.error}
-        fallback="Could not load this user."
-        onRetry={() => void query.refetch()}
-      />
+      {query.error ? (
+        <QueryErrorBanner
+          error={query.error}
+          fallback="Could not load this user."
+          onRetry={() => void query.refetch()}
+        />
+      ) : null}
 
       <AsyncContent
         loading={query.isPending}
@@ -129,7 +131,9 @@ function ViewAsUser({
       title="View as user"
       description="Start a time-boxed impersonation session. The reason is recorded in the audit log."
     >
-      <QueryErrorBanner error={impersonate.error} fallback="Could not start impersonation." />
+      {impersonate.error ? (
+        <QueryErrorBanner error={impersonate.error} fallback="Could not start impersonation." />
+      ) : null}
       <form
         className="flex flex-col gap-2 @lg:flex-row"
         onSubmit={(event) => {

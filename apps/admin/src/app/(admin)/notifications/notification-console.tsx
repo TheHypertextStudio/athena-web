@@ -139,7 +139,7 @@ export function NotificationAnnouncementConsole({
         }
       />
 
-      <QueryErrorBanner error={error} fallback="Could not complete that action." />
+      {error ? <QueryErrorBanner error={error} fallback="Could not complete that action." /> : null}
       {statusMessage ? (
         <InlineBanner tone="info" title="Done">
           {statusMessage}

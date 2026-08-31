@@ -151,11 +151,13 @@ export default function UsersPage(): JSX.Element {
         }
       />
 
-      <QueryErrorBanner
-        error={query.error}
-        fallback="Could not load users."
-        onRetry={() => void query.refetch()}
-      />
+      {query.error ? (
+        <QueryErrorBanner
+          error={query.error}
+          fallback="Could not load users."
+          onRetry={() => void query.refetch()}
+        />
+      ) : null}
 
       <AsyncContent
         loading={query.isPending}

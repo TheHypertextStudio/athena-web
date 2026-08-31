@@ -66,11 +66,13 @@ export default function DashboardPage(): JSX.Element {
         description="Platform health and the organizations that need attention."
       />
 
-      <QueryErrorBanner
-        error={metrics.error}
-        fallback="Could not load the dashboard."
-        onRetry={() => void metrics.refetch()}
-      />
+      {metrics.error ? (
+        <QueryErrorBanner
+          error={metrics.error}
+          fallback="Could not load the dashboard."
+          onRetry={() => void metrics.refetch()}
+        />
+      ) : null}
 
       <div className="grid gap-8 @4xl:grid-cols-[1.4fr_1fr]">
         <AsyncContent

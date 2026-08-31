@@ -175,11 +175,13 @@ export default function OrgsPage(): JSX.Element {
         }
       />
 
-      <QueryErrorBanner
-        error={query.error}
-        fallback="Could not load organizations."
-        onRetry={() => void query.refetch()}
-      />
+      {query.error ? (
+        <QueryErrorBanner
+          error={query.error}
+          fallback="Could not load organizations."
+          onRetry={() => void query.refetch()}
+        />
+      ) : null}
 
       <AsyncContent
         loading={query.isPending}

@@ -35,6 +35,7 @@ export interface ListKeyboardEvent {
   readonly ctrlKey?: boolean;
   readonly metaKey?: boolean;
   readonly altKey?: boolean;
+  readonly shiftKey?: boolean;
   /** Prevent the browser's default key behavior when the hook handles it. */
   preventDefault: () => void;
 }
@@ -60,6 +61,14 @@ export interface UseListKeyboardOptions {
    * it fall through untouched, so a future in-row editor can still claim the same letter.
    */
   onPropertyKey?: (key: string, index: number) => boolean;
+  /** Report a keyboard move after the next active index has been resolved. */
+  onMove?: (index: number, event: ListKeyboardEvent) => void;
+  /** Toggle the active entry through Space. */
+  onToggle?: (index: number, event: ListKeyboardEvent) => void;
+  /** Select every eligible entry through Command/Ctrl+A. */
+  onSelectAll?: (index: number, event: ListKeyboardEvent) => void;
+  /** Clear selection through Escape before the active entry is reset. */
+  onClear?: (index: number, event: ListKeyboardEvent) => void;
 }
 
 /** The value returned by {@link useListKeyboard}. */
@@ -92,6 +101,48 @@ function isPlainLetterKey(event: ListKeyboardEvent): boolean {
   return /^[a-zA-Z]$/.test(event.key) && !event.ctrlKey && !event.metaKey && !event.altKey;
 }
 
+/** Return the next index for one navigation key, or `null` for a non-navigation key. */
+function navigationIndex(key: string, activeIndex: number, rowCount: number): number | null {
+  switch (key) {
+    case 'ArrowDown':
+      return clampIndex(activeIndex < 0 ? 0 : activeIndex + 1, rowCount);
+    case 'ArrowUp':
+      return clampIndex(activeIndex < 0 ? rowCount - 1 : activeIndex - 1, rowCount);
+    case 'Home':
+      return clampIndex(0, rowCount);
+    case 'End':
+      return clampIndex(rowCount - 1, rowCount);
+    default:
+      return null;
+  }
+}
+
+/** Dispatch Command/Ctrl+A when the host supplied a selection handler. */
+function handleSelectAllShortcut(
+  event: ListKeyboardEvent,
+  activeIndex: number,
+  onSelectAll: UseListKeyboardOptions['onSelectAll'],
+): boolean {
+  if (!onSelectAll || (!event.metaKey && !event.ctrlKey) || event.key.toLowerCase() !== 'a') {
+    return false;
+  }
+  event.preventDefault();
+  onSelectAll(activeIndex, event);
+  return true;
+}
+
+/** Dispatch an unmodified property letter when the host claims it. */
+function handlePropertyShortcut(
+  event: ListKeyboardEvent,
+  activeIndex: number,
+  onPropertyKey: UseListKeyboardOptions['onPropertyKey'],
+): boolean {
+  if (!onPropertyKey || activeIndex < 0 || !isPlainLetterKey(event)) return false;
+  if (!onPropertyKey(event.key.toLowerCase(), activeIndex)) return false;
+  event.preventDefault();
+  return true;
+}
+
 /**
  * Manage arrow / Enter / Esc / property-key grid keyboard navigation over flattened list rows.
  *
@@ -110,6 +161,10 @@ export function useListKeyboard({
   onActiveChange,
   initialIndex = -1,
   onPropertyKey,
+  onMove,
+  onToggle,
+  onSelectAll,
+  onClear,
 }: UseListKeyboardOptions): UseListKeyboardResult {
   const [activeIndex, setActiveIndexState] = React.useState<number>(initialIndex);
 
@@ -130,53 +185,43 @@ export function useListKeyboard({
   const onKeyDown = React.useCallback(
     (event: ListKeyboardEvent) => {
       if (isTextEntryTarget(event.target)) return;
+      if (handleSelectAllShortcut(event, activeIndex, onSelectAll)) return;
+      if (handlePropertyShortcut(event, activeIndex, onPropertyKey)) return;
 
-      if (onPropertyKey && activeIndex >= 0 && isPlainLetterKey(event)) {
-        const handled = onPropertyKey(event.key.toLowerCase(), activeIndex);
-        if (handled) {
-          event.preventDefault();
-          return;
-        }
+      const next = navigationIndex(event.key, activeIndex, rowCount);
+      if (next !== null) {
+        event.preventDefault();
+        setActiveIndex(next);
+        onMove?.(next, event);
+        return;
       }
-
-      switch (event.key) {
-        case 'ArrowDown': {
-          event.preventDefault();
-          setActiveIndex(activeIndex < 0 ? 0 : activeIndex + 1);
-          break;
-        }
-        case 'ArrowUp': {
-          event.preventDefault();
-          setActiveIndex(activeIndex < 0 ? rowCount - 1 : activeIndex - 1);
-          break;
-        }
-        case 'Home': {
-          event.preventDefault();
-          setActiveIndex(0);
-          break;
-        }
-        case 'End': {
-          event.preventDefault();
-          setActiveIndex(rowCount - 1);
-          break;
-        }
-        case 'Enter': {
-          if (activeIndex >= 0) {
-            event.preventDefault();
-            onActivate?.(activeIndex);
-          }
-          break;
-        }
-        case 'Escape': {
-          event.preventDefault();
-          setActiveIndexState(-1);
-          break;
-        }
-        default:
-          break;
+      if (event.key === 'Enter' && activeIndex >= 0) {
+        event.preventDefault();
+        onActivate?.(activeIndex);
+        return;
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClear?.(activeIndex, event);
+        setActiveIndexState(-1);
+        return;
+      }
+      if (event.key === ' ' && onToggle && activeIndex >= 0) {
+        event.preventDefault();
+        onToggle(activeIndex, event);
       }
     },
-    [activeIndex, rowCount, onActivate, setActiveIndex, onPropertyKey],
+    [
+      activeIndex,
+      rowCount,
+      onActivate,
+      setActiveIndex,
+      onPropertyKey,
+      onMove,
+      onToggle,
+      onSelectAll,
+      onClear,
+    ],
   );
 
   return { activeIndex, setActiveIndex, onKeyDown };

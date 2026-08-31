@@ -7,6 +7,7 @@ import {
   type Column,
   EntityTable,
   type EntityTableGroup,
+  type EntityTableSelectionCommand,
 } from '../../../src/components/views/EntityTable';
 
 interface Row {
@@ -30,7 +31,12 @@ beforeAll(() => {
   const rect = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'getBoundingClientRect');
   Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
     configurable: true,
-    get: () => ROW_HEIGHT,
+    get(this: HTMLElement) {
+      const measured = this.matches('[data-row-height]')
+        ? this
+        : this.querySelector<HTMLElement>('[data-row-height]');
+      return measured ? Number(measured.dataset['rowHeight']) : ROW_HEIGHT;
+    },
   });
   Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
     configurable: true,
@@ -74,6 +80,185 @@ function rows(count: number): readonly Row[] {
 }
 
 describe('EntityTable virtualization', () => {
+  it('indexes nested headers, rows, and continuations in one active virtual sequence', async () => {
+    const groups: readonly EntityTableGroup<Row>[] = [
+      {
+        id: 'parent',
+        label: 'Parent',
+        children: [
+          {
+            id: 'parent/child',
+            label: 'Child',
+            rows: [{ id: 'shared', name: 'Nested resource' }],
+            continuation: {
+              id: 'more-child',
+              label: 'Load more child resources',
+              state: 'idle',
+              onActivate: vi.fn(),
+            },
+          },
+        ],
+      },
+      { id: 'second', label: 'Second', rows: [{ id: 'shared', name: 'Second resource' }] },
+    ];
+    render(
+      <EntityTable
+        aria-label="Nested resources"
+        columns={COLUMNS}
+        groups={groups}
+        continuation={{
+          id: 'more-root',
+          label: 'Load more resources',
+          state: 'idle',
+          onActivate: vi.fn(),
+        }}
+        getRowKey={(row) => row.id}
+        virtualized
+      />,
+    );
+
+    const grid = screen.getByRole('grid', { name: 'Nested resources' });
+    await screen.findByRole('row', { name: 'Parent1' });
+    expect(grid).toHaveAttribute('aria-rowcount', '8');
+    grid.focus();
+    for (let index = 0; index < 4; index += 1) fireEvent.keyDown(grid, { key: 'ArrowDown' });
+    expect(grid).toHaveAttribute(
+      'aria-activedescendant',
+      screen.getByRole('button', { name: 'Load more child resources' }).closest('[role="row"]')?.id,
+    );
+    fireEvent.keyDown(grid, { key: 'ArrowDown' });
+    expect(grid).toHaveAttribute(
+      'aria-activedescendant',
+      screen.getByRole('row', { name: 'Second1' }).id,
+    );
+  });
+
+  it('dispatches keyboard and pointer selection commands with only eligible rows in table order', async () => {
+    const onSelectionCommand = vi.fn<(command: EntityTableSelectionCommand) => void>();
+    const onActiveEntryChange = vi.fn<(entryKey: string | null) => void>();
+    const selectionRows: readonly Row[] = [
+      { id: 'a', name: 'Selectable A' },
+      { id: 'context', name: 'Context row' },
+      { id: 'b', name: 'Selectable B' },
+    ];
+    render(
+      <EntityTable
+        aria-label="Selectable resources"
+        columns={COLUMNS}
+        rows={selectionRows}
+        getRowKey={(row) => row.id}
+        getRowSelectionKey={(row) => (row.id === 'context' ? undefined : `selection-${row.id}`)}
+        selectionAnchorKey="selection-a"
+        onSelectionCommand={onSelectionCommand}
+        onActiveEntryChange={onActiveEntryChange}
+        virtualized
+      />,
+    );
+
+    const grid = screen.getByRole('grid', { name: 'Selectable resources' });
+    await screen.findByRole('row', { name: 'Selectable A' });
+    grid.focus();
+    fireEvent.keyDown(grid, { key: 'ArrowDown' });
+    expect(onActiveEntryChange).toHaveBeenLastCalledWith('r:a');
+    expect(onSelectionCommand).toHaveBeenLastCalledWith(
+      expect.objectContaining({ command: 'move-active', activeEntryKey: 'r:a' }),
+    );
+    fireEvent.keyDown(grid, { key: ' ' });
+    expect(onSelectionCommand).toHaveBeenLastCalledWith({
+      command: 'toggle',
+      activeEntryKey: 'r:a',
+      targetSelectionKey: 'selection-a',
+      anchorSelectionKey: 'selection-a',
+      orderedSelectionKeys: ['selection-a', 'selection-b'],
+      modifiers: { shiftKey: false, metaKey: false, ctrlKey: false },
+    });
+
+    fireEvent.keyDown(grid, { key: 'ArrowDown', shiftKey: true });
+    expect(onSelectionCommand).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        command: 'extend-active',
+        activeEntryKey: 'r:context',
+        targetSelectionKey: null,
+        orderedSelectionKeys: ['selection-a', 'selection-b'],
+      }),
+    );
+    fireEvent.keyDown(grid, { key: 'ArrowDown', shiftKey: true });
+    expect(onSelectionCommand).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        command: 'extend-active',
+        activeEntryKey: 'r:b',
+        targetSelectionKey: 'selection-b',
+        orderedSelectionKeys: ['selection-a', 'selection-b'],
+      }),
+    );
+    fireEvent.keyDown(grid, { key: 'a', metaKey: true });
+    expect(onSelectionCommand).toHaveBeenLastCalledWith(
+      expect.objectContaining({ command: 'select-all', activeEntryKey: 'r:b' }),
+    );
+    fireEvent.click(screen.getByRole('row', { name: 'Selectable A' }));
+    expect(screen.getByRole('row', { name: 'Selectable A' })).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
+    expect(onActiveEntryChange).toHaveBeenLastCalledWith('r:a');
+    expect(onSelectionCommand).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        command: 'replace',
+        targetSelectionKey: 'selection-a',
+        modifiers: { shiftKey: false, metaKey: false, ctrlKey: false },
+      }),
+    );
+    fireEvent.click(screen.getByRole('row', { name: 'Selectable B' }), { shiftKey: true });
+    expect(onSelectionCommand).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        command: 'range',
+        targetSelectionKey: 'selection-b',
+        modifiers: { shiftKey: true, metaKey: false, ctrlKey: false },
+      }),
+    );
+    fireEvent.click(screen.getByRole('row', { name: 'Selectable B' }), { ctrlKey: true });
+    expect(onSelectionCommand).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        command: 'toggle',
+        targetSelectionKey: 'selection-b',
+        modifiers: { shiftKey: false, metaKey: false, ctrlKey: true },
+      }),
+    );
+    fireEvent.keyDown(grid, { key: 'Escape' });
+    expect(onSelectionCommand).toHaveBeenLastCalledWith(
+      expect.objectContaining({ command: 'clear', activeEntryKey: 'r:b' }),
+    );
+    expect(grid).not.toHaveAttribute('aria-activedescendant');
+    expect(onActiveEntryChange).toHaveBeenLastCalledWith(null);
+    for (const row of screen.getAllByRole('row').slice(1))
+      expect(row).toHaveAttribute('tabindex', '-1');
+  });
+
+  it('uses rowHeight for measured rows and keeps the sticky header in the table scrollport', async () => {
+    render(
+      <EntityTable
+        aria-label="Tall resources"
+        columns={COLUMNS}
+        rows={rows(20)}
+        getRowKey={(row) => row.id}
+        rowHeight={56}
+        virtualized
+      />,
+    );
+
+    const grid = screen.getByRole('grid', { name: 'Tall resources' });
+    const header = screen.getByRole('columnheader', { name: 'Name' }).parentElement;
+    expect(header).toHaveClass('sticky', 'top-0');
+    expect(header?.parentElement).toBe(grid);
+    const firstRow = await screen.findByRole('row', { name: 'Resource 0' });
+    expect(firstRow).toHaveStyle({ '--row-h': '56px' });
+    expect(firstRow.parentElement).toHaveStyle({ transform: 'translateY(0px)' });
+    const secondRow = screen.getByRole('row', { name: 'Resource 1' });
+    expect(secondRow.parentElement).toHaveStyle({ transform: 'translateY(56px)' });
+    fireEvent.scroll(grid, { target: { scrollTop: 112 } });
+    expect(header?.parentElement).toBe(grid);
+  });
+
   it('keeps a 10,000-row collection below 100 mounted row elements', async () => {
     render(
       <EntityTable
@@ -209,7 +394,7 @@ describe('EntityTable virtualization', () => {
     fireEvent.keyDown(grid, { key: 'ArrowDown' });
     fireEvent.keyDown(grid, { key: 'ArrowDown' });
     fireEvent.keyDown(grid, { key: 'Enter' });
-    expect(onRowClick).toHaveBeenCalledWith(groups[0]?.rows[0]);
+    expect(onRowClick).toHaveBeenCalledWith({ id: 'row-0', name: 'Resource 0' });
   });
 
   it('calls the end callback once per loaded extent and renders the end adornment', async () => {

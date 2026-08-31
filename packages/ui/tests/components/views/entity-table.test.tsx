@@ -8,6 +8,7 @@ import {
   EntityTable,
   type EntityTableGroup,
 } from '../../../src/components/views/EntityTable';
+import { priorityVisibility } from '../../../src/components/views/entity-table-columns';
 import { assertDefined } from '@docket/test-utils';
 
 /** A minimal row shape for the table under test. */
@@ -102,6 +103,64 @@ describe('EntityTable — header band', () => {
 });
 
 describe('EntityTable — column alignment + sizing', () => {
+  it('keeps a flex column minimum aligned between its header and every data row', () => {
+    const columns: Column<Row>[] = [
+      {
+        key: 'name',
+        header: 'Title',
+        flex: true,
+        minWidth: '22rem',
+        render: (row) => row.name,
+      },
+    ];
+    const { container } = render(
+      <EntityTable aria-label="Items" columns={columns} rows={ROWS} getRowKey={getRowKey} />,
+    );
+
+    const nameCells = container.querySelectorAll('[data-col="name"]');
+    expect(nameCells).toHaveLength(4);
+    nameCells.forEach((cell) => {
+      expect(cell).toHaveStyle({ minWidth: '22rem' });
+    });
+  });
+
+  it('uses the same container tier for each responsive header and data cell', () => {
+    const expected = [
+      [1, 'hidden @md/table:flex'],
+      [2, 'hidden @lg/table:flex'],
+      [3, 'hidden @xl/table:flex'],
+      [4, 'hidden @2xl/table:flex'],
+      [5, 'hidden @3xl/table:flex'],
+      [6, 'hidden @4xl/table:flex'],
+      [7, 'hidden @5xl/table:flex'],
+      [8, 'hidden @6xl/table:flex'],
+      [9, 'hidden @7xl/table:flex'],
+    ] as const;
+    const columns: Column<Row>[] = expected.map(([priority]) => ({
+      key: `priority-${String(priority)}`,
+      header: `Priority ${String(priority)}`,
+      priority,
+      render: (row) => row.name,
+    }));
+    const { container } = render(
+      <EntityTable
+        aria-label="Priority table"
+        columns={columns}
+        rows={[assertDefined(ROWS[0])]}
+        getRowKey={getRowKey}
+      />,
+    );
+
+    for (const [priority, classes] of expected) {
+      expect(priorityVisibility(priority)).toBe(classes);
+      const cells = container.querySelectorAll(`[data-col="priority-${String(priority)}"]`);
+      expect(cells).toHaveLength(2);
+      cells.forEach((cell) => {
+        for (const className of classes.split(' ')) expect(cell).toHaveClass(className);
+      });
+    }
+  });
+
   it('locks every cell to its header width/alignment so columns line up', () => {
     const { container } = render(
       <EntityTable aria-label="Items" columns={COLUMNS} rows={ROWS} getRowKey={getRowKey} />,
@@ -141,6 +200,63 @@ describe('EntityTable — column alignment + sizing', () => {
 });
 
 describe('EntityTable — rows + chrome', () => {
+  it('renders caller-owned hierarchy metadata on data rows in treegrid mode', () => {
+    render(
+      <EntityTable
+        aria-label="Hierarchy"
+        gridRole="treegrid"
+        columns={COLUMNS}
+        rows={[assertDefined(ROWS[0])]}
+        getRowKey={getRowKey}
+        getRowAria={() => ({ level: 3, posInSet: 2, setSize: 5, expanded: false })}
+      />,
+    );
+
+    expect(screen.getByRole('treegrid', { name: 'Hierarchy' })).toBeInTheDocument();
+    expect(screen.getByRole('row', { name: /Billing revamp/ })).toHaveAttribute('aria-level', '3');
+    expect(screen.getByRole('row', { name: /Billing revamp/ })).toHaveAttribute(
+      'aria-posinset',
+      '2',
+    );
+    expect(screen.getByRole('row', { name: /Billing revamp/ })).toHaveAttribute(
+      'aria-setsize',
+      '5',
+    );
+    expect(screen.getByRole('row', { name: /Billing revamp/ })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+  });
+
+  it('keeps the outlined default and makes the table itself the tonal roster surface', () => {
+    const { rerender } = render(
+      <EntityTable aria-label="Items" columns={COLUMNS} rows={ROWS} getRowKey={getRowKey} />,
+    );
+    expect(screen.getByRole('grid', { name: 'Items' })).toHaveClass(
+      'bg-surface',
+      'border',
+      'rounded-xl',
+    );
+
+    rerender(
+      <EntityTable
+        aria-label="Items"
+        columns={COLUMNS}
+        rows={ROWS}
+        getRowKey={getRowKey}
+        tone="tonal"
+      />,
+    );
+    expect(screen.getByRole('grid', { name: 'Items' })).toHaveClass(
+      'bg-surface-container-low',
+      'rounded-xl',
+    );
+    expect(screen.getByRole('grid', { name: 'Items' })).not.toHaveClass('border');
+    expect(screen.getByRole('row', { name: /Billing revamp/ })).toHaveClass(
+      'bg-surface-container-low',
+    );
+  });
+
   it('renders one role=row per data row with cells reconciled to the row density', () => {
     render(<EntityTable aria-label="Items" columns={COLUMNS} rows={ROWS} getRowKey={getRowKey} />);
     // 1 header row + 3 data rows.
@@ -415,6 +531,166 @@ describe('EntityTable — grouping', () => {
     { id: 'g-one', label: 'First bucket', rows: [assertDefined(ROWS[0])] },
     { id: 'g-two', label: 'Second bucket', rows: [assertDefined(ROWS[1])] },
   ];
+
+  it('preserves nested server order, authoritative counts, full-path row keys, and collapse scope', () => {
+    const nestedGroups: readonly EntityTableGroup<Row>[] = [
+      {
+        id: 'release%2Falpha',
+        label: 'Release alpha',
+        count: 8,
+        children: [
+          {
+            id: 'release%2Falpha/active%20work',
+            label: 'Active work',
+            count: 5,
+            rows: [{ id: 'duplicate', name: 'Alpha duplicate', status: 'Active', estimate: '1h' }],
+          },
+        ],
+      },
+      {
+        id: 'release%2Fbeta',
+        label: 'Release beta',
+        count: 4,
+        rows: [{ id: 'duplicate', name: 'Beta duplicate', status: 'Planned', estimate: '2h' }],
+      },
+    ];
+    render(
+      <EntityTable
+        aria-label="Nested items"
+        columns={COLUMNS}
+        groups={nestedGroups}
+        getRowKey={getRowKey}
+      />,
+    );
+
+    const rows = screen.getAllByRole('row');
+    expect(rows.map((row) => row.textContent)).toEqual([
+      'TitleStatusEstimate',
+      expect.stringContaining('Release alpha8'),
+      expect.stringContaining('Active work5'),
+      expect.stringContaining('Alpha duplicate'),
+      expect.stringContaining('Release beta4'),
+      expect.stringContaining('Beta duplicate'),
+    ]);
+    expect(screen.getByRole('row', { name: /Active work/ })).toHaveAttribute('data-level', '1');
+    expect(screen.getByRole('row', { name: /Alpha duplicate/ })).toHaveAttribute(
+      'data-entry-key',
+      'r:release%2Falpha/active%20work:duplicate',
+    );
+    expect(screen.getByRole('row', { name: /Beta duplicate/ })).toHaveAttribute(
+      'data-entry-key',
+      'r:release%2Fbeta:duplicate',
+    );
+
+    fireEvent.click(screen.getByRole('row', { name: /Active work/ }));
+    expect(screen.queryByRole('row', { name: /Alpha duplicate/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('row', { name: /Beta duplicate/ })).toBeInTheDocument();
+    expect(screen.getByRole('row', { name: /Release alpha/ })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+  });
+
+  it('activates idle group and error root continuations through pointer and Enter', () => {
+    const loadGroup = vi.fn();
+    const retryRoot = vi.fn();
+    const groups: readonly EntityTableGroup<Row>[] = [
+      {
+        id: 'release',
+        label: 'Release',
+        rows: [assertDefined(ROWS[0])],
+        continuation: {
+          id: 'continue-release',
+          label: 'Load more release items',
+          state: 'idle',
+          onActivate: loadGroup,
+        },
+      },
+    ];
+    const { unmount } = render(
+      <EntityTable
+        aria-label="Grouped items"
+        columns={COLUMNS}
+        groups={groups}
+        getRowKey={getRowKey}
+      />,
+    );
+
+    const groupAction = screen.getByRole('button', { name: 'Load more release items' });
+    expect(groupAction).toHaveAttribute('id', 'continue-release');
+    expect(groupAction).toHaveAttribute('tabindex', '-1');
+    expect(groupAction.closest('[role="row"]')).toContainElement(
+      groupAction.closest('[role="gridcell"]'),
+    );
+    fireEvent.click(groupAction);
+    const groupedGrid = screen.getByRole('grid', { name: 'Grouped items' });
+    expect(groupedGrid).toHaveAttribute(
+      'aria-activedescendant',
+      groupAction.closest('[role="row"]')?.id,
+    );
+    fireEvent.keyDown(groupedGrid, { key: 'End' });
+    fireEvent.keyDown(groupedGrid, { key: 'Enter' });
+    expect(loadGroup).toHaveBeenCalledTimes(2);
+
+    unmount();
+    render(
+      <EntityTable
+        aria-label="Root items"
+        columns={COLUMNS}
+        rows={[assertDefined(ROWS[0])]}
+        getRowKey={getRowKey}
+        continuation={{
+          id: 'retry-root',
+          label: 'Retry loading items',
+          state: 'error',
+          onActivate: retryRoot,
+        }}
+      />,
+    );
+    const rootGrid = screen.getByRole('grid', { name: 'Root items' });
+    fireEvent.keyDown(rootGrid, { key: 'End' });
+    fireEvent.keyDown(rootGrid, { key: 'Enter' });
+    expect(retryRoot).toHaveBeenCalledOnce();
+  });
+
+  it('keeps loading continuations busy and unable to start duplicate requests', () => {
+    const loadMore = vi.fn();
+    const { rerender } = render(
+      <EntityTable
+        aria-label="Loading items"
+        columns={COLUMNS}
+        rows={[assertDefined(ROWS[0])]}
+        getRowKey={getRowKey}
+        continuation={{
+          id: 'loading-root',
+          label: 'Load more items',
+          state: 'idle',
+          onActivate: loadMore,
+        }}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Load more items' }));
+    expect(loadMore).toHaveBeenCalledOnce();
+
+    rerender(
+      <EntityTable
+        aria-label="Loading items"
+        columns={COLUMNS}
+        rows={[assertDefined(ROWS[0])]}
+        getRowKey={getRowKey}
+        continuation={{ id: 'loading-root', label: 'Loading more items', state: 'loading' }}
+      />,
+    );
+
+    const loading = screen.getByRole('button', { name: 'Loading more items' });
+    expect(loading).toHaveAttribute('aria-disabled', 'true');
+    expect(loading).toHaveAttribute('aria-busy', 'true');
+    fireEvent.click(loading);
+    const grid = screen.getByRole('grid', { name: 'Loading items' });
+    fireEvent.keyDown(grid, { key: 'End' });
+    fireEvent.keyDown(grid, { key: 'Enter' });
+    expect(loadMore).toHaveBeenCalledOnce();
+  });
 
   it('renders full-width group header rows spanning the table with their data rows beneath', () => {
     render(

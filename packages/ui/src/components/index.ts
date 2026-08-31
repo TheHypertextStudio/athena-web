@@ -120,10 +120,21 @@ export {
   type Column,
   type ColumnPriority,
   EntityTable,
+  type EntityTableContinuation,
+  type EntityTableContinuationBase,
   type EntityTableGroup,
+  type EntityTableGroupBase,
   type EntityTableProps,
+  type EntityTableRowAria,
   type EntityTableRowLinkProps,
+  type EntityTableSelectionCommand,
+  type EntityTableSelectionModifiers,
 } from './views/EntityTable';
+export {
+  type FlattenEntityTableEntriesOptions,
+  type FlatEntityTableEntry,
+  flattenEntityTableEntries,
+} from './views/entity-table-groups';
 export { GroupHeader, type GroupHeaderProps } from './views/GroupHeader';
 export { ListGroup, type ListGroupProps } from './views/ListGroup';
 export {

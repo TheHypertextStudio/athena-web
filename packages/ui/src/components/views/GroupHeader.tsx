@@ -30,6 +30,10 @@ export interface GroupHeaderProps {
   id?: string | undefined;
   /** Logical one-based row position in the owning grid. */
   'aria-rowindex'?: number | undefined;
+  /** Stable flattened-entry key for diagnostics and interaction adapters. */
+  entryKey?: string | undefined;
+  /** Rendered minimum height shared with the owning virtualizer estimate. */
+  rowHeight?: number | undefined;
   /** The display-ready group label (entity labels must already be vocabulary-resolved). */
   label: string;
   /** Whether the group is expanded (its descendants are rendered). */
@@ -56,6 +60,8 @@ export interface GroupHeaderProps {
 export function GroupHeader({
   id,
   'aria-rowindex': ariaRowIndex,
+  entryKey,
+  rowHeight,
   label,
   expanded,
   onToggle,
@@ -65,16 +71,23 @@ export function GroupHeader({
   className,
 }: GroupHeaderProps): React.JSX.Element {
   const Chevron = expanded ? ChevronDown : ChevronRight;
+  const style: React.CSSProperties = {
+    ...(rowHeight === undefined ? {} : { '--row-h': `${String(rowHeight)}px` }),
+    ...(level > 0 ? { paddingLeft: `${String(level * 1.25 + 0.5)}rem` } : {}),
+  };
   return (
     <div
       id={id}
       role="row"
       aria-rowindex={ariaRowIndex}
       aria-expanded={expanded}
+      data-entry-key={entryKey}
+      data-row-height={rowHeight}
       data-level={level}
       className={cn(
         surfaceToneColor('canvas'),
-        'border-outline-variant hover:bg-surface-container-high text-body-medium flex h-9 w-full cursor-pointer items-center gap-2 border-b px-3 font-medium transition-colors outline-none select-none',
+        'border-outline-variant hover:bg-surface-container-high text-body-medium flex w-full cursor-pointer items-center gap-2 border-b px-3 font-medium transition-colors outline-none select-none',
+        rowHeight === undefined ? 'h-9' : 'min-h-(--row-h)',
         focusRingInset,
         className,
       )}
@@ -85,7 +98,7 @@ export function GroupHeader({
           onToggle();
         }
       }}
-      style={level > 0 ? { paddingLeft: `${String(level * 1.25 + 0.5)}rem` } : undefined}
+      style={style}
     >
       <Chevron aria-hidden="true" className="text-on-surface-variant size-4 shrink-0" />
       {decoration ? <span className="flex shrink-0 items-center">{decoration}</span> : null}

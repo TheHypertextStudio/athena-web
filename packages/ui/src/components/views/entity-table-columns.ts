@@ -8,9 +8,10 @@ import { cn } from '../../lib/utils';
  * - `'always'` — never hidden (title + leading glyph).
  * - `1` — hidden only on the narrowest containers (kept down to `@md`).
  * - `2` — hidden below `@lg`.
- * - `3` — hidden below `@xl` (the first to go).
+ * - `3` — hidden below `@xl`.
+ * - `4` through `9` — hidden below the remaining container tiers through `@7xl` (1280px).
  */
-export type ColumnPriority = 'always' | 1 | 2 | 3;
+export type ColumnPriority = 'always' | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
 /**
  * One column of an {@link EntityTable}.
@@ -49,11 +50,21 @@ export interface EntityTableRowLinkProps {
   id?: string | undefined;
   /** Logical one-based row position in the owning grid. */
   'aria-rowindex'?: number | undefined;
+  'aria-level'?: number | undefined;
+  'aria-posinset'?: number | undefined;
+  'aria-setsize'?: number | undefined;
+  'aria-expanded'?: boolean | undefined;
+  /** Stable flattened entry key. */
+  'data-entry-key'?: string | undefined;
+  /** Rendered row minimum shared with virtualization. */
+  'data-row-height'?: number | undefined;
+  /** Row-level custom properties supplied by the table. */
+  style?: React.CSSProperties | undefined;
   /** Grid row role when the link owns the complete row. */
   role?: 'row' | undefined;
   href: string;
   className: string;
-  onClick: () => void;
+  onClick: (event: React.MouseEvent<HTMLElement>) => void;
   /** Hover/focus handlers for prefetch-on-intent (set when the table has `onRowPrefetch`). */
   onMouseEnter?: (() => void) | undefined;
   onFocus?: (() => void) | undefined;
@@ -80,6 +91,18 @@ export function priorityVisibility(priority: ColumnPriority): string {
       return 'hidden @lg/table:flex';
     case 3:
       return 'hidden @xl/table:flex';
+    case 4:
+      return 'hidden @2xl/table:flex';
+    case 5:
+      return 'hidden @3xl/table:flex';
+    case 6:
+      return 'hidden @4xl/table:flex';
+    case 7:
+      return 'hidden @5xl/table:flex';
+    case 8:
+      return 'hidden @6xl/table:flex';
+    case 9:
+      return 'hidden @7xl/table:flex';
     /* v8 ignore next 2 -- defensive: `priority` is a closed union. */
     default:
       return 'flex';
@@ -94,7 +117,7 @@ export function effectivePriority<T>(column: Column<T>): ColumnPriority {
 
 /** The shared per-cell sizing/alignment style for a column (header + body stay in lockstep). */
 export function columnStyle<T>(column: Column<T>): React.CSSProperties {
-  if (column.flex) return { flex: '1 1 0%', minWidth: 0 };
+  if (column.flex) return { flex: '1 1 0%', minWidth: column.minWidth ?? 0 };
   if (column.width !== undefined) return { width: column.width, flex: `0 0 ${column.width}` };
   if (column.minWidth !== undefined) return { minWidth: column.minWidth };
   return {};

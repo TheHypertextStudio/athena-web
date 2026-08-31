@@ -56,6 +56,14 @@ function packageScripts(packageRoot: string): Record<string, string | undefined>
   return manifest.scripts ?? {};
 }
 
+/** Read a package's declared runtime dependencies. */
+function packageDependencies(packageRoot: string): Record<string, string | undefined> {
+  const manifest = JSON.parse(readFileSync(`${packageRoot}/package.json`, 'utf8')) as {
+    dependencies?: Record<string, string>;
+  };
+  return manifest.dependencies ?? {};
+}
+
 /** Read one task's explicit dependency edges from a delivery application's Turbo config. */
 function turboDependencies(packageRoot: string, task: string): readonly string[] {
   const configPath = `${packageRoot}/turbo.json`;
@@ -138,19 +146,38 @@ describe('env + RPC transport contract', () => {
   });
 
   it('builds declarations before direct API and delivery-app workflows', () => {
-    expect(packageScripts(apiRoot)['pretest']).toBe('tsc -p tsconfig.build.json');
-    expect(packageScripts(apiRoot)['pretest:coverage']).toBe('tsc -p tsconfig.build.json');
     expect(turboDependencies(apiRoot, 'test')).toContain('build');
     expect(turboDependencies(apiRoot, 'test:coverage')).toContain('build');
+    expect(turboDependencies(apiRoot, 'typecheck')).toContain('build');
 
     for (const app of ['admin', 'web']) {
-      const scripts = packageScripts(`${appsRoot}/${app}`);
-      for (const workflow of ['build', 'dev', 'lint', 'typecheck']) {
-        expect(scripts[`pre${workflow}`]).toBe('pnpm --filter @docket/api build');
+      // `build` is ordered by the root config's `^build`, which reaches @docket/api because these
+      // apps depend on it. The three tasks that consume the compiled declarations without
+      // building the app name it explicitly.
+      expect(packageDependencies(`${appsRoot}/${app}`)['@docket/api']).toBe('workspace:*');
+      for (const workflow of ['dev', 'lint', 'typecheck']) {
+        expect(turboDependencies(`${appsRoot}/${app}`, workflow)).toContain('@docket/api#build');
       }
+    }
+  });
 
-      expect(turboDependencies(`${appsRoot}/${app}`, 'dev')).toContain('@docket/api#build');
-      expect(turboDependencies(`${appsRoot}/${app}`, 'typecheck')).toContain('@docket/api#build');
+  /**
+   * The ordering above must come from the task graph alone.
+   *
+   * @remarks
+   * These workflows were previously ordered *twice*: by the Turbo edges asserted above and by npm
+   * `pre*` lifecycle hooks that shelled out to `pnpm --filter @docket/api build`. The hook ran
+   * outside the graph, so Turbo neither hashed nor deduplicated it, and two unordered `tsc`
+   * processes emitted the same `dist/*.d.ts` concurrently. `prelint` was worse still: `lint` had
+   * no Turbo edge at all, so its cache key referenced nothing the hook kept rewriting underneath
+   * it, and Turbo could replay a cached PASS against declarations that had since changed.
+   */
+  it('orders those workflows through the task graph alone, never a lifecycle hook', () => {
+    for (const packageRoot of [apiRoot, `${appsRoot}/admin`, `${appsRoot}/web`]) {
+      const hooks = Object.keys(packageScripts(packageRoot)).filter((name) =>
+        /^pre(build|dev|lint|typecheck|test)/u.test(name),
+      );
+      expect(hooks).toEqual([]);
     }
   });
 

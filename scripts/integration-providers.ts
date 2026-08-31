@@ -65,7 +65,7 @@ export interface SetupUrls {
   readonly apiBase: string;
   readonly webBases: readonly string[];
   /** The selected cloud project, when the environment is hosted. */
-  readonly projectId?: string;
+  readonly projectId?: string | undefined;
 }
 
 /** Stable identifiers for every provider supported by the interactive setup wizard. */

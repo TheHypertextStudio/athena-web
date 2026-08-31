@@ -19,6 +19,7 @@
     "icons:apple": "tsx src/render-apple.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "clean": "rm -rf .turbo *.tsbuildinfo",
     "test": "vitest run",
     "test:watch": "vitest",

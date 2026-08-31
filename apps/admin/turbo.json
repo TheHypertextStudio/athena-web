@@ -10,8 +10,15 @@
       "dependsOn": ["^db:migrate", "@docket/api#build"],
       "env": ["NEXT_PUBLIC_API_URL", "NEXT_PUBLIC_APP_URL"]
     },
+    // `lint` needs the compiled `@docket/api` declarations exactly as `typecheck` does.
+    // This edge replaces a `prelint` npm hook that shelled out to `pnpm --filter
+    // @docket/api build` outside the graph, which left lint's cache key with no
+    // reference to a build the hook kept changing underneath it.
+    "lint": {
+      "dependsOn": ["topo", "@docket/api#build"]
+    },
     "typecheck": {
-      "dependsOn": ["@docket/api#build"]
+      "dependsOn": ["topo", "@docket/api#build"]
     }
   }
 }

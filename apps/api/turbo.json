@@ -18,7 +18,7 @@
     // would have left two unordered tasks emitting the same declarations concurrently. Turbo also
     // caches the build instead of re-running `tsc` on every typecheck.
     "typecheck": {
-      "dependsOn": ["build"]
+      "dependsOn": ["topo", "build"]
     },
     "dev": {
       "env": [
@@ -55,10 +55,10 @@
       ]
     },
     "test": {
-      "dependsOn": ["build"]
+      "dependsOn": ["topo", "build"]
     },
     "test:coverage": {
-      "dependsOn": ["build"]
+      "dependsOn": ["topo", "build"]
     }
   }
 }

@@ -112,13 +112,14 @@ export function docketVitest(options: DocketVitestOptions = {}) {
       // stay tighter so assertion-level hangs still surface quickly.
       testTimeout,
       hookTimeout,
-      // Coverage is gated (with all:true so untested files count). Default 90% gives
+      // Coverage is gated, and every file matched by `include` counts whether or not a test
+      // touched it — that was the `all: true` option through Vitest 3, and is the only behavior
+      // in Vitest 4, which removed the option. Default 90% gives
       // headroom so we don't write brittle wiring/tautology tests to chase the last
       // few lines; the trust-spine packages pass coverageThreshold:100. Either bar is
       // met with MEANINGFUL behavior tests.
       coverage: {
         provider: 'v8',
-        all: true,
         reporter: ['text', 'json-summary', 'json'],
         include: coverageInclude,
         exclude: ['src/**/*.{test,spec}.{ts,tsx}', 'src/**/*.d.ts', ...coverageExclude],

@@ -51,18 +51,43 @@
     // TS, so tsc/eslint/vitest resolve dependency source directly. Delivery apps that consume the
     // compiled `@docket/api/rpc-contract` declaration name that one necessary API build in their
     // local turbo configs instead of making every workspace task build every dependency.
+    // A transit node: no package implements `topo`, and it runs nothing. It exists so that the
+    // check tasks below inherit a dependency edge on every workspace dependency, which is what
+    // puts an upstream package's hash into a downstream task's cache key.
+    //
+    // Without it those tasks had NO `dependsOn` at all, and turbo's key is the package's own
+    // files + task definition + env + the hashes of tasks named in `dependsOn`. So a breaking
+    // change in @docket/types contributed nothing to @docket/work#typecheck's key and turbo
+    // replayed a cached PASS. (`turbo run typecheck --filter=@docket/work --dry=json` reported
+    // `dependencies: []`.) The three delivery apps were correct only for the one dependency that
+    // has a build — @docket/api#build, declared in their own turbo.json — while all 21
+    // JIT-source edges went unmodelled.
+    //
+    // A transit node rather than `^typecheck`/`^lint`/`^test`: it chains the hashes without
+    // forcing every dependency's check to finish before a dependent's may start, so the graph
+    // stays as parallel as it was while the key becomes correct.
+    "topo": {
+      "dependsOn": ["^topo"]
+    },
     "lint": {
+      "dependsOn": ["topo"],
       "outputs": [],
       "inputs": ["$TURBO_DEFAULT$", "!**/*.md"]
     },
+    // Never cacheable: this rewrites source files in place, and its `outputs` are those same
+    // input files rather than an artifact turbo can restore. A cached replay would report success
+    // and apply no fixes.
     "lint:fix": {
-      "outputs": []
+      "dependsOn": ["topo"],
+      "cache": false
     },
     "typecheck": {
+      "dependsOn": ["topo"],
       "outputs": [],
       "inputs": ["$TURBO_DEFAULT$", "!**/*.md"]
     },
     "test": {
+      "dependsOn": ["topo"],
       "outputs": [],
       "inputs": ["$TURBO_DEFAULT$", "!**/*.md"]
     },
@@ -71,15 +96,35 @@
       "persistent": true
     },
     "test:coverage": {
+      "dependsOn": ["topo"],
       "outputs": ["coverage/**"],
       "inputs": ["$TURBO_DEFAULT$", "!**/*.md"]
     },
+    // `cache: false`, because the inputs that decide this task's result are not all in the graph:
+    // the suite runs against a live @docket/api server and a migrated database, both started
+    // outside turbo by CI. Left cacheable, a change confined to apps/api kept
+    // @docket/web#test:e2e cache-valid and replayed a green run that never exercised the change.
+    // The API build and the migration are named as well, so a direct invocation still orders them.
     "test:e2e": {
-      "dependsOn": ["build"],
+      "dependsOn": ["build", "@docket/api#build", "^db:migrate"],
+      "cache": false,
       "outputs": ["playwright-report/**", "test-results/**"],
       "env": ["NEXT_PUBLIC_*"]
     },
     "clean": {
+      "cache": false
+    },
+    // Root-package tasks. Both are `cache: false` on purpose: each reads far outside any one
+    // package — `typecheck:repo` compiles `scripts/` and `repo-tests/`, which import from
+    // `apps/api/src`, `domains/billing/src`, and `packages/*` by relative path, and the
+    // `repo-tests/` suites additionally read `.github/workflows/*`, every workspace manifest, and
+    // several `docs/` files. An `inputs` list that missed one of those would cache a stale PASS,
+    // which is the exact failure the `topo` node above exists to prevent. Both are seconds long,
+    // so there is nothing to win by risking it.
+    "//#typecheck:repo": {
+      "cache": false
+    },
+    "//#test:tooling": {
       "cache": false
     },
     // Root task (runs the root `db:up` script, which is scheme-aware: it starts + waits on

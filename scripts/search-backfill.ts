@@ -15,7 +15,7 @@ const cursor = cursorArg ? cursorArg.slice('--cursor='.length) : undefined;
 const sourceTables = args.filter((arg) => arg !== '--repair' && !arg.startsWith('--cursor='));
 const result = repair
   ? await repairSearchIndex({
-      sourceTables: sourceTables.length > 0 ? sourceTables : undefined,
+      ...(sourceTables.length > 0 ? { sourceTables } : {}),
     })
   : await backfillSearchIndex({
       sourceTables: sourceTables.length > 0 ? sourceTables : undefined,

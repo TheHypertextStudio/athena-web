@@ -38,9 +38,9 @@ export type DatabaseResetPlan =
 
 /** Inputs used to derive a safe database reset plan. */
 export interface DatabaseResetOptions {
-  readonly appMode?: string;
+  readonly appMode?: string | undefined;
   readonly databaseUrl: string;
-  readonly nodeEnv?: string;
+  readonly nodeEnv?: string | undefined;
   readonly workspaceRoot: string;
 }
 
@@ -178,7 +178,7 @@ export async function main(): Promise<void> {
   const plan = planDatabaseReset({
     appMode: process.env['APP_MODE'],
     databaseUrl,
-    nodeEnv: process.env.NODE_ENV,
+    nodeEnv: process.env['NODE_ENV'],
     workspaceRoot,
   });
   await executeDatabaseReset(plan);

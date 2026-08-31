@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { readProblemError, userErrorMessage, userProblemMessage } from '../../src/lib/problem';
+import {
+  isAuthError,
+  readProblemError,
+  userErrorMessage,
+  userProblemMessage,
+} from '../../src/lib/problem';
 
 const diagnostic = 'AGENT_MAX_TURNS is not configured; refusing to run agent sessions';
 
@@ -39,5 +44,41 @@ describe('admin user-facing errors', () => {
     await expect(userProblemMessage(response, 'Please try again.')).resolves.toBe(
       'Please try again.',
     );
+  });
+});
+
+describe('admin problem-code extraction', () => {
+  it('keeps the status but no code when the body is JSON that is not a Problem', async () => {
+    const response = new Response(JSON.stringify({ error: diagnostic }), { status: 422 });
+
+    const error = await readProblemError(response, 'Could not save the change.');
+
+    expect(error.status).toBe(422);
+    expect(error.code).toBeUndefined();
+    expect(error.message).toBe('Could not save the change.');
+  });
+
+  it('retains the original failure as the cause without surfacing it', () => {
+    const cause = new Error(diagnostic);
+
+    const error = (() => {
+      try {
+        throw cause;
+      } catch (thrown) {
+        return thrown;
+      }
+    })();
+
+    expect(userErrorMessage(error, 'Something went wrong.')).toBe('Something went wrong.');
+  });
+});
+
+describe('isAuthError', () => {
+  it.each([401, 403])('treats %i as an authentication failure', (status) => {
+    expect(isAuthError(new Response(null, { status }))).toBe(true);
+  });
+
+  it.each([400, 404, 500])('leaves %i for the caller to handle', (status) => {
+    expect(isAuthError(new Response(null, { status }))).toBe(false);
   });
 });

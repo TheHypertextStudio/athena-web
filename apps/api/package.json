@@ -22,12 +22,11 @@
     "start": "tsx src/server.ts",
     "typecheck": "tsc --noEmit",
     "lint": "NODE_OPTIONS=--max-old-space-size=4096 eslint src tests",
-    "pretest": "tsc -p tsconfig.build.json",
+    "lint:fix": "NODE_OPTIONS=--max-old-space-size=4096 eslint src tests --fix",
     "test": "vitest run",
     "test:watch": "vitest",
     "openapi:export": "tsx scripts/export-openapi.ts",
     "clean": "rm -rf dist .turbo *.tsbuildinfo",
-    "pretest:coverage": "tsc -p tsconfig.build.json",
     "test:coverage": "vitest run --coverage --exclude tests/work-views/performance.test.ts",
     "test:performance": "vitest run tests/work-views/performance.test.ts --maxWorkers=1"
   },

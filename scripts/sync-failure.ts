@@ -20,9 +20,9 @@ import { execFileSync } from 'node:child_process';
 import postgres from 'postgres';
 
 /** Where production's connection string lives, mirroring `deploy.yml`'s migration step. */
-const PROD_SECRET = process.env.DOCKET_DB_SECRET ?? 'docket-database-url-unpooled';
+const PROD_SECRET = process.env['DOCKET_DB_SECRET'] ?? 'docket-database-url-unpooled';
 /** The Google Cloud project holding {@link PROD_SECRET} (`vars.GCP_PROJECT_ID`). */
-const PROD_PROJECT = process.env.DOCKET_GCP_PROJECT ?? 'athena-services';
+const PROD_PROJECT = process.env['DOCKET_GCP_PROJECT'] ?? 'athena-services';
 
 /**
  * Read production's connection string from Secret Manager.

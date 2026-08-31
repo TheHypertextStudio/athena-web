@@ -1,27 +1,23 @@
 {
+  // The repository-root TypeScript program. It exists to typecheck the code that belongs to no
+  // workspace package — `scripts/`, `repo-tests/`, and the root Vitest config — because
+  // `pnpm typecheck` is `turbo run typecheck`, which only ever reaches workspaces. Without this,
+  // 12,000 lines including `scripts/ci-gate-policy.ts` (the guard protecting the deploy gate) and
+  // `scripts/bootstrap.ts` were typechecked by no command, local or CI.
+  //
+  // It extends the shared base rather than restating it. The previous copy had drifted out of
+  // agreement with `@docket/tsconfig/base.json` (no `moduleDetection`, `verbatimModuleSyntax`, or
+  // `noImplicitOverride`) precisely because nothing ran it.
+  "extends": "@docket/tsconfig/base.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "lib": ["ES2022"],
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "esModuleInterop": true,
-    "strict": true,
-    "strictNullChecks": true,
-    "exactOptionalPropertyTypes": true,
-    "noUncheckedIndexedAccess": true,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true,
-    "noPropertyAccessFromIndexSignature": true,
-    "forceConsistentCasingInFileNames": true,
-    "skipLibCheck": true,
-    "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
-    "composite": true,
-    "incremental": true,
+    // Checking only — this program emits nothing, so the base's declaration/composite settings
+    // (which exist for packages that publish types) are switched off here.
+    "noEmit": true,
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
     "types": ["node"]
   },
+  "include": ["scripts/**/*.ts", "repo-tests/**/*.ts", "vitest.config.ts"],
   "exclude": ["node_modules", "dist", ".next", "coverage"]
 }

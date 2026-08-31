@@ -428,7 +428,7 @@ export function buildApiSecretBindings(
 interface PromptContext {
   readonly env: Environment;
   /** Current value (from `.env.local` for local, or an existing secret for cloud). */
-  readonly current?: string;
+  readonly current?: string | undefined;
 }
 
 /**
@@ -536,7 +536,7 @@ async function chooseAccount(message: string, accounts: readonly Account[]): Pro
       options: accounts.map((a) => ({
         value: a.id,
         label: a.id,
-        hint: a.active ? 'active' : undefined,
+        ...(a.active ? { hint: 'active' } : {}),
       })),
     }),
   );
@@ -635,7 +635,7 @@ export async function chooseGcloudProject(fallback: string, label = ''): Promise
         ...projects.map((p) => ({
           value: p,
           label: p,
-          hint: p === fallback ? 'current' : undefined,
+          ...(p === fallback ? { hint: 'current' } : {}),
         })),
         { value: MANUAL_PROJECT, label: '✎ Enter a different project id…' },
       ],
@@ -725,7 +725,7 @@ function readCloudConfiguration(
           ? 'inaccessible'
           : classifyCredentialValue(value);
       fieldStatuses.set(varName, status);
-      if (status === 'ready') {
+      if (status === 'ready' && source !== undefined) {
         configuredVars.add(varName);
         secretNames.add(source);
         usableSecretNames.add(source);
@@ -874,14 +874,14 @@ interface SetupOptions {
   /** Set when invoked inside another clack flow (bootstrap) — suppresses our own intro/outro. */
   readonly embedded?: boolean;
   /** Pre-scope the environments to configure; when set, the multiselect prompt is skipped. */
-  readonly environments?: Environment[];
+  readonly environments?: Environment[] | undefined;
   /** Pre-scope providers for automation/tests; otherwise the status picker is shown. */
-  readonly providers?: ProviderId[];
+  readonly providers?: ProviderId[] | undefined;
 }
 
 export interface IntegrationCliOptions {
-  readonly environments?: Environment[];
-  readonly providers?: ProviderId[];
+  readonly environments?: Environment[] | undefined;
+  readonly providers?: ProviderId[] | undefined;
   readonly help: boolean;
 }
 
@@ -1253,10 +1253,18 @@ async function runProviderProvisioner(
     throw new Error(`${mode} Stripe provisioning requires a ${publishablePrefix} publishable key.`);
   }
   const existingWebhookSecret = current('STRIPE_WEBHOOK_SECRET');
-  if (env === 'local' && !existingWebhookSecret) {
-    throw new Error(
-      'Stripe sandbox provisioning requires STRIPE_WEBHOOK_SECRET from an explicitly selected Hypertext Studio Stripe CLI profile.',
-    );
+  // Built in a narrowed block rather than a ternary: the sandbox branch requires a webhook secret,
+  // and only an explicit guard proves that to the type checker at the point it is spread.
+  let webhook: { webhookTransport?: 'stripe-cli'; existingWebhookSecret?: string } = {};
+  if (env === 'local') {
+    if (!existingWebhookSecret) {
+      throw new Error(
+        'Stripe sandbox provisioning requires STRIPE_WEBHOOK_SECRET from an explicitly selected Hypertext Studio Stripe CLI profile.',
+      );
+    }
+    webhook = { webhookTransport: 'stripe-cli', existingWebhookSecret };
+  } else if (existingWebhookSecret) {
+    webhook = { existingWebhookSecret };
   }
   const result = await provisionDocketStripe({
     mode,
@@ -1264,11 +1272,7 @@ async function runProviderProvisioner(
     expectedAccountId,
     apiOrigin: urls.apiBase,
     webOrigin: urls.webBases[0] ?? urls.apiBase,
-    ...(env === 'local'
-      ? { webhookTransport: 'stripe-cli' as const, existingWebhookSecret }
-      : existingWebhookSecret
-        ? { existingWebhookSecret }
-        : {}),
+    ...webhook,
   });
   for (const action of result.actions) ok(`Stripe: ${action}`);
   return { ...result.values };
@@ -1355,7 +1359,7 @@ async function setupEnvironment(
         options: PROVIDER_GROUPS.map((group) => ({
           value: group.id,
           label: group.label,
-          hint: group.optional ? 'optional' : undefined,
+          ...(group.optional ? { hint: 'optional' } : {}),
         })),
       }),
     );

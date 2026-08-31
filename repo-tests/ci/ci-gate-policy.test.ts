@@ -508,9 +508,11 @@ describe('the real workflows', () => {
     // enumerated list, so a newly added package lands there by default instead of nowhere.
     // Rewriting that group as a list of package names is the regression this guards against.
     const source = readFileSync(join(REPO_ROOT, '.github/workflows/ci.yml'), 'utf8');
-    const shardGroups = [...source.matchAll(/^ +- group: (\S+)$/gm)].map(([, group]) => group);
-    const catchAlls = [...source.matchAll(/^ +filter: (--filter=!\S.*)$/gm)].map(
-      ([, filter]) => filter,
+    const shardGroups = [...source.matchAll(/^ +- group: (\S+)$/gm)].flatMap(([, group]) =>
+      group === undefined ? [] : [group],
+    );
+    const catchAlls = [...source.matchAll(/^ +filter: (--filter=!\S.*)$/gm)].flatMap(
+      ([, filter]) => (filter === undefined ? [] : [filter]),
     );
 
     // Three gates are sharded — lint, typecheck, and test — and each needs its own catch-all.

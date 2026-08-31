@@ -240,7 +240,7 @@ type Availability = 'available' | 'registered' | 'inconclusive';
 /** RDAP base URLs by TLD, from IANA's bootstrap file. */
 async function rdapBootstrap(): Promise<Map<string, string>> {
   const response = await fetch('https://data.iana.org/rdap/dns.json');
-  const body: { services: [string[], string[]][] } = await response.json();
+  const body = (await response.json()) as { services: [string[], string[]][] };
   const map = new Map<string, string>();
   for (const [tlds, bases] of body.services) {
     const base = bases[0];

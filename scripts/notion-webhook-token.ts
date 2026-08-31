@@ -108,7 +108,7 @@ function parseArgs(argv: readonly string[]): { env: TokenEnvironment; project?: 
     if (argv[i] === '--env') env = argv[++i] as TokenEnvironment;
     if (argv[i] === '--project') project = argv[++i];
   }
-  return { env, project };
+  return { env, ...(project === undefined ? {} : { project }) };
 }
 
 async function main(): Promise<void> {

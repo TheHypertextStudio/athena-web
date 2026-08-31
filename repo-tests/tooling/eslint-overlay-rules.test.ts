@@ -5,7 +5,9 @@ import { afterAll, describe, it } from 'vitest';
 
 import plugin from '../../tooling/eslint-config/plugin.js';
 
-RuleTester.afterAll = afterAll;
+// ESLint publishes `describe`/`it`/`itOnly` as assignable statics but omits `afterAll`, which
+// the runtime does honor — RuleTester calls it to flush its unused-fixture check.
+(RuleTester as unknown as { afterAll: typeof afterAll }).afterAll = afterAll;
 RuleTester.describe = describe;
 RuleTester.it = it;
 RuleTester.itOnly = it.only;

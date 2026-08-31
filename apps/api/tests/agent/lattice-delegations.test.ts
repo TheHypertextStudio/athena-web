@@ -816,6 +816,79 @@ describe('durable Lattice assignment delegations', () => {
     ).toHaveLength(0);
   });
 
+  it.each([
+    { condition: 'disabled', update: { enabled: false } },
+    { condition: 'disconnected', update: { status: 'disconnected' as const } },
+    { condition: 'retargeted', update: { deviceId: 'lat_retargeted' } },
+  ])(
+    'settles when the Lattice connection is $condition inside result approval',
+    async ({ update }) => {
+      const fixture = await seed();
+      const deps = dependencies();
+      const proposed = await prepareProposedResult(
+        fixture,
+        deps,
+        new Date('2026-08-29T18:12:30.000Z'),
+      );
+      const realCanActor = authzModule.canActor;
+      const canActor = vi.spyOn(authzModule, 'canActor').mockImplementation(async (...args) => {
+        const result = await realCanActor(...args);
+        const handle = args[3];
+        await handle
+          .update(schema.latticeConnection)
+          .set(update)
+          .where(eq(schema.latticeConnection.id, fixture.connection.id));
+        return result;
+      });
+
+      try {
+        await decideActivity(
+          fixture.organization.id,
+          fixture.ownerActor.id,
+          proposed.sessionId,
+          proposed.activity.id,
+          { decision: 'approve' },
+        );
+      } finally {
+        canActor.mockRestore();
+      }
+
+      expect(
+        one(
+          await db
+            .select()
+            .from(schema.agentDelegation)
+            .where(eq(schema.agentDelegation.id, proposed.delegation.id)),
+        ),
+      ).toMatchObject({ status: 'failed', failureCode: 'oauth_invalid' });
+      expect(
+        one(
+          await db
+            .select()
+            .from(schema.agentSession)
+            .where(eq(schema.agentSession.id, proposed.sessionId)),
+        ),
+      ).toMatchObject({ status: 'failed', endedAt: expect.any(Date) });
+      expect(
+        one(
+          await db
+            .select()
+            .from(schema.sessionActivity)
+            .where(eq(schema.sessionActivity.id, proposed.activity.id)),
+        ),
+      ).toMatchObject({
+        approvalStatus: 'applied',
+        body: { action: { result: { isError: true } } },
+      });
+      expect(
+        await db
+          .select()
+          .from(schema.comment)
+          .where(eq(schema.comment.subjectId, fixture.targetTask.id)),
+      ).toHaveLength(0);
+    },
+  );
+
   it('does not reconcile decided proposals while polling is disabled', async () => {
     const fixture = await seed();
     const deps = dependencies();

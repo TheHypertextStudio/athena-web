@@ -9,11 +9,12 @@ import {
   auditEvent,
   comment,
   db,
+  latticeConnection,
   sessionActivity,
 } from '@docket/db';
 import { canActor } from '@docket/authz';
 import type { SessionApprovalDecision } from '@docket/types';
-import { and, asc, desc, eq, isNull } from 'drizzle-orm';
+import { and, asc, desc, eq, isNotNull, isNull } from 'drizzle-orm';
 
 import { proposalOrganizationId } from '../agent/proposals';
 import { persistWaitingAthenaWake } from '../agent/async-runner';
@@ -142,6 +143,22 @@ async function settleLatticeDecision(
           )
         ).allow
       : false;
+  const [authorizedConnection] = authorized
+    ? await tx
+        .select({ id: latticeConnection.id })
+        .from(latticeConnection)
+        .where(
+          and(
+            eq(latticeConnection.id, delegation.connectionId),
+            eq(latticeConnection.ownerUserId, delegation.ownerUserId),
+            eq(latticeConnection.status, 'connected'),
+            eq(latticeConnection.enabled, true),
+            isNotNull(latticeConnection.accountId),
+            eq(latticeConnection.deviceId, delegation.runtimeId),
+          ),
+        )
+        .limit(1)
+    : [];
   const input = action.body.action?.toolCall?.input;
   const inputRecord =
     input && typeof input === 'object' ? (input as Record<string, unknown>) : undefined;
@@ -153,7 +170,13 @@ async function settleLatticeDecision(
     inputRecord['subjectId'] === assignment.entityId &&
     typeof body === 'string' &&
     body.trim().length > 0;
-  let failureCode = !authorized ? 'access_lost' : validComment ? null : 'task_comment_failed';
+  let failureCode = !authorized
+    ? 'access_lost'
+    : !authorizedConnection
+      ? 'oauth_invalid'
+      : validComment
+        ? null
+        : 'task_comment_failed';
 
   if (!failureCode && assignment && ownerActor && typeof body === 'string') {
     try {
@@ -253,7 +276,9 @@ async function settleLatticeDecision(
             currentStep:
               failureCode === 'access_lost'
                 ? 'Athena stopped because you no longer have access to the assigned work.'
-                : 'Athena could not add the Lattice result to the assigned task.',
+                : failureCode === 'oauth_invalid'
+                  ? 'Athena stopped because the Lattice connection no longer matches this assignment.'
+                  : 'Athena could not add the Lattice result to the assigned task.',
             currentStepAt: now,
             endedAt: now,
           }

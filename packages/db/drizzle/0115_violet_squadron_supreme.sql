@@ -5,7 +5,11 @@ SELECT
   "delegation"."session_id",
   "delegation"."returned_activity_id",
   "activity"."approval_status",
-  COALESCE(("activity"."body" #>> '{action,result,isError}')::boolean, false) AS "execution_failed"
+  CASE
+    WHEN jsonb_typeof("activity"."body" #> '{action,result,isError}') = 'boolean'
+      THEN ("activity"."body" #>> '{action,result,isError}')::boolean
+    ELSE false
+  END AS "execution_failed"
 FROM "agent_delegation" AS "delegation"
 LEFT JOIN "session_activity" AS "activity"
   ON "activity"."id" = "delegation"."returned_activity_id"
@@ -57,7 +61,11 @@ SET
       THEN 'result_key_invalid'
     ELSE NULL
   END,
-  "returned_activity_id" = NULL,
+  "returned_activity_id" = CASE
+    WHEN "settlement"."approval_status" = 'applied' AND NOT "settlement"."execution_failed"
+      THEN "delegation"."returned_activity_id"
+    ELSE NULL
+  END,
   "next_poll_at" = now(),
   "settled_at" = COALESCE("delegation"."settled_at", now())
 FROM "_0115_lattice_proposal_settlement" AS "settlement"

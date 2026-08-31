@@ -312,6 +312,20 @@ function deliverDownloads(contents: readonly unknown[]): boolean {
   return true;
 }
 
+/**
+ * The browser half of the MCP Apps host: one sandboxed card in a transcript.
+ *
+ * @remarks
+ * Owns the two-frame embedding (the API-origin proxy iframe and, inside it, the origin-less view
+ * frame), drives the framework-free bridge from `@docket/integrations/mcp-apps`, and adapts the
+ * protocol to this page: theme variables read live from Docket's computed styles, height that
+ * follows `ui/notifications/size-changed`, fullscreen by relocating the live frame into a dialog,
+ * link/message/download/model-context callbacks, and the textual fallback when a view never
+ * completes its handshake.
+ *
+ * @param props - See {@link McpAppViewProps}.
+ * @returns the framed card, or `null` once the view has torn itself down.
+ */
 export function McpAppView(props: McpAppViewProps): JSX.Element | null {
   const {
     instanceId,

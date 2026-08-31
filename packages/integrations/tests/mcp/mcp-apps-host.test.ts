@@ -811,6 +811,20 @@ describe('optional capabilities the host serves when a caller wires them', () =>
     expect(declined.resultFor(33)?.result).toEqual({ isError: true });
   });
 
+  it('refuses a ui/download-file with no contents before asking the caller anything', async () => {
+    const downloadFile = vi.fn(() => true);
+    const { host, resultFor, handshake } = harness({ downloadFile });
+    await handshake();
+    await host.receive({
+      jsonrpc: '2.0',
+      id: 35,
+      method: MCP_UI_METHODS.downloadFile,
+      params: { contents: [] },
+    });
+    expect(resultFor(35)?.error?.code).toBe(JSON_RPC_ERROR.invalidParams);
+    expect(downloadFile).not.toHaveBeenCalled();
+  });
+
   it('still refuses both methods when no caller wired them', async () => {
     const { host, resultFor, handshake } = harness();
     await handshake();

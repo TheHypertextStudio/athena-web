@@ -28,7 +28,7 @@
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
     "clean": "rm -rf .turbo *.tsbuildinfo",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage --passWithNoTests"
   },
   "dependencies": {
     "@docket/types": "workspace:*",

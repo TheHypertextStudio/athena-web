@@ -1,3 +1,4 @@
+# Default matches `.node-version`, which CI passes explicitly as this build arg.
 ARG NODE_VERSION=24
 FROM node:${NODE_VERSION}-alpine AS base
 ENV PNPM_HOME="/pnpm"
@@ -10,14 +11,16 @@ RUN npm install --global corepack@0.35.0 && corepack enable pnpm
 FROM base AS pruner
 WORKDIR /app
 COPY . .
-RUN pnpm dlx turbo@2.9.18 prune @docket/admin --docker
+# Pruned with the turbo this repository pins, read from the root manifest, so the pruner
+# can never be a different release from the one that wrote the turbo.json it parses.
+RUN pnpm dlx turbo@"$(node -p "require('./package.json').devDependencies.turbo")" prune @docket/admin --docker
 
 FROM base AS builder
 WORKDIR /app
 # Install from pruned manifests (cache-stable), then bring in the pruned source.
 COPY --from=pruner /app/out/json/ .
 COPY --from=pruner /app/scripts/install-git-guardrails.sh ./scripts/install-git-guardrails.sh
-RUN pnpm install --no-frozen-lockfile
+RUN pnpm install --frozen-lockfile
 COPY --from=pruner /app/out/full/ .
 ARG API_URL
 ARG NEXT_PUBLIC_API_URL

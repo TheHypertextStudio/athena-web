@@ -101,7 +101,14 @@ describe('one conversation across every Athena interface', () => {
       provider: 'mock',
       organizationId: person.orgId,
     });
-    const call = await twilio.decideInboundCall({ From: person.e164, CallSid: 'CA_parity_1' });
+    const call = await twilio.decideInboundCall({
+      From: person.e164,
+      CallSid: 'CA_parity_1',
+      // Parity is about the channels sharing one conversation, not about call authentication —
+      // present the A-attested signal so the call connects directly. Weaker signals route
+      // through the confirmed-callback flow, which the phone-inbound suites own.
+      StirVerstat: 'TN-Validation-Passed-A',
+    });
     expect(call.disposition).toBe('connected');
     const phoneSession = one(
       await db
@@ -179,7 +186,12 @@ describe('one conversation across every Athena interface', () => {
     expect(recent).toContain('The venue deposit is due on the fourteenth.');
 
     // The same recall reaches the telephone, because the session opens on the same conversation.
-    const call = await twilio.decideInboundCall({ From: person.e164, CallSid: 'CA_recall_1' });
+    // A-attested so the call connects directly rather than entering the callback flow.
+    const call = await twilio.decideInboundCall({
+      From: person.e164,
+      CallSid: 'CA_recall_1',
+      StirVerstat: 'TN-Validation-Passed-A',
+    });
     const phoneSession = one(
       await db
         .select()
@@ -221,7 +233,12 @@ describe('one conversation across every Athena interface', () => {
       provider: 'mock',
       organizationId: person.orgId,
     });
-    const call = await twilio.decideInboundCall({ From: person.e164, CallSid: 'CA_shared_1' });
+    // A-attested so the call connects directly rather than entering the callback flow.
+    const call = await twilio.decideInboundCall({
+      From: person.e164,
+      CallSid: 'CA_shared_1',
+      StirVerstat: 'TN-Validation-Passed-A',
+    });
     const phone = voiceService.liveVoiceSessionByCallSid('CA_shared_1');
 
     expect(web.engine).toBeInstanceOf(engineModule.VoiceSessionEngine);

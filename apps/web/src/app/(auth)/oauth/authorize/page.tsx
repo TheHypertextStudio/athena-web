@@ -75,6 +75,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
   focusRingInset,
+  Surface,
   Text,
 } from '@docket/ui/primitives';
 import Link from 'next/link';
@@ -246,6 +247,12 @@ function ContextRow({
  * One requested permission, as a disclosure row.
  *
  * @remarks
+ * Rows are separated by a gap, not a `border-b` rule — Material 3 Expressive's answer for list
+ * items is a gap between them rather than a divider line, because a gap reads the relationship
+ * between items without drawing something that has to be justified as a boundary. Each row
+ * carries its own `Surface tone="floating"`, so the gap between rows shows the card's plain
+ * surface rather than a seam in one continuous block.
+ *
  * Built on `@docket/ui/primitives`' `Collapsible` rather than native `<details>`/`<summary>` —
  * same keyboard/AT contract (Radix wires `aria-expanded` and keyboard toggling for free), but the
  * open state now reads through `data-[state=open]` like every other primitive in the system,
@@ -268,7 +275,7 @@ function ScopeRow({ scope }: { scope: string }): JSX.Element {
   const Icon = SCOPE_ICON[scope] ?? XCircle;
 
   return (
-    <li className="border-outline-variant border-b last:border-b-0">
+    <Surface as="li" tone="floating" shape="small">
       <Collapsible>
         {/* `items-stretch`: the glyph column, the text column, and the chevron column are all the
             row's full height, so no inline sibling is a different size than the ones beside it.
@@ -276,8 +283,9 @@ function ScopeRow({ scope }: { scope: string }): JSX.Element {
             `focusRingInset`, not the standalone `focus-visible:ring-2`. The list is a scroll
             container (`overflow-y-auto`), which clips anything drawn outside a child's box — so
             the outer ring on the first and last rows lost three of its four edges and the
-            remaining one read as a divider rather than as focus. The design system already has an
-            answer for dense rows packed flush against their neighbours; use it.
+            remaining one read as a divider rather than as focus, regardless of whether the rows
+            themselves are flush or gapped. The design system already has an answer for dense rows
+            packed against a clipping container; use it.
 
             `group` + `group-data-[state=open]` (not `group-open`): the chevron reads its
             ancestor's Radix `data-state`, not the CSS `:open` pseudo-class `<details>` gave for
@@ -285,7 +293,7 @@ function ScopeRow({ scope }: { scope: string }): JSX.Element {
         <CollapsibleTrigger
           type="button"
           className={cn(
-            'group flex min-h-11 w-full items-stretch gap-3 px-3 py-2.5 text-left',
+            'group flex min-h-11 w-full items-stretch gap-3 rounded-lg px-3 py-2.5 text-left',
             focusRingInset,
           )}
         >
@@ -312,13 +320,13 @@ function ScopeRow({ scope }: { scope: string }): JSX.Element {
           <p className="text-on-surface-variant text-body-small mr-3 mb-3 ml-8">{detail}</p>
         </CollapsibleContent>
       </Collapsible>
-    </li>
+    </Surface>
   );
 }
 
 /**
- * The tonal block of requested permissions: one scroll container, masked at whichever edge
- * currently hides more rows.
+ * The requested-permissions list: one scroll container of gap-separated rows, masked at
+ * whichever edge currently hides more of them.
  *
  * @remarks
  * The list is capped and scrollable because the server accepts arbitrary requested scopes, so
@@ -328,7 +336,9 @@ function ScopeRow({ scope }: { scope: string }): JSX.Element {
  * entirely, with nothing in the frame suggesting more is below. The masks here are the fix — a
  * short gradient fade at whichever edge still has hidden content, recomputed on every scroll and
  * on every resize the list's own content triggers (a disclosure opening changes its height
- * without necessarily firing a scroll event).
+ * without necessarily firing a scroll event). They fade to `from-surface`, the card's own plain
+ * tone — what's actually behind the mask now that each row carries its own background rather than
+ * the list sharing one continuous tonal block.
  */
 function ScopeList({ scopes }: { scopes: readonly string[] }): JSX.Element {
   const listRef = useRef<HTMLUListElement>(null);
@@ -359,10 +369,7 @@ function ScopeList({ scopes }: { scopes: readonly string[] }): JSX.Element {
 
   return (
     <div className="relative min-w-0">
-      <ul
-        ref={listRef}
-        className="bg-surface-container-high max-h-[40dvh] overflow-y-auto rounded-lg"
-      >
+      <ul ref={listRef} className="flex max-h-[40dvh] flex-col gap-1 overflow-y-auto">
         {scopes.map((scope) => (
           <ScopeRow key={scope} scope={scope} />
         ))}
@@ -370,13 +377,13 @@ function ScopeList({ scopes }: { scopes: readonly string[] }): JSX.Element {
       {edges.top ? (
         <div
           aria-hidden="true"
-          className="from-surface-container-high pointer-events-none absolute inset-x-0 top-0 h-6 rounded-t-lg bg-gradient-to-b to-transparent"
+          className="from-surface pointer-events-none absolute inset-x-0 top-0 h-6 bg-gradient-to-b to-transparent"
         />
       ) : null}
       {edges.bottom ? (
         <div
           aria-hidden="true"
-          className="from-surface-container-high pointer-events-none absolute inset-x-0 bottom-0 h-6 rounded-b-lg bg-gradient-to-t to-transparent"
+          className="from-surface pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t to-transparent"
         />
       ) : null}
     </div>
@@ -569,8 +576,9 @@ function ConsentPage(): JSX.Element {
       {requestedScopes.length > 0 ? (
         <section aria-label="Requested permissions" className="flex min-w-0 flex-col gap-3">
           <p className="text-on-surface text-label-large">Requested access</p>
-          {/* One tonal block rather than a card per permission: the list reads as a single object
-              being granted. See {@link ScopeList} for why it's capped, scrollable, and masked. */}
+          {/* Rows share this one label rather than a heading per row: they still read as one
+              request being decided, even though each is its own tonal chip. See {@link ScopeList}
+              for why the list is capped, scrollable, gapped rather than divided, and masked. */}
           <ScopeList scopes={requestedScopes} />
         </section>
       ) : null}
@@ -595,14 +603,15 @@ function ConsentPage(): JSX.Element {
           `sticky bottom-0`: the decision is the one control this screen exists for, so it stays
           reachable without scrolling even when a long permission list or a wrapped context row
           pushes the rest of the column past the fold. `bg-surface` matches AuthLayout's own card
-          tone exactly (`surfaceToneColor('page')`) so scrolled content disappears cleanly behind
-          it instead of showing through; `border-t` reads as a docked bar once it's actually
-          pinned, and is invisible the rest of the time since nothing sits behind it. The card has
-          no scrolling ancestor of its own, so `bottom` resolves against the viewport rather than
-          any padded ancestor — `pb-[env(safe-area-inset-bottom)]` keeps the buttons clear of a
-          phone's home-indicator instead of sitting flush against it. */}
+          tone exactly (`surfaceToneColor('page')`), so scrolled content disappears cleanly behind
+          it rather than showing through, on the rare viewport where it's actually pinned mid-scroll
+          — no border, since a static rule would show even in the ordinary case where nothing is
+          scrolled and the tonal permission list already reads as its own bounded block above. The
+          card has no scrolling ancestor of its own, so `bottom` resolves against the viewport
+          rather than any padded ancestor — `pb-[env(safe-area-inset-bottom)]` keeps the buttons
+          clear of a phone's home-indicator instead of sitting flush against it. */}
       {error !== 'expired' && error !== 'missing-return-address' ? (
-        <div className="bg-surface border-outline-variant sticky bottom-0 z-10 flex flex-col-reverse gap-2 border-t pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] @3xl:flex-row @3xl:justify-end">
+        <div className="bg-surface sticky bottom-0 z-10 flex flex-col-reverse gap-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] @3xl:flex-row @3xl:justify-end">
           <Button
             type="button"
             variant="outline"

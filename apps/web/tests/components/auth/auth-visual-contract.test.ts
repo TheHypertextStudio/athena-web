@@ -155,10 +155,18 @@ describe('Auth visual contract', () => {
     }
   });
 
-  it('renders the permission list as one capped tonal block', () => {
+  it('renders the requested-permissions list capped, scrollable, and gap-separated rather than divided', () => {
     const consent = code(consentPath);
-    // One surface for the whole grant, not a card per permission.
-    expect(consent).toContain('bg-surface-container-high');
+    // Each row carries its own tonal surface rather than the list sharing one continuous block —
+    // through the shared `Surface` primitive, not a hand-rolled `bg-surface-container-high`.
+    expect(consent).toContain('<Surface');
+    expect(consent).toContain('tone="floating"');
+    // Material 3 Expressive's answer for list-row separation is a gap between items, not a
+    // divider line between them — docs/design/design-system.md §8: "Grouping and separation are
+    // not on that list [of what justifies a border]." A `border-b` row divider was the original
+    // implementation and must not come back.
+    expect(consent).toContain('gap-1');
+    expect(consent).not.toContain('border-b');
     // The server accepts arbitrary requested scopes, so the row count has no ceiling. Without the
     // cap a long list pushes the decision buttons off a short viewport — the original defect.
     expect(consent).toMatch(

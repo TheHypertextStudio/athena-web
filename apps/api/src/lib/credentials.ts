@@ -15,6 +15,24 @@ import { env } from '../env';
 
 const ENVELOPE_PREFIX = 'v1:gcm';
 
+/**
+ * Whether this deployment can seal a credential at all.
+ *
+ * @remarks
+ * Surfaces the same condition {@link sealCredential} enforces, so a surface that
+ * would have to store a credential can say up front that the deployment is not
+ * set up for it. Without this the only signal is a 409 raised at the moment
+ * somebody acts, which reads as "your request conflicted" when the truth is
+ * "this deployment was never configured".
+ *
+ * @returns `true` when `CREDENTIALS_ENCRYPTION_KEY` decodes to exactly 32 bytes.
+ */
+export function credentialSealingConfigured(): boolean {
+  const raw = env.CREDENTIALS_ENCRYPTION_KEY;
+  if (!raw) return false;
+  return Buffer.from(raw, 'base64').length === 32;
+}
+
 /** Decode + validate the configured sealing key, or throw a clear 409. */
 function sealingKey(): Buffer {
   const raw = env.CREDENTIALS_ENCRYPTION_KEY;

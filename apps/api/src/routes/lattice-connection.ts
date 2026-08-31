@@ -29,6 +29,8 @@ import {
 } from '@docket/integrations';
 import { and, eq } from 'drizzle-orm';
 
+import { credentialSealingConfigured } from '../lib/credentials';
+
 import { env } from '../env';
 import { sealCredential, unsealCredential } from '../lib/credentials';
 
@@ -45,7 +47,11 @@ export type LatticeConnectionRow = typeof latticeConnection.$inferSelect;
  * @returns True when a Lovelace OAuth client id is configured.
  */
 export function latticeConfigured(): boolean {
-  return typeof env.LATTICE_CLIENT_ID === 'string' && env.LATTICE_CLIENT_ID.trim().length > 0;
+  const hasClientId =
+    typeof env.LATTICE_CLIENT_ID === 'string' && env.LATTICE_CLIENT_ID.trim().length > 0;
+  // Starting a flow stores a sealed PKCE verifier, so a deployment without a
+  // sealing key cannot offer Lattice however complete its OAuth client is.
+  return hasClientId && credentialSealingConfigured();
 }
 
 /** The callback Lovelace returns the browser to; must match the registered redirect URI. */

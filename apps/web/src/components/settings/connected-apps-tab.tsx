@@ -36,7 +36,7 @@ import {
   useLiveApiQuery,
 } from '@/lib/query';
 
-import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
+import { ConfirmDestructiveDialog } from '@docket/ui/components';
 import { LoadFailure } from './load-failure';
 import { SettingsGroup } from './settings-group';
 import { SETTINGS_NODES } from './settings-capabilities';

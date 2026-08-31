@@ -62,7 +62,7 @@ import {
   useApiMutation,
   useApiQuery,
 } from '@/lib/query';
-import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
+import { ConfirmDestructiveDialog } from '@docket/ui/components';
 import { ROW_BASE, ROW_INTERACTIVE, SettingRow } from '@/components/settings/setting-row';
 import { SettingsGroup } from '@/components/settings/settings-group';
 import { SETTINGS_NODES } from '@/components/settings/settings-capabilities';

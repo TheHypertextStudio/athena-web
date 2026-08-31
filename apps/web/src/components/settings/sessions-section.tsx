@@ -18,7 +18,7 @@ import { Computer, Phone } from '@docket/ui/icons';
 import { Badge, Button, DecorativeIcon, Skeleton } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
 
-import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
+import { ConfirmDestructiveDialog } from '@docket/ui/components';
 
 import { api } from '@/lib/api';
 import { formatCalendarDate } from '@/lib/format-date';

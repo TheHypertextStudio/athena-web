@@ -17,7 +17,7 @@
  */
 import type { JSX } from 'react';
 
-import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
+import { ConfirmDestructiveDialog } from '@docket/ui/components';
 
 /** Props for {@link DisconnectConfirmDialog}. */
 interface DisconnectConfirmDialogProps {

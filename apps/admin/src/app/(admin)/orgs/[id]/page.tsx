@@ -1,341 +1,470 @@
 'use client';
 
 import { DatePicker } from '@docket/ui/components';
-import { Button, Card, CardContent, CardHeader, CardTitle, Input } from '@docket/ui/primitives';
-import Link from 'next/link';
+import { Button, ControlGroup, Input, Stack, Surface, Text } from '@docket/ui/primitives';
 import { useParams } from 'next/navigation';
 import { type JSX } from 'react';
 
-import { ErrorBanner, PageHeader, SignInAction } from '@/components/ui-bits';
+import { AsyncContent, QueryErrorBanner } from '@/components/admin-feedback';
+import { DetailBackLink, DetailSkeleton, Property, PropertyList } from '@/components/admin-detail';
+import { AdminPage, AdminPageHeader, AdminSection } from '@/components/admin-page';
+import { ConfirmButton } from '@/components/confirm-button';
 import { formatTimestamp } from '@/lib/lifecycle';
-import { DetailSkeleton, Field } from './org-detail-ui';
+import type { AdminOrg, AdminOrgBillingState } from '@/lib/types';
 import { useOrgDetail } from './use-org-detail';
+
+/** How far ahead a partner discount may be scheduled to end. */
+const PARTNER_DISCOUNT_MAX_MONTHS = 24;
+
+/** The award statuses that can still be renewed or revoked. */
+const CHANGEABLE_AWARD_STATUSES = ['scheduled', 'active', 'ending'];
 
 /**
  * The organization detail screen with inline billing actions.
  *
  * @remarks
- * A Client Component. Reads `GET /admin/orgs/:id` at runtime. Billing actions (finance+
- * on the API) may extend an eligible Stripe trial. Superadmins may grant or revoke the
- * complimentary Docket Pro entitlement with an audit reason. Finance can run the same safe
- * Stripe reconciliation worker as the scheduler. A 403 (insufficient tier or non-staff)
- * surfaces inline on each action.
+ * Billing actions are gated by operator tier on the API, and the response's `permissions` block
+ * says which the caller holds — so each section renders only where the operator can actually act,
+ * rather than offering every control and failing the ones they may not perform.
+ *
+ * The two irreversible actions on this screen — revoking complimentary Pro, and revoking a live
+ * partner discount — go through a confirmation. Both change what an organization is paying and
+ * neither has an undo.
  */
 export default function OrgDetailPage(): JSX.Element {
   const params = useParams<{ id: string }>();
-  const partnerDiscountMinDate = new Date().toISOString().slice(0, 10);
-  const partnerDiscountMaxDateValue = new Date();
-  partnerDiscountMaxDateValue.setUTCMonth(partnerDiscountMaxDateValue.getUTCMonth() + 24);
-  const partnerDiscountMaxDate = partnerDiscountMaxDateValue.toISOString().slice(0, 10);
-  const {
-    org,
-    billing,
-    loading,
-    error,
-    authFailed,
-    actionError,
-    pending,
-    trialDays,
-    setTrialDays,
-    complimentaryReason,
-    setComplimentaryReason,
-    partnerPercent,
-    setPartnerPercent,
-    partnerEndsAt,
-    setPartnerEndsAt,
-    partnerReason,
-    setPartnerReason,
-    partnerPreview,
-    extendTrial,
-    reconcileStripe,
-    grantComplimentary,
-    revokeComplimentary,
-    grantPartnerDiscount,
-    previewPartnerDiscount,
-    renewPartnerDiscount,
-    revokeDiscount,
-  } = useOrgDetail(params.id);
+  const detail = useOrgDetail(params.id);
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-4 sm:p-8">
-      <Link
-        href="/orgs"
-        className="text-on-surface-variant hover:text-on-surface focus-visible:ring-ring text-body-medium w-fit rounded-sm underline-offset-4 transition-colors hover:underline focus-visible:ring-1 focus-visible:outline-none"
+    <AdminPage width="form">
+      <DetailBackLink href="/orgs" label="organizations" />
+
+      <QueryErrorBanner
+        error={detail.error}
+        fallback="Could not load this organization."
+        onRetry={() => void detail.load()}
+      />
+
+      <AsyncContent
+        loading={detail.loading}
+        empty={detail.org === undefined}
+        skeleton={<DetailSkeleton panels={3} />}
+        emptyState={<></>}
       >
-        ← Back to organizations
-      </Link>
-
-      {loading ? (
-        <DetailSkeleton />
-      ) : org ? (
-        <>
-          <PageHeader title={org.name} description={org.slug} />
-          <ErrorBanner message={error} />
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-body-medium">Overview</CardTitle>
-            </CardHeader>
-            <CardContent className="text-body-medium grid grid-cols-2 gap-4 sm:grid-cols-3">
-              <Field label="Organization ID" value={org.id} mono />
-              <Field label="Type" value={org.isPersonal ? 'Personal' : 'Team'} />
-              <Field label="Created" value={formatTimestamp(org.createdAt)} />
-            </CardContent>
-          </Card>
-
-          <ErrorBanner message={actionError} />
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-body-medium">Billing state</CardTitle>
-            </CardHeader>
-            <CardContent className="text-body-medium grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <Field
-                label="Stripe customer"
-                value={billing?.customer?.stripeCustomerId ?? 'None'}
-                mono
-              />
-              <Field
-                label="Billing country"
-                value={billing?.customer?.billingCountry ?? 'Not verified'}
-              />
-              <Field label="Subscription" value={billing?.entitlement?.status ?? 'Free'} />
-              <Field
-                label="Subscription ID"
-                value={billing?.entitlement?.stripeSubscriptionId ?? 'None'}
-                mono
-              />
-              <Field label="Reconciliation" value={billing?.reconciliation?.status ?? 'Not run'} />
-              <Field
-                label="Last observed"
-                value={formatTimestamp(billing?.entitlement?.providerObservedAt ?? null)}
-              />
-              <Field
-                label="Discount application"
-                value={
-                  billing?.application
-                    ? `${billing.application.programKey} · ${billing.application.status}`
-                    : 'None'
-                }
-              />
-              <Field
-                label="Discount award"
-                value={
-                  billing?.award ? `${billing.award.percentOff}% · ${billing.award.status}` : 'None'
-                }
-              />
-              <Field
-                label="Issued credit"
-                value={
-                  billing?.credit
-                    ? `${(billing.credit.totalAmount / 100).toLocaleString(undefined, { style: 'currency', currency: billing.credit.currency.toUpperCase() })} · ${billing.credit.status}`
-                    : 'None'
-                }
-              />
-              {billing?.reconciliation?.status === 'failed' ? (
-                <p className="text-error text-body-small sm:col-span-2 lg:col-span-3">
-                  Stripe reconciliation needs attention. Review the protected operator logs before
-                  changing billing access.
-                </p>
-              ) : null}
-              {billing?.permissions.manageDiscounts ? (
-                <div className="flex flex-col items-start gap-2 sm:col-span-2 lg:col-span-3">
-                  <Button variant="outline" disabled={pending !== null} onClick={reconcileStripe}>
-                    {pending === 'reconcile-stripe' ? 'Reconciling…' : 'Reconcile Stripe'}
-                  </Button>
-                  <p className="text-on-surface-variant text-body-small">
-                    This refreshes provider mirrors. It cannot activate an unpaid subscription or
-                    resolve duplicate subscriptions.
-                  </p>
-                </div>
-              ) : null}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-body-medium">Billing actions</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-5">
-              {billing?.permissions.manageDiscounts ? (
-                <div className="flex flex-col gap-2">
-                  <label htmlFor="trial-days" className="text-on-surface-variant text-label-medium">
-                    Extend trial
-                  </label>
-                  <div className="flex gap-2">
-                    <Input
-                      id="trial-days"
-                      type="number"
-                      min={1}
-                      max={365}
-                      value={trialDays}
-                      onChange={(e) => {
-                        setTrialDays(e.target.value);
-                      }}
-                      className="w-28"
-                    />
-                    <Button variant="outline" disabled={pending !== null} onClick={extendTrial}>
-                      {pending === 'extend-trial' ? 'Extending…' : 'Extend trial'}
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
-
-              {billing?.permissions.manageComplimentary ? (
-                <div className="flex flex-col gap-2">
-                  <label
-                    htmlFor="complimentary-reason"
-                    className="text-on-surface-variant text-label-medium"
-                  >
-                    Complimentary Docket Pro
-                  </label>
-                  <p className="text-on-surface-variant text-body-small">
-                    This grants every current and future Pro capability without Stripe. The API
-                    rejects a grant while a paid subscription is current.
-                  </p>
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <Input
-                      id="complimentary-reason"
-                      value={complimentaryReason}
-                      onChange={(event) => {
-                        setComplimentaryReason(event.target.value);
-                      }}
-                      placeholder="Reason for the complimentary grant"
-                      className="flex-1"
-                    />
-                    <Button
-                      variant="outline"
-                      disabled={pending !== null || complimentaryReason.trim().length === 0}
-                      onClick={org.isBillingExempt ? revokeComplimentary : grantComplimentary}
-                    >
-                      {org.isBillingExempt
-                        ? pending === 'revoke-complimentary'
-                          ? 'Revoking…'
-                          : 'Revoke complimentary Pro'
-                        : pending === 'grant-complimentary'
-                          ? 'Granting…'
-                          : 'Grant complimentary Pro'}
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
-
-              {billing?.permissions.manageDiscounts ? (
-                <div className="flex flex-col gap-2">
-                  <p className="text-on-surface-variant text-xs font-medium">
-                    Private partner discount
-                  </p>
-                  <p className="text-on-surface-variant text-xs">
-                    Finance can grant one 1–90% award for no more than 24 months. Provider failures
-                    keep the same award and retry key.
-                  </p>
-                  <div className="grid gap-2 sm:grid-cols-[7rem_11rem_minmax(0,1fr)_auto_auto]">
-                    <Input
-                      type="number"
-                      min={1}
-                      max={90}
-                      value={partnerPercent}
-                      onChange={(event) => {
-                        setPartnerPercent(event.target.value);
-                      }}
-                      aria-label="Partner discount percent"
-                    />
-                    <DatePicker
-                      value={partnerEndsAt}
-                      onChange={(value) => {
-                        setPartnerEndsAt(value ?? '');
-                      }}
-                      placeholder="Choose end date"
-                      ariaLabel="Partner discount end date"
-                      triggerVariant="outline"
-                      triggerClassName="w-full justify-start"
-                      min={partnerDiscountMinDate}
-                      max={partnerDiscountMaxDate}
-                    />
-                    <Input
-                      value={partnerReason}
-                      onChange={(event) => {
-                        setPartnerReason(event.target.value);
-                      }}
-                      placeholder="Required finance reason"
-                      aria-label="Partner discount reason"
-                    />
-                    <Button
-                      variant="outline"
-                      disabled={
-                        pending !== null ||
-                        partnerReason.trim().length === 0 ||
-                        partnerEndsAt.length === 0
-                      }
-                      onClick={previewPartnerDiscount}
-                    >
-                      {pending === 'preview-partner-discount' ? 'Previewing…' : 'Preview'}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      disabled={
-                        pending !== null ||
-                        !partnerPreview ||
-                        partnerReason.trim().length === 0 ||
-                        partnerEndsAt.length === 0
-                      }
-                      onClick={grantPartnerDiscount}
-                    >
-                      {pending === 'grant-partner-discount' ? 'Applying…' : 'Grant discount'}
-                    </Button>
-                  </div>
-                  {partnerPreview ? (
-                    <div className="bg-surface-container-low flex flex-col gap-1 rounded-md p-3">
-                      <p className="text-label-large">
-                        {partnerPreview.percentOff}% through{' '}
-                        {new Date(partnerPreview.endsAt).toLocaleDateString()}
-                      </p>
-                      <p className="text-body-small">
-                        Provider action: {partnerPreview.providerAction.replaceAll('_', ' ')}
-                      </p>
-                      <p className="text-body-small">
-                        {partnerPreview.credit
-                          ? `Credit preview: ${(partnerPreview.credit.totalAmount / 100).toLocaleString(undefined, { style: 'currency', currency: partnerPreview.credit.currency.toUpperCase() })}`
-                          : 'No current-invoice credit is required.'}
-                      </p>
-                    </div>
-                  ) : null}
-                  {billing.award &&
-                  ['scheduled', 'active', 'ending'].includes(billing.award.status) ? (
-                    <div className="flex flex-nowrap gap-2 overflow-x-auto">
-                      {billing.award.programKey === null ? (
-                        <Button
-                          variant="outline"
-                          disabled={pending !== null || partnerReason.trim().length === 0}
-                          onClick={renewPartnerDiscount}
-                        >
-                          {pending === 'renew-discount' ? 'Renewing…' : 'Renew current award'}
-                        </Button>
-                      ) : null}
-                      <Button
-                        variant="outline"
-                        disabled={pending !== null || partnerReason.trim().length === 0}
-                        onClick={revokeDiscount}
-                      >
-                        {pending === 'revoke-discount' ? 'Revoking…' : 'Revoke current award'}
-                      </Button>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-              {!billing?.permissions.manageDiscounts &&
-              !billing?.permissions.manageComplimentary ? (
-                <p className="text-on-surface-variant text-body-small">
-                  Support can inspect billing state. Finance manages trials and discounts. A
-                  superadmin manages complimentary Pro.
-                </p>
-              ) : null}
-            </CardContent>
-          </Card>
-        </>
-      ) : (
-        <ErrorBanner message={error} action={authFailed ? <SignInAction /> : null} />
-      )}
-    </div>
+        {detail.org ? <OrgDetail org={detail.org} detail={detail} /> : null}
+      </AsyncContent>
+    </AdminPage>
   );
+}
+
+/** Everything the screen shows once the organization has loaded. */
+function OrgDetail({
+  org,
+  detail,
+}: {
+  readonly org: AdminOrg;
+  readonly detail: ReturnType<typeof useOrgDetail>;
+}): JSX.Element {
+  const { billing } = detail;
+
+  return (
+    <Stack gap={6}>
+      <AdminPageHeader title={org.name} description={org.slug} />
+
+      <AdminSection title="Overview">
+        <PropertyList>
+          <Property label="Organization ID" value={org.id} identifier />
+          <Property label="Type" value={org.isPersonal ? 'Personal' : 'Team'} />
+          <Property label="Created" value={formatTimestamp(org.createdAt)} />
+        </PropertyList>
+      </AdminSection>
+
+      <BillingState billing={billing} />
+
+      <AdminSection title="Billing actions">
+        <QueryErrorBanner error={detail.actionError} fallback="Could not complete that action." />
+        <BillingActions org={org} detail={detail} />
+      </AdminSection>
+    </Stack>
+  );
+}
+
+/** What the provider currently reports for this organization. */
+function BillingState({
+  billing,
+}: {
+  readonly billing: AdminOrgBillingState | undefined;
+}): JSX.Element {
+  return (
+    <AdminSection title="Billing state">
+      <PropertyList>
+        <Property
+          label="Stripe customer"
+          value={billing?.customer?.stripeCustomerId ?? 'None'}
+          identifier={Boolean(billing?.customer?.stripeCustomerId)}
+        />
+        <Property
+          label="Billing country"
+          value={billing?.customer?.billingCountry ?? 'Not verified'}
+        />
+        <Property label="Subscription" value={billing?.entitlement?.status ?? 'Free'} />
+        <Property
+          label="Subscription ID"
+          value={billing?.entitlement?.stripeSubscriptionId ?? 'None'}
+          identifier={Boolean(billing?.entitlement?.stripeSubscriptionId)}
+        />
+        <Property label="Reconciliation" value={billing?.reconciliation?.status ?? 'Not run'} />
+        <Property
+          label="Last observed"
+          value={formatTimestamp(billing?.entitlement?.providerObservedAt ?? null)}
+        />
+        <Property label="Discount application" value={applicationSummary(billing)} />
+        <Property label="Discount award" value={awardSummary(billing)} />
+        <Property label="Issued credit" value={creditSummary(billing)} />
+      </PropertyList>
+
+      {billing?.reconciliation?.status === 'failed' ? (
+        <Text as="p" token="body-small" tone="error">
+          Stripe reconciliation needs attention. Review the protected operator logs before changing
+          billing access.
+        </Text>
+      ) : null}
+    </AdminSection>
+  );
+}
+
+/** The actions this operator's tier permits, or a note explaining what each tier may do. */
+function BillingActions({
+  org,
+  detail,
+}: {
+  readonly org: AdminOrg;
+  readonly detail: ReturnType<typeof useOrgDetail>;
+}): JSX.Element {
+  const permissions = detail.billing?.permissions;
+
+  if (!permissions?.manageDiscounts && !permissions?.manageComplimentary) {
+    return (
+      <Text as="p" token="body-small" tone="muted">
+        Support can inspect billing state. Finance manages trials and discounts. A superadmin
+        manages complimentary Pro.
+      </Text>
+    );
+  }
+
+  return (
+    <Stack gap={6}>
+      {permissions.manageDiscounts ? <ReconcileStripe detail={detail} /> : null}
+      {permissions.manageDiscounts ? <ExtendTrial detail={detail} /> : null}
+      {permissions.manageComplimentary ? <ComplimentaryPro org={org} detail={detail} /> : null}
+      {permissions.manageDiscounts ? <PartnerDiscount detail={detail} /> : null}
+    </Stack>
+  );
+}
+
+/** Refresh the provider mirrors for this organization. */
+function ReconcileStripe({
+  detail,
+}: {
+  readonly detail: ReturnType<typeof useOrgDetail>;
+}): JSX.Element {
+  return (
+    <Stack gap={2}>
+      <ControlGroup controlSize="md">
+        <Button
+          variant="outline"
+          disabled={detail.pending !== null}
+          onClick={detail.reconcileStripe}
+        >
+          {detail.pending === 'reconcile-stripe' ? 'Reconciling…' : 'Reconcile Stripe'}
+        </Button>
+      </ControlGroup>
+      <Text as="p" token="body-small" tone="muted">
+        This refreshes provider mirrors. It cannot activate an unpaid subscription or resolve
+        duplicate subscriptions.
+      </Text>
+    </Stack>
+  );
+}
+
+/** Extend an eligible Stripe trial by a number of days. */
+function ExtendTrial({
+  detail,
+}: {
+  readonly detail: ReturnType<typeof useOrgDetail>;
+}): JSX.Element {
+  return (
+    <Stack gap={2}>
+      <Text as="label" token="label-medium" tone="muted" htmlFor="trial-days">
+        Extend trial
+      </Text>
+      <ControlGroup controlSize="md">
+        <Input
+          id="trial-days"
+          type="number"
+          min={1}
+          max={365}
+          value={detail.trialDays}
+          onChange={(event) => {
+            detail.setTrialDays(event.target.value);
+          }}
+          className="w-28"
+        />
+        <Button variant="outline" disabled={detail.pending !== null} onClick={detail.extendTrial}>
+          {detail.pending === 'extend-trial' ? 'Extending…' : 'Extend trial'}
+        </Button>
+      </ControlGroup>
+    </Stack>
+  );
+}
+
+/** Grant or revoke the complimentary Docket Pro entitlement. */
+function ComplimentaryPro({
+  org,
+  detail,
+}: {
+  readonly org: AdminOrg;
+  readonly detail: ReturnType<typeof useOrgDetail>;
+}): JSX.Element {
+  const busy = detail.pending !== null;
+  const noReason = detail.complimentaryReason.trim().length === 0;
+
+  return (
+    <Stack gap={2}>
+      <Text as="label" token="label-medium" tone="muted" htmlFor="complimentary-reason">
+        Complimentary Docket Pro
+      </Text>
+      <Text as="p" token="body-small" tone="muted">
+        This grants every current and future Pro capability without Stripe. The API rejects a grant
+        while a paid subscription is current.
+      </Text>
+      <div className="flex flex-col gap-2 @lg:flex-row">
+        <Input
+          id="complimentary-reason"
+          value={detail.complimentaryReason}
+          onChange={(event) => {
+            detail.setComplimentaryReason(event.target.value);
+          }}
+          placeholder="Reason for the complimentary grant"
+          className="flex-1"
+        />
+        <ControlGroup controlSize="md">
+          <ComplimentaryAction
+            granted={org.isBillingExempt}
+            orgName={org.name}
+            pending={detail.pending}
+            disabled={busy || noReason}
+            onGrant={detail.grantComplimentary}
+            onRevoke={detail.revokeComplimentary}
+          />
+        </ControlGroup>
+      </div>
+    </Stack>
+  );
+}
+
+/** The grant or revoke control, whichever this organization's current state calls for. */
+function ComplimentaryAction({
+  granted,
+  orgName,
+  pending,
+  disabled,
+  onGrant,
+  onRevoke,
+}: {
+  readonly granted: boolean;
+  readonly orgName: string;
+  readonly pending: string | null;
+  readonly disabled: boolean;
+  readonly onGrant: () => void;
+  readonly onRevoke: () => void;
+}): JSX.Element {
+  if (granted) {
+    return (
+      <ConfirmButton
+        label={pending === 'revoke-complimentary' ? 'Revoking…' : 'Revoke complimentary Pro'}
+        disabled={disabled}
+        pending={pending === 'revoke-complimentary'}
+        title="Revoke complimentary Pro?"
+        description={`${orgName} loses every Pro capability immediately, and nothing restores it automatically. The reason you entered is recorded in the audit log.`}
+        confirmLabel="Revoke complimentary Pro"
+        onConfirm={onRevoke}
+      />
+    );
+  }
+
+  return (
+    <Button variant="outline" disabled={disabled} onClick={onGrant}>
+      {pending === 'grant-complimentary' ? 'Granting…' : 'Grant complimentary Pro'}
+    </Button>
+  );
+}
+
+/** Preview, grant, renew, and revoke the private partner discount. */
+function PartnerDiscount({
+  detail,
+}: {
+  readonly detail: ReturnType<typeof useOrgDetail>;
+}): JSX.Element {
+  const busy = detail.pending !== null;
+  const noReason = detail.partnerReason.trim().length === 0;
+  const noEndDate = detail.partnerEndsAt.length === 0;
+
+  const today = new Date();
+  const latest = new Date();
+  latest.setUTCMonth(latest.getUTCMonth() + PARTNER_DISCOUNT_MAX_MONTHS);
+
+  return (
+    <Stack gap={2}>
+      <Text as="p" token="label-medium" tone="muted">
+        Private partner discount
+      </Text>
+      <Text as="p" token="body-small" tone="muted">
+        Finance can grant one 1–90% award for no more than {PARTNER_DISCOUNT_MAX_MONTHS} months.
+        Provider failures keep the same award and retry key.
+      </Text>
+
+      <div className="grid gap-2 @2xl:grid-cols-[7rem_11rem_minmax(0,1fr)_auto_auto]">
+        <Input
+          type="number"
+          min={1}
+          max={90}
+          value={detail.partnerPercent}
+          onChange={(event) => {
+            detail.setPartnerPercent(event.target.value);
+          }}
+          aria-label="Partner discount percent"
+        />
+        <DatePicker
+          value={detail.partnerEndsAt}
+          onChange={(value) => {
+            detail.setPartnerEndsAt(value ?? '');
+          }}
+          placeholder="Choose end date"
+          ariaLabel="Partner discount end date"
+          triggerVariant="outline"
+          triggerClassName="w-full justify-start"
+          min={today.toISOString().slice(0, 10)}
+          max={latest.toISOString().slice(0, 10)}
+        />
+        <Input
+          value={detail.partnerReason}
+          onChange={(event) => {
+            detail.setPartnerReason(event.target.value);
+          }}
+          placeholder="Required finance reason"
+          aria-label="Partner discount reason"
+        />
+        <Button
+          variant="outline"
+          disabled={busy || noReason || noEndDate}
+          onClick={detail.previewPartnerDiscount}
+        >
+          {detail.pending === 'preview-partner-discount' ? 'Previewing…' : 'Preview'}
+        </Button>
+        <Button
+          disabled={busy || !detail.partnerPreview || noReason || noEndDate}
+          onClick={detail.grantPartnerDiscount}
+        >
+          {detail.pending === 'grant-partner-discount' ? 'Applying…' : 'Grant discount'}
+        </Button>
+      </div>
+
+      <DiscountPreview preview={detail.partnerPreview} />
+      <CurrentAward detail={detail} />
+    </Stack>
+  );
+}
+
+/** What granting the previewed discount would do at the provider. */
+function DiscountPreview({
+  preview,
+}: {
+  readonly preview: ReturnType<typeof useOrgDetail>['partnerPreview'];
+}): JSX.Element | null {
+  if (!preview) return null;
+
+  return (
+    <Surface tone="card" shape="small" pad="comfortable">
+      <Stack gap={1}>
+        <Text as="p" token="label-large">
+          {preview.percentOff}% through {new Date(preview.endsAt).toLocaleDateString()}
+        </Text>
+        <Text as="p" token="body-small" tone="muted">
+          Provider action: {preview.providerAction.replaceAll('_', ' ')}
+        </Text>
+        <Text as="p" token="body-small" tone="muted">
+          {creditPreviewLine(preview.credit)}
+        </Text>
+      </Stack>
+    </Surface>
+  );
+}
+
+/** Renew or revoke the award that is currently in force, when there is one. */
+function CurrentAward({
+  detail,
+}: {
+  readonly detail: ReturnType<typeof useOrgDetail>;
+}): JSX.Element | null {
+  const award = detail.billing?.award;
+  if (!award || !CHANGEABLE_AWARD_STATUSES.includes(award.status)) return null;
+
+  const disabled = detail.pending !== null || detail.partnerReason.trim().length === 0;
+
+  return (
+    <ControlGroup controlSize="md" wrap>
+      {award.programKey === null ? (
+        <Button variant="outline" disabled={disabled} onClick={detail.renewPartnerDiscount}>
+          {detail.pending === 'renew-discount' ? 'Renewing…' : 'Renew current award'}
+        </Button>
+      ) : null}
+      <ConfirmButton
+        label={detail.pending === 'revoke-discount' ? 'Revoking…' : 'Revoke current award'}
+        disabled={disabled}
+        pending={detail.pending === 'revoke-discount'}
+        title="Revoke the current discount?"
+        description="The award ends at the provider and the organization returns to full price on its next invoice. The reason you entered is recorded in the audit log."
+        confirmLabel="Revoke award"
+        onConfirm={detail.revokeDiscount}
+      />
+    </ControlGroup>
+  );
+}
+
+/** The discount application's program and status, or that there is none. */
+function applicationSummary(billing: AdminOrgBillingState | undefined): string {
+  const application = billing?.application;
+  if (!application) return 'None';
+  return `${application.programKey} · ${application.status}`;
+}
+
+/** The current award's size and status, or that there is none. */
+function awardSummary(billing: AdminOrgBillingState | undefined): string {
+  const award = billing?.award;
+  if (!award) return 'None';
+  return `${award.percentOff}% · ${award.status}`;
+}
+
+/** The credit issued against this organization, or that none was. */
+function creditSummary(billing: AdminOrgBillingState | undefined): string {
+  const credit = billing?.credit;
+  if (!credit) return 'None';
+  return `${money(credit.totalAmount, credit.currency)} · ${credit.status}`;
+}
+
+/** What credit a previewed discount would issue, if any. */
+function creditPreviewLine(
+  credit: { readonly totalAmount: number; readonly currency: string } | null | undefined,
+): string {
+  if (!credit) return 'No current-invoice credit is required.';
+  return `Credit preview: ${money(credit.totalAmount, credit.currency)}`;
+}
+
+/** Format a minor-unit provider amount as currency. */
+function money(minorUnits: number, currency: string): string {
+  return (minorUnits / 100).toLocaleString(undefined, {
+    style: 'currency',
+    currency: currency.toUpperCase(),
+  });
 }

@@ -35,7 +35,7 @@ import { type JSX, useState } from 'react';
 import { LoadFailure } from '@/components/settings/load-failure';
 import { firstWriteError, WriteError } from '@/components/settings/write-error';
 import { useActiveOrg } from '@/components/active-org';
-import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
+import { ConfirmDestructiveDialog } from '@docket/ui/components';
 import { LabelEditorDialog } from '@/components/labels/label-editor-dialog';
 import { LabelSettingsRow } from '@/components/labels/label-settings-row';
 import { EntityIconPicker } from '@/components/entity-display/entity-icon-picker';

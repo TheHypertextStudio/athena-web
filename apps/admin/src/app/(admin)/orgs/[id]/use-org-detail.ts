@@ -1,10 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import type { InferResponseType } from 'hono/client';
 
 import { api } from '@/lib/api';
-import { isAuthError, userErrorMessage, userProblemMessage } from '@/lib/problem';
+import { userErrorMessage, userProblemMessage } from '@/lib/problem';
+import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 import type { AdminOrg, AdminOrgBillingState } from '@/lib/types';
 
 import { settleComplimentaryChange } from './complimentary-settlement';
@@ -13,13 +15,31 @@ type PartnerPreview = InferResponseType<
   (typeof api.admin.orgs)[':id']['discount-awards']['preview']['$post']
 >;
 
+/** One organization's record. */
+function orgDef(orgId: string) {
+  return apiQueryOptions(
+    queryKeys.org(orgId),
+    () => api.admin.orgs[':id'].$get({ param: { id: orgId } }),
+    'Could not load this organization.',
+  );
+}
+
+/** One organization's billing and discount diagnostics. */
+function billingDef(orgId: string) {
+  return apiQueryOptions(
+    queryKeys.orgBilling(orgId),
+    () => api.admin.orgs[':id']['billing-state'].$get({ param: { id: orgId } }),
+    'Could not load this billing account.',
+  );
+}
+
 /** All state + actions for the org detail screen. */
 export interface OrgDetailData {
-  org: AdminOrg | null;
-  billing: AdminOrgBillingState | null;
+  org: AdminOrg | undefined;
+  billing: AdminOrgBillingState | undefined;
   loading: boolean;
-  error: string | null;
-  authFailed: boolean;
+  /** The failed read, if either read failed. */
+  error: unknown;
   actionError: string | null;
   pending: string | null;
   trialDays: string;
@@ -46,11 +66,9 @@ export interface OrgDetailData {
 
 /** useOrgDetail coordinates use org detail state, loading, and mutations for its screen. */
 export function useOrgDetail(orgId: string): OrgDetailData {
-  const [org, setOrg] = useState<AdminOrg | null>(null);
-  const [billing, setBilling] = useState<AdminOrgBillingState | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [authFailed, setAuthFailed] = useState(false);
+  const queryClient = useQueryClient();
+  const orgQuery = useApiQuery(orgDef(orgId));
+  const billingQuery = useApiQuery(billingDef(orgId));
   const [actionError, setActionError] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [trialDays, setTrialDays] = useState('14');
@@ -64,37 +82,17 @@ export function useOrgDetail(orgId: string): OrgDetailData {
   const [partnerReason, setPartnerReason] = useState('');
   const [partnerPreview, setPartnerPreview] = useState<PartnerPreview | null>(null);
 
+  /**
+   * Re-read the organization and its billing state.
+   *
+   * @remarks
+   * Every billing action calls this once it settles. Both reads go through the query cache, so a
+   * refresh here also updates the organization list and the dashboard queues if they are mounted,
+   * rather than leaving them showing a state the operator has just changed.
+   */
   const load = useCallback(async (): Promise<void> => {
-    setLoading(true);
-    setError(null);
-    setAuthFailed(false);
-    try {
-      const [res, billingRes] = await Promise.all([
-        api.admin.orgs[':id'].$get({ param: { id: orgId } }),
-        api.admin.orgs[':id']['billing-state'].$get({ param: { id: orgId } }),
-      ]);
-      if (!res.ok) {
-        setAuthFailed(isAuthError(res));
-        setError(await userProblemMessage(res, 'Could not load this organization.'));
-        return;
-      }
-      if (!billingRes.ok) {
-        setAuthFailed(isAuthError(billingRes));
-        setError(await userProblemMessage(billingRes, 'Could not load this billing account.'));
-        return;
-      }
-      setOrg(await res.json());
-      setBilling(await billingRes.json());
-    } catch (caught) {
-      setError(userErrorMessage(caught, 'Something went wrong loading this organization.'));
-    } finally {
-      setLoading(false);
-    }
-  }, [orgId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+    await Promise.all([orgQuery.refetch(), billingQuery.refetch()]);
+  }, [orgQuery, billingQuery]);
 
   const runOrgAction = useCallback(
     async (key: string, call: () => Promise<Response>, failMessage: string): Promise<void> => {
@@ -106,14 +104,14 @@ export function useOrgDetail(orgId: string): OrgDetailData {
           setActionError(await userProblemMessage(res, failMessage));
           return;
         }
-        setOrg((await res.json()) as AdminOrg);
+        queryClient.setQueryData(orgDef(orgId).queryKey, (await res.json()) as AdminOrg);
       } catch (caught) {
         setActionError(userErrorMessage(caught, failMessage));
       } finally {
         setPending(null);
       }
     },
-    [],
+    [queryClient, orgId],
   );
 
   const extendTrial = useCallback((): void => {
@@ -258,8 +256,8 @@ export function useOrgDetail(orgId: string): OrgDetailData {
 
   const changeCurrentAward = useCallback(
     (action: 'renew' | 'revoke'): void => {
-      if (!billing?.award) return;
-      const award = billing.award;
+      const award = billingQuery.data?.award;
+      if (!award) return;
       void (async () => {
         setActionError(null);
         setPending(`${action}-discount`);
@@ -294,7 +292,7 @@ export function useOrgDetail(orgId: string): OrgDetailData {
         }
       })();
     },
-    [billing?.award, load, partnerEndsAt, partnerReason],
+    [billingQuery.data?.award, load, partnerEndsAt, partnerReason],
   );
 
   const renewPartnerDiscount = useCallback((): void => {
@@ -306,11 +304,10 @@ export function useOrgDetail(orgId: string): OrgDetailData {
   }, [changeCurrentAward]);
 
   return {
-    org,
-    billing,
-    loading,
-    error,
-    authFailed,
+    org: orgQuery.data,
+    billing: billingQuery.data,
+    loading: orgQuery.isPending || billingQuery.isPending,
+    error: orgQuery.error ?? billingQuery.error,
     actionError,
     pending,
     trialDays,

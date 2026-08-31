@@ -56,7 +56,7 @@ import { type JSX, useEffect, useMemo, useState } from 'react';
 import { SettingsGroup } from '@/components/settings/settings-group';
 import { SETTINGS_NODES } from '@/components/settings/settings-capabilities';
 import { useReauth } from '@/components/settings/use-reauth';
-import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
+import { ConfirmDestructiveDialog } from '@docket/ui/components';
 
 import { api } from '@/lib/api';
 import { formatClock } from '@/lib/format-time';

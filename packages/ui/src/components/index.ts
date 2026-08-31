@@ -34,6 +34,10 @@ export {
   useResponsiveControlLayout,
 } from './toolbar';
 export {
+  ConfirmDestructiveDialog,
+  type ConfirmDestructiveDialogProps,
+} from './feedback/ConfirmDestructiveDialog';
+export {
   InlineBanner,
   type InlineBannerAction,
   type InlineBannerProps,

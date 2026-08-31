@@ -6,15 +6,6 @@
     "ad-hoc-border": 10,
     "raw-type-utility": 26
   },
-  "apps/admin/src/app/(admin)/orgs/[id]/org-detail-ui.tsx": {
-    "raw-type-utility": 3
-  },
-  "apps/admin/src/app/(admin)/orgs/[id]/page.tsx": {
-    "raw-type-utility": 3
-  },
-  "apps/admin/src/app/(admin)/users/[id]/page.tsx": {
-    "raw-type-utility": 6
-  },
   "apps/admin/src/app/(auth)/sign-in/page.tsx": {
     "raw-type-utility": 4
   },

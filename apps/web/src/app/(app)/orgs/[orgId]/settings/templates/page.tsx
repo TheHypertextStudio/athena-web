@@ -31,7 +31,7 @@ import { LoadFailure } from '@/components/settings/load-failure';
 import { SettingRow } from '@/components/settings/setting-row';
 import { SettingsGroup } from '@/components/settings/settings-group';
 import { firstWriteError, WriteError } from '@/components/settings/write-error';
-import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
+import { ConfirmDestructiveDialog } from '@docket/ui/components';
 import { TemplateEditorDialog } from '@/components/templates/template-editor';
 import {
   sortTemplates,

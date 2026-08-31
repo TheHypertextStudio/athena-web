@@ -36,7 +36,7 @@ import {
   connectorReadinessLabel,
   deriveMcpConnectorDraft,
 } from '@/components/settings/mcp-connector-draft';
-import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
+import { ConfirmDestructiveDialog } from '@docket/ui/components';
 import { EmptyState } from '@docket/ui/components';
 import { SettingsGroup } from './settings-group';
 import { SETTINGS_NODES } from './settings-capabilities';

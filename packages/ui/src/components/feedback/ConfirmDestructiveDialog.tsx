@@ -1,10 +1,10 @@
 'use client';
 
 /**
- * `ConfirmDestructiveDialog` — the one destructive-confirmation dialog in the product.
+ * `@docket/ui` — `ConfirmDestructiveDialog`, the one destructive-confirmation dialog.
  *
  * @remarks
- * A thin, entity-agnostic wrapper over the {@link Dialog} primitive from `@docket/ui`, which
+ * A thin, entity-agnostic wrapper over the {@link Dialog} primitive, which
  * inherits Radix's focus trap, `Escape`-to-close, scroll-lock, return-focus-to-opener, and the
  * `aria-labelledby`/`aria-describedby` wiring for free. The caller owns the open state and the
  * delete action; this component only renders the MD3 tonal panel, a destructive confirm button,
@@ -48,7 +48,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@docket/ui/primitives';
+} from '../../primitives';
 import type { JSX, ReactNode } from 'react';
 
 /** Props for {@link ConfirmDestructiveDialog}. */

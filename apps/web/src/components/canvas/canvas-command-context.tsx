@@ -15,7 +15,7 @@ import {
   useState,
 } from 'react';
 
-import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
+import { ConfirmDestructiveDialog } from '@docket/ui/components';
 import { useSelection } from '@/components/selection';
 import type { ObjectKind, ObjectRef } from '@/lib/actions';
 

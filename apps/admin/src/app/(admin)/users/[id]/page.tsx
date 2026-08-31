@@ -1,242 +1,198 @@
 'use client';
 
-import {
-  Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  Input,
-  Skeleton,
-} from '@docket/ui/primitives';
-import Link from 'next/link';
+import { EmptyState, IdentityGlyph } from '@docket/ui/components';
+import { Building } from '@docket/ui/icons';
+import { Button, ControlGroup, Input, Stack, Text } from '@docket/ui/primitives';
 import { useParams } from 'next/navigation';
-import { type JSX, useCallback, useEffect, useState } from 'react';
+import { type JSX, useState } from 'react';
 
+import { AsyncContent, QueryErrorBanner } from '@/components/admin-feedback';
+import { DetailBackLink, DetailSkeleton, Property, PropertyList } from '@/components/admin-detail';
+import { AdminPage, AdminPageHeader, AdminSection } from '@/components/admin-page';
+import { AdminList, AdminListRow } from '@/components/admin-table';
 import { useImpersonation } from '@/components/impersonation';
-import {
-  EmptyState,
-  ErrorBanner,
-  LifecycleBadge,
-  PageHeader,
-  ROW_CLASS,
-  SignInAction,
-} from '@/components/ui-bits';
+import { LifecycleBadge } from '@/components/lifecycle-badge';
 import { api } from '@/lib/api';
 import { formatTimestamp } from '@/lib/lifecycle';
-import { isAuthError, userErrorMessage, userProblemMessage } from '@/lib/problem';
-import type { AdminUserDetail } from '@/lib/types';
+import { apiQueryOptions, queryKeys, useApiMutation, useApiQuery } from '@/lib/query';
+import type { AdminMembership, AdminUserDetail } from '@/lib/types';
 
 /** Default impersonation session lifetime, in minutes (the API caps this at 480). */
 const IMPERSONATION_TTL_MINUTES = 60;
 
+/** One user with their cross-org memberships. */
+function userDef(id: string) {
+  return apiQueryOptions(
+    queryKeys.user(id),
+    () => api.admin.users[':id'].$get({ param: { id } }),
+    'Could not load this user.',
+  );
+}
+
 /**
- * The user detail screen: a user and their org memberships, with an inline "View as"
- * (impersonation) action.
+ * The user detail screen: a user, their org memberships, and the "View as" action.
  *
  * @remarks
- * A Client Component. Reads `GET /admin/users/:id` (the user plus every cross-org
- * membership) at runtime. The "View as" control starts a time-boxed impersonation via
- * `POST /admin/impersonations` (requires a free-text reason) and records it in the
+ * The "View as" control starts a time-boxed impersonation via `POST /admin/impersonations`
+ * (requiring a free-text reason, which is recorded in the audit log) and registers it with the
  * {@link useImpersonation} context so the persistent banner appears across the console.
  */
 export default function UserDetailPage(): JSX.Element {
   const params = useParams<{ id: string }>();
-  const { start: startImpersonation } = useImpersonation();
-  const [detail, setDetail] = useState<AdminUserDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [authFailed, setAuthFailed] = useState(false);
+  const query = useApiQuery(userDef(params.id));
+  const detail = query.data;
 
+  return (
+    <AdminPage width="form">
+      <DetailBackLink href="/users" label="users" />
+
+      <QueryErrorBanner
+        error={query.error}
+        fallback="Could not load this user."
+        onRetry={() => void query.refetch()}
+      />
+
+      <AsyncContent
+        loading={query.isPending}
+        empty={detail === undefined}
+        skeleton={<DetailSkeleton />}
+        emptyState={<></>}
+      >
+        {detail ? <UserDetail detail={detail} /> : null}
+      </AsyncContent>
+    </AdminPage>
+  );
+}
+
+/** Everything the screen shows once the user has loaded. */
+function UserDetail({ detail }: { readonly detail: AdminUserDetail }): JSX.Element {
+  return (
+    <Stack gap={6}>
+      <AdminPageHeader
+        title={detail.user.name || detail.user.email}
+        description={detail.user.email}
+      />
+
+      <AdminSection title="Account">
+        <PropertyList>
+          <Property label="User ID" value={detail.user.id} identifier />
+          <Property label="Email verified" value={detail.user.emailVerified ? 'Yes' : 'No'} />
+          <Property label="Joined" value={formatTimestamp(detail.user.createdAt)} />
+        </PropertyList>
+      </AdminSection>
+
+      <ViewAsUser userId={detail.user.id} label={detail.user.name || detail.user.email} />
+
+      <AdminSection title={`Organization memberships (${detail.memberships.length})`}>
+        <Memberships memberships={detail.memberships} />
+      </AdminSection>
+    </Stack>
+  );
+}
+
+/** The impersonation control: a required reason and the action that starts the session. */
+function ViewAsUser({
+  userId,
+  label,
+}: {
+  readonly userId: string;
+  readonly label: string;
+}): JSX.Element {
+  const { start } = useImpersonation();
   const [reason, setReason] = useState('');
-  const [impersonating, setImpersonating] = useState(false);
-  const [impersonateError, setImpersonateError] = useState<string | null>(null);
 
-  /** Load the user and their memberships. */
-  const load = useCallback(async (): Promise<void> => {
-    setLoading(true);
-    setError(null);
-    setAuthFailed(false);
-    try {
-      const res = await api.admin.users[':id'].$get({ param: { id: params.id } });
-      if (!res.ok) {
-        setAuthFailed(isAuthError(res));
-        setError(await userProblemMessage(res, 'Could not load this user.'));
-        return;
-      }
-      setDetail(await res.json());
-    } catch (caught) {
-      setError(userErrorMessage(caught, 'Something went wrong loading this user.'));
-    } finally {
-      setLoading(false);
-    }
-  }, [params.id]);
+  const impersonate = useApiMutation(
+    (variables: { reason: string }) =>
+      api.admin.impersonations.$post({
+        json: {
+          targetUserId: userId,
+          reason: variables.reason,
+          ttlMinutes: IMPERSONATION_TTL_MINUTES,
+        },
+      }),
+    'Could not start impersonation.',
+    {
+      onSuccess: (session) => {
+        start({
+          id: session.id,
+          targetUserId: session.targetUserId,
+          targetLabel: label,
+          expiresAt: session.expiresAt,
+        });
+        setReason('');
+      },
+    },
+  );
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  return (
+    <AdminSection
+      title="View as user"
+      description="Start a time-boxed impersonation session. The reason is recorded in the audit log."
+    >
+      <QueryErrorBanner error={impersonate.error} fallback="Could not start impersonation." />
+      <form
+        className="flex flex-col gap-2 @lg:flex-row"
+        onSubmit={(event) => {
+          event.preventDefault();
+          impersonate.mutate({ reason });
+        }}
+      >
+        <Input
+          value={reason}
+          onChange={(event) => {
+            setReason(event.target.value);
+          }}
+          placeholder="Reason for impersonation"
+          required
+          aria-label="Reason for impersonation"
+          className="flex-1"
+        />
+        <ControlGroup controlSize="md">
+          <Button type="submit" disabled={impersonate.isPending || reason.trim().length === 0}>
+            {impersonate.isPending ? 'Starting…' : 'View as'}
+          </Button>
+        </ControlGroup>
+      </form>
+    </AdminSection>
+  );
+}
 
-  /** Start a time-boxed impersonation of this user, with the entered reason. */
-  async function viewAs(): Promise<void> {
-    if (!detail) return;
-    setImpersonateError(null);
-    setImpersonating(true);
-    try {
-      const res = await api.admin.impersonations.$post({
-        json: { targetUserId: detail.user.id, reason, ttlMinutes: IMPERSONATION_TTL_MINUTES },
-      });
-      if (!res.ok) {
-        setImpersonateError(await userProblemMessage(res, 'Could not start impersonation.'));
-        return;
-      }
-      const session = await res.json();
-      startImpersonation({
-        id: session.id,
-        targetUserId: session.targetUserId,
-        targetLabel: detail.user.name || detail.user.email,
-        expiresAt: session.expiresAt,
-      });
-      setReason('');
-    } catch (caught) {
-      setImpersonateError(userErrorMessage(caught, 'Something went wrong starting impersonation.'));
-    } finally {
-      setImpersonating(false);
-    }
+/** The organizations this user belongs to, or a note that they belong to none. */
+function Memberships({
+  memberships,
+}: {
+  readonly memberships: readonly AdminMembership[];
+}): JSX.Element {
+  if (memberships.length === 0) {
+    return (
+      <EmptyState
+        icon={Building}
+        title="No memberships"
+        body="This account does not belong to any organization."
+      />
+    );
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-8">
-      <Link
-        href="/users"
-        className="text-on-surface-variant hover:text-on-surface focus-visible:ring-ring text-body-medium w-fit rounded-sm underline-offset-4 transition-colors hover:underline focus-visible:ring-1 focus-visible:outline-none"
-      >
-        ← Back to users
-      </Link>
-
-      {loading ? (
-        <DetailSkeleton />
-      ) : detail ? (
-        <>
-          <PageHeader
-            title={detail.user.name || detail.user.email}
-            description={detail.user.email}
-          />
-          <ErrorBanner message={error} />
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-body-medium">Account</CardTitle>
-            </CardHeader>
-            <CardContent className="text-body-medium grid grid-cols-2 gap-4 sm:grid-cols-3">
-              <Field label="User ID" value={detail.user.id} mono />
-              <Field label="Email verified" value={detail.user.emailVerified ? 'Yes' : 'No'} />
-              <Field label="Joined" value={formatTimestamp(detail.user.createdAt)} />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-body-medium">View as user</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3">
-              <p className="text-on-surface-variant text-body-medium">
-                Start a time-boxed impersonation session. A reason is recorded in the audit log.
-              </p>
-              <ErrorBanner message={impersonateError} />
-              <form
-                className="flex flex-col gap-2 sm:flex-row"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void viewAs();
-                }}
-              >
-                <Input
-                  value={reason}
-                  onChange={(e) => {
-                    setReason(e.target.value);
-                  }}
-                  placeholder="Reason for impersonation"
-                  required
-                  aria-label="Reason for impersonation"
-                  className="flex-1"
-                />
-                <Button type="submit" disabled={impersonating || reason.trim().length === 0}>
-                  {impersonating ? 'Starting…' : 'View as'}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-
-          <section className="flex flex-col gap-3" aria-labelledby="memberships-heading">
-            <h2
-              id="memberships-heading"
-              className="text-on-surface-variant text-body-medium font-medium"
-            >
-              Organization memberships ({detail.memberships.length})
-            </h2>
-            {detail.memberships.length > 0 ? (
-              <ul className="flex flex-col gap-1.5">
-                {detail.memberships.map((m) => (
-                  <li key={m.actorId}>
-                    <Link
-                      href={`/orgs/${m.organizationId}`}
-                      className={`${ROW_CLASS} items-center justify-between gap-3 rounded-lg px-4 py-3`}
-                    >
-                      <div className="min-w-0">
-                        <p className="text-body-medium truncate font-medium">
-                          {m.organizationName}
-                        </p>
-                        <p className="text-on-surface-variant truncate text-xs">
-                          {m.organizationSlug}
-                        </p>
-                      </div>
-                      <LifecycleBadge state={m.lifecycleState} />
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <EmptyState message="This user has no organization memberships." />
-            )}
-          </section>
-        </>
-      ) : (
-        <ErrorBanner message={error} action={authFailed ? <SignInAction /> : null} />
-      )}
-    </div>
-  );
-}
-
-/** A labeled read-only field in the account card. */
-function Field({
-  label,
-  value,
-  mono = false,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-}): JSX.Element {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-on-surface-variant text-xs tracking-wide uppercase">{label}</span>
-      <span
-        className={`text-body-medium ${mono ? 'truncate font-mono text-xs' : ''}`}
-        title={value}
-      >
-        {value}
-      </span>
-    </div>
-  );
-}
-
-/** A loading placeholder for the user detail screen. */
-function DetailSkeleton(): JSX.Element {
-  return (
-    <div className="flex flex-col gap-4">
-      <Skeleton className="h-8 w-64 rounded-md" />
-      <Skeleton className="h-28 w-full rounded-lg" />
-      <Skeleton className="h-28 w-full rounded-lg" />
-    </div>
+    <AdminList label="Organization memberships">
+      {memberships.map((membership) => (
+        <AdminListRow
+          key={membership.actorId}
+          href={`/orgs/${membership.organizationId}`}
+          leading={
+            <IdentityGlyph size={20}>
+              <Building className="size-3" />
+            </IdentityGlyph>
+          }
+          title={membership.organizationName}
+          subtitle={
+            <Text as="span" token="body-small" tone="muted" className="font-mono">
+              {membership.organizationSlug}
+            </Text>
+          }
+          trailing={<LifecycleBadge state={membership.lifecycleState} />}
+        />
+      ))}
+    </AdminList>
   );
 }

@@ -18,7 +18,7 @@ import {
 import { useTypedRoute } from '@/lib/app-location';
 import { type JSX, useEffect, useMemo, useState } from 'react';
 
-import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
+import { ConfirmDestructiveDialog } from '@docket/ui/components';
 import { TemplateAwareEntityDocument } from '@/components/editor/apply-description-template';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { EditableSubtitle } from '@/components/editor/editable-subtitle';

@@ -16,7 +16,7 @@ import { Badge, Button, Field, Input, Select, Skeleton } from '@docket/ui/primit
 import NextLink from '@/components/docket-link';
 import { type JSX, useEffect, useRef, useState } from 'react';
 
-import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
+import { ConfirmDestructiveDialog } from '@docket/ui/components';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { LoadFailure } from './load-failure';
 import { SettingRow } from './setting-row';

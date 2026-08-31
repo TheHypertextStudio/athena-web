@@ -186,6 +186,16 @@ export interface TextProps extends React.HTMLAttributes<HTMLElement> {
    * not a new size, which is why it lives here rather than as a raw utility at the callsite.
    */
   readonly numeric?: boolean | undefined;
+  /**
+   * Associate the text with a form control, for `as="label"`.
+   *
+   * @remarks
+   * `HTMLAttributes` does not carry `htmlFor` — only `LabelHTMLAttributes` does — so a `Text`
+   * rendering `as="label"` could not name the control it labels, which is the entire job of a
+   * label. Declared here rather than widening the whole prop type, so the escape stays one named
+   * attribute. `Surface` carries the same prop for the same reason.
+   */
+  readonly htmlFor?: string | undefined;
 }
 
 /**

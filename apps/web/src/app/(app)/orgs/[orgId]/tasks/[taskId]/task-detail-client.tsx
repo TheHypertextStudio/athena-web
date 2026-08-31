@@ -12,7 +12,7 @@ import { type JSX, useCallback, useEffect, useMemo, useState } from 'react';
 import { useDocumentTitle } from '@/components/tabs/use-document-title';
 import { useRegisterTabTitle } from '@/components/tabs/use-register-tab-title';
 import TaskGraphPanel from '@/components/canvas/task-graph-panel';
-import { ConfirmDestructiveDialog } from '@/components/confirm-destructive-dialog';
+import { ConfirmDestructiveDialog } from '@docket/ui/components';
 import { ResourcesTab } from '@/components/entity-detail/resources-tab';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { EntityIconPicker } from '@/components/entity-display/entity-icon-picker';

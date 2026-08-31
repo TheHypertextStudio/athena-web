@@ -125,7 +125,6 @@ jobs:
           ATHENA_ASYNC_RUNNER_ENABLED: "false"
           ATHENA_LATTICE_SUBMISSIONS_ENABLED: "${{ vars.ATHENA_LATTICE_SUBMISSIONS_ENABLED || 'false' }}"
           ATHENA_LATTICE_POLLING_ENABLED: "${{ vars.ATHENA_LATTICE_POLLING_ENABLED || 'false' }}"
-          LATTICE_CLIENT_ID: "${{ vars.LATTICE_CLIENT_ID }}"
           LATTICE_ACCOUNTS_ISSUER: "https://auth.uselovelace.com"
           LATTICE_GATEWAY_URL: "https://lattice.uselovelace.com"
           BILLING_CANARY_EMAILS: "${{ vars.BILLING_CANARY_EMAILS }}"

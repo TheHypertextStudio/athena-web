@@ -25,6 +25,8 @@ function validApiEnv(): Record<string, string> {
     LINEAR_AGENT_ENABLED: 'false',
     AGENT_MAX_TURNS: '24',
     ATHENA_ASYNC_RUNNER_ENABLED: 'false',
+    ATHENA_LATTICE_SUBMISSIONS_ENABLED: 'false',
+    ATHENA_LATTICE_POLLING_ENABLED: 'false',
     CRON_SECRET: 'test-cron-secret',
     BILLING_ENABLED: 'false',
     BILLING_RECONCILIATION_MODE: 'off',

@@ -1,53 +1,45 @@
-import {
-  Badge,
-  Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  Input,
-  Select,
-} from '@docket/ui/primitives';
-import type { JSX, SyntheticEvent } from 'react';
+'use client';
 
-import { EmptyState, ErrorBanner, PageHeader, ROW_CLASS } from '@/components/ui-bits';
+import { EmptyState, InlineBanner } from '@docket/ui/components';
+import { Bell, RefreshCw } from '@docket/ui/icons';
+import { Badge, Button, Stack, Tabs, Text } from '@docket/ui/primitives';
+import { type JSX, useState } from 'react';
+
+import { QueryErrorBanner } from '@/components/admin-feedback';
+import { AdminPage, AdminPageHeader, AdminSection } from '@/components/admin-page';
+import { AdminList, AdminListRow } from '@/components/admin-table';
 import type {
   AdminNotificationEstimate,
   AdminNotificationIntent,
   AdminNotificationPreview,
 } from '@/lib/types';
-import {
-  notificationAudienceSegments,
-  type NotificationAnnouncementDraft,
-} from './notification-console-model';
+import { ComposeStage } from './compose-stage';
+import { MonitorStage } from './monitor-stage';
+import type {
+  NotificationMonitorAuditEvent,
+  NotificationMonitorDelivery,
+  NotificationMonitorInboundEvent,
+} from './monitor-stage';
+import type { NotificationAnnouncementDraft } from './notification-console-model';
+import { ReviewStage } from './review-stage';
+import { SendStage } from './send-stage';
 
-/** Minimal delivery row shown in the monitor panel. */
-export interface NotificationMonitorDelivery {
-  /** Delivery id. */
-  readonly id: string;
-  /** Delivery channel. */
-  readonly channel: string;
-  /** Delivery status. */
-  readonly status: string;
-}
+export type {
+  NotificationMonitorAuditEvent,
+  NotificationMonitorDelivery,
+  NotificationMonitorInboundEvent,
+} from './monitor-stage';
 
-/** Minimal inbound event row shown in the monitor panel. */
-export interface NotificationMonitorInboundEvent {
-  /** Inbound event id. */
-  readonly id: string;
-  /** Event channel. */
-  readonly channel: string;
-  /** Event kind. */
-  readonly kind: string;
-}
+/** The stages an announcement moves through, in order. */
+const STAGES = [
+  { value: 'compose', label: 'Compose' },
+  { value: 'review', label: 'Review' },
+  { value: 'send', label: 'Send' },
+  { value: 'monitor', label: 'Monitor' },
+] as const;
 
-/** Minimal operator audit row shown in the monitor panel. */
-export interface NotificationMonitorAuditEvent {
-  /** Audit event id. */
-  readonly id: string;
-  /** Audit event type. */
-  readonly type: string;
-}
+/** One stage of the announcement workflow. */
+type Stage = (typeof STAGES)[number]['value'];
 
 /** Props for {@link NotificationAnnouncementConsole}. */
 export interface NotificationAnnouncementConsoleProps {
@@ -94,13 +86,21 @@ export interface NotificationAnnouncementConsoleProps {
   readonly onSelectIntent: (id: string) => void;
 }
 
-const channels = ['web', 'email', 'sms', 'push'] as const;
 /**
- * The staff service-announcement console surface.
+ * The staff service-announcement console.
  *
  * @remarks
- * This component is intentionally presentational: the routed page owns API calls and state, while
- * this surface keeps the compose, review, and monitor workflow testable without browser globals.
+ * Composing, estimating, previewing, sending, and monitoring an announcement is a sequence: you
+ * cannot preview what you have not composed, and you should not send what you have not previewed.
+ * The console used to render all five as a flat mosaic of six equally-weighted cards with a fixed
+ * minimum height, which stated none of that order — an operator had to already know the workflow to
+ * use the screen.
+ *
+ * The work is now staged, with the announcement list beside it. Stages past Compose need a selected
+ * announcement, so they stay unavailable until one exists rather than presenting empty panels.
+ *
+ * Intentionally presentational: the routed page owns the API calls and state, which keeps this
+ * whole workflow testable without browser globals.
  */
 export function NotificationAnnouncementConsole({
   intents,
@@ -123,513 +123,180 @@ export function NotificationAnnouncementConsole({
   onCancel,
   onSelectIntent,
 }: NotificationAnnouncementConsoleProps): JSX.Element {
-  const recipientLabel = estimate
-    ? `${estimate.recipientCount} recipient${estimate.recipientCount === 1 ? '' : 's'}`
-    : 'No estimate';
-  const disableSelectedActions = !selectedIntent || pendingAction !== null;
-
-  function submit(event: SyntheticEvent<HTMLFormElement>): void {
-    event.preventDefault();
-    onCreateDraft();
-  }
+  const [stage, setStage] = useState<Stage>('compose');
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 p-8">
-      <PageHeader
+    <AdminPage width="console">
+      <AdminPageHeader
         title="Service announcements"
         description="Compose, review, send, and monitor operational notifications."
         actions={
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={pendingAction !== null}
-            onClick={onRefreshReview}
-          >
+          <Button variant="outline" disabled={pendingAction !== null} onClick={onRefreshReview}>
+            <RefreshCw aria-hidden="true" className="size-4" />
             Refresh
           </Button>
         }
       />
-      <ErrorBanner message={error} />
+
+      <QueryErrorBanner error={error} fallback="Could not complete that action." />
       {statusMessage ? (
-        <div className="border-outline-variant bg-surface-container-low text-on-surface text-body-medium rounded-lg border px-3 py-2">
+        <InlineBanner tone="info" title="Done">
           {statusMessage}
-        </div>
+        </InlineBanner>
       ) : null}
 
-      <div className="grid min-h-[42rem] gap-6 xl:grid-cols-[20rem_minmax(0,1fr)]">
-        <section className="flex flex-col gap-3" aria-labelledby="notification-list-heading">
-          <div className="flex items-center justify-between gap-3">
-            <h2 id="notification-list-heading" className="text-body-medium font-medium">
-              Recent intents
-            </h2>
-            <Badge>{intents.length}</Badge>
-          </div>
-          {intents.length > 0 ? (
-            <ul className="flex flex-col gap-1.5">
-              {intents.map((intent) => (
-                <li key={intent.id}>
-                  <button
-                    type="button"
-                    className={`${ROW_CLASS} w-full flex-col items-start gap-1 rounded-lg px-3 py-2.5 text-left ${
-                      selectedIntent?.id === intent.id ? 'bg-surface-container-highest' : ''
-                    }`}
-                    onClick={() => {
-                      onSelectIntent(intent.id);
-                    }}
-                  >
-                    <span className="text-body-medium line-clamp-2 font-medium">
-                      {intent.subject}
-                    </span>
-                    <span className="text-on-surface-variant text-xs">
-                      {intent.status} · {intent.priority}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <EmptyState message="No notification intents yet." />
-          )}
-        </section>
-
-        <div className="grid gap-4 lg:grid-cols-2">
-          <ComposeCard
-            draft={draft}
-            pending={pendingAction === 'create'}
-            onDraftChange={onDraftChange}
-            onSubmit={submit}
+      <div className="grid gap-6 @4xl:grid-cols-[20rem_minmax(0,1fr)]">
+        <AdminSection title={`Announcements (${intents.length})`}>
+          <IntentList
+            intents={intents}
+            selectedId={selectedIntent?.id ?? null}
+            onSelect={onSelectIntent}
           />
-          <AudienceCard estimate={estimate} recipientLabel={recipientLabel} />
-          <ChannelsCard estimate={estimate} />
-          <PreviewCard preview={preview} />
-          <ReviewCard
+        </AdminSection>
+
+        <Stack gap={4}>
+          <Tabs
+            label="Announcement workflow"
+            value={stage}
+            onValueChange={(next) => {
+              setStage(next as Stage);
+            }}
+            items={STAGES.map((entry) => ({
+              value: entry.value,
+              label: entry.label,
+              disabled: entry.value !== 'compose' && !selectedIntent,
+            }))}
+          />
+
+          <StagePanel
+            stage={stage}
             selectedIntent={selectedIntent}
             estimate={estimate}
+            preview={preview}
+            deliveries={deliveries}
+            inboundEvents={inboundEvents}
+            auditEvents={auditEvents}
+            draft={draft}
             pendingAction={pendingAction}
-            disabled={disableSelectedActions}
+            onDraftChange={onDraftChange}
+            onCreateDraft={onCreateDraft}
             onTestSend={onTestSend}
             onApprove={onApprove}
             onSendNow={onSendNow}
             onCancel={onCancel}
           />
-          <MonitorCard
-            deliveries={deliveries}
-            inboundEvents={inboundEvents}
-            auditEvents={auditEvents}
-          />
-        </div>
+        </Stack>
       </div>
-    </div>
+    </AdminPage>
   );
 }
 
-function ComposeCard({
-  draft,
-  pending,
-  onDraftChange,
-  onSubmit,
-}: {
-  readonly draft: NotificationAnnouncementDraft;
-  readonly pending: boolean;
-  readonly onDraftChange: NotificationAnnouncementConsoleProps['onDraftChange'];
-  readonly onSubmit: (event: SyntheticEvent<HTMLFormElement>) => void;
-}): JSX.Element {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-body-medium">Compose</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form className="flex flex-col gap-4" onSubmit={onSubmit}>
-          <Field label="Title">
-            <Input
-              value={draft.subject}
-              onChange={(event) => {
-                onDraftChange('subject', event.target.value);
-              }}
-              placeholder="Scheduled maintenance tonight"
-            />
-          </Field>
-          <Field label="Body">
-            <textarea
-              value={draft.bodyText}
-              onChange={(event) => {
-                onDraftChange('bodyText', event.target.value);
-              }}
-              className="border-outline bg-surface text-on-surface placeholder:text-on-surface-variant focus-visible:ring-ring min-h-24 rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
-              placeholder="Docket will be briefly unavailable tonight."
-            />
-          </Field>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Audience">
-              <Select
-                value={draft.audienceType}
-                onChange={(event) => {
-                  onDraftChange(
-                    'audienceType',
-                    event.target.value as NotificationAnnouncementDraft['audienceType'],
-                  );
-                }}
-              >
-                <option value="user">One user</option>
-                <option value="users">Specific users</option>
-                <option value="segment">Segment</option>
-                <option value="all_users">All users</option>
-              </Select>
-            </Field>
-            {draft.audienceType === 'segment' ? (
-              <Field label="Segment">
-                <Select
-                  value={draft.audienceValue}
-                  onChange={(event) => {
-                    onDraftChange('audienceValue', event.target.value);
-                  }}
-                >
-                  {notificationAudienceSegments.map((segment) => (
-                    <option key={segment} value={segment}>
-                      {segment}
-                    </option>
-                  ))}
-                </Select>
-              </Field>
-            ) : (
-              <Field label={draft.audienceType === 'users' ? 'User ids' : 'User id'}>
-                <Input
-                  value={draft.audienceValue}
-                  disabled={draft.audienceType === 'all_users'}
-                  onChange={(event) => {
-                    onDraftChange('audienceValue', event.target.value);
-                  }}
-                  placeholder={draft.audienceType === 'users' ? 'user_1, user_2' : 'user_1'}
-                />
-              </Field>
-            )}
-            <Field label="Priority">
-              <Select
-                value={draft.priority}
-                onChange={(event) => {
-                  onDraftChange(
-                    'priority',
-                    event.target.value as NotificationAnnouncementDraft['priority'],
-                  );
-                }}
-              >
-                {['low', 'normal', 'high', 'urgent'].map((priority) => (
-                  <option key={priority} value={priority}>
-                    {priority}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="Reply policy">
-              <Select
-                value={draft.replyPolicy}
-                onChange={(event) => {
-                  onDraftChange(
-                    'replyPolicy',
-                    event.target.value as NotificationAnnouncementDraft['replyPolicy'],
-                  );
-                }}
-              >
-                {['none', 'staff_inbox', 'org_admins', 'automation'].map((policy) => (
-                  <option key={policy} value={policy}>
-                    {policy}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="Channels">
-              <div className="border-outline-variant grid grid-cols-2 gap-2 rounded-md border p-2">
-                {channels.map((channel) => (
-                  <label key={channel} className="flex items-center gap-2 text-sm font-normal">
-                    <input
-                      type="checkbox"
-                      checked={draft.channels.includes(channel)}
-                      onChange={() => {
-                        onDraftChange('channels', toggleChannel(draft.channels, channel));
-                      }}
-                    />
-                    {channel}
-                  </label>
-                ))}
-              </div>
-            </Field>
-            <Field label="Schedule">
-              <Input
-                type="datetime-local"
-                value={draft.scheduledAt}
-                onChange={(event) => {
-                  onDraftChange('scheduledAt', event.target.value);
-                }}
-              />
-            </Field>
-          </div>
-          <Button
-            type="submit"
-            disabled={pending || draft.subject.trim() === '' || draft.bodyText.trim() === ''}
-          >
-            {pending ? 'Creating…' : 'Create draft'}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
-  );
-}
-
-function toggleChannel(
-  selected: readonly NotificationAnnouncementDraft['channels'][number][],
-  channel: NotificationAnnouncementDraft['channels'][number],
-): readonly NotificationAnnouncementDraft['channels'][number][] {
-  return selected.includes(channel)
-    ? selected.filter((item) => item !== channel)
-    : [...selected, channel];
-}
-
-function AudienceCard({
-  estimate,
-  recipientLabel,
-}: {
-  readonly estimate: AdminNotificationEstimate | null;
-  readonly recipientLabel: string;
-}): JSX.Element {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-body-medium">Audience</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        <p className="text-3xl font-semibold tabular-nums">{recipientLabel}</p>
-        {estimate?.approvalRequired ? (
-          <Badge variant="destructive">Approval required</Badge>
-        ) : (
-          <Badge variant="secondary">No approval gate</Badge>
-        )}
-        {estimate?.suppressions.length ? (
-          <ul className="flex flex-col gap-1">
-            {estimate.suppressions.map((suppression) => (
-              <li
-                key={`${suppression.channel ?? 'any'}:${suppression.reason}`}
-                className="text-on-surface-variant text-sm"
-              >
-                {suppression.count} {suppression.channel ?? 'channel'} ·{' '}
-                {formatReason(suppression.reason)}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-on-surface-variant text-sm">No suppressions estimated.</p>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function ChannelsCard({
-  estimate,
-}: {
-  readonly estimate: AdminNotificationEstimate | null;
-}): JSX.Element {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-body-medium">Channels</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="grid grid-cols-4 gap-2 text-center text-xs">
-          {channels.map((channel) => {
-            const counts = estimate?.channelCounts[channel];
-            return (
-              <div key={channel} className="border-outline-variant rounded-md border p-2">
-                <p className="font-medium">{channel}</p>
-                <p className="text-on-surface-variant mt-1">send {counts?.send ?? 0}</p>
-                <p className="text-on-surface-variant">delay {counts?.delay ?? 0}</p>
-                <p className="text-on-surface-variant">suppress {counts?.suppress ?? 0}</p>
-              </div>
-            );
-          })}
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function PreviewCard({
-  preview,
-}: {
-  readonly preview: AdminNotificationPreview | null;
-}): JSX.Element {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-body-medium">Preview</CardTitle>
-      </CardHeader>
-      <CardContent className="grid gap-3 sm:grid-cols-2">
-        {preview ? (
-          <>
-            <PreviewPane label="Web" title={preview.web?.title} body={preview.web?.body} />
-            <PreviewPane label="Email" title={preview.email?.subject} body={preview.email?.text} />
-            <PreviewPane label="SMS" body={preview.sms?.text} />
-            <PreviewPane label="Push" title={preview.push?.title} body={preview.push?.body} />
-          </>
-        ) : (
-          <p className="text-on-surface-variant text-sm">Select an intent to preview channels.</p>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function ReviewCard({
+/** Whichever stage is selected, or a prompt to select an announcement first. */
+function StagePanel({
+  stage,
   selectedIntent,
   estimate,
+  preview,
+  deliveries,
+  inboundEvents,
+  auditEvents,
+  draft,
   pendingAction,
-  disabled,
+  onDraftChange,
+  onCreateDraft,
   onTestSend,
   onApprove,
   onSendNow,
   onCancel,
 }: {
-  readonly selectedIntent: AdminNotificationIntent | null;
-  readonly estimate: AdminNotificationEstimate | null;
-  readonly pendingAction: string | null;
-  readonly disabled: boolean;
-  readonly onTestSend: () => void;
-  readonly onApprove: () => void;
-  readonly onSendNow: () => void;
-  readonly onCancel: () => void;
-}): JSX.Element {
+  readonly stage: Stage;
+} & Omit<
+  NotificationAnnouncementConsoleProps,
+  'intents' | 'error' | 'statusMessage' | 'onRefreshReview' | 'onSelectIntent'
+>): JSX.Element {
+  if (stage === 'compose') {
+    return (
+      <ComposeStage
+        draft={draft}
+        pending={pendingAction === 'create'}
+        recipientCount={estimate?.recipientCount}
+        onDraftChange={onDraftChange}
+        onCreateDraft={onCreateDraft}
+      />
+    );
+  }
+
+  if (!selectedIntent) {
+    return (
+      <EmptyState
+        icon={Bell}
+        title="No announcement selected"
+        body="Compose one, or choose an existing announcement to review it."
+      />
+    );
+  }
+
+  if (stage === 'review') {
+    return <ReviewStage estimate={estimate} preview={preview} />;
+  }
+
+  if (stage === 'send') {
+    return (
+      <SendStage
+        intent={selectedIntent}
+        estimate={estimate}
+        pendingAction={pendingAction}
+        disabled={pendingAction !== null}
+        onTestSend={onTestSend}
+        onApprove={onApprove}
+        onSendNow={onSendNow}
+        onCancel={onCancel}
+      />
+    );
+  }
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-body-medium">Review</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        <div className="grid gap-2 text-sm">
-          <FieldValue label="Status" value={selectedIntent?.status ?? 'None selected'} />
-          <FieldValue label="Category" value={selectedIntent?.category ?? 'service_announcement'} />
-          <FieldValue
-            label="Approval"
-            value={estimate?.approvalRequired ? 'Required' : 'Not required'}
-          />
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" disabled={disabled} onClick={onTestSend}>
-            {pendingAction === 'test' ? 'Sending…' : 'Test send'}
-          </Button>
-          <Button variant="outline" disabled={disabled} onClick={onApprove}>
-            {pendingAction === 'approve' ? 'Approving…' : 'Approve'}
-          </Button>
-          <Button disabled={disabled} onClick={onSendNow}>
-            {pendingAction === 'send' ? 'Sending…' : 'Send now'}
-          </Button>
-          <Button variant="outline" disabled={disabled} onClick={onCancel}>
-            {pendingAction === 'cancel' ? 'Canceling…' : 'Cancel'}
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+    <MonitorStage deliveries={deliveries} inboundEvents={inboundEvents} auditEvents={auditEvents} />
   );
 }
 
-function MonitorCard({
-  deliveries,
-  inboundEvents,
-  auditEvents,
+/** The announcements that exist, newest first. */
+function IntentList({
+  intents,
+  selectedId,
+  onSelect,
 }: {
-  readonly deliveries: readonly NotificationMonitorDelivery[];
-  readonly inboundEvents: readonly NotificationMonitorInboundEvent[];
-  readonly auditEvents: readonly NotificationMonitorAuditEvent[];
+  readonly intents: readonly AdminNotificationIntent[];
+  readonly selectedId: string | null;
+  readonly onSelect: (id: string) => void;
 }): JSX.Element {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-body-medium">Monitor</CardTitle>
-      </CardHeader>
-      <CardContent className="grid gap-4 md:grid-cols-3">
-        <MiniList title="Deliveries" items={deliveries.map((d) => `${d.channel} · ${d.status}`)} />
-        <MiniList title="Inbound" items={inboundEvents.map((e) => `${e.channel} · ${e.kind}`)} />
-        <MiniList title="Audit" items={auditEvents.map((event) => event.type)} />
-      </CardContent>
-    </Card>
-  );
-}
+  if (intents.length === 0) {
+    return (
+      <EmptyState
+        icon={Bell}
+        title="No announcements yet"
+        body="Compose one to tell every affected person what is happening."
+      />
+    );
+  }
 
-function Field({
-  label,
-  children,
-}: {
-  readonly label: string;
-  readonly children: JSX.Element;
-}): JSX.Element {
   return (
-    <label className="text-on-surface flex flex-col gap-1.5 text-sm font-medium">
-      {label}
-      {children}
-    </label>
+    <AdminList label="Announcements">
+      {intents.map((intent) => (
+        <AdminListRow
+          key={intent.id}
+          title={
+            <Text as="span" token="body-medium" className="line-clamp-2">
+              {intent.subject}
+            </Text>
+          }
+          selected={intent.id === selectedId}
+          trailing={<Badge variant="secondary">{intent.status.replaceAll('_', ' ')}</Badge>}
+          onActivate={() => {
+            onSelect(intent.id);
+          }}
+        />
+      ))}
+    </AdminList>
   );
-}
-
-function FieldValue({
-  label,
-  value,
-}: {
-  readonly label: string;
-  readonly value: string;
-}): JSX.Element {
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="text-on-surface-variant">{label}</span>
-      <span className="text-on-surface font-medium">{value}</span>
-    </div>
-  );
-}
-
-function PreviewPane({
-  label,
-  title,
-  body,
-}: {
-  readonly label: string;
-  readonly title?: string | undefined;
-  readonly body?: string | undefined;
-}): JSX.Element {
-  return (
-    <div className="border-outline-variant bg-surface-container-low rounded-md border p-3">
-      <p className="text-on-surface-variant text-xs font-medium">{label}</p>
-      {title ? <p className="text-on-surface mt-1 text-sm font-medium">{title}</p> : null}
-      <p className="text-on-surface-variant mt-1 line-clamp-3 text-sm">{body ?? 'Not requested'}</p>
-    </div>
-  );
-}
-
-function MiniList({
-  title,
-  items,
-}: {
-  readonly title: string;
-  readonly items: readonly string[];
-}): JSX.Element {
-  return (
-    <div className="flex flex-col gap-2">
-      <h3 className="text-sm font-medium">{title}</h3>
-      {items.length > 0 ? (
-        <ul className="flex flex-col gap-1">
-          {items.map((item) => (
-            <li key={item} className="text-on-surface-variant text-sm">
-              {item}
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="text-on-surface-variant text-sm">None yet</p>
-      )}
-    </div>
-  );
-}
-
-/** Render a suppression reason in staff-facing plain language. */
-export function formatReason(reason: string): string {
-  return reason.replaceAll('_', ' ');
 }

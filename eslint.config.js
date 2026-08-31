@@ -32,6 +32,7 @@ export default [
   ...menuStyleBoundaryConfig,
   ...serverComponentBoundaryConfig,
   ...semanticSurfaceCohortConfig([
+    'apps/admin/src/**/*.{ts,tsx}',
     'apps/web/src/components/athena/**/*.{ts,tsx}',
     'apps/web/src/components/agenda/**/*.{ts,tsx}',
     'apps/web/src/components/calendar/**/*.{ts,tsx}',

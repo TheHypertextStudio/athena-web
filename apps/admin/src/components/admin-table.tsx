@@ -119,8 +119,19 @@ export interface AdminListRowProps {
   readonly meta?: ReactNode;
   /** The trailing slot, pinned to the row's end. */
   readonly trailing?: ReactNode;
-  /** Where the row navigates to. */
-  readonly href: string;
+  /**
+   * Where the row navigates to.
+   *
+   * @remarks
+   * Omit for a row that selects rather than navigates — a master–detail queue, where activating a
+   * row swaps the pane beside it instead of changing route. Supply {@link AdminListRowProps.onActivate}
+   * in that case, and the row renders a `<button>` rather than an `<a>`.
+   */
+  readonly href?: string | undefined;
+  /** Activate a row that selects rather than navigates. */
+  readonly onActivate?: (() => void) | undefined;
+  /** Whether this row is the selected one, for a row that selects. */
+  readonly selected?: boolean | undefined;
 }
 
 /**
@@ -141,19 +152,33 @@ export function AdminListRow({
   meta,
   trailing,
   href,
+  onActivate,
+  selected,
 }: AdminListRowProps): JSX.Element {
+  const slots = {
+    title,
+    ...(leading ? { leading } : {}),
+    ...(subtitle ? { subtitle } : {}),
+    ...(meta ? { meta } : {}),
+    ...(trailing ? { trailing } : {}),
+    ...(selected === undefined ? {} : { selected }),
+  };
+
+  // A selecting row has no destination, so the shared row renders its own <button> and there is no
+  // link element to hand off to the router.
+  if (href === undefined) {
+    return <EntityListRow {...slots} {...(onActivate ? { onActivate } : {})} />;
+  }
+
   return (
     <EntityListRow
+      {...slots}
       href={href}
-      title={title}
-      {...(leading ? { leading } : {})}
-      {...(subtitle ? { subtitle } : {})}
-      {...(meta ? { meta } : {})}
-      {...(trailing ? { trailing } : {})}
+      {...(onActivate ? { onActivate } : {})}
       render={({ children, href: rowHref, ...rowProps }) => (
         // The row's render slot types `href` as optional, because a row without a destination is a
-        // button. This row always has one, so the outer `href` stands in and Link gets a definite
-        // string rather than a possibly-absent one.
+        // button. This branch always has one, so the outer `href` stands in and Link gets a
+        // definite string rather than a possibly-absent one.
         <Link href={rowHref ?? href} {...withoutUndefinedValues(rowProps)}>
           {children}
         </Link>

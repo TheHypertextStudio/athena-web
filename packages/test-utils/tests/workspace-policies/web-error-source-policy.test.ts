@@ -27,6 +27,11 @@ const PRODUCTION_SOURCE_ROOTS = ['apps/web/src', 'apps/admin/src'] as const;
  */
 const RAW_MESSAGE_BOUNDARIES = new Set([
   'apps/admin/src/lib/problem.ts',
+  // The admin console's data layer, and the mirror of `apps/web/src/lib/query-core.ts` below. The
+  // only messages it reads are ones a caller supplied: `readProblemError` in the boundary above
+  // always returns the caller's fallback as the message and carries through nothing but the stable
+  // Problem code, so a provider's `title`/`detail` cannot reach it.
+  'apps/admin/src/lib/query.ts',
   'apps/web/src/lib/problem.ts',
   'apps/web/src/lib/query-core.ts',
 ]);

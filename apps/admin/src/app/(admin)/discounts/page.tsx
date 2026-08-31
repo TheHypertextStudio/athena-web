@@ -1,277 +1,439 @@
 'use client';
 
-import { Button, Card, CardContent, CardHeader, CardTitle, Input } from '@docket/ui/primitives';
+import { EmptyState } from '@docket/ui/components';
+import { FileText, Tag } from '@docket/ui/icons';
+import { Badge, Button, ControlGroup, Input, Stack, Surface, Text } from '@docket/ui/primitives';
 import type { InferResponseType } from 'hono/client';
-import { useCallback, useEffect, useState, type JSX } from 'react';
+import { type JSX, useState } from 'react';
 
-import { ErrorBanner, PageHeader } from '@/components/ui-bits';
+import { AsyncContent, ListSkeleton, QueryErrorBanner } from '@/components/admin-feedback';
+import { AdminPage, AdminPageHeader, AdminSection } from '@/components/admin-page';
+import { AdminList, AdminListRow } from '@/components/admin-table';
+import { ConfirmButton } from '@/components/confirm-button';
 import { api } from '@/lib/api';
-import { userErrorMessage, userProblemMessage } from '@/lib/problem';
+import { apiQueryOptions, queryKeys, useApiMutation, useApiQuery } from '@/lib/query';
 
-type Queue = InferResponseType<(typeof api.admin)['discount-applications']['$get']>;
-type Application = Queue['items'][number];
-type Detail = InferResponseType<
+/** One application awaiting a finance decision. */
+type Application = InferResponseType<
+  (typeof api.admin)['discount-applications']['$get']
+>['items'][number];
+
+/** One application's evidence and decision history. */
+type ApplicationDetail = InferResponseType<
   (typeof api.admin)['discount-applications'][':applicationId']['$get']
 >;
-type Preview = InferResponseType<
+
+/** What approving an application would do at the provider. */
+type ApprovalPreview = InferResponseType<
   (typeof api.admin)['discount-applications'][':applicationId']['approval-previews']['$post']
 >;
 
-/** Finance queue for eligibility evidence, approval effects, and final decisions. */
+/** Bytes per kilobyte, for the evidence size readout. */
+const BYTES_PER_KB = 1024;
+
+/** The review queue and whether this operator may decide. */
+const queueDef = apiQueryOptions(
+  queryKeys.discounts(),
+  () => api.admin['discount-applications'].$get(),
+  'Could not load discount applications.',
+);
+
+/** One application's review detail. */
+function detailDef(applicationId: string) {
+  return apiQueryOptions(
+    queryKeys.discount(applicationId),
+    () => api.admin['discount-applications'][':applicationId'].$get({ param: { applicationId } }),
+    'Could not load the application review.',
+  );
+}
+
+/**
+ * The finance queue for discount applications.
+ *
+ * @remarks
+ * A decision here moves money, so the screen is built around one question at a time: pick an
+ * application, read its evidence, preview exactly what approval would do at the provider, then
+ * decide. Approval stays unavailable until that preview has been run — the API requires the
+ * preview's confirmation token, and the button now says so rather than failing on submit.
+ *
+ * The four decisions used to be four identical outline buttons in a horizontally scrolling row, so
+ * "Reject" looked exactly like "Preview approval". Approve is now the single primary action,
+ * requesting information is subordinate to it, and rejecting an application asks first.
+ */
 export default function DiscountsPage(): JSX.Element {
-  const [items, setItems] = useState<readonly Application[]>([]);
-  const [canDecide, setCanDecide] = useState(false);
-  const [selected, setSelected] = useState<Application | null>(null);
-  const [detail, setDetail] = useState<Detail | null>(null);
-  const [preview, setPreview] = useState<Preview | null>(null);
-  const [reason, setReason] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const queue = useApiQuery(queueDef);
 
-  const load = useCallback(async (): Promise<void> => {
-    setError(null);
-    try {
-      const response = await api.admin['discount-applications'].$get();
-      if (!response.ok) {
-        setError(await userProblemMessage(response, 'Could not load discount applications.'));
-        return;
-      }
-      const body = await response.json();
-      setItems(body.items);
-      setCanDecide(body.canDecide);
-      setSelected((current) =>
-        current ? (body.items.find((item) => item.id === current.id) ?? null) : null,
-      );
-    } catch (caught) {
-      setError(userErrorMessage(caught, 'Could not load discount applications.'));
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const open = async (application: Application): Promise<void> => {
-    setSelected(application);
-    setDetail(null);
-    setPreview(null);
-    setReason('');
-    const response = await api.admin['discount-applications'][':applicationId'].$get({
-      param: { applicationId: application.id },
-    });
-    if (response.ok) setDetail(await response.json());
-    else setError(await userProblemMessage(response, 'Could not load the application review.'));
-  };
-
-  const previewApproval = async (): Promise<void> => {
-    if (!selected) return;
-    setPending('preview');
-    setError(null);
-    try {
-      const response = await api.admin['discount-applications'][':applicationId'][
-        'approval-previews'
-      ].$post({ param: { applicationId: selected.id } });
-      if (response.ok) setPreview(await response.json());
-      else setError(await userProblemMessage(response, 'Could not preview the Stripe effects.'));
-    } finally {
-      setPending(null);
-    }
-  };
-
-  const decide = async (action: 'approve' | 'reject' | 'request-information'): Promise<void> => {
-    if (!selected || reason.trim().length === 0) return;
-    setPending(action);
-    setError(null);
-    try {
-      const response =
-        action === 'approve'
-          ? await api.admin['discount-applications'][':applicationId'].approvals.$post({
-              param: { applicationId: selected.id },
-              json: { reason, confirmation: preview?.confirmation ?? '' },
-            })
-          : action === 'reject'
-            ? await api.admin['discount-applications'][':applicationId'].rejections.$post({
-                param: { applicationId: selected.id },
-                json: { reason },
-              })
-            : await api.admin['discount-applications'][':applicationId'][
-                'information-requests'
-              ].$post({
-                param: { applicationId: selected.id },
-                json: { reason },
-              });
-      if (!response.ok) {
-        setError(await userProblemMessage(response, 'Could not record the finance decision.'));
-        return;
-      }
-      setSelected(null);
-      setDetail(null);
-      setPreview(null);
-      setReason('');
-      await load();
-    } catch (caught) {
-      setError(userErrorMessage(caught, 'Could not record the finance decision.'));
-    } finally {
-      setPending(null);
-    }
-  };
+  const items = queue.data?.items ?? [];
+  const canDecide = queue.data?.canDecide ?? false;
+  const selected = items.find((item) => item.id === selectedId) ?? null;
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-4 sm:p-8">
-      <PageHeader
+    <AdminPage width="console">
+      <AdminPageHeader
         title="Discount applications"
         description="Review eligibility and preview every Stripe effect before approval."
       />
-      <ErrorBanner message={error} />
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-body-medium">Review queue</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {items.length === 0 ? (
-              <p className="text-on-surface-variant text-body-medium">
-                No applications need review.
-              </p>
-            ) : (
-              <ul className="flex flex-col gap-2">
-                {items.map((application) => (
-                  <li key={application.id}>
-                    <button
-                      type="button"
-                      className="border-outline-variant hover:bg-surface-container-low focus-visible:ring-ring flex w-full flex-nowrap items-center justify-between gap-3 rounded-md border p-3 text-left focus-visible:ring-2 focus-visible:outline-none"
-                      onClick={() => void open(application)}
-                    >
-                      <span className="min-w-0">
-                        <span className="text-on-surface text-label-large block truncate">
-                          {application.organizationName}
-                        </span>
-                        <span className="text-on-surface-variant text-body-small">
-                          {application.programKey} · {application.status.replace('_', ' ')}
-                        </span>
-                      </span>
-                      <span className="text-on-surface-variant text-body-small shrink-0">
-                        Review
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-body-medium">Decision</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            {!selected ? (
-              <p className="text-on-surface-variant text-body-medium">
-                Select an application to inspect its evidence and history.
-              </p>
-            ) : (
-              <>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <p className="text-body-medium">Program: {selected.programKey}</p>
-                  <p className="text-body-medium">Evidence: {selected.evidenceType ?? 'None'}</p>
-                  {selected.institutionalEmail ? (
-                    <p className="text-body-medium">Email: {selected.institutionalEmail}</p>
-                  ) : null}
-                  {selected.ein ? <p className="text-body-medium">EIN: {selected.ein}</p> : null}
-                </div>
-                {detail?.evidence.length ? (
-                  <ul className="flex flex-col gap-2">
-                    {detail.evidence.map((evidence) => (
-                      <li key={evidence.id}>
-                        <a
-                          className="text-primary text-body-medium underline"
-                          href={`/admin/discount-applications/${selected.id}/evidence/${evidence.id}`}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          {evidence.fileName ?? evidence.evidenceType} (
-                          {Math.ceil(evidence.byteSize / 1024)} KB)
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
-                {detail?.events.length ? (
-                  <ol className="border-outline-variant flex flex-col gap-2 border-l pl-4">
-                    {detail.events.map((event) => (
-                      <li key={event.id} className="text-on-surface-variant text-body-small">
-                        {event.type.replaceAll('_', ' ')}
-                        {event.reason ? ` — ${event.reason}` : ''}
-                      </li>
-                    ))}
-                  </ol>
-                ) : null}
-                {canDecide ? (
-                  <Input
-                    value={reason}
-                    onChange={(event) => {
-                      setReason(event.target.value);
-                    }}
-                    placeholder="Required finance reason"
-                    aria-label="Finance decision reason"
-                  />
-                ) : (
-                  <p className="text-on-surface-variant text-body-small">
-                    Support can inspect this application. Finance records revenue decisions.
-                  </p>
-                )}
-                {preview ? (
-                  <div className="bg-surface-container-low flex flex-col gap-1 rounded-md p-3">
-                    <p className="text-label-large">
-                      {preview.percentOff}% through {new Date(preview.endsAt).toLocaleDateString()}
-                    </p>
-                    <p className="text-body-small">
-                      Provider action: {preview.providerAction.replaceAll('_', ' ')}
-                    </p>
-                    <p className="text-body-small">
-                      {preview.credit
-                        ? `Credit preview: ${(preview.credit.totalAmount / 100).toLocaleString(undefined, { style: 'currency', currency: preview.credit.currency.toUpperCase() })}`
-                        : 'No current-invoice credit is required.'}
-                    </p>
-                  </div>
-                ) : null}
-                {canDecide ? (
-                  <div className="flex flex-nowrap gap-2 overflow-x-auto">
-                    <Button
-                      variant="outline"
-                      onClick={() => void previewApproval()}
-                      disabled={pending !== null}
-                    >
-                      Preview approval
-                    </Button>
-                    <Button
-                      onClick={() => void decide('approve')}
-                      disabled={!preview || pending !== null || reason.trim().length === 0}
-                    >
-                      Approve
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => void decide('request-information')}
-                      disabled={pending !== null || reason.trim().length === 0}
-                    >
-                      Request information
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => void decide('reject')}
-                      disabled={pending !== null || reason.trim().length === 0}
-                    >
-                      Reject
-                    </Button>
-                  </div>
-                ) : null}
-              </>
-            )}
-          </CardContent>
-        </Card>
+      <QueryErrorBanner
+        error={queue.error}
+        fallback="Could not load discount applications."
+        onRetry={() => void queue.refetch()}
+      />
+
+      <div className="grid gap-6 @4xl:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
+        <AdminSection title={`Review queue (${items.length})`}>
+          <AsyncContent
+            loading={queue.isPending}
+            empty={items.length === 0}
+            skeleton={<ListSkeleton rows={4} />}
+            emptyState={
+              <EmptyState
+                icon={Tag}
+                title="Nothing to review"
+                body="No discount application is waiting on a finance decision."
+              />
+            }
+          >
+            <ReviewQueue
+              items={items}
+              selectedId={selectedId}
+              onSelect={(id) => {
+                setSelectedId(id);
+              }}
+            />
+          </AsyncContent>
+        </AdminSection>
+
+        <AdminSection title="Decision">
+          <DecisionPanel
+            application={selected}
+            canDecide={canDecide}
+            onDecided={() => {
+              setSelectedId(null);
+            }}
+          />
+        </AdminSection>
       </div>
+    </AdminPage>
+  );
+}
+
+/** The applications waiting on a decision, one selectable row each. */
+function ReviewQueue({
+  items,
+  selectedId,
+  onSelect,
+}: {
+  readonly items: readonly Application[];
+  readonly selectedId: string | null;
+  readonly onSelect: (id: string) => void;
+}): JSX.Element {
+  return (
+    <AdminList label="Applications awaiting review">
+      {items.map((application) => (
+        <AdminListRow
+          key={application.id}
+          title={application.organizationName}
+          subtitle={application.programKey}
+          selected={application.id === selectedId}
+          trailing={<Badge variant="secondary">{application.status.replaceAll('_', ' ')}</Badge>}
+          onActivate={() => {
+            onSelect(application.id);
+          }}
+        />
+      ))}
+    </AdminList>
+  );
+}
+
+/** The selected application's evidence, history, and decision controls. */
+function DecisionPanel({
+  application,
+  canDecide,
+  onDecided,
+}: {
+  readonly application: Application | null;
+  readonly canDecide: boolean;
+  readonly onDecided: () => void;
+}): JSX.Element {
+  if (!application) {
+    return (
+      <EmptyState
+        icon={FileText}
+        title="No application selected"
+        body="Choose an application to inspect its evidence and decision history."
+      />
+    );
+  }
+
+  return (
+    <ApplicationReview
+      key={application.id}
+      application={application}
+      canDecide={canDecide}
+      onDecided={onDecided}
+    />
+  );
+}
+
+/** One application under review, with its decision controls. */
+function ApplicationReview({
+  application,
+  canDecide,
+  onDecided,
+}: {
+  readonly application: Application;
+  readonly canDecide: boolean;
+  readonly onDecided: () => void;
+}): JSX.Element {
+  const [reason, setReason] = useState('');
+  const [preview, setPreview] = useState<ApprovalPreview | null>(null);
+  const detail = useApiQuery(detailDef(application.id));
+
+  const routes = api.admin['discount-applications'][':applicationId'];
+  const param = { applicationId: application.id };
+  const invalidates = [queryKeys.discounts(), queryKeys.discount(application.id)];
+
+  const runPreview = useApiMutation(
+    () => routes['approval-previews'].$post({ param }),
+    'Could not preview the Stripe effects.',
+    {
+      onSuccess: (result) => {
+        setPreview(result);
+      },
+    },
+  );
+
+  const approve = useApiMutation(
+    () =>
+      routes.approvals.$post({
+        param,
+        json: { reason, confirmation: preview?.confirmation ?? '' },
+      }),
+    'Could not record the finance decision.',
+    { invalidates, onSuccess: onDecided },
+  );
+
+  const requestInformation = useApiMutation(
+    () => routes['information-requests'].$post({ param, json: { reason } }),
+    'Could not record the finance decision.',
+    { invalidates, onSuccess: onDecided },
+  );
+
+  const reject = useApiMutation(
+    () => routes.rejections.$post({ param, json: { reason } }),
+    'Could not record the finance decision.',
+    { invalidates, onSuccess: onDecided },
+  );
+
+  const busy =
+    runPreview.isPending || approve.isPending || requestInformation.isPending || reject.isPending;
+  const noReason = reason.trim().length === 0;
+
+  return (
+    <Stack gap={4}>
+      <QueryErrorBanner
+        error={
+          detail.error ??
+          runPreview.error ??
+          approve.error ??
+          requestInformation.error ??
+          reject.error
+        }
+        fallback="Could not complete that action."
+      />
+
+      <ApplicationFacts application={application} />
+      <Evidence detail={detail.data} applicationId={application.id} />
+      <DecisionHistory detail={detail.data} />
+
+      {canDecide ? (
+        <Stack gap={3}>
+          <Input
+            value={reason}
+            onChange={(event) => {
+              setReason(event.target.value);
+            }}
+            placeholder="Required finance reason"
+            aria-label="Finance decision reason"
+          />
+
+          <PreviewResult preview={preview} />
+
+          <ControlGroup controlSize="md" wrap>
+            <Button
+              variant="outline"
+              disabled={busy}
+              onClick={() => {
+                runPreview.mutate(undefined);
+              }}
+            >
+              {runPreview.isPending ? 'Previewing…' : 'Preview approval'}
+            </Button>
+            <Button
+              disabled={busy || !preview || noReason}
+              onClick={() => {
+                approve.mutate(undefined);
+              }}
+            >
+              {approve.isPending ? 'Approving…' : 'Approve'}
+            </Button>
+            <Button
+              variant="ghost"
+              disabled={busy || noReason}
+              onClick={() => {
+                requestInformation.mutate(undefined);
+              }}
+            >
+              {requestInformation.isPending ? 'Requesting…' : 'Request information'}
+            </Button>
+            <ConfirmButton
+              label={reject.isPending ? 'Rejecting…' : 'Reject'}
+              disabled={busy || noReason}
+              pending={reject.isPending}
+              title="Reject this application?"
+              description={`${application.organizationName} is told their application was not approved. The reason you entered is recorded and sent with the decision.`}
+              confirmLabel="Reject application"
+              onConfirm={() => {
+                reject.mutate(undefined);
+              }}
+            />
+          </ControlGroup>
+
+          {preview ? null : (
+            <Text as="p" token="body-small" tone="muted">
+              Approval needs a preview first — it confirms exactly what changes at the provider.
+            </Text>
+          )}
+        </Stack>
+      ) : (
+        <Text as="p" token="body-small" tone="muted">
+          Support can inspect this application. Finance records revenue decisions.
+        </Text>
+      )}
+    </Stack>
+  );
+}
+
+/** What the applicant claimed and how they evidenced it. */
+function ApplicationFacts({ application }: { readonly application: Application }): JSX.Element {
+  return (
+    <dl className="grid gap-2 @lg:grid-cols-2">
+      <Fact label="Program" value={application.programKey} />
+      <Fact label="Evidence" value={application.evidenceType ?? 'None'} />
+      {application.institutionalEmail ? (
+        <Fact label="Institutional email" value={application.institutionalEmail} />
+      ) : null}
+      {application.ein ? <Fact label="EIN" value={application.ein} /> : null}
+    </dl>
+  );
+}
+
+/** One labelled application fact. */
+function Fact({ label, value }: { readonly label: string; readonly value: string }): JSX.Element {
+  return (
+    <div className="flex min-w-0 flex-col gap-0.5">
+      <Text as="dt" token="label-small" tone="muted">
+        {label}
+      </Text>
+      <Text as="dd" token="body-medium" truncate>
+        {value}
+      </Text>
     </div>
   );
+}
+
+/** The files the applicant submitted, each opening in a new tab. */
+function Evidence({
+  detail,
+  applicationId,
+}: {
+  readonly detail: ApplicationDetail | undefined;
+  readonly applicationId: string;
+}): JSX.Element | null {
+  if (!detail || detail.evidence.length === 0) return null;
+
+  return (
+    <Stack gap={1} as="ul">
+      {detail.evidence.map((file) => (
+        <li key={file.id}>
+          <Button asChild variant="ghost" controlSize="sm" className="w-full justify-start">
+            <a
+              href={`/admin/discount-applications/${applicationId}/evidence/${file.id}`}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <FileText aria-hidden="true" className="size-4" />
+              <span className="truncate">{file.fileName ?? file.evidenceType}</span>
+              <span className="text-on-surface-variant ml-auto shrink-0">
+                {Math.ceil(file.byteSize / BYTES_PER_KB)} KB
+              </span>
+            </a>
+          </Button>
+        </li>
+      ))}
+    </Stack>
+  );
+}
+
+/** What has already happened to this application. */
+function DecisionHistory({
+  detail,
+}: {
+  readonly detail: ApplicationDetail | undefined;
+}): JSX.Element | null {
+  if (!detail || detail.events.length === 0) return null;
+
+  return (
+    <Surface tone="card" shape="small" pad="comfortable">
+      <Stack gap={1} as="ol">
+        {detail.events.map((event) => (
+          <li key={event.id}>
+            <Text as="span" token="body-small" tone="muted">
+              {event.type.replaceAll('_', ' ')}
+              {event.reason ? ` — ${event.reason}` : ''}
+            </Text>
+          </li>
+        ))}
+      </Stack>
+    </Surface>
+  );
+}
+
+/** What approving would do at the provider, once previewed. */
+function PreviewResult({
+  preview,
+}: {
+  readonly preview: ApprovalPreview | null;
+}): JSX.Element | null {
+  if (!preview) return null;
+
+  return (
+    <Surface tone="card" shape="small" pad="comfortable">
+      <Stack gap={1}>
+        <Text as="p" token="label-large">
+          {preview.percentOff}% through {new Date(preview.endsAt).toLocaleDateString()}
+        </Text>
+        <Text as="p" token="body-small" tone="muted">
+          Provider action: {preview.providerAction.replaceAll('_', ' ')}
+        </Text>
+        <Text as="p" token="body-small" tone="muted">
+          {creditLine(preview.credit)}
+        </Text>
+      </Stack>
+    </Surface>
+  );
+}
+
+/** What credit approval would issue against the current invoice, if any. */
+function creditLine(
+  credit: { readonly totalAmount: number; readonly currency: string } | null | undefined,
+): string {
+  if (!credit) return 'No current-invoice credit is required.';
+  const amount = (credit.totalAmount / 100).toLocaleString(undefined, {
+    style: 'currency',
+    currency: credit.currency.toUpperCase(),
+  });
+  return `Credit preview: ${amount}`;
 }

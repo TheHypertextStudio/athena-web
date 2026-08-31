@@ -1,18 +1,4 @@
 {
-  "apps/admin/src/app/(admin)/discounts/page.tsx": {
-    "ad-hoc-border": 4
-  },
-  "apps/admin/src/app/(admin)/notifications/notification-console.tsx": {
-    "ad-hoc-border": 10,
-    "raw-type-utility": 26
-  },
-  "apps/admin/src/app/(auth)/sign-in/page.tsx": {
-    "raw-type-utility": 4
-  },
-  "apps/admin/src/components/ui-bits.tsx": {
-    "ad-hoc-border": 7,
-    "raw-type-utility": 1
-  },
   "apps/web/src/app/(app)/exports/[exportId]/page.tsx": {
     "raw-type-utility": 2
   },

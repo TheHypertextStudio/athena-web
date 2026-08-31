@@ -2,7 +2,7 @@
 
 import { AuthLayout } from '@docket/ui/components';
 import { useRedirectIfAuthenticated } from '@docket/ui/hooks';
-import { Button, Stack } from '@docket/ui/primitives';
+import { Button, Stack, Text } from '@docket/ui/primitives';
 import { useRouter } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 
@@ -171,17 +171,15 @@ export default function SignInPage(): JSX.Element {
 
   return (
     <AuthLayout
-      brand={
-        <span className="text-on-surface text-headline-small leading-none font-semibold tracking-tight">
-          Docket
-        </span>
-      }
+      brand={<Text token="headline-small">Docket</Text>}
       intro={
         <>
-          <h1 className="text-headline-small text-on-surface font-medium">Service admin</h1>
-          <p className="text-on-surface-variant text-body-medium">
+          <Text as="h1" token="headline-small">
+            Service admin
+          </Text>
+          <Text as="p" token="body-medium" tone="muted">
             Operator access only. Non-staff accounts are rejected.
-          </p>
+          </Text>
         </>
       }
     >

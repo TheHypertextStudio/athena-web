@@ -206,6 +206,10 @@ const UI_OWNERSHIP_SURFACES = [
   'packages/ui/src/components/**/*.{ts,tsx}',
   'apps/web/src/components/**/*.{ts,tsx}',
   'apps/web/src/app/(app)/**/*.{ts,tsx}',
+  // The operator console. It sat outside this list until its screens were migrated onto the shared
+  // shell, rows, and surface ramp, which is how it drifted into a different-looking product in the
+  // first place: three rules that hold the main app to the design system had never applied to it.
+  'apps/admin/src/**/*.{ts,tsx}',
 ];
 
 /** Keep every application roster on the one table primitive that owns column-header semantics. */

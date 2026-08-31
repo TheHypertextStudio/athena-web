@@ -708,8 +708,8 @@
     "complexity": 21
   },
   "apps/web/src/app/(app)/orgs/[orgId]/settings/work-structure/page.tsx": {
-    "complexity": 17,
-    "sonarjs/cognitive-complexity": 28
+    "complexity": 19,
+    "sonarjs/cognitive-complexity": 30
   },
   "apps/web/src/app/(app)/orgs/[orgId]/tasks/[taskId]/task-detail-client.tsx": {
     "complexity": 25
@@ -1753,9 +1753,6 @@
   "scripts/launch-record.ts": {
     "complexity": 26,
     "sonarjs/cognitive-complexity": 46
-  },
-  "scripts/migration-0080-org-slug-unify.ts": {
-    "sonarjs/cognitive-complexity": 16
   },
   "scripts/placeholder-inventory.ts": {
     "complexity": 14

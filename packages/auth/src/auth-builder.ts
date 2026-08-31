@@ -40,6 +40,7 @@ import { and, eq, inArray, ne } from 'drizzle-orm';
 import { generateAppleClientSecret, type AppleClientSecretInput } from './apple-secret';
 import { hasRecoveryCodes } from './backup-codes';
 import { changeEmailConfirmationEmail, recoveryCodeUsedEmail } from './emails';
+import { derivePasskeyLabel } from './passkey-label';
 import { recoveryChallenge } from './recovery-challenge';
 import { signupChallenge } from './signup-challenge';
 import { INTENT_IDENTIFIER_PREFIX, type SignupIntent } from './signup-intent';
@@ -482,6 +483,18 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
       ...(passkeyOrigins ? { origin: passkeyOrigins } : {}),
       registration: {
         requireSession: false,
+        afterVerification: ({ ctx, verification, clientData }) => {
+          const registrationInfo = verification.registrationInfo;
+          return {
+            name: derivePasskeyLabel({
+              aaguid: registrationInfo?.aaguid,
+              userAgent: ctx.headers?.get('user-agent'),
+              deviceType: registrationInfo?.credentialDeviceType,
+              backedUp: registrationInfo?.credentialBackedUp,
+              transports: clientData.response.transports,
+            }),
+          };
+        },
         resolveUser: ({ ctx, context }) =>
           resolvePasskeyUser(
             {

@@ -29,6 +29,7 @@
     "@docket/types": "workspace:*",
     "@simplewebauthn/server": "catalog:",
     "better-auth": "catalog:",
+    "bowser": "^2.14.1",
     "drizzle-orm": "catalog:",
     "zod": "catalog:"
   },

@@ -1364,6 +1364,79 @@ describe('buildAuthOptions env-gating', () => {
     expect(typeof registration?.['resolveUser']).toBe('function');
   });
 
+  it('derives a useful passkey label after registration when the client supplies none', async () => {
+    const { buildAuthOptions } = await import('../../src/index');
+    const opts = buildAuthOptions(baseEnv, MAILER_DEPS);
+    const pk = (opts.plugins ?? []).find((plugin) => plugin.id === 'passkey');
+    type AfterVerification = (args: {
+      ctx: { headers: Headers };
+      verification: {
+        registrationInfo: {
+          aaguid: string;
+          credentialDeviceType: 'singleDevice' | 'multiDevice';
+          credentialBackedUp: boolean;
+        };
+      };
+      user: { id: string; name: string };
+      clientData: { response: { transports?: string[] } };
+    }) => Promise<{ name?: string } | undefined>;
+    const registration = (
+      pk as { options?: { registration?: { afterVerification?: AfterVerification } } }
+    ).options?.registration;
+
+    expect(typeof registration?.afterVerification).toBe('function');
+    if (!registration?.afterVerification) return;
+
+    const baseArgs = {
+      ctx: { headers: new Headers() },
+      user: { id: 'user-1', name: 'Ada' },
+    };
+    const knownAuthenticator = await registration.afterVerification({
+      ...baseArgs,
+      verification: {
+        registrationInfo: {
+          aaguid: 'fbfc3007-154e-4ecc-8c0b-6e020557d7bd',
+          credentialDeviceType: 'multiDevice',
+          credentialBackedUp: true,
+        },
+      },
+      clientData: { response: { transports: ['internal', 'hybrid'] } },
+    });
+    expect(knownAuthenticator).toEqual({ name: 'Apple Passwords' });
+
+    const browserFallback = await registration.afterVerification({
+      ...baseArgs,
+      ctx: {
+        headers: new Headers({
+          'user-agent':
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/128.0.0.0 Safari/537.36',
+        }),
+      },
+      verification: {
+        registrationInfo: {
+          aaguid: '00000000-0000-0000-0000-000000000000',
+          credentialDeviceType: 'singleDevice',
+          credentialBackedUp: false,
+        },
+      },
+      clientData: { response: { transports: ['internal'] } },
+    });
+    expect(browserFallback).toEqual({ name: 'Chrome on macOS' });
+
+    const kindFallback = await registration.afterVerification({
+      ...baseArgs,
+      verification: {
+        registrationInfo: {
+          aaguid: '00000000-0000-0000-0000-000000000000',
+          credentialDeviceType: 'singleDevice',
+          credentialBackedUp: false,
+        },
+      },
+      clientData: { response: { transports: ['usb', 'nfc'] } },
+    });
+    expect(kindFallback).toEqual({ name: 'Security key' });
+  });
+
   it('allows the explicit Android origin without changing browser passkey origins', async () => {
     const { buildAuthOptions } = await import('../../src/index');
     const nativeOrigin = 'android:apk-key-hash:3zJp1NzJxP5y_mFioPTp7l8EFEfcs472qSV2_DiQ28c';

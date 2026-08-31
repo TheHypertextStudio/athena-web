@@ -1,29 +1,34 @@
 'use client';
 
 /**
- * `settings` — passkey management (list / add / rename / remove) for the Security tab.
+ * `settings` — turnkey passkey enrollment and post-creation management for the Security tab.
  *
  * @remarks
- * Docket is passwordless: a passkey is the primary credential, so this is where a signed-in user
- * curates the passkeys bound to their account. It lists every registered passkey (via the Better
- * Auth `passkey.listUserPasskeys()` client method), lets them **add** a passkey to the current
- * device/authenticator from an already-authenticated session (`passkey.addPasskey`) — the correct,
- * session-bound home for enrollment that replaces the removed unauthenticated registration path —
- * **rename** one in place (`passkey.updatePasskey`, autosaved via {@link EditableTitle} — no Save
- * button), and **remove** one (`passkey.deletePasskey`).
- *
- * Removing the *last* passkey would leave the account reachable only through recovery codes (or a
- * linked social provider), so that case gets an explicit, louder confirmation rather than the same
- * quiet prompt. Reads/writes go straight to the Better Auth client (passkeys are not a Hono REST
- * resource); the list is held in a TanStack query so mutations can invalidate and refetch it.
- * Errors render inline as `role="alert"` banners — there is no toast system.
+ * A person starts the platform passkey ceremony with one click. Better Auth assigns the initial
+ * label after verification, while this surface classifies the stored WebAuthn facts into a synced,
+ * device, security-key, or nearby-device treatment. Rename and remove stay available from each
+ * row's overflow menu without turning every resting name into a form field.
  */
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  passkeyAuthenticatorKind,
+  passkeyAuthenticatorKindLabel,
+  type PasskeyAuthenticatorKind,
+} from '@docket/types';
 import { cn } from '@docket/ui';
-import { ROW_BASE, ROW_INTERACTIVE } from '@/components/settings/setting-row';
-import { LoadFailure } from './load-failure';
-import { WriteError } from './write-error';
-import { Plus, Shield, Trash2 } from '@docket/ui/icons';
+import { EmptyState } from '@docket/ui/components';
+import {
+  CloudSync,
+  Edit,
+  Ellipsis,
+  Fingerprint,
+  Key,
+  PhonePasskey,
+  Plus,
+  Shield,
+  Trash2,
+  Usb,
+  type LucideIcon,
+} from '@docket/ui/icons';
 import {
   Button,
   DecorativeIcon,
@@ -33,25 +38,35 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
   Input,
   Skeleton,
 } from '@docket/ui/primitives';
-import { type JSX, useEffect, useId, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { type JSX, useId, useState } from 'react';
 
-import { EmptyState } from '@docket/ui/components';
-import { EditableTitle } from '@/components/editor/editable-title';
+import { ROW_BASE, ROW_INTERACTIVE } from '@/components/settings/setting-row';
 import { passkey } from '@/lib/auth-client';
 import { formatCalendarDate } from '@/lib/format-date';
 import { toUserFacingError, userErrorMessage } from '@/lib/problem';
-import { SettingsGroup } from './settings-group';
+import { LoadFailure } from './load-failure';
 import { SETTINGS_NODES } from './settings-capabilities';
+import { SettingsGroup } from './settings-group';
+import { WriteError } from './write-error';
 
-/** The Better Auth passkey record as returned by `listUserPasskeys` (subset this UI renders). */
+/** The Better Auth passkey record fields this UI renders. */
 interface PasskeyRecord {
-  id: string;
-  name?: string | undefined;
-  deviceType: string;
-  createdAt: string | Date;
+  readonly id: string;
+  readonly name?: string | undefined;
+  readonly deviceType: string;
+  readonly backedUp?: boolean | undefined;
+  readonly transports?: string | undefined;
+  readonly aaguid?: string | undefined;
+  readonly createdAt: string | Date;
 }
 
 /** The TanStack cache key for the signed-in user's passkey list. */
@@ -66,33 +81,80 @@ async function fetchPasskeys(): Promise<PasskeyRecord[]> {
   return result.data;
 }
 
-/** A friendly label for a passkey whose name the user never set. */
+/** Return the stored label or a neutral fallback for an old unnamed passkey. */
 function passkeyLabel(record: PasskeyRecord): string {
   const name = record.name?.trim();
-  return name && name.length > 0 ? name : 'Unnamed passkey';
+  return name && name.length > 0 ? name : 'Passkey';
 }
 
-/** Render a passkey's "Added <date>" line, tolerating the wire value being a string or Date. */
+/** Render a passkey's creation date while tolerating a string or Date wire value. */
 function addedOn(record: PasskeyRecord): string | null {
-  const iso = new Date(record.createdAt).toISOString();
-  const formatted = formatCalendarDate(iso);
+  const formatted = formatCalendarDate(new Date(record.createdAt).toISOString());
   return formatted ? `Added ${formatted}` : null;
+}
+
+/** The icon, label, and MD3 tone assigned to one inferred authenticator kind. */
+interface AuthenticatorPresentation {
+  readonly icon: LucideIcon;
+  readonly label: string;
+  readonly tone: string;
+}
+
+/** Map stored WebAuthn facts to an authenticator-kind presentation. */
+function authenticatorPresentation(record: PasskeyRecord): AuthenticatorPresentation {
+  const kind = passkeyAuthenticatorKind(record);
+  const label = passkeyAuthenticatorKindLabel(kind);
+  const presentations: Record<PasskeyAuthenticatorKind, AuthenticatorPresentation> = {
+    synced: {
+      icon: CloudSync,
+      label,
+      tone: 'bg-primary-container text-on-primary-container',
+    },
+    device: {
+      icon: Fingerprint,
+      label,
+      tone: 'bg-tertiary-container text-on-tertiary-container',
+    },
+    'security-key': {
+      icon: Usb,
+      label,
+      tone: 'bg-secondary-container text-on-secondary-container',
+    },
+    'nearby-device': {
+      icon: PhonePasskey,
+      label,
+      tone: 'bg-secondary-container text-on-secondary-container',
+    },
+    unknown: {
+      icon: Key,
+      label,
+      tone: 'bg-surface-container-high text-on-surface-variant',
+    },
+  };
+  return presentations[kind];
 }
 
 /** The Security-tab card that lists and manages the user's passkeys. */
 export function PasskeysSection(): JSX.Element {
   const queryClient = useQueryClient();
   const listQ = useQuery({ queryKey: PASSKEYS_QUERY_KEY, queryFn: fetchPasskeys });
-
   const [removing, setRemoving] = useState<PasskeyRecord | null>(null);
-  const [addOpen, setAddOpen] = useState(false);
-
+  const [renaming, setRenaming] = useState<PasskeyRecord | null>(null);
   const invalidate = (): Promise<void> =>
     queryClient.invalidateQueries({ queryKey: PASSKEYS_QUERY_KEY });
+  const add = useMutation({
+    mutationFn: async () => {
+      const result = await passkey.addPasskey();
+      if (result.error) {
+        throw toUserFacingError(result.error, 'Could not add the passkey.');
+      }
+    },
+    onSuccess: () => {
+      void invalidate();
+    },
+  });
 
   if (listQ.isPending) {
-    // placeholder: the passkeys registered to this account — how many, what each is named, and
-    // when it was last used. This is the sign-in method itself, so the list is the whole panel.
     return <Skeleton className="h-40 w-full rounded-xl" />;
   }
   if (listQ.isError) {
@@ -105,6 +167,10 @@ export function PasskeysSection(): JSX.Element {
   }
 
   const passkeys = listQ.data;
+  const addLabel = add.isPending ? 'Waiting for your device…' : 'Add passkey';
+  const startEnrollment = (): void => {
+    if (!add.isPending) add.mutate();
+  };
 
   return (
     <section className="flex flex-col gap-3" aria-label="Passkeys">
@@ -115,13 +181,12 @@ export function PasskeysSection(): JSX.Element {
           passkeys.length > 0 ? (
             <Button
               type="button"
-              variant="outline"
-              onClick={() => {
-                setAddOpen(true);
-              }}
+              variant="secondary"
+              disabled={add.isPending}
+              onClick={startEnrollment}
             >
-              <Plus aria-hidden="true" className="size-4" />
-              Add passkey
+              <Plus aria-hidden="true" />
+              {addLabel}
             </Button>
           ) : undefined
         }
@@ -132,12 +197,7 @@ export function PasskeysSection(): JSX.Element {
             title="No passkeys yet"
             body="A passkey is how you sign in — your fingerprint, face, or a security key. Add one for each device you use."
             frame="none"
-            cta={{
-              label: 'Add passkey',
-              onClick: () => {
-                setAddOpen(true);
-              },
-            }}
+            cta={{ label: addLabel, onClick: startEnrollment }}
           />
         ) : (
           <ul>
@@ -145,8 +205,8 @@ export function PasskeysSection(): JSX.Element {
               <PasskeyRow
                 key={record.id}
                 record={record}
-                onRenamed={() => {
-                  void invalidate();
+                onRename={() => {
+                  setRenaming(record);
                 }}
                 onRemove={() => {
                   setRemoving(record);
@@ -157,13 +217,23 @@ export function PasskeysSection(): JSX.Element {
         )}
       </SettingsGroup>
 
-      <AddPasskeyDialog
-        open={addOpen}
-        onOpenChange={setAddOpen}
-        onAdded={() => {
-          void invalidate();
-        }}
-      />
+      {add.isError ? (
+        <WriteError message={userErrorMessage(add.error, 'Could not add the passkey.')} />
+      ) : null}
+
+      {renaming ? (
+        <RenamePasskeyDialog
+          key={renaming.id}
+          record={renaming}
+          onOpenChange={(open) => {
+            if (!open) setRenaming(null);
+          }}
+          onRenamed={() => {
+            setRenaming(null);
+            void invalidate();
+          }}
+        />
+      ) : null}
 
       <RemovePasskeyDialog
         record={removing}
@@ -179,191 +249,148 @@ export function PasskeysSection(): JSX.Element {
   );
 }
 
-/** Props for {@link AddPasskeyDialog}. */
-interface AddPasskeyDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onAdded: () => void;
+/** Props for the optional post-creation passkey rename dialog. */
+interface RenamePasskeyDialogProps {
+  readonly record: PasskeyRecord;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly onRenamed: () => void;
 }
 
-/** Name-and-register dialog: runs the WebAuthn add ceremony from the authenticated session. */
-function AddPasskeyDialog({ open, onOpenChange, onAdded }: AddPasskeyDialogProps): JSX.Element {
+/** Rename a passkey after registration without putting an input in every resting row. */
+function RenamePasskeyDialog({
+  record,
+  onOpenChange,
+  onRenamed,
+}: RenamePasskeyDialogProps): JSX.Element {
   const nameId = useId();
-  const [name, setName] = useState('');
-  const add = useMutation({
-    mutationFn: async (passkeyName: string) => {
-      const trimmed = passkeyName.trim();
-      const result = await passkey.addPasskey(trimmed.length > 0 ? { name: trimmed } : undefined);
-      if (result.error) {
-        throw toUserFacingError(result.error, 'Could not add the passkey.');
-      }
-    },
-    onSuccess: () => {
-      onAdded();
-      setName('');
-      onOpenChange(false);
-    },
-  });
-
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        if (!next) {
-          add.reset();
-          setName('');
-        }
-        onOpenChange(next);
-      }}
-    >
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Add a passkey</DialogTitle>
-          <DialogDescription>
-            Your device will prompt you to confirm with Face ID, Touch ID, or a security key. Give
-            this passkey a name so you can recognize it later.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="flex flex-col gap-2">
-          <label htmlFor={nameId} className="text-on-surface text-label-large">
-            Name
-          </label>
-          <Input
-            id={nameId}
-            value={name}
-            placeholder="e.g. MacBook Pro"
-            autoComplete="off"
-            onChange={(event) => {
-              setName(event.target.value);
-            }}
-          />
-        </div>
-        {add.isError ? (
-          <WriteError message={userErrorMessage(add.error, 'Could not update your passkeys.')} />
-        ) : null}
-        <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              onOpenChange(false);
-            }}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            disabled={add.isPending}
-            onClick={() => {
-              add.mutate(name);
-            }}
-          >
-            {add.isPending ? 'Waiting for your device…' : 'Add passkey'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/** Props for {@link PasskeyRow}. */
-interface PasskeyRowProps {
-  record: PasskeyRecord;
-  /** Invoked after a rename persists so the list can refetch. */
-  onRenamed: () => void;
-  /** Open the remove-confirmation dialog for this passkey. */
-  onRemove: () => void;
-}
-
-/** How long the quiet "Saved" acknowledgement lingers after an inline rename lands. */
-const SAVED_HINT_MS = 2000;
-
-/**
- * A single passkey row whose name renames in place: no Rename button, no dialog.
- *
- * @remarks
- * The name is an {@link EditableTitle}, always an editable field that autosaves on a debounce (or
- * immediately on Enter). That primitive owns the dirty guard — it only calls `onSave` when the
- * trimmed value is non-empty *and* changed from what's persisted, so a rename never fires on mount
- * or on an emptied field (which reverts). The save runs the same `passkey.updatePasskey` mutation
- * the old dialog's Save button used, now triggered by the autosave. A quiet inline word next to the
- * name reports the mutation state — a brief "Saved", or an inline error that keeps the field editable.
- */
-function PasskeyRow({ record, onRenamed, onRemove }: PasskeyRowProps): JSX.Element {
-  const [showSaved, setShowSaved] = useState(false);
+  const persistedName = passkeyLabel(record);
+  const [name, setName] = useState(persistedName);
   const rename = useMutation({
     mutationFn: async (nextName: string) => {
-      const result = await passkey.updatePasskey({ id: record.id, name: nextName.trim() });
+      const result = await passkey.updatePasskey({ id: record.id, name: nextName });
       if (result.error) {
         throw toUserFacingError(result.error, 'Could not rename the passkey.');
       }
     },
     onSuccess: onRenamed,
   });
+  const trimmedName = name.trim();
 
-  // Show the "Saved" acknowledgement briefly after each successful commit, then fade it out.
-  useEffect(() => {
-    if (!rename.isSuccess) return;
-    setShowSaved(true);
-    const timer = setTimeout(() => {
-      setShowSaved(false);
-    }, SAVED_HINT_MS);
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [rename.isSuccess, rename.submittedAt]);
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) rename.reset();
+        onOpenChange(open);
+      }}
+    >
+      <DialogContent>
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (trimmedName && trimmedName !== persistedName) rename.mutate(trimmedName);
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>Rename passkey</DialogTitle>
+            <DialogDescription>
+              Choose a name that helps you recognize this passkey later.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2">
+            <label htmlFor={nameId} className="text-on-surface text-label-large">
+              Passkey name
+            </label>
+            <Input
+              id={nameId}
+              value={name}
+              autoComplete="off"
+              onChange={(event) => {
+                setName(event.target.value);
+              }}
+            />
+          </div>
+          {rename.isError ? (
+            <WriteError message={userErrorMessage(rename.error, 'Could not rename the passkey.')} />
+          ) : null}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                onOpenChange(false);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={
+                rename.isPending || trimmedName.length === 0 || trimmedName === persistedName
+              }
+            >
+              {rename.isPending ? 'Saving…' : 'Save name'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** Props for one passkey row. */
+interface PasskeyRowProps {
+  readonly record: PasskeyRecord;
+  readonly onRename: () => void;
+  readonly onRemove: () => void;
+}
+
+/** Render one readable passkey row with kind-specific presentation and overflow actions. */
+function PasskeyRow({ record, onRename, onRemove }: PasskeyRowProps): JSX.Element {
+  const presentation = authenticatorPresentation(record);
+  const label = passkeyLabel(record);
 
   return (
     <li className={cn(ROW_BASE, ROW_INTERACTIVE)}>
-      <DecorativeIcon icon={Shield} className="shrink-0" />
+      <DecorativeIcon icon={presentation.icon} className={cn('shrink-0', presentation.tone)} />
       <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-2">
-          <EditableTitle
-            value={record.name?.trim() ?? ''}
-            onSave={(next) => {
-              rename.mutate(next);
-            }}
-            canEdit
-            ariaLabel="Passkey name"
-            placeholder="Unnamed passkey"
-            className="text-on-surface text-label-large min-w-0 truncate"
-          />
-          {rename.isError ? (
-            <span role="alert" className="text-error text-body-small shrink-0">
-              {userErrorMessage(rename.error, 'Could not update your passkeys.')}
-            </span>
-          ) : showSaved ? (
-            <span className="text-on-surface-variant text-body-small shrink-0">Saved</span>
-          ) : null}
-        </div>
+        <p className="text-on-surface text-label-large truncate">{label}</p>
         <p className="text-on-surface-variant text-body-small truncate">
-          {[addedOn(record), record.deviceType === 'multiDevice' ? 'Synced' : null]
-            .filter(Boolean)
-            .join(' · ')}
+          {[presentation.label, addedOn(record)].filter(Boolean).join(' · ')}
         </p>
       </div>
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        aria-label={`Remove ${passkeyLabel(record)}`}
-        onClick={onRemove}
-      >
-        <Trash2 aria-hidden="true" className="size-4" />
-      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button type="button" variant="ghost" iconOnly aria-label={`Actions for ${label}`}>
+            <Ellipsis />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={onRename}>
+            <Edit />
+            Rename
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem destructive onSelect={onRemove}>
+            <Trash2 />
+            Remove
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </li>
   );
 }
 
-/** Props for {@link RemovePasskeyDialog}. */
+/** Props for the passkey removal confirmation. */
 interface RemovePasskeyDialogProps {
-  record: PasskeyRecord | null;
-  isLast: boolean;
-  onOpenChange: (open: boolean) => void;
-  onRemoved: () => void;
+  readonly record: PasskeyRecord | null;
+  readonly isLast: boolean;
+  readonly onOpenChange: (open: boolean) => void;
+  readonly onRemoved: () => void;
 }
 
-/** Confirm-and-remove dialog; warns harder when it is the account's only passkey. */
+/** Confirm passkey removal and warn when the selected credential is the account's last passkey. */
 function RemovePasskeyDialog({
   record,
   isLast,
@@ -386,9 +413,9 @@ function RemovePasskeyDialog({
   return (
     <Dialog
       open={record !== null}
-      onOpenChange={(next) => {
-        if (!next) remove.reset();
-        onOpenChange(next);
+      onOpenChange={(open) => {
+        if (!open) remove.reset();
+        onOpenChange(open);
       }}
     >
       <DialogContent>
@@ -401,7 +428,7 @@ function RemovePasskeyDialog({
           </DialogDescription>
         </DialogHeader>
         {remove.isError ? (
-          <WriteError message={userErrorMessage(remove.error, 'Could not update your passkeys.')} />
+          <WriteError message={userErrorMessage(remove.error, 'Could not remove the passkey.')} />
         ) : null}
         <DialogFooter>
           <Button

@@ -1,0 +1,1 @@
+ALTER TABLE "agent_delegation" ADD COLUMN "lattice_account_id" text;

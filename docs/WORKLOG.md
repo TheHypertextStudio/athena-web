@@ -28,7 +28,8 @@
 - **Subtasks**:
   - [x] Prevent ordinary Athena runners from claiming Lattice assignment sessions.
   - [x] Settle the delegation and parent session together after proposal decisions.
-  - [ ] Reauthorize after every relay network call and inside every progress or retry transaction.
+  - [x] Reauthorize after every relay network call and inside every progress or retry transaction.
+  - [x] Carry cancellation as durable intent and settle it only after Lattice drops the work.
   - [x] Complete the controller command and accepted-submission metadata boundary.
   - [x] Derive the logical submission id from the pre-minted delegation id.
   - [x] Fence concurrent scheduler submission before the relay call.
@@ -36,16 +37,81 @@
   - [x] Require both emergency controls at the scheduler function boundary.
   - [x] Persist `offline_queued` as the selected runtime's visible offline condition.
   - [x] Replace copied relay types with official exported types where available.
-- **Validation**: The focused API route and delegation suites pass 136 tests. The clean PGlite
-  personal-Athena migration and schema suite passes 7 tests. API and database builds, lint, and
-  type checks pass through Turbo. The API type check needs a process-local 3 GB Node heap on this
-  16 GB host. The repository commit hooks run without bypasses on the follow-up commits. These
-  results predate the cancellation-intent RED tests preserved in the Claude handoff.
-- **Blockers**: Independent review found orphaned remote work and access-loss write races during
-  submit, poll, retry, and concurrent cancellation. Migration 0116 and the RED tests are present,
-  but the cancellation-intent runtime implementation is not. Package publication, production mTLS
-  recovery, deployment, managed Mac Studio pairing, and both real production proofs also remain.
-  See `docs/superpowers/plans/2026-08-30-docket-lattice-roundtrip-claude-handoff.md` for exact state.
+- **Cancellation lifecycle**: `agent_delegation.cancellation_requested_at` records that Docket has
+  given up on a delegation while the row is still `prepared` or `submitted`, and its `failure_code`
+  names how that intent must settle: an empty code belongs to the owner and settles `canceled`,
+  while an authorization code settles `failed`. A cancellation that arrives while a submission
+  lease is live records intent alone, so the in-flight submitter keeps the reply key, work id, and
+  lease it needs to compensate. The submitter rechecks intent immediately before `submitWork` and
+  rechecks both intent and authorization immediately after, and work the relay accepted moves to
+  `submitted` before Docket asks Lattice to drop it. A compensating cancellation that fails leaves
+  the row non-terminal with a retry time, and the scheduler settles that intent ahead of every poll
+  and submission.
+- **One rule, everywhere**: every terminal settlement of a delegation the relay may still be
+  running now goes through that path. Access loss found before `pollEvents`, after it, on an
+  account change, inside the progress transaction, in the write fence over accepted work, and in
+  either ambiguous relay failure all record intent and ask Lattice to drop the work before Docket
+  settles. An owner cancelling submitted work the relay refuses to drop keeps its reply key and is
+  driven to `canceled` by the scheduler once Lattice confirms, rather than being settled on the
+  spot while the runtime keeps going. Confirmation means a `cancelled` state or the stable
+  unknown-work answer, and that answer only counts from the grant that accepted the work: a
+  connection relinked to another Lovelace account or another runtime cannot speak for it, so its
+  404 proves nothing. That case, and a relay still unanswered past the delegation's deadline, end
+  the delegation instead of retrying forever, because an unsettled row holds the assignment's one
+  open-delegation slot. An owner's cancellation survives all of it: their marker is an empty
+  `failure_code` beside recorded intent, and no authorization code, relay code, or deadline may
+  replace it, so a delegation the owner cancelled always ends `canceled`.
+- **Whose account holds the work**: `agent_delegation.lattice_account_id` (migration 0117) records
+  the Lovelace account a delegation was created against, and cancellation addresses that account
+  rather than whichever runtime the owner has selected since. Switching Mac Studios inside one
+  account still cancels; a connection relinked to a different account is treated as out of reach,
+  because its answers describe someone else's relay.
+- **Validation**: The delegation suite passes 92 tests. The API package passes 424 test files under
+  its coverage thresholds, with lint, type check, and Prettier clean through Turbo. The database
+  package passes 39 files and 228 tests with lint and type check clean. CI on `main` was failing on
+  exactly the eight cancellation tests this work implements, and nothing else. Two independent
+  adversarial reviews ran against the finished implementation, then ran again against the fixes.
+  The first round rejected and confirmed nine defects, three of them critical; the second round
+  confirmed seven more, of which five were already fixed while it ran. Every confirmed defect from
+  both rounds is fixed here. Two existing tests encoded behaviour those reviews proved wrong and
+  were rewritten: `settles local cancellation when revoked relay access cannot cancel submitted
+work` asserted a local `canceled` settlement while the Mac Studio kept running, and the
+  accepted-submission write fence asserted a terminal row for work the relay had already taken. One
+  assertion was corrected for a different reason: it required `cancelWork` to receive the connection
+  row as it read before the test revoked it, which no implementation can produce, so it now matches
+  that connection's identity.
+- **Coverage**: `apps/api/src/agent/lattice-delegations.ts` did not exist at the last green CI run,
+  so the whole Lattice slice arrived with its branch debt and the API branch gate had been failing
+  behind the eight red tests. This change repays it: the delegation module goes from 72% to 98%
+  branches, and 55 new tests bring `lattice-oauth`, `lattice-connection`, and the Lattice routes up
+  with it, which puts the package back over its 88% gate. Twenty-two guards against interleavings a
+  single-connection test database cannot produce carry the file's existing
+  `/* v8 ignore next -- @preserve defensive: … */` marker with the reason each is unreachable. Two
+  gaps found along the way had no test at all and now do: approving a Lattice result and completing
+  the delegation, which is the feature's primary success path, and settling each of the five
+  submission failure codes.
+- **Known residue**: `packages/db` cannot run `test:coverage` on this Mac Studio. V8 aborts with
+  `Check failed: end > addr` while freeing WASM code across vitest's worker threads, which PGlite
+  and v8 coverage together provoke. Linux CI runs the same command green, and every db test passes
+  here without `--coverage`, so this is a host toolchain fault rather than a repository one.
+- **Blockers for launch**: The remaining work is external and needs the user. `@lovelace-ai/compute`
+  and `@lovelace-ai/lattice-relay-client` are still `0.0.1` in the registry, the reviewed `0.0.2`
+  tarballs are gone from this machine, the Lovelace checkout sits on
+  `codex/rewrite-unpublished-lovelace-main-20260828` a hundred commits ahead of its remote with a
+  large staged tree, and npm write operations need manual web TFA. `auth.uselovelace.com` and
+  `lattice.uselovelace.com` both answer HTTP 200 and serve OAuth discovery, but through Cloud Run
+  domain mappings rather than the mTLS load balancer, so the Google edge recovery is unfinished and
+  the `willie@reasonabletech.co` credentials need an interactive `gcloud auth login`. The Mac Studio
+  is this host. LM Studio serves `poolside/laguna-s-2.1`, `lattice-daemon` 0.1.0 and `lattice-ctl`
+  are installed, and `~/.lovelace/lattice/config.toml` already carries the required shape: provider
+  `lmstudio`, that model, `http://127.0.0.1:1234/v1`, one concurrent task, relay tools on, and no
+  auto-consented tools. What remains is `lattice-ctl auth login --accounts-url
+https://auth.uselovelace.com`, whose device code the user must approve in a browser, followed by
+  `device`, `model`, `open`, and `service install`; `auth status` reports `signedIn: false` and no
+  `dev.williecubed.lattice-daemon` job exists. See
+  `docs/superpowers/plans/2026-08-30-docket-lattice-roundtrip-claude-handoff.md` for the recorded
+  handoff state, and note that its worktree paths, tarball paths, `gcloud` path, and Lovelace
+  branch state are stale.
 
 ### [MCP-APPS-CHAT-001] Render MCP apps in the Athena chat and complete the optional spec surface
 

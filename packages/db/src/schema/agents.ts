@@ -881,6 +881,7 @@ export const agentDelegation = pgTable(
     submissionLeaseToken: text('submission_lease_token'),
     submissionLeaseExpiresAt: timestamp('submission_lease_expires_at'),
     cancellationRequestedAt: timestamp('cancellation_requested_at'),
+    latticeAccountId: text('lattice_account_id'),
     relayCursor: text('relay_cursor').notNull().default('cursor_0'),
     nextPollAt: timestamp('next_poll_at'),
     deadlineAt: timestamp('deadline_at'),

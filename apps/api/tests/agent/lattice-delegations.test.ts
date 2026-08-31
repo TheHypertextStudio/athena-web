@@ -1,6 +1,7 @@
 import * as authzModule from '@docket/authz';
 import { and, eq, sql } from 'drizzle-orm';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { LatticeUnavailableError } from '@docket/integrations';
 import { RelayControllerError } from '@lovelace-ai/lattice-relay-client';
 
 vi.hoisted(() => {
@@ -170,6 +171,7 @@ async function seed() {
     owner,
     ownerActor,
     organization,
+    project,
     targetTask,
     connection,
     assignment,
@@ -466,7 +468,7 @@ describe('durable Lattice assignment delegations', () => {
         {
           cursor: 'cursor_final',
           kind: 'result',
-          outcome: 'completed',
+          outcome: 'completed' as const,
           sealed: {
             version: 'relay-v1',
             ephemeralPublicKey: 'ephemeral',
@@ -523,7 +525,7 @@ describe('durable Lattice assignment delegations', () => {
           workId: proposedDelegation.workId,
           runtimeId: 'lat_mac_studio',
           runtimeName: 'Mac Studio',
-          outcome: 'completed',
+          outcome: 'completed' as const,
         },
         action: {
           kind: 'comment',
@@ -964,7 +966,7 @@ describe('durable Lattice assignment delegations', () => {
         {
           cursor: 'cursor_final',
           kind: 'result',
-          outcome: 'completed',
+          outcome: 'completed' as const,
           sealed: {
             version: 'relay-v1',
             ephemeralPublicKey: 'ephemeral',
@@ -1290,6 +1292,119 @@ describe('durable Lattice assignment delegations', () => {
     });
   });
 
+  it('completes a Lattice delegation once its task comment is applied', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const proposed = await prepareProposedResult(
+      fixture,
+      deps,
+      new Date('2026-08-29T18:49:00.000Z'),
+    );
+    const action = proposed.activity.body.action;
+    if (!action) throw new Error('Expected a proposed action');
+    await db
+      .update(schema.sessionActivity)
+      .set({
+        approvalStatus: 'applied',
+        body: {
+          ...proposed.activity.body,
+          action: { ...action, result: { content: 'Comment created', isError: false } },
+        },
+      })
+      .where(eq(schema.sessionActivity.id, proposed.activity.id));
+
+    await sweepLatticeDelegations(new Date('2026-08-29T18:49:07.000Z'), deps, {
+      pollingEnabled: true,
+      submissionsEnabled: false,
+    });
+
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.id, proposed.delegation.id)),
+      ),
+    ).toMatchObject({
+      status: 'completed',
+      failureCode: null,
+      replyKeyCiphertext: null,
+      settledAt: expect.any(Date),
+    });
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentSession)
+          .where(eq(schema.agentSession.id, proposed.sessionId)),
+      ),
+    ).toMatchObject({ status: 'completed', endedAt: expect.any(Date) });
+  });
+
+  it('completes an approved delegation whose activity records no action result', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const proposed = await prepareProposedResult(
+      fixture,
+      deps,
+      new Date('2026-08-29T18:48:00.000Z'),
+    );
+    await db
+      .update(schema.sessionActivity)
+      .set({ approvalStatus: 'applied', body: { text: 'applied elsewhere' } })
+      .where(eq(schema.sessionActivity.id, proposed.activity.id));
+
+    await sweepLatticeDelegations(new Date('2026-08-29T18:48:07.000Z'), deps, {
+      pollingEnabled: true,
+      submissionsEnabled: false,
+    });
+
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.id, proposed.delegation.id)),
+      ),
+    ).toMatchObject({ status: 'completed', failureCode: null });
+  });
+
+  it('writes nothing when the submission lease changes hands mid-call', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:56:40.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:lease-changed-mid-submit`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    vi.mocked(deps.submitWork).mockImplementation(async (_connection, input) => {
+      await db
+        .update(schema.agentDelegation)
+        .set({
+          submissionLeaseToken: 'a-newer-lease',
+          submissionLeaseExpiresAt: new Date(preparedAt.getTime() + 60_000),
+        })
+        .where(eq(schema.agentDelegation.sessionId, sessionId));
+      return { workId: input.workId, state: 'queued' };
+    });
+
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.sessionId, sessionId)),
+      ),
+    ).toMatchObject({ status: 'prepared', submissionLeaseToken: 'a-newer-lease' });
+  });
+
   it('reconciles failed proposal activity history without leaving a result reference', async () => {
     const fixture = await seed();
     const deps = dependencies();
@@ -1426,7 +1541,7 @@ describe('durable Lattice assignment delegations', () => {
     ).toMatchObject({ status: 'canceled', replyKeyCiphertext: null });
   });
 
-  it('settles local cancellation when revoked relay access cannot cancel submitted work', async () => {
+  it('holds an owner cancellation open until the relay confirms revoked submitted work is gone', async () => {
     const fixture = await seed();
     const deps = dependencies();
     const preparedAt = new Date('2026-08-29T19:40:00.000Z');
@@ -1463,7 +1578,31 @@ describe('durable Lattice assignment delegations', () => {
       ),
     ).resolves.toBe(true);
 
-    expect(deps.cancelWork).toHaveBeenCalledWith(fixture.connection, delegation.workId);
+    expect(deps.cancelWork).toHaveBeenCalledWith(
+      expect.objectContaining({ id: fixture.connection.id, ownerUserId: fixture.owner.id }),
+      delegation.workId,
+    );
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.id, delegation.id)),
+      ),
+    ).toMatchObject({
+      status: 'submitted',
+      failureCode: null,
+      cancellationRequestedAt: expect.any(Date),
+      replyKeyCiphertext: expect.any(String),
+      settledAt: null,
+    });
+
+    await sweepLatticeDelegations(new Date(preparedAt.getTime() + 10_001), deps, {
+      pollingEnabled: true,
+      submissionsEnabled: false,
+    });
+
+    expect(deps.cancelWork).toHaveBeenCalledTimes(2);
     expect(
       one(
         await db
@@ -1473,9 +1612,9 @@ describe('durable Lattice assignment delegations', () => {
       ),
     ).toMatchObject({
       status: 'canceled',
-      failureCode: 'oauth_invalid',
-      workState: delegation.workState,
-      terminalOutcome: null,
+      failureCode: null,
+      workState: 'cancelled',
+      cancellationRequestedAt: null,
       replyKeyCiphertext: null,
       settledAt: expect.any(Date),
     });
@@ -1546,6 +1685,1443 @@ describe('durable Lattice assignment delegations', () => {
           .where(eq(schema.agentDelegation.id, pending.id)),
       ),
     ).toMatchObject({ status: 'canceled', workState: 'cancelled', replyKeyCiphertext: null });
+  });
+
+  it('cancels a leased delegation before submission when the owner acts during runtime discovery', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:42:30.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:cancel-before-submit`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    const delegation = one(
+      await db
+        .select()
+        .from(schema.agentDelegation)
+        .where(eq(schema.agentDelegation.sessionId, sessionId)),
+    );
+    const runtimes = await deps.listRuntimes(fixture.connection);
+    vi.mocked(deps.listRuntimes).mockImplementation(async () => {
+      await cancelLatticeDelegation(
+        fixture.owner.id,
+        sessionId,
+        new Date(preparedAt.getTime() + 500),
+        deps,
+      );
+      return runtimes;
+    });
+
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+
+    expect(
+      vi.mocked(deps.submitWork).mock.calls.some(([, input]) => input.workId === delegation.workId),
+    ).toBe(false);
+    expect(deps.cancelWork).not.toHaveBeenCalled();
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.id, delegation.id)),
+      ),
+    ).toMatchObject({
+      status: 'canceled',
+      failureCode: null,
+      workState: null,
+      cancellationRequestedAt: null,
+      replyKeyCiphertext: null,
+      submissionLeaseToken: null,
+      settledAt: expect.any(Date),
+    });
+    expect(
+      one(await db.select().from(schema.agentSession).where(eq(schema.agentSession.id, sessionId))),
+    ).toMatchObject({ status: 'canceled', endedAt: expect.any(Date) });
+  });
+
+  it('accepts the unknown-work answer as proof the relay holds nothing to cancel', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:41:00.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:unknown-work-cancellation`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+    const delegation = one(
+      await db
+        .select()
+        .from(schema.agentDelegation)
+        .where(eq(schema.agentDelegation.sessionId, sessionId)),
+    );
+    vi.mocked(deps.cancelWork).mockRejectedValueOnce(new RelayControllerError(404, 'unknown_work'));
+
+    await expect(
+      cancelLatticeDelegation(
+        fixture.owner.id,
+        sessionId,
+        new Date(preparedAt.getTime() + 2_000),
+        deps,
+      ),
+    ).resolves.toBe(true);
+
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.id, delegation.id)),
+      ),
+    ).toMatchObject({
+      status: 'canceled',
+      failureCode: null,
+      workState: delegation.workState,
+      replyKeyCiphertext: null,
+      settledAt: expect.any(Date),
+    });
+  });
+
+  it('retries an owner cancellation the relay refused until it confirms the work is gone', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:42:45.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:cancel-retry-after-refusal`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    let releaseSubmit!: () => void;
+    let markSubmitEntered!: () => void;
+    const submitEntered = new Promise<void>((resolve) => {
+      markSubmitEntered = resolve;
+    });
+    const submitRelease = new Promise<void>((resolve) => {
+      releaseSubmit = resolve;
+    });
+    vi.mocked(deps.submitWork).mockImplementation(async (_connection, input) => {
+      markSubmitEntered();
+      await submitRelease;
+      return { workId: input.workId, state: 'queued' };
+    });
+    vi.mocked(deps.cancelWork)
+      .mockResolvedValueOnce({ state: 'in_flight' })
+      .mockResolvedValueOnce({ state: 'cancelled' });
+
+    const sweep = sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+    await submitEntered;
+    await expect(
+      cancelLatticeDelegation(
+        fixture.owner.id,
+        sessionId,
+        new Date(preparedAt.getTime() + 1_000),
+        deps,
+      ),
+    ).resolves.toBe(true);
+    releaseSubmit();
+    await sweep;
+
+    const pending = one(
+      await db
+        .select()
+        .from(schema.agentDelegation)
+        .where(eq(schema.agentDelegation.sessionId, sessionId)),
+    );
+    expect(pending).toMatchObject({
+      status: 'submitted',
+      failureCode: null,
+      workState: 'queued',
+      cancellationRequestedAt: expect.any(Date),
+      replyKeyCiphertext: expect.any(String),
+      nextPollAt: expect.any(Date),
+    });
+
+    await sweepLatticeDelegations(new Date(preparedAt.getTime() + 6_001), deps, {
+      pollingEnabled: true,
+      submissionsEnabled: false,
+    });
+
+    expect(deps.cancelWork).toHaveBeenCalledTimes(2);
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.id, pending.id)),
+      ),
+    ).toMatchObject({
+      status: 'canceled',
+      failureCode: null,
+      workState: 'cancelled',
+      cancellationRequestedAt: null,
+      replyKeyCiphertext: null,
+      settledAt: expect.any(Date),
+    });
+  });
+
+  it('keeps an owner cancellation intact when the submit call fails ambiguously', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:43:00.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:cancel-during-ambiguous-submit`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    vi.mocked(deps.submitWork).mockImplementation(async () => {
+      await cancelLatticeDelegation(
+        fixture.owner.id,
+        sessionId,
+        new Date(preparedAt.getTime() + 1_000),
+        deps,
+      );
+      throw new Error('ambiguous submit timeout');
+    });
+
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+
+    const settled = one(
+      await db
+        .select()
+        .from(schema.agentDelegation)
+        .where(eq(schema.agentDelegation.sessionId, sessionId)),
+    );
+    expect(deps.cancelWork).toHaveBeenCalledWith(
+      expect.objectContaining({ id: fixture.connection.id }),
+      settled.workId,
+    );
+    expect(settled).toMatchObject({
+      status: 'canceled',
+      failureCode: null,
+      workState: 'cancelled',
+      cancellationRequestedAt: null,
+      replyKeyCiphertext: null,
+      submissionLeaseToken: null,
+      settledAt: expect.any(Date),
+    });
+    expect(
+      one(await db.select().from(schema.agentSession).where(eq(schema.agentSession.id, sessionId))),
+    ).toMatchObject({ status: 'canceled', endedAt: expect.any(Date) });
+  });
+
+  it('stops asking Lattice once the delegation deadline has passed', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:44:00.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:cancel-deadline-exhausted`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+    const delegation = one(
+      await db
+        .select()
+        .from(schema.agentDelegation)
+        .where(eq(schema.agentDelegation.sessionId, sessionId)),
+    );
+    vi.mocked(deps.cancelWork).mockResolvedValue({ state: 'in_flight' });
+
+    await expect(
+      cancelLatticeDelegation(
+        fixture.owner.id,
+        sessionId,
+        new Date(preparedAt.getTime() + 1_000),
+        deps,
+      ),
+    ).resolves.toBe(true);
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.id, delegation.id)),
+      ),
+    ).toMatchObject({ status: 'submitted', cancellationRequestedAt: expect.any(Date) });
+
+    await sweepLatticeDelegations(new Date(preparedAt.getTime() + 130_000), deps, {
+      pollingEnabled: true,
+      submissionsEnabled: false,
+    });
+
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.id, delegation.id)),
+      ),
+    ).toMatchObject({
+      status: 'canceled',
+      failureCode: null,
+      cancellationRequestedAt: null,
+      replyKeyCiphertext: null,
+      settledAt: expect.any(Date),
+    });
+  });
+
+  it('cancels the relay work behind a prepared delegation whose submit ended ambiguously', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:44:30.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:ambiguous-then-cancel`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    vi.mocked(deps.submitWork).mockRejectedValueOnce(new Error('ambiguous submit timeout'));
+
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+
+    const pending = one(
+      await db
+        .select()
+        .from(schema.agentDelegation)
+        .where(eq(schema.agentDelegation.sessionId, sessionId)),
+    );
+    expect(pending).toMatchObject({
+      status: 'prepared',
+      failureCode: 'relay_unavailable',
+      submissionLeaseToken: null,
+    });
+
+    await expect(
+      cancelLatticeDelegation(
+        fixture.owner.id,
+        sessionId,
+        new Date(preparedAt.getTime() + 1_000),
+        deps,
+      ),
+    ).resolves.toBe(true);
+
+    expect(deps.cancelWork).toHaveBeenCalledWith(
+      expect.objectContaining({ id: fixture.connection.id }),
+      pending.workId,
+    );
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.id, pending.id)),
+      ),
+    ).toMatchObject({
+      status: 'canceled',
+      replyKeyCiphertext: null,
+      settledAt: expect.any(Date),
+    });
+  });
+
+  it.each([
+    [
+      'scope_missing',
+      (deps: ReturnType<typeof dependencies>) => {
+        vi.mocked(deps.listRuntimes).mockRejectedValue(
+          new LatticeUnavailableError('insufficient_scopes'),
+        );
+      },
+    ],
+    [
+      'runtime_not_found',
+      (deps: ReturnType<typeof dependencies>) => {
+        vi.mocked(deps.listRuntimes).mockResolvedValue([]);
+      },
+    ],
+    [
+      'runtime_key_expired',
+      (deps: ReturnType<typeof dependencies>) => {
+        vi.mocked(deps.listRuntimes).mockResolvedValue([
+          {
+            latticeId: 'lat_mac_studio',
+            accountId: 'acct_owner',
+            displayName: 'Mac Studio',
+            reachability: 'reachable' as const,
+            protocolVersion: 1,
+            capabilities: { agentRuntime: true, streamingProgress: true, cancellation: true },
+            workKeys: [
+              {
+                keyId: 'work-key-expired',
+                publicKey: 'runtime-public',
+                notBefore: '2026-01-01T00:00:00.000Z',
+                notAfter: '2026-02-01T00:00:00.000Z',
+              },
+            ],
+          },
+        ]);
+      },
+    ],
+    [
+      'submission_rejected',
+      (deps: ReturnType<typeof dependencies>) => {
+        vi.mocked(deps.submitWork).mockRejectedValue(
+          new RelayControllerError(400, 'submission_rejected'),
+        );
+      },
+    ],
+  ])('settles a %s submission with Docket-owned copy', async (failureCode, arrange) => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:46:00.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:${failureCode}`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    arrange(deps);
+
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.sessionId, sessionId)),
+      ),
+    ).toMatchObject({ status: 'failed', failureCode, replyKeyCiphertext: null });
+    const errors = await db
+      .select()
+      .from(schema.sessionActivity)
+      .where(
+        and(
+          eq(schema.sessionActivity.sessionId, sessionId),
+          eq(schema.sessionActivity.type, 'error'),
+        ),
+      );
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.body).toMatchObject({ code: failureCode, source: 'lattice' });
+  });
+
+  it('settles a delegation whose stored reply key can no longer be opened', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:46:30.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:reply-key-unreadable`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    await db
+      .update(schema.agentDelegation)
+      .set({ replyKeyCiphertext: 'not-a-sealed-credential' })
+      .where(eq(schema.agentDelegation.sessionId, sessionId));
+
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+
+    expect(vi.mocked(deps.submitWork).mock.calls.length).toBe(0);
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.sessionId, sessionId)),
+      ),
+    ).toMatchObject({ status: 'failed', failureCode: 'result_key_invalid' });
+  });
+
+  it('refuses to prepare a run on a connection with no selected runtime', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    await expect(
+      prepareLatticeAssignmentRun(
+        fixture.assignment,
+        fixture.ownerActor.id,
+        fixture.assignment.objective,
+        `athena-assignment:${fixture.assignment.id}:no-runtime`,
+        { ...fixture.connection, deviceId: null },
+        new Date('2026-08-29T19:47:30.000Z'),
+        deps,
+      ),
+    ).rejects.toThrow();
+    await expect(
+      prepareLatticeAssignmentRun(
+        fixture.assignment,
+        fixture.ownerActor.id,
+        fixture.assignment.objective,
+        `athena-assignment:${fixture.assignment.id}:disabled`,
+        { ...fixture.connection, enabled: false },
+        new Date('2026-08-29T19:47:31.000Z'),
+        deps,
+      ),
+    ).rejects.toThrow();
+  });
+
+  it('treats a revoked runtime work key as no usable key', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:47:40.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:revoked-work-key`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    vi.mocked(deps.listRuntimes).mockResolvedValue([
+      {
+        latticeId: 'lat_mac_studio',
+        accountId: 'acct_owner',
+        displayName: 'Mac Studio',
+        protocolVersion: 1,
+        capabilities: { agentRuntime: true, streamingProgress: true, cancellation: true },
+        workKeys: [
+          {
+            keyId: 'work-key-revoked',
+            publicKey: 'runtime-public',
+            notBefore: '2026-08-01T00:00:00.000Z',
+            notAfter: '2026-09-30T00:00:00.000Z',
+            revokedAt: '2026-08-15T00:00:00.000Z',
+          },
+        ],
+      },
+    ]);
+
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.sessionId, sessionId)),
+      ),
+    ).toMatchObject({ status: 'failed', failureCode: 'runtime_key_expired' });
+  });
+
+  it.each([
+    ['oauth_invalid', new LatticeUnavailableError('not_connected')],
+    ['oauth_invalid', new LatticeUnavailableError('authorization_expired')],
+    ['scope_missing', new RelayControllerError(403, 'forbidden')],
+    ['submission_rejected', new RelayControllerError(409, 'conflict')],
+    ['submission_rejected', new RelayControllerError(404, 'missing')],
+  ])('maps a %s submission refusal from the relay boundary', async (failureCode, cause) => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:47:50.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:${failureCode}-${(cause as Error).message}`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    vi.mocked(deps.submitWork).mockRejectedValue(cause);
+
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.sessionId, sessionId)),
+      ),
+    ).toMatchObject({ status: 'failed', failureCode });
+  });
+
+  it('settles a relay answer that carries a different work id', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:48:10.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:work-id-mismatch`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+    vi.mocked(deps.pollEvents).mockResolvedValue({
+      workId: 'work_someone_else',
+      state: 'in_flight',
+      events: [],
+      nextPollAfterMs: 1_000,
+    });
+
+    await sweepLatticeDelegations(new Date(preparedAt.getTime() + 5_001), deps, {
+      pollingEnabled: true,
+      submissionsEnabled: false,
+    });
+
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.sessionId, sessionId)),
+      ),
+    ).toMatchObject({ status: 'failed', failureCode: 'unknown_work' });
+  });
+
+  it('advances the relay cursor for a progress event that carries no readable text', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:48:20.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:textless-progress`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+    const delegation = one(
+      await db
+        .select()
+        .from(schema.agentDelegation)
+        .where(eq(schema.agentDelegation.sessionId, sessionId)),
+    );
+    deps.pollResult = {
+      workId: delegation.workId,
+      state: 'in_flight',
+      events: [
+        {
+          cursor: 'cursor_textless',
+          kind: 'progress',
+          sealed: {
+            version: 'relay-v1',
+            ephemeralPublicKey: 'ephemeral',
+            salt: 'salt',
+            iv: 'iv',
+            ciphertext: 'ciphertext',
+          },
+        },
+      ],
+      nextPollAfterMs: 1_000,
+    };
+    vi.mocked(deps.openWork).mockResolvedValue({ unrelated: true });
+
+    await sweepLatticeDelegations(new Date(preparedAt.getTime() + 5_001), deps, {
+      pollingEnabled: true,
+      submissionsEnabled: false,
+    });
+
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.id, delegation.id)),
+      ),
+    ).toMatchObject({ relayCursor: 'cursor_textless', status: 'submitted' });
+    expect(
+      await db
+        .select()
+        .from(schema.sessionActivity)
+        .where(
+          and(
+            eq(schema.sessionActivity.sessionId, sessionId),
+            eq(schema.sessionActivity.type, 'thought'),
+          ),
+        ),
+    ).toHaveLength(0);
+  });
+
+  it('settles an expired runtime work key reported in a terminal relay result', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:48:30.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:terminal-key-expired`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+    const delegation = one(
+      await db
+        .select()
+        .from(schema.agentDelegation)
+        .where(eq(schema.agentDelegation.sessionId, sessionId)),
+    );
+    deps.pollResult = {
+      workId: delegation.workId,
+      state: 'failed',
+      events: [
+        {
+          cursor: 'cursor_final',
+          kind: 'result',
+          outcome: 'work_key_expired' as const,
+          sealed: {
+            version: 'relay-v1',
+            ephemeralPublicKey: 'ephemeral',
+            salt: 'salt',
+            iv: 'iv',
+            ciphertext: 'ciphertext',
+          },
+        },
+      ],
+      nextPollAfterMs: 0,
+    };
+
+    await sweepLatticeDelegations(new Date(preparedAt.getTime() + 5_001), deps, {
+      pollingEnabled: true,
+      submissionsEnabled: false,
+    });
+
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.id, delegation.id)),
+      ),
+    ).toMatchObject({ status: 'failed', failureCode: 'runtime_key_expired' });
+  });
+
+  it('reports no cancellation for a session that owns no open delegation', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    await expect(
+      cancelLatticeDelegation(
+        fixture.owner.id,
+        'session_that_does_not_exist',
+        new Date('2026-08-29T19:48:40.000Z'),
+        deps,
+      ),
+    ).resolves.toBe(false);
+  });
+
+  it('abandons a submission whose row another pass already settled', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:50:10.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:claim-settled`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    vi.mocked(deps.submitWork).mockImplementation(async (_connection, input) => {
+      await db
+        .update(schema.agentDelegation)
+        .set({
+          status: 'canceled',
+          replyKeyCiphertext: null,
+          returnedActivityId: null,
+          submissionLeaseToken: null,
+          submissionLeaseExpiresAt: null,
+          cancellationRequestedAt: null,
+          settledAt: preparedAt,
+        })
+        .where(eq(schema.agentDelegation.sessionId, sessionId));
+      return { workId: input.workId, state: 'queued' };
+    });
+
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+
+    expect(deps.cancelWork).toHaveBeenCalled();
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.sessionId, sessionId)),
+      ),
+    ).toMatchObject({ status: 'canceled' });
+  });
+
+  it('leaves a submission alone once another pass has taken its lease', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:50:20.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:claim-reassigned`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    const runtimes = await deps.listRuntimes(fixture.connection);
+    vi.mocked(deps.listRuntimes).mockImplementation(async () => {
+      await db
+        .update(schema.agentDelegation)
+        .set({
+          submissionLeaseToken: 'someone-elses-lease',
+          submissionLeaseExpiresAt: new Date(preparedAt.getTime() + 60_000),
+        })
+        .where(eq(schema.agentDelegation.sessionId, sessionId));
+      return runtimes;
+    });
+
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+
+    expect(deps.submitWork).not.toHaveBeenCalled();
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.sessionId, sessionId)),
+      ),
+    ).toMatchObject({ status: 'prepared', submissionLeaseToken: 'someone-elses-lease' });
+  });
+
+  it('refuses a relay answer that renames the caller-minted work id', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:50:30.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:renamed-work-id`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    vi.mocked(deps.submitWork).mockResolvedValue({ workId: 'work_relay_renamed', state: 'queued' });
+
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.sessionId, sessionId)),
+      ),
+    ).toMatchObject({ status: 'prepared', failureCode: 'relay_unavailable' });
+  });
+
+  it('waits for runtime queue space without a relay retry hint', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:50:40.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:queue-full`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    vi.mocked(deps.submitWork).mockResolvedValue({ workId: '', state: 'queue_full' });
+
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.sessionId, sessionId)),
+      ),
+    ).toMatchObject({ status: 'prepared', workState: 'queue_full' });
+    expect(
+      one(await db.select().from(schema.agentSession).where(eq(schema.agentSession.id, sessionId))),
+    ).toMatchObject({ currentStep: expect.any(String) });
+  });
+
+  it('cancels a proposed delegation and withdraws its pending task write', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const { delegation, sessionId } = await prepareProposedResult(
+      fixture,
+      deps,
+      new Date('2026-08-29T19:51:00.000Z'),
+    );
+
+    await expect(
+      cancelLatticeDelegation(
+        fixture.owner.id,
+        sessionId,
+        new Date('2026-08-29T19:51:30.000Z'),
+        deps,
+      ),
+    ).resolves.toBe(true);
+
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.id, delegation.id)),
+      ),
+    ).toMatchObject({ status: 'canceled', returnedActivityId: null });
+  });
+
+  it('addresses cancellation by runtime when a delegation predates account binding', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:51:20.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:legacy-account-binding`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+    await db
+      .update(schema.agentDelegation)
+      .set({ latticeAccountId: null })
+      .where(eq(schema.agentDelegation.sessionId, sessionId));
+
+    await expect(
+      cancelLatticeDelegation(
+        fixture.owner.id,
+        sessionId,
+        new Date(preparedAt.getTime() + 2_000),
+        deps,
+      ),
+    ).resolves.toBe(true);
+
+    expect(deps.cancelWork).toHaveBeenCalled();
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.sessionId, sessionId)),
+      ),
+    ).toMatchObject({ status: 'canceled' });
+  });
+
+  it('keeps asking a relay that has not answered when no deadline bounds the work', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:51:40.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:no-deadline-retry`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+    await db
+      .update(schema.agentDelegation)
+      .set({ deadlineAt: null })
+      .where(eq(schema.agentDelegation.sessionId, sessionId));
+    vi.mocked(deps.cancelWork).mockResolvedValue({ state: 'in_flight' });
+
+    await expect(
+      cancelLatticeDelegation(
+        fixture.owner.id,
+        sessionId,
+        new Date(preparedAt.getTime() + 1_000),
+        deps,
+      ),
+    ).resolves.toBe(true);
+
+    await sweepLatticeDelegations(new Date(preparedAt.getTime() + 200_000), deps, {
+      pollingEnabled: true,
+      submissionsEnabled: false,
+    });
+
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.sessionId, sessionId)),
+      ),
+    ).toMatchObject({ status: 'submitted', cancellationRequestedAt: expect.any(Date) });
+  });
+
+  it('ignores relay payloads that are not readable objects', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:52:10.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:unreadable-payload`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+    const delegation = one(
+      await db
+        .select()
+        .from(schema.agentDelegation)
+        .where(eq(schema.agentDelegation.sessionId, sessionId)),
+    );
+    deps.pollResult = {
+      workId: delegation.workId,
+      state: 'completed',
+      events: [
+        {
+          cursor: 'cursor_final',
+          kind: 'result',
+          outcome: 'completed' as const,
+          sealed: {
+            version: 'relay-v1',
+            ephemeralPublicKey: 'ephemeral',
+            salt: 'salt',
+            iv: 'iv',
+            ciphertext: 'ciphertext',
+          },
+        },
+      ],
+      nextPollAfterMs: 0,
+    };
+    vi.mocked(deps.openWork).mockResolvedValue('not-an-object');
+
+    await sweepLatticeDelegations(new Date(preparedAt.getTime() + 5_001), deps, {
+      pollingEnabled: true,
+      submissionsEnabled: false,
+    });
+
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.id, delegation.id)),
+      ),
+    ).toMatchObject({ status: 'failed', failureCode: 'result_invalid' });
+  });
+
+  it('refuses a prepared delegation that lost its controller deadline', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:53:10.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:no-deadline-submit`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    await db
+      .update(schema.agentDelegation)
+      .set({ deadlineAt: null })
+      .where(eq(schema.agentDelegation.sessionId, sessionId));
+
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+
+    expect(deps.submitWork).not.toHaveBeenCalled();
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.sessionId, sessionId)),
+      ),
+    ).toMatchObject({ status: 'failed', failureCode: 'result_key_invalid' });
+  });
+
+  it('names the runtime by its lattice id when the connection carries no device name', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:53:20.000Z');
+    await db
+      .update(schema.latticeConnection)
+      .set({ deviceName: null })
+      .where(eq(schema.latticeConnection.id, fixture.connection.id));
+    const { delegation } = await prepareProposedResult(
+      { ...fixture, connection: { ...fixture.connection, deviceName: null } },
+      deps,
+      preparedAt,
+    );
+    const activity = one(
+      await db
+        .select()
+        .from(schema.sessionActivity)
+        .where(eq(schema.sessionActivity.id, delegation.returnedActivityId ?? '')),
+    );
+    expect(activity.body).toMatchObject({
+      lattice: { runtimeName: delegation.runtimeId },
+    });
+  });
+
+  it('retries acknowledgement when the relay reports an unreadable time', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:53:30.000Z');
+    const { delegation, sessionId } = await prepareProposedResult(fixture, deps, preparedAt);
+    await db
+      .update(schema.sessionActivity)
+      .set({ approvalStatus: 'applied' })
+      .where(eq(schema.sessionActivity.id, delegation.returnedActivityId ?? ''));
+    vi.mocked(deps.acknowledgeResult).mockResolvedValue({
+      state: 'completed',
+      acknowledgedAt: 'not-a-time',
+    });
+
+    await sweepLatticeDelegations(new Date(preparedAt.getTime() + 10_001), deps, {
+      pollingEnabled: true,
+      submissionsEnabled: false,
+    });
+
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.sessionId, sessionId)),
+      ).resultAcknowledgedAt,
+    ).toBeNull();
+  });
+
+  it('settles a delegation whose owner lost the capability to contribute', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:53:40.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:capability-removed`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    await db
+      .update(schema.grant)
+      .set({ capabilities: ['view'] })
+      .where(eq(schema.grant.organizationId, fixture.organization.id));
+
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+
+    expect(deps.submitWork).not.toHaveBeenCalled();
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.sessionId, sessionId)),
+      ),
+    ).toMatchObject({ status: 'failed', failureCode: 'access_lost' });
+  });
+
+  it('settles an owner cancellation the relinked account can no longer reach', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:53:50.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:relinked-cancel`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+    await invalidateConnection(fixture.connection.id);
+
+    await expect(
+      cancelLatticeDelegation(
+        fixture.owner.id,
+        sessionId,
+        new Date(preparedAt.getTime() + 2_000),
+        deps,
+      ),
+    ).resolves.toBe(true);
+
+    expect(deps.cancelWork).not.toHaveBeenCalled();
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.sessionId, sessionId)),
+      ),
+    ).toMatchObject({ status: 'canceled', failureCode: 'oauth_invalid' });
+    expect(
+      one(await db.select().from(schema.agentSession).where(eq(schema.agentSession.id, sessionId))),
+    ).toMatchObject({ status: 'canceled' });
+  });
+
+  it('leaves an unmapped Lattice outage as a retryable relay failure', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:54:10.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:unmapped-outage`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    vi.mocked(deps.listRuntimes).mockRejectedValue(
+      new LatticeUnavailableError('gateway_unreachable'),
+    );
+
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.sessionId, sessionId)),
+      ),
+    ).toMatchObject({ status: 'prepared', failureCode: 'relay_unavailable' });
+  });
+
+  it('takes the durable path when the relay refuses an owner mid-poll', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:55:10.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:poll-401`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+    vi.mocked(deps.pollEvents).mockRejectedValue(
+      new RelayControllerError(401, 'controller_token_expired'),
+    );
+
+    await sweepLatticeDelegations(new Date(preparedAt.getTime() + 5_001), deps, {
+      pollingEnabled: true,
+      submissionsEnabled: false,
+    });
+
+    expect(deps.cancelWork).toHaveBeenCalled();
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.sessionId, sessionId)),
+      ),
+    ).toMatchObject({ status: 'failed', failureCode: 'oauth_invalid', workState: 'cancelled' });
+  });
+
+  it('keeps a progress event whose payload is not an object out of the session', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:55:20.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:scalar-progress`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+    const delegation = one(
+      await db
+        .select()
+        .from(schema.agentDelegation)
+        .where(eq(schema.agentDelegation.sessionId, sessionId)),
+    );
+    deps.pollResult = {
+      workId: delegation.workId,
+      state: 'in_flight',
+      events: [
+        {
+          cursor: 'cursor_scalar',
+          kind: 'progress',
+          sealed: {
+            version: 'relay-v1',
+            ephemeralPublicKey: 'ephemeral',
+            salt: 'salt',
+            iv: 'iv',
+            ciphertext: 'ciphertext',
+          },
+        },
+      ],
+      nextPollAfterMs: 1_000,
+    };
+    vi.mocked(deps.openWork).mockResolvedValue('a scalar payload');
+
+    await sweepLatticeDelegations(new Date(preparedAt.getTime() + 5_001), deps, {
+      pollingEnabled: true,
+      submissionsEnabled: false,
+    });
+
+    expect(
+      await db
+        .select()
+        .from(schema.sessionActivity)
+        .where(
+          and(
+            eq(schema.sessionActivity.sessionId, sessionId),
+            eq(schema.sessionActivity.type, 'thought'),
+          ),
+        ),
+    ).toHaveLength(0);
+  });
+
+  it('refuses to submit a prepared delegation whose instruction went missing', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:55:30.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:missing-instruction`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    await db
+      .update(schema.sessionActivity)
+      .set({ body: { text: '   ', author: 'user' } })
+      .where(
+        and(
+          eq(schema.sessionActivity.sessionId, sessionId),
+          eq(schema.sessionActivity.type, 'response'),
+        ),
+      );
+
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+
+    expect(deps.submitWork).not.toHaveBeenCalled();
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.sessionId, sessionId)),
+      ),
+    ).toMatchObject({ status: 'prepared', failureCode: 'relay_unavailable' });
+  });
+
+  it('records the selected runtime with no reported reachability', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:55:50.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:no-reachability`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    vi.mocked(deps.listRuntimes).mockResolvedValue([
+      {
+        latticeId: 'lat_mac_studio',
+        accountId: 'acct_owner',
+        displayName: 'Mac Studio',
+        protocolVersion: 1,
+        capabilities: { agentRuntime: true, streamingProgress: true, cancellation: true },
+        workKeys: [
+          {
+            keyId: 'work-key-1',
+            publicKey: 'runtime-public',
+            notBefore: '2026-08-01T00:00:00.000Z',
+            notAfter: '2026-09-30T00:00:00.000Z',
+          },
+        ],
+      },
+    ]);
+
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.sessionId, sessionId)),
+      ),
+    ).toMatchObject({ status: 'submitted', runtimeReachability: null });
+  });
+
+  it('delegates an assignment scoped to a project rather than a task', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:56:10.000Z');
+    const projectAssignment = one(
+      await db
+        .insert(schema.athenaAssignment)
+        .values({
+          ownerUserId: fixture.owner.id,
+          organizationId: fixture.organization.id,
+          entityType: 'project',
+          entityId: fixture.project.id,
+          objective: 'Summarize where this project stands.',
+        })
+        .returning(),
+    );
+
+    const sessionId = await prepareLatticeAssignmentRun(
+      projectAssignment,
+      fixture.ownerActor.id,
+      projectAssignment.objective,
+      `athena-assignment:${projectAssignment.id}:project-scope`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.sessionId, sessionId)),
+      ),
+    ).toMatchObject({ status: 'prepared', taskId: null });
+    expect(
+      one(await db.select().from(schema.agentSession).where(eq(schema.agentSession.id, sessionId))),
+    ).toMatchObject({ taskId: null });
   });
 
   it('settles access loss before submission without contacting the relay', async () => {
@@ -1879,6 +3455,11 @@ describe('durable Lattice assignment delegations', () => {
       }
 
       expect(authorizationChecks).toBeGreaterThanOrEqual(4);
+      if (acceptedState === 'offline_queued') {
+        expect(deps.cancelWork).toHaveBeenCalled();
+      } else {
+        expect(deps.cancelWork).not.toHaveBeenCalled();
+      }
       expect(
         one(
           await db
@@ -1889,7 +3470,7 @@ describe('durable Lattice assignment delegations', () => {
       ).toMatchObject({
         status: 'failed',
         failureCode: 'oauth_invalid',
-        workState: null,
+        workState: acceptedState === 'offline_queued' ? 'cancelled' : null,
         runtimeName: null,
         relayQueuePosition: null,
         nextPollAt: null,
@@ -1956,6 +3537,10 @@ describe('durable Lattice assignment delegations', () => {
     expect(
       vi.mocked(deps.pollEvents).mock.calls.some(([, workId]) => workId === delegation.workId),
     ).toBe(false);
+    expect(deps.cancelWork).toHaveBeenCalledWith(
+      expect.objectContaining({ id: fixture.connection.id }),
+      delegation.workId,
+    );
     expect(
       one(
         await db
@@ -1963,7 +3548,7 @@ describe('durable Lattice assignment delegations', () => {
           .from(schema.agentDelegation)
           .where(eq(schema.agentDelegation.id, delegation.id)),
       ),
-    ).toMatchObject({ status: 'failed', failureCode: 'access_lost' });
+    ).toMatchObject({ status: 'failed', failureCode: 'access_lost', workState: 'cancelled' });
     expect(
       await db
         .select()
@@ -2007,6 +3592,7 @@ describe('durable Lattice assignment delegations', () => {
     expect(
       vi.mocked(deps.pollEvents).mock.calls.some(([, workId]) => workId === delegation.workId),
     ).toBe(false);
+    expect(deps.cancelWork).not.toHaveBeenCalled();
     expect(
       one(
         await db
@@ -2363,7 +3949,7 @@ describe('durable Lattice assignment delegations', () => {
         {
           cursor: 'cursor_final',
           kind: 'result',
-          outcome: 'completed',
+          outcome: 'completed' as const,
           sealed: {
             version: 'relay-v1',
             ephemeralPublicKey: 'ephemeral',
@@ -2431,7 +4017,7 @@ describe('durable Lattice assignment delegations', () => {
         {
           cursor: terminalCursor,
           kind: 'result',
-          outcome: 'completed',
+          outcome: 'completed' as const,
           sealed: {
             version: 'relay-v1',
             ephemeralPublicKey: 'ephemeral',
@@ -2525,7 +4111,7 @@ describe('durable Lattice assignment delegations', () => {
         {
           cursor: 'cursor_final',
           kind: 'result',
-          outcome: 'completed',
+          outcome: 'completed' as const,
           sealed: {
             version: 'relay-v1',
             ephemeralPublicKey: 'ephemeral',
@@ -2662,7 +4248,7 @@ describe('durable Lattice assignment delegations', () => {
         {
           cursor: 'cursor_final',
           kind: 'result',
-          outcome: 'completed',
+          outcome: 'completed' as const,
           sealed: {
             version: 'relay-v1',
             ephemeralPublicKey: 'ephemeral',
@@ -2776,7 +4362,7 @@ describe('durable Lattice assignment delegations', () => {
         {
           cursor: 'cursor_final',
           kind: 'result',
-          outcome: 'completed',
+          outcome: 'completed' as const,
           sealed: {
             version: 'relay-v1',
             ephemeralPublicKey: 'ephemeral',

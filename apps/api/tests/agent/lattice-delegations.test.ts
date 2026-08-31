@@ -4220,6 +4220,69 @@ describe('durable Lattice assignment delegations', () => {
     },
   );
 
+  it('leaves the result unacknowledged when the relay dates it unparseably', async () => {
+    // Acknowledging is what tells the relay it may drop the sealed result. Recording an
+    // acknowledgement we cannot date would retire the only copy of a result on the strength of a
+    // value we could not read, so the row stays unacknowledged and the sweep tries again.
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T21:20:00.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:bad-ack-time`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+    const delegation = one(
+      await db
+        .select()
+        .from(schema.agentDelegation)
+        .where(eq(schema.agentDelegation.sessionId, sessionId)),
+    );
+    deps.pollResult = {
+      workId: delegation.workId,
+      state: 'cancelled',
+      events: [
+        {
+          cursor: 'cursor_final',
+          kind: 'result',
+          outcome: 'cancelled',
+          sealed: {
+            version: 'relay-v1',
+            ephemeralPublicKey: 'ephemeral',
+            salt: 'salt',
+            iv: 'iv',
+            ciphertext: 'ciphertext',
+          },
+        },
+      ],
+      nextPollAfterMs: 0,
+    };
+    vi.mocked(deps.openWork).mockResolvedValue({ detail: 'terminal proof' });
+    vi.mocked(deps.acknowledgeResult).mockResolvedValue({
+      state: 'completed',
+      acknowledgedAt: 'not-a-timestamp',
+    });
+
+    await sweepLatticeDelegations(new Date(preparedAt.getTime() + 5_001), deps, {
+      pollingEnabled: true,
+      submissionsEnabled: false,
+    });
+
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.id, delegation.id)),
+      ),
+    ).toMatchObject({ resultAcknowledgedAt: null });
+  });
+
   it('persists and acknowledges an opened result that has no usable report', async () => {
     const fixture = await seed();
     const deps = dependencies();

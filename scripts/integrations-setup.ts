@@ -29,6 +29,8 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import process from 'node:process';
 
+import { parseEnvFile } from './env-file';
+
 import {
   cancel,
   confirm,
@@ -188,30 +190,6 @@ export function upsertEnvVars(path: string, kv: Record<string, string>): void {
   const tmp = `${path}.tmp`;
   writeFileSync(tmp, body, { encoding: 'utf8', mode: 0o600 });
   renameSync(tmp, path);
-}
-
-/** Minimal `.env` parser (KEY=VALUE, `#` comments, optional quotes); keeps empty values. */
-export function parseEnvFile(path: string): Record<string, string> {
-  let text: string;
-  try {
-    text = readFileSync(path, 'utf8');
-  } catch {
-    return {};
-  }
-  const out: Record<string, string> = {};
-  for (const raw of text.split('\n')) {
-    const line = raw.trim();
-    if (!line || line.startsWith('#')) continue;
-    const eq = line.indexOf('=');
-    if (eq < 1) continue;
-    const key = line.slice(0, eq).trim();
-    const val = line
-      .slice(eq + 1)
-      .trim()
-      .replace(/^["']|["']$/g, '');
-    if (key) out[key] = val;
-  }
-  return out;
 }
 
 // ── environments ────────────────────────────────────────────────────────────────

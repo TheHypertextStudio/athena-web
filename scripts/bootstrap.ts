@@ -32,12 +32,12 @@ import {
   exec,
   listGcloudAccounts,
   listGhAccounts,
-  parseEnvFile,
   runIntegrationSetup,
   tryRun,
   unwrap,
   upsertEnvVars,
 } from './integrations-setup';
+import { parseEnvFile } from './env-file';
 import { cloudflaredConfigYaml, launchAgentPlist, tunnelRegistrationUrls } from './tunnel';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');

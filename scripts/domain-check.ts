@@ -32,6 +32,8 @@ import { connect, type PeerCertificate } from 'node:tls';
 import { join, relative, resolve } from 'node:path';
 import process from 'node:process';
 
+import { loadEnvFile } from './env-file';
+
 import { verifyCustomDomain } from '../packages/env/src/custom-domain';
 
 /**
@@ -168,31 +170,6 @@ const DEFAULT_CANDIDATES = [
   'quietathena.com',
   'athena.place',
 ] as const;
-
-/** Minimal `.env` parser (KEY=VALUE, `#` comments, optional quotes) — no dependency. */
-function loadEnvFile(file: string): void {
-  let text: string;
-  try {
-    text = readFileSync(resolve(REPO_ROOT, file), 'utf8');
-  } catch {
-    return; // file absent — fine
-  }
-  for (const rawLine of text.split('\n')) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith('#')) continue;
-    const eq = line.indexOf('=');
-    if (eq === -1) continue;
-    const key = line.slice(0, eq).trim();
-    let value = line.slice(eq + 1).trim();
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-    process.env[key] ??= value;
-  }
-}
 
 /** The host contract as this environment resolves it. */
 function currentConfig(): HostConfig {
@@ -433,8 +410,8 @@ function commandLegacy(): number {
 
 /** Entry point. */
 async function main(): Promise<void> {
-  loadEnvFile('.env.local');
-  loadEnvFile('.env');
+  loadEnvFile(resolve(REPO_ROOT, '.env.local'));
+  loadEnvFile(resolve(REPO_ROOT, '.env'));
 
   const [command = 'hosts', ...rest] = process.argv.slice(2);
   let code: number;

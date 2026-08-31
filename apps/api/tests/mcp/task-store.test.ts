@@ -323,13 +323,18 @@ describe('taskStoreForContext', () => {
 
   describe('TTL eviction', () => {
     it('does not retain a terminal task past its ttlMs', async () => {
-      const created = await owner.createTask({ ttl: 20 }, REQUEST_ID, REQUEST);
+      // 250ms, not 20ms: the first read asserts the task is still live, which is a race against
+      // the TTL rather than a property of it. Under a loaded coverage run the write and the read
+      // can straddle a 20ms window, and the test then fails for having been slow rather than for
+      // anything the store did. The sleep stays comfortably past the TTL so the eviction it
+      // actually tests is unchanged.
+      const created = await owner.createTask({ ttl: 250 }, REQUEST_ID, REQUEST);
       await owner.storeTaskResult(created.taskId, 'completed', { content: [] });
       // Still readable immediately after completion — the TTL clock starts at last-updated, not
-      // creation, and 20ms has not elapsed yet.
+      // creation, and the TTL has not elapsed yet.
       await expect(owner.getTask(created.taskId)).resolves.not.toBeNull();
 
-      await new Promise((resolve) => setTimeout(resolve, 40));
+      await new Promise((resolve) => setTimeout(resolve, 400));
       // Eviction is lazy (runs on the next owner-scoped read, see task-store.ts's own remarks) —
       // this read is itself the sweep, not just an assertion on one that already happened.
       await expect(owner.getTask(created.taskId)).resolves.toBeNull();

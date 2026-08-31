@@ -24,6 +24,10 @@ export const API_TEST_ENV = {
   SKIP_ENV_VALIDATION: '1',
   AGENT_MAX_TURNS: '8',
   ATHENA_ASYNC_RUNNER_ENABLED: 'false',
+  // The Twilio webhooks authenticate every request with an HMAC over this token. Without a
+  // value the verifier fails closed and the whole webhook surface answers 403, so its tests
+  // could only ever prove the refusals and never that a genuine call is served.
+  TWILIO_AUTH_TOKEN: 'test-twilio-auth-token',
   // Keep the test host eligible to run configured Agent suites. Tests still need to provide the
   // three Agent credentials, so unconfigured-route coverage continues to exercise the dark path.
   LINEAR_AGENT_ENABLED: 'true',

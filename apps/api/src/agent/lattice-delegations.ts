@@ -499,12 +499,12 @@ function authorizationFailureCode(cause: unknown): 'oauth_invalid' | 'scope_miss
 
 function relayTerminalFailureCode(
   cause: unknown,
-  phase: 'submit' | 'poll',
+  phase: 'submit' | 'poll' | 'cancel',
 ): 'oauth_invalid' | 'scope_missing' | 'submission_rejected' | 'unknown_work' | null {
   if (!(cause instanceof RelayControllerError)) return null;
   if (cause.status === 401) return 'oauth_invalid';
   if (cause.status === 403) return 'scope_missing';
-  if (phase === 'poll' && cause.status === 404) return 'unknown_work';
+  if (phase !== 'submit' && cause.status === 404) return 'unknown_work';
   if (
     phase === 'submit' &&
     (cause.status === 400 || cause.status === 404 || cause.status === 409)
@@ -667,6 +667,26 @@ async function submitPrepared(
       keyId: workKey.keyId,
       recipientPublicKey: workKey.publicKey,
     });
+    const postSubmitAuthorization = await authorizeDelegation(row);
+    if (!postSubmitAuthorization.authorized) {
+      return (await settleFailure(
+        row.id,
+        row.sessionId,
+        postSubmitAuthorization.failureCode,
+        null,
+        now,
+      ))
+        ? 'failed'
+        : 'skipped';
+    }
+    if (
+      postSubmitAuthorization.context.connection.accountId !==
+      finalAuthorization.context.connection.accountId
+    ) {
+      return (await settleFailure(row.id, row.sessionId, 'oauth_invalid', null, now))
+        ? 'failed'
+        : 'skipped';
+    }
     const runtimeLastSeenAt = accepted.lastSeenAt ?? runtime.lastSeenAt;
     const parsedRuntimeLastSeenAt = runtimeLastSeenAt ? new Date(runtimeLastSeenAt) : null;
     const runtimeMetadata = {
@@ -680,7 +700,35 @@ async function submitPrepared(
     };
     if (accepted.state === 'rate_limited' || accepted.state === 'queue_full') {
       const retryAfterMs = accepted.retryAfterMs ?? TRANSIENT_RETRY_MS;
-      await db.transaction(async (tx) => {
+      return await db.transaction(async (tx) => {
+        const authorization = await authorizeDelegation(row, tx);
+        if (!authorization.authorized) {
+          return (await settleFailureInTransaction(
+            tx,
+            row.id,
+            row.sessionId,
+            authorization.failureCode,
+            null,
+            now,
+          ))
+            ? 'failed'
+            : 'skipped';
+        }
+        if (
+          authorization.context.connection.accountId !==
+          postSubmitAuthorization.context.connection.accountId
+        ) {
+          return (await settleFailureInTransaction(
+            tx,
+            row.id,
+            row.sessionId,
+            'oauth_invalid',
+            null,
+            now,
+          ))
+            ? 'failed'
+            : 'skipped';
+        }
         const [claimed] = await tx
           .update(agentDelegation)
           .set({
@@ -698,7 +746,7 @@ async function submitPrepared(
             ),
           )
           .returning({ id: agentDelegation.id });
-        if (!claimed) return;
+        if (!claimed) return 'skipped';
         await tx
           .update(agentSession)
           .set({
@@ -709,46 +757,76 @@ async function submitPrepared(
             currentStepAt: now,
           })
           .where(eq(agentSession.id, row.sessionId));
+        return 'skipped';
       });
-      return 'skipped';
     }
     if (accepted.workId !== row.workId) {
       throw new Error('relay changed the caller-minted work id');
     }
-    const [updated] = await db
-      .update(agentDelegation)
-      .set({
-        ...runtimeMetadata,
-        status: 'submitted',
-        workState: accepted.state,
-        submittedAt: now,
-        failureCode: null,
-        nextPollAt: new Date(now.getTime() + TRANSIENT_RETRY_MS),
-        submissionLeaseToken: null,
-        submissionLeaseExpiresAt: null,
-      })
-      .where(
-        and(
-          eq(agentDelegation.id, row.id),
-          eq(agentDelegation.status, 'prepared'),
-          eq(agentDelegation.submissionLeaseToken, row.submissionLeaseToken ?? ''),
-        ),
-      )
-      .returning({ id: agentDelegation.id });
-    if (!updated) return 'skipped';
-    await db
-      .update(agentSession)
-      .set({
-        status: 'running',
-        startedAt: now,
-        currentStep:
-          accepted.state === 'offline_queued'
-            ? 'Queued until the selected Lattice runtime comes online'
-            : 'Running on the selected Lattice runtime',
-        currentStepAt: now,
-      })
-      .where(eq(agentSession.id, row.sessionId));
-    return 'submitted';
+    return await db.transaction(async (tx) => {
+      const authorization = await authorizeDelegation(row, tx);
+      if (!authorization.authorized) {
+        return (await settleFailureInTransaction(
+          tx,
+          row.id,
+          row.sessionId,
+          authorization.failureCode,
+          null,
+          now,
+        ))
+          ? 'failed'
+          : 'skipped';
+      }
+      if (
+        authorization.context.connection.accountId !==
+        postSubmitAuthorization.context.connection.accountId
+      ) {
+        return (await settleFailureInTransaction(
+          tx,
+          row.id,
+          row.sessionId,
+          'oauth_invalid',
+          null,
+          now,
+        ))
+          ? 'failed'
+          : 'skipped';
+      }
+      const [updated] = await tx
+        .update(agentDelegation)
+        .set({
+          ...runtimeMetadata,
+          status: 'submitted',
+          workState: accepted.state,
+          submittedAt: now,
+          failureCode: null,
+          nextPollAt: new Date(now.getTime() + TRANSIENT_RETRY_MS),
+          submissionLeaseToken: null,
+          submissionLeaseExpiresAt: null,
+        })
+        .where(
+          and(
+            eq(agentDelegation.id, row.id),
+            eq(agentDelegation.status, 'prepared'),
+            eq(agentDelegation.submissionLeaseToken, row.submissionLeaseToken ?? ''),
+          ),
+        )
+        .returning({ id: agentDelegation.id });
+      if (!updated) return 'skipped';
+      await tx
+        .update(agentSession)
+        .set({
+          status: 'running',
+          startedAt: now,
+          currentStep:
+            accepted.state === 'offline_queued'
+              ? 'Queued until the selected Lattice runtime comes online'
+              : 'Running on the selected Lattice runtime',
+          currentStepAt: now,
+        })
+        .where(eq(agentSession.id, row.sessionId));
+      return 'submitted';
+    });
   } catch (cause) {
     const failureCode =
       authorizationFailureCode(cause) ?? relayTerminalFailureCode(cause, 'submit');
@@ -1343,19 +1421,24 @@ export async function cancelLatticeDelegation(
     .limit(1);
   if (!row) return false;
 
+  let remoteFailureCode: string | null = null;
+  let remoteWorkState = row.workState;
   if (row.status === 'submitted') {
-    const [connection] = await db
-      .select()
-      .from(latticeConnection)
-      .where(
-        and(
-          eq(latticeConnection.id, row.connectionId),
-          eq(latticeConnection.ownerUserId, ownerUserId),
-        ),
-      )
-      .limit(1);
-    if (!connection) throw new Error('Lattice connection is no longer available');
-    await deps.cancelWork(connection, row.workId);
+    const authorization = await authorizeDelegation(row);
+    if (!authorization.authorized) {
+      remoteFailureCode = authorization.failureCode;
+    } else {
+      try {
+        const cancellation = await deps.cancelWork(authorization.context.connection, row.workId);
+        remoteWorkState = cancellation.state;
+        if (cancellation.state !== 'cancelled') remoteFailureCode = 'relay_unavailable';
+      } catch (cause) {
+        remoteFailureCode =
+          authorizationFailureCode(cause) ??
+          relayTerminalFailureCode(cause, 'cancel') ??
+          'relay_unavailable';
+      }
+    }
   }
 
   return await db.transaction(async (tx) => {
@@ -1363,7 +1446,8 @@ export async function cancelLatticeDelegation(
       .update(agentDelegation)
       .set({
         status: 'canceled',
-        workState: row.status === 'submitted' ? 'cancelled' : row.workState,
+        workState: remoteFailureCode ? row.workState : remoteWorkState,
+        failureCode: remoteFailureCode,
         replyKeyCiphertext: null,
         returnedActivityId: null,
         nextPollAt: null,
@@ -1394,7 +1478,15 @@ export async function cancelLatticeDelegation(
     }
     await tx
       .update(agentSession)
-      .set({ status: 'canceled', endedAt: now, interruptedAt: now })
+      .set({
+        status: 'canceled',
+        currentStep: remoteFailureCode
+          ? 'Docket canceled this session, but Lattice could not confirm remote cancellation.'
+          : 'The Lattice assignment was canceled',
+        currentStepAt: now,
+        endedAt: now,
+        interruptedAt: now,
+      })
       .where(and(eq(agentSession.id, sessionId), eq(agentSession.ownerUserId, ownerUserId)));
     return true;
   });

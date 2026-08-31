@@ -36,7 +36,7 @@
   - [x] Require both emergency controls at the scheduler function boundary.
   - [x] Persist `offline_queued` as the selected runtime's visible offline condition.
   - [x] Replace copied relay types with official exported types where available.
-- **Validation**: The focused API route and delegation suites pass 132 tests. The clean PGlite
+- **Validation**: The focused API route and delegation suites pass 136 tests. The clean PGlite
   personal-Athena migration and schema suite passes 7 tests. API and database builds, lint, and
   type checks pass through Turbo. The API type check needs a process-local 3 GB Node heap on this
   16 GB host. The repository commit hooks run without bypasses on the follow-up commits.

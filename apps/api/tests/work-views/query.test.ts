@@ -2,9 +2,13 @@ import { sql, type SQL } from 'drizzle-orm';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
-import { FractionalRank, WorkViewQueryResponse } from '@docket/work/work-view-contract';
-import { InitiativeId, LabelId } from '@docket/work/ids';
 import { TeamId } from '@docket/identity-access/ids';
+import {
+  FractionalRank,
+  InitiativeWorkViewQueryRequest,
+  WorkViewQueryResponse,
+} from '@docket/work/work-view-contract';
+import { InitiativeId, LabelId } from '@docket/work/ids';
 
 import { ApiError } from '../../src/error';
 import { rawResultRows } from '../../src/lib/raw-result';
@@ -19,6 +23,28 @@ import {
 } from './request-fixtures';
 
 process.env['BETTER_AUTH_SECRET'] ??= 'work-view-query-test-secret-at-least-32-characters';
+
+function initiativeRequest(over: Partial<InitiativeQueryRequest> = {}): InitiativeQueryRequest {
+  return InitiativeWorkViewQueryRequest.parse({
+    target: 'initiative',
+    definition: {
+      version: 2,
+      target: 'initiative',
+      filter: null,
+      arrangement: { groupBy: null, subGroupBy: null, orderBy: [] },
+      presentation: {
+        layout: 'list',
+        properties: ['status', 'priority'],
+        density: 'comfortable',
+        showEmptyGroups: false,
+      },
+    },
+    temporaryFilter: null,
+    context: { kind: 'organization' },
+    limit: 100,
+    ...over,
+  });
+}
 
 describe('queryWorkView', () => {
   let schema: typeof DbModule;
@@ -657,6 +683,286 @@ describe('queryWorkView', () => {
     expect(childRow?.target === 'initiative' ? childRow.parent : null).toBe(root.id);
     expect(response.totalCount).toBe(1);
     expect(response.groups.map((group) => group.count)).toEqual([1]);
+  });
+
+  it('pages direct Initiative matches before adding their ancestor context', async () => {
+    const { orgId, humanActorId, statusId } = await seedBaseOrg(schema.db, schema);
+    const rows = await schema.db
+      .insert(schema.initiative)
+      .values([
+        {
+          organizationId: orgId,
+          name: 'Zulu context root',
+          status: 'active',
+          statusId: statusId('initiative', 'active'),
+        },
+        {
+          organizationId: orgId,
+          name: 'Alpha direct child',
+          status: 'active',
+          statusId: statusId('initiative', 'active'),
+          priority: 'high',
+        },
+        {
+          organizationId: orgId,
+          name: 'Beta direct child',
+          status: 'active',
+          statusId: statusId('initiative', 'active'),
+          priority: 'high',
+        },
+      ])
+      .returning({ id: schema.initiative.id, name: schema.initiative.name });
+    const root = rows.find((row) => row.name === 'Zulu context root');
+    const childA = rows.find((row) => row.name === 'Alpha direct child');
+    const childB = rows.find((row) => row.name === 'Beta direct child');
+    if (!root || !childA || !childB) throw new Error('Initiative paging fixture was not seeded');
+    await schema.db.insert(schema.initiativeHierarchyLink).values([
+      {
+        contextOrganizationId: orgId,
+        parentInitiativeId: root.id,
+        childInitiativeId: childA.id,
+        createdBy: humanActorId,
+      },
+      {
+        contextOrganizationId: orgId,
+        parentInitiativeId: root.id,
+        childInitiativeId: childB.id,
+        createdBy: humanActorId,
+      },
+    ]);
+    const request = initiativeRequest({
+      definition: {
+        ...initiativeRequest().definition,
+        filter: { kind: 'predicate', field: 'priority', operator: 'is', operand: 'high' },
+        arrangement: {
+          groupBy: null,
+          subGroupBy: null,
+          orderBy: [{ field: 'name', direction: 'asc' }],
+        },
+      },
+      limit: 1,
+    });
+
+    const first = await queryWorkView({
+      database: schema.db,
+      organizationId: orgId,
+      actorId: humanActorId,
+      request,
+    });
+
+    expect(first.rows.map((row) => row.id)).toEqual([root.id, childA.id]);
+    expect(first.rows.find((row) => row.id === root.id)?.isContext).toBe(true);
+    expect(first.totalCount).toBe(2);
+    expect(first.nextCursor).not.toBeNull();
+    if (!first.nextCursor) throw new Error('The first direct Initiative page needs a cursor');
+    expect(decodeWorkViewCursor(first.nextCursor).entityId).toBe(childA.id);
+
+    const second = await queryWorkView({
+      database: schema.db,
+      organizationId: orgId,
+      actorId: humanActorId,
+      request: { ...request, cursor: first.nextCursor },
+    });
+
+    expect(second.rows.map((row) => row.id)).toEqual([root.id, childB.id]);
+    expect(second.totalCount).toBe(2);
+    expect(second.nextCursor).toBeNull();
+    expect(
+      [...first.rows, ...second.rows]
+        .filter((row) => !row.isContext)
+        .map((row) => row.id)
+        .sort(),
+    ).toEqual([childA.id, childB.id].sort());
+  });
+
+  it('excludes an Initiative whose linked ancestor is not authorized', async () => {
+    const contextOrg = await seedBaseOrg(schema.db, schema);
+    const ownerOrg = await seedBaseOrg(schema.db, schema);
+    const [user] = await schema.db
+      .insert(schema.user)
+      .values({ name: 'Hierarchy viewer', email: `hierarchy-${contextOrg.orgId}@example.test` })
+      .returning({ id: schema.user.id });
+    if (!user) throw new Error('Hierarchy viewer was not seeded');
+    await schema.db
+      .update(schema.actor)
+      .set({ userId: user.id })
+      .where(sql`${schema.actor.id} in (${contextOrg.humanActorId}, ${ownerOrg.humanActorId})`);
+    const [child] = await schema.db
+      .insert(schema.initiative)
+      .values({
+        organizationId: contextOrg.orgId,
+        name: 'Authorized direct child',
+        status: 'active',
+        statusId: contextOrg.statusId('initiative', 'active'),
+        priority: 'high',
+      })
+      .returning({ id: schema.initiative.id });
+    const [parent] = await schema.db
+      .insert(schema.initiative)
+      .values({
+        organizationId: ownerOrg.orgId,
+        name: 'Readable low-priority parent',
+        status: 'active',
+        statusId: ownerOrg.statusId('initiative', 'active'),
+        priority: 'low',
+      })
+      .returning({ id: schema.initiative.id });
+    if (!child || !parent) throw new Error('Authorization hierarchy fixture was not seeded');
+    await schema.db.insert(schema.initiativeHierarchyLink).values({
+      contextOrganizationId: contextOrg.orgId,
+      parentInitiativeId: parent.id,
+      childInitiativeId: child.id,
+      createdBy: contextOrg.humanActorId,
+    });
+    const request = initiativeRequest({
+      definition: {
+        ...initiativeRequest().definition,
+        filter: { kind: 'predicate', field: 'name', operator: 'contains', operand: 'direct' },
+        arrangement: { groupBy: 'priority', subGroupBy: null, orderBy: [] },
+      },
+      limit: 1,
+    });
+
+    const readable = await queryWorkView({
+      database: schema.db,
+      organizationId: contextOrg.orgId,
+      actorId: contextOrg.humanActorId,
+      request,
+      groupPath: ['high'],
+    });
+    expect(readable.rows.map((row) => row.id)).toEqual([parent.id, child.id]);
+    expect(readable.rows.find((row) => row.id === parent.id)?.isContext).toBe(true);
+    expect(readable.totalCount).toBe(1);
+    expect(readable.groups).toContainEqual({
+      path: ['high'],
+      key: 'high',
+      label: 'high',
+      count: 1,
+    });
+
+    await schema.db
+      .update(schema.actor)
+      .set({ status: 'suspended' })
+      .where(sql`${schema.actor.id}=${ownerOrg.humanActorId}`);
+    const hidden = await queryWorkView({
+      database: schema.db,
+      organizationId: contextOrg.orgId,
+      actorId: contextOrg.humanActorId,
+      request,
+      groupPath: ['high'],
+    });
+    expect(hidden).toMatchObject({ totalCount: 0, rows: [], groups: [] });
+    expect(hidden.nextCursor).toBeNull();
+  });
+
+  it('keeps Initiative cursors and duplicate context scoped to their group path', async () => {
+    const { orgId, humanActorId, statusId } = await seedBaseOrg(schema.db, schema);
+    const rows = await schema.db
+      .insert(schema.initiative)
+      .values([
+        {
+          organizationId: orgId,
+          name: 'Shared group context',
+          status: 'active',
+          statusId: statusId('initiative', 'active'),
+          priority: 'low',
+        },
+        {
+          organizationId: orgId,
+          name: 'Alpha high direct',
+          status: 'active',
+          statusId: statusId('initiative', 'active'),
+          priority: 'high',
+        },
+        {
+          organizationId: orgId,
+          name: 'Beta high direct',
+          status: 'active',
+          statusId: statusId('initiative', 'active'),
+          priority: 'high',
+        },
+        {
+          organizationId: orgId,
+          name: 'Gamma medium direct',
+          status: 'active',
+          statusId: statusId('initiative', 'active'),
+          priority: 'medium',
+        },
+      ])
+      .returning({ id: schema.initiative.id, name: schema.initiative.name });
+    const root = rows.find((row) => row.name === 'Shared group context');
+    const highA = rows.find((row) => row.name === 'Alpha high direct');
+    const highB = rows.find((row) => row.name === 'Beta high direct');
+    const medium = rows.find((row) => row.name === 'Gamma medium direct');
+    if (!root || !highA || !highB || !medium)
+      throw new Error('Grouped Initiative fixture was not seeded');
+    await schema.db.insert(schema.initiativeHierarchyLink).values([
+      {
+        contextOrganizationId: orgId,
+        parentInitiativeId: root.id,
+        childInitiativeId: highA.id,
+        createdBy: humanActorId,
+      },
+      {
+        contextOrganizationId: orgId,
+        parentInitiativeId: root.id,
+        childInitiativeId: highB.id,
+        createdBy: humanActorId,
+      },
+      {
+        contextOrganizationId: orgId,
+        parentInitiativeId: root.id,
+        childInitiativeId: medium.id,
+        createdBy: humanActorId,
+      },
+    ]);
+    const request = initiativeRequest({
+      definition: {
+        ...initiativeRequest().definition,
+        filter: { kind: 'predicate', field: 'name', operator: 'contains', operand: 'direct' },
+        arrangement: {
+          groupBy: 'priority',
+          subGroupBy: null,
+          orderBy: [{ field: 'name', direction: 'asc' }],
+        },
+      },
+      limit: 1,
+    });
+
+    const high = await queryWorkView({
+      database: schema.db,
+      organizationId: orgId,
+      actorId: humanActorId,
+      request,
+      groupPath: ['high'],
+    });
+    expect(high.rows.map((row) => row.id)).toEqual([root.id, highA.id]);
+    expect(high.groups).toContainEqual({ path: ['high'], key: 'high', label: 'high', count: 2 });
+    expect(high.groups).toContainEqual({
+      path: ['medium'],
+      key: 'medium',
+      label: 'medium',
+      count: 1,
+    });
+    if (!high.nextCursor) throw new Error('The first high group page needs a cursor');
+
+    const mediumPage = await queryWorkView({
+      database: schema.db,
+      organizationId: orgId,
+      actorId: humanActorId,
+      request,
+      groupPath: ['medium'],
+    });
+    expect(mediumPage.rows.map((row) => row.id)).toEqual([root.id, medium.id]);
+    await expect(
+      queryWorkView({
+        database: schema.db,
+        organizationId: orgId,
+        actorId: humanActorId,
+        request: { ...request, cursor: high.nextCursor },
+        groupPath: ['medium'],
+      }),
+    ).rejects.toThrow('This page cursor belongs to another group');
   });
 
   it('authorizes Projects through secondary Teams and returns named Project and Program output', async () => {

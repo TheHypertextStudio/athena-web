@@ -705,6 +705,7 @@ function queryRequest<const TContract extends ViewContract, const TContext exten
       search: z.string().trim().min(1).optional(),
       groupPath: z.array(z.string()).max(2).optional(),
       cursor: ViewCursorValue.nullable().optional(),
+      /** Initiative cursors and limits apply to direct matches, not appended ancestor context. */
       limit: z.number().int().min(1).max(100).default(100),
     })
     .strict();
@@ -1415,6 +1416,7 @@ function queryResponse<const TTarget extends ViewTarget, const TRow extends z.Zo
   return z
     .object({
       target: z.literal(target),
+      /** Initiative pages may add authorized ancestors beyond the direct-match request limit. */
       rows: z.array(row),
       groups: z.array(WorkViewGroup),
       totalCount: count,

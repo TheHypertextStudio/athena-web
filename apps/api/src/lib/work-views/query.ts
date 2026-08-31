@@ -61,12 +61,27 @@ interface InternalRequest {
   readonly limit: number;
 }
 
+interface PageSqlInput {
+  readonly initiative: boolean;
+  readonly groupScope: SQL;
+  readonly keyset: SQL;
+  readonly order: readonly SQL[];
+  readonly organizationId: string;
+  readonly pageLimit: number;
+  readonly sortValues: readonly SQL[];
+}
+
+interface PageSql {
+  readonly aggregate: SQL;
+  readonly ctes: SQL;
+}
+
 const cursorScalarSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
 const callerRowSchema = z.object({ user_id: z.string().nullable() }).loose();
 const workViewPageRecordSchema = z
   .object({
     id: z.string(),
-    _cursor_sort_tuple: z.array(cursorScalarSchema),
+    _cursor_sort_tuple: z.array(cursorScalarSchema).nullable(),
   })
   .loose();
 const workViewAggregateRecordSchema = z
@@ -74,8 +89,11 @@ const workViewAggregateRecordSchema = z
     rows: z.array(workViewPageRecordSchema),
     groups: z.array(z.record(z.string(), z.unknown())),
     total_count: z.number().int().nonnegative(),
+    has_more: z.boolean().optional(),
+    last_direct: workViewPageRecordSchema.nullable().optional(),
   })
   .loose();
+type WorkViewAggregateRecord = z.output<typeof workViewAggregateRecordSchema>;
 
 async function executeRows<TSchema extends z.ZodType>(
   database: Database,
@@ -124,23 +142,6 @@ function internalRequest(request: WorkViewQueryRequest): InternalRequest {
   };
 }
 
-function initiativePageCtes(ctes: SQL, groupScope: SQL, organizationId: string): SQL {
-  return sql`${ctes}, page_direct as materialized (
-      select e.* from direct e where ${groupScope}
-    ), page_ancestor_ids(id) as (
-      select d.id from page_direct d
-      union
-      select h.parent_initiative_id
-      from initiative_hierarchy_link h
-      join page_ancestor_ids a on a.id=h.child_initiative_id
-      join authorized parent on parent.id=h.parent_initiative_id
-      where h.context_organization_id=${organizationId}
-    ), page_matched as materialized (
-      select e.*, not exists(select 1 from page_direct d where d.id=e.id) as _is_context
-      from authorized e join page_ancestor_ids a on a.id=e.id
-    )`;
-}
-
 function orderingContextId(context: WorkViewSqlContext, organizationId: string): string {
   return context.kind === 'organization'
     ? organizationId
@@ -150,6 +151,91 @@ function orderingContextId(context: WorkViewSqlContext, organizationId: string):
           context['programId'] ??
           context['initiativeId'],
       );
+}
+
+function pageSql(input: PageSqlInput): PageSql {
+  if (!input.initiative) {
+    return {
+      ctes: sql`page_candidates as not materialized (
+          select e.*, ranked.rank as _manual_rank from contextual_order ranked
+          join matched e on e.id=ranked.item_id
+          where ${input.groupScope}
+          union all
+          select e.*, null::text as _manual_rank from matched e
+          where ${input.groupScope} and not exists (
+            select 1 from contextual_order ranked where ranked.item_id=e.id
+          )
+        ), page_selection as materialized (
+          select e.id, e._is_context, e._manual_rank,
+            json_build_array(${sql.join(input.sortValues, sql`, `)}) as _cursor_sort_tuple,
+            row_number() over (order by ${sql.join(input.order, sql`, `)}) as _page_order
+          from page_candidates e where ${input.keyset}
+          order by ${sql.join(input.order, sql`, `)} limit ${input.pageLimit + 1}
+        )`,
+      aggregate: sql``,
+    };
+  }
+  return {
+    ctes: sql`direct_page_candidates as not materialized (
+        select e.*, ranked.rank as _manual_rank from contextual_order ranked
+        join direct e on e.id=ranked.item_id
+        where ${input.groupScope}
+        union all
+        select e.*, null::text as _manual_rank from direct e
+        where ${input.groupScope} and not exists (
+          select 1 from contextual_order ranked where ranked.item_id=e.id
+        )
+      ), direct_page_selection as materialized (
+        select e.id, e._manual_rank,
+          json_build_array(${sql.join(input.sortValues, sql`, `)}) as _cursor_sort_tuple,
+          row_number() over (order by ${sql.join(input.order, sql`, `)}) as _page_order
+        from direct_page_candidates e where ${input.keyset}
+        order by ${sql.join(input.order, sql`, `)} limit ${input.pageLimit + 1}
+      ), selected_direct as materialized (
+        select * from direct_page_selection where _page_order <= ${input.pageLimit}
+      ), page_ancestor_ids(id) as (
+        select d.id from selected_direct d
+        union
+        select h.parent_initiative_id
+        from initiative_hierarchy_link h
+        join page_ancestor_ids a on a.id=h.child_initiative_id
+        where h.context_organization_id=${input.organizationId}
+      ), page_selection as materialized (
+        select d.id, false as _is_context, d._manual_rank,
+          d._cursor_sort_tuple, d._page_order
+        from selected_direct d
+        union all
+        select e.id, true as _is_context, null::text as _manual_rank,
+          null::json as _cursor_sort_tuple, 0::bigint as _page_order
+        from authorized e join page_ancestor_ids a on a.id=e.id
+        where not exists (select 1 from selected_direct d where d.id=e.id)
+      )`,
+    aggregate: sql`, (select exists(
+        select 1 from direct_page_selection where _page_order > ${input.pageLimit}
+      )) has_more,
+      (select json_build_object('id', d.id, '_cursor_sort_tuple', d._cursor_sort_tuple)
+        from selected_direct d order by d._page_order desc limit 1) last_direct`,
+  };
+}
+
+function resolvePage(
+  initiative: boolean,
+  aggregate: WorkViewAggregateRecord,
+  pageLimit: number,
+): {
+  readonly hasMore: boolean;
+  readonly last: WorkViewAggregateRecord['rows'][number] | undefined;
+  readonly rows: WorkViewAggregateRecord['rows'];
+} {
+  if (initiative) {
+    return {
+      hasMore: aggregate.has_more === true,
+      last: aggregate.last_direct ?? undefined,
+      rows: aggregate.rows,
+    };
+  }
+  const rows = aggregate.rows.slice(0, pageLimit);
+  return { hasMore: aggregate.rows.length > pageLimit, last: rows.at(-1), rows };
 }
 
 /**
@@ -238,12 +324,7 @@ export async function queryWorkView(input: QueryWorkViewInput): Promise<WorkView
     request.definition.arrangement.subGroupBy,
     groupPath,
   );
-  const scopedInitiativePage = request.target === 'initiative' && groupPath.length > 0;
-  const pageCtes = scopedInitiativePage
-    ? initiativePageCtes(ctes, groupScope, input.organizationId)
-    : ctes;
-  const pageSource = scopedInitiativePage ? 'page_matched' : 'matched';
-  const pageScope = scopedInitiativePage ? sql`true` : groupScope;
+  const isInitiativePage = request.target === 'initiative';
   const countSource = request.target === 'initiative' ? 'direct' : 'matched';
   const groupJson = compileGroupJsonSql(
     request.target,
@@ -251,30 +332,27 @@ export async function queryWorkView(input: QueryWorkViewInput): Promise<WorkView
     request.definition.arrangement.subGroupBy,
     countSource,
   );
+  const page = pageSql({
+    initiative: isInitiativePage,
+    groupScope,
+    keyset,
+    order,
+    organizationId: input.organizationId,
+    pageLimit,
+    sortValues,
+  });
+  const rowOrder = isInitiativePage
+    ? sql`page_data._page_order, page_data.id`
+    : sql`page_data._page_order`;
   const aggregateRows = await executeRows(
     input.database,
-    sql`with recursive ${pageCtes}, contextual_order as materialized (
+    sql`with recursive ${ctes}, contextual_order as materialized (
       select item_id, rank from work_item_order
       where organization_id=${input.organizationId}
         and context_type=${request.context.kind}
         and context_id=${orderingContextId(request.context, input.organizationId)}
         and target=${request.target}
-    ), page_candidates as not materialized (
-      select e.*, ranked.rank as _manual_rank from contextual_order ranked
-      join ${sql.raw(pageSource)} e on e.id=ranked.item_id
-      where ${pageScope}
-      union all
-      select e.*, null::text as _manual_rank from ${sql.raw(pageSource)} e
-      where ${pageScope} and not exists (
-        select 1 from contextual_order ranked where ranked.item_id=e.id
-      )
-    ), page_selection as materialized (
-      select e.id, e._is_context, e._manual_rank,
-        json_build_array(${sql.join(sortValues, sql`, `)}) as _cursor_sort_tuple,
-        row_number() over (order by ${sql.join(order, sql`, `)}) as _page_order
-      from page_candidates e where ${keyset}
-      order by ${sql.join(order, sql`, `)} limit ${pageLimit + 1}
-    ), projectable as not materialized (
+    ), ${page.ctes}, projectable as not materialized (
       select e.*, selected._is_context, selected._manual_rank,
         selected._cursor_sort_tuple, selected._page_order,
         display.subject_type as _display_subject_type,
@@ -292,30 +370,28 @@ export async function queryWorkView(input: QueryWorkViewInput): Promise<WorkView
       select ${contract.projection(request.context, execution)},
         e._cursor_sort_tuple, e._page_order from projectable e
     )
-    select coalesce((select json_agg(page_data order by page_data._page_order) from page_data), '[]'::json) rows,
+    select coalesce((select json_agg(page_data order by ${rowOrder}) from page_data), '[]'::json) rows,
       (select count(*)::int from ${sql.raw(countSource)} e) total_count,
-      ${groupJson} groups`,
+      ${groupJson} groups${page.aggregate}`,
     workViewAggregateRecordSchema,
   );
   const aggregate = aggregateRows[0];
   /* v8 ignore next -- @preserve A SELECT of SQL aggregates always returns exactly one row. */
   if (!aggregate) throw new TypeError('A work-view aggregate query returned no row.');
-  const hasMore = aggregate.rows.length > pageLimit;
-  const pageRows = aggregate.rows.slice(0, pageLimit);
-  const last = pageRows.at(-1);
+  const pageResult = resolvePage(isInitiativePage, aggregate, pageLimit);
   const nextCursor =
-    hasMore && last
+    pageResult.hasMore && pageResult.last?._cursor_sort_tuple
       ? encodeWorkViewCursor({
           fingerprint,
           groupPath,
-          sortTuple: last._cursor_sort_tuple,
-          entityId: last.id,
+          sortTuple: pageResult.last._cursor_sort_tuple,
+          entityId: pageResult.last.id,
           asOf,
         })
       : null;
   return WorkViewQueryResponse.parse({
     target: request.target,
-    rows: pageRows.map((row) =>
+    rows: pageResult.rows.map((row) =>
       contract.rowSchema.parse(transportWorkViewRow(request.target, row)),
     ),
     groups: aggregate.groups,

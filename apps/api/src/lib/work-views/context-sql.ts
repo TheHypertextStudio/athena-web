@@ -243,17 +243,26 @@ export function compileRosterCtes(
         select e.*, ${enrichmentSql('initiative')} from authorized_base e
         left join work_status status_meta on status_meta.id=e.status_id
           and status_meta.organization_id=e.organization_id
-      ), direct as materialized (
+      ), direct_candidates as materialized (
         select e.* from authorized e
         where ${compileContextSql('initiative', context, organizationId)} and ${filter}
-      ), ancestor_ids(id) as (
-        select d.id from direct d
+      ), direct_ancestor_chain(direct_id, ancestor_id) as (
+        select d.id, d.id from direct_candidates d
         union
-        select h.parent_initiative_id
+        select chain.direct_id, h.parent_initiative_id
         from initiative_hierarchy_link h
-        join ancestor_ids a on a.id=h.child_initiative_id
-        join authorized parent on parent.id=h.parent_initiative_id
+        join direct_ancestor_chain chain on chain.ancestor_id=h.child_initiative_id
         where h.context_organization_id=${organizationId}
+      ), direct as materialized (
+        select candidate.* from direct_candidates candidate
+        where not exists (
+          select 1 from direct_ancestor_chain chain
+          left join authorized ancestor on ancestor.id=chain.ancestor_id
+          where chain.direct_id=candidate.id and ancestor.id is null
+        )
+      ), ancestor_ids(id) as (
+        select chain.ancestor_id from direct_ancestor_chain chain
+        join direct d on d.id=chain.direct_id
       ), matched as materialized (
         select e.*, not exists(select 1 from direct d where d.id=e.id) as _is_context
         from authorized e join ancestor_ids a on a.id=e.id

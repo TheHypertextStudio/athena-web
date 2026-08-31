@@ -103,6 +103,61 @@ describe('work-view routes', () => {
     expect(body.rows?.[0]).not.toHaveProperty('activeProjectCount');
   });
 
+  it('returns ancestor context beyond an Initiative route page limit', async () => {
+    const { orgId, humanActorId, statusId } = await seedBaseOrg(schema.db, schema);
+    const rows = await schema.db
+      .insert(schema.initiative)
+      .values([
+        {
+          organizationId: orgId,
+          name: 'Route context root',
+          status: 'active',
+          statusId: statusId('initiative', 'active'),
+        },
+        {
+          organizationId: orgId,
+          name: 'Route direct child',
+          status: 'active',
+          statusId: statusId('initiative', 'active'),
+          priority: 'high',
+        },
+      ])
+      .returning({ id: schema.initiative.id, name: schema.initiative.name });
+    const root = rows.find((row) => row.name === 'Route context root');
+    const child = rows.find((row) => row.name === 'Route direct child');
+    if (!root || !child) throw new Error('Initiative route hierarchy fixture was not seeded');
+    await schema.db.insert(schema.initiativeHierarchyLink).values({
+      contextOrganizationId: orgId,
+      parentInitiativeId: root.id,
+      childInitiativeId: child.id,
+      createdBy: humanActorId,
+    });
+    const request = InitiativeWorkViewQueryRequest.parse({
+      ...initiativeRequest(),
+      definition: {
+        ...initiativeRequest().definition,
+        filter: { kind: 'predicate', field: 'name', operator: 'contains', operand: 'direct' },
+      },
+      limit: 1,
+    });
+    const app = appWithActor(workViews, orgId, ['view'], humanActorId);
+
+    const response = await app.request('/query', {
+      method: 'POST',
+      headers: JSON_HEADERS,
+      body: JSON.stringify(request),
+    });
+
+    expect(response.status).toBe(200);
+    const page = WorkViewQueryResponse.parse(await response.json());
+    expect(page.target).toBe('initiative');
+    if (page.target !== 'initiative') throw new Error('expected an Initiative response');
+    expect(page.rows.map((row) => row.id).sort()).toEqual([root.id, child.id].sort());
+    expect(page.rows.find((row) => row.id === root.id)?.isContext).toBe(true);
+    expect(page.totalCount).toBe(1);
+    expect(page.nextCursor).toBeNull();
+  });
+
   it('returns the target-discriminated Task page through the typed query route', async () => {
     const { orgId, teamId, humanActorId, statusId } = await seedBaseOrg(schema.db, schema);
     await schema.db.insert(schema.task).values({

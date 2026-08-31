@@ -5,7 +5,7 @@ import {
   InitiativeWorkViewQueryRequest,
   WorkViewQueryResponse,
 } from '@docket/work/work-view-contract';
-import { and, eq, gt, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, sql } from 'drizzle-orm';
 
 import { queryWorkView } from '../../src/lib/work-views/query';
 import { appWithActor, getDb, seedBaseOrg } from '../support/routes-harness';
@@ -90,6 +90,36 @@ describe('work-view production-size performance', () => {
           })),
         ),
       );
+      const hierarchy = await schema.db
+        .select({ id: schema.initiative.id })
+        .from(schema.initiative)
+        .where(eq(schema.initiative.organizationId, orgId))
+        .orderBy(asc(schema.initiative.name))
+        .limit(4);
+      const [root, parent, firstChild, secondChild] = hierarchy;
+      if (!root || !parent || !firstChild || !secondChild) {
+        throw new Error('Initiative performance hierarchy was not seeded');
+      }
+      await schema.db.insert(schema.initiativeHierarchyLink).values([
+        {
+          contextOrganizationId: orgId,
+          parentInitiativeId: root.id,
+          childInitiativeId: parent.id,
+          createdBy: humanActorId,
+        },
+        {
+          contextOrganizationId: orgId,
+          parentInitiativeId: parent.id,
+          childInitiativeId: firstChild.id,
+          createdBy: humanActorId,
+        },
+        {
+          contextOrganizationId: orgId,
+          parentInitiativeId: parent.id,
+          childInitiativeId: secondChild.id,
+          createdBy: humanActorId,
+        },
+      ]);
       await insertInChunks(COUNTS.project, (start, size) =>
         schema.db.insert(schema.project).values(
           Array.from({ length: size }, (_, offset) => ({

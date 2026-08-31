@@ -1450,6 +1450,9 @@ describe('durable Lattice assignment delegations', () => {
       .update(schema.latticeConnection)
       .set({ status: 'disconnected' })
       .where(eq(schema.latticeConnection.id, fixture.connection.id));
+    vi.mocked(deps.cancelWork).mockRejectedValueOnce(
+      new RelayControllerError(401, 'controller_token_expired'),
+    );
 
     await expect(
       cancelLatticeDelegation(
@@ -1460,7 +1463,7 @@ describe('durable Lattice assignment delegations', () => {
       ),
     ).resolves.toBe(true);
 
-    expect(deps.cancelWork).not.toHaveBeenCalled();
+    expect(deps.cancelWork).toHaveBeenCalledWith(fixture.connection, delegation.workId);
     expect(
       one(
         await db
@@ -1479,6 +1482,70 @@ describe('durable Lattice assignment delegations', () => {
     expect(
       one(await db.select().from(schema.agentSession).where(eq(schema.agentSession.id, sessionId))),
     ).toMatchObject({ status: 'canceled', endedAt: expect.any(Date) });
+  });
+
+  it('keeps a leased prepared delegation cancelable until its in-flight submit is canceled', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:42:00.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:cancel-during-submit`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    let releaseSubmit!: () => void;
+    let markSubmitEntered!: () => void;
+    const submitEntered = new Promise<void>((resolve) => {
+      markSubmitEntered = resolve;
+    });
+    const submitRelease = new Promise<void>((resolve) => {
+      releaseSubmit = resolve;
+    });
+    vi.mocked(deps.submitWork).mockImplementation(async (_connection, input) => {
+      markSubmitEntered();
+      await submitRelease;
+      return { workId: input.workId, state: 'queued' };
+    });
+
+    const sweep = sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+    await submitEntered;
+    await expect(
+      cancelLatticeDelegation(
+        fixture.owner.id,
+        sessionId,
+        new Date(preparedAt.getTime() + 1_000),
+        deps,
+      ),
+    ).resolves.toBe(true);
+
+    const pending = one(
+      await db
+        .select()
+        .from(schema.agentDelegation)
+        .where(eq(schema.agentDelegation.sessionId, sessionId)),
+    );
+    expect(pending).toMatchObject({
+      status: 'prepared',
+      replyKeyCiphertext: expect.any(String),
+      submissionLeaseToken: expect.any(String),
+    });
+
+    releaseSubmit();
+    await sweep;
+
+    expect(deps.cancelWork).toHaveBeenCalledWith(fixture.connection, pending.workId);
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.id, pending.id)),
+      ),
+    ).toMatchObject({ status: 'canceled', workState: 'cancelled', replyKeyCiphertext: null });
   });
 
   it('settles access loss before submission without contacting the relay', async () => {
@@ -1609,7 +1676,7 @@ describe('durable Lattice assignment delegations', () => {
     ).toMatchObject({ status: 'failed', failureCode: 'oauth_invalid' });
   });
 
-  it('settles access loss during submit without writing accepted queue progress', async () => {
+  it('cancels work accepted during submit access loss without writing queue progress', async () => {
     const fixture = await seed();
     const deps = dependencies();
     const preparedAt = new Date('2026-08-29T19:49:00.000Z');
@@ -1637,6 +1704,128 @@ describe('durable Lattice assignment delegations', () => {
 
     await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
 
+    const delegation = one(
+      await db
+        .select()
+        .from(schema.agentDelegation)
+        .where(eq(schema.agentDelegation.sessionId, sessionId)),
+    );
+    expect(deps.cancelWork).toHaveBeenCalledWith(fixture.connection, delegation.workId);
+    expect(delegation).toMatchObject({
+      status: 'failed',
+      failureCode: 'access_lost',
+      workState: 'cancelled',
+      runtimeName: null,
+      relayQueuePosition: null,
+    });
+    expect(
+      one(await db.select().from(schema.agentSession).where(eq(schema.agentSession.id, sessionId))),
+    ).toMatchObject({ status: 'failed', endedAt: expect.any(Date) });
+  });
+
+  it('retries cancellation after submit access loss until the relay confirms it', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:49:15.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:post-submit-cancel-retry`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    vi.mocked(deps.submitWork).mockImplementation(async (_connection, input) => {
+      await db
+        .update(schema.actor)
+        .set({ status: 'suspended' })
+        .where(eq(schema.actor.id, fixture.ownerActor.id));
+      return { workId: input.workId, state: 'offline_queued', queuePosition: 2 };
+    });
+    vi.mocked(deps.cancelWork)
+      .mockRejectedValueOnce(new Error('relay unavailable during compensation'))
+      .mockResolvedValueOnce({ state: 'cancelled' });
+
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+
+    const pending = one(
+      await db
+        .select()
+        .from(schema.agentDelegation)
+        .where(eq(schema.agentDelegation.sessionId, sessionId)),
+    );
+    expect(pending).toMatchObject({
+      status: 'submitted',
+      failureCode: 'access_lost',
+      workState: 'offline_queued',
+      replyKeyCiphertext: expect.any(String),
+      nextPollAt: expect.any(Date),
+    });
+
+    await db
+      .update(schema.actor)
+      .set({ status: 'active' })
+      .where(eq(schema.actor.id, fixture.ownerActor.id));
+    await sweepLatticeDelegations(new Date(preparedAt.getTime() + 5_001), deps, {
+      pollingEnabled: true,
+      submissionsEnabled: false,
+    });
+
+    expect(deps.cancelWork).toHaveBeenCalledTimes(2);
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.id, pending.id)),
+      ),
+    ).toMatchObject({
+      status: 'failed',
+      failureCode: 'access_lost',
+      workState: 'cancelled',
+      replyKeyCiphertext: null,
+      settledAt: expect.any(Date),
+    });
+  });
+
+  it('reauthorizes transient submit failure writes inside their transaction', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:49:20.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:submit-error-write-fence`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    vi.mocked(deps.submitWork).mockRejectedValue(new Error('ambiguous submit timeout'));
+    const realCanActor = authzModule.canActor;
+    let authorizationChecks = 0;
+    const canActor = vi.spyOn(authzModule, 'canActor').mockImplementation(async (...args) => {
+      const result = await realCanActor(...args);
+      if (args[2].id !== fixture.targetTask.id) return result;
+      authorizationChecks += 1;
+      if (authorizationChecks === 3) {
+        await args[3]
+          .update(schema.latticeConnection)
+          .set({ status: 'disconnected' })
+          .where(eq(schema.latticeConnection.id, fixture.connection.id));
+      }
+      return result;
+    });
+
+    try {
+      await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+    } finally {
+      canActor.mockRestore();
+    }
+
+    expect(authorizationChecks).toBeGreaterThanOrEqual(3);
+    expect(deps.cancelWork).toHaveBeenCalled();
     expect(
       one(
         await db
@@ -1644,16 +1833,7 @@ describe('durable Lattice assignment delegations', () => {
           .from(schema.agentDelegation)
           .where(eq(schema.agentDelegation.sessionId, sessionId)),
       ),
-    ).toMatchObject({
-      status: 'failed',
-      failureCode: 'access_lost',
-      workState: null,
-      runtimeName: null,
-      relayQueuePosition: null,
-    });
-    expect(
-      one(await db.select().from(schema.agentSession).where(eq(schema.agentSession.id, sessionId))),
-    ).toMatchObject({ status: 'failed', endedAt: expect.any(Date) });
+    ).toMatchObject({ status: 'failed', failureCode: 'oauth_invalid', workState: 'cancelled' });
   });
 
   it.each(['offline_queued', 'rate_limited'] as const)(
@@ -1835,6 +2015,180 @@ describe('durable Lattice assignment delegations', () => {
           .where(eq(schema.agentDelegation.id, delegation.id)),
       ),
     ).toMatchObject({ status: 'failed', failureCode: 'oauth_invalid' });
+  });
+
+  it('cancels remote work when access is lost during the poll network call', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:53:00.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:post-poll-access-loss`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+    const delegation = one(
+      await db
+        .select()
+        .from(schema.agentDelegation)
+        .where(eq(schema.agentDelegation.sessionId, sessionId)),
+    );
+    vi.mocked(deps.pollEvents).mockImplementation(async (_connection, workId) => {
+      await db
+        .update(schema.actor)
+        .set({ status: 'suspended' })
+        .where(eq(schema.actor.id, fixture.ownerActor.id));
+      return { workId, state: 'in_flight', events: [], nextPollAfterMs: 1_000 };
+    });
+
+    await sweepLatticeDelegations(new Date(preparedAt.getTime() + 5_001), deps, {
+      pollingEnabled: true,
+      submissionsEnabled: false,
+    });
+
+    expect(deps.cancelWork).toHaveBeenCalledWith(fixture.connection, delegation.workId);
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.id, delegation.id)),
+      ),
+    ).toMatchObject({ status: 'failed', failureCode: 'access_lost', workState: 'cancelled' });
+    expect(
+      await db
+        .select()
+        .from(schema.sessionActivity)
+        .where(
+          and(
+            eq(schema.sessionActivity.sessionId, sessionId),
+            eq(schema.sessionActivity.type, 'thought'),
+          ),
+        ),
+    ).toHaveLength(0);
+  });
+
+  it('reauthorizes non-terminal poll writes inside their transaction', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:54:00.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:poll-state-write-fence`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+    const delegation = one(
+      await db
+        .select()
+        .from(schema.agentDelegation)
+        .where(eq(schema.agentDelegation.sessionId, sessionId)),
+    );
+    deps.pollResult = {
+      workId: delegation.workId,
+      state: 'in_flight',
+      events: [],
+      nextPollAfterMs: 1_000,
+    };
+    const realCanActor = authzModule.canActor;
+    let authorizationChecks = 0;
+    const canActor = vi.spyOn(authzModule, 'canActor').mockImplementation(async (...args) => {
+      const result = await realCanActor(...args);
+      if (args[2].id !== fixture.targetTask.id) return result;
+      authorizationChecks += 1;
+      if (authorizationChecks === 4) {
+        await args[3]
+          .update(schema.latticeConnection)
+          .set({ status: 'disconnected' })
+          .where(eq(schema.latticeConnection.id, fixture.connection.id));
+      }
+      return result;
+    });
+
+    try {
+      await sweepLatticeDelegations(new Date(preparedAt.getTime() + 5_001), deps, {
+        pollingEnabled: true,
+        submissionsEnabled: false,
+      });
+    } finally {
+      canActor.mockRestore();
+    }
+
+    expect(authorizationChecks).toBeGreaterThanOrEqual(4);
+    expect(deps.cancelWork).toHaveBeenCalled();
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.id, delegation.id)),
+      ),
+    ).toMatchObject({ status: 'failed', failureCode: 'oauth_invalid', workState: 'cancelled' });
+  });
+
+  it('reauthorizes transient poll failure writes inside their transaction', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:54:30.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:poll-error-write-fence`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+    const delegation = one(
+      await db
+        .select()
+        .from(schema.agentDelegation)
+        .where(eq(schema.agentDelegation.sessionId, sessionId)),
+    );
+    vi.mocked(deps.pollEvents).mockRejectedValue(new Error('poll timeout'));
+    const realCanActor = authzModule.canActor;
+    let authorizationChecks = 0;
+    const canActor = vi.spyOn(authzModule, 'canActor').mockImplementation(async (...args) => {
+      const result = await realCanActor(...args);
+      if (args[2].id !== fixture.targetTask.id) return result;
+      authorizationChecks += 1;
+      if (authorizationChecks === 3) {
+        await args[3]
+          .update(schema.latticeConnection)
+          .set({ status: 'disconnected' })
+          .where(eq(schema.latticeConnection.id, fixture.connection.id));
+      }
+      return result;
+    });
+
+    try {
+      await sweepLatticeDelegations(new Date(preparedAt.getTime() + 5_001), deps, {
+        pollingEnabled: true,
+        submissionsEnabled: false,
+      });
+    } finally {
+      canActor.mockRestore();
+    }
+
+    expect(authorizationChecks).toBeGreaterThanOrEqual(3);
+    expect(deps.cancelWork).toHaveBeenCalled();
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.id, delegation.id)),
+      ),
+    ).toMatchObject({ status: 'failed', failureCode: 'oauth_invalid', workState: 'cancelled' });
   });
 
   it('reauthorizes inside the progress transaction before writing activity', async () => {

@@ -28,7 +28,7 @@
 - **Subtasks**:
   - [x] Prevent ordinary Athena runners from claiming Lattice assignment sessions.
   - [x] Settle the delegation and parent session together after proposal decisions.
-  - [x] Reauthorize before submission and every poll.
+  - [ ] Reauthorize after every relay network call and inside every progress or retry transaction.
   - [x] Complete the controller command and accepted-submission metadata boundary.
   - [x] Derive the logical submission id from the pre-minted delegation id.
   - [x] Fence concurrent scheduler submission before the relay call.
@@ -39,11 +39,13 @@
 - **Validation**: The focused API route and delegation suites pass 136 tests. The clean PGlite
   personal-Athena migration and schema suite passes 7 tests. API and database builds, lint, and
   type checks pass through Turbo. The API type check needs a process-local 3 GB Node heap on this
-  16 GB host. The repository commit hooks run without bypasses on the follow-up commits.
-- **Blockers**: Production proof still needs the managed Mac Studio daemon to run one real assigned
-  task. The proof must correlate the Docket session, immutable delegation id, relay work id,
-  proposal, task comment, and result acknowledgement. Code and package publication do not prove
-  that final runtime path.
+  16 GB host. The repository commit hooks run without bypasses on the follow-up commits. These
+  results predate the cancellation-intent RED tests preserved in the Claude handoff.
+- **Blockers**: Independent review found orphaned remote work and access-loss write races during
+  submit, poll, retry, and concurrent cancellation. Migration 0116 and the RED tests are present,
+  but the cancellation-intent runtime implementation is not. Package publication, production mTLS
+  recovery, deployment, managed Mac Studio pairing, and both real production proofs also remain.
+  See `docs/superpowers/plans/2026-08-30-docket-lattice-roundtrip-claude-handoff.md` for exact state.
 
 ### [ATHENA-PHONE-AUTH-001] Verify phone ownership and authenticate calls without routine codes
 

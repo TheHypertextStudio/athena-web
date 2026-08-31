@@ -880,6 +880,7 @@ export const agentDelegation = pgTable(
     workState: text('work_state'),
     submissionLeaseToken: text('submission_lease_token'),
     submissionLeaseExpiresAt: timestamp('submission_lease_expires_at'),
+    cancellationRequestedAt: timestamp('cancellation_requested_at'),
     relayCursor: text('relay_cursor').notNull().default('cursor_0'),
     nextPollAt: timestamp('next_poll_at'),
     deadlineAt: timestamp('deadline_at'),
@@ -958,6 +959,10 @@ export const agentDelegation = pgTable(
       'agent_delegation_submission_lease_check',
       sql`(${t.submissionLeaseToken} IS NULL AND ${t.submissionLeaseExpiresAt} IS NULL)
         OR (${t.status} = 'prepared' AND ${t.submissionLeaseToken} IS NOT NULL AND ${t.submissionLeaseExpiresAt} IS NOT NULL)`,
+    ),
+    check(
+      'agent_delegation_cancellation_intent_check',
+      sql`${t.cancellationRequestedAt} IS NULL OR ${t.status} in ('prepared','submitted')`,
     ),
     check(
       'agent_delegation_reply_key_lifecycle_check',

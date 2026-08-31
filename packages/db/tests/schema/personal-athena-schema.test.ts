@@ -107,9 +107,17 @@ describe('personal Athena schema', () => {
     const delegationTable = (await db.execute(
       `select to_regclass('public.agent_delegation') as reg`,
     )) as unknown as { rows: { reg: string | null }[] };
+    const cancellationIntentColumn = (await db.execute(`
+      select is_nullable
+      from information_schema.columns
+      where table_schema = 'public'
+        and table_name = 'agent_delegation'
+        and column_name = 'cancellation_requested_at'
+    `)) as unknown as { rows: { is_nullable: string }[] };
 
     expect(sessionColumn.rows).toEqual([{ column_default: "'docket'::text" }]);
     expect(delegationTable.rows[0]?.reg).toBe('agent_delegation');
+    expect(cancellationIntentColumn.rows).toEqual([{ is_nullable: 'YES' }]);
 
     const [assignment] = await db
       .insert(athenaAssignment)

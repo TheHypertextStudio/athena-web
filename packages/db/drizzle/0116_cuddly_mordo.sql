@@ -1,0 +1,2 @@
+ALTER TABLE "agent_delegation" ADD COLUMN "cancellation_requested_at" timestamp;--> statement-breakpoint
+ALTER TABLE "agent_delegation" ADD CONSTRAINT "agent_delegation_cancellation_intent_check" CHECK ("agent_delegation"."cancellation_requested_at" IS NULL OR "agent_delegation"."status" in ('prepared','submitted'));

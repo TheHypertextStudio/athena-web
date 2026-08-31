@@ -102,13 +102,26 @@ work` asserted a local `canceled` settlement while the Mac Studio kept running, 
   `lattice.uselovelace.com` both answer HTTP 200 and serve OAuth discovery, but through Cloud Run
   domain mappings rather than the mTLS load balancer, so the Google edge recovery is unfinished and
   the `willie@reasonabletech.co` credentials need an interactive `gcloud auth login`. The Mac Studio
-  is this host. LM Studio serves `poolside/laguna-s-2.1`, `lattice-daemon` 0.1.0 and `lattice-ctl`
-  are installed, and `~/.lovelace/lattice/config.toml` already carries the required shape: provider
-  `lmstudio`, that model, `http://127.0.0.1:1234/v1`, one concurrent task, relay tools on, and no
-  auto-consented tools. What remains is `lattice-ctl auth login --accounts-url
-https://auth.uselovelace.com`, whose device code the user must approve in a browser, followed by
-  `device`, `model`, `open`, and `service install`; `auth status` reports `signedIn: false` and no
-  `dev.williecubed.lattice-daemon` job exists. See
+  is this host. LM Studio serves `poolside/laguna-s-2.1`, and `~/.lovelace/lattice/config.toml`
+  already carries the required shape: provider `lmstudio`, that model, `http://127.0.0.1:1234/v1`,
+  one concurrent task, relay tools on, and no auto-consented tools.
+- **Mac Studio runtime, as found**: two conditions the handoff did not know about. The daemon could
+  not start at all — `Failed to initialize device identity: Invalid DID: Keypair does not match
+stored DID` — because `~/.lovelace/lattice/device.json` and `device.key`, both written
+  2026-06-16, had drifted apart. That identity read `trust_status: "unregistered"`, so nothing was
+  bound to it and nothing was lost by replacing it; both files were moved aside in place with a
+  `.corrupt-20260830-230702` suffix rather than removed. The managed launchd job is installed under
+  the label the tool chooses, `com.lovelace.lattice-daemon`, and the daemon now mints a fresh
+  identity and answers `ping`.
+- **Pairing is blocked on Lovelace, not on Docket**: `lattice-ctl auth login --accounts-url
+https://auth.uselovelace.com` is refused with `invalid_scope`. The installed `lattice-ctl` 0.1.0
+  asks `/device_authorization` for `openid profile offline_access marketplace`, and production's
+  discovery document advertises no `marketplace` scope — it offers `openid`, `profile`, `email`,
+  `offline_access`, the `workspace`, `agents`, and `knowledge` pairs, `lattice:compute:inference`,
+  and `lattice:compute:catalog:read`. The deployed accounts service and this daemon build disagree
+  about the provider-side scope, which fits the Lovelace checkout sitting a hundred commits ahead
+  of its remote. Closing it needs a Lovelace change: an accounts service that grants `marketplace`,
+  or a daemon built against what production offers. No Docket change reaches it. See
   `docs/superpowers/plans/2026-08-30-docket-lattice-roundtrip-claude-handoff.md` for the recorded
   handoff state, and note that its worktree paths, tarball paths, `gcloud` path, and Lovelace
   branch state are stale.

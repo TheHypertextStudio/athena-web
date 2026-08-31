@@ -855,6 +855,92 @@ describe('queryWorkView', () => {
     expect(hidden.nextCursor).toBeNull();
   });
 
+  it('excludes a direct Initiative when its readable parent has an unreadable grandparent', async () => {
+    const contextOrg = await seedBaseOrg(schema.db, schema);
+    const foreignOrg = await seedBaseOrg(schema.db, schema);
+    const [parent, child] = await schema.db
+      .insert(schema.initiative)
+      .values([
+        {
+          organizationId: contextOrg.orgId,
+          name: 'Readable immediate parent',
+          status: 'active',
+          statusId: contextOrg.statusId('initiative', 'active'),
+          priority: 'low',
+        },
+        {
+          organizationId: contextOrg.orgId,
+          name: 'Three-level direct child',
+          status: 'active',
+          statusId: contextOrg.statusId('initiative', 'active'),
+          priority: 'high',
+        },
+      ])
+      .returning({ id: schema.initiative.id });
+    const [grandparent] = await schema.db
+      .insert(schema.initiative)
+      .values({
+        organizationId: foreignOrg.orgId,
+        name: 'Unreadable grandparent',
+        status: 'active',
+        statusId: foreignOrg.statusId('initiative', 'active'),
+        priority: 'low',
+      })
+      .returning({ id: schema.initiative.id });
+    if (!parent || !child || !grandparent) {
+      throw new Error('Three-level authorization fixture was not seeded');
+    }
+    await schema.db.insert(schema.initiativeHierarchyLink).values({
+      contextOrganizationId: contextOrg.orgId,
+      parentInitiativeId: parent.id,
+      childInitiativeId: child.id,
+      createdBy: contextOrg.humanActorId,
+    });
+    const request = initiativeRequest({
+      definition: {
+        ...initiativeRequest().definition,
+        filter: {
+          kind: 'predicate',
+          field: 'name',
+          operator: 'contains',
+          operand: 'Three-level direct child',
+        },
+        arrangement: { groupBy: 'priority', subGroupBy: null, orderBy: [] },
+      },
+      limit: 1,
+    });
+    const readableChain = await queryWorkView({
+      database: schema.db,
+      organizationId: contextOrg.orgId,
+      actorId: contextOrg.humanActorId,
+      request,
+      groupPath: ['high'],
+    });
+    expect(readableChain.rows.map((row) => row.id)).toEqual([parent.id, child.id]);
+    expect(readableChain.totalCount).toBe(1);
+    expect(readableChain.groups).toContainEqual({
+      path: ['high'],
+      key: 'high',
+      label: 'high',
+      count: 1,
+    });
+
+    await schema.db.insert(schema.initiativeHierarchyLink).values({
+      contextOrganizationId: contextOrg.orgId,
+      parentInitiativeId: grandparent.id,
+      childInitiativeId: parent.id,
+      createdBy: contextOrg.humanActorId,
+    });
+    const hiddenChain = await queryWorkView({
+      database: schema.db,
+      organizationId: contextOrg.orgId,
+      actorId: contextOrg.humanActorId,
+      request,
+      groupPath: ['high'],
+    });
+    expect(hiddenChain).toMatchObject({ totalCount: 0, rows: [], groups: [], nextCursor: null });
+  });
+
   it('keeps Initiative cursors and duplicate context scoped to their group path', async () => {
     const { orgId, humanActorId, statusId } = await seedBaseOrg(schema.db, schema);
     const rows = await schema.db

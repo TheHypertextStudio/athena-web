@@ -253,6 +253,14 @@ function ContextRow({
  * carries its own `Surface tone="floating"`, so the gap between rows shows the card's plain
  * surface rather than a seam in one continuous block.
  *
+ * The row itself takes no fixed `shape` — {@link ScopeList} sets every row's corners from the
+ * list container, the same `corner-xs` seam / `corner-md` edge scheme `menuGroup()`
+ * (`packages/ui/src/primitives/menu-styles.ts`) already uses for grouped rows, so the tighter
+ * radius at each gap and the fuller radius only at the group's own top and bottom is automatic
+ * from `:first-child`/`:last-child` rather than a per-row prop this component would have to
+ * thread through. `overflow-hidden` clips the trigger's focus ring to whichever radius the row
+ * actually has.
+ *
  * Built on `@docket/ui/primitives`' `Collapsible` rather than native `<details>`/`<summary>` —
  * same keyboard/AT contract (Radix wires `aria-expanded` and keyboard toggling for free), but the
  * open state now reads through `data-[state=open]` like every other primitive in the system,
@@ -275,7 +283,7 @@ function ScopeRow({ scope }: { scope: string }): JSX.Element {
   const Icon = SCOPE_ICON[scope] ?? XCircle;
 
   return (
-    <Surface as="li" tone="floating" shape="small">
+    <Surface as="li" tone="floating" shape="none" className="overflow-hidden">
       <Collapsible>
         {/* `items-stretch`: the glyph column, the text column, and the chevron column are all the
             row's full height, so no inline sibling is a different size than the ones beside it.
@@ -293,7 +301,7 @@ function ScopeRow({ scope }: { scope: string }): JSX.Element {
         <CollapsibleTrigger
           type="button"
           className={cn(
-            'group flex min-h-11 w-full items-stretch gap-3 rounded-lg px-3 py-2.5 text-left',
+            'group flex min-h-11 w-full items-stretch gap-3 px-3 py-2.5 text-left',
             focusRingInset,
           )}
         >
@@ -339,6 +347,13 @@ function ScopeRow({ scope }: { scope: string }): JSX.Element {
  * without necessarily firing a scroll event). They fade to `from-surface`, the card's own plain
  * tone — what's actually behind the mask now that each row carries its own background rather than
  * the list sharing one continuous tonal block.
+ *
+ * Row corners come from here, not from `ScopeRow`: every row gets the MD3 `corner-xs` seam
+ * radius, and `:first-child`/`:last-child` alone escalate to `corner-md` on the edge facing the
+ * group's own boundary — the tighter radius at every gap is what reads as one list that has been
+ * cut into rows rather than a stack of unrelated pills, the same reasoning `menuGroup()`
+ * (`packages/ui/src/primitives/menu-styles.ts`) already applies to a menu's own sectioned rows.
+ * Driven entirely by these selectors so a row never needs to know its own position in the list.
  */
 function ScopeList({ scopes }: { scopes: readonly string[] }): JSX.Element {
   const listRef = useRef<HTMLUListElement>(null);
@@ -369,7 +384,10 @@ function ScopeList({ scopes }: { scopes: readonly string[] }): JSX.Element {
 
   return (
     <div className="relative min-w-0">
-      <ul ref={listRef} className="flex max-h-[40dvh] flex-col gap-1 overflow-y-auto">
+      <ul
+        ref={listRef}
+        className="[&>li]:rounded-corner-xs [&>li:first-child]:rounded-t-corner-md [&>li:last-child]:rounded-b-corner-md flex max-h-[40dvh] flex-col gap-1 overflow-y-auto"
+      >
         {scopes.map((scope) => (
           <ScopeRow key={scope} scope={scope} />
         ))}

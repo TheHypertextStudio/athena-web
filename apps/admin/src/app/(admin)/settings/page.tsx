@@ -92,7 +92,7 @@ function LatticeControls({
   onChange,
 }: {
   readonly controls: ServiceControls;
-  readonly actionError: unknown;
+  readonly actionError: Error | null;
   readonly pending: ServiceControlField | null;
   readonly onChange: (field: ServiceControlField, enabled: boolean) => void;
 }): JSX.Element {

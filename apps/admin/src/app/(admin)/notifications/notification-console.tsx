@@ -20,6 +20,7 @@ import type {
   NotificationMonitorDelivery,
   NotificationMonitorInboundEvent,
 } from './monitor-stage';
+import type { UserFacingError } from '@/lib/problem';
 import type { NotificationAnnouncementDraft } from './notification-console-model';
 import { ReviewStage } from './review-stage';
 import { SendStage } from './send-stage';
@@ -61,8 +62,8 @@ export interface NotificationAnnouncementConsoleProps {
   readonly draft: NotificationAnnouncementDraft;
   /** Action currently in flight, if any. */
   readonly pendingAction: string | null;
-  /** Inline error message. */
-  readonly error: string | null;
+  /** The failed action, carrying its status so a 403 can offer the right recovery. */
+  readonly error: UserFacingError | null;
   /** Inline success/status message. */
   readonly statusMessage: string | null;
   /** Update one draft field. */

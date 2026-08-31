@@ -13,7 +13,7 @@ import {
   type NotificationAnnouncementDraft,
 } from './notification-console-model';
 import { api, productApi } from '@/lib/api';
-import { readProblemError, userErrorMessage } from '@/lib/problem';
+import { readProblemError, toUserFacingError, type UserFacingError } from '@/lib/problem';
 import type {
   AdminNotificationEstimate,
   AdminNotificationIntent,
@@ -50,7 +50,7 @@ export default function NotificationsPage(): JSX.Element {
   const [auditEvents, setAuditEvents] = useState<readonly NotificationMonitorAuditEvent[]>([]);
   const [draft, setDraft] = useState<NotificationAnnouncementDraft>(emptyDraft);
   const [pendingAction, setPendingAction] = useState<string | null>('load');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<UserFacingError | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   const loadIntent = useCallback(async (id: string): Promise<void> => {
@@ -126,7 +126,7 @@ export default function NotificationsPage(): JSX.Element {
           setAuditEvents([]);
         }
       } catch (caught) {
-        setError(userErrorMessage(caught, 'Something went wrong loading notifications.'));
+        setError(toUserFacingError(caught, 'Something went wrong loading notifications.'));
       } finally {
         setPendingAction(null);
       }
@@ -228,7 +228,7 @@ export default function NotificationsPage(): JSX.Element {
     try {
       await run();
     } catch (caught) {
-      setError(userErrorMessage(caught, 'Notification action failed.'));
+      setError(toUserFacingError(caught, 'Notification action failed.'));
     } finally {
       setPendingAction(null);
     }

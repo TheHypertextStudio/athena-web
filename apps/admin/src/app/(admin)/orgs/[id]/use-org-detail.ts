@@ -5,7 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { InferResponseType } from 'hono/client';
 
 import { api } from '@/lib/api';
-import { userErrorMessage, userProblemMessage } from '@/lib/problem';
+import { readProblemError, toUserFacingError, type UserFacingError } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 import type { AdminOrg, AdminOrgBillingState } from '@/lib/types';
 
@@ -39,8 +39,9 @@ export interface OrgDetailData {
   billing: AdminOrgBillingState | undefined;
   loading: boolean;
   /** The failed read, if either read failed. */
-  error: unknown;
-  actionError: string | null;
+  error: Error | null;
+  /** The failed action, carrying its status so a 403 can offer the right recovery. */
+  actionError: UserFacingError | null;
   pending: string | null;
   trialDays: string;
   setTrialDays: (v: string) => void;
@@ -69,7 +70,7 @@ export function useOrgDetail(orgId: string): OrgDetailData {
   const queryClient = useQueryClient();
   const orgQuery = useApiQuery(orgDef(orgId));
   const billingQuery = useApiQuery(billingDef(orgId));
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<UserFacingError | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [trialDays, setTrialDays] = useState('14');
   const [complimentaryReason, setComplimentaryReason] = useState('Founder production access');
@@ -101,12 +102,12 @@ export function useOrgDetail(orgId: string): OrgDetailData {
       try {
         const res = await call();
         if (!res.ok) {
-          setActionError(await userProblemMessage(res, failMessage));
+          setActionError(await readProblemError(res, failMessage));
           return;
         }
         queryClient.setQueryData(orgDef(orgId).queryKey, (await res.json()) as AdminOrg);
       } catch (caught) {
-        setActionError(userErrorMessage(caught, failMessage));
+        setActionError(toUserFacingError(caught, failMessage));
       } finally {
         setPending(null);
       }
@@ -136,13 +137,13 @@ export function useOrgDetail(orgId: string): OrgDetailData {
         });
         if (!response.ok) {
           setActionError(
-            await userProblemMessage(response, 'Could not reconcile Stripe billing state.'),
+            await readProblemError(response, 'Could not reconcile Stripe billing state.'),
           );
           return;
         }
         await load();
       } catch (caught) {
-        setActionError(userErrorMessage(caught, 'Could not reconcile Stripe billing state.'));
+        setActionError(toUserFacingError(caught, 'Could not reconcile Stripe billing state.'));
       } finally {
         setPending(null);
       }
@@ -173,7 +174,7 @@ export function useOrgDetail(orgId: string): OrgDetailData {
         );
       } catch (caught) {
         setActionError(
-          userErrorMessage(
+          toUserFacingError(
             caught,
             grant
               ? 'Something went wrong granting complimentary Docket Pro.'
@@ -210,16 +211,14 @@ export function useOrgDetail(orgId: string): OrgDetailData {
           },
         });
         if (!response.ok) {
-          setActionError(
-            await userProblemMessage(response, 'Could not grant the partner discount.'),
-          );
+          setActionError(await readProblemError(response, 'Could not grant the partner discount.'));
           return;
         }
         setPartnerReason('');
         setPartnerPreview(null);
         await load();
       } catch (caught) {
-        setActionError(userErrorMessage(caught, 'Could not grant the partner discount.'));
+        setActionError(toUserFacingError(caught, 'Could not grant the partner discount.'));
       } finally {
         setPending(null);
       }
@@ -241,13 +240,13 @@ export function useOrgDetail(orgId: string): OrgDetailData {
         });
         if (!response.ok) {
           setActionError(
-            await userProblemMessage(response, 'Could not preview the partner discount.'),
+            await readProblemError(response, 'Could not preview the partner discount.'),
           );
           return;
         }
         setPartnerPreview(await response.json());
       } catch (caught) {
-        setActionError(userErrorMessage(caught, 'Could not preview the partner discount.'));
+        setActionError(toUserFacingError(caught, 'Could not preview the partner discount.'));
       } finally {
         setPending(null);
       }
@@ -278,7 +277,7 @@ export function useOrgDetail(orgId: string): OrgDetailData {
                 });
           if (!response.ok) {
             setActionError(
-              await userProblemMessage(response, `Could not ${action} the current discount.`),
+              await readProblemError(response, `Could not ${action} the current discount.`),
             );
             return;
           }
@@ -286,7 +285,7 @@ export function useOrgDetail(orgId: string): OrgDetailData {
           setPartnerPreview(null);
           await load();
         } catch (caught) {
-          setActionError(userErrorMessage(caught, `Could not ${action} the current discount.`));
+          setActionError(toUserFacingError(caught, `Could not ${action} the current discount.`));
         } finally {
           setPending(null);
         }

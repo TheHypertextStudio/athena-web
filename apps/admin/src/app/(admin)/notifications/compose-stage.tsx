@@ -94,7 +94,7 @@ export function ComposeStage({
       <Audience draft={draft} recipientCount={recipientCount} onDraftChange={onDraftChange} />
 
       <div className="grid gap-4 @lg:grid-cols-2">
-        <Field label="Channels">
+        <FieldGroup label="Channels">
           <div className="flex flex-wrap gap-3">
             {CHANNELS.map((channel) => (
               <label key={channel} className="flex items-center gap-1.5">
@@ -111,7 +111,7 @@ export function ComposeStage({
               </label>
             ))}
           </div>
-        </Field>
+        </FieldGroup>
 
         <Field label="Send at" htmlFor="announcement-schedule">
           <Input
@@ -193,11 +193,15 @@ function Audience({
           id="announcement-audience"
           value={draft.audienceType}
           onChange={(event) => {
+            const next = event.target.value as NotificationAnnouncementDraft['audienceType'];
+            onDraftChange('audienceType', next);
+            // A segment must start on a real option. Clearing to `''` matches no `<option>`, so the
+            // select renders blank while `segmentFromDraft` still resolves it to `active_users` —
+            // an announcement addressed to everyone active that nobody chose.
             onDraftChange(
-              'audienceType',
-              event.target.value as NotificationAnnouncementDraft['audienceType'],
+              'audienceValue',
+              next === 'segment' ? notificationAudienceSegments[0] : '',
             );
-            onDraftChange('audienceValue', '');
           }}
         >
           {AUDIENCES.map((audience) => (
@@ -264,12 +268,38 @@ function Field({
   children,
 }: {
   readonly label: string;
-  readonly htmlFor?: string | undefined;
+  /** The control this labels. Required — a `<label>` earns its element by naming one. */
+  readonly htmlFor: string;
   readonly children: JSX.Element;
 }): JSX.Element {
   return (
     <Stack gap={1}>
-      <Text as="label" token="label-medium" {...(htmlFor ? { htmlFor } : {})}>
+      <Text as="label" token="label-medium" htmlFor={htmlFor}>
+        {label}
+      </Text>
+      {children}
+    </Stack>
+  );
+}
+
+/**
+ * A caption for a set of controls rather than a single one.
+ *
+ * @remarks
+ * Separate from {@link Field} so neither takes an optional `htmlFor`: a caption over several inputs
+ * has no one control to name, and rendering it as a `<label>` would point at nothing and leave the
+ * inputs announced as an unnamed run. A real `fieldset`/`legend` names the group instead.
+ */
+function FieldGroup({
+  label,
+  children,
+}: {
+  readonly label: string;
+  readonly children: JSX.Element;
+}): JSX.Element {
+  return (
+    <Stack gap={1} as="fieldset">
+      <Text as="legend" token="label-medium">
         {label}
       </Text>
       {children}

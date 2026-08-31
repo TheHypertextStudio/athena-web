@@ -1,4 +1,4 @@
-import { userErrorMessage, userProblemMessage } from '@/lib/problem';
+import { readProblemError, toUserFacingError, type UserFacingError } from '@/lib/problem';
 
 /**
  * Settle one complimentary-access request and always refresh the authoritative billing state.
@@ -12,25 +12,27 @@ import { userErrorMessage, userProblemMessage } from '@/lib/problem';
  * @param request - The grant or revoke request.
  * @param load - Reloads organization and billing state after the request settles.
  * @param failureMessage - Application-owned copy for a rejected request.
- * @returns Application-owned error copy, or `null` after a confirmed success.
+ * @returns The structured failure, or `null` after a confirmed success. Returning the error
+ * rather than a rendered string keeps its status, so a 403 can offer the sign-in recovery instead
+ * of an unhelpful retry.
  */
 export async function settleComplimentaryChange(
   request: () => Promise<Response>,
   load: () => Promise<void>,
   failureMessage: string,
-): Promise<string | null> {
+): Promise<UserFacingError | null> {
   try {
     const response = await request();
     if (!response.ok) {
-      const message = await userProblemMessage(response, failureMessage);
+      const failure = await readProblemError(response, failureMessage);
       await load();
-      return message;
+      return failure;
     }
     await load();
     return null;
   } catch (caught) {
-    const message = userErrorMessage(caught, failureMessage);
+    const failure = toUserFacingError(caught, failureMessage);
     await load();
-    return message;
+    return failure;
   }
 }

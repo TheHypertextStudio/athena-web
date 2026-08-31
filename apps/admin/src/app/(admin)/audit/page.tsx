@@ -112,23 +112,24 @@ export default function AuditPage(): JSX.Element {
         skeleton={<ListSkeleton rows={8} />}
         emptyState={<NoEvents filtered={debouncedType !== ''} />}
       >
-        <Stack gap={4}>
-          <RefreshingOverlay refreshing={query.isFetching}>
-            <Stack gap={1} as="ul">
-              {events.map((event) => (
-                <AuditRow key={event.id} event={event} />
-              ))}
-            </Stack>
-          </RefreshingOverlay>
-          <AdminPagination
-            offset={offset}
-            pageSize={PAGE_SIZE}
-            pageCount={events.length}
-            onOffsetChange={setOffset}
-            noun="events"
-          />
-        </Stack>
+        <RefreshingOverlay refreshing={query.isFetching}>
+          <Stack gap={1} as="ul">
+            {events.map((event) => (
+              <AuditRow key={event.id} event={event} />
+            ))}
+          </Stack>
+        </RefreshingOverlay>
       </AsyncContent>
+
+      {/* A sibling of the content, not a child: a page that comes back empty swaps in the empty
+          state, and a pager nested inside it would take the only way back with it. */}
+      <AdminPagination
+        offset={offset}
+        pageSize={PAGE_SIZE}
+        pageCount={events.length}
+        onOffsetChange={setOffset}
+        noun="events"
+      />
     </AdminPage>
   );
 }

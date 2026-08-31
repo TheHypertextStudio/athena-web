@@ -4,7 +4,7 @@ import { EmptyState, IdentityGlyph, RelativeTime } from '@docket/ui/components';
 import type { Column } from '@docket/ui/components';
 import { relativeTime } from '@docket/ui';
 import { Building } from '@docket/ui/icons';
-import { Input, Stack, Text } from '@docket/ui/primitives';
+import { Input, Text } from '@docket/ui/primitives';
 import { type JSX, useMemo, useState } from 'react';
 
 import {
@@ -187,26 +187,27 @@ export default function OrgsPage(): JSX.Element {
         skeleton={<ListSkeleton />}
         emptyState={<NoOrganizations filtered={filtered} />}
       >
-        <Stack gap={4}>
-          <RefreshingOverlay refreshing={query.isFetching}>
-            <AdminTable
-              label="Organizations"
-              columns={columns}
-              rows={items}
-              getRowKey={(row) => row.id}
-              rowHref={(row) => `/orgs/${row.id}`}
-            />
-          </RefreshingOverlay>
-          <AdminPagination
-            offset={offset}
-            pageSize={PAGE_SIZE}
-            pageCount={items.length}
-            total={total}
-            onOffsetChange={setOffset}
-            noun="organizations"
+        <RefreshingOverlay refreshing={query.isFetching}>
+          <AdminTable
+            label="Organizations"
+            columns={columns}
+            rows={items}
+            getRowKey={(row) => row.id}
+            rowHref={(row) => `/orgs/${row.id}`}
           />
-        </Stack>
+        </RefreshingOverlay>
       </AsyncContent>
+
+      {/* A sibling of the content, not a child: a page that comes back empty swaps in the empty
+          state, and a pager nested inside it would take the only way back with it. */}
+      <AdminPagination
+        offset={offset}
+        pageSize={PAGE_SIZE}
+        pageCount={items.length}
+        total={total}
+        onOffsetChange={setOffset}
+        noun="organizations"
+      />
     </AdminPage>
   );
 }

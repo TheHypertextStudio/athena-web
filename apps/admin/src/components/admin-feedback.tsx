@@ -10,8 +10,16 @@ import { userErrorMessage } from '@/lib/problem';
 
 /** Props for {@link QueryErrorBanner}. */
 export interface QueryErrorBannerProps {
-  /** The failure from a query or mutation, or `null`/`undefined` to render nothing. */
-  readonly error: unknown;
+  /**
+   * The failure from a query, mutation, or action — or `null` to render nothing.
+   *
+   * @remarks
+   * Deliberately an `Error` rather than `unknown`: this component reads a failure's `status` to
+   * choose the recovery, and preserves its message only when it is a `UserFacingError`. Handing it
+   * an already-rendered string used to type-check and then silently discard that string in favour
+   * of the fallback, losing which of a screen's actions had failed.
+   */
+  readonly error: Error | null | undefined;
   /** Application-owned copy used when the failure carries none of its own. */
   readonly fallback: string;
   /** Retry the failed read, when the caller has something to retry. */

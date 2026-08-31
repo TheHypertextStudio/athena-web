@@ -27,11 +27,11 @@ export interface ServiceControlsData {
   /** Whether the initial read is still in flight. */
   loading: boolean;
   /** The failed load, if the read failed. */
-  error: unknown;
+  error: Error | null;
   /** Re-read the current controls. */
   reload: () => void;
   /** The failed change, if the last change failed. */
-  actionError: unknown;
+  actionError: Error | null;
   /** The control whose change is in flight, or `null` when the screen is idle. */
   pending: ServiceControlField | null;
   /** Store a new value for one control, keeping the screen on the confirmed state until it lands. */

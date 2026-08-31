@@ -4,7 +4,7 @@ import { ActorAvatar, EmptyState, RelativeTime } from '@docket/ui/components';
 import type { Column } from '@docket/ui/components';
 import { relativeTime } from '@docket/ui';
 import { Users } from '@docket/ui/icons';
-import { Input, Stack, Text } from '@docket/ui/primitives';
+import { Input, Text } from '@docket/ui/primitives';
 import { type JSX, useMemo, useState } from 'react';
 
 import {
@@ -163,26 +163,27 @@ export default function UsersPage(): JSX.Element {
         skeleton={<ListSkeleton />}
         emptyState={<NoUsers searching={debouncedSearch !== ''} />}
       >
-        <Stack gap={4}>
-          <RefreshingOverlay refreshing={query.isFetching}>
-            <AdminTable
-              label="Users"
-              columns={columns}
-              rows={items}
-              getRowKey={(row) => row.id}
-              rowHref={(row) => `/users/${row.id}`}
-            />
-          </RefreshingOverlay>
-          <AdminPagination
-            offset={offset}
-            pageSize={PAGE_SIZE}
-            pageCount={items.length}
-            total={total}
-            onOffsetChange={setOffset}
-            noun="users"
+        <RefreshingOverlay refreshing={query.isFetching}>
+          <AdminTable
+            label="Users"
+            columns={columns}
+            rows={items}
+            getRowKey={(row) => row.id}
+            rowHref={(row) => `/users/${row.id}`}
           />
-        </Stack>
+        </RefreshingOverlay>
       </AsyncContent>
+
+      {/* A sibling of the content, not a child: a page that comes back empty swaps in the empty
+          state, and a pager nested inside it would take the only way back with it. */}
+      <AdminPagination
+        offset={offset}
+        pageSize={PAGE_SIZE}
+        pageCount={items.length}
+        total={total}
+        onOffsetChange={setOffset}
+        noun="users"
+      />
     </AdminPage>
   );
 }

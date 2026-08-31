@@ -10,7 +10,7 @@ describe('complimentary organization access', () => {
       visibleState = providerState;
     });
 
-    const message = await settleComplimentaryChange(
+    const failure = await settleComplimentaryChange(
       async () => {
         providerState = 'Complimentary';
         throw new Error('connection closed after commit');
@@ -21,8 +21,8 @@ describe('complimentary organization access', () => {
 
     expect(load).toHaveBeenCalledOnce();
     expect(visibleState).toBe('Complimentary');
-    expect(message).toBe('Could not grant complimentary Docket Pro.');
-    expect(message).not.toContain('connection closed');
+    expect(failure?.message).toBe('Could not grant complimentary Docket Pro.');
+    expect(failure?.message).not.toContain('connection closed');
   });
 
   it('reloads authoritative state after the server rejects the request', async () => {
@@ -32,7 +32,7 @@ describe('complimentary organization access', () => {
       visibleState = providerState;
     });
 
-    const message = await settleComplimentaryChange(
+    const failure = await settleComplimentaryChange(
       async () => new Response(JSON.stringify({ code: 'forbidden', status: 403 }), { status: 403 }),
       load,
       'Could not grant complimentary Docket Pro.',
@@ -40,7 +40,7 @@ describe('complimentary organization access', () => {
 
     expect(load).toHaveBeenCalledOnce();
     expect(visibleState).toBe('Free');
-    expect(message).toBe('Could not grant complimentary Docket Pro.');
+    expect(failure?.message).toBe('Could not grant complimentary Docket Pro.');
   });
 
   it('reports no error and reloads after a confirmed success', async () => {
@@ -50,7 +50,7 @@ describe('complimentary organization access', () => {
       visibleState = providerState;
     });
 
-    const message = await settleComplimentaryChange(
+    const failure = await settleComplimentaryChange(
       async () => {
         providerState = 'Complimentary';
         return new Response(null, { status: 204 });
@@ -59,7 +59,7 @@ describe('complimentary organization access', () => {
       'Could not grant complimentary Docket Pro.',
     );
 
-    expect(message).toBeNull();
+    expect(failure).toBeNull();
     expect(load).toHaveBeenCalledOnce();
     expect(visibleState).toBe('Complimentary');
   });

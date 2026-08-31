@@ -47,9 +47,15 @@ async function focusTable(
   editor: HTMLElement,
   user: ReturnType<typeof userEvent.setup>,
 ): Promise<void> {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    // Tiptap may replace its initial document DOM after the textbox first appears. Resolve the
-    // cell again before each click so JSDOM never sends the event to a detached first render.
+  // Tiptap replaces its initial document DOM after the textbox first appears, and it does so on
+  // its own schedule — under a loaded test host the replacement can land well after mount. Wait
+  // for a header cell to exist at all before spending any click attempts on it.
+  await waitFor(() => {
+    expect(editor.querySelector('th')).not.toBeNull();
+  });
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    // Resolve the cell again before each click so JSDOM never sends the event to a detached
+    // first render.
     const firstCell = editor.querySelector('th');
     if (firstCell === null) {
       throw new Error('Expected the Markdown fixture to render a header cell.');
@@ -58,15 +64,18 @@ async function focusTable(
     await user.keyboard('{ArrowRight}');
 
     try {
+      // The per-attempt budget must absorb a slow scheduler tick on a fully loaded CPU (the
+      // whole suite runs in parallel workers), not just the happy-path render — a budget the
+      // toolbar routinely meets in isolation is exactly the one that flakes under load.
       await waitFor(
         () => {
           expect(screen.queryByRole('toolbar', { name: 'Table controls' })).not.toBeNull();
         },
-        { timeout: 1_500 },
+        { timeout: 3_000 },
       );
       return;
     } catch (error) {
-      if (attempt === 2) throw error;
+      if (attempt === 4) throw error;
     }
   }
 }
@@ -167,15 +176,32 @@ describe('editing a Markdown table', () => {
     expect(dialog).toContainElement(addColumnItem);
     expect(toolbar).toBeVisible();
     await user.keyboard('{Escape}');
+    // Closing the menu moves focus on its own schedule, and two owners race for it: Radix
+    // restores the trigger, while the toolbar's own Escape handler refocuses the editor —
+    // whichever saw the key first. Both outcomes keep the toolbar legitimately visible; what the
+    // dismissal below cannot tolerate is clicking outside while that restoration is still
+    // pending, because a deferred focus landing INSIDE the toolbar after the hide re-satisfies
+    // `shouldShow` and re-opens it. Wait for the close to fully settle first.
+    await waitFor(() => {
+      expect(screen.queryByRole('menuitem', { name: 'Add column' })).toBeNull();
+      expect(document.activeElement === editor || toolbar.contains(document.activeElement)).toBe(
+        true,
+      );
+    });
 
     const taskTitleControl = screen.getByRole('button', { name: 'Task title control' });
     await user.click(taskTitleControl);
-    await waitFor(() => {
-      expect(screen.queryByRole('toolbar', { name: 'Table controls' })).toBeNull();
-      expect(editor.querySelector('.tableWrapper')).not.toHaveAttribute(
-        'data-table-controls-visible',
-      );
-    });
+    // Same load allowance as focusTable: dismissal rides a selection-change tick that can lag
+    // behind the click when the suite's parallel workers saturate the host.
+    await waitFor(
+      () => {
+        expect(screen.queryByRole('toolbar', { name: 'Table controls' })).toBeNull();
+        expect(editor.querySelector('.tableWrapper')).not.toHaveAttribute(
+          'data-table-controls-visible',
+        );
+      },
+      { timeout: 3_000 },
+    );
   });
 
   it('moves keyboard focus into and back out of the table controls', async () => {
@@ -320,9 +346,20 @@ describe('editing a Markdown table', () => {
 
     await user.click(within(toolbar).getByRole('button', { name: 'Add row' }));
 
+    // The property under guard: a portaled control is INSIDE the edit session. If its click
+    // leaked out as an outside interaction, the session would end (a second `onEditStart` on the
+    // next edit), the toolbar would dismiss, and the row command would never run. The quiet-timer
+    // autosave is deliberately NOT asserted against wall-clock here — the surface's 2s debounce
+    // may legitimately elapse mid-test on a loaded host (Tiptap's normalized serialization of the
+    // fixture counts as a pending change from mount), and such a commit does not end the session.
     expect(within(editor).getAllByRole('row')).toHaveLength(3);
-    expect(onSave).not.toHaveBeenCalled();
+    expect(toolbar).toBeVisible();
     expect(onEditStart).toHaveBeenCalledTimes(1);
+    // A background commit mid-session, if one happened, saves content — never the null that
+    // means "cleared".
+    for (const call of onSave.mock.calls) {
+      expect(call[0]).not.toBeNull();
+    }
   });
 
   it('keeps table controls out of read-only documents', async () => {

@@ -96,6 +96,34 @@
   "athena-conversation is dead code" evidence was already stale before this task (the component
   is mounted from Today) and is untouched here.
 
+### [TEST-STABILITY-001] Repair the two suites that raced the host machine
+
+- **Status**: REVIEW
+- **Started**: 2026-08-30
+- **Priority**: P2
+- **Description**: Two deterministic-looking suites carried hidden timing bets. The Markdown-table
+  suite flaked under full-suite parallel load: its modal test clicked outside while the table
+  menu's deferred focus restoration was still pending (re-satisfying the bubble menu's
+  `shouldShow` after the hide), and its autosave test asserted "no save fired" against a 2s
+  quiet-timer that legitimately elapses mid-test on a saturated host — Tiptap's normalized
+  serialization of the fixture counts as a pending change from mount. The voice channel-parity
+  suite failed outright after inbound call authentication landed, because its unattested fixture
+  calls now route to the confirmed-callback flow instead of connecting.
+- **Summary**: The modal test waits for the menu close to settle (menu unmounted, focus on the
+  editor or inside the toolbar) before clicking outside; the autosave test asserts the session
+  invariants (row added, toolbar alive, one `onEditStart`, no null save) instead of elapsed time;
+  `focusTable` waits for Tiptap's post-mount DOM replacement and absorbs loaded scheduler ticks.
+  The parity fixtures present `StirVerstat: TN-Validation-Passed-A` so parity is asserted on a
+  connected call, leaving the callback ladder to the phone-inbound suites.
+- **Validation**: `voice-channel-parity` 6/6 and `phone-inbound-call` 17/17; the Markdown-table
+  file 13/13 three times in isolation and green across three consecutive full web-suite runs
+  under load (the only remaining full-run failure is the canvas layout performance benchmark,
+  which is load-sensitive by design and already excluded from the coverage gate).
+- **Learnings**: A fake-timers conversion was tried first for the autosave test and rejected —
+  `waitFor` stalls under vitest fake timers with this editor stack, and a timeout inside the
+  faked region leaks fake timers into the rest of the file. Asserting settle conditions and
+  session invariants beats owning the clock when a real editor is in the loop.
+
 ### [ATHENA-PHONE-AUTH-001] Verify phone ownership and authenticate calls without routine codes
 
 - **Status**: REVIEW

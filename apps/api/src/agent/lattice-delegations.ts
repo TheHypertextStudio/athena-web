@@ -346,48 +346,66 @@ async function settleFailure(
   options: {
     readonly terminalOutcome?: { readonly outcome: string; readonly payload?: unknown };
     readonly retainReplyKey?: boolean;
+    readonly relayCursor?: string;
   } = {},
 ): Promise<boolean> {
-  return await db.transaction(async (tx) => {
-    const [claimed] = await tx
-      .update(agentDelegation)
-      .set({
-        status: 'failed',
-        failureCode: code,
-        workState,
-        submissionLeaseToken: null,
-        submissionLeaseExpiresAt: null,
-        ...(options.retainReplyKey ? {} : { replyKeyCiphertext: null }),
-        terminalOutcome: options.terminalOutcome,
-        returnedActivityId: null,
-        nextPollAt: null,
-        settledAt: now,
-      })
-      .where(
-        and(
-          eq(agentDelegation.id, delegationId),
-          or(eq(agentDelegation.status, 'prepared'), eq(agentDelegation.status, 'submitted')),
-        ),
-      )
-      .returning({ id: agentDelegation.id });
-    if (!claimed) return false;
-    await tx.insert(sessionActivity).values({
-      sessionId,
-      organizationId: null,
-      type: 'error',
-      body: { text: failureMessage(code), code, source: 'lattice' },
-    });
-    await tx
-      .update(agentSession)
-      .set({
-        status: 'failed',
-        currentStep: failureMessage(code),
-        currentStepAt: now,
-        endedAt: now,
-      })
-      .where(eq(agentSession.id, sessionId));
-    return true;
+  return await db.transaction(async (tx) =>
+    settleFailureInTransaction(tx, delegationId, sessionId, code, workState, now, options),
+  );
+}
+
+async function settleFailureInTransaction(
+  tx: LatticeTransaction,
+  delegationId: string,
+  sessionId: string,
+  code: string,
+  workState: string | null,
+  now: Date,
+  options: {
+    readonly terminalOutcome?: { readonly outcome: string; readonly payload?: unknown };
+    readonly retainReplyKey?: boolean;
+    readonly relayCursor?: string;
+  } = {},
+): Promise<boolean> {
+  const [claimed] = await tx
+    .update(agentDelegation)
+    .set({
+      status: 'failed',
+      failureCode: code,
+      workState,
+      submissionLeaseToken: null,
+      submissionLeaseExpiresAt: null,
+      ...(options.retainReplyKey ? {} : { replyKeyCiphertext: null }),
+      ...(options.relayCursor ? { relayCursor: options.relayCursor } : {}),
+      terminalOutcome: options.terminalOutcome,
+      returnedActivityId: null,
+      nextPollAt: null,
+      settledAt: now,
+    })
+    .where(
+      and(
+        eq(agentDelegation.id, delegationId),
+        or(eq(agentDelegation.status, 'prepared'), eq(agentDelegation.status, 'submitted')),
+      ),
+    )
+    .returning({ id: agentDelegation.id });
+  if (!claimed) return false;
+  await tx.insert(sessionActivity).values({
+    sessionId,
+    organizationId: null,
+    type: 'error',
+    body: { text: failureMessage(code), code, source: 'lattice' },
   });
+  await tx
+    .update(agentSession)
+    .set({
+      status: 'failed',
+      currentStep: failureMessage(code),
+      currentStepAt: now,
+      endedAt: now,
+    })
+    .where(eq(agentSession.id, sessionId));
+  return true;
 }
 
 async function settleCanceled(
@@ -396,6 +414,7 @@ async function settleCanceled(
   workState: string | null,
   now: Date,
   terminalOutcome?: { readonly outcome: string; readonly payload?: unknown },
+  relayCursor?: string,
 ): Promise<boolean> {
   return await db.transaction(async (tx) => {
     const [claimed] = await tx
@@ -408,6 +427,7 @@ async function settleCanceled(
         failureCode: null,
         replyKeyCiphertext: null,
         terminalOutcome,
+        ...(relayCursor ? { relayCursor } : {}),
         nextPollAt: null,
         settledAt: now,
       })
@@ -563,26 +583,13 @@ async function submitPrepared(
   now: Date,
   deps: LatticeDelegationDependencies,
 ): Promise<'submitted' | 'failed' | 'skipped'> {
-  if (!(await stillAuthorized(row))) {
-    return (await settleFailure(row.id, row.sessionId, 'access_lost', null, now))
+  const initialAuthorization = await authorizeDelegation(row);
+  if (!initialAuthorization.authorized) {
+    return (await settleFailure(row.id, row.sessionId, initialAuthorization.failureCode, null, now))
       ? 'failed'
       : 'skipped';
   }
-  const [connection] = await db
-    .select()
-    .from(latticeConnection)
-    .where(
-      and(
-        eq(latticeConnection.id, row.connectionId),
-        eq(latticeConnection.ownerUserId, row.ownerUserId),
-      ),
-    )
-    .limit(1);
-  if (!connection?.enabled || !connection.accountId || connection.deviceId !== row.runtimeId) {
-    return (await settleFailure(row.id, row.sessionId, 'oauth_invalid', null, now))
-      ? 'failed'
-      : 'skipped';
-  }
+  const connection = initialAuthorization.context.connection;
   if (!row.replyKeyCiphertext || !row.deadlineAt) {
     return (await settleFailure(row.id, row.sessionId, 'result_key_invalid', null, now))
       ? 'failed'
@@ -638,14 +645,20 @@ async function submitPrepared(
         docketAssignmentId: row.assignmentId,
       },
     });
-    if (!(await stillAuthorized(row))) {
-      return (await settleFailure(row.id, row.sessionId, 'access_lost', null, now))
+    const finalAuthorization = await authorizeDelegation(row);
+    if (!finalAuthorization.authorized) {
+      return (await settleFailure(row.id, row.sessionId, finalAuthorization.failureCode, null, now))
         ? 'failed'
         : 'skipped';
     }
-    const accepted = await deps.submitWork(connection, {
+    if (runtime.accountId !== finalAuthorization.context.connection.accountId) {
+      return (await settleFailure(row.id, row.sessionId, 'oauth_invalid', null, now))
+        ? 'failed'
+        : 'skipped';
+    }
+    const accepted = await deps.submitWork(finalAuthorization.context.connection, {
       latticeId: row.runtimeId,
-      accountId: connection.accountId,
+      accountId: finalAuthorization.context.connection.accountId,
       controllerId: `docket:${row.ownerUserId}`,
       logicalSubmissionId: row.logicalSubmissionId,
       workId: row.workId,
@@ -766,9 +779,10 @@ async function persistProgress(
   payload: unknown,
   workState: RelayWorkState,
   now: Date,
-): Promise<'persisted' | 'stale' | 'access_lost'> {
+): Promise<'persisted' | 'stale' | 'access_lost' | 'oauth_invalid'> {
   return await db.transaction(async (tx) => {
-    if (!(await stillAuthorized(row, tx))) return 'access_lost';
+    const authorization = await authorizeDelegation(row, tx);
+    if (!authorization.authorized) return authorization.failureCode;
     const [claimed] = await tx
       .update(agentDelegation)
       .set({ relayCursor: event.cursor, workState, failureCode: null })
@@ -798,10 +812,22 @@ async function persistProgress(
   });
 }
 
-async function stillAuthorized(
+interface AuthorizedDelegationContext {
+  readonly assignment: typeof athenaAssignment.$inferSelect;
+  readonly connection: typeof latticeConnection.$inferSelect;
+}
+
+type DelegationAuthorization =
+  | { readonly authorized: true; readonly context: AuthorizedDelegationContext }
+  | {
+      readonly authorized: false;
+      readonly failureCode: 'access_lost' | 'oauth_invalid';
+    };
+
+async function authorizeDelegation(
   row: typeof agentDelegation.$inferSelect,
   handle: typeof db | LatticeTransaction = db,
-): Promise<boolean> {
+): Promise<DelegationAuthorization> {
   const [assignment] = await handle
     .select()
     .from(athenaAssignment)
@@ -809,10 +835,11 @@ async function stillAuthorized(
       and(
         eq(athenaAssignment.id, row.assignmentId),
         eq(athenaAssignment.ownerUserId, row.ownerUserId),
+        eq(athenaAssignment.organizationId, row.organizationId),
       ),
     )
     .limit(1);
-  if (!assignment) return false;
+  if (!assignment) return { authorized: false, failureCode: 'access_lost' };
   const [ownerActor] = await handle
     .select({ id: actor.id })
     .from(actor)
@@ -826,8 +853,8 @@ async function stillAuthorized(
       ),
     )
     .limit(1);
-  if (!ownerActor) return false;
-  return (
+  if (!ownerActor) return { authorized: false, failureCode: 'access_lost' };
+  const authorized = (
     await canActor(
       ownerActor.id,
       'contribute',
@@ -835,6 +862,26 @@ async function stillAuthorized(
       handle,
     )
   ).allow;
+  if (!authorized) return { authorized: false, failureCode: 'access_lost' };
+  const [connection] = await handle
+    .select()
+    .from(latticeConnection)
+    .where(
+      and(
+        eq(latticeConnection.id, row.connectionId),
+        eq(latticeConnection.ownerUserId, row.ownerUserId),
+        eq(latticeConnection.status, 'connected'),
+        eq(latticeConnection.enabled, true),
+        isNotNull(latticeConnection.accountId),
+        eq(latticeConnection.deviceId, row.runtimeId),
+      ),
+    )
+    .limit(1);
+  if (!connection?.accountId) return { authorized: false, failureCode: 'oauth_invalid' };
+  return {
+    authorized: true,
+    context: { assignment, connection },
+  };
 }
 
 function outputText(payload: unknown): string | null {
@@ -846,34 +893,18 @@ function outputText(payload: unknown): string | null {
 async function proposeResult(
   row: typeof agentDelegation.$inferSelect,
   payload: unknown,
+  relayCursor: string,
   now: Date,
-): Promise<boolean> {
+): Promise<'proposed' | 'failed' | 'skipped'> {
   const terminalOutcome = { outcome: 'completed', payload } as const;
-  if (!(await stillAuthorized(row))) {
-    return await settleFailure(row.id, row.sessionId, 'access_lost', 'completed', now, {
-      terminalOutcome,
-    });
-  }
-  const [assignment] = await db
-    .select()
-    .from(athenaAssignment)
-    .where(eq(athenaAssignment.id, row.assignmentId))
-    .limit(1);
-  const [connection] = await db
-    .select({ deviceName: latticeConnection.deviceName })
-    .from(latticeConnection)
-    .where(
-      and(
-        eq(latticeConnection.id, row.connectionId),
-        eq(latticeConnection.ownerUserId, row.ownerUserId),
-      ),
-    )
-    .limit(1);
   const report = outputText(payload);
-  if (!assignment || !report) {
-    return await settleFailure(row.id, row.sessionId, 'result_invalid', 'completed', now, {
+  if (!report) {
+    return (await settleFailure(row.id, row.sessionId, 'result_invalid', 'completed', now, {
       terminalOutcome,
-    });
+      relayCursor,
+    }))
+      ? 'failed'
+      : 'skipped';
   }
 
   return await db.transaction(async (tx) => {
@@ -883,7 +914,22 @@ async function proposeResult(
       .where(and(eq(agentDelegation.id, row.id), eq(agentDelegation.status, 'submitted')))
       .for('update')
       .limit(1);
-    if (!claimable) return false;
+    if (!claimable) return 'skipped';
+    const authorization = await authorizeDelegation(row, tx);
+    if (!authorization.authorized) {
+      return (await settleFailureInTransaction(
+        tx,
+        row.id,
+        row.sessionId,
+        authorization.failureCode,
+        'completed',
+        now,
+        { terminalOutcome, relayCursor },
+      ))
+        ? 'failed'
+        : 'skipped';
+    }
+    const { assignment, connection } = authorization.context;
     const [activity] = await tx
       .insert(sessionActivity)
       .values({
@@ -898,7 +944,7 @@ async function proposeResult(
             logicalSubmissionId: row.logicalSubmissionId,
             workId: row.workId,
             runtimeId: row.runtimeId,
-            runtimeName: connection?.deviceName ?? row.runtimeId,
+            runtimeName: connection.deviceName ?? row.runtimeId,
             outcome: 'completed',
           },
           action: {
@@ -927,7 +973,7 @@ async function proposeResult(
       .set({
         status: 'proposed',
         workState: 'completed',
-        relayCursor: 'cursor_final',
+        relayCursor,
         nextPollAt: null,
         terminalOutcome,
         failureCode: null,
@@ -945,7 +991,7 @@ async function proposeResult(
         currentStepAt: now,
       })
       .where(eq(agentSession.id, row.sessionId));
-    return true;
+    return 'proposed';
   });
 }
 
@@ -954,28 +1000,28 @@ async function acknowledgeStoredResult(
   now: Date,
   deps: LatticeDelegationDependencies,
 ): Promise<boolean> {
-  if (!(await stillAuthorized(row))) return false;
-  const [connection] = await db
-    .select()
-    .from(latticeConnection)
-    .where(
-      and(
-        eq(latticeConnection.id, row.connectionId),
-        eq(latticeConnection.ownerUserId, row.ownerUserId),
-      ),
-    )
-    .limit(1);
-  if (!connection?.enabled) {
+  const initialAuthorization = await authorizeDelegation(row);
+  if (!initialAuthorization.authorized) {
     await db
       .update(agentDelegation)
       .set({ nextPollAt: new Date(now.getTime() + TRANSIENT_RETRY_MS) })
       .where(and(eq(agentDelegation.id, row.id), isNull(agentDelegation.resultAcknowledgedAt)));
     return false;
   }
-  if (!(await stillAuthorized(row))) return false;
+  const finalAuthorization = await authorizeDelegation(row);
+  if (
+    !finalAuthorization.authorized ||
+    finalAuthorization.context.connection.accountId !==
+      initialAuthorization.context.connection.accountId
+  ) {
+    return false;
+  }
 
   try {
-    const accepted = await deps.acknowledgeResult(connection, row.workId);
+    const accepted = await deps.acknowledgeResult(
+      finalAuthorization.context.connection,
+      row.workId,
+    );
     const acknowledgedAt = new Date(accepted.acknowledgedAt);
     if (Number.isNaN(acknowledgedAt.getTime())) {
       throw new Error('relay returned an invalid result acknowledgement time');
@@ -1000,26 +1046,19 @@ async function pollSubmitted(
   now: Date,
   deps: LatticeDelegationDependencies,
 ): Promise<'polled' | 'proposed' | 'failed' | 'canceled' | 'skipped'> {
-  if (!(await stillAuthorized(row))) {
-    return (await settleFailure(row.id, row.sessionId, 'access_lost', row.workState, now))
+  const initialAuthorization = await authorizeDelegation(row);
+  if (!initialAuthorization.authorized) {
+    return (await settleFailure(
+      row.id,
+      row.sessionId,
+      initialAuthorization.failureCode,
+      row.workState,
+      now,
+    ))
       ? 'failed'
       : 'skipped';
   }
-  const [connection] = await db
-    .select()
-    .from(latticeConnection)
-    .where(
-      and(
-        eq(latticeConnection.id, row.connectionId),
-        eq(latticeConnection.ownerUserId, row.ownerUserId),
-      ),
-    )
-    .limit(1);
-  if (!connection?.enabled) {
-    return (await settleFailure(row.id, row.sessionId, 'oauth_invalid', row.workState, now))
-      ? 'failed'
-      : 'skipped';
-  }
+  const connection = initialAuthorization.context.connection;
   if (!row.replyKeyCiphertext) {
     return (await settleFailure(row.id, row.sessionId, 'result_key_invalid', row.workState, now))
       ? 'failed'
@@ -1036,12 +1075,28 @@ async function pollSubmitted(
   }
 
   try {
-    if (!(await stillAuthorized(row))) {
-      return (await settleFailure(row.id, row.sessionId, 'access_lost', row.workState, now))
+    const finalAuthorization = await authorizeDelegation(row);
+    if (!finalAuthorization.authorized) {
+      return (await settleFailure(
+        row.id,
+        row.sessionId,
+        finalAuthorization.failureCode,
+        row.workState,
+        now,
+      ))
         ? 'failed'
         : 'skipped';
     }
-    const response = await deps.pollEvents(connection, row.workId, row.relayCursor);
+    if (finalAuthorization.context.connection.accountId !== connection.accountId) {
+      return (await settleFailure(row.id, row.sessionId, 'oauth_invalid', row.workState, now))
+        ? 'failed'
+        : 'skipped';
+    }
+    const response = await deps.pollEvents(
+      finalAuthorization.context.connection,
+      row.workId,
+      row.relayCursor,
+    );
     if (response.workId !== row.workId) {
       return (await settleFailure(row.id, row.sessionId, 'unknown_work', row.workState, now))
         ? 'failed'
@@ -1078,8 +1133,8 @@ async function pollSubmitted(
         response.state,
         now,
       );
-      if (persistence === 'access_lost') {
-        return (await settleFailure(row.id, row.sessionId, 'access_lost', response.state, now))
+      if (persistence === 'access_lost' || persistence === 'oauth_invalid') {
+        return (await settleFailure(row.id, row.sessionId, persistence, response.state, now))
           ? 'failed'
           : 'skipped';
       }
@@ -1112,6 +1167,7 @@ async function pollSubmitted(
     if (terminal.kind === 'expiry') {
       return (await settleFailure(row.id, row.sessionId, 'work_expired', response.state, now, {
         terminalOutcome: { outcome: 'expired', payload: terminal },
+        relayCursor: terminal.cursor,
       }))
         ? 'failed'
         : 'skipped';
@@ -1129,19 +1185,23 @@ async function pollSubmitted(
         'result_decryption_failed',
         response.state,
         now,
-        { retainReplyKey: true },
+        { retainReplyKey: true, relayCursor: terminal.cursor },
       ))
         ? 'failed'
         : 'skipped';
     }
     if (terminal.outcome === 'completed') {
-      return (await proposeResult(row, payload, now)) ? 'proposed' : 'skipped';
+      return await proposeResult(row, payload, terminal.cursor, now);
     }
     if (terminal.outcome === 'cancelled') {
-      return (await settleCanceled(row.id, row.sessionId, response.state, now, {
-        outcome: terminal.outcome,
-        payload,
-      }))
+      return (await settleCanceled(
+        row.id,
+        row.sessionId,
+        response.state,
+        now,
+        { outcome: terminal.outcome, payload },
+        terminal.cursor,
+      ))
         ? 'canceled'
         : 'skipped';
     }
@@ -1149,6 +1209,7 @@ async function pollSubmitted(
       terminal.outcome === 'work_key_expired' ? 'runtime_key_expired' : 'execution_failed';
     return (await settleFailure(row.id, row.sessionId, code, response.state, now, {
       terminalOutcome: { outcome: terminal.outcome, payload },
+      relayCursor: terminal.cursor,
     }))
       ? 'failed'
       : 'skipped';

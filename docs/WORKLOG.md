@@ -7,6 +7,44 @@
 
 ## Active Tasks
 
+### [ATHENA-LATTICE-ROUNDTRIP-001] Prove the durable Docket–Lattice round trip
+
+- **Status**: REVIEW
+- **Started**: 2026-08-28
+- **Priority**: P0
+- **Description**: Complete the Docket-to-Lattice Mac Studio round trip so one private Athena
+  assignment remains on its durable execution surface from preparation through approval,
+  settlement, and result acknowledgement. Docket now owns the durable delegation, immutable work
+  identity, encrypted reply key, scheduler fence, approval proposal, and terminal acknowledgement.
+- **Package state**: The five production dependencies are public at version `0.0.1`:
+  `@lovelace-ai/acsp`, `@lovelace-ai/compute`, `@lovelace-ai/lattice-relay-client`,
+  `@lovelace-ai/lattice-relay-crypto`, and `@reasonabletech/lattice-client`. The lockfile resolves
+  registry artifacts and contains no `link:` or `file:` override for them.
+- **Production state**: Lovelace production bootstraps the public PKCE client `docket-athena`. The
+  exact Docket authorization request reaches the Lovelace login redirect. Docket pins the accounts
+  issuer to `https://auth.uselovelace.com` and the gateway to `https://lattice.uselovelace.com`.
+  Production keeps submission and polling disabled unless operators set both emergency controls
+  explicitly. No client secret belongs in Docket's public-PKCE flow.
+- **Subtasks**:
+  - [x] Prevent ordinary Athena runners from claiming Lattice assignment sessions.
+  - [x] Settle the delegation and parent session together after proposal decisions.
+  - [x] Reauthorize before submission and every poll.
+  - [x] Complete the controller command and accepted-submission metadata boundary.
+  - [x] Derive the logical submission id from the pre-minted delegation id.
+  - [x] Fence concurrent scheduler submission before the relay call.
+  - [x] Acknowledge every safely retained terminal delivery.
+  - [x] Require both emergency controls at the scheduler function boundary.
+  - [x] Persist `offline_queued` as the selected runtime's visible offline condition.
+  - [x] Replace copied relay types with official exported types where available.
+- **Validation**: The focused API route and delegation suites pass 129 tests. The clean PGlite
+  personal-Athena migration and schema suite passes 7 tests. API and database builds, lint, and
+  type checks pass through Turbo. The API type check needs a process-local 3 GB Node heap on this
+  16 GB host. The repository commit hooks run without bypasses on the follow-up commits.
+- **Blockers**: Production proof still needs the managed Mac Studio daemon to run one real assigned
+  task. The proof must correlate the Docket session, immutable delegation id, relay work id,
+  proposal, task comment, and result acknowledgement. Code and package publication do not prove
+  that final runtime path.
+
 ### [ATHENA-PHONE-AUTH-001] Verify phone ownership and authenticate calls without routine codes
 
 - **Status**: REVIEW

@@ -153,17 +153,23 @@ async function settleLatticeDecision(
     inputRecord['subjectId'] === assignment.entityId &&
     typeof body === 'string' &&
     body.trim().length > 0;
-  const failureCode = !authorized ? 'access_lost' : validComment ? null : 'task_comment_failed';
+  let failureCode = !authorized ? 'access_lost' : validComment ? null : 'task_comment_failed';
 
   if (!failureCode && assignment && ownerActor && typeof body === 'string') {
-    await tx.insert(comment).values({
-      organizationId: assignment.organizationId,
-      authorId: ownerActor.id,
-      subjectType: assignment.entityType,
-      subjectId: assignment.entityId,
-      body,
-      createdBy: ownerActor.id,
-    });
+    try {
+      await tx.transaction(async (commentTx) => {
+        await commentTx.insert(comment).values({
+          organizationId: assignment.organizationId,
+          authorId: ownerActor.id,
+          subjectType: assignment.entityType,
+          subjectId: assignment.entityId,
+          body,
+          createdBy: ownerActor.id,
+        });
+      });
+    } catch {
+      failureCode = 'task_comment_failed';
+    }
   }
   const [applied] = await tx
     .update(sessionActivity)

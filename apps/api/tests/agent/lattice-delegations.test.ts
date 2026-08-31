@@ -1,4 +1,5 @@
-import { and, eq } from 'drizzle-orm';
+import * as authzModule from '@docket/authz';
+import { and, eq, sql } from 'drizzle-orm';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { RelayControllerError } from '@lovelace-ai/lattice-relay-client';
 
@@ -299,6 +300,18 @@ async function prepareProposedResult(
       .where(eq(schema.sessionActivity.id, delegation.returnedActivityId)),
   );
   return { activity, delegation, sessionId };
+}
+
+async function invalidateConnection(connectionId: string): Promise<void> {
+  await db
+    .update(schema.latticeConnection)
+    .set({
+      status: 'disconnected',
+      enabled: true,
+      accountId: 'acct_relinked',
+      deviceId: 'lat_relinked',
+    })
+    .where(eq(schema.latticeConnection.id, connectionId));
 }
 
 describe('durable Lattice assignment delegations', () => {
@@ -701,6 +714,63 @@ describe('durable Lattice assignment delegations', () => {
           .where(eq(schema.sessionActivity.id, proposed.activity.id)),
       ),
     ).toMatchObject({ approvalStatus: 'applied', body: { action: { result: { isError: true } } } });
+    expect(
+      await db
+        .select()
+        .from(schema.comment)
+        .where(eq(schema.comment.subjectId, fixture.targetTask.id)),
+    ).toHaveLength(0);
+  });
+
+  it('settles an actual comment insert error without rolling back the decision', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const proposed = await prepareProposedResult(
+      fixture,
+      deps,
+      new Date('2026-08-29T18:11:30.000Z'),
+    );
+    const constraintName = `comment_lattice_insert_failure_${Math.random().toString(36).slice(2)}`;
+    await db.execute(
+      sql.raw(
+        `ALTER TABLE "comment" ADD CONSTRAINT "${constraintName}" CHECK (` +
+          `"body" <> 'Use the existing task history to narrow the next milestone.') NOT VALID`,
+      ),
+    );
+
+    try {
+      await expect(
+        decideActivity(
+          fixture.organization.id,
+          fixture.ownerActor.id,
+          proposed.sessionId,
+          proposed.activity.id,
+          { decision: 'approve' },
+        ),
+      ).resolves.toMatchObject({
+        approvalStatus: 'applied',
+        body: { action: { result: { isError: true } } },
+      });
+    } finally {
+      await db.execute(sql.raw(`ALTER TABLE "comment" DROP CONSTRAINT "${constraintName}"`));
+    }
+
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.id, proposed.delegation.id)),
+      ),
+    ).toMatchObject({ status: 'failed', failureCode: 'task_comment_failed' });
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentSession)
+          .where(eq(schema.agentSession.id, proposed.sessionId)),
+      ),
+    ).toMatchObject({ status: 'failed', endedAt: expect.any(Date) });
     expect(
       await db
         .select()
@@ -1371,6 +1441,46 @@ describe('durable Lattice assignment delegations', () => {
     ).toMatchObject({ status: 'failed', failureCode: 'access_lost' });
   });
 
+  it('rechecks connection account and runtime identity before submission', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:48:00.000Z');
+    const runtimes = await deps.listRuntimes(fixture.connection);
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:submit-connection-race`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    vi.mocked(deps.listRuntimes).mockImplementation(async () => {
+      await invalidateConnection(fixture.connection.id);
+      return runtimes;
+    });
+    const delegation = one(
+      await db
+        .select()
+        .from(schema.agentDelegation)
+        .where(eq(schema.agentDelegation.sessionId, sessionId)),
+    );
+
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+
+    expect(
+      vi.mocked(deps.submitWork).mock.calls.some(([, input]) => input.workId === delegation.workId),
+    ).toBe(false);
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.sessionId, sessionId)),
+      ),
+    ).toMatchObject({ status: 'failed', failureCode: 'oauth_invalid' });
+  });
+
   it('settles access loss before polling without opening or persisting relay progress', async () => {
     const fixture = await seed();
     const deps = dependencies();
@@ -1446,6 +1556,46 @@ describe('durable Lattice assignment delegations', () => {
     ).toHaveLength(0);
   });
 
+  it('refuses to poll after the connection account or selected runtime changes', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:52:00.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:poll-connection-change`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+    const delegation = one(
+      await db
+        .select()
+        .from(schema.agentDelegation)
+        .where(eq(schema.agentDelegation.sessionId, sessionId)),
+    );
+    await invalidateConnection(fixture.connection.id);
+
+    await sweepLatticeDelegations(new Date(preparedAt.getTime() + 5_001), deps, {
+      pollingEnabled: true,
+      submissionsEnabled: false,
+    });
+
+    expect(
+      vi.mocked(deps.pollEvents).mock.calls.some(([, workId]) => workId === delegation.workId),
+    ).toBe(false);
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.id, delegation.id)),
+      ),
+    ).toMatchObject({ status: 'failed', failureCode: 'oauth_invalid' });
+  });
+
   it('reauthorizes inside the progress transaction before writing activity', async () => {
     const fixture = await seed();
     const deps = dependencies();
@@ -1505,6 +1655,75 @@ describe('durable Lattice assignment delegations', () => {
           .where(eq(schema.agentDelegation.id, delegation.id)),
       ),
     ).toMatchObject({ status: 'failed', failureCode: 'access_lost' });
+    expect(
+      await db
+        .select()
+        .from(schema.sessionActivity)
+        .where(
+          and(
+            eq(schema.sessionActivity.sessionId, sessionId),
+            eq(schema.sessionActivity.type, 'thought'),
+          ),
+        ),
+    ).toHaveLength(0);
+  });
+
+  it('rechecks connection identity inside the progress transaction', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T19:57:00.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:progress-connection-race`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+    const delegation = one(
+      await db
+        .select()
+        .from(schema.agentDelegation)
+        .where(eq(schema.agentDelegation.sessionId, sessionId)),
+    );
+    deps.pollResult = {
+      workId: delegation.workId,
+      state: 'in_flight',
+      events: [
+        {
+          cursor: 'cursor_connection_changed_after_open',
+          kind: 'progress',
+          sealed: {
+            version: 'relay-v1',
+            ephemeralPublicKey: 'ephemeral',
+            salt: 'salt',
+            iv: 'iv',
+            ciphertext: 'ciphertext',
+          },
+        },
+      ],
+      nextPollAfterMs: 1_000,
+    };
+    vi.mocked(deps.openWork).mockImplementation(async () => {
+      await invalidateConnection(fixture.connection.id);
+      return { text: 'This progress must not persist' };
+    });
+
+    await sweepLatticeDelegations(new Date(preparedAt.getTime() + 5_001), deps, {
+      pollingEnabled: true,
+      submissionsEnabled: false,
+    });
+
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.id, delegation.id)),
+      ),
+    ).toMatchObject({ status: 'failed', failureCode: 'oauth_invalid' });
     expect(
       await db
         .select()
@@ -1589,6 +1808,101 @@ describe('durable Lattice assignment delegations', () => {
     ).toHaveLength(0);
   });
 
+  it('rechecks assignment and connection access inside the terminal proposal transaction', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const preparedAt = new Date('2026-08-29T20:02:00.000Z');
+    const sessionId = await prepareLatticeAssignmentRun(
+      fixture.assignment,
+      fixture.ownerActor.id,
+      fixture.assignment.objective,
+      `athena-assignment:${fixture.assignment.id}:terminal-transaction-fence`,
+      fixture.connection,
+      preparedAt,
+      deps,
+    );
+    await sweepLatticeDelegations(preparedAt, deps, ENABLED_SWEEP);
+    const delegation = one(
+      await db
+        .select()
+        .from(schema.agentDelegation)
+        .where(eq(schema.agentDelegation.sessionId, sessionId)),
+    );
+    const terminalCursor = 'cursor_final';
+    deps.pollResult = {
+      workId: delegation.workId,
+      state: 'completed',
+      events: [
+        {
+          cursor: terminalCursor,
+          kind: 'result',
+          outcome: 'completed',
+          sealed: {
+            version: 'relay-v1',
+            ephemeralPublicKey: 'ephemeral',
+            salt: 'salt',
+            iv: 'iv',
+            ciphertext: 'ciphertext',
+          },
+        },
+      ],
+      nextPollAfterMs: 0,
+    };
+    const realCanActor = authzModule.canActor;
+    let authorizationChecks = 0;
+    const canActor = vi.spyOn(authzModule, 'canActor').mockImplementation(async (...args) => {
+      const result = await realCanActor(...args);
+      authorizationChecks += 1;
+      if (authorizationChecks === 3) {
+        const handle = args[3];
+        await handle
+          .update(schema.latticeConnection)
+          .set({
+            status: 'disconnected',
+            enabled: true,
+            accountId: 'acct_relinked',
+            deviceId: 'lat_relinked',
+          })
+          .where(eq(schema.latticeConnection.id, fixture.connection.id));
+      }
+      return result;
+    });
+
+    try {
+      await sweepLatticeDelegations(new Date(preparedAt.getTime() + 5_001), deps, {
+        pollingEnabled: true,
+        submissionsEnabled: false,
+      });
+    } finally {
+      canActor.mockRestore();
+    }
+
+    expect(authorizationChecks).toBeGreaterThanOrEqual(3);
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.id, delegation.id)),
+      ),
+    ).toMatchObject({
+      status: 'failed',
+      failureCode: 'oauth_invalid',
+      relayCursor: terminalCursor,
+    });
+    expect(
+      await db
+        .select()
+        .from(schema.sessionActivity)
+        .where(
+          and(
+            eq(schema.sessionActivity.sessionId, sessionId),
+            eq(schema.sessionActivity.type, 'action'),
+          ),
+        ),
+    ).toHaveLength(0);
+  });
+
   it('settles invalid result ciphertext with a stable Docket error', async () => {
     const fixture = await seed();
     const deps = dependencies();
@@ -1642,6 +1956,7 @@ describe('durable Lattice assignment delegations', () => {
     ).toMatchObject({
       status: 'failed',
       failureCode: 'result_decryption_failed',
+      relayCursor: 'cursor_final',
       replyKeyCiphertext: expect.any(String),
     });
     expect(
@@ -1716,6 +2031,7 @@ describe('durable Lattice assignment delegations', () => {
       ).toMatchObject({
         status: expectedStatus,
         failureCode,
+        relayCursor: 'cursor_final',
         terminalOutcome: { outcome, payload },
         resultAcknowledgedAt: expect.any(Date),
       });
@@ -1777,6 +2093,7 @@ describe('durable Lattice assignment delegations', () => {
     ).toMatchObject({
       status: 'failed',
       failureCode: 'result_invalid',
+      relayCursor: 'cursor_final',
       terminalOutcome: { outcome: 'completed', payload },
       resultAcknowledgedAt: expect.any(Date),
     });
@@ -1827,6 +2144,7 @@ describe('durable Lattice assignment delegations', () => {
     ).toMatchObject({
       status: 'failed',
       failureCode: 'work_expired',
+      relayCursor: 'cursor_final',
       terminalOutcome: { outcome: 'expired', payload: terminal },
       resultAcknowledgedAt: expect.any(Date),
     });
@@ -1898,10 +2216,15 @@ describe('durable Lattice assignment delegations', () => {
     ).toMatchObject({
       status: 'failed',
       failureCode: 'access_lost',
+      relayCursor: 'cursor_final',
       terminalOutcome: { outcome: 'completed', payload },
       resultAcknowledgedAt: null,
     });
-    expect(deps.acknowledgeResult).not.toHaveBeenCalled();
+    expect(
+      vi
+        .mocked(deps.acknowledgeResult)
+        .mock.calls.some(([, workId]) => workId === delegation.workId),
+    ).toBe(false);
     expect(
       await db
         .select()
@@ -1913,6 +2236,40 @@ describe('durable Lattice assignment delegations', () => {
           ),
         ),
     ).toHaveLength(0);
+  });
+
+  it('rechecks connection account and runtime identity before acknowledgement', async () => {
+    const fixture = await seed();
+    const deps = dependencies();
+    const settledAt = new Date('2026-08-29T21:20:00.000Z');
+    const proposed = await prepareProposedResult(fixture, deps, settledAt);
+    await decideActivity(
+      fixture.organization.id,
+      fixture.ownerActor.id,
+      proposed.sessionId,
+      proposed.activity.id,
+      { decision: 'approve' },
+    );
+    await invalidateConnection(fixture.connection.id);
+
+    await sweepLatticeDelegations(new Date(settledAt.getTime() + 7_000), deps, {
+      pollingEnabled: true,
+      submissionsEnabled: false,
+    });
+
+    expect(
+      vi
+        .mocked(deps.acknowledgeResult)
+        .mock.calls.some(([, workId]) => workId === proposed.delegation.workId),
+    ).toBe(false);
+    expect(
+      one(
+        await db
+          .select()
+          .from(schema.agentDelegation)
+          .where(eq(schema.agentDelegation.id, proposed.delegation.id)),
+      ).resultAcknowledgedAt,
+    ).toBeNull();
   });
 
   it('settles an unknown relay work id with Docket-owned copy', async () => {

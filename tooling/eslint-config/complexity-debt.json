@@ -23,9 +23,9 @@
     "sonarjs/cognitive-complexity": 19
   },
   "apps/api/src/agent/lattice-delegations.ts": {
-    "complexity": 37,
+    "complexity": 35,
     "max-params": 7,
-    "sonarjs/cognitive-complexity": 52
+    "sonarjs/cognitive-complexity": 39
   },
   "apps/api/src/agent/loop.ts": {
     "complexity": 45,

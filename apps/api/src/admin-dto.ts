@@ -27,6 +27,15 @@ export const StaffRoleDto = z
 /** Validated staff-tier value. */
 export type StaffRoleDto = z.infer<typeof StaffRoleDto>;
 
+/** The calling operator's own staff identity. */
+export const AdminSessionOut = z.object({
+  staffUserId: z.string().describe("The caller's staff record id."),
+  userId: z.string().describe('The Docket user account the staff record belongs to.'),
+  role: StaffRoleDto.describe("The caller's operator tier."),
+});
+/** Validated operator-session value. */
+export type AdminSessionOut = z.infer<typeof AdminSessionOut>;
+
 /** Query params for the paginated, searchable user list. */
 export const AdminUserListQuery = z.object({
   search: z

@@ -25,6 +25,7 @@ import {
   AdminImpersonationOut,
   AdminLifecycleBoard,
   AdminMetricsOut,
+  AdminSessionOut,
   AdminOrgListQuery,
   AdminOrgOut,
   AdminOrgPage,
@@ -66,6 +67,28 @@ export function createAdminRoutes<
   return (
     new Hono<AppEnv>()
       .use('*', staffMiddleware)
+      // ---- Session ------------------------------------------------------------
+      .get(
+        '/session',
+        apiDoc({
+          tag: 'Admin',
+          summary: 'Get the calling operator',
+          response: AdminSessionOut,
+          description: `Returns the calling operator's own staff record: the staff id, the Docket user account it belongs to, and the operator tier that account holds.
+
+**Tier.** \`role\` is one of \`support\`, \`finance\`, or \`superadmin\`, in ascending privilege. Because every other \`/admin\` route is gated on that tier, reading it up front lets a client present the actions the caller can actually perform rather than offering all of them and failing the ones it may not.
+
+**Access.** Behind \`staffMiddleware\` (any staff tier — a read). Non-operator → \`403\`; anonymous → \`401\`.
+
+**Side effects.** None — a read; no audit event.
+
+**Related.** \`GET /admin/staff\` (superadmin) lists every operator.`,
+        }),
+        (c) => {
+          const { staffUserId, userId, role } = c.get('staffCtx');
+          return ok(c, AdminSessionOut, { staffUserId, userId, role });
+        },
+      )
       // ---- Users --------------------------------------------------------------
       .get(
         '/users',

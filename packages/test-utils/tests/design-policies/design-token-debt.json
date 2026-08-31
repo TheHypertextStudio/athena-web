@@ -38,11 +38,6 @@
   "apps/admin/src/app/(auth)/sign-in/page.tsx": {
     "raw-type-utility": 4
   },
-  "apps/admin/src/components/admin-shell.tsx": {
-    "ad-hoc-border": 2,
-    "raw-type-utility": 5,
-    "shadow-outside-overlay": 1
-  },
   "apps/admin/src/components/ui-bits.tsx": {
     "ad-hoc-border": 7,
     "raw-type-utility": 1

@@ -1,38 +1,14 @@
 'use client';
 
-import { Button } from '@docket/ui/primitives';
-import Link from 'next/link';
+import { AppShell, ContextProvider, InlineBanner, PageScrollProvider } from '@docket/ui/components';
 import { usePathname, useRouter } from 'next/navigation';
-import { type JSX, type ReactNode, useEffect, useState } from 'react';
+import { type JSX, type ReactNode, useCallback, useEffect, useState } from 'react';
 
+import { AdminSidebar } from '@/components/admin-sidebar';
 import { ViewingAsBanner } from '@/components/viewing-as-banner';
-import { ErrorBanner } from '@/components/ui-bits';
 import { signOut, useSession } from '@/lib/auth-client';
-
-/** A single primary navigation entry in the admin shell. */
-interface NavItem {
-  /** The route the entry links to. */
-  href: string;
-  /** The entry's display label. */
-  label: string;
-}
-
-/** The admin console's primary navigation, in display order. */
-const NAV: readonly NavItem[] = [
-  { href: '/', label: 'Dashboard' },
-  { href: '/users', label: 'Users' },
-  { href: '/orgs', label: 'Organizations' },
-  { href: '/discounts', label: 'Discounts' },
-  { href: '/notifications', label: 'Notifications' },
-  { href: '/operators', label: 'Operators' },
-  { href: '/audit', label: 'Audit log' },
-  { href: '/settings', label: 'Settings' },
-];
-
-/** Whether `pathname` is within the section rooted at `href`. */
-function isActive(pathname: string, href: string): boolean {
-  return href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`);
-}
+import { useAdminQueues } from '@/lib/use-admin-queues';
+import { useOperator } from '@/lib/use-operator';
 
 /** Props for {@link AdminShell}. */
 export interface AdminShellProps {
@@ -41,111 +17,105 @@ export interface AdminShellProps {
 }
 
 /**
- * The persistent operator shell: a fixed sidebar nav, the active-session banner, and the
- * routed content column.
+ * The persistent operator shell.
  *
  * @remarks
- * A Client Component (it reads the reactive session and the current pathname). The
- * sign-in route renders without this shell — it is mounted only by the authenticated
- * route group's layout. The session line shows the signed-in operator's email and a
- * sign-out action that returns to `/sign-in`. The {@link ViewingAsBanner} is pinned above
- * the content so an active impersonation is always visible.
+ * Built on the product app's {@link AppShell} rather than a bespoke layout, so the console inherits
+ * one implementation of everything a shell has to get right: the MD3 tonal model (a tinted canvas,
+ * a canvas-blended sidebar, and the routed content as the single floating rounded surface panel),
+ * the responsive frame (a static sidebar at `lg` and up; below that a slim top bar whose hamburger
+ * opens the *same* sidebar as a focus-trapped off-canvas drawer), the container-query context that
+ * lets pages lay out against the panel's real width rather than the viewport's, and the guaranteed
+ * minimum share of the window that `<main>` is entitled to.
  *
- * @remarks Visual model — the same MD3 tonal surface system the product app uses. The shell root
- * is the tinted `surface-container` canvas; the sidebar blends into it with no hard divider; the
- * routed content sits in a single floating, rounded `surface` panel inset by a uniform gutter.
+ * `AppShell` takes its sidebar as a node, so the console supplies {@link AdminSidebar} while the
+ * shell owns the layout. The product's own `Sidebar` is not reusable here — it is built around
+ * workspaces, org vocabulary, and tenant nav keys, none of which an operator console has.
+ *
+ * `AppShell` reads context state for the org accent and density, so it is mounted inside a
+ * {@link ContextProvider}. The console binds no org: it is service-wide tooling, so there is no
+ * tenant accent to apply and the shell renders in the neutral palette.
  *
  * @remarks Auth — when the reactive session resolves to "signed out" the shell redirects to
  * `/sign-in` rather than stranding an unauthenticated visitor on inert chrome. A signed-in but
- * non-staff visitor keeps the shell (they have a session) and the API's 403 surfaces inline on
- * each screen with a recovery action.
+ * non-staff visitor keeps the shell (they have a session) and the API's 403 surfaces inline on each
+ * screen with a recovery action.
  */
 export function AdminShell({ children }: AdminShellProps): JSX.Element {
+  return (
+    <ContextProvider>
+      <PageScrollProvider>
+        <AdminShellFrame>{children}</AdminShellFrame>
+      </PageScrollProvider>
+    </ContextProvider>
+  );
+}
+
+/** The shell's wiring, split out so it can read the shell contexts its parent establishes. */
+function AdminShellFrame({ children }: AdminShellProps): JSX.Element {
   const pathname = usePathname();
   const router = useRouter();
   const { data: session, isPending } = useSession();
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
+  const queues = useAdminQueues();
+  const { tierLabel } = useOperator();
 
-  // Redirect to sign-in once the session resolves to "signed out" — an unauthenticated visitor
-  // has no usable destination in the shell, so surface the sign-in screen instead of inert chrome.
+  // Redirect to sign-in once the session resolves to "signed out" — an unauthenticated visitor has
+  // no usable destination in the shell, so surface the sign-in screen instead of inert chrome.
   useEffect(() => {
     if (!isPending && !session) router.replace('/sign-in');
   }, [isPending, session, router]);
 
-  /** Sign the operator out and return to the sign-in screen. */
-  async function handleSignOut(): Promise<void> {
+  const handleSignOut = useCallback((): void => {
     if (!session || signingOut) return;
     setSignOutError(null);
     setSigningOut(true);
-    try {
-      await signOut(session.user.id);
-      router.push('/sign-in');
-    } catch {
-      setSignOutError('Could not sign out. Check your connection and try again.');
-    } finally {
-      setSigningOut(false);
-    }
-  }
+    void (async () => {
+      try {
+        await signOut(session.user.id);
+        router.push('/sign-in');
+      } catch {
+        // A sign-out that failed leaves the operator signed in. Saying so is the point: silently
+        // resetting the button would read as success and leave a live session on a shared machine.
+        setSignOutError('Could not sign out. Check your connection and try again.');
+      } finally {
+        setSigningOut(false);
+      }
+    })();
+  }, [session, signingOut, router]);
 
   return (
-    <div className="bg-surface-container text-on-surface flex min-h-screen flex-col gap-2 p-2 md:flex-row">
-      <aside className="flex w-full shrink-0 flex-col gap-3 px-2 py-2 md:w-60 md:gap-6 md:py-4">
-        <div className="flex items-center justify-between gap-3 px-2 md:block">
-          <div>
-            <p className="text-on-surface text-body-medium font-semibold tracking-tight">Docket</p>
-            <p className="text-on-surface-variant text-xs">Service admin</p>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="md:hidden"
-            disabled={signingOut}
-            onClick={() => void handleSignOut()}
-          >
-            {signingOut ? 'Signing out…' : 'Sign out'}
-          </Button>
-        </div>
-        <nav
-          className="flex flex-nowrap gap-1 overflow-x-auto pb-1 md:flex-col md:overflow-visible md:pb-0"
-          aria-label="Primary"
-        >
-          {NAV.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              aria-current={isActive(pathname, item.href) ? 'page' : undefined}
-              className={`focus-visible:ring-ring text-body-medium shrink-0 rounded-lg px-3 py-2 transition-colors focus-visible:ring-1 focus-visible:outline-none ${
-                isActive(pathname, item.href)
-                  ? 'bg-surface-container-highest text-on-surface font-medium'
-                  : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
-              }`}
+    <AppShell
+      sidebar={
+        <AdminSidebar
+          pathname={pathname}
+          queues={queues}
+          email={session?.user.email ?? null}
+          tier={tierLabel}
+          signingOut={signingOut}
+          onSignOut={handleSignOut}
+        />
+      }
+      banner={
+        <>
+          <ViewingAsBanner />
+          {signOutError ? (
+            // The shell's banner slot, not the sidebar: a collapsed rail is too narrow to carry a
+            // sentence, and a failure the operator cannot see reads exactly like success.
+            <InlineBanner
+              tone="critical"
+              title="Sign-out failed"
+              action={{ label: 'Try again', onSelect: handleSignOut }}
             >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-        <ErrorBanner message={signOutError} />
-        <div className="mt-auto hidden flex-col gap-2 px-1 md:flex">
-          {session?.user.email ? (
-            <p className="text-on-surface-variant truncate text-xs" title={session.user.email}>
-              {session.user.email}
-            </p>
+              {signOutError}
+            </InlineBanner>
           ) : null}
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={signingOut}
-            onClick={() => void handleSignOut()}
-          >
-            {signingOut ? 'Signing out…' : 'Sign out'}
-          </Button>
-        </div>
-      </aside>
-      <div className="bg-surface border-outline-variant flex min-w-0 flex-1 flex-col overflow-hidden rounded-xl border shadow-sm">
-        <ViewingAsBanner />
-        <main className="min-w-0 flex-1 overflow-auto">{children}</main>
-      </div>
-    </div>
+        </>
+      }
+      mobileBrand="Docket service admin"
+    >
+      {children}
+    </AppShell>
   );
 }

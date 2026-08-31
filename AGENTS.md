@@ -350,12 +350,9 @@ A task is ONLY complete when:
 - **NO placeholder content** without implementation plan
 - **NO new entries in `complexity-debt.json`**. That ledger records complexity that predates the
   gate; it may only shrink. A complexity, cognitive-complexity, depth, or parameter-count failure in
-  code you wrote is refactored, never granted an exemption. See
-  `docs/engineering/complexity-ratchet.md`.
-- **NO new entries in `complexity-debt.json`**. That ledger records complexity that predates the
-  gate; it may only shrink. A complexity, cognitive-complexity, depth, or parameter-count failure in
-  code you wrote is refactored, never granted an exemption. See
-  `docs/engineering/complexity-ratchet.md`.
+  code you wrote is refactored, never granted an exemption. Note the ledger pins a _file_, not a
+  function: a new over-complex function inside an already-ledgered file needs no new entry and so
+  this rule cannot catch it. See `docs/engineering/complexity-ratchet.md`.
 
 If a task cannot be completed:
 

@@ -200,9 +200,11 @@ global threshold structurally cannot.
 
 **The run is load-sensitive.** On an oversubscribed machine a run stretched from ~4 minutes to
 13m49s and five test files died on timeouts, contributing zero coverage and moving the measured
-number by ~9 branches. `tests/security/route-auth.test.ts` had capped its own `beforeAll` at 60s —
-a third of the preset's budget — and was the first to go; that cap is now removed. The remaining
-four hit the package's `testTimeout: 60_000` and are untouched.
+number by ~9 branches — against a margin of roughly 12 branches, so load variance was most of the
+headroom. `tests/security/route-auth.test.ts` had capped its own `beforeAll` at 60s, a third of the
+preset's budget, and was the first to go; that cap is removed. The other four hit the package's own
+`testTimeout`, which is now 120s rather than 60s, because the cause is the runner and not any one
+test.
 
 ---
 

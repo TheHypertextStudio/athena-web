@@ -373,10 +373,14 @@ export const complexityConfig = [
  * Escape a literal path so minimatch reads it as a path and not as a pattern.
  *
  * @remarks
- * Ninety-three files here carry a Next.js dynamic segment. Left alone, `orgs/[id]/page.tsx` is a
+ * Sixteen ledgered paths carry a Next.js dynamic segment. Left alone, `orgs/[id]/page.tsx` is a
  * character class: it matches `orgs/i/page.tsx` and `orgs/d/page.tsx` and never the file itself, so
- * the relaxation would land on files that do not exist while the real file failed the gate. This is
- * verified in `complexity-policy.test.ts` against ESLint's own matcher rather than assumed.
+ * the relaxation would land on files that do not exist while the real file failed the gate.
+ *
+ * Nothing tests this. It fails in both directions and only one of them is loud: under-escaping
+ * makes a relaxation miss, and the file then fails lint at the target, which someone notices;
+ * over-escaping, or widening the character class, makes a pattern match files that were never
+ * ledgered, and lint stays green while the gate quietly stops applying to them.
  */
 function escapeGlob(path) {
   return path.replace(/[*?[\]{}!]/g, (character) => `\\${character}`);

@@ -18,7 +18,13 @@ import { API_TEST_ENV } from './tests/support/env';
 // assertion in it succeeded. One process per worker gives each instance its own registry.
 export default docketVitest({
   env: API_TEST_ENV,
-  testTimeout: 60_000,
+  // 120s, not 60s: under an oversubscribed runner five files in this package have timed out at
+  // 60s — `route-auth.test.ts` in its `beforeAll` (now inheriting the preset's 180s hook budget)
+  // and four more in `it()` bodies, which land here. A timed-out file contributes no coverage, so
+  // the failure surfaces as a branch-coverage regression against the 88% threshold rather than as
+  // the timeout it is, which is a far more expensive thing to diagnose. The cause is the runner,
+  // not any one test, so the budget is raised once for the package.
+  testTimeout: 120_000,
   coverageThreshold: 88,
   pool: 'forks',
 });

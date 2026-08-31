@@ -60,14 +60,26 @@ db:reset` completed. The migration changes no UI behavior, but the requested des
 - **Plan**: `~/.claude/plans/plan-to-fix-noble-hejlsberg.md`
 - **Subtasks**:
   - [x] Phase 0 — ban ad-hoc borders in admin, seeded into the ratchet ledger
-  - [ ] Phase 1 — substrate: shell, page contract, shared primitives, query layer, pagination,
+  - [x] Phase 1 — substrate: shell, page contract, shared primitives, query layer, pagination,
         mutation feedback, operator tier
-  - [ ] Phase 2 — screens, each landing at zero violations (service announcements first)
-  - [ ] Phase 3 — close the perimeter: admin into the lint cohorts, ledger to `{}`, first admin
-        Craft Rubric scorecards
+  - [x] Phase 2 — every screen migrated, each landing at zero design-token violations
+  - [x] Phase 3 — admin added to `UI_OWNERSHIP_SURFACES` and the semantic-surface cohort; admin's
+        design-token ledger is empty
+  - [ ] Craft Rubric scorecards for the migrated surfaces (`docs/design/audits/`) — needs a visual
+        pass against a running console
 - **Out of scope by decision**: a Staff management screen, and a ranked attention feed on the
   dashboard. Both are net-new; the user scoped this effort to standardization plus the operator
   tier and the announcement-safety fixes.
+- **Verification**: `pnpm typecheck`, `pnpm lint`, and `pnpm exec prettier --check` all pass
+  repo-wide; `apps/admin` is 42 passing tests; `packages/ui` is 721 passing with branch coverage
+  back over its 90% gate. Both gates were proven to fire on admin by injecting
+  `className="bg-surface-container border"` into an admin component and confirming
+  `no-raw-surface-role` and `ad-hoc-border` each named it, then reverting. One API test
+  (`admin.test.ts` → "applies a reviewed discount to a trial and records the provider credit") fails,
+  and fails identically on the pre-effort commit `d30971ce3` — it is unrelated to this work.
+- **Not yet done**: no screenshots. `docs/engineering/ui-verification.md` and its tooling target
+  `apps/web`; `dev-session.ts` is parameterized by `APP_URL`/`PASSKEY_RP_ID`, so it can be pointed at
+  the admin origin without a parallel stack, but that has not been run.
 - **Follow-on**: infrastructure monitoring (Cloud Run, Cloud Scheduler, the Cloudflare Worker,
   Neon, Vercel, Stripe, Lattice) as a separate spec after Phase 3 — synthetic checks as the truth
   layer with provider adapters behind them, read-only plus a manual re-check.

@@ -234,6 +234,42 @@ describe('EntityTable virtualization', () => {
       expect(row).toHaveAttribute('tabindex', '-1');
   });
 
+  it('clears the host active entry when an update removes every flattened entry', async () => {
+    const onActiveEntryChange = vi.fn<(entryKey: string | null) => void>();
+    const { rerender } = render(
+      <EntityTable
+        aria-label="Changing resources"
+        columns={COLUMNS}
+        rows={[{ id: 'active', name: 'Active resource' }]}
+        getRowKey={(row) => row.id}
+        onActiveEntryChange={onActiveEntryChange}
+        virtualized
+      />,
+    );
+
+    const grid = screen.getByRole('grid', { name: 'Changing resources' });
+    await screen.findByRole('row', { name: 'Active resource' });
+    fireEvent.keyDown(grid, { key: 'ArrowDown' });
+    expect(grid).toHaveAttribute('aria-activedescendant');
+    expect(onActiveEntryChange).toHaveBeenLastCalledWith('r:active');
+
+    rerender(
+      <EntityTable
+        aria-label="Changing resources"
+        columns={COLUMNS}
+        rows={[]}
+        getRowKey={(row) => row.id}
+        onActiveEntryChange={onActiveEntryChange}
+        virtualized
+      />,
+    );
+
+    await waitFor(() => {
+      expect(grid).not.toHaveAttribute('aria-activedescendant');
+      expect(onActiveEntryChange).toHaveBeenLastCalledWith(null);
+    });
+  });
+
   it('uses rowHeight for measured rows and keeps the sticky header in the table scrollport', async () => {
     render(
       <EntityTable

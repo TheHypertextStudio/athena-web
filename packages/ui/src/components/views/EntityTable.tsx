@@ -597,11 +597,12 @@ export function EntityTable<T>({
     if (nextIndex < 0) {
       const first = flat[0];
       activeKeyRef.current = first?.key ?? null;
+      if (first === undefined) onActiveEntryChange?.(null);
       setActiveIndex(first ? 0 : -1);
     } else if (nextIndex !== activeIndex) {
       setActiveIndex(nextIndex);
     }
-  }, [activeIndex, flat, setActiveIndex]);
+  }, [activeIndex, flat, onActiveEntryChange, setActiveIndex]);
 
   const virtualItems = virtualizer.getVirtualItems();
   const lastVirtualIndex = virtualItems.at(-1)?.index ?? -1;

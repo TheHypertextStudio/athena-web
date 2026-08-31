@@ -17,10 +17,10 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { pathToFileURL } from 'node:url';
-
 import { Linter } from 'eslint';
 import tseslint from 'typescript-eslint';
+
+import { complexityConfig } from '../tooling/eslint-config/index.js';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const LEDGER = resolve(ROOT, 'tooling/eslint-config/complexity-debt.json');
@@ -40,12 +40,7 @@ const linter = new Linter({ configType: 'flat', cwd: ROOT });
 // The preset's own block, so the rules and their targets are stated once. Only the parser is
 // added: in the real config that comes from `baseConfig`, which this deliberately does not load
 // (it is type-aware, and none of these four rules needs type information).
-// The preset is untyped plain JavaScript. A static import of it is an implicit `any` that the
-// repo's `typecheck:repo` rejects, so it is loaded through a computed URL and narrowed once here.
-const preset = (await import(
-  pathToFileURL(resolve(ROOT, 'tooling/eslint-config/index.js')).href
-)) as { complexityConfig: Linter.Config[] };
-const presetBlocks = preset.complexityConfig;
+const presetBlocks = complexityConfig as unknown as Linter.Config[];
 const config: Linter.Config[] = presetBlocks.map((block) => ({
   ...block,
   languageOptions: {

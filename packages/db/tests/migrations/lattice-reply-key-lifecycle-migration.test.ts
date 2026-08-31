@@ -6,7 +6,6 @@ import { drizzle } from 'drizzle-orm/pglite';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
-  agentDelegation,
   agentSession,
   athenaAssignment,
   latticeConnection,
@@ -30,6 +29,37 @@ function migrationSql(through: string): string {
 afterEach(async () => {
   await Promise.all(clients.splice(0).map((client) => client.close()));
 });
+
+/**
+ * Seed one legacy null-key delegation with raw SQL naming only pre-0115 columns.
+ *
+ * @remarks
+ * The database under test is deliberately migrated only THROUGH 0114 — that is the era the
+ * upgrade path starts from. Inserting through the current Drizzle table would name every column
+ * the schema has TODAY (0116's `cancellation_requested_at` and whatever comes after), which the
+ * 0114-era database rightly rejects. Raw SQL keeps the fixture pinned to the era it fakes, so a
+ * future schema column never breaks a test about a past migration.
+ */
+async function insertLegacyDelegation(client: PGlite, suffix: string): Promise<void> {
+  const key = suffix.length > 0 ? `_${suffix}` : '';
+  await client.query(
+    `INSERT INTO agent_delegation
+       (id, owner_user_id, organization_id, assignment_id, session_id, connection_id,
+        runtime_id, logical_submission_id, work_id, reply_key_ciphertext, status,
+        terminal_outcome, returned_activity_id)
+     VALUES ($1, 'user_lattice_upgrade', 'org_lattice_upgrade', $2, $3,
+        'connection_lattice_upgrade', 'lat_upgrade', $4, $5, NULL, 'proposed', $6, $7)`,
+    [
+      `delegation_lattice_upgrade${key}`,
+      `assignment_lattice_upgrade${key}`,
+      `session_lattice_upgrade${key}`,
+      `athena:delegation_lattice_upgrade${key}`,
+      `work_lattice_upgrade${key}`,
+      JSON.stringify({ outcome: 'completed', payload: { outputText: 'Opened result' } }),
+      `activity_lattice_upgrade${key}`,
+    ],
+  );
+}
 
 describe('Lattice reply-key lifecycle migration', () => {
   it('settles legacy null-key proposals without losing applied result history', async () => {
@@ -99,21 +129,7 @@ describe('Lattice reply-key lifecycle migration', () => {
       approvalStatus: 'proposed',
       body: { action: { kind: 'comment', summary: 'Review result', mode: 'proposal' } },
     });
-    await db.insert(agentDelegation).values({
-      id: 'delegation_lattice_upgrade',
-      ownerUserId: 'user_lattice_upgrade',
-      organizationId: 'org_lattice_upgrade',
-      assignmentId: 'assignment_lattice_upgrade',
-      sessionId: 'session_lattice_upgrade',
-      connectionId: 'connection_lattice_upgrade',
-      runtimeId: 'lat_upgrade',
-      logicalSubmissionId: 'athena:delegation_lattice_upgrade',
-      workId: 'work_lattice_upgrade',
-      replyKeyCiphertext: null,
-      status: 'proposed',
-      terminalOutcome: { outcome: 'completed', payload: { outputText: 'Opened result' } },
-      returnedActivityId: 'activity_lattice_upgrade',
-    });
+    await insertLegacyDelegation(client, '');
     await db.insert(agentSession).values({
       id: 'session_lattice_upgrade_malformed_result',
       executorKind: 'athena',
@@ -144,21 +160,7 @@ describe('Lattice reply-key lifecycle migration', () => {
        SET body = jsonb_set(body, '{action,result,isError}', '"unknown"'::jsonb)
        WHERE id = 'activity_lattice_upgrade_malformed_result'`,
     );
-    await db.insert(agentDelegation).values({
-      id: 'delegation_lattice_upgrade_malformed_result',
-      ownerUserId: 'user_lattice_upgrade',
-      organizationId: 'org_lattice_upgrade',
-      assignmentId: 'assignment_lattice_upgrade_malformed_result',
-      sessionId: 'session_lattice_upgrade_malformed_result',
-      connectionId: 'connection_lattice_upgrade',
-      runtimeId: 'lat_upgrade',
-      logicalSubmissionId: 'athena:delegation_lattice_upgrade_malformed_result',
-      workId: 'work_lattice_upgrade_malformed_result',
-      replyKeyCiphertext: null,
-      status: 'proposed',
-      terminalOutcome: { outcome: 'completed', payload: { outputText: 'Opened result' } },
-      returnedActivityId: 'activity_lattice_upgrade_malformed_result',
-    });
+    await insertLegacyDelegation(client, 'malformed_result');
     await db.insert(agentSession).values({
       id: 'session_lattice_upgrade_applied_result',
       executorKind: 'athena',
@@ -184,21 +186,7 @@ describe('Lattice reply-key lifecycle migration', () => {
         },
       },
     });
-    await db.insert(agentDelegation).values({
-      id: 'delegation_lattice_upgrade_applied_result',
-      ownerUserId: 'user_lattice_upgrade',
-      organizationId: 'org_lattice_upgrade',
-      assignmentId: 'assignment_lattice_upgrade_applied_result',
-      sessionId: 'session_lattice_upgrade_applied_result',
-      connectionId: 'connection_lattice_upgrade',
-      runtimeId: 'lat_upgrade',
-      logicalSubmissionId: 'athena:delegation_lattice_upgrade_applied_result',
-      workId: 'work_lattice_upgrade_applied_result',
-      replyKeyCiphertext: null,
-      status: 'proposed',
-      terminalOutcome: { outcome: 'completed', payload: { outputText: 'Opened result' } },
-      returnedActivityId: 'activity_lattice_upgrade_applied_result',
-    });
+    await insertLegacyDelegation(client, 'applied_result');
 
     await client.exec(readFileSync(resolve(migrationsFolder, migrationName), 'utf8'));
 

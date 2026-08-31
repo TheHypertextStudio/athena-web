@@ -8,16 +8,29 @@ anything, and it runs only after every other job in the file has succeeded.
 
 ## The jobs
 
-| Job                 | What it runs                                                                 | Gating?                                         |
-| ------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------- |
-| `quality`           | `turbo run lint typecheck`, `pnpm format:check`, `pnpm ci:gate-policy`       | Yes                                             |
-| `secret-scan`       | `pnpm secret-scan` — the in-repo scanner over the tracked tree               | Yes                                             |
-| `test`              | `turbo run test`, then `pnpm test:tooling` for the root `repo-tests/` suites | Yes                                             |
-| `coverage`          | `turbo run test:coverage` — the same suites with thresholds enforced         | Yes                                             |
-| `build`             | `turbo run build` — every deployable artifact                                | Yes                                             |
-| `e2e`               | `pnpm --filter @docket/web test:e2e` against a real dev stack                | Yes                                             |
-| `still-latest`      | Checks `main` hasn't moved past this commit since the gates started          | Yes — stands `deploy-production` down if it has |
-| `deploy-production` | Calls `deploy.yml`, on pushes to `main` only                                 | The thing being gated                           |
+Three of these are sharded across a build matrix (`api` / `web` / `rest`), which multiplies the
+runs but not the job id — `needs` still names one id per row.
+
+| Job                 | What it runs                                                                                                                     | Gating?                                         |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `lint`              | `turbo run lint` per shard                                                                                                       | Yes                                             |
+| `typecheck`         | `turbo run typecheck typecheck:repo` per shard; `pnpm format:check` and `pnpm ci:gate-policy` on `rest`                          | Yes                                             |
+| `secret-scan`       | `pnpm secret-scan` — the in-repo scanner over the tracked tree                                                                   | Yes                                             |
+| `test`              | `turbo run test:coverage` per shard (thresholds enforced), `test:performance` for api and web, and `pnpm test:tooling` on `rest` | Yes                                             |
+| `build`             | `turbo run build` — every deployable artifact                                                                                    | Yes                                             |
+| `core-screen-smoke` | Playwright over the primary authenticated screens, against a real Postgres                                                       | Yes                                             |
+| `build-images`      | Calls `build-images.yml`; starts at t=0 with no `needs` of its own                                                               | Yes                                             |
+| `still-latest`      | Checks `main` hasn't moved past this commit since the gates started                                                              | Yes — stands `deploy-production` down if it has |
+| `deploy-production` | Calls `deploy.yml`, on pushes to `main` only                                                                                     | The thing being gated                           |
+
+There is no separate `coverage` job: `test` runs the instrumented task, so the thresholds in
+`tooling/vitest/preset.ts` are what the `test` job enforces. Root `pnpm test` runs the same task,
+so a local green means the same thing CI's does.
+
+The browser suite in `.github/workflows/e2e.yml` is **not** in this list and does not gate the
+deploy. It carries a `# ci-gate-policy: advisory` directive saying so, because it still contains
+flaky and evidence-oriented journeys. `core-screen-smoke` is the browser contract production does
+depend on, and it lives in `ci.yml` where `needs` can reach it.
 
 `deploy-production.needs` must name **every** job above it. Not just the ones with "test" in the name:
 a lint failure, a type error, a formatting drift, a leaked credential, and a coverage regression are all
@@ -37,8 +50,8 @@ test. This is worse than the first failure mode because the CI badge stays green
 
 **One implementation, two invocations.** `scripts/ci-gate-policy.ts` is the whole guard. It runs
 
-- as `pnpm ci:gate-policy`, a step inside the `quality` job, so a bad workflow edit fails the very
-  run that introduced it; and
+- as `pnpm ci:gate-policy`, a step in the `typecheck` job's `rest` shard, so a bad workflow edit
+  fails the very run that introduced it; and
 - as `repo-tests/ci/ci-gate-policy.test.ts` under `pnpm test:tooling`, which the `test` job runs.
 
 This was briefly two guards. A second, line-based workflow reader lived in
@@ -67,14 +80,16 @@ re-adoption is classified correctly even though the scan runs as a `run:` step t
 The assertions:
 
 1. Every check job in `ci.yml` appears in `deploy-production.needs` (`ungated-check-job`, the launch
-   requirement tracked as SCR-19). The acceptance names `quality` and `build` explicitly and neither
-   runs a test command, so the rule is written over checks, not over tests — a tests-only rule
-   would let a new lint-only job ship red.
+   requirement tracked as SCR-19). SCR-19's acceptance was written when the checks were named
+   `quality`, `test`, `build` and `e2e`; the names have changed since, which is exactly why the
+   rule is written over checks rather than over a list — and over checks rather than over _tests_,
+   since `lint`, `typecheck` and `build` run no test command and a tests-only rule would let a new
+   lint-only job ship red.
 2. No gating step is soft-failed by `continue-on-error: true` (step-level **or** job-level),
    a trailing `|| true`, or `if: always()` — in `ci.yml` or in any other workflow file
    (`soft-failed-gate`, tracked as SCR-20, static half).
 3. Committed expectations over the real file: the check-job set and `needs` are asserted as an exact
-   list, so adding a job forces both to be updated together. The coverage job's command, the
+   list, so adding a job forces both to be updated together. The `test` job's coverage command, the
    secret-scan job's command, and the presence of `pnpm ci:gate-policy` are each pinned.
 4. Four synthetic fixtures prove each rule bites, and a fifth proves the deliberate carve-out does
    not: `if: always()` on a Codecov upload or an artifact upload is left alone, because those steps
@@ -136,10 +151,13 @@ What the proof consists of, precisely, for whoever runs it:
 2. Observe the run. Required outcome: the `test` job concludes **failure**, the workflow's overall
    conclusion is **failure** (not "success with a skipped job"), and `deploy-production` shows as
    **skipped**, never **success**. Record the run URL.
-3. Revert that change. On the same branch, introduce exactly one failing assertion in one Playwright
-   spec — for example, in `apps/web/e2e/auth/sign-in.spec.ts`. Push.
-4. Observe the run. Required outcome: the `e2e` job concludes **failure**, the workflow conclusion is
-   **failure**, and `deploy-production` is **skipped**. Record the run URL.
+3. Revert that change. On the same branch, introduce exactly one failing assertion in a Playwright
+   spec that `core-screen-smoke` runs — one of `e2e/release/core-screen-acceptance.spec.ts`,
+   `e2e/platform/pwa-offline-sync.spec.ts`, or `e2e/work/work-views.spec.ts`. Push.
+4. Observe the run. Required outcome: the `core-screen-smoke` job concludes **failure**, the
+   workflow conclusion is **failure**, and `deploy-production` is **skipped**. Record the run URL.
+   Note that a failure in `e2e.yml` proves nothing here: that workflow is advisory and reaches no
+   `needs` list, which is why the spec has to be one `core-screen-smoke` actually runs.
 5. Because `deploy-production` is guarded by `if: github.event_name == 'push' && github.ref == 'refs/heads/main'`,
    a scratch branch skips it for that reason alone. To prove the `needs` gate rather than the `if` gate,
    either run steps 1–4 with that `if` temporarily relaxed on the scratch branch, or read the run's job

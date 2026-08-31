@@ -335,28 +335,20 @@ Releases follow [Semantic Versioning](https://semver.org/):
 - **MINOR** (0.1.0) - New features
 - **PATCH** (0.0.1) - Bug fixes
 
-### Automated Releases
+### Releases today
 
-Releases are automated via `semantic-release`:
+There is no automated release process. `semantic-release` produced the entries in `CHANGELOG.md`
+up to v1.3.0 on 2026-06-16; its workflow was removed afterwards, and its configuration and
+dependencies were removed from `package.json` once it became clear nothing had run it since. The
+version in the root `package.json` and the changelog both stop at that release.
 
-1. Commits to `main` are analyzed
-2. Version is determined from commit types
-3. Changelog is generated
-4. GitHub release is created
-5. Packages are published (if applicable)
+Shipping is a push to `main`, which `ci.yml` gates and `deploy.yml` deploys — see
+[`ci-gating.md`](../engineering/ci-gating.md). Nothing tags, versions, or publishes as part of
+that. Whether versioning should come back, and on what mechanism, is an open question rather than
+a process that exists and is being skipped.
 
-### Manual Release (if needed)
-
-```bash
-# Create release branch
-git checkout -b release/v1.2.0
-
-# Update version
-pnpm version 1.2.0
-
-# Push and create PR
-git push -u origin release/v1.2.0
-```
+The `MAJOR`/`MINOR`/`PATCH` meanings above still describe how a version number would be chosen if
+one were cut by hand.
 
 ## Troubleshooting
 

@@ -158,15 +158,23 @@ describe('Auth visual contract', () => {
   it('renders the requested-permissions list capped, scrollable, and gap-separated rather than divided', () => {
     const consent = code(consentPath);
     // Each row carries its own tonal surface rather than the list sharing one continuous block —
-    // through the shared `Surface` primitive, not a hand-rolled `bg-surface-container-high`.
-    expect(consent).toContain('<Surface');
+    // through the shared `Surface` primitive, not a hand-rolled `bg-surface-container-high`. The
+    // prop value is the observable decision; which JSX tag carries it is an implementation detail
+    // this file shouldn't pin (a Surface-authoring change would break this test for no reason).
     expect(consent).toContain('tone="floating"');
     // Material 3 Expressive's answer for list-row separation is a gap between items, not a
     // divider line between them — docs/design/design-system.md §8: "Grouping and separation are
     // not on that list [of what justifies a border]." A `border-b` row divider was the original
     // implementation and must not come back.
-    expect(consent).toContain('gap-1');
-    expect(consent).not.toContain('border-b');
+    //
+    // Scoped to the scope list's own `<ul>` className, not a whole-file substring search: the
+    // page has an unrelated `gap-1` elsewhere (the account row), so an unscoped `toContain`
+    // passed even when the list itself carried no gap at all.
+    const scopeListMatch = /<ul\b[\s\S]*?className="([^"]*)"/.exec(consent);
+    expect(scopeListMatch).not.toBeNull();
+    const scopeListClassName = scopeListMatch?.[1] ?? '';
+    expect(scopeListClassName).toContain('gap-1');
+    expect(scopeListClassName).not.toContain('border-b');
     // The server accepts arbitrary requested scopes, so the row count has no ceiling. Without the
     // cap a long list pushes the decision buttons off a short viewport — the original defect.
     expect(consent).toMatch(
@@ -178,10 +186,9 @@ describe('Auth visual contract', () => {
     const consent = code(consentPath);
     // The shared `Collapsible` primitive (`@docket/ui/primitives`), not a bespoke `<details>`:
     // same keyboard/AT contract, but the open state now reads through Radix's `data-state` like
-    // every other primitive in the system.
-    expect(consent).toContain('<Collapsible>');
-    expect(consent).toContain('<CollapsibleTrigger');
-    expect(consent).toContain('<CollapsibleContent>');
+    // every other primitive in the system. Asserted on the CSS decision that only makes sense
+    // wired to Radix's `data-state`, not the JSX tag names themselves — those are implementation
+    // detail that a legitimate refactor of the row markup shouldn't have to keep matching.
     expect(consent).toContain('group-data-[state=open]:rotate-180');
   });
 

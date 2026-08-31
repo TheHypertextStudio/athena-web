@@ -18,6 +18,7 @@ import { OAUTH_ISSUABLE_SCOPES } from '@docket/types';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { signInReturnPath } from '@/components/app-shell-utils';
 import { OAUTH_SCOPE_COPY } from '@/lib/oauth-scope-copy';
 
 /**
@@ -79,6 +80,30 @@ function renderSignedRequest(): void {
   render(<OAuthAuthorizePage />);
 }
 
+const ORIGINAL_LOCATION_DESCRIPTOR = Object.getOwnPropertyDescriptor(window, 'location');
+
+/**
+ * Swap `window.location` for a plain object that records `href` assignments instead of letting
+ * jsdom attempt a real (unsupported) navigation. Restored by `afterEach` below. Mirrors
+ * `sign-in-page.test.tsx`'s helper of the same name.
+ */
+function mockLocationForHrefCapture(pathname: string, search: string): string[] {
+  const assignments: string[] = [];
+  const origin = window.location.origin;
+  Object.defineProperty(window, 'location', {
+    configurable: true,
+    value: {
+      origin,
+      pathname,
+      search,
+      set href(value: string) {
+        assignments.push(value);
+      },
+    },
+  });
+  return assignments;
+}
+
 beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock);
   fetchMock.mockReset();
@@ -95,6 +120,9 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   cleanup();
+  if (ORIGINAL_LOCATION_DESCRIPTOR) {
+    Object.defineProperty(window, 'location', ORIGINAL_LOCATION_DESCRIPTOR);
+  }
 });
 
 describe('OAuthAuthorizePage', () => {
@@ -417,11 +445,37 @@ describe('OAuthAuthorizePage', () => {
 
     it('signs out of the shown account by id when "Not you?" is clicked', async () => {
       renderSignedRequest();
+      const assignments = mockLocationForHrefCapture('/oauth/authorize', window.location.search);
 
       fireEvent.click(await screen.findByRole('button', { name: 'Not you? Switch account' }));
 
       await waitFor(() => {
         expect(signOut).toHaveBeenCalledWith('user_ada');
+      });
+      // A hard navigation back to sign-in with this exact request preserved, not just a call to
+      // signOut with no follow-through — the resume only works if the browser actually leaves.
+      await waitFor(() => {
+        expect(assignments).toContain(
+          signInReturnPath(`/oauth/authorize${window.location.search}`),
+        );
+      });
+    });
+
+    it('resumes the same request after a switch triggered by another tab ("owner-changed")', async () => {
+      // `signOut`'s outcome can be 'owner-changed' as well as 'signed-out' — Better Auth reports
+      // that when the account changed out from under this tab rather than through this control.
+      // Both are "this tab's session no longer matches what it just showed" and must resume the
+      // same request the same way; only 'failed' takes the different, recoverable-error branch.
+      signOut.mockResolvedValue('owner-changed');
+      renderSignedRequest();
+      const assignments = mockLocationForHrefCapture('/oauth/authorize', window.location.search);
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Not you? Switch account' }));
+
+      await waitFor(() => {
+        expect(assignments).toContain(
+          signInReturnPath(`/oauth/authorize${window.location.search}`),
+        );
       });
     });
 
@@ -435,15 +489,27 @@ describe('OAuthAuthorizePage', () => {
       expect(screen.getByRole('button', { name: 'Not you? Switch account' })).toBeEnabled();
     });
 
-    it('does not disturb the request being decided', async () => {
-      // A person exploring "not you?" and backing out should still be looking at the exact
-      // request they started with, not a screen that lost track of it.
+    it('does not disturb the request being decided while a switch is in flight', async () => {
+      // A person clicking "not you?" should still be looking at the exact request they started
+      // with while the sign-out is in flight, not a screen that dropped it the instant the click
+      // landed. Asserting immediately after the click (no intervening `await`) catches the state
+      // right after Radix's synchronous updates but before `signOut`'s promise settles — the
+      // previous version of this test never clicked the control at all, so it passed regardless
+      // of whether the switch-account feature disturbed anything.
       renderSignedRequest();
+      const assignments = mockLocationForHrefCapture('/oauth/authorize', window.location.search);
 
-      await screen.findByRole('button', { name: 'Not you? Switch account' });
+      fireEvent.click(await screen.findByRole('button', { name: 'Not you? Switch account' }));
 
       expect(screen.getByText('Read your work')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Allow access' })).toBeInTheDocument();
+
+      // Let the in-flight signOut settle so it doesn't fire mid-cleanup or leak into the next test.
+      await waitFor(() => {
+        expect(assignments).toContain(
+          signInReturnPath(`/oauth/authorize${window.location.search}`),
+        );
+      });
     });
   });
 });

@@ -95,6 +95,7 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -247,7 +248,9 @@ function ContextRow({
       >
         {value}
       </dd>
-      {action}
+      {/* A second `<dd>` for the same `<dt>`, not a bare sibling: a `<div>` child of `<dl>` may
+          only contain `<dt>`+`<dd>` groups, and HTML permits more than one `<dd>` per `<dt>`. */}
+      {action ? <dd>{action}</dd> : null}
     </div>
   );
 }
@@ -290,10 +293,30 @@ function ContextRow({
 function ScopeRow({ scope }: { scope: string }): JSX.Element {
   const { label, detail, access } = describeScope(scope);
   const Icon = SCOPE_ICON[scope] ?? XCircle;
+  const [open, setOpen] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  // The browser's own find-in-page can't search a closed disclosure's content, since Radix
+  // unmounts it — a person searching for text inside a collapsed permission never finds it.
+  // `forceMount` keeps the region in the DOM always; `hidden="until-found"` (not the plain
+  // boolean the collapsed state used before) keeps it visually collapsed while still letting
+  // find-in-page match it, and the browser fires `beforematch` on a match so the row can open
+  // for real instead of leaving the disclosure's own chevron/state out of sync with what's shown.
+  useEffect(() => {
+    const node = contentRef.current;
+    if (!node) return;
+    const onBeforeMatch = (): void => {
+      setOpen(true);
+    };
+    node.addEventListener('beforematch', onBeforeMatch);
+    return () => {
+      node.removeEventListener('beforematch', onBeforeMatch);
+    };
+  }, []);
 
   return (
     <Surface as="li" tone="floating" shape="none" className="overflow-hidden">
-      <Collapsible>
+      <Collapsible open={open} onOpenChange={setOpen}>
         {/* `items-stretch`: the glyph column, the text column, and the chevron column are all the
             row's full height, so no inline sibling is a different size than the ones beside it.
 
@@ -332,7 +355,13 @@ function ScopeRow({ scope }: { scope: string }): JSX.Element {
             <ChevronDown className="text-on-surface-variant size-4 transition-transform group-data-[state=open]:rotate-180" />
           </span>
         </CollapsibleTrigger>
-        <CollapsibleContent>
+        <CollapsibleContent
+          ref={contentRef}
+          forceMount
+          // Cast needed: @types/react still models `hidden` as boolean-only, one HTML-spec
+          // revision behind the "until-found" value browsers already implement.
+          hidden={open ? undefined : ('until-found' as unknown as true)}
+        >
           {/* `ml-8` aligns the detail under the label rather than the icon (w-5 + gap-3 = 2rem). */}
           <p className="text-on-surface-variant text-body-small mr-3 mb-3 ml-8">{detail}</p>
         </CollapsibleContent>
@@ -421,9 +450,11 @@ function ScopeList({ scopes }: { scopes: readonly string[] }): JSX.Element {
  * The "Not you? Switch account" action under the account row.
  *
  * @remarks
- * Owns its own state and the sign-out call rather than lifting either into `ConsentPage` — this
- * is the one place on the screen that cares about the "not you?" case, and keeping it self
- * contained keeps `ConsentPage` itself to plain prop-passing for this feature.
+ * Owns its own `pending`/`failed` UI state rather than lifting it into `ConsentPage` — this is
+ * the one place on the screen that cares about the "not you?" case in detail. It does report
+ * whether a sign-out is in flight via `onSwitchingChange`, though: `ConsentPage`'s own decision
+ * buttons must not be submittable while this screen's session is being torn down underneath them
+ * (see the call site), so that one bit can't stay fully local.
  *
  * Signs out of the account shown above and resumes this exact authorization request after the
  * next sign-in — the same cold-start resume a server-ended session already relies on, just
@@ -433,11 +464,6 @@ function ScopeList({ scopes }: { scopes: readonly string[] }): JSX.Element {
  * screen, so it would throw for a real, signed-in person. The session itself still ends
  * correctly either way; only the local-only offline cache purge is skipped, and there is nothing
  * in that cache for a screen that never loaded app data.
- *
- * @param sessionSettled - Whether the session read has resolved to a real, authenticated account.
- * @param accountEmail - The account's email, or `null` while still loading — nothing to switch
- * away from yet.
- * @param userId - The signed-in account's id, for the owner-scoped sign-out call.
  */
 /** Props for {@link SwitchAccountControl}. */
 interface SwitchAccountControlProps {
@@ -447,12 +473,15 @@ interface SwitchAccountControlProps {
   // `session?.user.id` from the caller) keeps that optional chain's branch charged to this
   // component's own complexity budget instead of `ConsentPage`'s already-ledgered one.
   readonly session: ReturnType<typeof useSession>['data'];
+  /** Reports whether a sign-out is in flight, so the decision buttons can't be submitted mid-switch. */
+  readonly onSwitchingChange: (switching: boolean) => void;
 }
 
 function SwitchAccountControl({
   sessionSettled,
   accountEmail,
   session,
+  onSwitchingChange,
 }: SwitchAccountControlProps): JSX.Element | null {
   const [pending, setPending] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -462,20 +491,24 @@ function SwitchAccountControl({
     if (!userId) return;
     setPending(true);
     setFailed(false);
+    onSwitchingChange(true);
     void signOut(userId).then((outcome) => {
       if (outcome === 'failed') {
         setFailed(true);
         setPending(false);
+        onSwitchingChange(false);
         return;
       }
       // 'signed-out' or 'owner-changed': either way this tab's session no longer matches what it
       // just showed. A hard navigation, not `router.replace`, so no stale session-hook state from
-      // this tab survives into the sign-in page's own read.
+      // this tab survives into the sign-in page's own read. Deliberately left `switching` at
+      // `true` here rather than resetting it — the buttons stay disabled through the redirect
+      // instead of flashing enabled again for the instant before the navigation lands.
       window.location.href = signInReturnPath(
         `${window.location.pathname}${window.location.search}`,
       );
     });
-  }, [userId]);
+  }, [userId, onSwitchingChange]);
 
   if (!sessionSettled || accountEmail === null) return null;
   return (
@@ -516,14 +549,26 @@ function ConsentPage(): JSX.Element {
   const scopeParam = params.get('scope') ?? '';
   const returnHost = hostOf(params.get('redirect_uri'));
 
-  const requestedScopes = scopeParam
-    .split(' ')
-    .map((s) => s.trim())
-    .filter(Boolean);
+  // `useMemo`, not a plain re-split on every render: `ScopeList`'s own effect depends on this
+  // array by reference to know when to re-observe its rows, and a fresh array every render (e.g.
+  // when `clientMeta`/`pending`/`error` change below) tore down and rebuilt its scroll listener
+  // and `ResizeObserver` for no reason.
+  const requestedScopes = useMemo(
+    () =>
+      scopeParam
+        .split(' ')
+        .map((s) => s.trim())
+        .filter(Boolean),
+    [scopeParam],
+  );
 
   const [clientMeta, setClientMeta] = useState<{ name: string; icon: string | null } | null>(null);
   const [pending, setPending] = useState<'accept' | 'deny' | null>(null);
   const [error, setError] = useState<ConsentError | null>(null);
+  // Whether a deliberate "switch account" sign-out is in flight — the decision buttons below must
+  // not be submittable while it is, or a click on "Allow access" can race the sign-out and mint a
+  // grant for the account the person just tried to leave.
+  const [switchingAccount, setSwitchingAccount] = useState(false);
 
   // Fetch CIMD metadata for URL-form client IDs.
   useEffect(() => {
@@ -641,6 +686,10 @@ function ConsentPage(): JSX.Element {
   // one failed request. Only the account row and the two decision buttons wait.
   const accountEmail = session?.user.email ?? null;
   const sessionSettled = sessionStatus === 'authenticated';
+  // Shared by both decision buttons below: neither may be submitted while a decision is already
+  // in flight, before the session has settled, or while a switch-account sign-out is tearing this
+  // tab's session down underneath them. Computed once so the condition isn't duplicated per button.
+  const decisionDisabled = pending !== null || !sessionSettled || switchingAccount;
   const returnDestination =
     returnHost === null
       ? null
@@ -669,6 +718,7 @@ function ConsentPage(): JSX.Element {
                   sessionSettled={sessionSettled}
                   accountEmail={accountEmail}
                   session={session}
+                  onSwitchingChange={setSwitchingAccount}
                 />
               }
             />
@@ -733,7 +783,7 @@ function ConsentPage(): JSX.Element {
             type="button"
             variant="outline"
             size="lg"
-            disabled={pending !== null || !sessionSettled}
+            disabled={decisionDisabled}
             onClick={() => {
               void decide(false);
             }}
@@ -743,7 +793,7 @@ function ConsentPage(): JSX.Element {
           <Button
             type="button"
             size="lg"
-            disabled={pending !== null || !sessionSettled}
+            disabled={decisionDisabled}
             onClick={() => {
               void decide(true);
             }}

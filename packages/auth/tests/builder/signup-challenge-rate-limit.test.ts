@@ -16,6 +16,8 @@ import { describe, expect, it, vi } from 'vitest';
 // budget before the dynamic import below, mirroring `builder/auth.test.ts`.
 process.env['AGENT_MAX_TURNS'] = '8';
 process.env['ATHENA_ASYNC_RUNNER_ENABLED'] = 'false';
+process.env['ATHENA_LATTICE_SUBMISSIONS_ENABLED'] = 'false';
+process.env['ATHENA_LATTICE_POLLING_ENABLED'] = 'false';
 process.env['LINEAR_AGENT_ENABLED'] = 'false';
 
 describe('signupChallenge rate-limit path matchers', () => {

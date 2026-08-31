@@ -24,6 +24,7 @@ const MCP_SOURCE_DIR = resolve(WORKSPACE_ROOT, 'apps/api/src/mcp');
 // is now a deprecated re-export shim with no literals in it to read.
 const VOCABULARY_SOURCE = resolve(WORKSPACE_ROOT, 'domains/work/src/vocabulary.ts');
 const OAUTH_SCOPE_SOURCE = resolve(WORKSPACE_ROOT, 'packages/types/src/oauth-scope.ts');
+const OAUTH_SCOPE_COPY_SOURCE = resolve(WORKSPACE_ROOT, 'apps/web/src/lib/oauth-scope-copy.ts');
 
 const MCP_REFERENCE_PAGE = 'developers/mcp-tools-and-resources.mdx';
 const AUTHENTICATION_PAGE = 'developers/authentication.mdx';
@@ -111,6 +112,30 @@ function unionMembers(source: string, typeName: string): string[] {
   return [...(body ?? '').matchAll(/'([^']+)'/g)].map(([, member]) => member ?? '');
 }
 
+/** The scope literals assigned to `export const OAUTH_ISSUABLE_SCOPES: readonly [...] = [...]`. */
+function issuableScopes(source: string): string[] {
+  const assignment =
+    /export const OAUTH_ISSUABLE_SCOPES:[\s\S]*?=\s*\[([\s\S]*?)\]\s*as const;/.exec(source);
+  if (assignment === null) return [];
+  const [, body] = assignment;
+  return [...(body ?? '').matchAll(/'([^']+)'/g)].map(([, member]) => member ?? '');
+}
+
+/**
+ * The `detail` sentence for one scope in `OAUTH_SCOPE_COPY`'s source text.
+ *
+ * @remarks
+ * Read as text rather than imported, same reasoning as the rest of this file: a package under
+ * `packages/` has no business importing from an app's `src` tree, and this only needs the one
+ * string. `detail` is either inline (`detail: '...'`) or Prettier-wrapped onto its own line
+ * (`detail:\n  '...'`) depending on sentence length, so the pattern tolerates both.
+ */
+function scopeCopyDetail(source: string, scope: string): string | null {
+  const key = /^[a-z_]+$/.test(scope) ? scope : `'${scope}'`;
+  const pattern = new RegExp(`${key}:\\s*\\{[\\s\\S]*?detail:\\s*\\n?\\s*'([^']+)'`);
+  return pattern.exec(source)?.[1] ?? null;
+}
+
 /**
  * Every page path in the `docs.json` navigation tree.
  *
@@ -169,6 +194,29 @@ describe('documentation site coverage', () => {
         `\nOAuth scopes absent from apps/docs/${page}:\n  ${undocumented.join('\n  ')}\n`,
       ).toEqual([]);
     }
+  });
+
+  it("the authentication page's scope table matches the consent screen's copy, word for word", () => {
+    // `apps/web/src/lib/oauth-scope-copy.ts` is the single source of truth for what a scope
+    // grants — it's the copy a person reads on the actual consent screen before trusting a
+    // client with their account. This page's "Grants" column used to hand-write its own
+    // paraphrase of the same five sentences, and every one had drifted: `work:write` omitted
+    // that the scope also covers archiving, `agents:run` omitted that it covers cancellation, and
+    // `work:read` named a "Hub" resource the copy map doesn't. Asserting literal equality is what
+    // keeps a docs author from re-introducing that drift by hand.
+    const scopes = issuableScopes(readFileSync(OAUTH_SCOPE_SOURCE, 'utf8'));
+    expect(scopes.length).toBeGreaterThan(EXPECTED_CAPABILITY_SCOPES); // includes offline_access
+
+    const copySource = readFileSync(OAUTH_SCOPE_COPY_SOURCE, 'utf8');
+    const page = readDocsFile(AUTHENTICATION_PAGE);
+    const mismatched = scopes.filter((scope) => {
+      const detail = scopeCopyDetail(copySource, scope);
+      return detail === null || !page.includes(detail);
+    });
+    expect(
+      mismatched,
+      `\napps/docs/${AUTHENTICATION_PAGE}'s scope table doesn't match apps/web/src/lib/oauth-scope-copy.ts's detail sentence for:\n  ${mismatched.join('\n  ')}\n`,
+    ).toEqual([]);
   });
 
   it('names the interim apex only where the pinned inventory says it may', () => {

@@ -1,6 +1,6 @@
 ---
-title: "Authentication"
-description: "OAuth 2.1, client registration, the four scopes, and the limit on what any token can do."
+title: 'Authentication'
+description: 'OAuth 2.1, client registration, the four scopes, and the limit on what any token can do.'
 ---
 
 Docket runs an OAuth 2.1 resource server, with the authorization server on the same origin at
@@ -10,10 +10,10 @@ Docket runs an OAuth 2.1 resource server, with the authorization server on the s
 
 Fetch these two and you need nothing else to start.
 
-| Document | Path | Standard |
-| --- | --- | --- |
-| Protected Resource Metadata | `/.well-known/oauth-protected-resource/mcp` | RFC 9728 |
-| Authorization Server Metadata | `/.well-known/oauth-authorization-server` | RFC 8414 |
+| Document                      | Path                                        | Standard |
+| ----------------------------- | ------------------------------------------- | -------- |
+| Protected Resource Metadata   | `/.well-known/oauth-protected-resource/mcp` | RFC 9728 |
+| Authorization Server Metadata | `/.well-known/oauth-authorization-server`   | RFC 8414 |
 
 The AS metadata lists the authorize, token, and registration endpoints, `S256` for
 `code_challenge_method`, and URL-form client IDs.
@@ -29,6 +29,7 @@ The AS metadata lists the authorize, token, and registration endpoints, `S256` f
     ```
 
     Returns a `client_id`.
+
   </Tab>
   <Tab title="Client ID Metadata Document">
     Serve a metadata document at an HTTPS URL and use that URL as your `client_id`. Register
@@ -36,6 +37,7 @@ The AS metadata lists the authorize, token, and registration endpoints, `S256` f
 
     Docket fetches, DNS-checks, and validates it during the authorize preflight, then shows the
     validated `client_name` and `logo_uri` on the consent screen.
+
   </Tab>
 </Tabs>
 
@@ -56,22 +58,23 @@ The AS metadata lists the authorize, token, and registration endpoints, `S256` f
 
 ## Token lifetimes
 
-| | |
-| --- | --- |
-| Access token | 15 minutes |
-| Refresh token | 30 days |
+|               |            |
+| ------------- | ---------- |
+| Access token  | 15 minutes |
+| Refresh token | 30 days    |
 
 ## Scopes
 
-Four capability scopes, plus `offline_access`.
+Four capability scopes, plus `offline_access`. The "Grants" column is the exact wording a user
+sees on the consent screen when your client requests that scope.
 
-| Scope | Grants |
-| --- | --- |
-| `work:read` | Read work. Run views, search, read tasks, projects, and Hub resources. The usual default. |
-| `work:write` | Create and update work: tasks, projects, initiatives, comments, updates. |
-| `agents:run` | Manage agents. Trigger sessions, approve or reject proposed actions. |
-| `connectors:link` | Link external items, such as GitHub and Linear references, onto work. |
-| `offline_access` | Issue a refresh token. |
+| Scope             | Grants                                                                                          |
+| ----------------- | ----------------------------------------------------------------------------------------------- |
+| `work:read`       | View your tasks, projects, programs, initiatives, and cycles.                                   |
+| `work:write`      | Create tasks, update and organize projects, post comments and status updates, and archive work. |
+| `agents:run`      | Start and cancel agent work sessions, and approve or reject the actions an agent proposes.      |
+| `connectors:link` | Connect other tools you use and link items from them to your work.                              |
+| `offline_access`  | Keep working on your behalf without asking you to sign in again.                                |
 
 Ask for the narrowest set that does the job. People decline a read-only integration that asks for
 `work:write` and `agents:run`.
@@ -88,9 +91,7 @@ Authorize again for the wider scope, then retry the call.
 
 ## The limit on every token
 
-<Warning>
-  **A token can never do more than the human who consented to it.**
-</Warning>
+<Warning>**A token can never do more than the human who consented to it.**</Warning>
 
 Docket checks the scope first, then that person's own grants. Someone with `view` on "Launch v2"
 cannot write to it with a `work:write` token. People revoke in **Settings → Connected apps**,

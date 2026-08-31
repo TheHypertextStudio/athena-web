@@ -17,8 +17,24 @@
  *    field anywhere in this section for a URL, a key, or a token, and nothing asks anyone to open a
  *    terminal.
  */
-import { CheckCircle2, CircleDashed, CloudOff, RefreshCw, XCircle } from '@docket/ui/icons';
-import { Button, Chip, ControlGroup, Skeleton, Stack, Text, Toolbar } from '@docket/ui/primitives';
+import {
+  CheckCircle2,
+  CircleDashed,
+  CloudOff,
+  Computer,
+  RefreshCw,
+  XCircle,
+} from '@docket/ui/icons';
+import {
+  Button,
+  Chip,
+  ControlGroup,
+  DecorativeIcon,
+  Skeleton,
+  Stack,
+  Text,
+  Toolbar,
+} from '@docket/ui/primitives';
 import { useAppSearchParams } from '@/lib/app-location';
 import { type JSX, type ReactNode } from 'react';
 
@@ -26,6 +42,7 @@ import { api } from '@/lib/api';
 import { LoadFailure } from '@/components/settings/load-failure';
 import { firstWriteError } from '@/components/settings/write-error';
 import { SettingsGroup } from '@/components/settings/settings-group';
+import { SettingRow } from '@/components/settings/setting-row';
 import { SETTINGS_NODES } from '@/components/settings/settings-capabilities';
 import { userErrorMessage } from '@/lib/problem';
 import {
@@ -189,6 +206,33 @@ export function LatticeSection(): JSX.Element {
     );
   }
 
+  // Before anyone has connected, this is an integration like any other: one row naming the
+  // service, a sentence on what it gives you, and the single action that starts it. The device
+  // list and its states only become meaningful once a grant exists.
+  if (!connected) {
+    return (
+      <SettingsGroup capability={SETTINGS_NODES.athenaLattice} body="rows">
+        <SettingRow
+          leading={<DecorativeIcon icon={Computer} />}
+          label="Lattice"
+          description="Run Athena's models on a computer you own, instead of the model service Docket runs."
+          trailing={
+            <Button
+              controlSize="md"
+              variant="outline"
+              disabled={authorize.isPending}
+              onClick={() => {
+                authorize.mutate(undefined);
+              }}
+            >
+              {authorize.isPending ? 'Connecting…' : 'Connect'}
+            </Button>
+          }
+        />
+      </SettingsGroup>
+    );
+  }
+
   const devices = devicesQ.data?.devices ?? [];
   const listReason: LatticeReason | null = devicesQ.data?.unavailableReason ?? null;
   const statusReason: LatticeReason | null = status.unavailableReason ?? null;
@@ -204,10 +248,7 @@ export function LatticeSection(): JSX.Element {
           : 'device_offline'
       : null;
   const reason =
-    listReason ??
-    chosenReason ??
-    statusReason ??
-    (connected && !status.deviceId ? 'no_device_selected' : null);
+    listReason ?? chosenReason ?? statusReason ?? (status.deviceId ? null : 'no_device_selected');
   const runningHere = status.enabled && status.deviceId !== null && chosenReason === null;
   // The return flag lives in the URL and survives every later interaction, so it is suppressed
   // once its instruction has been carried out — telling someone to "choose a computer" under a
@@ -221,26 +262,15 @@ export function LatticeSection(): JSX.Element {
     <SettingsGroup
       capability={SETTINGS_NODES.athenaLattice}
       action={
-        connected ? (
-          <Button
-            variant="ghost"
-            onClick={() => {
-              disconnect.mutate(undefined);
-            }}
-            disabled={disconnect.isPending}
-          >
-            Disconnect
-          </Button>
-        ) : (
-          <Button
-            onClick={() => {
-              authorize.mutate(undefined);
-            }}
-            disabled={authorize.isPending}
-          >
-            Connect Lattice
-          </Button>
-        )
+        <Button
+          variant="ghost"
+          onClick={() => {
+            disconnect.mutate(undefined);
+          }}
+          disabled={disconnect.isPending}
+        >
+          Disconnect
+        </Button>
       }
     >
       {returnNote ? (
@@ -249,116 +279,104 @@ export function LatticeSection(): JSX.Element {
         </Text>
       ) : null}
 
-      {connected ? (
-        <Stack gap={4}>
-          <Toolbar
-            leading={
-              <Text token="label-large">
-                {status.deviceName ? `Athena runs on ${status.deviceName}` : 'Your computers'}
-              </Text>
-            }
-            trailing={
-              <ControlGroup>
+      <Stack gap={4}>
+        <Toolbar
+          leading={
+            <Text token="label-large">
+              {status.deviceName ? `Athena runs on ${status.deviceName}` : 'Your computers'}
+            </Text>
+          }
+          trailing={
+            <ControlGroup>
+              <Button
+                variant="ghost"
+                iconOnly
+                aria-label="Refresh your computers"
+                onClick={() => {
+                  void devicesQ.refetch();
+                }}
+                disabled={devicesQ.isFetching}
+              >
+                <RefreshCw />
+              </Button>
+              {status.deviceId ? (
                 <Button
-                  variant="ghost"
-                  iconOnly
-                  aria-label="Refresh your computers"
+                  variant={status.enabled ? 'secondary' : 'default'}
                   onClick={() => {
-                    void devicesQ.refetch();
+                    setEnabled.mutate(!status.enabled);
                   }}
-                  disabled={devicesQ.isFetching}
+                  disabled={setEnabled.isPending}
                 >
-                  <RefreshCw />
+                  {status.enabled ? 'Turn off' : 'Turn on'}
                 </Button>
-                {status.deviceId ? (
-                  <Button
-                    variant={status.enabled ? 'secondary' : 'default'}
-                    onClick={() => {
-                      setEnabled.mutate(!status.enabled);
-                    }}
-                    disabled={setEnabled.isPending}
-                  >
-                    {status.enabled ? 'Turn off' : 'Turn on'}
-                  </Button>
-                ) : null}
-              </ControlGroup>
-            }
-          />
+              ) : null}
+            </ControlGroup>
+          }
+        />
 
-          {devicesQ.isPending ? (
-            /* placeholder: the list of computers paired to this person's Lovelace account, which
+        {devicesQ.isPending ? (
+          /* placeholder: the list of computers paired to this person's Lovelace account, which
                only the gateway can report. */
-            <Skeleton className="h-24 rounded-xl" />
-          ) : devices.length === 0 ? (
-            <Stack gap={1} role="status">
-              <Text token="body-medium">No computers are paired yet</Text>
-              <Text token="body-small" tone="muted">
-                Install Lattice on the computer you want Athena to use. It appears here once it
-                connects — use Refresh above if you have just installed it.
-              </Text>
-            </Stack>
-          ) : (
-            <ul className="flex flex-col">
-              {devices.map((device) => (
-                <li key={device.id} className="flex min-h-12 items-center gap-3 px-1">
-                  <span aria-hidden className="text-on-surface-variant [&_svg]:size-4.5!">
-                    {deviceIcon(device.status)}
-                  </span>
-                  <Stack gap={0} className="min-w-0 flex-1">
-                    <Text token="body-medium" truncate>
-                      {device.name}
-                    </Text>
-                    <Text token="body-small" tone="muted">
-                      {LATTICE_DEVICE_STATUS_COPY[device.status]}
-                    </Text>
-                  </Stack>
-                  {device.selected ? (
-                    <Chip variant="assist" icon={<CheckCircle2 />} selected asChild>
-                      <span>In use</span>
-                    </Chip>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        chooseDevice.mutate(device.id);
-                      }}
-                      disabled={chooseDevice.isPending || device.status === 'revoked'}
-                    >
-                      Use this
-                    </Button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
+          <Skeleton className="h-24 rounded-xl" />
+        ) : devices.length === 0 ? (
+          <Stack gap={1} role="status">
+            <Text token="body-medium">No computers are paired yet</Text>
+            <Text token="body-small" tone="muted">
+              Install Lattice on the computer you want Athena to use. It appears here once it
+              connects — use Refresh above if you have just installed it.
+            </Text>
+          </Stack>
+        ) : (
+          <ul className="flex flex-col">
+            {devices.map((device) => (
+              <li key={device.id} className="flex min-h-12 items-center gap-3 px-1">
+                <span aria-hidden className="text-on-surface-variant [&_svg]:size-4.5!">
+                  {deviceIcon(device.status)}
+                </span>
+                <Stack gap={0} className="min-w-0 flex-1">
+                  <Text token="body-medium" truncate>
+                    {device.name}
+                  </Text>
+                  <Text token="body-small" tone="muted">
+                    {LATTICE_DEVICE_STATUS_COPY[device.status]}
+                  </Text>
+                </Stack>
+                {device.selected ? (
+                  <Chip variant="assist" icon={<CheckCircle2 />} selected asChild>
+                    <span>In use</span>
+                  </Chip>
+                ) : (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      chooseDevice.mutate(device.id);
+                    }}
+                    disabled={chooseDevice.isPending || device.status === 'revoked'}
+                  >
+                    Use this
+                  </Button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
 
-          {runningHere ? (
-            <Text token="body-small" tone="muted">
-              Athena&apos;s replies are generated on {status.deviceName ?? 'your computer'}. If it
-              is unavailable, Athena tells you instead of quietly using a cloud model.
-            </Text>
-          ) : status.enabled && status.deviceId ? (
-            <Text token="body-small" tone="muted">
-              Athena will use {status.deviceName ?? 'your computer'} as soon as it is reachable. It
-              will not fall back to a cloud model in the meantime.
-            </Text>
-          ) : (
-            <Text token="body-small" tone="muted">
-              Athena is using Docket&apos;s standard model service right now.
-            </Text>
-          )}
-        </Stack>
-      ) : (
-        <Stack gap={2}>
-          <Text token="body-medium">
-            Lattice lets Athena think using models running on your own computer, instead of the
-            model service Docket runs.
-          </Text>
+        {runningHere ? (
           <Text token="body-small" tone="muted">
-            You approve the connection on Lovelace, and can disconnect it here at any time.
+            Athena&apos;s replies are generated on {status.deviceName ?? 'your computer'}. If it is
+            unavailable, Athena tells you instead of quietly using a cloud model.
           </Text>
-        </Stack>
-      )}
+        ) : status.enabled && status.deviceId ? (
+          <Text token="body-small" tone="muted">
+            Athena will use {status.deviceName ?? 'your computer'} as soon as it is reachable. It
+            will not fall back to a cloud model in the meantime.
+          </Text>
+        ) : (
+          <Text token="body-small" tone="muted">
+            Athena is using Docket&apos;s standard model service right now.
+          </Text>
+        )}
+      </Stack>
 
       {reason ? <ReasonNote reason={reason} /> : null}
 

@@ -22,6 +22,11 @@
     "complexity": 20,
     "sonarjs/cognitive-complexity": 19
   },
+  "apps/api/src/agent/lattice-delegations.ts": {
+    "complexity": 37,
+    "max-params": 7,
+    "sonarjs/cognitive-complexity": 52
+  },
   "apps/api/src/agent/loop.ts": {
     "complexity": 45,
     "max-depth": 6,
@@ -239,9 +244,9 @@
     "max-params": 6
   },
   "apps/api/src/routes/agent-session-approval.ts": {
-    "complexity": 18,
+    "complexity": 39,
     "max-params": 7,
-    "sonarjs/cognitive-complexity": 25
+    "sonarjs/cognitive-complexity": 33
   },
   "apps/api/src/routes/agent-session-helpers.ts": {
     "complexity": 25,
@@ -1542,10 +1547,6 @@
   },
   "packages/integrations/src/lattice-oauth.ts": {
     "complexity": 13
-  },
-  "packages/integrations/src/lattice-sdk.ts": {
-    "complexity": 14,
-    "sonarjs/cognitive-complexity": 16
   },
   "packages/integrations/src/linear.ts": {
     "complexity": 22,

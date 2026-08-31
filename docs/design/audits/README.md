@@ -130,7 +130,9 @@ A `needs-work` verdict is not a failure of process — it is the process working
 
 1. Run `/design-review <route>` (see [`.claude/skills/design-review/SKILL.md`](../../../.claude/skills/design-review/SKILL.md)).
 2. Write the header first, then the body, to `docs/design/audits/YYYY-MM-DD-<surface>.md`.
-3. Regenerate the inventory: `pnpm exec tsx scripts/surface-inventory.ts`.
+3. Add the surface to [`docs/design/surface-inventory.md`](../surface-inventory.md) by hand if
+   it is not already listed. That file is hand-maintained; the generator it names has never
+   existed, which its own opening paragraph records.
 4. `pnpm exec prettier --write docs/design/audits/<your-file>.md docs/design/surface-inventory.md`
 5. `pnpm --filter @docket/test-utils test`
 

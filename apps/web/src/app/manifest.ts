@@ -24,7 +24,7 @@ import type { MetadataRoute } from 'next';
  *   screen). The dark mark reads correctly against it.
  *
  * @see {@link file://./layout.tsx} for the media-scoped `theme-color` pair.
- * @see {@link file://../../scripts/generate-pwa-icons.ts} which generates the referenced icons.
+ * @see `packages/brand` (`pnpm icons`), which renders the referenced icons.
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {

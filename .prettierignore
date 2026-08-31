@@ -23,6 +23,11 @@ docs/engineering/placeholder-inventory.md
 # columns aligned, which would put the generator and `pnpm format:check` in a permanent loop.
 docs/engineering/specs/mcp-apps-conformance.md
 
+# Same story: `scripts/launch-scorecard.ts` renders this scorecard from `launch-compliance.json`,
+# and its Markdown tables are padded by the generator. Prettier wants different column widths, so
+# formatting it puts the generator and `pnpm format:check` in a loop over 399 requirement rows.
+docs/engineering/launch-compliance.md
+
 # Verbatim upstream specification copies. Their bytes are hashed by the conformance suite to prove
 # nobody edited a spec to agree with the implementation; reformatting them breaks that proof.
 docs/engineering/specs/vendor/

@@ -5,8 +5,8 @@
  * The sync spine records each failure in `sync_run.error`. The web error-source policy keeps that
  * text off product surfaces, so this read-only operator tool is where it can be read.
  *
- * Talks to Postgres directly rather than importing the workspace's Drizzle client, as
- * `migration-0080-org-slug-unify.ts` does, so it can run against any database.
+ * Talks to Postgres directly rather than importing the workspace's Drizzle client, so it can
+ * run against any database.
  *
  * @example
  * ```bash

@@ -25,6 +25,7 @@ const NAV: readonly NavItem[] = [
   { href: '/discounts', label: 'Discounts' },
   { href: '/notifications', label: 'Notifications' },
   { href: '/audit', label: 'Audit log' },
+  { href: '/settings', label: 'Settings' },
 ];
 
 /** Whether `pathname` is within the section rooted at `href`. */

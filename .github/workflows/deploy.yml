@@ -58,17 +58,18 @@ jobs:
           LINEAR_AGENT_ENABLED: ${{ vars.LINEAR_AGENT_ENABLED || 'false' }}
         run: pnpm exec tsx scripts/production-secrets.ts
 
+      # Athena submits work to, and polls results from, each owner's Lovelace Lattice runtime on
+      # every deployment; staff pause either half from the admin console. Consent still runs
+      # through the Lovelace OAuth client, so a deployment without the client id cannot serve the
+      # capability at all.
       - name: Validate Lattice production configuration
         env:
-          ATHENA_LATTICE_SUBMISSIONS_ENABLED: ${{ vars.ATHENA_LATTICE_SUBMISSIONS_ENABLED || 'false' }}
-          ATHENA_LATTICE_POLLING_ENABLED: ${{ vars.ATHENA_LATTICE_POLLING_ENABLED || 'false' }}
           LATTICE_CLIENT_ID: ${{ vars.LATTICE_CLIENT_ID }}
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "$ATHENA_LATTICE_SUBMISSIONS_ENABLED" == 'true' || "$ATHENA_LATTICE_POLLING_ENABLED" == 'true' ]] &&
-            [[ -z "${LATTICE_CLIENT_ID//[[:space:]]/}" ]]; then
-            echo 'LATTICE_CLIENT_ID is required when either Athena Lattice control is enabled.' >&2
+          if [[ -z "${LATTICE_CLIENT_ID//[[:space:]]/}" ]]; then
+            echo 'LATTICE_CLIENT_ID is required: production cannot serve Lattice without the Lovelace OAuth client.' >&2
             exit 1
           fi
 
@@ -118,8 +119,6 @@ jobs:
           LATTICE_CLIENT_ID: "${{ vars.LATTICE_CLIENT_ID }}"
           AGENT_MAX_TURNS: "${{ vars.AGENT_MAX_TURNS }}"
           ATHENA_ASYNC_RUNNER_ENABLED: "false"
-          ATHENA_LATTICE_SUBMISSIONS_ENABLED: "${{ vars.ATHENA_LATTICE_SUBMISSIONS_ENABLED || 'false' }}"
-          ATHENA_LATTICE_POLLING_ENABLED: "${{ vars.ATHENA_LATTICE_POLLING_ENABLED || 'false' }}"
           LATTICE_ACCOUNTS_ISSUER: "https://auth.uselovelace.com"
           LATTICE_GATEWAY_URL: "https://lattice.uselovelace.com"
           BILLING_CANARY_EMAILS: "${{ vars.BILLING_CANARY_EMAILS }}"

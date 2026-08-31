@@ -451,3 +451,42 @@ export const CreateStaffBody = z.object({
 });
 /** Validated create-staff body. */
 export type CreateStaffBody = z.infer<typeof CreateStaffBody>;
+
+/** The instance-wide service controls governing Athena's durable Lattice work. */
+export const AdminServiceControlsOut = z.object({
+  latticeSubmissionsEnabled: z
+    .boolean()
+    .describe(
+      'Whether the scheduled sweep submits new durable work to personal Lattice runtimes. Instance-wide; enabled unless an operator has turned it off.',
+    ),
+  latticePollingEnabled: z
+    .boolean()
+    .describe(
+      'Whether the scheduled sweep polls and settles Lattice work that has already been submitted. Instance-wide; enabled unless an operator has turned it off.',
+    ),
+});
+/** Validated service-controls value. */
+export type AdminServiceControlsOut = z.infer<typeof AdminServiceControlsOut>;
+
+/** Body for changing one or both service controls; omitted fields are left as they are. */
+export const UpdateServiceControlsBody = z
+  .object({
+    latticeSubmissionsEnabled: z
+      .boolean()
+      .optional()
+      .describe('New value for Lattice submissions; omit to leave the control unchanged.'),
+    latticePollingEnabled: z
+      .boolean()
+      .optional()
+      .describe('New value for Lattice polling; omit to leave the control unchanged.'),
+  })
+  .superRefine((value, ctx) => {
+    if (
+      value.latticeSubmissionsEnabled === undefined &&
+      value.latticePollingEnabled === undefined
+    ) {
+      ctx.addIssue({ code: 'custom', message: 'Supply at least one control to change.' });
+    }
+  });
+/** Validated update-service-controls body. */
+export type UpdateServiceControlsBody = z.infer<typeof UpdateServiceControlsBody>;

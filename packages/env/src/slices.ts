@@ -255,10 +255,6 @@ export const agentServer = {
   ATHENA_MAX_CONCURRENT_RUNS: z.coerce.number().int().min(1).max(64).optional(),
   /** Route personal Athena generations through the durable Cloudflare execution bridge. */
   ATHENA_ASYNC_RUNNER_ENABLED: boolFromString(),
-  /** Required emergency control for new durable Athena submissions to personal Lattice runtimes. */
-  ATHENA_LATTICE_SUBMISSIONS_ENABLED: boolFromString(),
-  /** Required emergency control for polling and settling existing durable Lattice work. */
-  ATHENA_LATTICE_POLLING_ENABLED: boolFromString(),
   /** HTTPS origin of the Cloudflare runner Worker when asynchronous execution is enabled. */
   CLOUDFLARE_ATHENA_RUNNER_URL: z.url().optional(),
   /** HMAC secret authenticating Cloudflare callbacks to Docket. */

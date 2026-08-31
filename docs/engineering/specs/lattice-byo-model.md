@@ -219,20 +219,25 @@ reaches the fallback's normal configuration error.
 
 ## 9. Environment
 
-| Var                                  | Required | Meaning                                                                                                |
-| ------------------------------------ | -------- | ------------------------------------------------------------------------------------------------------ |
-| `LATTICE_CLIENT_ID`                  | no       | Lovelace OAuth client. Absent ⇒ the section renders as unavailable and no Connect control appears.     |
-| `LATTICE_CLIENT_SECRET`              | no       | Optional compatibility value. Production `docket-athena` is a public PKCE client and does not set one. |
-| `LATTICE_ACCOUNTS_ISSUER`            | no       | Defaults to `https://auth.uselovelace.com`.                                                            |
-| `LATTICE_GATEWAY_URL`                | no       | Defaults to `https://lattice.uselovelace.com`.                                                         |
-| `ATHENA_LATTICE_SUBMISSIONS_ENABLED` | yes      | Set false to stop new durable submissions while existing work continues to settle.                     |
-| `ATHENA_LATTICE_POLLING_ENABLED`     | yes      | Set false to stop polling without deleting delegation rows, work ids, or encrypted keys.               |
+| Var                       | Required | Meaning                                                                                                |
+| ------------------------- | -------- | ------------------------------------------------------------------------------------------------------ |
+| `LATTICE_CLIENT_ID`       | no       | Lovelace OAuth client. Absent ⇒ the section renders as unavailable and no Connect control appears.     |
+| `LATTICE_CLIENT_SECRET`   | no       | Optional compatibility value. Production `docket-athena` is a public PKCE client and does not set one. |
+| `LATTICE_ACCOUNTS_ISSUER` | no       | Defaults to `https://auth.uselovelace.com`.                                                            |
+| `LATTICE_GATEWAY_URL`     | no       | Defaults to `https://lattice.uselovelace.com`.                                                         |
 
 The OAuth client identifies Docket during consent; it is application infrastructure, not the model
 credential. Every model grant, device choice, and enablement state still belongs to the individual
 user. The user never enters a gateway URL, API key, or token. A deployment that sets none of these
-OAuth values keeps Lattice unavailable. Every deployment must set both emergency controls
-explicitly. The production workflow supplies `false` when either production variable is absent.
+OAuth values keeps Lattice unavailable.
+
+Submission and polling are product settings. The `service_control` table holds one row per control
+(`lattice_submissions` and `lattice_polling`), staff change them from the admin console, and the
+five-minute sweep reads them at the start of every pass, so a change takes effect on the next tick.
+Turning submission off stops new durable submissions while existing work continues to settle.
+Turning polling off holds the delegation rows, work ids, and encrypted keys in place until polling
+resumes. A key with no row reads as enabled, so a fresh deployment serves the capability before
+anyone opens the console.
 
 ## 10. The SDK
 

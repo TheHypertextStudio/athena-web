@@ -55,6 +55,7 @@ import {
 } from './admin-serializers';
 import { adminBillingRoutes } from './admin-billing-routes';
 import { adminDiscountRoutes } from './admin-discount-routes';
+import { adminSettingsRoutes } from './admin-settings-routes';
 import { adminStaffRoutes } from './admin-staff-routes';
 
 /** The staff-gated operator back-office router. */
@@ -365,6 +366,8 @@ export function createAdminRoutes<
           return ok(c, AdminAuditPage, { items: rows.map(toAuditOut) });
         },
       )
+      // ---- Service controls (sub-router) -------------------------------------
+      .route('/service-controls', adminSettingsRoutes)
       // ---- Staff management (sub-router) ------------------------------------
       .route('/staff', adminStaffRoutes)
       .route('/discount-applications', adminDiscountRoutes)

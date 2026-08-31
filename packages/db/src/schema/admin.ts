@@ -7,7 +7,16 @@
  * audit trail. Distinct from the per-org permission system.
  */
 import { sql } from 'drizzle-orm';
-import { index, jsonb, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  check,
+  index,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
 
 import { staffRole } from '../enums';
 import { genId } from '../id';
@@ -97,5 +106,35 @@ export const billingExemption = pgTable(
     uniqueIndex('billing_exemption_org_active_uq')
       .on(t.organizationId)
       .where(sql`${t.revokedAt} IS NULL`),
+  ],
+);
+
+/** Instance-wide service controls an operator switches from the admin console. */
+export const SERVICE_CONTROL_KEYS = ['lattice_submissions', 'lattice_polling'] as const;
+/** One instance-wide service control key. */
+export type ServiceControlKey = (typeof SERVICE_CONTROL_KEYS)[number];
+
+/**
+ * One instance-wide service control, read live by the runtime that the control governs.
+ *
+ * @remarks
+ * A key with no row reads as enabled: the product default lives in code so a fresh deployment
+ * runs the capability before anyone opens the admin console, and a row exists only once an
+ * operator has actually decided something.
+ */
+export const serviceControl = pgTable(
+  'service_control',
+  {
+    key: text('key').$type<ServiceControlKey>().primaryKey(),
+    enabled: boolean('enabled').notNull().default(true),
+    updatedBy: text('updated_by').references(() => staffUser.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at').notNull().defaultNow(),
+    updatedAt: timestamp('updated_at')
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => [
+    check('service_control_key_check', sql`${t.key} IN ('lattice_submissions', 'lattice_polling')`),
   ],
 );

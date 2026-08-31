@@ -41,6 +41,7 @@ import { sweepRecurrenceMaterialization } from '../lib/recurrence/sweep';
 import { createGoogleWorkLocationTransport } from '../services/work-location/google-transport';
 import { sweepWorkLocations } from '../services/work-location/sweep';
 import { runScheduledBillingReconciliation } from '../services/scheduled-billing-reconciliation';
+import { readLatticeServiceControls } from '../services/service-controls';
 
 /** Extract the presented cron secret from `Authorization: Bearer …` or `x-cron-secret`. */
 function presentedSecret(
@@ -254,10 +255,11 @@ const cron = new Hono()
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
     const now = new Date();
     const triggers = await sweepAthenaAssignmentTriggers(now);
-    const delegations = await sweepLatticeDelegations(now, latticeDelegationDependencies, {
-      pollingEnabled: env.ATHENA_LATTICE_POLLING_ENABLED,
-      submissionsEnabled: env.ATHENA_LATTICE_SUBMISSIONS_ENABLED,
-    });
+    const delegations = await sweepLatticeDelegations(
+      now,
+      latticeDelegationDependencies,
+      await readLatticeServiceControls(),
+    );
     return c.json({ swept: true, ...triggers, delegations });
   })
   // Expired-session sweep: deletes every `session` row past its `expiresAt` — Better Auth itself

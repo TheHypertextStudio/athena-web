@@ -284,9 +284,10 @@ idempotency and approval guarantees against the present schema.
 
 ## Rollback
 
-Docket will gate new submissions behind an environment-controlled capability. Disabling it will
-stop new submissions while existing rows continue to poll and settle. A second emergency control
-will stop polling without deleting rows or keys. The database migration will remain additive.
+Docket carries two operator settings in the admin console, submission and polling, both on by
+default. Turning submission off takes effect on the next five-minute sweep and leaves existing rows
+to poll and settle. Turning polling off holds the delegation rows, work ids, and encrypted reply
+keys in place for a later pass. The database migration will remain additive.
 
 Lovelace can reject new controller submissions while preserving status and result reads for work
 already accepted. The managed Studio daemon can stop claiming new work while it finishes or returns

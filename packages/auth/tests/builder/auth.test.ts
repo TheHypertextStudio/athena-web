@@ -14,8 +14,6 @@ const SECRET = 'test-secret-at-least-32-characters-long';
 // complete configured instance, so declare the same explicit test-only budget before that import.
 process.env['AGENT_MAX_TURNS'] = '8';
 process.env['ATHENA_ASYNC_RUNNER_ENABLED'] = 'false';
-process.env['ATHENA_LATTICE_SUBMISSIONS_ENABLED'] = 'false';
-process.env['ATHENA_LATTICE_POLLING_ENABLED'] = 'false';
 process.env['LINEAR_AGENT_ENABLED'] = 'false';
 
 /** The verified-intent identifier prefix (kept in sync with `src/signup-intent.ts`). */

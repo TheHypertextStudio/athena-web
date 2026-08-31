@@ -56,8 +56,6 @@ function validApiEnv(): Record<string, string> {
     LINEAR_AGENT_ENABLED: 'false',
     AGENT_MAX_TURNS: '24',
     ATHENA_ASYNC_RUNNER_ENABLED: 'false',
-    ATHENA_LATTICE_SUBMISSIONS_ENABLED: 'true',
-    ATHENA_LATTICE_POLLING_ENABLED: 'true',
     CRON_SECRET: 'test-cron-secret',
     BILLING_ENABLED: 'false',
     BILLING_RECONCILIATION_MODE: 'off',
@@ -102,15 +100,11 @@ describe('registry', () => {
     });
   });
 
-  it('requires both Lattice emergency controls while keeping OAuth availability optional', () => {
-    expect(findVar('ATHENA_LATTICE_SUBMISSIONS_ENABLED')).toMatchObject({
-      targets: ['api'],
-      required: true,
-    });
-    expect(findVar('ATHENA_LATTICE_POLLING_ENABLED')).toMatchObject({
-      targets: ['api'],
-      required: true,
-    });
+  it('keeps the Lattice run controls out of the environment and OAuth availability optional', () => {
+    // Submissions and polling are operator-owned service settings read from the database at
+    // sweep time, so a deployment can never pin them to a build value.
+    expect(findVar('ATHENA_LATTICE_SUBMISSIONS_ENABLED')).toBeUndefined();
+    expect(findVar('ATHENA_LATTICE_POLLING_ENABLED')).toBeUndefined();
     expect(findVar('LATTICE_CLIENT_ID')).toMatchObject({
       targets: ['api'],
       required: false,
@@ -178,24 +172,17 @@ describe('production Lattice deployment contract', () => {
     'utf8',
   );
 
-  it('passes explicit fail-closed controls and the public PKCE client configuration', () => {
-    expect(workflow).toContain(
-      'ATHENA_LATTICE_SUBMISSIONS_ENABLED: "${{ vars.ATHENA_LATTICE_SUBMISSIONS_ENABLED || \'false\' }}"',
-    );
-    expect(workflow).toContain(
-      'ATHENA_LATTICE_POLLING_ENABLED: "${{ vars.ATHENA_LATTICE_POLLING_ENABLED || \'false\' }}"',
-    );
+  it('passes the public PKCE client configuration and no build-time run controls', () => {
     expect(workflow).toContain('LATTICE_CLIENT_ID: "${{ vars.LATTICE_CLIENT_ID }}"');
     expect(workflow).toContain('LATTICE_ACCOUNTS_ISSUER: "https://auth.uselovelace.com"');
     expect(workflow).toContain('LATTICE_GATEWAY_URL: "https://lattice.uselovelace.com"');
+    // Submissions and polling move with the operator's admin-console decision, so shipping
+    // either of them as a deployed value would put the running service behind a redeploy again.
+    expect(workflow).not.toContain('ATHENA_LATTICE_SUBMISSIONS_ENABLED');
+    expect(workflow).not.toContain('ATHENA_LATTICE_POLLING_ENABLED');
   });
 
-  it('blocks enabled Lattice work without a client id and never mounts a client secret', () => {
-    expect(workflow).toContain('- name: Validate Lattice production configuration');
-    expect(workflow).toContain(
-      '[[ "$ATHENA_LATTICE_SUBMISSIONS_ENABLED" == \'true\' || "$ATHENA_LATTICE_POLLING_ENABLED" == \'true\' ]]',
-    );
-    expect(workflow).toContain('[[ -z "${LATTICE_CLIENT_ID//[[:space:]]/}" ]]');
+  it('never mounts the confidential client secret', () => {
     expect(workflow).toContain('$1 != "LATTICE_CLIENT_SECRET"');
     expect(workflow).not.toMatch(/^\s+LATTICE_CLIENT_SECRET:/m);
   });
@@ -292,12 +279,8 @@ describe('slices', () => {
     expect(() => agentServer.ATHENA_MAX_CONCURRENT_RUNS.parse('65')).toThrow();
     expect(() => agentServer.ATHENA_ASYNC_RUNNER_ENABLED.parse(undefined)).toThrow();
     expect(agentServer.ATHENA_ASYNC_RUNNER_ENABLED.parse('true')).toBe(true);
-    expect(() => agentServer.ATHENA_LATTICE_SUBMISSIONS_ENABLED.parse(undefined)).toThrow();
-    expect(agentServer.ATHENA_LATTICE_SUBMISSIONS_ENABLED.parse('false')).toBe(false);
-    expect(agentServer.ATHENA_LATTICE_SUBMISSIONS_ENABLED.parse('true')).toBe(true);
-    expect(() => agentServer.ATHENA_LATTICE_POLLING_ENABLED.parse(undefined)).toThrow();
-    expect(agentServer.ATHENA_LATTICE_POLLING_ENABLED.parse('false')).toBe(false);
-    expect(agentServer.ATHENA_LATTICE_POLLING_ENABLED.parse('true')).toBe(true);
+    expect(agentServer).not.toHaveProperty('ATHENA_LATTICE_SUBMISSIONS_ENABLED');
+    expect(agentServer).not.toHaveProperty('ATHENA_LATTICE_POLLING_ENABLED');
     expect(authServer.LATTICE_CLIENT_ID.parse(undefined)).toBeUndefined();
     expect(authServer.LATTICE_CLIENT_SECRET.parse(undefined)).toBeUndefined();
     expect(agentServer.CLOUDFLARE_ATHENA_RUNNER_URL.parse('https://runner.example.com')).toBe(
@@ -411,14 +394,15 @@ describe.each([
 
 describe('api composition', () => {
   it.each(['ATHENA_LATTICE_SUBMISSIONS_ENABLED', 'ATHENA_LATTICE_POLLING_ENABLED'] as const)(
-    'rejects startup when required emergency control %s is absent',
-    async (missingControl) => {
+    'starts without %s, which the admin console owns at runtime instead',
+    async (runtimeControl) => {
       for (const [key, value] of Object.entries(validApiEnv())) {
         vi.stubEnv(key, value);
       }
-      vi.stubEnv(missingControl, undefined);
+      vi.stubEnv(runtimeControl, undefined);
 
-      await expect(import('../../src/api')).rejects.toThrow();
+      const mod = await import('../../src/api');
+      expect(mod.env).not.toHaveProperty(runtimeControl);
     },
   );
 

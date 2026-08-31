@@ -614,8 +614,8 @@
     "complexity": 14
   },
   "apps/web/e2e/athena/mcp-apps-stable.spec.ts": {
-    "complexity": 17,
-    "sonarjs/cognitive-complexity": 16
+    "complexity": 19,
+    "sonarjs/cognitive-complexity": 18
   },
   "apps/web/e2e/calendar/calendar-panel-floor.spec.ts": {
     "sonarjs/cognitive-complexity": 16
@@ -787,6 +787,10 @@
   "apps/web/src/components/athena/athena-conversation-browser.tsx": {
     "complexity": 20,
     "sonarjs/cognitive-complexity": 41
+  },
+  "apps/web/src/components/athena/athena-conversation.tsx": {
+    "complexity": 19,
+    "sonarjs/cognitive-complexity": 17
   },
   "apps/web/src/components/athena/athena-mcp-panel.tsx": {
     "complexity": 17,
@@ -1553,7 +1557,7 @@
     "sonarjs/cognitive-complexity": 25
   },
   "packages/integrations/src/mcp-apps-host.ts": {
-    "complexity": 15
+    "complexity": 19
   },
   "packages/integrations/src/mcp-connector.ts": {
     "complexity": 13,

@@ -113,15 +113,32 @@ stored DID` — because `~/.lovelace/lattice/device.json` and `device.key`, both
   `.corrupt-20260830-230702` suffix rather than removed. The managed launchd job is installed under
   the label the tool chooses, `com.lovelace.lattice-daemon`, and the daemon now mints a fresh
   identity and answers `ping`.
-- **Pairing is blocked on Lovelace, not on Docket**: `lattice-ctl auth login --accounts-url
-https://auth.uselovelace.com` is refused with `invalid_scope`. The installed `lattice-ctl` 0.1.0
-  asks `/device_authorization` for `openid profile offline_access marketplace`, and production's
-  discovery document advertises no `marketplace` scope — it offers `openid`, `profile`, `email`,
-  `offline_access`, the `workspace`, `agents`, and `knowledge` pairs, `lattice:compute:inference`,
-  and `lattice:compute:catalog:read`. The deployed accounts service and this daemon build disagree
-  about the provider-side scope, which fits the Lovelace checkout sitting a hundred commits ahead
-  of its remote. Closing it needs a Lovelace change: an accounts service that grants `marketplace`,
-  or a daemon built against what production offers. No Docket change reaches it. See
+- **Pairing was two Lovelace bugs, both now fixed**: `lattice-ctl auth login` was refused with
+  `invalid_scope`. The installed CLI asked `/device_authorization` for `openid profile
+offline_access marketplace`, and a bare `marketplace` names nothing in Lovelace's own registry:
+  `packages/core/auth-core/src/scopes/lovelace-scopes.ts` calls it `lattice:compute:marketplace`
+  canonically and `lattice:marketplace` as a legacy alias, and a host that serves compute wants
+  neither — it wants `lattice:compute:provider`, the provider control plane. Probing production
+  directly settled it: all three marketplace spellings return 400 `invalid_scope`, and
+  `lattice:compute:provider` returns 200 with a device code.
+  `crates/lattice-daemon/src/bin/ctl/auth.rs` now asks for that scope, and the rebuilt binary
+  carries it.
+  With the scope fixed the device page still hung on "Signing you in" and no passkey prompt ever
+  appeared, on that screen and anywhere else browser autofill had nothing to attach to. In
+  `apps/lovelace-accounts/src/components/auth/WebAuthnLoginForm`, the login form and the autofill
+  hook share one attempt lock. Autofill takes it on mount and starts a conditional-mediation
+  ceremony, which settles only when somebody picks a passkey out of an autofill dropdown; a screen
+  that renders no field for that dropdown never offers the chance, so the ceremony waits forever
+  and the lock is never released. The person's own sign-in then failed the lock check and returned
+  before it ever called the WebAuthn client, so the browser was never asked for a passkey. A
+  sign-in now takes the lock from a waiting autofill ceremony, which is safe because the WebAuthn
+  client already aborts an outstanding ceremony when the next one begins. That fix is
+  `fda3d38409` on Lovelace `main`, deployed to `accounts.uselovelace.com` and verified by finding
+  `preemptAutofillAttempt` in the served bundle.
+- **What pairing still needs**: one person approving a device code in a browser. RFC 8628 exists
+  precisely so a host cannot authenticate its owner by itself, and no automation substitutes for
+  it. Three codes were minted and expired unapproved. Everything behind that click is staged: the
+  daemon config, the launchd job, and the `device`, `model`, and `open` steps. See
   `docs/superpowers/plans/2026-08-30-docket-lattice-roundtrip-claude-handoff.md` for the recorded
   handoff state, and note that its worktree paths, tarball paths, `gcloud` path, and Lovelace
   branch state are stale.

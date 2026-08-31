@@ -53,6 +53,10 @@
  *
  * Unauthenticated users are redirected to `/sign-in` with the current search params preserved
  * so Better Auth can resume the flow after the user signs in.
+ *
+ * **Switching accounts.** "Not you? Switch account" under the account row deliberately signs out
+ * and resumes through the same signed-out redirect, so choosing a different account lands right
+ * back on this exact request instead of abandoning it.
  */
 import { AuthLayout } from '@docket/ui/components';
 import {
@@ -87,6 +91,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   type ComponentType,
   type JSX,
+  type ReactNode,
   Suspense,
   useCallback,
   useEffect,
@@ -97,7 +102,7 @@ import {
 import { signInReturnPath } from '@/components/app-shell-utils';
 import Wordmark from '@/components/wordmark';
 import { api } from '@/lib/api';
-import { useSession } from '@/lib/auth-client';
+import { signOut, useSession } from '@/lib/auth-client';
 import { describeScope, OAUTH_SCOPE_ACCESS_LABEL } from '@/lib/oauth-scope-copy';
 import { resolveSessionStatus } from '@/lib/session-status';
 
@@ -221,10 +226,13 @@ function ContextRow({
   label,
   value,
   muted = false,
+  action,
 }: {
   label: string;
   value: string;
   muted?: boolean;
+  /** Optional small control under the value — e.g. "Not you? Switch account" on the account row. */
+  action?: ReactNode;
 }): JSX.Element {
   return (
     <div className="flex flex-col gap-0.5">
@@ -239,6 +247,7 @@ function ContextRow({
       >
         {value}
       </dd>
+      {action}
     </div>
   );
 }
@@ -408,6 +417,89 @@ function ScopeList({ scopes }: { scopes: readonly string[] }): JSX.Element {
   );
 }
 
+/**
+ * The "Not you? Switch account" action under the account row.
+ *
+ * @remarks
+ * Owns its own state and the sign-out call rather than lifting either into `ConsentPage` — this
+ * is the one place on the screen that cares about the "not you?" case, and keeping it self
+ * contained keeps `ConsentPage` itself to plain prop-passing for this feature.
+ *
+ * Signs out of the account shown above and resumes this exact authorization request after the
+ * next sign-in — the same cold-start resume a server-ended session already relies on, just
+ * reached deliberately instead of by surprise. Calls `signOut` directly rather than the app
+ * shell's `signOutAndPurge`: that helper requires the offline outbox to have already bound an
+ * owner, which only happens once the authenticated app boots — never true on this pre-app
+ * screen, so it would throw for a real, signed-in person. The session itself still ends
+ * correctly either way; only the local-only offline cache purge is skipped, and there is nothing
+ * in that cache for a screen that never loaded app data.
+ *
+ * @param sessionSettled - Whether the session read has resolved to a real, authenticated account.
+ * @param accountEmail - The account's email, or `null` while still loading — nothing to switch
+ * away from yet.
+ * @param userId - The signed-in account's id, for the owner-scoped sign-out call.
+ */
+/** Props for {@link SwitchAccountControl}. */
+interface SwitchAccountControlProps {
+  readonly sessionSettled: boolean;
+  readonly accountEmail: string | null;
+  // The whole session, not a pre-extracted id: reading `.user.id` here (rather than passing
+  // `session?.user.id` from the caller) keeps that optional chain's branch charged to this
+  // component's own complexity budget instead of `ConsentPage`'s already-ledgered one.
+  readonly session: ReturnType<typeof useSession>['data'];
+}
+
+function SwitchAccountControl({
+  sessionSettled,
+  accountEmail,
+  session,
+}: SwitchAccountControlProps): JSX.Element | null {
+  const [pending, setPending] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const userId = session?.user.id;
+
+  const onSwitch = useCallback((): void => {
+    if (!userId) return;
+    setPending(true);
+    setFailed(false);
+    void signOut(userId).then((outcome) => {
+      if (outcome === 'failed') {
+        setFailed(true);
+        setPending(false);
+        return;
+      }
+      // 'signed-out' or 'owner-changed': either way this tab's session no longer matches what it
+      // just showed. A hard navigation, not `router.replace`, so no stale session-hook state from
+      // this tab survives into the sign-in page's own read.
+      window.location.href = signInReturnPath(
+        `${window.location.pathname}${window.location.search}`,
+      );
+    });
+  }, [userId]);
+
+  if (!sessionSettled || accountEmail === null) return null;
+  return (
+    <>
+      <button
+        type="button"
+        onClick={onSwitch}
+        disabled={pending}
+        // No separate `font-medium`: `text-label-medium` already carries weight 500 as part of
+        // the token (`--text-label-medium--font-weight`), so adding it again would only be a new
+        // raw-type-utility hit for no visual change.
+        className="text-primary text-label-medium inline-flex min-h-10 w-fit items-center underline-offset-4 hover:underline disabled:no-underline disabled:opacity-60"
+      >
+        {pending ? 'Signing out…' : 'Not you? Switch account'}
+      </button>
+      {failed ? (
+        <p role="alert" className="text-error text-label-medium">
+          Could not sign out. Try again.
+        </p>
+      ) : null}
+    </>
+  );
+}
+
 /** The inner consent page that reads searchParams and renders the form. */
 function ConsentPage(): JSX.Element {
   const router = useRouter();
@@ -572,6 +664,13 @@ function ConsentPage(): JSX.Element {
               label="Your account"
               value={accountEmail ?? ACCOUNT_PENDING_LABEL}
               muted={accountEmail === null}
+              action={
+                <SwitchAccountControl
+                  sessionSettled={sessionSettled}
+                  accountEmail={accountEmail}
+                  session={session}
+                />
+              }
             />
             {returnDestination ? <ContextRow label="Returns to" value={returnDestination} /> : null}
           </dl>

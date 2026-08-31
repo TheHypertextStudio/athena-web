@@ -26,16 +26,17 @@ import { OAUTH_SCOPE_COPY } from '@/lib/oauth-scope-copy';
  * a mock that omitted `error` would let a regression in that distinction pass unnoticed.
  */
 interface MockSession {
-  data: { user: { email: string } } | null;
+  data: { user: { email: string; id: string } } | null;
   isPending: boolean;
   error: { status: number } | null;
 }
 
-const { fetchMock, metadataGet, replace, useSession } = vi.hoisted(() => ({
+const { fetchMock, metadataGet, replace, useSession, signOut } = vi.hoisted(() => ({
   fetchMock: vi.fn(),
   metadataGet: vi.fn(),
   replace: vi.fn(),
   useSession: vi.fn((): MockSession => ({ data: null, isPending: false, error: null })),
+  signOut: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -49,6 +50,7 @@ vi.mock('../../../src/lib/api', () => ({
 
 vi.mock('../../../src/lib/auth-client', () => ({
   useSession,
+  signOut,
 }));
 
 import OAuthAuthorizePage from '../../../src/app/(auth)/oauth/authorize/page';
@@ -70,7 +72,7 @@ const SIGNED_QUERY =
 function renderSignedRequest(): void {
   window.history.replaceState(null, '', `/oauth/authorize${SIGNED_QUERY}`);
   useSession.mockReturnValue({
-    data: { user: { email: 'ada@example.com' } },
+    data: { user: { email: 'ada@example.com', id: 'user_ada' } },
     isPending: false,
     error: null,
   });
@@ -85,6 +87,8 @@ beforeEach(() => {
   replace.mockReset();
   useSession.mockReset();
   useSession.mockReturnValue({ data: null, isPending: false, error: null });
+  signOut.mockReset();
+  signOut.mockResolvedValue('signed-out');
   window.history.replaceState(null, '', `/oauth/authorize${CONSENT_QUERY}`);
 });
 
@@ -114,7 +118,7 @@ describe('OAuthAuthorizePage', () => {
 
   it('does not redirect an authenticated visitor', async () => {
     useSession.mockReturnValue({
-      data: { user: { email: 'ada@example.com' } },
+      data: { user: { email: 'ada@example.com', id: 'user_ada' } },
       isPending: false,
       error: null,
     });
@@ -148,7 +152,7 @@ describe('OAuthAuthorizePage', () => {
     // The `sig`-less state used to render a title and description and nothing else, leaving the
     // reader on a screen with no control of any kind.
     useSession.mockReturnValue({
-      data: { user: { email: 'ada@example.com' } },
+      data: { user: { email: 'ada@example.com', id: 'user_ada' } },
       isPending: false,
       error: null,
     });
@@ -189,7 +193,7 @@ describe('OAuthAuthorizePage', () => {
         '/oauth/authorize?sig=abc123&client_id=https%3A%2F%2Fclient.example&scope=some%3Afuture',
       );
       useSession.mockReturnValue({
-        data: { user: { email: 'ada@example.com' } },
+        data: { user: { email: 'ada@example.com', id: 'user_ada' } },
         isPending: false,
         error: null,
       });
@@ -216,7 +220,7 @@ describe('OAuthAuthorizePage', () => {
         )}`,
       );
       useSession.mockReturnValue({
-        data: { user: { email: 'ada@example.com' } },
+        data: { user: { email: 'ada@example.com', id: 'user_ada' } },
         isPending: false,
         error: null,
       });
@@ -262,7 +266,7 @@ describe('OAuthAuthorizePage', () => {
           '&redirect_uri=http%3A%2F%2F127.0.0.1%3A65056%2Fcallback&scope=work%3Aread',
       );
       useSession.mockReturnValue({
-        data: { user: { email: 'ada@example.com' } },
+        data: { user: { email: 'ada@example.com', id: 'user_ada' } },
         isPending: false,
         error: null,
       });
@@ -282,7 +286,7 @@ describe('OAuthAuthorizePage', () => {
           '&redirect_uri=http%3A%2F%2F127.0.0.1%3A65056%2Fcallback&scope=work%3Aread',
       );
       useSession.mockReturnValue({
-        data: { user: { email: 'ada@example.com' } },
+        data: { user: { email: 'ada@example.com', id: 'user_ada' } },
         isPending: false,
         error: null,
       });
@@ -398,6 +402,48 @@ describe('OAuthAuthorizePage', () => {
 
       expect(await screen.findByText('Verified domain')).toBeInTheDocument();
       expect(screen.getByText('client.example')).toBeInTheDocument();
+    });
+  });
+
+  describe('switching accounts', () => {
+    it('offers no way to switch accounts until the session settles', () => {
+      window.history.replaceState(null, '', `/oauth/authorize${SIGNED_QUERY}`);
+      useSession.mockReturnValue({ data: null, isPending: true, error: null });
+
+      render(<OAuthAuthorizePage />);
+
+      expect(screen.queryByRole('button', { name: 'Not you? Switch account' })).toBeNull();
+    });
+
+    it('signs out of the shown account by id when "Not you?" is clicked', async () => {
+      renderSignedRequest();
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Not you? Switch account' }));
+
+      await waitFor(() => {
+        expect(signOut).toHaveBeenCalledWith('user_ada');
+      });
+    });
+
+    it('shows a recoverable error and re-enables the control when sign-out fails', async () => {
+      signOut.mockResolvedValue('failed');
+      renderSignedRequest();
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Not you? Switch account' }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('Could not sign out');
+      expect(screen.getByRole('button', { name: 'Not you? Switch account' })).toBeEnabled();
+    });
+
+    it('does not disturb the request being decided', async () => {
+      // A person exploring "not you?" and backing out should still be looking at the exact
+      // request they started with, not a screen that lost track of it.
+      renderSignedRequest();
+
+      await screen.findByRole('button', { name: 'Not you? Switch account' });
+
+      expect(screen.getByText('Read your work')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Allow access' })).toBeInTheDocument();
     });
   });
 });

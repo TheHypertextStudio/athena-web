@@ -550,6 +550,19 @@ function ConsentPage(): JSX.Element {
             />
             {returnDestination ? <ContextRow label="Returns to" value={returnDestination} /> : null}
           </dl>
+          {/* Lives in the intro column, not trailing after the decision buttons: the buttons are
+              the last thing in the children column on purpose, so the primary action is always
+              the bottom-most element rather than competing with a footnote for that position. */}
+          <p className="text-on-surface-variant text-body-small">
+            Revoke access any time in{' '}
+            <Link
+              href="/settings/connected-apps"
+              className="text-primary font-medium underline-offset-4 hover:underline"
+            >
+              Connected apps
+            </Link>
+            .
+          </p>
         </>
       }
     >
@@ -577,9 +590,19 @@ function ConsentPage(): JSX.Element {
         </section>
       ) : null}
 
-      {/* Reversed so the primary lands on the right at width and first when stacked. */}
+      {/* Reversed so the primary lands on the right at width and first when stacked.
+
+          `sticky bottom-0`: the decision is the one control this screen exists for, so it stays
+          reachable without scrolling even when a long permission list or a wrapped context row
+          pushes the rest of the column past the fold. `bg-surface` matches AuthLayout's own card
+          tone exactly (`surfaceToneColor('page')`) so scrolled content disappears cleanly behind
+          it instead of showing through; `border-t` reads as a docked bar once it's actually
+          pinned, and is invisible the rest of the time since nothing sits behind it. The card has
+          no scrolling ancestor of its own, so `bottom` resolves against the viewport rather than
+          any padded ancestor — `pb-[env(safe-area-inset-bottom)]` keeps the buttons clear of a
+          phone's home-indicator instead of sitting flush against it. */}
       {error !== 'expired' && error !== 'missing-return-address' ? (
-        <div className="flex flex-col-reverse gap-2 @3xl:flex-row @3xl:justify-end">
+        <div className="bg-surface border-outline-variant sticky bottom-0 z-10 flex flex-col-reverse gap-2 border-t pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] @3xl:flex-row @3xl:justify-end">
           <Button
             type="button"
             variant="outline"
@@ -603,17 +626,6 @@ function ConsentPage(): JSX.Element {
           </Button>
         </div>
       ) : null}
-
-      <p className="text-on-surface-variant text-body-small">
-        Revoke access any time in{' '}
-        <Link
-          href="/settings/connected-apps"
-          className="text-primary font-medium underline-offset-4 hover:underline"
-        >
-          Connected apps
-        </Link>
-        .
-      </p>
     </AuthLayout>
   );
 }

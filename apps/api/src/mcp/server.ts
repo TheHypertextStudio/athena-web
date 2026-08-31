@@ -13,6 +13,9 @@
  * OAuth 2.1 Resource-Server discovery metadata + Dynamic Client Registration are a
  * documented follow-up; for now the Better Auth session/bearer guard IS the auth.
  */
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { auth } from '@docket/auth';
@@ -34,8 +37,27 @@ import { installTaskProtocolHandlers } from './task-protocol';
 import { taskStoreForContext } from './task-store';
 import { registerTools } from './tools';
 
-/** The advertised MCP server identity (name + version). */
-const SERVER_INFO = { name: 'docket', version: '1.0.0' } as const;
+/** The repo's release version (root `package.json`, tagged by semantic-release), read once at startup. */
+const { version: repoVersion } = JSON.parse(
+  readFileSync(fileURLToPath(new URL('../../../../package.json', import.meta.url)), 'utf8'),
+) as { version: string };
+
+/** The web app's public origin, with no trailing slash — also the source for {@link authorizationServerMetadata}. */
+const WEB_ORIGIN = env.WEB_URL.replace(/\/$/, '');
+
+/** The advertised MCP server identity. `version`/`websiteUrl`/`icons` are derived rather than duplicated. */
+const SERVER_INFO = {
+  name: 'docket',
+  title: 'Docket',
+  version: repoVersion,
+  description:
+    'Search, read, and update tasks, projects, and initiatives in Docket. Add comments and status updates, and work within cycles.',
+  websiteUrl: WEB_ORIGIN,
+  icons: [
+    { src: `${WEB_ORIGIN}/icons/icon-192.png`, mimeType: 'image/png', sizes: ['192x192'] },
+    { src: `${WEB_ORIGIN}/icons/icon-512.png`, mimeType: 'image/png', sizes: ['512x512'] },
+  ],
+};
 
 /**
  * Build a fresh MCP server for one request, bound to the authenticated caller.
@@ -215,7 +237,6 @@ export function protectedResourceMetadata(c: Context): Response {
 export async function authorizationServerMetadata(c: Context): Promise<Response> {
   const resource = canonicalResourceUrl(c);
   const issuer = env.MCP_ISSUER_URL?.replace(/\/$/, '') ?? new URL(resource).origin;
-  const webOrigin = env.WEB_URL.replace(/\/$/, '');
   const upstream = await auth.handler(
     new Request(`${issuer}/api/auth/.well-known/oauth-authorization-server`),
   );
@@ -223,7 +244,7 @@ export async function authorizationServerMetadata(c: Context): Promise<Response>
   return c.json({
     ...metadata,
     issuer: oauthIssuer() ?? metadata['issuer'] ?? `${issuer}/api/auth`,
-    authorization_endpoint: `${webOrigin}/api/auth/oauth2/authorize`,
+    authorization_endpoint: `${WEB_ORIGIN}/api/auth/oauth2/authorize`,
   });
 }
 

@@ -1,21 +1,22 @@
 'use client';
 
-import { Card, CardContent, CardHeader, CardTitle, Checkbox } from '@docket/ui/primitives';
+import { Checkbox, Skeleton, Stack, Surface, Text } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
-import { ErrorBanner, PageHeader, SignInAction } from '@/components/ui-bits';
+import { QueryErrorBanner } from '@/components/admin-feedback';
+import { AdminPage, AdminPageHeader, AdminSection } from '@/components/admin-page';
 import { type ServiceControlField, useServiceControls } from './use-service-controls';
 
 /** How one service control is presented on the settings screen. */
 interface ControlPresentation {
   /** The control's name in the API's request and response body. */
-  field: ServiceControlField;
+  readonly field: ServiceControlField;
   /** The checkbox's DOM id, used to associate its label. */
-  id: string;
+  readonly id: string;
   /** The control's short name. */
-  label: string;
+  readonly label: string;
   /** What turning the control off stops, in plain language. */
-  description: string;
+  readonly description: string;
 }
 
 /** The controls this screen renders, in display order. */
@@ -40,76 +41,95 @@ const CONTROLS: readonly ControlPresentation[] = [
  * The service settings screen: the instance-wide switches for Athena's Lattice work.
  *
  * @remarks
- * A Client Component reading `GET /admin/service-controls` at runtime. Both controls are on for
- * every organization until an operator turns one off, and a change applies to the next scheduled
- * run without a redeploy. Changing a control requires a superadmin; the API's 403 for a support or
- * finance operator surfaces inline and the control stays where it was.
+ * Both controls are on for every organization until an operator turns one off, and a change applies
+ * to the next scheduled run without a redeploy. Changing a control requires a superadmin; the API's
+ * 403 for a support or finance operator surfaces inline and the control stays where it was.
  */
 export default function SettingsPage(): JSX.Element {
-  const { controls, loading, error, authFailed, actionError, pending, setControl } =
+  const { controls, loading, error, reload, actionError, pending, setControl } =
     useServiceControls();
 
+  /** The screen's body: first load, a failed load, or the controls. */
+  function body(): JSX.Element {
+    if (loading) {
+      return (
+        <Stack gap={2} aria-hidden="true">
+          <Skeleton className="h-20 w-full rounded-xl" />
+          <Skeleton className="h-20 w-full rounded-xl" />
+        </Stack>
+      );
+    }
+
+    if (!controls) {
+      return (
+        <QueryErrorBanner
+          error={error}
+          fallback="Could not load the service controls."
+          onRetry={reload}
+        />
+      );
+    }
+
+    return (
+      <AdminSection
+        title="Lovelace Lattice"
+        description="Both controls are on unless someone turns them off. A change applies to every organization on the next scheduled run. Only a superadmin can change them."
+      >
+        <QueryErrorBanner
+          error={actionError}
+          fallback="Could not change this control. It is unchanged for everyone."
+        />
+        <Stack gap={2} aria-busy={pending !== null}>
+          {CONTROLS.map((control) => (
+            // The whole card is the label, so the description text is a hit target too rather
+            // than the 16px box being the only way to change an instance-wide switch.
+            <Surface
+              key={control.field}
+              as="label"
+              htmlFor={control.id}
+              tone="card"
+              shape="medium"
+              pad="roomy"
+              className="cursor-pointer"
+            >
+              <div className="flex items-start gap-3">
+                <Checkbox
+                  id={control.id}
+                  className="mt-1"
+                  checked={controls[control.field]}
+                  disabled={pending !== null}
+                  onChange={(event) => {
+                    setControl(control.field, event.target.checked);
+                  }}
+                />
+                <Stack gap={1} className="min-w-0">
+                  <Text as="span" token="label-large">
+                    {control.label}
+                  </Text>
+                  <Text as="p" token="body-small" tone="muted">
+                    {control.description}
+                  </Text>
+                  {pending === control.field ? (
+                    <Text as="p" token="body-small" tone="muted" role="status">
+                      Saving…
+                    </Text>
+                  ) : null}
+                </Stack>
+              </div>
+            </Surface>
+          ))}
+        </Stack>
+      </AdminSection>
+    );
+  }
+
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 p-4 sm:p-8">
-      <PageHeader
+    <AdminPage width="form">
+      <AdminPageHeader
         title="Service settings"
         description="Instance-wide controls for Athena's background work."
       />
-
-      {controls ? (
-        <>
-          <ErrorBanner message={actionError} />
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-body-medium">Lovelace Lattice</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <p className="text-on-surface-variant text-body-small">
-                Both controls are on unless someone turns them off. A change applies to every
-                organization on the next scheduled run. Only a superadmin can change them.
-              </p>
-              <div className="flex flex-col gap-3" aria-busy={pending !== null}>
-                {CONTROLS.map((control) => (
-                  <div
-                    key={control.field}
-                    className="border-outline-variant bg-surface-container-low flex items-start gap-3 rounded-lg border p-4"
-                  >
-                    <Checkbox
-                      id={control.id}
-                      className="mt-1"
-                      checked={controls[control.field]}
-                      disabled={pending !== null}
-                      onChange={(event) => {
-                        setControl(control.field, event.target.checked);
-                      }}
-                    />
-                    <div className="flex min-w-0 flex-col gap-1">
-                      <label htmlFor={control.id} className="text-on-surface text-label-large">
-                        {control.label}
-                      </label>
-                      <p className="text-on-surface-variant text-body-small">
-                        {control.description}
-                      </p>
-                      {pending === control.field ? (
-                        <p className="text-on-surface-variant text-body-small" role="status">
-                          Saving…
-                        </p>
-                      ) : null}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </>
-      ) : loading ? (
-        <div
-          className="border-outline-variant bg-surface-container-low h-40 animate-pulse rounded-lg border"
-          aria-hidden="true"
-        />
-      ) : (
-        <ErrorBanner message={error} action={authFailed ? <SignInAction /> : null} />
-      )}
-    </div>
+      {body()}
+    </AdminPage>
   );
 }

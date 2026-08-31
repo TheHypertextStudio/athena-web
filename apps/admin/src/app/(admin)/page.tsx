@@ -1,203 +1,223 @@
 'use client';
 
-import { Card, CardContent, CardHeader, CardTitle, Skeleton } from '@docket/ui/primitives';
-import Link from 'next/link';
-import { type JSX, useCallback, useEffect, useState } from 'react';
+import { EmptyState, IdentityGlyph } from '@docket/ui/components';
+import { Building } from '@docket/ui/icons';
+import { Skeleton, Stack, Surface, Text } from '@docket/ui/primitives';
+import { type JSX } from 'react';
 
-import {
-  EmptyState,
-  ErrorBanner,
-  LifecycleBadge,
-  PageHeader,
-  ROW_CLASS,
-  SignInAction,
-} from '@/components/ui-bits';
+import { QueryErrorBanner } from '@/components/admin-feedback';
+import { AdminPage, AdminPageHeader, AdminSection } from '@/components/admin-page';
+import { AdminList, AdminListRow } from '@/components/admin-table';
+import { LifecycleBadge } from '@/components/lifecycle-badge';
 import { api } from '@/lib/api';
 import { lifecycleLabel } from '@/lib/lifecycle';
-import { isAuthError, userErrorMessage, userProblemMessage } from '@/lib/problem';
-import type { AdminMetrics, AdminOrg } from '@/lib/types';
+import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
+import type { AdminOrg } from '@/lib/types';
+import { metricsDef } from '@/lib/use-admin-queues';
 
-/** The dashboard's loaded data: headline metrics and legacy account-retention queues. */
-interface DashboardData {
-  /** Totals + per-lifecycle org counts from `GET /admin/metrics`. */
-  metrics: AdminMetrics;
-  /** Orgs carrying the legacy export-window marker. Billing does not write this state. */
-  exportWindow: readonly AdminOrg[];
-  /** Orgs scheduled for deletion through the separate account-retention flow. */
-  pendingDeletion: readonly AdminOrg[];
-}
+/** How many rows a retention queue shows before it defers to the organization list. */
+const QUEUE_PREVIEW = 5;
+
+/** The organizations scheduled for deletion. */
+const pendingDeletionDef = apiQueryOptions(
+  queryKeys.orgList({ lifecycleState: 'pending_deletion' }),
+  () =>
+    api.admin.orgs.$get({
+      query: {
+        lifecycleState: 'pending_deletion',
+        limit: String(QUEUE_PREVIEW),
+        offset: '0',
+      },
+    }),
+  'Could not load the deletion queue.',
+);
+
+/** The organizations still carrying the legacy export marker. */
+const exportWindowDef = apiQueryOptions(
+  queryKeys.orgList({ lifecycleState: 'export_window' }),
+  () =>
+    api.admin.orgs.$get({
+      query: { lifecycleState: 'export_window', limit: String(QUEUE_PREVIEW), offset: '0' },
+    }),
+  'Could not load the export-marker queue.',
+);
 
 /**
  * The operator dashboard — the default authenticated landing.
  *
  * @remarks
- * A Client Component that fetches at runtime (no build-time API dependency). It loads the
- * headline metrics (`GET /admin/metrics`) alongside legacy retention diagnostics for
- * `export_window` and `pending_deletion` via filtered `GET /admin/orgs` lookups. These organization
- * markers do not represent Docket Pro access. The layout splits metrics from the queues. A 403 from
- * any call by a non-staff session surfaces inline.
+ * Reads the same metrics definition the sidebar's queue badges use, so the number on a nav badge
+ * and the number on this screen come from one request and one cache entry rather than two reads
+ * that can disagree.
+ *
+ * The service signals (`metrics.queues`) are rendered here for the first time. The API has always
+ * computed stuck approvals, failed agent sessions, session volume, and active retention holds, and
+ * the dashboard has always discarded them.
  */
 export default function DashboardPage(): JSX.Element {
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [authFailed, setAuthFailed] = useState(false);
+  const metrics = useApiQuery(metricsDef);
+  const pendingDeletion = useApiQuery(pendingDeletionDef);
+  const exportWindow = useApiQuery(exportWindowDef);
 
-  /** Load metrics and the account-retention queues in parallel. */
-  const load = useCallback(async (): Promise<void> => {
-    setLoading(true);
-    setError(null);
-    setAuthFailed(false);
-    try {
-      const [metricsRes, exportRes, deleteRes] = await Promise.all([
-        api.admin.metrics.$get(),
-        api.admin.orgs.$get({
-          query: { lifecycleState: 'export_window', limit: '5', offset: '0' },
-        }),
-        api.admin.orgs.$get({
-          query: { lifecycleState: 'pending_deletion', limit: '5', offset: '0' },
-        }),
-      ]);
-      if (!metricsRes.ok) {
-        setAuthFailed(isAuthError(metricsRes));
-        setError(await userProblemMessage(metricsRes, 'Could not load the dashboard.'));
-        return;
-      }
-      const metrics = await metricsRes.json();
-      const exportWindow = exportRes.ok ? (await exportRes.json()).items : [];
-      const pendingDeletion = deleteRes.ok ? (await deleteRes.json()).items : [];
-      setData({ metrics, exportWindow, pendingDeletion });
-    } catch (caught) {
-      setError(userErrorMessage(caught, 'Something went wrong loading the dashboard.'));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  /** The metric grid: placeholders on first load, otherwise the counts. */
+  function counts(): JSX.Element {
+    if (metrics.isPending) return <MetricSkeleton />;
+    if (!metrics.data) return <></>;
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+    return (
+      <Stack gap={6}>
+        <AdminSection title="Platform">
+          <MetricGrid>
+            <Metric label="Users" value={metrics.data.totalUsers} />
+            <Metric label="Organizations" value={metrics.data.totalOrgs} />
+          </MetricGrid>
+        </AdminSection>
+
+        <AdminSection
+          title="Service"
+          description="What Athena is doing across every organization right now."
+        >
+          <MetricGrid>
+            <Metric label="Awaiting approval" value={metrics.data.queues.stuckApprovals} />
+            <Metric label="Failed sessions" value={metrics.data.queues.agentErrors} />
+            <Metric label="Sessions run" value={metrics.data.queues.agentVolume} />
+            <Metric label="Retention holds" value={metrics.data.queues.activeHolds} />
+          </MetricGrid>
+        </AdminSection>
+
+        <AdminSection
+          title="Organizations by state"
+          description="Legacy retention markers. Billing access never advances these."
+        >
+          <MetricGrid>
+            {metrics.data.orgsByLifecycle.map((bucket) => (
+              <Metric
+                key={bucket.lifecycleState}
+                label={lifecycleLabel(bucket.lifecycleState)}
+                value={bucket.count}
+              />
+            ))}
+          </MetricGrid>
+        </AdminSection>
+      </Stack>
+    );
+  }
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 p-8">
-      <PageHeader
+    <AdminPage width="list">
+      <AdminPageHeader
         title="Operator dashboard"
         description="Platform health and the organizations that need attention."
       />
-      <ErrorBanner message={error} action={authFailed ? <SignInAction /> : null} />
 
-      {loading ? (
-        <DashboardSkeleton />
-      ) : data ? (
-        <div className="grid gap-8 lg:grid-cols-[1.4fr_1fr]">
-          <section className="flex flex-col gap-4" aria-labelledby="metrics-heading">
-            <h2
-              id="metrics-heading"
-              className="text-on-surface-variant text-body-medium font-medium"
-            >
-              Platform metrics
-            </h2>
-            <div className="grid grid-cols-2 gap-3">
-              <MetricCard label="Total users" value={data.metrics.totalUsers} />
-              <MetricCard label="Total organizations" value={data.metrics.totalOrgs} />
-            </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {data.metrics.orgsByLifecycle.map((bucket) => (
-                <MetricCard
-                  key={bucket.lifecycleState}
-                  label={lifecycleLabel(bucket.lifecycleState)}
-                  value={bucket.count}
-                />
-              ))}
-            </div>
-          </section>
+      <QueryErrorBanner
+        error={metrics.error}
+        fallback="Could not load the dashboard."
+        onRetry={() => void metrics.refetch()}
+      />
 
-          <section className="flex flex-col gap-4" aria-labelledby="queues-heading">
-            <h2
-              id="queues-heading"
-              className="text-on-surface-variant text-body-medium font-medium"
-            >
-              Account retention
-            </h2>
+      <div className="grid gap-8 @4xl:grid-cols-[1.4fr_1fr]">
+        {counts()}
+
+        <Stack gap={6}>
+          <AdminSection title="Pending deletion">
             <OrgQueue
-              title="Pending deletion"
-              orgs={data.pendingDeletion}
-              emptyMessage="No organizations scheduled for deletion."
+              query={pendingDeletion}
+              emptyTitle="Nothing scheduled"
+              emptyBody="No organization is queued for deletion."
             />
+          </AdminSection>
+
+          <AdminSection title="Legacy export marker">
             <OrgQueue
-              title="Legacy export marker"
-              orgs={data.exportWindow}
-              emptyMessage="No organizations carry the legacy export marker."
+              query={exportWindow}
+              emptyTitle="No markers"
+              emptyBody="No organization carries the legacy export marker."
             />
-          </section>
-        </div>
-      ) : null}
-    </div>
+          </AdminSection>
+        </Stack>
+      </div>
+    </AdminPage>
   );
 }
 
-/** A single headline-metric card. */
-function MetricCard({ label, value }: { label: string; value: number }): JSX.Element {
+/** The responsive grid every metric row shares. */
+function MetricGrid({ children }: { readonly children: JSX.Element | JSX.Element[] }): JSX.Element {
+  return <div className="grid grid-cols-2 gap-2 @xl:grid-cols-3">{children}</div>;
+}
+
+/** One headline count. */
+function Metric({ label, value }: { readonly label: string; readonly value: number }): JSX.Element {
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-on-surface-variant text-xs font-medium">{label}</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p className="text-2xl font-semibold tabular-nums">{value}</p>
-      </CardContent>
-    </Card>
+    <Surface tone="card" shape="small" pad="comfortable">
+      <Stack gap={1}>
+        <Text as="p" token="label-small" tone="muted">
+          {label}
+        </Text>
+        <Text as="p" token="headline-small" className="tabular-nums">
+          {value.toLocaleString()}
+        </Text>
+      </Stack>
+    </Surface>
   );
 }
 
-/** A titled account-retention queue whose rows link to organization detail. */
+/** The shape of a retention-queue read, narrowed to what this screen needs. */
+interface OrgQueueQuery {
+  readonly data: { readonly items: readonly AdminOrg[] } | undefined;
+  readonly isPending: boolean;
+}
+
+/** A short retention queue whose rows open the organization. */
 function OrgQueue({
-  title,
-  orgs,
-  emptyMessage,
+  query,
+  emptyTitle,
+  emptyBody,
 }: {
-  title: string;
-  orgs: readonly AdminOrg[];
-  emptyMessage: string;
+  readonly query: OrgQueueQuery;
+  readonly emptyTitle: string;
+  readonly emptyBody: string;
 }): JSX.Element {
+  if (query.isPending) {
+    return (
+      <Stack gap={1} aria-hidden="true">
+        <Skeleton className="h-11 w-full rounded-lg" />
+        <Skeleton className="h-11 w-full rounded-lg" />
+      </Stack>
+    );
+  }
+
+  const orgs = query.data?.items ?? [];
+  if (orgs.length === 0) {
+    return <EmptyState icon={Building} title={emptyTitle} body={emptyBody} />;
+  }
+
   return (
-    <div className="flex flex-col gap-2">
-      <h3 className="text-body-medium font-medium">{title}</h3>
-      {orgs.length > 0 ? (
-        <ul className="flex flex-col gap-1.5">
-          {orgs.map((org) => (
-            <li key={org.id}>
-              <Link
-                href={`/orgs/${org.id}`}
-                className={`${ROW_CLASS} items-center justify-between gap-3 rounded-lg px-3 py-2.5`}
-              >
-                <span className="text-body-medium min-w-0 truncate font-medium">{org.name}</span>
-                <LifecycleBadge state={org.lifecycleState} />
-              </Link>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <EmptyState message={emptyMessage} />
-      )}
-    </div>
+    <AdminList label="Organizations needing attention">
+      {orgs.map((org) => (
+        <AdminListRow
+          key={org.id}
+          href={`/orgs/${org.id}`}
+          leading={
+            <IdentityGlyph size={20}>
+              <Building className="size-3" />
+            </IdentityGlyph>
+          }
+          title={org.name}
+          trailing={<LifecycleBadge state={org.lifecycleState} />}
+        />
+      ))}
+    </AdminList>
   );
 }
 
-/** A loading placeholder for the dashboard's two columns. */
-function DashboardSkeleton(): JSX.Element {
+/** A loading placeholder sized to the metric grid. */
+function MetricSkeleton(): JSX.Element {
   return (
-    <div className="grid gap-8 lg:grid-cols-[1.4fr_1fr]">
-      <div className="grid grid-cols-2 gap-3">
-        <Skeleton className="h-24 w-full rounded-lg" />
-        <Skeleton className="h-24 w-full rounded-lg" />
-        <Skeleton className="h-24 w-full rounded-lg" />
-        <Skeleton className="h-24 w-full rounded-lg" />
-      </div>
-      <div className="flex flex-col gap-3">
-        <Skeleton className="h-16 w-full rounded-lg" />
-        <Skeleton className="h-16 w-full rounded-lg" />
-      </div>
+    <div className="grid grid-cols-2 gap-2 @xl:grid-cols-3" aria-hidden="true">
+      {Array.from({ length: 6 }, (_, index) => (
+        <Skeleton key={index} className="h-[4.5rem] w-full rounded-lg" />
+      ))}
     </div>
   );
 }

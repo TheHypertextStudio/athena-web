@@ -1,10 +1,12 @@
 'use client';
 
 import type { InferResponseType } from 'hono/client';
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 
 import { api } from '@/lib/api';
-import { isAuthError, userErrorMessage, userProblemMessage } from '@/lib/problem';
+import { useQueryClient } from '@tanstack/react-query';
+
+import { apiQueryOptions, queryKeys, STALE, useApiMutation, useApiQuery } from '@/lib/query';
 
 /**
  * The instance-wide service controls as reported by `GET /admin/service-controls`.
@@ -20,23 +22,29 @@ export type ServiceControlField = keyof ServiceControls;
 
 /** All state and actions the service-controls screen renders. */
 export interface ServiceControlsData {
-  /** The controls as last confirmed by the API, or `null` before the first load succeeds. */
-  controls: ServiceControls | null;
+  /** The controls as last confirmed by the API, or `undefined` before the first load succeeds. */
+  controls: ServiceControls | undefined;
   /** Whether the initial read is still in flight. */
   loading: boolean;
-  /** Application-owned copy for a failed load. */
-  error: string | null;
-  /** Whether the failed load was an authentication or authorization failure. */
-  authFailed: boolean;
-  /** Application-owned copy for a failed change. */
-  actionError: string | null;
+  /** The failed load, if the read failed. */
+  error: unknown;
+  /** Re-read the current controls. */
+  reload: () => void;
+  /** The failed change, if the last change failed. */
+  actionError: unknown;
   /** The control whose change is in flight, or `null` when the screen is idle. */
   pending: ServiceControlField | null;
-  /** Re-read the current controls. */
-  load: () => Promise<void>;
   /** Store a new value for one control, keeping the screen on the confirmed state until it lands. */
   setControl: (field: ServiceControlField, enabled: boolean) => void;
 }
+
+/** The instance-wide service controls. */
+const controlsDef = apiQueryOptions(
+  queryKeys.serviceControls(),
+  () => api.admin['service-controls'].$get(),
+  'Could not load the service controls.',
+  { staleTime: STALE.static },
+);
 
 /**
  * Build the single-control request body for `PATCH /admin/service-controls`.
@@ -58,70 +66,54 @@ function controlPatch(
  * Coordinate reading and changing the instance-wide service controls.
  *
  * @remarks
- * The rendered value always comes from a response the API confirmed: a rejected change leaves the
- * previous state in place and surfaces application-owned copy, so a control never appears to have
- * moved when nothing was stored.
+ * The rendered value always comes from a response the API confirmed. There is deliberately no
+ * optimistic update: these switches stop and start background work for every organization on the
+ * instance, and a control that flips itself and then flips back is indistinguishable, in the moment
+ * that matters, from one that stored the change. A rejected change leaves the previous state in
+ * place and surfaces the failure.
  *
  * @returns See {@link ServiceControlsData}.
  */
 export function useServiceControls(): ServiceControlsData {
-  const [controls, setControls] = useState<ServiceControls | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [authFailed, setAuthFailed] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
   const [pending, setPending] = useState<ServiceControlField | null>(null);
+  const queryClient = useQueryClient();
+  const query = useApiQuery(controlsDef);
 
-  const load = useCallback(async (): Promise<void> => {
-    setLoading(true);
-    setError(null);
-    setAuthFailed(false);
-    try {
-      const response = await api.admin['service-controls'].$get();
-      if (!response.ok) {
-        setAuthFailed(isAuthError(response));
-        setError(await userProblemMessage(response, 'Could not load the service controls.'));
-        return;
-      }
-      setControls(await response.json());
-    } catch (caught) {
-      setError(userErrorMessage(caught, 'Could not load the service controls.'));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const mutation = useApiMutation(
+    (variables: { field: ServiceControlField; enabled: boolean }) =>
+      api.admin['service-controls'].$patch({
+        json: controlPatch(variables.field, variables.enabled),
+      }),
+    'Could not change this control. It is unchanged for everyone.',
+    {
+      // The PATCH response *is* the stored state, so adopt it directly. Relying on the invalidation
+      // alone would leave the old value on screen until the re-read lands, so a switch someone just
+      // turned off would still read as on for a moment — which, for a control that stops background
+      // work across every organization, is the one moment it must not be wrong.
+      onSuccess: (controls) => {
+        queryClient.setQueryData(controlsDef.queryKey, controls);
+      },
+      invalidates: [queryKeys.serviceControls()],
+    },
+  );
 
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const setControl = useCallback((field: ServiceControlField, enabled: boolean): void => {
-    void (async () => {
-      setActionError(null);
+  return {
+    controls: query.data,
+    loading: query.isPending,
+    error: query.error,
+    reload: () => void query.refetch(),
+    actionError: mutation.error,
+    pending,
+    setControl: (field, enabled) => {
       setPending(field);
-      try {
-        const response = await api.admin['service-controls'].$patch({
-          json: controlPatch(field, enabled),
-        });
-        if (!response.ok) {
-          setActionError(
-            await userProblemMessage(
-              response,
-              'Could not change this control. It is unchanged for everyone.',
-            ),
-          );
-          return;
-        }
-        setControls(await response.json());
-      } catch (caught) {
-        setActionError(
-          userErrorMessage(caught, 'Could not change this control. It is unchanged for everyone.'),
-        );
-      } finally {
-        setPending(null);
-      }
-    })();
-  }, []);
-
-  return { controls, loading, error, authFailed, actionError, pending, load, setControl };
+      mutation.mutate(
+        { field, enabled },
+        {
+          onSettled: () => {
+            setPending(null);
+          },
+        },
+      );
+    },
+  };
 }

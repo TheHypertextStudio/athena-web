@@ -1,76 +1,169 @@
 'use client';
 
-import { Input, Skeleton } from '@docket/ui/primitives';
-import Link from 'next/link';
-import { type JSX, useCallback, useEffect, useState } from 'react';
+import { ActorAvatar, EmptyState, RelativeTime } from '@docket/ui/components';
+import type { Column } from '@docket/ui/components';
+import { Users } from '@docket/ui/icons';
+import { relativeTime } from '@docket/ui';
+import { Input, Stack, Text } from '@docket/ui/primitives';
+import { type JSX, useMemo, useState } from 'react';
 
-import { EmptyState, ErrorBanner, PageHeader, ROW_CLASS, SignInAction } from '@/components/ui-bits';
+import { ListSkeleton, QueryErrorBanner, RefreshingOverlay } from '@/components/admin-feedback';
+import { AdminPage, AdminPageHeader } from '@/components/admin-page';
+import { AdminPagination } from '@/components/admin-pagination';
+import { AdminTable } from '@/components/admin-table';
 import { api } from '@/lib/api';
-import { formatTimestamp } from '@/lib/lifecycle';
-import { isAuthError, userErrorMessage, userProblemMessage } from '@/lib/problem';
+import { useDebounced } from '@/lib/use-debounced';
+import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
 import type { AdminUser } from '@/lib/types';
 
 /** Page size for the user list. */
 const PAGE_SIZE = 50;
 
+/** One page of users matching a search term. */
+function usersDef(search: string, offset: number) {
+  return apiQueryOptions(
+    [...queryKeys.userList({ search }), offset],
+    () =>
+      api.admin.users.$get({
+        query: {
+          ...(search ? { search } : {}),
+          limit: String(PAGE_SIZE),
+          offset: String(offset),
+        },
+      }),
+    'Could not load users.',
+  );
+}
+
 /**
- * The user-primary list with debounced search.
+ * The user directory.
  *
  * @remarks
- * A Client Component. Reads `GET /admin/users` (paginated + searchable) at runtime; the
- * search box re-queries on a short debounce. Each row links to the user detail screen. A
- * 403 (non-staff session) surfaces inline.
+ * A column-aligned {@link EntityTable} rather than a stack of hand-rolled rows, so a name, its
+ * account email, and when it was created line up down the page and can actually be scanned. Each
+ * row carries the account's own avatar as its leading identity.
+ *
+ * Searching keeps the current rows on screen and dims them while the next answer loads, instead of
+ * replacing the list with skeletons on every debounced keystroke.
  */
 export default function UsersPage(): JSX.Element {
   const [search, setSearch] = useState('');
-  const [users, setUsers] = useState<readonly AdminUser[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [authFailed, setAuthFailed] = useState(false);
+  const [offset, setOffset] = useState(0);
+  const debouncedSearch = useDebounced(search, 250);
+  const query = useApiListQuery(usersDef(debouncedSearch, offset));
 
-  /** Load the first page of users matching the current search term. */
-  const load = useCallback(async (term: string): Promise<void> => {
-    setLoading(true);
-    setError(null);
-    setAuthFailed(false);
-    try {
-      const res = await api.admin.users.$get({
-        query: { ...(term ? { search: term } : {}), limit: String(PAGE_SIZE), offset: '0' },
-      });
-      if (!res.ok) {
-        setAuthFailed(isAuthError(res));
-        setError(await userProblemMessage(res, 'Could not load users.'));
-        return;
+  const columns = useMemo<readonly Column<AdminUser>[]>(
+    () => [
+      {
+        key: 'name',
+        header: 'Name',
+        flex: true,
+        render: (row) => (
+          <div className="flex min-w-0 items-center gap-2">
+            <ActorAvatar kind="human" name={row.name || row.email} size={20} />
+            <span className="truncate">{row.name || row.email}</span>
+          </div>
+        ),
+      },
+      {
+        key: 'email',
+        header: 'Email',
+        minWidth: '16rem',
+        priority: 1,
+        render: (row) => (
+          <Text as="span" token="body-small" tone="muted" truncate>
+            {row.email}
+          </Text>
+        ),
+      },
+      {
+        key: 'verified',
+        header: 'Verified',
+        width: '6rem',
+        priority: 3,
+        render: (row) => (
+          <Text as="span" token="body-small" tone="muted">
+            {row.emailVerified ? 'Yes' : 'No'}
+          </Text>
+        ),
+      },
+      {
+        key: 'created',
+        header: 'Created',
+        width: '9rem',
+        align: 'end',
+        priority: 2,
+        render: (row) => (
+          <Text as="span" token="body-small" tone="muted">
+            <RelativeTime iso={row.createdAt}>{relativeTime(row.createdAt)}</RelativeTime>
+          </Text>
+        ),
+      },
+    ],
+    [],
+  );
+
+  const total = query.data?.total ?? 0;
+  const items = query.data?.items ?? [];
+
+  /** The screen's body: first load, no results, or the table. */
+  function body(): JSX.Element {
+    if (query.isPending) return <ListSkeleton />;
+
+    if (items.length === 0) {
+      if (debouncedSearch) {
+        return (
+          <EmptyState
+            icon={Users}
+            title="No matching users"
+            body="No account name or email contains that text."
+          />
+        );
       }
-      const page = await res.json();
-      setUsers(page.items);
-      setTotal(page.total);
-    } catch (caught) {
-      setError(userErrorMessage(caught, 'Something went wrong loading users.'));
-    } finally {
-      setLoading(false);
+      return (
+        <EmptyState
+          icon={Users}
+          title="No users yet"
+          body="Accounts appear here as people sign up."
+        />
+      );
     }
-  }, []);
 
-  useEffect(() => {
-    const handle = setTimeout(() => void load(search), 250);
-    return () => {
-      clearTimeout(handle);
-    };
-  }, [search, load]);
+    return (
+      <Stack gap={4}>
+        <RefreshingOverlay refreshing={query.isFetching}>
+          <AdminTable
+            label="Users"
+            columns={columns}
+            rows={items}
+            getRowKey={(row) => row.id}
+            rowHref={(row) => `/users/${row.id}`}
+          />
+        </RefreshingOverlay>
+        <AdminPagination
+          offset={offset}
+          pageSize={PAGE_SIZE}
+          pageCount={items.length}
+          total={total}
+          onOffsetChange={setOffset}
+          noun="users"
+        />
+      </Stack>
+    );
+  }
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-8">
-      <PageHeader
+    <AdminPage width="list">
+      <AdminPageHeader
         title="Users"
-        description={loading ? 'Loading…' : `${total} user${total === 1 ? '' : 's'} total`}
+        description={query.data ? `${total.toLocaleString()} across every organization` : undefined}
         actions={
           <Input
             type="search"
             value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setOffset(0);
             }}
             placeholder="Search name or email"
             className="w-64"
@@ -78,43 +171,14 @@ export default function UsersPage(): JSX.Element {
           />
         }
       />
-      <ErrorBanner message={error} action={authFailed ? <SignInAction /> : null} />
 
-      {loading ? (
-        <ListSkeleton />
-      ) : users.length > 0 ? (
-        <ul className="flex flex-col gap-1.5">
-          {users.map((u) => (
-            <li key={u.id}>
-              <Link
-                href={`/users/${u.id}`}
-                className={`${ROW_CLASS} items-center justify-between gap-4 rounded-lg px-4 py-3`}
-              >
-                <div className="min-w-0">
-                  <p className="text-body-medium truncate font-medium">{u.name || u.email}</p>
-                  <p className="text-on-surface-variant truncate text-xs">{u.email}</p>
-                </div>
-                <span className="text-on-surface-variant shrink-0 text-xs">
-                  {formatTimestamp(u.createdAt)}
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <EmptyState message={search ? 'No users match your search.' : 'No users yet.'} />
-      )}
-    </div>
-  );
-}
+      <QueryErrorBanner
+        error={query.error}
+        fallback="Could not load users."
+        onRetry={() => void query.refetch()}
+      />
 
-/** A loading placeholder for the user list. */
-function ListSkeleton(): JSX.Element {
-  return (
-    <div className="flex flex-col gap-1.5">
-      {Array.from({ length: 6 }, (_, i) => (
-        <Skeleton key={i} className="h-14 w-full rounded-lg" />
-      ))}
-    </div>
+      {body()}
+    </AdminPage>
   );
 }

@@ -1,8 +1,4 @@
 {
-  "apps/admin/src/app/(admin)/audit/page.tsx": {
-    "ad-hoc-border": 2,
-    "raw-type-utility": 4
-  },
   "apps/admin/src/app/(admin)/discounts/page.tsx": {
     "ad-hoc-border": 4
   },
@@ -20,20 +16,8 @@
   "apps/admin/src/app/(admin)/orgs/[id]/page.tsx": {
     "raw-type-utility": 3
   },
-  "apps/admin/src/app/(admin)/orgs/page.tsx": {
-    "raw-type-utility": 2
-  },
-  "apps/admin/src/app/(admin)/page.tsx": {
-    "raw-type-utility": 8
-  },
-  "apps/admin/src/app/(admin)/settings/page.tsx": {
-    "ad-hoc-border": 4
-  },
   "apps/admin/src/app/(admin)/users/[id]/page.tsx": {
     "raw-type-utility": 6
-  },
-  "apps/admin/src/app/(admin)/users/page.tsx": {
-    "raw-type-utility": 3
   },
   "apps/admin/src/app/(auth)/sign-in/page.tsx": {
     "raw-type-utility": 4

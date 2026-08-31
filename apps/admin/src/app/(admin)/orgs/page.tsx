@@ -1,96 +1,192 @@
 'use client';
 
-import { Input, Skeleton } from '@docket/ui/primitives';
-import Link from 'next/link';
-import { type JSX, useCallback, useEffect, useState } from 'react';
+import { EmptyState, IdentityGlyph, RelativeTime } from '@docket/ui/components';
+import type { Column } from '@docket/ui/components';
+import { relativeTime } from '@docket/ui';
+import { Building } from '@docket/ui/icons';
+import { Input, Stack, Text } from '@docket/ui/primitives';
+import { type JSX, useMemo, useState } from 'react';
 
+import { ListSkeleton, QueryErrorBanner, RefreshingOverlay } from '@/components/admin-feedback';
+import { AdminPage, AdminPageHeader } from '@/components/admin-page';
+import { AdminPagination } from '@/components/admin-pagination';
+import { AdminTable } from '@/components/admin-table';
 import {
   ALL_STATES,
   LifecycleFilter,
   type LifecycleFilterValue,
 } from '@/components/lifecycle-filter';
-import {
-  EmptyState,
-  ErrorBanner,
-  LifecycleBadge,
-  PageHeader,
-  ROW_CLASS,
-  SignInAction,
-} from '@/components/ui-bits';
+import { LifecycleBadge } from '@/components/lifecycle-badge';
 import { api } from '@/lib/api';
-import { isAuthError, userErrorMessage, userProblemMessage } from '@/lib/problem';
+import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
 import type { AdminOrg } from '@/lib/types';
+import { useDebounced } from '@/lib/use-debounced';
 
 /** Page size for the org list. */
 const PAGE_SIZE = 50;
 
+/** One page of organizations matching a search term and lifecycle filter. */
+function orgsDef(search: string, state: LifecycleFilterValue, offset: number) {
+  return apiQueryOptions(
+    [...queryKeys.orgList({ search, lifecycleState: state }), offset],
+    () =>
+      api.admin.orgs.$get({
+        query: {
+          ...(search ? { search } : {}),
+          ...(state === ALL_STATES ? {} : { lifecycleState: state }),
+          limit: String(PAGE_SIZE),
+          offset: String(offset),
+        },
+      }),
+    'Could not load organizations.',
+  );
+}
+
 /**
- * The organization list with search and a lifecycle-state filter.
+ * The organization directory.
  *
  * @remarks
- * A Client Component. Reads `GET /admin/orgs` (paginated, searchable, lifecycle-
- * filterable) at runtime; search debounces, the filter re-queries immediately. Each row
- * links to the org detail screen and shows its current lifecycle state. A 403 (non-staff
- * session) surfaces inline.
+ * A column-aligned table: name and slug as the row's identity, whether the workspace is personal
+ * or a team, its lifecycle state, and when it was created. The lifecycle filter and the search box
+ * share one control height because they sit in the header's control group.
  */
 export default function OrgsPage(): JSX.Element {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<LifecycleFilterValue>(ALL_STATES);
-  const [orgs, setOrgs] = useState<readonly AdminOrg[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [authFailed, setAuthFailed] = useState(false);
+  const [offset, setOffset] = useState(0);
+  const debouncedSearch = useDebounced(search, 250);
+  const query = useApiListQuery(orgsDef(debouncedSearch, filter, offset));
 
-  /** Load the first page of orgs matching the current search + filter. */
-  const load = useCallback(async (term: string, state: LifecycleFilterValue): Promise<void> => {
-    setLoading(true);
-    setError(null);
-    setAuthFailed(false);
-    try {
-      const res = await api.admin.orgs.$get({
-        query: {
-          ...(term ? { search: term } : {}),
-          ...(state === ALL_STATES ? {} : { lifecycleState: state }),
-          limit: String(PAGE_SIZE),
-          offset: '0',
-        },
-      });
-      if (!res.ok) {
-        setAuthFailed(isAuthError(res));
-        setError(await userProblemMessage(res, 'Could not load organizations.'));
-        return;
+  const columns = useMemo<readonly Column<AdminOrg>[]>(
+    () => [
+      {
+        key: 'name',
+        header: 'Organization',
+        flex: true,
+        render: (row) => (
+          <div className="flex min-w-0 items-center gap-2">
+            <IdentityGlyph size={20}>
+              <Building className="size-3" />
+            </IdentityGlyph>
+            <span className="truncate">{row.name}</span>
+          </div>
+        ),
+      },
+      {
+        key: 'slug',
+        header: 'Slug',
+        minWidth: '12rem',
+        priority: 2,
+        render: (row) => (
+          <Text as="span" token="body-small" tone="muted" truncate className="font-mono">
+            {row.slug}
+          </Text>
+        ),
+      },
+      {
+        key: 'type',
+        header: 'Type',
+        width: '6rem',
+        priority: 3,
+        render: (row) => (
+          <Text as="span" token="body-small" tone="muted">
+            {row.isPersonal ? 'Personal' : 'Team'}
+          </Text>
+        ),
+      },
+      {
+        key: 'lifecycle',
+        header: 'State',
+        width: '10rem',
+        priority: 'always',
+        render: (row) => <LifecycleBadge state={row.lifecycleState} />,
+      },
+      {
+        key: 'created',
+        header: 'Created',
+        width: '9rem',
+        align: 'end',
+        priority: 3,
+        render: (row) => (
+          <Text as="span" token="body-small" tone="muted">
+            <RelativeTime iso={row.createdAt}>{relativeTime(row.createdAt)}</RelativeTime>
+          </Text>
+        ),
+      },
+    ],
+    [],
+  );
+
+  const total = query.data?.total ?? 0;
+  const items = query.data?.items ?? [];
+  const filtered = debouncedSearch !== '' || filter !== ALL_STATES;
+
+  /** The screen's body: first load, no results, or the table. */
+  function body(): JSX.Element {
+    if (query.isPending) return <ListSkeleton />;
+
+    if (items.length === 0) {
+      if (filtered) {
+        return (
+          <EmptyState
+            icon={Building}
+            title="No matching organizations"
+            body="Nothing matches this search and lifecycle filter."
+          />
+        );
       }
-      const page = await res.json();
-      setOrgs(page.items);
-      setTotal(page.total);
-    } catch (caught) {
-      setError(userErrorMessage(caught, 'Something went wrong loading organizations.'));
-    } finally {
-      setLoading(false);
+      return (
+        <EmptyState
+          icon={Building}
+          title="No organizations yet"
+          body="Workspaces appear here as people create them."
+        />
+      );
     }
-  }, []);
 
-  useEffect(() => {
-    const handle = setTimeout(() => void load(search, filter), 250);
-    return () => {
-      clearTimeout(handle);
-    };
-  }, [search, filter, load]);
+    return (
+      <Stack gap={4}>
+        <RefreshingOverlay refreshing={query.isFetching}>
+          <AdminTable
+            label="Organizations"
+            columns={columns}
+            rows={items}
+            getRowKey={(row) => row.id}
+            rowHref={(row) => `/orgs/${row.id}`}
+          />
+        </RefreshingOverlay>
+        <AdminPagination
+          offset={offset}
+          pageSize={PAGE_SIZE}
+          pageCount={items.length}
+          total={total}
+          onOffsetChange={setOffset}
+          noun="organizations"
+        />
+      </Stack>
+    );
+  }
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-8">
-      <PageHeader
+    <AdminPage width="list">
+      <AdminPageHeader
         title="Organizations"
-        description={loading ? 'Loading…' : `${total} organization${total === 1 ? '' : 's'} total`}
+        description={query.data ? `${total.toLocaleString()} matching` : undefined}
         actions={
           <>
-            <LifecycleFilter value={filter} onChange={setFilter} />
+            <LifecycleFilter
+              value={filter}
+              onChange={(next) => {
+                setFilter(next);
+                setOffset(0);
+              }}
+            />
             <Input
               type="search"
               value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setOffset(0);
               }}
               placeholder="Search name or slug"
               className="w-56"
@@ -99,41 +195,14 @@ export default function OrgsPage(): JSX.Element {
           </>
         }
       />
-      <ErrorBanner message={error} action={authFailed ? <SignInAction /> : null} />
 
-      {loading ? (
-        <ListSkeleton />
-      ) : orgs.length > 0 ? (
-        <ul className="flex flex-col gap-1.5">
-          {orgs.map((org) => (
-            <li key={org.id}>
-              <Link
-                href={`/orgs/${org.id}`}
-                className={`${ROW_CLASS} items-center justify-between gap-4 rounded-lg px-4 py-3`}
-              >
-                <div className="min-w-0">
-                  <p className="text-body-medium truncate font-medium">{org.name}</p>
-                  <p className="text-on-surface-variant truncate text-xs">{org.slug}</p>
-                </div>
-                <LifecycleBadge state={org.lifecycleState} />
-              </Link>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <EmptyState message="No organizations match these filters." />
-      )}
-    </div>
-  );
-}
+      <QueryErrorBanner
+        error={query.error}
+        fallback="Could not load organizations."
+        onRetry={() => void query.refetch()}
+      />
 
-/** A loading placeholder for the org list. */
-function ListSkeleton(): JSX.Element {
-  return (
-    <div className="flex flex-col gap-1.5">
-      {Array.from({ length: 6 }, (_, i) => (
-        <Skeleton key={i} className="h-14 w-full rounded-lg" />
-      ))}
-    </div>
+      {body()}
+    </AdminPage>
   );
 }

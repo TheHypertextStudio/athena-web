@@ -1,7 +1,7 @@
 # Project Athena Work Log
 
 > **Purpose**: Comprehensive tracking of all work - past, present, and future.
-> **Last Updated**: 2026-08-30
+> **Last Updated**: 2026-08-31
 
 ---
 
@@ -7812,6 +7812,63 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 ---
 
 ## Completed Tasks
+
+### [OAUTH-CONSENT-POLISH-001] Design-review pass on the OAuth consent screen
+
+- **Completed**: 2026-08-31
+- **Process**: Logged at completion. Requested as a UI cleanup task, not opened under Active Tasks
+  first; recorded here rather than back-filled.
+- **Priority**: P2
+- **Summary**: Re-ran the Craft Rubric review on `/oauth/authorize` (last reviewed 2026-08-02,
+  verdict SHIP) against three raised concerns — mobile fidelity and component consistency,
+  whether the expandable permission rows are properly sized, and whether scope copy stays
+  centralized — plus closing the prior review's two open, non-blocking findings. New scorecard:
+  `docs/design/audits/2026-08-31-oauth-authorize.md` (verdict SHIP, all 8 dimensions ≥3, all 5
+  gates green).
+- **Findings and fixes**:
+  1. The capped permission list (`max-h-[45dvh] overflow-y-auto`) silently clipped content with no
+     indication more existed — at 1440×900 with every disclosure expanded, the fifth permission
+     row was hidden entirely inside the block; at 390×844 the fourth row's sentence was cut
+     mid-word. This reproduced even in the ordinary collapsed state, not just the expanded stress
+     case the 2026-08-02 review's related finding covered. Fixed with a new `ScopeList` component
+     (`apps/web/src/app/(auth)/oauth/authorize/page.tsx`) that tracks scroll position via a
+     `ResizeObserver` + scroll listener and renders a `surface-container-high → transparent`
+     gradient mask at whichever edge still hides content; the cap also tightened from `45dvh` to
+     `40dvh` to reclaim vertical space on short viewports.
+  2. On a 390×600 viewport (the deliberately extreme stress case in the design-review shot
+     matrix), the decision buttons sit 41px below the fold even for the realistic all-scopes
+     request — confirmed by direct DOM measurement, not just the long-`redirect_uri`-host case the
+     prior review flagged. The cap reduction above reclaims ~30px; the remainder is accepted as
+     ordinary document scroll (same judgment as 2026-08-02), now paired with a visible scroll cue.
+  3. The permission disclosure was a page-local `<details>`/`<summary>` block because the design
+     system had no Collapsible primitive to reach for. Added `Collapsible` /
+     `CollapsibleTrigger` / `CollapsibleContent` to `@docket/ui/primitives`
+     (`packages/ui/src/primitives/collapsible.tsx`), a thin passthrough over the newly added
+     `@radix-ui/react-collapsible` dependency, matching the existing `Popover`/`HoverCard`
+     pattern. `ScopeRow` now composes it; the chevron keys off `group-data-[state=open]` instead
+     of the `<details>` `:open` pseudo-class. Verified no regression on the `focusRingInset`
+     keyboard-focus fix the 2026-08-02 review shipped (zoomed screenshots on the first/last row).
+  4. Confirmed, not a defect: scope copy is already fully centralized in
+     `apps/web/src/lib/oauth-scope-copy.ts` — both this screen and the Connected Apps settings tab
+     (`apps/web/src/components/settings/connected-apps-tab.tsx`) import `describeScope` from the
+     one module. `apps/docs`'s public API reference hand-writes its own scope descriptions in a
+     markdown table (informational prose, not app UI) — flagged separately, out of scope here.
+- **Files changed**: `packages/ui/src/primitives/collapsible.tsx` (new),
+  `packages/ui/src/primitives/index.ts`, `packages/ui/package.json` (added
+  `@radix-ui/react-collapsible`), `packages/ui/tests/primitives/collapsible.test.tsx` (new, 3
+  tests, 100% line coverage), `apps/web/src/app/(auth)/oauth/authorize/page.tsx`,
+  `apps/web/tests/components/auth/auth-visual-contract.test.ts`,
+  `docs/design/audits/2026-08-31-oauth-authorize.md` (new),
+  `docs/design/audits/screenshots/2026-08-31-oauth-authorize/` (new, 18 PNGs),
+  `docs/design/surface-inventory.md`.
+- **Validation**: `pnpm typecheck` (27/27 packages) and `pnpm lint` (26/26 packages) pass at the
+  root. `@docket/ui` full coverage suite: 46 files / 711 tests, all thresholds met. `@docket/web`
+  full coverage suite: 474 files / 3704 tests, all thresholds met. `@docket/test-utils` full suite
+  (including `scorecard-schema.test.ts` and `surface-inventory.test.ts`): 21 files / 191 tests.
+  Screenshots re-captured at 1440×900/390×844/320×844/390×600 × light/dark for the realistic,
+  fully-expanded, and long-`redirect_uri`-host cases (24 raw frames), zero horizontal overflow
+  flagged at any width. Keyboard focus re-verified with zoomed screenshots on the rebuilt
+  disclosure's first and last row.
 
 ### [OVERLAY-REMOVAL-001] Remove every side overlay, and rebuild Stream around inline expansion
 

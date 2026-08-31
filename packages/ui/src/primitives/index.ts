@@ -53,6 +53,7 @@ export {
 } from './control';
 export { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './card';
 export { Checkbox, type CheckboxProps } from './checkbox';
+export { Collapsible, CollapsibleContent, CollapsibleTrigger } from './collapsible';
 export {
   ContextMenu,
   ContextMenuCheckboxItem,

@@ -168,11 +168,13 @@ describe('Auth visual contract', () => {
 
   it('makes each permission a collapsible disclosure', () => {
     const consent = code(consentPath);
-    // Native <details>/<summary>: keyboard-operable and announced without a bespoke component,
-    // and the repo has no Collapsible primitive to reach for.
-    expect(consent).toContain('<details');
-    expect(consent).toContain('<summary');
-    expect(consent).toContain('group-open:rotate-180');
+    // The shared `Collapsible` primitive (`@docket/ui/primitives`), not a bespoke `<details>`:
+    // same keyboard/AT contract, but the open state now reads through Radix's `data-state` like
+    // every other primitive in the system.
+    expect(consent).toContain('<Collapsible>');
+    expect(consent).toContain('<CollapsibleTrigger');
+    expect(consent).toContain('<CollapsibleContent>');
+    expect(consent).toContain('group-data-[state=open]:rotate-180');
   });
 
   it('clears the 40px mobile touch-target gate on every auth action', () => {

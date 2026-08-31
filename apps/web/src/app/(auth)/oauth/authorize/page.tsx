@@ -71,6 +71,9 @@ import {
   AvatarFallback,
   AvatarImage,
   Button,
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
   focusRingInset,
   Text,
 } from '@docket/ui/primitives';
@@ -80,7 +83,15 @@ import Link from 'next/link';
 // app-location hooks here throws at prerender. The `no-restricted-imports` rule scopes itself to
 // `(app)/`, `components/`, and `lib/` for the same reason.
 import { useRouter, useSearchParams } from 'next/navigation';
-import { type ComponentType, type JSX, Suspense, useCallback, useEffect, useState } from 'react';
+import {
+  type ComponentType,
+  type JSX,
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 
 import { signInReturnPath } from '@/components/app-shell-utils';
 import Wordmark from '@/components/wordmark';
@@ -235,8 +246,10 @@ function ContextRow({
  * One requested permission, as a disclosure row.
  *
  * @remarks
- * Native `<details>`/`<summary>` rather than a bespoke component: it is keyboard-operable and
- * screen-reader-announced for free, and the repo has no Collapsible primitive to reach for.
+ * Built on `@docket/ui/primitives`' `Collapsible` rather than native `<details>`/`<summary>` —
+ * same keyboard/AT contract (Radix wires `aria-expanded` and keyboard toggling for free), but the
+ * open state now reads through `data-[state=open]` like every other primitive in the system,
+ * instead of a bespoke `<details>` on the auth tree the design system had nothing to reach for.
  * Collapsed by default, so a five-scope request reads as a short scannable list instead of five
  * stacked paragraphs — the label alone says what is being granted, and the detail is one click
  * away for anyone who wants it.
@@ -256,18 +269,23 @@ function ScopeRow({ scope }: { scope: string }): JSX.Element {
 
   return (
     <li className="border-outline-variant border-b last:border-b-0">
-      <details className="group">
+      <Collapsible>
         {/* `items-stretch`: the glyph column, the text column, and the chevron column are all the
             row's full height, so no inline sibling is a different size than the ones beside it.
 
-            `focusRingInset`, not the standalone `focus-visible:ring-2` this used to carry. The list
-            is a scroll container (`overflow-y-auto`), which clips anything drawn outside a child's
-            box — so the outer ring on the first and last rows lost three of its four edges and the
+            `focusRingInset`, not the standalone `focus-visible:ring-2`. The list is a scroll
+            container (`overflow-y-auto`), which clips anything drawn outside a child's box — so
+            the outer ring on the first and last rows lost three of its four edges and the
             remaining one read as a divider rather than as focus. The design system already has an
-            answer for dense rows packed flush against their neighbours; use it. */}
-        <summary
+            answer for dense rows packed flush against their neighbours; use it.
+
+            `group` + `group-data-[state=open]` (not `group-open`): the chevron reads its
+            ancestor's Radix `data-state`, not the CSS `:open` pseudo-class `<details>` gave for
+            free. */}
+        <CollapsibleTrigger
+          type="button"
           className={cn(
-            'flex min-h-11 cursor-pointer list-none items-stretch gap-3 px-3 py-2.5 [&::-webkit-details-marker]:hidden',
+            'group flex min-h-11 w-full items-stretch gap-3 px-3 py-2.5 text-left',
             focusRingInset,
           )}
         >
@@ -286,13 +304,82 @@ function ScopeRow({ scope }: { scope: string }): JSX.Element {
             </span>
           </span>
           <span aria-hidden="true" className="flex w-4 shrink-0 items-center justify-center">
-            <ChevronDown className="text-on-surface-variant size-4 transition-transform group-open:rotate-180" />
+            <ChevronDown className="text-on-surface-variant size-4 transition-transform group-data-[state=open]:rotate-180" />
           </span>
-        </summary>
-        {/* `ml-8` aligns the detail under the label rather than the icon (w-5 + gap-3 = 2rem). */}
-        <p className="text-on-surface-variant text-body-small mr-3 mb-3 ml-8">{detail}</p>
-      </details>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          {/* `ml-8` aligns the detail under the label rather than the icon (w-5 + gap-3 = 2rem). */}
+          <p className="text-on-surface-variant text-body-small mr-3 mb-3 ml-8">{detail}</p>
+        </CollapsibleContent>
+      </Collapsible>
     </li>
+  );
+}
+
+/**
+ * The tonal block of requested permissions: one scroll container, masked at whichever edge
+ * currently hides more rows.
+ *
+ * @remarks
+ * The list is capped and scrollable because the server accepts arbitrary requested scopes, so
+ * the row count has no ceiling — without the cap a long list would push the decision buttons off
+ * a short viewport. But a hard `max-h` + `overflow-y-auto` with no other signal is a silent trap:
+ * expand every disclosure on a normal laptop and the cap cuts a row off mid-sentence, or drops it
+ * entirely, with nothing in the frame suggesting more is below. The masks here are the fix — a
+ * short gradient fade at whichever edge still has hidden content, recomputed on every scroll and
+ * on every resize the list's own content triggers (a disclosure opening changes its height
+ * without necessarily firing a scroll event).
+ */
+function ScopeList({ scopes }: { scopes: readonly string[] }): JSX.Element {
+  const listRef = useRef<HTMLUListElement>(null);
+  const [edges, setEdges] = useState({ top: false, bottom: false });
+
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+
+    const updateEdges = (): void => {
+      setEdges({
+        top: list.scrollTop > 1,
+        bottom: list.scrollTop + list.clientHeight < list.scrollHeight - 1,
+      });
+    };
+
+    updateEdges();
+    list.addEventListener('scroll', updateEdges);
+    const resizeObserver = new ResizeObserver(updateEdges);
+    resizeObserver.observe(list);
+    for (const child of list.children) resizeObserver.observe(child);
+
+    return () => {
+      list.removeEventListener('scroll', updateEdges);
+      resizeObserver.disconnect();
+    };
+  }, [scopes]);
+
+  return (
+    <div className="relative min-w-0">
+      <ul
+        ref={listRef}
+        className="bg-surface-container-high max-h-[40dvh] overflow-y-auto rounded-lg"
+      >
+        {scopes.map((scope) => (
+          <ScopeRow key={scope} scope={scope} />
+        ))}
+      </ul>
+      {edges.top ? (
+        <div
+          aria-hidden="true"
+          className="from-surface-container-high pointer-events-none absolute inset-x-0 top-0 h-6 rounded-t-lg bg-gradient-to-b to-transparent"
+        />
+      ) : null}
+      {edges.bottom ? (
+        <div
+          aria-hidden="true"
+          className="from-surface-container-high pointer-events-none absolute inset-x-0 bottom-0 h-6 rounded-b-lg bg-gradient-to-t to-transparent"
+        />
+      ) : null}
+    </div>
   );
 }
 
@@ -470,14 +557,8 @@ function ConsentPage(): JSX.Element {
         <section aria-label="Requested permissions" className="flex min-w-0 flex-col gap-3">
           <p className="text-on-surface text-label-large">Requested access</p>
           {/* One tonal block rather than a card per permission: the list reads as a single object
-              being granted. Capped and scrollable because the server accepts arbitrary requested
-              scopes, so the row count has no ceiling — without the cap a long list would push the
-              decision buttons off a short viewport, which is the failure this redesign fixes. */}
-          <ul className="bg-surface-container-high max-h-[45dvh] overflow-y-auto rounded-lg">
-            {requestedScopes.map((scope) => (
-              <ScopeRow key={scope} scope={scope} />
-            ))}
-          </ul>
+              being granted. See {@link ScopeList} for why it's capped, scrollable, and masked. */}
+          <ScopeList scopes={requestedScopes} />
         </section>
       ) : null}
 

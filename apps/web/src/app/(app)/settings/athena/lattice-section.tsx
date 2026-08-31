@@ -238,7 +238,7 @@ export function LatticeSection(): JSX.Element {
             }}
             disabled={authorize.isPending}
           >
-            Connect Lovelace
+            Connect Lattice
           </Button>
         )
       }
@@ -351,19 +351,11 @@ export function LatticeSection(): JSX.Element {
       ) : (
         <Stack gap={2}>
           <Text token="body-medium">
-            You&apos;ll approve this on Lovelace&apos;s own sign-in page. Docket never sees your
-            Lovelace password.
+            Lattice lets Athena think using models running on your own computer, instead of the
+            model service Docket runs.
           </Text>
-          <ControlGroup wrap>
-            {status.scopes.map((scope) => (
-              <Chip key={scope} variant="suggestion" leadingNone="md3-suggestion-chip" asChild>
-                <span>{scope}</span>
-              </Chip>
-            ))}
-          </ControlGroup>
           <Text token="body-small" tone="muted">
-            Those are the only permissions Athena asks for: run model work, and read the list of
-            your computers. It cannot add or remove computers on your account.
+            You approve the connection on Lovelace, and can disconnect it here at any time.
           </Text>
         </Stack>
       )}

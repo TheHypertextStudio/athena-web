@@ -25,8 +25,11 @@ const LIVE_APP_HTML = `<!doctype html>
   <button id="call" type="button">Run app-only action</button>
   <button id="message" type="button">Post text to Athena</button>
   <button id="link" type="button">Open safe link</button>
+  <button id="context" type="button">Share context</button>
+  <button id="download" type="button">Save report</button>
   <button id="fullscreen" type="button">Open fullscreen</button>
   <button id="teardown" type="button">Close interactive view</button>
+  <p id="request-state"></p>
   <script>
   (() => {
     let nextId = 10;
@@ -74,6 +77,19 @@ const LIVE_APP_HTML = `<!doctype html>
     });
     document.querySelector('#link').addEventListener('click', () => {
       void request('ui/open-link', { url: 'https://example.test/from-app' });
+    });
+    document.querySelector('#context').addEventListener('click', async () => {
+      const answer = await request('ui/update-model-context', {
+        content: [{ type: 'text', text: 'The user pinned Las Vegas' }],
+      });
+      document.querySelector('#request-state').textContent = answer.error ? 'context-refused' : 'context-ok';
+    });
+    document.querySelector('#download').addEventListener('click', async () => {
+      const answer = await request('ui/download-file', {
+        contents: [{ type: 'resource', resource: { uri: 'ui://weather/report.txt', mimeType: 'text/plain', text: 'Las Vegas: 72 degrees' } }],
+      });
+      const refused = answer.error || (answer.result && answer.result.isError);
+      document.querySelector('#request-state').textContent = refused ? 'download-refused' : 'download-ok';
     });
     document.querySelector('#teardown').addEventListener('click', () => {
       send({ jsonrpc: '2.0', method: 'ui/notifications/request-teardown', params: {} });
@@ -178,6 +194,7 @@ async function installAthenaMcpFixture(page: Page, orgId: string) {
   let persisted = false;
   const viewCalls: unknown[] = [];
   const appMessages: unknown[] = [];
+  const contextUpdates: unknown[] = [];
   const summary = sessionDetail(orgId, false);
 
   await page.route('**/mcp/apps/sandbox', async (route) => {
@@ -238,6 +255,11 @@ async function installAthenaMcpFixture(page: Page, orgId: string) {
       });
       return;
     }
+    if (request.method() === 'POST' && path === '/v1/me/athena/mcp-apps/model-context') {
+      contextUpdates.push(request.postDataJSON());
+      await route.fulfill({ json: { retained: true } });
+      return;
+    }
     if (request.method() === 'POST' && path === '/v1/me/athena/chat/messages') {
       appMessages.push(request.postDataJSON());
       await route.fulfill({ json: { id: SESSION_ID } });
@@ -255,6 +277,7 @@ async function installAthenaMcpFixture(page: Page, orgId: string) {
     originalToolRouteCount: () => originalToolRouteCount,
     viewCalls,
     appMessages,
+    contextUpdates,
   };
 }
 
@@ -376,6 +399,24 @@ test('canonical Athena invocation creates and restores a fully interactive stabl
 
   await appFrame(page).getByRole('button', { name: 'Post text to Athena' }).click();
   await expect.poll(() => fixture.appMessages).toEqual([{ body: 'Message from the app' }]);
+
+  // ui/update-model-context: the card's word for future turns, stored against the card itself.
+  await appFrame(page).getByRole('button', { name: 'Share context' }).click();
+  await expect(appFrame(page).locator('#request-state')).toHaveText('context-ok');
+  expect(fixture.contextUpdates).toEqual([
+    {
+      connectionId: CONNECTION_ID,
+      activityId: 'model_tool_live',
+      content: [{ type: 'text', text: 'The user pinned Las Vegas' }],
+    },
+  ]);
+
+  // ui/download-file: an embedded resource becomes a real browser download, named by its uri.
+  const downloadPromise = page.waitForEvent('download');
+  await appFrame(page).getByRole('button', { name: 'Save report' }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe('report.txt');
+  await expect(appFrame(page).locator('#request-state')).toHaveText('download-ok');
 
   await page.context().route('https://example.test/from-app', async (route) => {
     await route.fulfill({

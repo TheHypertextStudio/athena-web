@@ -200,7 +200,7 @@ function containsCredential(value: unknown, seen = new WeakSet()): boolean {
   );
 }
 
-function jsonSafeClone<T>(value: T): T | null {
+function jsonSafeClone<T>(value: T, maxBytes: number = MCP_APP_PRESENTATION_MAX_BYTES): T | null {
   try {
     const serialized = JSON.stringify(value, (_key, item: unknown) => {
       if (
@@ -214,7 +214,7 @@ function jsonSafeClone<T>(value: T): T | null {
       }
       return item;
     });
-    if (new TextEncoder().encode(serialized).byteLength > MCP_APP_PRESENTATION_MAX_BYTES) {
+    if (new TextEncoder().encode(serialized).byteLength > maxBytes) {
       return null;
     }
     return JSON.parse(serialized) as T;
@@ -266,6 +266,60 @@ export function parseMcpAppPresentation(value: unknown): McpAppPresentation | nu
   };
   if (containsCredential(presentation)) return null;
   return jsonSafeClone(presentation);
+}
+
+/** Maximum serialized size of one retained widget model-context update. */
+export const MCP_APP_MODEL_CONTEXT_MAX_BYTES = 64 * 1024;
+
+/**
+ * A widget's retained `ui/update-model-context` payload, ready for the agent's next turn.
+ *
+ * @remarks
+ * Overwrite semantics per the extension: each update from a view replaces the previous one, so a
+ * store holds at most one of these per widget instance. The content is widget-authored and stays
+ * untrusted data wherever it later meets a model.
+ */
+export interface McpAppModelContext {
+  /** Plain-text context joined from the update's text content blocks. */
+  readonly text: string;
+  /** The update's machine-readable context, when it carried one. */
+  readonly structuredContent?: Readonly<Record<string, unknown>> | undefined;
+}
+
+/**
+ * Validate and normalize an untrusted `ui/update-model-context` payload.
+ *
+ * @remarks
+ * Docket advertises the `{ text: {} }` modality only, so a content array holding anything but
+ * text blocks is rejected outright rather than filtered — a widget that sends an image believed
+ * it would be kept. The same credential scan and JSON-safety bounds as
+ * {@link parseMcpAppPresentation} apply, with a far smaller size cap: this is a note to the
+ * model, not a document store.
+ *
+ * @param value - The raw request params (`content`, `structuredContent`).
+ * @returns the bounded context, or `null` when nothing safe and non-empty remains.
+ */
+export function parseMcpAppModelContext(value: unknown): McpAppModelContext | null {
+  const source = record(value);
+  if (!source) return null;
+  const structured = record(source['structuredContent']);
+  const lines: string[] = [];
+  if (source['content'] !== undefined) {
+    if (!Array.isArray(source['content'])) return null;
+    for (const blockValue of source['content']) {
+      const block = record(blockValue);
+      if (block?.['type'] !== 'text' || typeof block['text'] !== 'string') return null;
+      lines.push(block['text']);
+    }
+  }
+  const text = lines.join('\n').trim();
+  if (text.length === 0 && !structured) return null;
+  const context: McpAppModelContext = {
+    text,
+    ...(structured ? { structuredContent: structured } : {}),
+  };
+  if (containsCredential(context)) return null;
+  return jsonSafeClone(context, MCP_APP_MODEL_CONTEXT_MAX_BYTES);
 }
 
 /**

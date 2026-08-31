@@ -180,6 +180,7 @@ describe('conformance matrix', () => {
     expect(ADVERTISED_OPTIONAL_CAPABILITIES.map((entry) => entry.capability).sort()).toEqual([
       'displayMode.fullscreen',
       'displayMode.inline',
+      'downloadFile',
       'hostContext.sizing',
       'hostContext.theme',
       'message.text',
@@ -187,6 +188,7 @@ describe('conformance matrix', () => {
       'sandbox.csp',
       'sandbox.permissions',
       'serverTools',
+      'updateModelContext.text',
     ]);
     for (const entry of ADVERTISED_OPTIONAL_CAPABILITIES) {
       const [file, testName] = entry.test.split(' :: ');
@@ -234,6 +236,7 @@ describe('claims the matrix cites here', () => {
       readResource: async () => ({}),
       log: () => undefined,
       sendMessage: () => true,
+      updateModelContext: () => true,
     });
     await host.receive({
       jsonrpc: '2.0',
@@ -248,17 +251,19 @@ describe('claims the matrix cites here', () => {
     const capabilities = (posted[0]?.result as { hostCapabilities: Record<string, unknown> })
       .hostCapabilities;
     expect(Object.keys(capabilities).sort()).toEqual([
+      'downloadFile',
       'message',
       'openLinks',
       'sandbox',
       'serverTools',
+      'updateModelContext',
     ]);
-    expect(capabilities['downloadFile']).toBeUndefined();
+    // Docket advertises the text modality only for context updates.
+    expect(capabilities['updateModelContext']).toEqual({ text: {} });
     expect(capabilities['experimental']).toBeUndefined();
     expect(capabilities['logging']).toBeUndefined();
     expect(capabilities['sampling']).toBeUndefined();
     expect(capabilities['serverResources']).toBeUndefined();
-    expect(capabilities['updateModelContext']).toBeUndefined();
   });
 
   it('every app capability the spec defines survives the handshake', async () => {

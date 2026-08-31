@@ -152,6 +152,7 @@ describe('official MCP Apps compatibility', () => {
       sendMessage: () => true,
       readResource: async () => ({}),
       downloadFile: () => true,
+      updateModelContext: () => true,
       log: () => undefined,
     });
 
@@ -159,6 +160,8 @@ describe('official MCP Apps compatibility', () => {
       openLinks: {},
       serverTools: { listChanged: false },
       message: { text: {} },
+      downloadFile: {},
+      updateModelContext: { text: {} },
       sandbox: { csp: {}, permissions: {} },
     });
   });

@@ -22,9 +22,11 @@ import {
   MCP_UI_EXTENSION,
   MCP_UI_MIME_TYPE,
   MCP_UI_PROXIED_METHODS,
+  MCP_APP_MODEL_CONTEXT_MAX_BYTES,
   declaresTasksExtension,
   isLiveTaskStatus,
   isTerminalTaskStatus,
+  parseMcpAppModelContext,
   parseMcpAppPresentation,
 } from '../../src';
 
@@ -204,6 +206,65 @@ describe('MCP Apps protocol', () => {
     );
 
     expect(parseMcpAppPresentation(input)).toBeNull();
+  });
+});
+
+describe('widget model-context updates', () => {
+  it('retains text blocks joined with any structured content', () => {
+    expect(
+      parseMcpAppModelContext({
+        content: [
+          { type: 'text', text: 'the user pinned Dallas' },
+          { type: 'text', text: 'and dismissed the alert' },
+        ],
+        structuredContent: { city: 'Dallas' },
+      }),
+    ).toEqual({
+      text: 'the user pinned Dallas\nand dismissed the alert',
+      structuredContent: { city: 'Dallas' },
+    });
+  });
+
+  it('retains a structured-only update with empty text', () => {
+    expect(parseMcpAppModelContext({ structuredContent: { city: 'Dallas' } })).toEqual({
+      text: '',
+      structuredContent: { city: 'Dallas' },
+    });
+  });
+
+  it('rejects non-objects, empty updates, and non-array content outright', () => {
+    expect(parseMcpAppModelContext(null)).toBeNull();
+    expect(parseMcpAppModelContext('context')).toBeNull();
+    expect(parseMcpAppModelContext({})).toBeNull();
+    expect(parseMcpAppModelContext({ content: [] })).toBeNull();
+    expect(parseMcpAppModelContext({ content: 'not-blocks' })).toBeNull();
+  });
+
+  it('rejects any non-text block rather than filtering it away', () => {
+    expect(
+      parseMcpAppModelContext({
+        content: [
+          { type: 'text', text: 'kept?' },
+          { type: 'image', data: 'x', mimeType: 'image/png' },
+        ],
+      }),
+    ).toBeNull();
+    expect(parseMcpAppModelContext({ content: [{ type: 'text', text: 7 }] })).toBeNull();
+    expect(parseMcpAppModelContext({ content: ['bare string'] })).toBeNull();
+  });
+
+  it('rejects credential-shaped keys and payloads over the context cap', () => {
+    expect(
+      parseMcpAppModelContext({
+        content: [{ type: 'text', text: 'fine' }],
+        structuredContent: { apiKey: 'sk-forbidden' },
+      }),
+    ).toBeNull();
+    expect(
+      parseMcpAppModelContext({
+        content: [{ type: 'text', text: 'x'.repeat(MCP_APP_MODEL_CONTEXT_MAX_BYTES + 1) }],
+      }),
+    ).toBeNull();
   });
 });
 

@@ -15,7 +15,7 @@
  * ({@link AthenaPanelProvider}), and (in principle) any future entry point —
  * so the conversation itself is defined once and each door only supplies its own chrome.
  */
-import type { AgentSessionDetailOut, SessionActivityOut } from '@docket/types';
+import { parseMcpAppPresentation, type SessionActivityOut } from '@docket/types';
 import { EmptyState } from '@docket/ui/components';
 import { Cable, Sparkles } from '@docket/ui/icons';
 import { cn } from '@docket/ui/lib/utils';
@@ -32,11 +32,15 @@ import {
 } from '@docket/ui/primitives';
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 
+import { useQueryClient } from '@tanstack/react-query';
+
 import { ProposalGroupCard } from '@/components/agents/proposal-group-card';
+import { McpAppPresentationCard } from '@/components/athena/mcp-app-presentation-card';
 import { useMentionOrgId } from '@/components/mentions/use-mention-org';
 import { AddMcpConnectorForm } from '@/components/settings/mcp-connectors-section';
-import { api } from '@/lib/api';
-import { userErrorMessage, readProblemError } from '@/lib/problem';
+import { fetchOrgChatThread, sendOrgChatMessage, useOrgChatThread } from '@/lib/athena/chat-defs';
+import { userErrorMessage } from '@/lib/problem';
+import { queryKeys } from '@/lib/query';
 import { useSessionDetail } from '@/lib/use-session-detail';
 import { startViewTransition } from '@/lib/view-transition';
 import MentionTextarea from '@/components/mentions/mention-textarea';
@@ -64,44 +68,42 @@ export default function AthenaConversation({
   className,
   initialDraft,
 }: AthenaConversationProps): JSX.Element {
-  const [thread, setThread] = useState<AgentSessionDetailOut | null>(null);
   const mentionOrgId = useMentionOrgId(orgId);
-  const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
   const [draft, setDraft] = useState(initialDraft ?? '');
   const [connectOpen, setConnectOpen] = useState(false);
   const endRef = useRef<HTMLDivElement | null>(null);
+  const queryClient = useQueryClient();
 
-  const load = useCallback(async (): Promise<void> => {
+  const query = useOrgChatThread(orgId);
+  const thread = query.data ?? null;
+  const loading = query.isPending;
+  const error =
+    sendError ??
+    (query.isError ? userErrorMessage(query.error, 'Could not open the conversation.') : null);
+
+  const commitThread = useCallback(
+    (data: NonNullable<typeof thread>): void => {
+      queryClient.setQueryData(queryKeys.chatThread(orgId), data);
+    },
+    [queryClient, orgId],
+  );
+
+  // Called after a proposal group settles (via `ChatProposals`'s `onSettled`), so the group's
+  // ghost rows — each carrying a stable `view-transition-name` — morph out in place instead of
+  // the list just popping. The fetch happens first and the cache write goes inside the
+  // transition, which is why this does not simply `refetch()`.
+  const reloadWithTransition = useCallback(async (): Promise<void> => {
     try {
-      const res = await api.v1.orgs[':orgId'].sessions.chat.$get({ param: { orgId } });
-      if (!res.ok) {
-        setError(
-          userErrorMessage(
-            await readProblemError(res, 'Could not open the conversation.'),
-            'Could not open the conversation.',
-          ),
-        );
-        return;
-      }
-      const data = await res.json();
-      // Called after a proposal group settles (via `ChatProposals`'s `onSettled`), so the group's
-      // ghost rows — each carrying a stable `view-transition-name` — morph out in place instead of
-      // the list just popping.
+      const data = await fetchOrgChatThread(orgId);
       startViewTransition(() => {
-        setThread(data);
+        commitThread(data);
       });
     } catch (caught) {
-      setError(userErrorMessage(caught, 'Something went wrong opening the conversation.'));
-    } finally {
-      setLoading(false);
+      setSendError(userErrorMessage(caught, 'Something went wrong opening the conversation.'));
     }
-  }, [orgId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  }, [orgId, commitThread]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: 'end' });
@@ -110,32 +112,31 @@ export default function AthenaConversation({
   const send = useCallback(async (): Promise<void> => {
     const text = draft.trim();
     if (text.length === 0 || sending) return;
-    setError(null);
+    setSendError(null);
     setSending(true);
     setDraft('');
     try {
-      const res = await api.v1.orgs[':orgId'].sessions.chat.messages.$post({
-        param: { orgId },
-        json: { body: text },
-      });
-      if (!res.ok) {
-        setDraft(text);
-        setError(
-          userErrorMessage(
-            await readProblemError(res, 'Athena could not answer right now.'),
-            'Athena could not answer right now.',
-          ),
-        );
-        return;
-      }
-      setThread(await res.json());
+      commitThread(await sendOrgChatMessage(orgId, text));
     } catch (caught) {
       setDraft(text);
-      setError(userErrorMessage(caught, 'Something went wrong reaching Athena.'));
+      setSendError(userErrorMessage(caught, 'Something went wrong reaching Athena.'));
     } finally {
       setSending(false);
     }
-  }, [orgId, draft, sending]);
+  }, [orgId, draft, sending, commitThread]);
+
+  // A widget speaking as the user posts into THIS thread, exactly as if typed into the composer.
+  const sendWidgetMessage = useCallback(
+    async (text: string): Promise<boolean> => {
+      try {
+        commitThread(await sendOrgChatMessage(orgId, text));
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [orgId, commitThread],
+  );
 
   return (
     <div className={cn('flex h-full w-full flex-col', className)}>
@@ -151,10 +152,14 @@ export default function AthenaConversation({
         ) : thread && thread.activities.length > 0 ? (
           <>
             {thread.activities.map((activity) => (
-              <ChatEntry key={activity.id} activity={activity} />
+              <ChatEntry
+                key={activity.id}
+                activity={activity}
+                onWidgetMessage={sendWidgetMessage}
+              />
             ))}
             {thread.status === 'awaiting_approval' ? (
-              <ChatProposals orgId={orgId} sessionId={thread.id} onSettled={load} />
+              <ChatProposals orgId={orgId} sessionId={thread.id} onSettled={reloadWithTransition} />
             ) : null}
           </>
         ) : (
@@ -255,10 +260,19 @@ export default function AthenaConversation({
 /** Props for {@link ChatEntry}. */
 interface ChatEntryProps {
   activity: SessionActivityOut;
+  /** Posts a widget-composed `ui/message` into this thread, as the user. */
+  onWidgetMessage: (text: string) => Promise<boolean>;
+}
+
+/** Read one nested object off an untrusted activity body. */
+function bodyRecord(value: unknown): Readonly<Record<string, unknown>> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Readonly<Record<string, unknown>>)
+    : null;
 }
 
 /** One conversational beat: user bubble, Athena text, quiet work chip, or question. */
-function ChatEntry({ activity }: ChatEntryProps): JSX.Element | null {
+function ChatEntry({ activity, onWidgetMessage }: ChatEntryProps): JSX.Element | null {
   const text = typeof activity.body['text'] === 'string' ? activity.body['text'] : '';
   const fromUser = activity.body['author'] === 'user';
 
@@ -288,20 +302,38 @@ function ChatEntry({ activity }: ChatEntryProps): JSX.Element | null {
     );
   }
   if (activity.type === 'action') {
-    const action = activity.body['action'];
-    const summary =
-      action && typeof action === 'object' && 'summary' in action
-        ? String((action as Record<string, unknown>)['summary'])
-        : 'worked';
+    const action = bodyRecord(activity.body['action']);
+    const summary = action && typeof action['summary'] === 'string' ? action['summary'] : 'worked';
+    // The chip stays the quiet record of what Athena did; when the tool captured an interactive
+    // MCP app card, it renders full-width beneath the chip — the same durable presentation the
+    // workbench shows, revalidated here because the body is an untrusted bag of JSON.
+    const result = action ? bodyRecord(action['result']) : null;
+    const presentation = parseMcpAppPresentation(result?.['presentation']);
+    const presentationUnavailable =
+      result?.['presentationUnavailable'] === true ||
+      (result?.['presentation'] !== undefined && !presentation);
     return (
-      <span
-        className={cn(
-          surfaceToneColor('canvas'),
-          'border-outline-variant text-on-surface-variant mr-auto inline-flex max-w-[85%] items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs',
-        )}
-      >
-        <span className="truncate">{summary}</span>
-      </span>
+      <div className="flex w-full flex-col gap-2">
+        <span
+          className={cn(
+            surfaceToneColor('canvas'),
+            'border-outline-variant text-on-surface-variant mr-auto inline-flex max-w-[85%] items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs',
+          )}
+        >
+          <span className="truncate">{summary}</span>
+        </span>
+        {presentation ? (
+          <McpAppPresentationCard
+            presentation={presentation}
+            activityId={activity.id}
+            onMessage={onWidgetMessage}
+          />
+        ) : presentationUnavailable ? (
+          <p className="text-on-surface-variant text-body-small" data-testid="mcp-app-view-failure">
+            Interactive view unavailable.
+          </p>
+        ) : null}
+      </div>
     );
   }
   // Thoughts stay out of the conversation — the work-log session view carries them.

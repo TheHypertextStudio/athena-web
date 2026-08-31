@@ -19,7 +19,13 @@
  * Personal connections only. These are owner-scoped by the authenticated Better Auth user and no
  * workspace participates in the decision, exactly as the rest of `/v1/me/athena` works.
  */
-import { db, personalMcpConnection, personalMcpCredential } from '@docket/db';
+import {
+  agentSession,
+  db,
+  personalMcpConnection,
+  personalMcpCredential,
+  sessionActivity,
+} from '@docket/db';
 import {
   isRenderableUiResource,
   isRemoteToolVisibleTo,
@@ -28,7 +34,7 @@ import {
   type RemoteToolDescriptor,
   type RemoteUiResource,
 } from '@docket/integrations';
-import { MCP_UI_MIME_TYPE } from '@docket/types';
+import { MCP_UI_MIME_TYPE, parseMcpAppModelContext } from '@docket/types';
 import { and, asc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -82,6 +88,18 @@ const callInput = z.object({
   connectionId: z.string().min(1),
   tool: z.string().min(1),
   arguments: z.record(z.string(), z.unknown()).optional(),
+});
+
+const modelContextInput = z.object({
+  connectionId: z.string().min(1),
+  activityId: z.string().min(1),
+  content: z.array(z.record(z.string(), z.unknown())).optional(),
+  structuredContent: z.record(z.string(), z.unknown()).optional(),
+});
+
+/** Acknowledgement that a context update was retained. */
+export const McpAppModelContextOut = z.object({
+  retained: z.literal(true).describe('The update replaced any previous context for this card.'),
 });
 
 /** Return the authenticated owner or fail closed. */
@@ -277,6 +295,64 @@ export async function runWidgetTool(
 }
 
 /**
+ * Retain one rendered card's `ui/update-model-context` for the conversation's next turn.
+ *
+ * @remarks
+ * The same ownership ladder as a widget tool call, then the payload bounds: the connection must
+ * be the caller's own (a miss, not a denial), the activity must be a card that exact connection
+ * produced in a session the caller owns, and the payload must survive
+ * {@link parseMcpAppModelContext}'s text-only, credential-scanned, size-capped normalization.
+ * Each retention overwrites the card's previous context, per the extension.
+ *
+ * @param ownerUserId - The authenticated owner.
+ * @param connectionId - The personal connection the card came from.
+ * @param activityId - The activity row the card is persisted on.
+ * @param params - The raw `ui/update-model-context` params.
+ * @throws {NotFoundError} When the card cannot be located under this owner and connection.
+ * @throws {ApiError} When the payload cannot be safely retained.
+ */
+export async function retainWidgetModelContext(
+  ownerUserId: string,
+  connectionId: string,
+  activityId: string,
+  params: { content?: Record<string, unknown>[]; structuredContent?: Record<string, unknown> },
+): Promise<void> {
+  await loadConnection(ownerUserId, connectionId);
+  const context = parseMcpAppModelContext(params);
+  if (!context) {
+    throw new ApiError(422, 'validation_error', 'The context update could not be safely retained.');
+  }
+  await db.transaction(async (tx) => {
+    const [row] = await tx
+      .select({ activity: sessionActivity, ownerUserId: agentSession.ownerUserId })
+      .from(sessionActivity)
+      .innerJoin(agentSession, eq(sessionActivity.sessionId, agentSession.id))
+      .where(eq(sessionActivity.id, activityId))
+      .limit(1);
+    if (row?.ownerUserId !== ownerUserId) {
+      throw new NotFoundError('Widget instance not found');
+    }
+    const action = row.activity.body.action;
+    const result = action?.result;
+    if (!action || result?.presentation?.connectionId !== connectionId) {
+      throw new NotFoundError('Widget instance not found');
+    }
+    await tx
+      .update(sessionActivity)
+      .set({
+        body: {
+          ...row.activity.body,
+          action: {
+            ...action,
+            result: { ...result, modelContext: context, modelContextDelivered: false },
+          },
+        },
+      })
+      .where(eq(sessionActivity.id, row.activity.id));
+  });
+}
+
+/**
  * The MCP Apps host routes, mounted under `/v1/me/athena/mcp-apps`.
  */
 const mcpAppHostRoutes = new Hono<AppEnv>()
@@ -378,6 +454,25 @@ const mcpAppHostRoutes = new Hono<AppEnv>()
           true,
         ),
       );
+    },
+  )
+  .post(
+    '/model-context',
+    apiDoc({
+      tag: 'Athena',
+      summary: 'Record a rendered widget’s context for future turns',
+      response: McpAppModelContextOut,
+      description:
+        'Store the `ui/update-model-context` a rendered widget posted, replacing any previous context for that card. The stored context reaches the conversation on its next turn, attributed to the app rather than the person.',
+    }),
+    zJson(modelContextInput),
+    async (c) => {
+      const body = c.req.valid('json');
+      await retainWidgetModelContext(requestOwner(c), body.connectionId, body.activityId, {
+        ...(body.content ? { content: body.content } : {}),
+        ...(body.structuredContent ? { structuredContent: body.structuredContent } : {}),
+      });
+      return ok(c, McpAppModelContextOut, { retained: true });
     },
   );
 

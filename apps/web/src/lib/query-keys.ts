@@ -196,6 +196,7 @@ export const queryKeys = {
     ['org', orgId, 'templates', targetType] as const,
   agents: (orgId: string) => ['org', orgId, 'agents'] as const,
   sessions: (orgId: string) => ['org', orgId, 'sessions'] as const,
+  chatThread: (orgId: string) => ['org', orgId, 'sessions', 'chat'] as const,
   views: (orgId: string) => ['org', orgId, 'views'] as const,
   // The dependency-graph read carries its scope (`org` / `project:<id>` / `task:<id>:<depth>`)
   // so each embed caches apart; the coarse `['org',orgId,'task-graph']` prefix invalidates all.

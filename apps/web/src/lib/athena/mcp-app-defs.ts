@@ -111,6 +111,34 @@ async function postToCanonicalChat(text: string): Promise<boolean> {
 }
 
 /**
+ * Record a rendered widget's `ui/update-model-context` for the conversation's next turn.
+ *
+ * @remarks
+ * The context is stored server-side on the activity row the card lives on — replacing any
+ * previous update from the same card, per the extension's overwrite semantics — and reaches the
+ * model on the thread's next turn, enveloped as app-authored text rather than the person's own.
+ *
+ * @param input - The card's connection and activity, plus the update's payload.
+ * @returns whether the host retained the update.
+ */
+export async function postWidgetModelContext(input: {
+  readonly connectionId: string;
+  readonly activityId: string;
+  readonly content?: readonly Record<string, unknown>[];
+  readonly structuredContent?: Readonly<Record<string, unknown>>;
+}): Promise<boolean> {
+  const response = await api.v1.me.athena['mcp-apps']['model-context'].$post({
+    json: {
+      connectionId: input.connectionId,
+      activityId: input.activityId,
+      ...(input.content ? { content: [...input.content] } : {}),
+      ...(input.structuredContent ? { structuredContent: input.structuredContent } : {}),
+    },
+  });
+  return response.ok;
+}
+
+/**
  * Post a widget-composed `ui/message` into the Athena conversation.
  *
  * @remarks

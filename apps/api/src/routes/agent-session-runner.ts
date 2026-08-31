@@ -20,6 +20,7 @@ import {
 import { driveSession, driveSessionAfterMessage } from '../agent/loop';
 import { markProvenance, type TurnProvenance } from '../agent/provenance';
 import { loadTranscript, saveTranscript } from '../agent/transcript';
+import { takePendingWidgetModelContexts } from '../mcp/apps/model-context';
 import { ensureDefaultAgent } from '../lib/default-agent';
 
 import type { SessionRow } from './agent-session-helpers';
@@ -346,11 +347,27 @@ async function applyReplyToSession(
     });
     const messages = await loadTranscript(tx, sessionId);
     const modelText = markProvenance(text, provenance, origin);
+    // Any context a rendered MCP app posted since the last turn rides in ahead of the person's
+    // own words, enveloped as third-party text — the extension's "context for future turns",
+    // delivered exactly once because the flag flips in this same transaction.
+    const widgetContexts = await takePendingWidgetModelContexts(tx, sessionId);
     await saveTranscript(
       tx,
       sessionId,
       attributedOrgId,
-      [...messages, { role: 'user', content: [{ type: 'text', text: modelText }] }],
+      [
+        ...messages,
+        {
+          role: 'user',
+          content: [
+            ...widgetContexts.map((context) => ({
+              type: 'text' as const,
+              text: markProvenance(context.text, 'mcp_app', context.origin),
+            })),
+            { type: 'text', text: modelText },
+          ],
+        },
+      ],
       session.ownerUserId,
     );
     if (

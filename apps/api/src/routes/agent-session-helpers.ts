@@ -1,7 +1,7 @@
 import { agentSession, agentSessionRun, db, sessionActivity, task } from '@docket/db';
 import { type Capability, satisfies } from '@docket/authz';
 import type { AgentSessionDetailOut, AgentSessionOut } from '@docket/types';
-import { SessionStatus } from '@docket/types';
+import { parseMcpAppPresentation, SessionStatus } from '@docket/types';
 import { and, desc, eq, inArray, or } from 'drizzle-orm';
 import type { Context } from 'hono';
 import { z } from 'zod';
@@ -221,6 +221,49 @@ export function toSessionOut(s: SessionRow): z.input<typeof AgentSessionOut> {
   };
 }
 
+/**
+ * Re-validate a persisted MCP app presentation before it leaves the API.
+ *
+ * @remarks
+ * The agent loop only ever writes presentations that passed `parseMcpAppPresentation` at capture
+ * time, but the row is durable and the parser's bounds (JSON safety, size cap, credential scan)
+ * are the read-side contract too — the same validated-on-read posture the personal activity route
+ * takes. A raw value that no longer parses is stripped and reported as unavailable rather than
+ * relayed. Everything else in the body — the approval gate's `toolCall.input` above all — passes
+ * through untouched.
+ */
+function bodyWithValidatedPresentation(body: ActivityRow['body']): ActivityRow['body'] {
+  const action = body.action;
+  const result = action?.result;
+  if (
+    !action ||
+    !result ||
+    (result.presentation === undefined && result.modelContext === undefined)
+  ) {
+    return body;
+  }
+  // `modelContext` and its delivery flag are the agent loop's private storage — they never leave
+  // the process, on any surface.
+  const {
+    presentation: raw,
+    modelContext: _context,
+    modelContextDelivered: _delivered,
+    ...rest
+  } = result;
+  const presentation = parseMcpAppPresentation(raw);
+  return {
+    ...body,
+    action: {
+      ...action,
+      result: presentation
+        ? { ...rest, presentation }
+        : raw === undefined
+          ? rest
+          : { ...rest, presentationUnavailable: true },
+    },
+  };
+}
+
 /** toActivityOut converts internal API route data into the public API response shape. */
 export function toActivityOut(
   a: ActivityRow,
@@ -230,7 +273,7 @@ export function toActivityOut(
     sessionId: a.sessionId,
     organizationId: a.organizationId,
     type: a.type,
-    body: a.body,
+    body: bodyWithValidatedPresentation(a.body),
     // `executing` is an internal non-repeatable dispatch claim. Compatibility clients see the
     // existing non-terminal `approved` state while the session itself is parked for attention.
     approvalStatus: a.approvalStatus === 'executing' ? 'approved' : a.approvalStatus,

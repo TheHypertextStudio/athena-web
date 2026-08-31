@@ -47,6 +47,55 @@
   recovery, deployment, managed Mac Studio pairing, and both real production proofs also remain.
   See `docs/superpowers/plans/2026-08-30-docket-lattice-roundtrip-claude-handoff.md` for exact state.
 
+### [MCP-APPS-CHAT-001] Render MCP apps in the Athena chat and complete the optional spec surface
+
+- **Status**: REVIEW
+- **Started**: 2026-08-30
+- **Priority**: P1
+- **Description**: Audit against the stable MCP Apps extension (`io.modelcontextprotocol/ui`,
+  2026-01-26) found the host conformant but the main chat surface widget-blind: `AthenaConversation`
+  renders tool work as a text chip even though the presentation is persisted and served. Close the
+  gaps: inline + fullscreen widgets in the chat thread, live arrival over the existing org-session
+  SSE stream, and the two plumbed-but-disabled capabilities (`ui/update-model-context`,
+  `ui/download-file`). Reconcile the stale `ATH-07` ledger entry.
+- **Subtasks**:
+  - [x] Validate persisted presentations on read in the org session serializer
+  - [x] Shared `McpAppPresentationCard`; mount it in `ChatEntry` (chip + card + fallback)
+  - [x] Org-scoped widget `ui/message` sink
+  - [x] Migrate `AthenaConversation` onto the typed query layer
+  - [x] SSE subscription seam feeding the chat thread cache, polling fallback
+  - [x] `ui/update-model-context`: host option, bounded parse, API write, turn injection, web wiring
+  - [x] `ui/download-file`: web handler with size/filename bounds
+  - [x] Docs: mcp-apps-host spec, conformance matrix regen, `ATH-07` reconciliation
+- **Files changed**: `apps/web/src/components/athena/{athena-conversation,athena-workbench,mcp-app-view}.tsx`,
+  new `mcp-app-presentation-card.tsx` and `apps/web/src/lib/athena/chat-defs.ts`,
+  `apps/web/src/lib/athena/mcp-app-defs.ts`, `apps/web/src/lib/query-keys.ts`;
+  `packages/integrations/src/mcp-apps-host.ts`; `packages/types/src/mcp-apps.ts`;
+  `packages/db/src/types.ts`; `apps/api/src/mcp/apps/{host-routes.ts,model-context.ts (new)}`,
+  `apps/api/src/routes/{agent-session-helpers,agent-session-runner}.ts`,
+  `apps/api/src/agent/provenance.ts`, `domains/athena/src/voice.ts`; tests in
+  `apps/api/tests/mcp/mcp-app-model-context.test.ts` (new), `apps/web/tests/athena/athena-conversation.test.tsx`
+  (new), plus updated host/conformance/view suites and the `mcp-apps-stable` browser journey;
+  `docs/engineering/specs/{mcp-apps-host.md,mcp-apps-conformance.md}`,
+  `docs/engineering/launch-compliance.{md,json}`.
+- **Validation**: Root turbo `typecheck` (26/26) and `lint` clean; `format:check` clean; root
+  `pnpm test` green apart from one pre-existing load-dependent flake
+  (`apps/web/tests/editor/markdown-table.test.tsx`, passes in isolation and on identical rerun —
+  flagged as a follow-up task). `@docket/types` coverage holds its 100% trust-spine gate (828
+  tests); `@docket/integrations` coverage gate passes; the regenerated conformance matrix gate
+  passes (13/13) with `HOST-027/028/029/031` now applicable and every advertised optional
+  capability citing browser-journey evidence.
+- **Learnings**: The conformance matrix's optional-capability rule forces Playwright evidence
+  before a host capability may be advertised, which is why `downloadFile`/`updateModelContext`
+  landed together with fixture-widget journey steps rather than as bridge-only wiring. Widget
+  model context must never ride as user speech: it is stored per card with overwrite semantics and
+  folded into the next turn inside the `docket:external source="mcp_app"` envelope, exactly once,
+  with delivery flipped in the same transaction as the transcript append.
+- **Notes**: Plan at `~/.claude/plans/take-a-look-at-robust-trinket.md`. Out of scope by prior
+  decision: `pip`, `_meta.ui.domain` origins, host `sampling`. The `ATH-12` ledger row's
+  "athena-conversation is dead code" evidence was already stale before this task (the component
+  is mounted from Today) and is untouched here.
+
 ### [ATHENA-PHONE-AUTH-001] Verify phone ownership and authenticate calls without routine codes
 
 - **Status**: REVIEW

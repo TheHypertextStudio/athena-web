@@ -510,6 +510,7 @@ describe('McpAppView bridge', () => {
     expect(result['hostCapabilities']).toEqual({
       openLinks: {},
       serverTools: { listChanged: false },
+      downloadFile: {},
       sandbox: { csp: {}, permissions: {} },
     });
     expect(result['hostContext']).toMatchObject({

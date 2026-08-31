@@ -34,6 +34,7 @@ import {
   type McpUiResourceCsp,
   type McpUiResourceMeta,
   type McpUiResourcePermissions,
+  type McpUiUpdateModelContextRequest,
   McpUiOpenLinkRequestSchema,
   McpUiResourceMetaSchema,
 } from '@modelcontextprotocol/ext-apps/app-bridge';
@@ -159,6 +160,18 @@ export interface McpAppHostOptions {
   readonly requestDisplayMode?: (mode: McpUiDisplayMode) => McpUiDisplayMode;
   /** Hand resource contents to the user as a download. Returning `false` refuses. */
   readonly downloadFile?: (contents: readonly unknown[]) => boolean | Promise<boolean>;
+  /**
+   * Record the view's `ui/update-model-context` for the agent's next turn. Returning `false`
+   * refuses the update.
+   *
+   * @remarks
+   * The spec's overwrite semantics — each update replaces the previous one — are the caller's to
+   * honour when it stores the context; the bridge only relays and audits. The content is
+   * widget-authored and must be treated as untrusted data wherever it later meets a model.
+   */
+  readonly updateModelContext?: (
+    params: McpUiUpdateModelContextRequest['params'],
+  ) => boolean | Promise<boolean>;
   /** Record a view's `notifications/message` log line. */
   readonly log?: (params: unknown) => void;
   /** The view reported its rendered size. */
@@ -447,6 +460,8 @@ export function createMcpAppHost(options: McpAppHostOptions): McpAppHost {
     ...(options.openLink ? { openLinks: {} } : {}),
     ...(options.callTool ? { serverTools: { listChanged: false } } : {}),
     ...(options.sendMessage ? { message: { text: {} } } : {}),
+    ...(options.downloadFile ? { downloadFile: {} } : {}),
+    ...(options.updateModelContext ? { updateModelContext: { text: {} } } : {}),
     sandbox: {
       csp: options.resource.meta?.csp ?? {},
       permissions: options.resource.meta?.permissions ?? {},
@@ -527,6 +542,34 @@ export function createMcpAppHost(options: McpAppHostOptions): McpAppHost {
         throw new McpError(JSON_RPC_ERROR.refused, 'This host did not post that message.');
       }
       audit({ method: 'ui/message', outcome: 'ok' });
+      return {};
+    };
+  }
+
+  const downloadFile = options.downloadFile;
+  if (downloadFile) {
+    bridge.ondownloadfile = async ({ contents }) => {
+      if (!Array.isArray(contents) || contents.length === 0) {
+        throw new McpError(ErrorCode.InvalidParams, 'ui/download-file needs resource contents.');
+      }
+      if (!(await downloadFile(contents))) {
+        audit({ method: 'ui/download-file', outcome: 'error' });
+        // The spec's result carries refusal in-band rather than as a JSON-RPC error.
+        return { isError: true };
+      }
+      audit({ method: 'ui/download-file', outcome: 'ok' });
+      return {};
+    };
+  }
+
+  const updateModelContext = options.updateModelContext;
+  if (updateModelContext) {
+    bridge.onupdatemodelcontext = async (params) => {
+      if (!(await updateModelContext(params))) {
+        audit({ method: 'ui/update-model-context', outcome: 'error' });
+        throw new McpError(JSON_RPC_ERROR.refused, 'This host did not record that context.');
+      }
+      audit({ method: 'ui/update-model-context', outcome: 'ok' });
       return {};
     };
   }

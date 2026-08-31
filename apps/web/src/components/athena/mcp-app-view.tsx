@@ -10,12 +10,14 @@ import {
   type McpAppResource,
 } from '@docket/integrations/mcp-apps';
 import {
+  MCP_APP_PRESENTATION_MAX_BYTES,
   MCP_UI_METHODS,
   type McpUiContentBlock,
   type McpUiDisplayMode,
   type McpUiHostContext,
   type McpUiHostStyles,
   type McpUiTheme,
+  type McpUiUpdateModelContextParams,
 } from '@docket/types';
 import {
   Button,
@@ -65,6 +67,17 @@ export interface McpAppViewProps {
   ) => Promise<Readonly<Record<string, unknown>>>;
   /** Post a message the widget composed into the conversation. */
   readonly onMessage?: (text: string) => Promise<boolean> | boolean;
+  /**
+   * Record the widget's `ui/update-model-context` for the conversation's next turn.
+   *
+   * @remarks
+   * Only durable cards can honour this — the context is stored on the activity row the card
+   * lives on — so a manually launched widget with no activity simply does not receive the
+   * capability, which the bridge advertises only when this prop is present.
+   */
+  readonly onUpdateModelContext?: (
+    params: McpUiUpdateModelContextParams,
+  ) => Promise<boolean> | boolean;
   /** Overrides the API origin the sandbox proxy is served from. Tests only. */
   readonly sandboxOrigin?: string;
 }
@@ -234,9 +247,83 @@ function buildHostContext(maxWidth?: number): McpUiHostContext {
  * @param props - The resource, the tool call behind it, and the host callbacks.
  * @returns the framed widget.
  */
+/** One decodable embedded file from a `ui/download-file` request. */
+interface EmbeddedDownload {
+  readonly name: string;
+  readonly mimeType: string;
+  readonly bytes: Uint8Array;
+}
+
+/** Derive a safe filename from a resource URI, falling back to a generic one. */
+function downloadName(uri: unknown): string {
+  const base = typeof uri === 'string' ? (uri.split(/[/\\]/).pop() ?? '') : '';
+  const safe = base.replace(/[^A-Za-z0-9._-]/g, '_').replace(/^\.+/, '');
+  return safe.length > 0 ? safe.slice(0, 120) : 'download';
+}
+
+/**
+ * Decode one `ui/download-file` content entry, or `null` when it is not deliverable.
+ *
+ * @remarks
+ * Embedded resources only. A `resource_link` asks the host to go fetch someone else's URL with
+ * the user's network position, which this host does not do — the refusal is all-or-nothing so a
+ * widget never believes a partial delivery succeeded.
+ */
+function decodeDownload(entry: unknown): EmbeddedDownload | null {
+  if (entry === null || typeof entry !== 'object') return null;
+  const resource: unknown = Reflect.get(entry, 'resource');
+  if (resource === null || typeof resource !== 'object') return null;
+  const text: unknown = Reflect.get(resource, 'text');
+  const blob: unknown = Reflect.get(resource, 'blob');
+  const mimeTypeValue: unknown = Reflect.get(resource, 'mimeType');
+  const mimeType = typeof mimeTypeValue === 'string' ? mimeTypeValue : 'application/octet-stream';
+  let bytes: Uint8Array;
+  if (typeof text === 'string') {
+    bytes = new TextEncoder().encode(text);
+  } else if (typeof blob === 'string') {
+    try {
+      bytes = Uint8Array.from(atob(blob), (char) => char.codePointAt(0) ?? 0);
+    } catch {
+      return null;
+    }
+  } else {
+    return null;
+  }
+  if (bytes.byteLength === 0 || bytes.byteLength > MCP_APP_PRESENTATION_MAX_BYTES) return null;
+  return { name: downloadName(Reflect.get(resource, 'uri')), mimeType, bytes };
+}
+
+/** Hand each embedded file to the browser as a download; refuse the batch on any bad entry. */
+function deliverDownloads(contents: readonly unknown[]): boolean {
+  const files = contents.map(decodeDownload);
+  if (files.some((file) => file === null)) return false;
+  for (const file of files as readonly EmbeddedDownload[]) {
+    const url = URL.createObjectURL(new Blob([file.bytes.slice()], { type: file.mimeType }));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = file.name;
+    anchor.rel = 'noopener';
+    anchor.click();
+    // Revoke on the next tick so the click's navigation has started before the URL dies.
+    window.setTimeout(() => {
+      URL.revokeObjectURL(url);
+    }, 0);
+  }
+  return true;
+}
+
 export function McpAppView(props: McpAppViewProps): JSX.Element | null {
-  const { instanceId, resource, tool, result, serverName, onCallTool, onMessage, sandboxOrigin } =
-    props;
+  const {
+    instanceId,
+    resource,
+    tool,
+    result,
+    serverName,
+    onCallTool,
+    onMessage,
+    onUpdateModelContext,
+    sandboxOrigin,
+  } = props;
   const frameRef = useRef<HTMLIFrameElement | null>(null);
   const frameHostRef = useRef<HTMLDivElement | null>(null);
   const inlineContainerRef = useRef<HTMLDivElement | null>(null);
@@ -247,10 +334,12 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
     identity: string;
     onCallTool: McpAppViewProps['onCallTool'];
     onMessage: McpAppViewProps['onMessage'];
+    onUpdateModelContext: McpAppViewProps['onUpdateModelContext'];
   } | null>(null);
   if (callbackLifecycleRef.current?.identity === presentationIdentity) {
     callbackLifecycleRef.current.onCallTool = onCallTool;
     callbackLifecycleRef.current.onMessage = onMessage;
+    callbackLifecycleRef.current.onUpdateModelContext = onUpdateModelContext;
   }
   const [height, setHeight] = useState(INITIAL_HEIGHT);
   const [displayMode, setDisplayMode] = useState<McpUiDisplayMode>('inline');
@@ -276,7 +365,12 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
 
     let proxyWindow: Window | null = frame.contentWindow;
     let lifecycleResource: McpAppResource | null = resource;
-    const lifecycleCallbacks = { identity: presentationIdentity, onCallTool, onMessage };
+    const lifecycleCallbacks = {
+      identity: presentationIdentity,
+      onCallTool,
+      onMessage,
+      onUpdateModelContext,
+    };
     callbackLifecycleRef.current = lifecycleCallbacks;
     let initializationDeadline: number | undefined;
     let disposed = false;
@@ -376,6 +470,13 @@ export function McpAppView(props: McpAppViewProps): JSX.Element | null {
             },
           }
         : {}),
+      ...(lifecycleCallbacks.onUpdateModelContext
+        ? {
+            updateModelContext: async (params: McpUiUpdateModelContextParams) =>
+              (await lifecycleCallbacks.onUpdateModelContext?.(params)) ?? false,
+          }
+        : {}),
+      downloadFile: (contents) => deliverDownloads(contents),
       onSizeChanged: ({ height: reported }) => {
         if (typeof reported === 'number' && reported > 0) {
           setHeight(Math.min(Math.max(reported, 96), MAX_HEIGHT));

@@ -754,3 +754,72 @@ describe('sandbox policy', () => {
     ).toBe(false);
   });
 });
+
+describe('optional capabilities the host serves when a caller wires them', () => {
+  it('serves ui/update-model-context and audits the retention', async () => {
+    const updateModelContext = vi.fn(() => true);
+    const { host, resultFor, handshake } = harness({ updateModelContext });
+    await handshake();
+    await host.receive({
+      jsonrpc: '2.0',
+      id: 30,
+      method: MCP_UI_METHODS.updateModelContext,
+      params: { content: [{ type: 'text', text: 'the user picked Dallas' }] },
+    });
+    expect(resultFor(30)?.result).toEqual({});
+    expect(updateModelContext).toHaveBeenCalledWith(
+      expect.objectContaining({ content: [{ type: 'text', text: 'the user picked Dallas' }] }),
+    );
+  });
+
+  it('refuses ui/update-model-context with a JSON-RPC error when the store declines', async () => {
+    const { host, resultFor, handshake } = harness({ updateModelContext: () => false });
+    await handshake();
+    await host.receive({
+      jsonrpc: '2.0',
+      id: 31,
+      method: MCP_UI_METHODS.updateModelContext,
+      params: { content: [{ type: 'text', text: 'x' }] },
+    });
+    expect(resultFor(31)?.error?.code).toBe(JSON_RPC_ERROR.refused);
+  });
+
+  it('serves ui/download-file and reports a decline in-band as isError', async () => {
+    const contents = [
+      { type: 'resource', resource: { uri: 'ui://acme/report.csv', text: 'a,b\n1,2' } },
+    ];
+    const downloadFile = vi.fn(() => true);
+    const { host, resultFor, handshake } = harness({ downloadFile });
+    await handshake();
+    await host.receive({
+      jsonrpc: '2.0',
+      id: 32,
+      method: MCP_UI_METHODS.downloadFile,
+      params: { contents },
+    });
+    expect(resultFor(32)?.result).toEqual({});
+    expect(downloadFile).toHaveBeenCalledWith(contents);
+
+    const declined = harness({ downloadFile: () => false });
+    await declined.handshake();
+    await declined.host.receive({
+      jsonrpc: '2.0',
+      id: 33,
+      method: MCP_UI_METHODS.downloadFile,
+      params: { contents },
+    });
+    expect(declined.resultFor(33)?.result).toEqual({ isError: true });
+  });
+
+  it('still refuses both methods when no caller wired them', async () => {
+    const { host, resultFor, handshake } = harness();
+    await handshake();
+    await host.receive({
+      jsonrpc: '2.0',
+      id: 34,
+      method: MCP_UI_METHODS.downloadFile,
+      params: { contents: [] },
+    });
+    expect(resultFor(34)?.error?.code).toBe(JSON_RPC_ERROR.methodNotFound);
+  });
+});

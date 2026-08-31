@@ -8,8 +8,8 @@ import { presentAthenaSession, type PersonalAthenaSessionDetail } from '@/lib/at
 import type { PersonalAthenaLifecycle } from '@/lib/athena/query-defs';
 import MentionTextarea from '@/components/mentions/mention-textarea';
 import { useMentionOrgId } from '@/components/mentions/use-mention-org';
-import { McpAppView } from '@/components/athena/mcp-app-view';
-import { callMcpAppViewTool, postWidgetMessage } from '@/lib/athena/mcp-app-defs';
+import { McpAppPresentationCard } from '@/components/athena/mcp-app-presentation-card';
+import { postWidgetMessage } from '@/lib/athena/mcp-app-defs';
 
 /** Events emitted by the shared personal Athena workbench. */
 export interface AthenaWorkbenchProps {
@@ -212,48 +212,9 @@ export function AthenaWorkbench({
                       ) : null}
                       {presentation ? (
                         <div className="mt-3">
-                          <McpAppView
-                            instanceId={`${presentation.connectionId}:${entry.id}`}
-                            resource={{
-                              uri: presentation.resource.uri,
-                              mimeType: presentation.resource.mimeType,
-                              text: presentation.resource.text,
-                              ...(presentation.resource.meta
-                                ? {
-                                    meta: {
-                                      ...(presentation.resource.meta.csp
-                                        ? { csp: presentation.resource.meta.csp }
-                                        : {}),
-                                      ...(presentation.resource.meta.permissions
-                                        ? {
-                                            permissions: presentation.resource.meta.permissions,
-                                          }
-                                        : {}),
-                                      ...(presentation.resource.meta.domain
-                                        ? { domain: presentation.resource.meta.domain }
-                                        : {}),
-                                      ...(presentation.resource.meta.prefersBorder === undefined
-                                        ? {}
-                                        : {
-                                            prefersBorder: presentation.resource.meta.prefersBorder,
-                                          }),
-                                    },
-                                  }
-                                : {}),
-                            }}
-                            tool={{
-                              name: presentation.tool,
-                              arguments: presentation.arguments,
-                            }}
-                            result={presentation.result}
-                            serverName={presentation.serverName}
-                            onCallTool={(tool, args) =>
-                              callMcpAppViewTool({
-                                connectionId: presentation.connectionId,
-                                tool,
-                                arguments: args,
-                              })
-                            }
+                          <McpAppPresentationCard
+                            presentation={presentation}
+                            activityId={entry.id}
                             onMessage={postWidgetMessage}
                           />
                         </div>

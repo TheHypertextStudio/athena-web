@@ -28,7 +28,9 @@ export type TurnProvenance =
   /** A comment or agent-session reply relayed from Linear. Authored by a third-party workspace. */
   | 'linear'
   /** A message relayed from another provider-native agent surface. */
-  | 'external_agent';
+  | 'external_agent'
+  /** A `ui/update-model-context` posted by an interactive MCP app rendered in the conversation. */
+  | 'mcp_app';
 
 /** The delimiter tag. Kept ASCII and unlikely to occur in prose. */
 const TAG = 'docket:external';

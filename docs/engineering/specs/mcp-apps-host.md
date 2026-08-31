@@ -28,8 +28,17 @@ implementation is asserted against that copy by
 | The proxy endpoint, served from the API origin                  | `apps/api/src/mcp/apps/sandbox.ts` → `GET /mcp/apps/sandbox`        |
 | Server-side widget listing, rendering, and view-initiated calls | `apps/api/src/mcp/apps/host-routes.ts` → `/v1/me/athena/mcp-apps/*` |
 | Client capability declaration on outbound connections           | `packages/integrations/src/mcp-connector.ts`                        |
-| The browser adapter (frames, theme, height)                     | `apps/web/src/components/athena/mcp-app-view.tsx`                   |
+| The browser adapter (frames, theme, height, downloads)          | `apps/web/src/components/athena/mcp-app-view.tsx`                   |
+| The durable-card mounting point every transcript surface shares | `apps/web/src/components/athena/mcp-app-presentation-card.tsx`      |
 | The Athena surface (connect + choose + render)                  | `apps/web/src/components/athena/athena-mcp-panel.tsx`               |
+| Widget model-context storage and next-turn delivery             | `apps/api/src/mcp/apps/model-context.ts`                            |
+
+Cards render on three surfaces, all through the shared `McpAppPresentationCard`: the personal
+workbench work-log (`athena-workbench.tsx`), the Athena tools panel, and the org chat thread
+(`athena-conversation.tsx` — the conversation on Today and in the /athena workspace). The chat
+thread reads through the typed query layer and, while a turn is in flight, subscribes to the
+session's SSE activity stream (`apps/web/src/lib/athena/chat-defs.ts`), so a card lands inline as
+the turn produces it; the focus-gated poll underneath remains the delivery guarantee.
 
 The bridge touches no DOM and no React on purpose: the whole protocol is driven by a fake view
 frame in `packages/integrations/tests/mcp/mcp-apps-host.test.ts`, so ordering, refusals, and CSP
@@ -142,6 +151,30 @@ its connection id. Replacing one connection with another therefore tears down an
 frame even when both servers expose the same tool and `ui://` URI. Each bridge retains its own
 connection callback during bounded teardown, while ordinary rerenders of the same instance update
 their callback in place without reinitializing the app.
+
+### `ui/update-model-context` — a widget's word for future turns
+
+A rendered card may hand the host context for the conversation's next turn. The same ownership
+ladder applies (`POST /v1/me/athena/mcp-apps/model-context`: the caller's connection, then an
+activity that exact connection produced in a session the caller owns), and the payload passes
+`parseMcpAppModelContext` — text blocks only (the advertised modality is `{ text: {} }`), the
+credential-key scan, and a 64 KB cap. Each retention **overwrites** the card's previous context,
+per the extension. Delivery is deferred to the next user turn: `applyReplyToSession` folds every
+undelivered context into that turn ahead of the person's own words, wrapped in the
+`docket:external` provenance envelope with `source="mcp_app"` — a widget speaks _about_ the
+conversation, never with the principal's authority — and the delivered flag flips in the same
+transaction, so a context reaches the model exactly once. The stored context is the agent loop's
+private state: every activity serializer strips it before a body leaves the process. Only durable
+cards receive the capability; a manually launched widget has no activity row to store against, and
+its bridge simply never advertises `updateModelContext`.
+
+### `ui/download-file` — embedded resources only
+
+The browser adapter accepts embedded resource contents (text or base64 `blob`), bounded by the
+same 2 MB cap as a presentation, and hands each to the browser as a download named from the
+resource URI's sanitized basename. `resource_link` entries are refused as a batch — following one
+would spend the user's network position fetching someone else's URL. A host decline is reported
+in-band as `{ isError: true }`, per the extension's result shape.
 
 ---
 

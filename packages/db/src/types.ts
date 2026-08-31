@@ -10,6 +10,7 @@
 import {
   DEFAULT_WORKFLOW_STATES,
   type HubPreferences as HubPreferencesShape,
+  type McpAppModelContext,
   type McpAppPresentation,
   type WorkflowState as WorkflowStateShape,
   type WorkStatusCategory,
@@ -280,7 +281,7 @@ export interface SessionActivityBody {
    * The text stored here stays raw so a person reads what was actually sent; the enveloping
    * happens on the transcript the model reads. See `agent/provenance.ts`.
    */
-  readonly provenance?: 'principal' | 'email' | 'linear' | 'external_agent' | undefined;
+  readonly provenance?: 'principal' | 'email' | 'linear' | 'external_agent' | 'mcp_app' | undefined;
   /** Display identity of a non-principal author, e.g. the sending email address. */
   readonly origin?: string | undefined;
   /** For `action` activities: the proposed change + its approval linkage. */
@@ -323,6 +324,14 @@ export interface SessionActivityBody {
               readonly presentation?: McpAppPresentation | undefined;
               /** The remote tool declared UI that could not be safely retained. */
               readonly presentationUnavailable?: boolean | undefined;
+              /**
+               * The card's latest `ui/update-model-context`, overwritten on each update per the
+               * MCP Apps extension. Internal to the API — serializers strip it before a body
+               * leaves the process, and the agent loop folds it into the next user turn.
+               */
+              readonly modelContext?: McpAppModelContext | undefined;
+              /** Whether the stored context already reached the model on a past turn. */
+              readonly modelContextDelivered?: boolean | undefined;
             }
           | undefined;
         /**

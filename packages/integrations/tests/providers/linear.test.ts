@@ -388,6 +388,35 @@ describe('LinearProviderClient — pushWorkItem', () => {
     });
   });
 
+  it.each([
+    [
+      'the issue lookup comes back empty',
+      { issue: null },
+      'linear issue relation lookup did not return the issue',
+    ],
+    [
+      'a page claims another page but names no cursor',
+      { issue: { relations: { nodes: [], pageInfo: { hasNextPage: true } } } },
+      'linear issue relation page omitted its cursor',
+    ],
+  ] as const)('refuses to finish a relation sync when %s', async (_case, second, message) => {
+    // A dependency sync that stops early and reports success drops blocking links silently, which
+    // is the connector failure this codebase treats as unacceptable: never show success when
+    // nothing happened. Each of these is a provider response that looks benign and is not.
+    const { client } = fakeHttp([
+      gql({ issueUpdate: { success: true, issue: { id: 'i1', updatedAt: 'T2' } } }),
+      gql(second),
+    ]);
+
+    await expect(
+      client.pushWorkItem({
+        kind: 'update',
+        externalId: 'i1',
+        fields: { blockingExternalIds: ['i2'] },
+      }),
+    ).rejects.toThrow(message);
+  });
+
   it('preserves explicit null to CLEAR a field but omits absent fields entirely', async () => {
     const { client, calls } = fakeHttp([
       gql({ issueUpdate: { success: true, issue: { id: 'i1', updatedAt: 'T2' } } }),

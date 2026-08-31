@@ -18,6 +18,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { startCallbackForInboundCall } from '../../src/routes/phone-call-authorization';
 import { CaptureTelephonyProvider } from '../../src/routes/twilio-telephony';
 import type * as DirectoryModule from '../../src/routes/phone-directory';
+import twilioVoiceRoutes from '../../src/routes/twilio-voice';
 import type * as TwilioModule from '../../src/routes/twilio-voice';
 import type * as VoiceServiceModule from '../../src/routes/voice-session-service';
 import { addMember, getDb, one, seedOrg, seedUserWithHub } from '../support/routes-harness';
@@ -473,5 +474,151 @@ describe('inbound call disposition', () => {
 
     expect(voiceService.liveVoiceSession(decision.voiceSessionId)).not.toBeNull();
     await voiceService.closeVoiceSession(decision.voiceSessionId, 'caller_hung_up');
+  });
+
+  it('ends the session once the call itself has ended', async () => {
+    const caller = await seedCaller({});
+    const decision = await twilio.decideInboundCall({
+      From: caller.e164,
+      CallSid: 'CA_status_completed',
+      StirVerstat: 'TN-Validation-Passed-A',
+    });
+    if (!decision.voiceSessionId) throw new Error('expected connected call');
+
+    await twilio.handleCallStatus(
+      'CA_status_completed',
+      'completed',
+      new CaptureTelephonyProvider(),
+    );
+
+    // A session left open after the caller hangs up holds a relay socket and a model context for a
+    // conversation nobody is in.
+    expect(voiceService.liveVoiceSession(decision.voiceSessionId)).toBeNull();
+    const [row] = await db
+      .select()
+      .from(schema.voiceSession)
+      .where(eq(schema.voiceSession.id, decision.voiceSessionId));
+    expect(row).toMatchObject({ status: 'ended', endedReason: 'caller_hung_up' });
+  });
+
+  it('refuses every telephony webhook that is not signed by Twilio', async () => {
+    // These four endpoints connect calls, confirm callback authorizations, and close sessions.
+    // An unsigned POST is anybody on the internet, so each must refuse before it reads a
+    // parameter — not merely fail to find a matching record.
+    const unsigned = (path: string, body: Record<string, string>) =>
+      twilioVoiceRoutes.request(path, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams(body).toString(),
+      });
+
+    for (const [path, body] of [
+      ['/voice', { From: '+14155550123', CallSid: 'CA_unsigned' }],
+      ['/callback/auth_unsigned/answer', { CallSid: 'CA_unsigned' }],
+      ['/callback/auth_unsigned/digit', { CallSid: 'CA_unsigned', Digits: '1' }],
+      ['/status', { CallSid: 'CA_unsigned', CallStatus: 'completed' }],
+    ] as const) {
+      const response = await unsigned(path, body);
+      expect(response.status, path).toBe(403);
+    }
+  });
+
+  it('treats a repeated status webhook for a finished call as a no-op', async () => {
+    const caller = await seedCaller({});
+    const decision = await twilio.decideInboundCall({
+      From: caller.e164,
+      CallSid: 'CA_status_repeat',
+      StirVerstat: 'TN-Validation-Passed-A',
+    });
+    if (!decision.voiceSessionId) throw new Error('expected connected call');
+    const telephony = new CaptureTelephonyProvider();
+    await twilio.handleCallStatus('CA_status_repeat', 'completed', telephony);
+
+    // Twilio retries status webhooks, so the second delivery arrives with the session already
+    // closed. It has to settle quietly rather than throw or re-close.
+    await twilio.handleCallStatus('CA_status_repeat', 'completed', telephony);
+
+    const [row] = await db
+      .select()
+      .from(schema.voiceSession)
+      .where(eq(schema.voiceSession.id, decision.voiceSessionId));
+    expect(row).toMatchObject({ status: 'ended', endedReason: 'caller_hung_up' });
+    expect(telephony.callbacks).toEqual([]);
+  });
+
+  it('records why a callback leg never reached the caller', async () => {
+    const caller = await seedCaller({ lifecycleState: 'active' });
+    await twilio.decideInboundCall({
+      From: caller.e164,
+      CallSid: 'CA_callback_unanswered',
+      StirVerstat: 'TN-Validation-Passed-B',
+    });
+    const [authorization] = await db
+      .select()
+      .from(schema.phoneCallAuthorization)
+      .where(eq(schema.phoneCallAuthorization.inboundCallSid, 'CA_callback_unanswered'));
+    if (!authorization) throw new Error('callback authorization missing');
+    const telephony = new CaptureTelephonyProvider();
+    await startCallbackForInboundCall('CA_callback_unanswered', telephony);
+
+    await twilio.handleCallStatus(telephony.placedCallSids[0] ?? '', 'no-answer', telephony);
+
+    // The authorization has to settle, and it has to say why: an authorization left `dialing`
+    // forever is one the caller can neither use nor retry past.
+    const [settled] = await db
+      .select()
+      .from(schema.phoneCallAuthorization)
+      .where(eq(schema.phoneCallAuthorization.id, authorization.id));
+    expect(settled).toMatchObject({ state: 'failed', failureReason: 'callback_no_answer' });
+  });
+
+  it('completes a callback authorization once its answered leg hangs up', async () => {
+    const caller = await seedCaller({ lifecycleState: 'active' });
+    await twilio.decideInboundCall({
+      From: caller.e164,
+      CallSid: 'CA_callback_done',
+      StirVerstat: 'TN-Validation-Passed-B',
+    });
+    const [authorization] = await db
+      .select()
+      .from(schema.phoneCallAuthorization)
+      .where(eq(schema.phoneCallAuthorization.inboundCallSid, 'CA_callback_done'));
+    if (!authorization) throw new Error('callback authorization missing');
+    const telephony = new CaptureTelephonyProvider();
+    await startCallbackForInboundCall('CA_callback_done', telephony);
+    const outboundSid = telephony.placedCallSids[0] ?? '';
+    const connected = await twilio.confirmCallbackAuthorization(authorization.id, outboundSid, '1');
+    expect(connected.disposition).toBe('connected');
+
+    await twilio.handleCallStatus(outboundSid, 'completed', telephony);
+
+    // A callback that did its job ends `completed`, never `failed` — the two are the difference
+    // between "this number reached its owner" and "this number should be backed off".
+    const [settled] = await db
+      .select()
+      .from(schema.phoneCallAuthorization)
+      .where(eq(schema.phoneCallAuthorization.id, authorization.id));
+    expect(settled).toMatchObject({ state: 'completed', failureReason: null });
+    if (connected.voiceSessionId) {
+      await voiceService.closeVoiceSession(connected.voiceSessionId, 'caller_hung_up');
+    }
+  });
+
+  it('ends the session on a call that failed rather than completed, and calls nobody back', async () => {
+    const caller = await seedCaller({});
+    const decision = await twilio.decideInboundCall({
+      From: caller.e164,
+      CallSid: 'CA_status_no_answer',
+      StirVerstat: 'TN-Validation-Passed-A',
+    });
+    if (!decision.voiceSessionId) throw new Error('expected connected call');
+    const telephony = new CaptureTelephonyProvider();
+
+    await twilio.handleCallStatus('CA_status_no_answer', 'no-answer', telephony);
+
+    expect(voiceService.liveVoiceSession(decision.voiceSessionId)).toBeNull();
+    // Only a completed call starts a callback. A call that never connected must not cause Docket
+    // to ring the caller back on its own.
+    expect(telephony.callbacks).toEqual([]);
   });
 });

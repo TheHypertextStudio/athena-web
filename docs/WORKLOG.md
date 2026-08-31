@@ -135,13 +135,31 @@ offline_access marketplace`, and a bare `marketplace` names nothing in Lovelace'
   client already aborts an outstanding ceremony when the next one begins. That fix is
   `fda3d38409` on Lovelace `main`, deployed to `accounts.uselovelace.com` and verified by finding
   `preemptAutofillAttempt` in the served bundle.
-- **What pairing still needs**: one person approving a device code in a browser. RFC 8628 exists
-  precisely so a host cannot authenticate its owner by itself, and no automation substitutes for
-  it. Three codes were minted and expired unapproved. Everything behind that click is staged: the
-  daemon config, the launchd job, and the `device`, `model`, and `open` steps. See
-  `docs/superpowers/plans/2026-08-30-docket-lattice-roundtrip-claude-handoff.md` for the recorded
-  handoff state, and note that its worktree paths, tarball paths, `gcloud` path, and Lovelace
-  branch state are stale.
+- **Sign-in is done; attestation is the wall**: the owner approved a device code and
+  `lattice-ctl auth status` reports `signedIn: true` with
+  `lattice:compute:personal_runtime:manage lattice:compute:provider`. `device link` still cannot
+  finish, and the reason is structural rather than another bug. `device link` runs the host
+  attestation ceremony, which measures a macOS `developer_id` code-integrity report; the gateway
+  rejects every other class outright with `attestation_class_not_supported`, and the measurement
+  fails closed when the running binary carries no team identifier. A binary built from source here
+  is ad-hoc signed (`Signature=adhoc`, `TeamIdentifier=not set`), so it can never enroll. The
+  crate's own test says as much: the measurement yields a report "when the test host binary is
+  developer_id-signed" and a typed error "when it is only ad-hoc signed".
+- **Why no signed binary exists to install instead**: `publish-cli-rs.yml` signs with
+  `Developer ID Application: Reasonable Technology` and notarizes, but only for `v*.*.*` tags —
+  pushes to `main` produce unsigned staging artifacts. The repository has published no releases,
+  and every recent run of that workflow failed within eight seconds with "The job was not started
+  because an Actions budget is preventing further use." This Mac holds only an
+  `Apple Development` identity, which is not the `Developer ID Application` certificate the
+  ceremony requires. Production also resolves approved builds from a signed transparency manifest
+  (`LATTICE_TRANSPARENCY_MANIFEST_URL` plus its signing key), so an enrolling build must appear in
+  that manifest as well.
+- **What unblocks it**: restoring the GitHub Actions budget on the Lovelace repository, then
+  cutting a `v*.*.*` tag so the pipeline signs, notarizes, and lists a `lattice-ctl` build. Both
+  are owner actions. The remaining pairing steps (`device link`, `model set`, `open`,
+  `service install`) and the two proofs behind them are staged and unchanged; see
+  `docs/superpowers/plans/2026-08-30-docket-lattice-roundtrip-claude-handoff.md`, noting that its
+  worktree paths, tarball paths, `gcloud` path, and Lovelace branch state are stale.
 
 ### [MCP-APPS-CHAT-001] Render MCP apps in the Athena chat and complete the optional spec surface
 

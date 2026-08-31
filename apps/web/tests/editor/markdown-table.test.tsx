@@ -170,6 +170,9 @@ describe('editing a Markdown table', () => {
     await user.keyboard('{Alt>}{F10}{/Alt}');
     expect(within(toolbar).getByRole('button', { name: 'Add row' })).toHaveFocus();
     await user.keyboard('{Escape}');
+    await waitFor(() => {
+      expect(editor).toHaveFocus();
+    });
 
     await user.click(within(toolbar).getByRole('button', { name: 'Table options' }));
     const addColumnItem = await screen.findByRole('menuitem', { name: 'Add column' });
@@ -313,14 +316,20 @@ describe('editing a Markdown table', () => {
     const user = userEvent.setup();
     const editor = await screen.findByRole('textbox', { name: 'Description' });
     await focusTable(editor, user);
+    const toolbar = screen.getByRole('toolbar', { name: 'Table controls' });
     await user.keyboard('X');
-    const toolbar = await screen.findByRole('toolbar', { name: 'Table controls' });
 
     await user.click(within(toolbar).getByRole('button', { name: 'Table options' }));
     await user.click(await screen.findByRole('menuitem', { name: 'Copy as CSV' }));
 
-    expect(onSave).not.toHaveBeenCalled();
+    // Reaching into the menu must leave the edit session running. Unlike `Add row`, copying puts
+    // focus nowhere near the document, so the click back into it is what makes the session
+    // observable: a session that had ended announces the return as a second edit.
     expect(onEditStart).toHaveBeenCalledTimes(1);
+    await user.click(editor);
+    expect(onEditStart).toHaveBeenCalledTimes(1);
+
+    // No assertion that `onSave` has not fired — see the note in the test below.
   });
 
   it('keeps a portaled table action inside one autosave session', async () => {
@@ -341,8 +350,8 @@ describe('editing a Markdown table', () => {
     const user = userEvent.setup();
     const editor = await screen.findByRole('textbox', { name: 'Description' });
     await focusTable(editor, user);
+    const toolbar = screen.getByRole('toolbar', { name: 'Table controls' });
     await user.keyboard('X');
-    const toolbar = await screen.findByRole('toolbar', { name: 'Table controls' });
 
     await user.click(within(toolbar).getByRole('button', { name: 'Add row' }));
 
@@ -354,6 +363,11 @@ describe('editing a Markdown table', () => {
     // fixture counts as a pending change from mount), and such a commit does not end the session.
     expect(within(editor).getAllByRole('row')).toHaveLength(3);
     expect(toolbar).toBeVisible();
+    expect(onEditStart).toHaveBeenCalledTimes(1);
+    // Returning to the document must not read as a new edit either. This is the signal that
+    // actually distinguishes a surviving session from an ended one: remove the blur carve-out and
+    // this second click reports a second edit, where the assertions above still pass.
+    await user.click(editor);
     expect(onEditStart).toHaveBeenCalledTimes(1);
     // A background commit mid-session, if one happened, saves content — never the null that
     // means "cleared".

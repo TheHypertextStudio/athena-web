@@ -44,6 +44,36 @@
 db:reset` completed. The migration changes no UI behavior, but the requested desktop and phone
   screenshot set remains unrecorded.
 
+### [ADMIN-DS-001] Standardize the admin console on the design system
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-08-31
+- **Priority**: P1
+- **Description**: The service-admin console reads as a different product from Docket — bare, and
+  out of touch with the main app's aesthetic. The cause is mechanical, not editorial: `apps/admin`
+  is absent from `UI_OWNERSHIP_SURFACES` and from every `semanticSurfaceCohortConfig` cohort, so
+  `no-raw-surface-role`, `no-bespoke-overlay`, and `no-overlay-style-override` have never applied
+  to it. It drifted because nothing stopped it. Admin imports 16 names from `@docket/ui` — almost
+  all raw primitives — and hand-rolled thinner versions of the compositional components the main
+  app is built from (`ROW_CLASS` for `EntityListRow`, a dashed-border box for the `EmptyState`
+  atom, a bespoke shell for `AppShell`).
+- **Plan**: `~/.claude/plans/plan-to-fix-noble-hejlsberg.md`
+- **Subtasks**:
+  - [x] Phase 0 — ban ad-hoc borders in admin, seeded into the ratchet ledger
+  - [ ] Phase 1 — substrate: shell, page contract, shared primitives, query layer, pagination,
+        mutation feedback, operator tier
+  - [ ] Phase 2 — screens, each landing at zero violations (service announcements first)
+  - [ ] Phase 3 — close the perimeter: admin into the lint cohorts, ledger to `{}`, first admin
+        Craft Rubric scorecards
+- **Out of scope by decision**: a Staff management screen, and a ranked attention feed on the
+  dashboard. Both are net-new; the user scoped this effort to standardization plus the operator
+  tier and the announcement-safety fixes.
+- **Follow-on**: infrastructure monitoring (Cloud Run, Cloud Scheduler, the Cloudflare Worker,
+  Neon, Vercel, Stripe, Lattice) as a separate spec after Phase 3 — synthetic checks as the truth
+  layer with provider adapters behind them, read-only plus a manual re-check.
+
+---
+
 ### [ATHENA-LATTICE-ROUNDTRIP-001] Prove the durable Docket–Lattice round trip
 
 - **Status**: REVIEW

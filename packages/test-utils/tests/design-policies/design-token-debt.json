@@ -1,11 +1,17 @@
 {
   "apps/admin/src/app/(admin)/audit/page.tsx": {
+    "ad-hoc-border": 2,
     "raw-type-utility": 4
   },
+  "apps/admin/src/app/(admin)/discounts/page.tsx": {
+    "ad-hoc-border": 4
+  },
   "apps/admin/src/app/(admin)/lifecycle/page.tsx": {
+    "ad-hoc-border": 2,
     "raw-type-utility": 4
   },
   "apps/admin/src/app/(admin)/notifications/notification-console.tsx": {
+    "ad-hoc-border": 10,
     "raw-type-utility": 26
   },
   "apps/admin/src/app/(admin)/orgs/[id]/org-detail-ui.tsx": {
@@ -20,6 +26,9 @@
   "apps/admin/src/app/(admin)/page.tsx": {
     "raw-type-utility": 8
   },
+  "apps/admin/src/app/(admin)/settings/page.tsx": {
+    "ad-hoc-border": 4
+  },
   "apps/admin/src/app/(admin)/users/[id]/page.tsx": {
     "raw-type-utility": 6
   },
@@ -30,13 +39,16 @@
     "raw-type-utility": 4
   },
   "apps/admin/src/components/admin-shell.tsx": {
+    "ad-hoc-border": 2,
     "raw-type-utility": 5,
     "shadow-outside-overlay": 1
   },
   "apps/admin/src/components/ui-bits.tsx": {
+    "ad-hoc-border": 7,
     "raw-type-utility": 1
   },
   "apps/admin/src/components/viewing-as-banner.tsx": {
+    "ad-hoc-border": 2,
     "raw-type-utility": 1
   },
   "apps/web/src/app/(app)/exports/[exportId]/page.tsx": {
@@ -79,7 +91,7 @@
     "raw-type-utility": 1
   },
   "apps/web/src/app/(app)/tasks/all-tasks-client.tsx": {
-    "raw-type-utility": 8
+    "raw-type-utility": 7
   },
   "apps/web/src/app/(app)/today/page.tsx": {
     "raw-type-utility": 1
@@ -180,7 +192,7 @@
     "raw-type-utility": 2
   },
   "apps/web/src/components/canvas/node-peek.tsx": {
-    "raw-type-utility": 4
+    "raw-type-utility": 3
   },
   "apps/web/src/components/canvas/task-node.tsx": {
     "raw-type-utility": 9
@@ -372,7 +384,7 @@
     "raw-type-utility": 1
   },
   "packages/ui/src/components/shell/AppShell.tsx": {
-    "raw-type-utility": 4,
+    "raw-type-utility": 2,
     "shadow-outside-overlay": 1
   },
   "packages/ui/src/components/shell/SidebarNavItem.tsx": {

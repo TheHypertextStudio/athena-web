@@ -121,7 +121,44 @@ describe('design token policy', () => {
       'shadow-md',
     ]);
 
-    const values = [...violations, ...overlayViolations].map((violation) => violation.value);
+    // `ad-hoc-border` is scoped by RULE_ROOTS to `apps/admin/src`, so it needs its own fixture
+    // scanned at an admin path. Scanning the identical text at a web path below proves the scope
+    // is real rather than incidental.
+    const borderFixture = `
+      const drawn = 'border border-l border-b border-2 border-dashed border-outline-variant';
+      const tinted = 'border-error/40';
+
+      // Legal: the three "nothing is drawn" spellings, table-layout utilities that only share the
+      // prefix, and a border behind an interaction variant (design-system §8 allows a focus
+      // indicator to be a border).
+      const legal =
+        'border-none border-0 border-transparent border-collapse border-separate ' +
+        'border-spacing-2 focus-visible:border-primary hover:border-outline rounded-xl';
+    `;
+    const borderViolations = scanDesignTokens(
+      resolve(WORKSPACE_ROOT, 'apps/admin/src/fixture.ts'),
+      borderFixture,
+    ).filter((violation) => violation.rule === 'ad-hoc-border');
+    expect(borderViolations.map((violation) => violation.value).sort()).toEqual([
+      'border',
+      'border-2',
+      'border-b',
+      'border-dashed',
+      'border-error/40',
+      'border-l',
+      'border-outline-variant',
+    ]);
+
+    // The same text outside the rule's roots must produce nothing.
+    expect(
+      scanDesignTokens(resolve(WORKSPACE_ROOT, 'apps/web/src/fixture.ts'), borderFixture).filter(
+        (violation) => violation.rule === 'ad-hoc-border',
+      ),
+    ).toEqual([]);
+
+    const values = [...violations, ...overlayViolations, ...borderViolations].map(
+      (violation) => violation.value,
+    );
 
     for (const expected of [
       'text-xs',
@@ -146,6 +183,9 @@ describe('design token policy', () => {
       'text-muted-foreground',
       'border-border',
       'bg-destructive',
+      'border-l',
+      'border-dashed',
+      'border-outline-variant',
     ]) {
       expect(values, `expected the scanner to flag ${expected}`).toContain(expected);
     }
@@ -153,7 +193,9 @@ describe('design token policy', () => {
     // Every rule must be exercised by the fixture, so none can rot into a dead regex.
     for (const rule of DESIGN_TOKEN_RULES) {
       expect(
-        [...violations, ...overlayViolations].some((violation) => violation.rule === rule),
+        [...violations, ...overlayViolations, ...borderViolations].some(
+          (violation) => violation.rule === rule,
+        ),
         `expected the fixture to exercise the ${rule} rule`,
       ).toBe(true);
     }
@@ -168,6 +210,10 @@ describe('design token policy', () => {
       'hover:bg-surface-container-high',
       'size-4.5',
       'h-8',
+      'border-none',
+      'border-transparent',
+      'border-collapse',
+      'border-spacing-2',
     ]) {
       expect(values, `expected the scanner to allow ${legal}`).not.toContain(legal);
     }

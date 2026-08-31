@@ -26,6 +26,12 @@
  * | `raw-shadow-on-overlay` | `shadow-md`, `shadow-lg`, `shadow-2xl` *inside* an overlay module | An overlay does float, but at a named MD3 elevation. Use `shadow-level0`–`shadow-level5`. |
  * | `legacy-color-role` | `bg-card`, `text-muted-foreground`, `border-border`, `bg-destructive`, `text-primary-foreground` | shadcn's role names alias the MD3 roles, so they resolve to the same pixel; one name per colour keeps the palette single. Use the MD3 name: `surface-container-low`, `on-surface-variant`, `outline-variant`, `error`, `on-primary`. |
  * | `hardcoded-color` | `#7a5cff`, `rgb(…)`, `rgba(…)`, `hsl(…)` | A literal colour cannot follow the light/dark theme and is invisible to every downstream token change. |
+ * | `ad-hoc-border` | `border`, `border-outline-variant`, `border-l`, `border-dashed` | Grouping and separation are done with a tonal step on the surface ramp, not a drawn line (design-system §8). Only a field affordance, a focus indicator, or a genuine semantic boundary earns a border. |
+ *
+ * ## Per-rule scope
+ *
+ * Most rules apply to every enforced root. `ad-hoc-border` is scoped to `apps/admin/src` via
+ * {@link RULE_ROOTS} — see that constant for why.
  *
  * @see `packages/ui/src/primitives/text.tsx` for the token set `raw-type-utility` is defined against.
  * @see `docs/design/design-system.md` for the contract these rules enforce.
@@ -43,7 +49,8 @@ export type DesignTokenRule =
   | 'shadow-outside-overlay'
   | 'raw-shadow-on-overlay'
   | 'legacy-color-role'
-  | 'hardcoded-color';
+  | 'hardcoded-color'
+  | 'ad-hoc-border';
 
 /** Every rule the scanner implements, for exhaustive reporting and ledger validation. */
 export const DESIGN_TOKEN_RULES: readonly DesignTokenRule[] = [
@@ -53,7 +60,31 @@ export const DESIGN_TOKEN_RULES: readonly DesignTokenRule[] = [
   'raw-shadow-on-overlay',
   'legacy-color-role',
   'hardcoded-color',
+  'ad-hoc-border',
 ];
+
+/**
+ * Rules that apply to a subset of the enforced roots, keyed by rule.
+ *
+ * @remarks
+ * A rule with no entry here runs everywhere the scanner walks. An entry restricts the rule to
+ * files whose workspace-relative path begins with one of the listed prefixes.
+ *
+ * `ad-hoc-border` is scoped to the admin console because that is the surface being migrated. The
+ * scope is a deliberate limit on blast radius, not a claim that borders are fine elsewhere:
+ * `apps/web/src` carries roughly 601 border utilities across 154 files, and seeding all of them
+ * into the ledger would add hundreds of entries nobody currently intends to pay down. The scope
+ * also keeps the rule away from `packages/ui/src/primitives/**`, which ratchet rule 4 holds to
+ * zero with *no ledger entries permitted at all* — and where a border is frequently the correct
+ * answer, because it is the field's editable affordance (`field.tsx`), a divider that is the
+ * component's whole purpose (`separator.tsx`), or a control's outline (`checkbox.tsx`).
+ *
+ * Widening this to another root is a migration commitment: drive that root to zero first, or seed
+ * it into the ledger in the same change.
+ */
+export const RULE_ROOTS: Partial<Record<DesignTokenRule, readonly string[]>> = {
+  'ad-hoc-border': ['apps/admin/src'],
+};
 
 /** One flagged value, located precisely enough to fix without searching. */
 export interface DesignTokenViolation {
@@ -234,6 +265,24 @@ const RULE_PATTERNS: readonly {
     rule: 'hardcoded-color',
     pattern: /(?:#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b|\b(?:rgba?|hsla?)\()/g,
   },
+  {
+    rule: 'ad-hoc-border',
+    // A border utility that draws a line at rest: bare `border`, a side (`border-l`), a width
+    // (`border-2`), a style (`border-dashed`), or a colour (`border-outline-variant`).
+    //
+    // Deliberately legal:
+    // - `border-none`, `border-0`, `border-transparent` — assertions that nothing is drawn, the
+    //   same reasoning that keeps `shadow-none` legal for the shadow rule.
+    // - `border-collapse`, `border-separate`, `border-spacing-*` — table layout, not a border.
+    // - anything behind an interaction variant (`focus-visible:border-primary`), because
+    //   design-system §8 names a focus indicator as one of the three things that earn a border.
+    pattern: new RegExp(
+      String.raw`(?<![\w-])(?<!(?:${INTERACTION_VARIANTS}):)border` +
+        String.raw`(?:-(?!(?:none|0|transparent|collapse|separate)(?![\w-])` +
+        String.raw`|spacing(?:-[\w.[\]/-]+)?(?![\w-]))[\w.[\]/-]+)?(?![\w-])`,
+      'g',
+    ),
+  },
 ];
 
 /** Collect production `.ts`/`.tsx` files under a directory, excluding tests and declarations. */
@@ -267,12 +316,20 @@ export function scanDesignTokens(filePath: string, sourceText: string): DesignTo
   );
   const violations: DesignTokenViolation[] = [];
 
+  // Which rules apply to this file, resolved once rather than per string literal. A rule is out
+  // of scope when the file is (or is not) an overlay module, or when RULE_ROOTS restricts it to
+  // roots this file does not live under.
+  const activePatterns = RULE_PATTERNS.filter(({ rule }) => {
+    if (rule === 'shadow-outside-overlay') return !shadowAllowed;
+    // The mirror of the rule above: inside an overlay a shadow is correct, so what is checked
+    // there is whether it names an MD3 elevation level instead of Tailwind's unnamed scale.
+    if (rule === 'raw-shadow-on-overlay') return shadowAllowed;
+    const roots = RULE_ROOTS[rule];
+    return roots === undefined || roots.some((root) => relativePath.startsWith(root));
+  });
+
   function inspect(text: string, node: ts.Node): void {
-    for (const { rule, pattern } of RULE_PATTERNS) {
-      if (rule === 'shadow-outside-overlay' && shadowAllowed) continue;
-      // The mirror of the rule above: inside an overlay a shadow is correct, so what is checked
-      // there is whether it names an MD3 elevation level instead of Tailwind's unnamed scale.
-      if (rule === 'raw-shadow-on-overlay' && !shadowAllowed) continue;
+    for (const { rule, pattern } of activePatterns) {
       pattern.lastIndex = 0;
       for (const match of text.matchAll(pattern)) {
         const location = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));

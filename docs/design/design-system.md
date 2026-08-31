@@ -794,16 +794,35 @@ against its own edge at any size. A test asserts this over the whole scale.
 
 ### Rules
 
-| Rule                        | Fails on                                                                                                                          |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `raw-type-utility`          | `text-xs`, `text-2xl`, `text-[13px]`, `font-semibold`, `leading-tight`, `leading-[1.1]`, `tracking-widest`, `tracking-[-0.015em]` |
-| `size-changing-interaction` | `hover:scale-105`, `active:scale-[0.99]`, `group-hover:h-10`, `hover:p-3`, `focus:text-lg`                                        |
-| `shadow-outside-overlay`    | any `shadow-*` outside the allow-set above                                                                                        |
-| `hardcoded-color`           | `#7a5cff`, `rgb(…)`, `rgba(…)`, `hsl(…)`                                                                                          |
+| Rule                        | Fails on                                                                                                                            |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `raw-type-utility`          | `text-xs`, `text-2xl`, `text-[13px]`, `font-semibold`, `leading-tight`, `leading-[1.1]`, `tracking-widest`, `tracking-[-0.015em]`   |
+| `size-changing-interaction` | `hover:scale-105`, `active:scale-[0.99]`, `group-hover:h-10`, `hover:p-3`, `focus:text-lg`                                          |
+| `shadow-outside-overlay`    | any `shadow-*` outside the allow-set above                                                                                          |
+| `raw-shadow-on-overlay`     | `shadow-md`, `shadow-lg`, `shadow-2xl` _inside_ an allow-set overlay — a float names an MD3 level (`shadow-level0`–`shadow-level5`) |
+| `legacy-color-role`         | `bg-card`, `text-muted-foreground`, `border-border`, `bg-destructive`, `text-primary-foreground`                                    |
+| `hardcoded-color`           | `#7a5cff`, `rgb(…)`, `rgba(…)`, `hsl(…)`                                                                                            |
+| `ad-hoc-border`             | `border`, `border-l`, `border-2`, `border-dashed`, `border-outline-variant` — grouping is a tonal step, not a drawn line (§8)       |
 
 Legal near-misses the scanner deliberately spares: `text-on-surface-variant` (a colour token),
 `shadow-none`, `text-[var(--radix-x)]` (a token reference), `hover:translate-y-0.5` (movement, not a
-resize), and any static size no interaction changes.
+resize), any static size no interaction changes, and — for `ad-hoc-border` — `border-none`,
+`border-0`, `border-transparent`, the table-layout utilities (`border-collapse`, `border-separate`,
+`border-spacing-*`), and any border behind an interaction variant, since a focus indicator is one
+of the three things §8 says earns a border.
+
+#### Per-rule scope
+
+Every rule runs across all of `ENFORCED_ROOTS` except where `RULE_ROOTS` in `design-token-scan.ts`
+narrows it. Today that holds one entry: **`ad-hoc-border` applies only to `apps/admin/src`**, the
+surface currently being migrated. `apps/web/src` carries roughly 601 border utilities across 154
+files, and seeding those into the ledger would add hundreds of entries nobody intends to pay down
+yet. The scope also keeps the rule clear of `packages/ui/src/primitives/**`, which rule 4 below
+holds to zero with no ledger entries permitted — and where a border is often correct, being the
+field's editable affordance, a separator's whole purpose, or a control's outline.
+
+Widening the rule to another root is a migration commitment: drive that root to zero in the same
+change, or seed it into the ledger.
 
 ### The ratchet
 

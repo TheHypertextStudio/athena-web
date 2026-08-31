@@ -53,14 +53,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: pnpm/action-setup@v6
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: '.node-version'
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup
 
       # A production build, not `next dev`. Under the dev server Turbopack compiles each route on
       # first request — inside whichever test asked for it — which on a two-core runner outlasts
@@ -126,14 +119,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: pnpm/action-setup@v6
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: '.node-version'
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup
 
       - name: Map dev hosts to loopback
         run: echo "127.0.0.1 docket.localhost api.docket.localhost" | sudo tee -a /etc/hosts

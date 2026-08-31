@@ -24,18 +24,13 @@ jobs:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
-      - uses: pnpm/action-setup@v6
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: '.node-version'
-          cache: pnpm
-
       # A filtered install, matching `deploy-runner` below: this job needs `tsx` and nothing else
       # from the workspace. The previous `npx -y tsx` re-resolved and downloaded tsx from the
       # registry on every single deploy, and did it outside the `tsx@^4.22.4` pin in the root
       # package.json — so the production secret gate ran on whatever version npm served that day.
-      - run: pnpm install --frozen-lockfile --filter @docket/root
+      - uses: ./.github/actions/setup
+        with:
+          filter: '--filter @docket/root'
 
       - name: Select active production secrets
         id: active-secrets
@@ -208,14 +203,9 @@ jobs:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
-      - uses: pnpm/action-setup@v6
-
-      - uses: actions/setup-node@v6
+      - uses: ./.github/actions/setup
         with:
-          node-version-file: '.node-version'
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile --filter @docket/root
+          filter: '--filter @docket/root'
 
       - name: Ensure Cloud Scheduler jobs
         env:
@@ -306,17 +296,12 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: pnpm/action-setup@v6
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: '.node-version'
-          cache: pnpm
-
       # A filtered install so this job costs one workspace, not the monorepo. The deploy runs
       # the runner's own wrangler pin (apps/runner/package.json), so CI and an operator's local
       # deploy always use the same wrangler.
-      - run: pnpm install --frozen-lockfile --filter @docket/runner...
+      - uses: ./.github/actions/setup
+        with:
+          filter: '--filter @docket/runner...'
 
       - name: Deploy docket-athena-runner
         working-directory: apps/runner

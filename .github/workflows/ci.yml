@@ -75,14 +75,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: pnpm/action-setup@v6
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: '.node-version'
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup
 
       - run: timeout --signal=TERM --kill-after=10s 180s pnpm turbo run lint ${{ matrix.filter }} --concurrency=1
 
@@ -111,14 +104,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: pnpm/action-setup@v6
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: '.node-version'
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup
 
       - run: pnpm turbo run typecheck ${{ matrix.filter }} --concurrency=1
 
@@ -156,14 +142,7 @@ jobs:
           # on this same checkout without re-cloning.
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@v6
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: '.node-version'
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup
 
       - run: pnpm secret-scan
 
@@ -184,10 +163,15 @@ jobs:
   # intact with no report-merging machinery. Splitting by file would hand each shard a partial
   # coverage number and fail the 89% gate in apps/api/vite.config.ts.
   #
-  # The groups partition the task set exactly — `turbo run test:coverage --dry` reports 19
-  # packages, and api(1) + web(1) + rest(17) = 19. If a package is ever added that matches none
+  # The groups partition the task set exactly — `turbo run test:coverage --dry` reports 25
+  # packages, and api(1) + web(1) + rest(23) = 25. If a package is ever added that matches none
   # of these filters it would silently go untested, so the `rest` group is defined by EXCLUSION
   # rather than by an enumerated list: anything new lands there by default.
+  #
+  # Exclusion protects against a missing FILTER, not against a missing SCRIPT: a package that
+  # declares no `test:coverage` is reported by turbo as `<NONEXISTENT>` and skipped in silence,
+  # which is how @docket/admin and @docket/runner went untested here for as long as they existed.
+  # repo-tests/tooling/package-script-integrity.test.ts is what closes that second hole.
   #
   # The job id stays `test`, so `deploy-production.needs` and scripts/ci-gate-policy.ts's
   # ungated-check-job check keep working unchanged — a matrix multiplies the runs, not the id.
@@ -207,7 +191,7 @@ jobs:
           - group: web
             filter: --filter=@docket/web
             tooling: false
-          # The other 17 packages, ~6m combined.
+          # The other 23 packages, ~6m combined.
           - group: rest
             filter: --filter=!@docket/api --filter=!@docket/web
             tooling: true
@@ -218,14 +202,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: pnpm/action-setup@v6
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: '.node-version'
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup
 
       - run: pnpm turbo run test:coverage ${{ matrix.filter }} --concurrency=1
 
@@ -279,14 +256,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: pnpm/action-setup@v6
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: '.node-version'
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup
 
       - run: pnpm turbo run build --concurrency=1
 
@@ -334,14 +304,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: pnpm/action-setup@v6
-
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: '.node-version'
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/setup
 
       - name: Apply PostgreSQL migrations
         # The job already owns a healthy PostgreSQL service. Running the root Turbo task would

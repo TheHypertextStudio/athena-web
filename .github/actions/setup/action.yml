@@ -1,0 +1,34 @@
+# The Node/pnpm preamble every job in this repository needs, in one place.
+#
+# It existed as a verbatim copy in thirteen jobs across six workflows, which is how the copies
+# drifted apart: `actions/setup-node` was pinned to @v7 in three workflows and @v6 in two, and
+# `pnpm/action-setup` to @v6 everywhere except one job on @v6.0.9. A version bump had to be
+# applied thirteen times to take effect, and applying it twelve times looked exactly the same.
+#
+# `actions/checkout` is deliberately NOT here: a job cannot use a local action until the
+# repository containing it has been checked out, so that step necessarily stays in the job.
+name: Set up Node and pnpm
+description: Install pnpm and Node from .node-version, then install workspace dependencies.
+
+inputs:
+  filter:
+    description: >-
+      Extra pnpm filter arguments appended to `pnpm install --frozen-lockfile`, for a job that needs
+      only part of the workspace (e.g. '--filter @docket/root'). Empty installs everything.
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - uses: pnpm/action-setup@v6
+
+    - uses: actions/setup-node@v7
+      with:
+        node-version-file: '.node-version'
+        cache: pnpm
+
+    # `--frozen-lockfile` in every job, so CI can never resolve a dependency tree the lockfile
+    # does not already describe.
+    - shell: bash
+      run: pnpm install --frozen-lockfile ${{ inputs.filter }}

@@ -10,7 +10,7 @@ import { Field, Select, Skeleton } from '@docket/ui/primitives';
 import { useQueryClient } from '@tanstack/react-query';
 import { LoadFailure } from '@/components/settings/load-failure';
 import { useTypedRoute } from '@/lib/app-location';
-import { useEffect, useState, type JSX } from 'react';
+import { useState, type JSX } from 'react';
 
 import { SettingRowStatus } from '@/components/settings/setting-row-status';
 import { useCanManageOrg } from '@/components/settings/use-can-manage-org';
@@ -65,14 +65,21 @@ export default function WorkStructureSettingsPage(): JSX.Element {
   const [autoCompleteParents, setAutoCompleteParents] = useState(true);
   const [scale, setScale] = useState<EstimationScale>('fibonacci');
   const [fiscalMonth, setFiscalMonth] = useState(0);
-  useEffect(() => {
-    if (settingsQ.data) {
-      setDepth(settingsQ.data.initiativeMaxDepth);
-      setAutoCompleteParents(settingsQ.data.autoCompleteParentTasks);
-      setScale(settingsQ.data.estimationScale);
-      setFiscalMonth(settingsQ.data.fiscalYearStartMonth);
-    }
-  }, [settingsQ.data]);
+  // Adjusted during render rather than in an effect, because an effect runs *after* the commit
+  // that first shows these controls. The form is gated on `settingsQ.isPending`, so the moment
+  // the fetch resolves React commits every control with the `useState` defaults above, and only
+  // then does an effect correct them — one frame in which the page states the opposite of the
+  // saved setting ("On" for a workspace that has parent completion off). Setting state during
+  // render makes React discard this pass and re-render before anything reaches the DOM, so the
+  // first frame a person sees is already the saved value.
+  const [syncedFrom, setSyncedFrom] = useState<typeof settingsQ.data>(undefined);
+  if (settingsQ.data && settingsQ.data !== syncedFrom) {
+    setSyncedFrom(settingsQ.data);
+    setDepth(settingsQ.data.initiativeMaxDepth);
+    setAutoCompleteParents(settingsQ.data.autoCompleteParentTasks);
+    setScale(settingsQ.data.estimationScale);
+    setFiscalMonth(settingsQ.data.fiscalYearStartMonth);
+  }
 
   const saveDepth = useApiMutation<WorkspaceSettingsOut, number>({
     mutationFn: (initiativeMaxDepth) =>

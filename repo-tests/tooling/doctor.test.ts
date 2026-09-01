@@ -13,6 +13,8 @@ import {
   API_RUNTIME_SA_ROLES,
   AR_REPO,
   DEPLOY_SA_ROLES,
+  PRODUCTION_VAR_NAMES,
+  REPO_VAR_NAMES,
   REQUIRED_GCP_APIS,
   WIF_POOL,
   WIF_PROVIDER,
@@ -34,22 +36,10 @@ function healthy(overrides: Partial<Observation> = {}): Observation {
     artifactRepos: [AR_REPO],
     wifPools: [WIF_POOL],
     wifProviders: [WIF_PROVIDER],
-    repoVars: [
-      'GCP_PROJECT_ID',
-      'GCP_REGION',
-      'GCP_SERVICE_ACCOUNT',
-      'GCP_API_RUNTIME_SERVICE_ACCOUNT',
-      'GCP_WIF_PROVIDER',
-    ],
-    environmentVars: [
-      'API_URL',
-      'WEB_URL',
-      'ADMIN_URL',
-      'PASSKEY_RP_ID',
-      'BETTER_AUTH_ALLOWED_HOSTS',
-      'GOOGLE_OAUTH_PUBLIC',
-      'API_SECRET_BINDINGS',
-    ],
+    // Derived from the same constants bootstrap writes — restating them here is the drift this
+    // whole script exists to catch, and it is just as easy to introduce in its own fixture.
+    repoVars: [...REPO_VAR_NAMES],
+    environmentVars: [...PRODUCTION_VAR_NAMES, 'API_SECRET_BINDINGS'],
     apiRuntimeServiceAccount: RUNTIME_SA,
     ...overrides,
   };
@@ -146,6 +136,22 @@ describe('diagnose', () => {
 
     expect(check(healthy({ repoVars: null }), 'Repository variables')?.status).toBe('unknown');
     expect(report.passed).toBe(true);
+  });
+
+  it('distinguishes an unreadable organization from a project that has none', () => {
+    // null means the ancestry lookup failed; [] means the project genuinely sits outside an org.
+    // Collapsing them would print a missing-role failure for what is a credential problem.
+    expect(check(healthy({ orgRoles: null }), 'Runtime account org role')?.status).toBe('unknown');
+    expect(check(healthy({ orgRoles: [] }), 'Runtime account org role')?.status).toBe('fail');
+  });
+
+  it('reports an unreadable IAM policy as unknown rather than as no roles', () => {
+    const observation = healthy({
+      projectRoles: { [DEPLOY_SA]: null, [RUNTIME_SA]: [...API_RUNTIME_SA_ROLES] },
+    });
+
+    expect(check(observation, 'Deploy account roles')?.status).toBe('unknown');
+    expect(diagnose(observation).passed).toBe(true);
   });
 
   it('reports an unreadable Cloud Run separately from a wrong service account', () => {

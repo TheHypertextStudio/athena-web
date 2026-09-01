@@ -24,6 +24,8 @@ import {
   API_RUNTIME_SA_ROLES,
   AR_REPO,
   DEPLOY_SA_ROLES,
+  PRODUCTION_VAR_NAMES,
+  REPO_VAR_NAMES,
   REQUIRED_GCP_APIS,
   SA_NAME,
   WIF_POOL,
@@ -82,26 +84,6 @@ export interface Observation {
   readonly apiRuntimeServiceAccount: string | null;
 }
 
-/** The repository-scoped variables the deploy reads. */
-const EXPECTED_REPO_VARS: readonly string[] = [
-  'GCP_PROJECT_ID',
-  'GCP_REGION',
-  'GCP_SERVICE_ACCOUNT',
-  'GCP_API_RUNTIME_SERVICE_ACCOUNT',
-  'GCP_WIF_PROVIDER',
-];
-
-/** The production-environment variables the deploy reads. */
-const EXPECTED_ENVIRONMENT_VARS: readonly string[] = [
-  'API_URL',
-  'WEB_URL',
-  'ADMIN_URL',
-  'PASSKEY_RP_ID',
-  'BETTER_AUTH_ALLOWED_HOSTS',
-  'GOOGLE_OAUTH_PUBLIC',
-  'API_SECRET_BINDINGS',
-];
-
 /** Record a check from a set-difference, naming what is absent — or that nothing could be read. */
 function missingCheck(
   name: string,
@@ -155,13 +137,13 @@ export function diagnose(observation: Observation): DoctorReport {
     missingCheck(
       'Deploy account roles',
       DEPLOY_SA_ROLES,
-      observation.projectRoles[deploySa] ?? [],
+      observation.projectRoles[deploySa] ?? null,
       'all bound',
     ),
     missingCheck(
       'Runtime account roles',
       API_RUNTIME_SA_ROLES,
-      observation.projectRoles[runtimeSa] ?? [],
+      observation.projectRoles[runtimeSa] ?? null,
       'all bound',
     ),
     missingCheck(
@@ -178,10 +160,10 @@ export function diagnose(observation: Observation): DoctorReport {
       observation.wifProviders,
       'provider exists',
     ),
-    missingCheck('Repository variables', EXPECTED_REPO_VARS, observation.repoVars, 'all present'),
+    missingCheck('Repository variables', REPO_VAR_NAMES, observation.repoVars, 'all present'),
     missingCheck(
       'Production environment variables',
-      EXPECTED_ENVIRONMENT_VARS,
+      [...PRODUCTION_VAR_NAMES, 'API_SECRET_BINDINGS'],
       observation.environmentVars,
       'all present',
     ),
@@ -225,7 +207,13 @@ function lines(output: string | null): string[] | null {
     .filter(Boolean);
 }
 
-/** The organization a project sits under, or null — the parent may be a folder, or absent. */
+/**
+ * The organization a project sits under.
+ *
+ * @remarks
+ * Three outcomes, and they are not the same: the org id, `''` for a project genuinely outside an
+ * organization, and null when the ancestry could not be read at all.
+ */
 function organizationOf(project: string): string | null {
   const ancestors = read([
     'gcloud',
@@ -239,7 +227,7 @@ function organizationOf(project: string): string | null {
     const [id, type] = row.trim().split(/\s+/);
     if (type === 'organization' && id) return id;
   }
-  return null;
+  return '';
 }
 
 /** Read every input {@link diagnose} compares. */
@@ -274,19 +262,25 @@ function observe(project: string, region: string, repo: string): Observation {
       read(['gcloud', 'iam', 'service-accounts', 'list', ...scope, '--format=value(email)']),
     ),
     projectRoles: { [deploySa]: rolesFor(deploySa), [runtimeSa]: rolesFor(runtimeSa) },
-    orgRoles: orgId
-      ? lines(
-          read([
-            'gcloud',
-            'organizations',
-            'get-iam-policy',
-            orgId,
-            '--flatten=bindings[].members',
-            `--filter=bindings.members:${runtimeSa}`,
-            '--format=value(bindings.role)',
-          ]),
-        )
-      : [],
+    // A null orgId means the lookup FAILED; a project genuinely outside an organization is the
+    // empty-string case. Collapsing both to [] would print "missing: roles/cloudidentity.groupsReader"
+    // for what is really a credential problem — the outcome `unknown` exists to prevent.
+    orgRoles:
+      orgId === null
+        ? null
+        : orgId === ''
+          ? []
+          : lines(
+              read([
+                'gcloud',
+                'organizations',
+                'get-iam-policy',
+                orgId,
+                '--flatten=bindings[].members',
+                `--filter=bindings.members:${runtimeSa}`,
+                '--format=value(bindings.role)',
+              ]),
+            ),
     artifactRepos:
       lines(
         read([

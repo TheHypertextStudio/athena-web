@@ -25,13 +25,12 @@ import { checkEnvForTarget, type EnvIssue } from '../packages/env/src/registry';
 import { parseSecretBindings } from './production-secrets';
 
 /**
- * Variables the Cloud Run runtime injects, which the manifest therefore never declares.
+ * Variables Cloud Run injects, so the manifest never declares them.
  *
  * @remarks
- * `PORT` is genuinely required by the API and genuinely absent from the manifest: Cloud Run sets it
- * on the container, and a deploy that pinned it would fight the platform for the port to listen on.
- * Treated like a Secret Manager mount — supplied from elsewhere, so not a missing value — rather
- * than relaxed to optional in the registry, which would stop it being required anywhere at all.
+ * A property of this deploy surface, not of the variable: `PORT` is an ordinary required var
+ * locally. Treated like a Secret Manager mount rather than relaxed in the registry, which would
+ * stop it being required anywhere.
  */
 const PLATFORM_INJECTED: readonly string[] = ['PORT'];
 

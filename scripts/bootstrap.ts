@@ -146,6 +146,40 @@ export const API_RUNTIME_SA_ROLES: readonly string[] = ['roles/secretmanager.sec
 /** Org-level role the runtime account needs to resolve Workspace group membership. */
 export const API_RUNTIME_ORG_ROLE = 'roles/cloudidentity.groupsReader';
 
+/**
+ * Repository-scoped GitHub Actions variables every deployment needs.
+ *
+ * @remarks
+ * Names only. The values are `cfg`-derived and belong to `setupGithub`, but the names are shared
+ * knowledge: `pnpm doctor` reports a missing one, and restating them there is how the two drift.
+ */
+export const REPO_VAR_NAMES: readonly string[] = [
+  'GCP_PROJECT_ID',
+  'GCP_REGION',
+  'GCP_SERVICE_ACCOUNT',
+  'GCP_API_RUNTIME_SERVICE_ACCOUNT',
+  'GCP_WIF_PROVIDER',
+  'NEON_PROJECT_ID',
+];
+
+/**
+ * Production-environment variables every deployment needs.
+ *
+ * @remarks
+ * The unconditional subset. Operator SSO adds `GOOGLE_WORKSPACE_DOMAIN` and
+ * `ADMIN_GOOGLE_GROUP_ROLES` only when a Workspace domain was given, and `ADMIN_GOOGLE_SSO_ENABLED`
+ * is a first-run default rather than an every-run assertion — so none of the three is something a
+ * project is wrong to lack.
+ */
+export const PRODUCTION_VAR_NAMES: readonly string[] = [
+  'PASSKEY_RP_ID',
+  'API_URL',
+  'WEB_URL',
+  'ADMIN_URL',
+  'BETTER_AUTH_ALLOWED_HOSTS',
+  'GOOGLE_OAUTH_PUBLIC',
+];
+
 export const AR_REPO = 'docket';
 export const WIF_POOL = 'github';
 export const WIF_PROVIDER = 'github-actions';
@@ -752,6 +786,24 @@ function provisionOperatorGroups(cfg: Config, orgId: string): void {
 
 // ── github ────────────────────────────────────────────────────────────────────
 
+/**
+ * Fail loudly when the variables written no longer cover the names promised to `pnpm doctor`.
+ *
+ * @throws {Error} when a promised name is absent, naming it.
+ */
+function assertWritesEveryName(
+  written: Readonly<Record<string, string>>,
+  promised: readonly string[],
+  constantName: string,
+): void {
+  const missing = promised.filter((name) => !(name in written));
+  if (missing.length > 0) {
+    throw new Error(
+      `${constantName} promises ${missing.join(', ')}, which bootstrap never writes.`,
+    );
+  }
+}
+
 function setupGithub(
   cfg: Config,
   saEmail: string,
@@ -786,6 +838,12 @@ function setupGithub(
         }
       : {}),
   };
+
+  // The name lists are what `pnpm doctor` reports a project against, so they have to stay a
+  // description of what this actually writes. Checked here rather than trusted, because a name
+  // dropped from one side and not the other is precisely the drift doctor exists to catch.
+  assertWritesEveryName(repoVars, REPO_VAR_NAMES, 'REPO_VAR_NAMES');
+  assertWritesEveryName(productionVars, PRODUCTION_VAR_NAMES, 'PRODUCTION_VAR_NAMES');
 
   // Written only when absent. These are decisions an operator makes once and then lives with, so
   // re-running bootstrap for an unrelated reason must not silently revoke everyone's console

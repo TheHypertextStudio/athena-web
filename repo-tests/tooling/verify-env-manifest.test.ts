@@ -10,6 +10,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { VAR_REGISTRY } from '../../packages/env/src/registry';
+import { sampleEnvForTarget } from '../../packages/env/tests/support/sample-env';
 import { parseEnvManifest, verifyEnvManifest } from '../../scripts/verify-env-manifest';
 
 /** The env names `deploy.yml` mounts from Secret Manager rather than writing into the manifest. */
@@ -20,32 +21,11 @@ const SECRET_BINDINGS = [
   'CRON_SECRET=docket-cron-secret:latest',
 ].join('\n');
 
-/** Narrow schemas that reject a generic string. */
-const SAMPLES: Readonly<Record<string, string>> = {
-  NODE_ENV: 'production',
-  APP_MODE: 'production',
-  GOOGLE_OAUTH_PUBLIC: 'false',
-  ADMIN_GOOGLE_SSO_ENABLED: 'false',
-  WORK_LOCATION_PROJECTION_ENABLED: 'false',
-  LINEAR_AGENT_ENABLED: 'false',
-  BILLING_ENABLED: 'false',
-  MCP_TASKS_ENABLED: 'false',
-  ATHENA_ASYNC_RUNNER_ENABLED: 'false',
-  BILLING_RECONCILIATION_MODE: 'off',
-  AGENT_MAX_TURNS: '8',
-  PORT: '4000',
-};
-
 /** A manifest carrying every required api var that is not secret-mounted. */
 function completeManifest(): Record<string, string> {
-  const secretNames = new Set(SECRET_BINDINGS.split('\n').map((b) => b.split('=')[0]));
-  const manifest: Record<string, string> = {};
-  for (const spec of VAR_REGISTRY) {
-    if (!spec.targets.includes('api') || !spec.required) continue;
-    if (secretNames.has(spec.name)) continue;
-    manifest[spec.name] = SAMPLES[spec.name] ?? 'sample-value-long-enough-for-min-length-rules';
-  }
-  return manifest;
+  const secretNames = SECRET_BINDINGS.split('\n').map((binding) => binding.split('=')[0] ?? '');
+  // PORT is required but injected by Cloud Run, so the manifest never declares it either.
+  return sampleEnvForTarget('api', [...secretNames, 'PORT']);
 }
 
 describe('the deploy-manifest gate', () => {

@@ -1,42 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
 import { checkEnvForTarget, VAR_REGISTRY } from '../../src/registry';
-
-/** A complete, valid environment for one target, built from the registry itself. */
-function validEnvFor(target: 'api' | 'web' | 'marketing' | 'admin'): Record<string, string> {
-  const env: Record<string, string> = {};
-  for (const spec of VAR_REGISTRY) {
-    if (!spec.targets.includes(target) || !spec.required) continue;
-    // Sample values are chosen per-var below only where the schema is narrow; everything else
-    // takes a generic string, which every open `z.string()` accepts.
-    env[spec.name] = SAMPLES[spec.name] ?? 'sample-value-long-enough-for-min-length-rules';
-  }
-  return env;
-}
-
-/** Narrow schemas that reject a generic string, so a "valid" fixture really is valid. */
-const SAMPLES: Readonly<Record<string, string>> = {
-  NODE_ENV: 'production',
-  APP_MODE: 'production',
-  GOOGLE_OAUTH_PUBLIC: 'false',
-  ADMIN_GOOGLE_SSO_ENABLED: 'false',
-  WORK_LOCATION_PROJECTION_ENABLED: 'false',
-  LINEAR_AGENT_ENABLED: 'false',
-  BILLING_ENABLED: 'false',
-  MCP_TASKS_ENABLED: 'false',
-  ATHENA_ASYNC_RUNNER_ENABLED: 'false',
-  BILLING_RECONCILIATION_MODE: 'off',
-  AGENT_MAX_TURNS: '8',
-  PORT: '4000',
-};
+import { sampleEnvForTarget } from '../support/sample-env';
 
 describe('checkEnvForTarget', () => {
   it('accepts an environment that satisfies every required var for the target', () => {
-    expect(checkEnvForTarget('api', validEnvFor('api'))).toEqual([]);
+    expect(checkEnvForTarget('api', sampleEnvForTarget('api'))).toEqual([]);
   });
 
   it('reports a required var that is absent', () => {
-    const env = validEnvFor('api');
+    const env = sampleEnvForTarget('api');
     delete env['ADMIN_GOOGLE_SSO_ENABLED'];
 
     const issues = checkEnvForTarget('api', env);
@@ -50,7 +23,7 @@ describe('checkEnvForTarget', () => {
   it('treats an empty string as absent, which is what an unset CI variable writes', () => {
     // The exact production failure this query exists to catch: `vars.X` unset interpolates to ''.
     const issues = checkEnvForTarget('api', {
-      ...validEnvFor('api'),
+      ...sampleEnvForTarget('api'),
       ADMIN_GOOGLE_SSO_ENABLED: '',
     });
 
@@ -59,7 +32,7 @@ describe('checkEnvForTarget', () => {
 
   it('parses with the real schema, so a present-but-malformed value still fails', () => {
     const issues = checkEnvForTarget('api', {
-      ...validEnvFor('api'),
+      ...sampleEnvForTarget('api'),
       ADMIN_GOOGLE_SSO_ENABLED: 'yes',
     });
 
@@ -69,7 +42,7 @@ describe('checkEnvForTarget', () => {
   });
 
   it('carries the registry hint so a failure says how to fix itself', () => {
-    const env = validEnvFor('api');
+    const env = sampleEnvForTarget('api');
     delete env['ADMIN_GOOGLE_SSO_ENABLED'];
 
     expect(
@@ -81,7 +54,7 @@ describe('checkEnvForTarget', () => {
     const optional = VAR_REGISTRY.find((v) => v.targets.includes('api') && !v.required);
     expect(optional).toBeDefined();
 
-    const issues = checkEnvForTarget('api', validEnvFor('api'));
+    const issues = checkEnvForTarget('api', sampleEnvForTarget('api'));
 
     expect(issues.map((i) => i.name)).not.toContain(optional?.name);
   });
@@ -99,13 +72,13 @@ describe('checkEnvForTarget', () => {
   });
 
   it('stays quiet about undeclared vars unless asked, since a process env carries thousands', () => {
-    const env = { ...validEnvFor('api'), HOME: '/root', SOME_UNRELATED_TOOL: '1' };
+    const env = { ...sampleEnvForTarget('api'), HOME: '/root', SOME_UNRELATED_TOOL: '1' };
 
     expect(checkEnvForTarget('api', env)).toEqual([]);
   });
 
   it('reports undeclared vars when the environment is a closed set', () => {
-    const env = { ...validEnvFor('api'), LEFTOVER_AFTER_A_RENAME: 'x' };
+    const env = { ...sampleEnvForTarget('api'), LEFTOVER_AFTER_A_RENAME: 'x' };
 
     const issues = checkEnvForTarget('api', env, { rejectUnknown: true });
 

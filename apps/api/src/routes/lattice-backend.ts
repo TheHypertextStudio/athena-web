@@ -101,6 +101,29 @@ export function latticeChatPort(
 }
 
 /**
+ * How long one turn may wait on a person's own device, in milliseconds.
+ *
+ * The SDK's default request timeout is two minutes, which fits a hosted model and does not fit a
+ * local one: a laptop or desktop model pays prompt processing on every turn, and an Athena turn
+ * carries its tool set, so a 40k-token prompt takes a model class like Laguna close to two minutes
+ * before it produces a word. The gateway allows a personal runtime five minutes for a standard
+ * turn, and this matches it so Docket does not give up first and record a stop for work the
+ * device then finishes.
+ */
+export const PERSONAL_RUNTIME_TURN_TIMEOUT_MS = 300_000;
+
+/**
+ * The gateway context a turn is driven with: the person's grant, plus a timeout sized for a
+ * local model. Only the turn path uses it — listing devices and reading status keep the default.
+ *
+ * @param gateway - The person's gateway context.
+ * @returns The same context with a turn timeout, unless the caller already set one.
+ */
+export function turnGatewayContext(gateway: LatticeGatewayContext): LatticeGatewayContext {
+  return { ...gateway, timeoutMs: gateway.timeoutMs ?? PERSONAL_RUNTIME_TURN_TIMEOUT_MS };
+}
+
+/**
  * Resolve the turn runtime for one Athena owner.
  *
  * @remarks
@@ -131,7 +154,7 @@ export async function resolveOwnerBackend(
   if (!connection || !connection.enabled || connection.status !== 'connected') return fallback();
   if (!connection.deviceId) return fallback();
 
-  const gateway = await latticeGatewayContext(connection);
+  const gateway = turnGatewayContext(await latticeGatewayContext(connection));
   const deviceId = connection.deviceId;
   return {
     runtime: new LatticeAgentTurnRuntime({

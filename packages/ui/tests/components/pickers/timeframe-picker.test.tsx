@@ -116,7 +116,7 @@ describe('TimeframePicker', () => {
         edge="target"
         onChange={onChange}
         min="2026-01-01"
-        max="2026-12-31"
+        max="2026-08-31"
       />,
     );
 

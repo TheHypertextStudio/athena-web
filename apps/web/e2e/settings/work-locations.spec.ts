@@ -6,6 +6,7 @@ import { expect, test } from '../helpers/fixtures';
 test('a person can plan across multiple regular places with home kept separate', async ({
   page,
 }) => {
+  await page.clock.setFixedTime('2026-08-10T17:00:00.000Z');
   await signUpAndOnboard(page, 'WorkLocations');
   await page.goto('/settings/work-locations', { waitUntil: 'domcontentloaded' });
 

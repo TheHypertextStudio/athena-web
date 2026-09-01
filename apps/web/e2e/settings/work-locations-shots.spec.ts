@@ -23,6 +23,7 @@ async function addPlace(page: Page, name: string, address?: string): Promise<voi
 
 test('captures the standard work-location settings review set', async ({ page }) => {
   mkdirSync(SHOT_DIR, { recursive: true });
+  await page.clock.setFixedTime('2026-08-10T17:00:00.000Z');
   await signUpAndOnboard(page, 'WorkLocationShots');
   await page.goto('/settings/work-locations', { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading', { name: 'Work locations' })).toBeVisible({

@@ -271,6 +271,7 @@ describe('DateRangePicker ordering', () => {
         startPlaceholder="Set start date"
         endPlaceholder="Set end date"
         ariaLabel="Timeline"
+        max="2026-08-31"
       />,
     );
     await user.click(screen.getByRole('button', { name: /Timeline End/ }));

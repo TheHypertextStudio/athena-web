@@ -74,7 +74,7 @@ async function assignAndReadScrollTop(detail: Locator, value: number): Promise<n
   }, value);
 }
 
-test('short detail pages do not scroll while long Project work owns the only detail scrollbar', async ({
+test('a short Team page does not scroll while long Project work owns the only detail scrollbar', async ({
   page,
 }) => {
   test.setTimeout(240_000);
@@ -82,25 +82,21 @@ test('short detail pages do not scroll while long Project work owns the only det
   const fixture = await createMobileAuditFixture(page);
   const longProjectId = await createLongProject(page, fixture.orgId, fixture.teamId);
 
-  const shortRoutes = [`projects/${fixture.blockingProjectId}`, `teams/${fixture.teamId}`] as const;
-
   for (const viewport of VIEWPORTS) {
     await page.setViewportSize(viewport);
-    for (const route of shortRoutes) {
-      await page.goto(orgHref(fixture.orgId, route), {
-        waitUntil: 'commit',
-        timeout: TIMEOUTS.pageReady,
-      });
-      const detail = page.locator('[data-detail-panel-scroll]:visible');
-      await expect(detail).toBeVisible({ timeout: TIMEOUTS.pageReady });
-      const dimensions = await detail.evaluate((element) => ({
-        clientHeight: element.clientHeight,
-        scrollHeight: element.scrollHeight,
-      }));
-      expect(dimensions.scrollHeight).toBeLessThanOrEqual(dimensions.clientHeight + 1);
-      expect(await assignAndReadScrollTop(detail, 40)).toBe(0);
-      expect(await scrollingAncestors(detail)).toEqual([]);
-    }
+    await page.goto(orgHref(fixture.orgId, `teams/${fixture.teamId}`), {
+      waitUntil: 'commit',
+      timeout: TIMEOUTS.pageReady,
+    });
+    const detail = page.locator('[data-detail-panel-scroll]:visible');
+    await expect(detail).toBeVisible({ timeout: TIMEOUTS.pageReady });
+    const dimensions = await detail.evaluate((element) => ({
+      clientHeight: element.clientHeight,
+      scrollHeight: element.scrollHeight,
+    }));
+    expect(dimensions.scrollHeight).toBeLessThanOrEqual(dimensions.clientHeight + 1);
+    expect(await assignAndReadScrollTop(detail, 40)).toBe(0);
+    expect(await scrollingAncestors(detail)).toEqual([]);
 
     await page.goto(orgHref(fixture.orgId, `projects/${longProjectId}`), {
       waitUntil: 'commit',

@@ -1,3 +1,4 @@
+import { buildLatticeTurnMessages } from '@docket/athena/turn/adapters/lattice';
 import { and, eq } from 'drizzle-orm';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -96,6 +97,28 @@ describe('Athena internal user principal', () => {
     expect(await db.select().from(schema.agent)).toHaveLength(0);
     const agentActors = await db.select().from(schema.actor).where(eq(schema.actor.kind, 'agent'));
     expect(agentActors).toHaveLength(0);
+  });
+
+  it('keeps the whole built-in toolbox inside a local model’s prompt budget', async () => {
+    const seed = await seedUserWorkspace();
+    const toolbox = await openToolbox({ kind: 'athena', ownerUserId: seed.userId });
+    const [system] = buildLatticeTurnMessages({
+      system: 'You are Athena.',
+      messages: [],
+      tools: toolbox.tools,
+    });
+
+    // A person's own device pays prompt processing for every token of every tool on every
+    // turn. Rendered verbosely, this toolbox pushed a one-line turn to ~40k tokens, past a
+    // 32k-context model; compact, its 38 tools measured 57,508 characters (~14k tokens).
+    // The bound leaves room for a few more tools and fails first when one arrives with an
+    // oversized schema.
+    const length = system?.content.length ?? Number.POSITIVE_INFINITY;
+    expect(toolbox.tools.length).toBeGreaterThan(10);
+    expect(
+      length,
+      `tool section is ${length} characters for ${toolbox.tools.length} tools`,
+    ).toBeLessThan(64_000);
   });
 
   it('resolves the current human Actor and grants on every Docket call', async () => {

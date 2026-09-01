@@ -508,6 +508,74 @@ offline_access marketplace`, and a bare `marketplace` names nothing in Lovelace'
   outage longer than five minutes therefore strands every personal runtime permanently and forces a
   manual, browser-authorized re-pair. That is what turned one database incident into a lost
   pairing, and renewal working correctly does not prevent the next occurrence.
+- **Inference reached the Mac Studio, on the wrong runtime**: with relay tracing on
+  (`RUST_LOG=lattice_daemon::compute::relay=trace`), a Docket turn decrypted on the runtime at
+  18:22:10, dispatched at 18:22:29, and completed at 18:23:20 with 98 tokens — on **Ollama**,
+  model `lovelace:gemma4:latest`, even though `config.toml` names LM Studio and
+  `poolside/laguna-s-2.1`. The relay picker in `crates/lattice-daemon/src/compute/relay/startup.rs`
+  took the first catalog entry that served the task class, and the catalog is built in probe order
+  with Ollama first; `orchestrator.default_provider` was never consulted. Every earlier "the chat
+  never arrives" reading was wrong for a simpler reason: the daemon's success path logs at `debug!`,
+  and I was grepping for `laguna` while the work ran on gemma.
+- **Fix one, Lovelace `5b329633ae`**: `preferred_local_model(&LatticeConfig)` reads the operator's
+  provider and model; `resolve_agent_runtime_model` prefers the configured model when the catalog
+  serves it, then any model on the configured runtime, then the old first-entry fallback; a
+  concrete model named by the command still wins. Ollama is deprecated for relay work — the relay
+  no longer constructs that runtime and a config naming it warns and falls through. 40 relay
+  startup tests pass including 7 new cases against a two-runtime catalog probed Ollama-first. The
+  marketplace tunnel and `DEFAULT_LOCAL_FIRST_*` still assume Ollama and are tracked separately.
+- **The relay itself was the next wall**: every beacon request — heartbeat, lease, ack, result —
+  took 20–40 s (`work-leases` 27.9 s avg, `heartbeat` 18.9 s). `durable-personal-control-relay.ts`
+  persists the whole relay state as one JSONB snapshot under a global advisory lock on every
+  mutation, and the snapshot kept each work item's 1.4 MB sealed command for the 24-hour retention
+  window, so a day of turns meant every request read, re-serialised, and rewrote many megabytes.
+  A 60-second lease could not survive one acknowledgement round trip: the daemon answered in a
+  second and `PUT /result` came back 404. Not caused by any push — the serving revision was two
+  days old; it surfaced once enough sealed commands had accumulated.
+- **Fix two, Lovelace `bec36d6974`, deployed as `lattice-signaling-service-00009-74z`**: the relay
+  releases a work item's sealed command at its terminal transition and prunes it from any snapshot
+  it loads, so legacy state shrinks on first read; the sealed result keeps its own retention.
+  `deploy.yaml` memory 512Mi → 1Gi (the deploy tooling forbids `minInstances` above 0 for
+  production, so scale-to-zero stays). Measured on the new revision from the daemon's own traffic:
+  `work-leases` 27.9 s → **0.73 s**, `voice-streams` 18.1 s → **0.63 s**. Three new unit tests;
+  54 relay tests pass.
+- **Then the time budget**: with the relay fast, LM Studio rejected the turn — `request (39760
+tokens) exceeds the available context size (32768 tokens)`. An Athena turn ships its full tool
+  set. The Mac Studio's launchd watchdog (`~/CelloWork/bin/lmstudio-server-watchdog.zsh`) pins
+  laguna to a 32k context as a memory bound; it now pins 64k (loads at ~66 GiB; the model allows
+  262k). With 64k the model finished the turn (`LM Studio chat completed … tokens=Some(9)`,
+  39,760-token prefill in 111 s at 358 tok/s) but the gateway's 120 s standard deadline had already
+  cancelled the work and Docket's SDK client had given up at 120 s. The gateway now runs with
+  `LATTICE_PERSONAL_RELAY_STANDARD_DEADLINE_MS=300000` (revision `00010-j9l`, request timeout
+  300 s), and Docket's turn path drives it with a matching five-minute client timeout
+  (`turnGatewayContext`, this commit). The prompt size itself is the real defect and is tracked as
+  its own task.
+- **Two machine-level traps recorded as memories**: `lattice-ctl` auto-spawns an untracked daemon
+  whenever the launchd instance is down, which throws launchd into a respawn storm; and the
+  shared Cargo target dir was poisoned by another worktree's build (two copies of
+  `platform-resource`), fixed with a targeted `cargo clean` of four crates.
+- **Proof on LM Studio** (workspace `01KV6378GSKDVFRX5FZQ63C9W8`, per the instruction to stop
+  using Las Vegans for Better Transit for tests): EVIDENCE
+- **Prompt size was the last wall, and it is Athena's**: a one-line turn reached LM Studio as
+  39,760 tokens because `renderToolInstructions` rendered every tool's full description and its
+  JSON Schema pretty-printed with every `description`, `title`, and `examples` at every level.
+  The renderer now emits the lead paragraph of each description and the shape-preserving part of
+  each schema as compact JSON — every keyword that decides validity kept, documentation-only
+  keywords removed at every level, property names never treated as keywords, literal arrays
+  copied as they are. Validation still runs against the registered schema. Measured on the real
+  built-in toolbox: 38 tools render to 57,508 characters (~14k tokens), down from ~160k
+  characters; a synthetic forty-tool set renders under 40% of its verbose size. Two tests pin
+  those budgets (`domains/athena/tests/lattice-adapter.test.ts`,
+  `apps/api/tests/mcp/mcp-athena-user.test.ts`) so a tool added with an oversized schema fails
+  in CI before it reaches a device. `docs/engineering/specs/lattice-byo-model.md` §4 records the
+  rule, the ~64k context a paired model needs today, and the shared five-minute turn budget.
+- **The daemon now says why a turn failed**: `dispatch_canonical_request` logged nothing when the
+  local runtime returned an error, so the only record of "request exceeds the available context
+  size" was LM Studio's own log. Lovelace `b1d5373c82` adds a warning at that branch (request id,
+  model, error code and message, elapsed) and logs LM Studio's status and the first 512
+  characters of its response body on a rejected completion — identifiers and the server's
+  message, never prompt content. A runtime that rejects every request is driven through the
+  local relay dispatcher in a new test; 41 relay startup tests pass, clippy clean.
 
 ### [MCP-APPS-CHAT-001] Render MCP apps in the Athena chat and complete the optional spec surface
 

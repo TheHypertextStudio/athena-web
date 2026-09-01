@@ -27,6 +27,10 @@ import {
   renderToolCall,
   toLatticeStopReason,
 } from '../src/turn/adapters/lattice';
+import {
+  compactToolSchema,
+  renderToolInstructions,
+} from '../src/turn/internal/lattice-tool-protocol';
 
 const TOOLS: readonly TurnToolDef[] = [
   { name: 'search', description: 'Search work', inputSchema: { type: 'object' } },
@@ -168,6 +172,143 @@ describe('buildLatticeTurnMessages', () => {
     // The tool vocabulary has to reach a text-only model somehow; the system message is where.
     expect(messages[0]?.content).toContain('search');
     expect(messages[1]).toEqual({ role: 'user', content: 'Hello.' });
+  });
+});
+
+/** A tool schema the way Docket's registered tools actually look: nested, annotated, verbose. */
+function annotatedSchema(index: number): Record<string, unknown> {
+  return {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    type: 'object',
+    title: `Tool ${index} input`,
+    description: `Arguments for tool ${index}. `.repeat(6),
+    properties: {
+      workspaceId: {
+        type: 'string',
+        description: 'The workspace to act in. '.repeat(8),
+        examples: ['01KV6378GSKDVFRX5FZQ63C9W8'],
+      },
+      description: {
+        type: 'string',
+        description: 'A property that happens to share a keyword name.',
+      },
+      status: {
+        type: 'string',
+        enum: ['backlog', 'in_progress', 'done'],
+        description: 'x'.repeat(80),
+      },
+      filters: {
+        type: 'object',
+        description: 'Optional narrowing. '.repeat(5),
+        properties: {
+          assignee: { type: 'string', description: 'y'.repeat(120) },
+          due: {
+            anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }],
+            description: 'z'.repeat(60),
+          },
+        },
+        additionalProperties: false,
+      },
+      items: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: { id: { type: 'string', description: 'w'.repeat(50) } },
+        },
+      },
+    },
+    required: ['workspaceId'],
+    additionalProperties: false,
+  };
+}
+
+/** Read one path out of a compacted schema; the schema type is an open record. */
+function at(schema: Record<string, unknown>, ...path: string[]): unknown {
+  let current: unknown = schema;
+  for (const key of path) {
+    if (typeof current !== 'object' || current === null) return undefined;
+    current = (current as Record<string, unknown>)[key];
+  }
+  return current;
+}
+
+describe('compactToolSchema', () => {
+  it('drops documentation keywords at every level and keeps what decides validity', () => {
+    const compact = compactToolSchema(annotatedSchema(1));
+
+    expect(compact).not.toHaveProperty('description');
+    expect(compact).not.toHaveProperty('title');
+    expect(compact).not.toHaveProperty('$schema');
+    expect(at(compact, 'required')).toEqual(['workspaceId']);
+    expect(at(compact, 'additionalProperties')).toBe(false);
+    expect(at(compact, 'properties', 'workspaceId')).toEqual({ type: 'string' });
+    expect(at(compact, 'properties', 'status')).toEqual({
+      type: 'string',
+      enum: ['backlog', 'in_progress', 'done'],
+    });
+    expect(at(compact, 'properties', 'filters', 'properties', 'assignee')).toEqual({
+      type: 'string',
+    });
+    expect(at(compact, 'properties', 'filters', 'properties', 'due')).toEqual({
+      anyOf: [{ type: 'string', format: 'date' }, { type: 'null' }],
+    });
+    expect(at(compact, 'properties', 'items', 'items', 'properties', 'id')).toEqual({
+      type: 'string',
+    });
+  });
+
+  it('never treats a property name as a keyword', () => {
+    const compact = compactToolSchema(annotatedSchema(1));
+
+    expect(at(compact, 'properties')).toHaveProperty('description');
+    expect(at(compact, 'properties', 'description')).toEqual({ type: 'string' });
+  });
+
+  it('leaves the registered schema untouched', () => {
+    const schema = annotatedSchema(1);
+    const before = JSON.stringify(schema);
+    compactToolSchema(schema);
+    expect(JSON.stringify(schema)).toBe(before);
+  });
+});
+
+describe('renderToolInstructions', () => {
+  const tool = (index: number): TurnToolDef => ({
+    name: `tool_${index}`,
+    description: `Does thing ${index}.\n\nUsage notes that do not belong in every prompt. `.repeat(
+      3,
+    ),
+    inputSchema: annotatedSchema(index),
+  });
+
+  it('renders each schema compactly, with only the lead paragraph of the description', () => {
+    const rendered = renderToolInstructions([tool(1)]);
+
+    expect(rendered).toContain('### tool_1\nDoes thing 1.\n\nInput JSON Schema:');
+    expect(rendered).not.toContain('Usage notes');
+    // The first fenced block in the instructions is the call template; the tool's own
+    // schema is the block that follows its heading.
+    const afterHeading = rendered.slice(rendered.indexOf('### tool_1'));
+    const fenced = afterHeading.split('```json\n')[1]?.split('\n```')[0] ?? '';
+    expect(fenced).not.toContain('\n');
+    expect(JSON.parse(fenced)).toEqual(compactToolSchema(annotatedSchema(1)));
+  });
+
+  it('keeps a realistic toolbox inside a local model’s budget', () => {
+    const tools = Array.from({ length: 40 }, (_, index) => tool(index));
+    const rendered = renderToolInstructions(tools);
+    const verbose = tools
+      .map((t) => `${t.description}\n${JSON.stringify(t.inputSchema, null, 2)}`)
+      .join('\n');
+
+    // Forty annotated tools rendered verbosely ran a turn past a 32k-token context. At roughly
+    // four characters a token this keeps the whole tool section under ten thousand tokens.
+    expect(rendered.length).toBeLessThan(40_000);
+    expect(rendered.length).toBeLessThan(verbose.length * 0.4);
+  });
+
+  it('renders nothing when a turn offers no tools', () => {
+    expect(renderToolInstructions([])).toBe('');
   });
 });
 

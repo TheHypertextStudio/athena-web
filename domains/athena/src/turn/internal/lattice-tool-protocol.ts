@@ -43,16 +43,105 @@ export function latticeToolUseId(sequence: number): string {
 }
 
 /** Render the tool instructions appended to a Lattice system prompt. */
+/**
+ * Schema keywords that document a schema without changing what it accepts.
+ *
+ * A local model pays prompt processing for every token of every tool on every turn, and the full
+ * toolbox rendered with its prose ran to ~40k tokens — more than a 32k-context model can take.
+ * These keys are dropped from the rendered schema; validation still runs against the original.
+ */
+const PROMPT_ONLY_SCHEMA_KEYS: ReadonlySet<string> = new Set([
+  'description',
+  'title',
+  'examples',
+  '$comment',
+  '$schema',
+  '$id',
+  'deprecated',
+  'readOnly',
+  'writeOnly',
+  'markdownDescription',
+]);
+
+/** Keywords whose value is a map from *property name* to schema, where names are not keywords. */
+const NAMED_SUBSCHEMA_KEYS: ReadonlySet<string> = new Set([
+  'properties',
+  'patternProperties',
+  'definitions',
+  '$defs',
+  'dependentSchemas',
+]);
+
+/** Keywords whose value is a schema or a list of schemas. */
+const SUBSCHEMA_KEYS: ReadonlySet<string> = new Set([
+  'items',
+  'prefixItems',
+  'additionalItems',
+  'contains',
+  'additionalProperties',
+  'unevaluatedProperties',
+  'propertyNames',
+  'not',
+  'if',
+  'then',
+  'else',
+  'anyOf',
+  'oneOf',
+  'allOf',
+]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function compactSubschema(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(compactSubschema);
+  return isRecord(value) ? compactToolSchema(value) : value;
+}
+
+/**
+ * The shape-preserving part of a JSON Schema: everything that decides what input is valid, and
+ * nothing that only explains it.
+ *
+ * Property names are never treated as keywords, so a property that happens to be called
+ * `description` survives. Literal arrays such as `enum` and `required` are copied as they are.
+ *
+ * @param schema - A tool's input schema as registered.
+ * @returns The same schema with documentation-only keywords removed at every level.
+ */
+export function compactToolSchema(schema: Record<string, unknown>): Record<string, unknown> {
+  const compact: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(schema)) {
+    if (PROMPT_ONLY_SCHEMA_KEYS.has(key)) continue;
+    if (NAMED_SUBSCHEMA_KEYS.has(key) && isRecord(value)) {
+      compact[key] = Object.fromEntries(
+        Object.entries(value).map(([name, subschema]) => [name, compactSubschema(subschema)]),
+      );
+      continue;
+    }
+    if (SUBSCHEMA_KEYS.has(key)) {
+      compact[key] = compactSubschema(value);
+      continue;
+    }
+    compact[key] = value;
+  }
+  return compact;
+}
+
+/** The first paragraph of a tool description: what the tool does, without its usage notes. */
+function leadParagraph(description: string): string {
+  const [lead] = description.trim().split(/\n\s*\n/, 1);
+  return (lead ?? '').trim();
+}
+
 export function renderToolInstructions(tools: readonly TurnToolDef[]): string {
   if (tools.length === 0) return '';
 
   const renderedTools = tools
     .map(
       (tool) =>
-        `### ${tool.name}\n${tool.description}\n\nInput JSON Schema:\n\`\`\`json\n${JSON.stringify(
-          tool.inputSchema,
-          null,
-          2,
+        `### ${tool.name}\n${leadParagraph(tool.description)}\n\nInput JSON Schema:\n\`\`\`json\n${JSON.stringify(
+          compactToolSchema(tool.inputSchema),
         )}\n\`\`\``,
     )
     .join('\n\n');

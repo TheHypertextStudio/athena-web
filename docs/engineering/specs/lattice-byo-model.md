@@ -105,8 +105,18 @@ live is inside the text.
 
 The private text-protocol module behind `@docket/athena/turn/adapters/lattice` defines one:
 
-- Tools are described in the system prompt, each with its **verbatim** JSON Schema. A paraphrase
-  produces inputs that fail validation, and recovering costs a whole turn on the person's hardware.
+- Tools are described in the system prompt, each with the **shape-preserving** part of its JSON
+  Schema: every keyword that decides what input is valid (`type`, `properties`, `required`,
+  `enum`, `items`, `anyOf`, …) rendered as compact JSON, with documentation-only keywords
+  (`description`, `title`, `examples`, `$comment`, …) removed at every level and the tool's own
+  description cut to its lead paragraph. Validation still runs against the registered schema. A
+  paraphrase of the shape would produce inputs that fail validation, and recovering costs a whole
+  turn on the person's hardware; but a local model also pays prompt processing for every token of
+  every tool on every turn, and the full toolbox with its prose ran a one-line turn to ~40k
+  tokens — more than a 32k-context model accepts. The paired model must be loaded with at least a
+  **64k context** (on the Mac Studio the LM Studio watchdog loads `poolside/laguna-s-2.1` at
+  65,536), and the gateway allows a personal runtime five minutes for a standard turn, which
+  Docket's turn timeout matches.
 - A call is a lone fenced JSON block: `{"tool": "<name>", "input": { … }}`.
 - A result comes back as a user message prefixed `TOOL RESULT (<id>) OK|FAILED`.
 

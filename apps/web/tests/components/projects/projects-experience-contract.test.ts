@@ -7,6 +7,7 @@ const root = resolve(import.meta.dirname, '../../../../../');
 const overviewPath = join(root, 'apps/web/src/app/(app)/orgs/[orgId]/projects/projects-client.tsx');
 const workPagePath = join(root, 'apps/web/src/components/work-views/work-view-page.tsx');
 const workListPath = join(root, 'apps/web/src/components/work-views/work-list.tsx');
+const workListColumnsPath = join(root, 'apps/web/src/components/work-views/work-list-columns.tsx');
 const timelinePath = join(root, 'apps/web/src/components/work-views/project-timeline-adapter.tsx');
 const dependencyPath = join(root, 'apps/web/src/components/work-views/project-dependency-lens.tsx');
 const detailPath = join(
@@ -50,15 +51,16 @@ describe('Projects experience contract', () => {
     const workList = source(workListPath);
     expect(workPage).toContain('groups={controller.response?.groups ?? []}');
     expect(workPage).toContain('groupPages={controller.groupPages}');
-    expect(workList).toContain('subGroupBy=');
+    expect(workList).toContain('buildWorkListRoster({');
+    expect(workList).toContain('pages: groupPages');
   });
 
   it('preserves dense, stable rows and full columns inside a local scroller', () => {
     const workList = source(workListPath);
-    expect(workList).toContain('<ListView');
-    expect(workList).toContain('bg-surface-container-low @container/table');
-    expect(workList).toContain('rowHeight={56}');
-    expect(workList).toContain('truncate');
+    expect(workList).toContain('<EntityTable');
+    expect(workList).toContain('tone="tonal"');
+    expect(workList).toContain('rowHeight={rowHeight}');
+    expect(workList).toContain('virtualized');
   });
 
   it('keeps planning semantics in Project controls, lists, and timeline descriptions', () => {
@@ -74,9 +76,9 @@ describe('Projects experience contract', () => {
 
   it('uses target-derived properties instead of page-owned display columns', () => {
     const workPage = source(workPagePath);
-    const workList = source(workListPath);
+    const workListColumns = source(workListColumnsPath);
     expect(workPage).toContain("properties: ['status', 'priority', 'health', 'lead'");
-    expect(workList).toContain('workViewDisplayFieldCatalog(target)');
+    expect(workListColumns).toContain('workViewDisplayFieldCatalog(target)');
   });
 
   it('keeps Project identity and work ahead of progressive metadata', () => {

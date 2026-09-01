@@ -1,247 +1,249 @@
 'use client';
 
 /**
- * The Cycles roster — a 72px identity-row grid, standardized with Initiatives/Programs/Projects.
+ * The Cycles roster adapter for the shared responsive table.
  *
  * @remarks
- * Previously rendered through the dense `EntityListRow` family (36px "comfortable" rows) inside a
- * bordered {@link EntityList}. That read visibly smaller than the other core-object rosters even
- * though a cycle carries the same tier of information (status, a completion pace, a points
- * roll-up) — so this hand-rolls the same aligned-column grid Initiatives/Programs/Projects use.
- * {@link CycleRows} owns the frame + column header (mirroring `ProgramRows`); {@link CycleRow} is
- * one row, still a link to the cycle detail and a drag source for the cycle itself.
+ * EntityTable owns sizing, headers, scrolling, visibility, and row chrome. This module owns the
+ * Cycle-specific identity, rename control, status, progress, points, link, and object binding.
  */
 import { defaultEntityDisplay, type EntityDisplayOut } from '@docket/work/entity-display-contract';
 import { type CycleOut, type CycleStats } from '@docket/work/cycle-contract';
-import { cn } from '@docket/ui/lib/utils';
+import {
+  type Column,
+  EntityTable,
+  type EntityTableProps,
+  type EntityTableRowLinkProps,
+} from '@docket/ui/components';
 import { Skeleton } from '@docket/ui/primitives';
-import Link from '@/components/docket-link';
-import type { ComponentPropsWithoutRef, JSX } from 'react';
+import { createContext, type JSX, useContext } from 'react';
 
+import Link from '@/components/docket-link';
 import { EditableTitle } from '@/components/editor/editable-title';
 import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
+import { WorkStatusBadge } from '@/components/entity-display/work-status';
 import { ObjectSurface } from '@/components/objects/object-surface';
 
-import { formatWindow } from './format-window';
-import { WorkStatusBadge } from '@/components/entity-display/work-status';
-
 import { CYCLE_STATUS } from './cycle-status';
+import { formatWindow } from './format-window';
 
-/** Column widths shared by {@link CycleRows}'s header and each {@link CycleRow}. */
-const ROW_GRID = 'grid-cols-[minmax(20rem,1fr)_7rem_10rem_8rem]';
-
-/** Props for {@link CycleRow}. */
+/** The Cycle-specific data and interactions required by one shared table row. */
 export interface CycleRowProps {
   /** The cycle to summarize. */
   cycle: CycleOut;
   /** Decorative identity, composed through the bulk display read. */
   display?: EntityDisplayOut | undefined;
-  /** The cycle's rolled-up stats, or `null` while they load (or if they failed). */
+  /** The cycle's rolled-up stats, or `null` while they load or after a failed read. */
   stats: CycleStats | null;
-  /**
-   * The owning team's display name.
-   *
-   * @remarks
-   * Every cycle belongs to exactly one team, but the roster is org-wide: grouping by status
-   * (the default view) can legitimately place several teams' own current cadences side by
-   * side, each correctly "Active." Without a team name on the row, that reads as a bug
-   * ("why are there three active cycles?") rather than as several teams each running their
-   * own week — so the row always names its team, not only when grouped by team.
-   */
+  /** The owning team's display name. */
   teamName: string;
-  /** The (vocabulary-resolved) singular cycle noun (e.g. "Cycle", "Sprint"). */
+  /** The vocabulary-resolved singular cycle noun. */
   cycleNoun: string;
   /** Href to the cycle's detail screen. */
   href: string;
-  /** Warm the cycle-detail cache on hover/focus so the row opens instantly (prefetch-on-intent). */
+  /** Warm the cycle-detail cache on hover or focus. */
   onPrefetch?: (() => void) | undefined;
-  /** Whether the viewer may rename this cycle in place (double-click the title). */
+  /** Whether the viewer may rename this cycle in place. */
   canRename?: boolean | undefined;
-  /** Persist a renamed cycle name. Enables inline rename when provided with `canRename`. */
+  /** Persist a renamed cycle name. */
   onRename?: ((cycleId: string, name: string) => void) | undefined;
-  /** Open the cycle — used by the inline title so a single click still navigates. */
+  /** Open the cycle from a non-link part of the row. */
   onOpen?: (() => void) | undefined;
 }
 
-/**
- * A single cycle summary row linking to its detail.
- *
- * @example
- * ```tsx
- * <CycleRow cycle={cycle} stats={stats} cycleNoun="Cycle" href={`/orgs/${orgId}/cycles/${cycle.id}`} />
- * ```
- */
-export function CycleRow({
-  cycle,
-  display,
-  stats,
-  teamName,
-  cycleNoun,
-  href,
-  onPrefetch,
-  canRename,
-  onRename,
-  onOpen,
-}: CycleRowProps): JSX.Element {
-  // The rendered identity is always the server-derived `displayName` — the author's name when the
-  // cycle has one, otherwise its window ("Jul 27 – Aug 2"). The stored `number` is the auto-roll
-  // idempotency key (1000137) and is never shown; the row used to print it both as the title
-  // fallback and as a trailing chip beside a named cycle.
-  const title = cycle.displayName;
-  // The window rides beside the team name only when it isn't already the title: an unnamed
-  // cycle's title already IS its window, so repeating it would print the same string twice.
-  const subtitle = cycle.name
-    ? `${formatWindow(cycle.startsAt, cycle.endsAt)} · ${teamName}`
-    : teamName;
-  const taskPct =
-    stats && stats.committed > 0 ? Math.round((stats.completed / stats.committed) * 100) : 0;
-
-  const object = {
-    kind: 'cycle' as const,
-    id: cycle.id,
-    organizationId: cycle.organizationId,
-    title,
-  };
-
-  const status = CYCLE_STATUS[cycle.status];
-  const identity = display ?? defaultEntityDisplay('cycle', cycle.id);
-
-  return (
-    <ObjectSurface object={object} surfaceId="cycles">
-      <Link
-        href={href}
-        role="row"
-        aria-label={`${title}, ${teamName}`}
-        {...(onPrefetch !== undefined ? { onMouseEnter: onPrefetch, onFocus: onPrefetch } : {})}
-        className={cn(
-          'hover:bg-surface-container-high grid min-h-[72px] cursor-pointer items-center rounded-lg transition-colors',
-          ROW_GRID,
-        )}
-      >
-        <div className="flex min-w-0 items-center gap-3 px-2 py-2">
-          <EntityIconGlyph
-            iconKey={identity.iconKey}
-            colorKey={identity.colorKey}
-            customColor={identity.customColor}
-            size={32}
-          />
-          <div className="min-w-0">
-            <span className="flex min-w-0 items-center gap-2">
-              {canRename && onRename ? (
-                // Rename writes `name` and only `name`, so an unnamed cycle opens an EMPTY field
-                // with its window as the placeholder — never pre-filled with a derived title the
-                // author did not write.
-                <EditableTitle
-                  value={cycle.name ?? ''}
-                  onSave={(name) => {
-                    onRename(cycle.id, name);
-                  }}
-                  canEdit
-                  activate="doubleClick"
-                  {...(onOpen ? { onActivate: onOpen } : {})}
-                  ariaLabel={`${cycleNoun} name`}
-                  placeholder={cycle.displayName}
-                  className="text-on-surface text-body-medium line-clamp-1 min-w-0 font-medium"
-                />
-              ) : (
-                <span className="text-on-surface text-body-medium line-clamp-1 font-medium">
-                  {title}
-                </span>
-              )}
-            </span>
-            <p className="text-on-surface-variant text-body-small mt-0.5 truncate">{subtitle}</p>
-          </div>
-        </div>
-        <div className="px-3">
-          <WorkStatusBadge name={status.name} category={status.category} />
-        </div>
-        <div className="px-3">
-          {stats ? (
-            <div className="flex items-center gap-2">
-              <div className="bg-surface-container-highest h-1.5 w-14 overflow-hidden rounded-full">
-                <span
-                  className="bg-primary block h-full rounded-full"
-                  style={{ width: `${taskPct}%` }}
-                />
-              </div>
-              <span className="text-body-medium tabular-nums">
-                <span className="text-on-surface font-medium">{stats.completed}</span>
-                <span className="text-on-surface-variant">/{stats.committed}</span>
-              </span>
-            </div>
-          ) : (
-            // placeholder: this cycle's completion stats — the committed/completed counts behind the
-            // progress bar. They come from a separate per-cycle read, so the row's name, dates and
-            // status render immediately and only the numbers wait.
-            <div className="flex items-center gap-2">
-              <Skeleton className="h-1.5 w-14 rounded-full" />
-              <Skeleton className="h-3 w-10" />
-            </div>
-          )}
-        </div>
-        <div className="text-on-surface-variant text-body-medium px-3 tabular-nums">
-          {stats ? (
-            stats.carryover > 0 && cycle.status !== 'completed' ? (
-              <span className="text-state-started font-medium">{stats.carryover} open</span>
-            ) : (
-              <span>
-                {stats.completedCapacity}/{stats.capacity} pts
-              </span>
-            )
-          ) : (
-            <Skeleton className="h-3 w-12" />
-          )}
-        </div>
-      </Link>
-    </ObjectSurface>
-  );
-}
-
-/**
- * Props for {@link CycleRows}.
- *
- * @remarks
- * Extends the outer wrapper's own div props so a caller can pass `className`, `data-*`, `id`, or
- * an event handler straight through to the roster frame, matching {@link ProgramRows}'s contract.
- */
-export interface CycleRowsProps extends ComponentPropsWithoutRef<'div'> {
+/** Props for {@link CycleRows}. */
+export type CycleRowsProps = NonNullable<
+  EntityTableProps<CycleRowProps>['containerInteraction']
+> & {
   /** The cycle rows to render, in order. */
   rows: readonly CycleRowProps[];
   /** Accessible label for the roster grid. */
   ariaLabel: string;
+  className?: string | undefined;
+};
+
+/** Return the visible subtitle without repeating an unnamed Cycle's window. */
+function cycleSubtitle({ cycle, teamName }: CycleRowProps): string {
+  return cycle.name ? `${formatWindow(cycle.startsAt, cycle.endsAt)} · ${teamName}` : teamName;
 }
 
-/** The Cycles roster frame: the 72px-row grid's shared column header + its data rows. */
+/** Render the Cycle identity and optional inline rename control. */
+function CycleIdentity({ row }: { readonly row: CycleRowProps }): JSX.Element {
+  const { cycle, display, cycleNoun, canRename, onRename, onOpen } = row;
+  const identity = display ?? defaultEntityDisplay('cycle', cycle.id);
+  return (
+    <span className="flex min-w-0 items-center gap-3 py-1">
+      <EntityIconGlyph
+        iconKey={identity.iconKey}
+        colorKey={identity.colorKey}
+        customColor={identity.customColor}
+        size={32}
+      />
+      <span className="min-w-0">
+        <span className="flex min-w-0 items-center gap-2">
+          {canRename && onRename ? (
+            <EditableTitle
+              value={cycle.name ?? ''}
+              onSave={(name) => {
+                onRename(cycle.id, name);
+              }}
+              canEdit
+              activate="doubleClick"
+              {...(onOpen ? { onActivate: onOpen } : {})}
+              ariaLabel={`${cycleNoun} name`}
+              placeholder={cycle.displayName}
+              className="text-on-surface text-body-medium line-clamp-1 min-w-0 font-medium"
+            />
+          ) : (
+            <span className="text-on-surface text-body-medium line-clamp-1 font-medium">
+              {cycle.displayName}
+            </span>
+          )}
+        </span>
+        <span className="text-on-surface-variant text-body-small mt-0.5 block truncate">
+          {cycleSubtitle(row)}
+        </span>
+      </span>
+    </span>
+  );
+}
+
+/** Render one Cycle's completed versus committed task progress. */
+function CycleProgress({ cycle, stats }: CycleRowProps): JSX.Element {
+  if (!stats) {
+    return (
+      <span className="flex items-center gap-2">
+        <Skeleton className="h-1.5 w-14 rounded-full" />
+        <Skeleton className="h-3 w-10" />
+      </span>
+    );
+  }
+  const taskPct = stats.committed > 0 ? Math.round((stats.completed / stats.committed) * 100) : 0;
+  return (
+    <span
+      className="flex items-center gap-2"
+      aria-label={`${String(stats.completed)} of ${String(stats.committed)} tasks completed in ${cycle.displayName}`}
+    >
+      <span className="bg-surface-container-highest h-1.5 w-14 overflow-hidden rounded-full">
+        <span className="bg-primary block h-full rounded-full" style={{ width: `${taskPct}%` }} />
+      </span>
+      <span className="text-body-medium tabular-nums">
+        <span className="text-on-surface font-medium">{stats.completed}</span>
+        <span className="text-on-surface-variant">/{stats.committed}</span>
+      </span>
+    </span>
+  );
+}
+
+/** Render one Cycle's capacity or carryover summary. */
+function CyclePoints({ cycle, stats }: CycleRowProps): JSX.Element {
+  if (!stats) return <Skeleton className="h-3 w-12" />;
+  if (stats.carryover > 0 && cycle.status !== 'completed') {
+    return <span className="text-state-started font-medium">{stats.carryover} open</span>;
+  }
+  return (
+    <span>
+      {stats.completedCapacity}/{stats.capacity} pts
+    </span>
+  );
+}
+
+/** The one responsive column sequence shared by Cycle headers and rows. */
+const CYCLE_COLUMNS: readonly Column<CycleRowProps>[] = [
+  {
+    key: 'cycle',
+    header: 'Cycle',
+    flex: true,
+    minWidth: '22rem',
+    render: (row) => <CycleIdentity row={row} />,
+  },
+  {
+    key: 'status',
+    header: 'Status',
+    width: '7rem',
+    priority: 1,
+    render: ({ cycle }) => {
+      const status = CYCLE_STATUS[cycle.status];
+      return <WorkStatusBadge name={status.name} category={status.category} />;
+    },
+  },
+  {
+    key: 'progress',
+    header: 'Progress',
+    width: '10rem',
+    priority: 2,
+    render: (row) => <CycleProgress {...row} />,
+  },
+  {
+    key: 'points',
+    header: 'Points',
+    width: '8rem',
+    priority: 3,
+    render: (row) => <CyclePoints {...row} />,
+  },
+];
+
+const CycleRowContext = createContext<CycleRowProps | null>(null);
+
+/** Remove explicit undefined values before forwarding the table's exact-optional link props. */
+function definedRowLinkProps<T extends object>(
+  value: T,
+): {
+  [K in keyof T]: Exclude<T[K], undefined>;
+} {
+  const result = {} as { [K in keyof T]: Exclude<T[K], undefined> };
+  for (const key of Object.keys(value) as (keyof T)[]) {
+    const fieldValue = value[key];
+    if (fieldValue !== undefined) result[key] = fieldValue as Exclude<T[typeof key], undefined>;
+  }
+  return result;
+}
+
+/** Render EntityTable's row link through the existing Cycle object surface. */
+function CycleRowLink(props: EntityTableRowLinkProps): JSX.Element {
+  const row = useContext(CycleRowContext);
+  if (row === null) throw new Error('CycleRowLink requires a Cycle row.');
+  const object = {
+    kind: 'cycle' as const,
+    id: row.cycle.id,
+    organizationId: row.cycle.organizationId,
+    title: row.cycle.displayName,
+  };
+  return (
+    <ObjectSurface object={object} surfaceId="cycles" href={props.href}>
+      <Link
+        {...definedRowLinkProps(props)}
+        aria-label={`${row.cycle.displayName}, ${row.teamName}`}
+      />
+    </ObjectSurface>
+  );
+}
+
+/** Render Cycle rows through the shared responsive table. */
 export function CycleRows({ rows, ariaLabel, className, ...rest }: CycleRowsProps): JSX.Element {
   return (
-    <div {...rest} className={cn('relative', className)}>
-      <div className="overflow-x-auto overscroll-x-contain">
-        <div role="grid" aria-label={ariaLabel} className="text-body-medium min-w-[46rem]">
-          <div
-            role="row"
-            className={cn(
-              'text-on-surface-variant text-label-medium grid h-8 items-center',
-              ROW_GRID,
-            )}
-          >
-            <div role="columnheader" className="px-3 pl-14">
-              Cycle
-            </div>
-            <div role="columnheader" className="px-3">
-              Status
-            </div>
-            <div role="columnheader" className="px-3">
-              Progress
-            </div>
-            <div role="columnheader" className="px-3">
-              Points
-            </div>
-          </div>
-          {rows.map((row) => (
-            <CycleRow key={row.cycle.id} {...row} />
-          ))}
-        </div>
-      </div>
-    </div>
+    <EntityTable<CycleRowProps>
+      aria-label={ariaLabel}
+      columns={CYCLE_COLUMNS}
+      rows={rows}
+      getRowKey={({ cycle }) => cycle.id}
+      tone="tonal"
+      rowHeight={72}
+      rowHref={({ href }) => href}
+      renderRowLink={(props) => <CycleRowLink {...props} />}
+      onRowPrefetch={(row) => {
+        row.onPrefetch?.();
+      }}
+      renderRowInteraction={({ row, children }) => (
+        <CycleRowContext.Provider value={row}>
+          {children({
+            selected: false,
+            rowProps: { 'aria-selected': false, 'data-selected': false },
+          })}
+        </CycleRowContext.Provider>
+      )}
+      containerInteraction={rest}
+      className={className}
+    />
   );
 }

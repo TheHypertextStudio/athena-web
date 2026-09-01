@@ -320,11 +320,38 @@ describe('Cycles list', () => {
   });
 
   it('keeps the active cycle in the roster below, so filters stay honest', () => {
-    renderWithProviders(<CyclesClient />);
+    const { container } = renderWithProviders(<CyclesClient />);
     // The roster grid still carries a row for the active cycle: the overview subordinates the
     // roster by weight, it does not hide anything from it.
     const roster = screen.getByRole('grid', { name: /active cycles/i });
-    expect(within(roster).getByRole('row', { name: 'Jul 27 – Aug 2, Core' })).toBeInTheDocument();
+    const row = within(roster).getByRole('row', { name: /Jul 27 – Aug 2.*Core/ });
+    expect(row).toHaveAttribute('data-object-kind', 'cycle');
+    expect(row).toHaveAttribute('data-object-id', ACTIVE_CYCLE_ID);
+    expect(row).toHaveAttribute('href', `/orgs/${ORG_ID}/cycles/${ACTIVE_CYCLE_ID}`);
+    expect(within(row).getByText('Active')).toBeVisible();
+    expect(row.querySelector('[data-col="progress"]')).toHaveTextContent('3/4');
+    expect(within(row).getByText('1 open')).toBeVisible();
+
+    const priorities = [
+      ['cycle', ['flex']],
+      ['status', ['hidden', '@md/table:flex']],
+      ['progress', ['hidden', '@lg/table:flex']],
+      ['points', ['hidden', '@xl/table:flex']],
+    ] as const;
+    expect(
+      within(roster)
+        .getAllByRole('columnheader')
+        .map((header) => header.getAttribute('data-col')),
+    ).toEqual(priorities.map(([key]) => key));
+    for (const [key, visibilityClasses] of priorities) {
+      const cells = container.querySelectorAll(`[aria-label="Active cycles"] [data-col="${key}"]`);
+      expect(cells).toHaveLength(2);
+      for (const cell of cells) {
+        for (const className of visibilityClasses) {
+          expect(cell).toHaveClass(className);
+        }
+      }
+    }
   });
 });
 

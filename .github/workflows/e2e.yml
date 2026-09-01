@@ -5,16 +5,14 @@ name: E2E
 # fragile signal than the rest of CI, and a deploy held behind it stops shipping the moment it goes
 # red. The header directive is checked by `ci:gate-policy`, so this exception is visible in its
 # report and cannot be mistaken for a deploy gate without changing GitHub's existing check context.
-# It reports here on every push and PR instead.
+# It runs only when an operator needs the complete browser signal. Core screen acceptance remains
+# in CI; this four-shard suite is deliberately not multiplied across every push.
 #
-# Move it back into ci.yml's `deploy-production.needs` once it has been green for long enough to
-# trust as a release gate.
+# Promote it into ci.yml's `release-ready.needs` only if it becomes reliable and valuable enough
+# to justify its billed runner cost as a release gate.
 
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

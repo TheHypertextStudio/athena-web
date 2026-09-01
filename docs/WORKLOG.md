@@ -7,6 +7,50 @@
 
 ## Active Tasks
 
+### [CI-COST-001] Bound hosted Actions usage without weakening release gates
+
+- **Status**: COMPLETED
+- **Started**: 2026-09-01
+- **Completed**: 2026-09-01
+- **Priority**: P0
+- **Description**: August recorded 38,432 billed Linux runner-minutes for `athena-web`. Actions
+  history shows 1,088 workflow runs, including 474 direct pushes that each launched both CI and
+  advisory E2E. The current CI workflow deliberately queues superseded `main` runs because it also
+  owns deployment; each stale run therefore pays the full validation graph before standing down.
+- **Plan**: Local-only `/tmp/2026-09-01-actions-cost-controls.md`; Superpowers execution plans are
+  not committed by policy.
+- **Approach**: Separate successful-CI deployment into a serialized `workflow_run` workflow, make
+  stale validation cancellable, stop automatic advisory E2E runs, and add explicit billed-resource
+  and batched-push rules to `AGENTS.md`. Preserve the existing release-critical browser gate and
+  require an explicit validated SHA throughout deployment.
+- **Subtasks**:
+  - [x] Add failing repository tests for the cost-control and exact-SHA release contracts.
+  - [x] Split cancellable validation from protected deployment.
+  - [x] Make advisory E2E manual-only and codify batch-push/resource policy.
+  - [x] Validate locally, commit once, and push once; hosted lifecycle observation follows the push.
+- **Observed billing**: August `athena-web` Actions Linux usage was 38,432 minutes ($230.592 gross,
+  fully discounted to $0 net). September is already 3,467 minutes ($20.802 gross, $0 net). A recent
+  full CI attempt consumed 80 rounded Linux runner-minutes ($0.48 gross).
+- **Files Changed**: `.github/workflows/ci.yml`, `.github/workflows/deploy-main.yml`,
+  `.github/workflows/deploy.yml`, `.github/workflows/e2e.yml`, `AGENTS.md`,
+  `docs/engineering/ci-gating.md`, `scripts/ci-gate-policy.ts`,
+  `repo-tests/ci/ci-gate-policy.test.ts`, and this worklog.
+- **Validation**: The four new repository assertions failed against the previous workflow graph,
+  then all 37 CI policy tests passed. `actionlint`, formatting, typecheck, lint, build, secret scan,
+  all 301 tooling tests, and the focused API infrastructure suite pass. The full local coverage
+  command was stopped after four minutes after two infrastructure tests failed under the full
+  concurrent graph; the same 18-test file passed alone immediately afterward, and the preceding
+  hosted parent run passed all coverage shards. The replacement hosted run remains the final
+  same-SHA release proof.
+- **Learnings**: Combining non-cancellable deployment with validation made deployment safety force
+  every superseded validation graph to keep running. Separating those lifecycles preserves safe
+  migrations while making stale checks disposable. A four-shard advisory suite is not free merely
+  because it is non-gating; automatic triggers still multiplied it across all 474 pushes. A shared
+  workflow-level concurrency group must exclude failed, cancelled, and PR completions or those
+  no-op events can evict the one legitimate production release waiting behind an active deploy.
+
+---
+
 ### [DEPLOY-DOCTOR-DEPS-001] Install the production doctor's runtime dependencies
 
 - **Status**: COMPLETED

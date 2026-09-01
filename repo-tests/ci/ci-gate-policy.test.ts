@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -20,11 +20,11 @@ import { assertDefined } from '@docket/test-utils';
 import { VAR_REGISTRY } from '../../packages/env/src/registry';
 
 /**
- * Builds a synthetic workflow around a `deploy-production` job so a rule can be
+ * Builds a synthetic workflow around a `release-ready` job so a rule can be
  * exercised in isolation from the real pipeline.
  *
  * @param jobsYaml - YAML for the jobs under test, indented two spaces
- * @param needs - Contents of `deploy-production.needs`
+ * @param needs - Contents of `release-ready.needs`
  * @returns The workflow source text
  */
 function fixture(jobsYaml: string, needs: string[]): string {
@@ -35,8 +35,8 @@ function fixture(jobsYaml: string, needs: string[]): string {
     '    branches: [main]',
     'jobs:',
     jobsYaml.replace(/\n$/, ''),
-    '  deploy-production:',
-    '    name: Deploy production',
+    '  release-ready:',
+    '    name: Release ready',
     `    needs: [${needs.join(', ')}]`,
     '    uses: ./.github/workflows/deploy.yml',
     '',
@@ -190,7 +190,7 @@ describe('ungated-check-job — every check job must gate the deploy', () => {
     expect(checkGatePolicy([workflow])).toEqual([]);
   });
 
-  it('reports a new test job that was never added to deploy-production.needs', () => {
+  it('reports a new test job that was never added to release-ready.needs', () => {
     const findings = check(
       [
         '  contract-tests:',
@@ -204,7 +204,7 @@ describe('ungated-check-job — every check job must gate the deploy', () => {
 
     expect(findings).toHaveLength(1);
     expect(findings[0]).toMatchObject({ rule: 'ungated-check-job', job: 'contract-tests' });
-    expect(findings[0]?.message).toContain('deploy-production.needs');
+    expect(findings[0]?.message).toContain('release-ready.needs');
   });
 
   it('reports a check job implemented purely as an action', () => {
@@ -376,10 +376,11 @@ describe('the real workflows', () => {
       // it runs no tests or checks, so it is not a gate and holds nothing back.
       '.github/workflows/build-images.yml',
       '.github/workflows/ci.yml',
+      '.github/workflows/deploy-main.yml',
       '.github/workflows/deploy.yml',
       // e2e is a check job that deliberately does not gate the deploy; see e2e.yml for why.
       // The ungated-check-job rule is unaffected — it only governs the workflow that owns
-      // `deploy-production`, so a check job in another file is not a gate that file can skip.
+      // `release-ready`, so a check job in another file is not a gate that file can skip.
       '.github/workflows/e2e.yml',
       '.github/workflows/neon-branch.yml',
     ]);
@@ -402,6 +403,67 @@ describe('the real workflows', () => {
     expect(report).toContain('advisory check workflow(s): .github/workflows/e2e.yml');
   });
 
+  it('runs the full advisory E2E suite only when an operator requests it', () => {
+    const source = readFileSync(join(REPO_ROOT, '.github/workflows/e2e.yml'), 'utf8');
+    const document = parseYaml(source) as Record<string, unknown>;
+    const triggers = document['on'] as Record<string, unknown>;
+
+    expect(Object.keys(triggers)).toEqual(['workflow_dispatch']);
+  });
+
+  it('cancels stale validation without cancelling an active production release', () => {
+    const ciSource = readFileSync(join(REPO_ROOT, '.github/workflows/ci.yml'), 'utf8');
+    const ciDocument = parseYaml(ciSource) as Record<string, unknown>;
+    const ciConcurrency = ciDocument['concurrency'] as Record<string, unknown>;
+    const ciJobs = ciDocument['jobs'] as Record<string, unknown>;
+
+    expect(ciConcurrency['cancel-in-progress']).toBe(true);
+    expect(ciJobs['deploy-production']).toBeUndefined();
+    expect(ciJobs['release-ready']).toBeDefined();
+
+    const releasePath = join(REPO_ROOT, '.github/workflows/deploy-main.yml');
+    expect(existsSync(releasePath)).toBe(true);
+    if (!existsSync(releasePath)) return;
+
+    const releaseDocument = parseYaml(readFileSync(releasePath, 'utf8')) as Record<string, unknown>;
+    const releaseConcurrency = releaseDocument['concurrency'] as Record<string, unknown>;
+    const releaseTriggers = releaseDocument['on'] as Record<string, unknown>;
+    const workflowRun = releaseTriggers['workflow_run'] as Record<string, unknown>;
+    const releaseGroup = releaseConcurrency['group'] as string;
+
+    expect(releaseConcurrency['cancel-in-progress']).toBe(false);
+    expect(releaseGroup).toContain("github.event.workflow_run.conclusion == 'success'");
+    expect(releaseGroup).toContain("github.event.workflow_run.event == 'push'");
+    expect(releaseGroup).toContain("github.event.workflow_run.head_branch == 'main'");
+    expect(releaseGroup).toContain('github.run_id');
+    expect(workflowRun['workflows']).toEqual(['CI']);
+    expect(workflowRun['types']).toEqual(['completed']);
+  });
+
+  it('deploys the exact SHA whose CI run passed', () => {
+    const source = readFileSync(join(REPO_ROOT, '.github/workflows/deploy.yml'), 'utf8');
+    const document = parseYaml(source) as Record<string, unknown>;
+    const triggers = document['on'] as Record<string, unknown>;
+    const workflowCall = triggers['workflow_call'] as Record<string, unknown>;
+    const inputs = workflowCall['inputs'] as Record<string, unknown>;
+
+    expect(inputs['release_sha']).toEqual({
+      description: 'Validated commit to deploy.',
+      required: true,
+      type: 'string',
+    });
+    expect(source).toContain('ref: ${{ inputs.release_sha }}');
+    expect(source).not.toContain('${{ github.sha }}');
+  });
+
+  it('requires agents to batch hosted validation into one push per delivery', () => {
+    const agents = readFileSync(join(REPO_ROOT, 'AGENTS.md'), 'utf8');
+
+    expect(agents).toContain('## Billed Resource Policy');
+    expect(agents).toContain('one push per coherent delivery');
+    expect(agents).toContain('Never push merely to use hosted CI as a debugger');
+  });
+
   it('preserves pnpm links when the E2E build crosses the artifact boundary', () => {
     const source = readFileSync(join(REPO_ROOT, '.github/workflows/e2e.yml'), 'utf8');
 
@@ -413,11 +475,11 @@ describe('the real workflows', () => {
 
   it('gates the production deploy on every check job ci.yml declares', () => {
     const ci = workflows.find((workflow) => workflow.path === '.github/workflows/ci.yml');
-    const deploy = ci?.jobs.find((job) => job.id === 'deploy-production');
+    const releaseReady = ci?.jobs.find((job) => job.id === 'release-ready');
     const checkJobs = (ci?.jobs ?? []).filter((job) => isCheckJob(job)).map((job) => job.id);
 
     // Recorded expectation: adding a check job to ci.yml must update this list *and*
-    // deploy-production.needs, which is exactly the coupling the ungated-check-job rule enforces.
+    // release-ready.needs, which is exactly the coupling the ungated-check-job rule enforces.
     expect(checkJobs).toEqual([
       'lint',
       'typecheck',
@@ -426,13 +488,9 @@ describe('the real workflows', () => {
       'build',
       'core-screen-smoke',
     ]);
-    // `build-images` and `still-latest` are in `needs` without being check jobs, and the
-    // asymmetry is deliberate: neither runs tests, so the ungated-check-job rule does not require
-    // them, but the
-    // deploy consumes the images `build-images` pushes and stands down when `still-latest` finds
-    // `main` has moved past this commit — both are real data/ordering dependencies. Every check
-    // job still appears here.
-    expect(deploy?.needs).toEqual([
+    // `build-images` is a data dependency without being a check job: the release consumes the
+    // images it pushes. Every check job still appears here.
+    expect(releaseReady?.needs).toEqual([
       'lint',
       'typecheck',
       'secret-scan',
@@ -440,12 +498,8 @@ describe('the real workflows', () => {
       'build',
       'core-screen-smoke',
       'build-images',
-      'still-latest',
     ]);
-    expect(checkJobs.every((job) => deploy?.needs.includes(job))).toBe(true);
-
-    const freshness = ci?.jobs.find((job) => job.id === 'still-latest');
-    expect(freshness?.needs).toContain('core-screen-smoke');
+    expect(checkJobs.every((job) => releaseReady?.needs.includes(job))).toBe(true);
   });
 
   it('runs the coverage gate — a bare `vitest run` enforces no thresholds', () => {

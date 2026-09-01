@@ -1,7 +1,7 @@
 # AGENTS.md - Project Athena Agent Guidelines
 
-> **Version**: 2.1.0
-> **Last Updated**: 2026-08-29
+> **Version**: 2.2.0
+> **Last Updated**: 2026-09-01
 > **Applies To**: All AI coding agents working on Project Athena
 
 This document defines the operational framework for AI agents contributing to Project Athena. All agents MUST adhere to these guidelines to ensure consistent, high-quality, autonomous development.
@@ -13,15 +13,16 @@ This document defines the operational framework for AI agents contributing to Pr
 1. [Workflow](#workflow)
 2. [Documentation Requirements](#documentation-requirements)
 3. [Version Control Protocol](#version-control-protocol)
-4. [Work Tracking System](#work-tracking-system)
-5. [Platform Best Practices](#platform-best-practices)
-6. [Task Completion Standards](#task-completion-standards)
-7. [Reusable Tooling](#reusable-tooling)
-8. [Self-Modification Protocol](#self-modification-protocol)
-9. [Research Requirements](#research-requirements)
-10. [Planning Protocol](#planning-protocol)
-11. [Retrospection Requirements](#retrospection-requirements)
-12. [Self-Validation Protocol](#self-validation-protocol)
+4. [Billed Resource Policy](#billed-resource-policy)
+5. [Work Tracking System](#work-tracking-system)
+6. [Platform Best Practices](#platform-best-practices)
+7. [Task Completion Standards](#task-completion-standards)
+8. [Reusable Tooling](#reusable-tooling)
+9. [Self-Modification Protocol](#self-modification-protocol)
+10. [Research Requirements](#research-requirements)
+11. [Planning Protocol](#planning-protocol)
+12. [Retrospection Requirements](#retrospection-requirements)
+13. [Self-Validation Protocol](#self-validation-protocol)
 
 ---
 
@@ -227,6 +228,24 @@ Commit behavior:
 2. Use only `feat`, `fix`, or `chore` Conventional Commit types
 3. Include a substantive plain-language body for every normal commit
 4. No user approval required (project override)
+
+---
+
+## Billed Resource Policy
+
+Hosted runner time is a finite production resource. Agents MUST validate locally, commit as often as
+the change requires, and make **one push per coherent delivery** after the local release checks pass.
+Do not push intermediate diagnostic commits or push each atomic commit separately.
+
+Never push merely to use hosted CI as a debugger. Reproduce failures with the repository's local
+commands first, inspect active runs before starting another, and rerun only the failed job at the same
+SHA when the failure is transient or provider-side. A new push is justified only by a source change.
+
+New or expanded workflows MUST document their trigger multiplier, expected runner footprint, and why
+the signal belongs on every push. Prefer cancellable validation, targeted changed-slice checks, and
+manual dispatch for expensive advisory suites. Production deployment remains serialized and
+non-cancellable, but it MUST be isolated from validation so that safety does not force stale checks to
+consume billed minutes.
 
 ---
 

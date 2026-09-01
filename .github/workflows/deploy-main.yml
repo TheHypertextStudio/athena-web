@@ -1,0 +1,53 @@
+name: Deploy main
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+# A production migration or rollout must never be cancelled halfway through. Only qualifying
+# success/push/main events share the production group: failed, cancelled, and PR completions still
+# create workflow_run events, but unique no-op groups keep them from evicting the one pending
+# production release GitHub concurrency retains. The freshness job prevents queued stale releases.
+concurrency:
+  group: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && 'deploy-main' || format('deploy-main-noop-{0}', github.run_id) }}
+  cancel-in-progress: false
+
+jobs:
+  still-latest:
+    name: Confirm validated commit is still main
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      proceed: ${{ steps.check.outputs.proceed }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VALIDATED_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          latest="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          if [ "$latest" = "$VALIDATED_SHA" ]; then
+            echo "proceed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::main moved to $latest after CI validated $VALIDATED_SHA; skipping the stale release."
+          fi
+
+  deploy-production:
+    name: Deploy production
+    needs: still-latest
+    if: needs.still-latest.outputs.proceed == 'true'
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/deploy.yml
+    with:
+      release_sha: ${{ github.event.workflow_run.head_sha }}
+    secrets: inherit

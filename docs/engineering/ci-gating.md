@@ -3,43 +3,66 @@
 The rule this document exists to protect: **Docket does not deploy to production unless every test
 and every check has passed.** Not "unless someone noticed a failure" — unless CI itself refuses.
 
-`.github/workflows/ci.yml` is the whole of that gate. `deploy-production` is the only job that ships
-anything, and it runs only after every other job in the file has succeeded.
+`.github/workflows/ci.yml` owns validation and ends at `release-ready`. A successful push run then
+triggers `.github/workflows/deploy-main.yml`, which verifies that the validated SHA is still the tip
+of `main` and calls `deploy.yml` with that exact SHA. Validation is cancellable; the separate
+production workflow is serialized and non-cancellable once it begins.
 
 ## The jobs
 
 Three of these are sharded across a build matrix (`api` / `web` / `rest`), which multiplies the
 runs but not the job id — `needs` still names one id per row.
 
-| Job                 | What it runs                                                                                                                     | Gating?                                         |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
-| `lint`              | `turbo run lint` per shard                                                                                                       | Yes                                             |
-| `typecheck`         | `turbo run typecheck typecheck:repo` per shard; `pnpm format:check` and `pnpm ci:gate-policy` on `rest`                          | Yes                                             |
-| `secret-scan`       | `pnpm secret-scan` — the in-repo scanner over the tracked tree                                                                   | Yes                                             |
-| `test`              | `turbo run test:coverage` per shard (thresholds enforced), `test:performance` for api and web, and `pnpm test:tooling` on `rest` | Yes                                             |
-| `build`             | `turbo run build` — every deployable artifact                                                                                    | Yes                                             |
-| `core-screen-smoke` | Playwright over the primary authenticated screens, against a real Postgres                                                       | Yes                                             |
-| `build-images`      | Calls `build-images.yml`; starts at t=0 with no `needs` of its own                                                               | Yes                                             |
-| `still-latest`      | Checks `main` hasn't moved past this commit since the gates started                                                              | Yes — stands `deploy-production` down if it has |
-| `deploy-production` | Calls `deploy.yml`, on pushes to `main` only                                                                                     | The thing being gated                           |
+| Job                 | What it runs                                                                                                                     | Gating?                 |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| `lint`              | `turbo run lint` per shard                                                                                                       | Yes                     |
+| `typecheck`         | `turbo run typecheck typecheck:repo` per shard; `pnpm format:check` and `pnpm ci:gate-policy` on `rest`                          | Yes                     |
+| `secret-scan`       | `pnpm secret-scan` — the in-repo scanner over the tracked tree                                                                   | Yes                     |
+| `test`              | `turbo run test:coverage` per shard (thresholds enforced), `test:performance` for api and web, and `pnpm test:tooling` on `rest` | Yes                     |
+| `build`             | `turbo run build` — every deployable artifact                                                                                    | Yes                     |
+| `core-screen-smoke` | Playwright over the primary authenticated screens, against a real Postgres                                                       | Yes                     |
+| `build-images`      | Calls `build-images.yml`; starts at t=0 with no `needs` of its own                                                               | Release data dependency |
+| `release-ready`     | Depends on every check and the exact-SHA images                                                                                  | The release gate        |
 
 There is no separate `coverage` job: `test` runs the instrumented task, so the thresholds in
 `tooling/vitest/preset.ts` are what the `test` job enforces. Root `pnpm test` runs the same task,
 so a local green means the same thing CI's does.
 
-The browser suite in `.github/workflows/e2e.yml` is **not** in this list and does not gate the
-deploy. It carries a `# ci-gate-policy: advisory` directive saying so, because it still contains
-flaky and evidence-oriented journeys. `core-screen-smoke` is the browser contract production does
-depend on, and it lives in `ci.yml` where `needs` can reach it.
+The full browser suite in `.github/workflows/e2e.yml` is **not** in this list and does not gate the
+deploy. It carries a `# ci-gate-policy: advisory` directive and runs only by manual dispatch because
+it contains slower, evidence-oriented journeys across four shards. `core-screen-smoke` is the
+browser contract production depends on, and it lives in `ci.yml` where `needs` can reach it.
 
-`deploy-production.needs` must name **every** job above it. Not just the ones with "test" in the name:
+## Billed use and trigger policy
+
+The August 2026 baseline was 38,432 Linux runner-minutes across 1,088 Actions runs. There were 474
+push-triggered CI runs and 474 matching push-triggered advisory E2E runs. One representative CI run
+consumed 80 rounded Linux runner-minutes, so rapid direct pushes multiplied a large graph even when
+only the newest commit could be useful in production.
+
+The controls are structural:
+
+- CI uses `cancel-in-progress: true`; a newer push replaces validation for a stale SHA.
+- Deployment runs only after a successful CI `workflow_run`, is serialized with
+  `cancel-in-progress: false`, and checks that the validated SHA is still `main` before starting.
+- `deploy.yml` receives `release_sha` explicitly, checks out that SHA, and uses its image tags.
+- Full advisory E2E is manual. Its trigger multiplier is therefore one five-job workflow per
+  explicit operator dispatch, not one five-job workflow per push and pull request.
+- Agents validate locally and batch finished commits into one push per coherent delivery. Hosted CI
+  is release evidence, not an interactive debugger.
+
+Any new automatic workflow must record its expected jobs per event and justify why the signal is
+required on every trigger. Do not trade away release integrity to save minutes: change the trigger
+or dependency graph so stale work can stop while active production work remains protected.
+
+`release-ready.needs` must name **every** check job above it. Not just the ones with "test" in the name:
 a lint failure, a type error, a formatting drift, a leaked credential, and a coverage regression are all
 reasons not to ship, and each of them lives in a job that runs no test command at all.
 
 ## Two ways this gate can rot
 
 **A new job that nobody wires into `needs`.** Someone adds an `accessibility` or `contract-tests` job.
-It runs. It goes red. And `deploy-production` ships anyway, because `needs` still lists the six jobs it
+It runs. It goes red. And `release-ready` still passes, because `needs` still lists the six jobs it
 listed last month. GitHub gives no warning for this — a job absent from `needs` is simply not waited on.
 
 **A step that is allowed to fail.** `continue-on-error: true`, a trailing `|| true`, or `if: always()`
@@ -79,7 +102,7 @@ re-adoption is classified correctly even though the scan runs as a `run:` step t
 
 The assertions:
 
-1. Every check job in `ci.yml` appears in `deploy-production.needs` (`ungated-check-job`, the launch
+1. Every check job in `ci.yml` appears in `release-ready.needs` (`ungated-check-job`, the launch
    requirement tracked as SCR-19). SCR-19's acceptance was written when the checks were named
    `quality`, `test`, `build` and `e2e`; the names have changed since, which is exactly why the
    rule is written over checks rather than over a list — and over checks rather than over _tests_,
@@ -138,7 +161,7 @@ proof by experiment:
 
 > Proven empirically on a scratch branch: force one unit test to fail and, separately, one e2e spec to
 > fail — in both cases the workflow run reports failure (not merely a skipped deploy) and
-> `deploy-production` does not run.
+> the production deployment workflow does not run.
 
 **This has not been performed.** It requires pushing branches and consuming CI minutes, and the working
 tree this guard was written in does not push. Recording it as done would be a false claim, so it is
@@ -149,20 +172,20 @@ What the proof consists of, precisely, for whoever runs it:
 1. Branch from `main`. Introduce exactly one failing assertion in one unit test — for example, invert an
    expectation in `packages/test-utils/tests/workspace-policies/dependency-catalog.test.ts`. Push.
 2. Observe the run. Required outcome: the `test` job concludes **failure**, the workflow's overall
-   conclusion is **failure** (not "success with a skipped job"), and `deploy-production` shows as
-   **skipped**, never **success**. Record the run URL.
+   conclusion is **failure** (not "success with a skipped job"), and no matching `Deploy main`
+   workflow is created. Record the run URL.
 3. Revert that change. On the same branch, introduce exactly one failing assertion in a Playwright
    spec that `core-screen-smoke` runs — one of `e2e/release/core-screen-acceptance.spec.ts`,
    `e2e/platform/pwa-offline-sync.spec.ts`, or `e2e/work/work-views.spec.ts`. Push.
 4. Observe the run. Required outcome: the `core-screen-smoke` job concludes **failure**, the
-   workflow conclusion is **failure**, and `deploy-production` is **skipped**. Record the run URL.
+   workflow conclusion is **failure**, and no matching `Deploy main` workflow is created. Record
+   the run URL.
    Note that a failure in `e2e.yml` proves nothing here: that workflow is advisory and reaches no
    `needs` list, which is why the spec has to be one `core-screen-smoke` actually runs.
-5. Because `deploy-production` is guarded by `if: github.event_name == 'push' && github.ref == 'refs/heads/main'`,
-   a scratch branch skips it for that reason alone. To prove the `needs` gate rather than the `if` gate,
-   either run steps 1–4 with that `if` temporarily relaxed on the scratch branch, or read the run's job
-   graph and confirm the skip is attributed to the failed dependency. State in the record which of the
-   two was done — the distinction is the entire point of the experiment.
+5. `Deploy main` accepts only a successful CI `workflow_run` whose event was a push to `main`.
+   Scratch-branch evidence therefore proves failure propagation inside CI; proving the cross-workflow
+   production boundary requires a controlled failure on `main`, which must be explicitly authorized
+   and immediately repaired rather than smuggled into routine validation.
 6. Delete the scratch branch. Paste both run URLs and both observed conclusions into this section, and
    update SCR-20's evidence in `docs/engineering/launch-compliance.json`.
 

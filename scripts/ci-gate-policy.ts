@@ -5,7 +5,7 @@
  * @remarks
  * This module exists because two properties are otherwise unenforceable by review alone:
  *
- * - **No ungated check job** — `deploy-production.needs` must name *every* job that executes
+ * - **No ungated check job** — `release-ready.needs` must name *every* job that executes
  *   tests or checks. The list is correct today, but nothing stops a future job
  *   from being added to `ci.yml` without being wired into `needs`; such a job
  *   would run, fail, and the deploy would ship anyway.
@@ -716,7 +716,7 @@ export const GATING_COMMAND_TOKENS: readonly string[] = [
   'secret-scan',
   // This checker itself. Today it runs inside `quality`, which is already a check job; listing
   // it means that if it is ever moved into a job of its own, that job is still required in
-  // `deploy-production.needs` rather than becoming an unguarded guard.
+  // `release-ready.needs` rather than becoming an unguarded guard.
   'ci:gate-policy',
 ];
 
@@ -815,7 +815,7 @@ export interface PolicyFinding {
 /** Options for {@link checkGatePolicy}. */
 export interface GatePolicyOptions {
   /**
-   * Identifier of the job that performs the production deploy.
+   * Identifier of the job that certifies a commit for production deployment.
    *
    * @remarks
    * Check jobs in a workflow that owns this job must be listed in its `needs`.
@@ -825,8 +825,8 @@ export interface GatePolicyOptions {
   readonly deployJobId?: string;
 }
 
-/** The job id that ships production, and the anchor for the ungated-check-job guard. */
-export const DEFAULT_DEPLOY_JOB_ID = 'deploy-production';
+/** The release-gate job id and anchor for the ungated-check-job guard. */
+export const DEFAULT_DEPLOY_JOB_ID = 'release-ready';
 
 /**
  * Determines whether a workflow visibly declares its checks advisory rather than deploy gates.
@@ -881,7 +881,7 @@ export function checkGatePolicy(
           step: null,
           message:
             `Job "${job.id}" runs gating checks but is not listed in ` +
-            `${deployJobId}.needs — a failure there would not stop the production deploy. ` +
+            `${deployJobId}.needs — a failure there would not stop the production release. ` +
             `Add "${job.id}" to ${deployJobId}.needs.`,
         });
       }
@@ -894,7 +894,7 @@ export function checkGatePolicy(
           step: null,
           message:
             `Job "${job.id}" runs gating checks in a workflow with no ${deployJobId} job. ` +
-            'Move it into the deploy workflow so it gates production, or add ' +
+            'Move it into the release-gate workflow so it gates production, or add ' +
             `${ADVISORY_WORKFLOW_MARKER} to this workflow's comment header to mark the signal explicitly advisory.`,
         });
       }

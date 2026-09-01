@@ -6,14 +6,11 @@ on:
   pull_request:
     branches: [main]
 
-# Superseded pull-request runs are worth cancelling; superseded pushes to `main` are not.
-# `deploy-production` is the last job of this run, so cancelling a push to `main` throws away that
-# commit's only deploy — and at this repo's merge rate, every run cancels the one before it and
-# nothing ever ships. Pushes to `main` queue instead. The concurrency group still serializes them,
-# so two deploys can never race; they take turns.
+# Validation is safe to cancel because production release now runs in deploy-main.yml after a
+# successful CI run. A newer push replaces stale validation without interrupting an active deploy.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  cancel-in-progress: true
 
 # Turbo Remote Cache. A task computed on any run — or on a developer's linked machine — is
 # replayed rather than recomputed here, so a pull request that touches one package no longer pays
@@ -116,13 +113,13 @@ jobs:
         if: matrix.gates
 
       # Fails when a job that runs tests or checks is added to this file without being added to
-      # deploy-production.needs, or when a gating step is soft-failed (continue-on-error,
+      # release-ready.needs, or when a gating step is soft-failed (continue-on-error,
       # `|| true`, `if: always()`). See scripts/ci-gate-policy.ts.
       - run: pnpm ci:gate-policy
         if: matrix.gates
 
   # No credential may reach the default branch. Fails the run — and therefore
-  # the production deploy, via deploy-production.needs — on any finding.
+  # the production release, via release-ready.needs — on any finding.
   #
   # The gate is `scripts/secret-scan.ts`, the in-repo scanner, NOT gitleaks/gitleaks-action.
   # The action is free for personal accounts but requires a licence key for org-owned
@@ -175,7 +172,7 @@ jobs:
   # which is how @docket/admin and @docket/runner went untested here for as long as they existed.
   # repo-tests/tooling/package-script-integrity.test.ts is what closes that second hole.
   #
-  # The job id stays `test`, so `deploy-production.needs` and scripts/ci-gate-policy.ts's
+  # The job id stays `test`, so `release-ready.needs` and scripts/ci-gate-policy.ts's
   # ungated-check-job check keep working unchanged — a matrix multiplies the runs, not the id.
   test:
     name: Test (${{ matrix.group }})
@@ -402,14 +399,14 @@ jobs:
 
   # Deliberately NO `needs`. The Docker builds take ~4 minutes and depend on nothing the check
   # jobs produce, so they run alongside them rather than after: by the time the gates are green
-  # both images are already in Artifact Registry and `deploy-production` has only migrations and
+  # both images are already in Artifact Registry and the release workflow has only migrations and
   # the Cloud Run rollout left to do.
   #
   # This is not a hole in the gating. Building an image publishes nothing a user can reach —
-  # `deploy-production` below still needs every check job, so a red run rolls out nothing. The
+  # `release-ready` below still needs every check job, so a red run rolls out nothing. The
   # cost is one discarded image build on a failing run, which is the point of the trade.
   # `scripts/ci-gate-policy.ts` sees a job with no gating command and correctly does not classify
-  # it as a check job, so it isn't required to appear in deploy-production.needs on that basis —
+  # it as a check job, so it isn't required to appear in release-ready.needs on that basis —
   # it's listed there anyway, for the image-consumption ordering, not to satisfy that rule.
   build-images:
     name: Build deploy images
@@ -420,59 +417,13 @@ jobs:
     uses: ./.github/workflows/build-images.yml
     secrets: inherit
 
-  # `cancel-in-progress: false` above protects an ACTIVE deploy from being killed mid-migration —
-  # that is the fix for the 2026-08-05 outage, and it stays. But it means a run that started from
-  # an older push keeps paying for its gates even after newer commits have landed on `main`: under
-  # a burst of rapid pushes (several agents committing directly to main within the same
-  # ~15-20 minute gate window), a run can reach `deploy-production` for a commit `main` has already
-  # moved past. Deploying it anyway just means a second, immediate rollout when the next run's
-  # deploy lands on top of it. This job `needs` the same gates `deploy-production` does, so it
-  # checks freshness right before `deploy-production` would start rather than at T+0 when the run
-  # began — a check made 15-20 minutes early would already be stale by the time it's used. If
-  # `main` has moved on, `deploy-production` stands down — nothing has been touched yet, so this
-  # is a plain skip, not a cancellation of anything in flight.
-  still-latest:
-    name: Still latest on main
+  # This is the single success gate consumed by deploy-main.yml. Keeping deployment out of this
+  # workflow makes stale validation cancellable while retaining an explicit dependency on every
+  # check and on the exact-SHA images the release consumes.
+  release-ready:
+    name: Release ready
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [lint, typecheck, secret-scan, test, build, core-screen-smoke, build-images]
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    outputs:
-      proceed: ${{ steps.check.outputs.proceed }}
     steps:
-      - id: check
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          for _ in 1 2 3; do
-            latest=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha') && break
-            sleep 5
-          done
-          if [ -z "$latest" ]; then
-            echo "::error::Could not read main's current tip after 3 attempts; failing closed."
-            exit 1
-          fi
-          if [ "$latest" = "$GITHUB_SHA" ]; then
-            echo "proceed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "proceed=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::main has moved to $latest since this run started at $GITHUB_SHA — skipping deploy for a stale commit."
-          fi
-
-  # Browser e2e against the real dev stack (Portless routing + Next dev + Hono API + PGlite),
-  # exactly the topology `pnpm dev` gives a developer — including the MCP OAuth flows
-  # (register → consent → token → Bearer /mcp), which .env.local enables locally.
-  # `needs` must name EVERY job above that runs tests or checks. Adding a check job without
-  # adding it here would let a red check ship to production; `pnpm ci:gate-policy`
-  # (run in the `quality` job, and by repo-tests/ci/ci-gate-policy.test.ts) fails when that happens.
-  deploy-production:
-    name: Deploy production
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.still-latest.outputs.proceed == 'true'
-    needs:
-      [lint, typecheck, secret-scan, test, build, core-screen-smoke, build-images, still-latest]
-    permissions:
-      contents: read
-      id-token: write
-    uses: ./.github/workflows/deploy.yml
-    secrets: inherit
+      - run: echo "Validated $GITHUB_SHA and built its release images."

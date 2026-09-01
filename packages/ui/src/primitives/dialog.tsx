@@ -177,6 +177,12 @@ export interface DialogContentProps extends Omit<
   readonly className?: string | undefined;
 }
 
+function hostedDialogInteractivityClass(
+  hosted: Extract<DialogPresentation, { kind: 'hosted' }> | null,
+): string | undefined {
+  return hosted ? 'pointer-events-auto' : undefined;
+}
+
 /** Render a focus-trapped dialog panel with one shared presentation contract. */
 export function DialogContent({
   className,
@@ -214,6 +220,7 @@ export function DialogContent({
           // panel never bleeds to the window edge; `max-w-lg` caps it once the screen is wide
           // enough that the calc would exceed it (the narrower per-dialog `max-w-md` still wins).
           'bg-surface-container-high text-on-surface data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-[0.98] data-[state=open]:zoom-in-[0.98] shadow-level3 border-outline-variant fixed z-[110] flex min-h-0 flex-col gap-0 overflow-hidden overscroll-contain rounded-xl border p-0 duration-(--dur-slow) ease-(--ease-out) outline-none',
+          hostedDialogInteractivityClass(hosted),
           presentationClass ??
             'top-1/2 left-1/2 max-h-[85vh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 p-6',
           { '@container': containerQuery },

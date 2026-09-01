@@ -314,7 +314,7 @@ describe('Dialog family', () => {
 
     const dialog = await screen.findByRole('dialog', { name: 'Hosted' });
     expect(portal).toContainElement(dialog);
-    expect(dialog).toHaveClass('max-w-5xl', 'max-h-[min(85dvh,48rem)]');
+    expect(dialog).toHaveClass('pointer-events-auto', 'max-w-5xl', 'max-h-[min(85dvh,48rem)]');
     expect(dialog).toHaveStyle({ top: '12px', left: '20px', width: '480px', maxHeight: '600px' });
     expect(portal.querySelector('[data-overlay-scrim]')).toBeNull();
     portal.remove();

@@ -529,15 +529,11 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
 
   const hasSocial = Object.keys(socialProviders).length > 0;
 
+  const browserTrustedOrigins = parseTrustedOrigins(e.BETTER_AUTH_TRUSTED_ORIGINS);
   const nativePasskeyOrigins = parseTrustedOrigins(e.BETTER_AUTH_PASSKEY_NATIVE_ORIGINS);
   const passkeyOrigins =
     nativePasskeyOrigins.length > 0
-      ? [
-          ...new Set([
-            ...parseTrustedOrigins(e.BETTER_AUTH_TRUSTED_ORIGINS),
-            ...nativePasskeyOrigins,
-          ]),
-        ]
+      ? [...new Set([...browserTrustedOrigins, ...nativePasskeyOrigins])]
       : undefined;
 
   const plugins: BetterAuthPlugin[] = [
@@ -737,7 +733,7 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
   // Apple posts its OAuth callback (form_post) from `appleid.apple.com`, so that origin must be
   // trusted or Better Auth rejects the callback. Added ONLY when Apple is configured — unset ⇒ the
   // trusted-origins list is byte-identical to the CSV env value.
-  const trustedOrigins = parseTrustedOrigins(e.BETTER_AUTH_TRUSTED_ORIGINS);
+  const trustedOrigins = [...new Set([...browserTrustedOrigins, ...nativePasskeyOrigins])];
   if (appleCreds !== undefined) trustedOrigins.push('https://appleid.apple.com');
 
   return {

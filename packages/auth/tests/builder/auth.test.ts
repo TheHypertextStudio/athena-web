@@ -1455,6 +1455,55 @@ describe('buildAuthOptions env-gating', () => {
       'https://admin.hypertext.studio',
       nativeOrigin,
     ]);
+    expect(opts.trustedOrigins).toEqual([
+      'https://docket.hypertext.studio',
+      'https://admin.hypertext.studio',
+      nativeOrigin,
+    ]);
+  });
+
+  it('allows the configured Android origin through the real request-origin gate', async () => {
+    const { buildAuthOptions } = await import('../../src/index');
+    const { betterAuth } = await import('better-auth');
+    const nativeOrigin = 'android:apk-key-hash:3zJp1NzJxP5y_mFioPTp7l8EFEfcs472qSV2_DiQ28c';
+    const options = buildAuthOptions(
+      {
+        ...baseEnv,
+        BETTER_AUTH_URL: 'https://docket-api.hypertext.studio',
+        BETTER_AUTH_PASSKEY_RP_ID: 'hypertext.studio',
+        BETTER_AUTH_TRUSTED_ORIGINS: 'https://docket.hypertext.studio',
+        BETTER_AUTH_PASSKEY_NATIVE_ORIGINS: nativeOrigin,
+      },
+      MAILER_DEPS,
+    );
+    const instance = betterAuth({
+      ...options,
+      advanced: {
+        ...options.advanced,
+        disableOriginCheck: false,
+        disableCSRFCheck: false,
+      },
+    });
+    const verify = (origin: string): Promise<Response> =>
+      instance.handler(
+        new Request('https://docket-api.hypertext.studio/api/auth/passkey/verify-authentication', {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            cookie: 'native-origin-probe=1',
+            origin,
+          },
+          body: JSON.stringify({ response: { id: 'native-origin-probe' } }),
+        }),
+      );
+
+    const allowed = await verify(nativeOrigin);
+    expect(allowed.status).toBe(400);
+    expect(await allowed.json()).toMatchObject({ code: 'CHALLENGE_NOT_FOUND' });
+
+    const rejected = await verify('android:apk-key-hash:unlisted');
+    expect(rejected.status).toBe(403);
+    expect(await rejected.json()).toMatchObject({ code: 'INVALID_ORIGIN' });
   });
 
   it('leaves passkey origin unset when no native application origin is configured', async () => {

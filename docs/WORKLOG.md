@@ -329,19 +329,27 @@ offline_access marketplace`, and a bare `marketplace` names nothing in Lovelace'
   limited to a truthful unavailable capability whose future input is cached work and agenda state.
 - **Subtasks**:
   - [x] Add native passkey origin configuration and regression coverage.
-  - [ ] Publish and verify the debug application's Digital Asset Links statement (file is on the
-        website's `main`; the apex Cloudflare binding still returns 522).
+  - [x] Publish and verify the debug application's Digital Asset Links statement at the apex RP
+        domain with the package and debug-certificate fingerprint installed on both phones.
   - [x] Establish the Hilt-based Android shell and account authenticator.
   - [x] Implement the native passkey ceremony and offline session recovery.
   - [x] Implement bounded, owner-isolated offline share capture.
   - [x] Add the read-only on-device Athena capability boundary.
+  - [x] Make the Android application origin one canonical trust input for both Better Auth's
+        request-origin gate and the passkey assertion verifier, with handler-level and live-deploy
+        regression proof.
+  - [x] Preserve sanitized Android authentication stage/status diagnostics so server rejection is
+        actionable without exposing cookies, passkey material, or provider response text.
   - [ ] Validate production web auth, Android tests/build, and the emulator journey.
-- **Blockers**: The validated asset-links commit is on `website/main`, but
-  `https://hypertext.studio/.well-known/assetlinks.json` still returns Cloudflare 522. The Pages
-  workflow has no `CLOUDFLARE_API_TOKEN`, and the local Wrangler login belongs to a different
-  account with no `hypertext-studio` Pages project. Production passkey acceptance also remains
-  unproven until the API deployment, apex asset statement, and a Credential Manager ceremony
-  succeed together on an unlocked debug emulator.
+- **Current failure**: A fresh production probe on 2026-09-01 proved that the challenge endpoint,
+  challenge cookie, RP ID, Digital Asset Links response, package, and debug fingerprint are
+  correct. The assertion POST is rejected before WebAuthn verification with HTTP 403
+  `INVALID_ORIGIN`: `BETTER_AUTH_PASSKEY_NATIVE_ORIGINS` feeds the passkey plugin's expected-origin
+  list, but the deployment leaves Better Auth's separate top-level `trustedOrigins` browser-only.
+  The Android client then maps that server exception to its generic recoverable-error copy.
+- **Blockers**: None for implementation. Final acceptance still requires a successful production
+  deployment followed by one real Credential Manager assertion and session creation on a physical
+  phone; the biometric/passkey choice remains intentionally user-mediated.
 - **Notes**: The user explicitly replaced the planned manual application container with a modern DI
   library. Hilt 2.60.1 is required for AGP 9's current extension model, and KSP 2.3.9 is required
   for AGP's built-in Kotlin source integration; the older compiler-coupled KSP line fails during

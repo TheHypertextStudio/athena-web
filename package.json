@@ -35,6 +35,7 @@
     "sync:failure": "tsx scripts/sync-failure.ts",
     "launch:record": "tsx scripts/launch-record.ts",
     "launch:scorecard": "tsx scripts/launch-scorecard.ts",
+    "launch:verify-native-auth": "tsx scripts/native-passkey-origin-verify.ts",
     "launch:verify-prod": "tsx scripts/production-verify.ts",
     "placeholders:inventory": "tsx scripts/placeholder-inventory.ts",
     "placeholders:check": "tsx scripts/placeholder-inventory.ts --check",

@@ -233,6 +233,15 @@ describe('slices', () => {
         'android:apk-key-hash:debug,android:apk-key-hash:release',
       ),
     ).toBe('android:apk-key-hash:debug,android:apk-key-hash:release');
+    expect(authServer.BETTER_AUTH_PASSKEY_NATIVE_ORIGINS.parse('')).toBe('');
+    expect(() =>
+      authServer.BETTER_AUTH_PASSKEY_NATIVE_ORIGINS.parse(
+        'android:apk-key-hash:debug,https://docket.hypertext.studio',
+      ),
+    ).toThrow();
+    expect(() =>
+      authServer.BETTER_AUTH_PASSKEY_NATIVE_ORIGINS.parse('android:apk-key-hash:debug,'),
+    ).toThrow();
   });
 
   it('requires and coerces boolean-from-string vars across both branches (no default)', () => {

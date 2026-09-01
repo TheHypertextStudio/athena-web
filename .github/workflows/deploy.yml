@@ -173,6 +173,7 @@ jobs:
       - name: Verify production health and auth routes
         env:
           API_URL: ${{ vars.API_URL }}
+          BETTER_AUTH_PASSKEY_NATIVE_ORIGINS: ${{ vars.PASSKEY_NATIVE_ORIGINS }}
         shell: bash
         run: |
           set -euo pipefail
@@ -189,6 +190,7 @@ jobs:
             400|422) ;;
             *) echo "signup challenge probe returned HTTP $signup_status" >&2; exit 1 ;;
           esac
+          pnpm launch:verify-native-auth
 
   # Split out of deploy-api deliberately. Vercel gates production promotion on the check named
   # "Deploy production / Migrate database and deploy API" (docs/engineering/deployment.md), so

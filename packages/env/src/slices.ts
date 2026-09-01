@@ -22,6 +22,14 @@ import { z } from 'zod';
  */
 const boolFromString = () => z.enum(['true', 'false']).transform((v) => v === 'true');
 
+/** A comma-separated allowlist containing only Android WebAuthn application origins. */
+const nativePasskeyOrigins = z.string().refine((value) => {
+  if (value.trim() === '') return true;
+  return value
+    .split(',')
+    .every((origin) => /^android:apk-key-hash:[A-Za-z0-9_-]+$/.test(origin.trim()));
+}, 'Expected comma-separated android:apk-key-hash origins');
+
 /** Shared across every deployable (server scope). */
 export const sharedServer = {
   /**
@@ -59,7 +67,7 @@ export const authServer = {
   BETTER_AUTH_PASSKEY_RP_ID: z.string().min(1),
   BETTER_AUTH_PASSKEY_RP_NAME: z.string().min(1),
   /** CSV of Android application origins accepted by the passkey verifier. */
-  BETTER_AUTH_PASSKEY_NATIVE_ORIGINS: z.string().optional(),
+  BETTER_AUTH_PASSKEY_NATIVE_ORIGINS: nativePasskeyOrigins.optional(),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   /** Whether Google OAuth is open to every production user; false keeps it test-user-only. */

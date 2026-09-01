@@ -5,7 +5,7 @@ import { Building } from '@docket/ui/icons';
 import { Skeleton, Stack, Surface, Text } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
-import { AsyncContent, QueryErrorBanner } from '@/components/admin-feedback';
+import { AsyncContent, ListSkeleton, QueryErrorBanner } from '@/components/admin-feedback';
 import { AdminPage, AdminPageHeader, AdminSection } from '@/components/admin-page';
 import { AdminList, AdminListRow } from '@/components/admin-table';
 import { LifecycleBadge } from '@/components/lifecycle-badge';
@@ -184,36 +184,31 @@ function OrgQueue({
   readonly emptyTitle: string;
   readonly emptyBody: string;
 }): JSX.Element {
-  if (query.isPending) {
-    return (
-      <Stack gap={1} aria-hidden="true">
-        <Skeleton className="h-11 w-full rounded-lg" />
-        <Skeleton className="h-11 w-full rounded-lg" />
-      </Stack>
-    );
-  }
-
   const orgs = query.data?.items ?? [];
-  if (orgs.length === 0) {
-    return <EmptyState icon={Building} title={emptyTitle} body={emptyBody} />;
-  }
 
   return (
-    <AdminList label="Organizations needing attention">
-      {orgs.map((org) => (
-        <AdminListRow
-          key={org.id}
-          href={`/orgs/${org.id}`}
-          leading={
-            <IdentityGlyph size={20}>
-              <Building className="size-3" />
-            </IdentityGlyph>
-          }
-          title={org.name}
-          trailing={<LifecycleBadge state={org.lifecycleState} />}
-        />
-      ))}
-    </AdminList>
+    <AsyncContent
+      loading={query.isPending}
+      empty={orgs.length === 0}
+      skeleton={<ListSkeleton rows={2} />}
+      emptyState={<EmptyState icon={Building} title={emptyTitle} body={emptyBody} />}
+    >
+      <AdminList label="Organizations needing attention">
+        {orgs.map((org) => (
+          <AdminListRow
+            key={org.id}
+            href={`/orgs/${org.id}`}
+            leading={
+              <IdentityGlyph size={20}>
+                <Building className="size-3" />
+              </IdentityGlyph>
+            }
+            title={org.name}
+            trailing={<LifecycleBadge state={org.lifecycleState} />}
+          />
+        ))}
+      </AdminList>
+    </AsyncContent>
   );
 }
 

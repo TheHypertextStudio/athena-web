@@ -155,6 +155,9 @@ describe('Service settings screen', () => {
     await act(async () => {
       checkbox(container, POLLING).click();
     });
+    // The in-flight flag is read from the mutation rather than mirrored in local state, so it
+    // lands on the next React pass rather than inside the click handler.
+    await settle();
 
     expect(checkbox(container, SUBMISSIONS).disabled).toBe(true);
     expect(checkbox(container, POLLING).disabled).toBe(true);

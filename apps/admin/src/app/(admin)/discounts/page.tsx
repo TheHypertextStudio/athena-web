@@ -10,7 +10,10 @@ import { AsyncContent, ListSkeleton, QueryErrorBanner } from '@/components/admin
 import { AdminPage, AdminPageHeader, AdminSection } from '@/components/admin-page';
 import { AdminList, AdminListRow } from '@/components/admin-table';
 import { ConfirmButton } from '@/components/confirm-button';
+import { Property, PropertyList } from '@/components/admin-detail';
 import { api } from '@/lib/api';
+import { creditLine } from '@/lib/money';
+import { discountQueueDef } from '@/lib/use-admin-queues';
 import { apiQueryOptions, queryKeys, useApiMutation, useApiQuery } from '@/lib/query';
 
 /** One application awaiting a finance decision. */
@@ -30,13 +33,6 @@ type ApprovalPreview = InferResponseType<
 
 /** Bytes per kilobyte, for the evidence size readout. */
 const BYTES_PER_KB = 1024;
-
-/** The review queue and whether this operator may decide. */
-const queueDef = apiQueryOptions(
-  queryKeys.discounts(),
-  () => api.admin['discount-applications'].$get(),
-  'Could not load discount applications.',
-);
 
 /** One application's review detail. */
 function detailDef(applicationId: string) {
@@ -62,7 +58,7 @@ function detailDef(applicationId: string) {
  */
 export default function DiscountsPage(): JSX.Element {
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const queue = useApiQuery(queueDef);
+  const queue = useApiQuery(discountQueueDef);
 
   const items = queue.data?.items ?? [];
   const canDecide = queue.data?.canDecide ?? false;
@@ -363,28 +359,14 @@ function DecisionControls({
 /** What the applicant claimed and how they evidenced it. */
 function ApplicationFacts({ application }: { readonly application: Application }): JSX.Element {
   return (
-    <dl className="grid gap-2 @lg:grid-cols-2">
-      <Fact label="Program" value={application.programKey} />
-      <Fact label="Evidence" value={application.evidenceType ?? 'None'} />
+    <PropertyList>
+      <Property label="Program" value={application.programKey} truncate />
+      <Property label="Evidence" value={application.evidenceType ?? 'None'} truncate />
       {application.institutionalEmail ? (
-        <Fact label="Institutional email" value={application.institutionalEmail} />
+        <Property label="Institutional email" value={application.institutionalEmail} truncate />
       ) : null}
-      {application.ein ? <Fact label="EIN" value={application.ein} /> : null}
-    </dl>
-  );
-}
-
-/** One labelled application fact. */
-function Fact({ label, value }: { readonly label: string; readonly value: string }): JSX.Element {
-  return (
-    <div className="flex min-w-0 flex-col gap-0.5">
-      <Text as="dt" token="label-small" tone="muted">
-        {label}
-      </Text>
-      <Text as="dd" token="body-medium" truncate>
-        {value}
-      </Text>
-    </div>
+      {application.ein ? <Property label="EIN" value={application.ein} truncate /> : null}
+    </PropertyList>
   );
 }
 
@@ -468,16 +450,4 @@ function PreviewResult({
       </Stack>
     </Surface>
   );
-}
-
-/** What credit approval would issue against the current invoice, if any. */
-function creditLine(
-  credit: { readonly totalAmount: number; readonly currency: string } | null | undefined,
-): string {
-  if (!credit) return 'No current-invoice credit is required.';
-  const amount = (credit.totalAmount / 100).toLocaleString(undefined, {
-    style: 'currency',
-    currency: credit.currency.toUpperCase(),
-  });
-  return `Credit preview: ${amount}`;
 }

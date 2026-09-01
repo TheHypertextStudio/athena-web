@@ -247,7 +247,6 @@ function StagePanel({
         intent={selectedIntent}
         estimate={estimate}
         pendingAction={pendingAction}
-        disabled={pendingAction !== null}
         onTestSend={onTestSend}
         onApprove={onApprove}
         onSendNow={onSendNow}

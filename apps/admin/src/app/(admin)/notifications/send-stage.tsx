@@ -4,6 +4,7 @@ import { Button, ControlGroup, Stack, Text } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
 import { ConfirmButton } from '@/components/confirm-button';
+import { Property, PropertyList } from '@/components/admin-detail';
 import type { AdminNotificationEstimate, AdminNotificationIntent } from '@/lib/types';
 
 /** Props for {@link SendStage}. */
@@ -12,10 +13,14 @@ export interface SendStageProps {
   readonly intent: AdminNotificationIntent;
   /** The audience estimate, which says how far this reaches. */
   readonly estimate: AdminNotificationEstimate | null;
-  /** The action currently in flight, if any. */
+  /**
+   * The action currently in flight, if any.
+   *
+   * @remarks
+   * Also decides whether the controls are available: anything in flight disables all of them, so a
+   * separate `disabled` prop would be a second copy of this fact that could disagree with it.
+   */
   readonly pendingAction: string | null;
-  /** Whether every action is unavailable. */
-  readonly disabled: boolean;
   /** Send a test copy to the operator. */
   readonly onTestSend: () => void;
   /** Approve a draft or scheduled announcement. */
@@ -44,22 +49,24 @@ export function SendStage({
   intent,
   estimate,
   pendingAction,
-  disabled,
   onTestSend,
   onApprove,
   onSendNow,
   onCancel,
 }: SendStageProps): JSX.Element {
+  const disabled = pendingAction !== null;
+
   return (
     <Stack gap={4}>
-      <dl className="grid gap-2 @lg:grid-cols-3">
-        <Summary label="Status" value={intent.status.replaceAll('_', ' ')} />
-        <Summary label="Category" value={intent.category.replaceAll('_', ' ')} />
-        <Summary
+      <PropertyList>
+        <Property label="Status" value={intent.status.replaceAll('_', ' ')} truncate />
+        <Property label="Category" value={intent.category.replaceAll('_', ' ')} truncate />
+        <Property
           label="Approval"
           value={estimate?.approvalRequired ? 'Required' : 'Not required'}
+          truncate
         />
-      </dl>
+      </PropertyList>
 
       <Stack gap={2}>
         <Text as="p" token="body-small" tone="muted">
@@ -94,26 +101,6 @@ export function SendStage({
         </ControlGroup>
       </Stack>
     </Stack>
-  );
-}
-
-/** One summary fact about the announcement. */
-function Summary({
-  label,
-  value,
-}: {
-  readonly label: string;
-  readonly value: string;
-}): JSX.Element {
-  return (
-    <div className="flex min-w-0 flex-col gap-0.5">
-      <Text as="dt" token="label-small" tone="muted">
-        {label}
-      </Text>
-      <Text as="dd" token="body-medium" truncate>
-        {value}
-      </Text>
-    </div>
   );
 }
 

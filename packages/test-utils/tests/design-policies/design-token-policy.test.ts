@@ -127,13 +127,17 @@ describe('design token policy', () => {
     const borderFixture = `
       const drawn = 'border border-l border-b border-2 border-dashed border-outline-variant';
       const tinted = 'border-error/40';
+      // A border that only appears on hover is decoration, which is what the rule bans; only a
+      // focus indicator earns one.
+      const decorative = 'hover:border-outline';
 
-      // Legal: the three "nothing is drawn" spellings, table-layout utilities that only share the
-      // prefix, and a border behind an interaction variant (design-system §8 allows a focus
-      // indicator to be a border).
+      // Legal: "nothing is drawn" on any side, table-layout utilities that only share the prefix,
+      // and a border behind a focus variant (design-system §8 earns one for a focus indicator).
       const legal =
-        'border-none border-0 border-transparent border-collapse border-separate ' +
-        'border-spacing-2 focus-visible:border-primary hover:border-outline rounded-xl';
+        'border-none border-0 border-transparent border-x-0 border-t-transparent ' +
+        'border-collapse border-separate border-spacing-2 ' +
+        'focus:border-primary focus-visible:border-primary focus-within:border-primary ' +
+        'group-focus-visible:border-primary rounded-xl';
     `;
     const borderViolations = scanDesignTokens(
       resolve(WORKSPACE_ROOT, 'apps/admin/src/fixture.ts'),
@@ -146,6 +150,7 @@ describe('design token policy', () => {
       'border-dashed',
       'border-error/40',
       'border-l',
+      'border-outline',
       'border-outline-variant',
     ]);
 
@@ -212,8 +217,11 @@ describe('design token policy', () => {
       'h-8',
       'border-none',
       'border-transparent',
+      'border-x-0',
+      'border-t-transparent',
       'border-collapse',
       'border-spacing-2',
+      'focus-within:border-primary',
     ]) {
       expect(values, `expected the scanner to allow ${legal}`).not.toContain(legal);
     }

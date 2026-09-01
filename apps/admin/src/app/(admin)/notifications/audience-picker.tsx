@@ -1,8 +1,8 @@
 'use client';
 
-import { ActorAvatar } from '@docket/ui/components';
-import { Check, Search, X } from '@docket/ui/icons';
-import { Badge, Input, Stack, Surface, Text } from '@docket/ui/primitives';
+import { ActorAvatar, PickerList } from '@docket/ui/components';
+import type { PickerOption } from '@docket/ui/components';
+import { Chip, Row, Stack, Surface, Text } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
 
 import { api } from '@/lib/api';
@@ -45,6 +45,11 @@ export interface AudiencePickerProps {
  * that actually reaches someone. Recipients are now searched by name or email and picked from real
  * accounts, each shown with its avatar and address.
  *
+ * Built on the shared {@link PickerList}, which already separates the four states this needs — idle,
+ * loading, no-match, and results — and brings the roving keyboard navigation a hand-rolled list
+ * does not. `filter="none"` because the API has already narrowed the rows; a second local pass
+ * would drop matches the server deliberately returned.
+ *
  * The stored value stays a comma-separated list of ids, so the draft model and the create payload
  * are unchanged; only the way an operator arrives at that list is different.
  *
@@ -69,6 +74,13 @@ export function AudiencePicker({
     .filter((id) => id.length > 0);
   const multiple = audienceType === 'users';
 
+  const options: readonly PickerOption[] = (results.data?.items ?? []).map((user) => ({
+    value: user.id,
+    label: user.name || user.email,
+    hint: user.email,
+    icon: <ActorAvatar kind="human" name={user.name || user.email} size={20} />,
+  }));
+
   function toggle(userId: string): void {
     if (selectedIds.includes(userId)) {
       onChange(selectedIds.filter((id) => id !== userId).join(', '));
@@ -79,24 +91,19 @@ export function AudiencePicker({
 
   return (
     <Stack gap={2}>
-      <Input
-        type="search"
-        value={search}
-        onChange={(event) => {
-          setSearch(event.target.value);
-        }}
-        placeholder={multiple ? 'Search people to add' : 'Search for a person'}
-        aria-label="Search recipients"
-      />
-
       <SelectedRecipients ids={selectedIds} onRemove={toggle} />
-
-      <SearchResults
-        searching={debouncedSearch.trim().length > 0}
+      <PickerList
+        options={options}
+        selected={multiple ? selectedIds : (selectedIds[0] ?? null)}
+        onSelect={toggle}
+        multiple={multiple}
+        filter="none"
         loading={results.isFetching}
-        users={results.data?.items ?? []}
-        selectedIds={selectedIds}
-        onToggle={toggle}
+        query={search}
+        onQueryChange={setSearch}
+        searchPlaceholder={multiple ? 'Search people to add' : 'Search for a person'}
+        idleText="Search by name or email to pick recipients."
+        emptyText="No account matches that search."
       />
     </Stack>
   );
@@ -113,86 +120,21 @@ function SelectedRecipients({
   if (ids.length === 0) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-1">
+    <Row gap={1} align="center" className="flex-wrap">
       {ids.map((id) => (
-        <Badge key={id} variant="secondary" className="gap-1">
-          <span className="max-w-40 truncate font-mono">{id}</span>
-          <button
-            type="button"
-            aria-label={`Remove recipient ${id}`}
-            onClick={() => {
-              onRemove(id);
-            }}
-          >
-            <X aria-hidden="true" className="size-3" />
-          </button>
-        </Badge>
+        <Chip
+          key={id}
+          variant="input"
+          avatar={<ActorAvatar kind="human" name={id} size={16} />}
+          onRemove={() => {
+            onRemove(id);
+          }}
+          removeLabel={`Remove recipient ${id}`}
+        >
+          {id}
+        </Chip>
       ))}
-    </div>
-  );
-}
-
-/** The accounts matching the current search. */
-function SearchResults({
-  searching,
-  loading,
-  users,
-  selectedIds,
-  onToggle,
-}: {
-  readonly searching: boolean;
-  readonly loading: boolean;
-  readonly users: readonly { id: string; name: string; email: string }[];
-  readonly selectedIds: readonly string[];
-  readonly onToggle: (id: string) => void;
-}): JSX.Element | null {
-  if (!searching) {
-    return (
-      <Text as="p" token="body-small" tone="muted">
-        <Search aria-hidden="true" className="mr-1 inline size-3.5" />
-        Search by name or email to pick recipients.
-      </Text>
-    );
-  }
-
-  if (users.length === 0 && !loading) {
-    return (
-      <Text as="p" token="body-small" tone="muted">
-        No account matches that search.
-      </Text>
-    );
-  }
-
-  return (
-    <Surface tone="card" shape="small" pad="tight">
-      <Stack gap={0} as="ul">
-        {users.map((user) => (
-          <li key={user.id}>
-            <button
-              type="button"
-              aria-pressed={selectedIds.includes(user.id)}
-              className="hover:bg-surface-container-high focus-visible:ring-ring flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors focus-visible:ring-1 focus-visible:outline-none"
-              onClick={() => {
-                onToggle(user.id);
-              }}
-            >
-              <ActorAvatar kind="human" name={user.name || user.email} size={20} />
-              <span className="flex min-w-0 flex-1 flex-col">
-                <Text as="span" token="body-small" truncate>
-                  {user.name || user.email}
-                </Text>
-                <Text as="span" token="label-small" tone="muted" truncate>
-                  {user.email}
-                </Text>
-              </span>
-              {selectedIds.includes(user.id) ? (
-                <Check aria-hidden="true" className="size-4 shrink-0" />
-              ) : null}
-            </button>
-          </li>
-        ))}
-      </Stack>
-    </Surface>
+    </Row>
   );
 }
 

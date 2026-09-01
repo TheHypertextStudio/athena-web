@@ -31,8 +31,6 @@
 import {
   type DefaultError,
   keepPreviousData,
-  MutationCache,
-  QueryCache,
   QueryClient,
   type QueryKey,
   queryOptions,
@@ -287,17 +285,10 @@ export function useApiMutation<TData, TVariables, TOnMutateResult = unknown>(
  * A 401/403 is never retried. For an operator whose session is not staff, retrying just delays the
  * inline error and the sign-in affordance beside it.
  *
- * @param handlers - Optional global cache handlers, wired by the client providers.
  * @returns a configured client.
  */
-export function createQueryClient(handlers?: {
-  onError?: ((error: unknown) => void) | undefined;
-}): QueryClient {
-  const onError = handlers?.onError;
+export function createQueryClient(): QueryClient {
   return new QueryClient({
-    ...(onError
-      ? { queryCache: new QueryCache({ onError }), mutationCache: new MutationCache({ onError }) }
-      : {}),
     defaultOptions: {
       queries: {
         staleTime: STALE.standard,

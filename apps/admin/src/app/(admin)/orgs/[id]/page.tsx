@@ -10,8 +10,9 @@ import { DetailBackLink, DetailSkeleton, Property, PropertyList } from '@/compon
 import { AdminPage, AdminPageHeader, AdminSection } from '@/components/admin-page';
 import { ConfirmButton } from '@/components/confirm-button';
 import { formatTimestamp } from '@/lib/lifecycle';
+import { creditLine, money } from '@/lib/money';
 import type { AdminOrg, AdminOrgBillingState } from '@/lib/types';
-import { useOrgDetail } from './use-org-detail';
+import { type OrgDetailData, type PartnerPreview, useOrgDetail } from './use-org-detail';
 
 /** How far ahead a partner discount may be scheduled to end. */
 const PARTNER_DISCOUNT_MAX_MONTHS = 24;
@@ -65,7 +66,7 @@ function OrgDetail({
   detail,
 }: {
   readonly org: AdminOrg;
-  readonly detail: ReturnType<typeof useOrgDetail>;
+  readonly detail: OrgDetailData;
 }): JSX.Element {
   const { billing } = detail;
 
@@ -143,7 +144,7 @@ function BillingActions({
   detail,
 }: {
   readonly org: AdminOrg;
-  readonly detail: ReturnType<typeof useOrgDetail>;
+  readonly detail: OrgDetailData;
 }): JSX.Element {
   const permissions = detail.billing?.permissions;
 
@@ -167,11 +168,7 @@ function BillingActions({
 }
 
 /** Refresh the provider mirrors for this organization. */
-function ReconcileStripe({
-  detail,
-}: {
-  readonly detail: ReturnType<typeof useOrgDetail>;
-}): JSX.Element {
+function ReconcileStripe({ detail }: { readonly detail: OrgDetailData }): JSX.Element {
   return (
     <Stack gap={2}>
       <ControlGroup controlSize="md">
@@ -192,11 +189,7 @@ function ReconcileStripe({
 }
 
 /** Extend an eligible Stripe trial by a number of days. */
-function ExtendTrial({
-  detail,
-}: {
-  readonly detail: ReturnType<typeof useOrgDetail>;
-}): JSX.Element {
+function ExtendTrial({ detail }: { readonly detail: OrgDetailData }): JSX.Element {
   return (
     <Stack gap={2}>
       <Text as="label" token="label-medium" tone="muted" htmlFor="trial-days">
@@ -228,7 +221,7 @@ function ComplimentaryPro({
   detail,
 }: {
   readonly org: AdminOrg;
-  readonly detail: ReturnType<typeof useOrgDetail>;
+  readonly detail: OrgDetailData;
 }): JSX.Element {
   const busy = detail.pending !== null;
   const noReason = detail.complimentaryReason.trim().length === 0;
@@ -305,11 +298,7 @@ function ComplimentaryAction({
 }
 
 /** Preview, grant, renew, and revoke the private partner discount. */
-function PartnerDiscount({
-  detail,
-}: {
-  readonly detail: ReturnType<typeof useOrgDetail>;
-}): JSX.Element {
+function PartnerDiscount({ detail }: { readonly detail: OrgDetailData }): JSX.Element {
   const busy = detail.pending !== null;
   const noReason = detail.partnerReason.trim().length === 0;
   const noEndDate = detail.partnerEndsAt.length === 0;
@@ -384,7 +373,7 @@ function PartnerDiscount({
 function DiscountPreview({
   preview,
 }: {
-  readonly preview: ReturnType<typeof useOrgDetail>['partnerPreview'];
+  readonly preview: PartnerPreview | null;
 }): JSX.Element | null {
   if (!preview) return null;
 
@@ -398,7 +387,7 @@ function DiscountPreview({
           Provider action: {preview.providerAction.replaceAll('_', ' ')}
         </Text>
         <Text as="p" token="body-small" tone="muted">
-          {creditPreviewLine(preview.credit)}
+          {creditLine(preview.credit)}
         </Text>
       </Stack>
     </Surface>
@@ -406,11 +395,7 @@ function DiscountPreview({
 }
 
 /** Renew or revoke the award that is currently in force, when there is one. */
-function CurrentAward({
-  detail,
-}: {
-  readonly detail: ReturnType<typeof useOrgDetail>;
-}): JSX.Element | null {
+function CurrentAward({ detail }: { readonly detail: OrgDetailData }): JSX.Element | null {
   const award = detail.billing?.award;
   if (!award || !CHANGEABLE_AWARD_STATUSES.includes(award.status)) return null;
 
@@ -455,20 +440,4 @@ function creditSummary(billing: AdminOrgBillingState | undefined): string {
   const credit = billing?.credit;
   if (!credit) return 'None';
   return `${money(credit.totalAmount, credit.currency)} · ${credit.status}`;
-}
-
-/** What credit a previewed discount would issue, if any. */
-function creditPreviewLine(
-  credit: { readonly totalAmount: number; readonly currency: string } | null | undefined,
-): string {
-  if (!credit) return 'No current-invoice credit is required.';
-  return `Credit preview: ${money(credit.totalAmount, credit.currency)}`;
-}
-
-/** Format a minor-unit provider amount as currency. */
-function money(minorUnits: number, currency: string): string {
-  return (minorUnits / 100).toLocaleString(undefined, {
-    style: 'currency',
-    currency: currency.toUpperCase(),
-  });
 }

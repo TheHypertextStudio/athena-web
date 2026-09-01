@@ -11,7 +11,8 @@ import type { AdminOrg, AdminOrgBillingState } from '@/lib/types';
 
 import { settleComplimentaryChange } from './complimentary-settlement';
 
-type PartnerPreview = InferResponseType<
+/** What granting the drafted partner discount would do at the provider, before it is applied. */
+export type PartnerPreview = InferResponseType<
   (typeof api.admin.orgs)[':id']['discount-awards']['preview']['$post']
 >;
 

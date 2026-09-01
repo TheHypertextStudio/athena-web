@@ -43,7 +43,9 @@ export function ViewingAsBanner(): JSX.Element | null {
     <Row
       role="status"
       align="center"
-      className="bg-state-started/10 flex-wrap justify-between gap-3 px-6 py-2.5"
+      justify="between"
+      gap={3}
+      className="bg-state-started/10 flex-wrap px-6 py-2.5"
     >
       <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
         {/* The emphasis is the type role's, not a weight set at the call site: `label-large`

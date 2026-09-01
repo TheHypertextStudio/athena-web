@@ -1,4 +1,4 @@
-import { ControlGroup, Stack, Text } from '@docket/ui/primitives';
+import { ControlGroup, Row, Stack, Text } from '@docket/ui/primitives';
 import type { JSX, ReactNode } from 'react';
 
 /**
@@ -77,7 +77,7 @@ export function AdminPageHeader({
   actions,
 }: AdminPageHeaderProps): JSX.Element {
   return (
-    <header className="flex flex-wrap items-end justify-between gap-4">
+    <Row as="header" align="end" justify="between" gap={4} className="flex-wrap">
       <Stack gap={1}>
         <Text as="h1" token="title-large">
           {title}
@@ -89,7 +89,7 @@ export function AdminPageHeader({
         ) : null}
       </Stack>
       {actions ? <ControlGroup controlSize="md">{actions}</ControlGroup> : null}
-    </header>
+    </Row>
   );
 }
 

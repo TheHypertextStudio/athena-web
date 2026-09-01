@@ -7,7 +7,7 @@ import type { AdminNotificationEstimate, AdminNotificationPreview } from '@/lib/
 import { CHANNELS } from './compose-stage';
 
 /** Render a suppression reason in staff-facing plain language. */
-export function formatReason(reason: string): string {
+function formatReason(reason: string): string {
   return reason.replaceAll('_', ' ');
 }
 

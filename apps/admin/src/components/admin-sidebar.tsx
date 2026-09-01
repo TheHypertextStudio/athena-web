@@ -147,9 +147,10 @@ function NavRow({
 }): JSX.Element {
   const Icon = item.icon;
   return (
+    // No `icon` prop: `SidebarNavItem` ignores it under `asChild`, where the child owns the row's
+    // content — the glyph below is the one that renders.
     <SidebarNavItem
       label={item.label}
-      icon={Icon}
       active={active}
       collapsed={collapsed}
       {...(count !== undefined ? { badge: count } : {})}

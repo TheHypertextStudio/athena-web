@@ -385,6 +385,12 @@ export const AdminQueues = z.object({
     .number()
     .int()
     .describe('Unreleased legacy account-retention holds. Billing never creates one.'),
+  pendingDiscountReviews: z
+    .number()
+    .int()
+    .describe(
+      'Discount applications awaiting a finance decision (`submitted` or `needs_information`).',
+    ),
 });
 /** Validated operator-queue value. */
 export type AdminQueues = z.infer<typeof AdminQueues>;

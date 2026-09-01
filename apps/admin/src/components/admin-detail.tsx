@@ -75,6 +75,8 @@ export interface PropertyProps {
    * control.
    */
   readonly identifier?: boolean | undefined;
+  /** Clamp a long value to one line, for a fact shown in a narrow column. */
+  readonly truncate?: boolean | undefined;
 }
 
 /**
@@ -83,14 +85,25 @@ export interface PropertyProps {
  * @param props - See {@link PropertyProps}.
  * @returns the label/value pair.
  */
-export function Property({ label, value, identifier = false }: PropertyProps): JSX.Element {
+export function Property({
+  label,
+  value,
+  identifier = false,
+  truncate = false,
+}: PropertyProps): JSX.Element {
   return (
     <div className="flex min-w-0 flex-col gap-0.5">
       <Text as="dt" token="label-small" tone="muted">
         {label}
       </Text>
       <dd className="min-w-0">
-        {identifier ? <CopyableValue value={value} /> : <Text token="body-medium">{value}</Text>}
+        {identifier ? (
+          <CopyableValue value={value} />
+        ) : (
+          <Text token="body-medium" truncate={truncate}>
+            {value}
+          </Text>
+        )}
       </dd>
     </div>
   );

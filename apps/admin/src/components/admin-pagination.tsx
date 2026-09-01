@@ -58,7 +58,7 @@ export function AdminPagination({
   const last = offset + pageCount;
 
   return (
-    <Row align="center" className="justify-between gap-4">
+    <Row align="center" justify="between" gap={4}>
       <Text as="p" token="body-small" tone="muted">
         {total === undefined
           ? `Showing ${first.toLocaleString()}–${last.toLocaleString()}`

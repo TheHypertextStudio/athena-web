@@ -9,6 +9,7 @@
 import {
   actor,
   agentSession,
+  billingDiscountApplication,
   db,
   impersonationSession,
   lifecycleHold,
@@ -16,7 +17,7 @@ import {
   organization,
   user,
 } from '@docket/db';
-import { and, count, desc, eq, ilike, isNull, or, type SQL } from 'drizzle-orm';
+import { and, count, desc, eq, ilike, inArray, isNull, or, type SQL } from 'drizzle-orm';
 import { Hono, type Schema } from 'hono';
 
 import {
@@ -407,7 +408,7 @@ export function createAdminRoutes<
 
 **Counts.** \`totalUsers\` and \`totalOrgs\` are the full account/tenant totals; \`orgsByLifecycle\` breaks orgs down by data-lifecycle state in the fixed pipeline order (states with no orgs report \`count: 0\`).
 
-**Queues (triage signals).** \`stuckApprovals\` = agent sessions parked in \`awaiting_approval\` (work blocked on a human decision); \`agentErrors\` = sessions in the \`failed\` terminal state; \`agentVolume\` = total agent sessions ever created; \`activeHolds\` = un-released lifecycle holds currently pausing the delete sweep. These are the numbers an operator triages from the home screen.
+**Queues (triage signals).** \`stuckApprovals\` = agent sessions parked in \`awaiting_approval\` (work blocked on a human decision); \`agentErrors\` = sessions in the \`failed\` terminal state; \`agentVolume\` = total agent sessions ever created; \`activeHolds\` = un-released lifecycle holds currently pausing the delete sweep; \`pendingDiscountReviews\` = discount applications awaiting a finance decision. These are the numbers an operator triages from the home screen.
 
 **Access.** Behind \`staffMiddleware\` (any staff tier — a read). Non-operator → \`403\`; anonymous → \`401\`.
 
@@ -424,6 +425,7 @@ export function createAdminRoutes<
             agentVolume,
             agentErrors,
             stuckApprovals,
+            pendingDiscountReviews,
           ] = await Promise.all([
             db.select({ n: count() }).from(user),
             db.select({ n: count() }).from(organization),
@@ -438,6 +440,12 @@ export function createAdminRoutes<
               .select({ n: count() })
               .from(agentSession)
               .where(eq(agentSession.status, 'awaiting_approval')),
+            db
+              .select({ n: count() })
+              .from(billingDiscountApplication)
+              .where(
+                inArray(billingDiscountApplication.status, ['submitted', 'needs_information']),
+              ),
           ]);
           const counts = new Map(byState.map((r) => [r.state, r.n]));
           return ok(c, AdminMetricsOut, {
@@ -452,6 +460,7 @@ export function createAdminRoutes<
               agentErrors: countOf(agentErrors),
               agentVolume: countOf(agentVolume),
               activeHolds: countOf(holdTotals),
+              pendingDiscountReviews: countOf(pendingDiscountReviews),
             },
           });
         },

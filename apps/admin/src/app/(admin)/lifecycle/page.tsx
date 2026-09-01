@@ -2,7 +2,7 @@
 
 import { EmptyState } from '@docket/ui/components';
 import { Layers } from '@docket/ui/icons';
-import { Badge, Skeleton, Stack, Surface, Text } from '@docket/ui/primitives';
+import { Badge, Row, Skeleton, Stack, Surface, Text } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
 import { AsyncContent, QueryErrorBanner } from '@/components/admin-feedback';
@@ -90,12 +90,12 @@ function BoardColumnPanel({ column }: { readonly column: BoardColumn }): JSX.Ele
       aria-label={label}
     >
       <Stack gap={3}>
-        <div className="flex items-center justify-between gap-2">
+        <Row align="center" justify="between" gap={2}>
           <Text as="h2" token="label-large">
             {label}
           </Text>
           <Badge variant="secondary">{column.orgs.length}</Badge>
-        </div>
+        </Row>
 
         <ColumnOrgs label={label} orgs={column.orgs} />
       </Stack>

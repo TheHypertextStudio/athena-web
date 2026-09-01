@@ -208,6 +208,19 @@ const LEGACY_COLOR_ROLES = [
   'border',
 ].join('|');
 
+/** Border side selectors, so "nothing is drawn" is exempted per-property rather than per-spelling. */
+const BORDER_SIDES = '[xytrbls]';
+
+/**
+ * The variants under which a border is legitimate.
+ *
+ * @remarks
+ * Only focus. Design-system §8 earns a border for a field affordance, a focus indicator, or a
+ * genuine semantic boundary — a hover border is none of those, so this deliberately does not reuse
+ * {@link INTERACTION_VARIANTS}, which exists for the geometry rule and includes hover and active.
+ */
+const BORDER_FOCUS_VARIANTS = 'focus|focus-visible|focus-within';
+
 const RULE_PATTERNS: readonly {
   readonly rule: DesignTokenRule;
   readonly pattern: RegExp;
@@ -271,14 +284,18 @@ const RULE_PATTERNS: readonly {
     // (`border-2`), a style (`border-dashed`), or a colour (`border-outline-variant`).
     //
     // Deliberately legal:
-    // - `border-none`, `border-0`, `border-transparent` — assertions that nothing is drawn, the
-    //   same reasoning that keeps `shadow-none` legal for the shadow rule.
+    // - anything asserting that nothing is drawn, on any side: `border-none`, `border-0`,
+    //   `border-transparent`, and their side-scoped forms (`border-x-0`, `border-t-transparent`).
+    //   Exempting the *property* rather than a list of spellings is what keeps `border-0` and
+    //   `border-x-0` from disagreeing.
     // - `border-collapse`, `border-separate`, `border-spacing-*` — table layout, not a border.
-    // - anything behind an interaction variant (`focus-visible:border-primary`), because
-    //   design-system §8 names a focus indicator as one of the three things that earn a border.
+    // - a border behind a *focus* variant, because design-system §8 names a focus indicator as one
+    //   of the three things that earns one. Deliberately not the whole interaction set the geometry
+    //   rule uses: a border that appears on hover is decoration, and decoration is what this bans.
     pattern: new RegExp(
-      String.raw`(?<![\w-])(?<!(?:${INTERACTION_VARIANTS}):)border` +
-        String.raw`(?:-(?!(?:none|0|transparent|collapse|separate)(?![\w-])` +
+      String.raw`(?<![\w-])(?<!(?:(?:group-|peer-)?(?:${BORDER_FOCUS_VARIANTS})):)border` +
+        String.raw`(?:-(?!(?:${BORDER_SIDES}-)?(?:0|transparent|none)(?![\w-])` +
+        String.raw`|collapse(?![\w-])|separate(?![\w-])` +
         String.raw`|spacing(?:-[\w.[\]/-]+)?(?![\w-]))[\w.[\]/-]+)?(?![\w-])`,
       'g',
     ),

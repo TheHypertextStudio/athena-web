@@ -1,7 +1,6 @@
 'use client';
 
 import type { InferResponseType } from 'hono/client';
-import { useState } from 'react';
 
 import { api } from '@/lib/api';
 import { useQueryClient } from '@tanstack/react-query';
@@ -75,7 +74,6 @@ function controlPatch(
  * @returns See {@link ServiceControlsData}.
  */
 export function useServiceControls(): ServiceControlsData {
-  const [pending, setPending] = useState<ServiceControlField | null>(null);
   const queryClient = useQueryClient();
   const query = useApiQuery(controlsDef);
 
@@ -90,10 +88,12 @@ export function useServiceControls(): ServiceControlsData {
       // alone would leave the old value on screen until the re-read lands, so a switch someone just
       // turned off would still read as on for a moment — which, for a control that stops background
       // work across every organization, is the one moment it must not be wrong.
+      // The PATCH response *is* the stored state, so adopt it directly and do not invalidate
+      // afterwards: with an observer mounted, invalidating would refetch immediately and answer a
+      // question the response just answered.
       onSuccess: (controls) => {
         queryClient.setQueryData(controlsDef.queryKey, controls);
       },
-      invalidates: [queryKeys.serviceControls()],
     },
   );
 
@@ -103,17 +103,11 @@ export function useServiceControls(): ServiceControlsData {
     error: query.error,
     reload: () => void query.refetch(),
     actionError: mutation.error,
-    pending,
+    // Derived rather than mirrored in state: the mutation already knows what is in flight and what
+    // it was called with, and a second copy can only disagree with it.
+    pending: mutation.isPending ? mutation.variables.field : null,
     setControl: (field, enabled) => {
-      setPending(field);
-      mutation.mutate(
-        { field, enabled },
-        {
-          onSettled: () => {
-            setPending(null);
-          },
-        },
-      );
+      mutation.mutate({ field, enabled });
     },
   };
 }

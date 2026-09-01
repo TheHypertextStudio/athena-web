@@ -101,3 +101,7 @@ export const LATTICE_RETURN_COPY: Readonly<Record<string, string>> = {
   scopes: 'Some permissions were not approved, so Athena cannot run models on your computer yet.',
   error: 'That connection attempt did not finish. You can try again.',
 };
+
+/** Copy shown only after a supported browser's native FedCM ceremony did not finish. */
+export const LATTICE_FEDCM_FALLBACK_COPY =
+  'The Lovelace dialog closed, so nothing changed. You can try it again or continue on Lovelace’s page.';

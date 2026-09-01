@@ -36,7 +36,7 @@ import {
   Toolbar,
 } from '@docket/ui/primitives';
 import { useAppSearchParams } from '@/lib/app-location';
-import { type JSX, type ReactNode } from 'react';
+import { type JSX, type ReactNode, useState } from 'react';
 
 import { api } from '@/lib/api';
 import { LoadFailure } from '@/components/settings/load-failure';
@@ -57,11 +57,17 @@ import {
 import {
   LATTICE_DEPLOYMENT_COPY,
   LATTICE_DEVICE_STATUS_COPY,
+  LATTICE_FEDCM_FALLBACK_COPY,
   LATTICE_REASON_COPY,
   LATTICE_RETURN_COPY,
   type LatticeDeploymentReason,
   type LatticeReason,
 } from './lattice-copy';
+import {
+  requestLatticeFedCM,
+  type LatticeAuthorizationStart,
+  type LatticeFedCMResult,
+} from './lattice-fedcm';
 
 /** The device states the API reports. */
 type DeviceStatus = 'unpaired' | 'reachable' | 'offline' | 'revoked';
@@ -95,6 +101,141 @@ function ReasonNote({ reason }: { readonly reason: LatticeReason }): JSX.Element
   );
 }
 
+/** The redirect transport remains a deliberate second click after an invoked FedCM dialog. */
+function AuthorizationFallback({
+  authorizationUrl,
+}: {
+  readonly authorizationUrl: string;
+}): JSX.Element {
+  return (
+    <Stack gap={2} className="px-4 pb-4" role="status">
+      <Text token="body-small" tone="muted">
+        {LATTICE_FEDCM_FALLBACK_COPY}
+      </Text>
+      <div>
+        <Button
+          variant="outline"
+          onClick={() => {
+            window.location.assign(authorizationUrl);
+          }}
+        >
+          Continue in Lovelace
+        </Button>
+      </div>
+    </Stack>
+  );
+}
+
+/** A native-code completion result in addition to the transport helper's three outcomes. */
+type AuthorizationAction =
+  | Exclude<LatticeFedCMResult, { readonly kind: 'code' }>
+  | { readonly kind: 'completed'; readonly status: 'connected' | 'declined' | 'error' | 'scopes' };
+
+/** Own the native-first ceremony and its explicit redirect-fallback state. */
+function useLatticeAuthorization(): {
+  readonly authorize: ReturnType<typeof useApiMutation<AuthorizationAction, undefined>>;
+  readonly authorizationNotice: string | null;
+  readonly fallbackUrl: string | null;
+  readonly startAuthorization: () => void;
+} {
+  const [fallbackUrl, setFallbackUrl] = useState<string | null>(null);
+  const [authorizationNotice, setAuthorizationNotice] = useState<string | null>(null);
+  const authorize = useApiMutation<AuthorizationAction, undefined>({
+    mutationFn: async () => {
+      const started: LatticeAuthorizationStart = await unwrap(
+        () => api.v1.me.athena.lattice.authorize.$post(),
+        'Could not start the Lovelace connection.',
+      );
+      const fedcm = await requestLatticeFedCM(started);
+      if (fedcm.kind !== 'code') return fedcm;
+      const completed = await unwrap(
+        () =>
+          api.v1.me.athena.lattice.authorize.complete.$post({
+            json: {
+              attemptId: started.attemptId,
+              authorizationCode: fedcm.authorizationCode,
+            },
+          }),
+        'Could not finish the Lovelace connection.',
+      );
+      return { kind: 'completed', status: completed.status };
+    },
+    onSuccess: (data) => {
+      setFallbackUrl(null);
+      if (data.kind === 'redirect') {
+        window.location.assign(data.authorizationUrl);
+        return;
+      }
+      if (data.kind === 'fallback') {
+        setFallbackUrl(data.authorizationUrl);
+        return;
+      }
+      setAuthorizationNotice(LATTICE_RETURN_COPY[data.status] ?? null);
+    },
+    invalidateKeys: [queryKeys.latticeConnection(), queryKeys.latticeDevices()],
+  });
+
+  return {
+    authorize,
+    authorizationNotice,
+    fallbackUrl,
+    startAuthorization: () => {
+      setFallbackUrl(null);
+      setAuthorizationNotice(null);
+      authorize.mutate(undefined);
+    },
+  };
+}
+
+/** Render the connect ceremony before an approved Lovelace grant exists. */
+function UnconnectedLatticeSection({
+  actionError,
+  authorizationNotice,
+  authorizePending,
+  fallbackUrl,
+  startAuthorization,
+}: {
+  readonly actionError: string | null;
+  readonly authorizationNotice: string | null;
+  readonly authorizePending: boolean;
+  readonly fallbackUrl: string | null;
+  readonly startAuthorization: () => void;
+}): JSX.Element {
+  return (
+    <SettingsGroup capability={SETTINGS_NODES.athenaLattice} body="rows">
+      <SettingRow
+        leading={<DecorativeIcon icon={Computer} />}
+        label="Lattice"
+        description="Run Athena's models on a computer you own, instead of the model service Docket runs."
+        trailing={
+          <Button
+            controlSize="md"
+            variant="outline"
+            disabled={authorizePending}
+            onClick={startAuthorization}
+          >
+            {authorizePending ? 'Connecting…' : 'Connect with Lovelace'}
+          </Button>
+        }
+      />
+      {authorizationNotice ? (
+        <Text token="body-medium" role="status" className="px-4 pb-4">
+          {authorizationNotice}
+        </Text>
+      ) : null}
+      {fallbackUrl ? <AuthorizationFallback authorizationUrl={fallbackUrl} /> : null}
+      {actionError ? (
+        <div className="px-4 pb-4">
+          <LoadFailure message={actionError} />
+        </div>
+      ) : null}
+      <Text token="body-small" tone="muted" role="status" aria-live="polite" className="px-4">
+        {authorizePending ? 'Opening Lovelace…' : ''}
+      </Text>
+    </SettingsGroup>
+  );
+}
+
 /**
  * Settings → Athena → run models on your own computer.
  *
@@ -103,6 +244,8 @@ function ReasonNote({ reason }: { readonly reason: LatticeReason }): JSX.Element
 export function LatticeSection(): JSX.Element {
   const searchParams = useAppSearchParams();
   const returned = searchParams.get('lattice');
+  const { authorize, authorizationNotice, fallbackUrl, startAuthorization } =
+    useLatticeAuthorization();
   const statusQ = useApiQuery(
     apiQueryOptions(
       queryKeys.latticeConnection(),
@@ -124,19 +267,6 @@ export function LatticeSection(): JSX.Element {
       { staleTime: STALE.volatile, enabled: connected },
     ),
   );
-
-  const authorize = useApiMutation<{ authorizationUrl: string }, undefined>({
-    mutationFn: () =>
-      unwrap(
-        () => api.v1.me.athena.lattice.authorize.$post(),
-        'Could not start the Lovelace connection.',
-      ),
-    onSuccess: (data) => {
-      // A full navigation, not a popup: the consent screen is Lovelace's own page and the
-      // person should see its address bar.
-      window.location.assign(data.authorizationUrl);
-    },
-  });
 
   const chooseDevice = useApiMutation<unknown, string>({
     mutationFn: (deviceId) =>
@@ -211,25 +341,13 @@ export function LatticeSection(): JSX.Element {
   // list and its states only become meaningful once a grant exists.
   if (!connected) {
     return (
-      <SettingsGroup capability={SETTINGS_NODES.athenaLattice} body="rows">
-        <SettingRow
-          leading={<DecorativeIcon icon={Computer} />}
-          label="Lattice"
-          description="Run Athena's models on a computer you own, instead of the model service Docket runs."
-          trailing={
-            <Button
-              controlSize="md"
-              variant="outline"
-              disabled={authorize.isPending}
-              onClick={() => {
-                authorize.mutate(undefined);
-              }}
-            >
-              {authorize.isPending ? 'Connecting…' : 'Connect'}
-            </Button>
-          }
-        />
-      </SettingsGroup>
+      <UnconnectedLatticeSection
+        actionError={actionError}
+        authorizationNotice={authorizationNotice}
+        authorizePending={authorize.isPending}
+        fallbackUrl={fallbackUrl}
+        startAuthorization={startAuthorization}
+      />
     );
   }
 
@@ -254,23 +372,29 @@ export function LatticeSection(): JSX.Element {
   // once its instruction has been carried out — telling someone to "choose a computer" under a
   // list where they already did reads as a broken screen.
   const returnNote =
-    returned && !(returned === 'connected' && status.deviceId)
+    authorizationNotice ??
+    (returned && !(returned === 'connected' && status.deviceId)
       ? LATTICE_RETURN_COPY[returned]
-      : undefined;
+      : undefined);
 
   return (
     <SettingsGroup
       capability={SETTINGS_NODES.athenaLattice}
       action={
-        <Button
-          variant="ghost"
-          onClick={() => {
-            disconnect.mutate(undefined);
-          }}
-          disabled={disconnect.isPending}
-        >
-          Disconnect
-        </Button>
+        <ControlGroup>
+          <Button variant="ghost" onClick={startAuthorization} disabled={authorize.isPending}>
+            Reconnect Lovelace
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              disconnect.mutate(undefined);
+            }}
+            disabled={disconnect.isPending}
+          >
+            Disconnect
+          </Button>
+        </ControlGroup>
       }
     >
       {returnNote ? (
@@ -278,6 +402,8 @@ export function LatticeSection(): JSX.Element {
           {returnNote}
         </Text>
       ) : null}
+
+      {fallbackUrl ? <AuthorizationFallback authorizationUrl={fallbackUrl} /> : null}
 
       <Stack gap={4}>
         <Toolbar

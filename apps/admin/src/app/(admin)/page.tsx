@@ -12,6 +12,7 @@ import { AdminList, AdminListRow } from '@/components/admin-table';
 import { AttentionBand } from './dashboard-attention';
 import { LifecycleDistribution } from './dashboard-lifecycle';
 import { ResourceUsage } from './dashboard-resources';
+import { ServiceHealthSummary } from './dashboard-status';
 import { LifecycleBadge } from '@/components/lifecycle-badge';
 import { api } from '@/lib/api';
 import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
@@ -33,6 +34,14 @@ const resourcesDef = apiQueryOptions(
   () => api.admin.resources.$get(),
   'Could not load resource usage.',
   { staleTime: STALE.static },
+);
+
+/** Whether anything is currently broken. */
+const statusDef = apiQueryOptions(
+  queryKeys.status(),
+  () => api.admin.status.$get(),
+  'Could not load service status.',
+  { staleTime: STALE.volatile },
 );
 
 /** The organizations scheduled for deletion. */
@@ -76,6 +85,7 @@ export default function DashboardPage(): JSX.Element {
   const pendingDeletion = useApiQuery(pendingDeletionDef);
   const exportWindow = useApiQuery(exportWindowDef);
   const resources = useApiQuery(resourcesDef);
+  const status = useApiQuery(statusDef);
 
   return (
     <AdminPage width="list">
@@ -97,6 +107,19 @@ export default function DashboardPage(): JSX.Element {
       >
         <AttentionBand metrics={metrics.data} />
       </AsyncContent>
+
+      <AdminSection
+        title="Service health"
+        action={
+          <Link href="/status" className="text-primary hover:underline">
+            <Text as="span" token="label-medium">
+              Full board
+            </Text>
+          </Link>
+        }
+      >
+        <ServiceHealthSummary status={status.data} />
+      </AdminSection>
 
       <div className="grid items-start gap-4 @4xl:grid-cols-[1fr_1fr]">
         <AdminSection title="Platform">

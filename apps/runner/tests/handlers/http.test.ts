@@ -41,6 +41,35 @@ function runnerEnv() {
 }
 
 describe('signed runner HTTP ingress', () => {
+  it('answers an unsigned liveness probe, since a probe holds neither HMAC secret', async () => {
+    const { env } = runnerEnv();
+    const handler = createRunnerFetchHandler({ fetch: vi.fn() });
+
+    const response = await handler(
+      new Request('https://runner.example/healthz', { method: 'GET' }),
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: 'ok', service: 'docket-athena-runner' });
+    // Liveness reaches no binding: it answers whether this Worker is running, nothing more.
+    expect(env.ATHENA_RUN_QUEUE.send).not.toHaveBeenCalled();
+    expect(env.ATHENA_WORKFLOW.get).not.toHaveBeenCalled();
+  });
+
+  it('leaves the signed ingress closed to an unsigned request on any other path', async () => {
+    const { env } = runnerEnv();
+    const handler = createRunnerFetchHandler({ fetch: vi.fn() });
+
+    const response = await handler(
+      new Request('https://runner.example/enqueue', { method: 'GET' }),
+      env,
+    );
+
+    expect(response.status).toBe(404);
+    expect(env.ATHENA_RUN_QUEUE.send).not.toHaveBeenCalled();
+  });
+
   it('cancels an oversized streamed body before authentication or queue effects', async () => {
     const { env } = runnerEnv();
     let canceled = false;

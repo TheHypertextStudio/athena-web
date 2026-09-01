@@ -82,6 +82,7 @@ export const ADMIN_NAV: readonly AdminNavSection[] = [
     title: 'Operations',
     items: [
       { href: '/notifications', label: 'Announcements', icon: Bell },
+      { href: '/status', label: 'Service status', icon: Activity },
       { href: '/audit', label: 'Audit log', icon: Activity },
       { href: '/lifecycle', label: 'Retention markers', icon: Layers },
     ],

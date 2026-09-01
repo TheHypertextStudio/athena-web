@@ -556,3 +556,90 @@ export const AdminResourcesOut = z.object({
 });
 /** Validated resource-usage value. */
 export type AdminResourcesOut = z.infer<typeof AdminResourcesOut>;
+
+/** What a health check concluded about one service. */
+export const ProbeOutcomeDto = z
+  .enum(['up', 'degraded', 'down', 'disabled', 'unknown'])
+  .describe(
+    'Health verdict: `up` answered correctly; `degraded` answered but not correctly; `down` did not answer; `disabled` is switched off for this deployment; `unknown` means there was no basis to judge.',
+  );
+/** Validated probe-outcome value. */
+export type ProbeOutcomeDto = z.infer<typeof ProbeOutcomeDto>;
+
+/** Why a check did not succeed, in application-owned words. */
+export const ProbeReasonDto = z
+  .enum(['unreachable', 'bad_status', 'recent_failures', 'no_recent_activity', 'not_configured'])
+  .describe('Why the check did not succeed. A closed set — never a provider message.');
+/** Validated probe-reason value. */
+export type ProbeReasonDto = z.infer<typeof ProbeReasonDto>;
+
+/** Successful checks over total checks in one window. */
+export const AdminUptimeWindow = z.object({
+  windowHours: z.number().int().describe('How many hours back the ratio covers.'),
+  checks: z.number().int().describe('Checks recorded in the window.'),
+  successes: z.number().int().describe('Checks that reported `up`.'),
+  uptime: z
+    .number()
+    .nullable()
+    .describe('Successes over checks, 0..1. Null when no check was recorded in the window.'),
+});
+/** Validated uptime-window value. */
+export type AdminUptimeWindow = z.infer<typeof AdminUptimeWindow>;
+
+/** One service's current health and its recent record. */
+export const AdminServiceStatus = z.object({
+  key: z.string().describe('Stable identifier for the service.'),
+  label: z.string().describe('What an operator calls it.'),
+  kind: z
+    .enum(['platform', 'dependency'])
+    .describe('`platform` is ours to fix; `dependency` belongs to a third party.'),
+  method: z
+    .enum(['http', 'database', 'derived'])
+    .describe(
+      'How health is established: an HTTP health endpoint, a direct database query, or derived from the ledger of real traffic we sent the provider.',
+    ),
+  outcome: ProbeOutcomeDto,
+  reason: ProbeReasonDto.nullable().describe(
+    'Why the latest check did not succeed, when it did not.',
+  ),
+  latencyMs: z.number().int().nullable().describe('How long the latest check took.'),
+  statusCode: z
+    .number()
+    .int()
+    .nullable()
+    .describe('HTTP status of the latest check, when it was one.'),
+  checkedAt: z
+    .string()
+    .nullable()
+    .describe('When the latest check ran. Null when this service has never been checked.'),
+  lastSuccessAt: z
+    .string()
+    .nullable()
+    .describe('When this service last reported `up`. Null when it never has.'),
+  uptime: z.array(AdminUptimeWindow).describe('Uptime over each reported window, shortest first.'),
+});
+/** Validated service-status value. */
+export type AdminServiceStatus = z.infer<typeof AdminServiceStatus>;
+
+/** One internal job ledger and what it has recorded recently. */
+export const AdminJobHealth = z.object({
+  key: z.string().describe('Stable identifier for the ledger.'),
+  label: z.string().describe('What an operator calls the work it records.'),
+  failures: z.number().int().describe('Runs that failed in the window.'),
+  total: z.number().int().describe('Runs recorded in the window.'),
+  lastFailureAt: z.string().nullable().describe('When the most recent failure was recorded.'),
+});
+/** Validated job-health value. */
+export type AdminJobHealth = z.infer<typeof AdminJobHealth>;
+
+/** The whole service-status board. */
+export const AdminStatusOut = z.object({
+  services: z.array(AdminServiceStatus).describe('Every probed service, in reading order.'),
+  jobs: z.array(AdminJobHealth).describe('Internal job ledgers and their recent failure counts.'),
+  probesEnabled: z
+    .boolean()
+    .describe('Whether scheduled probing is switched on for this deployment.'),
+  jobWindowHours: z.number().int().describe('How many hours the job failure counts cover.'),
+});
+/** Validated status-board value. */
+export type AdminStatusOut = z.infer<typeof AdminStatusOut>;

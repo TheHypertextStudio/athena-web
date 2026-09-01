@@ -449,7 +449,9 @@ describe('server boot', () => {
     expect(serve).toHaveBeenCalledTimes(1);
     const res = await server.request('/v1/health');
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ status: 'ok' });
+    // The probe reports what it actually checked, so a caller can tell "the API is down" from
+    // "the API is up but its database is not".
+    expect(await res.json()).toEqual({ status: 'ok', dependencies: { database: 'ok' } });
   });
 
   it('serves the openapi spec and routes the auth + mcp + cron + webhook edges', async () => {

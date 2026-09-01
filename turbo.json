@@ -12,6 +12,7 @@
     "PORT",
     "API_URL",
     "WEB_URL",
+    "ADMIN_URL",
     "SKIP_ENV_VALIDATION",
     "DATABASE_URL",
     "DATABASE_URL_UNPOOLED"

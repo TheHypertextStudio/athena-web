@@ -44,6 +44,73 @@
 db:reset` completed. The migration changes no UI behavior, but the requested desktop and phone
   screenshot set remains unrecorded.
 
+### [ADMIN-OBS-001] Give the operator console real service, resource, and usage visibility
+
+- **Status**: IN_PROGRESS
+- **Started**: 2026-08-31
+- **Priority**: P1
+- **Description**: The console said what needed a _decision_ and nothing about whether the service
+  was _running_. Docket carries no observability stack at all — no Sentry (`SENTRY_DSN` is declared
+  in the env registry and read by nothing), no OpenTelemetry, no structured logger, no probe or
+  uptime table. The single health endpoint returned a hardcoded `{ status: 'ok' }`, so it reported
+  healthy with Postgres unreachable, and it is what the deploy gates promotion on.
+- **Plan**: `~/.claude/plans/plan-to-fix-noble-hejlsberg.md`
+- **Subtasks**:
+  - [x] Phase 0 — land the finished console redesign
+  - [x] Phase 1 — resource usage: per-store bytes and database size, no migration required
+  - [x] Phase 2a — a real dependency check on `/v1/health`, and health routes for web, admin, and
+        the Cloudflare runner, none of which had one
+  - [x] Phase 2b — `service_probe`, the append-only record every check writes to
+  - [x] Phase 2c — a probe pass on the existing cron substrate, operator-controllable at runtime
+  - [x] Phase 2d — internal job health derived from the run ledgers that already record failures
+  - [x] Phase 2e — the status board, with per-service disclosure and 24h/7d/30d uptime
+  - [ ] Phase 3 — Athena usage and per-session token capture
+- **Decisions**: Third-party health is **derived** from the ledgers recording real provider traffic
+  (`billing_provider_sync`, `agent_session_run`, `sync_run`) rather than from synthetic pings. The
+  first draft pinged each provider directly, which meant reading `STRIPE_SECRET_KEY`,
+  `ANTHROPIC_API_KEY`, and `RESEND_API_KEY` into a module that has no business holding any of them
+  when each provider already has an adapter that owns its credential. Deriving is also the more
+  truthful signal: a ping that succeeds while every real charge fails is exactly the "reports
+  success when nothing happened" failure the connector invariant forbids. What it costs is a signal
+  for a provider with no recent traffic, reported as `unknown`.
+
+  Nothing stores provider or exception text. A check that throws deliberately does not read the
+  thrown value and writes one of a closed set of application-owned reason codes, because that column
+  is rendered in the console and provider messages can carry request URLs, echoed headers, or
+  account identifiers.
+
+  The outcome vocabulary separates `degraded` (reachable but wrong), `disabled` (switched off on
+  purpose), and `unknown` (no basis to judge). Uptime excludes the last two from both halves of the
+  ratio, and an unmeasured window reports `null` rather than 0% or 100%.
+
+- **Files changed**: `apps/api/src/routes/health.ts`, `admin-resource-routes.ts`,
+  `admin-status-routes.ts`, `apps/api/src/services/service-probes.ts`,
+  `packages/db/src/schema/status.ts`, `apps/web/src/app/healthz/route.ts`,
+  `apps/admin/src/app/healthz/route.ts`, `apps/runner/src/http.ts`, `scripts/scheduler-setup.ts`,
+  the console's `status/` route and `dashboard-resources`/`dashboard-status` panels.
+- **Validation**: `pnpm typecheck`, `pnpm lint`, and `pnpm format:check` pass repo-wide. The probe
+  runner has 8 tests covering the failure paths, including that a thrown provider message never
+  reaches the stored reason and that every dependency is credential-free. The failure path was also
+  proven end to end against a running stack: pointing one probe at a dead port produced a `down`
+  row with `unreachable`, dropped that service's 24h uptime to 0.75, and left `lastSuccessAt`
+  intact.
+- **Learnings**: `service_probe.checked_at` initially used the repo's usual naive
+  `timestamp(...).defaultNow()`, which stores Postgres' local wall-clock and reads back as UTC — so
+  every check reported hours old the moment it was written, on the one board whose value is knowing
+  how fresh a verdict is. It is `withTimezone: true`. The same defect affects every table relying on
+  the DB default and is worth its own effort.
+
+  Turbo filters environment variables to tasks; `ADMIN_URL` reached nothing until it was added to
+  `globalEnv`, which is why the console reported itself unprobeable.
+
+- **Blockers**: Visual re-verification is blocked on the dev machine rather than the code — the web
+  app's Turbopack server began 404ing every route (including ones that had just worked) under
+  sustained `EMFILE` watcher exhaustion, and single requests reached 11 minutes of application time.
+  `dev-stack.sh` now raises the descriptor limit before starting, which is a real fix but not
+  sufficient on its own.
+
+---
+
 ### [ADMIN-DS-001] Standardize the admin console on the design system
 
 - **Status**: IN_PROGRESS

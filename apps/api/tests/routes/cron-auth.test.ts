@@ -10,6 +10,7 @@ const CRON_PATHS: readonly string[] = [
   '/email-suggestions',
   '/process-events',
   '/search-index',
+  '/service-probe',
   '/legacy-mentions',
   '/unfurl-resources',
   '/daily-digests',

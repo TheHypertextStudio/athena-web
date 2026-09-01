@@ -131,7 +131,7 @@ function AuditRow({ event }: { readonly event: AdminAuditEvent }): JSX.Element {
   const Chevron = expanded ? ChevronDown : ChevronRight;
 
   return (
-    <Surface as="li" tone="card" shape="small" pad="none">
+    <Surface tone="card" shape="small" pad="none">
       <div className="flex items-center gap-3 px-3 py-2">
         <ActorAvatar kind={event.staffUserId ? 'human' : 'agent'} name={actor} size={20} />
 

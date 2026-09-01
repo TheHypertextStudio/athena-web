@@ -90,3 +90,12 @@ export type NotificationDeliveryPage = InferResponseType<
 
 /** The platform resource report: stored bytes by store, plus database size. */
 export type AdminResources = InferResponseType<typeof api.admin.resources.$get>;
+
+/** The service-status board: every probed service, its uptime, and internal job health. */
+export type AdminStatus = InferResponseType<typeof api.admin.status.$get>;
+
+/** One service's current health and recent record. */
+export type AdminServiceStatus = AdminStatus['services'][number];
+
+/** One internal job ledger's recent failure count. */
+export type AdminJobHealth = AdminStatus['jobs'][number];

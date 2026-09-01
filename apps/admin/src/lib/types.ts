@@ -22,6 +22,12 @@ export type AdminUser = AdminUserPage['items'][number];
 /** A user plus their cross-org memberships (`GET /admin/users/:id`). */
 export type AdminUserDetail = InferResponseType<(typeof api.admin.users)[':id']['$get']>;
 
+/** A page of service operators, as `GET /admin/staff` returns it. */
+export type AdminStaffPage = InferResponseType<typeof api.admin.staff.$get>;
+
+/** One service operator on the roster. */
+export type AdminStaff = AdminStaffPage['items'][number];
+
 /** One of a user's org memberships. */
 export type AdminMembership = AdminUserDetail['memberships'][number];
 

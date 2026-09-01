@@ -1007,7 +1007,7 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
     --maxWorkers=1
   ```
 
-- [ ] **Step 3: Run bounded repository checks**
+- [x] **Step 3: Run bounded repository checks**
 
   Use no more than two concurrent package tasks and one concurrent build task:
 
@@ -1034,7 +1034,7 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
   and database schema did not change. Confirm that no test encodes utility strings as product
   behavior.
 
-- [ ] **Step 6: Update the worklog and commit closeout evidence**
+- [x] **Step 6: Update the worklog and commit closeout evidence**
 
   Move `[WORK-ROSTER-CORRECTNESS-001]` to completed only after every local gate passes. Add exact
   commands, results, remaining release state, and retrospective. Include the worklog and visual
@@ -1051,7 +1051,7 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
 
   The result must be `0`.
 
-- [ ] **Step 8: Verify CI, deployment, and production as separate states**
+- [x] **Step 8: Verify CI, deployment, and production as separate states**
 
   Push only after local checks pass. Wait for the exact-SHA required checks. Confirm that the
   release browser job passed before deployment. After deployment, verify the deployed SHA and run

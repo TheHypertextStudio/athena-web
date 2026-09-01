@@ -7,39 +7,6 @@
 
 ## Active Tasks
 
-### [WORK-ROSTER-CORRECTNESS-001] Make shared work rosters correct by construction
-
-- **Status**: REVIEW
-- **Started**: 2026-08-28
-- **Priority**: P0
-- **Description**: Replace six hand-built roster headers and split scrolling regions with the
-  shared `EntityTable` contract. Preserve direct-page context, hierarchy, mutation refreshes,
-  loaded data during recoverable failures, and responsive behavior across Initiative, Project,
-  Program, Team, Cycle, and Task rosters.
-- **Implementation**: `EntityTable` now owns the header, column geometry, sticky behavior, row
-  density, keyboard movement, selection, drag affordances, and one scroll surface. Work-view API
-  queries return complete direct-page context without changing the response contract or database
-  schema. Mutation invalidation now refreshes the mounted roster in the current tab and sends a
-  target-scoped `BroadcastChannel` hint to other open Docket tabs.
-- **Visual review**: The six-shot craft audit covers 1440x900, 1016x1724, and 390x844 in light and
-  dark themes. It records a SHIP verdict with all eight dimensions at 3 and all five hard gates
-  green. The shared header has no decorative divider. The roster toolbar has external block
-  margins, and the 320px geometry gate reports no page overflow.
-- **Validation**: The final focused matrix passes 24 files and 293 tests. Repository typecheck
-  passes 27 tasks. Repository lint passes 26 tasks. Tooling passes 21 files and 261 tests. The
-  production-build release journey passes all 5 browser tests in 51.6 seconds. The production-size
-  work-view benchmark passes both tests in isolation in 21.8 seconds. A bounded two-package Turbo
-  run reached 173 API files and 232 web files with one failure before it was stopped; the only
-  failure was the same 300ms benchmark while database, API, and web tests competed for this
-  16GB host. Required CI remains the exact-SHA full-suite gate.
-- **Release state**: The branch is rebased onto `origin/main` at `c3a93e1a9b12`, contains no merge
-  commits, and is ready for direct integration after this evidence commit. CI, deployment, and the
-  authenticated production journey remain pending and are tracked as separate states.
-- **Retrospective**: The original roster duplicated layout ownership across product code and the
-  shared table. One component must own header and body geometry. Query invalidation also cannot
-  stop at one browser tab when a detail editor and its mounted roster can be open in different
-  tabs.
-
 ### [TYPES-DOMAIN-001] Delete the global types warehouse
 
 - **Status**: REVIEW
@@ -7883,6 +7850,50 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 ---
 
 ## Completed Tasks
+
+### [WORK-ROSTER-CORRECTNESS-001] Make shared work rosters correct by construction
+
+- **Completed**: 2026-09-01
+- **Priority**: P0
+- **Summary**: `EntityTable` now owns the header, column geometry, sticky behavior, row density,
+  keyboard movement, selection, drag affordances, and one scroll surface for Initiative, Project,
+  Program, Team, Cycle, and Task rosters. Work-view API queries return complete direct-page context
+  without changing the response contract or database schema. Mutation invalidation refreshes the
+  mounted roster in the current tab and sends a target-scoped `BroadcastChannel` hint to other open
+  Docket tabs.
+- **Visual review**: The six-shot craft audit covers 1440x900, 1016x1724, and 390x844 in light and
+  dark themes. It records a SHIP verdict with all eight dimensions at 3 and all five hard gates
+  green. The shared header has no decorative divider. The roster toolbar has external block
+  margins, and the 320px geometry gate reports no page overflow.
+- **Validation**: The final focused matrix passes 24 files and 293 tests. Repository typecheck
+  passes 27 tasks. Repository lint passes 26 tasks. Tooling passes 21 files and 261 tests. The
+  production-build release journey passes all 5 browser tests in 51.6 seconds. The production-size
+  work-view benchmark passes both tests in isolation in 21.8 seconds. A bounded two-package Turbo
+  run reached 173 API files and 232 web files with one failure before it was stopped; the only
+  failure was the same 300ms benchmark while database, API, and web tests competed for this 16GB
+  host. Exact-SHA CI run `33509075412` passes the full required matrix, including API coverage, API
+  and Web performance, release-critical browser journeys, production deployment, and Scheduler
+  reconciliation. Advisory E2E run `33509075203` passes all four shards.
+- **Production evidence**: `a7471705dc11f1598b49b341d0976971205a1ab5` is on `main` with no merge
+  commits. Cloud Run deployed the same SHA for API and admin and passed the production health and
+  auth probes. Vercel deployment `dpl_GdbWyXD8JuGYLzCPkPfpxoB2Xia6` is `READY` for the same SHA and
+  owns the `docket.hypertext.studio` alias. Authenticated Chrome rendered the Las Vegans for Better
+  Transit roster without the divider and with external toolbar margins. The authorized live journey
+  created parents `01M1EVTXEFMZZYPSSBQBCD7ZZK` and `01M1EVVMTPRJD0P7XRXYMK12MY` plus child
+  `01M1EVW6QQ2QYSAWSW6719680D`. It renamed the child, assigned parent A, moved it to parent B, and
+  rendered the child as a level-2 row under the expanded parent B. Cleanup deleted the child first
+  and then both parents. A final virtualized-tail check found zero rows under the original or renamed
+  verification names, and the browser retained no verification document tabs.
+- **Incident note**: The first production load met a plain HTTP 429 `Rate exceeded.` at the
+  Cloudflare edge. The direct Cloud Run URL remained healthy with HTTP 200. The custom API hostname
+  and Web proxy recovered without a configuration change, and three fresh health probes then passed
+  in 138-211ms before the live journey resumed.
+- **Files changed**: Shared roster and table components, work-view API query planning, mutation
+  invalidation, release browser coverage, CI release gates, the craft audit, this worklog, and the
+  implementation plan.
+- **Retrospective**: The original roster duplicated layout ownership across product code and the
+  shared table. One component must own header and body geometry. Query invalidation also cannot stop
+  at one browser tab when a detail editor and its mounted roster can be open in another tab.
 
 ### [ADMIN-GOOGLE-SSO-001] Sign in to the operator console with Google Workspace
 

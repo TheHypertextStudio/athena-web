@@ -148,7 +148,7 @@ test('saved planning periods retain their fiscal basis across every product surf
   page,
 }) => {
   test.setTimeout(600_000);
-  await page.clock.setFixedTime('2026-05-01T12:00:00.000Z');
+  const wallClock = new Date();
   mkdirSync(SHOT_ROOT, { recursive: true });
   const runtimeErrors: string[] = [];
   page.on('pageerror', (error) => {
@@ -218,6 +218,7 @@ test('saved planning periods retain their fiscal basis across every product surf
   });
   await expect(page.getByRole('button', { name: /Target date.*H2 FY 2027/ })).toBeVisible();
 
+  await page.clock.setFixedTime('2026-05-01T12:00:00.000Z');
   await page.getByRole('button', { name: /Target date.*H2 FY 2027/ }).click();
   await page.getByRole('option', { name: 'Month', exact: true }).click();
   await page.getByRole('option', { name: 'June 2026', exact: true }).click();
@@ -225,6 +226,7 @@ test('saved planning periods retain their fiscal basis across every product surf
     page.getByRole('alert').filter({ hasText: 'Start must be on or before target.' }),
   ).toHaveText('Start must be on or before target.');
   await page.keyboard.press('Escape');
+  await page.clock.setFixedTime(wallClock);
 
   for (const viewport of [
     { name: 'desktop', width: 1440, height: 900 },

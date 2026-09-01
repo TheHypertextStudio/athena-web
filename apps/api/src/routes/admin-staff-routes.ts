@@ -108,7 +108,7 @@ export const adminStaffRoutes = new Hono<AppEnv>()
       response: AdminStaffOut,
       description: `Removes an operator, deleting their \`staff_user\` row so they revert to an ordinary signed-in account.
 
-**Behavior.** Refuses to revoke the caller's own staff id (\`409 conflict\` — an operator cannot lock themselves out, which also prevents removing the last superadmin by self-deletion), then deletes the \`staff_user\` by id. Returns \`404 not_found\` when the id is unknown. The returned record echoes the deleted row's role and target user id (name/email are blanked since the join is no longer fetched).
+**Behavior.** Refuses to revoke the caller's own staff id (\`409 conflict\` — an operator cannot lock themselves out, which also prevents removing the last superadmin by self-deletion). Also refuses a \`google_group\` operator with \`409 conflict\`: that grant mirrors Google Workspace group membership and would be re-created within minutes, so the revocation has to happen in the group. Otherwise deletes the \`staff_user\` by id. Returns \`404 not_found\` when the id is unknown. The returned record echoes the deleted row's role and target user id (name/email are blanked since the join is no longer fetched).
 
 **Access — superadmin only.** Gated by \`requireStaffRole('superadmin')\`: revoking operators is as sensitive as granting them and is restricted to \`superadmin\`. \`support\`/\`finance\` → \`403 forbidden\`; non-operators \`403\`; anonymous \`401\`.
 
@@ -121,6 +121,21 @@ export const adminStaffRoutes = new Hono<AppEnv>()
       const { id } = c.req.valid('param');
       const { staffUserId } = c.get('staffCtx');
       if (id === staffUserId) throw new ConflictError('Cannot revoke your own staff access');
+      // A group-managed grant is owned by the Workspace sync, which re-creates it from group
+      // membership within minutes. Deleting the row here would report success and then quietly
+      // undo itself, so refuse and point at the change that actually sticks.
+      const target = (
+        await db
+          .select({ managedBy: staffUser.managedBy })
+          .from(staffUser)
+          .where(eq(staffUser.id, id))
+          .limit(1)
+      )[0];
+      if (target?.managedBy === 'google_group') {
+        throw new ConflictError(
+          'This operator is provisioned from a Google Workspace group. Remove them from the group instead.',
+        );
+      }
       const deleted = await db.delete(staffUser).where(eq(staffUser.id, id)).returning();
       const staff = deleted[0];
       if (!staff) throw new NotFoundError('Staff member not found');

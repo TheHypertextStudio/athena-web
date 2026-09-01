@@ -108,10 +108,6 @@ const cron = new Hono()
     const notionMirror = await sweepNotionMirror(now);
     return c.json({ swept: true, ...result, notionMirror });
   })
-  // Elicitation deadlines: nothing Athena asks may pend forever. A question whose raiser declared
-  // a defensible default is answered by Athena with her reasoning recorded; every other overdue
-  // question is parked with nothing mutated, and the person is told the work is waiting on them.
-  // Idempotent: a settled question is never re-swept.
   // Operator SSO reconciliation: re-read every group-managed operator's Google Workspace group
   // membership and revoke those whose membership has gone. This is what makes revocation real —
   // sessions last 30 days, so without this sweep removing someone from a group would not lock
@@ -128,6 +124,10 @@ const cron = new Hono()
     });
     return c.json({ swept: true, ...result });
   })
+  // Elicitation deadlines: nothing Athena asks may pend forever. A question whose raiser declared
+  // a defensible default is answered by Athena with her reasoning recorded; every other overdue
+  // question is parked with nothing mutated, and the person is told the work is waiting on them.
+  // Idempotent: a settled question is never re-swept.
   .post('/elicitation-deadlines', async (c) => {
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
     const result = await sweepElicitations(new Date());

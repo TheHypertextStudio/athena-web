@@ -112,8 +112,9 @@ describe('highestRoleForGroups', () => {
 });
 
 describe('isWorkspaceEmail', () => {
-  it('accepts everything when no domain is configured', () => {
-    expect(isWorkspaceEmail('anyone@gmail.com', undefined)).toBe(true);
+  it('refuses everything when no domain is configured, rather than dropping the confinement', () => {
+    expect(isWorkspaceEmail('anyone@gmail.com', undefined)).toBe(false);
+    expect(isWorkspaceEmail('anyone@gmail.com', '  ')).toBe(false);
   });
 
   it('matches the configured domain case-insensitively', () => {
@@ -265,6 +266,17 @@ describe('syncStaffFromGoogle', () => {
     expect(assertDefined(await staffRow(userId)).role).toBe('finance');
   });
 
+  it('treats a mapping of only separators as unusable rather than as an empty mapping', async () => {
+    const userId = await makeUser();
+    const outcome = await syncStaffFromGoogle(
+      db,
+      directoryFor(await emailOf(userId), ['docket-admins@hypertext.studio']),
+      { userId, config: { ...config, groupRoles: ' , , ' } },
+    );
+
+    expect(outcome).toEqual({ status: 'not-operator' });
+  });
+
   it('grants nothing when no groups are mapped at all', async () => {
     const userId = await makeUser();
     const outcome = await syncStaffFromGoogle(
@@ -286,6 +298,19 @@ describe('syncStaffFromGoogle', () => {
     });
 
     expect(outcome).toEqual({ status: 'not-operator' });
+  });
+
+  it('grants nothing when no Workspace domain is configured', async () => {
+    const userId = await makeUser();
+    const outcome = await syncStaffFromGoogle(
+      db,
+      directoryFor(await emailOf(userId), ['docket-admins@hypertext.studio']),
+      { userId, config: { groupRoles: GROUP_ROLES } },
+    );
+
+    // Fail closed: an unset domain must not silently widen operator SSO to every Google account.
+    expect(outcome).toEqual({ status: 'not-operator' });
+    expect(await staffRow(userId)).toBeUndefined();
   });
 
   it('records an unchanged sync without rewriting the tier', async () => {
@@ -375,6 +400,22 @@ describe('syncAllStaff', () => {
     expect(await staffRow(loser)).toBeUndefined();
     expect(assertDefined(await staffRow(keeper)).role).toBe('support');
     expect(assertDefined(await staffRow(manual)).role).toBe('support');
+  });
+
+  it('changes nothing when the group mapping is unusable', async () => {
+    const userId = await makeUser();
+    const email = await emailOf(userId);
+    await syncStaffFromGoogle(db, directoryFor(email, ['docket-support@hypertext.studio']), {
+      userId,
+      config,
+    });
+
+    const sweep = await syncAllStaff(db, brokenDirectory, { ...config, groupRoles: undefined });
+
+    // Not a mass revocation: an absent mapping is "cannot tell", so no row is even examined.
+    expect(sweep.changed).toBe(0);
+    expect(sweep.failed).toBe(0);
+    expect(assertDefined(await staffRow(userId)).role).toBe('support');
   });
 
   it('counts a failed lookup without revoking that operator', async () => {

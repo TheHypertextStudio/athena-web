@@ -31,6 +31,23 @@ const TOKEN_EXPIRY_SKEW_S = 60;
 /** How long a directory call may run before the sign-in it is blocking gives up on it. */
 const LOOKUP_TIMEOUT_MS = 5_000;
 
+/** Pages to walk before giving up, so a pathological membership list cannot loop forever. */
+const MAX_GROUP_PAGES = 10;
+
+/**
+ * Addresses safe to embed in a Cloud Identity query.
+ *
+ * @remarks
+ * The lookup interpolates the address into a single-quoted CEL expression, and the API offers no
+ * parameter binding. RFC 5321 permits `'` in an unquoted local part, so an address is not
+ * inherently safe to splice: `a' || member_key_id == 'victim@corp.com` would return someone
+ * else's groups and hand the caller their staff tier. This pattern admits only the ordinary
+ * address shape — no quotes, no backslashes, no whitespace — and everything else is refused
+ * rather than escaped, because a rejected lookup is a throw, which the sync treats as "unknown"
+ * and never as "no groups".
+ */
+const SAFE_EMAIL = /^[A-Za-z0-9!#$%&*+/=?^_`{|}~.-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+
 /** Resolves the Google Groups an account belongs to. */
 export interface GoogleDirectoryPort {
   /**
@@ -49,9 +66,7 @@ export function staticGoogleDirectory(
 ): GoogleDirectoryPort {
   return {
     groupsFor: (email) =>
-      Promise.resolve(
-        [...(memberships[email.trim().toLowerCase()] ?? [])].map((g) => g.toLowerCase()),
-      ),
+      Promise.resolve((memberships[email.trim().toLowerCase()] ?? []).map((g) => g.toLowerCase())),
   };
 }
 
@@ -63,6 +78,7 @@ interface TransitiveGroupMembership {
 /** The shape of a `searchTransitiveGroups` page. */
 interface SearchTransitiveGroupsResponse {
   readonly memberships?: readonly TransitiveGroupMembership[] | undefined;
+  readonly nextPageToken?: string | undefined;
 }
 
 /** The metadata server's token response. */
@@ -88,6 +104,12 @@ export function createGoogleDirectory(
   let cachedToken: string | undefined;
   let cachedUntilMs = 0;
 
+  /** Forget the cached token, so the next call mints a fresh one. */
+  function invalidateToken(): void {
+    cachedToken = undefined;
+    cachedUntilMs = 0;
+  }
+
   async function accessToken(): Promise<string> {
     if (cachedToken !== undefined && now() < cachedUntilMs) return cachedToken;
     const response = await fetchImpl(
@@ -107,24 +129,53 @@ export function createGoogleDirectory(
     return cachedToken;
   }
 
+  /** Fetch one page of transitive memberships for an already-validated address. */
+  async function fetchGroupPage(
+    normalized: string,
+    token: string,
+    pageToken: string | undefined,
+  ): Promise<SearchTransitiveGroupsResponse> {
+    const query = new URLSearchParams({ query: `member_key_id == '${normalized}'` });
+    if (pageToken) query.set('pageToken', pageToken);
+    const response = await fetchImpl(`${SEARCH_TRANSITIVE_GROUPS_URL}?${query.toString()}`, {
+      headers: { authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(LOOKUP_TIMEOUT_MS),
+    });
+    if (response.status === 401 || response.status === 403) {
+      // The token was rejected while still inside its expiry window — it was revoked or rotated
+      // early. Drop it so the next attempt mints a fresh one instead of replaying a dead
+      // credential for the rest of its nominal lifetime.
+      invalidateToken();
+      throw new Error(`Cloud Identity rejected the service account (${response.status}).`);
+    }
+    if (!response.ok) {
+      throw new Error(`Cloud Identity group lookup failed (${response.status}).`);
+    }
+    return (await response.json()) as SearchTransitiveGroupsResponse;
+  }
+
   return {
     async groupsFor(email) {
-      const token = await accessToken();
-      const query = new URLSearchParams({
-        query: `member_key_id == '${email.trim().toLowerCase()}'`,
-      });
-      const response = await fetchImpl(`${SEARCH_TRANSITIVE_GROUPS_URL}?${query.toString()}`, {
-        headers: { authorization: `Bearer ${token}` },
-        signal: AbortSignal.timeout(LOOKUP_TIMEOUT_MS),
-      });
-      if (!response.ok) {
-        throw new Error(`Cloud Identity group lookup failed (${response.status}).`);
+      const normalized = email.trim().toLowerCase();
+      if (!SAFE_EMAIL.test(normalized)) {
+        throw new Error('Refusing to query Cloud Identity for an unexpected address shape.');
       }
-      const body = (await response.json()) as SearchTransitiveGroupsResponse;
-      return (body.memberships ?? [])
-        .map((m) => m.groupKey?.id)
-        .filter((id): id is string => typeof id === 'string' && id.length > 0)
-        .map((id) => id.toLowerCase());
+
+      const token = await accessToken();
+      const groups: string[] = [];
+      let pageToken: string | undefined;
+      for (let page = 0; page < MAX_GROUP_PAGES; page += 1) {
+        const body = await fetchGroupPage(normalized, token, pageToken);
+        for (const membership of body.memberships ?? []) {
+          const id = membership.groupKey?.id;
+          if (typeof id === 'string' && id.length > 0) groups.push(id.toLowerCase());
+        }
+        // A truncated membership list reads as "in fewer groups", which the sync would act on by
+        // demoting or revoking — so every page must be walked before the answer is trusted.
+        pageToken = body.nextPageToken;
+        if (!pageToken) return groups;
+      }
+      throw new Error('Cloud Identity returned more group pages than the lookup will walk.');
     },
   };
 }

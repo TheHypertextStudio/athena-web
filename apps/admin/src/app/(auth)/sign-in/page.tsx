@@ -144,15 +144,27 @@ export default function SignInPage(): JSX.Element {
     };
   }, []);
 
-  /** Hand off to Google; the browser leaves this page, so there is no success branch to handle. */
+  /**
+   * Hand off to Google; on success the browser leaves this page, so only failure lands back here.
+   *
+   * @remarks
+   * Both failure shapes have to clear `pending`, because it also gates the passkey button — a
+   * rejected call that left it set would strand the operator on a screen with no working control
+   * and no message, recoverable only by reloading.
+   */
   const continueWithGoogle = useCallback((): void => {
     setPending(true);
     setError(null);
-    void authClient.signIn.social({ provider: 'google', callbackURL: '/' }).then((result) => {
-      if (!result.error) return;
+    const failed = (): void => {
       setPending(false);
       setError('Could not start Google sign-in. Please try again, or use a passkey.');
-    });
+    };
+    void authClient.signIn
+      .social({ provider: 'google', callbackURL: '/' })
+      .then((result) => {
+        if (result.error) failed();
+      })
+      .catch(failed);
   }, []);
 
   const canSubmit = hydrated && passkeySupported && !pending;

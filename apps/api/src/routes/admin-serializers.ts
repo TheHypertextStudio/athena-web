@@ -150,6 +150,8 @@ export function toStaffOut(
     userName: u.name,
     userEmail: u.email,
     createdAt: s.createdAt.toISOString(),
+    managedBy: s.managedBy,
+    groupsSyncedAt: s.groupsSyncedAt?.toISOString() ?? null,
   };
 }
 

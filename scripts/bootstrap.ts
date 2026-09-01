@@ -430,6 +430,7 @@ function setupGcp(cfg: Config): {
     'sts.googleapis.com', // required for WIF OIDC token exchange
     'cloudresourcemanager.googleapis.com',
     'cloudscheduler.googleapis.com', // drives the secret-guarded cron endpoints (pnpm scheduler:setup)
+    'cloudidentity.googleapis.com', // reads Workspace group membership for operator SSO
   ];
   step(`enabling ${apis.length} APIs (may take ~30s)…`);
   exec(`gcloud services enable ${apis.join(' ')} --project=${cfg.project}`);

@@ -429,6 +429,17 @@ export const AdminStaffOut = z.object({
     .string()
     .describe('Email from the joined user account (blank on a revoke response).'),
   createdAt: z.string().describe('When staff access was granted (ISO-8601).'),
+  managedBy: z
+    .enum(['manual', 'google_group'])
+    .describe(
+      'What provisions this grant. `manual` grants are made here and are never changed by any automated sync. `google_group` grants mirror Google Workspace group membership: the tier follows the group, and revoking one here is undone the next time membership is reconciled.',
+    ),
+  groupsSyncedAt: z
+    .string()
+    .nullable()
+    .describe(
+      'When group membership was last reconciled for this operator (ISO-8601), or null for a grant no sync has touched.',
+    ),
 });
 /** Validated staff-user value. */
 export type AdminStaffOut = z.infer<typeof AdminStaffOut>;

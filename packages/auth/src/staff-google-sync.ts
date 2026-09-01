@@ -25,7 +25,7 @@ import {
   type StaffRole,
   type StaffTarget,
 } from '@docket/db';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, ne } from 'drizzle-orm';
 import type { PgliteDatabase } from 'drizzle-orm/pglite';
 
 import type { GoogleDirectoryPort } from './google-directory';
@@ -55,6 +55,11 @@ export interface StaffSyncConfig {
   readonly groupRoles: string | undefined;
   /** The Workspace domain operator accounts must belong to, when one is configured. */
   readonly workspaceDomain?: string | undefined;
+  /**
+   * Pre-parsed `groupRoles`, so a sweep parses the CSV once rather than once per operator.
+   * Only ever a usable mapping: a caller that cannot parse one declines to sync at all.
+   */
+  readonly targets?: readonly StaffTarget[] | undefined;
 }
 
 /**
@@ -76,19 +81,37 @@ export function highestRoleForGroups(
   return best;
 }
 
-/** Whether `email` belongs to the configured Workspace domain (no domain configured ⇒ yes). */
+/**
+ * Whether `email` belongs to `domain`.
+ *
+ * @remarks
+ * An absent domain answers false, not true. This is an authorization input, so "nothing
+ * configured" has to mean "nothing qualifies" — the permissive reading would silently drop the
+ * confinement the moment `GOOGLE_WORKSPACE_DOMAIN` went missing, and let every consumer Google
+ * account reach the directory lookup.
+ */
 export function isWorkspaceEmail(email: string, domain: string | undefined): boolean {
-  if (!domain) return true;
-  return email.trim().toLowerCase().endsWith(`@${domain.trim().toLowerCase()}`);
+  const suffix = domain?.trim().toLowerCase();
+  if (!suffix) return false;
+  return email.trim().toLowerCase().endsWith(`@${suffix}`);
 }
 
-/** Parse the group mapping, treating a malformed value as "grants nothing" rather than throwing. */
+/**
+ * Parse the group mapping, or null when it cannot be trusted.
+ *
+ * @remarks
+ * Null covers both an unusable value and an absent one, and callers decline to decide rather
+ * than revoking. Treating "no groups configured" as "nobody is in a group" would mean clearing
+ * the variable mid-edit silently revokes every group-managed operator on the next sweep — a
+ * far likelier accident than a deliberate mass revocation, and one with no other signal.
+ */
 function parseGroupRoles(raw: string | undefined): StaffTarget[] | null {
-  if (!raw?.trim()) return [];
+  if (!raw?.trim()) return null;
   try {
-    return parseStaffTargets(raw);
+    const targets = parseStaffTargets(raw);
+    return targets.length > 0 ? targets : null;
   } catch (error) {
-    console.error('Invalid ADMIN_GOOGLE_GROUP_ROLES — granting no operator access:', error);
+    console.error('Invalid ADMIN_GOOGLE_GROUP_ROLES — leaving operator access unchanged:', error);
     return null;
   }
 }
@@ -140,13 +163,14 @@ async function recordAudit(
   });
 }
 
-/** How many `superadmin` rows exist right now. */
-async function superadminCount(db: Db): Promise<number> {
+/** Whether a `superadmin` other than `excludingId` exists. */
+async function anotherSuperadminExists(db: Db, excludingId: string): Promise<boolean> {
   const rows = await db
     .select({ id: staffUser.id })
     .from(staffUser)
-    .where(eq(staffUser.role, 'superadmin'));
-  return rows.length;
+    .where(and(eq(staffUser.role, 'superadmin'), ne(staffUser.id, excludingId)))
+    .limit(1);
+  return rows.length > 0;
 }
 
 /** An existing group-manageable operator row. */
@@ -182,6 +206,15 @@ async function desiredRoleFor(
   targets: readonly StaffTarget[],
   config: StaffSyncConfig,
 ): Promise<StaffRole | null> {
+  // `parseGroupRoles` already rejected an empty mapping, so `targets` is non-empty here and a
+  // lookup can actually change the answer. This runs inline on the OAuth callback path, so the
+  // cheap refusals come first.
+  if (!config.workspaceDomain?.trim()) {
+    console.error(
+      'GOOGLE_WORKSPACE_DOMAIN is not set — operator SSO grants nothing until it is configured.',
+    );
+    return null;
+  }
   const email = await emailFor(db, userId);
   if (!email || !isWorkspaceEmail(email, config.workspaceDomain)) return null;
   if (!(await hasGoogleAccount(db, userId))) return null;
@@ -190,7 +223,10 @@ async function desiredRoleFor(
 
 /** Whether removing or demoting `existing` would leave the console with no superadmin. */
 async function isLastSuperadmin(db: Db, existing: ExistingStaff): Promise<boolean> {
-  return existing.role === 'superadmin' && (await superadminCount(db)) <= 1;
+  if (existing.role !== 'superadmin') return false;
+  // Manual rows count here on purpose: a break-glass superadmin is exactly what makes revoking
+  // a group-managed one safe.
+  return !(await anotherSuperadminExists(db, existing.id));
 }
 
 /** Drop an operator whose group membership has gone. */
@@ -285,15 +321,15 @@ async function retierStaff(
 export async function syncStaffFromGoogle(
   db: Db,
   directory: GoogleDirectoryPort,
-  input: { userId: string; config: StaffSyncConfig },
+  input: { userId: string; config: StaffSyncConfig; existing?: ExistingStaff | undefined },
 ): Promise<StaffSyncOutcome> {
   const { userId, config } = input;
-  const existing = await existingStaffFor(db, userId);
+  const existing = input.existing ?? (await existingStaffFor(db, userId));
   if (existing && existing.managedBy !== GOOGLE_MANAGED) {
     return { status: 'manual', role: existing.role };
   }
 
-  const targets = parseGroupRoles(config.groupRoles);
+  const targets = config.targets ?? parseGroupRoles(config.groupRoles);
   if (targets === null) {
     return existing ? { status: 'unchanged', role: existing.role } : { status: 'not-operator' };
   }
@@ -335,18 +371,30 @@ export async function syncAllStaff(
   directory: GoogleDirectoryPort,
   config: StaffSyncConfig,
 ): Promise<StaffSyncSweep> {
-  const rows = (await db
+  const rows = await db
     .select({
+      id: staffUser.id,
       userId: staffUser.userId,
+      role: staffUser.role,
+      managedBy: staffUser.managedBy,
     })
     .from(staffUser)
-    .where(eq(staffUser.managedBy, GOOGLE_MANAGED))) as { userId: string }[];
+    .where(eq(staffUser.managedBy, GOOGLE_MANAGED));
+
+  // Parse the mapping once for the whole sweep rather than once per operator, and treat an
+  // untrustworthy one as "change nothing" — the same rule a failed lookup gets.
+  const targets = parseGroupRoles(config.groupRoles);
+  if (targets === null) return { examined: rows.length, changed: 0, failed: 0 };
 
   let changed = 0;
   let failed = 0;
   for (const row of rows) {
     try {
-      const outcome = await syncStaffFromGoogle(db, directory, { userId: row.userId, config });
+      const outcome = await syncStaffFromGoogle(db, directory, {
+        userId: row.userId,
+        config: { ...config, targets },
+        existing: row,
+      });
       if (outcome.status === 'updated' || outcome.status === 'revoked') changed += 1;
     } catch (error) {
       failed += 1;

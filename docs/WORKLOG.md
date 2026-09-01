@@ -7858,6 +7858,39 @@ the _Groups Reader_ admin role directly, with no domain-wide delegation and no i
 - **`audit()` was not widened.** The sync lives in `packages/auth` (the auth hook constructs it)
   and writes its own system-attributed audit rows, so the API helper needed no signature change.
 
+#### Fixes from the self-review pass
+
+A `/code-review xhigh` over the commit surfaced fourteen findings; twelve were applied.
+
+- **Query injection in the Cloud Identity lookup.** The address was interpolated unescaped into a
+  single-quoted CEL expression, and the API offers no parameter binding. RFC 5321 permits `'` in a
+  local part, so `a' || member_key_id == 'victim@corp.com` would have returned another account's
+  groups and granted their tier. Addresses are now matched against a strict pattern and refused
+  rather than escaped — a refusal throws, which the sync already treats as "unknown".
+- **A missing `GOOGLE_WORKSPACE_DOMAIN` silently removed the domain confinement.** `isWorkspaceEmail`
+  answered true for everyone when no domain was set, which also sent every consumer Google sign-in
+  to the directory. It now fails closed, and so does the sync.
+- **Revoking a group-managed operator from the console silently reverted.** `DELETE /admin/staff/:id`
+  deleted the row and wrote a `staff.revoked` audit event, then the next sweep re-created it. It now
+  409s and says to remove the person from the group. `AdminStaffOut` also gained `managedBy` and
+  `groupsSyncedAt`, so the roster shows which rows the sync owns.
+- **Blank `ADMIN_GOOGLE_GROUP_ROLES` mass-revoked while a malformed one did not.** Clearing the
+  variable mid-edit is a likelier accident than a deliberate mass revocation, so both now mean
+  "cannot tell".
+- **The group lookup ignored pagination and never dropped a rejected token.** A truncated membership
+  list reads as lost membership, so every page is walked; a 401/403 now invalidates the cache
+  instead of replaying a dead credential for the token's remaining hour.
+- **A rejected `signIn.social` stranded the sign-in page** with both buttons disabled and no
+  message — the `.then()` had no `.catch()`.
+- Smaller: the new cron route had been inserted between the elicitation comment and its route;
+  `cloudidentity.googleapis.com` is now enabled by `bootstrap.ts` rather than by a documented manual
+  step; the sweep parses the CSV once and reuses the rows it already selected; `superadminCount`
+  became a bounded `anotherSuperadminExists`.
+
+Two findings were not applied, both deliberately: the `--service-account` flag stays optional in
+`deploy.yml` (making it mandatory would break any deployment that has not run the new bootstrap),
+and per-operator directory calls are left unbatched (Cloud Identity has no batch membership query).
+
 #### Bug found while testing
 
 A malformed `ADMIN_GOOGLE_GROUP_ROLES` fell through to the revoke branch — one typo in a

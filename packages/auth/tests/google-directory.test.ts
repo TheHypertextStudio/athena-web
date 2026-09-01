@@ -108,11 +108,68 @@ describe('createGoogleDirectory', () => {
   it('throws when the group lookup itself fails, so the sync cannot read it as "no groups"', async () => {
     const fetchImpl = fetchStub(
       tokenResponse({ access_token: 'token-1', expires_in: 3600 }),
-      tokenResponse({ error: 'forbidden' }, 403),
+      tokenResponse({ error: 'boom' }, 500),
     );
 
     await expect(createGoogleDirectory(fetchImpl).groupsFor('op@x.dev')).rejects.toThrow(
       /group lookup failed/,
+    );
+  });
+
+  it('drops a rejected token so the next attempt mints a fresh one', async () => {
+    const fetchImpl = fetchStub(
+      tokenResponse({ access_token: 'stale', expires_in: 3600 }),
+      tokenResponse({ error: 'unauthorized' }, 401),
+      tokenResponse({ access_token: 'fresh', expires_in: 3600 }),
+      tokenResponse({ memberships: [{ groupKey: { id: 'g@x.dev' } }] }),
+    );
+    const directory = createGoogleDirectory(fetchImpl, () => 0);
+
+    await expect(directory.groupsFor('op@x.dev')).rejects.toThrow(/rejected the service account/);
+    // Without invalidation this would replay `stale` and fail again for the token's whole life.
+    await expect(directory.groupsFor('op@x.dev')).resolves.toEqual(['g@x.dev']);
+  });
+
+  it('walks every page, since a truncated list would read as lost group membership', async () => {
+    const fetchImpl = fetchStub(
+      tokenResponse({ access_token: 'token-1', expires_in: 3600 }),
+      tokenResponse({
+        memberships: [{ groupKey: { id: 'page-one@x.dev' } }],
+        nextPageToken: 'more',
+      }),
+      tokenResponse({ memberships: [{ groupKey: { id: 'page-two@x.dev' } }] }),
+    );
+
+    await expect(createGoogleDirectory(fetchImpl).groupsFor('op@x.dev')).resolves.toEqual([
+      'page-one@x.dev',
+      'page-two@x.dev',
+    ]);
+  });
+
+  it('gives up rather than looping when the pages never stop', async () => {
+    const endless = vi.fn((url: string) =>
+      Promise.resolve(
+        url.includes('metadata')
+          ? tokenResponse({ access_token: 'token-1', expires_in: 3600 })
+          : tokenResponse({ memberships: [], nextPageToken: 'always-more' }),
+      ),
+    ) as never;
+
+    await expect(createGoogleDirectory(endless).groupsFor('op@x.dev')).rejects.toThrow(
+      /more group pages/,
+    );
+  });
+
+  it('refuses an address that could break out of the query, rather than escaping it', async () => {
+    const fetchImpl = fetchStub(tokenResponse({ access_token: 'token-1', expires_in: 3600 }));
+
+    // A throw is the safe outcome: the sync reads it as "unknown" and changes nothing, whereas
+    // a successful injected query would return someone else's groups.
+    await expect(
+      createGoogleDirectory(fetchImpl).groupsFor("a' || member_key_id == 'victim@corp.com"),
+    ).rejects.toThrow(/unexpected address shape/);
+    await expect(createGoogleDirectory(fetchImpl).groupsFor('no-at-sign')).rejects.toThrow(
+      /unexpected address shape/,
     );
   });
 

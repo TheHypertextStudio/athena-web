@@ -417,11 +417,13 @@ Setup, in order. Steps 2 and 3 cannot be automated — they live in the Workspac
    `docket-support@<domain>`, `docket-finance@<domain>`, `docket-admins@<domain>`.
 3. In the Workspace admin console (Account → Admin roles), assign the **Groups Reader** admin role
    to that service account. This is what lets it read the Cloud Identity Groups API; there is no
-   domain-wide delegation to configure and no admin user to impersonate. Also enable the
-   Cloud Identity API (`cloudidentity.googleapis.com`) on the GCP project.
+   domain-wide delegation to configure and no admin user to impersonate. (`pnpm bootstrap` already
+   enables `cloudidentity.googleapis.com` on the project.)
 4. Set `GOOGLE_WORKSPACE_DOMAIN` and `ADMIN_GOOGLE_GROUP_ROLES`, then flip
    `ADMIN_GOOGLE_SSO_ENABLED=true` **last** — the console hides the Google button until the API
-   reports it configured, so an operator never sees a button that cannot work.
+   reports it configured, so an operator never sees a button that cannot work. Both values are
+   load-bearing: with either missing the sync grants nothing at all, which is deliberate — an
+   unset domain would otherwise widen operator SSO to every Google account on earth.
 
 Two safety properties worth knowing before you rely on this:
 

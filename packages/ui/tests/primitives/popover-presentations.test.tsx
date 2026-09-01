@@ -29,6 +29,7 @@ describe('Popover presentations', () => {
 
     const panel = await screen.findByLabelText('Inspector');
     expect(panel).toHaveAttribute('data-surface-tone', 'floating');
+    expect(panel).toHaveClass('z-[120]', 'pointer-events-auto');
     expect(panel).toHaveClass('overflow-hidden', 'gap-0', 'p-0', 'w-72');
     expect(screen.getByTestId('body')).toHaveAttribute('data-overlay-scroll-owner', '');
     expect(screen.getByTestId('body')).toHaveClass('overflow-y-auto');

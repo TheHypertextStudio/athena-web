@@ -6,7 +6,6 @@ import { expect, test } from '../helpers/fixtures';
 test('a person can plan across multiple regular places with home kept separate', async ({
   page,
 }) => {
-  await page.clock.setFixedTime('2026-08-10T17:00:00.000Z');
   await signUpAndOnboard(page, 'WorkLocations');
   await page.goto('/settings/work-locations', { waitUntil: 'domcontentloaded' });
 
@@ -39,6 +38,7 @@ test('a person can plan across multiple regular places with home kept separate',
   await expect(savedPlaces.getByText('Current', { exact: true })).toBeVisible();
   await expect(page.getByRole('alert')).toHaveCount(0);
 
+  await page.clock.setFixedTime('2026-08-10T17:00:00.000Z');
   await page.getByRole('button', { name: 'Add schedule' }).click();
   const scheduleDialog = page.getByRole('dialog', { name: 'Add schedule' });
   await scheduleDialog

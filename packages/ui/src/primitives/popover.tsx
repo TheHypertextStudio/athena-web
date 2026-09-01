@@ -121,7 +121,7 @@ export function PopoverContent({
         collisionPadding={collisionPadding}
         className={cn(
           surfaceClass,
-          'max-h-[var(--radix-popover-content-available-height)] min-h-0 origin-[var(--radix-popover-content-transform-origin)] outline-none',
+          'pointer-events-auto z-[120] max-h-[var(--radix-popover-content-available-height)] min-h-0 origin-[var(--radix-popover-content-transform-origin)] outline-none',
           isMenu && 'overflow-x-hidden overflow-y-auto',
           focusRing,
           className,

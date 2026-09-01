@@ -1,6 +1,15 @@
 'use client';
 
-import { Button, ControlGroup, Input, Select, Stack, Text, Textarea } from '@docket/ui/primitives';
+import {
+  Button,
+  Checkbox,
+  ControlGroup,
+  Input,
+  Select,
+  Stack,
+  Text,
+  Textarea,
+} from '@docket/ui/primitives';
 import { type JSX, type SyntheticEvent } from 'react';
 
 import { AudiencePicker, BroadcastWarning } from './audience-picker';
@@ -98,8 +107,7 @@ export function ComposeStage({
           <div className="flex flex-wrap gap-3">
             {CHANNELS.map((channel) => (
               <label key={channel} className="flex items-center gap-1.5">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={draft.channels.includes(channel)}
                   onChange={() => {
                     onDraftChange('channels', toggleChannel(draft.channels, channel));

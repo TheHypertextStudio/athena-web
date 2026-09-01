@@ -21,6 +21,10 @@
  * Example:
  *   tsx e2e/tools/capture-shots.ts --session=playwright/.auth/dev-session.json \
  *     --out=.data/design-review/2026-07-06 /today /orgs/:orgId/agents /orgs/:orgId/athena
+ *
+ *   # Another app in the same stack — the session cookie spans `.docket.localhost`.
+ *   tsx e2e/tools/capture-shots.ts --session=playwright/.auth/dev-session.json \
+ *     --base-url=http://<prefix>.admin.docket.localhost:1355 --out=.data/admin /users /audit
  */
 import { chromium } from '@playwright/test';
 import type { BrowserContext, Page } from '@playwright/test';
@@ -46,6 +50,15 @@ interface SessionMeta {
 interface CliArgs {
   session: string;
   outDir: string;
+  /**
+   * Capture against a different origin than the session was created on.
+   *
+   * @remarks
+   * The session cookie is scoped to `.docket.localhost`, so one sign-in reaches every app in the
+   * stack. That makes this tool usable for the admin console — same auth, same shot set, same
+   * overflow check — without a second capture harness to keep correct.
+   */
+  baseURL?: string | undefined;
   routes: string[];
   audit: boolean;
   start: number;
@@ -83,6 +96,7 @@ function parseArgs(argv: string[]): CliArgs {
   return {
     session: resolve(flags.get('session') ?? 'playwright/.auth/dev-session.json'),
     outDir: resolve(flags.get('out') ?? '.data/design-review-shots'),
+    baseURL: flags.get('base-url'),
     routes,
     audit,
     start: flags.has('start') ? Number.parseInt(flags.get('start') ?? '', 10) : 0,
@@ -166,7 +180,13 @@ async function waitForSettledPage(page: Page): Promise<void> {
   await waitForNoLoadingState();
 }
 
-/** Navigate to a review route and fail before capture when the surface did not resolve. */
+/**
+ * Navigate to a review route and fail before capture when the surface did not resolve.
+ *
+ * @param page - The page to navigate.
+ * @param url - The absolute route URL.
+ * @param allowSignIn - Whether landing on `/sign-in` is the intended capture rather than a failure.
+ */
 async function openReviewRoute(page: Page, url: string, allowSignIn = false): Promise<void> {
   // Next development builds a route on its first request. Billing took 30.4 seconds on a cold
   // compile, which exceeded Playwright's default navigation timeout even though the route returned
@@ -253,10 +273,50 @@ async function captureCleanFrame(
   throw new Error(`Could not capture a clean frame after four attempts: ${url}`);
 }
 
+/**
+ * The shared workspace id, building one only when a route actually needs it.
+ *
+ * @remarks
+ * The workspace exists to resolve `:orgId`/`:sharedOrgId` tokens and the mobile audit's fixture
+ * routes, and building it requires an authenticated *product* document. A capture naming no such
+ * token — a plain route list, or another app in the stack — must neither pay for it nor fail on
+ * `/today` when that is not a route the app under capture serves.
+ *
+ * @param options - The authenticated context, the session metadata, and whether a route needs it.
+ * @returns the shared workspace id, or `undefined` when none was needed.
+ */
+async function resolveSharedWorkspace(options: {
+  context: BrowserContext;
+  meta: SessionMeta;
+  needed: boolean;
+}): Promise<string | undefined> {
+  const { context, meta, needed } = options;
+  if (!needed || meta.sharedOrgId !== undefined) return meta.sharedOrgId;
+
+  const setupPage = await context.newPage();
+  // Settings can complete a client redirect after its document first settles. The audit fixture
+  // uses page.evaluate for authenticated same-origin writes, so that redirect destroys its
+  // execution context mid-request. Today is a stable authenticated document and needs no profile
+  // route transition before the local-only fixture is created.
+  const setupResponse = await setupPage.goto(`${meta.baseURL}/today`, {
+    waitUntil: 'domcontentloaded',
+  });
+  if (!setupResponse?.ok() || setupPage.url().includes('/sign-in')) {
+    throw new Error('Could not open an authenticated setup document for the mobile audit fixture');
+  }
+  await setupPage.waitForTimeout(500);
+  const orgId = (await createMobileAuditFixture(setupPage)).orgId;
+  await setupPage.close();
+  return orgId;
+}
+
 async function main(): Promise<void> {
-  const { session, outDir, routes, audit, start, limit, frameStart, frameLimit, records } =
+  const { session, outDir, baseURL, routes, audit, start, limit, frameStart, frameLimit, records } =
     parseArgs(process.argv.slice(2));
   const meta = JSON.parse(readFileSync(`${session}.meta.json`, 'utf8')) as SessionMeta;
+  // Apply the override first, then assert: `--base-url` points at another app in the same local
+  // stack, so it must still satisfy the same locality check as the session's own origin.
+  if (baseURL !== undefined) meta.baseURL = baseURL;
   assertLocalCaptureBaseUrl(meta.baseURL);
   if (audit && (!Number.isInteger(start) || start < 0)) {
     throw new Error('capture-shots: --start must be a non-negative integer');
@@ -299,25 +359,11 @@ async function main(): Promise<void> {
     ignoreHTTPSErrors: true,
     serviceWorkers: 'block',
   });
-  let sharedOrgId = meta.sharedOrgId;
-  if (sharedOrgId === undefined) {
-    const setupPage = await context.newPage();
-    // Settings can complete a client redirect after its document first settles. The audit fixture
-    // uses page.evaluate for authenticated same-origin writes, so that redirect destroys its
-    // execution context mid-request. Today is a stable authenticated document and needs no profile
-    // route transition before the local-only fixture is created.
-    const setupResponse = await setupPage.goto(`${meta.baseURL}/today`, {
-      waitUntil: 'domcontentloaded',
-    });
-    if (!setupResponse?.ok() || setupPage.url().includes('/sign-in')) {
-      throw new Error(
-        'Could not open an authenticated setup document for the mobile audit fixture',
-      );
-    }
-    await setupPage.waitForTimeout(500);
-    sharedOrgId = (await createMobileAuditFixture(setupPage)).orgId;
-    await setupPage.close();
-  }
+  let sharedOrgId = await resolveSharedWorkspace({
+    context,
+    meta,
+    needed: audit || selectedCases.some((entry) => /:(?:orgId|sharedOrgId)\b/.test(entry.route)),
+  });
 
   const needsFixture = selectedCases.some((entry) =>
     /:(?:projectId|cycleId|initiativeId|programId|actorId|taskId|teamId|seriesId|sessionId)\b/.test(

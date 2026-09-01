@@ -8260,6 +8260,15 @@ rather than interpolated, so Tailwind's scanner can see them.
   reacquires the visible compact roster before continuing. The corrected journey passes against
   the downloaded `b4b045e9f5998506d0247785b2ddb34ec13caf69` production bundle in 1.1 minutes with
   one Playwright worker and an isolated temporary PGlite database.
+- **Virtualization follow-up**: Exact-main CI run `33551418120` showed that the known Proposed row
+  and its continuation cannot be asserted at the same scroll position: the shared table correctly
+  unmounts rows outside its virtual window. The journey now walks the retained page until that row
+  is mounted, moves to the continuation, triggers the failure, then independently reacquires both
+  the retained row and the Retry entry. This preserves the product assertion—failed continuation
+  keeps the already-loaded group page—without treating virtualized DOM eviction as data loss. The
+  corrected production-build release suite passes all 5 journeys; repository typecheck, lint,
+  coverage and tooling tests, production build, formatting, and the tracked-file secret scan also
+  pass locally.
 - **Release-gate follow-up**: Exact-main CI run `33546557293` reached Web lint with no lint finding,
   but its shared 180-second command cap expired at the same instant because remote Turbo caching
   was unavailable and the apps shard had rebuilt API and Admin dependencies first. The bounded

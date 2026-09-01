@@ -170,6 +170,30 @@ async function revealAtVirtualEnd(grid: Locator, target: Locator): Promise<void>
   await expect(target).toBeVisible();
 }
 
+/** Walk a virtualized grid from its start until a retained row is mounted and visible. */
+async function revealVirtualTarget(grid: Locator, target: Locator): Promise<void> {
+  await grid.evaluate((element) => {
+    element.scrollTop = 0;
+    element.dispatchEvent(new Event('scroll'));
+  });
+  await expect
+    .poll(
+      async () => {
+        if (await target.isVisible()) return true;
+        await grid.evaluate((element) => {
+          element.scrollTop = Math.min(
+            element.scrollTop + Math.max(element.clientHeight * 0.75, 1),
+            element.scrollHeight - element.clientHeight,
+          );
+          element.dispatchEvent(new Event('scroll'));
+        });
+        return target.isVisible();
+      },
+      { timeout: TIMEOUTS.pageReady },
+    )
+    .toBe(true);
+}
+
 /** Return one virtualized grid to its first mounted rows. */
 async function revealAtVirtualStart(grid: Locator, target: Locator): Promise<void> {
   await grid.evaluate((element) => {
@@ -241,12 +265,13 @@ async function exerciseGroupRecovery(page: Page, fixture: WorkRosterFixture): Pr
   const retainedTitle = fixture.bulkTitles.at(-3);
   if (retainedTitle === undefined) throw new Error('The Proposed continuation fixture is empty.');
   const retainedRow = grid.getByRole('link', { name: retainedTitle, exact: true });
+  await revealVirtualTarget(grid, retainedRow);
   await revealAtVirtualEnd(grid, loadMore);
-  await expect(retainedRow).toBeVisible();
   await loadMore.click();
   const retry = grid.getByRole('button', { name: /Retry Proposed/iu });
   await expect(retry).toBeVisible();
-  await expect(retainedRow).toBeVisible();
+  await revealVirtualTarget(grid, retainedRow);
+  await revealAtVirtualEnd(grid, retry);
   rejectContinuation = false;
   await retry.click();
   await expect(retry).toHaveCount(0);

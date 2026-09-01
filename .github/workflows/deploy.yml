@@ -113,7 +113,11 @@ jobs:
           BETTER_AUTH_PASSKEY_NATIVE_ORIGINS: "${{ vars.PASSKEY_NATIVE_ORIGINS }}"
           GOOGLE_CALENDAR_WEBHOOK_URL: "${{ vars.API_URL }}/webhooks/calendar/google"
           GOOGLE_OAUTH_PUBLIC: "${{ vars.GOOGLE_OAUTH_PUBLIC }}"
-          ADMIN_GOOGLE_SSO_ENABLED: "${{ vars.ADMIN_GOOGLE_SSO_ENABLED }}"
+          # Defaulted, unlike its neighbours: this flag is REQUIRED by the API's env contract, and
+          # `pnpm bootstrap` only creates the repository variable on a fresh project. An existing
+          # deployment therefore has no value for it, and an empty one makes the container refuse
+          # to boot — which surfaces as a failed Cloud Run rollout, not as a config error.
+          ADMIN_GOOGLE_SSO_ENABLED: "${{ vars.ADMIN_GOOGLE_SSO_ENABLED || 'false' }}"
           ADMIN_GOOGLE_GROUP_ROLES: "${{ vars.ADMIN_GOOGLE_GROUP_ROLES }}"
           GOOGLE_WORKSPACE_DOMAIN: "${{ vars.GOOGLE_WORKSPACE_DOMAIN }}"
           GOOGLE_OAUTH_TEST_EMAILS: "${{ vars.GOOGLE_OAUTH_TEST_EMAILS }}"

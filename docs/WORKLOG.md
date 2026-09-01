@@ -515,8 +515,10 @@ offline_access marketplace`, and a bare `marketplace` names nothing in Lovelace'
   `/v1/health`, and applies a fresh PGlite migration through
   `node /app/packages/db/dist/migrate.mjs`. The full API suite passes 451 files and 5,751 tests; the
   auth suite passes 164 tests; all 266 repository-tooling tests, all 27 typecheck tasks, and all 26
-  lint tasks pass. Live Cloud Run cold-start and native-origin acceptance remain the deployment
-  gates.
+  lint tasks pass. A release follow-up injects the root semantic-release version into the ESM bundle
+  at build time, while direct source execution keeps the manifest fallback. This removes the private
+  cross-workspace JSON import that the domain-boundary gate rejected without duplicating the release
+  version. Live Cloud Run cold-start and native-origin acceptance remain the deployment gates.
 - **Blockers**: None for implementation. Final acceptance still requires a successful production
   deployment followed by one real Credential Manager assertion and session creation on a physical
   phone; the biometric/passkey choice remains intentionally user-mediated.

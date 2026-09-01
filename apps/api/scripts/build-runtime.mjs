@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -5,12 +6,16 @@ import { build } from 'esbuild';
 
 const apiRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const workspaceRoot = resolve(apiRoot, '../..');
+const releaseVersion = JSON.parse(
+  readFileSync(resolve(workspaceRoot, 'package.json'), 'utf8'),
+).version;
 
 const shared = {
   banner: {
     js: "import { createRequire as __createRequire } from 'node:module'; const require = __createRequire(import.meta.url);",
   },
   bundle: true,
+  define: { __DOCKET_VERSION__: JSON.stringify(releaseVersion) },
   format: 'esm',
   platform: 'node',
   target: 'node24',

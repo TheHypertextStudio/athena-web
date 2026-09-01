@@ -13,12 +13,14 @@
  * OAuth 2.1 Resource-Server discovery metadata + Dynamic Client Registration are a
  * documented follow-up; for now the Better Auth session/bearer guard IS the auth.
  */
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { auth } from '@docket/auth';
 import { publicProblemTitle } from '../contracts/errors';
 import type { Context } from 'hono';
-import rootPackage from '../../../../package.json' with { type: 'json' };
 
 import { env } from '../env';
 import { ApiError, ConflictError, NotFoundError, problemTypeUrl } from '../error';
@@ -35,8 +37,21 @@ import { installTaskProtocolHandlers } from './task-protocol';
 import { taskStoreForContext } from './task-store';
 import { registerTools } from './tools';
 
-/** The repo's release version (root `package.json`, tagged by semantic-release), read once at startup. */
-const repoVersion = rootPackage.version;
+/** Root release version injected into the production bundle by `build-runtime.mjs`. */
+declare const __DOCKET_VERSION__: string | undefined;
+
+/** Read the semantic-release version when source runs directly in development or tests. */
+function readDevelopmentRepoVersion(): string {
+  return (
+    JSON.parse(
+      readFileSync(fileURLToPath(new URL('../../../../package.json', import.meta.url)), 'utf8'),
+    ) as { version: string }
+  ).version;
+}
+
+/** The repo's release version, embedded in production and read from the root manifest in source. */
+const repoVersion =
+  typeof __DOCKET_VERSION__ === 'string' ? __DOCKET_VERSION__ : readDevelopmentRepoVersion();
 
 /** The web app's public origin, with no trailing slash — also the source for {@link authorizationServerMetadata}. */
 const WEB_ORIGIN = env.WEB_URL.replace(/\/$/, '');

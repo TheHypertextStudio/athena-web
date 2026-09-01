@@ -12,6 +12,7 @@ function source(path: string): string {
 describe('production API runtime artifact', () => {
   it('builds JavaScript into the image and starts it without a TypeScript loader', () => {
     const dockerfile = source('apps/api/Dockerfile');
+    const runtimeBuilder = source('apps/api/scripts/build-runtime.mjs');
     const manifest = JSON.parse(source('apps/api/package.json')) as {
       scripts?: Record<string, string>;
     };
@@ -21,6 +22,10 @@ describe('production API runtime artifact', () => {
     expect(dockerfile).toContain('pnpm --filter @docket/api build:runtime');
     expect(dockerfile).toContain('CMD ["node", "dist/server.mjs"]');
     expect(dockerfile).not.toMatch(/CMD \[[^\n]*(?:tsx|\.ts")/u);
+    expect(runtimeBuilder).toContain("readFileSync(resolve(workspaceRoot, 'package.json')");
+    expect(runtimeBuilder).toContain(
+      'define: { __DOCKET_VERSION__: JSON.stringify(releaseVersion) }',
+    );
   });
 
   it('runs production migrations from the prebuilt JavaScript artifact', () => {

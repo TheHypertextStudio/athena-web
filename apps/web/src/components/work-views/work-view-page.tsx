@@ -331,6 +331,11 @@ function shouldShowInitialFailure<TTarget extends ViewTarget>(
   return Boolean(initialError) && response === undefined;
 }
 
+/** Keep root continuation recovery inside the list's typed table entry. */
+function externalRootContinuationError(layout: string, error: unknown): unknown {
+  return layout === 'list' ? null : error;
+}
+
 /** Render one organization roster from the shared server query and target contract. */
 export function WorkViewPage<TTarget extends ViewTarget>({
   organizationId,
@@ -630,6 +635,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
         onLoadMore={controller.loadMoreGroup}
         hasMoreRows={controller.response?.nextCursor !== null}
         loadingMoreRows={controller.loadingMoreRows}
+        rootContinuationError={controller.rootContinuationError}
         onLoadMoreRows={controller.loadMoreRows}
         onToggleGroup={controller.toggleCollapsedGroup}
       />
@@ -839,7 +845,10 @@ export function WorkViewPage<TTarget extends ViewTarget>({
           ) : null}
           <WorkViewOperationFailures
             title={copy.title}
-            rootContinuationError={controller.rootContinuationError}
+            rootContinuationError={externalRootContinuationError(
+              layout,
+              controller.rootContinuationError,
+            )}
             onRetryRoot={controller.loadMoreRows}
             preferencesError={controller.preferencesError}
             onRetryPreferences={controller.retryPreferences}

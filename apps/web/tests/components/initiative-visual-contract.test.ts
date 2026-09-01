@@ -10,8 +10,6 @@ const overviewPath = join(
 );
 const workPagePath = join(root, 'apps/web/src/components/work-views/work-view-page.tsx');
 const workViewToolbarPath = join(root, 'apps/web/src/components/work-views/work-view-toolbar.tsx');
-const workListPath = join(root, 'apps/web/src/components/work-views/work-list.tsx');
-const initiativeRailsPath = join(root, 'apps/web/src/components/work-views/initiative-rails.ts');
 const detailPath = join(
   root,
   'apps/web/src/app/(app)/orgs/[orgId]/initiatives/[initiativeId]/initiative-detail-client.tsx',
@@ -51,26 +49,6 @@ function productionTypeSources(directory: string): string[] {
 }
 
 describe('Initiative visual contract', () => {
-  it('keeps the hierarchy dense and gives every data column a clipping gutter', () => {
-    const workList = source(workListPath);
-    expect(workList).toContain('<ListView');
-    expect(workList).toContain('bg-surface-container-low @container/table');
-    expect(workList).toContain('rowHeight={56}');
-    expect(workList).toContain('min-w-72 flex-1');
-    expect(workList).toContain('hidden shrink-0');
-    expect(workList).toContain('truncate');
-    expect(workList).not.toContain('h-[72px]');
-  });
-
-  it('fits the Initiative columns without exposing Active Project count', () => {
-    const workList = source(workListPath);
-    const workPage = source(workPagePath);
-
-    expect(workList).toContain("health: 'w-24'");
-    expect(workList).not.toContain("health: 'w-32'");
-    expect(workPage).not.toContain('activeProjectCount');
-  });
-
   it('uses the canonical MD3 headline for detail titles and keeps status in the properties rail', () => {
     const typography = source(typographyPath);
     const detail = source(detailPath);
@@ -189,28 +167,6 @@ describe('Initiative visual contract', () => {
     expect(workPage).toContain('<ListPageLayout');
     expect(workPage).toContain('fill');
     expect(overview).not.toContain('max-w-7xl flex-col gap-6');
-  });
-
-  it('keeps the complete roster inside the bounded shared virtual list', () => {
-    const workList = source(workListPath);
-    expect(workList).toContain('<ListView');
-    expect(workList).toContain('className="min-h-0 flex-1"');
-    expect(workList).toContain('text-on-surface-variant text-body-small hidden shrink-0');
-    expect(workList).toContain('truncate');
-    expect(workList).not.toContain('border-b md:table-row');
-  });
-
-  it('keeps the five-level hierarchy and authorized ancestor context in the shared list', () => {
-    const workList = source(workListPath);
-    const initiativeRails = source(initiativeRailsPath);
-    expect(workList).toContain('initiativePositions');
-    expect(initiativeRails).toContain('ancestorRailContinues');
-    expect(initiativeRails).toContain('isLastSibling');
-    expect(initiativeRails).toContain('children.get(node.id)');
-    expect(workList).toContain('data-testid="initiative-hierarchy-rail"');
-    expect(workList).toContain('data-context-row');
-    expect(workList).toContain('text-on-surface-variant');
-    expect(workList).not.toContain('Collapse ${item.name}');
   });
 
   it('keeps icon-only Initiative controls at least 40px and uses a 48px detail glyph', () => {

@@ -1,7 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 
 import { fireEvent, render, screen } from '@testing-library/react';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
   InitiativeViewDefinition,
@@ -12,7 +12,7 @@ import {
 
 import { WorkList } from '../../src/components/work-views/work-list';
 
-const VIEWPORT = 360;
+let viewportHeight = 360;
 let restoreRect: (() => void) | undefined;
 let restoreHeight: (() => void) | undefined;
 let restoreWidth: (() => void) | undefined;
@@ -32,10 +32,10 @@ beforeAll(() => {
   HTMLElement.prototype.getBoundingClientRect = function getRect(): DOMRect {
     return {
       width: 900,
-      height: VIEWPORT,
+      height: viewportHeight,
       top: 0,
       left: 0,
-      bottom: VIEWPORT,
+      bottom: viewportHeight,
       right: 900,
       x: 0,
       y: 0,
@@ -57,6 +57,10 @@ afterAll(() => {
   restoreRect?.();
   restoreHeight?.();
   restoreWidth?.();
+});
+
+afterEach(() => {
+  viewportHeight = 360;
 });
 
 const taskDefinition = TaskViewDefinition.parse({
@@ -106,7 +110,7 @@ function task(index: number) {
 }
 
 describe('WorkList', () => {
-  it('keeps the mounted row count bounded and selects the active row with X', () => {
+  it('renders through the bounded shared table and activates the active row with Enter', () => {
     const onSelectionChange = vi.fn();
     const onActivate = vi.fn();
     render(
@@ -129,16 +133,26 @@ describe('WorkList', () => {
       screen.getByRole('checkbox', { name: 'Select Task 0' }).parentElement?.parentElement,
     ).toHaveClass('opacity-0');
     expect(screen.getAllByRole('row').length).toBeLessThan(60);
+    expect(screen.getByRole('row', { name: /Task 0/ })).toHaveAttribute('data-row-height', '44');
     const taskLink = screen.getByRole('link', { name: 'Task 0' });
     expect(taskLink).toHaveAttribute(
       'href',
       '/orgs/01ARZ3NDEKTSV4RRFFQ69G5FA0/tasks/01ARZ3NDEKTSV4RRFFQ6900000',
     );
     expect(taskLink).not.toContainElement(screen.getByRole('checkbox', { name: 'Select Task 0' }));
+    taskLink.addEventListener(
+      'click',
+      (event) => {
+        event.preventDefault();
+      },
+      { once: true },
+    );
     fireEvent.click(taskLink, { metaKey: true });
     expect(onActivate).not.toHaveBeenCalled();
     fireEvent.keyDown(grid, { key: 'ArrowDown' });
-    fireEvent.keyDown(grid, { key: 'x' });
+    fireEvent.keyDown(grid, { key: 'Enter' });
+    expect(onActivate).toHaveBeenCalledWith(task(0));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Task 0' }));
     expect(onSelectionChange).toHaveBeenCalledWith(new Set([task(0).id]));
   });
 
@@ -209,12 +223,21 @@ describe('WorkList', () => {
       />,
     );
 
+    const treegrid = screen.getByRole('treegrid', { name: 'Initiatives' });
+    expect(treegrid).toBeVisible();
     expect(screen.getByRole('row', { name: /Planned/ })).toHaveAttribute('data-level', '0');
     expect(screen.getByRole('row', { name: /High/ })).toHaveAttribute('data-level', '1');
-    expect(screen.getByText('Parent context').closest('[role="row"]')).toHaveAttribute(
-      'data-context-row',
-      'true',
-    );
+    const parentRow = screen.getByText('Parent context').closest('[role="row"]');
+    expect(parentRow).toHaveAttribute('data-context-row', 'true');
+    expect(parentRow).toHaveAttribute('aria-level', '1');
+    expect(parentRow).toHaveAttribute('aria-posinset', '1');
+    expect(parentRow).toHaveAttribute('aria-setsize', '1');
+    expect(parentRow).toHaveAttribute('aria-expanded', 'true');
+    expect(parentRow).toHaveAttribute('data-row-height', '56');
+    const childRow = screen.getByText('Matching child').closest('[role="row"]');
+    expect(childRow).toHaveAttribute('aria-level', '2');
+    expect(childRow).toHaveAttribute('aria-posinset', '1');
+    expect(childRow).toHaveAttribute('aria-setsize', '1');
     expect(screen.getByText('Matching child')).toBeVisible();
   });
 
@@ -354,6 +377,238 @@ describe('WorkList', () => {
     expect(childRow).toHaveClass('cursor-grab');
     fireEvent.click(childRow);
     expect(onActivate).toHaveBeenCalledWith(child);
-    expect(screen.getAllByTestId('initiative-hierarchy-rail')).not.toHaveLength(0);
+    const rails = screen.getAllByTestId('initiative-hierarchy-rail');
+    expect(rails).not.toHaveLength(0);
+    rails.forEach((rail) => {
+      expect(rail).toHaveAttribute('aria-hidden', 'true');
+    });
+  });
+
+  it('keeps duplicate context memberships and their rails independent by full path', () => {
+    const definition = InitiativeViewDefinition.parse({
+      version: 2,
+      target: 'initiative',
+      filter: null,
+      arrangement: { groupBy: 'status', subGroupBy: null, orderBy: [] },
+      presentation: {
+        layout: 'list',
+        properties: ['health'],
+        density: 'compact',
+        showEmptyGroups: false,
+      },
+    });
+    const root = InitiativeViewRow.parse({
+      target: 'initiative',
+      organizationId: '01ARZ3NDEKTSV4RRFFQ69G5FA0',
+      organization: '01ARZ3NDEKTSV4RRFFQ69G5FA0',
+      id: '01ARZ3NDEKTSV4RRFFQ69G5FC0',
+      name: 'Shared root',
+      status: 'planned',
+      priority: 'high',
+      health: null,
+      owner: null,
+      leadTeam: null,
+      labels: [],
+      targetDate: null,
+      updateCadence: 'monthly',
+      latestUpdate: null,
+      parent: null,
+      parentLinkId: null,
+      contributingProjects: [],
+      manualRank: 'a0',
+      isContext: true,
+      updatedAt: '2026-08-23T00:00:00.000Z',
+    });
+    const child = InitiativeViewRow.parse({
+      ...root,
+      id: '01ARZ3NDEKTSV4RRFFQ69G5FC1',
+      name: 'Shared child',
+      parent: root.id,
+      manualRank: 'a1',
+    });
+    const grandchild = InitiativeViewRow.parse({
+      ...root,
+      id: '01ARZ3NDEKTSV4RRFFQ69G5FC2',
+      name: 'Shared grandchild',
+      parent: child.id,
+      manualRank: 'a2',
+      isContext: false,
+    });
+    const later = InitiativeViewRow.parse({
+      ...root,
+      id: '01ARZ3NDEKTSV4RRFFQ69G5FC3',
+      name: 'Later active sibling',
+      parent: root.id,
+      manualRank: 'a3',
+      isContext: false,
+    });
+
+    render(
+      <WorkList
+        target="initiative"
+        definition={definition}
+        rows={[]}
+        groups={[
+          { path: ['active'], key: 'active', label: 'Active', count: 2 },
+          { path: ['planned'], key: 'planned', label: 'Planned', count: 1 },
+        ]}
+        groupPages={[
+          {
+            path: ['active'],
+            rows: [root, child, grandchild, later],
+            nextCursor: null,
+            loading: false,
+          },
+          { path: ['planned'], rows: [root, child, grandchild], nextCursor: null, loading: false },
+        ]}
+        selectedIds={new Set()}
+        onSelectionChange={vi.fn()}
+        onActivate={vi.fn()}
+      />,
+    );
+
+    const grandchildRows = screen
+      .getAllByText('Shared grandchild')
+      .map((label) => label.closest('[role="row"]'));
+    expect(grandchildRows).toHaveLength(2);
+    expect(grandchildRows[0]).toHaveAttribute('data-entry-key', expect.stringContaining('active'));
+    expect(grandchildRows[1]).toHaveAttribute('data-entry-key', expect.stringContaining('planned'));
+    expect(grandchildRows[0]?.querySelector('[data-ancestor-rail="0"]')).not.toBeNull();
+    expect(grandchildRows[1]?.querySelector('[data-ancestor-rail="0"]')).toBeNull();
+  });
+
+  it('terminates a corrupt Initiative cycle with one deterministic visible root', () => {
+    const definition = InitiativeViewDefinition.parse({
+      version: 2,
+      target: 'initiative',
+      filter: null,
+      arrangement: { groupBy: null, subGroupBy: null, orderBy: [] },
+      presentation: {
+        layout: 'list',
+        properties: [],
+        density: 'compact',
+        showEmptyGroups: false,
+      },
+    });
+    const first = InitiativeViewRow.parse({
+      target: 'initiative',
+      organizationId: '01ARZ3NDEKTSV4RRFFQ69G5FA0',
+      organization: '01ARZ3NDEKTSV4RRFFQ69G5FA0',
+      id: '01ARZ3NDEKTSV4RRFFQ69G5FC0',
+      name: 'Cycle first',
+      status: 'planned',
+      priority: 'high',
+      health: null,
+      owner: null,
+      leadTeam: null,
+      labels: [],
+      targetDate: null,
+      updateCadence: 'monthly',
+      latestUpdate: null,
+      parent: '01ARZ3NDEKTSV4RRFFQ69G5FC1',
+      parentLinkId: null,
+      contributingProjects: [],
+      manualRank: 'a0',
+      isContext: false,
+      updatedAt: '2026-08-23T00:00:00.000Z',
+    });
+    const second = InitiativeViewRow.parse({
+      ...first,
+      id: '01ARZ3NDEKTSV4RRFFQ69G5FC1',
+      name: 'Cycle second',
+      parent: first.id,
+      manualRank: 'a1',
+    });
+
+    render(
+      <WorkList
+        target="initiative"
+        definition={definition}
+        rows={[first, second]}
+        groups={[]}
+        groupPages={[]}
+        selectedIds={new Set()}
+        onSelectionChange={vi.fn()}
+        onActivate={vi.fn()}
+      />,
+    );
+
+    const rows = [
+      screen.getByText('Cycle first').closest('[role="row"]'),
+      screen.getByText('Cycle second').closest('[role="row"]'),
+    ];
+    expect(rows.map((row) => row?.getAttribute('aria-level'))).toEqual(['1', '2']);
+    expect(rows.filter((row) => row?.getAttribute('aria-level') === '1')).toHaveLength(1);
+  });
+
+  it('renders path-scoped group continuations with server counts and keyboard activation', async () => {
+    viewportHeight = 10_000;
+    const definition = TaskViewDefinition.parse({
+      ...taskDefinition,
+      arrangement: { groupBy: 'status', subGroupBy: null, orderBy: [] },
+    });
+    const onLoadMore = vi.fn();
+    const rows = Array.from({ length: 100 }, (_, index) => task(index));
+    const props = {
+      target: 'task' as const,
+      definition,
+      rows: [],
+      groups: [{ path: ['todo'], key: 'todo', label: 'Active', count: 101 }],
+      selectedIds: new Set<string>(),
+      onSelectionChange: vi.fn(),
+      onActivate: vi.fn(),
+      onLoadMore,
+    };
+    const { rerender } = render(
+      <WorkList
+        {...props}
+        groupPages={[{ path: ['todo'], rows, nextCursor: 'next', loading: false }]}
+      />,
+    );
+
+    expect(screen.getByRole('row', { name: 'Active101' })).toHaveTextContent('101');
+    const grid = screen.getByRole('grid', { name: 'Tasks' });
+    fireEvent.keyDown(grid, { key: 'End' });
+    fireEvent.scroll(grid, { target: { scrollTop: 10_000 } });
+    const loadMore = await screen.findByRole('button', { name: 'Load more Active' });
+    expect(loadMore).toHaveAttribute('id', 'work-list-continuation:todo');
+    expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument();
+    fireEvent.keyDown(grid, { key: 'Enter' });
+    expect(onLoadMore).toHaveBeenCalledWith(['todo']);
+
+    rerender(
+      <WorkList
+        {...props}
+        groupPages={[{ path: ['todo'], rows, nextCursor: 'next', loading: true }]}
+      />,
+    );
+    expect(await screen.findByRole('button', { name: 'Loading Active' })).toHaveAttribute(
+      'id',
+      'work-list-continuation:todo',
+    );
+    expect(screen.getByRole('button', { name: 'Loading Active' })).toHaveAttribute(
+      'aria-busy',
+      'true',
+    );
+
+    rerender(
+      <WorkList
+        {...props}
+        groupPages={[
+          {
+            path: ['todo'],
+            rows,
+            nextCursor: null,
+            retryCursor: 'next',
+            loading: false,
+            error: new Error('failed'),
+          },
+        ]}
+      />,
+    );
+    expect(await screen.findByRole('button', { name: 'Retry Active' })).toHaveAttribute(
+      'id',
+      'work-list-continuation:todo',
+    );
   });
 });

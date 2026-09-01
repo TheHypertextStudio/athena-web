@@ -1,63 +1,51 @@
 'use client';
 
-import { defaultEntityDisplay } from '@docket/work/entity-display-contract';
 import { entityNavigationSnapshotFromWorkViewRow } from '../../lib/contracts/entity-navigation';
-import { type Health } from '@docket/work/capability-contract';
-import { type WorkViewActor } from '@docket/work/work-view-contract';
-import { ListCell, ListRow, ListView } from '@docket/ui/components';
-import { Calendar } from '@docket/ui/icons';
-import { STRETCHED_LINK } from '@docket/ui/lib/stretched-link';
+import { EntityTable, type EntityTableProps } from '@docket/ui/components';
 import { cn } from '@docket/ui/lib/utils';
-import { Button, Checkbox } from '@docket/ui/primitives';
 import type { ViewTarget } from '@docket/work/view-contract';
 import {
-  type ComponentProps,
   type JSX,
-  type KeyboardEvent,
+  type MouseEvent,
   type ReactNode,
+  useCallback,
   useMemo,
   useRef,
+  useState,
 } from 'react';
 
-import { useRelationDropTarget } from '@/components/dnd/use-relation-drop-target';
 import { useDragState } from '@/components/dnd/drag-context';
-import DocketLink from '@/components/docket-link';
-import { EntityIconGlyph } from '@/components/entity-display/entity-icon-glyph';
-import { HealthLabel } from '@/components/entity-display/health';
-import { ActorName } from '@/components/entity-display/roster-cells';
+import { useDraggable } from '@/components/dnd/use-draggable';
+import { useRelationDropTarget } from '@/components/dnd/use-relation-drop-target';
 import { useWorkStatusResolver } from '@/components/entity-display/use-work-status';
-import { WorkStatusIcon } from '@/components/entity-display/work-status';
-import { ObjectSurface } from '@/components/objects/object-surface';
-import { PriorityGlyph } from '@/components/task-detail/PriorityGlyph';
 import type { ObjectRef } from '@/lib/actions';
+import { objectTargetProps } from '@/lib/actions/object';
 import { buildEntityHref } from '@/lib/authenticated-route';
-import { seedNavigationSnapshot } from '@/lib/navigation-snapshot-runtime';
 
+import {
+  buildWorkListColumns,
+  WORK_ROSTER_INLINE_LINK_COLUMN_KEY,
+  WORK_ROSTER_ROW_HEIGHT,
+} from './work-list-columns';
+import {
+  buildWorkListRootContinuation,
+  buildWorkListRoster,
+  type ListMembership,
+  workListEntityTableEntryKey,
+  workListMembershipKey,
+} from './work-list-groups';
 import { deriveInitiativeTreePositions, type InitiativeTreePosition } from './initiative-rails';
 import type { WorkViewDefinitionFor } from './view-state';
-import { workViewDisplayFieldCatalog } from './view-state';
-import {
-  formatWorkViewValue,
-  type WorkViewGroupPage,
-  type WorkViewGroupSummary,
-  type WorkViewRowFor,
-  workViewGroupPathKey,
-  workViewRowTitle,
-  workViewRowValue,
-} from './renderer-types';
+import type { WorkViewGroupPage, WorkViewGroupSummary, WorkViewRowFor } from './renderer-types';
 import { objectForWorkViewRow } from './work-view-object';
 
-interface ListMembership<TTarget extends ViewTarget> {
-  readonly row: WorkViewRowFor<TTarget>;
-  readonly path: readonly string[];
-}
+type WorkListRowInteractionContract<TTarget extends ViewTarget> = Parameters<
+  Parameters<
+    NonNullable<EntityTableProps<ListMembership<TTarget>>['renderRowInteraction']>
+  >[0]['children']
+>[0];
 
-interface RosterField {
-  readonly key: string;
-  readonly kind: string;
-}
-
-/** Props shared by each target's virtualized roster list. */
+/** Props shared by each target's virtualized roster table. */
 export interface WorkListProps<TTarget extends ViewTarget> {
   readonly target: TTarget;
   readonly definition: WorkViewDefinitionFor<TTarget>;
@@ -71,89 +59,9 @@ export interface WorkListProps<TTarget extends ViewTarget> {
   readonly onLoadMore?: ((path: readonly string[]) => void) | undefined;
   readonly hasMoreRows?: boolean;
   readonly loadingMoreRows?: boolean;
+  readonly rootContinuationError?: unknown;
   readonly onLoadMoreRows?: (() => void) | undefined;
   readonly onToggleGroup?: ((key: string) => void) | undefined;
-}
-
-const TARGET_LABEL = {
-  task: 'Task',
-  project: 'Project',
-  program: 'Program',
-  initiative: 'Initiative',
-} as const;
-
-const FIELD_WIDTH: Record<string, string> = {
-  status: 'w-32',
-  priority: 'w-20',
-  health: 'w-24',
-  assignee: 'w-44',
-  lead: 'w-44',
-  owner: 'w-44',
-  startDate: 'w-28',
-  dueDate: 'w-28',
-  targetDate: 'w-28',
-  targetTimeframe: 'w-32',
-  latestUpdate: 'w-44',
-  progress: 'w-28',
-  estimate: 'w-24',
-  estimateMinutes: 'w-24',
-  taskCount: 'w-24',
-  projectCount: 'w-24',
-  dependencyCount: 'w-28',
-};
-
-function groupLabel(groups: readonly WorkViewGroupSummary[], path: readonly string[]): string {
-  return (
-    groups.find(
-      (group) =>
-        group.path.length === path.length &&
-        group.path.every((part, index) => part === path[index]),
-    )?.label ??
-    path.at(-1) ??
-    'No value'
-  );
-}
-
-function orderInitiativeMemberships<TTarget extends ViewTarget>(
-  memberships: readonly ListMembership<TTarget>[],
-): readonly ListMembership<TTarget>[] {
-  if (!memberships.some(({ row }) => row.target === 'initiative')) return memberships;
-  const byId = new Map(memberships.map((membership) => [membership.row.id, membership]));
-  const children = new Map<string | null, ListMembership<TTarget>[]>();
-  for (const membership of memberships) {
-    const parent =
-      membership.row.target === 'initiative' &&
-      membership.row.parent !== null &&
-      byId.has(membership.row.parent)
-        ? membership.row.parent
-        : null;
-    children.set(parent, [...(children.get(parent) ?? []), membership]);
-  }
-  const ordered: ListMembership<TTarget>[] = [];
-  const seen = new Set<string>();
-  const visit = (parent: string | null): void => {
-    for (const membership of children.get(parent) ?? []) {
-      if (seen.has(membership.row.id)) continue;
-      seen.add(membership.row.id);
-      ordered.push(membership);
-      visit(membership.row.id);
-    }
-  };
-  visit(null);
-  for (const membership of memberships) {
-    if (!seen.has(membership.row.id)) ordered.push(membership);
-  }
-  return ordered;
-}
-
-function initiativePositions<TTarget extends ViewTarget>(
-  memberships: readonly ListMembership<TTarget>[],
-): ReadonlyMap<string, InitiativeTreePosition> {
-  return deriveInitiativeTreePositions(
-    memberships.flatMap(({ row }) =>
-      row.target === 'initiative' ? [{ id: row.id, parentId: row.parent }] : [],
-    ),
-  );
 }
 
 /** Return whether the candidate sits below the ancestor in the visible Initiative tree. */
@@ -172,252 +80,108 @@ function isInitiativeDescendant(
   return false;
 }
 
-function HierarchyRails({
-  position,
-  hasSummary,
-}: {
-  position: InitiativeTreePosition;
-  hasSummary: boolean;
-}): JSX.Element | null {
-  const { depth, ancestorRailContinues, hasChildren, isLastSibling } = position;
-  if (depth === 1 && !hasChildren && !ancestorRailContinues.some(Boolean)) return null;
-  const iconTop = hasSummary ? 8 : 16;
-  const targetLeft = 12 + (depth - 1) * 44;
-  const iconCenter = targetLeft + 16;
-  const branchY = iconTop + 16;
-  const parentRailX = iconCenter - 44;
-  return (
-    <svg
-      aria-hidden
-      data-testid="initiative-hierarchy-rail"
-      className="pointer-events-none absolute inset-0 h-full w-full overflow-visible"
-      height="56"
-      width="100%"
-    >
-      <g
-        className="stroke-outline-variant"
-        fill="none"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        {ancestorRailContinues.map((continues, index) => {
-          if (!continues) return null;
-          const railDepth = index + 1;
-          const railX = 12 + (railDepth - 1) * 44 + 16;
-          return <line key={railDepth} x1={railX} y1="0" x2={railX} y2="56" />;
-        })}
-        {depth > 1 ? (
-          <>
-            <line x1={parentRailX} y1="0" x2={parentRailX} y2={isLastSibling ? branchY - 7 : 56} />
-            <path
-              d={`M ${String(parentRailX)} ${String(branchY - 7)} Q ${String(parentRailX)} ${String(branchY)} ${String(parentRailX + 7)} ${String(branchY)} H ${String(targetLeft)}`}
-            />
-          </>
-        ) : null}
-        {hasChildren ? <line x1={iconCenter} y1={iconTop + 32} x2={iconCenter} y2="56" /> : null}
-      </g>
-    </svg>
-  );
-}
-
-function rowSummary(row: WorkViewRowFor<ViewTarget>): string | null {
-  switch (row.target) {
-    case 'task':
-      return row.description;
-    case 'project':
-    case 'program':
-    case 'initiative':
-      return row.summary;
-  }
-}
-
-/** Shared object, activation, drag, and relation-target binding for a virtual work row. */
-function WorkListObjectRow({
+/** Bind object identity, dragging, relation drops, and activation to one EntityTable row. */
+function WorkListRowInteraction<TTarget extends ViewTarget>({
+  membership,
   object,
-  onActivate,
-  rowProps,
   active,
   selected,
-  rowId,
-  contextRow,
-  ariaLevel,
-  className,
+  onActivate,
   children,
 }: {
+  readonly membership: ListMembership<TTarget>;
   readonly object: ObjectRef;
-  readonly onActivate: () => void;
-  readonly rowProps: Omit<ComponentProps<typeof ListRow>, 'children'>;
   readonly active: boolean;
   readonly selected: boolean;
-  readonly rowId: string;
-  readonly contextRow: boolean;
-  readonly ariaLevel: number | undefined;
-  readonly className: string;
-  readonly children: ReactNode;
+  readonly onActivate: () => void;
+  readonly children: (interaction: WorkListRowInteractionContract<TTarget>) => ReactNode;
 }): JSX.Element {
+  const suppressActivationRef = useRef(false);
+  const drag = useDraggable({
+    object,
+    actionScope: 'all',
+    surfaceId: `work-list:${object.kind}`,
+    onDragStart: () => {
+      suppressActivationRef.current = true;
+    },
+  });
   const drop = useRelationDropTarget({ target: object });
+  const handleClick = (event: MouseEvent): void => {
+    const nestedControl = (event.target as HTMLElement).closest(
+      'a, button, input, textarea, select, [contenteditable="true"], [role="button"]',
+    );
+    if (nestedControl !== null || event.metaKey || event.ctrlKey || event.shiftKey) return;
+    if (suppressActivationRef.current) {
+      suppressActivationRef.current = false;
+      return;
+    }
+    onActivate();
+  };
+  const rosterDataProps = {
+    'data-row-id': membership.row.id,
+    'data-context-row': membership.row.isContext ? 'true' : undefined,
+    'data-drop-state': drop.dropState,
+    'data-drag-state': drag['data-drag-state'],
+  };
   return (
-    <ObjectSurface object={object} surfaceId={`work-list:${object.kind}`} onActivate={onActivate}>
-      <ListRow
-        {...rowProps}
-        ref={drop.dropProps.ref}
-        active={active}
-        selected={selected}
-        data-row-id={rowId}
-        data-context-row={contextRow ? 'true' : undefined}
-        aria-level={ariaLevel}
-        data-drop-state={drop.dropState}
-        className={cn(
-          className,
+    <>
+      {children({
+        active,
+        selected,
+        rowProps: {
+          ...objectTargetProps(object),
+          ...rosterDataProps,
+          'aria-selected': selected,
+          'data-selected': selected,
+          'data-active': active,
+          tabIndex: -1,
+          ref: (element) => {
+            drag.ref(element);
+            drop.dropProps.ref(element);
+          },
+          onClick: handleClick,
+        },
+        className: cn(
+          'group/roster',
+          membership.row.isContext && 'text-on-surface-variant',
+          drag.className,
           drop.dropProps.className,
           drop.dropState === 'accept' && 'ring-primary bg-primary/8 z-10 ring-2 ring-inset',
           drop.dropState === 'reject' && 'ring-error/60 bg-error/5 z-10 ring-1 ring-inset',
-        )}
-      >
-        {children}
-        {drop.effectLabel ? (
-          <span className="bg-primary-container text-on-primary-container text-label-small absolute right-3 bottom-1 rounded-full px-2 py-0.5">
-            {drop.effectLabel}
-          </span>
-        ) : null}
-      </ListRow>
-    </ObjectSurface>
-  );
-}
-
-function rowActor(row: WorkViewRowFor<ViewTarget>, field: string): WorkViewActor | null {
-  if (row.target === 'task' && field === 'assignee') return row.assigneeActor;
-  if (row.target === 'project' && field === 'lead') return row.leadActor;
-  if (row.target === 'program' && field === 'owner') return row.ownerActor;
-  if (row.target === 'initiative' && field === 'owner') return row.ownerActor;
-  return null;
-}
-
-function Identity({ row }: { row: WorkViewRowFor<ViewTarget> }): JSX.Element {
-  const display = row.display ?? defaultEntityDisplay(row.target, row.id);
-  return (
-    <EntityIconGlyph
-      iconKey={display.iconKey}
-      colorKey={display.colorKey}
-      customColor={display.customColor}
-      size={32}
-    />
-  );
-}
-
-function SelectionIdentity({
-  row,
-  selected,
-  selectionActive,
-  onToggle,
-}: {
-  row: WorkViewRowFor<ViewTarget>;
-  selected: boolean;
-  selectionActive: boolean;
-  onToggle: () => void;
-}): JSX.Element {
-  return (
-    <span className="relative z-10 flex size-8 shrink-0 items-center justify-center">
-      <span
-        className={`absolute inset-0 flex items-center justify-center transition-opacity ${
-          selected || selectionActive
-            ? 'opacity-100'
-            : 'opacity-0 group-focus-within/roster:opacity-100 group-hover/roster:opacity-100'
-        }`}
-      >
-        <Checkbox
-          aria-label={`Select ${workViewRowTitle(row)}`}
-          checked={selected}
-          onClick={(event) => {
-            event.stopPropagation();
-          }}
-          onChange={onToggle}
-        />
-      </span>
-      <span
-        aria-hidden={selected || selectionActive}
-        className={`pointer-events-none transition-opacity ${selected || selectionActive ? 'opacity-0' : 'opacity-100 group-focus-within/roster:opacity-0 group-hover/roster:opacity-0'}`}
-      >
-        <Identity row={row} />
-      </span>
-    </span>
-  );
-}
-
-function PropertyValue({
-  row,
-  field,
-  statusOf,
-}: {
-  row: WorkViewRowFor<ViewTarget>;
-  field: RosterField;
-  statusOf: ReturnType<typeof useWorkStatusResolver>;
-}): JSX.Element {
-  const value = workViewRowValue(row, field.key);
-  const actor = rowActor(row, field.key);
-  if (field.key === 'status' && typeof value === 'string') {
-    const status = statusOf(value);
-    return (
-      <span className="flex min-w-0 items-center gap-2">
-        <WorkStatusIcon name={status.name} category={status.category} />
-        <span className="truncate">{status.name}</span>
-      </span>
-    );
-  }
-  if (field.key === 'priority' && typeof value === 'string') {
-    return <PriorityGlyph priority={value as 'urgent' | 'high' | 'medium' | 'low' | 'none'} />;
-  }
-  if (field.key === 'health' && (value === null || typeof value === 'string')) {
-    return <HealthLabel health={value as Health | null} />;
-  }
-  if (actor) {
-    return (
-      // `body-medium` and the default tone are what a ListRow cell already renders, so this reads
-      // exactly as the inline pair it replaces.
-      <ActorName actor={actor} token="body-medium" tone="default" />
-    );
-  }
-  // `datetime` joins `date` here rather than dropping through to the bare-text fallback, so two
-  // columns holding the same kind of value do not render one with a glyph and one without.
-  // `latestUpdate` needs no special case: its contract kind is already `datetime`.
-  if (field.kind === 'date' || field.kind === 'datetime') {
-    const formatted = typeof value === 'string' ? formatWorkViewValue(value, field.kind) : '—';
-    return formatted === '—' ? (
-      <span>—</span>
-    ) : (
-      <span className="flex items-center gap-2 whitespace-nowrap tabular-nums">
-        <Calendar className="size-3.5" />
-        {formatted}
-      </span>
-    );
-  }
-  if (field.key === 'progress' && typeof value === 'number') {
-    const percent = Math.round(value * 100);
-    return (
-      <span className="flex w-full items-center gap-2 tabular-nums">
-        <span className="bg-surface-container-highest h-1.5 min-w-10 flex-1 overflow-hidden rounded-full">
-          <span
-            className="bg-primary block h-full rounded-full"
-            style={{ width: `${String(percent)}%` }}
-          />
+        ),
+      })}
+      {drop.effectLabel ? (
+        <span className="sr-only" role="status">
+          {drop.effectLabel}
         </span>
-        {percent}%
-      </span>
-    );
-  }
-  if (Array.isArray(value)) return <span className="tabular-nums">{value.length || '—'}</span>;
-  if (typeof value === 'number') return <span className="tabular-nums">{value}</span>;
-  if (typeof value === 'boolean') return <span>{value ? 'Yes' : '—'}</span>;
-  if (field.kind === 'relation-one' || field.kind === 'relation-many') return <span>—</span>;
-  if (typeof value === 'object' && value !== null && 'label' in value)
-    return <span>{formatWorkViewValue(value, field.kind)}</span>;
-  if (typeof value === 'string' && value.length < 40)
-    return <span>{value.replaceAll('_', ' ')}</span>;
-  return <span>—</span>;
+      ) : null}
+    </>
+  );
 }
 
-/** Render one target-discriminated server roster through the shared virtual list. */
+/** Derive path-scoped rail inputs from the exact visible membership set. */
+function initiativePositions<TTarget extends ViewTarget>(
+  memberships: readonly ListMembership<TTarget>[],
+): ReadonlyMap<string, InitiativeTreePosition> {
+  const membershipKeys = new Set(memberships.map(({ key }) => key));
+  return deriveInitiativeTreePositions(
+    memberships.flatMap((membership) => {
+      if (membership.row.target !== 'initiative') return [];
+      const parentKey =
+        membership.row.parent === null
+          ? null
+          : workListMembershipKey(membership.path, membership.row.parent);
+      return [
+        {
+          key: membership.key,
+          parentKey: parentKey !== null && membershipKeys.has(parentKey) ? parentKey : null,
+        },
+      ];
+    }),
+  );
+}
+
+/** Render one target-discriminated server roster through the shared EntityTable. */
 export function WorkList<TTarget extends ViewTarget>({
   target,
   definition,
@@ -431,244 +195,154 @@ export function WorkList<TTarget extends ViewTarget>({
   onLoadMore,
   hasMoreRows = false,
   loadingMoreRows = false,
+  rootContinuationError = null,
   onLoadMoreRows,
   onToggleGroup,
 }: WorkListProps<TTarget>): JSX.Element {
-  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [activeEntryKey, setActiveEntryKey] = useState<string | null>(null);
   const dragState = useDragState();
+  const statusOf = useWorkStatusResolver(target);
+  const grouped = Boolean(definition.arrangement.groupBy);
+  const roster = useMemo(
+    () =>
+      buildWorkListRoster({
+        target,
+        grouped,
+        rows,
+        summaries: groups,
+        pages: groupPages,
+        onLoadMore,
+      }),
+    [groupPages, grouped, groups, onLoadMore, rows, target],
+  );
+  const rowHeight = WORK_ROSTER_ROW_HEIGHT[definition.presentation.density];
+  const positions = useMemo(() => initiativePositions(roster.memberships), [roster.memberships]);
+  const initiativeParentById = useMemo(
+    () =>
+      new Map(
+        roster.memberships.flatMap(({ row }) =>
+          row.target === 'initiative' ? [[row.id, row.parent] as const] : [],
+        ),
+      ),
+    [roster.memberships],
+  );
+  const toggleSelection = useCallback(
+    (id: string): void => {
+      const next = new Set(selectedIds);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      onSelectionChange(next);
+    },
+    [onSelectionChange, selectedIds],
+  );
+  const columns = useMemo(
+    () =>
+      buildWorkListColumns({
+        target,
+        definition,
+        selectedIds,
+        onToggleSelection: toggleSelection,
+        statusOf,
+        positions,
+        rowHeight,
+      }),
+    [definition, positions, rowHeight, selectedIds, statusOf, target, toggleSelection],
+  );
+  const firstMembership = roster.memberships[0];
   const initiativeRoot = useRelationDropTarget({
     target: {
       kind: 'initiative_root',
-      id: `${rows[0]?.organizationId ?? 'unknown'}:initiative-root`,
-      organizationId: rows[0]?.organizationId ?? null,
+      id: `${firstMembership?.row.organizationId ?? 'unknown'}:initiative-root`,
+      organizationId: firstMembership?.row.organizationId ?? null,
       title: 'top level',
     },
     disabled: target !== 'initiative',
     priority: 'root',
   });
-  const statusOf = useWorkStatusResolver(target);
-  const groupField = definition.arrangement.groupBy as string | null;
-  const subGroupField = definition.arrangement.subGroupBy as string | null;
-  const grouped = groupField !== null;
-  const memberships = useMemo<readonly ListMembership<TTarget>[]>(() => {
-    const source = grouped
-      ? groupPages.flatMap((page) =>
-          orderInitiativeMemberships(page.rows.map((row) => ({ row, path: page.path }))),
-        )
-      : rows.map((row) => ({ row, path: [] }));
-    return grouped ? source : orderInitiativeMemberships(source);
-  }, [groupPages, grouped, rows]);
-  const treePositions = useMemo(() => initiativePositions(memberships), [memberships]);
-  const initiativeParentById = useMemo(
-    () =>
-      new Map(
-        memberships.flatMap(({ row }) =>
-          row.target === 'initiative' ? [[row.id, row.parent] as const] : [],
-        ),
-      ),
-    [memberships],
+  const continuation = buildWorkListRootContinuation(
+    target,
+    hasMoreRows,
+    loadingMoreRows,
+    rootContinuationError,
+    onLoadMoreRows,
   );
-  const properties = workViewDisplayFieldCatalog(target).filter((field) =>
-    definition.presentation.properties.includes(field.key),
-  );
-  const selectionActive = selectedIds.size > 0;
 
-  const toggle = (id: string): void => {
-    const next = new Set(selectedIds);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    onSelectionChange(next);
-  };
-  const handleKeys = (event: KeyboardEvent<HTMLDivElement>): void => {
-    if (event.metaKey || event.ctrlKey || event.altKey) return;
-    if (event.key.toLowerCase() !== 'x') return;
-    event.preventDefault();
-    if (event.shiftKey) {
-      onSelectionChange(new Set(memberships.map((membership) => membership.row.id)));
-      return;
-    }
-    const active = rootRef.current?.querySelector<HTMLElement>('[data-active][data-row-id]');
-    const id = active?.dataset['rowId'];
-    if (id) toggle(id);
-  };
   return (
-    <div
-      ref={(element) => {
-        rootRef.current = element;
-        initiativeRoot.dropProps.ref(element);
-      }}
-      data-drop-state={initiativeRoot.dropState}
-      className={cn(
-        'bg-surface-container-low @container/table relative flex h-full min-h-0 flex-col overflow-hidden rounded-xl p-2',
-        initiativeRoot.dropProps.className,
-        initiativeRoot.dropState === 'accept' && 'ring-primary bg-primary/8 ring-2 ring-inset',
-        initiativeRoot.dropState === 'reject' && 'ring-error/60 bg-error/5 ring-1 ring-inset',
-      )}
-      onKeyDownCapture={handleKeys}
-    >
+    <div className="relative flex h-full min-h-0 flex-1">
       {initiativeRoot.effectLabel ? (
         <span className="bg-primary-container text-on-primary-container text-label-small pointer-events-none absolute top-2 right-3 z-50 rounded-full px-2 py-1">
           {initiativeRoot.effectLabel}
         </span>
       ) : null}
-      <div
-        role="row"
-        className="text-on-surface-variant text-label-small flex h-8 shrink-0 items-center gap-2 px-3"
-      >
-        <span role="columnheader" className="min-w-72 flex-1 pl-10">
-          {TARGET_LABEL[target]}
-        </span>
-        {properties.map((field) => (
-          <span
-            role="columnheader"
-            key={field.key}
-            className={`hidden shrink-0 items-center px-2 @2xl:flex ${FIELD_WIDTH[field.key] ?? 'w-32'}`}
-          >
-            {field.label}
-          </span>
-        ))}
-      </div>
-      <ListView<ListMembership<TTarget>>
-        items={memberships}
-        rowHeight={56}
-        className="min-h-0 flex-1"
-        groupBy={
-          grouped
-            ? (membership) => ({
-                id: membership.path[0] ?? '__empty__',
-                label: groupLabel(groups, membership.path.slice(0, 1)),
-              })
-            : null
+      <EntityTable<ListMembership<TTarget>>
+        aria-label={`${target === 'task' ? 'Task' : target === 'project' ? 'Project' : target === 'program' ? 'Program' : 'Initiative'}s`}
+        columns={columns}
+        {...(roster.groups === undefined ? { rows: roster.rows ?? [] } : { groups: roster.groups })}
+        getRowKey={({ key }) => key}
+        tone="tonal"
+        gridRole={target === 'initiative' ? 'treegrid' : 'grid'}
+        getRowAria={
+          target === 'initiative'
+            ? (membership) => {
+                const position = positions.get(membership.key);
+                return position
+                  ? {
+                      level: position.depth,
+                      posInSet: position.posInSet,
+                      setSize: position.setSize,
+                      ...(position.hasChildren ? { expanded: true } : {}),
+                    }
+                  : { level: 1, posInSet: 1, setSize: 1 };
+              }
+            : undefined
         }
-        subGroupBy={
-          subGroupField === null
-            ? undefined
-            : (membership) => ({
-                id: membership.path[1] ?? '__empty__',
-                label: groupLabel(groups, membership.path.slice(0, 2)),
-              })
+        rowHeight={rowHeight}
+        virtualized
+        rowHref={(membership) =>
+          buildEntityHref(entityNavigationSnapshotFromWorkViewRow(membership.row))
         }
-        getItemKey={(membership) => `${workViewGroupPathKey(membership.path)}:${membership.row.id}`}
-        label={`${TARGET_LABEL[target]}s`}
-        collapsed={collapsedGroups}
-        onToggle={onToggleGroup}
-        onActivateItem={(membership) => {
+        rowLinkColumnKey={WORK_ROSTER_INLINE_LINK_COLUMN_KEY}
+        onRowClick={(membership) => {
           onActivate(membership.row);
         }}
-        renderRow={(membership, context) => {
-          const row = membership.row;
-          const selected = selectedIds.has(row.id);
-          const summary = rowSummary(row);
-          const position = row.target === 'initiative' ? treePositions.get(row.id) : undefined;
-          const baseObject = objectForWorkViewRow(row);
+        renderRowInteraction={({ row: membership, children }) => {
+          const baseObject = objectForWorkViewRow(membership.row);
           const wouldCreateCycle =
-            row.target === 'initiative' &&
+            membership.row.target === 'initiative' &&
             dragState.objects.some(
               (source) =>
                 source.kind === 'initiative' &&
-                isInitiativeDescendant(initiativeParentById, source.id, row.id),
+                isInitiativeDescendant(initiativeParentById, source.id, membership.row.id),
             );
           const object = wouldCreateCycle
             ? { ...baseObject, meta: { ...baseObject.meta, wouldCreateCycle: true } }
             : baseObject;
-          const navigationSnapshot = entityNavigationSnapshotFromWorkViewRow(row);
           return (
-            <WorkListObjectRow
+            <WorkListRowInteraction
+              membership={membership}
               object={object}
-              rowProps={context.rowProps}
-              active={context.active}
-              selected={selected}
-              rowId={row.id}
-              contextRow={row.isContext}
-              ariaLevel={position?.depth}
-              onActivate={context.onActivate}
-              className={`group/roster relative min-h-14 gap-2 rounded-lg border-b-0 px-3 py-0 ${row.isContext ? 'text-on-surface-variant' : ''}`}
+              active={activeEntryKey === workListEntityTableEntryKey(membership)}
+              selected={selectedIds.has(membership.row.id)}
+              onActivate={() => {
+                onActivate(membership.row);
+              }}
             >
-              {position ? (
-                <HierarchyRails position={position} hasSummary={Boolean(summary)} />
-              ) : null}
-              <ListCell className="relative min-w-72 flex-1 gap-3">
-                <span
-                  className="relative flex min-w-0 items-center gap-3"
-                  style={
-                    position ? { paddingLeft: `${String((position.depth - 1) * 44)}px` } : undefined
-                  }
-                >
-                  <SelectionIdentity
-                    row={row}
-                    selected={selected}
-                    selectionActive={selectionActive}
-                    onToggle={() => {
-                      toggle(row.id);
-                    }}
-                  />
-                  <DocketLink
-                    href={buildEntityHref(navigationSnapshot)}
-                    className={cn(
-                      'focus-visible:ring-primary min-w-0 rounded-sm outline-none focus-visible:ring-2',
-                      STRETCHED_LINK,
-                    )}
-                    onClick={(event) => {
-                      seedNavigationSnapshot(navigationSnapshot);
-                      event.stopPropagation();
-                    }}
-                  >
-                    <span className="text-on-surface text-body-medium block truncate">
-                      {workViewRowTitle(row)}
-                    </span>
-                    {summary ? (
-                      <span className="text-on-surface-variant text-body-small block max-w-[52ch] truncate">
-                        {summary}
-                      </span>
-                    ) : null}
-                  </DocketLink>
-                </span>
-              </ListCell>
-              {properties.map((field) => (
-                <ListCell
-                  key={field.key}
-                  className={`text-on-surface-variant text-body-small hidden shrink-0 px-2 @2xl:flex ${FIELD_WIDTH[field.key] ?? 'w-32'}`}
-                >
-                  <span className="sr-only">{field.label}: </span>
-                  <PropertyValue
-                    row={row as WorkViewRowFor<ViewTarget>}
-                    field={field}
-                    statusOf={statusOf}
-                  />
-                </ListCell>
-              ))}
-            </WorkListObjectRow>
+              {children}
+            </WorkListRowInteraction>
           );
         }}
+        onActiveEntryChange={setActiveEntryKey}
+        {...(collapsedGroups !== undefined ? { collapsed: collapsedGroups } : {})}
+        {...(onToggleGroup !== undefined ? { onToggleGroup } : {})}
+        {...(continuation !== undefined ? { continuation } : {})}
+        containerInteraction={{ ref: initiativeRoot.dropProps.ref }}
+        className={cn(
+          'h-full min-h-0 flex-1',
+          initiativeRoot.dropProps.className,
+          initiativeRoot.dropState === 'accept' && 'ring-primary bg-primary/8 ring-2 ring-inset',
+          initiativeRoot.dropState === 'reject' && 'ring-error/60 bg-error/5 ring-1 ring-inset',
+        )}
       />
-      {onLoadMore
-        ? groupPages
-            .filter((page) => page.nextCursor !== null && !page.loading)
-            .map((page) => (
-              <button
-                key={workViewGroupPathKey(page.path)}
-                type="button"
-                className="sr-only"
-                onClick={() => {
-                  onLoadMore(page.path);
-                }}
-              >
-                Load more {groupLabel(groups, page.path)}
-              </button>
-            ))
-        : null}
-      {hasMoreRows && onLoadMoreRows ? (
-        <Button
-          type="button"
-          variant="secondary"
-          controlSize="sm"
-          className="absolute bottom-3 left-1/2 -translate-x-1/2"
-          disabled={loadingMoreRows}
-          onClick={onLoadMoreRows}
-        >
-          {loadingMoreRows ? 'Loading…' : 'Load more'}
-        </Button>
-      ) : null}
     </div>
   );
 }

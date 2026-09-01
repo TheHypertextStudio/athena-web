@@ -18,12 +18,20 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
 
-import { staffRole } from '../enums';
+import { staffManagedBy, staffRole } from '../enums';
 import { genId } from '../id';
 import { user } from './auth';
 import { organization } from './identity';
 
-/** A Docket-service operator (Support/Finance/Superadmin tiers), keyed to a global User. */
+/**
+ * A Docket-service operator (Support/Finance/Superadmin tiers), keyed to a global User.
+ *
+ * @remarks
+ * This row is the sole runtime authority for operator access: `staffMiddleware` reads it on
+ * every `/admin` request and nothing in that path consults an external directory. Google
+ * Workspace group membership reaches operators by writing this table, never by being checked
+ * live. See {@link staffManagedBy} for which rows the group sync owns.
+ */
 export const staffUser = pgTable(
   'staff_user',
   {
@@ -32,6 +40,8 @@ export const staffUser = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
     role: staffRole('role').notNull(),
+    managedBy: staffManagedBy('managed_by').notNull().default('manual'),
+    groupsSyncedAt: timestamp('groups_synced_at'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
   },
   (t) => [uniqueIndex('staff_user_user_uq').on(t.userId)],

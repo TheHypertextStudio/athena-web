@@ -9,6 +9,7 @@
  * lives in `server.ts` alongside `/api/auth` rather than the typed app. `now` is read
  * at request time, never at module scope, and the sweep is safe to retry.
  */
+import { createGoogleDirectory, syncAllStaff } from '@docket/auth';
 import { db } from '@docket/db';
 import { Hono } from 'hono';
 
@@ -111,6 +112,22 @@ const cron = new Hono()
   // a defensible default is answered by Athena with her reasoning recorded; every other overdue
   // question is parked with nothing mutated, and the person is told the work is waiting on them.
   // Idempotent: a settled question is never re-swept.
+  // Operator SSO reconciliation: re-read every group-managed operator's Google Workspace group
+  // membership and revoke those whose membership has gone. This is what makes revocation real —
+  // sessions last 30 days, so without this sweep removing someone from a group would not lock
+  // them out of the console until their session happened to expire. Bounded (one row per
+  // operator) and idempotent; a failed directory lookup leaves that row exactly as it was.
+  .post('/staff-google-sync', async (c) => {
+    if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
+    if (!env.ADMIN_GOOGLE_SSO_ENABLED) {
+      return c.json({ swept: false, reason: 'admin_google_sso_disabled' });
+    }
+    const result = await syncAllStaff(db, createGoogleDirectory(), {
+      groupRoles: env.ADMIN_GOOGLE_GROUP_ROLES,
+      workspaceDomain: env.GOOGLE_WORKSPACE_DOMAIN,
+    });
+    return c.json({ swept: true, ...result });
+  })
   .post('/elicitation-deadlines', async (c) => {
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
     const result = await sweepElicitations(new Date());

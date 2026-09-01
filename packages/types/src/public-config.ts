@@ -58,6 +58,13 @@ export const PublicConfigOut = z
       .boolean()
       .optional()
       .describe('False while Google OAuth is staged for designated test users only.'),
+    /** Whether the operator console offers Google Workspace sign-in. */
+    adminGoogleSso: z
+      .boolean()
+      .optional()
+      .describe(
+        'Whether the operator console offers Google Workspace sign-in alongside its passkey flow. False keeps the console passkey-only.',
+      ),
     /** Browser-safe Stripe publishable key, or null while billing is not configured. */
     stripePublishableKey: z
       .string()

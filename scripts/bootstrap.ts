@@ -42,6 +42,17 @@ import { cloudflaredConfigYaml, launchAgentPlist, tunnelRegistrationUrls } from 
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SA_NAME = 'docket-deploy';
+/**
+ * Runtime identity the `docket-api` Cloud Run service runs as.
+ *
+ * @remarks
+ * Distinct from the deploy account above, and created even when operator SSO is off. Cloud Run
+ * otherwise falls back to the project's default compute service account, which is broadly
+ * privileged and is a shared identity — neither property is one you want on the service that
+ * reads your Workspace directory. A dedicated, unprivileged account is also the only thing you
+ * can name when granting the *Groups Reader* admin role in the Workspace admin console.
+ */
+const API_RUNTIME_SA_NAME = 'docket-api';
 const AR_REPO = 'docket';
 const WIF_POOL = 'github';
 const WIF_PROVIDER = 'github-actions';
@@ -403,7 +414,11 @@ async function gatherConfig(): Promise<Config> {
 
 // ── gcp ───────────────────────────────────────────────────────────────────────
 
-function setupGcp(cfg: Config): { saEmail: string; wifProvider: string } {
+function setupGcp(cfg: Config): {
+  saEmail: string;
+  apiRuntimeSaEmail: string;
+  wifProvider: string;
+} {
   section('GCP — APIs');
 
   const apis = [
@@ -435,6 +450,19 @@ function setupGcp(cfg: Config): { saEmail: string; wifProvider: string } {
     ok(`created: ${saEmail}`);
   }
 
+  const apiRuntimeSaEmail = `${API_RUNTIME_SA_NAME}@${cfg.project}.iam.gserviceaccount.com`;
+  const apiRuntimeSaExists = tryRun(
+    `gcloud iam service-accounts describe ${apiRuntimeSaEmail} --project=${cfg.project} --format='value(email)'`,
+  );
+  if (apiRuntimeSaExists) {
+    ok(`service account exists: ${apiRuntimeSaEmail}`);
+  } else {
+    exec(`gcloud iam service-accounts create ${API_RUNTIME_SA_NAME} \
+      --project=${cfg.project} \
+      --display-name="Docket API runtime"`);
+    ok(`created: ${apiRuntimeSaEmail}`);
+  }
+
   const roles = [
     'roles/run.developer',
     'roles/artifactregistry.writer',
@@ -450,6 +478,13 @@ function setupGcp(cfg: Config): { saEmail: string; wifProvider: string } {
       --quiet`);
     ok(role);
   }
+
+  exec(`gcloud projects add-iam-policy-binding ${cfg.project} \
+    --member="serviceAccount:${apiRuntimeSaEmail}" \
+    --role="roles/secretmanager.secretAccessor" \
+    --condition=None \
+    --quiet`);
+  ok(`roles/secretmanager.secretAccessor (${API_RUNTIME_SA_NAME})`);
 
   section('GCP — Artifact Registry');
 
@@ -542,18 +577,24 @@ function setupGcp(cfg: Config): { saEmail: string; wifProvider: string } {
   }
   note([...created, ...skipped].join('\n') || '(none)', 'Secret Manager');
 
-  return { saEmail, wifProvider };
+  return { saEmail, apiRuntimeSaEmail, wifProvider };
 }
 
 // ── github ────────────────────────────────────────────────────────────────────
 
-function setupGithub(cfg: Config, saEmail: string, wifProvider: string): void {
+function setupGithub(
+  cfg: Config,
+  saEmail: string,
+  apiRuntimeSaEmail: string,
+  wifProvider: string,
+): void {
   section('GitHub — Repository Variables');
 
   const repoVars: Record<string, string> = {
     GCP_PROJECT_ID: cfg.project,
     GCP_REGION: cfg.region,
     GCP_SERVICE_ACCOUNT: saEmail,
+    GCP_API_RUNTIME_SERVICE_ACCOUNT: apiRuntimeSaEmail,
     GCP_WIF_PROVIDER: wifProvider,
     NEON_PROJECT_ID: cfg.neonProjectId,
   };
@@ -568,6 +609,7 @@ function setupGithub(cfg: Config, saEmail: string, wifProvider: string): void {
       new URL(cfg.adminUrl).host,
     ].join(','),
     GOOGLE_OAUTH_PUBLIC: 'false',
+    ADMIN_GOOGLE_SSO_ENABLED: 'false',
   };
 
   for (const [key, value] of Object.entries(repoVars)) {
@@ -656,6 +698,9 @@ OAUTH_PROXY_PRODUCTION_URL=
 BETTER_AUTH_PASSKEY_RP_ID=docket.localhost
 BETTER_AUTH_PASSKEY_RP_NAME=Docket (local)
 GOOGLE_OAUTH_PUBLIC=false
+ADMIN_GOOGLE_SSO_ENABLED=false
+ADMIN_GOOGLE_GROUP_ROLES=
+GOOGLE_WORKSPACE_DOMAIN=
 WORK_LOCATION_PROJECTION_ENABLED=false
 LINEAR_AGENT_ENABLED=false
 
@@ -1067,8 +1112,8 @@ async function main(): Promise<void> {
     return;
   }
   const cfg = await gatherConfig();
-  const { saEmail, wifProvider } = setupGcp(cfg);
-  setupGithub(cfg, saEmail, wifProvider);
+  const { saEmail, apiRuntimeSaEmail, wifProvider } = setupGcp(cfg);
+  setupGithub(cfg, saEmail, apiRuntimeSaEmail, wifProvider);
 
   if (!flags.skipProviders) {
     await runIntegrationSetup({

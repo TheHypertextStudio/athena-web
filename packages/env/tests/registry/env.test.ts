@@ -52,6 +52,7 @@ function validApiEnv(): Record<string, string> {
     BETTER_AUTH_PASSKEY_RP_ID: 'localhost',
     BETTER_AUTH_PASSKEY_RP_NAME: 'Docket',
     GOOGLE_OAUTH_PUBLIC: 'false',
+    ADMIN_GOOGLE_SSO_ENABLED: 'false',
     WORK_LOCATION_PROJECTION_ENABLED: 'false',
     LINEAR_AGENT_ENABLED: 'false',
     AGENT_MAX_TURNS: '24',

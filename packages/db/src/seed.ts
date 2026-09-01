@@ -29,6 +29,18 @@ export type StaffRole = (typeof STAFF_ROLES)[number];
 /** The tier granted when a bootstrap target omits an explicit `:role`. */
 export const DEFAULT_STAFF_ROLE: StaffRole = 'superadmin';
 
+/**
+ * Numeric privilege rank of a staff tier (higher = more privileged).
+ *
+ * @remarks
+ * `STAFF_ROLES` is declared in ascending privilege order, so the enum position *is* the rank.
+ * Shared so the API's tier cascade and the Workspace group sync's "highest role wins" rule
+ * cannot drift apart into two orderings.
+ */
+export function staffRank(role: StaffRole): number {
+  return STAFF_ROLES.indexOf(role);
+}
+
 /** Whether an arbitrary string is one of the {@link STAFF_ROLES}. */
 export function isStaffRole(value: string): value is StaffRole {
   return (STAFF_ROLES as readonly string[]).includes(value);
@@ -37,41 +49,44 @@ export function isStaffRole(value: string): value is StaffRole {
 /** A bootstrap target: an account email and the tier to grant it. */
 export interface StaffTarget {
   /** The account email. */
-  readonly email: string;
+  readonly identifier: string;
   /** The tier to grant. */
   readonly role: StaffRole;
 }
 
 /**
- * Parse a single `email[:role]` token into a {@link StaffTarget}.
+ * Parse a single `identifier[:role]` token into a {@link StaffTarget}.
  *
  * @remarks
- * Strict: an unrecognized role throws (so a mistyped CLI argument is reported rather than
- * silently ignored). An omitted role defaults to {@link DEFAULT_STAFF_ROLE}. Emails never
- * contain `:`, so the last `:` separates the role.
+ * The identifier is an account email for `STAFF_BOOTSTRAP_EMAILS` and a Google Group address
+ * for `ADMIN_GOOGLE_GROUP_ROLES`; the grammar is identical because neither ever contains `:`,
+ * so the last `:` separates the role. Strict: an unrecognized role throws (so a mistyped CLI
+ * argument or a mistyped deployment variable is reported rather than silently ignored). An
+ * omitted role defaults to {@link DEFAULT_STAFF_ROLE}.
  *
  * @throws {Error} when the role segment is not one of {@link STAFF_ROLES}.
  */
 export function parseStaffTarget(token: string): StaffTarget {
   const trimmed = token.trim();
   const sep = trimmed.lastIndexOf(':');
-  if (sep === -1) return { email: trimmed, role: DEFAULT_STAFF_ROLE };
-  const email = trimmed.slice(0, sep);
+  if (sep === -1) return { identifier: trimmed, role: DEFAULT_STAFF_ROLE };
+  const identifier = trimmed.slice(0, sep);
   const role = trimmed.slice(sep + 1);
   if (!isStaffRole(role)) {
     throw new Error(
-      `Invalid staff role "${role}" for ${email} — expected one of ${STAFF_ROLES.join(', ')}.`,
+      `Invalid staff role "${role}" for ${identifier} — expected one of ${STAFF_ROLES.join(', ')}.`,
     );
   }
-  return { email, role };
+  return { identifier, role };
 }
 
 /**
- * Parse a comma-separated `email[:role]` allowlist into {@link StaffTarget}s.
+ * Parse a comma-separated `identifier[:role]` list into {@link StaffTarget}s.
  *
  * @remarks
- * Blank entries are skipped; a malformed role throws via {@link parseStaffTarget}. Used for
- * the `STAFF_BOOTSTRAP_EMAILS` env value (by both the seed CLI and the staff guard).
+ * Blank entries are skipped; a malformed role throws via {@link parseStaffTarget}. Serves the
+ * `STAFF_BOOTSTRAP_EMAILS` env value (the seed CLI and the staff guard) and the
+ * `ADMIN_GOOGLE_GROUP_ROLES` group mapping (the Workspace sync).
  */
 export function parseStaffTargets(raw: string): StaffTarget[] {
   return raw
@@ -81,10 +96,13 @@ export function parseStaffTargets(raw: string): StaffTarget[] {
     .map(parseStaffTarget);
 }
 
-/** The tier configured for `email` in `targets` (case-insensitive), or null if absent. */
-export function roleForEmail(targets: readonly StaffTarget[], email: string): StaffRole | null {
-  const normalized = email.trim().toLowerCase();
-  return targets.find((t) => t.email.trim().toLowerCase() === normalized)?.role ?? null;
+/** The tier configured for `identifier` in `targets` (case-insensitive), or null if absent. */
+export function roleForIdentifier(
+  targets: readonly StaffTarget[],
+  identifier: string,
+): StaffRole | null {
+  const normalized = identifier.trim().toLowerCase();
+  return targets.find((t) => t.identifier.trim().toLowerCase() === normalized)?.role ?? null;
 }
 
 /**
@@ -103,7 +121,7 @@ export function bootstrapRoleFor(
   opts: { appMode: string; bootstrapEmails: string | undefined },
 ): StaffRole | null {
   if (opts.appMode === 'production' || !opts.bootstrapEmails) return null;
-  return roleForEmail(parseStaffTargets(opts.bootstrapEmails), email);
+  return roleForIdentifier(parseStaffTargets(opts.bootstrapEmails), email);
 }
 
 /** Options for {@link grantStaffByEmail}. */

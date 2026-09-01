@@ -9,21 +9,13 @@
  * {@link requireStaffRole} layers a tier check (support &lt; finance &lt; superadmin)
  * on top, for finance/superadmin-only mutations like billing actions.
  */
-import { bootstrapRoleFor, db, grantStaffByEmail, staffUser } from '@docket/db';
+import { bootstrapRoleFor, db, grantStaffByEmail, staffRank, staffUser } from '@docket/db';
 import { eq } from 'drizzle-orm';
 import type { MiddlewareHandler } from 'hono';
 
 import type { AppEnv, StaffRole } from '../context';
 import { env } from '../env';
 import { AuthError, CapabilityError } from '../error';
-
-/** The staff tiers in ascending privilege rank (index = rank). */
-const STAFF_RANK: readonly StaffRole[] = ['support', 'finance', 'superadmin'];
-
-/** Numeric rank of a staff role (higher = more privileged). */
-function rankOf(role: StaffRole): number {
-  return STAFF_RANK.indexOf(role);
-}
 
 /**
  * Resolve and attach the service-operator staff context for `/admin/*` routes.
@@ -103,7 +95,7 @@ async function maybeBootstrapStaff(email: string): Promise<{ id: string; role: S
 export function requireStaffRole(min: StaffRole): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
     const { role } = c.get('staffCtx');
-    if (rankOf(role) < rankOf(min)) throw new CapabilityError('Insufficient staff role');
+    if (staffRank(role) < staffRank(min)) throw new CapabilityError('Insufficient staff role');
     await next();
   };
 }

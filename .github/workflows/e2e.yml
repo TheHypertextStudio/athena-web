@@ -115,6 +115,7 @@ jobs:
       OIDC_LOGIN_PAGE_URL: http://docket.localhost:3000/sign-in
       AGENT_MAX_TURNS: '24'
       GOOGLE_OAUTH_PUBLIC: 'false'
+      ADMIN_GOOGLE_SSO_ENABLED: 'false'
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - uses: actions/checkout@v6

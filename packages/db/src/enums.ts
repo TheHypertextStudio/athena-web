@@ -678,6 +678,17 @@ export const productEntitlementSource = pgEnum('product_entitlement_source', [
 export const staffRole = pgEnum('staff_role', ['support', 'finance', 'superadmin']);
 
 /**
+ * What provisions and may withdraw a staff grant.
+ *
+ * @remarks
+ * `manual` rows are granted through the admin console and are never touched by the Google
+ * Workspace group sync — that is what keeps a break-glass operator reachable when the
+ * directory lookup or the Workspace configuration itself is broken. `google_group` rows are
+ * owned by the sync: it promotes, demotes, and revokes them to match group membership.
+ */
+export const staffManagedBy = pgEnum('staff_managed_by', ['manual', 'google_group']);
+
+/**
  * User account end-of-life state (the account-level mirror of {@link orgLifecycleState}).
  *
  * @remarks

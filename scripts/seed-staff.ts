@@ -95,7 +95,7 @@ async function promptForTarget(): Promise<StaffTarget[]> {
     if (!isStaffRole(role)) {
       throw new Error(`Invalid tier "${role}" — expected one of ${STAFF_ROLES.join(', ')}.`);
     }
-    return [{ email, role }];
+    return [{ identifier: email, role }];
   } finally {
     rl.close();
   }
@@ -134,7 +134,10 @@ async function main(): Promise<void> {
 
   const targets = await resolveTargets(args, args.includes('--non-interactive'));
   for (const target of targets) {
-    reportResult(target.email, await grantStaffByEmail(db, target));
+    reportResult(
+      target.identifier,
+      await grantStaffByEmail(db, { email: target.identifier, role: target.role }),
+    );
   }
 }
 

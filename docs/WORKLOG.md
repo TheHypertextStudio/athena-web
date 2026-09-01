@@ -7814,6 +7814,97 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [ADMIN-GOOGLE-SSO-001] Sign in to the operator console with Google Workspace
+
+- **Completed**: 2026-08-31
+- **Process**: Planned in plan mode; scope confirmed with the user (Workspace SSO now with
+  Cloudflare Access deferred, passkey kept as break-glass, Google Groups mapped to staff tiers).
+- **Priority**: P2
+- **Summary**: The admin console accepts a Google Workspace sign-in beside its passkey flow, and
+  Workspace **group membership** now decides the staff tier. Previously the only way in was a
+  passkey, and provisioning an operator meant granting a `staff_user` row by internal ULID with no
+  way to revoke by removing someone from a group.
+
+#### Design
+
+The shaping constraint: the admin frontend is not the trust boundary. `apps/admin` is a thin
+client whose `/admin/*` calls are rewritten to the public `docket-api`, where `staffMiddleware`
+reads `staff_user` and 403s. So a login placed in front of `docket-admin` alone would have
+protected nothing, and the change lands in the API and `packages/auth` instead.
+
+`staff_user` stays the sole runtime authority — Google establishes identity and group membership,
+the sync writes that into the table, and `staffMiddleware` is untouched. Nothing on the request
+path calls Google. Two triggers write the row: the OAuth callback (immediate effect on sign-in)
+and a 15-minute cron sweep. The cron is what makes revocation real, because sessions last 30 days.
+A per-request TTL check was deliberately rejected: it would put a directory call on the 403 path
+for any signed-in non-operator, which is a free amplification vector.
+
+Google's OIDC token carries no group claims, so membership comes from the Cloud Identity Groups
+API — chosen over the Admin SDK Directory API because the runtime service account can be granted
+the _Groups Reader_ admin role directly, with no domain-wide delegation and no impersonated admin.
+
+#### Decisions that diverged from the plan
+
+- **No `google-auth-library`.** The runtime only needs a metadata-server token on Cloud Run, which
+  is ~10 lines. That avoids the repo's first Google SDK, the dependency-cooldown list, and the
+  awkwardness of covering an SDK to `packages/auth`'s 100% bar.
+- **No `hd` authorization param.** The Google provider config is shared with the product app, so
+  setting it would have confined _product_ Google sign-in to the Workspace domain. It was only
+  ever an account-chooser hint; group membership is the gate.
+- **The sync keys off `user.email`, not the Google address.** `account.account_id` stores Google's
+  opaque `sub`, and no column holds the Google mailbox. So it matches on the Docket account's
+  verified email _and_ requires a linked Google account — an address alone can never reach a
+  grant. Both signup paths verify the mailbox (Google on OAuth, an emailed code on passkey).
+- **`audit()` was not widened.** The sync lives in `packages/auth` (the auth hook constructs it)
+  and writes its own system-attributed audit rows, so the API helper needed no signature change.
+
+#### Bug found while testing
+
+A malformed `ADMIN_GOOGLE_GROUP_ROLES` fell through to the revoke branch — one typo in a
+deployment variable would have revoked every group-managed operator at once. It now returns
+`unchanged`, on the same principle as a failed directory lookup: "we cannot tell" is not "this
+person is in no group".
+
+#### Safety rules
+
+Never revoke on a failed lookup or a malformed mapping; never touch a `managed_by = 'manual'` row
+(the break-glass path that survives a broken Workspace); never revoke or demote the last
+superadmin; highest tier wins across groups.
+
+- **Files changed**:
+  - `packages/auth/src/google-directory.ts` (new) — Cloud Identity port, live metadata-server
+    adapter, fixture adapter.
+  - `packages/auth/src/staff-google-sync.ts` (new) — sign-in sync, cron sweep, safety rules.
+  - `packages/auth/src/auth-builder.ts` — `isAdminOrigin`/`adminGoogleSsoEnabled`, the admin-origin
+    exemption on the staged Google rollout gate, the `/callback/google` after-hook branch.
+  - `packages/db/src/{enums,schema/admin,seed,index}.ts` + migration `0119` — `staff_managed_by`
+    enum, `managed_by`/`groups_synced_at` columns, shared `staffRank`, `StaffTarget.identifier`.
+  - `apps/api/src/routes/cron.ts`, `scripts/scheduler-setup.ts` — the `staff-google-sync` sweep.
+  - `apps/api/src/routes/config.ts`, `packages/types/src/public-config.ts` — `adminGoogleSso`.
+  - `apps/admin/src/app/(auth)/sign-in/page.tsx`, `apps/admin/src/lib/config.ts` — the button,
+    gated on what the API reports rather than a build-time flag.
+  - `.github/workflows/deploy.yml`, `scripts/bootstrap.ts` — dedicated `docket-api` runtime service
+    account (the API had been running as the default compute SA).
+  - `packages/env/src/{slices,registry-vars-core}.ts` and every env setter.
+- **Validation**: `pnpm typecheck` (27/27), `pnpm lint` (26/26), `pnpm format:check`, and
+  `pnpm test:coverage` (26/26) all pass. `packages/auth` holds its 100% trust-spine threshold with
+  155 tests.
+- **Learnings**:
+  - The complexity gate caught `syncStaffFromGoogle` at 19/12 and the refactor into named steps
+    (`desiredRoleFor`, `revokeStaff`, `grantStaff`, `retierStaff`) is genuinely clearer than the
+    original straight-line version — the gate was right.
+  - Three env vars required by `@docket/env/api` were pasted at the top of one auth test file
+    rather than living in `packages/auth/vite.config.ts`; adding a second test file that imported
+    the builder failed on env validation. They now live in the vite config.
+  - Better Auth does not run `after` hooks when an endpoint errors, so the `/callback/google`
+    branch is exercised by invoking `buildAuthOptions(...).hooks.after` directly.
+- **Unrelated fix**: `apps/api/tests/routes/admin.test.ts` hard-coded a billing period ending
+  `2026-09-01`, and the credit is the _unused_ remainder measured from now — so the test became a
+  time bomb that detonated today. The period is now relative to `now`.
+- **Follow-up**: Cloudflare Access over `docket-admin` and the API's `/admin/*` path, verifying
+  `Cf-Access-Jwt-Assertion` before `staffMiddleware`. That is the layer that stops unauthenticated
+  traffic reaching Cloud Run at all; this change does not alter network exposure.
+
 ### [OAUTH-CONSENT-POLISH-001] Design-review pass on the OAuth consent screen
 
 - **Completed**: 2026-08-31

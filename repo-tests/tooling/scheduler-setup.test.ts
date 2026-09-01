@@ -47,6 +47,7 @@ const EXPECTED_PATHS = [
   '/internal/cron/recurrence-materialization',
   '/internal/cron/run-linear-agent-sessions',
   '/internal/cron/search-index',
+  '/internal/cron/staff-google-sync',
   '/internal/cron/sync-calendars',
   '/internal/cron/sync-connectors',
   '/internal/cron/sync-work-locations',
@@ -114,7 +115,7 @@ describe('scheduler-setup — the twenty-one jobs', () => {
     // Guards the parser too: an empty parse cannot pass off as "no drift" here.
     expect([...routes].sort()).toEqual([...EXPECTED_PATHS].sort());
     expect(JOBS.map((job) => job.path).sort()).toEqual([...EXPECTED_PATHS].sort());
-    expect(JOBS).toHaveLength(21);
+    expect(JOBS).toHaveLength(22);
   });
 
   it('keeps every job id unique, since a duplicate would silently clobber its sibling', () => {

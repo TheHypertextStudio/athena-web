@@ -38,6 +38,8 @@ import { nextCookies } from 'better-auth/next-js';
 import { and, eq, inArray, ne } from 'drizzle-orm';
 
 import { generateAppleClientSecret, type AppleClientSecretInput } from './apple-secret';
+import type { GoogleDirectoryPort } from './google-directory';
+import { syncStaffOnSignIn } from './staff-google-sync';
 import { hasRecoveryCodes } from './backup-codes';
 import { changeEmailConfirmationEmail, recoveryCodeUsedEmail } from './emails';
 import { derivePasskeyLabel } from './passkey-label';
@@ -54,6 +56,11 @@ export interface AuthDeps {
    * can complete the flow without reading the capture mailer's outbox. Never set in production.
    */
   readonly devEchoSignupCode?: boolean;
+  /**
+   * Resolves Google Workspace group membership for operator SSO. Absent ⇒ the console's Google
+   * sign-in grants nothing, which is the correct posture when no directory is reachable.
+   */
+  readonly googleDirectory?: GoogleDirectoryPort | undefined;
 }
 
 /**
@@ -78,6 +85,10 @@ export interface AuthEnv {
   readonly GOOGLE_CLIENT_ID?: string | undefined;
   readonly GOOGLE_CLIENT_SECRET?: string | undefined;
   readonly GOOGLE_OAUTH_PUBLIC?: boolean | undefined;
+  readonly ADMIN_GOOGLE_SSO_ENABLED?: boolean | undefined;
+  readonly ADMIN_GOOGLE_GROUP_ROLES?: string | undefined;
+  readonly GOOGLE_WORKSPACE_DOMAIN?: string | undefined;
+  readonly ADMIN_URL?: string | undefined;
   readonly GOOGLE_OAUTH_TEST_EMAILS?: string | undefined;
   readonly GITHUB_APP_CLIENT_ID?: string | undefined;
   readonly GITHUB_APP_CLIENT_SECRET?: string | undefined;
@@ -119,6 +130,61 @@ export function canUseGoogleOAuth(e: AuthEnv, email: string | null | undefined):
   return parseTrustedOrigins(e.GOOGLE_OAUTH_TEST_EMAILS)
     .map((candidate) => candidate.toLowerCase())
     .includes(normalized);
+}
+
+/**
+ * Whether a Google sign-in starting from `origin` is the operator console's, not the product's.
+ *
+ * @remarks
+ * The product app's Google sign-in stays behind {@link canUseGoogleOAuth}'s staged-rollout gate,
+ * which is about Google's own consent-screen verification. Operator SSO is a different question
+ * entirely — it is confined to a Workspace domain and gated on group membership, so the
+ * verification rollout has no bearing on it. Matching on the browser-set `Origin` header keeps
+ * the two apart: it is a forbidden header, so page script cannot forge it.
+ *
+ * Returns false when no admin origin is configured, so a missing `ADMIN_URL` fails closed.
+ */
+export function isAdminOrigin(e: AuthEnv, origin: string | null | undefined): boolean {
+  if (!isRealValue(e.ADMIN_URL) || !origin) return false;
+  try {
+    return new URL(origin).origin === new URL(e.ADMIN_URL).origin;
+  } catch {
+    return false;
+  }
+}
+
+/** Whether operator SSO is switched on AND a directory is available to answer group questions. */
+export function adminGoogleSsoEnabled(e: AuthEnv, deps: AuthDeps): boolean {
+  return e.ADMIN_GOOGLE_SSO_ENABLED === true && deps.googleDirectory !== undefined;
+}
+
+/**
+ * Project a just-signed-in Google account's Workspace groups onto its `staff_user` row.
+ *
+ * @remarks
+ * Extracted from the `after` hook so the decision is reachable without driving a full OAuth
+ * round trip. `newSession` is only populated when the callback actually MINTED a session, which
+ * is what distinguishes a sign-in from an account-linking callback — a link must not silently
+ * re-grade the linker's operator tier.
+ *
+ * @param e - The validated env slice.
+ * @param deps - The builder dependencies, supplying the directory.
+ * @param newSession - Better Auth's freshly minted session, or null/undefined when none was.
+ */
+export async function syncStaffOnGoogleCallback(
+  e: AuthEnv,
+  deps: AuthDeps,
+  newSession: { user: { id: string } } | null | undefined,
+): Promise<void> {
+  const directory = deps.googleDirectory;
+  if (!newSession || !directory || e.ADMIN_GOOGLE_SSO_ENABLED !== true) return;
+  await syncStaffOnSignIn(db, directory, {
+    userId: newSession.user.id,
+    config: {
+      groupRoles: e.ADMIN_GOOGLE_GROUP_ROLES,
+      workspaceDomain: e.GOOGLE_WORKSPACE_DOMAIN,
+    },
+  });
 }
 
 /** A pending `verification` row as {@link resolvePasskeyUser} reads it. */
@@ -733,9 +799,17 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
         const provider = (ctx.body as { provider?: unknown } | undefined)?.provider;
         if (provider !== 'google') return;
         if (ctx.path === '/sign-in/social' && !canUseGoogleOAuth(e, null)) {
-          throw new APIError('FORBIDDEN', {
-            message: 'Google sign-in is in private production testing.',
-          });
+          // Operator SSO is exempt: the staged-rollout gate exists for Google's consent-screen
+          // verification of the PRODUCT app, and the console is a different, domain-confined
+          // audience whose access is decided by Workspace group membership either way. The
+          // exemption is only as wide as the admin origin, and only while operator SSO is on.
+          const fromConsole =
+            adminGoogleSsoEnabled(e, deps) && isAdminOrigin(e, ctx.headers?.get('origin'));
+          if (!fromConsole) {
+            throw new APIError('FORBIDDEN', {
+              message: 'Google sign-in is in private production testing.',
+            });
+          }
         }
         if (ctx.path === '/link-social') {
           const currentSession = await getSessionFromCtx(ctx);
@@ -753,6 +827,15 @@ export function buildAuthOptions(e: AuthEnv, deps: AuthDeps): BetterAuthOptions 
           // mutate the shared cookie names. Sign-out already revoked A's server row, so retaining
           // its inert token until expiry or the next sign-in does not retain access.
           ctx.context.responseHeaders?.delete('set-cookie');
+          return;
+        }
+        if (ctx.path === '/callback/google') {
+          // A Google sign-in just completed. Project the account's Workspace group membership onto
+          // its `staff_user` row so the console reflects it on the very first request, rather than
+          // making the operator wait for the next cron sweep. The sync swallows its own failures:
+          // this hook has no error boundary, so a throw here would surface as a broken OAuth
+          // callback rather than as a missing grant.
+          await syncStaffOnGoogleCallback(e, deps, ctx.context.newSession);
           return;
         }
         if (ctx.path !== '/two-factor/verify-backup-code') return;

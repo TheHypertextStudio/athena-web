@@ -67,6 +67,24 @@ export const authServer = {
   /** CSV of Docket account emails allowed to link Google while public access is disabled. */
   GOOGLE_OAUTH_TEST_EMAILS: z.string().optional(),
   /**
+   * Whether the operator console offers Google Workspace sign-in. Off keeps the console
+   * passkey-only and leaves the group sync dormant, so a half-configured Workspace never
+   * becomes a way in.
+   */
+  ADMIN_GOOGLE_SSO_ENABLED: boolFromString(),
+  /**
+   * CSV of `group-email:role` pairs mapping Google Groups onto staff tiers, e.g.
+   * `docket-support@example.com:support,docket-admins@example.com:superadmin`. Role defaults
+   * to `superadmin` when a pair omits it. Absent ⇒ the sync grants nothing.
+   */
+  ADMIN_GOOGLE_GROUP_ROLES: z.string().optional(),
+  /**
+   * The Google Workspace domain operator sign-in is confined to. A cheap early reject only —
+   * group membership is what actually grants access, so an account outside any mapped group is
+   * refused whether or not a domain is configured here.
+   */
+  GOOGLE_WORKSPACE_DOMAIN: z.string().optional(),
+  /**
    * Public HTTPS callback URL Docket registers with Google Calendar push-notification
    * `watch` subscriptions (`POST {this}` receives `X-Goog-*` headers at
    * `/webhooks/calendar/google`, e.g. `https://api.docket.app/webhooks/calendar/google`).

@@ -69,6 +69,13 @@ export const JOBS: readonly CronJob[] = [
       'Docket: background connector auto-mirror (re-syncs every due mirror integration).',
   },
   {
+    name: 'docket-staff-google-sync',
+    path: '/internal/cron/staff-google-sync',
+    schedule: '*/15 * * * *',
+    description:
+      'Docket: reconcile operator access against Google Workspace groups (revokes removed members).',
+  },
+  {
     name: 'docket-lifecycle-sweep',
     path: '/internal/cron/lifecycle-sweep',
     schedule: '0 3 * * *',
@@ -428,15 +435,28 @@ function warnOnRouteDrift(): void {
 
 // ── main ───────────────────────────────────────────────────────────────────────
 
+/**
+ * The origin Cloud Scheduler POSTs to, without a trailing slash.
+ *
+ * @remarks
+ * Production uses Cloud Run's own service URL; `API_URL` remains the fallback for local and
+ * preview environments that have no distinct internal origin. The emptiness check is explicit
+ * rather than `??` because a `SCHEDULER_API_URL` set to blank or whitespace must fall back too,
+ * and `??` would accept the empty string as a configured value.
+ */
+function resolveApiUrl(): string {
+  const configured = process.env['SCHEDULER_API_URL']?.trim() ?? '';
+  const origin = configured === '' ? requireEnv('API_URL') : configured;
+  return origin.replace(/\/+$/, '');
+}
+
 function main(): void {
   const dryRun = process.argv.includes('--dry-run') || process.env['DRY_RUN'] === '1';
 
   const ctx: Ctx = {
     project: requireEnv('GCP_PROJECT_ID'),
     region: requireEnv('GCP_REGION'),
-    // Production uses Cloud Run's service URL. API_URL remains the fallback for local and preview
-    // environments that have no distinct internal origin.
-    apiUrl: (process.env['SCHEDULER_API_URL']?.trim() || requireEnv('API_URL')).replace(/\/+$/, ''),
+    apiUrl: resolveApiUrl(),
     dryRun,
   };
 

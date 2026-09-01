@@ -431,14 +431,20 @@ describe('discount application review', () => {
     await startProviderTrial(organizationId);
     const finance = await makeStaff('finance');
     const app = appWithSession(admin, fakeSession(finance.userId));
+    // The billing period straddles NOW rather than sitting on fixed dates. The credit is the
+    // *unused* remainder of the period measured from the approval instant, so a hard-coded period
+    // silently starts yielding a zero credit — and this assertion starts failing — on the day the
+    // wall clock passes its end.
+    const periodStart = new Date(Date.now() - 15 * 24 * 60 * 60 * 1000);
+    const periodEnd = new Date(Date.now() + 15 * 24 * 60 * 60 * 1000);
     const invoice = {
       invoiceId: `in_${applicationId}`,
       lineId: `il_${applicationId}`,
       invoiceStatus: 'open' as const,
       currency: 'usd',
       recurringAmount: 800,
-      periodStartsAt: '2026-08-01T00:00:00.000Z',
-      periodEndsAt: '2026-09-01T00:00:00.000Z',
+      periodStartsAt: periodStart.toISOString(),
+      periodEndsAt: periodEnd.toISOString(),
     };
     const credit = {
       baseAmount: 400,

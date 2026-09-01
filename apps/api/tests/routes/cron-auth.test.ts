@@ -25,6 +25,7 @@ const CRON_PATHS: readonly string[] = [
   '/athena-triggers',
   '/billing-reconciliation',
   '/expired-sessions-sweep',
+  '/staff-google-sync',
 ];
 
 /** The migrated db module plus the lazily-imported cron router. */

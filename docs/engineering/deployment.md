@@ -111,23 +111,27 @@ required.
 
 Set by `pnpm bootstrap`. Add missing ones with `gh variable set NAME --body "VALUE" --repo owner/repo`.
 
-| Variable                           | Set by               | Description                                                                                                              |
-| ---------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `GCP_PROJECT_ID`                   | bootstrap            | GCP project ID (e.g. `my-project-123`)                                                                                   |
-| `GCP_REGION`                       | bootstrap            | Deployment region (e.g. `us-central1`)                                                                                   |
-| `GCP_SERVICE_ACCOUNT`              | bootstrap            | Full SA email: `docket-deploy@<project>.iam.gserviceaccount.com`                                                         |
-| `GCP_WIF_PROVIDER`                 | bootstrap            | Full WIF provider resource name: `projects/<num>/locations/global/workloadIdentityPools/github/providers/github-actions` |
-| `PASSKEY_RP_ID`                    | bootstrap/manual     | WebAuthn relying-party domain. Use `hypertext.studio` for the production `*.hypertext.studio` hosts.                     |
-| `NEON_PROJECT_ID`                  | bootstrap            | Neon project ID (from Neon console)                                                                                      |
-| `API_URL`                          | manual (post-deploy) | Public custom-domain origin of `docket-api`                                                                              |
-| `WEB_URL`                          | manual (post-deploy) | Public custom-domain origin of the Vercel web app                                                                        |
-| `ADMIN_URL`                        | manual (post-deploy) | Public custom-domain origin of `docket-admin`                                                                            |
-| `BETTER_AUTH_ALLOWED_HOSTS`        | manual               | `docket.hypertext.studio,docket-api.hypertext.studio,docket-admin.hypertext.studio`                                      |
-| `GOOGLE_OAUTH_PUBLIC`              | manual               | `false` during review; `true` only after Google approval                                                                 |
-| `GOOGLE_OAUTH_TEST_EMAILS`         | manual               | Staged Docket user allowlist, initially `willieechalmers@gmail.com`                                                      |
-| `WORK_LOCATION_PROJECTION_ENABLED` | manual               | `false` during canonical bootstrap; `true` enables outbound linked-account projection                                    |
-| `LINEAR_AGENT_ENABLED`             | manual               | `false` until the signed Linear Agent sandbox matrix passes; `true` enables install, webhook, and relay surfaces         |
-| `API_SECRET_BINDINGS`              | bootstrap            | Non-secret multiline Cloud Run env-to-Secret Manager mapping; includes only configured providers                         |
+| Variable                           | Set by               | Description                                                                                                               |
+| ---------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `GCP_PROJECT_ID`                   | bootstrap            | GCP project ID (e.g. `my-project-123`)                                                                                    |
+| `GCP_REGION`                       | bootstrap            | Deployment region (e.g. `us-central1`)                                                                                    |
+| `GCP_SERVICE_ACCOUNT`              | bootstrap            | Full SA email: `docket-deploy@<project>.iam.gserviceaccount.com`                                                          |
+| `GCP_WIF_PROVIDER`                 | bootstrap            | Full WIF provider resource name: `projects/<num>/locations/global/workloadIdentityPools/github/providers/github-actions`  |
+| `PASSKEY_RP_ID`                    | bootstrap/manual     | WebAuthn relying-party domain. Use `hypertext.studio` for the production `*.hypertext.studio` hosts.                      |
+| `NEON_PROJECT_ID`                  | bootstrap            | Neon project ID (from Neon console)                                                                                       |
+| `API_URL`                          | manual (post-deploy) | Public custom-domain origin of `docket-api`                                                                               |
+| `WEB_URL`                          | manual (post-deploy) | Public custom-domain origin of the Vercel web app                                                                         |
+| `ADMIN_URL`                        | manual (post-deploy) | Public custom-domain origin of `docket-admin`                                                                             |
+| `BETTER_AUTH_ALLOWED_HOSTS`        | manual               | `docket.hypertext.studio,docket-api.hypertext.studio,docket-admin.hypertext.studio`                                       |
+| `GOOGLE_OAUTH_PUBLIC`              | manual               | `false` during review; `true` only after Google approval                                                                  |
+| `GOOGLE_OAUTH_TEST_EMAILS`         | manual               | Staged Docket user allowlist, initially `willieechalmers@gmail.com`                                                       |
+| `GCP_API_RUNTIME_SERVICE_ACCOUNT`  | bootstrap            | Runtime identity for `docket-api`: `docket-api@<project>.iam.gserviceaccount.com`. Unset ⇒ Cloud Run's default compute SA |
+| `ADMIN_GOOGLE_SSO_ENABLED`         | manual               | `false` until the Workspace groups exist AND the runtime SA can read them; `true` enables console Google sign-in          |
+| `ADMIN_GOOGLE_GROUP_ROLES`         | manual               | CSV of `group-email:staff-role` pairs, e.g. `docket-support@…:support,docket-admins@…:superadmin`                         |
+| `GOOGLE_WORKSPACE_DOMAIN`          | manual               | Workspace domain operator sign-in is confined to                                                                          |
+| `WORK_LOCATION_PROJECTION_ENABLED` | manual               | `false` during canonical bootstrap; `true` enables outbound linked-account projection                                     |
+| `LINEAR_AGENT_ENABLED`             | manual               | `false` until the signed Linear Agent sandbox matrix passes; `true` enables install, webhook, and relay surfaces          |
+| `API_SECRET_BINDINGS`              | bootstrap            | Non-secret multiline Cloud Run env-to-Secret Manager mapping; includes only configured providers                          |
 
 ### Secrets (`secrets.*`)
 
@@ -184,6 +188,7 @@ guided GitHub App flow rotates them to canonical secret names.
 `BETTER_AUTH_TRUSTED_ORIGINS`, `BETTER_AUTH_ALLOWED_HOSTS`,
 `BETTER_AUTH_PASSKEY_RP_ID`, `BETTER_AUTH_PASSKEY_RP_NAME`,
 `GOOGLE_CALENDAR_WEBHOOK_URL`, `GOOGLE_OAUTH_PUBLIC`, `GOOGLE_OAUTH_TEST_EMAILS`,
+`ADMIN_GOOGLE_SSO_ENABLED`, `ADMIN_GOOGLE_GROUP_ROLES`, `GOOGLE_WORKSPACE_DOMAIN`,
 `BILLING_ENABLED`, `BILLING_RECONCILIATION_MODE`,
 `STRIPE_SINGLE_SUBSCRIPTION_REDIRECT_VERIFIED_AT`, and `MCP_TASKS_ENABLED`.
 The production `API_SECRET_BINDINGS` manifest supplies Stripe credentials, the Docket Pro lookup
@@ -392,6 +397,45 @@ API as `LINEAR_WEBHOOK_SECRET=docket-linear-webhook-secret:latest`. `pnpm integr
 writes this value for local, staging, or production without placing it in the repository. Create the
 Secret Manager entry before adding the Cloud Run mount: referencing a missing secret fails deploy.
 
+### Operator SSO — Google Workspace groups gate the admin console
+
+The operator console (`docket-admin`) accepts a Google Workspace sign-in alongside its passkey
+flow, and Workspace **group membership** decides the staff tier. Google only establishes identity;
+the `staff_user` row remains the sole runtime authority, and `staffMiddleware` never calls Google.
+
+Two things write that row: the OAuth callback (so a sign-in takes effect immediately) and the
+`docket-staff-google-sync` Cloud Scheduler job every 15 minutes. **The cron is what makes
+revocation real** — sessions last 30 days, so without it, removing someone from a group would not
+lock them out of the console until their session happened to expire.
+
+Setup, in order. Steps 2 and 3 cannot be automated — they live in the Workspace admin console:
+
+1. `pnpm bootstrap` creates the runtime service account `docket-api@<project>.iam.gserviceaccount.com`
+   and publishes it as `vars.GCP_API_RUNTIME_SERVICE_ACCOUNT`. The deploy workflow then passes
+   `--service-account`, so the API stops running as the broadly-privileged default compute account.
+2. In the Workspace admin console, create the groups you want to map, e.g.
+   `docket-support@<domain>`, `docket-finance@<domain>`, `docket-admins@<domain>`.
+3. In the Workspace admin console (Account → Admin roles), assign the **Groups Reader** admin role
+   to that service account. This is what lets it read the Cloud Identity Groups API; there is no
+   domain-wide delegation to configure and no admin user to impersonate. Also enable the
+   Cloud Identity API (`cloudidentity.googleapis.com`) on the GCP project.
+4. Set `GOOGLE_WORKSPACE_DOMAIN` and `ADMIN_GOOGLE_GROUP_ROLES`, then flip
+   `ADMIN_GOOGLE_SSO_ENABLED=true` **last** — the console hides the Google button until the API
+   reports it configured, so an operator never sees a button that cannot work.
+
+Two safety properties worth knowing before you rely on this:
+
+- **A manually granted operator is never auto-revoked.** `staff_user.managed_by` distinguishes
+  `manual` from `google_group`, and the sync only ever touches the latter. Keep at least one
+  `manual` superadmin with a passkey — that is your way back in when the Workspace configuration
+  is itself what broke. The sync additionally refuses to revoke or demote the last superadmin.
+- **Nothing revokes on a failure.** A directory outage, or a malformed `ADMIN_GOOGLE_GROUP_ROLES`,
+  leaves every row exactly as it was. Only a _successful_ lookup that returns no matching group
+  revokes, so one typo in a deployment variable cannot empty the operator table.
+
+The live lookup authenticates through the GCP metadata server, so it answers only on Cloud Run.
+Locally, leave `ADMIN_GOOGLE_SSO_ENABLED=false` and use `STAFF_BOOTSTRAP_EMAILS` as before.
+
 ### Retired provider compatibility
 
 Slack is not an active provider. Historical integration records and adapter code may remain
@@ -462,6 +506,7 @@ Cloud Run is scale-to-zero, so there is no in-process worker — scheduled work 
 | `sync-work-locations`                  | Bootstrap linked accounts, converge canonical work-location edits, drain projection writes, renew watches                                           | every 10 min             |
 | `run-linear-agent-sessions`            | Drive queued Linear Agent session runs and relay the activity back to Linear                                                                        | every 5 min              |
 | `expired-sessions-sweep`               | Delete session rows past their `expiresAt` (Better Auth only prunes lazily)                                                                         | hourly                   |
+| `staff-google-sync`                    | Reconcile operator access against Google Workspace groups; revoke members removed from a mapped group                                               | every 15 min             |
 | `athena-triggers`                      | Run every due user-owned scheduled Athena trigger (five-minute minimum schedule)                                                                    | every 5 min              |
 | `elicitation-deadlines`                | Auto-answer derivable overdue Athena questions, park the rest                                                                                       | every 5 min              |
 | `search-index`                         | Drain durable search-projection jobs from entity writes and backfills                                                                               | every 5 min              |

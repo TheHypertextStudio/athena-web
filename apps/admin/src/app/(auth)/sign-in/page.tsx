@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 
 import { authClient, useSession } from '@/lib/auth-client';
+import { fetchAdminGoogleSso } from '@/lib/config';
 
 import { isPasskeyUnknownToServer, passkeyErrorMessage } from '../_lib/passkey-error';
 import {
@@ -19,13 +20,20 @@ import {
  * The passwordless, passkey-first operator sign-in screen.
  *
  * @remarks
- * A Client Component. Docket has NO passwords anywhere — including the admin console. The
- * primary action runs a WebAuthn ceremony via `authClient.signIn.passkey()` (Face ID / Touch
- * ID / security key); where the browser supports it, a passkey autofill prompt is also armed on
- * mount. On success it routes to the operator dashboard (`/`); the admin API then 403s the
- * session unless it resolves to a `staff_user` row, which the dashboard surfaces inline. There
- * is no admin sign-up — staff accounts (and their passkeys, registered on the product app) are
- * provisioned out of band.
+ * A Client Component. Docket has NO passwords anywhere — including the admin console.
+ *
+ * Two ways in, both ending at the same gate. Google Workspace sign-in is the everyday path when
+ * the API reports it configured: it hands operator provisioning to Workspace groups, so adding
+ * someone to a group is how they get access and removing them is how they lose it. The passkey
+ * ceremony (`authClient.signIn.passkey()` — Face ID / Touch ID / security key) stays as the
+ * break-glass path, which is the whole point of keeping it: it is what still works when the
+ * Workspace configuration is itself what broke. Where the browser supports it, a passkey autofill
+ * prompt is armed on mount.
+ *
+ * Either path routes to the operator dashboard (`/`); the admin API then 403s the session unless
+ * it resolves to a `staff_user` row, which the dashboard surfaces inline. There is no admin
+ * sign-up — staff accounts (and their passkeys, registered on the product app) are provisioned
+ * out of band, and Google sign-in grants nothing on its own without a matching group.
  *
  * An already-authenticated browser landing here is redirected to the dashboard immediately
  * (via {@link useRedirectIfAuthenticated}) rather than rendering the form or arming a fresh
@@ -49,6 +57,7 @@ export default function SignInPage(): JSX.Element {
   const [pending, setPending] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [passkeySupported, setPasskeySupported] = useState(true);
+  const [googleSso, setGoogleSso] = useState(false);
   const conditionalArmed = useRef(false);
   const { data: existingSession, isPending: sessionPending } = useSession();
 
@@ -123,6 +132,29 @@ export default function SignInPage(): JSX.Element {
     })();
   }, [authenticate, existingSession, sessionPending]);
 
+  // Ask the API whether operator SSO is actually configured, rather than assuming it from a
+  // build-time flag — see `fetchAdminGoogleSso`. Fails closed to the passkey-only console.
+  useEffect(() => {
+    let live = true;
+    void fetchAdminGoogleSso().then((enabled) => {
+      if (live) setGoogleSso(enabled);
+    });
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  /** Hand off to Google; the browser leaves this page, so there is no success branch to handle. */
+  const continueWithGoogle = useCallback((): void => {
+    setPending(true);
+    setError(null);
+    void authClient.signIn.social({ provider: 'google', callbackURL: '/' }).then((result) => {
+      if (!result.error) return;
+      setPending(false);
+      setError('Could not start Google sign-in. Please try again, or use a passkey.');
+    });
+  }, []);
+
   const canSubmit = hydrated && passkeySupported && !pending;
 
   return (
@@ -169,9 +201,16 @@ export default function SignInPage(): JSX.Element {
         ) : null}
 
         {/* `lg` (h-10) clears the craft rubric's 40px mobile touch-target gate. */}
+        {googleSso ? (
+          <Button type="button" size="lg" disabled={pending} onClick={continueWithGoogle}>
+            Continue with Google Workspace
+          </Button>
+        ) : null}
+
         <Button
           type="button"
           size="lg"
+          variant={googleSso ? 'outline' : 'default'}
           disabled={!canSubmit}
           onClick={() => {
             void authenticate(false);

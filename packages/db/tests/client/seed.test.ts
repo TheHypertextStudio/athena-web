@@ -23,7 +23,8 @@ import {
   isStaffRole,
   parseStaffTarget,
   parseStaffTargets,
-  roleForEmail,
+  roleForIdentifier,
+  staffRank,
 } from '../../src/seed';
 
 let db!: PgliteDatabase<typeof fullSchema>;
@@ -48,11 +49,14 @@ describe('isStaffRole', () => {
 
 describe('parseStaffTarget / parseStaffTargets', () => {
   it('defaults the role to superadmin when omitted', () => {
-    expect(parseStaffTarget('a@x.dev')).toEqual({ email: 'a@x.dev', role: 'superadmin' });
+    expect(parseStaffTarget('a@x.dev')).toEqual({ identifier: 'a@x.dev', role: 'superadmin' });
   });
 
   it('parses an explicit role and trims whitespace', () => {
-    expect(parseStaffTarget('  a@x.dev:finance ')).toEqual({ email: 'a@x.dev', role: 'finance' });
+    expect(parseStaffTarget('  a@x.dev:finance ')).toEqual({
+      identifier: 'a@x.dev',
+      role: 'finance',
+    });
   });
 
   it('throws on an unrecognized role rather than guessing', () => {
@@ -61,21 +65,28 @@ describe('parseStaffTarget / parseStaffTargets', () => {
 
   it('splits a comma list and skips blanks', () => {
     expect(parseStaffTargets('a@x.dev, b@x.dev:support ,')).toEqual([
-      { email: 'a@x.dev', role: 'superadmin' },
-      { email: 'b@x.dev', role: 'support' },
+      { identifier: 'a@x.dev', role: 'superadmin' },
+      { identifier: 'b@x.dev', role: 'support' },
     ]);
   });
 });
 
-describe('roleForEmail / bootstrapRoleFor', () => {
+describe('staffRank', () => {
+  it('orders the tiers by privilege, so a cascade and a "highest wins" rule agree', () => {
+    expect(staffRank('support')).toBeLessThan(staffRank('finance'));
+    expect(staffRank('finance')).toBeLessThan(staffRank('superadmin'));
+  });
+});
+
+describe('roleForIdentifier / bootstrapRoleFor', () => {
   const targets = [
-    { email: 'a@x.dev', role: 'superadmin' as const },
-    { email: 'b@x.dev', role: 'finance' as const },
+    { identifier: 'a@x.dev', role: 'superadmin' as const },
+    { identifier: 'b@x.dev', role: 'finance' as const },
   ];
 
   it('matches case-insensitively, returns null when absent', () => {
-    expect(roleForEmail(targets, 'A@X.dev')).toBe('superadmin');
-    expect(roleForEmail(targets, 'c@x.dev')).toBeNull();
+    expect(roleForIdentifier(targets, 'A@X.dev')).toBe('superadmin');
+    expect(roleForIdentifier(targets, 'c@x.dev')).toBeNull();
   });
 
   it('denies in production regardless of the allowlist', () => {

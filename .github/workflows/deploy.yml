@@ -113,6 +113,9 @@ jobs:
           BETTER_AUTH_PASSKEY_NATIVE_ORIGINS: "${{ vars.PASSKEY_NATIVE_ORIGINS }}"
           GOOGLE_CALENDAR_WEBHOOK_URL: "${{ vars.API_URL }}/webhooks/calendar/google"
           GOOGLE_OAUTH_PUBLIC: "${{ vars.GOOGLE_OAUTH_PUBLIC }}"
+          ADMIN_GOOGLE_SSO_ENABLED: "${{ vars.ADMIN_GOOGLE_SSO_ENABLED }}"
+          ADMIN_GOOGLE_GROUP_ROLES: "${{ vars.ADMIN_GOOGLE_GROUP_ROLES }}"
+          GOOGLE_WORKSPACE_DOMAIN: "${{ vars.GOOGLE_WORKSPACE_DOMAIN }}"
           GOOGLE_OAUTH_TEST_EMAILS: "${{ vars.GOOGLE_OAUTH_TEST_EMAILS }}"
           # Public OAuth client registration shared by the deployment. Each person still grants
           # and selects their own Lattice device; this value does not choose a backend globally.
@@ -148,6 +151,7 @@ jobs:
           flags: >-
             --allow-unauthenticated
             --ingress=all
+            ${{ vars.GCP_API_RUNTIME_SERVICE_ACCOUNT && format('--service-account={0}', vars.GCP_API_RUNTIME_SERVICE_ACCOUNT) || '' }}
             --min-instances=${{ vars.LINEAR_AGENT_ENABLED == 'true' && '1' || '0' }}
             --max-instances=10
             --memory=512Mi

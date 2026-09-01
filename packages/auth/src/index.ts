@@ -13,6 +13,7 @@ import { betterAuth } from 'better-auth';
 import { verifyAccessToken } from 'better-auth/oauth2';
 
 import { buildAuthOptions } from './auth-builder';
+import { createGoogleDirectory } from './google-directory';
 
 export {
   generateRecoveryCodes,
@@ -28,10 +29,28 @@ export {
  */
 export { verifyAccessToken };
 export { generateAppleClientSecret, type AppleClientSecretInput } from './apple-secret';
+export {
+  createGoogleDirectory,
+  staticGoogleDirectory,
+  type GoogleDirectoryPort,
+} from './google-directory';
+export {
+  highestRoleForGroups,
+  isWorkspaceEmail,
+  syncAllStaff,
+  syncStaffFromGoogle,
+  syncStaffOnSignIn,
+  type StaffSyncConfig,
+  type StaffSyncOutcome,
+  type StaffSyncSweep,
+} from './staff-google-sync';
 export type { AuthDeps, AuthEnv, PasskeyUserAdapter } from './auth-builder';
 export {
+  adminGoogleSsoEnabled,
   buildAuthOptions,
   canUseGoogleOAuth,
+  isAdminOrigin,
+  syncStaffOnGoogleCallback,
   configuredSocialProviders,
   parseTrustedOrigins,
   resolvePasskeyUser,
@@ -64,11 +83,23 @@ const mailer = buildMailerFromEnv({
  */
 const devEchoSignupCode = env.APP_MODE === 'local' || env.APP_MODE === 'test';
 
+/**
+ * The Workspace group directory operator SSO reads, mounted only when SSO is switched on.
+ *
+ * @remarks
+ * The live adapter authenticates through the GCP metadata server, so it only answers on Cloud
+ * Run. Leaving it unmounted elsewhere is what keeps a developer machine from silently failing
+ * every lookup: with no directory, {@link adminGoogleSsoEnabled} reports off and staff access
+ * comes from `STAFF_BOOTSTRAP_EMAILS` instead.
+ */
+const googleDirectory = env.ADMIN_GOOGLE_SSO_ENABLED ? createGoogleDirectory() : undefined;
+
 /** The configured Better Auth instance (handler, server API, plugins). */
 export const auth = betterAuth(
   buildAuthOptions(env, {
     mailer,
     ...(devEchoSignupCode ? { devEchoSignupCode: true } : {}),
+    ...(googleDirectory ? { googleDirectory } : {}),
   }),
 );
 

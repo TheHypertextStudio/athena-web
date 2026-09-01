@@ -1,0 +1,385 @@
+/**
+ * `@docket/api` — the service-health probe runner.
+ *
+ * @remarks
+ * Docket carries no observability stack, so nothing has ever recorded whether a dependency
+ * answered. These probes are that record: a scheduled pass writes one row per service to
+ * `service_probe`, whether the check passed or failed, because uptime is a ratio and only recording
+ * the passes measures nothing.
+ *
+ * ## What this file may touch
+ *
+ * Only our own health endpoints and our own database. It holds no provider credential and issues no
+ * authenticated third-party request. An earlier draft read `STRIPE_SECRET_KEY`, `ANTHROPIC_API_KEY`,
+ * and `RESEND_API_KEY` straight into this module to ping each provider — which spread three secrets
+ * into a file that has no business holding any of them, when each provider already has an adapter
+ * that owns its credential.
+ *
+ * Third-party health is therefore *derived*, not pinged: it is read from the ledgers that already
+ * record real provider traffic. That is also the more truthful signal. A synthetic ping that
+ * succeeds while every real charge is failing is precisely the "reports success when nothing
+ * happened" failure this codebase forbids, and a ping cannot detect it. What is lost is a signal for
+ * a provider with no recent traffic, which is reported as exactly that rather than as healthy.
+ *
+ * ## What this file may store
+ *
+ * A closed set of application-owned failure reasons, never a provider's error text. Those strings
+ * are uncontrolled input — they can carry request URLs, echoed headers, or account identifiers —
+ * and this value is persisted and then rendered in the operator console.
+ */
+import { agentSessionRun, billingProviderSync, db, serviceProbe, syncRun } from '@docket/db';
+import { gte } from 'drizzle-orm';
+
+import { env } from '../env';
+import { readServiceControl } from './service-controls';
+
+/** How long any single check may take before it counts as unreachable. */
+const PROBE_TIMEOUT_MS = 5_000;
+
+/** How far back a derived check looks for real provider traffic. */
+export const DERIVED_WINDOW_MS = 60 * 60 * 1000;
+
+/** What a probe concluded. Mirrors the `probe_outcome` enum. */
+export type ProbeOutcome = 'up' | 'degraded' | 'down' | 'disabled' | 'unknown';
+
+/**
+ * Why a check did not succeed, in application-owned words.
+ *
+ * @remarks
+ * A closed set precisely so no provider or exception text is ever stored or shown. The console
+ * renders these; nothing it renders originates outside this file.
+ */
+export type ProbeReason =
+  'unreachable' | 'bad_status' | 'recent_failures' | 'no_recent_activity' | 'not_configured';
+
+/** Whether a service is ours to fix or someone else's. */
+export type ServiceKind = 'platform' | 'dependency';
+
+/** How a service's health is established. */
+export type ProbeMethod = 'http' | 'database' | 'derived';
+
+/** The result of checking one service, before it is written. */
+export interface ProbeResult {
+  readonly serviceKey: string;
+  readonly outcome: ProbeOutcome;
+  readonly latencyMs: number;
+  readonly statusCode: number | null;
+  readonly reason: ProbeReason | null;
+}
+
+/** One entry in the probe catalogue. */
+export interface ProbeTarget {
+  /** Stable key stored on every row for this service. */
+  readonly key: string;
+  /** What an operator calls it. */
+  readonly label: string;
+  /** Ours or a third party's. */
+  readonly kind: ServiceKind;
+  /** How this service's health is established. */
+  readonly method: ProbeMethod;
+  /** The health URL, for `http` targets that this deployment has configured. */
+  readonly url?: string | undefined;
+}
+
+/** Join an origin and a path without doubling or dropping the separator. */
+function healthUrl(origin: string | undefined, path: string): string | undefined {
+  if (!origin) return undefined;
+  return `${origin.replace(/\/+$/, '')}${path}`;
+}
+
+/**
+ * Every service this deployment depends on, in the order an operator should read them.
+ *
+ * @remarks
+ * Built per call rather than as a module constant, so a configuration change is picked up without a
+ * restart and a test can observe the unconfigured path.
+ *
+ * @returns the probe catalogue.
+ */
+export function probeTargets(): readonly ProbeTarget[] {
+  return [
+    {
+      key: 'api',
+      label: 'API',
+      kind: 'platform',
+      method: 'http',
+      url: healthUrl(env.API_URL, '/v1/health'),
+    },
+    {
+      key: 'web',
+      label: 'Web app',
+      kind: 'platform',
+      method: 'http',
+      url: healthUrl(env.WEB_URL, '/healthz'),
+    },
+    {
+      key: 'admin',
+      label: 'Operator console',
+      kind: 'platform',
+      method: 'http',
+      url: healthUrl(env.ADMIN_URL, '/healthz'),
+    },
+    {
+      key: 'runner',
+      label: 'Athena runner',
+      kind: 'platform',
+      method: 'http',
+      // Production currently holds the async runner off. That is a decision, not a fault, so an
+      // unconfigured runner reports `disabled` rather than paging someone.
+      url: env.ATHENA_ASYNC_RUNNER_ENABLED
+        ? healthUrl(env.CLOUDFLARE_ATHENA_RUNNER_URL, '/healthz')
+        : undefined,
+    },
+    { key: 'database', label: 'Database', kind: 'platform', method: 'database' },
+    { key: 'stripe', label: 'Stripe', kind: 'dependency', method: 'derived' },
+    { key: 'anthropic', label: 'Athena provider', kind: 'dependency', method: 'derived' },
+    { key: 'connectors', label: 'Connector syncs', kind: 'dependency', method: 'derived' },
+  ];
+}
+
+/**
+ * Classify an HTTP response status.
+ *
+ * @remarks
+ * A non-2xx from one of our own health endpoints is `down`: these endpoints are unauthenticated and
+ * exist only to answer this question, so there is no credential to blame.
+ *
+ * @param status - The response status.
+ * @returns the outcome that status implies.
+ */
+function outcomeForStatus(status: number): ProbeOutcome {
+  return status >= 200 && status < 300 ? 'up' : 'down';
+}
+
+/**
+ * Check one of our own services over HTTP.
+ *
+ * @param target - The service to check.
+ * @param fetchImpl - The fetch to use. Injectable so tests never reach the network.
+ * @returns what the check concluded, with the time it took.
+ */
+async function probeHttp(target: ProbeTarget, fetchImpl: typeof fetch): Promise<ProbeResult> {
+  const started = Date.now();
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    controller.abort();
+  }, PROBE_TIMEOUT_MS);
+
+  try {
+    const response = await fetchImpl(target.url ?? '', {
+      method: 'GET',
+      signal: controller.signal,
+      redirect: 'manual',
+    });
+    const outcome = outcomeForStatus(response.status);
+    return {
+      serviceKey: target.key,
+      outcome,
+      latencyMs: Date.now() - started,
+      statusCode: response.status,
+      reason: outcome === 'up' ? null : 'bad_status',
+    };
+  } catch {
+    // A check that throws is a check that failed, and it is recorded as one. The thrown value is
+    // deliberately not read: an absent row would read as "never checked", and the message would be
+    // provider text in a field the console renders.
+    return {
+      serviceKey: target.key,
+      outcome: 'down',
+      latencyMs: Date.now() - started,
+      statusCode: null,
+      reason: 'unreachable',
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Check the database directly.
+ *
+ * @returns what the check concluded.
+ */
+async function probeDatabase(): Promise<ProbeResult> {
+  const started = Date.now();
+  try {
+    await db.execute('select 1');
+    return {
+      serviceKey: 'database',
+      outcome: 'up',
+      latencyMs: Date.now() - started,
+      statusCode: null,
+      reason: null,
+    };
+  } catch {
+    return {
+      serviceKey: 'database',
+      outcome: 'down',
+      latencyMs: Date.now() - started,
+      statusCode: null,
+      reason: 'unreachable',
+    };
+  }
+}
+
+/** How much real traffic a ledger saw in the window, and how much of it failed. */
+interface TrafficWindow {
+  readonly total: number;
+  readonly failed: number;
+}
+
+/**
+ * Turn a window of real provider traffic into a health verdict.
+ *
+ * @remarks
+ * No traffic is reported as `disabled` with a `no_recent_activity` reason rather than as `up`.
+ * Claiming a provider is healthy because nothing asked it anything is the exact failure mode this
+ * codebase forbids of connectors.
+ *
+ * @param key - The service key to report under.
+ * @param window - What the ledger saw.
+ * @param startedAt - When the check began, for the latency figure.
+ * @returns the verdict.
+ */
+function verdictFromTraffic(key: string, window: TrafficWindow, startedAt: number): ProbeResult {
+  const latencyMs = Date.now() - startedAt;
+  if (window.total === 0) {
+    return {
+      serviceKey: key,
+      outcome: 'unknown',
+      latencyMs,
+      statusCode: null,
+      reason: 'no_recent_activity',
+    };
+  }
+  if (window.failed === 0) {
+    return { serviceKey: key, outcome: 'up', latencyMs, statusCode: null, reason: null };
+  }
+  // Some traffic is succeeding, so the provider is reachable and something is wrong with it.
+  const outcome: ProbeOutcome = window.failed === window.total ? 'down' : 'degraded';
+  return { serviceKey: key, outcome, latencyMs, statusCode: null, reason: 'recent_failures' };
+}
+
+/** Read what Stripe's own sync ledger saw in the window. */
+async function stripeTraffic(since: Date): Promise<TrafficWindow> {
+  const rows = await db
+    .select({ status: billingProviderSync.status })
+    .from(billingProviderSync)
+    .where(gte(billingProviderSync.updatedAt, since));
+  return {
+    total: rows.length,
+    failed: rows.filter((row) => row.status === 'failed').length,
+  };
+}
+
+/** Read what Athena's execution ledger saw in the window. */
+async function athenaTraffic(since: Date): Promise<TrafficWindow> {
+  const rows = await db
+    .select({ status: agentSessionRun.status })
+    .from(agentSessionRun)
+    .where(gte(agentSessionRun.queuedAt, since));
+  return {
+    total: rows.length,
+    failed: rows.filter((row) => row.status === 'failed').length,
+  };
+}
+
+/** Read what the connector sync ledger saw in the window. */
+async function connectorTraffic(since: Date): Promise<TrafficWindow> {
+  const rows = await db
+    .select({ status: syncRun.status })
+    .from(syncRun)
+    .where(gte(syncRun.startedAt, since));
+  return {
+    total: rows.length,
+    failed: rows.filter((row) => row.status === 'failed').length,
+  };
+}
+
+/** Which ledger answers for each derived service. */
+const DERIVED_TRAFFIC: Readonly<Record<string, (since: Date) => Promise<TrafficWindow>>> = {
+  stripe: stripeTraffic,
+  anthropic: athenaTraffic,
+  connectors: connectorTraffic,
+};
+
+/**
+ * Establish a third party's health from the traffic we actually sent it.
+ *
+ * @param target - The service to report on.
+ * @returns what the ledger implies.
+ */
+async function probeDerived(target: ProbeTarget): Promise<ProbeResult> {
+  const started = Date.now();
+  const read = DERIVED_TRAFFIC[target.key];
+  if (!read) {
+    return {
+      serviceKey: target.key,
+      outcome: 'disabled',
+      latencyMs: 0,
+      statusCode: null,
+      reason: 'not_configured',
+    };
+  }
+  return verdictFromTraffic(
+    target.key,
+    await read(new Date(Date.now() - DERIVED_WINDOW_MS)),
+    started,
+  );
+}
+
+/**
+ * Check one service.
+ *
+ * @param target - The service to check.
+ * @param fetchImpl - The fetch to use for `http` targets.
+ * @returns what the check concluded.
+ */
+export async function probeOne(
+  target: ProbeTarget,
+  fetchImpl: typeof fetch = fetch,
+): Promise<ProbeResult> {
+  if (target.method === 'database') return probeDatabase();
+  if (target.method === 'derived') return probeDerived(target);
+  if (target.url === undefined) {
+    return {
+      serviceKey: target.key,
+      outcome: 'disabled',
+      latencyMs: 0,
+      statusCode: null,
+      reason: 'not_configured',
+    };
+  }
+  return probeHttp(target, fetchImpl);
+}
+
+/**
+ * Check every service and record what each one said.
+ *
+ * @remarks
+ * Checks run concurrently, so the pass is bounded by the slowest single check rather than their sum
+ * and one slow service cannot delay the rest.
+ *
+ * Respects the `service_probes` control, so an operator can stop probing from the console without a
+ * redeploy. A key with no stored row reads as enabled, so probing is on by default.
+ *
+ * @param fetchImpl - The fetch to use. Injectable so tests never reach the network.
+ * @returns every result written this pass, empty when probing is switched off.
+ */
+export async function runServiceProbes(fetchImpl: typeof fetch = fetch): Promise<ProbeResult[]> {
+  if (!(await readServiceControl('service_probes'))) return [];
+
+  const results = await Promise.all(probeTargets().map((target) => probeOne(target, fetchImpl)));
+
+  await db.insert(serviceProbe).values(
+    results.map((result) => ({
+      serviceKey: result.serviceKey,
+      outcome: result.outcome,
+      latencyMs: result.latencyMs,
+      statusCode: result.statusCode,
+      reason: result.reason,
+    })),
+  );
+
+  return results;
+}

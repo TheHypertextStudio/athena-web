@@ -36,6 +36,7 @@ import { sweepAthenaAssignmentTriggers } from '../agent/assignments';
 import { sweepLatticeDelegations } from '../agent/lattice-delegations';
 import { latticeDelegationDependencies } from '../agent/lattice-delegation-runtime';
 import { reapIdleSessions } from '../mcp/session-registry';
+import { runServiceProbes } from '../services/service-probes';
 import { sweepElicitations } from '../services/elicitation-service';
 import { sweepExpiredSessions } from './session-sweep';
 import { sweepRecurrenceMaterialization } from '../lib/recurrence/sweep';
@@ -80,6 +81,17 @@ const cron = new Hono()
       },
     );
     return c.json(result);
+  })
+  // Service health: probes every deployed service and dependency and writes one row each, whether
+  // the check passed or failed. Uptime is a ratio, so a skipped failure would silently inflate it.
+  .post('/service-probe', async (c) => {
+    if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
+    const results = await runServiceProbes();
+    return c.json({
+      checked: results.length,
+      down: results.filter((result) => result.outcome === 'down').length,
+      degraded: results.filter((result) => result.outcome === 'degraded').length,
+    });
   })
   .post('/lifecycle-sweep', async (c) => {
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);

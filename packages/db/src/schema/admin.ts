@@ -120,7 +120,11 @@ export const billingExemption = pgTable(
 );
 
 /** Instance-wide service controls an operator switches from the admin console. */
-export const SERVICE_CONTROL_KEYS = ['lattice_submissions', 'lattice_polling'] as const;
+export const SERVICE_CONTROL_KEYS = [
+  'lattice_submissions',
+  'lattice_polling',
+  'service_probes',
+] as const;
 /** One instance-wide service control key. */
 export type ServiceControlKey = (typeof SERVICE_CONTROL_KEYS)[number];
 
@@ -145,6 +149,9 @@ export const serviceControl = pgTable(
       .$onUpdate(() => new Date()),
   },
   (t) => [
-    check('service_control_key_check', sql`${t.key} IN ('lattice_submissions', 'lattice_polling')`),
+    check(
+      'service_control_key_check',
+      sql`${t.key} IN ('lattice_submissions', 'lattice_polling', 'service_probes')`,
+    ),
   ],
 );

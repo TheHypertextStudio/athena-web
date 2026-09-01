@@ -1,5 +1,9 @@
 {
+<<<<<<< HEAD
   "id": "881ccc23-8b40-4b58-8e7a-aac1bc107317",
+=======
+  "id": "838bb80c-f155-469d-a52c-2ba9ede9b163",
+>>>>>>> c8a0b14bc (feat(admin): Record whether every service answered, instead of assuming it did)
   "prevId": "8b0b53f5-0aa5-4c7b-8174-e2acde420868",
   "version": "7",
   "dialect": "postgresql",
@@ -15473,7 +15477,11 @@
       "checkConstraints": {
         "service_control_key_check": {
           "name": "service_control_key_check",
+<<<<<<< HEAD
           "value": "\"service_control\".\"key\" IN ('lattice_submissions', 'lattice_polling')"
+=======
+          "value": "\"service_control\".\"key\" IN ('lattice_submissions', 'lattice_polling', 'service_probes')"
+>>>>>>> c8a0b14bc (feat(admin): Record whether every service answered, instead of assuming it did)
         }
       },
       "isRLSEnabled": false
@@ -15501,6 +15509,7 @@
           "primaryKey": false,
           "notNull": true
         },
+<<<<<<< HEAD
         "managed_by": {
           "name": "managed_by",
           "type": "staff_managed_by",
@@ -15515,6 +15524,8 @@
           "primaryKey": false,
           "notNull": false
         },
+=======
+>>>>>>> c8a0b14bc (feat(admin): Record whether every service answered, instead of assuming it did)
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -17464,6 +17475,89 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+<<<<<<< HEAD
+=======
+    "public.service_probe": {
+      "name": "service_probe",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "service_key": {
+          "name": "service_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "probe_outcome",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "latency_ms": {
+          "name": "latency_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "status_code": {
+          "name": "status_code",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "checked_at": {
+          "name": "checked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "service_probe_service_checked_idx": {
+          "name": "service_probe_service_checked_idx",
+          "columns": [
+            {
+              "expression": "service_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "checked_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+>>>>>>> c8a0b14bc (feat(admin): Record whether every service answered, instead of assuming it did)
     "public.work_location_assertion": {
       "name": "work_location_assertion",
       "schema": "",
@@ -32528,6 +32622,20 @@
         "year"
       ]
     },
+<<<<<<< HEAD
+=======
+    "public.probe_outcome": {
+      "name": "probe_outcome",
+      "schema": "public",
+      "values": [
+        "up",
+        "degraded",
+        "down",
+        "disabled",
+        "unknown"
+      ]
+    },
+>>>>>>> c8a0b14bc (feat(admin): Record whether every service answered, instead of assuming it did)
     "public.process_creation_mode": {
       "name": "process_creation_mode",
       "schema": "public",
@@ -32864,6 +32972,7 @@
         "outlook"
       ]
     },
+<<<<<<< HEAD
     "public.staff_managed_by": {
       "name": "staff_managed_by",
       "schema": "public",
@@ -32872,6 +32981,8 @@
         "google_group"
       ]
     },
+=======
+>>>>>>> c8a0b14bc (feat(admin): Record whether every service answered, instead of assuming it did)
     "public.staff_role": {
       "name": "staff_role",
       "schema": "public",

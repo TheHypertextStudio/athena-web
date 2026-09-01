@@ -55,6 +55,13 @@ export interface CronJob {
 /** The jobs Docket needs. All target secret-guarded, idempotent, retry-safe sweeps. */
 export const JOBS: readonly CronJob[] = [
   {
+    name: 'docket-service-probe',
+    path: '/internal/cron/service-probe',
+    schedule: '*/5 * * * *',
+    description:
+      'Docket: check every deployed service and dependency, and record the outcome for uptime.',
+  },
+  {
     name: 'docket-billing-reconciliation',
     path: '/internal/cron/billing-reconciliation',
     schedule: '*/15 * * * *',

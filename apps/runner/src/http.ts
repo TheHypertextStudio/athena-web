@@ -73,15 +73,66 @@ async function claimInboundNonce(
   return true;
 }
 
+/**
+ * Deliver one verified execution message to the queue or the running workflow.
+ *
+ * @remarks
+ * Extracted from the request handler so adding the liveness route did not push that handler past
+ * the complexity gate — the dispatch is a separable decision from the ingress checks around it.
+ *
+ * @param pathname - Which ingress accepted the message.
+ * @param env - The Worker's bindings.
+ * @param input - The verified execution message.
+ * @throws when the workflow instance cannot be reached.
+ */
+async function dispatchExecution(
+  pathname: string,
+  env: RunnerHttpEnv,
+  input: { readonly workflowId: string },
+): Promise<void> {
+  if (pathname === '/enqueue') {
+    await env.ATHENA_RUN_QUEUE.send(input, { contentType: 'json' });
+    return;
+  }
+  const instance = await env.ATHENA_WORKFLOW.get(input.workflowId);
+  const status = await instance.status();
+  if (status.status === 'unknown') {
+    throw new Error('Athena Workflow instance is unavailable');
+  }
+  if (status.status === 'errored' || status.status === 'terminated') {
+    await instance.restart();
+  }
+  await instance.sendEvent({ type: 'docket_wake', payload: {} });
+}
+
+/**
+ * Answer the ingress checks that do not need a verified body.
+ *
+ * @param request - The inbound request.
+ * @param url - Its parsed URL.
+ * @returns a response when the request is answered here, `null` when it should continue.
+ */
+function earlyResponse(request: Request, url: URL): Response | null {
+  // Liveness, deliberately unsigned: a health probe holds neither HMAC secret, and the answer
+  // ("this Worker is running") is not information worth authenticating.
+  if (request.method === 'GET' && url.pathname === '/healthz') {
+    return Response.json({ status: 'ok', service: 'docket-athena-runner' });
+  }
+  if (request.method !== 'POST' || (url.pathname !== '/enqueue' && url.pathname !== '/wake')) {
+    return Response.json({ error: 'not_found' }, { status: 404 });
+  }
+  return null;
+}
+
 /** Build the signed `/enqueue` and `/wake` handler with an injectable Docket transport. */
 export function createRunnerFetchHandler(
   dependencies: RunnerHttpDependencies = { fetch },
 ): (request: Request, env: RunnerHttpEnv) => Promise<Response> {
   return async (request, env) => {
     const url = new URL(request.url);
-    if (request.method !== 'POST' || (url.pathname !== '/enqueue' && url.pathname !== '/wake')) {
-      return Response.json({ error: 'not_found' }, { status: 404 });
-    }
+    const early = earlyResponse(request, url);
+    if (early) return early;
+
     const body = await readBoundedBody(request);
     if (body === null) {
       return Response.json({ error: 'request_too_large' }, { status: 413 });
@@ -122,19 +173,7 @@ export function createRunnerFetchHandler(
       return Response.json({ error: 'invalid_execution_message' }, { status: 400 });
     }
 
-    if (url.pathname === '/enqueue') {
-      await env.ATHENA_RUN_QUEUE.send(input, { contentType: 'json' });
-    } else {
-      const instance = await env.ATHENA_WORKFLOW.get(input.workflowId);
-      const status = await instance.status();
-      if (status.status === 'unknown') {
-        throw new Error('Athena Workflow instance is unavailable');
-      }
-      if (status.status === 'errored' || status.status === 'terminated') {
-        await instance.restart();
-      }
-      await instance.sendEvent({ type: 'docket_wake', payload: {} });
-    }
+    await dispatchExecution(url.pathname, env, input);
     console.log(
       JSON.stringify({
         event: url.pathname === '/enqueue' ? 'athena_generation_enqueued' : 'athena_wait_woken',

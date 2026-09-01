@@ -1138,3 +1138,25 @@ export const mentionEntityKind = pgEnum('mention_entity_kind', [
   'comment',
   'update',
 ]);
+
+/**
+ * What a health probe concluded about one service.
+ *
+ * @remarks
+ * Five outcomes, because three of them are ways of not being `up` that call for different
+ * responses. `degraded` is reachable but wrong. `disabled` is switched off on purpose — the
+ * Cloudflare runner ships behind a flag production currently holds off, and paging someone for a
+ * deliberate configuration is noise. `unknown` is the honest answer when there is no basis to
+ * judge: a dependency whose health is derived from real traffic, with no traffic in the window, has
+ * told us nothing, and recording that as `up` would be claiming success where nothing happened.
+ *
+ * Each is a written row rather than an absent one, so a service that stops being checked is visible
+ * instead of silently dropping out of the report.
+ */
+export const probeOutcome = pgEnum('probe_outcome', [
+  'up',
+  'degraded',
+  'down',
+  'disabled',
+  'unknown',
+]);

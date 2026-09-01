@@ -31,6 +31,7 @@ import { cimdAuthorizeMiddleware } from './mcp/cimd';
 import { mcpAppSandboxHandler } from './mcp/apps/sandbox';
 import { authorizationServerMetadata, mcpHandler, protectedResourceMetadata } from './mcp/server';
 import { registerOpenapi } from './openapi';
+import { healthRoutes } from './routes/health';
 import calendarWebhook from './routes/calendar-webhook';
 import cron from './routes/cron';
 import inboundMail from './routes/inbound-mail';
@@ -201,7 +202,7 @@ server.route('/v1/public/time', timePublic);
 // — separate from the public `/v1` app and absent from the public spec.
 server.route('/', adminApp);
 server.route('/', app);
-server.get('/v1/health', (c) => c.json({ status: 'ok' as const }));
+server.route('/v1/health', healthRoutes);
 registerOpenapi(server, app, adminApp);
 // Registered after every route so it can ask the finished router which methods a path does
 // accept, and turn Hono's plain-text default 404 into the Problem shape every other failure

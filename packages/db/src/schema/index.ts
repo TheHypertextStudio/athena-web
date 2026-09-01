@@ -16,6 +16,7 @@ export * from './elicitation';
 export * from './admin';
 export * from './billing';
 export * from './infra';
+export * from './status';
 export * from './work-location';
 export * from './calendar';
 export * from './work-location-sync';

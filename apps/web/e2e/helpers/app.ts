@@ -111,7 +111,10 @@ export async function signUp(page: Page, { name, email }: TestUser): Promise<voi
   // failure that reads like the app is down rather than like it is still building. Every other
   // wait in this helper already budgets for that; this one was the gap.
   await page.goto('/sign-up', { waitUntil: 'domcontentloaded', timeout: TIMEOUTS.pageReady });
-  await warmUpAuth(page);
+  // A production build has no lazy route compilation to warm. Sending the warm-up request there
+  // spends one of the real sign-up rate-limit slots and makes a serial release suite throttle its
+  // third account before the browser can exercise the product.
+  if (process.env['NODE_ENV'] !== 'production') await warmUpAuth(page);
 
   const continueButton = page.getByRole('button', { name: 'Continue with email' });
   const verifyButton = page.getByRole('button', { name: 'Verify and create account' });

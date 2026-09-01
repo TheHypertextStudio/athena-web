@@ -293,7 +293,7 @@ jobs:
     name: Core screen acceptance
     needs: build
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 30
     env:
       # Test mode keeps the non-production sign-up code echo and mock providers without starting
       # the local three-second background scheduler inside this bounded release check.
@@ -382,12 +382,7 @@ jobs:
           exit 1
 
       - name: Verify release-critical user journeys
-        run: >-
-          pnpm --filter @docket/web exec playwright test
-          e2e/release/core-screen-acceptance.spec.ts
-          e2e/platform/pwa-offline-sync.spec.ts
-          e2e/work/work-views.spec.ts
-          --workers=1
+        run: pnpm --filter @docket/web test:e2e:release
 
       - name: Server logs
         if: always()

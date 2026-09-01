@@ -5,6 +5,7 @@ import { RELATION_DEFINITIONS } from '@docket/work/relation-contract';
 import ts from 'typescript';
 import { describe, expect, it, vi } from 'vitest';
 
+import { copyObjectAction } from '../../src/components/actions/copy-object-action';
 import type { ObjectRef } from '../../src/lib/actions/object';
 import {
   createActionRegistry,
@@ -337,6 +338,23 @@ describe('action registry: registration', () => {
 });
 
 describe('action registry: applicability', () => {
+  it('labels a single reference copy as a link without renaming the full-authority action', () => {
+    const action = copyObjectAction('initiative', vi.fn());
+    expect(typeof action.label).toBe('function');
+    if (typeof action.label !== 'function') return;
+
+    const initiative: ObjectRef = {
+      kind: 'initiative',
+      id: 'i1',
+      organizationId: 'org1',
+      title: 'Safer crossings',
+    };
+    expect(action.label({ ...contextFor([initiative]), actionScope: 'reference' })).toBe(
+      'Copy link',
+    );
+    expect(action.label(contextFor([initiative]))).toBe('Copy');
+  });
+
   it('enforces reference-only action scope during both resolution and direct invocation', async () => {
     const open = vi.fn();
     const move = vi.fn();

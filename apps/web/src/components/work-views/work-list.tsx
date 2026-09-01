@@ -4,7 +4,15 @@ import { entityNavigationSnapshotFromWorkViewRow } from '../../lib/contracts/ent
 import { EntityTable, type EntityTableProps } from '@docket/ui/components';
 import { cn } from '@docket/ui/lib/utils';
 import type { ViewTarget } from '@docket/work/view-contract';
-import { type JSX, type MouseEvent, type ReactNode, useCallback, useMemo, useRef } from 'react';
+import {
+  type CSSProperties,
+  type JSX,
+  type MouseEvent,
+  type ReactNode,
+  useCallback,
+  useMemo,
+  useRef,
+} from 'react';
 
 import { useDragState } from '@/components/dnd/drag-context';
 import { useDraggable } from '@/components/dnd/use-draggable';
@@ -26,7 +34,11 @@ import {
   type ListMembership,
   workListMembershipKey,
 } from './work-list-groups';
-import { deriveInitiativeTreePositions, type InitiativeTreePosition } from './initiative-rails';
+import {
+  deriveInitiativeTreePositions,
+  INITIATIVE_LEADING_SLOT_PX,
+  type InitiativeTreePosition,
+} from './initiative-rails';
 import type { WorkViewDefinitionFor } from './view-state';
 import type { WorkViewGroupPage, WorkViewGroupSummary, WorkViewRowFor } from './renderer-types';
 import {
@@ -133,8 +145,8 @@ function WorkListRowInteraction<TTarget extends ViewTarget>({
       {children({
         selected,
         interactionRef: (element) => {
-          drag.ref(element);
-          drop.dropProps.ref(element);
+          drag.ref(interaction.dragDisabled ? null : element);
+          drop.dropProps.ref(interaction.writable ? element : null);
         },
         rowProps: {
           ...targetProps,
@@ -226,6 +238,7 @@ export function WorkList<TTarget extends ViewTarget>({
     [groupPages, grouped, groups, onLoadMore, rows, target],
   );
   const rowHeight = WORK_ROSTER_ROW_HEIGHT[definition.presentation.density];
+  const rowPaddingY = (rowHeight - INITIATIVE_LEADING_SLOT_PX) / 2;
   const positions = useMemo(() => initiativePositions(roster.memberships), [roster.memberships]);
   const interactions = useMemo(
     () =>
@@ -378,7 +391,10 @@ export function WorkList<TTarget extends ViewTarget>({
         {...(collapsedGroups !== undefined ? { collapsed: collapsedGroups } : {})}
         {...(onToggleGroup !== undefined ? { onToggleGroup } : {})}
         {...(continuation !== undefined ? { continuation } : {})}
-        containerInteraction={{ ref: initiativeRoot.dropProps.ref }}
+        containerInteraction={{
+          ref: initiativeRoot.dropProps.ref,
+          style: { '--row-py': `${String(rowPaddingY)}px` } as CSSProperties,
+        }}
         className={cn(
           'h-full min-h-0 flex-1',
           initiativeRoot.dropProps.className,

@@ -31,7 +31,9 @@ describe('docket-ui/no-app-owned-columnheader export', () => {
 ruleTester.run('docket-ui/no-app-owned-columnheader', plugin.rules['no-app-owned-columnheader'], {
   valid: [
     { code: '<div role="status" />;' },
+    { code: '<EntityTable {...props} />;' },
     { code: "React.createElement('div', { role: 'row' });" },
+    { code: 'React.createElement(EntityTable, props);' },
   ],
   invalid: [
     {

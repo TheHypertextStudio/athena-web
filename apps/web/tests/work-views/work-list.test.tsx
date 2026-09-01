@@ -64,7 +64,11 @@ vi.mock('../../src/components/dnd/use-draggable', () => ({
   useDraggable: (options: (typeof dragBindings.options)[number]) => {
     dragBindings.options.push(options);
     return {
-      ref: () => undefined,
+      ref: (element: Element | null) => {
+        if (element instanceof HTMLElement && options.disabled === true) {
+          element.setAttribute('aria-disabled', 'true');
+        }
+      },
       className: options.disabled === true ? '' : 'cursor-grab',
       'data-drag-state': 'idle',
     };
@@ -256,6 +260,7 @@ describe('WorkList', () => {
     );
 
     const grid = screen.getByRole('grid', { name: 'Tasks' });
+    expect(grid).toHaveStyle({ '--row-py': '6px' });
     expect(screen.getByRole('columnheader', { name: 'Task' })).toBeVisible();
     expect(screen.getByRole('columnheader', { name: 'Status' })).toBeVisible();
     expect(
@@ -357,6 +362,7 @@ describe('WorkList', () => {
 
     const treegrid = screen.getByRole('treegrid', { name: 'Initiatives' });
     expect(treegrid).toBeVisible();
+    expect(treegrid).toHaveStyle({ '--row-py': '12px' });
     const plannedGroup = screen.getByRole('row', { name: /Planned/ });
     expect(plannedGroup).toHaveAttribute('data-level', '0');
     expect(plannedGroup).toHaveTextContent('1');
@@ -434,6 +440,7 @@ describe('WorkList', () => {
     );
     const foreignRow = foreignLink.closest<HTMLElement>('[role="row"]');
     expect(foreignRow).toHaveAttribute('data-object-action-scope', 'reference');
+    expect(foreignRow).not.toHaveAttribute('aria-disabled');
     expect(foreignRow).not.toHaveClass('cursor-grab');
     expect(
       screen.queryByRole('checkbox', { name: 'Select Foreign direct task' }),

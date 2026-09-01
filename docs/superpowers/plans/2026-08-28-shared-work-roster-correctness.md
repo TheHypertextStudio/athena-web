@@ -206,7 +206,7 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
 - Treat a direct row as presentable only when the caller can read its complete ancestor chain.
 - Permit `response.rows.length > request.limit` only when the extra rows have `isContext: true`.
 
-- [ ] **Step 1: Add the failing ungrouped page tests**
+- [x] **Step 1: Add the failing ungrouped page tests**
 
   First seed one root and one matching child whose parent sorts after it. Query with `limit: 1` and
   assert that the response contains both rows with a null cursor. Then seed a second matching child.
@@ -214,7 +214,7 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
   plus child B, and the direct-row union is exactly A and B. Assert that `totalCount` is two and each
   non-null cursor is derived from a child.
 
-- [ ] **Step 2: Add the failing grouped and authorization tests**
+- [x] **Step 2: Add the failing grouped and authorization tests**
 
   Query a child through a group path whose parent does not match the group. Assert that the parent
   returns as context, the group count remains one, and the child never appears without the complete
@@ -225,13 +225,13 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
   whose parent row fails the authorization join. Assert that this missing join does not terminate
   the traversal as though the child were a real root.
 
-- [ ] **Step 3: Add cursor isolation and duplicate-context cases**
+- [x] **Step 3: Add cursor isolation and duplicate-context cases**
 
   Assert that a cursor for one group path fails for another path. Put the same context parent above
   direct children in two groups and assert that each response contains its own context membership
   without inflating either count.
 
-- [ ] **Step 4: Run the focused API tests and verify context consumes the old limit**
+- [x] **Step 4: Run the focused API tests and verify context consumes the old limit**
 
   Run:
 
@@ -242,7 +242,7 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
     --maxWorkers=1
   ```
 
-- [ ] **Step 5: Refactor the query CTE order**
+- [x] **Step 5: Refactor the query CTE order**
 
   Build a presentable-direct CTE from authorized direct rows after group scope. Traverse hierarchy
   links in the requested context independently of the authorized row set. Treat only the absence of
@@ -252,18 +252,18 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
   direct ids, union those context rows for projection, and create `nextCursor` from the last direct
   row.
 
-- [ ] **Step 6: Preserve statement and query-plan bounds**
+- [x] **Step 6: Preserve statement and query-plan bounds**
 
   Keep the work-view query at two SQL statements. Extend `query-plan.test.ts` to EXPLAIN the
   recursive page. Extend the performance fixture with a shared depth-three hierarchy so the
   benchmark measures context closure instead of a flat Initiative list.
 
-- [ ] **Step 7: Clarify the request and response contract in TSDoc**
+- [x] **Step 7: Clarify the request and response contract in TSDoc**
 
   Document near the work-view request limit and response schema that Initiative limits and cursors
   describe direct matches, while rows can contain additional authorized context.
 
-- [ ] **Step 8: Run focused API validation**
+- [x] **Step 8: Run focused API validation**
 
   Run:
 
@@ -278,7 +278,7 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
   pnpm domain:check
   ```
 
-- [ ] **Step 9: Commit the API correction**
+- [x] **Step 9: Commit the API correction**
 
   Commit as `fix(api): Keep Initiative context outside page limits`. The body must record the
   direct-row cursor invariant and the unchanged wire contract.
@@ -316,13 +316,13 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
   selection key, current anchor key, ordered eligible keys, and pointer modifiers. The table derives
   eligible order from flattened rows. The application never reconstructs it.
 
-- [ ] **Step 1: Write failing flex-minimum and responsive-priority tests**
+- [x] **Step 1: Write failing flex-minimum and responsive-priority tests**
 
   Assert that a flex column with `minWidth: '22rem'` emits that minimum in the header and every row.
   Assert that each priority returns the expected container class and that header/cell visibility
   uses the same helper.
 
-- [ ] **Step 2: Write failing nested-group tests**
+- [x] **Step 2: Write failing nested-group tests**
 
   Render two server-ordered parent groups, one subgroup, duplicate row ids in different paths, and
   explicit counts larger than the loaded row arrays. Assert full-path keys, server order, group
@@ -332,7 +332,7 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
   busy and that pointer or Enter activation cannot start a duplicate request. Repeat the contract
   for the ungrouped root continuation.
 
-- [ ] **Step 3: Write failing virtual-row tests**
+- [x] **Step 3: Write failing virtual-row tests**
 
   Assert that nested headers and continuations contribute to virtual count and keyboard indexing.
   Navigate across group headers, subgroups, data rows, and continuations. Assert that Shift reaches
@@ -344,13 +344,13 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
   model. Set `rowHeight={56}` and assert that the virtualizer estimate and rendered row variable
   agree. Scroll rows and assert that the header remains inside and sticky to the one scrollport.
 
-- [ ] **Step 4: Write failing treegrid and tone tests**
+- [x] **Step 4: Write failing treegrid and tone tests**
 
   Render `gridRole="treegrid"` with row metadata. Assert `aria-level`, `aria-posinset`,
   `aria-setsize`, and `aria-expanded`. Assert that the default tone remains outlined and the tonal
   tone uses the work-roster surface without adding a second wrapper.
 
-- [ ] **Step 5: Run the UI tests and verify the missing contracts fail**
+- [x] **Step 5: Run the UI tests and verify the missing contracts fail**
 
   Run:
 
@@ -361,14 +361,14 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
     --maxWorkers=1
   ```
 
-- [ ] **Step 6: Implement the column and group helpers**
+- [x] **Step 6: Implement the column and group helpers**
 
   Keep size and visibility logic in `entity-table-columns.ts`. Put public group types and the pure
   recursive flattener in `entity-table-groups.ts`. Use encoded full paths for flattened keys. Model
   root and group continuation as typed flattened entries instead of arbitrary adornment nodes. Do
   not attach an activation handler to the loading variant.
 
-- [ ] **Step 7: Implement one scrollport and shared row semantics**
+- [x] **Step 7: Implement one scrollport and shared row semantics**
 
   Keep the header, rowgroup, virtual rows, and group tails under the `EntityTable` scroll element.
   Make the header sticky. Pass row tone, height, and ARIA metadata through `entity-table-row.tsx`.
@@ -376,7 +376,7 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
   selection commands through callbacks. Do not add a feature-specific Initiative or app selection
   import to `@docket/ui`.
 
-- [ ] **Step 8: Run UI validation and public export checks**
+- [x] **Step 8: Run UI validation and public export checks**
 
   Run:
 
@@ -389,7 +389,7 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
   pnpm --filter @docket/ui lint
   ```
 
-- [ ] **Step 9: Commit the shared component slice**
+- [x] **Step 9: Commit the shared component slice**
 
   Commit as `fix(ui): Keep roster columns aligned across widths`. The body must name the single
   scrollport, single keyboard owner, and flex-minimum invariants. It must state that existing callers
@@ -417,24 +417,24 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
   save, default, and saved-view-list owners.
 - Derive group display order from `response.groups`.
 
-- [ ] **Step 1: Write reducer tests for path-keyed state**
+- [x] **Step 1: Write reducer tests for path-keyed state**
 
   Resolve B before A and assert that state lookup remains path-based. Append page two to A without
   duplicates. Fail page two and assert that page-one rows and the failed cursor remain available.
   Retry A and assert that B does not change.
 
-- [ ] **Step 2: Write hook tests for canonical group order**
+- [x] **Step 2: Write hook tests for canonical group order**
 
   Return group summaries in A, B order. Resolve B's request first. Assert that the controller still
   exposes A, B. Repeat with nested groups and duplicate context ids.
 
-- [ ] **Step 3: Write failure-ownership tests**
+- [x] **Step 3: Write failure-ownership tests**
 
   Cover initial roster, root continuation, group continuation, facet, preference, save, default,
   and saved-view-list failures. Assert that only the first failure with no cached rows renders
   `WorkViewLoadFailure`. Assert that every local retry repeats the request that failed.
 
-- [ ] **Step 4: Run focused tests and verify the combined `error` field fails them**
+- [x] **Step 4: Run focused tests and verify the combined `error` field fails them**
 
   Run:
 
@@ -446,18 +446,18 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
     --maxWorkers=1
   ```
 
-- [ ] **Step 5: Extract page state from `use-work-view.ts`**
+- [x] **Step 5: Extract page state from `use-work-view.ts`**
 
   Move root and group continuation transitions into the tested module. Store each path in place
   rather than filtering and re-appending it. Merge rows by id within that path only.
 
-- [ ] **Step 6: Route each error to its surface**
+- [x] **Step 6: Route each error to its surface**
 
   Keep cached rows visible during refetch and continuation failures. Put facet failure and retry in
   the filter builder. Keep failed save input in the open dialog. Show saved-view-list failure beside
   its tabs and retain cached tabs. Use application-owned copy.
 
-- [ ] **Step 7: Run web validation**
+- [x] **Step 7: Run web validation**
 
   Run:
 
@@ -470,7 +470,7 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
   pnpm --filter @docket/web typecheck
   ```
 
-- [ ] **Step 8: Commit the controller slice**
+- [x] **Step 8: Commit the controller slice**
 
   Commit as `fix(web): Keep work-view failures with their operations`. The body must explain why
   loaded rows survive continuation and mutation failures.
@@ -503,7 +503,7 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
   `comfortable` uses 56px. Pass that value to `EntityTable`, row CSS, hierarchy rails, and geometry
   assertions.
 
-- [ ] **Step 1: Write the failing column-policy tests**
+- [x] **Step 1: Write the failing column-policy tests**
 
   Select all supported Initiative properties. Assert the numeric width of each column, the
   cumulative priority assigned to it, monotonic visibility, and the responsive identity minimum.
@@ -512,27 +512,27 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
   is visible. Assert that compact density resolves to 44px and comfortable density resolves to
   56px through the exported row-height map.
 
-- [ ] **Step 2: Write the failing hierarchy counterexamples**
+- [x] **Step 2: Write the failing hierarchy counterexamples**
 
   Add `root A -> only child -> grandchild`, followed by root B. Assert that the grandchild's
   ancestor continuation is `[false]`. Add a final root whose first child has a grandchild and a
   later sibling. Assert that the grandchild's continuation is `[true]`. Change the current wrong
   expectation for the existing counterexample.
 
-- [ ] **Step 3: Write path-specific and corrupt-cycle tests**
+- [x] **Step 3: Write path-specific and corrupt-cycle tests**
 
   Put one context ancestor in two groups. Assert independent positions and rails by full membership
   key. Seed a cycle and assert deterministic termination, one displayed root, and no depth-two
   root.
 
-- [ ] **Step 4: Write grouped continuation and ARIA tests**
+- [x] **Step 4: Write grouped continuation and ARIA tests**
 
   Give a group a server count of 101 and 100 loaded rows. Assert a visible `Load more Active`
   continuation, the count 101, targeted loading state, targeted Retry, stable continuation id, and
   no ungrouped global button. Assert Enter activation, `treegrid`, row levels, positions, set sizes,
   and hidden decorative rails.
 
-- [ ] **Step 5: Run the focused tests and verify the manual header and old rail oracle fail**
+- [x] **Step 5: Run the focused tests and verify the manual header and old rail oracle fail**
 
   Run:
 
@@ -545,20 +545,20 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
     --maxWorkers=1
   ```
 
-- [ ] **Step 6: Build the columns and groups adapters**
+- [x] **Step 6: Build the columns and groups adapters**
 
   Move `FIELD_WIDTH`, property rendering, identity rendering, and breakpoint assignment into
   `work-list-columns.tsx`. Move response-summary ordering, path keys, counts, nested groups, and
   typed continuations into `work-list-groups.ts`. Export the density-to-height map from the column
   policy module so rendering and rail geometry cannot diverge.
 
-- [ ] **Step 7: Fix the rail model**
+- [x] **Step 7: Fix the rail model**
 
   Use the next path node when deciding whether an ancestor rail continues. Position elbows at 50
   percent of the row. Compute each position from a membership key. Keep all geometry in named
   constants shared by the model and renderer.
 
-- [ ] **Step 8: Replace the manual header and `ListView` body**
+- [x] **Step 8: Replace the manual header and `ListView` body**
 
   Reduce `WorkList` to the `EntityTable` adapter and interaction wrappers. Pass
   `rowHeight={WORK_ROSTER_ROW_HEIGHT[definition.presentation.density]}`, `tone="tonal"`, and
@@ -566,12 +566,12 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
   local `role="columnheader"`, `@2xl` visibility strings, the absolute Load more button, and
   `ListView` layout code.
 
-- [ ] **Step 9: Replace source-string visual assertions with rendered behavior**
+- [x] **Step 9: Replace source-string visual assertions with rendered behavior**
 
   Delete tests that look for the old `ListView`, `ListRow`, and class strings. Keep visual contract
   tests only when they assert rendered roles, cells, order, or behavior.
 
-- [ ] **Step 10: Run focused web validation**
+- [x] **Step 10: Run focused web validation**
 
   Run:
 
@@ -585,7 +585,7 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
   pnpm --filter @docket/web typecheck
   ```
 
-- [ ] **Step 11: Commit the WorkList migration**
+- [x] **Step 11: Commit the WorkList migration**
 
   Commit as `fix(web): Render work lists through the shared table`. The body must explain how one
   identity floor and one column array replace the separate header/body layout.
@@ -637,13 +637,13 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
 - Permit an entity write, property mutation, reorder, or generic drag only for a direct row whose
   owner equals the route organization and whose route capability allows that action.
 
-- [ ] **Step 1: Write selection-lifecycle tests**
+- [x] **Step 1: Write selection-lifecycle tests**
 
   Select rows, change the search or saved view, and assert that the old selection disappears. Remove
   a row on settled refresh and assert pruning. Change selection after a successful copy and assert
   that the label returns to `Copy links`. Reject the clipboard promise and assert no success state.
 
-- [ ] **Step 2: Write multi-row drag and context-row tests**
+- [x] **Step 2: Write multi-row drag and context-row tests**
 
   Select two direct route-owned rows and start a drag from one. Assert that both selected objects
   enter the drag payload. Attempt to select and drag a foreign-owned direct row. Assert that it does
@@ -651,7 +651,7 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
   board layouts. Assert that list context remains a link and never exposes selection or drag, while
   cards and board exclude it from ordinary items and counts.
 
-- [ ] **Step 3: Write the single-keyboard-owner tests**
+- [x] **Step 3: Write the single-keyboard-owner tests**
 
   Navigate across group headers, data rows, and continuations with arrows. Extend a range with Shift
   and assert that only direct rows enter selection. Toggle a row with Space. Exercise
@@ -661,7 +661,7 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
   against `TaskTable`, which currently combines both keyboard systems. Add compile-time or type
   assertions that the shared table rejects injected container keyboard props and row focus props.
 
-- [ ] **Step 4: Write capability tests**
+- [x] **Step 4: Write capability tests**
 
   Render a viewer, contributor, and manager. Assert that the viewer sees no create, rename, order,
   drag, or Set default action. Assert that a contributor can create and reorder but cannot set the
@@ -671,14 +671,14 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
   cannot enter bulk selection. Assert that rename, property edits, reorder, generic drag, and
   group-property mutation stay absent.
 
-- [ ] **Step 5: Write route-owner and cycle-preview tests**
+- [x] **Step 5: Write route-owner and cycle-preview tests**
 
   Render a readable Initiative owned by another authorized organization inside the route context.
   Assert that the root drop target uses the route organization and navigation uses the row owner.
   Assert that a proven cycle rejects, an incomplete local hierarchy stays neutral, and the API
   remains the final mutation authority.
 
-- [ ] **Step 6: Run the focused tests and verify dual focus and unconditional actions fail**
+- [x] **Step 6: Run the focused tests and verify dual focus and unconditional actions fail**
 
   Run:
 
@@ -697,7 +697,7 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
     --maxWorkers=1
   ```
 
-- [ ] **Step 7: Add the table-selection bridge and remove the second focus model**
+- [x] **Step 7: Add the table-selection bridge and remove the second focus model**
 
   Build `entity-table-selection.tsx` as the only adapter between `EntityTable` commands and
   `SelectionIntent`. Expose the provider's anchor and pass it to the table. Use the table-provided
@@ -710,21 +710,21 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
   and keyboard code from `WorkList`. Migrate `TaskTable` to the same bridge instead of treating its
   current dual-owner wiring as precedent.
 
-- [ ] **Step 8: Close the shared-component escape hatches**
+- [x] **Step 8: Close the shared-component escape hatches**
 
   Narrow the shared interaction types after `TaskTable` stops using them for focus. Keep the
   Library roster's `ref` and `onScroll` integration working. Reject externally supplied container
   keyboard ownership, active-descendant state, row focus refs, and row `tabIndex` at the type
   boundary.
 
-- [ ] **Step 9: Apply capabilities and organization context**
+- [x] **Step 9: Apply capabilities and organization context**
 
   Pass `canContribute` into create, edit, drag, drop, and order paths. Pass `canManage` to default
   controls. Require `row.organizationId === routeOrganizationId` and a direct row before any entity
   or property write, reorder, or generic drag. Build the Initiative root target from the route
   organization instead of `rows[0]`. Use the row owner only for navigation and object identity.
 
-- [ ] **Step 10: Run focused tests, typecheck, and lint**
+- [x] **Step 10: Run focused tests, typecheck, and lint**
 
   Run:
 
@@ -747,7 +747,7 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
   pnpm --filter @docket/web lint
   ```
 
-- [ ] **Step 11: Commit the interaction slice**
+- [x] **Step 11: Commit the interaction slice**
 
   Commit as `fix(web): Keep work-view actions within visible permissions`. The body must record
   one table keyboard owner, route-owned direct-row selection and multi-object drag, foreign-row
@@ -772,17 +772,17 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
 - `ProgramCards` remains. The unused `ProgramRows`, row-only props, and row-only helpers disappear.
 - Application feature code no longer owns `role="columnheader"`.
 
-- [ ] **Step 1: Write failing Team and Cycle behavior tests**
+- [x] **Step 1: Write failing Team and Cycle behavior tests**
 
   Assert shared header/body `data-col` keys, links, accessible names, values, and responsive column
   priorities. Assert that existing Team triage and Cycle status content remains present.
 
-- [ ] **Step 2: Write the ownership policy test**
+- [x] **Step 2: Write the ownership policy test**
 
   Scan `apps/web/src` and fail on application-owned `role="columnheader"`. Assert that Team,
   Cycle, and WorkList import `EntityTable`. Do not assert utility-class strings.
 
-- [ ] **Step 3: Run the focused tests and verify the manual grids fail the policy**
+- [x] **Step 3: Run the focused tests and verify the manual grids fail the policy**
 
   Run:
 
@@ -794,18 +794,18 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
     --maxWorkers=1
   ```
 
-- [ ] **Step 4: Migrate Team and Cycle rows**
+- [x] **Step 4: Migrate Team and Cycle rows**
 
   Keep each domain's cell rendering in its module. Hand sizing, headers, visibility, scrolling, and
   row chrome to `EntityTable`. Preserve real links, object surfaces, and accessible values.
 
-- [ ] **Step 5: Remove dead Program row code and the CSS-string helper**
+- [x] **Step 5: Remove dead Program row code and the CSS-string helper**
 
   Confirm `ProgramRows` has no production or test caller with `rg`. Remove only the unused row
   renderer and row-only contract. Keep cards and their shared program cells. Delete `roster-grid.ts`
   after its last import disappears.
 
-- [ ] **Step 6: Run the ownership scan and affected page tests**
+- [x] **Step 6: Run the ownership scan and affected page tests**
 
   Run:
 
@@ -819,7 +819,7 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
   pnpm --filter @docket/web typecheck
   ```
 
-- [ ] **Step 7: Commit the roster cleanup**
+- [x] **Step 7: Commit the roster cleanup**
 
   Commit as `fix(web): Route every roster through the shared table`. The body must state that the
   source policy prevents a feature-owned header/body grid from returning.
@@ -859,19 +859,19 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
 - Raise the `core-screen-smoke` timeout from 12 minutes to 30 minutes.
 - Measure header and body geometry through `data-col` instead of CSS source strings.
 
-- [ ] **Step 1: Build the long-title hierarchy fixture**
+- [x] **Step 1: Build the long-title hierarchy fixture**
 
   Seed two roots, an only child, a grandchild, a later sibling, and the three reported long titles.
   Add duplicate ancestor context across two groups and 101 direct rows in one group.
 
-- [ ] **Step 2: Add the geometry helper**
+- [x] **Step 2: Add the geometry helper**
 
   For each visible `data-col`, compare header and first-row cell x-coordinate and width within one
   CSS pixel. Compare header-label and root-title text x-coordinates. Repeat after setting the table
   scrollport's `scrollLeft`. Assert that a depth-N Initiative title starts 24px after its parent
   title. Assert that the document has no horizontal overflow.
 
-- [ ] **Step 3: Add the responsive matrix**
+- [x] **Step 3: Add the responsive matrix**
 
   Run Task, Project, Program, and Initiative work rosters at 1440x900, 1016x1724, 768x900, 390x844,
   and 320x844. Run Team and Cycle adapters at 1016x900 and 390x844. At 1016px, repeat Initiative
@@ -882,7 +882,7 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
   elbows centered at half the same resolved height. At 320px, assert that a one-column roster fits
   without horizontal scrolling.
 
-- [ ] **Step 4: Add the interaction and recovery journeys**
+- [x] **Step 4: Add the interaction and recovery journeys**
 
   Exercise arrow navigation, Enter activation, selection, direct-only drag, group Load more, a
   forced 503 continuation failure, targeted Retry, and preservation of loaded rows. Create, rename,
@@ -891,7 +891,7 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
   its link through the single-row action, and prove that bulk selection, write controls, and drag
   remain unavailable.
 
-- [ ] **Step 5: Run the new acceptance test against a local production build**
+- [x] **Step 5: Run the new acceptance test against a local production build**
 
   Implement the root release orchestration first. Run:
 
@@ -907,18 +907,18 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
   only the generated disposable URL.
   Assert that the runner has executable mode.
 
-- [ ] **Step 6: Update the visual evidence suite**
+- [x] **Step 6: Update the visual evidence suite**
 
   Capture light and dark screenshots at 1440px, 1016px, and 390px. Use the same hierarchy and long
   titles as the required test. Keep screenshots as review evidence and geometry as the gate.
 
-- [ ] **Step 7: Gate the complete release directory**
+- [x] **Step 7: Gate the complete release directory**
 
   Add the package script. Replace the individual `core-screen-acceptance.spec.ts` CI command with
   the directory script. Keep one worker and the existing PostgreSQL service. Raise the job timeout
   to 30 minutes. Do not add `continue-on-error`.
 
-- [ ] **Step 8: Lock the deployment dependency in the policy test**
+- [x] **Step 8: Lock the deployment dependency in the policy test**
 
   Assert that the package script names the complete release directory, the smoke job invokes it,
   the root orchestration command owns setup and cleanup through `EXIT`, `INT`, and `TERM`, and the CI
@@ -927,7 +927,7 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
   depends on the smoke job and `deploy-production` depends on both. Assert that an individual-spec
   command fails policy so future release specs join the gate automatically.
 
-- [ ] **Step 9: Run the release and policy gates**
+- [x] **Step 9: Run the release and policy gates**
 
   Run:
 
@@ -936,7 +936,7 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
   pnpm test:tooling
   ```
 
-- [ ] **Step 10: Commit the release gate**
+- [x] **Step 10: Commit the release gate**
 
   Commit as `fix(web): Gate work roster behavior before deployment`. The body must separate the
   deterministic release assertions from the evidence-only screenshots.

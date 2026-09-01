@@ -130,6 +130,21 @@ function isCreateElementCall(call) {
   );
 }
 
+/** Return whether a JSX tag names a platform element instead of a React component. */
+function isIntrinsicElementName(name) {
+  return (
+    name.type === 'JSXIdentifier' &&
+    name.name.length > 0 &&
+    name.name[0] === name.name[0]?.toLowerCase()
+  );
+}
+
+/** Return whether createElement receives a literal platform tag as its first argument. */
+function createsIntrinsicElement(call) {
+  const element = call.arguments[0];
+  return element?.type === 'Literal' && typeof element.value === 'string';
+}
+
 /** Reserve column-header semantics for the shared EntityTable implementation. */
 export default {
   meta: {
@@ -144,6 +159,7 @@ export default {
     const sourceCode = context.sourceCode;
     return {
       JSXOpeningElement(node) {
+        if (!isIntrinsicElementName(node.name)) return;
         const ownsHeader = node.attributes.some((attribute) => {
           if (attribute.type === 'JSXSpreadAttribute') {
             return objectOwnsColumnheader(attribute.argument, sourceCode);
@@ -162,7 +178,7 @@ export default {
         if (ownsHeader) context.report({ node, messageId: 'useEntityTable' });
       },
       CallExpression(node) {
-        if (!isCreateElementCall(node)) return;
+        if (!isCreateElementCall(node) || !createsIntrinsicElement(node)) return;
         const properties = node.arguments[1];
         if (properties !== undefined && objectOwnsColumnheader(properties, sourceCode)) {
           context.report({ node, messageId: 'useEntityTable' });

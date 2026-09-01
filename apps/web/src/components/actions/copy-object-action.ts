@@ -59,7 +59,9 @@ export function copyObjectAction(
     label: (context: ActionContext) =>
       context.objects.length > 1
         ? `Copy ${String(context.objects.length)} ${descriptor.pluralNoun.toLowerCase()}`
-        : 'Copy',
+        : context.actionScope === 'reference'
+          ? 'Copy link'
+          : 'Copy',
     icon: Copy,
     objectKinds: [kind],
     multi: true,

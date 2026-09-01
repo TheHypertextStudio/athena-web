@@ -37,6 +37,12 @@ import {
   unwrap,
   upsertEnvVars,
 } from './integrations-setup';
+// Root scripts import workspace code by relative path (see scripts/seed-staff.ts) — the root
+// package has no `@docket/db` dependency, so the bare specifier would not resolve here. The tier
+// vocabulary is imported rather than restated so a typo here cannot produce a group mapping the
+// API silently refuses to act on.
+import type { StaffRole } from '../packages/db/src/index';
+
 import { parseEnvFile } from './env-file';
 import { cloudflaredConfigYaml, launchAgentPlist, tunnelRegistrationUrls } from './tunnel';
 
@@ -63,15 +69,46 @@ const API_RUNTIME_SA_NAME = 'docket-api';
  * `roles/cloudidentity.groupsReader` binding can read — the same lookup against a discussion
  * forum answers `PERMISSION_DENIED`.
  */
-const OPERATOR_GROUPS: readonly { readonly localPart: string; readonly role: string }[] = [
+const OPERATOR_GROUPS: readonly { readonly localPart: string; readonly role: StaffRole }[] = [
   { localPart: 'docket-support', role: 'support' },
   { localPart: 'docket-finance', role: 'finance' },
   { localPart: 'docket-admins', role: 'superadmin' },
 ];
 
+/**
+ * Quote a value for safe interpolation into a `sh -c` command string.
+ *
+ * @remarks
+ * Several commands here are built as strings and handed to a shell, and some of their pieces now
+ * come from an operator's free-text answer. Single quotes disable every expansion the shell would
+ * otherwise perform; an embedded quote is closed, escaped, and reopened.
+ */
+export function shellArg(value: string): string {
+  return `'${value.replaceAll("'", `'\\''`)}'`;
+}
+
 /** The `ADMIN_GOOGLE_GROUP_ROLES` value for a Workspace domain. */
-function operatorGroupRoles(workspaceDomain: string): string {
+export function operatorGroupRoles(workspaceDomain: string): string {
   return OPERATOR_GROUPS.map((g) => `${g.localPart}@${workspaceDomain}:${g.role}`).join(',');
+}
+
+/**
+ * Reduce an operator's answer to a bare domain, or '' when it is not one.
+ *
+ * @remarks
+ * The answer becomes the right-hand side of three group addresses and of a deployment variable
+ * the API parses, so a pasted URL or a stray `@` has to be corrected here rather than surfacing
+ * later as an opaque gcloud error and a mapping the sync quietly refuses to act on.
+ */
+export function normalizeWorkspaceDomain(answer: string): string {
+  const bare = answer
+    .trim()
+    .toLowerCase()
+    .replace(/^[a-z]+:\/\//, '')
+    .replace(/^@/, '')
+    .replace(/\/.*$/, '')
+    .replace(/\.$/, '');
+  return /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(bare) ? bare : '';
 }
 const AR_REPO = 'docket';
 const WIF_POOL = 'github';
@@ -366,14 +403,21 @@ async function gatherConfig(): Promise<Config> {
   const apiUrl = await prompt('Production API URL', `https://api.${domain}`);
   const adminUrl = await prompt('Production admin URL', `https://admin.${domain}`);
 
-  log.info('Production database — Neon (neon.tech → New project → Connection details)');
-  // Operator SSO is optional: a deployment with no Workspace keeps the console passkey-only, and
-  // an empty answer must leave every operator-SSO variable unset rather than half-configured.
-  const workspaceDomain = await prompt(
+  // Operator SSO is optional, so this prompt carries NO fallback — `prompt` returns its fallback
+  // on an empty answer, and a defaulted domain would silently enable operator SSO against a
+  // Workspace that may not exist. The apex is offered as a placeholder hint instead, because the
+  // Workspace domain is frequently the company's rather than the product's.
+  const workspaceAnswer = await prompt(
     'Google Workspace domain for operator sign-in (blank = passkey-only console)',
+    '',
     domain,
   );
+  const workspaceDomain = normalizeWorkspaceDomain(workspaceAnswer);
+  if (workspaceAnswer.trim() && !workspaceDomain) {
+    cancel(`"${workspaceAnswer}" is not a domain. Enter one like ${domain}, or leave it blank.`);
+  }
 
+  log.info('Production database — Neon (neon.tech → New project → Connection details)');
   const neonProjectId = await prompt('Neon project ID', '', 'cool-darkness-12345678');
 
   // Skip the API key prompt if it's already stored as a GitHub secret.
@@ -533,13 +577,16 @@ function setupGcp(cfg: Config): {
       --quiet`);
     if (bound) {
       ok(`roles/cloudidentity.groupsReader (${API_RUNTIME_SA_NAME}, org ${orgId})`);
-      provisionOperatorGroups(cfg, orgId);
     } else {
       warn(
         `could not grant roles/cloudidentity.groupsReader on organization ${orgId} — operator ` +
           'SSO will not resolve groups until someone with org-level IAM rights grants it.',
       );
     }
+    // Independent of the binding above: creating groups needs Workspace administration, granting
+    // the role needs org-level IAM, and an operator may hold either without the other. Skipping
+    // the groups because the binding failed would hide half the setup behind an unrelated failure.
+    provisionOperatorGroups(cfg, orgId);
   } else {
     warn(
       'project has no parent organization — skipping roles/cloudidentity.groupsReader; ' +
@@ -657,23 +704,29 @@ function provisionOperatorGroups(cfg: Config, orgId: string): void {
   }
 
   section('Google Workspace — operator groups');
+  // The Cloud Identity API refuses an ADC call that names no quota project, and the refusal is
+  // reported as "There is no such a group" — indistinguishable from absence. Naming the project
+  // up front is what keeps the existence check below meaningful.
+  const identity = `CLOUDSDK_BILLING_QUOTA_PROJECT=${shellArg(cfg.project)} gcloud identity groups`;
+
   for (const group of OPERATOR_GROUPS) {
     const email = `${group.localPart}@${cfg.workspaceDomain}`;
-    if (tryRun(`gcloud identity groups describe ${email} --format='value(name)'`)) {
+    if (tryRun(`${identity} describe ${shellArg(email)} --format='value(name)'`)) {
       ok(`group exists: ${email}`);
       continue;
     }
-    const created = tryRun(`gcloud identity groups create ${email} \
-      --organization=${orgId} \
+    const created = tryRun(`${identity} create ${shellArg(email)} \
+      --organization=${shellArg(orgId)} \
       --group-type=security \
-      --display-name="Docket operators — ${group.role}" \
-      --description="Grants Docket admin console ${group.role}-tier operator access."`);
+      --display-name=${shellArg(`Docket operators — ${group.role}`)} \
+      --description=${shellArg(`Grants Docket admin console ${group.role}-tier operator access.`)}`);
     if (created) {
       ok(`created: ${email}`);
     } else {
       warn(
-        `could not create ${email} — create it manually as a SECURITY group, or operator SSO ` +
-          'will grant nothing for that tier.',
+        `could not create ${email}. Check that the active gcloud account administers ` +
+          `${cfg.workspaceDomain}; otherwise create it by hand as a SECURITY group, or operator ` +
+          'SSO will grant nothing for that tier.',
       );
     }
   }
@@ -708,9 +761,6 @@ function setupGithub(
       new URL(cfg.adminUrl).host,
     ].join(','),
     GOOGLE_OAUTH_PUBLIC: 'false',
-    // Left off until the groups have members: enabling operator SSO before anyone is in a group
-    // would simply grant nobody, and the console would advertise a button that cannot work.
-    ADMIN_GOOGLE_SSO_ENABLED: 'false',
     ...(cfg.workspaceDomain
       ? {
           GOOGLE_WORKSPACE_DOMAIN: cfg.workspaceDomain,
@@ -719,13 +769,34 @@ function setupGithub(
       : {}),
   };
 
+  // Written only when absent. These are decisions an operator makes once and then lives with, so
+  // re-running bootstrap for an unrelated reason must not silently revoke everyone's console
+  // access by resetting the switch to its first-run default.
+  const productionDefaults: Record<string, string> = {
+    ADMIN_GOOGLE_SSO_ENABLED: 'false',
+  };
+
   for (const [key, value] of Object.entries(repoVars)) {
-    exec(`gh variable set ${key} --body "${value}" --repo ${cfg.repo}`);
+    exec(`gh variable set ${key} --body ${shellArg(value)} --repo ${cfg.repo}`);
     ok(key);
   }
   for (const [key, value] of Object.entries(productionVars)) {
-    exec(`gh variable set ${key} --env production --body "${value}" --repo ${cfg.repo}`);
+    exec(`gh variable set ${key} --env production --body ${shellArg(value)} --repo ${cfg.repo}`);
     ok(`${key} (production)`);
+  }
+  const existingProductionVars = new Set(
+    tryRun(`gh variable list --env production --repo ${cfg.repo} --json name --jq '.[].name'`)
+      .split('\n')
+      .map((name) => name.trim())
+      .filter(Boolean),
+  );
+  for (const [key, value] of Object.entries(productionDefaults)) {
+    if (existingProductionVars.has(key)) {
+      ok(`${key} (production, kept existing)`);
+      continue;
+    }
+    exec(`gh variable set ${key} --env production --body ${shellArg(value)} --repo ${cfg.repo}`);
+    ok(`${key} (production, first run)`);
   }
 
   const configuredSecrets = new Set(

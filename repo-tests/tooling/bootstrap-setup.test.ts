@@ -3,7 +3,12 @@ import { resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { parseBootstrapFlags } from '../../scripts/bootstrap';
+import {
+  normalizeWorkspaceDomain,
+  operatorGroupRoles,
+  parseBootstrapFlags,
+  shellArg,
+} from '../../scripts/bootstrap';
 import {
   linearOAuthAppManifestUrl,
   PROVIDER_GROUPS,
@@ -439,5 +444,46 @@ describe('production account-creation deployment contract', () => {
     expect(workflow).not.toContain('MCP_ALLOWED_ORIGINS');
     expect(workflow).not.toContain('https://claude.ai');
     expect(workflow).not.toContain('https://claude.com');
+  });
+});
+
+describe('operator SSO provisioning inputs', () => {
+  it('emits a group mapping the API can actually parse', () => {
+    // The grammar is `identifier[:role]`, comma separated — the same one `parseStaffTargets`
+    // reads. Asserting the exact string keeps provisioning and consumption from drifting.
+    expect(operatorGroupRoles('example.com')).toBe(
+      'docket-support@example.com:support,' +
+        'docket-finance@example.com:finance,' +
+        'docket-admins@example.com:superadmin',
+    );
+  });
+
+  it('reduces the ways an operator might write a domain to the bare form', () => {
+    for (const answer of [
+      'example.com',
+      'EXAMPLE.com',
+      '  example.com  ',
+      '@example.com',
+      'https://example.com',
+      'https://example.com/a/b',
+      'example.com.',
+    ]) {
+      expect(normalizeWorkspaceDomain(answer)).toBe('example.com');
+    }
+  });
+
+  it('rejects an answer that is not a domain, so it cannot become a group address', () => {
+    // '' is the caller's signal to skip operator SSO entirely, so every unusable answer has to
+    // reduce to it rather than to a half-valid string that fails later inside gcloud.
+    for (const answer of ['', '   ', 'not a domain', 'localhost', 'example', 'exa mple.com']) {
+      expect(normalizeWorkspaceDomain(answer)).toBe('');
+    }
+  });
+
+  it('quotes shell arguments so a pasted answer cannot escape its command', () => {
+    expect(shellArg('example.com')).toBe("'example.com'");
+    expect(shellArg('x.com; rm -rf /')).toBe("'x.com; rm -rf /'");
+    // A single quote is closed, escaped, and reopened — the only sound way inside single quotes.
+    expect(shellArg("o'brien.com")).toBe("'o'\\''brien.com'");
   });
 });

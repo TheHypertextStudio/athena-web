@@ -8220,6 +8220,33 @@ superadmin; highest tier wins across groups.
   which blocks deploys outright — `deploy.yml` is a `workflow_call` that only runs once every CI gate
   is green. All three now derive their dates instead of stating them.
 
+#### Making bootstrap actually turnkey
+
+A review of the first provisioning attempt found it did not work, and would have failed quietly.
+Every item below was a way a fresh project reached a green deployment with operator SSO dead:
+
+- **The opt-out was unreachable.** `prompt` returns its fallback on an empty answer, and the
+  Workspace question passed the product apex as that fallback. "Blank = passkey-only" could not be
+  selected; pressing Enter provisioned groups at the product domain instead. The prompt now carries
+  no fallback and offers the apex as a placeholder hint.
+- **The group commands could never succeed.** The Cloud Identity API refuses an ADC call naming no
+  quota project, and reports the refusal as `There is no such a group` — indistinguishable from
+  absence. The existence check therefore always said "missing" and every create then failed.
+  `CLOUDSDK_BILLING_QUOTA_PROJECT` is now set for those calls.
+- **A re-run revoked everyone.** `gh variable set` overwrites, so re-running bootstrap for an
+  unrelated reason reset `ADMIN_GOOGLE_SSO_ENABLED` to `false`. It is now written only when absent,
+  as a first-run default rather than an every-run assertion.
+- **Group creation hid behind an unrelated failure.** It ran only when the org IAM binding
+  succeeded, though creating groups needs Workspace administration and the binding needs org IAM —
+  an operator may hold either without the other.
+- Plus: the Workspace answer is normalized and validated rather than pasted straight into three
+  group addresses; operator-supplied values are shell-quoted; tiers are typed as `StaffRole` rather
+  than bare strings; and the question no longer appears under the Neon database heading.
+
+**Learning: a provisioning step is not done when it is written, only when it has run.** Every one
+of these survived writing, review, and a passing test suite, because nothing here executes during
+tests. The two that mattered most were found by running the real commands.
+
 #### What the live API changed about the design
 
 Two things only surfaced once the lookup ran against real Cloud Identity, and both had been wrong

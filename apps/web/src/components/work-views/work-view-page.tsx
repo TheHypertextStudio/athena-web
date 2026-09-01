@@ -250,6 +250,87 @@ function RowsSkeleton({ label }: { readonly label: string }): JSX.Element {
   );
 }
 
+function SavedViewsLoadFailure({
+  error,
+  onRetry,
+}: {
+  readonly error: unknown;
+  readonly onRetry?: (() => void) | undefined;
+}): JSX.Element | null {
+  if (!error || !onRetry) return null;
+  return (
+    <span role="alert" className="text-error text-body-small flex shrink-0 items-center gap-1">
+      Could not load saved views.
+      <Button variant="ghost" controlSize="sm" onClick={onRetry}>
+        Retry
+      </Button>
+    </span>
+  );
+}
+
+function SaveViewFailure({ error }: { readonly error: unknown }): JSX.Element | null {
+  if (!error) return null;
+  return (
+    <p role="alert" className="text-error text-body-medium">
+      Could not save this view. Check the details and try again.
+    </p>
+  );
+}
+
+function WorkViewOperationFailures({
+  title,
+  rootContinuationError,
+  onRetryRoot,
+  preferencesError,
+  onRetryPreferences,
+  defaultError,
+  onRetryDefault,
+}: {
+  readonly title: string;
+  readonly rootContinuationError: unknown;
+  readonly onRetryRoot: () => void;
+  readonly preferencesError: unknown;
+  readonly onRetryPreferences: () => void;
+  readonly defaultError: unknown;
+  readonly onRetryDefault: () => void;
+}): JSX.Element {
+  return (
+    <>
+      {rootContinuationError ? (
+        <p role="alert" className="text-error text-body-medium flex items-center gap-2 px-3 py-2">
+          Could not load more {title.toLowerCase()}.
+          <Button variant="ghost" controlSize="sm" onClick={onRetryRoot}>
+            Retry
+          </Button>
+        </p>
+      ) : null}
+      {preferencesError ? (
+        <p role="alert" className="text-error text-body-medium flex items-center gap-2 px-3 py-2">
+          Could not save your view preferences.
+          <Button variant="ghost" controlSize="sm" onClick={onRetryPreferences}>
+            Retry
+          </Button>
+        </p>
+      ) : null}
+      {defaultError ? (
+        <p role="alert" className="text-error text-body-medium flex items-center gap-2 px-3 py-2">
+          Could not set the workspace view default.
+          <Button variant="ghost" controlSize="sm" onClick={onRetryDefault}>
+            Retry
+          </Button>
+        </p>
+      ) : null}
+    </>
+  );
+}
+
+function shouldShowInitialFailure<TTarget extends ViewTarget>(
+  initialError: unknown,
+  response: ReturnType<typeof useWorkView<TTarget>>['response'],
+): boolean {
+  return Boolean(initialError) && response === undefined;
+}
+
 /** Render one organization roster from the shared server query and target contract. */
 export function WorkViewPage<TTarget extends ViewTarget>({
   organizationId,
@@ -307,7 +388,8 @@ export function WorkViewPage<TTarget extends ViewTarget>({
     id: `work-view:${target}`,
     rootRef,
     inputRef: searchInputRef,
-    enabled: layout === 'list' && !dependencyMode && !controller.loading && !controller.error,
+    enabled:
+      layout === 'list' && !dependencyMode && !controller.loading && !controller.initialError,
     onOpen: () => {
       setFindOpen(true);
     },
@@ -433,12 +515,12 @@ export function WorkViewPage<TTarget extends ViewTarget>({
       ) : (
         <RowsSkeleton label={copy.title.toLowerCase()} />
       );
-  } else if (controller.error) {
+  } else if (shouldShowInitialFailure(controller.initialError, controller.response)) {
     content = (
       <WorkViewLoadFailure
         title={copy.title}
         retrying={controller.retrying}
-        onRetry={controller.retry}
+        onRetry={controller.retryInitial}
       />
     );
   } else if ((controller.response?.totalCount ?? 0) === 0) {
@@ -627,6 +709,10 @@ export function WorkViewPage<TTarget extends ViewTarget>({
           Dependencies
         </Button>
       ) : null}
+      <SavedViewsLoadFailure
+        error={savedViewsQuery.error}
+        onRetry={() => void savedViewsQuery.refetch()}
+      />
     </div>
   );
 
@@ -735,7 +821,9 @@ export function WorkViewPage<TTarget extends ViewTarget>({
               facetLoading={controller.facetLoading}
               facetHasMore={controller.facetHasMore}
               facetLoadingMore={controller.facetLoadingMore}
+              facetError={controller.facetError}
               onFacetLoadMore={controller.loadMoreFacets}
+              onFacetRetry={controller.retryFacet}
               onFacetRequest={controller.requestFacet}
             />
           </div>
@@ -749,6 +837,15 @@ export function WorkViewPage<TTarget extends ViewTarget>({
                 : userErrorMessage(orderMutation.error, `Could not move this ${copy.singular}.`)}
             </p>
           ) : null}
+          <WorkViewOperationFailures
+            title={copy.title}
+            rootContinuationError={controller.rootContinuationError}
+            onRetryRoot={controller.loadMoreRows}
+            preferencesError={controller.preferencesError}
+            onRetryPreferences={controller.retryPreferences}
+            defaultError={controller.defaultError}
+            onRetryDefault={controller.setAsDefault}
+          />
           {target === 'project' &&
           dependencyMode &&
           activeCreatedProjectSelection?.state === 'missing' ? (
@@ -893,6 +990,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
                 </Select>
               </label>
             ) : null}
+            <SaveViewFailure error={controller.saveError} />
             <DialogFooter>
               <Button
                 variant="ghost"
@@ -912,15 +1010,19 @@ export function WorkViewPage<TTarget extends ViewTarget>({
                   (viewScope === 'team' && viewTeamId.length === 0)
                 }
                 onClick={() => {
-                  controller.saveView({
-                    name: viewName.trim(),
-                    scope: viewScope,
-                    ...(viewScope === 'team' ? { teamId: TeamId.parse(viewTeamId) } : {}),
-                  });
-                  setSaveOpen(false);
-                  setViewName('');
-                  setViewScope('personal');
-                  setViewTeamId('');
+                  void controller
+                    .saveView({
+                      name: viewName.trim(),
+                      scope: viewScope,
+                      ...(viewScope === 'team' ? { teamId: TeamId.parse(viewTeamId) } : {}),
+                    })
+                    .then(() => {
+                      setSaveOpen(false);
+                      setViewName('');
+                      setViewScope('personal');
+                      setViewTeamId('');
+                    })
+                    .catch(() => undefined);
                 }}
               >
                 {controller.saving ? 'Saving…' : 'Save view'}

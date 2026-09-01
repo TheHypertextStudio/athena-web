@@ -73,7 +73,9 @@ export interface FilterBuilderProps<TTarget extends ViewTarget> {
   readonly facetLoading?: boolean;
   readonly facetHasMore?: boolean;
   readonly facetLoadingMore?: boolean;
+  readonly facetError?: unknown;
   readonly onFacetLoadMore?: (() => void) | undefined;
+  readonly onFacetRetry?: (() => void) | undefined;
   readonly onFacetRequest?:
     ((field: WorkViewFilterFieldKey<TTarget>, search: string) => void) | undefined;
 }
@@ -524,13 +526,44 @@ interface DraftEditorProps<TTarget extends ViewTarget> {
   readonly facetLoading: boolean;
   readonly facetHasMore: boolean;
   readonly facetLoadingMore: boolean;
+  readonly facetError?: unknown;
   readonly onFacetLoadMore?: (() => void) | undefined;
+  readonly onFacetRetry?: (() => void) | undefined;
   readonly onFacetRequest?:
     ((field: WorkViewFilterFieldKey<TTarget>, search: string) => void) | undefined;
   readonly onReplace: (path: readonly number[], draft: WorkViewFilterDraftFor<TTarget>) => void;
   readonly onAppend: (path: readonly number[], draft: WorkViewFilterDraftFor<TTarget>) => void;
   readonly onNegate: (nodeId: string) => void;
   readonly onRemove?: ((path: readonly number[]) => void) | undefined;
+}
+
+function FacetLoadingNotice({ loading }: { readonly loading: boolean }): ReactElement | null {
+  if (!loading) return null;
+  return (
+    <Text token="body-small" tone="muted">
+      Loading options…
+    </Text>
+  );
+}
+
+function FacetLoadFailure({
+  error,
+  onRetry,
+}: {
+  readonly error: unknown;
+  readonly onRetry?: (() => void) | undefined;
+}): ReactElement | null {
+  if (!error || !onRetry) return null;
+  return (
+    <div role="alert" className="flex items-center gap-2">
+      <Text token="body-small" tone="muted">
+        Could not load filter options.
+      </Text>
+      <Button variant="ghost" controlSize="sm" onClick={onRetry}>
+        Retry
+      </Button>
+    </div>
+  );
 }
 
 function DraftEditor<TTarget extends ViewTarget>({
@@ -544,7 +577,9 @@ function DraftEditor<TTarget extends ViewTarget>({
   facetLoading,
   facetHasMore,
   facetLoadingMore,
+  facetError,
   onFacetLoadMore,
+  onFacetRetry,
   onFacetRequest,
   onReplace,
   onAppend,
@@ -635,7 +670,9 @@ function DraftEditor<TTarget extends ViewTarget>({
                 facetLoading={facetLoading}
                 facetHasMore={facetHasMore}
                 facetLoadingMore={facetLoadingMore}
+                facetError={facetError}
                 onFacetLoadMore={onFacetLoadMore}
+                onFacetRetry={onFacetRetry}
                 onFacetRequest={onFacetRequest}
                 onReplace={onReplace}
                 onAppend={onAppend}
@@ -774,11 +811,8 @@ function DraftEditor<TTarget extends ViewTarget>({
               setFacetSearch(event.target.value);
             }}
           />
-          {facetLoading ? (
-            <Text token="body-small" tone="muted">
-              Loading options…
-            </Text>
-          ) : null}
+          <FacetLoadingNotice loading={facetLoading} />
+          <FacetLoadFailure error={facetError} onRetry={onFacetRetry} />
           {selectedField.acceptsCurrentActor ? (
             <label>
               <Checkbox
@@ -968,7 +1002,9 @@ export function FilterBuilder<TTarget extends ViewTarget>({
   facetLoading = false,
   facetHasMore = false,
   facetLoadingMore = false,
+  facetError,
   onFacetLoadMore,
+  onFacetRetry,
   onFacetRequest,
 }: FilterBuilderProps<TTarget>): ReactElement {
   const nextIdentity = useRef(0);
@@ -1106,7 +1142,9 @@ export function FilterBuilder<TTarget extends ViewTarget>({
               facetLoading={facetLoading}
               facetHasMore={facetHasMore}
               facetLoadingMore={facetLoadingMore}
+              facetError={facetError}
               onFacetLoadMore={onFacetLoadMore}
+              onFacetRetry={onFacetRetry}
               onFacetRequest={onFacetRequest}
               onReplace={onReplace}
               onAppend={(path, child) => {

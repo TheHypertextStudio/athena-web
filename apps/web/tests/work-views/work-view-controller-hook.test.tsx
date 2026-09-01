@@ -218,16 +218,16 @@ describe('useWorkView instance and request identity', () => {
     const { result } = renderHook(() => useWorkView(taskOptions()), { wrapper });
 
     await waitFor(() => {
-      expect(result.current.error).toBeDefined();
+      expect(result.current.initialError).toBeDefined();
     });
 
     apiMocks.query.mockResolvedValue(okResponse(queryResponse('task', 0)));
     act(() => {
-      result.current.retry();
+      result.current.retryInitial();
     });
 
     await waitFor(() => {
-      expect(result.current.error).toBeNull();
+      expect(result.current.initialError).toBeNull();
     });
     expect(apiMocks.query).toHaveBeenCalledTimes(2);
     expect(result.current.definition).toEqual(taskDefinition);
@@ -341,6 +341,156 @@ describe('useWorkView instance and request identity', () => {
 });
 
 describe('useWorkView row pagination', () => {
+  it('keeps grouped pages in server order when requests resolve out of order', async () => {
+    const resolvers = new Map<string, (value: ReturnType<typeof okResponse>) => void>();
+    apiMocks.query.mockImplementation(
+      ({ json }: { json: { groupPath?: readonly string[]; target: 'task' } }) => {
+        if (!json.groupPath) {
+          return Promise.resolve(
+            okResponse(
+              WorkViewQueryResponse.parse({
+                target: 'task',
+                rows: [],
+                groups: [
+                  { path: ['todo'], key: 'todo', label: 'To do', count: 1 },
+                  { path: ['done'], key: 'done', label: 'Done', count: 1 },
+                ],
+                totalCount: 2,
+                nextCursor: null,
+                queryFingerprint: 'sha256:0000000000000002',
+              }),
+            ),
+          );
+        }
+        const key = json.groupPath.join('/');
+        return new Promise((resolve) => {
+          resolvers.set(key, resolve);
+        });
+      },
+    );
+    const { wrapper } = makeQueryWrapper();
+    const { result } = renderHook(() => useWorkView(taskOptions()), { wrapper });
+
+    await waitFor(() => {
+      expect(resolvers.size).toBe(2);
+    });
+    await act(async () => {
+      resolvers.get('done')?.(
+        okResponse(
+          WorkViewQueryResponse.parse({
+            target: 'task',
+            rows: [taskRow(2)],
+            groups: [],
+            totalCount: 1,
+            nextCursor: null,
+            queryFingerprint: 'sha256:0000000000000001',
+          }),
+        ),
+      );
+    });
+    await act(async () => {
+      resolvers.get('todo')?.(
+        okResponse(
+          WorkViewQueryResponse.parse({
+            target: 'task',
+            rows: [taskRow(1)],
+            groups: [],
+            totalCount: 1,
+            nextCursor: null,
+            queryFingerprint: 'sha256:0000000000000001',
+          }),
+        ),
+      );
+    });
+
+    await waitFor(() => {
+      expect(result.current.groupPages.map((page) => page.path)).toEqual([['todo'], ['done']]);
+    });
+  });
+
+  it('keeps nested group pages ordered without merging duplicate context rows across paths', async () => {
+    const nestedDefinition = TaskViewDefinition.parse({
+      ...taskDefinition,
+      arrangement: { groupBy: 'status', subGroupBy: 'priority', orderBy: [] },
+    });
+    const resolvers = new Map<string, (value: ReturnType<typeof okResponse>) => void>();
+    apiMocks.getDefault.mockResolvedValue(
+      okResponse({ ...defaultResponse('task'), definition: nestedDefinition }),
+    );
+    apiMocks.query.mockImplementation(
+      ({ json }: { json: { groupPath?: readonly string[]; target: 'task' } }) => {
+        if (!json.groupPath) {
+          return Promise.resolve(
+            okResponse(
+              WorkViewQueryResponse.parse({
+                target: 'task',
+                rows: [],
+                groups: [
+                  { path: ['todo'], key: 'todo', label: 'To do', count: 1 },
+                  { path: ['todo', 'high'], key: 'high', label: 'High', count: 1 },
+                  { path: ['done'], key: 'done', label: 'Done', count: 1 },
+                  { path: ['done', 'high'], key: 'high', label: 'High', count: 1 },
+                ],
+                totalCount: 2,
+                nextCursor: null,
+                queryFingerprint: 'sha256:0000000000000002',
+              }),
+            ),
+          );
+        }
+        return new Promise((resolve) => {
+          resolvers.set(json.groupPath.join('/'), resolve);
+        });
+      },
+    );
+    const { wrapper } = makeQueryWrapper();
+    const { result } = renderHook(() => useWorkView(taskOptions()), { wrapper });
+
+    await waitFor(() => {
+      expect(resolvers.size).toBe(2);
+    });
+    const sharedContext = { ...taskRow(3), isContext: true };
+    await act(async () => {
+      resolvers.get('done/high')?.(
+        okResponse(
+          WorkViewQueryResponse.parse({
+            target: 'task',
+            rows: [sharedContext, taskRow(4)],
+            groups: [],
+            totalCount: 1,
+            nextCursor: null,
+            queryFingerprint: 'sha256:0000000000000001',
+          }),
+        ),
+      );
+    });
+    await act(async () => {
+      resolvers.get('todo/high')?.(
+        okResponse(
+          WorkViewQueryResponse.parse({
+            target: 'task',
+            rows: [sharedContext, taskRow(5)],
+            groups: [],
+            totalCount: 1,
+            nextCursor: null,
+            queryFingerprint: 'sha256:0000000000000001',
+          }),
+        ),
+      );
+    });
+
+    await waitFor(() => {
+      expect(result.current.groupPages.map((page) => page.path)).toEqual([
+        ['todo', 'high'],
+        ['done', 'high'],
+      ]);
+    });
+    expect(result.current.groupPages.map((page) => page.rows[0]?.id)).toEqual([
+      sharedContext.id,
+      sharedContext.id,
+    ]);
+  });
+
   it('appends a validated root cursor page without replacing the first page', async () => {
     apiMocks.getDefault.mockResolvedValue(
       okResponse({ ...defaultResponse('task'), definition: flatTaskDefinition }),
@@ -373,6 +523,133 @@ describe('useWorkView row pagination', () => {
       expect(result.current.response?.rows.map((row) => row.title)).toEqual(['Task 1', 'Task 2']);
     });
     expect(result.current.response?.nextCursor).toBeNull();
+  });
+
+  it('keeps root rows available and retries the failed continuation cursor', async () => {
+    apiMocks.getDefault.mockResolvedValue(
+      okResponse({ ...defaultResponse('task'), definition: flatTaskDefinition }),
+    );
+    apiMocks.query.mockImplementation(({ json }: { json: { cursor?: string } }) => {
+      if (!json.cursor) {
+        return Promise.resolve(
+          okResponse(
+            WorkViewQueryResponse.parse({
+              target: 'task',
+              rows: [taskRow(1)],
+              groups: [],
+              totalCount: 2,
+              nextCursor: 'page-2',
+              queryFingerprint: 'sha256:0000000000000002',
+            }),
+          ),
+        );
+      }
+      return Promise.reject(new Error('provider continuation failure'));
+    });
+    const { wrapper } = makeQueryWrapper();
+    const { result } = renderHook(() => useWorkView(taskOptions()), { wrapper });
+    await waitFor(() => {
+      expect(result.current.response?.rows).toHaveLength(1);
+    });
+
+    act(() => {
+      result.current.loadMoreRows();
+    });
+
+    await waitFor(() => {
+      expect(result.current.rootContinuationError).toMatchObject({
+        message: 'Could not load more tasks.',
+      });
+    });
+    expect(result.current.response?.rows.map((row) => row.id)).toEqual([taskRow(1).id]);
+    expect(apiMocks.query).toHaveBeenLastCalledWith(
+      expect.objectContaining({ json: expect.objectContaining({ cursor: 'page-2' }) }),
+    );
+
+    apiMocks.query.mockResolvedValue(
+      okResponse(
+        WorkViewQueryResponse.parse({
+          target: 'task',
+          rows: [taskRow(2)],
+          groups: [],
+          totalCount: 2,
+          nextCursor: null,
+          queryFingerprint: 'sha256:0000000000000002',
+        }),
+      ),
+    );
+    act(() => {
+      result.current.loadMoreRows();
+    });
+    await waitFor(() => {
+      expect(result.current.response?.rows.map((row) => row.id)).toEqual([
+        taskRow(1).id,
+        taskRow(2).id,
+      ]);
+    });
+  });
+
+  it('keeps group rows available and retries only that failed continuation path', async () => {
+    apiMocks.query.mockImplementation(
+      ({ json }: { json: { groupPath?: readonly string[]; cursor?: string } }) => {
+        if (!json.groupPath) {
+          return Promise.resolve(
+            okResponse(
+              WorkViewQueryResponse.parse({
+                target: 'task',
+                rows: [],
+                groups: [{ path: ['todo'], key: 'todo', label: 'To do', count: 2 }],
+                totalCount: 2,
+                nextCursor: null,
+                queryFingerprint: 'sha256:0000000000000002',
+              }),
+            ),
+          );
+        }
+        if (!json.cursor) {
+          return Promise.resolve(
+            okResponse(
+              WorkViewQueryResponse.parse({
+                target: 'task',
+                rows: [taskRow(1)],
+                groups: [],
+                totalCount: 2,
+                nextCursor: 'group-page-2',
+                queryFingerprint: 'sha256:0000000000000002',
+              }),
+            ),
+          );
+        }
+        return Promise.reject(new Error('provider group failure'));
+      },
+    );
+    const { wrapper } = makeQueryWrapper();
+    const { result } = renderHook(() => useWorkView(taskOptions()), { wrapper });
+    await waitFor(() => {
+      expect(result.current.groupPages[0]?.nextCursor).toBe('group-page-2');
+    });
+
+    act(() => {
+      result.current.loadMoreGroup(['todo']);
+    });
+
+    await waitFor(() => {
+      expect(result.current.groupPages[0]?.error).toMatchObject({
+        message: 'Could not load tasks in this group.',
+      });
+    });
+    expect(result.current.groupPages[0]?.rows.map((row) => row.id)).toEqual([taskRow(1).id]);
+
+    act(() => {
+      result.current.loadMoreGroup(['todo']);
+    });
+    await waitFor(() => {
+      expect(apiMocks.query).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          json: expect.objectContaining({ groupPath: ['todo'], cursor: 'group-page-2' }),
+        }),
+      );
+    });
   });
 });
 
@@ -699,7 +976,7 @@ describe('useWorkView preference serialization', () => {
     await waitFor(() => {
       expect(result.current.definition.arrangement.groupBy).toBe('status');
     });
-    expect(result.current.error).toMatchObject({
+    expect(result.current.preferencesError).toMatchObject({
       message: 'Could not save your view preferences.',
     });
   });

@@ -8,6 +8,8 @@ import type { JSX } from 'react';
 export interface WorkViewLoadFailureProps {
   readonly title: string;
   readonly retrying: boolean;
+  /** A local failure never displaces roster rows that the person can still use. */
+  readonly hasCachedRows?: boolean;
   readonly onRetry: () => void;
 }
 
@@ -15,8 +17,10 @@ export interface WorkViewLoadFailureProps {
 export function WorkViewLoadFailure({
   title,
   retrying,
+  hasCachedRows = false,
   onRetry,
 }: WorkViewLoadFailureProps): JSX.Element {
+  if (hasCachedRows) return <></>;
   return (
     <div role="alert" className="flex min-h-64 flex-1 items-center justify-center p-6">
       <EmptyState

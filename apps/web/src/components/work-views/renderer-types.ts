@@ -25,6 +25,10 @@ export interface WorkViewGroupPage<TTarget extends ViewTarget> {
   readonly rows: readonly WorkViewRowFor<TTarget>[];
   readonly nextCursor: string | null;
   readonly loading: boolean;
+  /** The failed cursor stays with its path so the owning continuation can retry it. */
+  readonly retryCursor?: string | null;
+  /** The owning continuation renders application-owned recovery copy for this failure. */
+  readonly error?: unknown;
 }
 
 /** Group summary returned by the root query. */

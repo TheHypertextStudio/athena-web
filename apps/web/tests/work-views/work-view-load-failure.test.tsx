@@ -21,4 +21,12 @@ describe('WorkViewLoadFailure', () => {
 
     expect(screen.getByRole('button', { name: 'Retrying' })).toBeDisabled();
   });
+
+  it('does not replace cached roster rows after a local failure', () => {
+    const { container } = render(
+      <WorkViewLoadFailure title="Tasks" retrying={false} hasCachedRows onRetry={vi.fn()} />,
+    );
+
+    expect(container).toBeEmptyDOMElement();
+  });
 });

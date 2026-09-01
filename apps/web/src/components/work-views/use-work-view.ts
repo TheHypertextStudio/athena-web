@@ -61,6 +61,13 @@ import {
   workViewFilterFieldCatalog,
 } from './view-state';
 import type { WorkViewGroupPage } from './renderer-types';
+import {
+  emptyWorkViewPages,
+  orderedWorkViewPages,
+  reduceWorkViewPages,
+  workViewPageForPath,
+  type WorkViewPages,
+} from './use-work-view-pages';
 
 interface QueryRequestByTarget {
   readonly task: ReturnType<typeof TaskWorkViewQueryRequest.parse>;
@@ -236,7 +243,18 @@ export interface WorkViewController<TTarget extends ViewTarget> {
   readonly facetLoading: boolean;
   readonly facetHasMore: boolean;
   readonly facetLoadingMore: boolean;
-  readonly error: unknown;
+  /** Initial roster failure. Cached rows remain visible for every other failure owner. */
+  readonly initialError: unknown;
+  /** Root continuation failure. Retry repeats the retained root cursor. */
+  readonly rootContinuationError: unknown;
+  /** Facet query failure owned by the filter builder. */
+  readonly facetError: unknown;
+  /** Personal view preference failure owned by the changed presentation control. */
+  readonly preferencesError: unknown;
+  /** Saved-view mutation failure owned by the open save dialog. */
+  readonly saveError: unknown;
+  /** Default mutation failure owned by the default action. */
+  readonly defaultError: unknown;
   readonly saving: boolean;
   readonly settingDefault: boolean;
   readonly updatingPreferences: boolean;
@@ -245,13 +263,15 @@ export interface WorkViewController<TTarget extends ViewTarget> {
   readonly loadMoreFacets: () => void;
   readonly loadMoreGroup: (path: readonly string[]) => void;
   readonly loadMoreRows: () => void;
-  readonly retry: () => void;
+  readonly retryInitial: () => void;
+  readonly retryFacet: () => void;
+  readonly retryPreferences: () => void;
   readonly toggleCollapsedGroup: (key: string) => void;
   readonly toggleHiddenBoardColumn: (key: string) => void;
   readonly showAllBoardColumns: () => void;
   readonly toggleFavoriteView: (viewId: string) => void;
   readonly resetPersonalOverride: () => void;
-  readonly saveView: (input: SaveWorkViewInput) => void;
+  readonly saveView: (input: SaveWorkViewInput) => Promise<void>;
   readonly setAsDefault: () => void;
 }
 
@@ -432,15 +452,11 @@ export function useWorkView<TTarget extends ViewTarget>(
   } | null>(null);
   const [groupPageState, setGroupPageState] = useState<{
     readonly key: string;
-    readonly pages: readonly WorkViewGroupPage<TTarget>[];
-    readonly error: unknown;
+    readonly pages: WorkViewPages<WorkViewGroupPage<TTarget>['rows'][number]>;
   } | null>(null);
   const [rootPageState, setRootPageState] = useState<{
     readonly key: string;
-    readonly rows: readonly WorkViewGroupPage<TTarget>['rows'][number][];
-    readonly nextCursor: string | null;
-    readonly loading: boolean;
-    readonly error: unknown;
+    readonly pages: WorkViewPages<WorkViewGroupPage<TTarget>['rows'][number]>;
   } | null>(null);
   const [personalExtrasState, setPersonalExtrasState] = useState<{
     readonly key: string;
@@ -517,20 +533,11 @@ export function useWorkView<TTarget extends ViewTarget>(
 
   const fetchGroupPage = useCallback(
     async (path: readonly string[], cursor: string | null): Promise<void> => {
-      const pathKey = JSON.stringify(path);
       setGroupPageState((current) => {
-        const pages = current?.key === executionKey ? current.pages : [];
-        const existing = pages.find((page) => JSON.stringify(page.path) === pathKey);
-        const nextPage: WorkViewGroupPage<TTarget> = {
-          path,
-          rows: existing?.rows ?? [],
-          nextCursor: existing?.nextCursor ?? null,
-          loading: true,
-        };
+        const pages = current?.key === executionKey ? current.pages : emptyWorkViewPages();
         return {
           key: executionKey,
-          error: null,
-          pages: [...pages.filter((page) => JSON.stringify(page.path) !== pathKey), nextPage],
+          pages: reduceWorkViewPages(pages, { type: 'request', path, cursor }),
         };
       });
       const pageRequest = parseQueryRequest(target, {
@@ -562,26 +569,20 @@ export function useWorkView<TTarget extends ViewTarget>(
         );
         setGroupPageState((current) => {
           if (current?.key !== executionKey) return current;
-          const existing = current.pages.find(
-            (candidate) => JSON.stringify(candidate.path) === pathKey,
-          );
           // `parseQueryResponse` validated the target discriminator above. TypeScript cannot retain
           // that correlation through an indexed generic response union, so restore it at this one
           // target-checked boundary instead of weakening the renderer contract.
           const pageRows =
             page.rows as unknown as readonly WorkViewGroupPage<TTarget>['rows'][number][];
-          const combined = cursor
-            ? [...(existing?.rows ?? []), ...pageRows].filter(
-                (row, index, all) =>
-                  all.findIndex((candidate) => candidate.id === row.id) === index,
-              )
-            : pageRows;
           return {
             ...current,
-            pages: [
-              ...current.pages.filter((candidate) => JSON.stringify(candidate.path) !== pathKey),
-              { path, rows: combined, nextCursor: page.nextCursor, loading: false },
-            ],
+            pages: reduceWorkViewPages(current.pages, {
+              type: 'success',
+              path,
+              cursor,
+              rows: pageRows,
+              nextCursor: page.nextCursor,
+            }),
           };
         });
       } catch {
@@ -589,10 +590,12 @@ export function useWorkView<TTarget extends ViewTarget>(
           current?.key === executionKey
             ? {
                 ...current,
-                error: new UserFacingError(`Could not load ${target}s in this group.`),
-                pages: current.pages.map((page) =>
-                  JSON.stringify(page.path) === pathKey ? { ...page, loading: false } : page,
-                ),
+                pages: reduceWorkViewPages(current.pages, {
+                  type: 'failure',
+                  path,
+                  cursor,
+                  error: new UserFacingError(`Could not load ${target}s in this group.`),
+                }),
               }
             : current,
         );
@@ -610,9 +613,10 @@ export function useWorkView<TTarget extends ViewTarget>(
     const paths = response.groups
       .filter((group) => group.path.length === depth)
       .map((group) => group.path);
-    const current = groupPageState?.key === executionKey ? groupPageState.pages : [];
+    const current =
+      groupPageState?.key === executionKey ? groupPageState.pages : emptyWorkViewPages();
     for (const path of paths) {
-      if (current.some((page) => JSON.stringify(page.path) === JSON.stringify(path))) continue;
+      if (workViewPageForPath(current, path)) continue;
       void fetchGroupPage(path, null);
     }
   }, [
@@ -923,9 +927,7 @@ export function useWorkView<TTarget extends ViewTarget>(
     (path: readonly string[]): void => {
       const page =
         groupPageState?.key === executionKey
-          ? groupPageState.pages.find(
-              (candidate) => JSON.stringify(candidate.path) === JSON.stringify(path),
-            )
+          ? workViewPageForPath(groupPageState.pages, path)
           : undefined;
       if (!page || page.loading || page.nextCursor === null) return;
       void fetchGroupPage(path, page.nextCursor);
@@ -935,17 +937,14 @@ export function useWorkView<TTarget extends ViewTarget>(
 
   const loadMoreRows = useCallback((): void => {
     const response = queryQ.data;
-    const current = rootPageState?.key === executionKey ? rootPageState : null;
+    const pages = rootPageState?.key === executionKey ? rootPageState.pages : emptyWorkViewPages();
+    const current = workViewPageForPath(pages, []);
     const cursor = current?.nextCursor ?? response?.nextCursor ?? null;
     const groupField = definition.arrangement.groupBy as string | null;
     if (!response || groupField !== null || cursor === null || current?.loading === true) return;
-    const existingRows = current?.rows ?? [];
     setRootPageState({
       key: executionKey,
-      rows: existingRows,
-      nextCursor: cursor,
-      loading: true,
-      error: null,
+      pages: reduceWorkViewPages(pages, { type: 'request', path: [], cursor }),
     });
     const pageRequest = parseQueryRequest(target, { ...request, cursor });
     void queryClient
@@ -976,14 +975,14 @@ export function useWorkView<TTarget extends ViewTarget>(
         setRootPageState((latest) =>
           latest?.key === executionKey
             ? {
-                key: executionKey,
-                rows: [...latest.rows, ...pageRows].filter(
-                  (row, index, all) =>
-                    all.findIndex((candidate) => candidate.id === row.id) === index,
-                ),
-                nextCursor: page.nextCursor,
-                loading: false,
-                error: null,
+                ...latest,
+                pages: reduceWorkViewPages(latest.pages, {
+                  type: 'success',
+                  path: [],
+                  cursor,
+                  rows: pageRows,
+                  nextCursor: page.nextCursor,
+                }),
               }
             : latest,
         );
@@ -993,8 +992,12 @@ export function useWorkView<TTarget extends ViewTarget>(
           latest?.key === executionKey
             ? {
                 ...latest,
-                loading: false,
-                error: new UserFacingError(`Could not load more ${target}s.`),
+                pages: reduceWorkViewPages(latest.pages, {
+                  type: 'failure',
+                  path: [],
+                  cursor,
+                  error: new UserFacingError(`Could not load more ${target}s.`),
+                }),
               }
             : latest,
         );
@@ -1012,13 +1015,14 @@ export function useWorkView<TTarget extends ViewTarget>(
     timezone,
   ]);
 
-  const retry = useCallback((): void => {
+  const retryInitial = useCallback((): void => {
     void queryQ.refetch();
   }, [queryQ]);
 
   const response = useMemo<QueryResponseFor<TTarget> | undefined>(() => {
     const first = queryQ.isPlaceholderData ? undefined : queryQ.data;
-    const continuation = rootPageState?.key === executionKey ? rootPageState : null;
+    const continuation =
+      rootPageState?.key === executionKey ? workViewPageForPath(rootPageState.pages, []) : null;
     if (!first || !continuation) return first;
     return {
       ...first,
@@ -1033,28 +1037,39 @@ export function useWorkView<TTarget extends ViewTarget>(
       definition,
       effectiveDefinition,
       response,
-      groupPages: groupPageState?.key === executionKey ? groupPageState.pages : [],
+      groupPages:
+        groupPageState?.key === executionKey
+          ? orderedWorkViewPages(queryQ.data?.groups ?? [], groupPageState.pages).map((page) => ({
+              path: page.path,
+              rows: page.rows,
+              nextCursor: page.nextCursor,
+              loading: page.loading,
+              retryCursor: page.retryCursor,
+              error: page.error,
+            }))
+          : [],
       collapsedGroups: new Set(collapsedGroupValues),
       hiddenBoardColumns: new Set(hiddenBoardColumnValues),
       favoriteViewIds: new Set(favoriteViewIdValues),
       facetResponse,
       facetMetadataResponse,
       loading: !readyToQuery || queryQ.isPending,
-      loadingMoreRows: rootPageState?.key === executionKey && rootPageState.loading,
+      loadingMoreRows:
+        rootPageState?.key === executionKey &&
+        (workViewPageForPath(rootPageState.pages, [])?.loading ?? false),
       retrying: queryQ.isFetching && queryQ.isError,
       facetLoading: facetQ.isPending,
       facetHasMore: facetQ.hasNextPage,
       facetLoadingMore: facetQ.isFetchingNextPage,
-      error:
-        queryQ.error ??
-        (rootPageState?.key === executionKey ? rootPageState.error : null) ??
-        (groupPageState?.key === executionKey ? groupPageState.error : null) ??
-        facetQ.error ??
-        preferenceError ??
-        saveMutation.error ??
-        defaultMutation.error ??
-        preferencesQ.error ??
-        defaultQ.error,
+      initialError: queryQ.error,
+      rootContinuationError:
+        rootPageState?.key === executionKey
+          ? (workViewPageForPath(rootPageState.pages, [])?.error ?? null)
+          : null,
+      facetError: facetQ.error,
+      preferencesError: preferenceError ?? preferencesQ.error,
+      saveError: saveMutation.error,
+      defaultError: defaultMutation.error,
       saving: saveMutation.isPending,
       settingDefault: defaultMutation.isPending,
       updatingPreferences: preferenceWritesPending > 0,
@@ -1063,13 +1078,25 @@ export function useWorkView<TTarget extends ViewTarget>(
       loadMoreFacets,
       loadMoreGroup,
       loadMoreRows,
-      retry,
+      retryInitial,
+      retryFacet: () => {
+        void facetQ.refetch();
+      },
+      retryPreferences: () => {
+        if (preferencesQ.error) {
+          void preferencesQ.refetch();
+          return;
+        }
+        void preferenceMutation.mutateAsync(preferredStates.current);
+      },
       toggleCollapsedGroup,
       toggleHiddenBoardColumn,
       showAllBoardColumns,
       toggleFavoriteView,
       resetPersonalOverride,
-      saveView: saveMutation.mutate,
+      saveView: async (input) => {
+        await saveMutation.mutateAsync(input);
+      },
       setAsDefault: () => {
         defaultMutation.mutate(undefined);
       },
@@ -1098,6 +1125,7 @@ export function useWorkView<TTarget extends ViewTarget>(
       preferenceError,
       preferenceWritesPending,
       preferencesQ.error,
+      preferencesQ.refetch,
       queryQ.data,
       queryQ.error,
       queryQ.isPending,
@@ -1106,13 +1134,13 @@ export function useWorkView<TTarget extends ViewTarget>(
       readyToQuery,
       response,
       rootPageState,
-      retry,
+      retryInitial,
       showAllBoardColumns,
       requestFacet,
       resetPersonalOverride,
       saveMutation.isPending,
       saveMutation.error,
-      saveMutation.mutate,
+      saveMutation.mutateAsync,
       setDefinition,
       timezone,
       toggleCollapsedGroup,

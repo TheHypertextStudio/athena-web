@@ -119,7 +119,9 @@ export interface WorkViewToolbarProps<TTarget extends ViewTarget> {
   readonly facetLoading?: boolean;
   readonly facetHasMore?: boolean;
   readonly facetLoadingMore?: boolean;
+  readonly facetError?: unknown;
   readonly onFacetLoadMore?: () => void;
+  readonly onFacetRetry?: () => void;
   readonly onFacetRequest?: (field: WorkViewFilterFieldKey<TTarget>, search: string) => void;
 }
 
@@ -142,7 +144,9 @@ export function WorkViewToolbar<TTarget extends ViewTarget>({
   facetLoading = false,
   facetHasMore = false,
   facetLoadingMore = false,
+  facetError,
   onFacetLoadMore,
+  onFacetRetry,
   onFacetRequest,
 }: WorkViewToolbarProps<TTarget>): ReactElement {
   const displayTriggerRef = useRef<HTMLButtonElement>(null);
@@ -189,7 +193,9 @@ export function WorkViewToolbar<TTarget extends ViewTarget>({
                 facetLoading={facetLoading}
                 facetHasMore={facetHasMore}
                 facetLoadingMore={facetLoadingMore}
+                facetError={facetError}
                 onFacetLoadMore={onFacetLoadMore}
+                onFacetRetry={onFacetRetry}
                 onFacetRequest={onFacetRequest}
                 onApply={(nextFilter) => {
                   if (editingFilterIndex === null) {

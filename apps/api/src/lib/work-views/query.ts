@@ -65,10 +65,10 @@ interface PageSqlInput {
   readonly initiative: boolean;
   readonly groupScope: SQL;
   readonly keyset: SQL;
-  readonly order: readonly SQL[];
+  readonly order: SQL[];
   readonly organizationId: string;
   readonly pageLimit: number;
-  readonly sortValues: readonly SQL[];
+  readonly sortValues: SQL[];
 }
 
 interface PageSql {

@@ -7,6 +7,39 @@
 
 ## Active Tasks
 
+### [WORK-ROSTER-CORRECTNESS-001] Make shared work rosters correct by construction
+
+- **Status**: REVIEW
+- **Started**: 2026-08-28
+- **Priority**: P0
+- **Description**: Replace six hand-built roster headers and split scrolling regions with the
+  shared `EntityTable` contract. Preserve direct-page context, hierarchy, mutation refreshes,
+  loaded data during recoverable failures, and responsive behavior across Initiative, Project,
+  Program, Team, Cycle, and Task rosters.
+- **Implementation**: `EntityTable` now owns the header, column geometry, sticky behavior, row
+  density, keyboard movement, selection, drag affordances, and one scroll surface. Work-view API
+  queries return complete direct-page context without changing the response contract or database
+  schema. Mutation invalidation now refreshes the mounted roster in the current tab and sends a
+  target-scoped `BroadcastChannel` hint to other open Docket tabs.
+- **Visual review**: The six-shot craft audit covers 1440x900, 1016x1724, and 390x844 in light and
+  dark themes. It records a SHIP verdict with all eight dimensions at 3 and all five hard gates
+  green. The shared header has no decorative divider. The roster toolbar has external block
+  margins, and the 320px geometry gate reports no page overflow.
+- **Validation**: The final focused matrix passes 24 files and 293 tests. Repository typecheck
+  passes 27 tasks. Repository lint passes 26 tasks. Tooling passes 21 files and 261 tests. The
+  production-build release journey passes all 5 browser tests in 51.6 seconds. The production-size
+  work-view benchmark passes both tests in isolation in 21.8 seconds. A bounded two-package Turbo
+  run reached 173 API files and 232 web files with one failure before it was stopped; the only
+  failure was the same 300ms benchmark while database, API, and web tests competed for this
+  16GB host. Required CI remains the exact-SHA full-suite gate.
+- **Release state**: The branch is rebased onto `origin/main` at `c3a93e1a9b12`, contains no merge
+  commits, and is ready for direct integration after this evidence commit. CI, deployment, and the
+  authenticated production journey remain pending and are tracked as separate states.
+- **Retrospective**: The original roster duplicated layout ownership across product code and the
+  shared table. One component must own header and body geometry. Query invalidation also cannot
+  stop at one browser tab when a detail editor and its mounted roster can be open in different
+  tabs.
+
 ### [TYPES-DOMAIN-001] Delete the global types warehouse
 
 - **Status**: REVIEW

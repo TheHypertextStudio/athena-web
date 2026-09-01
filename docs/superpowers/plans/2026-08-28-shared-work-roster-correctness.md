@@ -954,7 +954,7 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
   state, and live verification state separately.
 - Do not call production fixed until the deployed runtime has been checked in a real browser.
 
-- [ ] **Step 1: Run the machine resource check**
+- [x] **Step 1: Run the machine resource check**
 
   Run:
 
@@ -965,7 +965,10 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
   If the process forest is near its ceiling, report that state before running the root checks. Do
   not disable the watchdog.
 
-- [ ] **Step 2: Run the focused regression matrix one final time**
+  The documented `~/.claude/resource-limits/agentctl` path does not exist on this host. The test
+  runner reported no exit 137 or watchdog kill.
+
+- [x] **Step 2: Run the focused regression matrix one final time**
 
   Run:
 
@@ -1018,13 +1021,13 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
 
   Treat exit 137 with no output as a resource kill. Do not rerun the same command unchanged.
 
-- [ ] **Step 4: Run the visual craft review**
+- [x] **Step 4: Run the visual craft review**
 
   Use the repository `design-review` skill against the production build. Capture at least desktop
   and mobile in light and dark themes. Record alignment, density, hierarchy, responsive behavior,
   accessibility, and interaction findings in the audit. Fix every P0/P1 finding before proceeding.
 
-- [ ] **Step 5: Self-review the complete diff**
+- [x] **Step 5: Self-review the complete diff**
 
   Confirm that `WorkList` contains no manual header, local width map, or separate scroll body.
   Confirm that application code contains no `role="columnheader"`. Confirm that API response types
@@ -1037,7 +1040,7 @@ Tailwind container queries, Testing Library, Vitest, Playwright, and GitHub Acti
   commands, results, remaining release state, and retrospective. Include the worklog and visual
   audit in the final release-gate commit or amend that commit before it leaves the worktree.
 
-- [ ] **Step 7: Rebase and verify linear history before integration**
+- [x] **Step 7: Rebase and verify linear history before integration**
 
   Rebase onto the current integration target. Re-run affected checks after conflict resolution.
   Verify:

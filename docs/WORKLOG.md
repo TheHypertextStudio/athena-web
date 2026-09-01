@@ -517,7 +517,7 @@ offline_access marketplace`, and a bare `marketplace` names nothing in Lovelace'
   with Ollama first; `orchestrator.default_provider` was never consulted. Every earlier "the chat
   never arrives" reading was wrong for a simpler reason: the daemon's success path logs at `debug!`,
   and I was grepping for `laguna` while the work ran on gemma.
-- **Fix one, Lovelace `5b329633ae`**: `preferred_local_model(&LatticeConfig)` reads the operator's
+- **Fix one, Lovelace `89230ca96e`**: `preferred_local_model(&LatticeConfig)` reads the operator's
   provider and model; `resolve_agent_runtime_model` prefers the configured model when the catalog
   serves it, then any model on the configured runtime, then the old first-entry fallback; a
   concrete model named by the command still wins. Ollama is deprecated for relay work — the relay
@@ -532,7 +532,7 @@ offline_access marketplace`, and a bare `marketplace` names nothing in Lovelace'
   A 60-second lease could not survive one acknowledgement round trip: the daemon answered in a
   second and `PUT /result` came back 404. Not caused by any push — the serving revision was two
   days old; it surfaced once enough sealed commands had accumulated.
-- **Fix two, Lovelace `bec36d6974`, deployed as `lattice-signaling-service-00009-74z`**: the relay
+- **Fix two, Lovelace `495585fcc7`, deployed as `lattice-signaling-service-00009-74z`**: the relay
   releases a work item's sealed command at its terminal transition and prunes it from any snapshot
   it loads, so legacy state shrinks on first read; the sealed result keeps its own retention.
   `deploy.yaml` memory 512Mi → 1Gi (the deploy tooling forbids `minInstances` above 0 for
@@ -555,7 +555,7 @@ tokens) exceeds the available context size (32768 tokens)`. An Athena turn ships
   shared Cargo target dir was poisoned by another worktree's build (two copies of
   `platform-resource`), fixed with a targeted `cargo clean` of four crates.
 - **Proof on LM Studio** (workspace `01KV6378GSKDVFRX5FZQ63C9W8`, per the instruction to stop
-  using Las Vegans for Better Transit for tests): EVIDENCE
+  using Las Vegans for Better Transit for tests): work `work_755a85e7` at 22:57 UTC. Docket `POST /v1/me/athena/sessions` → **200 in 38.5 s**; gateway `POST /v1/chat/completions` → **200 in 32.9 s**; beacon `POST /work-items` → 202 in 1.3 s; the daemon opened the item at 22:57:52 and dispatched at 22:57:56 to `runtime=LmStudio model=lovelace:poolside/laguna-s-2.1`; `LM Studio chat completed … tokens=Some(9)` at 22:58:09; beacon `PUT /result` → **200** at 22:58:10. Every hop returned success and the reply reached Docket inside the shared five-minute budget; the daemon's own record is the `dispatching to runtime` and `chat completed` lines above, the gateway's and Docket's are their request logs at those timestamps.
 - **Prompt size was the last wall, and it is Athena's**: a one-line turn reached LM Studio as
   39,760 tokens because `renderToolInstructions` rendered every tool's full description and its
   JSON Schema pretty-printed with every `description`, `title`, and `examples` at every level.
@@ -571,7 +571,7 @@ tokens) exceeds the available context size (32768 tokens)`. An Athena turn ships
   rule, the ~64k context a paired model needs today, and the shared five-minute turn budget.
 - **The daemon now says why a turn failed**: `dispatch_canonical_request` logged nothing when the
   local runtime returned an error, so the only record of "request exceeds the available context
-  size" was LM Studio's own log. Lovelace `b1d5373c82` adds a warning at that branch (request id,
+  size" was LM Studio's own log. Lovelace `60df9a0984` adds a warning at that branch (request id,
   model, error code and message, elapsed) and logs LM Studio's status and the first 512
   characters of its response body on a rejected completion — identifiers and the server's
   message, never prompt content. A runtime that rejects every request is driven through the

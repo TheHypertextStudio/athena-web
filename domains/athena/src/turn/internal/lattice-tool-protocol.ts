@@ -42,7 +42,6 @@ export function latticeToolUseId(sequence: number): string {
   return `${TOOL_USE_ID_PREFIX}${String(sequence).padStart(4, '0')}`;
 }
 
-/** Render the tool instructions appended to a Lattice system prompt. */
 /**
  * Schema keywords that document a schema without changing what it accepts.
  *
@@ -134,6 +133,13 @@ function leadParagraph(description: string): string {
   return (lead ?? '').trim();
 }
 
+/**
+ * Render the compact tool instructions appended to a Lattice system prompt.
+ *
+ * @param tools - Tools offered to the local model for this turn.
+ * @returns An empty string when no tools are offered, otherwise the text protocol and compact
+ * tool schemas the model may use.
+ */
 export function renderToolInstructions(tools: readonly TurnToolDef[]): string {
   if (tools.length === 0) return '';
 

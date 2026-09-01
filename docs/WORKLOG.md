@@ -40,8 +40,11 @@
   all 301 tooling tests, and the focused API infrastructure suite pass. The full local coverage
   command was stopped after four minutes after two infrastructure tests failed under the full
   concurrent graph; the same 18-test file passed alone immediately afterward, and the preceding
-  hosted parent run passed all coverage shards. The replacement hosted run remains the final
-  same-SHA release proof.
+  hosted parent run passed all coverage shards. The first hosted run was correctly cancelled when
+  a newer two-commit delivery landed; its cancelled completion produced a skipped no-op deploy and
+  no automatic E2E run. That replacement run exposed an undocumented exported Athena renderer, so
+  it was cancelled once irrecoverably red instead of burning through the API tail. The declaration
+  now has its required TSDoc, and the focused documentation-coverage and Athena Lattice suites pass.
 - **Learnings**: Combining non-cancellable deployment with validation made deployment safety force
   every superseded validation graph to keep running. Separating those lifecycles preserves safe
   migrations while making stale checks disposable. A four-shard advisory suite is not free merely

@@ -190,6 +190,42 @@
   failed relink cannot destroy a valid connection, and removed unused `profile email` scopes from
   both transports.
 
+### [REPO-BOOTSTRAP-SPEC-001] Define the Hypertext Studio repository bootstrap contract
+
+- **Status**: REVIEW
+- **Started**: 2026-09-01
+- **Priority**: P1
+- **Description**: Write a rough, human-readable specification for the mandatory `./bootstrap`
+  entrypoint every Hypertext Studio repository will adopt. The contract must support macOS and
+  Linux, recognize projects by convention rather than require an infrastructure manifest, guide a
+  person through every unresolved setup step, and converge idempotently across local development
+  and production setup.
+- **Subtasks**:
+  - [x] Compare the existing Docket and Hypertext Studio website bootstrap approaches.
+  - [x] Agree on mandatory adoption, convention-driven discovery, interactive guidance, and
+        black-box idempotence.
+  - [x] Write and self-review the rough repository bootstrap specification.
+  - [x] Prepare the rough design document and work log for atomic commit and user review.
+- **Blockers**: None.
+- **Files changed**:
+  - `docs/superpowers/specs/2026-09-01-repo-bootstrap-design.md`
+  - `docs/WORKLOG.md`
+- **Validation**:
+  - `pnpm typecheck` and `pnpm lint` passed.
+  - The first `pnpm test` run had one 30-second timeout in
+    `tests/athena/phone-call-summary-sheet.test.tsx` under the 475-file web coverage workload. The
+    same test passed alone in 255 ms, and a clean `CI=1 pnpm test` rerun passed it in 215 ms with the
+    full suite.
+  - `pnpm build` passed after the clean test rerun.
+- **Learnings**: Docket is the reference example, but the contract must remain language-neutral and
+  avoid a formal application-facing adapter SDK. Project-specific executable hooks are an escape
+  hatch rather than the normal integration model. Version-control readiness belongs inside the
+  turnkey promise: Git identity, remotes, hooks, Conventional Commit scopes, ignore policy, and
+  history expectations must be reconciled without incidental staging, commits, pushes, or global
+  configuration changes.
+
+---
+
 ### [TYPES-DOMAIN-001] Delete the global types warehouse
 
 - **Status**: REVIEW

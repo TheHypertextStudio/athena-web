@@ -42,6 +42,9 @@ export declare const overlayPrimitiveConfig: ConfigArray;
 /** Menu styling may only come from the shared menu style exports. */
 export declare const menuStyleBoundaryConfig: ConfigArray;
 
+/** Application rosters may only receive column-header semantics from EntityTable. */
+export declare const rosterOwnershipConfig: ConfigArray;
+
 /** Semantic surface roles for the default cohort of component trees. */
 export declare const semanticSurfaceConfig: ConfigArray;
 

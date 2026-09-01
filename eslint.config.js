@@ -6,6 +6,7 @@ import {
   dataLayerConfig,
   menuStyleBoundaryConfig,
   overlayPrimitiveConfig,
+  rosterOwnershipConfig,
   semanticSurfaceCohortConfig,
   serverComponentBoundaryConfig,
 } from './tooling/eslint-config/index.js';
@@ -27,6 +28,7 @@ export default [
   ...dataLayerConfig,
   ...appLocationConfig,
   ...overlayPrimitiveConfig,
+  ...rosterOwnershipConfig,
   ...menuStyleBoundaryConfig,
   ...serverComponentBoundaryConfig,
   ...semanticSurfaceCohortConfig([

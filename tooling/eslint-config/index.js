@@ -208,6 +208,15 @@ const UI_OWNERSHIP_SURFACES = [
   'apps/web/src/app/(app)/**/*.{ts,tsx}',
 ];
 
+/** Keep every application roster on the one table primitive that owns column-header semantics. */
+export const rosterOwnershipConfig = [
+  {
+    files: ['apps/web/src/**/*.{ts,tsx}'],
+    plugins: { 'docket-ui': uiOwnershipPlugin },
+    rules: { 'docket-ui/no-app-owned-columnheader': 'error' },
+  },
+];
+
 /** Radix packages may only appear in the primitives that wrap their accessibility behavior. */
 const RADIX_OVERLAY_PACKAGES = [
   '@radix-ui/react-dialog',
@@ -322,6 +331,7 @@ export const serverComponentBoundaryConfig = [
 export const uiOwnershipConfig = [
   ...overlayPrimitiveConfig,
   ...menuStyleBoundaryConfig,
+  ...rosterOwnershipConfig,
   ...semanticSurfaceConfig,
   ...serverComponentBoundaryConfig,
 ];

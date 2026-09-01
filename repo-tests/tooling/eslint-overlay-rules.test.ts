@@ -22,6 +22,53 @@ const ruleTester = new RuleTester({
   },
 });
 
+describe('docket-ui/no-app-owned-columnheader export', () => {
+  it('publishes the roster ownership rule through the shared plugin', () => {
+    expect(plugin.rules['no-app-owned-columnheader']).toBeDefined();
+  });
+});
+
+ruleTester.run('docket-ui/no-app-owned-columnheader', plugin.rules['no-app-owned-columnheader'], {
+  valid: [
+    { code: '<div role="status" />;' },
+    { code: "React.createElement('div', { role: 'row' });" },
+  ],
+  invalid: [
+    {
+      code: '<div role="columnheader" />;',
+      errors: [{ messageId: 'useEntityTable' }],
+    },
+    {
+      code: 'const role = "columnheader"; <div role={role} />;',
+      errors: [{ messageId: 'useEntityTable' }],
+    },
+    {
+      code: 'function Header({ role }) { return <div role={role} />; }',
+      errors: [{ messageId: 'useEntityTable' }],
+    },
+    {
+      code: '<div role={`columnheader`} />;',
+      errors: [{ messageId: 'useEntityTable' }],
+    },
+    {
+      code: '<div {...{ role: "columnheader" }} />;',
+      errors: [{ messageId: 'useEntityTable' }],
+    },
+    {
+      code: 'const props = { role: "columnheader" }; <div {...props} />;',
+      errors: [{ messageId: 'useEntityTable' }],
+    },
+    {
+      code: 'React.createElement("div", { role: "columnheader" });',
+      errors: [{ messageId: 'useEntityTable' }],
+    },
+    {
+      code: 'const role = "columnheader"; createElement("div", { role });',
+      errors: [{ messageId: 'useEntityTable' }],
+    },
+  ],
+});
+
 ruleTester.run('docket-ui/no-bespoke-overlay', plugin.rules['no-bespoke-overlay'], {
   valid: [
     { code: "import { DialogContent } from '@docket/ui/primitives'; <DialogContent />;" },

@@ -39,9 +39,11 @@ or test caller. The named `program-list-ui.tsx` file was already absent at base 
 slice did not recreate or modify dead Program row code. Program card rendering remains in the
 existing work-card implementation.
 
-The new ownership policy recursively scans `apps/web/src` for quoted or JSX-expression
-`columnheader` roles. It also requires Team, Cycle, and WorkList to import `EntityTable`. The policy
-does not assert Tailwind utility strings.
+The ownership policy now runs as the `docket-ui/no-app-owned-columnheader` ESLint rule across
+`apps/web/src`. The rule rejects direct literals, identifier expressions, template literals,
+object spreads, `React.createElement`, and bare `createElement` props. The shared UI package remains
+outside the application-only policy. The ownership gate uses ESLint's AST walker and separately
+requires an actual `EntityTable` JSX node in Team, Cycle, and WorkList, so a dead import cannot pass.
 
 The required Project contract test contained three stale checks for the pre-Task-5 `ListView`
 implementation. Those checks now follow the current boundaries: WorkViewPage passes grouped pages,
@@ -75,3 +77,15 @@ shared implementation plan remain unstaged.
 
 Task 8 owns the authenticated screenshot matrix and narrow-width browser geometry checks. Task 7
 does not start a second visual-verification path.
+
+## Review fix round 1
+
+The rule-level TDD cycle first failed because the shared plugin did not export the ownership rule.
+After the minimal export passed, eight bypass fixtures failed against the no-op rule. The completed
+AST rule passed all 31 rule tests. The replacement web ownership gate then failed because the root
+lint config did not compose the new policy. It passed all 3 tests after the application-only config
+was added.
+
+The two-file ESLint run over the changed tests emitted no findings but did not finish within the
+review cutoff. It was interrupted after about 90 seconds. This round therefore does not claim that
+command passed. The rule-level suite and replacement ownership gate both completed successfully.

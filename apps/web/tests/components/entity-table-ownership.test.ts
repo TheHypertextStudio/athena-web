@@ -1,44 +1,88 @@
-import { readdirSync, readFileSync } from 'node:fs';
-import { extname, join, relative, resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 
+import { Linter, type Rule } from 'eslint';
+import tseslint from 'typescript-eslint';
 import { describe, expect, it } from 'vitest';
 
+import uiOwnershipPlugin from '../../../../tooling/eslint-config/plugin.js';
+
 const root = resolve(import.meta.dirname, '../../../../');
-const applicationRoot = join(root, 'apps/web/src');
+const ownershipRule = 'docket-ui/no-app-owned-columnheader';
+const rosterPaths = [
+  'apps/web/src/components/teams/team-list-ui.tsx',
+  'apps/web/src/components/cycles/cycle-row.tsx',
+  'apps/web/src/components/work-views/work-list.tsx',
+];
 
-function applicationSources(directory: string): readonly string[] {
-  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const path = join(directory, entry.name);
-    if (entry.isDirectory()) return applicationSources(path);
-    return ['.ts', '.tsx'].includes(extname(path)) ? [path] : [];
-  });
-}
-
-function source(path: string): string {
-  return readFileSync(path, 'utf8');
-}
+const requireEntityTable: Rule.RuleModule = {
+  meta: {
+    type: 'problem',
+    schema: [],
+    messages: { missingOwner: 'Render the roster through EntityTable.' },
+  },
+  create(context) {
+    let ownsRoster = false;
+    return {
+      JSXOpeningElement(node) {
+        if (node.name.type === 'JSXIdentifier' && node.name.name === 'EntityTable') {
+          ownsRoster = true;
+        }
+      },
+      'Program:exit'(node) {
+        if (!ownsRoster) context.report({ node, messageId: 'missingOwner' });
+      },
+    };
+  },
+};
 
 describe('EntityTable ownership', () => {
-  it('keeps application feature code from owning column headers', () => {
-    const columnHeaderRole = /role\s*=\s*(?:["']columnheader["']|\{\s*["']columnheader["']\s*\})/;
-    const owners = applicationSources(applicationRoot)
-      .filter((path) => columnHeaderRole.test(source(path)))
-      .map((path) => relative(root, path));
+  it('executes the AST ownership policy on application code but not its shared owner', () => {
+    const linter = new Linter();
+    const policyConfig = [
+      {
+        files: ['apps/web/src/**/*.{ts,tsx}'],
+        languageOptions: {
+          parser: tseslint.parser,
+          parserOptions: { ecmaFeatures: { jsx: true }, projectService: false },
+        },
+        plugins: { 'docket-ui': uiOwnershipPlugin },
+        rules: { [ownershipRule]: 'error' },
+      },
+    ];
+    const bypass = linter.verify(
+      'const role = "columnheader"; <div role={role} />;',
+      policyConfig,
+      { filename: 'apps/web/src/components/ownership-bypass.tsx' },
+    );
+    const sharedOwner = linter.verify('<div role="columnheader" />;', policyConfig, {
+      filename: 'packages/ui/src/components/entity-table.tsx',
+    });
 
-    expect(owners).toEqual([]);
+    expect(bypass.some((message) => message.ruleId === ownershipRule)).toBe(true);
+    expect(sharedOwner.some((message) => message.ruleId === ownershipRule)).toBe(false);
   });
 
-  it('routes each remaining roster adapter through EntityTable', () => {
-    const rosterPaths = [
-      'apps/web/src/components/teams/team-list-ui.tsx',
-      'apps/web/src/components/cycles/cycle-row.tsx',
-      'apps/web/src/components/work-views/work-list.tsx',
-    ];
+  it('composes the roster ownership policy into the repository lint gate', () => {
+    expect(readFileSync(join(root, 'eslint.config.js'), 'utf8')).toContain(
+      '...rosterOwnershipConfig',
+    );
+  });
+
+  it('renders each roster adapter through EntityTable instead of retaining a dead import', () => {
+    const linter = new Linter();
 
     for (const path of rosterPaths) {
-      expect(source(join(root, path))).toMatch(
-        /import\s*\{[^}]*\bEntityTable\b[^}]*\}\s*from '@docket\/ui\/components'/,
-      );
+      const messages = linter.verify(readFileSync(join(root, path), 'utf8'), {
+        languageOptions: {
+          parser: tseslint.parser,
+          parserOptions: { ecmaFeatures: { jsx: true }, projectService: false },
+        },
+        plugins: { 'roster-test': { rules: { 'require-entity-table': requireEntityTable } } },
+        rules: { 'roster-test/require-entity-table': 'error' },
+      });
+
+      expect(messages).toEqual([]);
     }
   });
 });

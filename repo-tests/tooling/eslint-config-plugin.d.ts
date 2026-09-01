@@ -12,6 +12,7 @@ declare module '*/tooling/eslint-config/plugin.js' {
   const plugin: {
     readonly rules: {
       readonly 'no-bespoke-overlay': Rule.RuleModule;
+      readonly 'no-app-owned-columnheader': Rule.RuleModule;
       readonly 'no-overlay-style-override': Rule.RuleModule;
       readonly 'no-raw-surface-role': Rule.RuleModule;
       readonly 'no-server-query-import': Rule.RuleModule;

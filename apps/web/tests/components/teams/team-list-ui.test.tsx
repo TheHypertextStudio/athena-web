@@ -1,10 +1,10 @@
 import '@testing-library/jest-dom/vitest';
 
-import { TeamOut } from '@docket/types';
 import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import { TeamRows } from '../../../src/components/teams/team-list-ui';
+import { TeamOut } from '../../../src/lib/contracts/team';
 
 const ORG_ID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 const TEAM_ID = '01ARZ3NDEKTSV4RRFFQ69G5FA1';

@@ -1,5 +1,6 @@
+import type { WorkViewGroup } from '@docket/work/work-view-contract';
+
 import { workViewGroupPathKey } from './renderer-types';
-import type { WorkViewGroup } from '@docket/types';
 
 /** The continuation state owned by one root or server group path. */
 export interface WorkViewPageState<TRow extends { readonly id: string }> {

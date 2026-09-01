@@ -3,8 +3,8 @@ import '@testing-library/jest-dom/vitest';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { InitiativeViewDefinition, InitiativeViewRow } from '@docket/types';
 import { EntityTable } from '@docket/ui/components';
+import { InitiativeViewDefinition, InitiativeViewRow } from '@docket/work/work-view-contract';
 
 import {
   buildWorkListColumns,

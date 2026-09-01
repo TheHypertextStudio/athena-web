@@ -1,17 +1,14 @@
 'use client';
 
-import {
-  defaultEntityDisplay,
-  entityNavigationSnapshotFromWorkViewRow,
-  type Health,
-  type WorkViewActor,
-} from '@docket/types';
 import type { Column, ColumnPriority } from '@docket/ui/components';
 import { Calendar } from '@docket/ui/icons';
 import { STRETCHED_LINK } from '@docket/ui/lib/stretched-link';
 import { cn } from '@docket/ui/lib/utils';
 import { Checkbox } from '@docket/ui/primitives';
+import type { Health } from '@docket/work/capability-contract';
+import { defaultEntityDisplay } from '@docket/work/entity-display-contract';
 import type { ViewTarget } from '@docket/work/view-contract';
+import type { WorkViewActor } from '@docket/work/work-view-contract';
 import type { JSX } from 'react';
 
 import DocketLink from '@/components/docket-link';
@@ -22,6 +19,7 @@ import type { WorkStatusDisplay } from '@/components/entity-display/work-status'
 import { WorkStatusIcon } from '@/components/entity-display/work-status';
 import { PriorityGlyph } from '@/components/task-detail/PriorityGlyph';
 import { buildEntityHref } from '@/lib/authenticated-route';
+import { entityNavigationSnapshotFromWorkViewRow } from '@/lib/contracts/entity-navigation';
 import { seedNavigationSnapshot } from '@/lib/navigation-snapshot-runtime';
 
 import {

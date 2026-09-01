@@ -1,5 +1,5 @@
 import { act, render } from '@testing-library/react';
-import { ProjectViewRow } from '@docket/types';
+import { ProjectViewRow } from '@docket/work/work-view-contract';
 import type { JSX } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 

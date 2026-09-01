@@ -48,7 +48,7 @@ function check(jobsYaml: string, needs: string[]): PolicyFinding[] {
   return checkGatePolicy([parseWorkflow('fixture.yml', fixture(jobsYaml, needs))]);
 }
 
-function isCompleteReleaseDirectoryCommand(command: string | undefined): boolean {
+function isCompleteReleaseDirectoryCommand(command: string | null | undefined): boolean {
   return command?.trim() === 'pnpm --filter @docket/web test:e2e:release';
 }
 

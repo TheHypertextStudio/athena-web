@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { TaskViewRow } from '@docket/types';
+import { TaskViewRow } from '@docket/work/work-view-contract';
 
 import {
   buildWorkListRootContinuation,

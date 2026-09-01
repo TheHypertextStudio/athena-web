@@ -146,6 +146,15 @@ jobs:
           MCP_TASKS_ENABLED: "false"
           EOF
 
+      # The manifest above is interpolated from `vars.*`, so an unset repository variable becomes an
+      # empty string and the API refuses to boot — which Cloud Run reports as a failed rollout with
+      # no pointer to the cause. This checks it against the same env contract the container parses,
+      # naming the offending variable while the old revision is still serving.
+      - name: Validate the Cloud Run environment manifest
+        env:
+          API_SECRET_BINDINGS: ${{ steps.active-secrets.outputs.bindings }}
+        run: pnpm exec tsx scripts/verify-env-manifest.ts "$RUNNER_TEMP/docket-api-env.yaml"
+
       - id: deploy-api
         uses: google-github-actions/deploy-cloudrun@v3
         with:

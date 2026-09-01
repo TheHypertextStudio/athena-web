@@ -47,7 +47,7 @@ const SEARCH_INTEGRATIONS: Readonly<Record<string, SearchIntegration>> = {
     evidenceFile: 'apps/web/src/components/work-views/use-work-view.ts',
     evidenceText: "api.v1.orgs[':orgId']['work-views'].query.$post",
     integrationFile: 'apps/web/src/components/work-views/work-view-page.tsx',
-    primitive: 'ListView',
+    primitive: 'EntityTable',
   },
 };
 

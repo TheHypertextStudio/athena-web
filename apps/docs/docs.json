@@ -42,40 +42,53 @@
             ]
           },
           {
-            "group": "Daily work",
+            "group": "Plan and do work",
             "pages": [
               "guides/daily/home-today",
-              "guides/daily/tasks-and-triage",
+              "guides/daily/tasks",
+              "guides/daily/triage",
               "guides/daily/calendar-and-scheduling",
-              "guides/daily/time",
+              "guides/daily/time"
+            ]
+          },
+          {
+            "group": "Find and follow work",
+            "pages": [
               "guides/daily/inbox",
+              "guides/daily/stream",
               "guides/daily/portfolio",
-              "guides/daily/search-and-views",
+              "guides/daily/search",
+              "guides/daily/views",
               "guides/daily/library",
               "guides/daily/graph"
             ]
           },
           {
-            "group": "Core concepts",
+            "group": "Organize work",
             "pages": [
               "guides/concepts/terminology",
               "guides/concepts/workspaces",
               "guides/concepts/teams",
               "guides/concepts/tasks",
               "guides/concepts/projects",
-              "guides/concepts/cycles-and-milestones",
-              "guides/concepts/initiatives-and-programs",
+              "guides/concepts/programs",
+              "guides/concepts/initiatives",
+              "guides/concepts/cycles",
+              "guides/concepts/milestones",
               "guides/concepts/updates-and-health",
               "guides/concepts/labels-and-statuses"
             ]
           },
           {
-            "group": "Managing Docket",
+            "group": "Manage Docket",
             "pages": [
               "guides/manage/workspaces-and-access",
               "guides/manage/workflow-configuration",
-              "guides/manage/connections-and-imports",
-              "guides/manage/templates-automations-and-publishing",
+              "guides/manage/connections",
+              "guides/manage/imports",
+              "guides/manage/templates",
+              "guides/manage/automations",
+              "guides/manage/publishing",
               "guides/manage/account-settings"
             ]
           },
@@ -109,6 +122,32 @@
       }
     ]
   },
+  "redirects": [
+    {
+      "source": "/guides/daily/tasks-and-triage",
+      "destination": "/guides/daily/tasks"
+    },
+    {
+      "source": "/guides/daily/search-and-views",
+      "destination": "/guides/daily/search"
+    },
+    {
+      "source": "/guides/concepts/cycles-and-milestones",
+      "destination": "/guides/concepts/cycles"
+    },
+    {
+      "source": "/guides/concepts/initiatives-and-programs",
+      "destination": "/guides/concepts/initiatives"
+    },
+    {
+      "source": "/guides/manage/connections-and-imports",
+      "destination": "/guides/manage/connections"
+    },
+    {
+      "source": "/guides/manage/templates-automations-and-publishing",
+      "destination": "/guides/manage/templates"
+    }
+  ],
   "navbar": {
     "links": [
       {

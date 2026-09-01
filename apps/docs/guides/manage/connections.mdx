@@ -1,12 +1,11 @@
 ---
-title: 'Connections and imports'
-description: 'Choose between ongoing sync and a one-time move into Docket.'
+title: 'Connections'
+description: 'Keep another tool running beside Docket and control which account, workspace, and data it may sync.'
 ---
 
-Use **Connections** when another tool will keep running beside Docket. Use **Import** when Docket
-will take over the work and the old tool can stop being the working copy.
+Use Connections when another tool will keep running beside Docket.
 
-## Link your account first
+## Link your account
 
 Open **Settings → Connected accounts** to link a Google, GitHub, Linear, or Notion identity. This is
 your sign-in and consent relationship with the provider.
@@ -15,7 +14,7 @@ Then open **Connections** for the personal or shared workspace that should use i
 workspace connection is available to people who have access to that workspace. Admins manage its
 configuration.
 
-## What each connection does
+## Choose what to connect
 
 | Connection          | What Docket uses it for                                                   |
 | ------------------- | ------------------------------------------------------------------------- |
@@ -27,24 +26,13 @@ configuration.
 | **Linear**          | Sync issues, Projects, and Cycles by Team.                                |
 | **Notion**          | Sync designed databases with Docket work.                                 |
 
-The connection card says whether it is connected, disconnected, or needs attention. Open the
-provider's configuration to choose lists, Teams, databases, repositories, and sync direction where
-that provider supports them.
-
-## Understand write-back
-
-Google Tasks and Linear can run as an import-only mirror or sync edits in both directions. Notion
-can sync both directions with Docket in charge when the same field changed on both sides. Docket
-keeps the displaced Notion value in sync history.
-
-Google Calendar separately reports whether editing is enabled or the calendar is read-only.
-
-## Move work once
-
-Open **Settings → Import** when you are leaving another tool. Review the destination and mapping
-before you start. An import is not a live connection and does not promise continuing write-back.
+The connection card shows whether it is connected, disconnected, or needs attention. Open its
+configuration to choose lists, Teams, databases, repositories, and sync direction where the
+provider supports them.
 
 <Warning>
-  Disconnecting a provider stops future sync. It does not mean that Docket should delete work the
-  connection already created.
+  Disconnecting a provider stops future sync. It does not delete work the connection already
+  created.
 </Warning>
+
+Use [Import](/guides/manage/imports) when Docket will take over the work once.

@@ -19,6 +19,7 @@ import { auditMetadataEntries, auditSubjectLabel, auditTypeLabel } from '@/lib/a
 import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
 import type { AdminAuditEvent } from '@/lib/types';
 import { useDebounced } from '@/lib/use-debounced';
+import { usePagedOffset } from '@/lib/use-paged-offset';
 
 /** Page size for the audit feed. */
 const PAGE_SIZE = 50;
@@ -74,8 +75,8 @@ function NoEvents({ filtered }: { readonly filtered: boolean }): JSX.Element {
  */
 export default function AuditPage(): JSX.Element {
   const [typeFilter, setTypeFilter] = useState('');
-  const [offset, setOffset] = useState(0);
   const debouncedType = useDebounced(typeFilter, 250);
+  const [offset, setOffset] = usePagedOffset(debouncedType);
   const query = useApiListQuery(auditDef(debouncedType, offset));
 
   const events = query.data?.items ?? [];
@@ -91,7 +92,6 @@ export default function AuditPage(): JSX.Element {
             value={typeFilter}
             onChange={(event) => {
               setTypeFilter(event.target.value);
-              setOffset(0);
             }}
             placeholder="Filter by event type"
             className="w-64"

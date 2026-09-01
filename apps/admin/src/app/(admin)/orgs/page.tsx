@@ -26,6 +26,7 @@ import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
 import type { AdminOrg } from '@/lib/types';
 import { useDebounced } from '@/lib/use-debounced';
+import { usePagedOffset } from '@/lib/use-paged-offset';
 
 /** Page size for the org list. */
 const PAGE_SIZE = 50;
@@ -78,8 +79,8 @@ function NoOrganizations({ filtered }: { readonly filtered: boolean }): JSX.Elem
 export default function OrgsPage(): JSX.Element {
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<LifecycleFilterValue>(ALL_STATES);
-  const [offset, setOffset] = useState(0);
   const debouncedSearch = useDebounced(search, 250);
+  const [offset, setOffset] = usePagedOffset(`${filter}:${debouncedSearch}`);
   const query = useApiListQuery(orgsDef(debouncedSearch, filter, offset));
 
   const columns = useMemo<readonly Column<AdminOrg>[]>(
@@ -153,19 +154,12 @@ export default function OrgsPage(): JSX.Element {
         description={query.data ? `${total.toLocaleString()} matching` : undefined}
         actions={
           <>
-            <LifecycleFilter
-              value={filter}
-              onChange={(next) => {
-                setFilter(next);
-                setOffset(0);
-              }}
-            />
+            <LifecycleFilter value={filter} onChange={setFilter} />
             <Input
               type="search"
               value={search}
               onChange={(event) => {
                 setSearch(event.target.value);
-                setOffset(0);
               }}
               placeholder="Search name or slug"
               className="w-56"

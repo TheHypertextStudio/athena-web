@@ -20,6 +20,7 @@ import { api } from '@/lib/api';
 import { apiQueryOptions, queryKeys, useApiListQuery } from '@/lib/query';
 import type { AdminUser } from '@/lib/types';
 import { useDebounced } from '@/lib/use-debounced';
+import { usePagedOffset } from '@/lib/use-paged-offset';
 
 /** Page size for the user list. */
 const PAGE_SIZE = 50;
@@ -123,8 +124,8 @@ function NoUsers({ searching }: { readonly searching: boolean }): JSX.Element {
  */
 export default function UsersPage(): JSX.Element {
   const [search, setSearch] = useState('');
-  const [offset, setOffset] = useState(0);
   const debouncedSearch = useDebounced(search, 250);
+  const [offset, setOffset] = usePagedOffset(debouncedSearch);
   const query = useApiListQuery(usersDef(debouncedSearch, offset));
   const columns = useUserColumns();
 
@@ -142,7 +143,6 @@ export default function UsersPage(): JSX.Element {
             value={search}
             onChange={(event) => {
               setSearch(event.target.value);
-              setOffset(0);
             }}
             placeholder="Search name or email"
             className="w-64"

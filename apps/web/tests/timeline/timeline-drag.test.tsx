@@ -331,6 +331,29 @@ describe('a schedule drag says where the object will land', () => {
       restore();
     }
   });
+
+  it('discards retained undo and cascade actions when scheduling permission is removed', () => {
+    const restore = stubLayout(PLOT);
+    const rows = [row('local', 0, 10, ['dependent']), row('dependent', 20, 30)];
+    try {
+      const view = render(<Fixture rows={rows} canSchedule />);
+      const bar = screen.getByRole('button', { name: /Project local — Planned/ });
+      dragBy(bar, PLOT.left + 100, PX_PER_DAY * 20);
+      release(bar);
+
+      expect(screen.getByRole('button', { name: 'Undo move of Project local' })).toBeVisible();
+      expect(screen.getByText(/That pushes/)).toBeVisible();
+
+      view.rerender(<Fixture rows={rows} canSchedule={false} />);
+
+      expect(
+        screen.queryByRole('button', { name: 'Undo move of Project local' }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByText(/That pushes/)).not.toBeInTheDocument();
+    } finally {
+      restore();
+    }
+  });
 });
 
 describe('a drag held at an edge moves the timeline under it', () => {

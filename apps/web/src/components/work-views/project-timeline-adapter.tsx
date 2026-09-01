@@ -127,13 +127,16 @@ export function ProjectTimelineAdapter({
       canSchedule={canSchedule}
       fullBleed
       onReschedule={(id, span) => {
+        if (!canSchedule) return;
         const row = rows.find((candidate) => candidate.id === id);
         if (row !== undefined && isRouteOwnedDirectWorkViewRow(row, organizationId)) {
           onReschedule({ id, organizationId }, span);
         }
       }}
       onApplyCascade={(changes: readonly ScheduleChange[]) => {
-        onApplyCascade(routeOwnedProjectScheduleChanges(rows, organizationId, changes));
+        if (!canSchedule) return;
+        const routeChanges = routeOwnedProjectScheduleChanges(rows, organizationId, changes);
+        if (routeChanges.length > 0) onApplyCascade(routeChanges);
       }}
       applyingCascade={applyingCascade}
       onActivate={onActivate}

@@ -64,14 +64,15 @@ import { CARD_GRID_CLASS, CARD_INSET, CARD_MIN_HEIGHT } from './card-styles';
 import { InitiativeTimeline } from './initiative-timeline';
 import { ProjectDependencyLens } from './project-dependency-lens';
 import { ProjectTimelineAdapter } from './project-timeline-adapter';
-import type { WorkViewRowFor } from './renderer-types';
+import type { WorkViewGroupSummary, WorkViewRowFor } from './renderer-types';
 import { useWorkView } from './use-work-view';
 import { useWorkViewOrder } from './use-work-view-order';
 import { useProjectTimelineMutations } from './use-project-timeline-mutations';
 import type { WorkViewDefinitionFor } from './view-state';
-import { WorkBoard } from './work-board';
+import { visibleWorkBoardRows, WorkBoard } from './work-board';
 import { WorkCards } from './work-cards';
 import { WorkList } from './work-list';
+import { visibleWorkListRows } from './work-list-groups';
 import { WorkViewLoadFailure } from './work-view-load-failure';
 import {
   isRouteOwnedDirectWorkViewRow,
@@ -143,6 +144,7 @@ const PAGE_COPY = {
 } as const;
 
 const SavedWorkViewPage = pageOf(SavedWorkViewOut);
+const EMPTY_WORK_VIEW_GROUPS: readonly WorkViewGroupSummary[] = [];
 
 interface CreatedProjectSelection {
   readonly organizationId: string;
@@ -170,6 +172,12 @@ export interface WorkViewPageProps<TTarget extends ViewTarget> {
 
 function fallbackFor<TTarget extends ViewTarget>(target: TTarget): WorkViewDefinitionFor<TTarget> {
   return FALLBACKS[target] as WorkViewDefinitionFor<TTarget>;
+}
+
+function workViewResponseGroups(
+  response: { readonly groups: readonly WorkViewGroupSummary[] } | null | undefined,
+): readonly WorkViewGroupSummary[] {
+  return response?.groups ?? EMPTY_WORK_VIEW_GROUPS;
 }
 
 /**
@@ -468,20 +476,53 @@ export function WorkViewPage<TTarget extends ViewTarget>({
   // The target discriminator was validated by `useWorkView`. TypeScript loses that correlation
   // when it indexes the four response variants through a generic target.
   const rows = (controller.response?.rows ?? []) as unknown as readonly WorkViewRowFor<TTarget>[];
+  const groups = workViewResponseGroups(controller.response);
+  const requestedLayout = controller.definition.presentation.layout;
+  const layout = supportsWorkViewRenderer(target, requestedLayout) ? requestedLayout : 'list';
+  const visibleRows = useMemo(() => {
+    if (dependencyMode) return [];
+    if (layout === 'list') {
+      return visibleWorkListRows(
+        {
+          target,
+          grouped: Boolean(controller.definition.arrangement.groupBy),
+          rows,
+          summaries: groups,
+          pages: controller.groupPages,
+        },
+        controller.collapsedGroups,
+      );
+    }
+    if (layout === 'board') {
+      return visibleWorkBoardRows(
+        controller.definition,
+        rows,
+        groups,
+        controller.groupPages,
+        controller.hiddenBoardColumns,
+      );
+    }
+    return rows;
+  }, [
+    controller.collapsedGroups,
+    controller.definition,
+    controller.groupPages,
+    controller.hiddenBoardColumns,
+    dependencyMode,
+    groups,
+    layout,
+    rows,
+    target,
+  ]);
   const selectionItems = useMemo(
     () =>
       workViewSelectionObjects(
-        [
-          ...rows,
-          ...controller.groupPages.flatMap((page) => page.rows),
-        ] as readonly WorkViewRowFor<ViewTarget>[],
+        visibleRows as readonly WorkViewRowFor<ViewTarget>[],
         organizationId,
       ),
-    [controller.groupPages, organizationId, rows],
+    [organizationId, visibleRows],
   );
   const selectionSurfaceId = `${organizationId}:${target}:${controller.executionKey}`;
-  const requestedLayout = controller.definition.presentation.layout;
-  const layout = supportsWorkViewRenderer(target, requestedLayout) ? requestedLayout : 'list';
   const { openSearch, restoreFocus } = useInPageSearchTarget({
     id: `work-view:${target}`,
     rootRef,

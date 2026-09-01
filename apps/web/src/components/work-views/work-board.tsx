@@ -41,6 +41,62 @@ import { CARD_CHECKBOX_REVEAL_CLASS } from './card-styles';
 
 const MAX_MOUNTED_CARDS_PER_CELL = 100;
 
+function visibleBoardColumns(
+  groups: readonly WorkViewGroupSummary[],
+  hiddenColumns: ReadonlySet<string>,
+): readonly WorkViewGroupSummary[] {
+  return groups.filter((group) => group.path.length === 1 && !hiddenColumns.has(group.key));
+}
+
+function boardLaneKeys(groups: readonly WorkViewGroupSummary[]): readonly string[] {
+  return [
+    ...new Set(
+      groups
+        .filter((group) => group.path.length === 2)
+        .map((group) => group.path[1])
+        .filter((key): key is string => key !== undefined),
+    ),
+  ];
+}
+
+function mountedWorkBoardRows<TTarget extends ViewTarget>(
+  rows: readonly WorkViewRowFor<TTarget>[],
+  grouped: boolean,
+): readonly WorkViewRowFor<TTarget>[] {
+  const directRows = rows.filter((row) => !row.isContext);
+  return grouped ? directRows.slice(-MAX_MOUNTED_CARDS_PER_CELL) : directRows;
+}
+
+/**
+ * Return the memberships mounted by the board's current visible columns and lanes.
+ *
+ * @param definition - The active board grouping definition.
+ * @param rows - Root rows used by an ungrouped board.
+ * @param groups - Root columns and optional lane summaries.
+ * @param groupPages - Independently loaded rows for each grouped cell.
+ * @param hiddenColumns - Root column keys omitted from the board.
+ * @returns rows mounted by visible board cells in their rendered order.
+ */
+export function visibleWorkBoardRows<TTarget extends ViewTarget>(
+  definition: WorkViewDefinitionFor<TTarget>,
+  rows: readonly WorkViewRowFor<TTarget>[],
+  groups: readonly WorkViewGroupSummary[],
+  groupPages: readonly WorkViewGroupPage<TTarget>[],
+  hiddenColumns: ReadonlySet<string>,
+): readonly WorkViewRowFor<TTarget>[] {
+  const grouped = Boolean(definition.arrangement.groupBy);
+  if (!grouped) return mountedWorkBoardRows(rows, false);
+
+  const laneKeys = boardLaneKeys(groups);
+  const paths = visibleBoardColumns(groups, hiddenColumns).flatMap((column) =>
+    laneKeys.length === 0 ? [column.path] : laneKeys.map((laneKey) => [column.key, laneKey]),
+  );
+  const pages = new Map(groupPages.map((page) => [workViewGroupPathKey(page.path), page]));
+  return paths.flatMap((path) =>
+    mountedWorkBoardRows(pages.get(workViewGroupPathKey(path))?.rows ?? [], true),
+  );
+}
+
 /** Property-changing move emitted by a mutable board group. */
 export interface WorkBoardDrop<TTarget extends ViewTarget> {
   readonly item: WorkViewRowFor<TTarget>;
@@ -288,13 +344,9 @@ export function WorkBoard<TTarget extends ViewTarget>({
           count: totalCount,
         },
       ]
-    : groups.filter((group) => group.path.length === 1 && !hiddenColumns.has(group.key));
+    : visibleBoardColumns(groups, hiddenColumns);
   const laneGroups = groups.filter((group) => group.path.length === 2);
-  const laneKeys = [
-    ...new Set(
-      laneGroups.map((group) => group.path[1]).filter((key): key is string => key !== undefined),
-    ),
-  ];
+  const laneKeys = boardLaneKeys(groups);
   const lanes = laneKeys.length === 0 ? [null] : laneKeys;
   const memberships = useMemo(() => {
     const entries: [
@@ -473,11 +525,7 @@ export function WorkBoard<TTarget extends ViewTarget>({
                         (candidate) =>
                           workViewGroupPathKey(candidate.path) === workViewGroupPathKey(path),
                       );
-                const mountedRows = ungrouped
-                  ? (page?.rows ?? []).filter((row) => !row.isContext)
-                  : (page?.rows ?? [])
-                      .filter((row) => !row.isContext)
-                      .slice(-MAX_MOUNTED_CARDS_PER_CELL);
+                const mountedRows = mountedWorkBoardRows(page?.rows ?? [], !ungrouped);
                 return (
                   <WorkBoardCell
                     key={workViewGroupPathKey(path)}

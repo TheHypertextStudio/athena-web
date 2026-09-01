@@ -1,4 +1,8 @@
-import type { EntityTableContinuation, EntityTableGroup } from '@docket/ui/components';
+import {
+  flattenEntityTableEntries,
+  type EntityTableContinuation,
+  type EntityTableGroup,
+} from '@docket/ui/components';
 import type { ViewTarget } from '@docket/work/view-contract';
 
 import {
@@ -209,6 +213,27 @@ export function buildWorkListRoster<TTarget extends ViewTarget>({
   }
   const groups = nestedGroups(target, summaries, pages, onLoadMore);
   return { memberships: membershipsFromGroups(groups), rows: undefined, groups };
+}
+
+/**
+ * Return the rows that EntityTable exposes after applying the current collapse state.
+ *
+ * @param options - The same direct response, summaries, and pages used to build the roster.
+ * @param collapsed - Encoded full group paths hidden by the renderer.
+ * @returns rows with every collapsed group and descendant removed.
+ */
+export function visibleWorkListRows<TTarget extends ViewTarget>(
+  options: BuildWorkListRosterOptions<TTarget>,
+  collapsed: ReadonlySet<string>,
+): readonly WorkViewRowFor<TTarget>[] {
+  const roster = buildWorkListRoster(options);
+  const entries = flattenEntityTableEntries({
+    rows: roster.rows,
+    groups: roster.groups,
+    collapsed,
+    getRowKey: ({ key }) => key,
+  });
+  return entries.flatMap((entry) => (entry.kind === 'row' ? [entry.row.row] : []));
 }
 
 /**

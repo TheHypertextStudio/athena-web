@@ -108,6 +108,27 @@ interface LastChange {
   readonly from: TimelineSpan;
 }
 
+/** Own schedule consequences and discard them when the route becomes read-only. */
+function useTimelineConsequences(canSchedule: boolean) {
+  const [proposal, setProposal] = useState<readonly ScheduleChange[]>([]);
+  const [lastChange, setLastChange] = useState<LastChange | null>(null);
+  useEffect(() => {
+    if (canSchedule) return;
+    setProposal([]);
+    setLastChange(null);
+  }, [canSchedule]);
+  return { proposal, setProposal, lastChange, setLastChange };
+}
+
+/** Suppress retained schedule actions during the render that removes permission. */
+function visibleTimelineConsequences(
+  canSchedule: boolean,
+  proposal: readonly ScheduleChange[],
+  lastChange: LastChange | null,
+): { readonly proposal: readonly ScheduleChange[]; readonly lastChange: LastChange | null } {
+  return canSchedule ? { proposal, lastChange } : { proposal: [], lastChange: null };
+}
+
 /** Props for {@link TimelineCanvas}. */
 export interface TimelineCanvasProps<T> {
   /** The filtered / sorted / grouped rows, shared with the list lens. */
@@ -179,8 +200,12 @@ export default function TimelineCanvas<T>({
   // `null` means "the responsive default"; a number is the width the user dragged to.
   const [labelWidth, setLabelWidth] = useState<number | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
-  const [proposal, setProposal] = useState<readonly ScheduleChange[]>([]);
-  const [lastChange, setLastChange] = useState<LastChange | null>(null);
+  const { proposal, setProposal, lastChange, setLastChange } = useTimelineConsequences(canSchedule);
+  const { proposal: visibleProposal, lastChange: visibleLastChange } = visibleTimelineConsequences(
+    canSchedule,
+    proposal,
+    lastChange,
+  );
 
   const layout = useMemo(
     () => buildTimelineLayout(applied, catalog, display),
@@ -628,28 +653,28 @@ export default function TimelineCanvas<T>({
       ) : null}
 
       {/* ── Consequences: undo, then the downstream ripple. Never modal. ──── */}
-      {lastChange ? (
+      {visibleLastChange ? (
         <div className={cn('flex items-center gap-2', fullBleed && LABEL_PAD_CLASS)}>
           <Button
             size="sm"
             variant="outline"
             className="gap-1.5"
             onClick={() => {
-              onReschedule(lastChange.id, lastChange.from);
+              onReschedule(visibleLastChange.id, visibleLastChange.from);
               setLastChange(null);
               setProposal([]);
             }}
           >
-            <Undo aria-hidden className="size-4" /> Undo move of {nameOf(lastChange.id)}
+            <Undo aria-hidden className="size-4" /> Undo move of {nameOf(visibleLastChange.id)}
           </Button>
         </div>
       ) : null}
 
       <div className={cn(fullBleed && LABEL_PAD_CLASS)}>
         <CascadeProposal
-          changes={proposal}
+          changes={visibleProposal}
           nameOf={nameOf}
-          noun={proposal.length === 1 ? noun.toLowerCase() : pluralNoun.toLowerCase()}
+          noun={visibleProposal.length === 1 ? noun.toLowerCase() : pluralNoun.toLowerCase()}
           applying={applyingCascade}
           onApply={() => {
             onApplyCascade(proposal);

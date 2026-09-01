@@ -237,13 +237,16 @@ async function exerciseGroupRecovery(page: Page, fixture: WorkRosterFixture): Pr
   await expect
     .poll(() => rootOccurrences.count(), { timeout: TIMEOUTS.pageReady })
     .toBeGreaterThanOrEqual(2);
-  const loadedBefore = await grid.getAttribute('aria-rowcount');
   const loadMore = grid.getByRole('button', { name: /Load more Proposed/iu });
+  const retainedTitle = fixture.bulkTitles.at(-3);
+  if (retainedTitle === undefined) throw new Error('The Proposed continuation fixture is empty.');
+  const retainedRow = grid.getByRole('link', { name: retainedTitle, exact: true });
   await revealAtVirtualEnd(grid, loadMore);
+  await expect(retainedRow).toBeVisible();
   await loadMore.click();
   const retry = grid.getByRole('button', { name: /Retry Proposed/iu });
   await expect(retry).toBeVisible();
-  expect(await grid.getAttribute('aria-rowcount')).toBe(loadedBefore);
+  await expect(retainedRow).toBeVisible();
   rejectContinuation = false;
   await retry.click();
   await expect(retry).toHaveCount(0);
@@ -320,6 +323,8 @@ test('shared work rosters pass the release geometry and interaction contract', a
   await exerciseKeyboard(page, initiativeGrid, fixture);
   await exerciseGroupRecovery(page, fixture);
   await selectRosterView(page, ROSTER_VIEWS.initiativeCompact);
+  const compactInitiativeGrid = page.getByRole('treegrid', { name: 'Initiatives' }).first();
+  await expect(compactInitiativeGrid).toBeVisible({ timeout: TIMEOUTS.pageReady });
 
   const newTitle = 'Created while the Initiative roster stays mounted';
   await page.getByRole('button', { name: 'New initiative' }).click();
@@ -334,16 +339,21 @@ test('shared work rosters pass the release geometry and interaction contract', a
   );
   await createDialog.getByRole('button', { name: 'Create Initiative' }).click();
   await createResponse;
+  await expect(createDialog).toHaveAttribute('aria-busy', 'false');
   await page.keyboard.press('Escape');
-  const rootContinuation = initiativeGrid.getByRole('button', { name: 'Load more Initiatives' });
-  await revealAtVirtualEnd(initiativeGrid, rootContinuation);
+  await expect(createDialog).toBeHidden();
+  await expect(compactInitiativeGrid).toBeVisible({ timeout: TIMEOUTS.pageReady });
+  const rootContinuation = compactInitiativeGrid.getByRole('button', {
+    name: 'Load more Initiatives',
+  });
+  await revealAtVirtualEnd(compactInitiativeGrid, rootContinuation);
   await rootContinuation.click();
-  await revealAtVirtualEnd(initiativeGrid, page.getByRole('link', { name: newTitle }));
+  await revealAtVirtualEnd(compactInitiativeGrid, page.getByRole('link', { name: newTitle }));
 
   const renamed = `${ROSTER_LONG_TITLES.child} renamed`;
   const childLink = page.getByRole('link', { name: ROSTER_LONG_TITLES.child }).first();
-  await revealAtVirtualStart(initiativeGrid, childLink);
-  const mountedGrid = await initiativeGrid.elementHandle();
+  await revealAtVirtualStart(compactInitiativeGrid, childLink);
+  const mountedGrid = await compactInitiativeGrid.elementHandle();
   if (mountedGrid === null) throw new Error('The mounted Initiative treegrid is missing.');
   const detailPage = await page.context().newPage();
   await detailPage.goto(orgHref(fixture.organizationId, `initiatives/${fixture.onlyChildId}`), {
@@ -369,8 +379,11 @@ test('shared work rosters pass the release geometry and interaction contract', a
   await rosterRefresh;
   await detailPage.close();
   await page.bringToFront();
-  await revealAtVirtualStart(initiativeGrid, page.getByRole('link', { name: renamed }).first());
-  const currentGrid = await initiativeGrid.elementHandle();
+  await revealAtVirtualStart(
+    compactInitiativeGrid,
+    page.getByRole('link', { name: renamed }).first(),
+  );
+  const currentGrid = await compactInitiativeGrid.elementHandle();
   if (currentGrid === null) throw new Error('The Initiative treegrid unmounted during rename.');
   expect(
     await mountedGrid.evaluate((original, current) => original === current, currentGrid),

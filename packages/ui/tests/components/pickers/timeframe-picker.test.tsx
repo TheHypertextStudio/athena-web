@@ -123,9 +123,19 @@ describe('TimeframePicker', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Target date — not set' }));
     fireEvent.click(await screen.findByRole('option', { name: 'Specific date' }));
     const grid = await screen.findByRole('grid', { name: 'Target date' });
-    fireEvent.click(within(grid).getByRole('button', { name: '2026-08-25' }));
+    // With no saved value the calendar opens on the current month, so the day to click is read
+    // off what actually rendered rather than hard-coded. A literal date here passes only while
+    // the wall clock sits in that month — and in UTC, not the runner's local zone, which is how
+    // this silently became a September failure that reproduced in CI and nowhere else.
+    const day = assertDefined(
+      within(grid)
+        .getAllByRole('button')
+        .find((button) => /^\d{4}-\d{2}-\d{2}$/.test(button.getAttribute('aria-label') ?? '')),
+    );
+    const chosen = assertDefined(day.getAttribute('aria-label'));
+    fireEvent.click(day);
     expect(onChange).toHaveBeenCalledWith({
-      date: '2026-08-25',
+      date: chosen,
       resolution: null,
       fiscalYearStartMonth: null,
     });
@@ -133,7 +143,7 @@ describe('TimeframePicker', () => {
     rerender(
       <TimeframePicker
         label="Target date"
-        value={{ date: '2026-08-25', resolution: null, fiscalYearStartMonth: null }}
+        value={{ date: chosen, resolution: null, fiscalYearStartMonth: null }}
         fiscalYearStartMonth={0}
         edge="target"
         onChange={onChange}

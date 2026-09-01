@@ -258,9 +258,15 @@ describe('DateRangePicker ordering', () => {
   it('cannot express an end before its start', async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
+    // With no end saved yet, the end calendar opens on the CURRENT month, so these three days
+    // have to live there. A hard-coded month passes only while the wall clock sits in it — and
+    // in the runner's timezone, not the author's, which is how this became a September failure
+    // that reproduced in CI and nowhere else. Every month has at least 20 days.
+    const now = new Date();
+    const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     render(
       <DateRangePicker
-        value={{ start: '2026-08-10', end: null }}
+        value={{ start: `${ym}-10`, end: null }}
         onChange={onChange}
         startPlaceholder="Set start date"
         endPlaceholder="Set end date"
@@ -269,12 +275,12 @@ describe('DateRangePicker ordering', () => {
     );
     await user.click(screen.getByRole('button', { name: /Timeline End/ }));
     const grid = await screen.findByRole('grid', { name: /Timeline End/ });
-    expect(within(grid).getByRole('button', { name: '2026-08-09' })).toBeDisabled();
-    await user.click(within(grid).getByRole('button', { name: '2026-08-09' }));
+    expect(within(grid).getByRole('button', { name: `${ym}-09` })).toBeDisabled();
+    await user.click(within(grid).getByRole('button', { name: `${ym}-09` }));
     expect(onChange).not.toHaveBeenCalled();
 
-    await user.click(within(grid).getByRole('button', { name: '2026-08-20' }));
-    expect(onChange).toHaveBeenCalledExactlyOnceWith({ start: '2026-08-10', end: '2026-08-20' });
+    await user.click(within(grid).getByRole('button', { name: `${ym}-20` }));
+    expect(onChange).toHaveBeenCalledExactlyOnceWith({ start: `${ym}-10`, end: `${ym}-20` });
   });
 
   it('drops a stale end rather than storing an inverted window', async () => {

@@ -1,7 +1,9 @@
 import { createHash, generateKeyPairSync, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 
+import type * as DocketEnvApi from '@docket/env/api';
 import type * as DocketMail from '@docket/mail';
+import type * as GoogleDirectory from '../../src/google-directory';
 import type { Mailer, OutboundMessage } from '@docket/mail';
 import { SESSION_OWNER_HEADER } from '@docket/types';
 import { migrate } from 'drizzle-orm/pglite/migrator';
@@ -2036,6 +2038,45 @@ describe('index.ts module-level env-driven wiring', () => {
       });
     } finally {
       vi.doUnmock('@docket/mail');
+      vi.resetModules();
+    }
+  });
+
+  it('mounts the Workspace group directory when operator SSO is switched on', async () => {
+    let built = 0;
+    vi.doMock('../../src/google-directory', async (importOriginal) => ({
+      ...(await importOriginal<typeof GoogleDirectory>()),
+      createGoogleDirectory: () => {
+        built += 1;
+        return { groupsFor: () => Promise.resolve([]) };
+      },
+    }));
+
+    // The flag is mocked on the env module rather than stubbed as a process env var, so the
+    // assertion holds in both modes this suite runs in: CI sets `SKIP_ENV_VALIDATION`, where the
+    // value never passes through zod's boolean transform and the raw string `'false'` is itself
+    // truthy. A string stub would exercise opposite arms locally and in CI.
+    const withSso = async (enabled: boolean): Promise<void> => {
+      vi.doMock('@docket/env/api', async (importOriginal) => {
+        const actual = await importOriginal<typeof DocketEnvApi>();
+        return { ...actual, env: { ...actual.env, ADMIN_GOOGLE_SSO_ENABLED: enabled } };
+      });
+      vi.resetModules();
+      await import('../../src/index');
+      vi.doUnmock('@docket/env/api');
+    };
+
+    try {
+      // Off: nothing is constructed, so `buildAuthOptions` gets no directory — which is what
+      // makes `adminGoogleSsoEnabled` report off and the console's Google button stay hidden.
+      await withSso(false);
+      expect(built).toBe(0);
+
+      await withSso(true);
+      expect(built).toBe(1);
+    } finally {
+      vi.doUnmock('../../src/google-directory');
+      vi.doUnmock('@docket/env/api');
       vi.resetModules();
     }
   });

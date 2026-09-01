@@ -1,3 +1,4 @@
+import type * as UiComponents from '@docket/ui/components';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
   act,
@@ -45,7 +46,10 @@ vi.mock('@/lib/query', async (importOriginal) => {
   };
 });
 
-vi.mock('@/components/confirm-destructive-dialog', () => ({
+// The dialog moved into `@docket/ui`. Mocking the whole module would drop every other component
+// this test renders, so the real module is spread and one export replaced.
+vi.mock('@docket/ui/components', async (importOriginal) => ({
+  ...(await importOriginal<typeof UiComponents>()),
   ConfirmDestructiveDialog: () => null,
 }));
 

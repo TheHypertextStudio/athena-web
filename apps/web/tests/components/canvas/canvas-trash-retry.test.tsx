@@ -1,3 +1,4 @@
+import type * as UiComponents from '@docket/ui/components';
 import '@testing-library/jest-dom/vitest';
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -39,7 +40,10 @@ vi.mock('../../../src/components/canvas/use-canvas-command-history', () => ({
   },
 }));
 
-vi.mock('../../../src/components/confirm-destructive-dialog', () => ({
+// The dialog moved into `@docket/ui`. Mocking the whole module would drop every other
+// component these tests render, so the real module is spread and one export replaced.
+vi.mock('@docket/ui/components', async (importOriginal) => ({
+  ...(await importOriginal<typeof UiComponents>()),
   ConfirmDestructiveDialog: ({
     open,
     error,

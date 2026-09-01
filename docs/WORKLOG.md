@@ -7,6 +7,33 @@
 
 ## Active Tasks
 
+### [DEPLOY-DOCTOR-DEPS-001] Install the production doctor's runtime dependencies
+
+- **Status**: COMPLETED
+- **Started**: 2026-09-01
+- **Completed**: 2026-09-01
+- **Priority**: P0
+- **Description**: Repair the production deploy job after its filtered pnpm install omitted the
+  environment workspace needed by `scripts/doctor.ts` and `scripts/verify-env-manifest.ts`. The
+  hosted release passed every build, lint, type, test, coverage, and browser gate, then stopped
+  before migrations with `ERR_MODULE_NOT_FOUND` for `zod`.
+- **Subtasks**:
+  - [x] Add a repository contract test for the deploy-time workspace dependency.
+  - [x] Include the environment workspace in the production deploy install.
+  - [x] Validate the repository change.
+- **Files Changed**: `.github/workflows/deploy.yml`,
+  `repo-tests/tooling/bootstrap-setup.test.ts`, and `docs/WORKLOG.md`.
+- **Validation**: The focused tooling test first failed against the root-only install, then passed
+  after the environment workspace was added. All 297 repository tooling tests pass; the CI gate
+  policy, formatting check, and `git diff --check` pass.
+- **Learnings**: pnpm workspace filtering follows declared package dependencies, not relative
+  source imports made by root scripts. A clean deploy checkout therefore needs every workspace
+  whose source those scripts execute named explicitly unless the root package declares it.
+- **Blockers**: Production continues serving the previous revision until the replacement hosted
+  workflow completes.
+
+---
+
 ### [FEDCM-LATTICE-001] Design FedCM-first Connect with Lovelace
 
 - **Status**: REVIEW

@@ -371,6 +371,17 @@ describe('bootstrap runtime Secret Manager access', () => {
   });
 });
 
+describe('production deploy tooling install', () => {
+  const workflow = readFileSync(
+    resolve(import.meta.dirname, '../../.github/workflows/deploy.yml'),
+    'utf8',
+  );
+
+  it('installs the environment workspace used by deploy-time validation scripts', () => {
+    expect(workflow).toContain("filter: '--filter @docket/root --filter @docket/env'");
+  });
+});
+
 describe('production account-creation deployment contract', () => {
   const workflow = readFileSync(
     resolve(import.meta.dirname, '../../.github/workflows/deploy.yml'),

@@ -24,13 +24,13 @@ jobs:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
           service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
 
-      # A filtered install, matching `deploy-runner` below: this job needs `tsx` and nothing else
-      # from the workspace. The previous `npx -y tsx` re-resolved and downloaded tsx from the
-      # registry on every single deploy, and did it outside the `tsx@^4.22.4` pin in the root
-      # package.json — so the production secret gate ran on whatever version npm served that day.
+      # A filtered install, matching `deploy-runner` below. The root supplies `tsx` and the
+      # deploy-time scripts; those scripts execute `packages/env` from source, so its runtime
+      # dependencies must be present in a clean checkout too. The previous `npx -y tsx` re-resolved
+      # and downloaded tsx from the registry on every deploy, outside the root package's pin.
       - uses: ./.github/actions/setup
         with:
-          filter: '--filter @docket/root'
+          filter: '--filter @docket/root --filter @docket/env'
 
       - name: Select active production secrets
         id: active-secrets

@@ -147,6 +147,7 @@ test('saved planning periods retain their fiscal basis across every product surf
   page,
 }) => {
   test.setTimeout(600_000);
+  await page.clock.setFixedTime('2026-05-01T12:00:00.000Z');
   mkdirSync(SHOT_ROOT, { recursive: true });
   const runtimeErrors: string[] = [];
   page.on('pageerror', (error) => {

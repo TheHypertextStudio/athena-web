@@ -90,6 +90,7 @@ async function expectDrawerContentContained(page: Page, drawer: Locator): Promis
     drawer.getByRole('button', { name: 'Link task', exact: true }),
   ]) {
     await expect(control).toBeVisible();
+    await control.scrollIntoViewIfNeeded();
     const controlBox = await control.boundingBox();
     if (!controlBox) throw new Error('Calendar drawer control has no browser geometry.');
     expect(controlBox.x).toBeGreaterThanOrEqual(drawerBox.x);

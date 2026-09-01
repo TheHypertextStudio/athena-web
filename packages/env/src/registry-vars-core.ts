@@ -206,7 +206,8 @@ export const CORE_VARS: readonly VarSpec[] = [
     targets: ['api'],
     required: false,
     zod: authServer.ADMIN_GOOGLE_GROUP_ROLES,
-    where: 'CSV of google-group-email:staff-role pairs granting operator access',
+    where:
+      'CSV of google-group-email:staff-role pairs; required once ADMIN_GOOGLE_SSO_ENABLED is on',
   },
   {
     name: 'GOOGLE_WORKSPACE_DOMAIN',
@@ -215,7 +216,8 @@ export const CORE_VARS: readonly VarSpec[] = [
     targets: ['api'],
     required: false,
     zod: authServer.GOOGLE_WORKSPACE_DOMAIN,
-    where: 'Workspace domain operator sign-in is confined to',
+    where:
+      'Workspace domain operator sign-in is confined to; required once ADMIN_GOOGLE_SSO_ENABLED is on',
   },
   {
     name: 'GOOGLE_CALENDAR_WEBHOOK_URL',

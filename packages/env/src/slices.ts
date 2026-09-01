@@ -75,13 +75,16 @@ export const authServer = {
   /**
    * CSV of `group-email:role` pairs mapping Google Groups onto staff tiers, e.g.
    * `docket-support@example.com:support,docket-admins@example.com:superadmin`. Role defaults
-   * to `superadmin` when a pair omits it. Absent ⇒ the sync grants nothing.
+   * to `superadmin` when a pair omits it. Absent or unparseable ⇒ the sync CHANGES nothing —
+   * it declines to decide rather than reading "no mapping" as "nobody is an operator", so
+   * clearing this mid-edit cannot revoke everyone. Required in practice whenever
+   * `ADMIN_GOOGLE_SSO_ENABLED` is on.
    */
   ADMIN_GOOGLE_GROUP_ROLES: z.string().optional(),
   /**
-   * The Google Workspace domain operator sign-in is confined to. A cheap early reject only —
-   * group membership is what actually grants access, so an account outside any mapped group is
-   * refused whether or not a domain is configured here.
+   * The Google Workspace domain operator sign-in is confined to. Required in practice whenever
+   * `ADMIN_GOOGLE_SSO_ENABLED` is on: an absent domain means NOTHING is granted, because the
+   * permissive reading would silently widen operator SSO to every Google account on earth.
    */
   GOOGLE_WORKSPACE_DOMAIN: z.string().optional(),
   /**

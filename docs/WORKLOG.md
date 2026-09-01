@@ -7873,7 +7873,9 @@ A `/code-review xhigh` over the commit surfaced fourteen findings; twelve were a
 - **Revoking a group-managed operator from the console silently reverted.** `DELETE /admin/staff/:id`
   deleted the row and wrote a `staff.revoked` audit event, then the next sweep re-created it. It now
   409s and says to remove the person from the group. `AdminStaffOut` also gained `managedBy` and
-  `groupsSyncedAt`, so the roster shows which rows the sync owns.
+  `groupsSyncedAt` — though note `/admin/staff` is an API-only surface today: no console screen
+  renders the roster, so those fields are readable only by calling the endpoint. Building that
+  screen is the follow-up that completes the break-glass story.
 - **Blank `ADMIN_GOOGLE_GROUP_ROLES` mass-revoked while a malformed one did not.** Clearing the
   variable mid-edit is a likelier accident than a deliberate mass revocation, so both now mean
   "cannot tell".
@@ -7934,9 +7936,13 @@ superadmin; highest tier wins across groups.
 - **Unrelated fix**: `apps/api/tests/routes/admin.test.ts` hard-coded a billing period ending
   `2026-09-01`, and the credit is the _unused_ remainder measured from now — so the test became a
   time bomb that detonated today. The period is now relative to `now`.
-- **Follow-up**: Cloudflare Access over `docket-admin` and the API's `/admin/*` path, verifying
-  `Cf-Access-Jwt-Assertion` before `staffMiddleware`. That is the layer that stops unauthenticated
-  traffic reaching Cloud Run at all; this change does not alter network exposure.
+- **Follow-ups**:
+  - **An operator-roster screen in the console.** `/admin/staff` has no UI at all, so the documented
+    advice to keep a `manual` break-glass superadmin cannot be verified from the console — only by
+    calling the API. The `managedBy` / `groupsSyncedAt` fields are exposed and waiting for it.
+  - Cloudflare Access over `docket-admin` and the API's `/admin/*` path, verifying
+    `Cf-Access-Jwt-Assertion` before `staffMiddleware`. That is the layer that stops unauthenticated
+    traffic reaching Cloud Run at all; this change does not alter network exposure.
 
 ### [OAUTH-CONSENT-POLISH-001] Design-review pass on the OAuth consent screen
 

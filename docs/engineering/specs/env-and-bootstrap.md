@@ -471,6 +471,12 @@ schema-validated and sensitive values are masked.
   exact generated origins/callbacks, then copy Client ID and masked Client Secret one at a time.
   Downloaded-JSON import remains an alternate path. After the console flow, configure the
   Docket-owned `GOOGLE_OAUTH_PUBLIC` and `GOOGLE_OAUTH_TEST_EMAILS` policy values separately.
+  Operator SSO for the admin console is a further, independent set of Docket-owned policy values
+  — `ADMIN_GOOGLE_SSO_ENABLED`, `ADMIN_GOOGLE_GROUP_ROLES`, `GOOGLE_WORKSPACE_DOMAIN` — plus two
+  steps in the Google **Workspace** admin console (create the groups; grant the API's runtime
+  service account the Groups Reader admin role) that no OAuth credential covers. See
+  `docs/engineering/deployment.md` § "Operator SSO"; with either of the latter two values missing,
+  the group sync deliberately grants nothing.
 - **GitHub:** create a **GitHub App** under the org at
   `https://github.com/organizations/<org>/settings/apps` (not an OAuth App). The identity section
   registers only the product-origin sign-in callback; under Post installation, clear Request user

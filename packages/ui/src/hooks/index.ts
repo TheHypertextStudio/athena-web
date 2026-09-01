@@ -3,7 +3,7 @@
  *
  * @remarks
  * Re-exports the vocabulary provider/resolver, the ListView keyboard hook, the reorder
- * primitive, and the already-authenticated redirect guard so consumers can import them from a
+ * primitive, the derived screen outline, and the already-authenticated redirect guard so consumers can import them from a
  * single subpath: `import { VocabularyProvider, useReorderable } from '@docket/ui/hooks'`.
  */
 export {
@@ -21,6 +21,12 @@ export {
   type UseListKeyboardOptions,
   type UseListKeyboardResult,
 } from './useListKeyboard';
+export {
+  nearestScrollport,
+  type OutlineEntry,
+  useActiveOutlineEntry,
+  useOutlineEntries,
+} from './use-outline';
 export { useMediaQuery } from './useMediaQuery';
 export { useRedirectIfAuthenticated } from './useRedirectIfAuthenticated';
 export {

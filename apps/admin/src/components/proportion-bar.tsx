@@ -40,6 +40,14 @@ export interface ProportionBarProps {
  * a token-filled track with a composed `aria-label`, shared by every distribution rather than
  * re-derived per screen.
  *
+ * The product has a second distribution bar, in `project-detail/overview-summary.tsx`, and it is
+ * deliberately not this one. That bar sits directly beneath a weighted progress bar and is drawn
+ * thinner, gapped and softened specifically so a single-state project does not read as a solid
+ * hundred-percent fill under an empty progress track, and its legend carries status glyphs rather
+ * than colour swatches. Unifying them would either lose that distinction or reduce this to a
+ * config surface where each caller still specifies every dimension. What the two actually share is
+ * the arithmetic, which is a filter and a division.
+ *
  * @param props - See {@link ProportionBarProps}.
  * @returns the bar and its legend.
  */

@@ -2,6 +2,7 @@
 
 /** Docket context for one Library resource. */
 import type { SearchResult } from '../../lib/contracts/search';
+import { formatBytes } from '@docket/ui';
 import { Download, OpenInNew, X } from '@docket/ui/icons';
 import { Button, Skeleton } from '@docket/ui/primitives';
 import Link from '@/components/docket-link';
@@ -9,10 +10,40 @@ import { type JSX, useEffect, useRef } from 'react';
 
 import { primaryResourceAction } from '@/components/library/resource-actions';
 import { api } from '@/lib/api';
-import { formatBytes } from '@/lib/format-bytes';
 import { userErrorMessage } from '@/lib/problem';
 import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 import { hrefForSearchResult } from '@/lib/search-route';
+
+/**
+ * One facet, when it is a non-empty string.
+ *
+ * @param facets - The resource's facets.
+ * @param key - The facet to read.
+ * @returns the value, or null when the resource has no such facet.
+ */
+function stringFacet(facets: Record<string, unknown>, key: string): string | null {
+  const value = facets[key];
+  return typeof value === 'string' && value !== '' ? value : null;
+}
+
+/**
+ * The file facts worth showing beside a resource, in reading order.
+ *
+ * @remarks
+ * A facet is present only when the resource has one — a link has no size, an uploaded note has no
+ * MIME type — so each is checked for its own type rather than assumed, and whatever is missing is
+ * simply left out rather than rendered as a blank.
+ *
+ * @param facets - The resource's facets.
+ * @returns the name, type, and size it actually has.
+ */
+function fileMetaOf(facets: Record<string, unknown>): string[] {
+  const meta = [stringFacet(facets, 'fileName'), stringFacet(facets, 'mimeType')].filter(
+    (value): value is string => value !== null,
+  );
+  if (typeof facets['byteSize'] === 'number') meta.push(formatBytes(facets['byteSize']));
+  return meta;
+}
 
 const SUBJECT_LABEL: Record<string, string> = {
   task: 'Tasks',
@@ -45,15 +76,8 @@ export default function ResourceDetailPanel({
   const primaryAction = primaryResourceAction(resource);
   const hostHref = attachment ? hrefForSearchResult(resource) : null;
   const hostKind = resource.subject?.kind.replaceAll('_', ' ') ?? 'record';
-  const fileName =
-    typeof resource.facets['fileName'] === 'string' ? resource.facets['fileName'] : null;
-  const mimeType =
-    typeof resource.facets['mimeType'] === 'string' ? resource.facets['mimeType'] : null;
-  const byteSize =
-    typeof resource.facets['byteSize'] === 'number' ? resource.facets['byteSize'] : null;
-  const fileMeta = [fileName, mimeType, formatBytes(byteSize)].filter((value): value is string =>
-    Boolean(value),
-  );
+  const fileName = stringFacet(resource.facets, 'fileName');
+  const fileMeta = fileMetaOf(resource.facets);
 
   useEffect(() => {
     headingRef.current?.focus();

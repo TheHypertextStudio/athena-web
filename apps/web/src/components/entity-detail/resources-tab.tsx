@@ -4,6 +4,7 @@
 import { canonicalizeResourceUrl } from '@docket/connections/resource-contract';
 import { type AttachmentOut } from '@docket/work/attachment-contract';
 import { type EntityMention } from '../../lib/contracts/mention';
+import { formatBytes } from '@docket/ui';
 import { Calendar, FileText, Link as LinkIcon, Mail, Plus, Trash2 } from '@docket/ui/icons';
 import { Button } from '@docket/ui/primitives';
 import type { JSX } from 'react';
@@ -15,7 +16,6 @@ import {
   MailAttachmentsPanel,
   type MailAttachmentSubject,
 } from '@/components/athena/mail-attachments-panel';
-import { formatBytes } from '@/lib/format-bytes';
 
 /** Props for {@link ResourcesTab}. */
 export interface ResourcesTabProps {
@@ -122,7 +122,9 @@ function attachmentPresentation(resource: AttachmentOut): {
       return {
         label: 'File',
         detail:
-          [resource.fileName, formatBytes(resource.byteSize)].filter(Boolean).join(' · ') || null,
+          [resource.fileName, resource.byteSize === null ? null : formatBytes(resource.byteSize)]
+            .filter(Boolean)
+            .join(' · ') || null,
         Icon: FileText,
       };
     case 'url':

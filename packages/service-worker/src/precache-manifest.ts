@@ -124,7 +124,19 @@ export function assertWithinBudget(
   );
 }
 
-/** Bytes, rendered the way a person reads them. */
+/**
+ * Bytes, rendered the way a person reads them.
+ *
+ * @remarks
+ * Binary units, deliberately not the decimal `formatBytes` in `@docket/ui`. This renders one number
+ * only — the precache total measured against `PRECACHE_BUDGET_BYTES`, which is `12 * 1024 * 1024`
+ * because a browser's storage quota is binary. Rendering that budget in decimal units would print a
+ * figure that disagrees with the constant it is being compared to. This is also a build-time
+ * diagnostic in a package that has no UI dependency and should not grow one.
+ *
+ * @param bytes - The size in bytes.
+ * @returns the size with its unit.
+ */
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) {
     return `${String(bytes)} B`;

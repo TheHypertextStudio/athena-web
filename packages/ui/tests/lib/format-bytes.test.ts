@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatBytes } from '@/lib/format-bytes';
+import { formatBytes } from '../../src/lib/format-bytes';
 
 describe('formatBytes', () => {
   it('reads whole bytes without a decimal', () => {

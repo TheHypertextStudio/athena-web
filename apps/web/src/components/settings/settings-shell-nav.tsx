@@ -14,6 +14,7 @@
  * chip changes this nav's second half without navigating away from Personal settings.
  */
 import { useContextState } from '@docket/ui/components';
+import { useActiveOutlineEntry, useOutlineEntries } from '@docket/ui/hooks';
 import { cn } from '@docket/ui';
 import Link from '@/components/docket-link';
 import { type JSX, useId, useMemo } from 'react';
@@ -28,7 +29,7 @@ import {
   type SettingsSection,
   workspaceSettingsSectionGroups,
 } from './settings-registry';
-import { useActiveOutlineEntry, useSettingsOutline } from './settings-outline';
+import { SETTINGS_GROUP_ATTR } from './settings-outline';
 import { useCanManageOrg } from './use-can-manage-org';
 
 /** Shared row layout for every settings link, personal or workspace. */
@@ -146,14 +147,14 @@ interface SectionOutlineProps {
  * @remarks
  * Indented under the section row rather than replacing it, so the rail keeps showing where you are
  * in the whole of Settings while it shows where you are inside one section. It renders nothing for
- * a section with fewer than two groups — see `settings-outline.tsx`.
+ * a section with fewer than two groups — see `useOutlineEntries`.
  *
  * @param props - The {@link SectionOutlineProps}.
  * @returns the rendered outline, or null when there is nothing to list.
  */
 function SectionOutline({ content }: SectionOutlineProps): JSX.Element | null {
-  const entries = useSettingsOutline(content);
-  const activeId = useActiveOutlineEntry(content, entries);
+  const entries = useOutlineEntries(content, SETTINGS_GROUP_ATTR);
+  const activeId = useActiveOutlineEntry(entries, content);
 
   if (entries.length === 0) return null;
 

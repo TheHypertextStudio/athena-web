@@ -4,7 +4,7 @@ import { Row, Skeleton, Stack, Text } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
 import { ProportionBar, type ProportionSegment } from '@/components/proportion-bar';
-import { formatBytes } from '@/lib/format-bytes';
+import { formatBytes } from '@docket/ui';
 import type { AdminResources } from '@/lib/types';
 
 /** What each store is called, and the fill it takes in the bar. */

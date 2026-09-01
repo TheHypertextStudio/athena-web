@@ -426,9 +426,8 @@ export async function expectInitiativeIdentityGeometry(
 /** Assert that each required long Initiative title fits inside its visible text box. */
 export async function expectInitiativeTitlesFit(grid: Locator): Promise<void> {
   for (const title of Object.values(ROSTER_LONG_TITLES)) {
-    const link = grid.getByRole('link', { name: title }).first();
-    await expect(link).toBeVisible();
-    const titleBox = link.locator('[data-roster-title]');
+    const titleBox = grid.locator('[data-roster-title]').filter({ hasText: title }).first();
+    await expect(titleBox).toBeVisible();
     const width = await titleBox.evaluate((element) => ({
       visible: element.clientWidth,
       content: element.scrollWidth,

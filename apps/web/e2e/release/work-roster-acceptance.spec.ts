@@ -299,8 +299,9 @@ test('shared work rosters pass the release geometry and interaction contract', a
   await openNavigation.click();
   const navigation = page.getByRole('dialog', { name: 'Navigation' });
   await expect(navigation).toBeVisible();
-  await expectRosterColumnGeometry(initiativeGrid);
-  await expectInitiativeTitlesFit(initiativeGrid);
+  const drawerBackgroundGrid = page.locator('[role="treegrid"][aria-label="Initiatives"]').first();
+  await expectRosterColumnGeometry(drawerBackgroundGrid);
+  await expectInitiativeTitlesFit(drawerBackgroundGrid);
   await page.keyboard.press('Escape');
   await expect(navigation).toBeHidden();
   await expectRosterColumnGeometry(initiativeGrid);

@@ -46,8 +46,9 @@ db:reset` completed. The migration changes no UI behavior, but the requested des
 
 ### [ADMIN-OBS-001] Give the operator console real service, resource, and usage visibility
 
-- **Status**: IN_PROGRESS
+- **Status**: COMPLETED
 - **Started**: 2026-08-31
+- **Completed**: 2026-09-01
 - **Priority**: P1
 - **Description**: The console said what needed a _decision_ and nothing about whether the service
   was _running_. Docket carries no observability stack at all — no Sentry (`SENTRY_DSN` is declared
@@ -125,6 +126,41 @@ db:reset` completed. The migration changes no UI behavior, but the requested des
     and its button sat at different heights on one line.
   - The attention band carried an **all-time** failed-session count as if it were queue depth, so
     the tile could never reach zero and was permanently raised.
+
+- **Token capture**: The schema stated, in a comment, that "Compute/cost/telemetry are NOT stored".
+  That comment is why the question an engineer running this service has to answer — what is Athena
+  costing — had no answer anywhere in the product. The decision is reversed and the docstring now
+  describes what the schema does.
+
+  The counts were already arriving and being discarded: `message_start` carries the input,
+  cache-read and cache-write counts plus the serving model and fell into the translator's
+  `default: break`, and the final output count sits on `message_delta` beside the stop reason
+  already being read. Both are captured, carried on a new field of `turn_end` — which had no channel
+  for them — and folded into the generation's row inside the transaction that already persists each
+  turn, so a crash cannot record a turn and lose its cost. Totals accumulate in SQL rather than
+  read-modify-write, so two turns settling together cannot lose each other's counts.
+
+  The columns are nullable with no default, and that is the load-bearing decision. A generation on a
+  person's own Lattice runtime returns no counts, so a zero would report as free what is actually
+  invisible. Every figure on the screen is paired with how many generations were measured, and a
+  slice with nothing measured says so instead of showing a total.
+
+- **Cross-app promotions**: Three display helpers had each grown a second copy, and two of the
+  copies had drifted into defects. The console's section rail, written after the settings pane's,
+  reintroduced both bugs that one had already fixed — keying entries by a slug of the title, which
+  collides when two sections share a name, and resolving the current section by intersection with a
+  band, which marks nothing at all inside a section taller than the band, precisely on the long
+  screens the rail exists for. The settings implementation is now shared and carries the tests it
+  never had. Byte sizes disagreed by base across apps: the same file read 4 KB in one place and
+  4.1 KB in the other; they agree on decimal now. The service worker keeps its binary copy, because
+  the one number it renders is measured against a budget written in binary and it should not grow a
+  dependency on the UI library to say so.
+
+  The distribution bar was deliberately **not** unified. The product's version is drawn thinner,
+  gapped and softened specifically so a single-state project does not read as a solid full bar under
+  an empty progress track. Merging would either lose that or reduce both to a configuration surface
+  where each caller still specifies every dimension; what they share is a filter and a division. The
+  reasoning is recorded in the code so it is not rediscovered.
 
 - **Enforcement**: The console drifted originally because it sat outside the lint perimeter, so
   applying standards without enforcing them only restarts that clock. `apps/admin` now joins

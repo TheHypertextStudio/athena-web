@@ -4,7 +4,7 @@
 > **Required action**: preserve the no-fallback boundary and complete both production proofs
 > **Status**: implemented locally; production rollout and proof remain open
 > **Owner**: Athena model backend
-> **Last updated**: 2026-08-30
+> **Last updated**: 2026-09-01
 
 Someone can point Athena's model work at a computer they own. They authorize Docket from their
 Lovelace account, pick one of the machines they have paired with Lattice, and from then on Athena's
@@ -39,7 +39,10 @@ is calling; it cannot express whose laptop to wake. Lattice enforces this at the
 personal-runtime dispatch with an API-key credential throws
 `PersonalRuntimeRequiresUserTokenError` **before any request is sent**.
 
-So the credential is a per-user OAuth grant, obtained through Sign in with Lovelace:
+So the credential is a per-user OAuth grant, obtained through **Connect with Lovelace**. This is
+intentionally the same native account-chooser experience as “Sign in with Lovelace,” but it does
+not replace the person's Docket session: it authorizes Docket to use that person's Lattice
+resources.
 
 - **Issuer**: `https://auth.uselovelace.com` (`/oauth/authorize`, `/oauth/token`).
 - **Client**: public client `docket-athena`.
@@ -47,11 +50,41 @@ So the credential is a per-user OAuth grant, obtained through Sign in with Lovel
 - **Stored**: access token, refresh token, granted scope — sealed with AES-256-GCM
   (`lattice_credential.ciphertext`). No Lovelace password ever reaches Docket.
 
+### FedCM-first authorization, OAuth-owned credentials
+
+One explicit **Connect with Lovelace** or **Reconnect Lovelace** click starts a short-lived
+authorization attempt. The API returns two transports for that same OAuth authorization-code +
+PKCE request:
+
+1. A browser-safe FedCM provider request containing only the public client id, redirect URI, exact
+   scopes, state, and S256 code challenge.
+2. The ordinary Lovelace authorization URL for browsers without FedCM and for an explicit fallback.
+
+When `IdentityCredential` and the Credential Management API are available, Docket invokes
+`navigator.credentials.get()` with active mode from that click. Lovelace either resolves the
+native ceremony with a one-time OAuth authorization code or continues into its own consent page and
+then resolves the same ceremony. Docket posts the code to
+`POST /v1/me/athena/lattice/authorize/complete`; only the API can open the sealed verifier and
+exchange the code for tokens.
+
+If the browser does not expose FedCM, Docket navigates to Lovelace immediately from the original
+click. If a native dialog was invoked and then dismissed or failed, Docket never redirects from the
+failure handler: it says that nothing changed and offers an explicit **Continue in Lovelace**
+button. The redirect callback and FedCM completion endpoint call the same attempt-completion
+service, so scope validation, one-time consumption, credential sealing, and connection transitions
+cannot drift between transports.
+
+An authorization attempt is not the active credential. Its state hash, sealed PKCE verifier,
+connection and owner binding, expiry, and terminal outcome live in
+`lattice_authorization_attempt`. A declined or failed reconnect therefore leaves an existing grant
+and device selection intact. Completion is owner-bound and one-time; a replay returns the recorded
+terminal outcome without exchanging the code again.
+
 ### The scopes, and the ones deliberately not requested
 
 | Scope                          | Why Athena needs it                                                                                       |
 | ------------------------------ | --------------------------------------------------------------------------------------------------------- |
-| `openid profile email`         | Bind the Lovelace grant to the Docket owner who approved it.                                              |
+| `openid`                       | Give the grant a stable Lovelace subject without requesting profile fields Docket does not use.           |
 | `offline_access`               | Refresh the owner grant without sending the person through consent for every job.                         |
 | `lattice:compute:inference`    | Use an existing personal runtime for chat and durable relay work.                                         |
 | `lattice:compute:catalog:read` | Populate the device and model surface from the gateway catalog instead of a Docket-owned hard-coded list. |
@@ -160,12 +193,13 @@ defines the port.
 
 ## 6. Data model
 
-| Table                | Holds                                                                                                                                                                                                                               |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `lattice_connection` | One row per Better Auth user: status, `enabled`, the chosen runtime, granted scope, and the last failure code.                                                                                                                      |
-| `lattice_credential` | The AES-256-GCM sealed OAuth tokens, joined by a compound owner foreign key.                                                                                                                                                        |
-| `agent_session`      | The execution surface. Assignment sessions delegated to the relay use `execution_surface = lattice`.                                                                                                                                |
-| `agent_delegation`   | One durable assignment job with owner, assignment, session, task, connection, runtime, logical submission id, work id, sealed reply key, relay cursor, next poll time, failure, outcome, proposal, and result acknowledgement time. |
+| Table                           | Holds                                                                                                                                                                                                                               |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `lattice_connection`            | One row per Better Auth user: status, `enabled`, the chosen runtime, granted scope, and the last failure code.                                                                                                                      |
+| `lattice_credential`            | The AES-256-GCM sealed OAuth tokens, joined by a compound owner foreign key.                                                                                                                                                        |
+| `lattice_authorization_attempt` | A short-lived owner- and connection-bound OAuth attempt: hashed state, sealed PKCE verifier, requested scope, expiry, and one-time terminal outcome. It is separate from the active credential.                                     |
+| `agent_session`                 | The execution surface. Assignment sessions delegated to the relay use `execution_surface = lattice`.                                                                                                                                |
+| `agent_delegation`              | One durable assignment job with owner, assignment, session, task, connection, runtime, logical submission id, work id, sealed reply key, relay cursor, next poll time, failure, outcome, proposal, and result acknowledgement time. |
 
 Per user, not per organization: a coworker cannot point the team's Athena at a laptop they do not
 own. Two constraints carry real weight:
@@ -189,8 +223,9 @@ records the outcome. The state machine is in
 ## 7. Surfaces
 
 `GET|PATCH|DELETE /v1/me/athena/lattice`, `POST /v1/me/athena/lattice/authorize`,
-`GET /v1/me/athena/lattice/devices`, `POST /v1/me/athena/lattice/device`, and the browser callback
-at `/internal/integrations/lattice/callback`.
+`POST /v1/me/athena/lattice/authorize/complete`, `GET /v1/me/athena/lattice/devices`,
+`POST /v1/me/athena/lattice/device`, and the browser callback at
+`/internal/integrations/lattice/callback`.
 
 Durable assignment jobs use the OAuth-protected gateway routes
 `GET /v1/personal-relay/lattices`, `POST /v1/personal-relay/work-items`,
@@ -241,6 +276,14 @@ credential. Every model grant, device choice, and enablement state still belongs
 user. The user never enters a gateway URL, API key, or token. A deployment that sets none of these
 OAuth values keeps Lattice unavailable.
 
+The Lovelace OAuth registration must be a public client that requires PKCE, allow Docket's exact
+web origin for FedCM, allow the exact Docket callback URI for redirect OAuth, and allow only the
+four scopes above. Lovelace's `feature.auth.fedcm_oauth_authorization` flag gates the
+OAuth-code-through-FedCM assertion path and fails closed. Rollout order is therefore: deploy the
+Lovelace provider support and flag definition, register the Docket client without a secret, apply
+Docket migration `0122_certain_hobgoblin.sql`, deploy Docket API and Web, enable the Lovelace flag,
+then prove native Chrome and redirect-only ceremonies against the deployed origins.
+
 Submission and polling are product settings. The `service_control` table holds one row per control
 (`lattice_submissions` and `lattice_polling`), staff change them from the admin console, and the
 five-minute sweep reads them at the start of every pass, so a change takes effect on the next tick.
@@ -271,13 +314,16 @@ the registry without a `link:` or `file:` override.
 | `apps/api/src/routes/lattice.ts`                             | The owner-only REST surface.                                             |
 | `apps/api/src/routes/lattice-connection.ts`                  | Load/seal/refresh one person's grant.                                    |
 | `apps/api/src/routes/lattice-oauth.ts`                       | The browser callback.                                                    |
+| `apps/api/src/routes/lattice-authorization.ts`               | Attempt creation and shared FedCM/redirect completion.                   |
 | `apps/api/src/routes/lattice-backend.ts`                     | Per-owner backend resolution for the agent loop.                         |
 | `apps/api/src/agent/lattice-delegations.ts`                  | Docket-owned durable job state, polling, proposal, and cancellation.     |
 | `apps/api/src/agent/lattice-delegation-runtime.ts`           | Official relay client and crypto adapter.                                |
 | `apps/web/src/app/(app)/settings/athena/lattice-section.tsx` | The settings surface.                                                    |
+| `apps/web/src/app/(app)/settings/athena/lattice-fedcm.ts`    | The active FedCM request and explicit redirect fallback boundary.        |
 | `apps/web/src/app/(app)/settings/athena/lattice-copy.ts`     | Application-owned copy per reason.                                       |
 | `packages/db/src/schema/agents.ts`                           | Lattice connection, credential, session surface, and delegation records. |
 | `packages/db/drizzle/0112_agent-delegation.sql`              | The durable delegation migration.                                        |
+| `packages/db/drizzle/0122_certain_hobgoblin.sql`             | Short-lived Lattice authorization attempts.                              |
 
 ## 12. Evidence
 

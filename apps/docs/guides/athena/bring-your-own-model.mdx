@@ -1,5 +1,5 @@
 ---
-title: "Bring your own model"
+title: 'Bring your own model'
 description: "Run Athena's model work on a computer you own."
 ---
 
@@ -9,16 +9,19 @@ to answer it never leave that machine.
 ## Connect Lovelace
 
 <Steps>
-  <Step title="A Lovelace account">
-    Lovelace Lattice is the compute network this runs on.
-  </Step>
+  <Step title="A Lovelace account">Lovelace Lattice is the compute network this runs on.</Step>
   <Step title="A paired machine">
     A laptop or desktop running the Lattice daemon in front of Ollama or LM Studio.
   </Step>
   <Step title="Authorize Docket">
-    Connect your Lovelace account in **Settings → Athena** and pick a paired machine.
+    Choose **Connect with Lovelace** in **Settings → Athena**. A supported browser opens its native
+    Lovelace account dialog; otherwise, Docket continues on Lovelace's page. Then pick a paired
+    machine.
   </Step>
 </Steps>
+
+If you close the browser's Lovelace dialog, Docket leaves any existing connection unchanged. You
+can try again or choose **Continue in Lovelace** to finish on Lovelace's page.
 
 ## How Docket sends a request to your machine
 
@@ -29,16 +32,16 @@ Docket sends the request to Lovelace's hosted gateway. Your daemon reads it on i
 it, and sends the reply back the same way.
 
 <Note>
-  **Docket never talks to your device.** It talks to the gateway. Your machine is unaddressable
-  from the internet.
+  **Docket never talks to your device.** It talks to the gateway. Your machine is unaddressable from
+  the internet.
 </Note>
 
 ## What runs where
 
-| Where it runs | What runs there |
-| --- | --- |
-| Your machine | Writing Athena's replies |
-| Docket | Your tasks, projects, comments, calendar, and the time ledger |
+| Where it runs | What runs there                                               |
+| ------------- | ------------------------------------------------------------- |
+| Your machine  | Writing Athena's replies                                      |
+| Docket        | Your tasks, projects, comments, calendar, and the time ledger |
 
 Sessions, proposals, approvals, and permissions work exactly as they do otherwise. See
 [Proposals and approvals](/guides/athena/proposals-and-approvals).

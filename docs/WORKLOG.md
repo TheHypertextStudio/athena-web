@@ -84,9 +84,45 @@
 
 ---
 
-### [FEDCM-LATTICE-001] Design FedCM-first Connect with Lovelace
+### [FEDCM-LATTICE-002] Implement FedCM-first Connect with Lovelace
 
 - **Status**: REVIEW
+- **Started**: 2026-09-01
+- **Priority**: P1
+- **Description**: Implement the approved FedCM-first authorization design across Lovelace and
+  Docket. Lovelace OAuth remains the authority for scopes, authorization codes, and durable tokens;
+  FedCM is the preferred browser transport for the one-time code, with redirect OAuth retained for
+  browsers that do not expose FedCM.
+- **Subtasks**:
+  - [x] Audit the current Lovelace FedCM, OAuth, consent, and feature-flag boundaries.
+  - [x] Audit the current Docket Lattice OAuth, credential persistence, API, and settings UI.
+  - [x] Write and self-review the cross-repository implementation plan.
+  - [x] Add Lovelace's FedCM OAuth-code and continuation-consent branches test-first.
+  - [x] Add separate Docket authorization attempts and shared completion semantics test-first.
+  - [x] Invoke active FedCM from Docket and retain explicit redirect fallback test-first.
+  - [x] Run focused coverage, type, lint, documentation, and migration gates in both repositories.
+  - [x] Prove native Chrome and redirect-only browser behavior or record the exact external blocker.
+- **Plan**:
+  `docs/superpowers/plans/2026-09-01-fedcm-first-lattice-authorization.md` (local execution
+  artifact; never stage or commit)
+- **Files**: See the plan and the approved design. Unrelated existing Lattice prompt/runtime edits
+  in the checkout are explicitly out of scope and must remain untouched.
+- **Validation**: Local FedCM helper and Settings tests cover active mode, one-time-code completion,
+  unsupported-browser redirect, and dismissal-without-redirect. API tests cover owner binding,
+  replay, shared redirect/FedCM completion, scope validation, and preserving an active grant after a
+  failed reconnect. All affected Docket and Lovelace tests, typechecks, focused lints,
+  documentation checks, and migration generation pass. Lovelace's repository-wide accounts-service
+  lint remains red on unrelated existing device, API-key, revocation, and test-helper files. This is
+  protocol coverage, not a claim that the native dialog ran.
+- **Blockers**: Native Chrome and production acceptance require deploying both repositories,
+  registering `docket-athena` as a public PKCE client with Docket's exact origin and callback URI,
+  applying Docket migration `0122_certain_hobgoblin.sql`, and enabling Lovelace flag
+  `feature.auth.fedcm_oauth_authorization`. Those external mutations are not authorized in this
+  task, so the last proof subtask remains open.
+
+### [FEDCM-LATTICE-001] Design FedCM-first Connect with Lovelace
+
+- **Status**: COMPLETED
 - **Started**: 2026-09-01
 - **Priority**: P1
 - **Description**: Define how Docket can use the browser's active FedCM account chooser as the
@@ -99,14 +135,14 @@
   - [x] Write the cross-repository design specification.
   - [x] Self-review the specification for security, lifecycle, and fallback ambiguity.
   - [x] Commit the design artifact and tracking entry.
-  - [ ] Obtain written-spec approval before producing the implementation plan.
+  - [x] Obtain written-spec approval before producing the implementation plan.
 - **Files**:
   - `docs/superpowers/specs/2026-09-01-fedcm-first-lattice-authorization-design.md`
   - `docs/WORKLOG.md`
 - **Validation**:
   - `pnpm exec prettier --check docs/superpowers/specs/2026-09-01-fedcm-first-lattice-authorization-design.md docs/WORKLOG.md`
   - `pnpm docs:check`
-- **Blockers**: Written-spec approval is required before implementation planning.
+- **Blockers**: None. The approved design is now the implementation authority.
 - **Notes**: The native browser dialog is preferred when supported. Dismissing that dialog must not
   trigger a surprise redirect; Docket will offer an explicit Continue in Lovelace action instead.
   Self-review separated pending authorization attempts from active credentials so a dismissed or

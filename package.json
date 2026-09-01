@@ -49,6 +49,7 @@
     "workspaces:provision": "tsx scripts/provision-workspaces.ts",
     "sunsama:import": "tsx scripts/import-sunsama.ts",
     "check:context-strategy": "tsx scripts/context-strategy-check.ts",
+    "rollback": "tsx scripts/rollback.ts",
     "scheduler:setup": "dotenv -e .env.local -- tsx scripts/scheduler-setup.ts",
     "billing:launch-audit": "dotenv -e .env.local -- tsx scripts/billing-launch-audit.ts",
     "proxy:install": "portless service install",

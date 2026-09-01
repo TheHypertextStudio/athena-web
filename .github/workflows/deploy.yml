@@ -240,12 +240,16 @@ jobs:
           export SCHEDULER_API_URL
           pnpm exec tsx scripts/scheduler-setup.ts
 
-  # No `needs: deploy-api`. The admin image consumes nothing the API job produces — every build
-  # arg comes from repo vars — so the two Docker builds ran back to back for no reason. Admin is
-  # the internal console and reaches the database only through the API, so the few seconds where
-  # a new admin revision may precede the new API revision costs nothing a user can see.
+  # `needs: deploy-api`, despite the admin image consuming nothing the API job produces. The
+  # original reason for running them independently was that both jobs built a Docker image and the
+  # builds would have queued; that stopped being true when the builds moved to `build-images`, and
+  # this job became a rollout of an image already in the registry. What remains is the failure
+  # case the old arrangement never covered: when the API deploy fails, a new admin revision used to
+  # ship anyway and serve against the OLD API indefinitely — not for the few seconds of skew the
+  # previous note weighed. Ordering costs a rollout's wait and keeps the console with its API.
   deploy-admin:
     name: Deploy admin
+    needs: deploy-api
     runs-on: ubuntu-latest
     environment: production
     permissions:

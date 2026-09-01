@@ -330,6 +330,21 @@ commits on `main`, only the `.github`-only and `scripts`-only ones would have sk
 of tonight's apps/api and packages/integrations work still triggers a web build, correctly,
 because it changes what `@docket/web` imports.
 
+### Rolling back
+
+Traffic-only. Migrations are additive by policy precisely so the previous revision keeps working
+against the newer schema — never roll the schema backward.
+
+```bash
+GCP_PROJECT_ID=<project> pnpm rollback --service docket-api          # list revisions + traffic
+GCP_PROJECT_ID=<project> pnpm rollback --service docket-api --to <revision>
+```
+
+Listing marks each revision `ready` or `NOT READY`, so a failed deploy is visible as a revision
+that exists but never became healthy. The rollback refuses a revision that does not exist, one that
+never became ready, and one already serving all traffic — the three mistakes that are easiest to
+make while something is broken. Add `--dry-run` to print the `gcloud` command instead of running it.
+
 ### Rotating a Secret Manager secret
 
 ```bash

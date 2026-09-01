@@ -93,7 +93,7 @@ function objectOwnsColumnheader(rawExpression, sourceCode, seen = new Set()) {
     if (expression.name === 'undefined') return false;
     if (seen.has(expression)) return false;
     const initializer = identifierInitializer(expression, sourceCode);
-    if (initializer === undefined) return true;
+    if (initializer === undefined) return false;
     seen.add(expression);
     return objectOwnsColumnheader(initializer, sourceCode, seen);
   }
@@ -104,7 +104,7 @@ function objectOwnsColumnheader(rawExpression, sourceCode, seen = new Set()) {
     );
   }
   if (expression.type === 'Literal') return false;
-  if (expression.type !== 'ObjectExpression') return true;
+  if (expression.type !== 'ObjectExpression') return false;
   return expression.properties.some((property) => {
     if (property.type === 'SpreadElement') {
       return objectOwnsColumnheader(property.argument, sourceCode, seen);

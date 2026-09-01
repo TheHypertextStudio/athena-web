@@ -106,6 +106,15 @@ export interface AdminListRowProps {
   readonly onActivate?: (() => void) | undefined;
   /** Whether this row is the selected one, for a row that selects. */
   readonly selected?: boolean | undefined;
+  /**
+   * Whether the row opens something.
+   *
+   * @remarks
+   * Defaults to true. Set it false for a roster row that reports rather than navigates — the shared
+   * row otherwise renders a focusable `<button>` that does nothing when activated, which reads to a
+   * keyboard or screen-reader user as a control that is broken rather than absent.
+   */
+  readonly interactive?: boolean | undefined;
 }
 
 /**
@@ -128,6 +137,7 @@ export function AdminListRow({
   href,
   onActivate,
   selected,
+  interactive,
 }: AdminListRowProps): JSX.Element {
   const slots = {
     title,
@@ -136,6 +146,7 @@ export function AdminListRow({
     ...(meta ? { meta } : {}),
     ...(trailing ? { trailing } : {}),
     ...(selected === undefined ? {} : { selected }),
+    ...(interactive === undefined ? {} : { interactive }),
   };
 
   // A selecting row has no destination, so the shared row renders its own <button> and there is no

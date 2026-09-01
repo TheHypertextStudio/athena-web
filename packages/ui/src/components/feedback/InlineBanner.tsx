@@ -71,7 +71,11 @@ export function InlineBanner({
       tone="floating"
       shape="small"
       pad="comfortable"
-      role="status"
+      // A critical banner reports something that failed, so it interrupts; every other tone is
+      // informational and waits its turn. Announcing an error politely means a screen-reader user
+      // hears it only after whatever they were already reading, which for a failed action is after
+      // they have moved on.
+      role={tone === 'critical' ? 'alert' : 'status'}
       className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-2 gap-y-1.5"
     >
       {icon ? <span className={`mt-0.5 shrink-0 ${TONE_CLASS[tone]}`}>{icon}</span> : null}

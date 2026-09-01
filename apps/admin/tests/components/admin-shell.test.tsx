@@ -128,6 +128,7 @@ describe('AdminShell', () => {
         '/status',
         '/audit',
         '/lifecycle',
+        '/operators',
         '/settings',
       ]);
     });
@@ -191,7 +192,7 @@ describe('AdminShell', () => {
       // Asserted as structure, not wording: a status region must appear carrying application
       // copy rather than the provider's exception text. It lives in the shell's banner slot rather
       // than the sidebar so a collapsed rail cannot hide it.
-      const banner = container.querySelector('[role="status"]');
+      const banner = container.querySelector('[role="status"], [role="alert"]');
       if (!banner) throw new Error('Expected the shell to surface the failure in its banner.');
       expect(banner.textContent.trim()).toBeTruthy();
       expect(container.textContent).not.toContain('provider detail that must stay private');
@@ -210,7 +211,7 @@ describe('AdminShell', () => {
 
       expect(mocks.signOut).toHaveBeenCalledWith('operator-1');
       expect(mocks.push).toHaveBeenCalledWith('/sign-in');
-      expect(container.querySelector('[role="status"]')).toBeNull();
+      expect(container.querySelector('[role="status"], [role="alert"]')).toBeNull();
     });
   });
 });

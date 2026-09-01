@@ -6,6 +6,7 @@ import {
   type LucideIcon,
   Layers,
   Settings,
+  Shield,
   Tag,
   Users,
 } from '@docket/ui/icons';
@@ -89,7 +90,10 @@ export const ADMIN_NAV: readonly AdminNavSection[] = [
   },
   {
     title: 'Service',
-    items: [{ href: '/settings', label: 'Settings', icon: Settings }],
+    items: [
+      { href: '/operators', label: 'Operators', icon: Shield },
+      { href: '/settings', label: 'Settings', icon: Settings },
+    ],
   },
 ];
 

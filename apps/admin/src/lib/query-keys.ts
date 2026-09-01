@@ -29,6 +29,7 @@ export const queryKeys = {
   session: () => [...queryKeys.all, 'session'] as const,
 
   /** Headline platform metrics. */
+  staff: () => [...queryKeys.all, 'staff'] as const,
   status: () => [...queryKeys.all, 'status'] as const,
   resources: () => [...queryKeys.all, 'resources'] as const,
   metrics: () => [...queryKeys.all, 'metrics'] as const,

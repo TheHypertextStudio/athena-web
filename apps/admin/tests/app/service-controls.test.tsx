@@ -110,7 +110,7 @@ describe('Service settings screen', () => {
     for (const input of [submissions, polling]) {
       expect(container.querySelector<HTMLLabelElement>(`label[for="${input.id}"]`)).not.toBeNull();
     }
-    expect(container.querySelector('[role="status"]')).toBeNull();
+    expect(container.querySelector('[role="status"], [role="alert"]')).toBeNull();
   });
 
   it('sends only the changed control and adopts the state the API confirms', async () => {
@@ -133,7 +133,7 @@ describe('Service settings screen', () => {
     expect(mocks.patch).toHaveBeenCalledWith({ json: { latticeSubmissionsEnabled: false } });
     expect(checkbox(container, SUBMISSIONS).checked).toBe(false);
     expect(checkbox(container, POLLING).checked).toBe(true);
-    expect(container.querySelector('[role="status"]')).toBeNull();
+    expect(container.querySelector('[role="status"], [role="alert"]')).toBeNull();
   });
 
   it('disables both controls while a change is in flight', async () => {
@@ -194,7 +194,7 @@ describe('Service settings screen', () => {
 
     // The banner renders nothing without a failure, so its presence is the assertion that owned
     // failure copy reached the operator.
-    expect(container.querySelector('[role="status"]')).not.toBeNull();
+    expect(container.querySelector('[role="status"], [role="alert"]')).not.toBeNull();
     expect(container.textContent).not.toContain('provider detail that must stay private');
     expect(checkbox(container, SUBMISSIONS).checked).toBe(true);
     expect(checkbox(container, POLLING).checked).toBe(true);
@@ -207,7 +207,7 @@ describe('Service settings screen', () => {
     await mount();
 
     expect(container.querySelector(SUBMISSIONS)).toBeNull();
-    const banner = container.querySelector('[role="status"]');
+    const banner = container.querySelector('[role="status"], [role="alert"]');
     if (!banner) throw new Error('Expected a failure banner for a non-operator session.');
 
     // Asserted as behaviour rather than markup: the recovery control must actually take the

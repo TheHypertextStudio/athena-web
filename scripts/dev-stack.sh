@@ -67,28 +67,11 @@ probe() {
   [ "$web" = 200 ] && [ "$api" = 200 ] && [ "$oidc" = 200 ]
 }
 
-# Stop every dev process belonging to THIS worktree, and only this worktree.
-#
-# The previous form (`pkill -f "next dev"` and friends) was wrong in both directions. It was
-# unqualified, so it also killed other worktrees' stacks — the thing `docs/engineering/
-# ui-verification.md` warns against. And it matched almost nothing here, because a Turbopack server
-# runs as the resolved `.../node_modules/.bin/next`, not as the string "next dev". The servers it
-# left behind kept their file watchers open, and after a few restarts the next start came up unable
-# to enumerate routes at all: Turbopack reported "Ready" in ~200ms having found none, and every
-# route 404'd — including routes that had worked minutes earlier. That failure reads as a routing
-# bug and is a resource one, which is why it is worth killing precisely.
 stop_stack() {
-  # Matched on each process's resolved command rather than by pattern: a Turbopack server runs as
-  # `.../node_modules/.bin/next`, so a pattern expecting "next dev" in the argv misses it, and the
-  # wrangler and workerd processes match no name-based pattern at all. The proxy is deliberately
-  # left running — it is shared with other worktrees.
-  for pid in $(pgrep -f "$ROOT" 2>/dev/null); do
-    case "$(ps -o command= -p "$pid" 2>/dev/null)" in
-      */.bin/next* | */.bin/turbo* | *turbo-darwin* | *wrangler* | *workerd* | *"tsx watch"*)
-        kill "$pid" 2>/dev/null
-        ;;
-    esac
-  done
+  pkill -f "$ROOT/apps/(web|admin)/.*next.*dev" 2>/dev/null
+  pkill -f "$ROOT/apps/api/.*tsx.*watch" 2>/dev/null
+  pkill -f "$ROOT/.*portless.*run" 2>/dev/null
+  pkill -f "$ROOT/.*turbo.*run.*dev" 2>/dev/null
   sleep 2
 }
 
@@ -100,12 +83,6 @@ case "${1:-start}" in
     stop_stack
     rm -f "$LOG"
     cd "$ROOT" || exit 1
-    # Five Turbopack/wrangler dev servers each open a file watcher over the whole workspace, which
-    # blows past macOS's default per-process descriptor limit. The failure is silent and looks like
-    # a routing bug rather than a resource one: Turbopack cannot enumerate `src/app`, reports
-    # "Ready" having found no routes, and every request 404s — including routes that worked a
-    # moment earlier. Raise the soft limit toward the kernel maximum before anything starts.
-    ulimit -n 65536 2>/dev/null || true
     # `proxy start` is idempotent and leaves a proxy already shared by other worktrees running.
     pnpm exec portless proxy start --port "$PORT" --no-tls >>"$LOG" 2>&1
     # Next watches the entire monorepo. macOS's default soft limit produces a partial route

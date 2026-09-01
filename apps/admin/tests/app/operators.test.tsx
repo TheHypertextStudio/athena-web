@@ -8,7 +8,14 @@ const mocks = vi.hoisted(() => ({ get: vi.fn() }));
 
 vi.mock('@/lib/api', () => ({ api: { admin: { staff: { $get: mocks.get } } } }));
 
+// `QueryErrorBanner` offers a sign-in route when a read is refused, so the screen needs a
+// router mounted even though nothing here navigates.
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+}));
+
 import OperatorsPage from '@/app/(admin)/operators/page';
+import { withQueryClient } from '../support/query-harness';
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -54,14 +61,30 @@ describe('operator roster', () => {
     container.remove();
   });
 
-  /** Render and settle the roster fetch. */
+  /**
+   * Render and settle the roster read.
+   *
+   * @remarks
+   * The screen reads through the query layer, which resolves over several microtask turns rather
+   * than the single turn a bare `fetch` in an effect took. Flushing a fixed number of turns keeps
+   * the helper synchronous-looking without a timer.
+   */
   async function render(): Promise<void> {
     await act(async () => {
-      root.render(<OperatorsPage />);
+      root.render(withQueryClient(<OperatorsPage />));
     });
-    await act(async () => {
-      await Promise.resolve();
-    });
+    // Settle on the outcome rather than on a fixed number of turns: the read resolves over a
+    // variable number of microtask turns, and a fixed count passes or fails by timing.
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      if (
+        container.querySelector('[aria-busy], [aria-hidden="true"] [data-slot="skeleton"]') === null
+      ) {
+        return;
+      }
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    }
   }
 
   it('distinguishes a manual grant from one the Workspace sync owns', async () => {
@@ -81,7 +104,9 @@ describe('operator roster', () => {
 
     // Provenance is the column this screen exists for: a synced row's tier follows its group,
     // so revoking it here would be undone within minutes.
-    const rows = Array.from(container.querySelectorAll('li'));
+    const rows = Array.from(
+      container.querySelectorAll('[role="group"][aria-label="Operators"] > *'),
+    );
     expect(rows).toHaveLength(2);
     expect(rows[0]?.textContent).toContain('Granted here');
     expect(rows[1]?.textContent).toContain('Workspace group');

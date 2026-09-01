@@ -1,121 +1,129 @@
 'use client';
 
-import { Badge, Skeleton } from '@docket/ui/primitives';
-import { type JSX, useCallback, useEffect, useState } from 'react';
+import { IdentityGlyph } from '@docket/ui/components';
+import { Shield } from '@docket/ui/icons';
+import { Badge, Text } from '@docket/ui/primitives';
+import { type JSX } from 'react';
 
-import { EmptyState, ErrorBanner, PageHeader, ROW_CLASS, SignInAction } from '@/components/ui-bits';
+import { AsyncContent, ListSkeleton, QueryErrorBanner } from '@/components/admin-feedback';
+import { AdminPage, AdminPageHeader, AdminSection } from '@/components/admin-page';
+import { AdminList, AdminListRow } from '@/components/admin-table';
 import { api } from '@/lib/api';
 import { formatTimestamp } from '@/lib/lifecycle';
-import { isAuthError, userErrorMessage, userProblemMessage } from '@/lib/problem';
+import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 import type { AdminStaff } from '@/lib/types';
 
 /** Page size for the operator roster. Staff counts are small; one page is the whole list. */
 const PAGE_SIZE = 100;
 
+/** The operator roster. */
+const operatorsDef = apiQueryOptions(
+  queryKeys.staff(),
+  () => api.admin.staff.$get({ query: { limit: String(PAGE_SIZE), offset: '0' } }),
+  'Could not load operators.',
+  { staleTime: STALE.standard },
+);
+
 /**
  * The operator roster: who holds staff access, at what tier, and what provisions it.
  *
  * @remarks
- * A Client Component reading `GET /admin/staff` (superadmin-only; a lower tier 403s inline).
+ * The column that matters is provenance. A `manual` grant is made here and is never touched by the
+ * Google Workspace group sync; a `google_group` grant mirrors group membership, so its tier follows
+ * the group and revoking it here is undone within minutes. Docket's documented recovery story
+ * depends on at least one `manual` superadmin existing — that is the account that still works when
+ * the Workspace configuration is itself what broke — and this screen exists so that can be
+ * confirmed at a glance rather than by calling the API.
  *
- * The column that matters is provenance. A `manual` grant is made here and is never touched by
- * the Google Workspace group sync; a `google_group` grant mirrors group membership, so its tier
- * follows the group and revoking it here is undone within minutes. Docket's documented recovery
- * story depends on at least one `manual` superadmin existing — that is the account that still
- * works when the Workspace configuration is itself what broke — and this screen exists so that
- * can be confirmed at a glance rather than by calling the API.
+ * @returns the roster screen.
  */
 export default function OperatorsPage(): JSX.Element {
-  const [operators, setOperators] = useState<readonly AdminStaff[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [authFailed, setAuthFailed] = useState(false);
-
-  /** Load the operator roster. */
-  const load = useCallback(async (): Promise<void> => {
-    setLoading(true);
-    setError(null);
-    setAuthFailed(false);
-    try {
-      const res = await api.admin.staff.$get({
-        query: { limit: String(PAGE_SIZE), offset: '0' },
-      });
-      if (!res.ok) {
-        setAuthFailed(isAuthError(res));
-        setError(await userProblemMessage(res, 'Could not load operators.'));
-        return;
-      }
-      const page = await res.json();
-      setOperators(page.items);
-      setTotal(page.total);
-    } catch (caught) {
-      setError(userErrorMessage(caught, 'Something went wrong loading operators.'));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const breakGlass = operators.filter(
-    (o) => o.managedBy === 'manual' && o.role === 'superadmin',
-  ).length;
+  const operators = useApiQuery(operatorsDef);
+  const items = operators.data?.items ?? [];
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-8">
-      <PageHeader
-        title="Operators"
-        description={
-          loading ? 'Loading…' : `${total} operator${total === 1 ? '' : 's'} with staff access`
-        }
-      />
-      <ErrorBanner message={error} action={authFailed ? <SignInAction /> : null} />
+    <AdminPage width="list">
+      <AdminPageHeader title="Operators" />
 
-      {!loading && !error && breakGlass === 0 ? (
-        <p role="status" className="text-on-surface-variant text-body-medium">
-          No manually granted superadmin remains. Every superadmin here is provisioned from a Google
-          Workspace group, so a broken Workspace configuration would leave nobody able to restore
-          access. Grant one operator superadmin from this console to keep a way back in.
-        </p>
+      {operators.error ? (
+        <QueryErrorBanner
+          error={operators.error}
+          fallback="Could not load operators."
+          onRetry={() => void operators.refetch()}
+        />
       ) : null}
 
-      {loading ? (
-        <ListSkeleton />
-      ) : operators.length > 0 ? (
-        <ul className="flex flex-col gap-1.5">
-          {operators.map((operator) => (
-            <li key={operator.id}>
-              <div
-                className={`${ROW_CLASS} items-center justify-between gap-4 rounded-lg px-4 py-3`}
-              >
-                <div className="min-w-0">
-                  {/* The name's emphasis comes from the role token, not a raw weight utility:
-                      `title-small` carries its own weight, so the MD3 scale is not forked. */}
-                  <p className="text-title-small truncate">
-                    {operator.userName || operator.userEmail}
-                  </p>
-                  <p className="text-on-surface-variant text-body-small truncate">
-                    {operator.userEmail}
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <Badge variant="secondary">{operator.role}</Badge>
-                  <ProvenanceBadge operator={operator} />
-                  <span className="text-on-surface-variant text-label-small hidden sm:inline">
-                    {formatTimestamp(operator.createdAt)}
-                  </span>
-                </div>
-              </div>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <EmptyState message="No operators yet." />
-      )}
-    </div>
+      <BreakGlassWarning operators={items} loaded={!operators.isPending && !operators.error} />
+
+      <AdminSection title="Staff access" body="rows">
+        <AsyncContent
+          loading={operators.isPending}
+          empty={items.length === 0}
+          skeleton={<ListSkeleton rows={4} />}
+          emptyState={
+            <Text as="p" token="body-small" tone="muted">
+              No operators yet.
+            </Text>
+          }
+        >
+          <AdminList label="Operators">
+            {items.map((operator) => (
+              <AdminListRow
+                key={operator.id}
+                interactive={false}
+                leading={
+                  <IdentityGlyph size={20}>
+                    <Shield className="size-3" />
+                  </IdentityGlyph>
+                }
+                title={operator.userName || operator.userEmail}
+                subtitle={operator.userEmail}
+                meta={formatTimestamp(operator.createdAt)}
+                trailing={
+                  <>
+                    <Badge variant="secondary">{operator.role}</Badge>
+                    <ProvenanceBadge operator={operator} />
+                  </>
+                }
+              />
+            ))}
+          </AdminList>
+        </AsyncContent>
+      </AdminSection>
+    </AdminPage>
+  );
+}
+
+/**
+ * Warn when no manually granted superadmin is left.
+ *
+ * @remarks
+ * Rendered only once the roster has actually loaded. Showing it while the read is outstanding would
+ * announce that the deployment has locked itself out on every page open.
+ *
+ * @param props - The loaded roster, and whether it is loaded.
+ * @returns the warning, or nothing.
+ */
+function BreakGlassWarning({
+  operators,
+  loaded,
+}: {
+  readonly operators: readonly AdminStaff[];
+  readonly loaded: boolean;
+}): JSX.Element | null {
+  const manualSuperadmins = operators.filter(
+    (operator) => operator.managedBy === 'manual' && operator.role === 'superadmin',
+  ).length;
+  if (!loaded || manualSuperadmins > 0) return null;
+
+  return (
+    <AdminSection title="No way back in">
+      <Text as="p" token="body-medium" tone="muted" role="status">
+        Every superadmin here is provisioned from a Google Workspace group, so a broken Workspace
+        configuration would leave nobody able to restore access. Grant one operator superadmin from
+        this console to keep a way back in.
+      </Text>
+    </AdminSection>
   );
 }
 
@@ -136,16 +144,5 @@ function ProvenanceBadge({ operator }: { readonly operator: AdminStaff }): JSX.E
     >
       Workspace group
     </Badge>
-  );
-}
-
-/** A loading placeholder for the roster. */
-function ListSkeleton(): JSX.Element {
-  return (
-    <div className="flex flex-col gap-1.5">
-      {Array.from({ length: 4 }, (_, i) => (
-        <Skeleton key={i} className="h-14 w-full rounded-lg" />
-      ))}
-    </div>
   );
 }

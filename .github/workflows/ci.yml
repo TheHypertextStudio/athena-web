@@ -258,6 +258,29 @@ jobs:
 
       - uses: ./.github/actions/setup
 
+      - run: pnpm docs:check
+
+      - name: Install Mintlify CLI
+        run: npm install --global mint@4.2.854
+
+      - name: Validate Mintlify build
+        working-directory: apps/docs
+        env:
+          DO_NOT_TRACK: '1'
+        run: mint validate
+
+      - name: Check Mintlify links
+        working-directory: apps/docs
+        env:
+          DO_NOT_TRACK: '1'
+        run: mint broken-links --check-anchors --check-redirects --check-snippets
+
+      - name: Check Mintlify accessibility
+        working-directory: apps/docs
+        env:
+          DO_NOT_TRACK: '1'
+        run: mint a11y
+
       - run: pnpm turbo run build --concurrency=1
 
   # This is the browser contract production depends on. The full E2E workflow remains advisory

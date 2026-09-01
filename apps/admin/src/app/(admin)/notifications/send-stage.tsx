@@ -83,7 +83,6 @@ export function SendStage({
           <ConfirmButton
             label={pendingAction === 'send' ? 'Sending…' : 'Send now'}
             disabled={disabled}
-            pending={pendingAction === 'send'}
             title="Send this announcement?"
             description={`${sendConsequence(estimate)} A delivered announcement cannot be recalled.`}
             confirmLabel="Send now"
@@ -92,7 +91,6 @@ export function SendStage({
           <ConfirmButton
             label={pendingAction === 'cancel' ? 'Canceling…' : 'Cancel announcement'}
             disabled={disabled}
-            pending={pendingAction === 'cancel'}
             title="Cancel this announcement?"
             description="It will not be sent, and a scheduled send is called off. The draft stays in the list."
             confirmLabel="Cancel announcement"

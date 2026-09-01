@@ -37,18 +37,24 @@ export type DependencyCheck = () => Promise<DependencyStatus>;
  * when it fails or takes longer.
  */
 export async function checkDatabase(): Promise<DependencyStatus> {
-  const timeout = new Promise<DependencyStatus>((resolve) => {
-    setTimeout(() => {
-      resolve('unreachable');
-    }, DATABASE_TIMEOUT_MS).unref();
-  });
-
-  const query = db
-    .execute(sql`select 1`)
-    .then<DependencyStatus>(() => 'ok')
-    .catch<DependencyStatus>(() => 'unreachable');
-
-  return Promise.race([query, timeout]);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      db
+        .execute(sql`select 1`)
+        .then<DependencyStatus>(() => 'ok')
+        .catch<DependencyStatus>(() => 'unreachable'),
+      new Promise<DependencyStatus>((resolve) => {
+        timer = setTimeout(() => {
+          resolve('unreachable');
+        }, DATABASE_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    // The losing branch of a race is abandoned, not cancelled — without this the timer and its
+    // closure sit on the heap for the full deadline after every healthy check.
+    if (timer) clearTimeout(timer);
+  }
 }
 
 /**

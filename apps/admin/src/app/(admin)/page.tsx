@@ -15,34 +15,23 @@ import { ResourceUsage } from './dashboard-resources';
 import { ServiceHealthSummary } from './dashboard-status';
 import { LifecycleBadge } from '@/components/lifecycle-badge';
 import { api } from '@/lib/api';
-import { STALE, apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
+import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 import type { AdminMetrics, AdminOrg } from '@/lib/types';
-import { metricsDef } from '@/lib/use-admin-queues';
+import { metricsDef, resourcesDef, statusDef } from '@/lib/use-admin-queues';
 
 /** How many rows a retention queue shows before it defers to the organization list. */
 const QUEUE_PREVIEW = 5;
 
 /**
- * What the deployment is consuming.
+ * How many organizations sit in one lifecycle state, from metrics already on screen.
  *
- * @remarks
- * A slower tier than the queue signals beside it. These are aggregate scans rather than indexed
- * counts, and stored bytes do not move minute to minute.
+ * @param metrics - The platform metrics, or `undefined` before they resolve.
+ * @param state - The state to count.
+ * @returns the count, or `undefined` while the metrics read is outstanding.
  */
-const resourcesDef = apiQueryOptions(
-  queryKeys.resources(),
-  () => api.admin.resources.$get(),
-  'Could not load resource usage.',
-  { staleTime: STALE.static },
-);
-
-/** Whether anything is currently broken. */
-const statusDef = apiQueryOptions(
-  queryKeys.status(),
-  () => api.admin.status.$get(),
-  'Could not load service status.',
-  { staleTime: STALE.volatile },
-);
+function lifecycleCount(metrics: AdminMetrics | undefined, state: string): number | undefined {
+  return metrics?.orgsByLifecycle.find((bucket) => bucket.lifecycleState === state)?.count;
+}
 
 /** The organizations scheduled for deletion. */
 const pendingDeletionDef = apiQueryOptions(
@@ -82,8 +71,17 @@ const exportWindowDef = apiQueryOptions(
  */
 export default function DashboardPage(): JSX.Element {
   const metrics = useApiQuery(metricsDef);
-  const pendingDeletion = useApiQuery(pendingDeletionDef);
-  const exportWindow = useApiQuery(exportWindowDef);
+  // Both queues render nothing when empty, which is the normal state — and the metrics read
+  // already on screen says whether they are. Fetching the rows before knowing that costs two of
+  // the dashboard's requests on every healthy load.
+  const pendingDeletion = useApiQuery({
+    ...pendingDeletionDef,
+    enabled: (lifecycleCount(metrics.data, 'pending_deletion') ?? 0) > 0,
+  });
+  const exportWindow = useApiQuery({
+    ...exportWindowDef,
+    enabled: (lifecycleCount(metrics.data, 'export_window') ?? 0) > 0,
+  });
   const resources = useApiQuery(resourcesDef);
   const status = useApiQuery(statusDef);
 

@@ -289,7 +289,6 @@ function ComplimentaryAction({
       <ConfirmButton
         label={pending === 'revoke-complimentary' ? 'Revoking…' : 'Revoke complimentary Pro'}
         disabled={disabled}
-        pending={pending === 'revoke-complimentary'}
         title="Revoke complimentary Pro?"
         description={`${orgName} loses every Pro capability immediately, and nothing restores it automatically. The reason you entered is recorded in the audit log.`}
         confirmLabel="Revoke complimentary Pro"
@@ -440,7 +439,6 @@ function CurrentAward({ detail }: { readonly detail: OrgDetailData }): JSX.Eleme
       <ConfirmButton
         label={detail.pending === 'revoke-discount' ? 'Revoking…' : 'Revoke current award'}
         disabled={disabled}
-        pending={detail.pending === 'revoke-discount'}
         title="Revoke the current discount?"
         description="Ends the award at Stripe. Full price resumes on the next invoice."
         confirmLabel="Revoke award"

@@ -63,19 +63,10 @@ describe('platform resource usage', () => {
     expect((await civilian.request('/resources', { method: 'GET' })).status).toBe(403);
   });
 
-  it('reports the database size and its largest relations', async () => {
+  it('reports the database size', async () => {
     const report = await readResources(await makeStaff('support'));
 
     expect(report.databaseByteSize).toBeGreaterThan(0);
-    expect(report.largestTables.length).toBeGreaterThan(0);
-    for (const table of report.largestTables) {
-      expect(table.table).not.toHaveLength(0);
-      expect(table.byteSize).toBeGreaterThan(0);
-    }
-
-    // Largest first, so an operator reads the growth without sorting.
-    const sizes = report.largestTables.map((table) => table.byteSize);
-    expect(sizes).toEqual([...sizes].sort((a, b) => b - a));
   });
 
   it('counts a stored object against its own store and the platform total', async () => {

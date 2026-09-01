@@ -8,7 +8,7 @@ import { getDb } from '../support/routes-harness';
 import {
   type ProbeTarget,
   probeOne,
-  probeTargets,
+  PROBE_TARGETS,
   runServiceProbes,
 } from '../../src/services/service-probes';
 
@@ -87,7 +87,7 @@ describe('service probes', () => {
 
     const rows = await db.select().from(schema.serviceProbe);
     expect(rows.length - before).toBe(results.length);
-    expect(results.length).toBe(probeTargets().length);
+    expect(results.length).toBe(PROBE_TARGETS.length);
 
     // Uptime is successes over total. A pass that only recorded its successes would report 100%
     // through a complete outage.
@@ -96,7 +96,7 @@ describe('service probes', () => {
   });
 
   it('derives a dependency with no recent traffic as unknown rather than healthy', async () => {
-    const stripe = assertDefined(probeTargets().find((target) => target.key === 'stripe'));
+    const stripe = assertDefined(PROBE_TARGETS.find((target) => target.key === 'stripe'));
     expect(stripe.method).toBe('derived');
 
     const result = await probeOne(stripe, unreachable);
@@ -111,7 +111,7 @@ describe('service probes', () => {
   it('probes no third party with a credential', () => {
     // Every dependency is derived from our own ledgers, so this module holds no provider secret
     // and issues no authenticated third-party request.
-    for (const target of probeTargets().filter((entry) => entry.kind === 'dependency')) {
+    for (const target of PROBE_TARGETS.filter((entry) => entry.kind === 'dependency')) {
       expect(target.method).toBe('derived');
       expect(target.url).toBeUndefined();
     }

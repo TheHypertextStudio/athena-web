@@ -6,13 +6,9 @@ import { ChevronDown, ChevronRight } from '@docket/ui/icons';
 import { Button, Surface, Text } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
 
-import {
-  formatUptime,
-  outcomeLabel,
-  outcomeTone,
-  reasonLabel,
-  windowLabel,
-} from '@/lib/service-status';
+import { OutcomeBadge } from '@/components/outcome-badge';
+import { PropertyList, Property } from '@/components/admin-detail';
+import { formatUptime, reasonLabel, windowLabel } from '@/lib/service-status';
 import type { AdminServiceStatus } from '@/lib/types';
 
 /** What each check method is called on screen. */
@@ -50,14 +46,7 @@ export function ServiceRow({ service }: ServiceRowProps): JSX.Element {
   return (
     <Surface tone="card" shape="small" pad="none">
       <div className="flex items-center gap-3 px-3 py-2">
-        <span
-          className={`shrink-0 rounded-full px-2 py-0.5 ${outcomeTone(service.outcome)}`}
-          aria-hidden="true"
-        >
-          <Text as="span" token="label-small">
-            {outcomeLabel(service.outcome)}
-          </Text>
-        </span>
+        <OutcomeBadge outcome={service.outcome} />
 
         <div className="flex min-w-0 flex-1 flex-col">
           <Text as="span" token="body-medium" truncate>
@@ -115,33 +104,19 @@ function ServiceDetail({ service }: { readonly service: AdminServiceStatus }): J
         ))}
       </div>
 
-      <dl className="grid grid-cols-[minmax(7rem,auto)_1fr] gap-x-4 gap-y-1">
-        <Detail label="Checked by" value={METHOD_LABEL[service.method]} />
-        <Detail
+      <PropertyList>
+        <Property label="Checked by" value={METHOD_LABEL[service.method]} />
+        <Property
           label="Last healthy"
           value={service.lastSuccessAt ? relativeTime(service.lastSuccessAt) : 'Never'}
         />
         {service.latencyMs === null ? null : (
-          <Detail label="Latency" value={`${String(service.latencyMs)} ms`} />
+          <Property label="Latency" value={`${String(service.latencyMs)} ms`} />
         )}
         {service.statusCode === null ? null : (
-          <Detail label="Status" value={String(service.statusCode)} />
+          <Property label="Status" value={String(service.statusCode)} />
         )}
-      </dl>
-    </div>
-  );
-}
-
-/** One labelled fact in the disclosure. */
-function Detail({ label, value }: { readonly label: string; readonly value: string }): JSX.Element {
-  return (
-    <div className="contents">
-      <Text as="dt" token="body-small" tone="muted">
-        {label}
-      </Text>
-      <Text as="dd" token="body-small">
-        {value}
-      </Text>
+      </PropertyList>
     </div>
   );
 }

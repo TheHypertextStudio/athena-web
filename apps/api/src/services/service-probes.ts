@@ -27,11 +27,12 @@
  * are uncontrolled input — they can carry request URLs, echoed headers, or account identifiers —
  * and this value is persisted and then rendered in the operator console.
  */
-import { agentSessionRun, billingProviderSync, db, serviceProbe, syncRun } from '@docket/db';
-import { gte } from 'drizzle-orm';
+import { db, serviceProbe } from '@docket/db';
 
 import { env } from '../env';
+import { checkDatabase } from '../routes/health';
 import { readServiceControl } from './service-controls';
+import { WORK_LEDGERS, readLedgerWindow, type LedgerWindow, type WorkLedger } from './work-ledgers';
 
 /** How long any single check may take before it counts as unreachable. */
 const PROBE_TIMEOUT_MS = 5_000;
@@ -40,7 +41,7 @@ const PROBE_TIMEOUT_MS = 5_000;
 export const DERIVED_WINDOW_MS = 60 * 60 * 1000;
 
 /** What a probe concluded. Mirrors the `probe_outcome` enum. */
-export type ProbeOutcome = 'up' | 'degraded' | 'down' | 'disabled' | 'unknown';
+type ProbeOutcome = 'up' | 'degraded' | 'down' | 'disabled' | 'unknown';
 
 /**
  * Why a check did not succeed, in application-owned words.
@@ -49,14 +50,14 @@ export type ProbeOutcome = 'up' | 'degraded' | 'down' | 'disabled' | 'unknown';
  * A closed set precisely so no provider or exception text is ever stored or shown. The console
  * renders these; nothing it renders originates outside this file.
  */
-export type ProbeReason =
+type ProbeReason =
   'unreachable' | 'bad_status' | 'recent_failures' | 'no_recent_activity' | 'not_configured';
 
 /** Whether a service is ours to fix or someone else's. */
-export type ServiceKind = 'platform' | 'dependency';
+type ServiceKind = 'platform' | 'dependency';
 
 /** How a service's health is established. */
-export type ProbeMethod = 'http' | 'database' | 'derived';
+type ProbeMethod = 'http' | 'database' | 'derived';
 
 /** The result of checking one service, before it is written. */
 export interface ProbeResult {
@@ -79,6 +80,23 @@ export interface ProbeTarget {
   readonly method: ProbeMethod;
   /** The health URL, for `http` targets that this deployment has configured. */
   readonly url?: string | undefined;
+  /**
+   * The ledger a `derived` target reads.
+   *
+   * @remarks
+   * Held on the target rather than in a lookup keyed by service name, so the catalogue is the only
+   * place that knows which ledger answers for which dependency.
+   */
+  readonly ledger?: WorkLedger | undefined;
+}
+
+/** Find one ledger by key, so a target can name the work that answers for it. */
+function ledger(key: string): WorkLedger {
+  const found = WORK_LEDGERS.find((entry) => entry.key === key);
+  // Unreachable with the catalogue below, and a loud failure at import beats a silent `unknown`
+  // row for a dependency an operator believes is being watched.
+  if (!found) throw new Error(`No work ledger named ${key}.`);
+  return found;
 }
 
 /** Join an origin and a path without doubling or dropping the separator. */
@@ -91,51 +109,66 @@ function healthUrl(origin: string | undefined, path: string): string | undefined
  * Every service this deployment depends on, in the order an operator should read them.
  *
  * @remarks
- * Built per call rather than as a module constant, so a configuration change is picked up without a
- * restart and a test can observe the unconfigured path.
- *
- * @returns the probe catalogue.
+ * Deployment topology, not an operator setting: a ninth service needs a check implementation
+ * either way, and the URLs are deployment facts the environment already carries. Whether probing
+ * runs at all *is* an operator setting, and lives in `service_control`.
  */
-export function probeTargets(): readonly ProbeTarget[] {
-  return [
-    {
-      key: 'api',
-      label: 'API',
-      kind: 'platform',
-      method: 'http',
-      url: healthUrl(env.API_URL, '/v1/health'),
-    },
-    {
-      key: 'web',
-      label: 'Web app',
-      kind: 'platform',
-      method: 'http',
-      url: healthUrl(env.WEB_URL, '/healthz'),
-    },
-    {
-      key: 'admin',
-      label: 'Operator console',
-      kind: 'platform',
-      method: 'http',
-      url: healthUrl(env.ADMIN_URL, '/healthz'),
-    },
-    {
-      key: 'runner',
-      label: 'Athena runner',
-      kind: 'platform',
-      method: 'http',
-      // Production currently holds the async runner off. That is a decision, not a fault, so an
-      // unconfigured runner reports `disabled` rather than paging someone.
-      url: env.ATHENA_ASYNC_RUNNER_ENABLED
-        ? healthUrl(env.CLOUDFLARE_ATHENA_RUNNER_URL, '/healthz')
-        : undefined,
-    },
-    { key: 'database', label: 'Database', kind: 'platform', method: 'database' },
-    { key: 'stripe', label: 'Stripe', kind: 'dependency', method: 'derived' },
-    { key: 'anthropic', label: 'Athena provider', kind: 'dependency', method: 'derived' },
-    { key: 'connectors', label: 'Connector syncs', kind: 'dependency', method: 'derived' },
-  ];
-}
+export const PROBE_TARGETS: readonly ProbeTarget[] = [
+  {
+    key: 'api',
+    label: 'API',
+    kind: 'platform',
+    method: 'http',
+    url: healthUrl(env.API_URL, '/v1/health'),
+  },
+  {
+    key: 'web',
+    label: 'Web app',
+    kind: 'platform',
+    method: 'http',
+    url: healthUrl(env.WEB_URL, '/healthz'),
+  },
+  {
+    key: 'admin',
+    label: 'Operator console',
+    kind: 'platform',
+    method: 'http',
+    url: healthUrl(env.ADMIN_URL, '/healthz'),
+  },
+  {
+    key: 'runner',
+    label: 'Athena runner',
+    kind: 'platform',
+    method: 'http',
+    // Production currently holds the async runner off. That is a decision, not a fault, so an
+    // unconfigured runner reports `disabled` rather than paging someone.
+    url: env.ATHENA_ASYNC_RUNNER_ENABLED
+      ? healthUrl(env.CLOUDFLARE_ATHENA_RUNNER_URL, '/healthz')
+      : undefined,
+  },
+  { key: 'database', label: 'Database', kind: 'platform', method: 'database' },
+  {
+    key: 'stripe',
+    label: 'Stripe',
+    kind: 'dependency',
+    method: 'derived',
+    ledger: ledger('billing_sync'),
+  },
+  {
+    key: 'anthropic',
+    label: 'Athena provider',
+    kind: 'dependency',
+    method: 'derived',
+    ledger: ledger('agent_runs'),
+  },
+  {
+    key: 'connectors',
+    label: 'Connector syncs',
+    kind: 'dependency',
+    method: 'derived',
+    ledger: ledger('connector_sync'),
+  },
+];
 
 /**
  * Classify an HTTP response status.
@@ -160,17 +193,15 @@ function outcomeForStatus(status: number): ProbeOutcome {
  */
 async function probeHttp(target: ProbeTarget, fetchImpl: typeof fetch): Promise<ProbeResult> {
   const started = Date.now();
-  const controller = new AbortController();
-  const timer = setTimeout(() => {
-    controller.abort();
-  }, PROBE_TIMEOUT_MS);
 
   try {
     const response = await fetchImpl(target.url ?? '', {
       method: 'GET',
-      signal: controller.signal,
+      signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
       redirect: 'manual',
     });
+    // Nothing reads the body, and an unconsumed one pins its socket out of the pool until GC.
+    await response.body?.cancel();
     const outcome = outcomeForStatus(response.status);
     return {
       serviceKey: target.key,
@@ -190,58 +221,46 @@ async function probeHttp(target: ProbeTarget, fetchImpl: typeof fetch): Promise<
       statusCode: null,
       reason: 'unreachable',
     };
-  } finally {
-    clearTimeout(timer);
   }
 }
 
 /**
- * Check the database directly.
+ * Check the database.
+ *
+ * @remarks
+ * Delegates to the liveness route's own check rather than repeating `select 1` here, so one
+ * deployment cannot give two different answers about Postgres — and so this inherits the deadline
+ * that check already applies. The first draft of this function had none, which would have let a
+ * hung connection stall the whole probe pass.
  *
  * @returns what the check concluded.
  */
 async function probeDatabase(): Promise<ProbeResult> {
   const started = Date.now();
-  try {
-    await db.execute('select 1');
-    return {
-      serviceKey: 'database',
-      outcome: 'up',
-      latencyMs: Date.now() - started,
-      statusCode: null,
-      reason: null,
-    };
-  } catch {
-    return {
-      serviceKey: 'database',
-      outcome: 'down',
-      latencyMs: Date.now() - started,
-      statusCode: null,
-      reason: 'unreachable',
-    };
-  }
-}
-
-/** How much real traffic a ledger saw in the window, and how much of it failed. */
-interface TrafficWindow {
-  readonly total: number;
-  readonly failed: number;
+  const reachable = (await checkDatabase()) === 'ok';
+  return {
+    serviceKey: 'database',
+    outcome: reachable ? 'up' : 'down',
+    latencyMs: Date.now() - started,
+    statusCode: null,
+    reason: reachable ? null : 'unreachable',
+  };
 }
 
 /**
  * Turn a window of real provider traffic into a health verdict.
  *
  * @remarks
- * No traffic is reported as `disabled` with a `no_recent_activity` reason rather than as `up`.
+ * No traffic is reported as `unknown` with a `no_recent_activity` reason rather than as `up`.
  * Claiming a provider is healthy because nothing asked it anything is the exact failure mode this
  * codebase forbids of connectors.
  *
  * @param key - The service key to report under.
- * @param window - What the ledger saw.
+ * @param window - What the ledger recorded.
  * @param startedAt - When the check began, for the latency figure.
  * @returns the verdict.
  */
-function verdictFromTraffic(key: string, window: TrafficWindow, startedAt: number): ProbeResult {
+function verdictFromTraffic(key: string, window: LedgerWindow, startedAt: number): ProbeResult {
   const latencyMs = Date.now() - startedAt;
   if (window.total === 0) {
     return {
@@ -260,72 +279,25 @@ function verdictFromTraffic(key: string, window: TrafficWindow, startedAt: numbe
   return { serviceKey: key, outcome, latencyMs, statusCode: null, reason: 'recent_failures' };
 }
 
-/** Read what Stripe's own sync ledger saw in the window. */
-async function stripeTraffic(since: Date): Promise<TrafficWindow> {
-  const rows = await db
-    .select({ status: billingProviderSync.status })
-    .from(billingProviderSync)
-    .where(gte(billingProviderSync.updatedAt, since));
-  return {
-    total: rows.length,
-    failed: rows.filter((row) => row.status === 'failed').length,
-  };
-}
-
-/** Read what Athena's execution ledger saw in the window. */
-async function athenaTraffic(since: Date): Promise<TrafficWindow> {
-  const rows = await db
-    .select({ status: agentSessionRun.status })
-    .from(agentSessionRun)
-    .where(gte(agentSessionRun.queuedAt, since));
-  return {
-    total: rows.length,
-    failed: rows.filter((row) => row.status === 'failed').length,
-  };
-}
-
-/** Read what the connector sync ledger saw in the window. */
-async function connectorTraffic(since: Date): Promise<TrafficWindow> {
-  const rows = await db
-    .select({ status: syncRun.status })
-    .from(syncRun)
-    .where(gte(syncRun.startedAt, since));
-  return {
-    total: rows.length,
-    failed: rows.filter((row) => row.status === 'failed').length,
-  };
-}
-
-/** Which ledger answers for each derived service. */
-const DERIVED_TRAFFIC: Readonly<Record<string, (since: Date) => Promise<TrafficWindow>>> = {
-  stripe: stripeTraffic,
-  anthropic: athenaTraffic,
-  connectors: connectorTraffic,
-};
-
 /**
  * Establish a third party's health from the traffic we actually sent it.
  *
  * @param target - The service to report on.
- * @returns what the ledger implies.
+ * @returns what its ledger implies.
  */
 async function probeDerived(target: ProbeTarget): Promise<ProbeResult> {
   const started = Date.now();
-  const read = DERIVED_TRAFFIC[target.key];
-  if (!read) {
+  if (!target.ledger) {
     return {
       serviceKey: target.key,
-      outcome: 'disabled',
+      outcome: 'unknown',
       latencyMs: 0,
       statusCode: null,
       reason: 'not_configured',
     };
   }
-  return verdictFromTraffic(
-    target.key,
-    await read(new Date(Date.now() - DERIVED_WINDOW_MS)),
-    started,
-  );
+  const since = new Date(Date.now() - DERIVED_WINDOW_MS);
+  return verdictFromTraffic(target.key, await readLedgerWindow(target.ledger, since), started);
 }
 
 /**
@@ -369,7 +341,7 @@ export async function probeOne(
 export async function runServiceProbes(fetchImpl: typeof fetch = fetch): Promise<ProbeResult[]> {
   if (!(await readServiceControl('service_probes'))) return [];
 
-  const results = await Promise.all(probeTargets().map((target) => probeOne(target, fetchImpl)));
+  const results = await Promise.all(PROBE_TARGETS.map((target) => probeOne(target, fetchImpl)));
 
   await db.insert(serviceProbe).values(
     results.map((result) => ({

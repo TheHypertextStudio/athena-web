@@ -9,17 +9,8 @@
  * Nothing in a response originates outside this codebase. Failure reasons are the probe runner's
  * closed vocabulary; provider text is never stored and so can never be served.
  */
-import {
-  agentSessionDispatch,
-  agentSessionRun,
-  billingProviderSync,
-  db,
-  objectCommandEffectJob,
-  searchIndexJob,
-  serviceProbe,
-  syncRun,
-} from '@docket/db';
-import { desc, gte, sql } from 'drizzle-orm';
+import { db, serviceProbe } from '@docket/db';
+import { desc, gte, sql, type SQL } from 'drizzle-orm';
 import { Hono } from 'hono';
 
 import {
@@ -27,14 +18,14 @@ import {
   type AdminJobHealth,
   type AdminServiceStatus,
   type AdminUptimeWindow,
-  ProbeOutcomeDto,
   ProbeReasonDto,
 } from '../admin-dto';
 import type { AppEnv } from '../context';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { readServiceControl } from '../services/service-controls';
-import { probeTargets } from '../services/service-probes';
+import { PROBE_TARGETS, type ProbeTarget } from '../services/service-probes';
+import { WORK_LEDGERS, instantOf, readLedgerWindow } from '../services/work-ledgers';
 
 /** The windows the board reports uptime over, shortest first. */
 const UPTIME_WINDOW_HOURS = [24, 24 * 7, 24 * 30] as const;
@@ -42,238 +33,203 @@ const UPTIME_WINDOW_HOURS = [24, 24 * 7, 24 * 30] as const;
 /** How far back the internal job ledgers are summarized. */
 const JOB_WINDOW_HOURS = 24;
 
-/** One probe row, narrowed to what the board needs. */
-interface ProbeRow {
-  readonly serviceKey: string;
-  readonly outcome: string;
-  readonly reason: string | null;
-  readonly latencyMs: number;
-  readonly statusCode: number | null;
-  readonly checkedAt: Date;
-}
-
 /** Hours back from now, as a date. */
 function hoursAgo(hours: number): Date {
   return new Date(Date.now() - hours * 60 * 60 * 1000);
 }
 
 /**
- * Compute one service's uptime over each reported window.
+ * An outcome that counts toward uptime.
  *
  * @remarks
- * `disabled` and `unknown` checks are excluded from both halves of the ratio. A service switched off
- * on purpose has not failed, and a dependency with no traffic has not been measured — counting
- * either as a failure would invent an outage, and counting either as a success would invent uptime.
- *
- * A window with no measurable check reports `null` rather than `0` or `1`, because "we do not know"
- * is a third answer and rounding it to either of the others is the lie this whole feature exists to
- * avoid.
- *
- * @param rows - Every probe row for one service, newest first.
- * @returns the uptime for each window.
+ * `disabled` and `unknown` are excluded from both halves of the ratio. A service switched off on
+ * purpose has not failed, and a dependency with no traffic has not been measured — counting either
+ * as a failure invents an outage, and counting either as a success invents uptime.
  */
-function uptimeWindows(rows: readonly ProbeRow[]): AdminUptimeWindow[] {
-  return UPTIME_WINDOW_HOURS.map((windowHours) => {
-    const since = hoursAgo(windowHours);
-    const measurable = rows.filter(
-      (row) => row.checkedAt >= since && row.outcome !== 'disabled' && row.outcome !== 'unknown',
-    );
-    const successes = measurable.filter((row) => row.outcome === 'up').length;
-    return {
-      windowHours,
-      checks: measurable.length,
-      successes,
-      uptime: measurable.length === 0 ? null : successes / measurable.length,
-    };
-  });
+const MEASURABLE = sql`${serviceProbe.outcome} not in ('disabled', 'unknown')`;
+
+/** One service's uptime counts, as Postgres aggregates them. */
+interface UptimeRow {
+  readonly serviceKey: string;
+  readonly checks24h: number;
+  readonly up24h: number;
+  readonly checks7d: number;
+  readonly up7d: number;
+  readonly checks30d: number;
+  readonly up30d: number;
+  readonly lastSuccessAt: string | Date | null;
 }
 
-/**
- * Fold one service's probe history into its board entry.
- *
- * @param target - The catalogue entry describing the service.
- * @param rows - Its probe rows, newest first.
- * @returns the service's current state and recent record.
- */
-function serviceStatus(
-  target: ReturnType<typeof probeTargets>[number],
-  rows: readonly ProbeRow[],
-): AdminServiceStatus {
-  const latest = rows[0];
-  const lastSuccess = rows.find((row) => row.outcome === 'up');
-
+/** Count the measurable checks in one window, and how many of them reported `up`. */
+function windowCounts(hours: number): { checks: SQL<number>; up: SQL<number> } {
+  const inWindow = sql`${serviceProbe.checkedAt} >= ${hoursAgo(hours)} and ${MEASURABLE}`;
   return {
-    key: target.key,
-    label: target.label,
-    kind: target.kind,
-    method: target.method,
-    // A service that has never been checked reads as `unknown`, not as healthy.
-    outcome: latest ? ProbeOutcomeDto.parse(latest.outcome) : 'unknown',
-    reason: latest?.reason == null ? null : ProbeReasonDto.parse(latest.reason),
-    latencyMs: latest?.latencyMs ?? null,
-    statusCode: latest?.statusCode ?? null,
-    checkedAt: latest?.checkedAt.toISOString() ?? null,
-    lastSuccessAt: lastSuccess?.checkedAt.toISOString() ?? null,
-    uptime: uptimeWindows(rows),
+    checks: sql<number>`count(*) filter (where ${inWindow})::int`,
+    up: sql<number>`count(*) filter (where ${inWindow} and ${serviceProbe.outcome} = 'up')::int`,
   };
 }
 
-/** One internal ledger, and how to read its recent failures. */
-interface JobLedger {
-  readonly key: string;
-  readonly label: string;
-  readonly read: (since: Date) => Promise<AdminJobHealth>;
-}
-
 /**
- * Summarize one ledger's recent runs.
+ * Read every service's uptime counts and last success.
  *
- * @param key - The ledger's identifier.
- * @param label - What an operator calls the work.
- * @param rows - Its rows in the window, each carrying a status and a timestamp.
- * @param failedWhen - Which status values count as a failure.
- * @returns the ledger's entry on the board.
- */
-function summarize(
-  key: string,
-  label: string,
-  rows: readonly { readonly status: string; readonly at: Date | null }[],
-  failedWhen: readonly string[],
-): AdminJobHealth {
-  const failures = rows.filter((row) => failedWhen.includes(row.status));
-  const lastFailure = failures
-    .map((row) => row.at)
-    .filter((at): at is Date => at !== null)
-    .sort((a, b) => b.getTime() - a.getTime())[0];
-
-  return {
-    key,
-    label,
-    failures: failures.length,
-    total: rows.length,
-    lastFailureAt: lastFailure?.toISOString() ?? null,
-  };
-}
-
-/** The ledgers that already record whether background work is succeeding. */
-const JOB_LEDGERS: readonly JobLedger[] = [
-  {
-    key: 'connector_sync',
-    label: 'Connector syncs',
-    read: async (since) =>
-      summarize(
-        'connector_sync',
-        'Connector syncs',
-        (
-          await db
-            .select({ status: syncRun.status, at: syncRun.startedAt })
-            .from(syncRun)
-            .where(gte(syncRun.startedAt, since))
-        ).map((row) => ({ status: row.status, at: row.at })),
-        ['failed'],
-      ),
-  },
-  {
-    key: 'agent_runs',
-    label: 'Agent sessions',
-    read: async (since) =>
-      summarize(
-        'agent_runs',
-        'Agent sessions',
-        (
-          await db
-            .select({ status: agentSessionRun.status, at: agentSessionRun.queuedAt })
-            .from(agentSessionRun)
-            .where(gte(agentSessionRun.queuedAt, since))
-        ).map((row) => ({ status: row.status, at: row.at })),
-        ['failed'],
-      ),
-  },
-  {
-    key: 'agent_dispatch',
-    label: 'Agent dispatch',
-    read: async (since) =>
-      summarize(
-        'agent_dispatch',
-        'Agent dispatch',
-        (
-          await db
-            .select({ status: agentSessionDispatch.status, at: agentSessionDispatch.createdAt })
-            .from(agentSessionDispatch)
-            .where(gte(agentSessionDispatch.createdAt, since))
-        ).map((row) => ({ status: row.status, at: row.at })),
-        ['failed'],
-      ),
-  },
-  {
-    key: 'search_index',
-    label: 'Search indexing',
-    read: async (since) =>
-      summarize(
-        'search_index',
-        'Search indexing',
-        (
-          await db
-            .select({ status: searchIndexJob.status, at: searchIndexJob.createdAt })
-            .from(searchIndexJob)
-            .where(gte(searchIndexJob.createdAt, since))
-        ).map((row) => ({ status: row.status, at: row.at })),
-        ['failed'],
-      ),
-  },
-  {
-    key: 'command_effects',
-    label: 'Command effects',
-    read: async (since) =>
-      summarize(
-        'command_effects',
-        'Command effects',
-        (
-          await db
-            .select({ status: objectCommandEffectJob.status, at: objectCommandEffectJob.createdAt })
-            .from(objectCommandEffectJob)
-            .where(gte(objectCommandEffectJob.createdAt, since))
-        ).map((row) => ({ status: row.status, at: row.at })),
-        ['failed'],
-      ),
-  },
-  {
-    key: 'billing_sync',
-    label: 'Billing provider sync',
-    read: async (since) =>
-      summarize(
-        'billing_sync',
-        'Billing provider sync',
-        (
-          await db
-            .select({ status: billingProviderSync.status, at: billingProviderSync.updatedAt })
-            .from(billingProviderSync)
-            .where(gte(billingProviderSync.updatedAt, since))
-        ).map((row) => ({ status: row.status, at: row.at })),
-        ['failed'],
-      ),
-  },
-];
-
-/**
- * Read every probe row inside the longest reported window.
+ * @remarks
+ * Aggregated in Postgres. Folding this in JavaScript meant selecting the entire retention window —
+ * around seventy thousand rows at the current cadence, growing without bound — to produce
+ * twenty-four ratios, on a route the console polls every thirty seconds.
  *
- * @returns the rows, newest first.
+ * @returns one row per service that has ever been probed.
  */
-async function recentProbes(): Promise<ProbeRow[]> {
-  const longest = UPTIME_WINDOW_HOURS[UPTIME_WINDOW_HOURS.length - 1] ?? 24;
+async function uptimeCounts(): Promise<UptimeRow[]> {
+  const day = windowCounts(UPTIME_WINDOW_HOURS[0]);
+  const week = windowCounts(UPTIME_WINDOW_HOURS[1]);
+  const month = windowCounts(UPTIME_WINDOW_HOURS[2]);
+
   return db
     .select({
       serviceKey: serviceProbe.serviceKey,
-      outcome: sql<string>`${serviceProbe.outcome}`,
+      checks24h: day.checks,
+      up24h: day.up,
+      checks7d: week.checks,
+      up7d: week.up,
+      checks30d: month.checks,
+      up30d: month.up,
+      lastSuccessAt: sql<Date | null>`max(${serviceProbe.checkedAt}) filter (where ${serviceProbe.outcome} = 'up')`,
+    })
+    .from(serviceProbe)
+    .where(gte(serviceProbe.checkedAt, hoursAgo(UPTIME_WINDOW_HOURS[2])))
+    .groupBy(serviceProbe.serviceKey);
+}
+
+/** The most recent check for each service. */
+interface LatestRow {
+  readonly serviceKey: string;
+  readonly outcome: AdminServiceStatus['outcome'];
+  readonly reason: string | null;
+  readonly latencyMs: number;
+  readonly statusCode: number | null;
+  readonly checkedAt: Date;
+}
+
+/**
+ * Read the latest check for every service.
+ *
+ * @returns one row per service, newest first within each.
+ */
+async function latestProbes(): Promise<LatestRow[]> {
+  return db
+    .selectDistinctOn([serviceProbe.serviceKey], {
+      serviceKey: serviceProbe.serviceKey,
+      outcome: serviceProbe.outcome,
       reason: serviceProbe.reason,
       latencyMs: serviceProbe.latencyMs,
       statusCode: serviceProbe.statusCode,
       checkedAt: serviceProbe.checkedAt,
     })
     .from(serviceProbe)
-    .where(gte(serviceProbe.checkedAt, hoursAgo(longest)))
-    .orderBy(desc(serviceProbe.checkedAt));
+    .where(gte(serviceProbe.checkedAt, hoursAgo(UPTIME_WINDOW_HOURS[2])))
+    .orderBy(serviceProbe.serviceKey, desc(serviceProbe.checkedAt));
+}
+
+/** What a service that has never been probed reports. */
+const NO_COUNTS: UptimeRow = {
+  serviceKey: '',
+  checks24h: 0,
+  up24h: 0,
+  checks7d: 0,
+  up7d: 0,
+  checks30d: 0,
+  up30d: 0,
+  lastSuccessAt: null,
+};
+
+/** Build one service's uptime windows from its aggregate row. */
+function uptimeWindows(counts: UptimeRow | undefined): AdminUptimeWindow[] {
+  const row = counts ?? NO_COUNTS;
+  const pairs: readonly (readonly [number, number])[] = [
+    [row.checks24h, row.up24h],
+    [row.checks7d, row.up7d],
+    [row.checks30d, row.up30d],
+  ];
+
+  return UPTIME_WINDOW_HOURS.map((windowHours, index) => {
+    const [checks, successes] = pairs[index] ?? [0, 0];
+    // A window holding no measurable check reports nothing rather than a zero or a one: "we do not
+    // know" is a third answer, and rounding it to either of the others is the lie this exists to avoid.
+    return { windowHours, checks, successes, uptime: checks === 0 ? null : successes / checks };
+  });
+}
+
+/**
+ * Fold one service's records into its board entry.
+ *
+ * @param target - The catalogue entry describing the service.
+ * @param latest - Its most recent check, when it has one.
+ * @param counts - Its uptime aggregates, when it has any.
+ * @returns the service's current state and recent record.
+ */
+function serviceStatus(
+  target: ProbeTarget,
+  latest: LatestRow | undefined,
+  counts: UptimeRow | undefined,
+): AdminServiceStatus {
+  return {
+    key: target.key,
+    label: target.label,
+    kind: target.kind,
+    method: target.method,
+    ...latestCheck(latest),
+    lastSuccessAt: instantOf(counts?.lastSuccessAt ?? null)?.toISOString() ?? null,
+    uptime: uptimeWindows(counts),
+  };
+}
+
+/** The part of a board entry that describes the most recent check. */
+type LatestCheck = Pick<
+  AdminServiceStatus,
+  'outcome' | 'reason' | 'latencyMs' | 'statusCode' | 'checkedAt'
+>;
+
+/**
+ * Describe a service's most recent check, or the absence of one.
+ *
+ * @remarks
+ * A service that has never been checked reads as `unknown` rather than healthy, which is the whole
+ * reason the board maps over the catalogue instead of over the rows it found.
+ *
+ * @param latest - The newest probe row, when there is one.
+ * @returns the check fields of the board entry.
+ */
+function latestCheck(latest: LatestRow | undefined): LatestCheck {
+  if (!latest) {
+    return { outcome: 'unknown', reason: null, latencyMs: null, statusCode: null, checkedAt: null };
+  }
+  return {
+    outcome: latest.outcome,
+    reason: latest.reason === null ? null : ProbeReasonDto.parse(latest.reason),
+    latencyMs: latest.latencyMs,
+    statusCode: latest.statusCode,
+    checkedAt: latest.checkedAt.toISOString(),
+  };
+}
+
+/** Summarize one background-work ledger for the board. */
+async function jobHealth(
+  ledger: (typeof WORK_LEDGERS)[number],
+  since: Date,
+): Promise<AdminJobHealth> {
+  const window = await readLedgerWindow(ledger, since);
+  return {
+    key: ledger.key,
+    label: ledger.label,
+    failures: window.failed,
+    total: window.total,
+    lastFailureAt: window.lastFailureAt?.toISOString() ?? null,
+  };
+}
+
+/** Index rows by the service they belong to. */
+function byService<T extends { readonly serviceKey: string }>(rows: readonly T[]): Map<string, T> {
+  return new Map(rows.map((row) => [row.serviceKey, row]));
 }
 
 /**
@@ -306,22 +262,19 @@ export const adminStatusRoutes = new Hono<AppEnv>().get(
   }),
   async (c) => {
     const jobSince = hoursAgo(JOB_WINDOW_HOURS);
-    const [rows, probesEnabled, jobs] = await Promise.all([
-      recentProbes(),
+    const [latest, counts, probesEnabled, jobs] = await Promise.all([
+      latestProbes(),
+      uptimeCounts(),
       readServiceControl('service_probes'),
-      Promise.all(JOB_LEDGERS.map((ledger) => ledger.read(jobSince))),
+      Promise.all(WORK_LEDGERS.map((ledger) => jobHealth(ledger, jobSince))),
     ]);
 
-    const byService = new Map<string, ProbeRow[]>();
-    for (const row of rows) {
-      const existing = byService.get(row.serviceKey);
-      if (existing) existing.push(row);
-      else byService.set(row.serviceKey, [row]);
-    }
+    const latestByService = byService(latest);
+    const countsByService = byService(counts);
 
     return ok(c, AdminStatusOut, {
-      services: probeTargets().map((target) =>
-        serviceStatus(target, byService.get(target.key) ?? []),
+      services: PROBE_TARGETS.map((target) =>
+        serviceStatus(target, latestByService.get(target.key), countsByService.get(target.key)),
       ),
       jobs,
       probesEnabled,

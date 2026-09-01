@@ -5,7 +5,8 @@ import { Row, Stack, Text } from '@docket/ui/primitives';
 import Link from 'next/link';
 import { type JSX } from 'react';
 
-import { faultingServices, outcomeLabel, reasonLabel } from '@/lib/service-status';
+import { OutcomeBadge } from '@/components/outcome-badge';
+import { faultingServices, reasonLabel } from '@/lib/service-status';
 import type { AdminStatus } from '@/lib/types';
 
 /** Props for {@link ServiceHealthSummary}. */
@@ -59,11 +60,7 @@ export function ServiceHealthSummary({ status }: ServiceHealthSummaryProps): JSX
           href="/status"
           className="hover:bg-surface-container -mx-2 flex items-center gap-3 rounded-md px-2 py-1 transition-colors"
         >
-          <span className="bg-error-container text-on-error-container shrink-0 rounded-full px-2 py-0.5">
-            <Text as="span" token="label-small">
-              {outcomeLabel(service.outcome)}
-            </Text>
-          </span>
+          <OutcomeBadge outcome={service.outcome} />
           <Text as="span" token="body-medium" truncate className="min-w-0 flex-1">
             {service.label}
           </Text>

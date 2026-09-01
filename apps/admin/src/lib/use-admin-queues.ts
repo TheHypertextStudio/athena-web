@@ -72,3 +72,31 @@ export function useAdminQueues(): AdminQueueCounts {
     )?.count,
   };
 }
+
+/**
+ * What the deployment is consuming, across object storage and the database.
+ *
+ * @remarks
+ * A slower tier than the queue signals: these are aggregate scans rather than indexed counts, and
+ * stored bytes do not move minute to minute.
+ */
+export const resourcesDef = apiQueryOptions(
+  queryKeys.resources(),
+  () => api.admin.resources.$get(),
+  'Could not load resource usage.',
+  { staleTime: STALE.static },
+);
+
+/**
+ * Whether every service is answering, with uptime and background-work health.
+ *
+ * @remarks
+ * Shared between the dashboard summary and the status board rather than declared twice, so both
+ * read one cache entry and cannot disagree about what is down.
+ */
+export const statusDef = apiQueryOptions(
+  queryKeys.status(),
+  () => api.admin.status.$get(),
+  'Could not load service status.',
+  { staleTime: STALE.volatile },
+);

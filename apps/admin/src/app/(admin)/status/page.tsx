@@ -1,28 +1,22 @@
 'use client';
 
 import { relativeTime } from '@docket/ui';
+import { EmptyState } from '@docket/ui/components';
+import { Activity } from '@docket/ui/icons';
 import { Row, Skeleton, Stack, Text } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
 import { AsyncContent, QueryErrorBanner } from '@/components/admin-feedback';
 import { AdminPage, AdminPageHeader, AdminSection } from '@/components/admin-page';
 import { AdminList } from '@/components/admin-table';
-import { api } from '@/lib/api';
-import { STALE, apiQueryOptions, queryKeys, useLiveApiQuery } from '@/lib/query';
+import { useLiveApiQuery } from '@/lib/query';
+import { statusDef } from '@/lib/use-admin-queues';
 import type { AdminJobHealth, AdminStatus } from '@/lib/types';
 
 import { ServiceRow } from './service-row';
 
 /** How often the board re-reads while an operator is looking at it. */
 const STATUS_POLL_MS = 30_000;
-
-/** The service-status board. */
-const statusDef = apiQueryOptions(
-  queryKeys.status(),
-  () => api.admin.status.$get(),
-  'Could not load service status.',
-  { staleTime: STALE.volatile },
-);
 
 /**
  * Whether every service and job is currently healthy, and what is running.
@@ -52,7 +46,14 @@ export default function StatusPage(): JSX.Element {
         loading={status.isPending}
         empty={status.data === undefined}
         skeleton={<Skeleton className="h-40 w-full rounded-xl" />}
-        emptyState={<Skeleton className="h-40 w-full rounded-xl" />}
+        emptyState={
+          <EmptyState
+            icon={Activity}
+            title="No status yet"
+            body="No check has been recorded for this deployment."
+            frame="none"
+          />
+        }
       >
         {status.data ? <StatusBoard status={status.data} /> : null}
       </AsyncContent>

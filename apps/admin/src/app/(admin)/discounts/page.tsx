@@ -331,7 +331,6 @@ function DecisionControls({
         <ConfirmButton
           label={rejecting ? 'Rejecting…' : 'Reject'}
           disabled={busy || noReason}
-          pending={rejecting}
           title="Reject this application?"
           description={`${application.organizationName} is told their application was not approved. The reason you entered is recorded and sent with the decision.`}
           confirmLabel="Reject application"

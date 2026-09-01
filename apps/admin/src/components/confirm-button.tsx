@@ -10,8 +10,6 @@ export interface ConfirmButtonProps {
   readonly label: string;
   /** Whether the trigger is unavailable. */
   readonly disabled: boolean;
-  /** Whether the confirmed action is in flight. */
-  readonly pending: boolean;
   /** The dialog's heading, phrased as the question being asked. */
   readonly title: string;
   /** What the action will do, and what it will not undo. */
@@ -36,7 +34,8 @@ export interface ConfirmButtonProps {
  *
  * The dialog closes as soon as the action starts rather than waiting for it to land: the calling
  * screen already renders the in-flight and failure states inline, so holding a modal open over them
- * would hide the very feedback the operator needs.
+ * would hide the very feedback the operator needs. That is also why this takes no `pending` flag —
+ * the dialog is never open while the action is running, so one could only ever read `false`.
  *
  * @param props - See {@link ConfirmButtonProps}.
  * @returns the trigger and its confirmation dialog.
@@ -44,7 +43,6 @@ export interface ConfirmButtonProps {
 export function ConfirmButton({
   label,
   disabled,
-  pending,
   title,
   description,
   confirmLabel,
@@ -69,7 +67,6 @@ export function ConfirmButton({
         title={title}
         description={description}
         confirmLabel={confirmLabel}
-        pending={pending}
         onConfirm={() => {
           setOpen(false);
           onConfirm();

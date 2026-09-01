@@ -1,3 +1,5 @@
+import type { BadgeProps } from '@docket/ui/primitives';
+
 import type { AdminServiceStatus, AdminStatus } from './types';
 
 /** The outcomes a service check can report. */
@@ -38,19 +40,22 @@ const REASON_LABEL: Readonly<Record<ProbeReason, string>> = {
 };
 
 /**
- * The tonal treatment each outcome takes.
+ * The {@link Badge} variant each outcome takes.
  *
  * @remarks
  * Colour is spent only where something is wrong. `up` is deliberately not green: on a board whose
  * normal state is every service healthy, painting all of them green makes the one that is not
- * harder to find, not easier.
+ * harder to find, not easier — so everything that is fine, off, or unmeasured reads as the same
+ * quiet secondary pill and only a fault carries a hue.
  */
-const OUTCOME_TONE: Readonly<Record<ProbeOutcome, string>> = {
-  up: 'bg-surface-container-high text-on-surface-variant',
-  degraded: 'bg-tertiary-container text-on-tertiary-container',
-  down: 'bg-error-container text-on-error-container',
-  disabled: 'bg-surface-container-high text-on-surface-variant',
-  unknown: 'bg-surface-container-high text-on-surface-variant',
+const OUTCOME_BADGE_VARIANTS: Readonly<Record<ProbeOutcome, NonNullable<BadgeProps['variant']>>> = {
+  up: 'secondary',
+  // The accent fill, matching how the attention band already marks work that needs a person but
+  // has not failed. A degraded service is reachable and wrong, which is neither `up` nor `down`.
+  degraded: 'default',
+  down: 'destructive',
+  disabled: 'secondary',
+  unknown: 'secondary',
 };
 
 /** Name one outcome. */
@@ -63,13 +68,13 @@ export function reasonLabel(reason: ProbeReason): string {
   return REASON_LABEL[reason];
 }
 
-/** The tonal classes one outcome carries. */
-export function outcomeTone(outcome: ProbeOutcome): string {
-  return OUTCOME_TONE[outcome];
+/** The badge variant one outcome carries. */
+export function outcomeBadgeVariant(outcome: ProbeOutcome): NonNullable<BadgeProps['variant']> {
+  return OUTCOME_BADGE_VARIANTS[outcome];
 }
 
 /** Whether an outcome is something an operator should act on. */
-export function isFault(outcome: ProbeOutcome): boolean {
+function isFault(outcome: ProbeOutcome): boolean {
   return outcome === 'down' || outcome === 'degraded';
 }
 

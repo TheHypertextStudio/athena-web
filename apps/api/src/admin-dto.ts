@@ -531,14 +531,6 @@ export const AdminStorageStore = z.object({
 /** Validated storage-store value. */
 export type AdminStorageStore = z.infer<typeof AdminStorageStore>;
 
-/** One database relation and the space it occupies. */
-export const AdminTableSize = z.object({
-  table: z.string().describe('The relation name.'),
-  byteSize: z.number().int().describe('Total bytes including indexes and TOAST.'),
-});
-/** Validated table-size value. */
-export type AdminTableSize = z.infer<typeof AdminTableSize>;
-
 /**
  * What the platform is currently consuming, across object storage and the database.
  *
@@ -550,9 +542,6 @@ export const AdminResourcesOut = z.object({
   storage: z.array(AdminStorageStore).describe('Per-store object counts and byte totals.'),
   storageByteSize: z.number().int().describe('Total stored bytes across every store.'),
   databaseByteSize: z.number().int().describe('Total size of the database, including indexes.'),
-  largestTables: z
-    .array(AdminTableSize)
-    .describe('The largest relations by total size, largest first.'),
 });
 /** Validated resource-usage value. */
 export type AdminResourcesOut = z.infer<typeof AdminResourcesOut>;

@@ -11,14 +11,11 @@ import { count, sql } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
-import { AdminResourcesOut, type AdminStorageStore, type AdminTableSize } from '../admin-dto';
+import { AdminResourcesOut, type AdminStorageStore } from '../admin-dto';
 import type { AppEnv } from '../context';
 import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { rawResultRows } from '../lib/raw-result';
-
-/** How many relations the size breakdown reports. */
-const LARGEST_TABLE_LIMIT = 10;
 
 /**
  * A Postgres size aggregate as a driver hands it back.
@@ -29,9 +26,6 @@ const LARGEST_TABLE_LIMIT = 10;
  * an empty set is `NULL`. Accepting all three here keeps the coercion in one place.
  */
 const ByteCount = z.union([z.string(), z.number(), z.null()]);
-
-/** One relation and its total size, as `pg_total_relation_size` reports it. */
-const TableSizeRow = z.object({ table: z.string(), bytes: ByteCount });
 
 /** The single row of the database-size read. */
 const DatabaseSizeRow = z.object({ bytes: ByteCount });
@@ -91,7 +85,7 @@ export const adminResourceRoutes = new Hono<AppEnv>().get(
 
 **Storage.** Object counts and byte totals for each blob-backed table, reported per store rather than as one figure, so it is visible which store is growing. \`attachment\` records size as nullable and rows without one count as zero bytes; \`document_image\` and \`discount_evidence\` always record it. \`storageByteSize\` is the sum across every store.
 
-**Database.** \`databaseByteSize\` is the total size of the database including indexes. \`largestTables\` lists the ${String(LARGEST_TABLE_LIMIT)} largest relations by total size (heap, indexes, and TOAST), largest first.
+**Database.** \`databaseByteSize\` is the total size of the database including indexes.
 
 **Cost.** These are aggregate scans rather than indexed counts, so this route is separate from \`GET /admin/metrics\` and is not suited to frequent polling.
 
@@ -102,7 +96,7 @@ export const adminResourceRoutes = new Hono<AppEnv>().get(
 **Related.** \`GET /admin/metrics\` for account and queue counts.`,
   }),
   async (c) => {
-    const [attachments, images, evidence, database, tables] = await Promise.all([
+    const [attachments, images, evidence, database] = await Promise.all([
       db
         .select({ objects: count(), bytes: sql<string | null>`sum(${attachment.byteSize})` })
         .from(attachment),
@@ -116,16 +110,6 @@ export const adminResourceRoutes = new Hono<AppEnv>().get(
         })
         .from(billingDiscountEvidence),
       db.execute(sql`select pg_database_size(current_database()) as bytes`),
-      db.execute(sql`
-        select
-          c.relname as table,
-          pg_total_relation_size(c.oid) as bytes
-        from pg_class c
-        join pg_namespace n on n.oid = c.relnamespace
-        where c.relkind = 'r' and n.nspname = 'public'
-        order by pg_total_relation_size(c.oid) desc
-        limit ${LARGEST_TABLE_LIMIT}
-      `),
     ]);
 
     const storage: AdminStorageStore[] = [
@@ -134,18 +118,12 @@ export const adminResourceRoutes = new Hono<AppEnv>().get(
       storeTotals('discount_evidence', evidence[0]),
     ];
 
-    const largestTables: AdminTableSize[] = z
-      .array(TableSizeRow)
-      .parse(rawResultRows<unknown>(tables))
-      .map((row) => ({ table: row.table, byteSize: bytesOf(row.bytes) }));
-
     const databaseSize = z.array(DatabaseSizeRow).parse(rawResultRows<unknown>(database))[0];
 
     return ok(c, AdminResourcesOut, {
       storage,
       storageByteSize: storage.reduce((total, store) => total + store.byteSize, 0),
       databaseByteSize: bytesOf(databaseSize?.bytes ?? null),
-      largestTables,
     });
   },
 );

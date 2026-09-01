@@ -149,9 +149,12 @@ export const serviceControl = pgTable(
       .$onUpdate(() => new Date()),
   },
   (t) => [
+    // Generated from SERVICE_CONTROL_KEYS rather than re-typed: a hand-copied IN list is a
+    // second source of truth no compiler checks, so a key TypeScript accepts can still be
+    // rejected by the constraint at runtime.
     check(
       'service_control_key_check',
-      sql`${t.key} IN ('lattice_submissions', 'lattice_polling', 'service_probes')`,
+      sql`${t.key} IN (${sql.raw(SERVICE_CONTROL_KEYS.map((key) => `'${key}'`).join(', '))})`,
     ),
   ],
 );

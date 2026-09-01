@@ -37,7 +37,11 @@ import {
 import { deriveInitiativeTreePositions, type InitiativeTreePosition } from './initiative-rails';
 import type { WorkViewDefinitionFor } from './view-state';
 import type { WorkViewGroupPage, WorkViewGroupSummary, WorkViewRowFor } from './renderer-types';
-import { objectForWorkViewRow } from './work-view-object';
+import {
+  objectForWorkViewRow,
+  workViewRowInteractionPolicy,
+  type WorkViewRowInteractionPolicy,
+} from './work-view-object';
 
 type WorkListRowInteractionContract<TTarget extends ViewTarget> = Parameters<
   Parameters<
@@ -48,6 +52,8 @@ type WorkListRowInteractionContract<TTarget extends ViewTarget> = Parameters<
 /** Props shared by each target's virtualized roster table. */
 export interface WorkListProps<TTarget extends ViewTarget> {
   readonly target: TTarget;
+  /** Organization whose roster owns selection and write interactions. */
+  readonly organizationId: string;
   readonly definition: WorkViewDefinitionFor<TTarget>;
   readonly rows: readonly WorkViewRowFor<TTarget>[];
   readonly groups: readonly WorkViewGroupSummary[];
@@ -84,13 +90,15 @@ function isInitiativeDescendant(
 function WorkListRowInteraction<TTarget extends ViewTarget>({
   membership,
   object,
+  interaction,
   active,
   selected,
   onActivate,
   children,
 }: {
   readonly membership: ListMembership<TTarget>;
-  readonly object: ObjectRef;
+  readonly object: ObjectRef | null;
+  readonly interaction: WorkViewRowInteractionPolicy;
   readonly active: boolean;
   readonly selected: boolean;
   readonly onActivate: () => void;
@@ -99,13 +107,17 @@ function WorkListRowInteraction<TTarget extends ViewTarget>({
   const suppressActivationRef = useRef(false);
   const drag = useDraggable({
     object,
-    actionScope: 'all',
-    surfaceId: `work-list:${object.kind}`,
+    disabled: interaction.dragDisabled,
+    actionScope: interaction.actionScope,
+    surfaceId: `work-list:${membership.row.target}`,
     onDragStart: () => {
       suppressActivationRef.current = true;
     },
   });
-  const drop = useRelationDropTarget({ target: object });
+  const drop = useRelationDropTarget({
+    target: object ?? objectForWorkViewRow(membership.row),
+    disabled: !interaction.writable,
+  });
   const handleClick = (event: MouseEvent): void => {
     const nestedControl = (event.target as HTMLElement).closest(
       'a, button, input, textarea, select, [contenteditable="true"], [role="button"]',
@@ -123,13 +135,14 @@ function WorkListRowInteraction<TTarget extends ViewTarget>({
     'data-drop-state': drop.dropState,
     'data-drag-state': drag['data-drag-state'],
   };
+  const targetProps = object === null ? {} : objectTargetProps(object, interaction.actionScope);
   return (
     <>
       {children({
         active,
         selected,
         rowProps: {
-          ...objectTargetProps(object),
+          ...targetProps,
           ...rosterDataProps,
           'aria-selected': selected,
           'data-selected': selected,
@@ -151,7 +164,15 @@ function WorkListRowInteraction<TTarget extends ViewTarget>({
         ),
       })}
       {drop.effectLabel ? (
-        <span className="sr-only" role="status">
+        <span
+          className={cn(
+            'text-label-small pointer-events-none absolute inset-y-1 right-3 z-20 flex items-center rounded-md px-2',
+            drop.dropState === 'reject'
+              ? 'bg-error-container text-on-error-container'
+              : 'bg-primary-container text-on-primary-container',
+          )}
+          role="status"
+        >
           {drop.effectLabel}
         </span>
       ) : null}
@@ -184,6 +205,7 @@ function initiativePositions<TTarget extends ViewTarget>(
 /** Render one target-discriminated server roster through the shared EntityTable. */
 export function WorkList<TTarget extends ViewTarget>({
   target,
+  organizationId,
   definition,
   rows,
   groups,
@@ -217,6 +239,26 @@ export function WorkList<TTarget extends ViewTarget>({
   );
   const rowHeight = WORK_ROSTER_ROW_HEIGHT[definition.presentation.density];
   const positions = useMemo(() => initiativePositions(roster.memberships), [roster.memberships]);
+  const interactions = useMemo(
+    () =>
+      new Map(
+        roster.memberships.map((membership) => [
+          membership.key,
+          workViewRowInteractionPolicy(membership.row, organizationId),
+        ]),
+      ),
+    [organizationId, roster.memberships],
+  );
+  const writableIds = useMemo(
+    () =>
+      new Set<string>(
+        roster.memberships.flatMap((membership) =>
+          interactions.get(membership.key)?.writable === true ? [membership.row.id] : [],
+        ),
+      ),
+    [interactions, roster.memberships],
+  );
+  const selectionActive = [...selectedIds].some((id) => writableIds.has(id));
   const initiativeParentById = useMemo(
     () =>
       new Map(
@@ -228,12 +270,13 @@ export function WorkList<TTarget extends ViewTarget>({
   );
   const toggleSelection = useCallback(
     (id: string): void => {
-      const next = new Set(selectedIds);
+      if (!writableIds.has(id)) return;
+      const next = new Set([...selectedIds].filter((selectedId) => writableIds.has(selectedId)));
       if (next.has(id)) next.delete(id);
       else next.add(id);
       onSelectionChange(next);
     },
-    [onSelectionChange, selectedIds],
+    [onSelectionChange, selectedIds, writableIds],
   );
   const columns = useMemo(
     () =>
@@ -241,12 +284,24 @@ export function WorkList<TTarget extends ViewTarget>({
         target,
         definition,
         selectedIds,
+        selectionActive,
+        isWritable: (membership) => interactions.get(membership.key)?.writable === true,
         onToggleSelection: toggleSelection,
         statusOf,
         positions,
         rowHeight,
       }),
-    [definition, positions, rowHeight, selectedIds, statusOf, target, toggleSelection],
+    [
+      definition,
+      interactions,
+      positions,
+      rowHeight,
+      selectedIds,
+      selectionActive,
+      statusOf,
+      target,
+      toggleSelection,
+    ],
   );
   const firstMembership = roster.memberships[0];
   const initiativeRoot = useRelationDropTarget({
@@ -306,7 +361,10 @@ export function WorkList<TTarget extends ViewTarget>({
           onActivate(membership.row);
         }}
         renderRowInteraction={({ row: membership, children }) => {
-          const baseObject = objectForWorkViewRow(membership.row);
+          const interaction =
+            interactions.get(membership.key) ??
+            workViewRowInteractionPolicy(membership.row, organizationId);
+          const baseObject = interaction.object;
           const wouldCreateCycle =
             membership.row.target === 'initiative' &&
             dragState.objects.some(
@@ -314,15 +372,17 @@ export function WorkList<TTarget extends ViewTarget>({
                 source.kind === 'initiative' &&
                 isInitiativeDescendant(initiativeParentById, source.id, membership.row.id),
             );
-          const object = wouldCreateCycle
-            ? { ...baseObject, meta: { ...baseObject.meta, wouldCreateCycle: true } }
-            : baseObject;
+          const object =
+            wouldCreateCycle && baseObject !== null
+              ? { ...baseObject, meta: { ...baseObject.meta, wouldCreateCycle: true } }
+              : baseObject;
           return (
             <WorkListRowInteraction
               membership={membership}
               object={object}
+              interaction={interaction}
               active={activeEntryKey === workListEntityTableEntryKey(membership)}
-              selected={selectedIds.has(membership.row.id)}
+              selected={interaction.writable && selectedIds.has(membership.row.id)}
               onActivate={() => {
                 onActivate(membership.row);
               }}

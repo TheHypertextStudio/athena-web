@@ -160,15 +160,27 @@ function IdentityGlyph({ row }: { readonly row: WorkViewRowFor<ViewTarget> }): J
 /** Render the fixed leading slot as either an entity glyph or its selection checkbox. */
 function SelectionIdentity({
   row,
+  writable,
   selected,
   selectionActive,
   onToggle,
 }: {
   readonly row: WorkViewRowFor<ViewTarget>;
+  readonly writable: boolean;
   readonly selected: boolean;
   readonly selectionActive: boolean;
   readonly onToggle: () => void;
 }): JSX.Element {
+  if (!writable) {
+    return (
+      <span
+        data-work-roster-leading-slot
+        className="relative z-10 flex size-8 shrink-0 items-center justify-center"
+      >
+        <IdentityGlyph row={row} />
+      </span>
+    );
+  }
   return (
     <span
       data-work-roster-leading-slot
@@ -288,6 +300,7 @@ function IdentityHeader({ label }: { readonly label: string }): JSX.Element {
 /** Render one path membership through the shared identity contract. */
 function IdentityCell<TTarget extends ViewTarget>({
   membership,
+  writable,
   selected,
   selectionActive,
   onToggle,
@@ -295,6 +308,7 @@ function IdentityCell<TTarget extends ViewTarget>({
   rowHeight,
 }: {
   readonly membership: ListMembership<TTarget>;
+  readonly writable: boolean;
   readonly selected: boolean;
   readonly selectionActive: boolean;
   readonly onToggle: () => void;
@@ -313,6 +327,7 @@ function IdentityCell<TTarget extends ViewTarget>({
       >
         <SelectionIdentity
           row={row}
+          writable={writable}
           selected={selected}
           selectionActive={selectionActive}
           onToggle={onToggle}
@@ -498,6 +513,10 @@ export interface BuildWorkListColumnsOptions<TTarget extends ViewTarget> {
   readonly target: TTarget;
   readonly definition: WorkViewDefinitionFor<TTarget>;
   readonly selectedIds: ReadonlySet<string>;
+  /** Whether the roster has at least one writable selected row. */
+  readonly selectionActive: boolean;
+  /** Resolve selection and write authority for one full-path membership. */
+  readonly isWritable: (membership: ListMembership<TTarget>) => boolean;
   readonly onToggleSelection: (rowId: string) => void;
   readonly statusOf: (key: string) => WorkStatusDisplay;
   readonly positions: ReadonlyMap<string, InitiativeTreePosition>;
@@ -514,6 +533,8 @@ export function buildWorkListColumns<TTarget extends ViewTarget>({
   target,
   definition,
   selectedIds,
+  selectionActive,
+  isWritable,
   onToggleSelection,
   statusOf,
   positions,
@@ -532,18 +553,22 @@ export function buildWorkListColumns<TTarget extends ViewTarget>({
     flex: true,
     priority: 'always',
     className: 'relative',
-    render: (membership) => (
-      <IdentityCell
-        membership={membership}
-        selected={selectedIds.has(membership.row.id)}
-        selectionActive={selectedIds.size > 0}
-        onToggle={() => {
-          onToggleSelection(membership.row.id);
-        }}
-        position={positions.get(membership.key)}
-        rowHeight={rowHeight}
-      />
-    ),
+    render: (membership) => {
+      const writable = isWritable(membership);
+      return (
+        <IdentityCell
+          membership={membership}
+          writable={writable}
+          selected={writable && selectedIds.has(membership.row.id)}
+          selectionActive={selectionActive}
+          onToggle={() => {
+            onToggleSelection(membership.row.id);
+          }}
+          position={positions.get(membership.key)}
+          rowHeight={rowHeight}
+        />
+      );
+    },
   };
   const metadata = selectedProperties.map<Column<ListMembership<TTarget>>>((field) => {
     const width = WORK_ROSTER_FIELD_WIDTH_PX[field.key] ?? DEFAULT_FIELD_WIDTH_PX;

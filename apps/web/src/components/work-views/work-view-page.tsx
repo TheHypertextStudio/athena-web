@@ -624,6 +624,7 @@ export function WorkViewPage<TTarget extends ViewTarget>({
     content = (
       <WorkList
         target={target}
+        organizationId={organizationId}
         definition={controller.definition}
         rows={rows}
         groups={controller.response?.groups ?? []}

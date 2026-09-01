@@ -10,8 +10,40 @@ import {
   TaskViewRow,
 } from '@docket/work/work-view-contract';
 
+const relationPreview = vi.hoisted<{
+  targetId: string | null;
+  dropState: 'idle' | 'accept' | 'reject';
+  effectLabel: string | null;
+}>(() => ({
+  targetId: null,
+  dropState: 'idle',
+  effectLabel: null,
+}));
+
+vi.mock('../../src/components/dnd/use-relation-drop-target', () => ({
+  useRelationDropTarget: (options: {
+    readonly target: { readonly id: string };
+    readonly disabled?: boolean;
+  }) => {
+    const active = options.target.id === relationPreview.targetId && options.disabled !== true;
+    const dropState = active ? relationPreview.dropState : 'idle';
+    return {
+      dropProps: {
+        ref: () => undefined,
+        className: '',
+      },
+      isOver: active,
+      canDrop: active && dropState === 'accept',
+      dropState,
+      effectLabel: active ? relationPreview.effectLabel : null,
+      relationId: null,
+    };
+  },
+}));
+
 import { WorkList } from '../../src/components/work-views/work-list';
 
+const ROUTE_ORGANIZATION_ID = '01ARZ3NDEKTSV4RRFFQ69G5FA0';
 let viewportHeight = 360;
 let restoreRect: (() => void) | undefined;
 let restoreHeight: (() => void) | undefined;
@@ -61,6 +93,9 @@ afterAll(() => {
 
 afterEach(() => {
   viewportHeight = 360;
+  relationPreview.targetId = null;
+  relationPreview.dropState = 'idle';
+  relationPreview.effectLabel = null;
 });
 
 const taskDefinition = TaskViewDefinition.parse({
@@ -116,6 +151,7 @@ describe('WorkList', () => {
     render(
       <WorkList
         target="task"
+        organizationId={ROUTE_ORGANIZATION_ID}
         definition={taskDefinition}
         rows={Array.from({ length: 500 }, (_, index) => task(index))}
         groups={[]}
@@ -156,7 +192,7 @@ describe('WorkList', () => {
     expect(onSelectionChange).toHaveBeenCalledWith(new Set([task(0).id]));
   });
 
-  it('renders nested server groups and mutes ancestor-only Initiative context', () => {
+  it('keeps context ancestors navigable without selection, write actions, or drag state', () => {
     const definition = InitiativeViewDefinition.parse({
       version: 2,
       target: 'initiative',
@@ -199,10 +235,15 @@ describe('WorkList', () => {
       isContext: false,
       manualRank: 'a1',
     });
+    relationPreview.targetId = parent.id;
+    relationPreview.dropState = 'accept';
+    relationPreview.effectLabel = 'Move to Parent context';
 
+    const onSelectionChange = vi.fn();
     render(
       <WorkList
         target="initiative"
+        organizationId={ROUTE_ORGANIZATION_ID}
         definition={definition}
         rows={[]}
         groups={[
@@ -217,15 +258,18 @@ describe('WorkList', () => {
             loading: false,
           },
         ]}
-        selectedIds={new Set()}
-        onSelectionChange={vi.fn()}
+        selectedIds={new Set([parent.id])}
+        onSelectionChange={onSelectionChange}
         onActivate={vi.fn()}
       />,
     );
 
     const treegrid = screen.getByRole('treegrid', { name: 'Initiatives' });
     expect(treegrid).toBeVisible();
-    expect(screen.getByRole('row', { name: /Planned/ })).toHaveAttribute('data-level', '0');
+    const plannedGroup = screen.getByRole('row', { name: /Planned/ });
+    expect(plannedGroup).toHaveAttribute('data-level', '0');
+    expect(plannedGroup).toHaveTextContent('1');
+    expect(plannedGroup).not.toHaveTextContent('2');
     expect(screen.getByRole('row', { name: /High/ })).toHaveAttribute('data-level', '1');
     const parentRow = screen.getByText('Parent context').closest('[role="row"]');
     expect(parentRow).toHaveAttribute('data-context-row', 'true');
@@ -234,11 +278,63 @@ describe('WorkList', () => {
     expect(parentRow).toHaveAttribute('aria-setsize', '1');
     expect(parentRow).toHaveAttribute('aria-expanded', 'true');
     expect(parentRow).toHaveAttribute('data-row-height', '56');
+    expect(screen.getByRole('link', { name: 'Parent context' })).toHaveAttribute(
+      'href',
+      `/orgs/${ROUTE_ORGANIZATION_ID}/initiatives/${parent.id}`,
+    );
+    expect(
+      screen.queryByRole('checkbox', { name: 'Select Parent context' }),
+    ).not.toBeInTheDocument();
+    expect(parentRow).not.toHaveAttribute('data-object-kind');
+    expect(parentRow).not.toHaveAttribute('data-object-id');
+    expect(parentRow).toHaveAttribute('aria-selected', 'false');
+    expect(parentRow).toHaveAttribute('data-drop-state', 'idle');
+    expect(parentRow).not.toHaveClass('cursor-grab');
+    expect(
+      screen.queryByText('Move to Parent context', { selector: '[role="status"]' }),
+    ).not.toBeInTheDocument();
     const childRow = screen.getByText('Matching child').closest('[role="row"]');
     expect(childRow).toHaveAttribute('aria-level', '2');
     expect(childRow).toHaveAttribute('aria-posinset', '1');
     expect(childRow).toHaveAttribute('aria-setsize', '1');
+    expect(childRow).toHaveAttribute('data-object-kind', 'initiative');
+    expect(childRow).toHaveAttribute('data-object-id', child.id);
+    expect(childRow).toHaveClass('cursor-grab');
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select Matching child' }));
+    expect(onSelectionChange).toHaveBeenCalledWith(new Set([child.id]));
     expect(screen.getByText('Matching child')).toBeVisible();
+  });
+
+  it.each([
+    ['Move', 'Move to Parent', 'accept'],
+    ['Link', 'Link to Initiative', 'accept'],
+    ['Assign', 'Assign to Willie', 'accept'],
+    ['Reject', 'This move would create a hierarchy cycle', 'reject'],
+  ] as const)('shows visible row feedback for a %s preview', (_operation, label, state) => {
+    const row = task(0);
+    relationPreview.targetId = row.id;
+    relationPreview.dropState = state;
+    relationPreview.effectLabel = label;
+
+    render(
+      <WorkList
+        target="task"
+        organizationId={ROUTE_ORGANIZATION_ID}
+        definition={taskDefinition}
+        rows={[row]}
+        groups={[]}
+        groupPages={[]}
+        selectedIds={new Set()}
+        onSelectionChange={vi.fn()}
+        onActivate={vi.fn()}
+      />,
+    );
+
+    const status = screen.getByText(label, { selector: '[role="status"]' });
+    expect(status).toBeVisible();
+    expect(status).not.toHaveClass('sr-only');
+    expect(status).toHaveClass('absolute');
+    expect(screen.getByRole('row', { name: /Task 0/ })).toHaveAttribute('data-drop-state', state);
   });
 
   it('orders grouped Initiative ancestors before child-first server rows', () => {
@@ -288,6 +384,7 @@ describe('WorkList', () => {
     render(
       <WorkList
         target="initiative"
+        organizationId={ROUTE_ORGANIZATION_ID}
         definition={definition}
         rows={[]}
         groups={[{ path: ['planned'], key: 'planned', label: 'Planned', count: 1 }]}
@@ -357,6 +454,7 @@ describe('WorkList', () => {
     render(
       <WorkList
         target="initiative"
+        organizationId={ROUTE_ORGANIZATION_ID}
         definition={definition}
         rows={[parent, child]}
         groups={[]}
@@ -446,6 +544,7 @@ describe('WorkList', () => {
     render(
       <WorkList
         target="initiative"
+        organizationId={ROUTE_ORGANIZATION_ID}
         definition={definition}
         rows={[]}
         groups={[
@@ -523,6 +622,7 @@ describe('WorkList', () => {
     render(
       <WorkList
         target="initiative"
+        organizationId={ROUTE_ORGANIZATION_ID}
         definition={definition}
         rows={[first, second]}
         groups={[]}
@@ -551,6 +651,7 @@ describe('WorkList', () => {
     const rows = Array.from({ length: 100 }, (_, index) => task(index));
     const props = {
       target: 'task' as const,
+      organizationId: ROUTE_ORGANIZATION_ID,
       definition,
       rows: [],
       groups: [{ path: ['todo'], key: 'todo', label: 'Active', count: 101 }],

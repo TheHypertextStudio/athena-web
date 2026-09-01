@@ -1,5 +1,6 @@
 'use client';
 
+import { withoutUndefinedValues } from '@docket/ui';
 import { EntityList, EntityListRow, EntityTable } from '@docket/ui/components';
 import type { Column } from '@docket/ui/components';
 import Link from 'next/link';
@@ -48,7 +49,9 @@ export function AdminTable<T>({
       rowHref={rowHref}
       // Spread wholesale: cherry-picking `href` would silently drop the grid's role, row index,
       // focus handling, and prefetch intent, with no type error to say so.
-      renderRowLink={({ children, ...linkProps }) => <Link {...linkProps}>{children}</Link>}
+      renderRowLink={({ children, ...linkProps }) => (
+        <Link {...withoutUndefinedValues(linkProps)}>{children}</Link>
+      )}
     />
   );
 }

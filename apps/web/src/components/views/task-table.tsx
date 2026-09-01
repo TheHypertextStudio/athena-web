@@ -42,6 +42,7 @@ import {
 } from '@docket/ui/components';
 import Link from '@/components/docket-link';
 import type { JSX, ReactNode } from 'react';
+import { withoutUndefinedValues } from '@docket/ui';
 import { cn } from '@docket/ui/lib/utils';
 
 import { EditableTitle } from '@/components/editor/editable-title';
@@ -287,26 +288,6 @@ export interface TaskTableProps {
   className?: string | undefined;
   /** Customized task identities composed through one workspace-wide display read. */
   displayByTaskId?: ReadonlyMap<string, EntityDisplayOut> | undefined;
-}
-
-/**
- * Drop every key whose value is `undefined`, keeping the rest under their original (now
- * `undefined`-free) types — for spreading an object with optional-and-possibly-`undefined`
- * fields onto a target whose own prop types don't accept an explicit `undefined`.
- */
-function withoutUndefinedValues<T extends object>(
-  value: T,
-): {
-  [K in keyof T]: Exclude<T[K], undefined>;
-} {
-  const result = {} as { [K in keyof T]: Exclude<T[K], undefined> };
-  for (const key of Object.keys(value) as (keyof T)[]) {
-    const fieldValue = value[key];
-    if (fieldValue !== undefined) {
-      result[key] = fieldValue as Exclude<T[typeof key], undefined>;
-    }
-  }
-  return result;
 }
 
 /** Flatten nested task groups into the provider's visible object order. */

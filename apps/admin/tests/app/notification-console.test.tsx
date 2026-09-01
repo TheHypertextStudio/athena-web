@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { Id } from '@docket/types';
+import { NotificationIntentId } from '@docket/notifications/ids';
 import { act, type ReactNode } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -31,7 +31,7 @@ import { withQueryClient } from '../support/query-harness';
   true;
 
 const intent: AdminNotificationIntent = {
-  id: Id.parse('01ARZ3NDEKTSV4RRFFQ69G5FAV'),
+  id: NotificationIntentId.parse('01ARZ3NDEKTSV4RRFFQ69G5FAV'),
   senderType: 'staff',
   senderId: null,
   organizationId: null,

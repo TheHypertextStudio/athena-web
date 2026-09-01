@@ -360,6 +360,15 @@ test('shared work rosters pass the release geometry and interaction contract', a
   );
   await titleEditor.press('Enter');
   await renamedResponse;
+  const rosterRefresh = page.waitForResponse(
+    (response) =>
+      response.url().endsWith('/work-views/query') &&
+      response.request().method() === 'POST' &&
+      response.ok(),
+  );
+  await detailPage.close();
+  await page.bringToFront();
+  await rosterRefresh;
   await revealAtVirtualStart(initiativeGrid, page.getByRole('link', { name: renamed }).first());
   const currentGrid = await initiativeGrid.elementHandle();
   if (currentGrid === null) throw new Error('The Initiative treegrid unmounted during rename.');
@@ -367,7 +376,6 @@ test('shared work rosters pass the release geometry and interaction contract', a
     await mountedGrid.evaluate((original, current) => original === current, currentGrid),
     'rename must retain the original treegrid DOM node',
   ).toBe(true);
-  await detailPage.close();
 
   const laterRow = page.locator(`[data-row-id="${fixture.laterSiblingId}"]`).first();
   const renamedRow = page.locator(`[data-row-id="${fixture.onlyChildId}"]`).first();

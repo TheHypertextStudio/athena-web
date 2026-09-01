@@ -14,6 +14,24 @@ import { AdminOutline, CONTENT_ID, SECTION_ATTRIBUTE, sectionId } from './admin-
  */
 export type AdminPageWidth = 'form' | 'list' | 'console';
 
+/**
+ * The measure an outlined screen takes: its content measure plus the rail and the gap.
+ *
+ * @remarks
+ * Composed rather than fixed, so an outlined screen keeps the measure it declared. A single
+ * hardcoded width here silently widened three `form` screens from 48rem to 72rem, which is the
+ * whole point of the width being a closed set.
+ *
+ * Spelled out as literal class strings because Tailwind scans source text: an interpolated class
+ * name produces no CSS at all, and the failure is invisible until someone looks at the rendered
+ * width.
+ */
+const OUTLINE_WIDTH_CLASS: Readonly<Record<AdminPageWidth, string>> = {
+  form: 'max-w-[calc(48rem+12rem+2rem)]',
+  list: 'max-w-[calc(64rem+12rem+2rem)]',
+  console: 'max-w-[calc(80rem+12rem+2rem)]',
+};
+
 /** The measure each width resolves to. */
 const WIDTH_CLASS: Readonly<Record<AdminPageWidth, string>> = {
   /** Forms, settings, and property detail — narrow enough to keep label/value pairs readable. */
@@ -69,7 +87,9 @@ export function AdminPage({ width, outline = false, children }: AdminPageProps):
   }
 
   return (
-    <div className="mx-auto grid w-full max-w-6xl gap-8 p-4 @2xl:p-8 @4xl:grid-cols-[minmax(0,1fr)_12rem]">
+    <div
+      className={`mx-auto grid w-full gap-8 p-4 @2xl:p-8 @4xl:grid-cols-[minmax(0,1fr)_12rem] ${OUTLINE_WIDTH_CLASS[width]}`}
+    >
       {column}
       <AdminOutline />
     </div>

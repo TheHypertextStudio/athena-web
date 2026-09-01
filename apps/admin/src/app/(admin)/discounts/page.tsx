@@ -318,7 +318,7 @@ function DecisionControls({
 
       <PreviewResult preview={preview} />
 
-      <ControlGroup controlSize="md" wrap>
+      <ControlGroup wrap>
         <Button variant="secondary" disabled={busy} onClick={onPreview}>
           {previewing ? 'Previewing…' : 'Preview approval'}
         </Button>
@@ -403,7 +403,7 @@ function DecisionHistory({
   if (!detail || detail.events.length === 0) return null;
 
   return (
-    <Surface tone="card" shape="small" pad="comfortable">
+    <Surface tone="well" shape="small" pad="comfortable">
       <Stack gap={1} as="ol">
         {detail.events.map((event) => (
           <li key={event.id}>
@@ -427,7 +427,7 @@ function PreviewResult({
   if (!preview) return null;
 
   return (
-    <Surface tone="card" shape="small" pad="comfortable">
+    <Surface tone="well" shape="small" pad="comfortable">
       <Stack gap={1}>
         <Text as="p" token="label-large">
           {preview.percentOff}% through {new Date(preview.endsAt).toLocaleDateString()}

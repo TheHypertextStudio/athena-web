@@ -86,11 +86,14 @@ const cron = new Hono()
   // the check passed or failed. Uptime is a ratio, so a skipped failure would silently inflate it.
   .post('/service-probe', async (c) => {
     if (!authorized(c)) return c.json({ error: 'unauthorized' }, 401);
-    const results = await runServiceProbes();
+    const pass = await runServiceProbes();
+    if (!pass.ran) return c.json({ swept: false, reason: pass.reason });
     return c.json({
-      checked: results.length,
-      down: results.filter((result) => result.outcome === 'down').length,
-      degraded: results.filter((result) => result.outcome === 'degraded').length,
+      swept: true,
+      checked: pass.results.length,
+      down: pass.results.filter((result) => result.outcome === 'down').length,
+      degraded: pass.results.filter((result) => result.outcome === 'degraded').length,
+      pruned: pass.pruned,
     });
   })
   .post('/lifecycle-sweep', async (c) => {

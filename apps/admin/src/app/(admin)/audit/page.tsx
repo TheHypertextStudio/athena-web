@@ -2,8 +2,8 @@
 
 import { ActorAvatar, EmptyState, RelativeTime } from '@docket/ui/components';
 import { relativeTime } from '@docket/ui';
-import { Activity, ChevronDown, ChevronRight } from '@docket/ui/icons';
-import { Button, Input, Stack, Surface, Text } from '@docket/ui/primitives';
+import { Activity } from '@docket/ui/icons';
+import { Input, Stack, Text } from '@docket/ui/primitives';
 import { type JSX, useState } from 'react';
 
 import {
@@ -12,6 +12,8 @@ import {
   QueryErrorBanner,
   RefreshingOverlay,
 } from '@/components/admin-feedback';
+import { AdminDisclosureRow } from '@/components/admin-disclosure-row';
+import { Property, PropertyList } from '@/components/admin-detail';
 import { AdminPage, AdminPageHeader } from '@/components/admin-page';
 import { AdminPagination } from '@/components/admin-pagination';
 import { api } from '@/lib/api';
@@ -125,59 +127,28 @@ export default function AuditPage(): JSX.Element {
 
 /** One audit event: the headline line, with its metadata behind a disclosure. */
 function AuditRow({ event }: { readonly event: AdminAuditEvent }): JSX.Element {
-  const [expanded, setExpanded] = useState(false);
   const entries = auditMetadataEntries(event.metadata);
   const actor = event.staffUserId ?? 'System';
-  const Chevron = expanded ? ChevronDown : ChevronRight;
 
   return (
-    <Surface tone="card" shape="small" pad="none">
-      <div className="flex items-center gap-3 px-3 py-2">
-        <ActorAvatar kind={event.staffUserId ? 'human' : 'agent'} name={actor} size={20} />
-
-        <div className="flex min-w-0 flex-1 flex-col">
-          <Text as="span" token="body-medium" truncate>
-            {auditTypeLabel(event.type)}
-          </Text>
-          <Text as="span" token="body-small" tone="muted" truncate>
-            {`${auditSubjectLabel(event.subjectType)} · ${event.subjectId}`}
-          </Text>
-        </div>
-
-        <Text as="span" token="body-small" tone="muted" className="shrink-0">
+    <AdminDisclosureRow
+      name={auditTypeLabel(event.type)}
+      leading={<ActorAvatar kind={event.staffUserId ? 'human' : 'agent'} name={actor} size={20} />}
+      title={auditTypeLabel(event.type)}
+      subtitle={`${auditSubjectLabel(event.subjectType)} · ${event.subjectId}`}
+      meta={
+        <Text as="span" token="body-small" tone="muted">
           <RelativeTime iso={event.createdAt}>{relativeTime(event.createdAt)}</RelativeTime>
         </Text>
-
-        {entries.length > 0 ? (
-          <Button
-            variant="ghost"
-            controlSize="sm"
-            iconOnly
-            aria-expanded={expanded}
-            aria-label={expanded ? 'Hide event detail' : 'Show event detail'}
-            onClick={() => {
-              setExpanded((open) => !open);
-            }}
-          >
-            <Chevron aria-hidden="true" className="size-4" />
-          </Button>
-        ) : null}
-      </div>
-
-      {expanded ? (
-        <dl className="grid grid-cols-[minmax(6rem,auto)_1fr] gap-x-4 gap-y-1 px-3 pb-3 pl-11">
+      }
+    >
+      {entries.length > 0 ? (
+        <PropertyList>
           {entries.map((entry) => (
-            <div key={entry.label} className="contents">
-              <Text as="dt" token="body-small" tone="muted">
-                {entry.label}
-              </Text>
-              <Text as="dd" token="body-small" className="font-mono break-all">
-                {entry.value}
-              </Text>
-            </div>
+            <Property key={entry.label} label={entry.label} value={entry.value} identifier />
           ))}
-        </dl>
+        </PropertyList>
       ) : null}
-    </Surface>
+    </AdminDisclosureRow>
   );
 }

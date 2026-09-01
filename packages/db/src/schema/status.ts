@@ -63,5 +63,13 @@ export const serviceProbe = pgTable(
      */
     checkedAt: timestamp('checked_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index('service_probe_service_checked_idx').on(t.serviceKey, t.checkedAt)],
+  (t) => [
+    // The board's aggregate scans a time window across every service, and the retention sweep
+    // deletes by time alone — neither has an equality predicate on `service_key`, so neither can
+    // use a composite led by it.
+    index('service_probe_checked_idx').on(t.checkedAt),
+    // Descending, so the per-service latest check is the first row of each group and `DISTINCT ON`
+    // walks the index instead of sorting.
+    index('service_probe_service_checked_idx').on(t.serviceKey, t.checkedAt.desc()),
+  ],
 );

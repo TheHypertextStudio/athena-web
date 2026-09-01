@@ -159,7 +159,7 @@ function PlatformCounts({ metrics }: { readonly metrics: AdminMetrics | undefine
     <div className="grid grid-cols-3 gap-4">
       <Metric label="Users" value={metrics.totalUsers} href="/users" />
       <Metric label="Organizations" value={metrics.totalOrgs} href="/orgs" />
-      <Metric label="Sessions run" value={metrics.queues.agentVolume} />
+      <Metric label="Sessions run, all time" value={metrics.queues.agentVolume} />
     </div>
   );
 }
@@ -249,8 +249,8 @@ function OrgQueue({
 /** A loading placeholder sized to the attention band. */
 function AttentionSkeleton(): JSX.Element {
   return (
-    <div className="grid grid-cols-2 gap-2 @2xl:grid-cols-5" aria-hidden="true">
-      {Array.from({ length: 5 }, (_, index) => (
+    <div className="grid grid-cols-2 gap-2 @2xl:grid-cols-4" aria-hidden="true">
+      {Array.from({ length: 4 }, (_, index) => (
         <Skeleton key={index} className="h-[5.5rem] w-full rounded-xl" />
       ))}
     </div>

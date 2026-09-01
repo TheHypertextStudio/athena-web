@@ -10,5 +10,6 @@ CREATE TABLE "service_probe" (
 );
 --> statement-breakpoint
 ALTER TABLE "service_control" DROP CONSTRAINT "service_control_key_check";--> statement-breakpoint
-CREATE INDEX "service_probe_service_checked_idx" ON "service_probe" USING btree ("service_key","checked_at");--> statement-breakpoint
+CREATE INDEX "service_probe_checked_idx" ON "service_probe" USING btree ("checked_at");--> statement-breakpoint
+CREATE INDEX "service_probe_service_checked_idx" ON "service_probe" USING btree ("service_key","checked_at" DESC NULLS LAST);--> statement-breakpoint
 ALTER TABLE "service_control" ADD CONSTRAINT "service_control_key_check" CHECK ("service_control"."key" IN ('lattice_submissions', 'lattice_polling', 'service_probes'));

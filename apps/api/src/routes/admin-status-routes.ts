@@ -205,7 +205,10 @@ function latestCheck(latest: LatestRow | undefined): LatestCheck {
   }
   return {
     outcome: latest.outcome,
-    reason: latest.reason === null ? null : ProbeReasonDto.parse(latest.reason),
+    // `.catch(null)` rather than a bare parse: `reason` is plain text, so a value written by a
+    // future backfill or a psql session would otherwise throw and take the whole board down with
+    // it. One unreadable reason costs one row's subtitle.
+    reason: ProbeReasonDto.nullable().catch(null).parse(latest.reason),
     latencyMs: latest.latencyMs,
     statusCode: latest.statusCode,
     checkedAt: latest.checkedAt.toISOString(),

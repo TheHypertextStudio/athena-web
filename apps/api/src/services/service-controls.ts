@@ -43,19 +43,40 @@ export async function readServiceControl(key: ServiceControlKey): Promise<boolea
 }
 
 /**
+ * Read several controls at once.
+ *
+ * @remarks
+ * A key with no stored row reads as enabled, so a deployment runs every capability before anyone
+ * opens the console. Callers get a total record rather than a `Map`, so a key they asked for cannot
+ * be silently absent at the point they read it.
+ *
+ * @param keys - The controls to read.
+ * @returns Each requested control's value, defaulting to enabled where no row exists.
+ */
+export async function readServiceControls<K extends ServiceControlKey>(
+  keys: readonly K[],
+): Promise<Record<K, boolean>> {
+  const rows = await db
+    .select({ key: serviceControl.key, enabled: serviceControl.enabled })
+    .from(serviceControl)
+    .where(inArray(serviceControl.key, [...keys]));
+  const stored = new Map(rows.map((row) => [row.key, row.enabled]));
+  return Object.fromEntries(keys.map((key) => [key, stored.get(key) ?? true])) as Record<
+    K,
+    boolean
+  >;
+}
+
+/**
  * Read both Lattice controls in the shape the delegation sweep takes.
  *
  * @returns Each control's stored value, defaulting to enabled where no row exists.
  */
 export async function readLatticeServiceControls(): Promise<LatticeServiceControls> {
-  const rows = await db
-    .select({ key: serviceControl.key, enabled: serviceControl.enabled })
-    .from(serviceControl)
-    .where(inArray(serviceControl.key, [...LATTICE_CONTROL_KEYS]));
-  const stored = new Map(rows.map((row) => [row.key, row.enabled]));
+  const stored = await readServiceControls(LATTICE_CONTROL_KEYS);
   return {
-    pollingEnabled: stored.get('lattice_polling') ?? true,
-    submissionsEnabled: stored.get('lattice_submissions') ?? true,
+    pollingEnabled: stored.lattice_polling,
+    submissionsEnabled: stored.lattice_submissions,
   };
 }
 

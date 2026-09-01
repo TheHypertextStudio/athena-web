@@ -28,7 +28,9 @@
  * and this value is persisted and then rendered in the operator console.
  */
 import { db, serviceProbe } from '@docket/db';
+import { lt } from 'drizzle-orm';
 
+import { type ProbeOutcomeDto, type ProbeReasonDto } from '../admin-dto';
 import { env } from '../env';
 import { checkDatabase } from '../routes/health';
 import { readServiceControl } from './service-controls';
@@ -40,24 +42,53 @@ const PROBE_TIMEOUT_MS = 5_000;
 /** How far back a derived check looks for real provider traffic. */
 export const DERIVED_WINDOW_MS = 60 * 60 * 1000;
 
-/** What a probe concluded. Mirrors the `probe_outcome` enum. */
-type ProbeOutcome = 'up' | 'degraded' | 'down' | 'disabled' | 'unknown';
+/**
+ * How long a recorded check is kept.
+ *
+ * @remarks
+ * Matches the longest window the status board reports, because a row older than that answers no
+ * question anyone can ask. Without a horizon this table is the one thing on the branch that grows
+ * without bound — roughly 841,000 rows a year at the scheduled cadence — and it has no owning
+ * organization to cascade from, so nothing else would ever remove a row.
+ */
+export const PROBE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * What a probe concluded.
+ *
+ * @remarks
+ * Derived from the response DTO rather than re-typed, so the runner cannot write an outcome the
+ * board is unable to serve. The same closed set also exists as the `probe_outcome` pgEnum, which is
+ * what makes an unknown value fail at the insert rather than at the far end of a request.
+ */
+type ProbeOutcome = ProbeOutcomeDto;
 
 /**
  * Why a check did not succeed, in application-owned words.
  *
  * @remarks
- * A closed set precisely so no provider or exception text is ever stored or shown. The console
- * renders these; nothing it renders originates outside this file.
+ * A closed set precisely so no provider or exception text is ever stored or shown. Derived from the
+ * response DTO for the same reason as {@link ProbeOutcome}: two hand-maintained copies of one
+ * vocabulary drift, and `reason` is stored as plain text, so nothing else would catch it.
  */
-type ProbeReason =
-  'unreachable' | 'bad_status' | 'recent_failures' | 'no_recent_activity' | 'not_configured';
+type ProbeReason = ProbeReasonDto;
 
 /** Whether a service is ours to fix or someone else's. */
 type ServiceKind = 'platform' | 'dependency';
 
 /** How a service's health is established. */
 type ProbeMethod = 'http' | 'database' | 'derived';
+
+/**
+ * What one scheduled pass did.
+ *
+ * @remarks
+ * A discriminated result rather than a possibly-empty list, so a caller cannot mistake "switched
+ * off" for "checked everything and found nothing wrong".
+ */
+export type ProbePass =
+  | { readonly ran: false; readonly reason: 'probing_disabled' }
+  | { readonly ran: true; readonly results: readonly ProbeResult[]; readonly pruned: number };
 
 /** The result of checking one service, before it is written. */
 export interface ProbeResult {
@@ -335,11 +366,16 @@ export async function probeOne(
  * Respects the `service_probes` control, so an operator can stop probing from the console without a
  * redeploy. A key with no stored row reads as enabled, so probing is on by default.
  *
+ * Reports whether it ran rather than returning an empty list when switched off. A pass that answered
+ * `0 checked, 0 down` for a disabled deployment would read exactly like a healthy one.
+ *
  * @param fetchImpl - The fetch to use. Injectable so tests never reach the network.
- * @returns every result written this pass, empty when probing is switched off.
+ * @returns what the pass did, or that it was switched off.
  */
-export async function runServiceProbes(fetchImpl: typeof fetch = fetch): Promise<ProbeResult[]> {
-  if (!(await readServiceControl('service_probes'))) return [];
+export async function runServiceProbes(fetchImpl: typeof fetch = fetch): Promise<ProbePass> {
+  if (!(await readServiceControl('service_probes'))) {
+    return { ran: false, reason: 'probing_disabled' };
+  }
 
   const results = await Promise.all(PROBE_TARGETS.map((target) => probeOne(target, fetchImpl)));
 
@@ -353,5 +389,23 @@ export async function runServiceProbes(fetchImpl: typeof fetch = fetch): Promise
     })),
   );
 
-  return results;
+  const pruned = await pruneExpiredProbes();
+  return { ran: true, results, pruned };
+}
+
+/**
+ * Delete recorded checks past the retention horizon.
+ *
+ * @remarks
+ * Runs inside the probe pass rather than as its own scheduled job: the horizon only moves when a
+ * pass writes, and folding it in keeps the cron catalogue and its pinned test unchanged.
+ *
+ * @returns how many rows were removed.
+ */
+async function pruneExpiredProbes(): Promise<number> {
+  const removed = await db
+    .delete(serviceProbe)
+    .where(lt(serviceProbe.checkedAt, new Date(Date.now() - PROBE_RETENTION_MS)))
+    .returning({ id: serviceProbe.id });
+  return removed.length;
 }

@@ -151,7 +151,7 @@ function ViewAsUser({
           aria-label="Reason for impersonation"
           className="flex-1"
         />
-        <ControlGroup controlSize="md">
+        <ControlGroup>
           <Button type="submit" disabled={impersonate.isPending || reason.trim().length === 0}>
             {impersonate.isPending ? 'Starting…' : 'View as'}
           </Button>

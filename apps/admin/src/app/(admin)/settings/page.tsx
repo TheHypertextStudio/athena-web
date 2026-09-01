@@ -39,13 +39,20 @@ const CONTROLS: readonly ControlPresentation[] = [
     description:
       'Athena checks on work it already sent and records the results. Turn this off to leave that work waiting until you turn it back on.',
   },
+  {
+    field: 'serviceProbesEnabled',
+    id: 'service-probes-enabled',
+    label: 'Check service health on a schedule',
+    description:
+      'Docket checks each service every five minutes and records what it found. Turn this off to stop checking; the status board then reports the last verdicts it has and says how old they are.',
+  },
 ];
 
 /**
- * The service settings screen: the instance-wide switches for Athena's Lattice work.
+ * The service settings screen: the instance-wide switches an operator can throw without a redeploy.
  *
  * @remarks
- * Both controls are on for every organization until an operator turns one off, and a change applies
+ * Every control is on for every organization until an operator turns it off, and a change applies
  * to the next scheduled run without a redeploy. Changing a control requires a superadmin; the API's
  * 403 for a support or finance operator surfaces inline and the control stays where it was.
  */

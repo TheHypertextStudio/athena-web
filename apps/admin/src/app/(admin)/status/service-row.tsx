@@ -2,10 +2,10 @@
 
 import { relativeTime } from '@docket/ui';
 import { RelativeTime } from '@docket/ui/components';
-import { ChevronDown, ChevronRight } from '@docket/ui/icons';
-import { Button, Surface, Text } from '@docket/ui/primitives';
-import { type JSX, useState } from 'react';
+import { Text } from '@docket/ui/primitives';
+import { type JSX } from 'react';
 
+import { AdminDisclosureRow } from '@/components/admin-disclosure-row';
 import { OutcomeBadge } from '@/components/outcome-badge';
 import { PropertyList, Property } from '@/components/admin-detail';
 import { formatUptime, reasonLabel, windowLabel } from '@/lib/service-status';
@@ -40,47 +40,24 @@ export interface ServiceRowProps {
  * @returns the service row.
  */
 export function ServiceRow({ service }: ServiceRowProps): JSX.Element {
-  const [expanded, setExpanded] = useState(false);
-  const Chevron = expanded ? ChevronDown : ChevronRight;
-
   return (
-    <Surface tone="card" shape="small" pad="none">
-      <div className="flex items-center gap-3 px-3 py-2">
-        <OutcomeBadge outcome={service.outcome} />
-
-        <div className="flex min-w-0 flex-1 flex-col">
-          <Text as="span" token="body-medium" truncate>
-            {service.label}
-          </Text>
-          <Text as="span" token="body-small" tone="muted" truncate>
-            {service.reason ? reasonLabel(service.reason) : METHOD_LABEL[service.method]}
-          </Text>
-        </div>
-
-        <Text as="span" token="body-small" tone="muted" className="shrink-0">
+    <AdminDisclosureRow
+      name={service.label}
+      leading={<OutcomeBadge outcome={service.outcome} />}
+      title={service.label}
+      subtitle={service.reason ? reasonLabel(service.reason) : METHOD_LABEL[service.method]}
+      meta={
+        <Text as="span" token="body-small" tone="muted">
           {service.checkedAt ? (
             <RelativeTime iso={service.checkedAt}>{relativeTime(service.checkedAt)}</RelativeTime>
           ) : (
             'Never checked'
           )}
         </Text>
-
-        <Button
-          variant="ghost"
-          controlSize="sm"
-          iconOnly
-          aria-expanded={expanded}
-          aria-label={expanded ? `Hide ${service.label} detail` : `Show ${service.label} detail`}
-          onClick={() => {
-            setExpanded((open) => !open);
-          }}
-        >
-          <Chevron aria-hidden="true" className="size-4" />
-        </Button>
-      </div>
-
-      {expanded ? <ServiceDetail service={service} /> : null}
-    </Surface>
+      }
+    >
+      <ServiceDetail service={service} />
+    </AdminDisclosureRow>
   );
 }
 

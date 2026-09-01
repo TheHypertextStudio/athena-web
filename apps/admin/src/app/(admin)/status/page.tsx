@@ -3,7 +3,7 @@
 import { relativeTime } from '@docket/ui';
 import { EmptyState } from '@docket/ui/components';
 import { Activity } from '@docket/ui/icons';
-import { Row, Skeleton, Stack, Text } from '@docket/ui/primitives';
+import { Badge, Row, Skeleton, Stack, Text } from '@docket/ui/primitives';
 import { type JSX } from 'react';
 
 import { AsyncContent, QueryErrorBanner } from '@/components/admin-feedback';
@@ -146,11 +146,7 @@ function JobCounts({ job }: { readonly job: AdminJobHealth }): JSX.Element {
           {relativeTime(job.lastFailureAt)}
         </Text>
       ) : null}
-      <span className="bg-error-container text-on-error-container rounded-full px-2 py-0.5">
-        <Text as="span" token="label-small" numeric>
-          {`${String(job.failures)} of ${String(job.total)} failed`}
-        </Text>
-      </span>
+      <Badge variant="destructive">{`${String(job.failures)} of ${String(job.total)} failed`}</Badge>
     </Row>
   );
 }

@@ -129,19 +129,32 @@ export const baseConfig = tseslint.config(
 const DATA_LAYER_SURFACES = [
   'apps/web/src/app/(app)/**/*.{ts,tsx}',
   'apps/web/src/components/**/*.{ts,tsx}',
+  // The operator console reads through its own typed layer (`apps/admin/src/lib/query.ts`) for the
+  // same reasons. It followed the rule by convention until now, which is exactly how the console
+  // drifted off the design system: a standard nothing checks is a standard until someone is busy.
+  'apps/admin/src/app/**/*.{ts,tsx}',
+  'apps/admin/src/components/**/*.{ts,tsx}',
 ];
 
 /** esquery selectors for the fetch-in-effect anti-pattern, with their guidance messages. */
 const SPEC_REF = 'See docs/engineering/specs/data-layer.md.';
+// `useEffect` is imported bare in some files and reached through the namespace in others, and the
+// namespaced form is the codebase's own dominant idiom — a selector matching only the bare callee
+// leaves the more common spelling unpoliced.
+const USE_EFFECT =
+  ":matches(CallExpression[callee.name='useEffect'], CallExpression[callee.property.name='useEffect'])";
 const fetchInEffectRules = [
   {
-    selector:
-      "CallExpression[callee.name='useEffect'] MemberExpression[object.name='api'][property.name='v1']",
+    selector: `${USE_EFFECT} MemberExpression[object.name='api'][property.name='v1']`,
     message: `Do not fetch with \`api.v1.*\` inside a useEffect — read through useApiQuery/useApiListQuery/useLiveApiQuery and write through useApiMutation (apps/web/src/lib/query.ts). ${SPEC_REF}`,
   },
   {
-    selector: "CallExpression[callee.name='useEffect'] CallExpression[callee.name='fetch']",
-    message: `Do not \`fetch\` inside a useEffect — go through the typed query layer (apps/web/src/lib/query.ts). ${SPEC_REF}`,
+    selector: `${USE_EFFECT} MemberExpression[object.name='api'][property.name='admin']`,
+    message: `Do not fetch with \`api.admin.*\` inside a useEffect — read through the console's typed layer (apps/admin/src/lib/query.ts). ${SPEC_REF}`,
+  },
+  {
+    selector: `${USE_EFFECT} CallExpression[callee.name='fetch']`,
+    message: `Do not \`fetch\` inside a useEffect — go through the typed query layer. ${SPEC_REF}`,
   },
 ];
 

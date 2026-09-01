@@ -2,12 +2,15 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import type * as DbModule from '@docket/db';
 
+import { eq } from 'drizzle-orm';
+
 import { assertDefined } from '@docket/test-utils';
 import { getDb } from '../support/routes-harness';
 
 import {
   type ProbeTarget,
   probeOne,
+  PROBE_RETENTION_MS,
   PROBE_TARGETS,
   runServiceProbes,
 } from '../../src/services/service-probes';
@@ -83,7 +86,9 @@ describe('service probes', () => {
   it('writes one row per service every pass, failures included', async () => {
     const before = (await db.select().from(schema.serviceProbe)).length;
 
-    const results = await runServiceProbes(unreachable);
+    const pass = await runServiceProbes(unreachable);
+    expect(pass.ran).toBe(true);
+    const results = pass.ran ? pass.results : [];
 
     const rows = await db.select().from(schema.serviceProbe);
     expect(rows.length - before).toBe(results.length);
@@ -115,5 +120,42 @@ describe('service probes', () => {
       expect(target.method).toBe('derived');
       expect(target.url).toBeUndefined();
     }
+  });
+
+  it('reports being switched off rather than answering with zero checks', async () => {
+    await db
+      .insert(schema.serviceControl)
+      .values({ key: 'service_probes', enabled: false })
+      .onConflictDoUpdate({ target: schema.serviceControl.key, set: { enabled: false } });
+
+    const pass = await runServiceProbes(unreachable);
+
+    // A disabled deployment answering "0 checked, 0 down" reads exactly like a healthy one.
+    expect(pass.ran).toBe(false);
+    expect(pass.ran ? null : pass.reason).toBe('probing_disabled');
+
+    await db
+      .update(schema.serviceControl)
+      .set({ enabled: true })
+      .where(eq(schema.serviceControl.key, 'service_probes'));
+  });
+
+  it('removes recorded checks past the retention horizon', async () => {
+    const stale = new Date(Date.now() - PROBE_RETENTION_MS - 60_000);
+    await db.insert(schema.serviceProbe).values({
+      serviceKey: 'retention-probe',
+      outcome: 'up',
+      latencyMs: 1,
+      checkedAt: stale,
+    });
+
+    await runServiceProbes(unreachable);
+
+    // Nothing else would ever remove one: the table has no owning organization to cascade from.
+    const left = await db
+      .select()
+      .from(schema.serviceProbe)
+      .where(eq(schema.serviceProbe.serviceKey, 'retention-probe'));
+    expect(left).toHaveLength(0);
   });
 });

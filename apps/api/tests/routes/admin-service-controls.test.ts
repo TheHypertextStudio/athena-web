@@ -90,6 +90,7 @@ async function patchControls(userId: string, body: unknown): Promise<Response> {
 interface ControlsBody {
   latticeSubmissionsEnabled: boolean;
   latticePollingEnabled: boolean;
+  serviceProbesEnabled: boolean;
 }
 
 describe('service controls — read', () => {
@@ -102,6 +103,7 @@ describe('service controls — read', () => {
     expect(await json<ControlsBody>(res)).toEqual({
       latticeSubmissionsEnabled: true,
       latticePollingEnabled: true,
+      serviceProbesEnabled: true,
     });
   });
 
@@ -117,6 +119,7 @@ describe('service controls — read', () => {
     expect(await json<ControlsBody>(res)).toEqual({
       latticeSubmissionsEnabled: true,
       latticePollingEnabled: false,
+      serviceProbesEnabled: true,
     });
   });
 
@@ -137,6 +140,7 @@ describe('service controls — update', () => {
     expect(await json<ControlsBody>(res)).toEqual({
       latticeSubmissionsEnabled: false,
       latticePollingEnabled: true,
+      serviceProbesEnabled: true,
     });
 
     const rows = await db
@@ -158,11 +162,13 @@ describe('service controls — update', () => {
     const res = await patchControls(sup.userId, {
       latticeSubmissionsEnabled: false,
       latticePollingEnabled: false,
+      serviceProbesEnabled: true,
     });
     expect(res.status).toBe(200);
     expect(await json<ControlsBody>(res)).toEqual({
       latticeSubmissionsEnabled: false,
       latticePollingEnabled: false,
+      serviceProbesEnabled: true,
     });
     expect((await auditRowsFor('lattice_submissions', sup.staffUserId)).length).toBe(1);
     expect((await auditRowsFor('lattice_polling', sup.staffUserId)).length).toBe(1);

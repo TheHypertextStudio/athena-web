@@ -17,7 +17,7 @@ import { ok } from '../lib/ok';
 import { apiDoc } from '../lib/openapi-route';
 import { zJson } from '../lib/validate';
 import { requireStaffRole } from '../permissions/staff-guard';
-import { readLatticeServiceControls, setServiceControl } from '../services/service-controls';
+import { readServiceControls, setServiceControl } from '../services/service-controls';
 
 import { audit } from './admin-serializers';
 
@@ -27,14 +27,19 @@ import { audit } from './admin-serializers';
  * @returns Each control's current value, keyed by its request/response field name.
  */
 async function currentControls(): Promise<AdminServiceControlsOut> {
-  const { pollingEnabled, submissionsEnabled } = await readLatticeServiceControls();
-  return { latticeSubmissionsEnabled: submissionsEnabled, latticePollingEnabled: pollingEnabled };
+  const stored = await readServiceControls(CONTROL_FIELDS.map((control) => control.key));
+  return {
+    latticeSubmissionsEnabled: stored.lattice_submissions,
+    latticePollingEnabled: stored.lattice_polling,
+    serviceProbesEnabled: stored.service_probes,
+  };
 }
 
 /** The request field carrying each control's new value, paired with the key it stores. */
 const CONTROL_FIELDS = [
   { field: 'latticeSubmissionsEnabled', key: 'lattice_submissions' },
   { field: 'latticePollingEnabled', key: 'lattice_polling' },
+  { field: 'serviceProbesEnabled', key: 'service_probes' },
 ] as const satisfies readonly { field: keyof UpdateServiceControlsBody; key: ServiceControlKey }[];
 
 /**

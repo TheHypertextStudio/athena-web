@@ -47,7 +47,6 @@ function signalsOf(metrics: AdminMetrics | undefined): readonly Signal[] {
       tone: 'work',
     },
     { label: 'Awaiting approval', count: metrics?.queues.stuckApprovals, tone: 'work' },
-    { label: 'Failed sessions', count: metrics?.queues.agentErrors, tone: 'fault' },
     { label: 'Pending deletion', count: pendingDeletion, href: '/orgs', tone: 'fault' },
     {
       label: 'Retention holds',
@@ -69,8 +68,13 @@ export interface AttentionBandProps {
  *
  * @remarks
  * The screen used to open with twelve counters of equal weight, so "Sessions run" and "Failed
- * sessions" looked alike and nothing said which mattered. These five are the only numbers that can
- * ask for something, so they lead, and the rest of the page is context beneath them.
+ * sessions" looked alike and nothing said which mattered. What leads now is only what can ask for
+ * something *right now*, and the rest of the page is context beneath it.
+ *
+ * Every signal here is a current depth — open work, waiting on someone. Failed agent sessions used
+ * to sit among them and did not belong: the API counts them for all time, so the tile could never
+ * reach zero and was permanently raised, which is the same as carrying no signal. Failure rates
+ * belong to the status board, which reports them against a stated window.
  *
  * A signal at zero is deliberately quiet — plain tone, muted numeral. It raises to a tonal
  * container only when it is actually asking, which is what makes a non-zero one findable without
@@ -103,7 +107,7 @@ export function AttentionBand({ metrics }: AttentionBandProps): JSX.Element {
   }
 
   return (
-    <div className="grid grid-cols-2 gap-2 @2xl:grid-cols-5">
+    <div className="grid grid-cols-2 gap-2 @2xl:grid-cols-4">
       {signals.map((signal) => (
         <SignalTile key={signal.label} signal={signal} />
       ))}

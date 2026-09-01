@@ -155,4 +155,21 @@ describe('service status board', () => {
     }
     expect(board.jobWindowHours).toBeGreaterThan(0);
   });
+
+  it('keeps the board readable when a stored reason is not one it recognises', async () => {
+    const userId = await makeStaff();
+    // `reason` is plain text, so a backfill or a psql session can put anything there. One
+    // unreadable value must cost that row its subtitle, not take the whole board down.
+    await db.insert(schema.serviceProbe).values({
+      serviceKey: 'api',
+      outcome: 'down',
+      latencyMs: 1,
+      reason: 'something_no_release_has_ever_written',
+      checkedAt: new Date(),
+    });
+
+    const service = serviceOf(await readStatus(userId), 'api');
+    expect(service.outcome).toBe('down');
+    expect(service.reason).toBeNull();
+  });
 });

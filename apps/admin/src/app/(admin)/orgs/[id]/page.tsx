@@ -406,7 +406,7 @@ function DiscountPreview({
   if (!preview) return null;
 
   return (
-    <Surface tone="card" shape="small" pad="comfortable">
+    <Surface tone="well" shape="small" pad="comfortable">
       <Stack gap={1}>
         <Text as="p" token="label-large">
           {preview.percentOff}% through {new Date(preview.endsAt).toLocaleDateString()}
@@ -430,7 +430,7 @@ function CurrentAward({ detail }: { readonly detail: OrgDetailData }): JSX.Eleme
   const disabled = detail.pending !== null || detail.partnerReason.trim().length === 0;
 
   return (
-    <ControlGroup controlSize="md" wrap>
+    <ControlGroup wrap>
       {award.programKey === null ? (
         <Button variant="secondary" disabled={disabled} onClick={detail.renewPartnerDiscount}>
           {detail.pending === 'renew-discount' ? 'Renewing…' : 'Renew current award'}

@@ -2,7 +2,10 @@ import { QueryClient, QueryObserver } from '@tanstack/react-query';
 import { describe, expect, it, vi } from 'vitest';
 
 import { queryKeys } from '@/lib/query-keys';
-import { invalidateWorkTargetQueries } from '@/lib/work-target-invalidation';
+import {
+  invalidateWorkTargetQueries,
+  invalidateWorkTargetQueriesFromPeer,
+} from '@/lib/work-target-invalidation';
 
 function testClient(): QueryClient {
   return new QueryClient({
@@ -218,5 +221,42 @@ describe('work target invalidation', () => {
     expect(queryClient.getQueryState(inactiveRosterKey)?.isInvalidated).toBe(true);
     expect(queryClient.getQueryData(inactiveRosterKey)).toEqual({ source: 'seed' });
     expect(queryClient.getQueryState(missingFacetsKey)).toBeUndefined();
+  });
+
+  it('applies a peer-tab hint without requiring an exclude key', async () => {
+    const queryClient = testClient();
+    const initiativeRoster = vi.fn(async () => ({ source: 'initiative-roster' }));
+    const projectRoster = vi.fn(async () => ({ source: 'project-roster' }));
+    const unsubscribes = observeSeededQueries(queryClient, [
+      {
+        queryKey: queryKeys.workView(
+          'route-a',
+          'initiative',
+          'builtin:initiative:route-a',
+          'request',
+          'America/Los_Angeles',
+        ),
+        queryFn: initiativeRoster,
+      },
+      {
+        queryKey: queryKeys.workView(
+          'route-a',
+          'project',
+          'builtin:project:route-a',
+          'request',
+          'America/Los_Angeles',
+        ),
+        queryFn: projectRoster,
+      },
+    ]);
+
+    await invalidateWorkTargetQueriesFromPeer(queryClient, {
+      target: 'initiative',
+      ownerOrganizationId: 'owner-b',
+    });
+
+    expect(initiativeRoster).toHaveBeenCalledOnce();
+    expect(projectRoster).not.toHaveBeenCalled();
+    for (const unsubscribe of unsubscribes) unsubscribe();
   });
 });

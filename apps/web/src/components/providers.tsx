@@ -22,6 +22,10 @@ import { createQueryClient } from '@/lib/query';
 import { SessionExpiredError } from '@/lib/query';
 import { createUnauthorizedConfirmer } from '@/lib/session-recovery';
 import { purgeLocalSessionState } from '@/lib/sign-out';
+import {
+  invalidateWorkTargetQueriesFromPeer,
+  subscribeWorkTargetInvalidations,
+} from '@/lib/work-target-invalidation';
 
 import {
   AuthenticationInterlockProvider,
@@ -96,6 +100,7 @@ export function Providers({ children }: ProvidersProps): JSX.Element {
           <AuthenticationInterlockProvider>
             <QueryClientProvider client={queryClient}>
               <UnauthorizedWatcher handlerRef={handleCacheError} />
+              <WorkTargetInvalidationSync />
               <InteractionReceiptProvider>
                 <InteractionProvider>
                   <PickerOverlayProvider>
@@ -113,6 +118,19 @@ export function Providers({ children }: ProvidersProps): JSX.Element {
       </VocabularyProvider>
     </ContextProvider>
   );
+}
+
+/** Keep mounted work rosters current when another tab changes their source records. */
+function WorkTargetInvalidationSync(): null {
+  const queryClient = useQueryClient();
+  useEffect(
+    () =>
+      subscribeWorkTargetInvalidations((invalidation) => {
+        void invalidateWorkTargetQueriesFromPeer(queryClient, invalidation);
+      }),
+    [queryClient],
+  );
+  return null;
 }
 
 /** Props for {@link UnauthorizedWatcher}. */

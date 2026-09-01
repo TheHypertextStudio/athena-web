@@ -45,7 +45,7 @@ export default function LifecyclePage(): JSX.Element {
     <AdminPage width="console">
       <AdminPageHeader
         title="Legacy retention markers"
-        description="Migration diagnostics for old retention records. Billing cancellation never changes these markers or deletes workspace data."
+        description="Billing cancellation never sets these."
       />
       {query.error ? (
         <QueryErrorBanner
@@ -58,13 +58,7 @@ export default function LifecyclePage(): JSX.Element {
         loading={query.isPending}
         empty={columns.length === 0}
         skeleton={<BoardSkeleton />}
-        emptyState={
-          <EmptyState
-            icon={Layers}
-            title="No retention records"
-            body="No organization carries a legacy retention marker."
-          />
-        }
+        emptyState={<EmptyState icon={Layers} title="No retention records" frame="none" />}
       >
         <div className="flex gap-4 overflow-x-auto pb-4">
           {columns.map((column) => (
@@ -113,7 +107,12 @@ function ColumnOrgs({
 }): JSX.Element {
   if (orgs.length === 0) {
     return (
-      <EmptyState icon={Layers} title="Empty" body={`No organization is ${label.toLowerCase()}.`} />
+      <EmptyState
+        icon={Layers}
+        title="Empty"
+        body={`No organization is ${label.toLowerCase()}.`}
+        frame="none"
+      />
     );
   }
 

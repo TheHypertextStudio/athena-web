@@ -51,21 +51,9 @@ function orgsDef(search: string, state: LifecycleFilterValue, offset: number) {
 /** What an empty organization list means, which depends on whether filters narrowed it. */
 function NoOrganizations({ filtered }: { readonly filtered: boolean }): JSX.Element {
   if (filtered) {
-    return (
-      <EmptyState
-        icon={Building}
-        title="No matching organizations"
-        body="Nothing matches this search and lifecycle filter."
-      />
-    );
+    return <EmptyState icon={Building} title="No matching organizations" />;
   }
-  return (
-    <EmptyState
-      icon={Building}
-      title="No organizations yet"
-      body="Workspaces appear here as people create them."
-    />
-  );
+  return <EmptyState icon={Building} title="No organizations yet" />;
 }
 
 /**
@@ -151,7 +139,6 @@ export default function OrgsPage(): JSX.Element {
     <AdminPage width="list">
       <AdminPageHeader
         title="Organizations"
-        description={query.data ? `${total.toLocaleString()} matching` : undefined}
         actions={
           <>
             <LifecycleFilter value={filter} onChange={setFilter} />

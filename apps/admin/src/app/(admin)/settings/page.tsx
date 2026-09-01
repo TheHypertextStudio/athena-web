@@ -54,11 +54,8 @@ export default function SettingsPage(): JSX.Element {
     useServiceControls();
 
   return (
-    <AdminPage width="form">
-      <AdminPageHeader
-        title="Service settings"
-        description="Instance-wide controls for Athena's background work."
-      />
+    <AdminPage width="form" outline>
+      <AdminPageHeader title="Service settings" />
       <AsyncContent
         loading={loading}
         empty={controls === undefined}
@@ -101,7 +98,7 @@ function LatticeControls({
   return (
     <AdminSection
       title="Lovelace Lattice"
-      description="Both controls are on unless someone turns them off. A change applies to every organization on the next scheduled run. Only a superadmin can change them."
+      description="Applies to every organization on the next scheduled run. Superadmin only."
     >
       {actionError ? (
         <QueryErrorBanner

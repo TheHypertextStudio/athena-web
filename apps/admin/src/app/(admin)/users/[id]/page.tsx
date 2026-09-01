@@ -43,7 +43,7 @@ export default function UserDetailPage(): JSX.Element {
   const detail = query.data;
 
   return (
-    <AdminPage width="form">
+    <AdminPage width="form" outline>
       <DetailBackLink href="/users" label="users" />
 
       {query.error ? (
@@ -85,7 +85,7 @@ function UserDetail({ detail }: { readonly detail: AdminUserDetail }): JSX.Eleme
 
       <ViewAsUser userId={detail.user.id} label={detail.user.name || detail.user.email} />
 
-      <AdminSection title={`Organization memberships (${detail.memberships.length})`}>
+      <AdminSection title="Organization memberships" body="rows">
         <Memberships memberships={detail.memberships} />
       </AdminSection>
     </Stack>
@@ -129,7 +129,7 @@ function ViewAsUser({
   return (
     <AdminSection
       title="View as user"
-      description="Start a time-boxed impersonation session. The reason is recorded in the audit log."
+      description="Time-boxed. The reason is recorded in the audit log."
     >
       {impersonate.error ? (
         <QueryErrorBanner error={impersonate.error} fallback="Could not start impersonation." />
@@ -168,13 +168,7 @@ function Memberships({
   readonly memberships: readonly AdminMembership[];
 }): JSX.Element {
   if (memberships.length === 0) {
-    return (
-      <EmptyState
-        icon={Building}
-        title="No memberships"
-        body="This account does not belong to any organization."
-      />
-    );
+    return <EmptyState icon={Building} title="No memberships" frame="none" />;
   }
 
   return (

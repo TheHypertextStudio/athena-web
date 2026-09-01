@@ -66,10 +66,7 @@ export default function DiscountsPage(): JSX.Element {
 
   return (
     <AdminPage width="console">
-      <AdminPageHeader
-        title="Discount applications"
-        description="Review eligibility and preview every Stripe effect before approval."
-      />
+      <AdminPageHeader title="Discount applications" />
 
       {queue.error ? (
         <QueryErrorBanner
@@ -80,18 +77,12 @@ export default function DiscountsPage(): JSX.Element {
       ) : null}
 
       <div className="grid gap-6 @4xl:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
-        <AdminSection title={`Review queue (${items.length})`}>
+        <AdminSection title="Review queue" body="rows">
           <AsyncContent
             loading={queue.isPending}
             empty={items.length === 0}
             skeleton={<ListSkeleton rows={4} />}
-            emptyState={
-              <EmptyState
-                icon={Tag}
-                title="Nothing to review"
-                body="No discount application is waiting on a finance decision."
-              />
-            }
+            emptyState={<EmptyState icon={Tag} title="Nothing to review" frame="none" />}
           >
             <ReviewQueue
               items={items}
@@ -160,7 +151,8 @@ function DecisionPanel({
       <EmptyState
         icon={FileText}
         title="No application selected"
-        body="Choose an application to inspect its evidence and decision history."
+        body="Choose an application."
+        frame="none"
       />
     );
   }
@@ -327,7 +319,7 @@ function DecisionControls({
       <PreviewResult preview={preview} />
 
       <ControlGroup controlSize="md" wrap>
-        <Button variant="outline" disabled={busy} onClick={onPreview}>
+        <Button variant="secondary" disabled={busy} onClick={onPreview}>
           {previewing ? 'Previewing…' : 'Preview approval'}
         </Button>
         <Button disabled={busy || !preview || noReason} onClick={onApprove}>

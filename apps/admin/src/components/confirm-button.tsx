@@ -55,7 +55,7 @@ export function ConfirmButton({
   return (
     <>
       <Button
-        variant="outline"
+        variant="ghost"
         disabled={disabled}
         onClick={() => {
           setOpen(true);

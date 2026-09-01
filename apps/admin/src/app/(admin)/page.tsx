@@ -1,16 +1,18 @@
 'use client';
 
-import { EmptyState, IdentityGlyph } from '@docket/ui/components';
+import { IdentityGlyph } from '@docket/ui/components';
 import { Building } from '@docket/ui/icons';
-import { Skeleton, Stack, Surface, Text } from '@docket/ui/primitives';
+import { Skeleton, Stack, Text } from '@docket/ui/primitives';
+import Link from 'next/link';
 import { type JSX } from 'react';
 
-import { AsyncContent, ListSkeleton, QueryErrorBanner } from '@/components/admin-feedback';
+import { AsyncContent, QueryErrorBanner } from '@/components/admin-feedback';
 import { AdminPage, AdminPageHeader, AdminSection } from '@/components/admin-page';
 import { AdminList, AdminListRow } from '@/components/admin-table';
+import { AttentionBand } from './dashboard-attention';
+import { LifecycleDistribution } from './dashboard-lifecycle';
 import { LifecycleBadge } from '@/components/lifecycle-badge';
 import { api } from '@/lib/api';
-import { lifecycleLabel } from '@/lib/lifecycle';
 import { apiQueryOptions, queryKeys, useApiQuery } from '@/lib/query';
 import type { AdminMetrics, AdminOrg } from '@/lib/types';
 import { metricsDef } from '@/lib/use-admin-queues';
@@ -61,10 +63,7 @@ export default function DashboardPage(): JSX.Element {
 
   return (
     <AdminPage width="list">
-      <AdminPageHeader
-        title="Operator dashboard"
-        description="Platform health and the organizations that need attention."
-      />
+      <AdminPageHeader title="Operator dashboard" />
 
       {metrics.error ? (
         <QueryErrorBanner
@@ -74,97 +73,83 @@ export default function DashboardPage(): JSX.Element {
         />
       ) : null}
 
-      <div className="grid gap-8 @4xl:grid-cols-[1.4fr_1fr]">
-        <AsyncContent
-          loading={metrics.isPending}
-          empty={metrics.data === undefined}
-          skeleton={<MetricSkeleton />}
-          emptyState={<MetricSkeleton />}
-        >
-          {metrics.data ? <PlatformMetrics metrics={metrics.data} /> : null}
-        </AsyncContent>
+      <AsyncContent
+        loading={metrics.isPending}
+        empty={metrics.data === undefined}
+        skeleton={<AttentionSkeleton />}
+        emptyState={<AttentionSkeleton />}
+      >
+        <AttentionBand metrics={metrics.data} />
+      </AsyncContent>
 
-        <Stack gap={6}>
-          <AdminSection title="Pending deletion">
-            <OrgQueue
-              query={pendingDeletion}
-              emptyTitle="Nothing scheduled"
-              emptyBody="No organization is queued for deletion."
-            />
-          </AdminSection>
+      <div className="grid gap-4 @4xl:grid-cols-[1fr_1fr]">
+        <AdminSection title="Platform">
+          <PlatformCounts metrics={metrics.data} />
+        </AdminSection>
 
-          <AdminSection title="Legacy export marker">
-            <OrgQueue
-              query={exportWindow}
-              emptyTitle="No markers"
-              emptyBody="No organization carries the legacy export marker."
-            />
-          </AdminSection>
-        </Stack>
+        <AdminSection title="Organizations by state">
+          {metrics.data ? (
+            <LifecycleDistribution buckets={metrics.data.orgsByLifecycle} />
+          ) : (
+            <Skeleton className="h-20 w-full rounded-lg" />
+          )}
+        </AdminSection>
+      </div>
+
+      <div className="grid gap-4 empty:hidden @4xl:grid-cols-[1fr_1fr]">
+        <OrgQueue title="Pending deletion" query={pendingDeletion} />
+        <OrgQueue title="Legacy export marker" query={exportWindow} />
       </div>
     </AdminPage>
   );
 }
 
-/** Every headline count the dashboard reports, grouped by what it describes. */
-function PlatformMetrics({ metrics }: { readonly metrics: AdminMetrics }): JSX.Element {
+/** The steady-state totals: reference, not a call to action. */
+function PlatformCounts({ metrics }: { readonly metrics: AdminMetrics | undefined }): JSX.Element {
+  if (!metrics) return <Skeleton className="h-16 w-full rounded-lg" />;
+
   return (
-    <Stack gap={6}>
-      <AdminSection title="Platform">
-        <MetricGrid>
-          <Metric label="Users" value={metrics.totalUsers} />
-          <Metric label="Organizations" value={metrics.totalOrgs} />
-        </MetricGrid>
-      </AdminSection>
-
-      <AdminSection
-        title="Service"
-        description="What Athena is doing across every organization right now."
-      >
-        <MetricGrid>
-          <Metric label="Awaiting approval" value={metrics.queues.stuckApprovals} />
-          <Metric label="Failed sessions" value={metrics.queues.agentErrors} />
-          <Metric label="Sessions run" value={metrics.queues.agentVolume} />
-          <Metric label="Retention holds" value={metrics.queues.activeHolds} />
-        </MetricGrid>
-      </AdminSection>
-
-      <AdminSection
-        title="Organizations by state"
-        description="Legacy retention markers. Billing access never advances these."
-      >
-        <MetricGrid>
-          {metrics.orgsByLifecycle.map((bucket) => (
-            <Metric
-              key={bucket.lifecycleState}
-              label={lifecycleLabel(bucket.lifecycleState)}
-              value={bucket.count}
-            />
-          ))}
-        </MetricGrid>
-      </AdminSection>
-    </Stack>
+    <div className="grid grid-cols-3 gap-4">
+      <Metric label="Users" value={metrics.totalUsers} href="/users" />
+      <Metric label="Organizations" value={metrics.totalOrgs} href="/orgs" />
+      <Metric label="Sessions run" value={metrics.queues.agentVolume} />
+    </div>
   );
 }
 
-/** The responsive grid every metric row shares. */
-function MetricGrid({ children }: { readonly children: JSX.Element | JSX.Element[] }): JSX.Element {
-  return <div className="grid grid-cols-2 gap-2 @xl:grid-cols-3">{children}</div>;
-}
+/**
+ * One headline count, and the list it counts.
+ *
+ * @remarks
+ * A count whose list exists in this console links to it. Reading "3 organizations" and then hunting
+ * the sidebar for where to see them is a step the number can take on its own.
+ */
+function Metric({
+  label,
+  value,
+  href,
+}: {
+  readonly label: string;
+  readonly value: number;
+  readonly href?: string;
+}): JSX.Element {
+  const body = (
+    <Stack gap={1}>
+      <Text as="p" token="label-small" tone="muted">
+        {label}
+      </Text>
+      <Text as="p" token="headline-small" numeric>
+        {value.toLocaleString()}
+      </Text>
+    </Stack>
+  );
 
-/** One headline count. */
-function Metric({ label, value }: { readonly label: string; readonly value: number }): JSX.Element {
+  if (!href) return body;
+
   return (
-    <Surface tone="card" shape="small" pad="comfortable">
-      <Stack gap={1}>
-        <Text as="p" token="label-small" tone="muted">
-          {label}
-        </Text>
-        <Text as="p" token="headline-small" className="tabular-nums">
-          {value.toLocaleString()}
-        </Text>
-      </Stack>
-    </Surface>
+    <Link href={href} className="hover:text-primary rounded-md transition-colors">
+      {body}
+    </Link>
   );
 }
 
@@ -174,26 +159,28 @@ interface OrgQueueQuery {
   readonly isPending: boolean;
 }
 
-/** A short retention queue whose rows open the organization. */
+/**
+ * A short retention queue, or nothing at all.
+ *
+ * @remarks
+ * Renders only when it holds rows. These two queues are empty on a healthy instance, and the
+ * attention band above already states that in a line — so an empty group here would be a second,
+ * much larger way of reporting the same nothing, on the screen whose whole job is to say what needs
+ * a person.
+ */
 function OrgQueue({
+  title,
   query,
-  emptyTitle,
-  emptyBody,
 }: {
+  readonly title: string;
   readonly query: OrgQueueQuery;
-  readonly emptyTitle: string;
-  readonly emptyBody: string;
-}): JSX.Element {
+}): JSX.Element | null {
   const orgs = query.data?.items ?? [];
+  if (query.isPending || orgs.length === 0) return null;
 
   return (
-    <AsyncContent
-      loading={query.isPending}
-      empty={orgs.length === 0}
-      skeleton={<ListSkeleton rows={2} />}
-      emptyState={<EmptyState icon={Building} title={emptyTitle} body={emptyBody} />}
-    >
-      <AdminList label="Organizations needing attention">
+    <AdminSection title={title} body="rows">
+      <AdminList label={title}>
         {orgs.map((org) => (
           <AdminListRow
             key={org.id}
@@ -208,16 +195,16 @@ function OrgQueue({
           />
         ))}
       </AdminList>
-    </AsyncContent>
+    </AdminSection>
   );
 }
 
-/** A loading placeholder sized to the metric grid. */
-function MetricSkeleton(): JSX.Element {
+/** A loading placeholder sized to the attention band. */
+function AttentionSkeleton(): JSX.Element {
   return (
-    <div className="grid grid-cols-2 gap-2 @xl:grid-cols-3" aria-hidden="true">
-      {Array.from({ length: 6 }, (_, index) => (
-        <Skeleton key={index} className="h-[4.5rem] w-full rounded-lg" />
+    <div className="grid grid-cols-2 gap-2 @2xl:grid-cols-5" aria-hidden="true">
+      {Array.from({ length: 5 }, (_, index) => (
+        <Skeleton key={index} className="h-[5.5rem] w-full rounded-xl" />
       ))}
     </div>
   );

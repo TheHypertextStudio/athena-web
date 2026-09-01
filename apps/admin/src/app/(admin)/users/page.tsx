@@ -98,17 +98,9 @@ function useUserColumns(): readonly Column<AdminUser>[] {
 /** What an empty user list means, which depends on whether a search narrowed it. */
 function NoUsers({ searching }: { readonly searching: boolean }): JSX.Element {
   if (searching) {
-    return (
-      <EmptyState
-        icon={Users}
-        title="No matching users"
-        body="No account name or email contains that text."
-      />
-    );
+    return <EmptyState icon={Users} title="No matching users" />;
   }
-  return (
-    <EmptyState icon={Users} title="No users yet" body="Accounts appear here as people sign up." />
-  );
+  return <EmptyState icon={Users} title="No users yet" />;
 }
 
 /**
@@ -136,7 +128,6 @@ export default function UsersPage(): JSX.Element {
     <AdminPage width="list">
       <AdminPageHeader
         title="Users"
-        description={query.data ? `${total.toLocaleString()} across every organization` : undefined}
         actions={
           <Input
             type="search"

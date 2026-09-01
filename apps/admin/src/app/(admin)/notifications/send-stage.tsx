@@ -74,10 +74,10 @@ export function SendStage({
         </Text>
 
         <ControlGroup controlSize="md" wrap>
-          <Button variant="outline" disabled={disabled} onClick={onTestSend}>
+          <Button variant="secondary" disabled={disabled} onClick={onTestSend}>
             {pendingAction === 'test' ? 'Sending…' : 'Send test to me'}
           </Button>
-          <Button variant="outline" disabled={disabled} onClick={onApprove}>
+          <Button variant="secondary" disabled={disabled} onClick={onApprove}>
             {pendingAction === 'approve' ? 'Approving…' : 'Approve'}
           </Button>
           <ConfirmButton

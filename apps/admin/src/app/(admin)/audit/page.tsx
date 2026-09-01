@@ -43,21 +43,9 @@ function auditDef(type: string, offset: number) {
 /** What an empty audit feed means, which depends on whether a type filter narrowed it. */
 function NoEvents({ filtered }: { readonly filtered: boolean }): JSX.Element {
   if (filtered) {
-    return (
-      <EmptyState
-        icon={Activity}
-        title="No matching events"
-        body="No operator action of that type has been recorded."
-      />
-    );
+    return <EmptyState icon={Activity} title="No matching events" />;
   }
-  return (
-    <EmptyState
-      icon={Activity}
-      title="No operator actions yet"
-      body="Holds, billing decisions, and impersonations are recorded here as they happen."
-    />
-  );
+  return <EmptyState icon={Activity} title="No operator actions yet" />;
 }
 
 /**
@@ -85,7 +73,6 @@ export default function AuditPage(): JSX.Element {
     <AdminPage width="list">
       <AdminPageHeader
         title="Audit log"
-        description="Every operator action, newest first."
         actions={
           <Input
             type="search"

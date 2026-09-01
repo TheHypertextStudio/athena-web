@@ -65,8 +65,10 @@ db:reset` completed. The migration changes no UI behavior, but the requested des
   - [x] Phase 2 — every screen migrated, each landing at zero design-token violations
   - [x] Phase 3 — admin added to `UI_OWNERSHIP_SURFACES` and the semantic-surface cohort; admin's
         design-token ledger is empty
-  - [ ] Craft Rubric scorecards for the migrated surfaces (`docs/design/audits/`) — needs a visual
-        pass against a running console
+  - [x] Phase 4 — layout and craft pass against captured screenshots: sections became real tonal
+        groups, billing state split into named concerns each carrying the control that changes it,
+        a per-screen section outline, and every screen's copy cut back
+  - [ ] Craft Rubric scorecards for the migrated surfaces (`docs/design/audits/`)
 - **Out of scope by decision**: a Staff management screen, and a ranked attention feed on the
   dashboard. Both are net-new; the user scoped this effort to standardization plus the operator
   tier and the announcement-safety fixes.
@@ -77,12 +79,21 @@ db:reset` completed. The migration changes no UI behavior, but the requested des
   `no-raw-surface-role` and `ad-hoc-border` each named it, then reverting. One API test
   (`admin.test.ts` → "applies a reviewed discount to a trial and records the provider credit") fails,
   and fails identically on the pre-effort commit `d30971ce3` — it is unrelated to this work.
-- **Not yet done**: no screenshots. `docs/engineering/ui-verification.md` and its tooling target
-  `apps/web`; `dev-session.ts` is parameterized by `APP_URL`/`PASSKEY_RP_ID`, so it can be pointed at
-  the admin origin without a parallel stack, but that has not been run.
-- **Follow-on**: infrastructure monitoring (Cloud Run, Cloud Scheduler, the Cloudflare Worker,
-  Neon, Vercel, Stripe, Lattice) as a separate spec after Phase 3 — synthetic checks as the truth
-  layer with provider adapters behind them, read-only plus a manual re-check.
+- **What the screenshots changed**: capturing every screen (`capture-shots.ts` gained a
+  `--base-url` flag rather than growing a second harness) turned up four things a static read had
+  missed. `AdminSection` was a heading above naked children — dropping borders was right, but
+  nothing replaced them, so a detail screen read as an undifferentiated run of headings; it is now
+  the same tonal group the product app's `SettingsGroup` is. `EmptyState` defaults to
+  `frame="panel"`, which paints a border, so eight nested usages were still drawing one. Fifteen
+  `variant="outline"` buttons were using outline as a default rather than for "a secondary action
+  on a busy surface" as §5 defines it. And the org detail screen reported nine facts in one 3×3
+  grid, which put "Stripe customer", "Billing country", and "Subscription" on a line together
+  despite having nothing to do with each other.
+- **Actionability**: state and the controls that change it were in separate sections, so the status
+  you were reading and the button that changes it were never on screen together. Each concern is
+  now one group carrying its own control, which also took the screen from eight sections to five.
+- **Follow-on**: operator observability — service status with uptime, platform resource usage, and
+  Athena usage including token capture. Tracked as `ADMIN-OBS-001`.
 
 ---
 

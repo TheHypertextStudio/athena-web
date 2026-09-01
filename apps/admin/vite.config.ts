@@ -17,6 +17,7 @@ import { docketVitest } from '../../tooling/vitest/preset';
  */
 const config = docketVitest({
   react: true,
+  setupFiles: ['./vitest.setup.ts'],
   coverageInclude: [
     // Problem-document parsing is the console's only translation from an API error into operator
     // copy. It decides what an operator is told when something fails, so it is gated on its own.

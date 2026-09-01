@@ -63,7 +63,7 @@ export function ViewingAsBanner(): JSX.Element | null {
         ) : null}
       </div>
       <Button
-        variant="outline"
+        variant="ghost"
         controlSize="sm"
         disabled={endSession.isPending}
         onClick={() => {

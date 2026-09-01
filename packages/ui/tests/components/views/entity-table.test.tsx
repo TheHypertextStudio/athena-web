@@ -417,6 +417,64 @@ describe('EntityTable — selection', () => {
     expect(anchorClick.mock.instances[0]).toHaveAttribute('target', '_blank');
   });
 
+  it('opens a body-activatable row from Enter on its whitespace, not from Enter on a nested control', () => {
+    // `vi.spyOn` returns the spy an earlier test in this file already installed, call history
+    // included, so clear it before asserting this test's own calls.
+    const anchorClick = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => undefined);
+    anchorClick.mockClear();
+    const columns: Column<Row>[] = [
+      { key: 'name', header: 'Name', flex: true, render: (row) => row.name },
+      { key: 'control', header: 'Control', render: () => <button type="button">Edit</button> },
+    ];
+    render(
+      <EntityTable
+        aria-label="Items"
+        columns={columns}
+        rows={[assertDefined(ROWS[0])]}
+        getRowKey={getRowKey}
+        rowHref={(row) => `/items/${row.id}`}
+        rowLinkColumnKey="name"
+      />,
+    );
+
+    const row = screen.getByRole('row', { name: /Billing revamp/ });
+    fireEvent.keyDown(within(row).getByRole('button', { name: 'Edit' }), { key: 'Enter' });
+    expect(anchorClick).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(row, { key: 'Enter' });
+    expect(anchorClick).toHaveBeenCalledOnce();
+    expect(anchorClick.mock.instances[0]).toHaveAttribute('href', '/items/r1');
+  });
+
+  it('routes the title column through renderRowLink on a body-activatable row, prefetch included', () => {
+    const onRowPrefetch = vi.fn();
+    render(
+      <EntityTable
+        aria-label="Items"
+        columns={COLUMNS}
+        rows={[assertDefined(ROWS[0])]}
+        getRowKey={getRowKey}
+        rowHref={(row) => `/items/${row.id}`}
+        rowLinkColumnKey="name"
+        onRowPrefetch={onRowPrefetch}
+        renderRowLink={({ children, ...props }) => (
+          <a {...props} data-router-link="true">
+            {children}
+          </a>
+        )}
+      />,
+    );
+
+    const link = screen.getByRole('link', { name: 'Billing revamp' });
+    expect(link).toHaveAttribute('data-router-link', 'true');
+    expect(link).toHaveAttribute('href', '/items/r1');
+
+    fireEvent.mouseEnter(link);
+    expect(onRowPrefetch).toHaveBeenCalledWith(ROWS[0]);
+  });
+
   it('binds injected drag and drop refs without giving the row a second focus model', () => {
     const onRowClick = vi.fn();
     const register = vi.fn();

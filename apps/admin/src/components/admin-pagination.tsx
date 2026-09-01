@@ -66,7 +66,7 @@ export function AdminPagination({
       </Text>
       <ControlGroup controlSize="sm">
         <Button
-          variant="outline"
+          variant="ghost"
           disabled={!hasPrevious}
           aria-label={`Previous page of ${noun}`}
           onClick={() => {
@@ -77,7 +77,7 @@ export function AdminPagination({
           Previous
         </Button>
         <Button
-          variant="outline"
+          variant="ghost"
           disabled={!hasNext}
           aria-label={`Next page of ${noun}`}
           onClick={() => {

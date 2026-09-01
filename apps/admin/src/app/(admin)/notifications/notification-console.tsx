@@ -130,9 +130,8 @@ export function NotificationAnnouncementConsole({
     <AdminPage width="console">
       <AdminPageHeader
         title="Service announcements"
-        description="Compose, review, send, and monitor operational notifications."
         actions={
-          <Button variant="outline" disabled={pendingAction !== null} onClick={onRefreshReview}>
+          <Button variant="ghost" disabled={pendingAction !== null} onClick={onRefreshReview}>
             <RefreshCw aria-hidden="true" className="size-4" />
             Refresh
           </Button>
@@ -147,7 +146,7 @@ export function NotificationAnnouncementConsole({
       ) : null}
 
       <div className="grid gap-6 @4xl:grid-cols-[20rem_minmax(0,1fr)]">
-        <AdminSection title={`Announcements (${intents.length})`}>
+        <AdminSection title="Announcements" body="rows">
           <IntentList
             intents={intents}
             selectedId={selectedIntent?.id ?? null}
@@ -232,7 +231,8 @@ function StagePanel({
       <EmptyState
         icon={Bell}
         title="No announcement selected"
-        body="Compose one, or choose an existing announcement to review it."
+
+        frame="none"
       />
     );
   }
@@ -275,7 +275,8 @@ function IntentList({
       <EmptyState
         icon={Bell}
         title="No announcements yet"
-        body="Compose one to tell every affected person what is happening."
+
+        frame="none"
       />
     );
   }

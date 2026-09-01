@@ -1,5 +1,7 @@
-import { ControlGroup, Row, Stack, Text } from '@docket/ui/primitives';
+import { ControlGroup, Row, Stack, Surface, Text } from '@docket/ui/primitives';
 import type { JSX, ReactNode } from 'react';
+
+import { AdminOutline, CONTENT_ID, SECTION_ATTRIBUTE, sectionId } from './admin-outline';
 
 /**
  * How wide a screen's content column is allowed to grow, named by the job the width serves.
@@ -26,6 +28,15 @@ const WIDTH_CLASS: Readonly<Record<AdminPageWidth, string>> = {
 export interface AdminPageProps {
   /** The width class this screen's content column takes. */
   readonly width: AdminPageWidth;
+  /**
+   * Whether to show the section outline beside the content.
+   *
+   * @remarks
+   * Set it on screens that run past a viewport. The rail reads the sections a screen actually
+   * rendered, so turning it on costs nothing on a screen that turns out to be short — it hides
+   * itself below two sections.
+   */
+  readonly outline?: boolean;
   /** The screen's content. */
   readonly children: ReactNode;
 }
@@ -42,10 +53,25 @@ export interface AdminPageProps {
  * @param props - See {@link AdminPageProps}.
  * @returns the screen's content column.
  */
-export function AdminPage({ width, children }: AdminPageProps): JSX.Element {
-  return (
-    <div className={`mx-auto flex w-full flex-col gap-6 p-4 @2xl:p-8 ${WIDTH_CLASS[width]}`}>
+export function AdminPage({ width, outline = false, children }: AdminPageProps): JSX.Element {
+  const column = (
+    <div id={CONTENT_ID} className="flex min-w-0 flex-col gap-4">
       {children}
+    </div>
+  );
+
+  if (!outline) {
+    return (
+      <div className={`mx-auto flex w-full flex-col p-4 @2xl:p-8 ${WIDTH_CLASS[width]}`}>
+        {column}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto grid w-full max-w-6xl gap-8 p-4 @2xl:p-8 @4xl:grid-cols-[minmax(0,1fr)_12rem]">
+      {column}
+      <AdminOutline />
     </div>
   );
 }
@@ -99,35 +125,82 @@ export interface AdminSectionProps {
   readonly title: string;
   /** Optional supporting copy under the heading. */
   readonly description?: string | undefined;
+  /** Optional controls acting on this group, pinned to the header's trailing edge. */
+  readonly action?: ReactNode;
+  /**
+   * How the body is inset.
+   *
+   * @remarks
+   * `padded` is the default and suits properties, prose, and forms. `rows` removes the inset for
+   * content that manages its own — a table, a row list — so those reach the group's edges instead
+   * of sitting in a second, narrower box.
+   */
+  readonly body?: 'padded' | 'rows';
   /** The section's content. */
   readonly children: ReactNode;
 }
 
 /**
- * A titled region within a screen.
+ * A named tonal group: one card step above the page panel, with no border and no shadow.
  *
  * @remarks
- * Regions are separated by heading and rhythm, and where a region needs to read as contained it
- * takes a tonal step on the surface ramp. Neither case draws a line: the ramp is designed to
- * separate without one, which is what keeps the console from looking like a form wrapped in boxes.
+ * This is the console's unit of grouping, and it mirrors the product app's `SettingsGroup`
+ * deliberately — same `card` tone, same `medium` shape, same header rhythm — so a group here and a
+ * group there read as the same thing.
+ *
+ * It previously rendered a heading above naked children, which is half of what §8 asks for. Dropping
+ * the borders was right; nothing replaced them, so a detail screen became an undifferentiated run of
+ * headings and text with no visible region boundaries at all. A tonal step is what the surface ramp
+ * exists for, and it is what does the grouping now.
+ *
+ * A padded body wraps its children in a `lg` {@link ControlGroup}, so an input, a select, and the
+ * button beside them resolve to one height from one number rather than each falling back to the
+ * bare default — which is why the billing actions used to render at mixed heights.
+ *
+ * The group is its own `@container`, so its contents reflow against the group's width rather than
+ * the page's — a property list inside a narrow master–detail column wraps on its own terms.
  *
  * @param props - See {@link AdminSectionProps}.
- * @returns the titled section.
+ * @returns the titled group.
  */
-export function AdminSection({ title, description, children }: AdminSectionProps): JSX.Element {
+export function AdminSection({
+  title,
+  description,
+  action,
+  body = 'padded',
+  children,
+}: AdminSectionProps): JSX.Element {
   return (
-    <Stack gap={3} as="section">
-      <Stack gap={1}>
-        <Text as="h2" token="title-small">
-          {title}
-        </Text>
-        {description ? (
-          <Text as="p" token="body-small" tone="muted">
-            {description}
+    <Surface
+      as="section"
+      id={sectionId(title)}
+      {...{ [SECTION_ATTRIBUTE]: title }}
+      tone="card"
+      shape="medium"
+      pad="none"
+      className="@container flex scroll-mt-4 flex-col overflow-hidden"
+    >
+      <div className="flex flex-col gap-3 px-4 pt-4 pb-3 @lg:flex-row @lg:items-start @lg:justify-between">
+        <Stack gap={1} className="min-w-0">
+          <Text as="h2" token="title-small">
+            {title}
           </Text>
-        ) : null}
-      </Stack>
-      {children}
-    </Stack>
+          {description ? (
+            <Text as="p" token="body-small" tone="muted">
+              {description}
+            </Text>
+          ) : null}
+        </Stack>
+        {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
+      </div>
+
+      {body === 'rows' ? (
+        <div className="flex min-w-0 flex-col px-4 pb-4">{children}</div>
+      ) : (
+        <ControlGroup controlSize="lg" orientation="vertical" className="min-w-0 gap-3 px-4 pb-4">
+          {children}
+        </ControlGroup>
+      )}
+    </Surface>
   );
 }

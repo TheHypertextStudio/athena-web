@@ -121,12 +121,49 @@ export interface EntityListRowProps {
 /** The props an {@link EntityListRowProps.render} slot receives. */
 export interface EntityRowRenderProps {
   className: string;
-  href?: string | undefined;
+  /**
+   * The row's destination, present only for a row that has one.
+   *
+   * @remarks
+   * Absent rather than `undefined` when the row is a button, so the whole object spreads into a
+   * router `Link` under `exactOptionalPropertyTypes`. A slot that sets optional keys to explicit
+   * `undefined` cannot be forwarded wholesale, which is what the doc above asks callers to do — so
+   * every consumer had to hand-strip them first.
+   */
+  href?: string;
   onClick: () => void;
   onKeyDown: (event: React.KeyboardEvent) => void;
   tabIndex: number;
-  'aria-current': 'true' | undefined;
+  'aria-current'?: 'true';
   children: React.ReactNode;
+}
+
+/**
+ * Build the render slot's payload, omitting the keys that have no value.
+ *
+ * @remarks
+ * Absent rather than explicitly `undefined`, so the whole object spreads into a router `Link` under
+ * `exactOptionalPropertyTypes` — which is what the slot's contract asks callers to do. Kept out of
+ * the component body so the omissions do not count against its complexity budget.
+ *
+ * @param parts - The row's resolved link state.
+ * @returns the payload handed to {@link EntityListRowProps.render}.
+ */
+function rowRenderProps(parts: {
+  readonly className: string;
+  readonly href: string | undefined;
+  readonly onClick: () => void;
+  readonly onKeyDown: (event: React.KeyboardEvent) => void;
+  readonly tabIndex: number;
+  readonly ariaCurrent: 'true' | undefined;
+  readonly children: React.ReactNode;
+}): EntityRowRenderProps {
+  const { href, ariaCurrent, ...rest } = parts;
+  return {
+    ...rest,
+    ...(href === undefined ? {} : { href }),
+    ...(ariaCurrent === undefined ? {} : { 'aria-current': ariaCurrent }),
+  };
 }
 
 const ROW_BASE =
@@ -262,15 +299,17 @@ export function EntityListRow({
   if (render) {
     return (
       <>
-        {render({
-          className: rowClassName,
-          href,
-          onClick: handleClick,
-          onKeyDown: handleKeyDown,
-          tabIndex,
-          'aria-current': ariaCurrent,
-          children: body,
-        })}
+        {render(
+          rowRenderProps({
+            className: rowClassName,
+            href,
+            onClick: handleClick,
+            onKeyDown: handleKeyDown,
+            tabIndex,
+            ariaCurrent,
+            children: body,
+          }),
+        )}
       </>
     );
   }

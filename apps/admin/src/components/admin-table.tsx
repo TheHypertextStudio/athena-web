@@ -5,32 +5,6 @@ import type { Column } from '@docket/ui/components';
 import Link from 'next/link';
 import type { JSX, ReactNode } from 'react';
 
-/**
- * Drop every key whose value is `undefined`, keeping the rest under their original (now
- * `undefined`-free) types.
- *
- * @remarks
- * `EntityTable` hands its row-link slot optional handlers typed as `T | undefined`, which
- * `next/link`'s own prop types reject under `exactOptionalPropertyTypes`. Stripping the absent keys
- * lets the rest be spread wholesale — and spreading matters: cherry-picking `href` would silently
- * drop the grid's `role`, `aria-rowindex`, `aria-current`, `tabIndex`, and prefetch handlers with
- * no type error, turning a keyboard-navigable grid row back into a plain anchor.
- */
-function withoutUndefinedValues<T extends object>(
-  value: T,
-): {
-  [K in keyof T]: Exclude<T[K], undefined>;
-} {
-  const result = {} as { [K in keyof T]: Exclude<T[K], undefined> };
-  for (const key of Object.keys(value) as (keyof T)[]) {
-    const fieldValue = value[key];
-    if (fieldValue !== undefined) {
-      result[key] = fieldValue as Exclude<T[typeof key], undefined>;
-    }
-  }
-  return result;
-}
-
 /** Props for {@link AdminTable}. */
 export interface AdminTableProps<T> {
   /** Accessible name for the grid. */
@@ -72,9 +46,9 @@ export function AdminTable<T>({
       rows={rows}
       getRowKey={getRowKey}
       rowHref={rowHref}
-      renderRowLink={({ children, ...linkProps }) => (
-        <Link {...withoutUndefinedValues(linkProps)}>{children}</Link>
-      )}
+      // Spread wholesale: cherry-picking `href` would silently drop the grid's role, row index,
+      // focus handling, and prefetch intent, with no type error to say so.
+      renderRowLink={({ children, ...linkProps }) => <Link {...linkProps}>{children}</Link>}
     />
   );
 }
@@ -176,10 +150,9 @@ export function AdminListRow({
       href={href}
       {...(onActivate ? { onActivate } : {})}
       render={({ children, href: rowHref, ...rowProps }) => (
-        // The row's render slot types `href` as optional, because a row without a destination is a
-        // button. This branch always has one, so the outer `href` stands in and Link gets a
-        // definite string rather than a possibly-absent one.
-        <Link href={rowHref ?? href} {...withoutUndefinedValues(rowProps)}>
+        // `href` is optional on the slot because a row without a destination is a button. This
+        // branch always has one, so the outer `href` stands in and Link gets a definite string.
+        <Link href={rowHref ?? href} {...rowProps}>
           {children}
         </Link>
       )}

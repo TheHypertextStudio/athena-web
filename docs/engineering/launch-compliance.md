@@ -1,7 +1,7 @@
 # Docket — Launch Compliance Scorecard
 
 > **Status**: Re-audited at the launch gate — 399 of 399 requirements adjudicated against observed evidence.
-> **Last Updated**: 2026-08-30
+> **Last Updated**: 2026-08-31
 > **Machine-readable source of truth**: [`launch-compliance.json`](./launch-compliance.json)
 
 Every requirement below was mechanically derived from the author's production-launch plan — the plan text was decomposed clause by clause, so each row traces back to something the author actually wrote rather than to an interpretation of what he might have meant. Each requirement carries the author's own words in its `sourceQuote` field in the JSON, alongside the `acceptance` criteria that decide whether it is met.

@@ -18,14 +18,14 @@ Mintlify site, deployment workflow, and billing audit. It does not add a paralle
       writes screenshots.
 - [x] Locate the current machine-resource status command or record that the superseded watchdog is
       no longer active before a repository-wide build.
-- [ ] Verify the exact production workspace `Docket Documentation Demo`
+- [x] Verify the exact production workspace `Docket Documentation Demo`
       (`01M0XDAP2DMBR3RPA4H4GSS8XN`) through the Hypertext Studio operating context.
-- [ ] Confirm that the workspace contains no customer data, active members beyond the creating
+- [x] Confirm that the workspace contains no customer data, active members beyond the creating
       operator, Stripe customer, subscription, invoice, credit, discount, integration, or retained
       legal record.
-- [ ] Remove only that workspace through an audited maintenance action. Record the actor, time,
+- [x] Remove only that workspace through an audited maintenance action. Record the actor, time,
       target, precondition results, and outcome.
-- [ ] Verify that account preferences, workspace switchers, sessions, search indexes, billing
+- [x] Verify that account preferences, workspace switchers, sessions, search indexes, billing
       indexes, and analytics dimensions no longer point at the removed workspace.
 
 This gate fails if the production target cannot be proved or if any check finds unrelated state.
@@ -52,13 +52,13 @@ privacy, support, backups, restore, observability, incident response, and rollba
 
 ## Gate 3: Clear product and operating blockers
 
-- [ ] Reproduce every failure on the latest `main` before changing code. Do not carry failure lists
+- [x] Reproduce every failure on the latest `main` before changing code. Do not carry failure lists
       forward from an older deployment without checking them.
-- [ ] Repair the current API test failures and run the affected package suite with bounded workers.
+- [x] Repair the current API test failures and run the affected package suite with bounded workers.
 - [ ] Repair the current browser-suite failures and rerun every cancelled shard.
-- [ ] Restore a checked-in `launch:verify-prod` command that verifies the public web host, API
+- [x] Restore a checked-in `launch:verify-prod` command that verifies the public web host, API
       health, OpenAPI, auth metadata, docs host, redirects, and immutable asset delivery.
-- [ ] Fix the production OpenAPI route and prove that the live schema matches the deployed API.
+- [x] Fix the production OpenAPI route and prove that the live schema matches the deployed API.
 - [ ] Add a recoverable workspace-deletion flow. `DELETE /v1/orgs/:orgId` schedules deletion after
       fresh authentication and owner confirmation. `POST /v1/orgs/:orgId/reactivation` restores it
       during the recovery window.
@@ -75,22 +75,22 @@ verification command passes against the deployed candidate with Checkout still c
 
 ## Gate 4: Rebuild the Mintlify guide
 
-- [ ] Inventory every existing URL and add a redirect before moving or splitting a page.
-- [ ] Update `apps/docs/docs.json` to group Guides by getting started, planning and doing work,
+- [x] Inventory every existing URL and add a redirect before moving or splitting a page.
+- [x] Update `apps/docs/docs.json` to group Guides by getting started, planning and doing work,
       organizing work, finding work, managing Docket, and Athena.
-- [ ] Split Tasks from Triage, Inbox from Stream, Search from Views, Cycles from milestones,
+- [x] Split Tasks from Triage, Inbox from Stream, Search from Views, Cycles from milestones,
       Initiatives from Programs, Connections from Imports, and Templates from Automations and
       Publishing.
-- [ ] Split account and workspace settings along the navigation that production shows.
-- [ ] Rewrite every GA page with one clear title, a direct opening answer, action-based sections,
+- [x] Split account and workspace settings along the navigation that production shows.
+- [x] Rewrite every GA page with one clear title, a direct opening answer, action-based sections,
       exact product labels, permissions, limits, recovery steps, and related links.
-- [ ] Remove persona announcements, launch prose, implementation history, duplicated endpoint
+- [x] Remove persona announcements, launch prose, implementation history, duplicated endpoint
       schemas, and claims that lack production evidence.
-- [ ] Keep experimental features out of GA navigation. Add a clearly marked preview section only
+- [x] Keep experimental features out of GA navigation. Add a clearly marked preview section only
       when the feature has a production owner, support boundary, and evidence.
-- [ ] Update developer guidance against live OAuth metadata, MCP registration, scopes, stable
+- [x] Update developer guidance against live OAuth metadata, MCP registration, scopes, stable
       errors, rate limits, and Scalar anchors.
-- [ ] Rewrite the change log as dated customer outcomes based on successful production deployments.
+- [x] Rewrite the change log as dated customer outcomes based on successful production deployments.
 - [ ] Add maintenance metadata that links each page to launch-ledger evidence without putting
       internal commit details in public prose.
 
@@ -116,13 +116,13 @@ profile. Screenshots never use production data.
 
 ## Gate 6: Enforce documentation quality
 
-- [ ] Add `mint validate`, `mint broken-links --check-anchors --check-redirects --check-snippets`,
+- [x] Add `mint validate`, `mint broken-links --check-anchors --check-redirects --check-snippets`,
       and `mint a11y` to the documentation package and CI graph.
 - [ ] Check navigation coverage, redirects, referenced assets, duplicate titles, orphan pages,
       product vocabulary, MCP tool names, OAuth scopes, canonical hosts, and LLM text files.
-- [ ] Add a customer-facing-change declaration to the repository workflow. Each product change must
+- [x] Add a customer-facing-change declaration to the repository workflow. Each product change must
       state that docs changed, docs do not change with a reason, or docs remain blocked.
-- [ ] Fail CI when a change affects a documented surface but supplies neither a docs change nor an
+- [x] Fail CI when a change affects a documented surface but supplies neither a docs change nor an
       accepted no-change reason.
 - [ ] Keep policy tests focused on behavior and generated site contracts. Do not enforce prose by
       searching for arbitrary sentence fragments.

@@ -341,7 +341,7 @@ function IdentityCell<TTarget extends ViewTarget>({
             event.stopPropagation();
           }}
         >
-          <span className="text-on-surface text-body-medium block truncate">
+          <span data-roster-title="" className="text-on-surface text-body-medium block truncate">
             {workViewRowTitle(row)}
           </span>
           {summary ? (

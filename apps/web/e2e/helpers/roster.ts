@@ -428,7 +428,8 @@ export async function expectInitiativeTitlesFit(grid: Locator): Promise<void> {
   for (const title of Object.values(ROSTER_LONG_TITLES)) {
     const link = grid.getByRole('link', { name: title }).first();
     await expect(link).toBeVisible();
-    const width = await link.evaluate((element) => ({
+    const titleBox = link.locator('[data-roster-title]');
+    const width = await titleBox.evaluate((element) => ({
       visible: element.clientWidth,
       content: element.scrollWidth,
     }));

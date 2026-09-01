@@ -340,7 +340,8 @@ db:reset` completed. The migration changes no UI behavior, but the requested des
 
 ### [ATHENA-LATTICE-ROUNDTRIP-001] Prove the durable Docket–Lattice round trip
 
-- **Status**: REVIEW
+- **Status**: COMPLETED
+- **Completed**: 2026-09-01
 - **Started**: 2026-08-28
 - **Priority**: P0
 - **Description**: Complete the Docket-to-Lattice Mac Studio round trip so one private Athena
@@ -579,6 +580,7 @@ tokens) exceeds the available context size (32768 tokens)`. An Athena turn ships
   characters of its response body on a rejected completion — identifiers and the server's
   message, never prompt content. A runtime that rejects every request is driven through the
   local relay dispatcher in a new test; 41 relay startup tests pass, clippy clean.
+- **Cold proof on the trimmed prompt**: work `work_7d068882` at 23:38 UTC on the first docket-api revision carrying the trimmed renderer (`f6bf55fa`, deployed 23:3x), in workspace `01KV6378GSKDVFRX5FZQ63C9W8`. LM Studio recorded the request as **20,133 prompt tokens** (the earlier proof turn was 39,760 and its prefill came from the prefix cache), processed the whole prompt cold in **47.8 s at 421 tokens/s**, and returned 6 completion tokens. Docket `POST /v1/me/athena/sessions` → 200 in 76.5 s; gateway `POST /v1/chat/completions` → 200 in 67.4 s; the daemon opened the item at 23:38:49, dispatched to `runtime=LmStudio model=lovelace:poolside/laguna-s-2.1` at 23:38:54, and logged `chat completed tokens=Some(6)` at 23:39:42. A one-line turn therefore costs about fifty seconds of prefill on this device when nothing is cached, which is the number the five-minute budget and the 64k context recommendation in `lattice-byo-model.md` §4 are sized against.
 
 ### [MCP-APPS-CHAT-001] Render MCP apps in the Athena chat and complete the optional spec surface
 

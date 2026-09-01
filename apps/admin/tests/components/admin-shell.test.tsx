@@ -114,7 +114,7 @@ describe('AdminShell', () => {
   }
 
   describe('navigation', () => {
-    it('reaches every operator screen, including the retention board', async () => {
+    it('reaches every operator screen, including service status and the retention board', async () => {
       await render();
       const hrefs = Array.from(container.querySelectorAll('nav a')).map((a) =>
         a.getAttribute('href'),
@@ -125,6 +125,7 @@ describe('AdminShell', () => {
         '/orgs',
         '/discounts',
         '/notifications',
+        '/status',
         '/audit',
         '/lifecycle',
         '/settings',

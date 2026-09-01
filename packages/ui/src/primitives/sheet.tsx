@@ -104,6 +104,20 @@ const SHEET_SIZE: Readonly<Record<SheetSize, string>> = {
   wide: 'w-[28rem] max-w-[calc(100vw-1.5rem)]',
 };
 
+/**
+ * The `sm`-and-up edge anchor and inner border for each {@link SheetSide}.
+ *
+ * Spelled out per side because Tailwind reads class names out of the source text: a name built
+ * by interpolation is never a complete string here, so no rule is generated for it and the
+ * attribute in the DOM matches nothing. Anchoring built that way left the panel on `inset-0`
+ * from the full-screen layout, stretching it across the viewport instead of pinning it to its
+ * edge — and it looked correct in both the markup and any test that reads the class list.
+ */
+const SIDE_ANCHOR_SM: Readonly<Record<SheetSide, string>> = {
+  left: 'sm:right-auto sm:left-0 sm:border-r',
+  right: 'sm:left-auto sm:right-0 sm:border-l',
+};
+
 function sheetPresentationClass(
   presentation: SheetPresentation,
   side: SheetSide,
@@ -111,9 +125,7 @@ function sheetPresentationClass(
 ): string {
   if (presentation === 'fullscreen') return 'inset-0 h-[100dvh] w-[100vw] border-0';
   if (presentation === 'responsive-fullscreen')
-    return `inset-0 h-[100dvh] w-[100vw] border-0 sm:inset-y-0 sm:${side}-0 sm:h-full sm:w-auto sm:border-0 ${
-      side === 'left' ? 'sm:border-r' : 'sm:border-l'
-    } ${SHEET_SIZE[size]}`;
+    return `inset-0 h-[100dvh] w-[100vw] border-0 sm:inset-y-0 sm:h-full sm:w-auto sm:border-0 ${SIDE_ANCHOR_SM[side]} ${SHEET_SIZE[size]}`;
   return `${SIDE_CLASS[side]} ${SHEET_SIZE[size]}`;
 }
 

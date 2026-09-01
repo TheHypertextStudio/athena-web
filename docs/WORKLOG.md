@@ -8087,6 +8087,43 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
 
 ## Completed Tasks
 
+### [UI-SHEET-ANCHOR-001] Anchor a responsive-fullscreen sheet to its edge
+
+- **Completed**: 2026-09-01
+- **Priority**: P2
+- **Summary**: `sheetPresentationClass` built the desktop edge anchor as `sm:${side}-0`. Tailwind
+  generates a rule only for a class name that appears whole in the source, so `sm:left-0` and
+  `sm:right-0` were never emitted and the rendered attribute matched nothing.
+
+#### Verification
+
+Compiling `packages/ui/src/styles/globals.css` through `@tailwindcss/postcss` and listing every
+emitted `.sm\:(left|right)-*` selector returned only `.sm\:left-1\/2` and `.sm\:left-auto` — no
+`left-0`, no `right-0` — while the neighbouring `side === 'left' ? 'sm:border-r' : 'sm:border-l'`
+ternary, written with literals, did emit. After the fix the same probe returns `.sm\:left-0`,
+`.sm\:left-auto`, `.sm\:right-0`, and `.sm\:right-auto`.
+
+One trap is worth recording: an early probe listed the class names as plain strings in a scratch
+file under `apps/web`, and Tailwind scanned that file and emitted them, reporting every class as
+present. The probe has to spell nothing it is testing for — build the names from fragments — or it
+manufactures its own answer. A control class that cannot exist catches this immediately.
+
+#### Change
+
+`SIDE_ANCHOR_SM` maps each side to its literal anchor, the release of the opposite edge that
+`inset-0` pinned, and its facing border, matching how `SIDE_CLASS` and `SHEET_SIZE` are written.
+
+- **Files changed**: `packages/ui/src/primitives/sheet.tsx`,
+  `packages/ui/tests/primitives/sheet-presentations.test.tsx`
+- **Validation**: `pnpm typecheck` and `pnpm lint` clean, Prettier clean, 715 `@docket/ui` tests
+  pass. Two new cases assert both sides get their literal anchor, opposite-edge release, and border.
+- **Blast radius**: No product code uses this presentation yet — `AppShell` uses `edge` and
+  `fullscreen` — so nothing visible changes today; the presentation now works when it is used.
+- **Learnings**: A class in the DOM is not a class with a rule behind it. The existing test asserted
+  `sm:right-0` on the element and passed the whole time the utility did not exist, because the
+  interpolated string still renders correctly. Class-list assertions cannot see this failure; only
+  the compiled stylesheet can.
+
 ### [UI-DIALOG-HEIGHT-001] Give a dialog the height it asks for
 
 - **Completed**: 2026-09-01

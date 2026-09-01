@@ -77,7 +77,9 @@ jobs:
 
       - uses: ./.github/actions/setup
 
-      - run: timeout --signal=TERM --kill-after=10s 180s pnpm turbo run lint ${{ matrix.filter }} --concurrency=1
+      # A cold apps shard must first build API and Admin dependencies before Web ESLint starts.
+      # The old 180-second cap killed Web lint at startup whenever remote Turbo caching was down.
+      - run: timeout --signal=TERM --kill-after=10s 300s pnpm turbo run lint ${{ matrix.filter }} --concurrency=1
 
   # Sharded for the same reason as lint, and with the same memory ceiling intact: `tsc` holds a
   # whole program in memory per package, so each runner still typechecks one at a time. 26 packages

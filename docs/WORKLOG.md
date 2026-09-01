@@ -8064,6 +8064,11 @@ identity-providers}.ts(x)` + `packages/ui/src/icons/index.ts` (badge, Source opt
   reacquires the visible compact roster before continuing. The corrected journey passes against
   the downloaded `b4b045e9f5998506d0247785b2ddb34ec13caf69` production bundle in 1.1 minutes with
   one Playwright worker and an isolated temporary PGlite database.
+- **Release-gate follow-up**: Exact-main CI run `33546557293` reached Web lint with no lint finding,
+  but its shared 180-second command cap expired at the same instant because remote Turbo caching
+  was unavailable and the apps shard had rebuilt API and Admin dependencies first. The bounded
+  lint budget is now 300 seconds inside the existing 10-minute job limit, which preserves
+  single-package concurrency and gives the cold-cache path enough time to run the required gate.
 - **Production evidence**: `a7471705dc11f1598b49b341d0976971205a1ab5` is on `main` with no merge
   commits. Cloud Run deployed the same SHA for API and admin and passed the production health and
   auth probes. Vercel deployment `dpl_GdbWyXD8JuGYLzCPkPfpxoB2Xia6` is `READY` for the same SHA and
